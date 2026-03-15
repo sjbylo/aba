@@ -86,7 +86,7 @@ set -x
 cd aba
 #aba -d cli govc
 echo "Config aba.conf ..."
-aba -A --channel stable --version latest -p vmw
+aba --noask --channel stable --version latest -p vmw
 grep -e ocp_channel -e ocp_version aba.conf
 echo DONE PART 1
 END
@@ -103,8 +103,9 @@ echo TERM=$TERM
 export TERM=xterm 
 echo TERM=$TERM
 cd ~/aba
-scp -rp steve@mirror.example.com:aba/mirror/regcreds/* mirror/regcreds
-ls -l mirror/regcreds
+mkdir -p ~/.aba/mirror/mirror
+scp -rp steve@mirror.example.com:~/.aba/mirror/mirror/* ~/.aba/mirror/mirror/
+ls -l ~/.aba/mirror/mirror
 aba -y mirror -H mirror.example.com -k "~/.ssh/id_rsa" -U steve
 #sed -i "s/^.*reg_ssh_user=.*/reg_ssh_user=steve/g" mirror.conf
 #sed -i "s#^.*reg_ssh_key=.*#reg_ssh_key=~/.ssh/id_rsa#g" mirror.conf

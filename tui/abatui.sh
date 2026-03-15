@@ -258,27 +258,38 @@ read -r TERM_ROWS TERM_COLS < <(stty size 2>/dev/null || echo "24 80")
 # Retry count for transient failures (applies to save/sync/bundle)
 RETRY_COUNT="2"  # Values: "off", "2", "8"
 
-# Registry type selection
+# Auto-answer setting — load from aba.conf if available
+# aba.conf: ask=true → prompt user (auto-answer OFF), ask= or ask=false → auto-answer ON
+ABA_AUTO_ANSWER="yes"  # Values: "yes", "no"
+if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+	_saved_ask=$(grep -E '^ask=' "$ABA_ROOT/aba.conf" 2>/dev/null | sed 's/#.*//' | cut -d= -f2 | tr -d '[:space:]')
+	[[ "$_saved_ask" == "true" ]] && ABA_AUTO_ANSWER="no"
+	unset _saved_ask
+fi
+
+# Registry type selection — load from mirror.conf if available
 ABA_REGISTRY_TYPE="Auto"  # Values: "Auto", "Quay", "Docker"
+if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+	_saved_vendor=$(grep -E '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | sed 's/#.*//' | cut -d= -f2 | tr -d '[:space:]')
+	case "$_saved_vendor" in
+		quay)   ABA_REGISTRY_TYPE="Quay" ;;
+		docker) ABA_REGISTRY_TYPE="Docker" ;;
+	esac
+	unset _saved_vendor
+fi
 
 ui_backtitle() {
 	echo "ABA TUI  |  channel: ${OCP_CHANNEL:-?}  version: ${OCP_VERSION:-?}"
 }
 
-# Resolve actual registry type based on Auto selection and architecture
-get_actual_registry_type() {
-	local registry_type="${ABA_REGISTRY_TYPE:-Auto}"
-	
-	if [[ "$registry_type" == "Auto" ]]; then
-		local arch=$(uname -m)
-		if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-			echo "Docker"
-		else
-			echo "Quay"
-		fi
-	else
-		echo "$registry_type"
-	fi
+# Map TUI registry type (Auto/Quay/Docker) to mirror.conf value (auto/quay/docker)
+reg_vendor_from_tui() {
+	case "${ABA_REGISTRY_TYPE:-Auto}" in
+		Auto)   echo "auto" ;;
+		Quay)   echo "quay" ;;
+		Docker) echo "docker" ;;
+		*)      echo "auto" ;;
+	esac
 }
 
 # Wrapper for dialog with consistent styling
@@ -1242,7 +1253,7 @@ Try again." 0 0 || true
 		
 		# Start catalog downloads for this version (immediate, non-blocking)
 		log "Starting parallel catalog downloads for OCP ${OCP_VERSION} (${version_short})"
-		download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
+		download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
 		
 		# Also trigger full prefetch (handles previous minor version too)
 		log "Triggering catalog prefetch for selected version + previous minor"
@@ -1356,49 +1367,109 @@ Your Red Hat pull secret is valid and ready to use." 0 0
 				--msgbox "$error_msg" 0 0 || true
 			error_msg=""  # Clear for next iteration
 		elif [[ $_showed_instructions -eq 0 ]]; then
-			# Show instructions on first visit (no error, no existing pull secret)
 			_showed_instructions=1
-			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET" \
-				--ok-label "Continue" \
-				--msgbox "Paste your Red Hat pull secret into the next screen.
+			# Button order per TUI_BUTTON_STANDARDS: OK(0), Extra(3), Cancel(1)
+			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_REQUIRED" \
+				--ok-label "Re-check" \
+				--extra-button --extra-label "Paste" \
+				--cancel-label "Exit" \
+				--yesno "\Z1~/.pull-secret.json not found\Zn
 
-Get your pull secret from:
+A Red Hat pull secret is required.
+
+Download from:
   https://console.redhat.com/openshift/downloads#tool-pull-secret
   (select \ZbTokens\Zn in the pull-down)
 
-Copy the entire JSON text and paste it into the editor." 0 0 || true
+\ZbOption 1 (recommended):\Zn Save to file, then re-run aba:
+  cat > ~/.pull-secret.json
+  (paste your pull secret, then press Ctrl+D)
+  Or, if you have a second terminal, press \Zb<Re-check>\Zn.
+
+\ZbOption 2:\Zn Paste into the editor (next screen).
+  \Z1Format first:\Zn  cat pull-secret.txt | jq .
+  Then paste the formatted (multi-line) output." 0 0
+			local choice_rc=$?
+			case $choice_rc in
+				0)
+					# Re-check -- see if user saved the file
+					if [[ -f "$pull_secret_file" ]] && jq empty "$pull_secret_file" 2>/dev/null && grep -q "registry.redhat.io" "$pull_secret_file"; then
+						log "Re-check: valid pull secret found at $pull_secret_file"
+						DIALOG_RC="next"
+						return
+					fi
+					log "Re-check: pull secret still missing or invalid"
+					_showed_instructions=0
+					continue
+					;;
+				3)
+					# Paste -- fall through to editbox
+					;;
+				1)
+					# Exit -- terminate TUI directly
+					log "User chose Exit from Pull Secret Required"
+					clear
+					echo "Exiting. Add your pull secret and re-run abatui:"
+					echo "  cat > ~/.pull-secret.json"
+					echo "  (paste your pull secret, then press Ctrl+D)"
+					echo ""
+					exit 0
+					;;
+				255)
+					# ESC -- treat as back
+					DIALOG_RC="back"
+					return
+					;;
+			esac
 		fi
 		
-		# Show editbox for paste - BLANK, large size
-		# Use full terminal size or max reasonable size
+		# Editbox for multi-line paste. Works well with formatted (jq .) pull secrets.
+		# Segfaults on very long single-line paste -- crash handler below catches that.
 		local dlg_h=$((TERM_ROWS - 4))
 		local dlg_w=$((TERM_COLS - 4))
-		
-		log "Terminal size: ${TERM_ROWS}x${TERM_COLS}, calculated dialog: ${dlg_h}x${dlg_w}"
-		
-		# Enforce minimums and maximums
 		[[ $dlg_h -lt 25 ]] && dlg_h=25
 		[[ $dlg_h -gt 50 ]] && dlg_h=50
 		[[ $dlg_w -lt 80 ]] && dlg_w=80
 		[[ $dlg_w -gt 120 ]] && dlg_w=120
 		
-		log "Final dialog size: ${dlg_h}x${dlg_w}"
+		log "Editbox dialog size: ${dlg_h}x${dlg_w}"
 		
-		# Create empty temp file for editbox
 		local empty_file=$(mktemp)
 		echo "" > "$empty_file"
 		
-		# Show editbox - title tells user what to do
+		# Button order per TUI_BUTTON_STANDARDS: OK(0)="Next", Extra(3)="Back"
 		dialog --colors --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_PULL_SECRET_PASTE" \
 			--no-cancel \
 			--extra-button --extra-label "Back" \
-			--help-button --help-label "Clear" \
 			--ok-label "Next" \
 			--editbox "$empty_file" $dlg_h $dlg_w 2>"$TMP"
 		
 		rc=$?
 		rm -f "$empty_file"
 		log "Pull secret editbox returned: $rc"
+		
+		# Handle dialog crash (rc > 128 = killed by signal, e.g. 139 = SIGSEGV)
+		# dialog's editbox segfaults on very long single-line paste (> ~2048 chars)
+		if [[ $rc -gt 128 ]]; then
+			stty sane 2>/dev/null
+			tput reset 2>/dev/null
+			# Drain leftover paste data from stdin so the next dialog isn't confused
+			while read -r -t 0.1 -n 10000 </dev/tty 2>/dev/null; do :; done
+			log "Dialog crashed (rc=$rc, signal=$((rc - 128))) - likely long single-line paste"
+			error_msg="\Z1ERROR: Paste too long for editor\Zn
+
+The dialog editor crashed on a very long single-line paste.
+
+\ZbOption 1:\Zn Format first, then paste (recommended):
+  cat pull-secret.txt | jq . > formatted.txt
+  Then paste the multi-line output into this screen.
+
+\ZbOption 2:\Zn Save the file directly, then re-run aba:
+  cat > ~/.pull-secret.json
+  (paste, then press Ctrl+D)
+  Then re-run: aba"
+			continue
+		fi
 		
 		# Handle ESC - confirm quit
 		if [[ $rc -eq 255 ]]; then
@@ -1420,6 +1491,11 @@ Copy the entire JSON text and paste it into the editor." 0 0 || true
 				log "User clicked Next, validating pull secret"
 				local pull_secret=$(<"$TMP")
 				
+				# Normalize: compact multi-line JSON to single line (handles pretty-printed paste)
+				if normalized=$(echo "$pull_secret" | jq -c . 2>/dev/null); then
+					pull_secret="$normalized"
+				fi
+
 				# Check if empty
 			if [[ -z "$pull_secret" || "$pull_secret" =~ ^[[:space:]]*$ ]]; then
 				error_msg="\Z1ERROR: Pull secret is empty\Zn
@@ -1510,20 +1586,18 @@ Please copy the complete pull secret from:
 
 The pasted content is not valid JSON.
 
-Please copy the ENTIRE pull secret from the Red Hat console.
-It should start with { and end with }
+This can happen if a long single-line pull secret
+is cut off when pasting.
 
-Get it from:
+Before pasting, format the pull secret with:
+  cat pull-secret.txt | jq .
+Then copy and paste the formatted (multi-line) output.
+
+Download from:
   https://console.redhat.com/openshift/downloads#tool-pull-secret
   (select 'Tokens' in the pull-down)"
 			continue
 		fi
-			;;
-		2)
-			# Clear button - just loop back to show empty editbox again
-			log "Clear button pressed, restarting pull secret entry"
-			error_msg=""  # Clear any error messages
-			continue
 			;;
 		3|255)
 			# Back/ESC
@@ -1620,6 +1694,9 @@ select_platform_network() {
 				dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Platform & Network Configuration:
 
+These values pertain to the disconnected environment
+where OpenShift will be deployed (the bastion network).
+
 • Platform: bm (bare-metal) or vmw (VMware)
 • Base Domain: DNS domain for cluster (e.g., example.com)
 • Machine Network: CIDR for cluster nodes (e.g., 10.0.0.0/24)
@@ -1627,7 +1704,7 @@ select_platform_network() {
 • Default Route: Gateway IP for cluster network
 • NTP Servers: IPs or hostnames separated by spaces (e.g., pool.ntp.org 10.0.1.8)
 
-Leave blank to use auto-detected values." 0 0 || true
+Leave blank to auto-detect on the disconnected bastion." 0 0 || true
 				continue
 				;;
 			3)
@@ -1805,7 +1882,7 @@ add_set_to_basket() {
 		[[ -z "$op" ]] && continue
 
 		# Validate operator exists in catalog index (silent filtering)
-		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/mirror/.index/* 2>/dev/null; then
+		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/* 2>/dev/null; then
 			log "Adding operator from set: $op (validated in catalog)"
 			OP_BASKET["$op"]=1
 			((added++))
@@ -1853,7 +1930,7 @@ select_operators() {
 	fi
 	
 	# Ensure all 3 catalogs are running in parallel (no-op if already started)
-	download_all_catalogs "$version_short" 86400 >>"$LOG_FILE" 2>&1
+	download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
 	
 	# Now wait for all 3 — they're already running in parallel
 	local failed_catalogs=()
@@ -1887,8 +1964,7 @@ $error_msg
 
 \ZbWhat to try:\Zn
   1. Check your internet connection
-  2. Press OK and go back to retry
-  3. Run 'aba doctor' for diagnostics" 0 0
+  2. Press OK and go back to retry" 0 0
 		
 		DIALOG_RC="back"
 		return
@@ -2137,7 +2213,7 @@ image synchronization process." 0 0 || true
 				[[ -n "${seen_ops[$op_name]:-}" ]] && continue
 				seen_ops["$op_name"]=1
 				echo "$line"
-			done < <(cat "$ABA_ROOT"/mirror/.index/* 2>/dev/null)
+			done < <(cat "$ABA_ROOT"/.index/* 2>/dev/null)
 		)
 		
 		# Now progressively filter by each search term
@@ -2358,7 +2434,7 @@ handle_action_view_isconf() {
 	log "Waiting for ImageSet config generation to complete"
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
-	if ! run_once -q -w -i "tui:isconf:generate"; then
+	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf"; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2396,6 +2472,12 @@ This file should have been generated automatically." 0 0 || true
 
 handle_action_bundle() {
 	log "Handling action: Create Bundle"
+	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
 	
 	# Get output path from user
 	local default_bundle="/tmp/ocp-bundle"
@@ -2517,6 +2599,12 @@ Continue with full bundle anyway?" 0 0
 handle_action_local_quay() {
 	log "Handling action: Local Quay Registry"
 	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
+	
 	# Load existing values from mirror.conf
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
@@ -2585,23 +2673,14 @@ handle_action_local_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Determine actual registry type and build appropriate command
-	local actual_type=$(get_actual_registry_type)
-	log "Actual registry type: $actual_type"
-	
-	local cmd
-	if [[ "$actual_type" == "Docker" ]]; then
-		# Docker: install-docker-registry + sync in one command
-		cmd="aba -d mirror install-docker-registry $retry_flag sync -H '$reg_host' $y_flag"
-	else
-		# Quay: just sync (install is make dependency)
-		cmd="aba -d mirror $retry_flag sync -H '$reg_host' $y_flag"
-	fi
-	
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local vendor="$(reg_vendor_from_tui)"
+	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' $y_flag"
+	log "Local registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
@@ -2676,17 +2755,24 @@ handle_action_local_docker() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f mirror/mirror.conf
 	log "Cleared SSH parameters for local registry installation"
 	
-	# Build command (install-docker-registry + sync in one)
-	local cmd="aba -d mirror install-docker-registry $retry_flag -H '$reg_host' sync $y_flag"
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local cmd="aba -d mirror --vendor docker $retry_flag sync -H '$reg_host' $y_flag"
+	log "Local Docker command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
 handle_action_remote_quay() {
 	log "Handling action: Remote Quay Registry"
+	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
 	
 	# Load existing values from mirror.conf
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
@@ -2759,28 +2845,25 @@ handle_action_remote_quay() {
 	replace-value-conf -q -n reg_ssh_key -v "$reg_ssh_key" -f mirror/mirror.conf
 	replace-value-conf -q -n reg_ssh_user -v "$reg_ssh_user" -f mirror/mirror.conf
 	
-	# Determine actual registry type and build appropriate command
-	local actual_type=$(get_actual_registry_type)
-	log "Actual registry type: $actual_type"
-	
-	local cmd
-	if [[ "$actual_type" == "Docker" ]]; then
-		# Docker: install-docker-registry + sync in one command
-		cmd="aba -d mirror install-docker-registry $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
-	else
-		# Quay: just sync (install is make dependency)
-		cmd="aba -d mirror $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
-	fi
-	
+	# --vendor ensures mirror.conf is created (if needed) and vendor is set
+	local vendor="$(reg_vendor_from_tui)"
+	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	log "Remote registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
-	
+
 	return 0
 }
 
 handle_action_save() {
 	log "Handling action: Save Images"
+	
+	# Wait for background isconf to finish (avoid racing two make processes)
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for background isconf to complete"
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+	fi
 	
 	# No form needed - just confirm and execute using global auto-answer setting
 	local y_flag=""
@@ -3151,9 +3234,6 @@ summary_apply() {
 		return
 	fi
 	
-	# Remove old ImageSet config files to force regeneration with current version
-	rm -f "$ABA_ROOT/mirror/save/imageset-config-save.yaml" 2>/dev/null || true
-	
 	# Reset and start isconf generation in background (non-blocking)
 	# Reset ensures regeneration if user changes operators and comes back
 	log "Resetting and starting background task: aba -d mirror isconf"
@@ -3245,15 +3325,27 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					else
 						ABA_AUTO_ANSWER="yes"; log "Auto-answer toggled ON"
 					fi
+					# Persist to aba.conf: ask=true means prompt (auto-answer OFF)
+					if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+						if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then
+							replace-value-conf -q -n ask -v "" -f aba.conf
+						else
+							replace-value-conf -q -n ask -v "true" -f aba.conf
+						fi
+					fi
 					settings_default="$TUI_SETTINGS_AUTO_ANSWER"
 					;;
-				$TUI_SETTINGS_REGISTRY_TYPE)
-					case "$ABA_REGISTRY_TYPE" in
-						Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
-						Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
-						Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
-					esac
-					settings_default="$TUI_SETTINGS_REGISTRY_TYPE"
+			$TUI_SETTINGS_REGISTRY_TYPE)
+				case "$ABA_REGISTRY_TYPE" in
+					Auto)   ABA_REGISTRY_TYPE="Quay"; log "Registry type toggled to Quay" ;;
+					Quay)   ABA_REGISTRY_TYPE="Docker"; log "Registry type toggled to Docker" ;;
+					Docker) ABA_REGISTRY_TYPE="Auto"; log "Registry type toggled to Auto" ;;
+				esac
+				# Persist to mirror.conf if it exists
+				if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+					replace-value-conf -q -n reg_vendor -v "$(reg_vendor_from_tui)" -f mirror/mirror.conf
+				fi
+				settings_default="$TUI_SETTINGS_REGISTRY_TYPE"
 					;;
 				$TUI_SETTINGS_RETRY_COUNT)
 					case "$RETRY_COUNT" in
@@ -3270,16 +3362,25 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 	# --- Advanced sub-dialog ---
 	_show_advanced() {
 		local adv_default="1"
+		# Label for delete: show installed registry type from state.sh when known
+		local _state_file="$HOME/.aba/mirror/mirror/state.sh"
+		local _delete_label="Delete registry"
+		if [[ -s "$_state_file" ]]; then
+			local _vendor
+			_vendor=$(grep -E '^REG_VENDOR=' "$_state_file" 2>/dev/null | cut -d= -f2-)
+			if [[ -n "$_vendor" ]]; then
+				_delete_label="Delete registry (${_vendor^})"
+			fi
+		fi
 		while :; do
 			dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ADVANCED" \
 				--cancel-label "Back" \
 				--ok-label "Select" \
 				--default-item "$adv_default" \
-				--menu "Advanced actions:" 0 0 4 \
+				--menu "Advanced actions:" 0 0 3 \
 				1 "Generate ImageSet Config & Exit" \
-				2 "Delete Registry (Quay)" \
-				3 "Delete Registry (Docker)" \
-				4 "Exit (run commands manually)" \
+				2 "$_delete_label" \
+				3 "Exit (run commands manually)" \
 				2>"$TMP"
 			local arc=$?
 			
@@ -3294,7 +3395,7 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					adv_default="1"; continue
 					;;
 				2)
-					log "User chose to delete Quay registry"
+					log "User chose to delete registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
@@ -3305,17 +3406,6 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					fi
 					;;
 				3)
-					log "User chose to delete Docker registry"
-					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
-							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
-						adv_default="3"; continue
-					fi
-					if ! confirm_and_execute "aba -d mirror uninstall-docker-registry -y"; then
-						adv_default="3"; continue
-					fi
-					;;
-				4)
 					log "User chose to exit and run commands manually"
 					clear
 					_show_exit_summary
@@ -3397,55 +3487,24 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 						continue
 					fi
 					;;
-				$TUI_ACTION_LOCAL_REGISTRY)
-					# Local Registry (Auto/Quay/Docker based on setting)
-					case "$ABA_REGISTRY_TYPE" in
-						Auto)
-							if [[ "$(uname -m)" == "aarch64" ]] || [[ "$(uname -m)" == "arm64" ]]; then
-								log "Auto-selected Docker for ARM64 architecture"
-								if handle_action_local_docker; then
-									return 0
-								else
-									default_item="$TUI_ACTION_LOCAL_REGISTRY"
-									continue
-								fi
-							else
-								log "Auto-selected Quay for non-ARM64 architecture"
-								if handle_action_local_quay; then
-									return 0
-								else
-									default_item="$TUI_ACTION_LOCAL_REGISTRY"
-									continue
-								fi
-							fi
-							;;
-						Quay)
-							if handle_action_local_quay; then
-								return 0
-							else
-								default_item="$TUI_ACTION_LOCAL_REGISTRY"
-								continue
-							fi
-							;;
-						Docker)
-							if handle_action_local_docker; then
-								return 0
-							else
-								default_item="$TUI_ACTION_LOCAL_REGISTRY"
-								continue
-							fi
-							;;
-					esac
-					;;
-				$TUI_ACTION_REMOTE_REGISTRY)
-					# Remote Registry
-					if handle_action_remote_quay; then
-						return 0
-					else
-						default_item="$TUI_ACTION_REMOTE_REGISTRY"
-						continue
-					fi
-					;;
+			$TUI_ACTION_LOCAL_REGISTRY)
+				# Local Registry -- dispatcher handles vendor (auto/quay/docker)
+				if handle_action_local_quay; then
+					return 0
+				else
+					default_item="$TUI_ACTION_LOCAL_REGISTRY"
+					continue
+				fi
+				;;
+			$TUI_ACTION_REMOTE_REGISTRY)
+				# Remote Registry -- dispatcher handles vendor + SSH
+				if handle_action_remote_quay; then
+					return 0
+				else
+					default_item="$TUI_ACTION_REMOTE_REGISTRY"
+					continue
+				fi
+				;;
 			$TUI_ACTION_RERUN_WIZARD)
 				# Rerun Wizard
 				log "User chose to rerun wizard"
@@ -3518,8 +3577,7 @@ SETTINGS (sub-menu):
 
 ADVANCED (sub-menu):
 • Generate ISConf & Exit  - Create YAML only (for manual oc-mirror)
-• Delete Registry (Quay)  - Uninstall Quay mirror registry
-• Delete Registry (Docker) - Uninstall Docker mirror registry
+• Delete registry        - Uninstall mirror registry (aba -d mirror uninstall)
 • Exit (manual)           - Exit TUI to run 'aba' commands yourself
 
 Log file: $LOG_FILE" 0 0 || true

@@ -11,20 +11,20 @@ This document contains the key rules, workflow, and architectural principles for
 
 ## Workflow
 
-**Development Environment**: Cursor Remote-SSH connected directly to `registry4`
+**Development Environment**: Cursor Remote-SSH connected directly to `dev host`
 
 ```
-Cursor (on registry4)
+Cursor (on dev host)
 ---------------------
-1. Edit files directly on registry4
+1. Edit files directly on the dev host (usually bastion or registry4)
 2. Test changes immediately
 3. Commit to git (when user approves)
 ```
 
 **Key Points:**
-- ✅ **Edit**: Changes are made directly on registry4 via Remote-SSH
+- ✅ **Edit**: Changes are made directly on dev host via Remote-SSH
 - ✅ **Test**: Test immediately in the same environment
-- ✅ **Commit**: Git operations happen on registry4 (with user permission!)
+- ✅ **Commit**: Git operations happen on dev host (with user permission!)
 - ✅ **No sync needed**: Working directly on target machine
 - ✅ **Real-time**: Changes are immediately available for testing
 
@@ -392,9 +392,28 @@ if [[ -f "$pid_file" ]]; then
 fi
 ```
 
+#### Never Pipe SSH Keys Through Multi-Hop SSH Chains
+
+**CRITICAL**: Piping file content through multi-hop SSH (e.g. `cat key | ssh hop1 'ssh hop2 "cat >> authorized_keys"'`) can introduce **invisible corruption** — missing newlines, null bytes, or encoding artifacts that make the file unparsable by `sshd`, even though `cat` shows correct-looking content.
+
+```bash
+# ❌ DANGEROUS - Can corrupt authorized_keys silently
+cat ~/.ssh/id_rsa.pub | ssh hop1 'ssh hop2 "cat >> ~/.ssh/authorized_keys"'
+
+# ✅ SAFE - Use scp or write the key on the target host directly
+scp ~/.ssh/id_rsa.pub hop1:/tmp/key.pub
+ssh hop1 'scp /tmp/key.pub hop2:/tmp/key.pub'
+ssh hop1 'ssh hop2 "cat /tmp/key.pub >> ~/.ssh/authorized_keys"'
+
+# ✅ SAFEST - Recreate the file from scratch on the target
+ssh target 'cp ~/.ssh/id_rsa.pub ~/.ssh/authorized_keys'
+```
+
+**Real example:** Multi-hop append corrupted `authorized_keys` on con3, breaking SSH for ALL sources. The file looked correct in `cat` output. `sshd` logged NO auth failures (silent rejection). Recreating the file from scratch fixed it.
+
 #### Stderr Redirection Best Practice
 
-**RULE**: Only use `2>/dev/null` IF there is an **explicit reason** to do so.
+**RULE**: Only use `2>/dev/null` or `2>&1` IF there is an **explicit reason** to do so.
 
 **DON'T** blindly suppress errors:
 ```bash
@@ -694,7 +713,7 @@ esac
 
 **Example from mirror/Makefile:**
 ```makefile
-.installed: .init .rpmsext mirror.conf
+.available: .init .rpmsext mirror.conf
 	@$(SCRIPTS)/ensure-cli.sh mirror-registry  # Waits/starts download, shows message
 	@make -sC . mirror-registry                 # Extracts tarball
 	$(SCRIPTS)/reg-install.sh                   # Installs registry
@@ -872,6 +891,96 @@ scripts/*.sh     → Task-specific scripts, called via Makefiles
 Makefiles        → Define targets and execution context
 ```
 
+### 5. `clean` vs `reset` — Know the Difference
+
+**`aba clean` / `make clean`**: Removes derived/temporary files only. The user can
+continue using ABA afterwards — all workflows (save, load, sync, install, etc.)
+will regenerate what they need.  Config files (`mirror.conf`, `cluster.conf`),
+tarballs, registry state, and `~/.aba/mirror/` credentials are preserved.
+
+**`aba reset` / `make reset`**: Nuclear option — returns the ABA directory to its
+original post-clone state (like `make distclean`).  Deletes everything `clean`
+does, plus tarballs, saved images, config files, and more.  ABA is **not expected
+to work normally** after a reset without re-running `./install` and reconfiguring.
+This is an internal/maintenance command and is not shown in user-facing help.
+
+**Rules:**
+- Use `clean` for mid-workflow restarts (e.g. repeat a `save` or `install`).
+- Use `reset` only when the repo **must** be returned to its original state.
+- Never use `reset` in the middle of a test suite — it destroys state that
+  subsequent steps depend on.
+- In E2E tests, prefer `aba clean` for end-of-test cleanup.  Use `rm -rf` only
+  for pre-test removal of entire cluster directories.
+
+### 6. `normalize*()` Functions: Config Values Only
+
+**CRITICAL RULE**: `normalize-aba-conf()`, `normalize-mirror-conf()`, and `normalize-cluster-conf()` must **only** echo config file values with sensible defaults. They must **never** compute derived values.
+
+**DON'T** put derived values in normalize functions:
+```bash
+# ❌ WRONG - in normalize-mirror-conf()
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name   # Derived from mirror_name!
+```
+
+**DO** compute derived values in the calling script:
+```bash
+# ✅ CORRECT - in the script that needs regcreds_dir
+source <(normalize-mirror-conf)
+regcreds_dir=$HOME/.aba/mirror/$mirror_name
+```
+
+**Why**: Two separate bugs were caused by putting derived values in normalize functions. The derived value was computed before dependent variables were set (e.g. `$mirror_name` was empty), producing wrong paths like `~/.aba/mirror/` instead of `~/.aba/mirror/sno`. The normalize function runs early in the pipeline and cannot know the calling context.
+
+**Rule of thumb**: If a value does not appear in `aba.conf`, `mirror.conf`, or `cluster.conf`, it does not belong in the corresponding normalize function.
+
+### 7. Make-First Architecture
+
+**Key Principle**: ABA was primarily make-based from the start. The `aba` CLI (`scripts/aba.sh`) is a convenience wrapper that resolves directories, parses CLI flags, and calls `make`.
+
+**Every operation must remain callable via `make` directly:**
+```bash
+# These must ALWAYS work, with or without the aba wrapper:
+make -C mirror install          # Install registry
+make -C mirror save             # Save images
+make -C sno cluster             # Create cluster
+make -C mirror unregister       # Deregister existing registry
+```
+
+**DON'T** put essential logic only in `aba.sh`:
+```bash
+# ❌ WRONG - logic that only works via "aba" CLI
+# Adding a critical step inside aba.sh's flag handling that make can't reach
+```
+
+**DO** keep logic in scripts called by Makefile targets:
+```bash
+# ✅ CORRECT - Makefile target calls script, aba.sh calls same Makefile target
+# mirror/Makefile:  unregister: ; $(SCRIPTS)/reg-unregister.sh
+# aba.sh:           make -C "$dir" unregister
+```
+
+**Why**: Advanced users and automation systems use `make` directly. Breaking `make` targets silently degrades the product for power users and CI pipelines.
+
+**DON'T** call scripts directly:
+```bash
+# ❌ WRONG - bypasses Makefile dependency tracking and marker management
+bash scripts/reg-install.sh
+bash scripts/reg-uninstall.sh
+```
+
+```bash
+# ✅ CORRECT - Makefile manages .available, .init, .unavailable markers
+make -C mirror install
+make -C mirror uninstall
+aba -d mirror install
+aba -d mirror uninstall
+```
+
+**Why**: Makefile targets manage dependency markers (`.available`, `.init`, `.unavailable`).
+Calling scripts directly skips this, leaving markers out of sync with actual state.
+This also means scripts should NOT contain `rm -f .available` or `touch .available` —
+that is the Makefile's responsibility.
+
 ## If Cursor Crashes
 
 ### What You'll Lose:
@@ -880,7 +989,7 @@ Makefiles        → Define targets and execution context
 - Specific fixes and decisions made
 
 ### What's Preserved:
-- All file changes (saved on registry4)
+- All file changes (saved on dev host)
 - Git diffs show what changed
 - System may provide a session summary
 
@@ -888,7 +997,7 @@ Makefiles        → Define targets and execution context
 
 1. **Remind AI of Key Rules** (paste this section):
    ```
-   - Working via Cursor Remote-SSH on registry4
+   - Working via Cursor Remote-SSH on dev host
    - Only modify: aba/tui, aba/test/func, scripts/include_all.sh (with permission)
    - Use run_once() for task management
    - Scripts use relative paths (minimal $ABA_ROOT usage)
@@ -913,7 +1022,7 @@ Makefiles        → Define targets and execution context
 ### Testing Changes
 ```bash
 # Edit files directly in Cursor (via Remote-SSH)
-# Files are already on registry4, no sync needed!
+# Files are already on dev host, no sync needed!
 
 # Test immediately
 cd /home/steve/aba
@@ -932,7 +1041,7 @@ git commit -m "Fix XYZ"
 
 ### Adding New Features
 1. Discuss design first
-2. Implement directly on registry4 (via Remote-SSH)
+2. Implement directly on dev host (via Remote-SSH)
 3. Test immediately (no sync delay!)
 4. Iterate until working
 5. User commits when ready (always ask first!)
@@ -995,9 +1104,31 @@ documented at the top of `test/e2e/lib/framework.sh`.
 
 1. **Tests MUST fail on error.**  Never mask underlying issues.
    If something breaks, the test must stop and report it.
+   **Especially in test/infrastructure code: never silently skip over or work around
+   an unexpected state.  Surface it loudly so the operator can act.**
 
-2. **Never use `2>/dev/null` in test commands.**
-   Stderr output is diagnostic gold.  Suppressing it hides root causes.
+2. **ABSOLUTELY NEVER use `2>/dev/null`, `>/dev/null`, or `>/dev/null 2>&1` in test commands.**
+   Stderr output is diagnostic gold.  Suppressing it hides root causes and wastes
+   hours of debugging when something goes wrong.  This applies to ALL commands inside
+   `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, and any command string passed to
+   the E2E framework.
+
+   **How to avoid it:**
+   - If a command might fail harmlessly → use `e2e_diag` or `e2e_diag_remote`
+     (exit code is ignored, but ALL output is preserved in the log)
+   - If a file might not exist → use `rm -f` (already ignores missing files)
+   - If a precondition is uncertain → use an explicit check:
+     `if [ -f X ]; then rm X; fi`
+   - If a container might not exist → `podman rm -f name` already tolerates
+     "no such container" without needing `2>/dev/null`
+   - If a service might already be stopped → check first:
+     `systemctl is-active svc && systemctl stop svc`
+
+   **Why this matters (real example):** A test added `podman system renew 2>/dev/null;
+   podman rm -af 2>/dev/null; true` as a "harmless cleanup" step.  This masked the
+   real error (podman lock corruption) and wasted an entire debug cycle before the
+   root cause was discovered.  Without the suppression, the error would have been
+   visible immediately in the test log.
 
 3. **Never use `|| true` in test commands.**
    If a command can legitimately fail, use `e2e_diag` (diagnostic only) or embed an
@@ -1025,12 +1156,15 @@ documented at the top of `test/e2e/lib/framework.sh`.
 10. **Prefer `aba` commands over raw `make` / scripts.**
     Eat your own dog food.  Use the product's CLI for setup and teardown.
 
-11. **Never destroy resources at the END of a suite.**
-    VMs, registries, clusters, etc. must be left alive so operators can inspect
-    state after a failure.  Cleanup belongs at the **start** of the next run
-    (e.g. `clone_vm` destroys a previous clone before creating a new one,
-    `reset_internal_bastion` wipes disN at suite start).  Explicit cleanup is
-    available via `--clean` or a dedicated destroy command.
+11. **Suites MUST clean up their own resources before suite_end.**
+    - SNO clusters: shutdown only (small, useful for post-suite debugging)
+    - Compact / Standard clusters: MUST delete (large, hold VIPs that block future installs)
+    - Mirrors on disN: MUST uninstall
+    - OOB pool registry: NEVER touched by suites (managed by setup-pool-registry.sh)
+    A suite NEVER installs a resource and leaves it for another suite.
+    Register every cluster (`e2e_register_cluster`) and mirror (`e2e_register_mirror`)
+    immediately before the install command -- this enables crash recovery via
+    `_pre_suite_cleanup` in runner.sh, which iterates ALL leftover .cleanup files.
 
 12. **Suites must be self-sufficient after clone-and-check.**
     Every suite (except `clone-and-check` itself) must be runnable independently
@@ -1055,18 +1189,81 @@ documented at the top of `test/e2e/lib/framework.sh`.
     must stay as `L` since the execution starts locally.  (b) Commands using custom SSH keys
     (`ssh -i ~/.ssh/testy_rsa`) may stay inline when testing specific key-based access.
 
-15. **Legitimate error suppression MUST have a comment explaining WHY.**
-    If `2>/dev/null`, `|| true`, or `|| echo ...` is genuinely needed (not a
-    workaround), add a comment on the line above or inline explaining the
-    specific reason.  Uncommented suppression is treated as a bug.
+15. **Error suppression in test code is almost NEVER acceptable.**
+    In the rare case where `2>/dev/null`, `|| true`, or `|| echo ...` is genuinely
+    needed (not a workaround), it MUST have a comment explaining the specific
+    reason.  Uncommented suppression is treated as a bug.  Before adding any
+    suppression, first consider these alternatives:
+    - `e2e_diag` / `e2e_diag_remote` — runs command, logs output, ignores exit code
+    - `rm -f` — already ignores "no such file"
+    - `podman rm -f name` — already tolerates "no such container"
+    - Explicit precondition: `if systemctl is-active svc; then systemctl stop svc; fi`
     ```bash
-    # ✅ GOOD - reason is documented
+    # ✅ BEST - use e2e_diag instead of suppression
+    e2e_diag "Power off VM (may already be off)" "govc vm.power -off $vm"
+
+    # ✅ ACCEPTABLE - documented reason, no e2e_diag alternative
     # Tolerate exit 1: VM may already be powered off
     govc vm.power -off "$vm" 2>/dev/null || true
 
-    # ❌ BAD - no explanation
+    # ❌ BAD - no explanation, hides real errors
     govc vm.power -off "$vm" 2>/dev/null || true
     ```
+
+16. **No safety nets in framework code.**
+    If a suite fails to clean up its resources, that is a bug in the suite --
+    fix the suite.  Do not add fallback cleanup to `suite_end()` or
+    `e2e_teardown()`.  Paper-over fixes violate rule #5.
+
+17. **Always run `aba day2` after `mirror load` or `mirror sync`.**
+    This applies the oc-mirror generated IDMS/ITMS/CatalogSources to the
+    cluster.  Without it, the cluster has no mirror configuration for newly
+    loaded images and deployments will fail with "image not found".
+
+18. **Tests MUST NEVER create ABA-internal or ABA-generated files directly.**
+    Do not write files like `cat > mirror/save/imageset-config-save.yaml <<EOF`
+    unless there is no `aba` or `make` target that produces the needed format.
+    Use `aba` CLI or `make` targets to generate files.
+
+    **Exception:** Creating a minimal/custom config for an incremental operation
+    that has no `aba` equivalent (e.g. operators-only imageset config without a
+    platform section).  When this is unavoidable, the test MUST include a comment
+    explaining why.
+
+19. **Tests MUST NEVER call ABA-internal functions directly.**
+    Do not call `run_once()`, `download_all_catalogs()`, `reg_detect_existing()`,
+    or similar internal functions from test code.  Tests simulate user actions via
+    `aba` CLI or `make` targets only.
+
+    **Exception:** Sourcing `include_all.sh` for access to utility functions
+    (e.g. `aba_info`) is acceptable in framework code.
+
+20. **Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism.**
+    `aba reset` is a "distclean" -- it returns the repo to its original unpacked
+    state.  It should only be used when a 100% fresh clean repo is genuinely
+    required for the following test cases.  Valid uses:
+    - Setup helpers like `setup_aba_from_scratch` (need pristine starting point)
+    - Dedicated regression tests for reset behavior itself
+    - Destroying a named mirror directory that is no longer needed
+
+    For cleaning up derived files between test steps, use `aba clean`, targeted
+    `aba uninstall` / `aba delete`, or `rm -rf` on specific directories.
+    From the user's perspective, `aba reset` should almost never be needed.
+
+21. **Every suite MUST have an explicit end-of-suite `Cleanup:` test block.**
+    Every suite that creates clusters or mirrors MUST have an explicit
+    `test_begin "Cleanup: ..."` block at the end that runs `aba delete` /
+    `aba uninstall` / `aba unregister` for every resource created during the
+    suite.  The EXIT trap and `_pre_suite_cleanup` are safety nets for crashes
+    -- they are NOT the primary cleanup path.  Explicit cleanup also serves as
+    a test of `aba delete`, `aba uninstall`, and `aba unregister`.
+
+### Documentation
+
+**Prefer adding documentation as comments inside the code** rather than in
+separate files under `ai/`.  Code comments are the primary source of truth --
+they stay with the code and don't drift out of sync.  Use `ai/` files only
+for high-level project context that doesn't belong in any specific source file.
 
 ### E2E Log Monitoring and Fix Scope
 
@@ -1263,7 +1460,7 @@ done
 ## Don't Forget!
 
 - ✅ **Never commit without permission**: Always ask user first!
-- ✅ **Remote-SSH workflow**: Already on registry4, no sync needed
+- ✅ **Remote-SSH workflow**: Already on dev host, no sync needed
 - ✅ **Ask before modifying**: Unknown scripts
 - ✅ **Use run_once**: For background/async work
 - ✅ **Tabs only**: No spaces in indentation
@@ -1304,6 +1501,6 @@ make -C mirror clean       # Mirror state
 
 ---
 
-**Last Updated**: February 21, 2026  
+**Last Updated**: March 1, 2026  
 **Purpose**: Keep this document updated as rules evolve
 

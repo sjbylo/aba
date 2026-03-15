@@ -198,13 +198,13 @@ reach_action_menu
 log_info "Test 1: View ImageSet Config"
 select_action "$TUI_ACTION_VIEW_IMAGESET"
 
-# The TUI first shows "Generating ImageSet configuration..." infobox, then a textbox.
-# Wait for the ACTUAL textbox (YAML content), not the generating infobox.
-if wait_for "$TUI_TITLE_IMAGESET" 30; then
+# The TUI first shows "Generating ImageSet configuration..." infobox (which
+# also contains "ImageSet"), then the actual textbox with YAML content.
+# Wait for YAML content to distinguish the textbox from the generating infobox.
+if wait_for "kind:.*ImageSetConfiguration\|apiVersion.*mirror" 30; then
 	log_pass "View ImageSet: textbox appeared"
 	screenshot "view-imageset"
 else
-	# Might be a "not found" msgbox instead
 	if capture | grep -qi "not found"; then
 		log_pass "View ImageSet: not-found message appeared"
 	else
@@ -213,28 +213,19 @@ else
 	fi
 fi
 
-# Give dialog time to finish rendering and become interactive
-sleep 3
+# Give dialog time to finish rendering
+sleep 2
 
-# dialog --textbox: Escape closes the dialog cleanly (rc=255)
-# Send Escape directly via tmux to avoid any quoting issues with the send helper
-log_info "Sending Escape to close textbox (session=$SESSION)"
-tmux send-keys -t "$SESSION" Escape
-sleep 3
+# Close the textbox with Escape
+log_info "Sending Escape to close textbox"
+send Escape
+sleep 2
 
 if wait_for "$TUI_TITLE_ACTION_MENU" 10; then
 	log_pass "View ImageSet: returned to action menu"
 else
-	# Retry with C-c in case Escape was lost
-	log_info "Escape did not work, trying C-c"
-	tmux send-keys -t "$SESSION" C-c
-	sleep 2
-	if wait_for "$TUI_TITLE_ACTION_MENU" 5; then
-		log_pass "View ImageSet: returned to action menu (via C-c)"
-	else
-		log_fail "View ImageSet: did not return to action menu"
-		ensure_action_menu
-	fi
+	log_fail "View ImageSet: did not return to action menu"
+	ensure_action_menu
 fi
 
 # ============================================================
@@ -359,18 +350,27 @@ log_info "Test 6: Rerun Wizard"
 ensure_action_menu
 select_action "$TUI_ACTION_RERUN_WIZARD"
 
-# Rerun Wizard restarts the wizard — Pull secret dialog should appear (first step)
-if wait_for "$TUI_TITLE_PULL_SECRET" 10; then
-	log_pass "Rerun Wizard: Pull secret dialog appeared"
+# Rerun Wizard restarts the wizard. If pull secret exists, auto-skip lands on Channel.
+# If not, the "Pull Secret Required" choice dialog appears.
+if wait_for "$TUI_TITLE_CHANNEL" 10; then
+	log_pass "Rerun Wizard: Channel screen appeared (pull secret auto-skipped)"
+	screenshot "rerun-wizard-channel"
+elif wait_for "$TUI_TITLE_PULL_SECRET_REQUIRED" 5; then
+	log_pass "Rerun Wizard: Pull secret required dialog appeared"
 	screenshot "rerun-wizard-pull-secret"
 else
-	log_fail "Rerun Wizard: Pull secret dialog did not appear"
-	screenshot "rerun-wizard-no-pull-secret"
+	log_fail "Rerun Wizard: neither Channel nor Pull Secret screen appeared"
+	screenshot "rerun-wizard-unknown"
 fi
 
-# Escape out -> confirm quit
+# Escape out repeatedly to reach confirm quit
 send Escape
 sleep 2
+# May land on "Valid Pull Secret Found" after backing from Channel
+if capture | grep -qi "Valid Pull Secret"; then
+	send Escape
+	sleep 2
+fi
 
 if wait_for "$TUI_TITLE_CONFIRM_EXIT" 5; then
 	log_pass "Rerun Wizard: confirm exit appeared"

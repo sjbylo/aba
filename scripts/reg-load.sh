@@ -1,10 +1,7 @@
 #!/bin/bash 
 # Load the registry with images from the local disk
 
-# Ensure we're in mirror/ directory (script is called from mirror/Makefile)
-# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-cd "$SCRIPT_DIR/../mirror" || exit 1
+# CWD is set by mirror/Makefile to the correct mirror directory
 
 # Enable INFO messages by default when called directly from make
 # (unless explicitly disabled by parent process via --quiet)
@@ -24,9 +21,10 @@ umask 077
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-verify-aba-conf || exit 1
-verify-mirror-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
 # Be sure a download has started ..
@@ -58,20 +56,19 @@ elif probe_host "$reg_url/" "registry root"; then
 else
 	aba_abort "Cannot reach mirror registry at $reg_url" \
 		"Registry must be accessible before loading images" \
-		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)" \
-		"Check curl errors above for details"
+		"Tried: /health/instance (Quay), /v2/ (Docker), / (generic)"
 fi
 
 aba_debug "Creating containers auth file for load operation"
-scripts/create-containers-auth.sh --load   # --load option indicates that the public pull secret is NOT needed.
+scripts/create-containers-auth.sh --load || exit 1   # --load option indicates that the public pull secret is NOT needed.
 
 # Check if the cert needs to be updated
 aba_debug "Checking for root CA certificate"
-if [ -s regcreds/rootCA.pem ]; then
+if [ -s "$regcreds_dir/rootCA.pem" ]; then
 	aba_debug "Installing root CA certificate"
-	trust_root_ca regcreds/rootCA.pem # FIXME: Is this required here since the rootCA.pem is installed after reg install?
+	trust_root_ca "$regcreds_dir/rootCA.pem" # FIXME: Is this required here since the rootCA.pem is installed after reg install?
 else
-	aba_warning "No regcreds/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+	aba_warning "No $regcreds_dir/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
 [ ! "$data_dir" ] && data_dir=\~

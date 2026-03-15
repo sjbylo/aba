@@ -1,13 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # Suite: Airgapped with Existing Registry (rewrite of test2)
 # =============================================================================
-# Purpose: Air-gapped workflow with a pre-existing registry. Save images,
-#          tar-pipe transfer, load into existing registry, install cluster,
-#          deploy app, install ACM.
+# Purpose: Air-gapped workflow using the pool registry on conN as an
+#          "existing" (externally-managed) registry. Save images, tar-pipe
+#          transfer, load into existing registry, install cluster, deploy
+#          app, install ACM.
 #
-# Unique: must-fail checks, existing registry integration, ACM/MCH,
-#         NTP chronyc verification.
+# Unique: pool registry registration via `aba register`, must-fail checks,
+#         existing registry integration, ACM/MCH, NTP chronyc verification.
 # =============================================================================
 
 set -u
@@ -22,7 +23,8 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 # L commands run on conN (this host). R commands SSH to disN.
 
-DIS_HOST="dis${POOL_NUM:-1}.${VM_BASE_DOMAIN:-example.com}"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
+DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
@@ -36,12 +38,12 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Setup: reset internal bastion" \
-    "Existing registry: install on bastion" \
+    "Existing registry: register pool registry" \
     "Must-fail checks" \
     "Save images to disk" \
     "Tar-pipe transfer to bastion" \
     "Load without regcreds (must fail)" \
+    "Load without save dir (must fail)" \
     "Load images into existing registry" \
     "Compact: install and delete cluster" \
     "SNO: install cluster" \
@@ -49,7 +51,8 @@ plan_tests \
     "ACM: install operators" \
     "ACM: MultiClusterHub" \
     "NTP: day2 and chronyc verify" \
-    "Shutdown cluster"
+    "Delete cluster" \
+    "Cleanup: deregister pool registry"
 
 suite_begin "airgapped-existing-reg"
 
@@ -66,9 +69,12 @@ setup_aba_from_scratch
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
-e2e_run "Show ocp_version" "grep -o '^ocp_version=[^ ]*' aba.conf"
+e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -79,11 +85,11 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Clean cluster dirs" "rm -rfv $SNO $COMPACT"
+e2e_run "Clean cluster dirs" "rm -rf $SNO $COMPACT"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
-    "aba --noask --platform vmw --channel ${TEST_CHANNEL:-stable} --version ${OCP_VERSION:-p} --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
@@ -95,29 +101,27 @@ e2e_run "Set operator sets (re-apply)" \
 test_end
 
 # ============================================================================
-# 2. Setup: reset internal bastion (reuse clone-and-check's disN)
+# 2. Register pool registry on conN as the "existing" registry
 # ============================================================================
-test_begin "Setup: reset internal bastion"
+test_begin "Existing registry: register pool registry"
 
-reset_internal_bastion
+# Ensure the pool registry is running on conN before registering it.
+# setup-pool-registry.sh is idempotent: skips install/sync if already done.
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
 
-test_end
-
-# ============================================================================
-# 3. Install "existing" registry on internal bastion
-# ============================================================================
-test_begin "Existing registry: install on bastion"
-
-e2e_run -r 2 2 "Download mirror-registry tarball" \
-    "aba --dir test mirror-registry-amd64.tar.gz"
+e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set mirror hostname in mirror.conf" \
-    "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
+e2e_run "Set reg_host to pool registry on conN" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
 
-e2e_run "Install test registry on internal bastion" \
-    "test/reg-test-install-remote.sh ${DIS_HOST}"
+e2e_run "Register pool registry with ABA" \
+    "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Verify pool registry access" \
+    "aba -d mirror verify"
 
 test_end
 
@@ -127,14 +131,30 @@ test_end
 test_begin "Must-fail checks"
 
 # These commands should fail -- verify they do
+e2e_run_must_fail "Uninstall existing reg should abort (state=existing)" \
+    "aba -d mirror uninstall -y"
+
 e2e_run_must_fail "Sync to unknown host should fail" \
     "aba -d mirror sync -H unknown.example.com --retry"
 
-e2e_run_must_fail "Install mirror to host where mirror already exists should fail" \
-    "aba -d mirror -k ~/.ssh/id_rsa -H $DIS_HOST install"
+# Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf).
+e2e_run "Restore reg_host after must-fail" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 
-e2e_run_must_fail "Install to localhost (no mirror on localhost) should fail" \
+# Pool registry is already registered -- idempotent install must succeed (skip)
+e2e_run "Install on already-registered registry succeeds (idempotent)" \
     "aba -d mirror install"
+
+# Existing registry detection (ported from old test2 line 178):
+# Unregister first so ABA doesn't know about the registry, then try to install.
+# Without state.sh, ABA probes the URL, finds a running registry it didn't install,
+# and correctly aborts — you can't install over an unknown existing registry.
+e2e_run "Unregister pool registry for must-fail install test" \
+    "aba -d mirror unregister"
+e2e_run_must_fail "Install over unregistered existing registry must fail" \
+    "aba -d mirror install"
+e2e_run "Re-register pool registry after must-fail test" \
+    "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 test_end
 
@@ -154,8 +174,47 @@ test_end
 # ============================================================================
 test_begin "Tar-pipe transfer to bastion"
 
+# Stdout purity regression test: force the dnf install code path (by removing
+# a known RPM) and verify `aba -d mirror tar --out -` produces valid tar on
+# stdout with no text contamination.  This catches regressions where install
+# messages leak to stdout and corrupt the tar stream (see install >&2 fix).
+e2e_run "Remove dialog RPM to force dnf path" \
+    "sudo dnf remove -y dialog"
+e2e_run "Remove stale dnf log" \
+    "rm -f mirror/.dnf-install.log"
+e2e_run "Verify tar stdout purity under dnf install" \
+    "aba -d mirror tar --out - 2>/tmp/e2e-tar-stderr.log | tar tf - > /dev/null"
+e2e_run "Verify dnf install actually ran" \
+    "test -s mirror/.dnf-install.log"
+e2e_run "Verify dialog was reinstalled" \
+    "rpm -q dialog"
+
+# Stage pool registry creds into mirror/.test/ so they're included in the tar-pipe
+e2e_run "Stage pool registry creds for transfer" \
+    "mkdir -p mirror/.test && cp $POOL_REG_DIR/pool-reg-creds.json mirror/.test/pool-reg-creds.json && cp $POOL_REG_DIR/certs/ca.crt mirror/.test/pool-reg-rootCA.pem"
+
+# Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
+e2e_run -q "Remove saved archives after transfer" "rm -f mirror/save/mirror_*.tar"
+
+e2e_run_remote "Remove dialog RPM to force dnf install path" \
+    "sudo dnf remove -y dialog"
+e2e_run_remote "Remove stale dnf log" \
+    "cd ~/aba && rm -f .dnf-install.log"
+e2e_run_remote "Install aba on internal bastion" \
+    "cd ~/aba && ./install"
+e2e_run_remote "Verify dialog was reinstalled" \
+    "rpm -q dialog"
+e2e_run_remote "Verify single dnf batch (no duplicate install)" \
+    "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
+
+# Register the pool registry on disN using the staged creds
+# Paths are relative to mirror/ because aba -d mirror changes CWD there
+e2e_run_remote "Register pool registry on disN" \
+    "cd ~/aba && aba -d mirror register --pull-secret-mirror .test/pool-reg-creds.json --ca-cert .test/pool-reg-rootCA.pem"
+e2e_run_remote "Verify pool registry access from disN" \
+    "cd ~/aba && aba -d mirror verify"
 
 test_end
 
@@ -164,17 +223,37 @@ test_end
 # ============================================================================
 test_begin "Load without regcreds (must fail)"
 
-# Before regcreds are in place, loading should fail with a clear error.
-# This validates error handling for a common user mistake.
-e2e_run_remote -q "Remove any existing regcreds" \
-    "cd ~/aba && rm -rfv mirror/regcreds"
+# Back up regcreds before removing, then restore after the must-fail test.
+# This is safer than manually reconstructing from ~/.docker/config.json.
+e2e_run_remote -q "Back up regcreds" \
+    "cp -a ~/.aba/mirror/mirror/ /tmp/e2e-regcreds-backup/"
+
+e2e_run_remote -q "Remove regcreds" \
+    "rm -rf ~/.aba/mirror/mirror/"
 
 e2e_run_must_fail_remote "Load without regcreds should fail" \
     "cd ~/aba && aba -d mirror load --retry"
 
-# Now restore regcreds so subsequent steps work
-e2e_run_remote "Restore regcreds from existing registry" \
+e2e_run_remote "Restore regcreds from backup" \
+    "rm -rf ~/.aba/mirror/mirror && cp -a /tmp/e2e-regcreds-backup ~/.aba/mirror/mirror && rm -rf /tmp/e2e-regcreds-backup"
+e2e_run_remote "Verify registry access with restored regcreds" \
     "cd ~/aba && aba -d mirror verify"
+
+test_end
+
+# ============================================================================
+# 7b. Load without save dir -- must fail
+# ============================================================================
+test_begin "Load without save dir (must fail)"
+
+e2e_run_remote -q "Move save dir aside" \
+	"cd ~/aba && mv mirror/save mirror/save.bak"
+
+e2e_run_must_fail_remote "Load without save dir should fail" \
+	"cd ~/aba && aba -d mirror load"
+
+e2e_run_remote -q "Restore save dir" \
+	"cd ~/aba && mv mirror/save.bak mirror/save"
 
 test_end
 
@@ -185,6 +264,7 @@ test_begin "Load images into existing registry"
 
 e2e_run_remote -r 3 2 "Load images into registry" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
 
 test_end
 
@@ -195,12 +275,18 @@ test_end
 # ============================================================================
 test_begin "Compact: install and delete cluster"
 
-e2e_run_remote "Create compact cluster (bootstrap only)" \
-    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_compact_api_vip) --step bootstrap"
+e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
+e2e_run_remote "Create compact cluster.conf" \
+    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
+e2e_run_remote "Increase compact resources for reliable bootstrap" \
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=12/' $COMPACT/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=24/' $COMPACT/cluster.conf"
+e2e_run_remote -r 1 1 "Bootstrap compact cluster" \
+    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
 e2e_run_remote -q "Clean compact dir" \
-    "cd ~/aba && rm -rfv $COMPACT"
+    "cd ~/aba && aba --dir $COMPACT clean"
 
 test_end
 
@@ -209,7 +295,14 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_run_remote "Create SNO cluster" \
+e2e_add_to_cluster_cleanup "$PWD/$SNO" remote
+# ACM/MCH requires significantly more resources than default SNO (old test uses 24 CPU / 40GB)
+e2e_run_remote "Generate SNO cluster.conf" \
+    "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run_remote "Increase SNO resources for ACM" \
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=24/' $SNO/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=40/' $SNO/cluster.conf"
+e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
@@ -218,15 +311,45 @@ e2e_poll_remote 600 30 "Wait for all operators fully available" \
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
+e2e_run_remote "Apply day2 config" \
+    "cd ~/aba && aba --dir $SNO day2"
+
 test_end
 
 # ============================================================================
-# 11. Deploy vote-app
+# 11. Incremental: vote-app image load
 # ============================================================================
 test_begin "Deploy vote-app"
 
-e2e_run_remote "Deploy vote-app" \
-    "cd ~/aba && test/deploy-test-app.sh"
+e2e_run "Create fresh imageset config for vote-app only" \
+    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/sjbylo/flask-vote-app:latest
+EOF"
+e2e_run -r 3 2 "Save vote-app image to disk" \
+    "aba -d mirror save --retry"
+e2e_run "Transfer vote-app archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -r 3 2 "Load vote-app images" \
+    "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+
+e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app:latest"
+
+e2e_run_remote "Apply day2 config (vote-app mirror resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
+
+e2e_run_remote "Create demo project" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
+e2e_run_remote -r 3 2 "Launch vote-app from mirror" \
+    "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
+e2e_poll_remote 480 30 "Wait for vote-app rollout" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 test_end
 
@@ -235,13 +358,39 @@ test_end
 # ============================================================================
 test_begin "ACM: install operators"
 
-# Add ACM operator to imageset and sync
+# Add ACM operator to imageset and sync.
+# For incremental operator saves, create a minimal imageset config with ONLY the
+# operators section (no platform).  oc-mirror v2 errors with "no release images
+# found" when the config includes a platform section but the delta tar doesn't
+# contain release images.  This matches the UBI/vote-app incremental pattern.
+# The grep -A2 from the catalog YAML simulates a user manually editing the ISC
+# file (as documented in aba's workflow).  The catalog YAML must be kept in sync
+# with .index/ by download-catalog-index.sh for this to work correctly.
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
+
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+e2e_run "Create operators-only imageset config for ACM" \
+    "cat > mirror/save/imageset-config-save.yaml <<EOF
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
+    packages:
+\$(grep -A2 'name: advanced-cluster-management\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+\$(grep -A2 'name: multicluster-engine\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+EOF"
+
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
-e2e_run -r 3 2 "Pipe ACM tar to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
+e2e_run "Transfer ACM archive+config to internal bastion" \
+    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+
+e2e_run_remote "Apply day2 config (ACM operator resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
 
 test_end
 
@@ -250,14 +399,28 @@ test_end
 # ============================================================================
 test_begin "ACM: MultiClusterHub"
 
-e2e_run_remote "Install ACM subscription" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc apply -f test/acm-subs.yaml'"
-e2e_run_remote -r 10 1.5 "Wait for ACM operator" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
-e2e_run_remote "Install MultiClusterHub" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc apply -f test/acm-mch.yaml'"
-e2e_run_remote -r 20 1.5 "Wait for MCH ready" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
+# Wait for CatalogSource to be indexed and ACM to appear in packagemanifests
+e2e_poll_remote 600 30 "Wait for ACM packagemanifest" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests -n openshift-marketplace' | grep advanced-cluster-management"
+
+e2e_run "Copy ACM YAML files to internal bastion" \
+    "ssh ${INTERNAL_BASTION} 'mkdir -p ~/aba/test' && scp ~/aba/test/acm-subs.yaml ~/aba/test/acm-mch.yaml ${INTERNAL_BASTION}:aba/test/"
+
+# Set the correct channel from the mirrored catalog index
+OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
+ACM_CHANNEL=$(grep ^advanced-cluster-management .index/redhat-operator-index-v${OCP_VER_MAJOR} | awk '{print $NF}' | tail -1)
+[ -n "$ACM_CHANNEL" ] && \
+e2e_run_remote "Set ACM channel to $ACM_CHANNEL" \
+    "sed -i 's/^#.*channel:.*/  channel: ${ACM_CHANNEL}/' ~/aba/test/acm-subs.yaml"
+
+e2e_run_remote -r 5 1.5 "Install ACM subscription" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-subs.yaml'"
+e2e_poll_remote 300 30 "Wait for ACM operator CSV" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
+e2e_run_remote -r 5 1.5 "Install MultiClusterHub" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-mch.yaml'"
+e2e_poll_remote 1800 60 "Wait for MCH ready" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get multiclusterhub -n open-cluster-management -o jsonpath={.items[0].status.phase} | grep Running'"
 
 test_end
 
@@ -269,29 +432,29 @@ test_begin "NTP: day2 and chronyc verify"
 e2e_run_remote "Apply day2 NTP config" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
 e2e_run_remote -r 3 2 "Verify chronyc sources" \
-    "cd ~/aba && aba --dir $SNO cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
 
 test_end
 
 # ============================================================================
-# 15. Shutdown
+# 15. Delete cluster
 # ============================================================================
-test_begin "Shutdown cluster"
+test_begin "Delete cluster"
 
-e2e_run_remote "Shutdown SNO cluster" \
-    "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
+e2e_run_remote "Delete SNO cluster" \
+    "cd ~/aba && aba --dir $SNO delete"
 
 test_end
 
 # ============================================================================
-# End-of-suite cleanup: uninstall registry on disN + verify
+# End-of-suite cleanup: deregister pool registry on both conN and disN
 # ============================================================================
-test_begin "Cleanup: uninstall registry on disN"
+test_begin "Cleanup: deregister pool registry"
 
-e2e_run "Uninstall registry on internal bastion" \
-    "aba -d mirror uninstall"
-e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/health/instance"
+e2e_run "Deregister pool registry on conN" \
+    "aba -d mirror unregister"
+e2e_run_remote "Deregister pool registry on disN" \
+    "cd ~/aba && aba -d mirror unregister"
 
 test_end
 

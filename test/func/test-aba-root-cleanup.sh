@@ -29,7 +29,7 @@ echo ""
 # Clean up any previous test state
 echo "Cleaning up previous test state..."
 rm -f ~/bin/oc-mirror
-rm -rf mirror/.index/*-operator-index-*
+rm -rf .index/*-operator-index-*
 rm -rf ~/.aba/runner/cli:install:oc-mirror
 rm -rf ~/.aba/runner/catalog:*
 
@@ -76,7 +76,7 @@ echo "Using OCP version: $ocp_version"
 
 # Start catalog downloads
 aba_info "Starting catalog downloads for OCP $ocp_version..." >&2
-download_all_catalogs "$ocp_version" 86400 >&2
+download_all_catalogs "$ocp_version" >&2
 
 # Wait for catalogs
 aba_info "Waiting for catalogs to complete..." >&2
@@ -84,9 +84,9 @@ wait_for_all_catalogs "$ocp_version" >&2
 
 # Verify catalog files exist and are not empty
 catalog_files=(
-	"mirror/.index/redhat-operator-index-v${ocp_version}"
-	"mirror/.index/certified-operator-index-v${ocp_version}"
-	"mirror/.index/community-operator-index-v${ocp_version}"
+	".index/redhat-operator-index-v${ocp_version}"
+	".index/certified-operator-index-v${ocp_version}"
+	".index/community-operator-index-v${ocp_version}"
 )
 
 for catalog_file in "${catalog_files[@]}"; do

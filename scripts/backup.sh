@@ -48,6 +48,7 @@ cd ..
 touch "${repo_dir}/.bundle"  # Flag this archive as a bundle
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
+
 # All 'find expr' below are by default "and"
 file_list=$(find		\
 	"${repo_dir}/install"		\
@@ -63,13 +64,14 @@ file_list=$(find		\
 	"${repo_dir}/README.md"		\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/mirror"		\
+	"${repo_dir}/.index"		\
 								\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
 	! -path "${repo_dir}/cli/.??*"	  				\
 	! -path "${repo_dir}/mirror/.init" 	 			\
 	! -path "${repo_dir}/mirror/.rpms"  				\
-	! -path "${repo_dir}/mirror/.installed"  			\
+	! -path "${repo_dir}/mirror/.available"  			\
 	! -path "${repo_dir}/mirror/.loaded" 				\
 	! -path "${repo_dir}/mirror/mirror-registry"  			\
 	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
@@ -78,7 +80,7 @@ file_list=$(find		\
 	! -path "${repo_dir}/mirror/pause.tar"  			\
 	! -path "${repo_dir}/mirror/postgres.tar"  			\
 	! -path "${repo_dir}/mirror/redis.tar"  			\
-	! -path "${repo_dir}/mirror/regcreds/*"	  			\
+	! -path "${repo_dir}/mirror/regcreds"	  			\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
 	! -path "${repo_dir}/mirror/sync/working-dir*"  		\
@@ -95,7 +97,7 @@ file_list=$(find		\
 
 # Notes on the above
 # See the "tar cf" command below and consider....
-# Note, don't copy over any of the ".init", ".installed", ".rpms" flag files etc, since these components are needed on the internal/private bastion
+# Note, don't copy over any of the ".init", ".available", ".rpms" flag files etc, since these components are needed on the internal/private bastion
 # Don't include/compress the 'image set' tar files since they are compressed already!
 # Don't need to copy over the oc-mirror-workspace (or working-dir 'v2') dirs.  The needed yaml files for 'aba day2' are created at 'aba -d mirror load' (???).
 # Don't copy over the "aba/test/output.log" since it's being written to by the test suite.  Tar may fail or stop since output.log is actively written to. 

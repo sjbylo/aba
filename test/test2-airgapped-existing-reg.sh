@@ -92,7 +92,7 @@ if [ ! "$1" ]; then
 	[ ! "$oc_mirror_ver_override" ] && oc_mirror_ver_override=v2
 	test-cmd -m "Configure aba.conf for version '$VER_OVERRIDE' and vmware $vf" aba --platform vmw --channel $TEST_CHANNEL --version $VER_OVERRIDE ### --vmw $vf
 
-	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba -A  # noask
+	test-cmd -m "Setting 'ask=false' in aba.conf to enable full automation." aba --noask
 
 	#test-cmd -m "Configure aba.conf for version 'latest' and vmware $vf" aba --version latest ## --vmw $vf
 
@@ -210,15 +210,15 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Install aba on the remote ho
 ###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
-test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Loading images into mirror registry (without regcreds/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
+test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Loading images into mirror registry (without ~/.aba/mirror/mirror/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
 
-# But, now regcreds/ is created...
-mylog "Simulating a manual config of 'existing' registry login credentials into mirror/regcreds/ on host: $DIS_SSH_USER@$int_bastion_hostname"
+# But, now ~/.aba/mirror/mirror/ is created...
+mylog "Simulating a manual config of 'existing' registry login credentials into ~/.aba/mirror/mirror/ on host: $DIS_SSH_USER@$int_bastion_hostname"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror"  
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l $subdir/aba/mirror/regcreds"  
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem $subdir/aba/mirror/regcreds/"  
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json $subdir/aba/mirror/regcreds/pull-secret-mirror.json"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "ls -l ~/.aba/mirror/mirror"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/quay-install/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/"  
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "cp -v ~/.containers/auth.json ~/.aba/mirror/mirror/pull-secret-mirror.json"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying access to the mirror registry $reg_host:$reg_port now succeeds" "aba --dir $subdir/aba/mirror verify"
 
@@ -591,7 +591,7 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 3 -m "Checking available O
 test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -rp test $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba
 
 # Need to fetch the actual channel name from the operator catalog that's in use
-acm_channel=$(cat mirror/.index/redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
+acm_channel=$(cat .index/redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
 [ "$acm_channel" ] && test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"

@@ -56,6 +56,9 @@ integration_tests=(
 	test/func/test-aba-root-cleanup.sh
 	test/func/test-bundle-tar-output.sh
 	test/func/test-mirror-save-workflow.sh
+	test/func/test-cli-download-wait.sh
+	test/func/test-e2e-framework.sh
+	test/func/test-tui-basket.sh
 )
 
 passed=0

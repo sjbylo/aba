@@ -100,6 +100,10 @@ $(MIRROR_CMDS):
 #	@echo "  aba -d mirror $@"
 #	@echo "  cd mirror && aba $@"
 
+.PHONY: mirror
+mirror: aba.conf  ## Create a named mirror directory, e.g. aba mirror --name mymirror
+	$(SCRIPTS)/setup-mirror.sh name=$(name)
+
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
 	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
@@ -112,9 +116,8 @@ ask: # Automatically accept the default answer to all prompts. Set 'ask' in aba.
 #.PHONY: setask
 #setask: ask
 
-#FIXME: Remove? Use -A or -y
 .PHONY: noask
-noask:  # Always prompt.  Set 'ask' in aba.conf to 'false'
+noask:  # Disable prompts. Use 'aba --noask' or 'aba -Y' instead.
 	@[ ! -s aba.conf ] && cp templates/aba.conf . || true
 	@[ -s aba.conf ] && sed -i "s/^ask=.*/ask=false/g" aba.conf && echo [ABA] value ask has been set to false in aba.conf.
 #.PHONY: setnoask
@@ -132,11 +135,14 @@ clean: ## Clean up all temporary files.
 reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'aba uninstall' to uninstall the mirror.
 	$(SCRIPTS)/reset-gate.sh $(force)
 	$(SCRIPTS)/cleanup-runner.sh
-	make clean
-	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
-	test -f aba.conf && mv aba.conf aba.conf.bk || true
+	make -sC test clean
 	make -sC cli reset
 	make -sC mirror reset 
+	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
+	test -f aba.conf && mv aba.conf aba.conf.bk || true
+	rm -f ~/.aba.previous.backup
+	rm -f ~/.aba.conf.created
+	rm -f .aba.conf.seen
 	rm -rf ~/.aba/cache ~/.aba/tmp ~/.aba/logs
 	rm -rf ~/.aba/runner || sleep 1 && rm -rf ~/.aba/runner || true
 	rm -f aba.conf ~/.aba.conf*

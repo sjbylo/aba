@@ -19,13 +19,17 @@ alwaysApply: true
 ## NEVER add AI attribution to commits
 
 - No "Co-authored-by: Cursor" or similar tags in commit messages
+- Add a git hook to remove the attribution from the commit message.
 
 ## Git workflow
 
 - Work on the `dev` branch
 - Default: commit AND push together (unless told otherwise)
+- Default: AI decides how to batch commits -- group by logical scope (e.g. core / test / docs) unless user specifies otherwise
+- **NEVER commit code changes without testing first!** If there is no automated test covering the change, ask the user to verify manually before committing. Docs-only changes are exempt.
 - Run `build/pre-commit-checks.sh` before committing code changes
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
+- IMPORTANT: `pre-commit-checks.sh` runs `git pull` which can overwrite local uncommitted changes. After running pre-commit checks, ALWAYS verify that edited files still contain the intended changes (e.g. `git diff` the files) before staging and committing.
 
 ## Backup uncommitted changes before editing
 
@@ -49,7 +53,7 @@ alwaysApply: true
 
 ## File modification permissions
 
-- CAN modify freely: `test/func/*`, `ai/*`
+- CAN modify freely: `test/func/*`, `ai/*`, `test/*`
 - CAN modify with permission: `scripts/include_all.sh`, `scripts/aba.sh`
 - CANNOT modify without explicit request: all other `scripts/*.sh`, Makefiles
 
@@ -58,22 +62,78 @@ alwaysApply: true
 - Use TABS for indentation, never spaces
 - Empty lines must have NO characters (no trailing whitespace)
 - Add comments for non-obvious bash features
+- Format bash scripts with proper and correct indentaton (pretty print).
 
 ## Key architecture
 
-- Use `run_once()` for all task management -- never access `~/.aba/runner/` directly
+- Use `run_once()` for all task management -- never access `~/.aba/runner/` dir directly
 - Use relative paths -- avoid `$ABA_ROOT` (only `aba.sh` should use it)
 - Use `ensure_*()` functions for CLI tool installation
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
+- `normalize*()` functions output ONLY config file values/defaults -- derived/computed values (e.g. `regcreds_dir`) belong in the calling script
+- ABA was originally make-based; `aba` is a wrapper around make. All `make <target>` invocations must continue to work directly (e.g. `make -C mirror install`, `make -C sno cluster`). Never add logic that only works via the `aba` CLI.
+- Scripts in `scripts/` must NEVER be called directly — only via Makefile targets or `aba` CLI. Calling scripts directly bypasses make's dependency tracking and marker management (.available, .init, etc.)
+- Scripts must NOT manage markers (.available, .unavailable) — that is the Makefile's responsibility
+
+## Documentation
+
+- Prefer adding documentation as comments inside the code vs in a file under `ai/`
+- Code comments are the primary source of truth -- they stay with the code and don't drift
 
 ## E2E test golden rules
 
-- Tests MUST fail on error -- never mask underlying issues
-- Never use `2>/dev/null` or `|| true` in test commands (use `e2e_diag` for diagnostic-only commands, or explicit precondition checks)
-- When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass
+- Tests MUST fail on error -- never mask underlying issues!
+- **ABSOLUTELY NEVER use `2>/dev/null` or `|| true` in test commands!  Only use ' `>/dev/null`' if there is a good reason to!**
+  - This includes inside `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, or any command string passed to the framework
+  - Stderr output is diagnostic gold -- suppressing it wastes HOURS of debugging when something goes wrong
+  - Even "harmless" cleanup commands (e.g. `podman rm -af 2>/dev/null`) hide real failures
+  - If a command might fail harmlessly, use `e2e_diag` or `e2e_diag_remote` (exit code is ignored, but output is preserved)
+  - If a file might not exist, use `rm -f` (already ignores missing files) NOT `rm 2>/dev/null`
+  - If a precondition is uncertain, use an explicit check: `if [ -f X ]; then ...; fi`
+  - If error suppression is truly unavoidable (extremely rare), it MUST have a comment explaining WHY
+- When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
+- No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
+- NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
+- If cleanup fails, the cleanup mechanism itself is broken -- fix IT, don't add out-of-band workarounds
+- Proper cleanup uses registered cleanup files (`.cleanup`, `.mirror-cleanup`) and `aba uninstall` / `aba delete` -- never bypass these with manual filesystem deletion
 - Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
 - Verify cleanup actually worked (assert service is down, directory is gone)
 - Prefer `aba` commands over raw `make` / scripts -- eat your own dog food
+- Tests MUST NEVER create ABA-internal or ABA-generated files directly (e.g. `cat > mirror/save/imageset-config-save.yaml`) -- use `aba` or `make` targets instead. Exception: creating a minimal/custom config for an incremental operation with no `aba` equivalent -- must include a comment explaining why.
+- Tests MUST NEVER call ABA-internal functions directly (e.g. `run_once()`, `download_all_catalogs()`) -- use `aba` CLI or `make` targets to simulate user actions. Exception: sourcing `include_all.sh` for utility functions in framework code is acceptable.
+- Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism -- `aba reset` is a "distclean" that returns the repo to its original unpacked state. Only use it when a 100% fresh clean repo is genuinely required (e.g. `setup_aba_from_scratch`, or dedicated reset regression tests). For mid-process cleanup use `aba clean`, `aba uninstall`, or `aba delete`.
+- Every suite that creates clusters or mirrors MUST have an explicit `test_begin "Cleanup: ..."` block at the end that runs `aba delete` / `aba uninstall` / `aba unregister` for every resource created. The EXIT trap and `_pre_suite_cleanup` are safety nets for crashes -- NOT the primary cleanup path. Explicit cleanup also tests `aba delete`, `aba uninstall`, and `aba unregister`.
+
+## E2E resource lifecycle
+
+- A suite ALWAYS cleans up resources it created before suite_end
+- SNO clusters: MUST delete (free resources for other suites)
+- Compact / Standard clusters: MUST delete (large, hold VIPs)
+- Mirrors on disN: MUST uninstall
+- OOB pool registry: NEVER touched by suites (managed by `setup-pool-registry.sh`)
+- Register every cluster (`e2e_register_cluster`) and mirror (`e2e_register_mirror`) immediately before install -- enables crash recovery via `_pre_suite_cleanup`
+- A suite NEVER installs a resource and leaves it for another suite
+
+## ABA operational rules
+
+- Always run `aba day2` after `mirror load` or `mirror sync` (applies IDMS/ITMS/CatalogSources)
+
+## E2E pool usage
+
+- When only pools 1 and 2 are active, ALWAYS pass `--pools 2` on every `run.sh` invocation (run, deploy, restart, stop, status, verify, reschedule)
+- Using `--pool N` without `--pools` can trigger infrastructure setup for ALL pools in pools.conf, powering on VMs that should stay off
+- Rule of thumb: if you know how many pools are in use, always pass `--pools N`
+
+## gotest directive
+
+When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E test loop. Full definition: **`ai/GOTEST.md`** (so you can find it after a Cursor crash).
+
+- Keep testing, monitoring, fixing test code or suites (only under `~/aba/test` and `ai/`), stopping suites, deploying changes, and re-testing
+- Do NOT stop to ask questions -- the user is away
+- Do NOT change any ABA core files (only `test/` and `ai/`)
+- Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested
+- Report back a summary when the user returns
+- If a fix requires core ABA changes, note it and move on
 
 ## For full details see `ai/RULES_OF_ENGAGEMENT.md`

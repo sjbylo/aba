@@ -1,10 +1,7 @@
 #!/bin/bash 
 # Copy images from RH reg. into the registry.
 
-# Scripts called from mirror/Makefile should cd to mirror/
-# Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-cd "$SCRIPT_DIR/../mirror" || exit 1
+# CWD is set by mirror/Makefile to the correct mirror directory
 
 # Enable INFO messages by default when called directly from make
 # (unless explicitly disabled by parent process via --quiet)
@@ -19,9 +16,10 @@ umask 077
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-verify-aba-conf || exit 1
-verify-mirror-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
 export reg_url=https://$reg_host:$reg_port
@@ -43,9 +41,14 @@ aba_debug "reg_url=$reg_url reg_host=$reg_host reg_port=$reg_port"
 aba_debug "Creating sync/ directory"
 mkdir -p sync 
 
-# Generate first imageset-config file for syncing images.  
-# Do not overwrite the file if it has been modified. Allow users to add images and operators to imageset-config-sync.yaml and run "make sync" again. 
-if [ ! -s sync/imageset-config-sync.yaml -o sync/.created -nt sync/imageset-config-sync.yaml ]; then
+# ISC regeneration guard:
+#   Regenerate if: ISC doesn't exist/empty OR ISC is NOT strictly newer than .created.
+#   Skip if: user edited the ISC after generation (ISC is strictly newer than .created).
+#   Using "! ISC -nt .created" instead of ".created -nt ISC" so that equal timestamps
+#   also trigger regeneration (needed on platforms like System Z/s390x).
+#   The .created file is touched at the end of each generation cycle.
+#   This allows users to customize the ISC and run 'aba sync' again without losing edits.
+if [ ! -s sync/imageset-config-sync.yaml -o ! sync/imageset-config-sync.yaml -nt sync/.created ]; then
 	aba_debug "Generating new imageset-config-sync.yaml"
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
@@ -78,5 +81,5 @@ fi
 
 # This is needed since sometimes an existing registry may already be available
 aba_debug "Creating containers auth file"
-scripts/create-containers-auth.sh
+scripts/create-containers-auth.sh || exit 1
 

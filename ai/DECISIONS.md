@@ -342,6 +342,82 @@ build steps, `run_once` bridges the gap with cross-process coordination).
 
 ---
 
+## oc-mirror v2: Incremental Image Loads
+
+### Decision: Fresh imageset-config for Incremental Loads
+**Date:** Feb 28, 2026  
+**Decision:** When doing incremental image loads (UBI, vote-app, extra operators) with
+oc-mirror v2, always create a **fresh** `imageset-config-save.yaml` containing ONLY
+the `additionalImages` (or `operators`) section. Do NOT uncomment/append to the
+existing config that still has the `mirror.platform` section.
+
+**Root Cause:**
+oc-mirror v2 treats every section in the imageset config as an instruction. If the
+`mirror.platform` block (with `channels`, `minVersion`, `maxVersion`) is present, it
+tries to re-resolve release images from the cache. When the release images are already
+mirrored, oc-mirror fails with:
+```
+[Executor] collection error: [GetReleaseReferenceImages] no release images found
+```
+
+**Correct Pattern (from old working E2E tests):**
+```bash
+# Backup existing config
+cp mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml
+
+# Create fresh config with ONLY the incremental images
+tee mirror/save/imageset-config-save.yaml <<'EOF'
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: registry.redhat.io/ubi9/ubi:latest
+EOF
+
+aba -d mirror save --retry
+```
+
+**Incorrect Pattern (causes failure):**
+```bash
+# DON'T just uncomment lines in existing config -- platform section persists!
+sed -i 's/^#  additionalImages:/  additionalImages:/' mirror/save/imageset-config-save.yaml
+sed -i 's/^#  - name: registry.redhat.io\/ubi9\/ubi:latest/  - name: .../' mirror/save/imageset-config-save.yaml
+```
+
+**Applies to:**
+- E2E test suites (`suite-airgapped-local-reg.sh`, `suite-airgapped-existing-reg.sh`)
+- Any user workflow that adds images incrementally after initial mirror sync
+- Documentation / user guides
+
+---
+
+## E2E Framework: Never Deploy to Running Pools
+
+### Decision: Do Not SCP Files While Suites Are Running
+**Date:** Feb 28, 2026  
+**Decision:** Never replace framework files (`framework.sh`, `runner.sh`, etc.) on
+conN hosts while a test suite is actively running in a tmux session.
+
+**Root Cause:**
+Bash reads sourced files lazily. When a running bash script has `source lib/framework.sh`,
+replacing that file mid-execution via `scp` corrupts the running process. The bash
+interpreter may read partial/misaligned content, causing:
+- Silent crashes (no RC file written, tmux session disappears)
+- Syntax errors at random points
+- Lost test results (suite completed but RC file never written)
+
+**Safe Patterns:**
+1. Use `run.sh deploy --force` only when no `e2e-suite-*` tmux sessions are active
+2. Wait for suites to finish, then deploy + restart
+3. `run.sh restart` handles stop → deploy → re-launch safely
+
+**Detection Gap:**
+The dispatcher (`_check_pool`) only detects completion by polling `.rc` files. If a
+suite crashes without writing an RC file (e.g., from a mid-flight scp), the dispatcher
+waits forever. Consider adding a tmux session liveness check as fallback.
+
+---
+
 ## Notes for AI Assistants
 
 - **Read this file at the start of each session**

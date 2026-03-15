@@ -13,15 +13,15 @@ source scripts/include_all.sh
 
 # Get OCP version from aba.conf
 source <(normalize-aba-conf)
-verify-aba-conf || aba_abort "aba.conf validation failed"
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Extract major.minor version (e.g., 4.20.8 -> 4.20)
 ocp_ver_short="${ocp_version%.*}"
 
 aba_info "Downloading operator catalogs for OCP $ocp_ver_short"
 
-# Download all catalogs in parallel (1-day TTL)
-download_all_catalogs "$ocp_ver_short" 86400
+# Download all catalogs in parallel (TTL from ~/.aba/config)
+download_all_catalogs "$ocp_ver_short"
 
 # Wait for all to complete
 wait_for_all_catalogs "$ocp_ver_short"

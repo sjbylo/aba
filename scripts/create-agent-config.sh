@@ -9,11 +9,12 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
-verify-mirror-conf || exit 1
+verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 ##############
 # Functions for manipulating IP addresses and CIDRs

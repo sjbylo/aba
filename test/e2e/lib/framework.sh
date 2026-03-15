@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # E2E Test Framework -- Core Library
 # =============================================================================
@@ -43,11 +43,73 @@
 # 10. Prefer 'aba' commands over raw 'make' / scripts.
 #     Eat your own dog food.  Use the product's CLI for setup and teardown.
 #
+# 10b. disN has NO INTERNET by design.
+#      All artifacts (images, tarballs, CLI tools) must arrive via the ABA
+#      bundle transfer from conN.  If something is missing on disN, the
+#      bundle creation failed -- never try to fetch from the internet.
+#
+# ===========================  TEST HYGIENE  =================================
+#
+# 10c. Tests MUST NEVER create ABA-internal or ABA-generated files directly.
+#      Use 'aba' or 'make' targets to generate files.  Exception: creating a
+#      minimal/custom config that has no aba/make equivalent (must have comment).
+#
+# 10d. Tests MUST NEVER call ABA-internal functions directly
+#      (e.g. run_once(), download_all_catalogs()).  Use 'aba' CLI or 'make'.
+#
+# 10e. Tests MUST NOT use 'aba reset' as a mid-process cleanup mechanism.
+#      Only use when a 100% fresh repo is needed (e.g. setup_aba_from_scratch)
+#      or for dedicated reset regression tests.  For mid-process cleanup use
+#      'aba clean', 'aba uninstall', or 'aba delete'.
+#
+# ===========================  RESOURCE LIFECYCLE  ===========================
+#
+# 11. A suite ALWAYS cleans up the resources it created (clusters AND mirrors).
+#     Before suite_end, explicitly:
+#       - SNO clusters: DELETE (free resources for other suites)
+#       - Compact / Standard clusters: DELETE (large, hold VIPs)
+#       - Mirrors on disN: uninstall
+#     Do not rely on external cleanup or snapshot revert.
+#
+# 12. A suite NEVER installs a resource and leaves it for another suite.
+#     Each suite is self-contained: create, test, destroy.
+#
+# 13. Only the OOB (out-of-band) pre-populated registry may be shared
+#     across suites.  It is managed by setup-pool-registry.sh, NOT suites.
+#     Suites must NEVER register or uninstall the OOB registry.
+#
+# 14. Add every cluster (e2e_add_to_cluster_cleanup) and mirror
+#     (e2e_add_to_mirror_cleanup) to the cleanup list immediately before the install command.
+#     This enables crash recovery: runner.sh _pre_suite_cleanup iterates
+#     ALL leftover .cleanup/.mirror-cleanup files before the next suite.
+#
+# 15. Every suite that creates clusters or mirrors MUST have an explicit
+#     test_begin "Cleanup: ..." block at the end that runs aba delete /
+#     aba uninstall / aba unregister for every resource created.  The EXIT
+#     trap and _pre_suite_cleanup are safety nets for crashes -- they are
+#     NOT the primary cleanup path.  Explicit cleanup also serves as a
+#     test of aba delete, aba uninstall, and aba unregister.
+#
 # ============================================================================
 
 # Resolve the directory this library lives in
 _E2E_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _E2E_DIR="$(cd "$_E2E_LIB_DIR/.." && pwd)"
+
+source "$_E2E_LIB_DIR/constants.sh"
+
+# --- SSH wrapper ------------------------------------------------------------
+# Cleanup functions (e2e_cleanup_clusters, e2e_cleanup_mirrors) need _essh().
+# Suites run as child bash processes (runner.sh line 588: bash "$suite_file"),
+# so functions sourced by the runner are NOT inherited.  Suites that source
+# pool-lifecycle.sh or vm-helpers.sh get _essh() from there; suites that only
+# source framework.sh (e.g. negative-paths, create-bundle-to-disk) need it here.
+_essh() {
+	ssh -o ConnectTimeout=10 -o BatchMode=yes \
+		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
+}
 
 # --- Globals ----------------------------------------------------------------
 
@@ -78,9 +140,28 @@ _E2E_START_TIME=""
 # Resume skip-block: when set, test_begin/e2e_run skip commands until test_end
 _E2E_SKIP_BLOCK=""
 
+# Skip-suite flag: when set, ALL remaining test blocks and e2e_run calls are no-ops
+_E2E_SUITE_SKIPPED=""
+
+# User-skip flag: set when user picks [s]kip from interactive menu; test_end records SKIP
+_E2E_USER_SKIPPED=""
+
 # Progress plan -- parallel arrays
 declare -a _E2E_PLAN_NAMES=()
 declare -a _E2E_PLAN_STATUS=()  # PENDING | RUNNING | PASS | FAIL | SKIP | DONE
+
+# --- Duration formatting ----------------------------------------------------
+
+_e2e_fmt_duration() {
+	local secs=$1
+	if [ $secs -ge 3600 ]; then
+		printf '%dh %dm %ds' $((secs/3600)) $((secs%3600/60)) $((secs%60))
+	elif [ $secs -ge 60 ]; then
+		printf '%dm %ds' $((secs/60)) $((secs%60))
+	else
+		printf '%ds' "$secs"
+	fi
+}
 
 # --- Color helpers ----------------------------------------------------------
 
@@ -144,18 +225,25 @@ _e2e_summary() {
 }
 
 # --- Notification -----------------------------------------------------------
+# All notifications:
+#   - Prefixed with [e2e] for easy filtering
+#   - Include pool number and hostname (never "localhost")
+#   - Failure notifications include last ~20 lines of suite log for context
+
+_e2e_notify_suffix() {
+    echo "(pool${POOL_NUM:-?}/$(hostname -s))"
+}
 
 _e2e_notify() {
     if [ -n "$NOTIFY_CMD" ]; then
-        # Pass message as args only (not also via stdin, which caused duplicates)
-        $NOTIFY_CMD "$@" < /dev/null 2>/dev/null || true
+        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null 2>&1
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "$subject" 2>/dev/null || true
+        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null 2>&1
     else
         cat > /dev/null  # drain stdin
     fi
@@ -319,30 +407,34 @@ suite_begin() {
     _e2e_log_and_print "$(_e2e_bold "SUITE: $suite_name${_host_info:+  [$_host_info]}")"
     _e2e_draw_line "="
     _e2e_summary "$(_e2e_Bold "========== SUITE: $suite_name${_host_info:+  [$_host_info]} ==========")"
-    _e2e_notify "Suite started: $suite_name${_host_info:+ ($_host_info)} ($(date))"
 }
 
 suite_end() {
     local elapsed=$(( $(date +%s) - _E2E_START_TIME ))
     local mins=$(( elapsed / 60 ))
     local secs=$(( elapsed % 60 ))
+    local _total_dur; _total_dur=$(_e2e_fmt_duration $elapsed)
 
     echo ""
     _e2e_draw_line "="
     _e2e_log_and_print "SUITE COMPLETE: $_E2E_SUITE_NAME"
     _e2e_log_and_print "  Total: $_E2E_TEST_COUNT  Pass: $_E2E_PASS_COUNT  Fail: $_E2E_FAIL_COUNT  Skip: $_E2E_SKIP_COUNT"
-    _e2e_log_and_print "  Duration: ${mins}m ${secs}s"
+    _e2e_log_and_print "  Duration: $_total_dur"
     _e2e_draw_line "="
 
     _print_progress
 
     if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
-        _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, ${mins}m ${secs}s) ==========")"
-        _e2e_notify "FAILED: $_E2E_SUITE_NAME -- $_E2E_FAIL_COUNT failures ($(date))"
+        _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
+        # #region agent log
+        printf '{"sessionId":"23cf03","hypothesisId":"H2","location":"framework.sh:finalize_suite:FAIL","message":"about to send suite FAIL notification","data":{"suite":"%s","fail_count":%d,"NOTIFY_CMD":"%s"},"timestamp":%s}\n' \
+            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+        # #endregion
+        _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
     else
-        _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, ${mins}m ${secs}s) ==========")"
-        _e2e_notify "PASSED: $_E2E_SUITE_NAME -- $_E2E_PASS_COUNT passed (${mins}m ${secs}s)"
+        _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, $_total_dur) ==========")"
+        _e2e_notify "PASSED: $_E2E_SUITE_NAME -- ${_E2E_PASS_COUNT} tests ($_total_dur)"
         return 0
     fi
 }
@@ -353,6 +445,16 @@ test_begin() {
     local test_name="$1"
     _E2E_CURRENT_TEST="$test_name"
     (( _E2E_TEST_COUNT++ )) || true
+
+    # If suite was skipped via interactive prompt, mark remaining tests SKIP
+    if [ -n "$_E2E_SUITE_SKIPPED" ]; then
+        _E2E_SKIP_BLOCK=1
+        (( _E2E_SKIP_COUNT++ )) || true
+        _update_plan "$test_name" "SKIP"
+        _e2e_log_and_print "$(_e2e_yellow "  SKIP (suite skipped): $test_name")"
+        _e2e_summary "$(_e2e_Yellow "  SKIP (suite skipped): $test_name")"
+        return 0
+    fi
 
     # Bug 3 fix: check resume checkpoint for test_begin/test_end pattern
     if should_skip_checkpoint "$test_name"; then
@@ -378,6 +480,23 @@ test_end() {
     # Bug 3 fix: if this test was skipped via resume, just clear state and return
     if [ -n "$_E2E_SKIP_BLOCK" ]; then
         _E2E_SKIP_BLOCK=""
+        _E2E_CURRENT_TEST=""
+        return 0
+    fi
+
+    # If suite was skipped during this test, record as FAIL
+    if [ -n "$_E2E_SUITE_SKIPPED" ] && [ "$result" -eq 0 ]; then
+        result=1
+    fi
+
+    # If user picked [s]kip from interactive menu, record as SKIP
+    if [ -n "$_E2E_USER_SKIPPED" ]; then
+        _E2E_USER_SKIPPED=""
+        (( _E2E_SKIP_COUNT++ )) || true
+        _update_plan "$test_name" "SKIP"
+        _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
+        _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
+        _checkpoint_write "$test_name" "SKIP"
         _E2E_CURRENT_TEST=""
         return 0
     fi
@@ -448,6 +567,133 @@ should_skip_checkpoint() {
     return 1  # no, don't skip
 }
 
+# --- Cluster Cleanup List ---------------------------------------------------
+#
+# Suites add clusters to the cleanup list RIGHT BEFORE the install command so
+# cleanup knows which clusters exist and where to delete them.  The .cleanup file
+# stores one entry per line: "user@fqdn /absolute/path/to/cluster_dir".
+# Cleanup SSHs to the stored target and runs 'aba -d <path> delete'.
+
+_E2E_CLEANUP_FILE=""
+
+# Add a cluster to the cluster cleanup list.  Call DIRECTLY before the install command.
+# The "local"/"remote" perspective is ALWAYS from conN (the host running the
+# suite script).  "local" = cleanup on conN, "remote" = cleanup on disN
+# (INTERNAL_BASTION) via SSH.
+#   e2e_add_to_cluster_cleanup "$PWD/$SNO"              # local cluster (on conN)
+#   e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote   # remote cluster (on disN)
+e2e_add_to_cluster_cleanup() {
+	local abs_path="$1"
+	local location="${2:-local}"
+
+	if [ -z "$_E2E_CLEANUP_FILE" ]; then
+		_E2E_CLEANUP_FILE="${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup"
+	fi
+
+	local target
+	if [ "$location" = "remote" ]; then
+		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	else
+		target="$(whoami)@$(hostname -f)"
+	fi
+
+	local entry="$target $abs_path"
+	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" 2>/dev/null || \
+		echo "$entry" >> "$_E2E_CLEANUP_FILE"
+
+	_e2e_log "  Added cluster to cleanup list: $entry"
+}
+
+# Delete all clusters in the cleanup list.  Safe to call multiple times.
+# SSHs to each stored user@fqdn and runs 'aba -d <path> delete'.
+e2e_cleanup_clusters() {
+	local cleanup_file="${_E2E_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup}"
+	[ -f "$cleanup_file" ] || return 0
+
+	_e2e_log_and_print "  Cleaning up clusters (from cleanup list) ..."
+	local target abs_path _all_ok=1
+	while IFS=' ' read -r target abs_path; do
+		[ -z "$abs_path" ] && continue
+		_e2e_log_and_print "    $target: aba -y -d $abs_path delete"
+		if ! ( _essh "$target" \
+			"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
+			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
+			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
+			_all_ok=""
+		fi
+	done < "$cleanup_file"
+	if [ -n "$_all_ok" ]; then
+		rm -f "$cleanup_file"
+	else
+		_e2e_log_and_print "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+	fi
+	_e2e_log_and_print "  Cleanup complete."
+}
+
+# --- Mirror Cleanup List ----------------------------------------------------
+#
+# Same pattern as cluster cleanup list but for mirrors installed on disN.
+# The .mirror-cleanup file stores one entry per line: "user@fqdn /abs/path".
+# Cleanup SSHs to the target and runs 'aba -d <path> uninstall'.
+# NOTE: This is for mirrors the SUITE installed (on disN).  The OOB pool
+#       registry on conN is managed by setup-pool-registry.sh and must
+#       NEVER be added to mirror cleanup here.
+
+_E2E_MIRROR_CLEANUP_FILE=""
+
+# Add a mirror to the mirror cleanup list.  Call DIRECTLY before the install/load/sync.
+# The "local"/"remote" perspective is ALWAYS from conN (the host running the
+# suite script).  "local" = cleanup on conN, "remote" = cleanup on disN
+# (INTERNAL_BASTION) via SSH.
+#   e2e_add_to_mirror_cleanup "$PWD/mirror"              # local mirror (on conN)
+#   e2e_add_to_mirror_cleanup "$PWD/mirror" remote       # remote mirror (on disN)
+e2e_add_to_mirror_cleanup() {
+	local abs_path="$1"
+	local location="${2:-local}"
+
+	if [ -z "$_E2E_MIRROR_CLEANUP_FILE" ]; then
+		_E2E_MIRROR_CLEANUP_FILE="${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup"
+	fi
+
+	local target
+	if [ "$location" = "remote" ]; then
+		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	else
+		target="$(whoami)@$(hostname -f)"
+	fi
+
+	local entry="$target $abs_path"
+	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" 2>/dev/null || \
+		echo "$entry" >> "$_E2E_MIRROR_CLEANUP_FILE"
+
+	_e2e_log "  Added mirror to cleanup list: $entry"
+}
+
+# Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
+e2e_cleanup_mirrors() {
+	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
+	[ -f "$cleanup_file" ] || return 0
+
+	_e2e_log_and_print "  Cleaning up mirrors (from cleanup list) ..."
+	local target abs_path _all_ok=1
+	while IFS=' ' read -r target abs_path; do
+		[ -z "$abs_path" ] && continue
+		_e2e_log_and_print "    $target: aba -y -d $abs_path uninstall"
+		if ! ( _essh "$target" \
+			"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
+			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
+			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
+			_all_ok=""
+		fi
+	done < "$cleanup_file"
+	if [ -n "$_all_ok" ]; then
+		rm -f "$cleanup_file"
+	else
+		_e2e_log_and_print "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+	fi
+	_e2e_log_and_print "  Mirror cleanup complete."
+}
+
 # --- Interactive Prompt -----------------------------------------------------
 
 _interactive_prompt() {
@@ -459,10 +705,9 @@ _interactive_prompt() {
         return 1
     fi
 
-    (
-        echo "Log tail:"
-        tail -20 "${E2E_LOG_FILE:-/dev/null}" 2>/dev/null
-    ) | _e2e_notify_stdin "Command failed: $cmd"
+    local _paused_file="/tmp/e2e-paused-${_E2E_SUITE_NAME:-unknown}"
+    echo "${_E2E_CURRENT_TEST:-$description}" > "$_paused_file"
+    local _clock_stopped=""
 
     while true; do
         echo ""
@@ -472,26 +717,63 @@ _interactive_prompt() {
         [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
         [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [a]bort [!cmd]: ")"
         read -t 0 -n 10000 </dev/tty 2>/dev/null || true
-        read -r ans </dev/tty
+        if [ "$_clock_stopped" ]; then
+            printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
+            read -r ans </dev/tty
+        else
+            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (20m timeout): ")"
+            if ! read -t 1200 -r ans </dev/tty; then
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_red "No input for 20 mins -- auto-aborting suite")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
+                exit 1
+            fi
+        fi
 
         case "$ans" in
+            p|P)
+                _clock_stopped=1
+                _e2e_log_and_print "  >> $(_e2e_yellow "PAUSED -- clock stopped. Pick any option to continue.")"
+                continue
+                ;;
             r|R|"")
-                _e2e_log "User chose: retry"
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ...")"
                 return 2
                 ;;
             s)
-                _e2e_log "User chose: skip test"
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test -- cleaning up ...")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
                 return 0
                 ;;
             S)
-                _e2e_log "User chose: skip entire suite"
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping entire suite -- cleaning up ...")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
                 return 3
                 ;;
+            0)
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_cyan "Restarting suite -- cleaning up first ...")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
+                return 4
+                ;;
+            c|C)
+                _e2e_log_and_print "  >> $(_e2e_yellow "Running cleanup ...")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
+                ;;
             a|A)
-                _e2e_log "User chose: abort"
-                echo "Aborting."
+                rm -f "$_paused_file"
+                _e2e_log_and_print "  >> $(_e2e_red "Aborting -- cleaning up ...")"
+                e2e_cleanup_clusters
+                e2e_cleanup_mirrors
                 exit 1
                 ;;
             !*)
@@ -502,6 +784,7 @@ _interactive_prompt() {
                 local new_rc=${PIPESTATUS[0]}
                 if [ $new_rc -eq 0 ]; then
                     _e2e_log "User command succeeded"
+                    rm -f "$_paused_file"
                     return 0
                 else
                     _e2e_log "User command failed (exit=$new_rc)"
@@ -549,6 +832,7 @@ _e2e_exit_info() {
 #
 e2e_run() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
 
     local tot_cnt=5
     local backoff=1.5
@@ -582,73 +866,101 @@ e2e_run() {
     local _step_start
     _step_start=$(date +%s)
 
+    # Per-command output capture: write to a temp file so failure notifications
+    # can read the last 20 lines without the tee-reading-own-log truncation bug.
+    local _cmd_output_file="/tmp/e2e-cmd-output.$$.tmp"
+
     while true; do
         local sleep_time="$initial_delay"
         local attempt=1
 
         while true; do
             local ret=0
+            : > "$_cmd_output_file"
 
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
-                    ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
-                        2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                        2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ( eval "$cmd" ) >> "$_lf" 2>&1 || ret=$?
+                    ( eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+                    ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
-            [ $ret -eq 130 ] && return 130
+            # Ctrl-C (SIGINT=130): skip retry loop, go straight to interactive prompt
+            if [ $ret -eq 130 ]; then
+                _e2e_log_and_print "    $(_e2e_yellow "Interrupted (Ctrl-C)")"
+                _e2e_summary "    $(_e2e_Yellow "Interrupted (Ctrl-C): $description")"
+                break
+            fi
 
             if [ $ret -eq 0 ]; then
                 local _elapsed=$(( $(date +%s) - _step_start ))
+                local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
-                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description (${_elapsed}s)"
-                    _e2e_notify "Command recovered: $description ($(date))"
+                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
                 fi
-                _e2e_log_and_print "    $(_e2e_green "OK") (${_elapsed}s)"
-                _e2e_summary "    $(_e2e_Green "OK (${_elapsed}s)")"
-                _e2e_log "  OK (attempt $attempt, ${_elapsed}s)"
+                _e2e_log_and_print "    $(_e2e_green "OK") ($_dur)"
+                _e2e_summary "    $(_e2e_Green "OK ($_dur)")"
+                _e2e_log "  OK (attempt $attempt, $_dur)"
+                rm -f "$_cmd_output_file"
                 return 0
             fi
 
             local _exi; _exi="$(_e2e_exit_info $ret)"
             _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
 
+            # Notify on the very first failure (before exhausted check so tot_cnt=1 still fires)
+            # #region agent log
+            printf '{"sessionId":"23cf03","hypothesisId":"H1","location":"framework.sh:retry_loop","message":"failure in retry loop","data":{"attempt":%d,"tot_cnt":%d,"description":"%s","ret":%d},"timestamp":%s}\n' \
+                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+            # #endregion
+            if [ $attempt -eq 1 ]; then
+                (
+                    echo "$(date '+%H:%M:%S') FIRST FAILURE"
+                    echo "Suite: $_E2E_SUITE_NAME"
+                    echo "Test: ${_E2E_CURRENT_TEST:-$description}"
+                    echo "Command: $cmd"
+                    echo "Host: ${host:-$(hostname -s)}"
+                    echo ""
+                    echo "--- Last 20 lines of suite log ---"
+                    echo ""
+                    tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                ) | _e2e_notify_stdin "FIRST FAIL: $description"
+            fi
+
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
                 _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
                 _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
                 _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
-                (
-                    echo "Command: $cmd"
-                    echo "Host: ${host:-localhost}"
-                    echo "Log tail:"
-                    tail -20 "${E2E_LOG_FILE:-/dev/null}" 2>/dev/null
-                ) | _e2e_notify_stdin "EXHAUSTED $tot_cnt attempts: $description"
+                if [ $tot_cnt -gt 1 ]; then
+                    (
+                        echo "$(date '+%H:%M:%S') EXHAUSTED $tot_cnt attempts"
+                        echo "Suite: $_E2E_SUITE_NAME"
+                        echo "Test: ${_E2E_CURRENT_TEST:-$description}"
+                        echo "Command: $cmd"
+                        echo "Host: ${host:-$(hostname -s)}"
+                        echo ""
+                        echo "--- Last 20 lines of suite log ---"
+                        echo ""
+                        tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                    ) | _e2e_notify_stdin "EXHAUSTED: $description"
+                fi
                 break
             fi
 
-            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description")"
-            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description"
-
-            if [ $attempt -eq 1 ]; then
-                (
-                    echo "Command: $cmd"
-                    echo "Host: ${host:-localhost}"
-                    echo "Log tail:"
-                    tail -20 "${E2E_LOG_FILE:-/dev/null}" 2>/dev/null
-                ) | _e2e_notify_stdin "Attempt $attempt failed: $description"
-            fi
+            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
+            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
 
             (( attempt++ ))
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
@@ -665,10 +977,19 @@ e2e_run() {
             continue
         elif [ $prompt_rc -eq 0 ]; then
             local _elapsed=$(( $(date +%s) - _step_start ))
-            _e2e_log_and_print "    $(_e2e_green "OK (user skip)") (${_elapsed}s)"
+            local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
+            _e2e_log_and_print "    $(_e2e_yellow "SKIP (user)") ($_dur)"
+            _e2e_summary "    $(_e2e_Yellow "SKIP (user): $description") ($_dur)"
+            _E2E_USER_SKIPPED=1
+            rm -f "$_cmd_output_file"
             return 0
         elif [ $prompt_rc -eq 3 ]; then
+            _E2E_SUITE_SKIPPED=1
+            rm -f "$_cmd_output_file"
             return 3
+        elif [ $prompt_rc -eq 4 ]; then
+            rm -f "$_cmd_output_file"
+            exit 4
         else
             local _exf; _exf="$(_e2e_exit_info $ret)"
             _e2e_log "  FAILED: $description ($_exf)"
@@ -677,7 +998,9 @@ e2e_run() {
             if [ -n "$_E2E_CURRENT_TEST" ]; then
                 test_end "$ret"
             fi
-            _e2e_notify "FATAL: $description ($_exf) -- suite aborted"
+            rm -f "$_cmd_output_file"
+            e2e_cleanup_clusters
+            e2e_cleanup_mirrors
             exit 1
         fi
     done
@@ -691,6 +1014,7 @@ e2e_run() {
 # Shorthand for e2e_run -h $INTERNAL_BASTION (all flags pass through)
 e2e_run_remote() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
@@ -721,6 +1045,45 @@ e2e_poll_remote() {
         "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
 }
 
+# --- Operator readiness helpers ---------------------------------------------
+#
+# Reusable wait functions for OpenShift cluster operator stabilization.
+# Both use wall-clock-bounded polling (e2e_poll / e2e_poll_remote).
+#
+# Usage:
+#   e2e_wait_operators_available $SNO           # local, AVAILABLE=True only
+#   e2e_wait_operators_available $SNO remote    # remote (disN)
+#   e2e_wait_operators_ready $SNO remote        # remote, strict 3-column check
+#
+
+# Loose check: all operators have AVAILABLE=True (ignores PROGRESSING/DEGRADED).
+# 10 min timeout, 30s interval.
+e2e_wait_operators_available() {
+	local cluster_dir="$1"
+	local location="${2:-local}"
+	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3}' | tail -n +2 | grep -v '^True\$' | wc -l | grep ^0\$"
+
+	if [ "$location" = "remote" ]; then
+		e2e_poll_remote 600 30 "Wait for all operators available" "$_cmd"
+	else
+		e2e_poll 600 30 "Wait for all operators available" "$_cmd"
+	fi
+}
+
+# Strict check: all operators AVAILABLE=True, PROGRESSING=False, DEGRADED=False.
+# 10 min timeout, 30s interval.
+e2e_wait_operators_ready() {
+	local cluster_dir="$1"
+	local location="${2:-local}"
+	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+
+	if [ "$location" = "remote" ]; then
+		e2e_poll_remote 600 30 "Wait for all operators fully ready" "$_cmd"
+	else
+		e2e_poll 600 30 "Wait for all operators fully ready" "$_cmd"
+	fi
+}
+
 # --- e2e_diag ---------------------------------------------------------------
 #
 # Run a DIAGNOSTIC command whose exit code does NOT affect the test outcome.
@@ -737,6 +1100,7 @@ e2e_poll_remote() {
 #
 e2e_diag() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
 
     local host=""
     local mark="L"
@@ -759,10 +1123,10 @@ e2e_diag() {
     _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
 
     if [ -n "$host" ]; then
-        ssh -o LogLevel=ERROR "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+        ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
             2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     else
-        ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+        ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     fi
 
     if [ $ret -ne 0 ]; then
@@ -775,6 +1139,7 @@ e2e_diag() {
 # Shorthand: e2e_diag on $INTERNAL_BASTION
 e2e_diag_remote() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
     if [ -z "${INTERNAL_BASTION:-}" ]; then
         _e2e_log_and_print "  $(_e2e_red "FATAL: INTERNAL_BASTION not set -- aborting suite")"
         exit 1
@@ -791,6 +1156,7 @@ e2e_diag_remote() {
 #
 e2e_run_must_fail() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
 
     local description="$1"; shift
     local cmd="$*"
@@ -803,7 +1169,7 @@ e2e_run_must_fail() {
     _e2e_summary "    $(_e2e_Cyan "$cmd")"
 
     local ret=0
-    ( eval "$cmd" ) 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
@@ -826,6 +1192,7 @@ e2e_run_must_fail() {
 #
 e2e_run_must_fail_remote() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
+    [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
 
     local description="$1"; shift
     local cmd="$*"
@@ -843,7 +1210,7 @@ e2e_run_must_fail_remote() {
     _e2e_summary "    $(_e2e_Cyan "($cmd)")"
 
     local ret=0
-    ssh -o LogLevel=ERROR "$INTERNAL_BASTION" -- \
+    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$INTERNAL_BASTION" -- \
         ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
         2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
@@ -915,7 +1282,7 @@ assert_contains() {
         _assert_fail "File does not exist: $file (expected to contain: $pattern)"
         return
     fi
-    if grep -q "$pattern" "$file"; then
+    if grep "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' found in $file"
     else
         _assert_fail "$msg"
@@ -930,7 +1297,7 @@ assert_not_contains() {
         _assert_fail "File does not exist: $file (checking for absence of: $pattern)"
         return
     fi
-    if ! grep -q "$pattern" "$file"; then
+    if ! grep "$pattern" "$file"; then
         _e2e_log "  ASSERT OK: '$pattern' not found in $file (expected)"
     else
         _assert_fail "$msg"
@@ -1007,6 +1374,30 @@ yaml_diff() {
     diff <(yaml_normalize "$file_a" $strip) <(yaml_normalize "$file_b" $strip)
 }
 
+# Adapt an example file written for pool 1 to the current pool.
+# On pool 1 the file is returned unchanged; on pool N the pool-specific
+# identifiers (domain, cluster names, IP decade, vCenter folder/datastore)
+# are remapped from pool 1 -> pool N.
+#   Usage: adapt_example_for_pool FILE [POOL_NUM]
+#   Output goes to stdout (use process substitution for yaml_diff).
+adapt_example_for_pool() {
+    local file="$1" pool="${2:-${POOL_NUM:-1}}"
+    if [ "$pool" = "1" ]; then
+        cat "$file"
+        return
+    fi
+    sed \
+        -e "s/p1\.example\.com/p${pool}.example.com/g" \
+        -e "s/con1\.example\.com/con${pool}.example.com/g" \
+        -e "s/\bsno1\b/sno${pool}/g" \
+        -e "s/\bcompact1\b/compact${pool}/g" \
+        -e "s/\bstandard1\b/standard${pool}/g" \
+        -e "s/10\.0\.2\.1\([0-9]\)/10.0.2.${pool}\1/g" \
+        -e "s/aba-e2e\/pool1/aba-e2e\/pool${pool}/g" \
+        -e "s/Datastore4-1/Datastore4-${pool}/g" \
+        "$file"
+}
+
 # --- Guards -----------------------------------------------------------------
 
 require_cluster() {
@@ -1072,17 +1463,24 @@ preflight_ssh() {
         _e2e_log "  Preflight: SSH to root@$host_only OK"
     fi
 
-    _e2e_log "  Preflight: checking SSH to testy@$host_only (testy_rsa) ..."
-    if ! ssh $_ssh_opts -i ~/.ssh/testy_rsa "testy@$host_only" true 2>/dev/null; then
-        _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to testy@$host_only with testy_rsa")"
-        _fail=1
+    # testy key lives on conN (baked into golden snapshot).
+    # Verify that conN can SSH as testy to disN -- the path used by test suites.
+    local _dis_host_only="${DIS_HOST:-}"
+    _dis_host_only="${_dis_host_only#*@}"   # strip user@ prefix if present
+    if [ -n "$_dis_host_only" ]; then
+        _e2e_log "  Preflight: checking testy SSH from $host_only to $_dis_host_only ..."
+        if ! ssh $_ssh_opts "$host" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null testy@${_dis_host_only} whoami 2>&1 | grep testy"; then
+            _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: testy cannot SSH from $host_only to $_dis_host_only")"
+            _fail=1
+        else
+            _e2e_log "  Preflight: testy SSH from $host_only to $_dis_host_only OK"
+        fi
     else
-        _e2e_log "  Preflight: SSH to testy@$host_only (testy_rsa) OK"
+        _e2e_log "  Preflight: DIS_HOST not set -- skipping testy SSH check"
     fi
 
     if [ -n "$_fail" ]; then
         _e2e_log_and_print "  $(_e2e_Red "Aborting suite -- SSH preflight failed for $host.")"
-        _e2e_notify "PREFLIGHT FAIL: SSH check failed for $host -- suite aborted"
         exit 1
     fi
 }

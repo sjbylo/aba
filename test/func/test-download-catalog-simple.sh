@@ -23,7 +23,7 @@ rm -rf "$RUN_ONCE_DIR"
 mkdir -p "$RUN_ONCE_DIR"
 
 # Clean up any existing index files
-rm -f mirror/.index/redhat-operator-index-v*.done 2>/dev/null || true
+rm -f .index/redhat-operator-index-v*.done 2>/dev/null || true
 
 echo "=== Test 1: Download redhat-operator catalog ==="
 cd mirror
@@ -101,6 +101,6 @@ head -10 "$index_file"
 echo ""
 echo "=== All tests passed! ==="
 cd "$ABA_ROOT"
-echo "Index files in: mirror/.index/"
+echo "Index files in: .index/"
 echo "Run once logs in: $RUN_ONCE_DIR"
 

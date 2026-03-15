@@ -12,8 +12,9 @@ public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
 umask 077
 
 source <(normalize-aba-conf)
+# $regcreds_dir is derived by mirror-side callers from $PWD, or by cluster-side callers from $mirror_name in cluster.conf.
 
-verify-aba-conf || exit 1
+verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 if [ "$public_pull_secret_file_needed" -a ! -s "$pull_secret_file" ]; then
 	if [ ! "$pull_secret_file" ]; then
@@ -30,27 +31,27 @@ mkdir -p ~/.docker ~/.containers
 [[ "$XDG_RUNTIME_DIR" == /* ]] && mkdir -p $XDG_RUNTIME_DIR/containers
 
 # If the Red Hat creds are available merge them 
-if [ -s regcreds/pull-secret-mirror.json -a -s $pull_secret_file ]; then
+if [ -s $regcreds_dir/pull-secret-mirror.json -a -s $pull_secret_file ]; then
 	# Merge the two files
-	jq -s '.[0] * .[1]' ./regcreds/pull-secret-mirror.json $pull_secret_file > ./regcreds/pull-secret-full.json
+	jq -s '.[0] * .[1]' $regcreds_dir/pull-secret-mirror.json $pull_secret_file > $regcreds_dir/pull-secret-full.json
 
 	# Copy into place 
-	aba_debug "Copying regcreds/pull-secret-full.json to ~/.docker/config.json and ~/.containers/auth.json"
-	cp ./regcreds/pull-secret-full.json ~/.docker/config.json
-	cp ./regcreds/pull-secret-full.json ~/.containers/auth.json
+	aba_debug "Copying $regcreds_dir/pull-secret-full.json to ~/.docker/config.json and ~/.containers/auth.json"
+	cp $regcreds_dir/pull-secret-full.json ~/.docker/config.json
+	cp $regcreds_dir/pull-secret-full.json ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Copying regcreds/pull-secret-full.json to $XDG_RUNTIME_DIR/containers/auth.json" 
-		cp ./regcreds/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json || true
+		aba_debug "Copying $regcreds_dir/pull-secret-full.json to $XDG_RUNTIME_DIR/containers/auth.json" 
+		cp $regcreds_dir/pull-secret-full.json $XDG_RUNTIME_DIR/containers/auth.json || true
 	fi
 
 # If the mirror creds are available add them also
-elif [ -s regcreds/pull-secret-mirror.json ]; then
-	aba_debug "Copying regcreds/pull-secret-mirror.json to ~/.docker/config.json and ~/.containers/auth.json"
-	cp ./regcreds/pull-secret-mirror.json ~/.docker/config.json
-	cp ./regcreds/pull-secret-mirror.json ~/.containers/auth.json
+elif [ -s $regcreds_dir/pull-secret-mirror.json ]; then
+	aba_debug "Copying $regcreds_dir/pull-secret-mirror.json to ~/.docker/config.json and ~/.containers/auth.json"
+	cp $regcreds_dir/pull-secret-mirror.json ~/.docker/config.json
+	cp $regcreds_dir/pull-secret-mirror.json ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
-		aba_debug "Copying regcreds/pull-secret-mirror.json to $XDG_RUNTIME_DIR/containers/auth.json" 
-	       cp ./regcreds/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
+		aba_debug "Copying $regcreds_dir/pull-secret-mirror.json to $XDG_RUNTIME_DIR/containers/auth.json" 
+	       cp $regcreds_dir/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
 	fi
 
 # Only use the Red Hat pull secret file
@@ -65,6 +66,6 @@ elif [ -s $pull_secret_file ]; then
 
 else
 	echo 
-	aba_abort "Aborting! Pull secret file(s) missing: '$pull_secret_file', 'regcreds/pull-secret-mirror.json' and/or 'regcreds/pull-secret-full.json'" >&2 
+	aba_abort "Aborting! Pull secret file(s) missing: '$pull_secret_file', '${regcreds_dir}/pull-secret-mirror.json' and/or '${regcreds_dir}/pull-secret-full.json'" >&2 
 fi
 

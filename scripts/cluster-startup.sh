@@ -56,16 +56,11 @@ if ! try_cmd -q 1 0 2 $OC get nodes ; then
 	try_cmd -q 3 0 40 $OC get nodes || aba_abort "Giving up waiting!"
 fi
 
-echo
 aba_info "Cluster endpoint accessible at $server_url"
-
-echo
 aba_info Cluster $cluster_name nodes:
-echo
 if ! $OC get nodes; then
 	aba_abort "Failed to access the cluster!"
 fi
-echo
 
 uncorden_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC adm uncordon ${node}; done; }
 
@@ -107,7 +102,7 @@ check_and_approve_csrs() {
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
-myexit() { [ "$pid" ] && { kill $pid &>/dev/null; sleep 1; kill -9 $pid &>/dev/null; }; exit $1; }
+myexit() { [ "$pid" ] && { kill $pid &>/dev/null; wait $pid 2>/dev/null; }; exit $1; }
 trap myexit EXIT
 
 # Wait for all nodes in Ready state
@@ -118,21 +113,14 @@ if ! all_nodes_ready; then
 fi
 ##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
-echo
 aba_info_ok "All nodes are ready!"
-
-echo
 $OC get nodes
-
-echo
 aba_info "Note the certificate expiration date of this cluster ($cluster_name):"
 echo_yellow $($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
-echo
 
 console=$($OC whoami --show-console)/
 if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	aba_info_ok "The cluster will complete startup and become fully available shortly!"
-	echo
 	aba_info "Waiting for the console to become available at $console"
 
 	#check_and_approve_csrs

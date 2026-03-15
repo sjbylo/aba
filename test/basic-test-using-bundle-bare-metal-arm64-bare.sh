@@ -1,6 +1,8 @@
 #!/bin/bash -ex
 # Basic test script to show how to create a custom bundle (*light* or normal) and then install OpenShift disonnected
 
+. test/lib.sh
+
 [ "$1" ] && LIGHT="--light"   		# Test with *light* bundle with any arg.
 
 MY_HOST=$(hostname -f)    # This must be FQDN with A record pointing to IP address of this host
@@ -12,20 +14,20 @@ MAC=00:50:56:05:7B:01
 mkdir -p $TEST_DIR_CONN $TEST_DIR_DISCO
 
 # Go online
-export no_proxy=.lan,.example.com
-export http_proxy=http://10.0.1.8:3128
-export https_proxy=http://10.0.1.8:3128
+int_up  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Clean up after last test
 ##cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d mirror uninstall -y && sudo rm -rf ~/quay-install || true  # Delete any existing mirror reg.
 # Checks if 'registry' is running, and stops it only if true
 #[ "$(podman inspect -f '{{.State.Running}}' registry 2>/dev/null)" == "true" ] && podman stop registry
-aba -d mirror uninstall-docker-registry
+aba -Y -d mirror uninstall-docker-registry 
 ! curl -f -SkIL https://$MY_HOST:8443/ 2>/dev/null|| { echo Registry detected at https://$MY_HOST/; exit 1; }   # Sanity check
 sudo rm -fv $(which aba)
 rm -rf ~/.oc-mirror/.cache
 rm -fv ~/bin/{oc-mirror,oc,openshift-install}
 rm -rf $TEST_DIR_CONN/aba 
+rm -rf $TEST_DIR_DISCO/aba 
 rm -f ~/.aba/.first_cluster_success
 
 # Install aba
@@ -46,7 +48,8 @@ aba -y bundle --pull-secret '~/.pull-secret.json' --platform vmw --channel fast 
 echo "aba bundle returned: $?"
 
 # Go offline
-unset http_proxy https_proxy no_proxy # Go offline
+int_down  # Internet up (from lib.sh)
+ping -c3 -W3 -i.2 8.8.8.8 &>/dev/null && echo UP || echo DOWN
 
 # Clean up
 sudo rm -vf $(which aba)
@@ -54,19 +57,21 @@ rm -rf ~/.oc-mirror/.cache
 rm -vf ~/bin/{oc-mirror,oc,openshift-install}
 
 cd $TEST_DIR_DISCO
-rm -rf $TEST_DIR_CONN/aba   # Save disk space, not needed anymore
 rm -rf aba
 tar xvf test-bundle-delete-me*tar
 rm -vf test-bundle-delete-me*tar   # Save space
 cd aba
 ./install
 # If "light" bundle, show the bundle instructions and move the ISC archive into place
-[ "$LIGHT" ] && aba && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+rm -rf $TEST_DIR_CONN/aba   # Save disk space, not needed anymore
 aba     # Show the bundle instructions again
+aba | grep -i "bundle .*detected"  # Verify it's the bundle!
 aba -d mirror -H $MY_HOST install-docker-registry   # Preempt mirror installation and use docker (works on arm64)
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 # Start bare-metal install ...
+mkdir -p $CLUSTER_NAME
 echo $MAC > $CLUSTER_NAME/macs.conf   				# Create the macs.conf file
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s iso -y	# Create the iso
 echo -n "ISO created!  Now manually boot the VM with the ISO and then hit ENTER to run: aba mon: "

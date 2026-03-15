@@ -2,16 +2,22 @@ Install 'Mirror Registry for Red Hat OpenShift' (Quay) or connect to an existing
 
 Usage:
   aba --dir mirror install [options]
+  aba mirror --name <name> [options]           # Create a named mirror directory (for enclaves / multiple registries)
 
 Options:
   -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
   -y                                   # Automatically accept the default answer to all prompts.
-  -H, --mirror-hostname string         # The hostname of the mirror registry.
+  -n, --name <name>                    # Create a named mirror directory (like cluster --name).
+  -H, --reg-host <hostname>            # The hostname of the mirror registry.
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.
   -U, --reg-ssh-user <string>          # Username to use to access the remote host via ssh.
   -u, --reg-user string                # The username used to access the registry (default is 'init').
       --data-dir </path/to/dir>        # Install Quay images/cache to this dir instead of ~/quay-install.
       --reg-path <string>              # The path to store images inside the mirror registry.
+      --vendor <auto|quay|docker>      # Registry type: auto (default), quay, or docker.
+      --reg-port <number>              # Port of the mirror registry (default 8443).
+      --pull-secret-mirror <file>      # Path to an existing registry's pull secret JSON file.
+      --ca-cert <file>                 # Path to an existing registry's root CA certificate.
   -r, --retry [<count>]                # Retry <count> times on oc-mirror error.
 
 Related commands:
@@ -39,11 +45,22 @@ Examples of fully disconnected mode (air-gapped):
   Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
     aba [-d mirror] load -H registry.example.com  --retry 8
 
-  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in aba/mirror/regcreds dir.
+  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in ~/.aba/mirror/mirror/ dir.
     aba [-d mirror] verify
 
   Install OpenShift:
     See: aba cluster --help
+
+Examples of registering an existing (externally-managed) mirror registry:
+
+  Register credentials for existing registry in the default mirror dir:
+    aba -d mirror --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+
+  Create a named mirror directory for an enclave and register it:
+    aba mirror --name enclave1 --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+
+  Deregister (only removes local credentials, never modifies the external registry):
+    aba -d enclave1 unregister
 
 The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
 The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 

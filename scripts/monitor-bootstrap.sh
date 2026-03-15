@@ -12,8 +12,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval $(scripts/cluster-config.sh $@ || exit 1)
 fi
 
-echo
-echo "[ABA] ================================================================================="
+aba_info "================================================================================="
 
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
@@ -50,7 +49,6 @@ declare -A wait_for_exit_reasons=(
 if [ $ret -ne 0 ]; then
 	# ret = 8 means openshift-install was interrupted (e.g. Ctrl-c), for that we don't want to show any errors. 
 	if [ $ret -ne 8 ]; then
-		echo 
 		echo_red "[ABA] Something went wrong with the bootstrap.  Fix the problem and try again!" >&2
 		[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 
