@@ -1338,6 +1338,8 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 			scp -q $_SSH_OPTS ~/bin/notify.sh "$target:~/bin/notify.sh" &&
 			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh" || true
 		fi
+		# Ensure rootless podman's pause process survives between SSH sessions
+		ssh -q $_SSH_OPTS "$target" "sudo loginctl enable-linger $user 2>/dev/null || true"
 		echo "    con${i}: framework + config deployed"
 	else
 		echo "    con${i}: FAILED to deploy framework (skipping)" >&2

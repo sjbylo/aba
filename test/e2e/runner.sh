@@ -360,12 +360,16 @@ _cleanup_dis_aba() {
 		fi
 	done
 
-	# 2. Stop containers first, then clean disN filesystem
+	# 2. Stop containers, then clean disN filesystem
 	echo "  Cleaning disN filesystem ..."
-	_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
+	# Disabled: nuclear podman cleanup destroys internal state (pause process),
+	# causing "invalid internal status" on next run. aba uninstall above is sufficient.
+	#_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
-	_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
+	# Disabled: destroys podman internal state.
+	#_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
+	_essh "$dis_host" "sudo rm -rf ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
 

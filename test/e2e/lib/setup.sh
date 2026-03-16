@@ -152,15 +152,18 @@ reset_internal_bastion() {
     e2e_run "Verify registry is down on $_dis_bare" \
         "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/v2/"
 
-    # 3. Clean slate on disN: remove aba tree, caches, container storage.
+    # 3. Clean slate on disN: remove aba tree and caches.
     e2e_run_remote "Remove aba tree on internal bastion" \
         "rm -rf ~/aba"
-    e2e_run_remote "Clean podman images on internal bastion" \
-        "podman system prune --all --force; podman rmi --all --force"
+    # Disabled: destroys podman internal state (pause process), causing
+    # "invalid internal status" on next run. aba uninstall above is sufficient.
+    #e2e_run_remote "Clean podman images on internal bastion" \
+    #    "podman system prune --all --force; podman rmi --all --force"
     e2e_run_remote "Clean oc-mirror caches on internal bastion" \
         "rm -rf ~/.cache/agent ~/.oc-mirror"
-    e2e_run_remote "Clean containers storage on internal bastion" \
-        "sudo rm -rf ~/.local/share/containers/storage"
+    # Disabled: destroys podman internal state.
+    #e2e_run_remote "Clean containers storage on internal bastion" \
+    #    "sudo rm -rf ~/.local/share/containers/storage"
 
     echo "=== reset_internal_bastion complete ==="
 }
