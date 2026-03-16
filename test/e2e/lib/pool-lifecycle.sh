@@ -659,7 +659,9 @@ _vm_cleanup_podman() {
 		set -ex
 		podman system prune --all --force
 		podman rmi --all --force 2>/dev/null || true
-		sudo rm -rf ~/.local/share/containers/storage
+		# Disabled: destroys podman internal state (pause process), causing
+		# "invalid internal status" on next run. Prune above is sufficient.
+		#sudo rm -rf ~/.local/share/containers/storage
 		rm -rf ~/test
 	PODEOF
 }
@@ -676,9 +678,10 @@ _vm_cleanup_home() {
     echo "  [vm] Cleaning home directory on $host ..."
     cat <<-'HOMEEOF' | _essh "${user}@${host}" -- bash
 		set -ex
-		# Stop/disable systemd user services (Quay/mirror-registry install creates these)
-		systemctl --user stop --all 2>/dev/null || true
-		systemctl --user disable --all 2>/dev/null || true
+		# Disabled: kills podman's pause process and user socket, causing
+		# "invalid internal status" on next run. podman stop/rm below is sufficient.
+		#systemctl --user stop --all 2>/dev/null || true
+		#systemctl --user disable --all 2>/dev/null || true
 		# Stop all podman/docker containers so no process holds files under ~
 		podman stop -a 2>/dev/null || true
 		podman rm -af 2>/dev/null || true
