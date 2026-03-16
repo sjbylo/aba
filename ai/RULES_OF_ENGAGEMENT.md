@@ -1385,6 +1385,12 @@ for test in test/func/test-*.sh; do
 done
 ```
 
+**TUI v2 tests (test-tui-v2-*.sh)** — run order matters:
+- **Run 01 first**: `test/func/test-tui-v2-01-wizard.sh` sets up state (aba.conf, cached catalogs, etc.) for the rest.
+- **Then 02, 03, 04 in any order**: `test-tui-v2-02-basket.sh`, `test-tui-v2-03-actions.sh`, `test-tui-v2-04-isconf.sh` can run in any order and can be repeated.
+- **Do not run 02/03/04 in parallel**: they share tmux session and state; run sequentially after 01.
+- If `reset_test_state` fails with "Permission denied" on `~/.aba/runner` or `~/.aba/cache`, fix permissions (e.g. `chmod -R u+rwx ~/.aba`) or remove those dirs and re-run.
+
 ### Creating New Tests
 
 1. **Decide test type**: Unit (fast) vs Integration (slow)
