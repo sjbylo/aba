@@ -68,8 +68,14 @@ int_up() {
 int_down() {
     local if_name=$(_find_internet_iface)
     [ -n "$if_name" ] && {
-        echo "Downing $if_name..."
-        sudo nmcli device disconnect "$if_name"
+        # Only disconnect if NetworkManager considers the device active
+        local state=$(nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep "^${if_name}:" | cut -d: -f2)
+        if [[ "$state" == "connected" || "$state" == "connecting"* ]]; then
+            echo "Downing $if_name..."
+            sudo nmcli device disconnect "$if_name"
+        else
+            echo "Interface $if_name already inactive (state=$state), skipping disconnect."
+        fi
     }
     unset http_proxy https_proxy no_proxy
     echo "Environment cleaned."
