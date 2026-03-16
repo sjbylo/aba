@@ -4,6 +4,215 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ---
 
+## High Priority
+
+### Replace `oc-mirror list operators` With Podman-Based Catalog Extraction
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-03-15
+
+**Problem:**
+`download-catalog-index.sh` depends on `oc-mirror list operators --catalog <url>` to generate
+the operator index files (`.index/<catalog>-index-v<ver>`). This has several drawbacks:
+- `oc-mirror` must be downloaded and installed before any catalog listing can happen
+- `oc-mirror list operators` is slow and opaque (no display names, just name + channel)
+- `oc-mirror v2` has known bugs (returns exit 0 on failure, intermittent hangs)
+- Fedora requires a `/tmp` resize workaround because `oc-mirror` uses `/tmp` heavily
+
+**Solution:**
+Replace the `oc-mirror list operators` call in `download-catalog-index.sh` with the podman-based
+extraction logic already implemented and tested in `scripts/extract-catalog-index.sh`. This script:
+- Pulls the catalog image directly with `podman`
+- Extracts `/configs` from the container
+- Parses all FBC formats (split JSON, single JSON, index.json, YAML)
+- Recursively searches bundle files for display names
+- Outputs 3 columns: `<name> <display_name> <default_channel>`
+
+The 3-column format is backward-compatible with existing consumers:
+- `add-operators-to-imageset.sh` uses `awk '{print $1, $NF}'` (first + last column)
+- `tui/abatui.sh` uses `${line%%[[:space:]]*}` (first field only)
+
+**Integration steps:**
+1. Replace `download-catalog-index.sh` contents with `extract-catalog-index.sh` logic
+   (or rename `extract-catalog-index.sh` to `download-catalog-index.sh`)
+2. Remove `ensure_oc_mirror` call — podman + jq are the only prerequisites
+3. Remove Fedora `/tmp` resize workaround (no longer needed)
+4. Remove `oc-mirror` from `download-catalogs-start.sh` prerequisite
+5. Update `aba.sh` lines ~382-383 to not download `oc-mirror` for catalog operations
+6. Keep `oc-mirror` in `cli-download-all.sh` — still needed for `reg-save.sh`/`reg-sync.sh`/`reg-load.sh`
+7. Update error messages in `add-operators-to-imageset.sh` (line ~111 references `oc-mirror`)
+
+**Note:** `oc-mirror` is still required for image mirroring (`oc-mirror --v2 --config`).
+This change only removes it as a dependency for catalog *listing*.
+
+**Tested:** `extract-catalog-index.sh` produces identical name + default_channel output as
+`oc-mirror list operators` for v4.20 (149 ops) and v4.21 (138 ops), plus display names.
+
+**Where:** `scripts/download-catalog-index.sh`, `scripts/extract-catalog-index.sh`,
+`scripts/download-catalogs-start.sh`, `scripts/aba.sh`, `scripts/add-operators-to-imageset.sh`
+
+**Also see:** `scripts/list-operators.sh` (standalone version for manual use / testing)
+
+---
+
+### Use Display Names in TUI Operator Search and Basket
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Medium
+**Created:** 2026-03-15
+**Updated:** 2026-03-15
+
+**Problem:**
+The TUI operator basket and search results (`tui/abatui.sh`) currently show only raw
+package names like `advanced-cluster-management` and `rhods-operator`. With the new
+3-column index format (from the podman-based catalog extraction above), display names
+are now available — e.g., "Advanced Cluster Management for Kubernetes" and
+"Red Hat OpenShift AI".
+
+Users searching for operators often know the product name (e.g., "OpenShift AI") but not
+the package name (`rhods-operator`). Showing display names in search results would make
+operator discovery far easier.
+
+**Proposed UX:**
+
+Search results (the checklist shown after typing a search term):
+```
+[ ] Red Hat OpenShift AI                         (rhods-operator)
+[ ] Red Hat OpenShift AI Self-Managed            (rhoai-servicemesh-operator)
+```
+
+Operator basket / View/Edit checklist:
+```
+[X] Advanced Cluster Management for Kubernetes  (advanced-cluster-management)
+[ ] Red Hat OpenShift AI                         (rhods-operator)
+[ ] Red Hat Integration - 3scale                 (3scale-operator)
+```
+
+Search should also match against display names, not just package names. For example,
+typing "AI" should find `rhods-operator` via its display name "Red Hat OpenShift AI".
+
+**Implementation:**
+- After replacing `download-catalog-index.sh` (see above), the `.index/` files will contain
+  3 columns: `<name> <display_name> <default_channel>`
+- `tui/abatui.sh` currently reads operator names with `${line%%[[:space:]]*}` (first field)
+- Update the TUI to also extract the display name (middle columns) for presentation
+- Update the search function to `grep` against both package name AND display name
+- The `awk '{print $1, $NF}'` pattern still works for name + channel extraction
+- Operators with `-` as display name (rare) should fall back to showing the package name
+
+**Where:** `tui/abatui.sh` (operator search, basket / checklist rendering), the `.index/` files
+
+---
+
+### Catalog Download Dialog Should Show the OCP Version
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-02-26
+
+**Problem:**
+The TUI's "Downloading operator catalogs..." infobox (`tui/abatui.sh` ~line 1929) does not
+mention which OCP version the catalogs are being downloaded for. When catalogs are downloading
+in the background, the user only sees:
+
+```
+Downloading operator catalogs...
+This may take a few minutes on first run.
+```
+
+**Fix:**
+Include the OCP version in the message, e.g.:
+
+```
+Downloading operator catalogs for OCP 4.21...
+This may take a few minutes on first run.
+```
+
+The version is available as `$ocp_ver_major` or can be derived from `$OCP_VERSION` at that
+point in the flow.
+
+---
+
+### `aba reset` Should Delete Root `.index/` Directory
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-02-26
+
+**Problem:**
+`aba reset` (i.e. `make reset force=1`) does not remove the root-level `.index/` directory
+where operator catalog indexes are cached. It only removes `mirror/.index/` (via
+`make -sC mirror clean`), which is a different directory.
+
+The `download-catalog-index.sh` script writes catalog indexes to `<aba-root>/.index/`,
+not `mirror/.index/`. This means stale catalog indexes from previous runs survive a
+full reset and can affect operator searches and ISC generation with outdated data.
+
+**Fix:**
+Add `rm -rf .index` to the root `Makefile`'s `reset` target, alongside the existing
+cleanup of `cli`, `mirror`, and `test` subdirectories.
+
+---
+
+### Investigate and Reduce Pool Registry Disk Usage in E2E Tests
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Medium
+**Created:** 2026-03-16
+
+**Problem:**
+The pool-registry on conN hosts (`/opt/pool-reg/`) consumes 27–57GB per host. Combined
+with the oc-mirror workspace (~9.4GB), each pool devotes ~36–66GB just to the pre-populated
+registry. The conN/disN VMs are thin-provisioned and already large (con1: 367GB used,
+dis1: 304GB used on Datastore4-1). As tests run, accumulated registry data risks
+out-of-disk errors.
+
+**Findings (2026-03-16):**
+- `setup-pool-registry.sh` correctly pins oc-mirror to exactly ONE OCP version
+  (`minVersion` = `maxVersion`), but:
+  - Each single-version sync costs ~27GB in registry blob storage (1309 blobs for OCP
+    4.20.15 + 3 operators + graph data).
+  - The oc-mirror workspace (`/opt/pool-reg/sync/`) adds ~9.4GB on top.
+  - Data accumulates across suite runs: con2 had 57GB / 2883 blobs vs con1's 27GB / 1309
+    blobs, despite both having only `.synced-4.20.15`. Prior runs left behind orphan blobs.
+- The Docker distribution registry has no built-in garbage collection that runs automatically.
+  Stale blobs from previous versions persist indefinitely.
+- Four suites use the pool-registry: `network-advanced`, `connected-public`, `cluster-ops`,
+  `airgapped-existing-reg`. All read the version from `aba.conf` at runtime — if a pool
+  previously ran with version X and now runs with version Y, both versions' blobs accumulate.
+
+**Questions to investigate:**
+1. Do we really need the full OCP release payload in the pool-registry for all suites?
+   Some suites (e.g. `cluster-ops`) need release images to install a cluster, but others
+   (e.g. `connected-public` in public mode) may only need operator catalogs.
+2. Can we use `oc-mirror --dry-run` or a more selective imageset config to reduce what
+   gets synced? E.g. skip graph data (`graph: false`), skip unused architectures.
+3. Should `setup-pool-registry.sh` run Docker registry GC (`registry garbage-collect`)
+   before or after each sync to reclaim stale blobs?
+4. Should the pool-registry data be wiped when the pool gets a new suite with a different
+   OCP version, instead of accumulating?
+5. Can we reduce the 3 test operators to 1 small one (e.g. `flux` community operator only)?
+
+**Proposed improvements (pick and test):**
+- Add `registry garbage-collect /etc/docker/registry/config.yml` step to
+  `setup-pool-registry.sh` after each sync.
+- Wipe `/opt/pool-reg/data` when the requested version differs from the last-synced version
+  (delete old `.synced-*` markers + data, fresh start).
+- Set `graph: false` in the imageset config if graph data isn't needed for pool tests.
+- Reduce operator set to a single small operator.
+- Consider pre-baking the pool-registry data into the VM snapshot so each revert starts clean.
+
+**Where:** `test/e2e/scripts/setup-pool-registry.sh`, `test/e2e/lib/vm-helpers.sh`,
+`test/e2e/lib/pool-lifecycle.sh`
+
+---
+
 ## Medium Priority
 
 ### Empty Values in aba.conf Propagate Into cluster.conf via Template Generation
@@ -248,6 +457,34 @@ After adding an operator via the TUI and running `aba sync`, ABA refuses to rege
 **Fix:**
 - Removed the `rm -f` of save ISC
 - Added `run_once -p/-w` wait blocks in all action handlers before they run `aba` commands, matching the pattern already used by `handle_action_view_isconf`
+
+---
+
+### TUI Test Framework: Replace `sleep` With `wait_for` Polling
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-02-26
+
+**Problem:**
+The TUI test framework (`test/func/tui-test-lib.sh` and test files) uses `sleep 1` between
+nearly every tmux `send-keys` call and the next assertion/action. Since tmux interaction is
+asynchronous, these sleeps are dead wait time. The framework already has `wait_for()` which
+polls the screen every 1s until a target string appears.
+
+Most `sleep 1` calls occur right before a `wait_for` and are therefore redundant — `wait_for`
+already handles the timing. Removing them would significantly speed up the test suite.
+
+**Proposed refactor:**
+- Remove `sleep` calls that immediately precede a `wait_for` (the polling handles it).
+- Keep `sleep 1` only in: (a) `send()` for `--slow` mode visibility, (b) before a raw
+  `capture` with no `wait_for`, (c) after the final action before script exit.
+- Consider adding a tiny `sleep 0.1` in `send()` (non-slow mode) to let tmux process
+  keystrokes, if any races appear after removing the larger sleeps.
+
+**Files:** `test/func/tui-test-lib.sh`, `test/func/test-tui-v2-01-wizard.sh`,
+`test/func/test-tui-v2-02-basket.sh`, `test/func/test-tui-v2-03-actions.sh`
 
 ---
 
