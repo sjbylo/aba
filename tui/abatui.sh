@@ -2129,22 +2129,21 @@ image synchronization process." 0 0 || true
 				local list_h=$((num_sets < 18 ? num_sets + 2 : 18))
 				dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_OPERATOR_SETS" \
 					--ok-label "Add to Basket" \
+					--separate-output \
 					--checklist "Use spacebar to toggle, then press Add to Basket:" 0 70 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
-				newsel=$(<"$TMP")
-				log "Raw selection: [$newsel]"
+				log "Raw selection: [$(cat "$TMP")]"
 				
 				# Build array of newly selected sets
 				declare -A newly_selected
-				while read -r k; do
-					k=${k//\"/}
-					k=${k##[[:space:]]}
-					k=${k%%[[:space:]]}
+				while IFS= read -r k; do
+					k="${k#"${k%%[![:space:]]*}"}"
+					k="${k%"${k##*[![:space:]]}"}"
 					[[ -z "$k" ]] && continue
 					newly_selected["$k"]=1
 					log "Selected set: [$k]"
-				done < <(echo "$newsel" | tr ' ' '\n')
+				done <"$TMP"
 				
 				# Remove sets that were previously added but are now unchecked
 				for prev_set in "${!OP_SET_ADDED[@]}"; do
@@ -2277,42 +2276,27 @@ image synchronization process." 0 0 || true
 			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 			dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SELECT_OPERATORS" \
 				--ok-label "Add to Basket" \
+				--separate-output \
 				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
-			newsel=$(<"$TMP")
-			log "Raw user selection from search: [$newsel]"
+			log "Raw user selection from search: [$(cat "$TMP")]"
 			
 			# Build a set of what was selected in the dialog
-			# Dialog returns operator names, possibly with quotes or brackets
+			# --separate-output puts each selection on its own line
 			declare -A SEL
 			SEL=()
 			
-			log "Starting to parse selections..."
-			# Parse the dialog output - remove quotes, brackets and split on spaces
-			sel_count=0
-			for op in $newsel; do
-				log "  Processing token: [$op]"
-				# Remove quotes
-				op="${op//\"/}"
-				log "  After removing quotes: [$op]"
-				# Remove brackets (dialog may add these)
-				op="${op//\[/}"
-				op="${op//\]/}"
-				log "  After removing brackets: [$op]"
-				# Skip empty
-				if [[ -z "$op" ]]; then
-					log "  Token is empty, skipping"
-					continue
-				fi
-				
-				log "  Adding to SEL array: [$op]"
-				SEL["$op"]=1 || { log "ERROR: Failed to add [$op] to SEL array"; exit 1; }
+			local sel_count=0
+			while IFS= read -r op; do
+				op="${op#"${op%%[![:space:]]*}"}"
+				op="${op%"${op##*[![:space:]]}"}"
+				[[ -z "$op" ]] && continue
+				SEL["$op"]=1
 				((sel_count++)) || true
 				log "  Selection #$sel_count: [$op]"
-			done
+			done <"$TMP"
 			
-			log "Finished parsing loop"
 			log "Total selections parsed from dialog: ${#SEL[@]}"
 			log "Selected keys: ${!SEL[*]}"
 
@@ -2352,7 +2336,7 @@ image synchronization process." 0 0 || true
 			done <<<"$matches"
 				
 				log "After search update, basket has ${#OP_BASKET[@]} operators"
-				log "Basket contents: ${!OP_BASKET[*]}"
+				log "Basket contents (sorted): $(printf '%s\n' "${!OP_BASKET[@]}" | sort | paste -sd, -)"
 				default_item="$action"  # Keep cursor on Search Operator Names
 				;;
 
@@ -2380,21 +2364,20 @@ image synchronization process." 0 0 || true
 			local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 			dialog --clear --backtitle "$(ui_backtitle)" --title "Basket (${#OP_BASKET[@]} operators)" \
 				--ok-label "Apply" \
+				--separate-output \
 				--checklist "Uncheck to remove. Use spacebar to toggle:" \
 				0 60 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
-				newsel=$(<"$TMP")
-				log "View/Edit basket selection: [$newsel]"
+				log "View/Edit basket selection: [$(cat "$TMP")]"
 				
 				declare -A KEEP
 				KEEP=()
-				while read -r op; do
-					op=${op//\"/}
-					op=${op##[[:space:]]}
-					op=${op%%[[:space:]]}
+				while IFS= read -r op; do
+					op="${op#"${op%%[![:space:]]*}"}"
+					op="${op%"${op##*[![:space:]]}"}"
 					[[ -n "$op" ]] && KEEP["$op"]=1 && log "Keeping: $op"
-				done < <(echo "$newsel" | tr ' ' '\n')
+				done <"$TMP"
 
 				for op in "${!OP_BASKET[@]}"; do
 					if [[ -n "${KEEP[$op]:-}" ]]; then
@@ -2424,6 +2407,17 @@ image synchronization process." 0 0 || true
 # -----------------------------------------------------------------------------
 # Action Handlers
 # -----------------------------------------------------------------------------
+
+# ISC ownership check: user-owned if either save or sync ISC is strictly newer
+# than its .created marker. Uses -nt (strictly newer) so equal timestamps
+# (common on System Z/s390x) correctly indicate ABA-generated, not user-edited.
+_isconf_user_owned() {
+	local save_isc="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
+	local sync_isc="$ABA_ROOT/mirror/sync/imageset-config-sync.yaml"
+	{ [[ -f "$save_isc" ]] && [[ "$save_isc" -nt "$ABA_ROOT/mirror/save/.created" ]]; } ||
+	{ [[ -f "$sync_isc" ]] && [[ "$sync_isc" -nt "$ABA_ROOT/mirror/sync/.created" ]]; }
+}
+
 handle_action_view_isconf() {
 	log "Handling action: View ImageSet Config"
 	
@@ -2434,7 +2428,7 @@ handle_action_view_isconf() {
 	log "Waiting for ImageSet config generation to complete"
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
-	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf"; then
+	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2470,13 +2464,81 @@ This file should have been generated automatically." 0 0 || true
 	return 0
 }
 
+handle_action_reset_isconf() {
+	log "Handling action: Reset ISC to auto-generated"
+
+	# Reset ownership by making .created newer than the ISC files
+	touch "$ABA_ROOT/mirror/save/.created" "$ABA_ROOT/mirror/sync/.created" 2>/dev/null
+
+	# Reset the generation task so ISC will be regenerated fresh
+	run_once -r -i "tui:isconf:generate" 2>/dev/null || true
+
+	dialog --colors --backtitle "$(ui_backtitle)" --title "ImageSet Config Reset" \
+		--msgbox "ImageSet configuration has been reset to auto-generated.\n\nThe next action that needs it will regenerate the files\nfrom your current aba.conf settings." 0 0 || true
+
+	return 0
+}
+
+handle_action_edit_isconf() {
+	log "Handling action: Edit ImageSet Config"
+
+	local isconf_file="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
+	local sync_file="$ABA_ROOT/mirror/sync/imageset-config-sync.yaml"
+
+	# Wait for background isconf generation to complete
+	if ! run_once -p -i "tui:isconf:generate"; then
+		log "Waiting for ImageSet config generation to complete"
+		dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
+
+		if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1; then
+			log "ERROR: ImageSet config generation failed"
+			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
+			return 0
+		fi
+
+		local wait_count=0
+		while [[ ! -f "$isconf_file" ]] && [[ $wait_count -lt 10 ]]; do
+			sleep 0.5
+			wait_count=$((wait_count + 1))
+		done
+	fi
+
+	if [[ ! -f "$isconf_file" ]]; then
+		dialog --backtitle "$(ui_backtitle)" --msgbox \
+"ImageSet configuration file not found.\n\nFile: $isconf_file" 0 0 || true
+		return 0
+	fi
+
+	# Open editor
+	dialog --colors --backtitle "$(ui_backtitle)" --title "Edit ImageSet Config" \
+		--ok-label "Save" \
+		--cancel-label "Cancel" \
+		--editbox "$isconf_file" 0 0 \
+		2>"$TMP"
+	local erc=$?
+
+	if [[ $erc -eq 0 ]]; then
+		# User saved — write back to both ISC files
+		cp "$TMP" "$isconf_file"
+		[[ -d "$(dirname "$sync_file")" ]] && cp "$TMP" "$sync_file"
+		log "ISC saved by user — file is now user-owned"
+
+		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Saved\Zn" \
+			--msgbox "ImageSet configuration saved.\n\nYou now own this configuration — ABA will not overwrite it.\nUse 'Reset to Auto-Generated' from the main menu to revert." 0 0 || true
+	else
+		log "User cancelled ISC edit"
+	fi
+
+	return 0
+}
+
 handle_action_bundle() {
 	log "Handling action: Create Bundle"
 	
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Get output path from user
@@ -2602,7 +2664,7 @@ handle_action_local_quay() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Load existing values from mirror.conf
@@ -2675,7 +2737,7 @@ handle_action_local_quay() {
 	
 	# --vendor ensures mirror.conf is created (if needed) and vendor is set
 	local vendor="$(reg_vendor_from_tui)"
-	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' $y_flag"
+	local cmd="aba sync -d mirror --vendor $vendor $retry_flag -H '$reg_host' $y_flag"
 	log "Local registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
@@ -2756,7 +2818,7 @@ handle_action_local_docker() {
 	log "Cleared SSH parameters for local registry installation"
 	
 	# --vendor ensures mirror.conf is created (if needed) and vendor is set
-	local cmd="aba -d mirror --vendor docker $retry_flag sync -H '$reg_host' $y_flag"
+	local cmd="aba sync -d mirror --vendor docker $retry_flag -H '$reg_host' $y_flag"
 	log "Local Docker command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
@@ -2771,7 +2833,7 @@ handle_action_remote_quay() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Load existing values from mirror.conf
@@ -2847,7 +2909,7 @@ handle_action_remote_quay() {
 	
 	# --vendor ensures mirror.conf is created (if needed) and vendor is set
 	local vendor="$(reg_vendor_from_tui)"
-	local cmd="aba -d mirror --vendor $vendor $retry_flag sync -H '$reg_host' -k '$reg_ssh_key' $y_flag"
+	local cmd="aba sync -d mirror --vendor $vendor $retry_flag -H '$reg_host' -k '$reg_ssh_key' $y_flag"
 	log "Remote registry command: $cmd"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
@@ -2862,7 +2924,7 @@ handle_action_save() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# No form needed - just confirm and execute using global auto-answer setting
@@ -2882,7 +2944,7 @@ handle_action_save() {
 	fi
 	
 	# Confirm and execute
-	local cmd="aba -d mirror $retry_flag save $y_flag"
+	local cmd="aba save -d mirror $retry_flag $y_flag"
 	if ! confirm_and_execute "$cmd"; then
 		return 1
 	fi
@@ -2897,9 +2959,9 @@ handle_action_isconf() {
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration..." 4 50
 	
 	local output rc
-	output=$(aba -d mirror isconf -y 2>&1) || true
+	output=$(aba isconf -d mirror -y 2>&1) || true
 	rc=$?
-	log "aba -d mirror isconf -y returned rc=$rc"
+	log "aba isconf -d mirror -y returned rc=$rc"
 	
 	if [[ $rc -eq 0 ]]; then
 		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Generated\Zn" \
@@ -3227,7 +3289,7 @@ summary_apply() {
 		dialog --backtitle "$(ui_backtitle)" --infobox "Installing oc-mirror...\n\nThis is needed before proceeding." 6 50
 	fi
 	# Let errors flow to logs, suppress stdout (informational messages only)
-	if ! run_once -w -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror >/dev/null; then
+	if ! run_once -w -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror >>"$LOG_FILE" 2>&1; then
 		log "ERROR: Failed to install oc-mirror"
 		show_run_once_error "$TASK_OC_MIRROR" "Failed to Install oc-mirror"
 		DIALOG_RC="back"
@@ -3236,14 +3298,14 @@ summary_apply() {
 	
 	# Reset and start isconf generation in background (non-blocking)
 	# Reset ensures regeneration if user changes operators and comes back
-	log "Resetting and starting background task: aba -d mirror isconf"
+	log "Resetting and starting background task: aba isconf -d mirror"
 	# DEBUG: Write directly to file
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to reset isconf task" >> /tmp/aba-tui-debug.log
 	run_once -r -i "tui:isconf:generate"
 	# Small delay to ensure reset completes
 	sleep 0.2
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to start isconf task" >> /tmp/aba-tui-debug.log
-	run_once -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror isconf" >/dev/null 2>&1
+	run_once -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >/dev/null 2>&1
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] isconf task started, checking directory..." >> /tmp/aba-tui-debug.log
 	ls -la ~/.aba/runner/tui:isconf:generate/ >> /tmp/aba-tui-debug.log 2>&1
 	log "ImageSet config generation started in background"
@@ -3377,10 +3439,11 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 				--cancel-label "Back" \
 				--ok-label "Select" \
 				--default-item "$adv_default" \
-				--menu "Advanced actions:" 0 0 3 \
+				--menu "Advanced actions:" 0 0 4 \
 				1 "Generate ImageSet Config & Exit" \
-				2 "$_delete_label" \
-				3 "Exit (run commands manually)" \
+				2 "Edit ImageSet Config" \
+				3 "$_delete_label" \
+				4 "Exit (run commands manually)" \
 				2>"$TMP"
 			local arc=$?
 			
@@ -3395,17 +3458,21 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					adv_default="1"; continue
 					;;
 				2)
+					handle_action_edit_isconf
+					adv_default="2"; continue
+					;;
+				3)
 					log "User chose to delete registry"
 					if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 						dialog --colors --title "$TUI_TITLE_ERROR" --msgbox \
 							"\Zb\Z1Error:\Zn\n\nmirror/mirror.conf not found.\n\nRegistry must be installed first." 0 0
-						adv_default="2"; continue
+						adv_default="3"; continue
 					fi
-					if ! confirm_and_execute "aba -d mirror uninstall -y"; then
-						adv_default="2"; continue
+					if ! confirm_and_execute "aba uninstall -d mirror -y"; then
+						adv_default="3"; continue
 					fi
 					;;
-				3)
+				4)
 					log "User chose to exit and run commands manually"
 					clear
 					_show_exit_summary
@@ -3418,12 +3485,20 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 	while :; do
 		local ADVANCED_EXIT=""
 		
-		# Build compact settings summary for the Settings menu item
+		# Build compact settings summary for the Configure menu item
 		local _s_answer _s_reg _s_retry
 		if [[ "$ABA_AUTO_ANSWER" == "yes" ]]; then _s_answer="-y"; else _s_answer="ask"; fi
 		_s_reg="$ABA_REGISTRY_TYPE"
 		_s_retry="$RETRY_COUNT"
-		local _settings_label="Settings...  (\Z6${_s_answer}, ${_s_reg}, retry=${_s_retry}\Zn)"
+		local _settings_label="\ZuC\Znonfigure...  (\Z6${_s_answer}, ${_s_reg}, retry=${_s_retry}\Zn)"
+		
+		# Dynamic View label and conditional Reset item based on ISC ownership
+		local _isconf_label="$TUI_ACTION_LABEL_VIEW_IMAGESET"
+		local _reset_args=()
+		if _isconf_user_owned; then
+			_isconf_label="$TUI_ACTION_LABEL_VIEW_IMAGESET_USER"
+			_reset_args=($TUI_ACTION_RESET_IMAGESET "$TUI_ACTION_LABEL_RESET_IMAGESET")
+		fi
 		
 		dialog --colors --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_ACTION_MENU" \
 		--cancel-label "Exit" \
@@ -3433,7 +3508,8 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 		--default-item "$default_item" \
 		--menu "Configuration saved to aba.conf. Choose what to do next:" 0 0 0 \
 		"" "──── Review ─────────────────────────────" \
-		$TUI_ACTION_VIEW_IMAGESET "$TUI_ACTION_LABEL_VIEW_IMAGESET" \
+		$TUI_ACTION_VIEW_IMAGESET "$_isconf_label" \
+		"${_reset_args[@]}" \
 		"" " " \
 		"" "──── Air-Gapped (Fully Disconnected) ────" \
 		$TUI_ACTION_CREATE_BUNDLE "$TUI_ACTION_LABEL_CREATE_BUNDLE" \
@@ -3447,7 +3523,6 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 		$TUI_ACTION_RERUN_WIZARD "$TUI_ACTION_LABEL_RERUN_WIZARD" \
 		$TUI_ACTION_SETTINGS "$_settings_label" \
 		$TUI_ACTION_ADVANCED "$TUI_ACTION_LABEL_ADVANCED" \
-		$TUI_ACTION_EXIT "$TUI_ACTION_LABEL_EXIT" \
 		2>"$TMP"
 		rc=$?
 		
@@ -3464,13 +3539,16 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					continue
 					;;
 				$TUI_ACTION_VIEW_IMAGESET)
-					# View ImageSet Config
 					handle_action_view_isconf
 					default_item="$TUI_ACTION_VIEW_IMAGESET"
 					continue
 					;;
+				$TUI_ACTION_RESET_IMAGESET)
+					handle_action_reset_isconf
+					default_item="$TUI_ACTION_VIEW_IMAGESET"
+					continue
+					;;
 				$TUI_ACTION_CREATE_BUNDLE)
-					# Create Bundle
 					if handle_action_bundle; then
 						return 0
 					else
@@ -3479,7 +3557,6 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 					fi
 					;;
 				$TUI_ACTION_SAVE_IMAGES)
-					# Save Images
 					if handle_action_save; then
 						return 0
 					else
@@ -3487,52 +3564,40 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 						continue
 					fi
 					;;
-			$TUI_ACTION_LOCAL_REGISTRY)
-				# Local Registry -- dispatcher handles vendor (auto/quay/docker)
-				if handle_action_local_quay; then
+				$TUI_ACTION_LOCAL_REGISTRY)
+					if handle_action_local_quay; then
+						return 0
+					else
+						default_item="$TUI_ACTION_LOCAL_REGISTRY"
+						continue
+					fi
+					;;
+				$TUI_ACTION_REMOTE_REGISTRY)
+					if handle_action_remote_quay; then
+						return 0
+					else
+						default_item="$TUI_ACTION_REMOTE_REGISTRY"
+						continue
+					fi
+					;;
+				$TUI_ACTION_RERUN_WIZARD)
+					log "User chose to rerun wizard"
+					RERUN_WIZARD=true
 					return 0
-				else
-					default_item="$TUI_ACTION_LOCAL_REGISTRY"
+					;;
+				$TUI_ACTION_SETTINGS)
+					_show_settings
+					default_item="$TUI_ACTION_SETTINGS"
 					continue
-				fi
-				;;
-			$TUI_ACTION_REMOTE_REGISTRY)
-				# Remote Registry -- dispatcher handles vendor + SSH
-				if handle_action_remote_quay; then
-					return 0
-				else
-					default_item="$TUI_ACTION_REMOTE_REGISTRY"
+					;;
+				$TUI_ACTION_ADVANCED)
+					_show_advanced
+					if [[ "$ADVANCED_EXIT" == "0" ]]; then
+						return 0
+					fi
+					default_item="$TUI_ACTION_ADVANCED"
 					continue
-				fi
-				;;
-			$TUI_ACTION_RERUN_WIZARD)
-				# Rerun Wizard
-				log "User chose to rerun wizard"
-				RERUN_WIZARD=true
-				return 0
-				;;
-			$TUI_ACTION_SETTINGS)
-				# Settings sub-menu
-				_show_settings
-				default_item="$TUI_ACTION_SETTINGS"
-				continue
-				;;
-			$TUI_ACTION_ADVANCED)
-				# Advanced sub-menu
-				_show_advanced
-				if [[ "$ADVANCED_EXIT" == "0" ]]; then
-					return 0
-				fi
-				default_item="$TUI_ACTION_ADVANCED"
-				continue
-				;;
-			$TUI_ACTION_EXIT)
-				# Exit
-				log "User chose to exit"
-				clear
-				_show_exit_summary
-				return 0
-				;;
+					;;
 			esac
 				;;
 			1)
@@ -3553,33 +3618,36 @@ Toggle a setting by selecting it and pressing Enter." 0 0 || true
 			dialog --backtitle "$(ui_backtitle)" --msgbox \
 "Choose Next Action - Help
 
-VIEW:
-• View ImageSet Config - Preview the generated YAML for oc-mirror
+REVIEW:
+  V  View ImageSet Config - Preview the generated YAML for oc-mirror
+  A  Reset to Auto-Generated - Discard edits, regenerate from aba.conf
+     (only shown when you have manually edited the ImageSet Config)
 
 AIR-GAPPED (Fully Disconnected) - uses mirror-to-disk:
   For environments with no internet access.
-• Create Air-Gapped Install Bundle - Package images, binaries & configs
+  B  Create Air-Gapped Install Bundle - Package images, binaries & configs
                               Transfer this bundle to the air-gapped site
-• Save Images to Archive - Save images to aba/mirror/save/
+  S  Save Images to Archive - Save images to aba/mirror/save/
 
 CONNECTED / PARTIALLY CONNECTED - uses mirror-to-mirror:
   For environments with direct or proxied internet.
-• Local Registry  - Install a registry here and sync images
-• Remote Registry - Install a registry on a remote host via SSH
+  L  Local Registry  - Install a registry here and sync images
+  R  Remote Registry - Install a registry on a remote host via SSH
 
-RERUN WIZARD:
-• Go back to channel/version/operator selection to change config
+  W  RERUN WIZARD - Go back to channel/version/operator selection
 
-SETTINGS (sub-menu):
-• Auto-answer (-y) - Skip confirmation prompts
-• Registry Type    - Toggle between Auto / Quay / Docker
-• Retry Count      - oc-mirror retry attempts (off / 3 / 8)
+CONFIGURE (sub-menu):
+  C  Auto-answer (-y) - Skip confirmation prompts
+     Registry Type    - Toggle between Auto / Quay / Docker
+     Retry Count      - oc-mirror retry attempts (off / 3 / 8)
 
 ADVANCED (sub-menu):
-• Generate ISConf & Exit  - Create YAML only (for manual oc-mirror)
-• Delete registry        - Uninstall mirror registry (aba -d mirror uninstall)
-• Exit (manual)           - Exit TUI to run 'aba' commands yourself
+  O  Generate ISConf & Exit  - Create YAML only (for manual oc-mirror)
+     Edit ImageSet Config    - Edit and take ownership of the config
+     Delete registry        - Uninstall mirror registry (aba uninstall -d mirror)
+     Exit (manual)           - Exit TUI to run 'aba' commands yourself
 
+Press Exit button or ESC to quit.
 Log file: $LOG_FILE" 0 0 || true
 				continue
 				;;

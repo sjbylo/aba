@@ -70,35 +70,42 @@ TUI_TITLE_HELP="ABA Help"
 TUI_TITLE_ERROR="Error"
 
 # =============================================================================
-# Action Menu — Item Numbers
+# Action Menu — Letter Tags
 # =============================================================================
-# These map to the numbered menu items in the "Choose Next Action" dialog.
-# If you reorder or add items, update these AND the TUI menu definition.
+# These are the single-letter tags for the "Choose Next Action" dialog.
+# The letter matches the underlined mnemonic in each label.
 
-TUI_ACTION_VIEW_IMAGESET=1
-TUI_ACTION_CREATE_BUNDLE=2
-TUI_ACTION_SAVE_IMAGES=3
-TUI_ACTION_LOCAL_REGISTRY=4
-TUI_ACTION_REMOTE_REGISTRY=5
-TUI_ACTION_RERUN_WIZARD=6
-TUI_ACTION_SETTINGS=7
-TUI_ACTION_ADVANCED=8
-TUI_ACTION_EXIT=9
+TUI_ACTION_VIEW_IMAGESET=V
+TUI_ACTION_RESET_IMAGESET=A
+TUI_ACTION_CREATE_BUNDLE=B
+TUI_ACTION_SAVE_IMAGES=S
+TUI_ACTION_LOCAL_REGISTRY=L
+TUI_ACTION_REMOTE_REGISTRY=R
+TUI_ACTION_RERUN_WIZARD=W
+TUI_ACTION_SETTINGS=C
+TUI_ACTION_ADVANCED=O
 
 # =============================================================================
-# Action Menu — Display Labels (for test assertions)
+# Action Menu — Display Labels
 # =============================================================================
-# These are the visible text next to each menu number.
+# Mnemonic letter is underlined via \Zu...\Zn (requires dialog --colors).
+# For test assertions, use the plain-text versions below.
 
-TUI_ACTION_LABEL_VIEW_IMAGESET="View Generated ImageSet Config"
-TUI_ACTION_LABEL_CREATE_BUNDLE="Create Air-Gapped Install Bundle"
-TUI_ACTION_LABEL_SAVE_IMAGES="Save Images to Local Archive"
-TUI_ACTION_LABEL_LOCAL_REGISTRY="Install & Sync to Local Registry"
-TUI_ACTION_LABEL_REMOTE_REGISTRY="Install & Sync to Remote Registry via SSH"
-TUI_ACTION_LABEL_RERUN_WIZARD="Rerun Wizard"
-TUI_ACTION_LABEL_SETTINGS="Settings..."
-TUI_ACTION_LABEL_ADVANCED="Advanced Options..."
-TUI_ACTION_LABEL_EXIT="Exit"
+TUI_ACTION_LABEL_VIEW_IMAGESET="\ZuV\Zniew Generated ImageSet Config"
+TUI_ACTION_LABEL_VIEW_IMAGESET_USER="\ZuV\Zniew User-Edited ImageSet Config"
+TUI_ACTION_LABEL_RESET_IMAGESET="Reset to \ZuA\Znuto-Generated ImageSet Config"
+TUI_ACTION_LABEL_CREATE_BUNDLE="Create Air-Gapped Install \ZuB\Znundle"
+TUI_ACTION_LABEL_SAVE_IMAGES="\ZuS\Znave Images to Local Archive"
+TUI_ACTION_LABEL_LOCAL_REGISTRY="Install & Sync to \ZuL\Znocal Registry"
+TUI_ACTION_LABEL_REMOTE_REGISTRY="Install & Sync to \ZuR\Znemote Registry via SSH"
+TUI_ACTION_LABEL_RERUN_WIZARD="Rerun \ZuW\Znizard"
+TUI_ACTION_LABEL_SETTINGS="\ZuC\Znonfigure..."
+TUI_ACTION_LABEL_ADVANCED="Advanced \ZuO\Znptions..."
+
+# Plain-text versions for test assertions (dialog strips \Zu/\Zn on screen)
+TUI_ACTION_TEXT_VIEW_IMAGESET="View Generated ImageSet Config"
+TUI_ACTION_TEXT_VIEW_IMAGESET_USER="View User-Edited ImageSet Config"
+TUI_ACTION_TEXT_RESET_IMAGESET="Reset to Auto-Generated ImageSet Config"
 
 # =============================================================================
 # Settings Menu — Item Numbers
