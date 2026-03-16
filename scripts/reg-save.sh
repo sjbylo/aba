@@ -36,7 +36,7 @@ aba_debug "Configuration validated"
 # Still downloading?
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
-aba_info "Ensuring CLI installation binaries are downloading"
+aba_info "Ensuring CLI installation binaries are available"
 #pwd
 sleep 1
 #run_once -w -i download_all_cli -- make -sC ../cli download #|| aba_abort "Downloading CLI binaries failed.  Please try again!"

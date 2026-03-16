@@ -7,7 +7,7 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
 - **Monitor and investigate** in a loop:
   - Run E2E tests (`test/e2e/run.sh`), monitor status and logs
   - Do not wait more that 10 mins between checking the status, otherwise you may miss a failed suite!
-  - When a suite fails, investigate the root cause: read logs, trace the error, identify the fix
+  - When a suite fails, enter 'p' to pause (if needed), investigate the root cause: read logs, trace the error, identify the fix
   - **Add proposed fixes to a plan** — do NOT edit any code directly
 - **Always ensure the dispatcher is running** — check at every monitoring cycle.
   If not running, start it: `run.sh run --all --force` (queues all suites, dispatches to idle pools).
