@@ -162,6 +162,8 @@ do
 			elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
 				[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				community_operator+=("$op")
+			else
+				aba_warning "Operator '$op' (from set '$op_set_name') not found in any catalog for OCP $ocp_ver_major -- skipping"
 			fi
 		done
 	else
@@ -196,6 +198,8 @@ if [ "$ops" ]; then
 		elif grep -q "^$op " .index/community-operator-index-v$ocp_ver_major; then
 			[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			community_operator+=("$op")
+		else
+			aba_warning "Operator '$op' not found in any catalog for OCP $ocp_ver_major -- skipping"
 		fi
 	done
 else
