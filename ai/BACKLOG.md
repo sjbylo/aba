@@ -252,6 +252,32 @@ pulls the catalog image directly with `podman` and doesn't depend on `oc-mirror`
 
 ## Medium Priority
 
+### Check VM Existence Before Prompting to Power Down
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-17
+
+**Problem:**
+After generating the agent ISO, ABA lists the VM paths and asks "Immediately power down the above virtual machine(s)? (Y/n):" — even when the VMs do not exist yet. If the user answers Yes, `govc` fails with `vm 'sno4-sno4' not found`.
+
+**Observed output:**
+```
+[ABA] The agent based ISO has been created in the /home/steve/aba/sno4/iso-agent-based directory
+
+/Datacenter/vm/abatesting/sno4/sno4-sno4
+[ABA] Immediately power down the above virtual machine(s)? (Y/n):
+govc: vm 'sno4-sno4' not found
+```
+
+**Expected behavior:**
+ABA should check (`govc vm.info` or similar) whether each VM exists before prompting. If no VMs exist yet, skip the prompt entirely. If some exist and some don't, only list and act on the ones that exist.
+
+**Where:** `scripts/vmw-create.sh` or wherever the power-down prompt is issued after ISO generation.
+
+---
+
 ### Empty Values in aba.conf Propagate Into cluster.conf via Template Generation
 
 **Status:** Backlog
