@@ -138,7 +138,7 @@ test_begin "Version mismatch"
 
 e2e_run "Ensure CLIs are installed" "aba -d cli install"
 e2e_run "Create dummy imageset-config for mismatch check" \
-	"mkdir -p mirror/save && touch mirror/save/.created && sleep 1 && cat > mirror/save/imageset-config-save.yaml <<'ENDYAML'
+	"mkdir -p mirror/data && touch mirror/data/.created && sleep 1 && cat > mirror/data/imageset-config.yaml <<'ENDYAML'
 mirror:
   platform:
     channels:
@@ -150,7 +150,7 @@ e2e_run "Save current version" "grep '^ocp_version=' aba.conf > /tmp/e2e-saved-v
 e2e_run "Set mismatched version" "sed -i 's/^ocp_version=.*/ocp_version=4.14.0/' aba.conf"
 e2e_run_must_fail "Version mismatch detected" "make -sC mirror checkversion"
 e2e_run "Restore version" "source /tmp/e2e-saved-version && sed -i \"s/^ocp_version=.*/ocp_version=\$ocp_version/\" aba.conf"
-e2e_run "Remove dummy imageset-config" "rm -f mirror/save/imageset-config-save.yaml"
+e2e_run "Remove dummy imageset-config" "rm -f mirror/data/imageset-config.yaml"
 
 test_end 0
 

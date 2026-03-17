@@ -252,6 +252,23 @@ pulls the catalog image directly with `podman` and doesn't depend on `oc-mirror`
 
 ## Medium Priority
 
+### Rename E2E SNO Cluster Names to Avoid Clashes
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small-Medium
+**Created:** 2026-02-26
+
+**Problem:**
+The new E2E test suites use SNO cluster names `sno1`, `sno2`, `sno3`, `sno4` which clash with other tests that also use the same names. This can cause cross-test interference when multiple suites run concurrently on different pools.
+
+**Proposed fix:**
+Rename the E2E SNO clusters to `e2e-sno1`, `e2e-sno2`, `e2e-sno3`, `e2e-sno4` (or similar unique prefix). Update all E2E suite scripts, cluster config templates, and dnsmasq DNS records accordingly.
+
+**Where:** `test/e2e/suites/`, dnsmasq config on pool hosts, any cluster config templates used by E2E tests.
+
+---
+
 ### Check VM Existence Before Prompting to Power Down
 
 **Status:** Backlog

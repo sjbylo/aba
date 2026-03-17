@@ -63,7 +63,7 @@ rm -vf test-bundle-delete-me*tar   # Save space
 cd aba
 ./install
 # If "light" bundle, show the bundle instructions and move the ISC archive into place
-[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba/mirror/data/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/data   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Save disk space, not needed anymore
 aba     # Show the bundle instructions again
 aba | grep -i "bundle .*detected"  # Verify it's the bundle!

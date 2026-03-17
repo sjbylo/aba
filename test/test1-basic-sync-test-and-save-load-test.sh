@@ -91,7 +91,7 @@ v=4.16.3
 #echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
 #####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### test-cmd -m "Show content of mirror/data" 'ls -l mirror mirror/data || true'
 #aba clean
 
 # Set up aba.conf properly
@@ -329,7 +329,7 @@ test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" aba -
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
 
 # FIXME: no need? or use 'aba clean' or?
-rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
+rm -rf mirror/data   # The process will halt, otherwise with "You already have images saved on local disk"
 
 #####################################################################################################################
 #####################################################################################################################

@@ -82,7 +82,7 @@ if [ ! "$1" ]; then
 	test-cmd -m "Installing aba" ./install
 	#test-cmd -m "Activating shortcuts.conf" cp -f .shortcuts.conf shortcuts.conf
 	mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
-	test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+	test-cmd -m "Show content of mirror/data" 'ls -l mirror mirror/data || true'
 	#test-cmd "make -C mirror clean"
 	rm -rf sno compact standard 
 
@@ -195,19 +195,19 @@ test-cmd -r 15 1 -m "Saving images to local disk on `hostname`" aba -d mirror sa
 # See OC_MIRROR_CACHE tests above
 test-cmd -m "Checking cache dir was created!" test -d $OC_MIRROR_CACHE/.oc-mirror/.cache/docker
 
-test-cmd -m "Checking existance of file mirror/save/mirror_*000000.tar" "ls -lh mirror/save/mirror_*\.tar"
+test-cmd -m "Checking existance of file mirror/data/mirror_*000000.tar" "ls -lh mirror/data/mirror_*\.tar"
 
 mylog "Use 'aba tar' and copy (ssh) files over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
 test-cmd -m "Create 'subdir' on host $int_bastion_hostname" "ssh $DIS_SSH_USER@$int_bastion_hostname -- mkdir -v -p $subdir"
 test-cmd -m "Create the 'full' tar file and unpack on host $int_bastion_hostname" "aba -d mirror tar --out - | ssh $DIS_SSH_USER@$int_bastion_hostname -- tar -C $subdir -xvf -"
 
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/data/mirror_*.tar'" "ls -lh $subdir/aba/mirror/data/mirror_*\.tar"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Install aba on the remote host $int_bastion_hostname" "$subdir/aba/install"
 ###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Activating shortcuts.conf on remote host" "cd $subdir/aba; cp -f .shortcuts.conf shortcuts.conf"
 
 # FIXME: Is this needed since we use "full tar" copy above?
-###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+###test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
 
 # This user's action is expected to fail since there are no login credentials for the "existing reg."
 test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Loading images into mirror registry (without ~/.aba/mirror/mirror/ fails with 'Quay registry found')" "aba --dir $subdir/aba/mirror load --retry"
@@ -227,8 +227,8 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying access to the mirr
 # Now, this works
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
-test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/save/mirror_*.tar"
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/save/mirror_*.tar"
+test-cmd                                             -m "Delete loaded image set 1 file" "rm -v mirror/data/mirror_*.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname         -m "Delete loaded image set 1 file on registry" "rm -v $subdir/aba/mirror/data/mirror_*.tar"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname "rm -rf $subdir/aba/compact" 
 #test-cmd -m "Copy over shortcuts.conf, needed for next test command" scp .shortcuts.conf $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/shortcuts.conf
@@ -443,9 +443,9 @@ mylog Adding vote-app image to imageset conf file on `hostname`
 gvk=v2alpha1
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y%m%d_%H%M%S")
+[ -f mirror/data/imageset-config.yaml ] && cp -v mirror/data/imageset-config.yaml mirror/data/imageset-config.yaml.$(date "+%Y%m%d_%H%M%S")
 #if [ "$oc_mirror_version" = "v2" ]; then
-tee mirror/save/imageset-config-save.yaml <<END
+tee mirror/data/imageset-config.yaml <<END
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/$gvk
 mirror:
@@ -454,18 +454,18 @@ END
 # For oc-miror v2
 
 # Note that if multiple 'additionalImages:' lines are added, it seems to cause oc-mirror v1 to delete images unexpectedly
-tee -a mirror/save/imageset-config-save.yaml <<END
+tee -a mirror/data/imageset-config.yaml <<END
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 END
 
-^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 test-cmd -r 15 1 -m "Saving 'vote-app' image to local disk" "aba --dir mirror save  --retry"
 
-test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh mirror/save/mirror_*\.tar"
+test-cmd -m "Checking existance of file mirror/data/mirror_*_000000.tar" "ls -lh mirror/data/mirror_*\.tar"
 
-#mylog "Simulate an 'inc' tar copy of 'mirror/save/mirror_*.tar' file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
+#mylog "Simulate an 'inc' tar copy of 'mirror/data/mirror_*.tar' file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
 
 #test-cmd -m "Create tmp dir" mkdir -v -p ~/tmp
 #test-cmd -m "Delete any old tar file (if any)" rm -fv ~/tmp/file.tar
@@ -474,25 +474,25 @@ test-cmd -m "Checking existance of file mirror/save/mirror_*_000000.tar" "ls -lh
 #test-cmd -m "Copy tar file over to $int_bastion_hostname" scp ~/tmp/file.tar $DIS_SSH_USER@$int_bastion_hostname:
 #test-cmd -m "Remove local tar file" rm -v ~/tmp/file.tar  # Remove file on client side
 
-test-cmd -m "Copy over mirror archive and image set config file" scp mirror/save/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save/
+test-cmd -m "Copy over mirror archive and image set config file" scp mirror/data/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data/
 
-#mylog "The following untar command should unpack the file aba/mirror/save/mirror_*.tar only"
+#mylog "The following untar command should unpack the file aba/mirror/data/mirror_*.tar only"
 #test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Unpacking tar file" "tar -C $subdir -xvf file.tar"   
 #test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Removing tar file" "rm -v file.tar"
 
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/data/mirror_*.tar'" "ls -lh $subdir/aba/mirror/data/mirror_*\.tar"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying access to mirror registry $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
-test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
+test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
 
-^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port" "aba --dir $subdir/aba/mirror load --retry"
 
-test-cmd                                     -m "Delete loaded image set 2 file" rm -v mirror/save/mirror_*.tar
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
+test-cmd                                     -m "Delete loaded image set 2 file" rm -v mirror/data/mirror_*.tar
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete loaded image set 2 file on registry" rm -v $subdir/aba/mirror/data/mirror_*.tar
 
 # Is the cluster can be reached ... use existing cluster
 #if test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Checking if sno cluster up" "aba --dir $subdir/aba/sno run --cmd 'oc get clusterversion'"; then
@@ -525,7 +525,7 @@ test-cmd -r 5 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "ab
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno run --cmd 'oc rollout status deployment vote-app -n demo'"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'"
 
-mylog "Adding advanced-cluster-management operator images to mirror/save/imageset-config-save.yaml file on `hostname`"
+mylog "Adding advanced-cluster-management operator images to mirror/data/imageset-config.yaml file on `hostname`"
 
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -533,12 +533,12 @@ test-cmd -m "Checking for file mirror/imageset-config-redhat-operator-catalog-v$
 test-cmd -m "Checking for advanced-cluster-management in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep advanced-cluster-management$"
 test-cmd -m "Checking for multicluster-engine in mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml" "cat mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | grep multicluster-engine$"
 
-mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/imageset-config-save.yaml on `hostname`
+mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/data/imageset-config.yaml on `hostname`
 
 # For oc-miror v2 (v2 needs to have only the images that are needed for this next save/load cycle)
-[ -f mirror/save/imageset-config-save.yaml ] && cp -v mirror/save/imageset-config-save.yaml mirror/save/imageset-config-save.yaml.$(date "+%Y%m%d_%H%M%S")
+[ -f mirror/data/imageset-config.yaml ] && cp -v mirror/data/imageset-config.yaml mirror/data/imageset-config.yaml.$(date "+%Y%m%d_%H%M%S")
 #if [ "$oc_mirror_version" = "v2" ]; then
-#tee mirror/save/imageset-config-save.yaml <<END
+#tee mirror/data/imageset-config.yaml <<END
 #kind: ImageSetConfiguration
 #apiVersion: mirror.openshift.io/$gvk
 #mirror:
@@ -546,40 +546,40 @@ mylog Appending redhat-operator-index:v$ocp_ver_major header into mirror/save/im
 #fi
 # For oc-miror v2
 
-tee -a mirror/save/imageset-config-save.yaml <<END
+tee -a mirror/data/imageset-config.yaml <<END
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
     packages:
 END
 
-^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 # Append the correct values for each operator
-test-cmd -m "Adding advanced-cluster-management  operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
+test-cmd -m "Adding advanced-cluster-management  operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
 
-test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"
-### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/save/imageset-config-save.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/save/imageset-config-save.yaml"   # Fetch all ??
+test-cmd -m "Adding multicluster-engine          operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
+### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/data/imageset-config.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"   # Fetch all ??
 
-^test-cmd -m "Output imageset conf file" cat mirror/save/imageset-config-save.yaml
+^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 
 test-cmd -r 15 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
 
-test-cmd -m "Listing image set files created" "ls -lh mirror/save/mirror_*.tar"
-mylog "Use 'scp' to copy mirror/save/mirror_*.tar file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
-test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/save/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save"
+test-cmd -m "Listing image set files created" "ls -lh mirror/data/mirror_*.tar"
+mylog "Use 'scp' to copy mirror/data/mirror_*.tar file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
+test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/data/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data"
 
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/save/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/save/mirror_*\.tar"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/data/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/data/mirror_*\.tar"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
-test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/save/imageset-config-save.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/save
+#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
+test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 
-test-cmd                                     -m "Delete loaded image set 3 file" rm -v mirror/save/mirror_*.tar
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/save/mirror_*.tar
+test-cmd                                     -m "Delete loaded image set 3 file" rm -v mirror/data/mirror_*.tar
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete loaded image set 3 file on registry" rm -v $subdir/aba/mirror/data/mirror_*.tar
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 15 3 -m "Run 'day2' on sno cluster" "aba --dir $subdir/aba/sno day2"
 

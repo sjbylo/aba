@@ -60,7 +60,7 @@ test-cmd -m "Installing aba" ./install
 
 ####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### test-cmd -m "Show content of mirror/data" 'ls -l mirror mirror/data || true'
 #test-cmd -m "Cleaning up mirror - clean" "aba -s -C mirror clean" 
 
 rm -rf sno compact standard 
@@ -202,7 +202,7 @@ test-cmd -r 3 3 -m "Creating bundle for channel $TEST_CHANNEL & version $ocp_ver
 test-cmd -m "Show tar file" 	ls -l /tmp/delete-me*tar 
 test-cmd -m "Show tar file GB" 	ls -lh /tmp/delete-me*tar 
 test-cmd -m "Verify tar file"	tar tvf /tmp/delete-me*tar 
-test-cmd -m "Verify tar file"	tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar
+test-cmd -m "Verify tar file"	tar tvf /tmp/delete-me*tar | grep mirror/data/mirror_000001.tar
 test-cmd -m "Delete tar file"	rm -fv /tmp/delete-me*tar 
 
 mylog "===> Completed test $0"

@@ -172,7 +172,7 @@ e2e_run "Show tar file size" "ls -l /tmp/delete-me*tar"
 e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
 e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
-    "tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar"
+    "tar tvf /tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
 
 test_end 0
 
@@ -186,14 +186,14 @@ test_begin "All-operators imageset: generate and verify YAML"
 e2e_run -q "Set op-sets to 'all' in aba.conf" "aba --op-sets all"
 
 # Remove any previously generated imageset YAML so it's regenerated
-e2e_run -q "Clean old imageset YAML" "rm -f mirror/save/imageset-config-save.yaml"
+e2e_run -q "Clean old imageset YAML" "rm -f mirror/data/imageset-config.yaml"
 
 # Generate the imageset config YAML (without actually saving images)
 e2e_run "Generate imageset-config for ops=all" "aba -d mirror imagesetconf"
 
 # Verify: the YAML must contain the redhat-operator-index catalog entry
 e2e_run "Verify redhat-operator-index in imageset YAML" \
-    "grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml"
+    "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
 
 # TODO: Replace with a proper verification for op-sets=all (backlog item)
 

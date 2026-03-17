@@ -256,7 +256,7 @@ e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
 e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
-e2e_run "Clean saved data" "rm -rf mirror/save"
+e2e_run "Clean saved data" "rm -rf mirror/data"
 e2e_diag "Markers: before sync" "_marker_snap"
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 

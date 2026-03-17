@@ -73,7 +73,7 @@ v=4.16.3
 aba --dir ~/aba reset --force
 #####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### test-cmd -m "Show content of mirror/data" 'ls -l mirror mirror/data || true'
 #aba clean
 
 # Set up aba.conf properly

@@ -121,8 +121,8 @@ while [ $try -le $try_tot ]
 do
 	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
-	cmd="oc-mirror --v2 --config imageset-config-sync.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd sync && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
+	cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	echo "cd data && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	aba_debug "Created sync-mirror.sh script"
 
 	echo
@@ -141,7 +141,7 @@ do
 	aba_debug "sync-mirror.sh exit code: $ret"
 	#if [ $ret -eq 0 ]; then
 	# Check for error files (only required for v2 of oc-mirror)
-	error_file=$(ls -t sync/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 	# Example error file:  mirroring_errors_20250914_230908.txt 
 	aba_debug "error_file=${error_file:-none}"
 
@@ -153,10 +153,10 @@ do
 	fi
 
 	if [ -s "$error_file" ]; then
-		aba_debug "Error file found: $error_file - saving to sync/saved_errors/"
-		mkdir -p sync/saved_errors
-		mv $error_file sync/saved_errors
-		echo_red "[ABA] Error detected and log file saved in sync/saved_errors/$(basename $error_file)" >&2
+		aba_debug "Error file found: $error_file - saving to data/saved_errors/"
+		mkdir -p data/saved_errors
+		mv $error_file data/saved_errors
+		echo_red "[ABA] Error detected and log file saved in data/saved_errors/$(basename $error_file)" >&2
 	fi
 	#fi
 

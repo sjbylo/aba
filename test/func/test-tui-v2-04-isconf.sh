@@ -136,7 +136,7 @@ verify_isconf_screen "${A_verify_args[@]}"
 log_info "=== Test B: ISC user-edit protection ==="
 ensure_action_menu
 
-ISC_FILE="mirror/save/imageset-config-save.yaml"
+ISC_FILE="mirror/data/imageset-config.yaml"
 
 if [[ ! -f "$ISC_FILE" ]]; then
 	log_fail "B: ISC file not found at $ISC_FILE"
@@ -217,8 +217,8 @@ ensure_action_menu
 if [[ -f "$ISC_FILE" ]]; then
 	sed -i '/user-edit-marker-B/d' "$ISC_FILE"
 	# Reset the timestamp so ISC is NOT newer than .created
-	if [[ -f mirror/save/.created ]]; then
-		touch mirror/save/.created
+	if [[ -f mirror/data/.created ]]; then
+		touch mirror/data/.created
 		sleep 1
 	fi
 fi
@@ -435,15 +435,11 @@ fi
 log_info "=== Test F: ISC ownership label (dynamic View label) ==="
 ensure_action_menu
 
-ISC_FILE="mirror/save/imageset-config-save.yaml"
+ISC_FILE="mirror/data/imageset-config.yaml"
 
 # First ensure ISC is auto-generated (not user-owned)
-if [[ -f mirror/save/.created ]]; then
-	touch mirror/save/.created
-	sleep 1
-fi
-if [[ -f mirror/sync/.created ]]; then
-	touch mirror/sync/.created
+if [[ -f mirror/data/.created ]]; then
+	touch mirror/data/.created
 	sleep 1
 fi
 
@@ -542,11 +538,8 @@ log_info "=== Test G: Edit ISC via Advanced Options ==="
 ensure_action_menu
 
 # Reset ISC to auto-generated first
-if [[ -f mirror/save/.created ]]; then
-	touch mirror/save/.created; sleep 1
-fi
-if [[ -f mirror/sync/.created ]]; then
-	touch mirror/sync/.created; sleep 1
+if [[ -f mirror/data/.created ]]; then
+	touch mirror/data/.created; sleep 1
 fi
 
 select_action "$TUI_ACTION_ADVANCED"

@@ -375,7 +375,7 @@ To download and save the platform and any operator images to disk, run:
 ```
 aba -d mirror save
 ```
-- pulls the images from the Internet and saves them into the local directory as `aba/mirror/save/mirror_000001.tar`. Make sure there is [enough disk space](#prerequisites) for that directory!
+- pulls the images from the Internet and saves them into the local directory as `aba/mirror/data/mirror_000001.tar`. Make sure there is [enough disk space](#prerequisites) for that directory!
 
 Then, create the _install bundle_ using the `aba tar` command, which will copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to the _install bundle_ file.  You then need to move the _bundle_ to your disconnected bastion via a portable storage device, e.g. a thumb drive, or other method. 
 
@@ -585,7 +585,7 @@ cd aba
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
-Note: It is recommended to run `aba bundle` on a fresh install of ABA or use the --force flag to overwrite any existing image-set files under aba/mirror/save.
+Note: It is recommended to run `aba bundle` on a fresh install of ABA or use the --force flag to overwrite any existing image-set files under aba/mirror/data.
 
 
 Create the install bundle with a single command, for example:
@@ -614,7 +614,7 @@ aba bundle \
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to use these checksum values to verify the files after copying them into the air-gapped environment!
-- Warning: --force will overwrite any existing image-set files under aba/mirror/save!
+- Warning: --force will overwrite any existing image-set files under aba/mirror/data!
 - See `aba bundle --help` for more.
 
 Copy the 10GB and the CHECKSUM.txt files to your RHEL 8 or 9 bastion within the disconnected environment.
@@ -634,7 +634,7 @@ cd aba
 aba         # Run aba and follow the instructions
 ```
 
-Note: You will find the large image-set tar file under `aba/mirror/save`.
+Note: You will find the large image-set tar file under `aba/mirror/data`.
 
 You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localhost and then load it with images using the following command (run: aba -d mirror load --help or see below for more details):
 
@@ -1012,17 +1012,17 @@ In a fully disconnected environment, you can do one of the following:
   aba -d mirror save
   ```
 - **Manually edit the image-set configuration (advanced / flexible option)**  
-  Edit `aba/mirror/save/imageset-config-save.yaml` yourself—for example, to add more images or fetch newer platform versions.
-  - To mirror images for OpenShift upgrades, you must manually adjust the `min` and `max` versions in `imageset-config-save.yaml`.  
+  Edit `aba/mirror/data/imageset-config.yaml` yourself—for example, to add more images or fetch newer platform versions.
+  - To mirror images for OpenShift upgrades, you must manually adjust the `min` and `max` versions in `imageset-config.yaml`.  
     ABA does **not** manage these values automatically.
 
 - Run `aba -d mirror save` to download the images to disk and wait for completion.
 
-- Copy the following files from the _connected workstation_ to the _internal bastion_, under `aba/mirror/save`:
+- Copy the following files from the _connected workstation_ to the _internal bastion_, under `aba/mirror/data`:
   - Image-set configuration file:  
-    aba/mirror/save/imageset-config-save.yaml
+    aba/mirror/data/imageset-config.yaml
   - Image-set archive file:  
-    aba/mirror/save/mirror_000001.tar
+    aba/mirror/data/mirror_000001.tar
 
 - On the _internal bastion_, run:
   ```
@@ -1044,7 +1044,7 @@ In a partially disconnected environment, the following workflow can be used:
 
 - Edit the image-set configuration file on the _connected bastion_:
 
-  aba/mirror/sync/imageset-sync.yaml
+  aba/mirror/data/imageset-config.yaml
 
   Add additional images or update platform versions as needed.
 
@@ -1184,7 +1184,7 @@ aba bundle --light \
 ```
 
 This creates the light bundle file (e.g. `my_bundle.tar`) in the specified directory.
-The image-set archive file(s) remain under `aba/mirror/save/` and must be transferred separately.
+The image-set archive file(s) remain under `aba/mirror/data/` and must be transferred separately.
 
 See `aba bundle --help` for all available options.
 
@@ -1193,11 +1193,11 @@ See `aba bundle --help` for all available options.
 If you need more control over the process, you can run the steps individually instead of using `aba bundle`:
 
 ```
-aba -d mirror save                                    # 1. Pull and save images to aba/mirror/save/
+aba -d mirror save                                    # 1. Pull and save images to aba/mirror/data/
 aba tarrepo --out $HOME/temp/dir/aba.tar              # 2. Create bundle excluding image-set archives
 ```
 
-- `aba -d mirror save` pulls the images from the Internet and saves them to `aba/mirror/save/mirror_000001.tar`.
+- `aba -d mirror save` pulls the images from the Internet and saves them to `aba/mirror/data/mirror_000001.tar`.
 - `aba tarrepo` creates the install bundle **excluding** the large image-set archive file(s).
 
 ### Transferring to the disconnected environment
@@ -1207,7 +1207,7 @@ Copy both the light bundle and the image-set archive file(s) separately to the _
 On the _internal bastion_:
 ```
 tar xvf aba.tar
-mv /path/to/mirror_000001.tar aba/mirror/save/
+mv /path/to/mirror_000001.tar aba/mirror/data/
 cd aba
 ./install
 aba

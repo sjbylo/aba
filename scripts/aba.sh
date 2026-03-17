@@ -23,7 +23,7 @@
 ABA_VERSION=20260317135525
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260315224415
+ABA_BUILD=20260317175051
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1026,16 +1026,16 @@ if [ -f .bundle ]; then
 	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
 	# Check if tar files are already in place
-	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
+	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
 		{
 			echo
 			aba_warning -p "IMPORANT" \
 				"The Image-set archive file(s) (ISA image payload) are not included in this install bundle." \
 				"The ISA file(s) were left out of the install bundle during its creation and *must be*" \
-				"moved or copied into the install bundle under the aba/mirror/save directory before continuing!"
+				"moved or copied into the install bundle under the aba/mirror/data directory before continuing!"
 			echo
 			echo_white "Example (copy ISA from portable media):" 
-			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/save/" 
+			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/data/" 
 			echo_white "Run aba again for further instructions." 
 		} >&2
 

@@ -105,7 +105,7 @@ unregister: .init
 #cli-oc-mirror:
 #	@make -sC ../cli ~/bin/oc-mirror
 
-imagesetconf: sync/imageset-config-sync.yaml save/imageset-config-save.yaml ## Create the initial image set config file with all provided values and operators
+imagesetconf: data/imageset-config.yaml ## Create the initial image set config file with all provided values and operators
 isconf: imagesetconf ## Same as imagesetconf
 
 # ISC (ImageSet Config) generation dependencies:
@@ -114,22 +114,19 @@ isconf: imagesetconf ## Same as imagesetconf
 #   catalogs-download/wait   - PHONY: ensure catalog indexes are downloaded before generation
 #   .index/*-operator-index-* - operator names + default channels from downloaded catalogs
 #
-# Regeneration is controlled by the script's internal guard (save/.created marker):
+# Regeneration is controlled by the script's internal guard (data/.created marker):
 #   - ISC is always regenerated UNLESS the user has edited it after generation.
 #   - The .created file is touched after each generation; if the ISC file is newer
 #     than .created, it means the user modified it and their changes are preserved.
-sync/imageset-config-sync.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
-	$(SCRIPTS)/reg-create-imageset-config-sync.sh
-
-save/imageset-config-save.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
-	$(SCRIPTS)/reg-create-imageset-config-save.sh
+data/imageset-config.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
+	$(SCRIPTS)/reg-create-imageset-config.sh
 
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?
 # Auth is verified only when building .available (install); do not depend on verify here or we run
 # reg-verify.sh even when .available is up-to-date (stale .available => login fails before sync).
 .PHONY: sync
-sync: .init .rpmsint ~/.pull-secret.json                     install sync/imageset-config-sync.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
+sync: .init .rpmsint ~/.pull-secret.json                     install data/imageset-config.yaml ## Sync images from the Internet directly to an internal registry (as defined in 'aba/mirror/mirror.conf') Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-sync.sh          $(retry)
 
 ~/.pull-secret.json:
@@ -140,7 +137,7 @@ sync: .init .rpmsint ~/.pull-secret.json                     install sync/images
 # For 'save' (mirrorToDisk) we need to download ALL CLI binaries because we don't know which OS will be used (RHEL8 or 9) internally. 
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
 # Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
-save: .init .rpmsext ~/.pull-secret.json                                                     save/imageset-config-save.yaml  ## Save images from the Internet to aba/mirror/save/mirror_000001.tar. Use --retry [count] to retry after failure.
+save: .init .rpmsext ~/.pull-secret.json                                                     data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for registry binary download" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
 ifneq ($(arch),aarch64)
 	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
@@ -148,14 +145,14 @@ endif
 	@[ -f $(DOCKER_REG_FILE) ] || echo "[ABA] Warning: Docker registry image not available (docker.io may not be reachable). Bundle will include Quay registry only."
 	$(SCRIPTS)/reg-save.sh          $(retry)
 
-# Fail fast if save/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
-.PHONY: .check-save-dir
-.check-save-dir:
-	@[ -d save ] || { echo "[ABA] Error: Missing 'mirror/save' directory!  Run 'aba -d mirror save' first on a connected host."; exit 1; }
+# Fail fast if data/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
+.PHONY: .check-data-dir
+.check-data-dir:
+	@[ -d data ] || { echo "[ABA] Error: Missing 'mirror/data' directory!  Run 'aba -d mirror save' first on a connected host."; exit 1; }
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load
-load: .init               .rpmsint .check-save-dir install  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
+load: .init               .rpmsint .check-data-dir install  ## Load the saved images into a registry on the internal bastion (as defined in 'aba/mirror/mirror.conf')  Use --retry [count] to retry after failure.
 	$(SCRIPTS)/reg-load.sh          $(retry)
 
 .PHONY: testload
@@ -269,7 +266,7 @@ tar:   ## Create a full tar backup of ~/aba & ~/bin, ready to be transported to 
 	@make -sC .. tar $(out)
 
 .PHONY: tarrepo
-tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under aba/mirror/save/.
+tarrepo:   ## Same as 'make tar' but excludes all 'mirror_000*.tar' files under aba/mirror/data/.
 	@make -sC .. tarrepo $(out)
 
 # This will be deprecated!
@@ -317,14 +314,14 @@ tidy:    # Tidy up so that this repo can be (re-)used to install/configure a reg
 	rm -f  reg-uninstall.sh 
 	rm -f  .rpms* 
 	rm -f  .reg_vendor
-	rm -f  save/oc-mirror-workspace 
-	rm -f  save/publish 
+	rm -f  data/oc-mirror-workspace 
+	rm -f  data/publish 
 
 # Note that the mirror-registry tarball ($(MR_TARBALL)) is needed to 'uninstall' the registry.
 # Note that KEEP the imageset conf file IF user has made changes, otherwise delete it.
 # Do not delete anyting that is "expensive", i.e. user edited config file, a large (or long time to) downlaod items, the installed registry.
 .PHONY: clean
-clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, save/ and sync/ (except working-dir).
+clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirror.conf, registry state, data/ (except working-dir).
 	@[ -f .available ] && echo "[ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched." || true
 	rm -f aba.conf
 	rm -f .init 
@@ -335,7 +332,7 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .cmd.out
 	rm -f .reg_vendor
-	rm -rf save/working-dir sync/working-dir
+	rm -rf data/working-dir
 	rm -f mirror-registry image-archive.tar execution-environment.tar sqlite3.tar
 	@$(SCRIPTS)/run-once.sh -r -i "mirror:reg:install"
 	rm -f templates scripts cli mirror
@@ -355,7 +352,7 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	rm -f $(DOCKER_REG_FILE)
 	rm -rf mirror-registry-*.tar.gz
 	rm -f *.conf *.yaml 
-	rm -rf save sync 
+	rm -rf data 
 	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f *.log .*.log
 	rm -f .ssh.conf

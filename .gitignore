@@ -10,7 +10,6 @@ mirror.conf
 mirror/.dnf-install.log
 mirror/execution-environment.tar
 mirror/image-archive.tar
-mirror/imageset-config-sync.yaml
 mirror/imageset-config*yaml
 mirror/.initialized
 mirror/.available
@@ -25,11 +24,10 @@ mirror/redis.tar
 mirror/regcreds
 mirror/.registry-creds.txt
 mirror/.rpms
-mirror/save
+mirror/data
 mirror/scripts
 mirror/templates
 mirror/*.sh
-mirror/sync
 mirror/.synced
 mirror/.unavailable
 mirror/.*
