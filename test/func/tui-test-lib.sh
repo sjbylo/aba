@@ -767,7 +767,8 @@ wizard_to_operators() {
 		return 1
 	fi
 
-	if ! wait_for "$TUI_TITLE_OPERATORS" 120; then
+	# 300s: cold catalog download (3 indexes) can take 2-3 min after aba reset
+	if ! wait_for "$TUI_TITLE_OPERATORS" 300; then
 		log_fail "wizard_to_operators: Operators screen did not appear"
 		return 1
 	fi

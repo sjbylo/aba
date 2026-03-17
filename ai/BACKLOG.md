@@ -213,6 +213,43 @@ out-of-disk errors.
 
 ---
 
+### oc-mirror Fails With v1/v2 Error on OCP 4.19 Catalog Image
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small–Medium
+**Created:** 2026-03-16
+
+**Problem:**
+`oc-mirror` fails when trying to download the OCP 4.19 catalog image, producing a v1/v2
+compatibility error. This blocks catalog index downloads and operator listing for version 4.19.
+
+**Context:**
+Starting with OCP 4.18, `oc-mirror v1` is deprecated and Red Hat is transitioning to `oc-mirror v2`.
+The 4.19 catalog images may require v2-only handling, causing the current v1-based catalog
+download path to fail. The deprecation warnings are already visible:
+```
+⚠️  oc-mirror v1 is deprecated (started in 4.18 release) and will be removed in a future release
+⚠️  starting with oc-mirror 4.21, the use of the flag --v1 or --v2 is mandatory
+```
+
+**Investigation needed:**
+1. Reproduce: run `oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v4.19`
+   and capture the exact error
+2. Determine if `--v2` flag resolves it (`oc-mirror --v2 list operators ...`)
+3. Check if this is a known Red Hat bug or intentional v1 deprecation enforcement
+4. If v2 fixes it, update `download-catalog-index.sh` to use `--v2` for OCP >= 4.19
+5. Alternatively, this is another reason to accelerate the backlog item "Replace oc-mirror
+   list operators With Podman-Based Catalog Extraction" — the podman-based approach
+   (`extract-catalog-index.sh`) bypasses oc-mirror entirely and already works for 4.19+
+
+**Workaround:** Use the podman-based extraction (`scripts/extract-catalog-index.sh`) which
+pulls the catalog image directly with `podman` and doesn't depend on `oc-mirror` at all.
+
+**Where:** `scripts/download-catalog-index.sh`, `scripts/extract-catalog-index.sh`
+
+---
+
 ## Medium Priority
 
 ### Empty Values in aba.conf Propagate Into cluster.conf via Template Generation
