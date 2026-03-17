@@ -348,8 +348,7 @@ select_action "$TUI_ACTION_RERUN_WIZARD"
 if wait_for "$TUI_TITLE_CHANNEL" 10; then
 	log_pass "F: At Channel screen"
 	send_tab_tab_tab_enter
-	sleep 1
-	if capture | grep -qi "Update Channels\|Recommended\|stable.*fast.*candidate"; then
+	if wait_for "Update Channels" 10; then
 		log_pass "F: Channel help dialog appeared"
 	else
 		log_fail "F: Channel help dialog content not found"
