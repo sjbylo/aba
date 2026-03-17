@@ -59,7 +59,7 @@ rm -vf delete-me*tar
 cd aba
 ./install
 [ "$LIGHT" ] && aba   # Show the bundle instructions
-[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba-vX/mirror/save/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/save   # Merge the two repos (to save disk space on this filesystem) 
+[ "$LIGHT" ] && mv -v $TEST_DIR_CONN/aba-vX/mirror/data/mirror_00000*tar $TEST_DIR_DISCO/aba/mirror/data   # Merge the two repos (to save disk space on this filesystem) 
 rm -rf $TEST_DIR_CONN/aba   # Not needed anymore
 aba     # Show the bundle instructions
 aba | grep -i "bundle .*detected"  # Verify it's the bundle!

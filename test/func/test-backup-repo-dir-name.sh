@@ -15,7 +15,7 @@ echo "Testing backup.sh with non-standard repo directory name..."
 
 # Create a minimal repo structure with a non-standard name
 repo_name="aba-test-0.9.0"
-mkdir -p "$test_dir/$repo_name"/{scripts,templates,cli,rpms,others,mirror/save}
+mkdir -p "$test_dir/$repo_name"/{scripts,templates,cli,rpms,others,mirror/data}
 
 # Create minimal required files
 touch "$test_dir/$repo_name/install"

@@ -37,9 +37,7 @@ log() {
 # -----------------------------------------------------------------------------
 _show_exit_files() {
 	local f mod_epoch shown=0
-	for f in aba.conf mirror/mirror.conf \
-	         mirror/save/imageset-config-save.yaml \
-	         mirror/sync/imageset-config-sync.yaml; do
+	for f in aba.conf mirror/mirror.conf mirror/data/imageset-config.yaml; do
 		[[ -f "$ABA_ROOT/$f" ]] || continue
 		mod_epoch=$(stat -c %Y "$ABA_ROOT/$f" 2>/dev/null) || continue
 		if (( mod_epoch >= _TUI_START_EPOCH )); then
@@ -2408,20 +2406,18 @@ image synchronization process." 0 0 || true
 # Action Handlers
 # -----------------------------------------------------------------------------
 
-# ISC ownership check: user-owned if either save or sync ISC is strictly newer
+# ISC ownership check: user-owned if data/imageset-config.yaml is strictly newer
 # than its .created marker. Uses -nt (strictly newer) so equal timestamps
 # (common on System Z/s390x) correctly indicate ABA-generated, not user-edited.
 _isconf_user_owned() {
-	local save_isc="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
-	local sync_isc="$ABA_ROOT/mirror/sync/imageset-config-sync.yaml"
-	{ [[ -f "$save_isc" ]] && [[ "$save_isc" -nt "$ABA_ROOT/mirror/save/.created" ]]; } ||
-	{ [[ -f "$sync_isc" ]] && [[ "$sync_isc" -nt "$ABA_ROOT/mirror/sync/.created" ]]; }
+	local isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+	[[ -f "$isc" ]] && [[ "$isc" -nt "$ABA_ROOT/mirror/data/.created" ]]
 }
 
 handle_action_view_isconf() {
 	log "Handling action: View ImageSet Config"
 	
-	local isconf_file="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
+	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	
 	# Wait for background isconf generation to complete AND file to exist
 	if ! run_once -p -i "tui:isconf:generate"; then
@@ -2467,8 +2463,8 @@ This file should have been generated automatically." 0 0 || true
 handle_action_reset_isconf() {
 	log "Handling action: Reset ISC to auto-generated"
 
-	# Reset ownership by making .created newer than the ISC files
-	touch "$ABA_ROOT/mirror/save/.created" "$ABA_ROOT/mirror/sync/.created" 2>/dev/null
+	# Reset ownership by making .created newer than the ISC file
+	touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
 
 	# Reset the generation task so ISC will be regenerated fresh
 	run_once -r -i "tui:isconf:generate" 2>/dev/null || true
@@ -2482,8 +2478,7 @@ handle_action_reset_isconf() {
 handle_action_edit_isconf() {
 	log "Handling action: Edit ImageSet Config"
 
-	local isconf_file="$ABA_ROOT/mirror/save/imageset-config-save.yaml"
-	local sync_file="$ABA_ROOT/mirror/sync/imageset-config-sync.yaml"
+	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 
 	# Wait for background isconf generation to complete
 	if ! run_once -p -i "tui:isconf:generate"; then
@@ -2518,9 +2513,8 @@ handle_action_edit_isconf() {
 	local erc=$?
 
 	if [[ $erc -eq 0 ]]; then
-		# User saved — write back to both ISC files
+		# User saved — write back to ISC file
 		cp "$TMP" "$isconf_file"
-		[[ -d "$(dirname "$sync_file")" ]] && cp "$TMP" "$sync_file"
 		log "ISC saved by user — file is now user-owned"
 
 		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Saved\Zn" \
@@ -2578,7 +2572,7 @@ handle_action_bundle() {
 	
 	# Get device numbers (like files_on_same_device() in include_all.sh)
 	local output_dev=$(stat -c %d "$output_dir" 2>/dev/null)
-	local mirror_dev=$(stat -c %d "$ABA_ROOT/mirror/save" 2>/dev/null)
+	local mirror_dev=$(stat -c %d "$ABA_ROOT/mirror/data" 2>/dev/null)
 	
 	log "Device check: output=[$output_dev], mirror=[$mirror_dev]"
 	
@@ -2612,7 +2606,7 @@ handle_action_bundle() {
 Bundle and mirror are on the same filesystem.
 
 Creating a full bundle requires:
-  • Mirror image-set archives written to mirror/save/
+  • Mirror image-set archives written to mirror/data/
   • Complete bundle copy written to: $bundle_path
 
 You may temporarily need roughly \Zbdouble the space\Zn.
@@ -2965,7 +2959,7 @@ handle_action_isconf() {
 	
 	if [[ $rc -eq 0 ]]; then
 		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Generated\Zn" \
-			--msgbox "ImageSet configuration generated successfully.\n\nFiles:\n  mirror/save/imageset-config-save.yaml\n  mirror/sync/imageset-config-sync.yaml" 0 0 || true
+			--msgbox "ImageSet configuration generated successfully.\n\nFile: mirror/data/imageset-config.yaml" 0 0 || true
 	else
 		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z1ImageSet Config Failed\Zn" \
 			--msgbox "Failed to generate ImageSet configuration.\n\n$output" 0 0 || true
@@ -3627,7 +3621,7 @@ AIR-GAPPED (Fully Disconnected) - uses mirror-to-disk:
   For environments with no internet access.
   B  Create Air-Gapped Install Bundle - Package images, binaries & configs
                               Transfer this bundle to the air-gapped site
-  S  Save Images to Archive - Save images to aba/mirror/save/
+  S  Save Images to Archive - Save images to aba/mirror/data/
 
 CONNECTED / PARTIALLY CONNECTED - uses mirror-to-mirror:
   For environments with direct or proxied internet.

@@ -51,8 +51,8 @@ reset_test_state() {
 	if ! rm -rf ~/.aba/runner ~/.aba/cache ~/.aba/tmp ~/.aba/logs 2>/dev/null; then
 		log_info "Warning: could not remove some ~/.aba paths (permission denied?) — continuing"
 	fi
-	rm -f mirror/save/.created mirror/sync/.created
-	rm -rf mirror/save/working-dir mirror/sync/working-dir
+	rm -f mirror/data/.created
+	rm -rf mirror/data/working-dir
 	rm -rf .index
 	rm -f aba.conf
 	log_info "=== reset_test_state: done ==="
@@ -61,7 +61,7 @@ reset_test_state() {
 # Clean oc-mirror working dirs that may have been corrupted by Ctrl-C.
 # Call after run_and_interrupt to prevent cascading failures.
 clean_oc_mirror_workdirs() {
-	rm -rf mirror/save/working-dir mirror/sync/working-dir 2>/dev/null || true
+	rm -rf mirror/data/working-dir 2>/dev/null || true
 }
 
 # Create a minimal but complete aba.conf so the TUI shows the Resume dialog

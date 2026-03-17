@@ -10,7 +10,7 @@ aba_debug "Starting: $0 $*"
 
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
-repo_only=			# Also include the save/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
+repo_only=			# Also include the data/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
 
 while echo "$1" | grep -q ^--[a-z]
 do
@@ -83,10 +83,8 @@ file_list=$(find		\
 	! -path "${repo_dir}/mirror/regcreds"	  			\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
-	! -path "${repo_dir}/mirror/sync/working-dir*"  		\
-	! -path "${repo_dir}/mirror/save/working-dir*"			\
-	! -path "${repo_dir}/mirror/sync/oc-mirror-workspace*"  	\
-	! -path "${repo_dir}/mirror/save/oc-mirror-workspace*"		\
+	! -path "${repo_dir}/mirror/data/working-dir*"  		\
+	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
 	! -path "${repo_dir}/test/output.log" 				\
 	! -path "${repo_dir}/bundles*"	 				\
 								\
@@ -104,7 +102,7 @@ file_list=$(find		\
 # Added [! -path "aba/mirror/reg-uninstall.sh"] to be sure no old scripts are added. Intent is to install the registry *from* internal bastion/net.
 
 # If we only want the repo, without the mirror tar files, then we need to filter these out of the list
-[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -E -v "^${repo_dir}/mirror/s.*/mirror_.*[0-9]{6}\.tar$") || true  # 'true' needed!
+[ "$repo_only" ] && file_list=$(echo "$file_list" | grep -E -v "^${repo_dir}/mirror/data/mirror_.*[0-9]{6}\.tar$") || true  # 'true' needed!
 
 # Clean up file_list
 file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " white space (is empty)
@@ -115,13 +113,13 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 # Output reminder message
 if [ "$repo_only" ]; then
 	#echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE INSTALL BUNDLE (*SPLIT BUNDLE*)." >&2
-	#echo_magenta "           The image set archive file(s) are located at $PWD/aba/mirror/save/mirror_*.tar." >&2
+	#echo_magenta "           The image set archive file(s) are located at $PWD/aba/mirror/data/mirror_*.tar." >&2
 	#echo_magenta "           You will need to copy them to your internal bastion, along with the install bundle file ($dest), and combine them." >&2
 	#echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
 	#echo_magenta "           To avoid this in future write the full install bundle to *external media* or to a *separate drive*." >&2
 
 	echo_magenta "IMPORTANT: No image-set files are being added to this install bundle (*light bundle*)." >&2
-	echo_magenta "           The image-set archive(s) are located at: ${PWD}/${repo_dir}/mirror/save/mirror_*.tar" >&2
+	echo_magenta "           The image-set archive(s) are located at: ${PWD}/${repo_dir}/mirror/data/mirror_*.tar" >&2
 	echo_magenta "           You must copy these archive files to your internal bastion together with the install bundle ($dest)," >&2
 	echo_magenta "           and then combine them there." >&2
 	echo_magenta "           PLEASE READ THE INSTRUCTIONS BELOW CAREFULLY." >&2
@@ -139,13 +137,13 @@ if [ "$dest" != "-" ]; then
 		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
 		aba_info " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		aba_info "Also transfer the image set archive file(s), for example, with:"
-		aba_info " cp mirror/save/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
+		aba_info " cp mirror/data/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
 		aba_info "After transfering the install bundle file and the image set archive file(s) to your internal bastion"
 		aba_info "extract them into your home directory and"
-		aba_info "then move the image set archive file(s) into the aba/mirror/save/ directory & continue by installing & running 'aba', for example, with the commands:"
+		aba_info "then move the image set archive file(s) into the aba/mirror/data/ directory & continue by installing & running 'aba', for example, with the commands:"
 		aba_info "  tar xvf $(basename $dest)"
-		aba_info "  mv mirror_*.tar aba/mirror/save"
+		aba_info "  mv mirror_*.tar aba/mirror/data"
 		aba_info "  cd aba"
 		aba_info "  ./install"
 		aba_info "  aba"

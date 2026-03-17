@@ -212,14 +212,14 @@ echo_step Create image set config file ...
 
 aba -d mirror isconf
 
-uncomment_line additionalImages:			mirror/save/imageset-config-save.yaml
-uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/save/imageset-config-save.yaml
-uncomment_line registry.redhat.io/rhel9/support-tools	mirror/save/imageset-config-save.yaml
-uncomment_line quay.io/openshifttest/hello-openshift	mirror/save/imageset-config-save.yaml
-uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yaml
-#[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/save/imageset-config-save.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/save/imageset-config-save.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/save/imageset-config-save.yaml
+uncomment_line additionalImages:			mirror/data/imageset-config.yaml
+uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/data/imageset-config.yaml
+uncomment_line registry.redhat.io/rhel9/support-tools	mirror/data/imageset-config.yaml
+uncomment_line quay.io/openshifttest/hello-openshift	mirror/data/imageset-config.yaml
+uncomment_line registry.redhat.io/ubi9/ubi		mirror/data/imageset-config.yaml
+#[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/data/imageset-config.yaml
+[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
+[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
 
 # START - Exception since issue with v2.10 #########
 # Replace release-v2.10 with release-v2.9 - in the 2 lines - after mtv-operator found:
@@ -228,9 +228,9 @@ uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yam
 #      defaultChannel: release-v2.8
 #      channels:
 #      - name: "release-v2.8"
-# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/save/imageset-config-save.yaml
+# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/data/imageset-config.yaml
 # Append or insert line after "mtv-operator" line
-# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/save/imageset-config-save.yaml
+# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/data/imageset-config.yaml
 # END - Exception since issue with v2.10 ##########
 
 echo_step Show image set config file ...
@@ -245,7 +245,7 @@ echo_step Show image set config file ...
 #  - name: quay.io/containerdisks/centos-stream:9
 #  - name: quay.io/containerdisks/fedora:latest
 
-cat mirror/save/imageset-config-save.yaml
+cat mirror/data/imageset-config.yaml
 
 echo Pausing 6s ...
 read -t 6  || true
@@ -486,11 +486,11 @@ sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < $TEMPLAT
 	echo 
 	echo "## The oc-mirror Image Set Config file used for this install bundle:"
 	echo
-	cat $WORK_DIR/test-install/aba/mirror/save/imageset-config-save.yaml 
+	cat $WORK_DIR/test-install/aba/mirror/data/imageset-config.yaml 
 ) >> $CLOUD_DIR_BUNDLE/README.txt
 
 # Copy in the image set config file used (for good measure)
-cp $WORK_DIR/test-install/aba/mirror/save/imageset-config-save.yaml $WORK_BUNDLE_DIR_BUILD
+cp $WORK_DIR/test-install/aba/mirror/data/imageset-config.yaml $WORK_BUNDLE_DIR_BUILD
 
 ## Output the files to copy:
 ls -l $WORK_BUNDLE_DIR/ocp_* || true

@@ -171,13 +171,13 @@ e2e_run_remote "Uninstall Quay registry" \
 e2e_run_remote "Verify Quay removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
 
-# Negative path: load without save/ dir should fail
-e2e_run_remote -q "Remove save dir for must-fail test" \
-    "cd ~/aba && mv mirror/save mirror/save.bk"
-e2e_run_must_fail_remote "Load without save dir should fail" \
+# Negative path: load without data/ dir should fail
+e2e_run_remote -q "Remove data dir for must-fail test" \
+    "cd ~/aba && mv mirror/data mirror/data.bak"
+e2e_run_must_fail_remote "Load without data dir should fail" \
     "cd ~/aba && aba -d mirror load"
-e2e_run_remote -q "Restore save dir" \
-    "cd ~/aba && mv mirror/save.bk mirror/save"
+e2e_run_remote -q "Restore data dir" \
+    "cd ~/aba && mv mirror/data.bak mirror/data"
 
 test_end
 
@@ -198,7 +198,7 @@ e2e_run_remote "Verify Docker registry accessible" \
 
 e2e_run_remote -r 3 2 "Load images into Docker registry" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 test_end
 
@@ -245,9 +245,9 @@ test_begin "Incremental: UBI image load"
 # to re-resolve release images from the cache and fails with
 # "no release images found".  The old E2E tests create a fresh file here.
 e2e_run "Backup existing imageset config" \
-    "cp -v mirror/save/imageset-config-save.yaml mirror/save/bk.imageset-config-save.yaml.\$(date +%Y%m%d%H%M%S)"
+    "cp -v mirror/data/imageset-config.yaml mirror/data/bk.imageset-config.yaml.\$(date +%Y%m%d%H%M%S)"
 e2e_run "Create fresh imageset config for UBI only" \
-    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+    "tee mirror/data/imageset-config.yaml <<'EOF'
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -257,11 +257,11 @@ EOF"
 e2e_run -r 3 2 "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI archive+config to internal bastion" \
-    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
-e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 # Verify UBI image exists in mirror (fail fast instead of waiting for deploy timeout)
 e2e_run_remote "Verify UBI image in mirror (skopeo)" \
@@ -279,7 +279,7 @@ test_begin "Incremental: vote-app image load"
 
 # Fresh config with only vote-app -- same rationale as UBI load above
 e2e_run "Create fresh imageset config for vote-app only" \
-    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+    "tee mirror/data/imageset-config.yaml <<'EOF'
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -289,11 +289,11 @@ EOF"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
-    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
-e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 # Verify vote-app image exists in mirror (fail fast instead of waiting for deploy timeout)
 e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
@@ -368,7 +368,7 @@ e2e_run "Add mesh operator set" "aba --op-sets mesh3"
 
 # Simulate user waiting for background catalog downloads to complete.
 # In normal use, 'aba save' / 'aba sync' run catalogs-wait automatically via
-# Makefile dependencies (imageset-config-save.yaml depends on catalogs-download
+# Makefile dependencies (imageset-config.yaml depends on catalogs-download
 # catalogs-wait).  Here we call it explicitly because this test manually reads
 # values from the generated catalog YAML to build a custom imageset config --
 # the same thing a user would do by consulting the catalog reference file.
@@ -385,7 +385,7 @@ e2e_run "Verify servicemeshoperator3 in catalog" \
 # contain release images.  No aba/make target generates this minimal format,
 # so the file is created directly here.
 e2e_run "Create operators-only imageset config for mesh" \
-    "cat > mirror/save/imageset-config-save.yaml <<EOF
+    "cat > mirror/data/imageset-config.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -397,11 +397,11 @@ EOF"
 
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 e2e_run "Transfer mesh archive+config to internal bastion" \
-    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
-e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (mesh operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"
@@ -421,16 +421,16 @@ e2e_run "Set version to desired (upgrade target)" \
 
 # Regenerate imageset config (incremental tests overwrote it with minimal config)
 e2e_run "Regenerate full imageset config for upgrade" \
-    "rm -f mirror/save/imageset-config-save.yaml && aba -d mirror imagesetconf"
+    "rm -f mirror/data/imageset-config.yaml && aba -d mirror imagesetconf"
 
 # Modify config for upgrade: fast channel, minVersion=older, enable shortestPath
 e2e_run "Configure imageset for upgrade path" \
     "_older=\$(cat /tmp/e2e-ocp-version-older) && \
      _desired=\$(cat /tmp/e2e-ocp-version-desired) && \
      _major=\$(echo \$_desired | cut -d. -f1-2) && \
-     sed -i \"s/^    - name: stable-\${_major}/    - name: fast-\${_major}/\" mirror/save/imageset-config-save.yaml && \
-     sed -i \"s/^      minVersion: \${_desired}/      minVersion: \${_older}/\" mirror/save/imageset-config-save.yaml && \
-     sed -i 's/^#      shortestPath: true.*/      shortestPath: true/' mirror/save/imageset-config-save.yaml"
+     sed -i \"s/^    - name: stable-\${_major}/    - name: fast-\${_major}/\" mirror/data/imageset-config.yaml && \
+     sed -i \"s/^      minVersion: \${_desired}/      minVersion: \${_older}/\" mirror/data/imageset-config.yaml && \
+     sed -i 's/^#      shortestPath: true.*/      shortestPath: true/' mirror/data/imageset-config.yaml"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
 # The catalog YAML should already exist from the earlier catalogs-wait; verify it.
@@ -439,15 +439,15 @@ e2e_run "Verify catalog YAML for upgrade" \
      test -s mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml"
 e2e_run "Append cincinnati-operator to imageset config" \
     "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
-     grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/save/imageset-config-save.yaml"
+     grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/data/imageset-config.yaml"
 
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
-    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
-e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"

@@ -389,7 +389,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 		--exclude='xxx*' \
 		--exclude='cli/*.gz' \
 		--exclude='cli/*.tar*' \
-		--exclude='mirror/save' \
+		--exclude='mirror/data' \
 		--exclude='mirror/mirror' \
 		--exclude='mirror/regcreds*' \
 		--exclude='mirror/docker-reg-image*' \
@@ -649,7 +649,7 @@ if [ -n "$CLI_RESTART" ]; then
 		--exclude='xxx*' \
 		--exclude='cli/*.gz' \
 		--exclude='cli/*.tar*' \
-		--exclude='mirror/save' \
+		--exclude='mirror/data' \
 		--exclude='mirror/mirror' \
 		--exclude='mirror/regcreds*' \
 		--exclude='mirror/docker-reg-image*' \
