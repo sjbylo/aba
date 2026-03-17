@@ -556,6 +556,8 @@ resume_from_conf() {
 	
 	log "Initializing global arrays in resume_from_conf"
 	
+	local _ver_short="${OCP_VERSION%.*}"
+
 	if [[ -n "${ops:-}" ]]; then
 		log "Restoring ops from aba.conf: $ops"
 		IFS=',' read -r -a _ops_arr <<<"$ops"
@@ -563,8 +565,12 @@ resume_from_conf() {
 			op=${op##[[:space:]]}
 			op=${op%%[[:space:]]}
 			if [[ -n "$op" ]]; then
-				OP_BASKET["$op"]=1
-				log "Restored operator: $op"
+				if ! grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/*-index-v${_ver_short} 2>/dev/null; then
+					log "Skipped operator '$op' (not in OCP $_ver_short catalog)"
+				else
+					OP_BASKET["$op"]=1
+					log "Loaded operator '$op' from aba.conf"
+				fi
 			fi
 		done
 	fi
@@ -585,6 +591,7 @@ resume_from_conf() {
 				if [[ -f "$set_file" ]]; then
 					log "Loading operators from $set_file"
 					local op_count=0
+					local filtered_count=0
 					while IFS= read -r line; do
 						# Skip comments and empty lines
 						[[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -595,12 +602,17 @@ resume_from_conf() {
 						line=${line%%[[:space:]]}  # Remove trailing whitespace
 						
 						if [[ -n "$line" ]]; then
-							OP_BASKET["$line"]=1
-							((op_count++))
-							log "  Added operator from set: $line"
+							if ! grep -q "^$line[[:space:]]" "$ABA_ROOT"/.index/*-index-v${_ver_short} 2>/dev/null; then
+								log "  Skipped operator '$line' from set '$s' (not in OCP $_ver_short catalog)"
+								((filtered_count++))
+							else
+								OP_BASKET["$line"]=1
+								((op_count++))
+								log "  Added operator from set: $line"
+							fi
 						fi
 					done < "$set_file"
-					log "Loaded $op_count operators from set '$s'"
+					log "Loaded $op_count operators from set '$s' (filtered $filtered_count)"
 				else
 					log "WARNING: Operator set file not found: $set_file"
 				fi
@@ -1879,8 +1891,8 @@ add_set_to_basket() {
 		op=${op%%[[:space:]]}
 		[[ -z "$op" ]] && continue
 
-		# Validate operator exists in catalog index (silent filtering)
-		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/* 2>/dev/null; then
+		# Validate operator exists in catalog index for the current OCP version
+		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/*-index-v${OCP_VERSION%.*} 2>/dev/null; then
 			log "Adding operator from set: $op (validated in catalog)"
 			OP_BASKET["$op"]=1
 			((added++))
@@ -2134,6 +2146,7 @@ image synchronization process." 0 0 || true
 				log "Raw selection: [$(cat "$TMP")]"
 				
 				# Build array of newly selected sets
+				unset newly_selected
 				declare -A newly_selected
 				while IFS= read -r k; do
 					k="${k#"${k%%[![:space:]]*}"}"
@@ -2202,7 +2215,7 @@ image synchronization process." 0 0 || true
 		read -ra search_terms <<< "$query"
 		log "Search terms: ${search_terms[*]}"
 
-		# First, get all unique operators from index files
+		# Get all unique operators from current version's index files
 		declare -A seen_ops
 		all_operators=$(
 			while IFS= read -r line; do
@@ -2210,7 +2223,7 @@ image synchronization process." 0 0 || true
 				[[ -n "${seen_ops[$op_name]:-}" ]] && continue
 				seen_ops["$op_name"]=1
 				echo "$line"
-			done < <(cat "$ABA_ROOT"/.index/* 2>/dev/null)
+			done < <(cat "$ABA_ROOT"/.index/*-index-v${OCP_VERSION%.*} 2>/dev/null)
 		)
 		
 		# Now progressively filter by each search term
@@ -3310,8 +3323,8 @@ summary_apply() {
 	# Initialize registry type setting if not set
 	: "${ABA_REGISTRY_TYPE:=Auto}"
 	
-	# Track which item has focus (start at item 1 for first display)
-	local default_item="1"
+	# Track which item has focus (default to "View ImageSet Config")
+	local default_item="$TUI_ACTION_VIEW_IMAGESET"
 	
 	# --- Settings sub-dialog ---
 	_show_settings() {
