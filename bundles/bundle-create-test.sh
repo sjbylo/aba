@@ -170,12 +170,11 @@ rm -rf aba
 export GIT_BRANCH=${GIT_BRANCH:-main}
 echo_step Install Aba from branch $GIT_BRANCH
 set +x
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 set -x
 cd aba
-####./install  # Done above
 
 # Create bundle? 
 echo Create the bundle in $WORK_BUNDLE_DIR ...
@@ -191,22 +190,9 @@ OP=
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 aba -d cli oc-mirror
-mypause 2
-ls -l ~/bin/oc-mirror 
 ~/bin/oc-mirror  --help > /dev/null 2>&1 && echo "oc-mirror is valid!"
-mypause 5
+
 set -x
-mypause 10 # wait for "download-operator"
-ps -ef | grep download-operator
-mypause 60 # Give some time ... # Hack: must wait for oc-mirror to d/l in the background b4 running "aba catalog" again! Otherwise the download happens in parallel causing trouble
-while ps -ef | grep -v grep | grep download-operator
-do
-	echo -n .
-	mypause 10
-done
-ls -l ~/bin/oc-mirror 
-##timeout 120 bash -c 'until [ -f ~/bin/oc-mirror ]; do mypause 1; done'; echo ~/bin/oc-mirror installed
-ps -ef | grep download 
 
 echo_step Create image set config file ...
 
