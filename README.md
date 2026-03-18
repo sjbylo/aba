@@ -1514,7 +1514,7 @@ Running out of disk space is the most likely problem you will encounter when con
 
 ## Q: Can I install Operators from community catalogs?
 
-**Yes!** ABA currently supports all four of Red Hat’s official catalogs (redhat-operator, certified-operator, redhat-marketplace and community-operator) via `oc-mirror`. 
+**Yes!** ABA supports three Red Hat operator catalogs (redhat-operator, certified-operator and community-operator). Catalog indexes are extracted directly from the container images using podman -- no oc-mirror dependency for operator listing. 
 
 [Back to top](#who-should-use-aba)
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Validate extract-catalog-index.sh against oc-mirror reference data.
+# Validate podman-based catalog extraction against oc-mirror reference data.
 #
 # For each OCP version x catalog combination (18 total):
 #   1. Run podman-based extraction to a test directory
@@ -96,7 +96,7 @@ for ver in $VERSIONS; do
 		rm -f "${REF_DIR}/${cat}-index-v${ver}" "${REF_DIR}/.${cat}-index-v${ver}.done"
 
 		echo "  Running podman extraction ..."
-		if ! scripts/extract-catalog-index.sh "$cat" "$ver" 2>&1 | tail -2; then
+		if ! scripts/download-catalog-index.sh "$cat" "$ver" 2>&1 | tail -2; then
 			echo -e "  ${RED}FAIL${NC}: podman extraction failed"
 			_fail=$((_fail + 1))
 			summary_lines+=("FAIL  ${label}  extraction failed")

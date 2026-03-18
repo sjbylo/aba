@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### New Features
+- **Podman-based catalog extraction** - Operator catalog indexes are now extracted directly from container images using podman, replacing the oc-mirror dependency for operator listing. Faster startup, no oc-mirror wait for catalog downloads, and more accurate default channel detection.
+- **Display names in TUI** - Operator search results and basket view now show display names (e.g. "Red Hat Integration - AMQ Broker") alongside operator package names.
+- **Search by display name** - TUI operator search matches against both operator names and display names (case-insensitive).
+- **Catalog extraction hardening** - Generic JSON fallback for unknown directory formats, runtime completeness check, and end-of-extraction summary for any parsing issues.
+
+### Changed
+- `aba reset` now cleans up `.index/` directory (cached catalog indexes).
+- Catalog download dialog shows OCP version.
+- Error messages reference `aba catalog` instead of `oc-mirror list operators`.
+
 ---
 
 ## [0.9.7] - 2026-03-15
