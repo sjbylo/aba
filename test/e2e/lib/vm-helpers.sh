@@ -562,6 +562,8 @@ _vm_setup_vmware_conf() {
 	echo "  [vm] Copying vmware.conf to $host ..."
 	if [ -f "$vf" ]; then
 		_escp "$vf" "${user}@${host}:"
+		# Also place in /root/ so root@disN tests can find it
+		_essh "${user}@${host}" -- "sudo cp /home/${user}/.vmware.conf /root/.vmware.conf && sudo chmod 600 /root/.vmware.conf"
 	fi
 }
 
