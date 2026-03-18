@@ -3,10 +3,10 @@
 apiVersion: v1alpha1
 kind: AgentConfig
 metadata:
-  name: sno1
+  name: e2e-sno1
 rendezvousIP: 10.0.2.12
 hosts:
-  - hostname: sno1
+  - hostname: e2e-sno1
     role: master
     interfaces:
       - name: ens160

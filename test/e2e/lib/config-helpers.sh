@@ -88,16 +88,17 @@ pool_standard_apps_vip()  { pool_apps_vip "$@"; }
 
 # --- Pool-Unique Cluster Names ------------------------------------------------
 # When parallel pools create VMs, names must not collide in vCenter.
-# Every pool always appends the pool number: sno1, compact1, sno-vlan2, etc.
+# The e2e- prefix avoids clashes with user-created clusters (e.g. "sno1").
+# Every pool always appends the pool number: e2e-sno1, e2e-compact2, etc.
 #
 # Usage: pool_cluster_name <base_type> [POOL_NUM]
-#   e.g. pool_cluster_name sno        -> "sno1"        (pool 1)
-#        pool_cluster_name sno 2      -> "sno2"        (pool 2)
-#        pool_cluster_name sno-vlan 1 -> "sno-vlan1"   (pool 1)
+#   e.g. pool_cluster_name sno        -> "e2e-sno1"        (pool 1)
+#        pool_cluster_name sno 2      -> "e2e-sno2"        (pool 2)
+#        pool_cluster_name sno-vlan 1 -> "e2e-sno-vlan1"   (pool 1)
 pool_cluster_name() {
     local base="$1"
     local p="${2:-${POOL_NUM:-1}}"
-    echo "${base}${p}"
+    echo "e2e-${base}${p}"
 }
 
 # Get starting IP for a cluster type: pool_starting_ip <sno|compact|standard> [POOL_NUM]
