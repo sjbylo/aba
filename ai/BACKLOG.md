@@ -8,154 +8,50 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ### Replace `oc-mirror list operators` With Podman-Based Catalog Extraction
 
-**Status:** Backlog
+**Status:** Done (2026-03-18)
 **Priority:** High
-**Estimated Effort:** Small
 **Created:** 2026-03-15
 
-**Problem:**
-`download-catalog-index.sh` depends on `oc-mirror list operators --catalog <url>` to generate
-the operator index files (`.index/<catalog>-index-v<ver>`). This has several drawbacks:
-- `oc-mirror` must be downloaded and installed before any catalog listing can happen
-- `oc-mirror list operators` is slow and opaque (no display names, just name + channel)
-- `oc-mirror v2` has known bugs (returns exit 0 on failure, intermittent hangs)
-- Fedora requires a `/tmp` resize workaround because `oc-mirror` uses `/tmp` heavily
+Replaced `oc-mirror list operators` with direct podman-based extraction from catalog
+container images. Eliminates oc-mirror dependency for operator listing, improves accuracy,
+and enables display name extraction. Tested across OCP 4.16-4.22 and all 3 catalogs.
 
-**Solution:**
-Replace the `oc-mirror list operators` call in `download-catalog-index.sh` with the podman-based
-extraction logic already implemented and tested in `scripts/extract-catalog-index.sh`. This script:
-- Pulls the catalog image directly with `podman`
-- Extracts `/configs` from the container
-- Parses all FBC formats (split JSON, single JSON, index.json, YAML)
-- Recursively searches bundle files for display names
-- Outputs 3 columns: `<name> <display_name> <default_channel>`
-
-The 3-column format is backward-compatible with existing consumers:
-- `add-operators-to-imageset.sh` uses `awk '{print $1, $NF}'` (first + last column)
-- `tui/abatui.sh` uses `${line%%[[:space:]]*}` (first field only)
-
-**Integration steps:**
-1. Replace `download-catalog-index.sh` contents with `extract-catalog-index.sh` logic
-   (or rename `extract-catalog-index.sh` to `download-catalog-index.sh`)
-2. Remove `ensure_oc_mirror` call — podman + jq are the only prerequisites
-3. Remove Fedora `/tmp` resize workaround (no longer needed)
-4. Remove `oc-mirror` from `download-catalogs-start.sh` prerequisite
-5. Update `aba.sh` lines ~382-383 to not download `oc-mirror` for catalog operations
-6. Keep `oc-mirror` in `cli-download-all.sh` — still needed for `reg-save.sh`/`reg-sync.sh`/`reg-load.sh`
-7. Update error messages in `add-operators-to-imageset.sh` (line ~111 references `oc-mirror`)
-
-**Note:** `oc-mirror` is still required for image mirroring (`oc-mirror --v2 --config`).
-This change only removes it as a dependency for catalog *listing*.
-
-**Tested:** `extract-catalog-index.sh` produces identical name + default_channel output as
-`oc-mirror list operators` for v4.20 (149 ops) and v4.21 (138 ops), plus display names.
-
-**Where:** `scripts/download-catalog-index.sh`, `scripts/extract-catalog-index.sh`,
-`scripts/download-catalogs-start.sh`, `scripts/aba.sh`, `scripts/add-operators-to-imageset.sh`
-
-**Also see:** `scripts/list-operators.sh` (standalone version for manual use / testing)
+**See:** `ai/PODMAN_CATALOG_EXTRACTION.md` for full details.
 
 ---
 
 ### Use Display Names in TUI Operator Search and Basket
 
-**Status:** Backlog
+**Status:** Done (2026-03-18)
 **Priority:** High
-**Estimated Effort:** Medium
 **Created:** 2026-03-15
-**Updated:** 2026-03-15
 
-**Problem:**
-The TUI operator basket and search results (`tui/abatui.sh`) currently show only raw
-package names like `advanced-cluster-management` and `rhods-operator`. With the new
-3-column index format (from the podman-based catalog extraction above), display names
-are now available — e.g., "Advanced Cluster Management for Kubernetes" and
-"Red Hat OpenShift AI".
+TUI operator list and basket now show display names from the catalog index. Search
+matches against both package name and display name (case-insensitive), excluding
+default channel. Search optimised from awk forks to pure bash parameter expansion.
 
-Users searching for operators often know the product name (e.g., "OpenShift AI") but not
-the package name (`rhods-operator`). Showing display names in search results would make
-operator discovery far easier.
-
-**Proposed UX:**
-
-Search results (the checklist shown after typing a search term):
-```
-[ ] Red Hat OpenShift AI                         (rhods-operator)
-[ ] Red Hat OpenShift AI Self-Managed            (rhoai-servicemesh-operator)
-```
-
-Operator basket / View/Edit checklist:
-```
-[X] Advanced Cluster Management for Kubernetes  (advanced-cluster-management)
-[ ] Red Hat OpenShift AI                         (rhods-operator)
-[ ] Red Hat Integration - 3scale                 (3scale-operator)
-```
-
-Search should also match against display names, not just package names. For example,
-typing "AI" should find `rhods-operator` via its display name "Red Hat OpenShift AI".
-
-**Implementation:**
-- After replacing `download-catalog-index.sh` (see above), the `.index/` files will contain
-  3 columns: `<name> <display_name> <default_channel>`
-- `tui/abatui.sh` currently reads operator names with `${line%%[[:space:]]*}` (first field)
-- Update the TUI to also extract the display name (middle columns) for presentation
-- Update the search function to `grep` against both package name AND display name
-- The `awk '{print $1, $NF}'` pattern still works for name + channel extraction
-- Operators with `-` as display name (rare) should fall back to showing the package name
-
-**Where:** `tui/abatui.sh` (operator search, basket / checklist rendering), the `.index/` files
+**See:** `ai/TUI_OPERATOR_DISPLAY_ENHANCEMENT.md` for full details.
 
 ---
 
 ### Catalog Download Dialog Should Show the OCP Version
 
-**Status:** Backlog
+**Status:** Done (2026-03-18)
 **Priority:** High
-**Estimated Effort:** Small
 **Created:** 2026-02-26
 
-**Problem:**
-The TUI's "Downloading operator catalogs..." infobox (`tui/abatui.sh` ~line 1929) does not
-mention which OCP version the catalogs are being downloaded for. When catalogs are downloading
-in the background, the user only sees:
-
-```
-Downloading operator catalogs...
-This may take a few minutes on first run.
-```
-
-**Fix:**
-Include the OCP version in the message, e.g.:
-
-```
-Downloading operator catalogs for OCP 4.21...
-This may take a few minutes on first run.
-```
-
-The version is available as `$ocp_ver_major` or can be derived from `$OCP_VERSION` at that
-point in the flow.
+TUI catalog download dialog now shows OCP version:
+`"Downloading operator catalogs for OCP 4.21..."`
 
 ---
 
 ### `aba reset` Should Delete Root `.index/` Directory
 
-**Status:** Backlog
+**Status:** Done (2026-03-18)
 **Priority:** High
-**Estimated Effort:** Small
 **Created:** 2026-02-26
 
-**Problem:**
-`aba reset` (i.e. `make reset force=1`) does not remove the root-level `.index/` directory
-where operator catalog indexes are cached. It only removes `mirror/.index/` (via
-`make -sC mirror clean`), which is a different directory.
-
-The `download-catalog-index.sh` script writes catalog indexes to `<aba-root>/.index/`,
-not `mirror/.index/`. This means stale catalog indexes from previous runs survive a
-full reset and can affect operator searches and ISC generation with outdated data.
-
-**Fix:**
-Add `rm -rf .index` to the root `Makefile`'s `reset` target, alongside the existing
-cleanup of `cli`, `mirror`, and `test` subdirectories.
+Added `rm -rf .index` to the root Makefile `reset` target.
 
 ---
 
@@ -215,38 +111,12 @@ out-of-disk errors.
 
 ### oc-mirror Fails With v1/v2 Error on OCP 4.19 Catalog Image
 
-**Status:** Backlog
+**Status:** Resolved (2026-03-18) -- eliminated by podman catalog extraction
 **Priority:** High
-**Estimated Effort:** Small–Medium
 **Created:** 2026-03-16
 
-**Problem:**
-`oc-mirror` fails when trying to download the OCP 4.19 catalog image, producing a v1/v2
-compatibility error. This blocks catalog index downloads and operator listing for version 4.19.
-
-**Context:**
-Starting with OCP 4.18, `oc-mirror v1` is deprecated and Red Hat is transitioning to `oc-mirror v2`.
-The 4.19 catalog images may require v2-only handling, causing the current v1-based catalog
-download path to fail. The deprecation warnings are already visible:
-```
-⚠️  oc-mirror v1 is deprecated (started in 4.18 release) and will be removed in a future release
-⚠️  starting with oc-mirror 4.21, the use of the flag --v1 or --v2 is mandatory
-```
-
-**Investigation needed:**
-1. Reproduce: run `oc-mirror list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v4.19`
-   and capture the exact error
-2. Determine if `--v2` flag resolves it (`oc-mirror --v2 list operators ...`)
-3. Check if this is a known Red Hat bug or intentional v1 deprecation enforcement
-4. If v2 fixes it, update `download-catalog-index.sh` to use `--v2` for OCP >= 4.19
-5. Alternatively, this is another reason to accelerate the backlog item "Replace oc-mirror
-   list operators With Podman-Based Catalog Extraction" — the podman-based approach
-   (`extract-catalog-index.sh`) bypasses oc-mirror entirely and already works for 4.19+
-
-**Workaround:** Use the podman-based extraction (`scripts/extract-catalog-index.sh`) which
-pulls the catalog image directly with `podman` and doesn't depend on `oc-mirror` at all.
-
-**Where:** `scripts/download-catalog-index.sh`, `scripts/extract-catalog-index.sh`
+No longer relevant. Podman-based extraction bypasses oc-mirror entirely for catalog
+listing. Tested and working for OCP 4.16-4.22 across all catalogs.
 
 ---
 
@@ -254,7 +124,7 @@ pulls the catalog image directly with `podman` and doesn't depend on `oc-mirror`
 
 ### oc-mirror v2 Load Failure: Replace `rm -rf mirror/data` With `aba clean` and Add FAQ
 
-**Status:** Backlog
+**Status:** Done (2026-03-18)
 **Priority:** Medium
 **Estimated Effort:** Small
 **Created:** 2026-03-18
@@ -274,7 +144,7 @@ After consolidating `mirror/save/` and `mirror/sync/` into `mirror/data/`, all o
 
 ### Rename E2E SNO Cluster Names to Avoid Clashes
 
-**Status:** Backlog
+**Status:** Done (2026-03-18)
 **Priority:** Medium
 **Estimated Effort:** Small-Medium
 **Created:** 2026-02-26
@@ -438,12 +308,11 @@ Make the `mirror-registry` prerequisite conditional on vendor. Options:
 
 ### Deduplicate `aba isconf` output
 
-**Status:** Backlog
-**Context:** `aba isconf` generates both `sync/imageset-config-sync.yaml` and `save/imageset-config-save.yaml`. Each target independently calls `add-operators-to-imageset.sh`, producing duplicate operator listings in the output. The user sees the same operator list printed twice, which looks like a bug.
-**Fix options:**
-- Suppress verbose operator output on the second run (e.g. a `--quiet` flag to `add-operators-to-imageset.sh`)
-- Consolidate: generate one base config then copy/adapt for sync vs save
-- Simply note in the first run's output that both configs are being generated
+**Status:** Partially done (2026-03-18)
+**Context:** The duplicate operator listing within a single `add-operators-to-imageset.sh` run
+has been fixed (removed the redundant summary line). However, `aba isconf` still calls the
+script twice (once for save, once for sync), so operators appear in both invocations.
+**Remaining:** Suppress output on the second run or consolidate into a single generation.
 
 ### Option to preserve registry data on `aba uninstall`
 
@@ -1158,6 +1027,18 @@ When moving logic out of Makefiles, add "ensure" patterns to 6 scripts as propos
 ---
 
 ## Completed
+
+### ISC Display Name Comments With Fuzzy Filtering
+**Completed:** 2026-03-18
+Generated ISC files now include display names as YAML comments (e.g. `- name: cincinnati-operator  # OpenShift Update Service`).
+Fuzzy logic (`_display_name_adds_info()`) skips redundant comments where the display name is just a
+reformatted version of the package name. See `ai/TUI_OPERATOR_DISPLAY_ENHANCEMENT.md`.
+
+### Catalog Canary Test Script
+**Completed:** 2026-03-18
+`test/func/test-catalog-canary.sh` -- standalone canary that auto-detects available OCP versions
+(including pre-GA), runs the production extraction entry point, and validates output. Designed
+for cron-based periodic execution. See `ai/PODMAN_CATALOG_EXTRACTION.md`.
 
 ### `aba shutdown` Retry and Verify
 **Completed:** 2026-03-10  
