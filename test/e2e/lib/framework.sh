@@ -908,6 +908,7 @@ e2e_run() {
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
                     _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
+                    _e2e_notify "RECOVERED: $description (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "    $(_e2e_green "OK") ($_dur)"
                 _e2e_summary "    $(_e2e_Green "OK ($_dur)")"
