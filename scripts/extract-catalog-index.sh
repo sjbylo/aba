@@ -100,8 +100,14 @@ aba_debug "container_name=$container_name"
 aba_debug "tmp_dir=$tmp_dir"
 
 # Pull the catalog image
+# Some catalog images (certified, community) may be signed with keys not in
+# the local trust store. Use a permissive signature policy for the pull since
+# we only read catalog metadata from the image.
+_sig_policy="$tmp_dir/policy.json"
+echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
+
 aba_info "Pulling operator catalog image: $catalog_url"
-if ! podman pull -q "$catalog_url" >/dev/null 2>&1; then
+if ! podman pull --signature-policy="$_sig_policy" -q "$catalog_url" >/dev/null 2>&1; then
 	rm -rf "$tmp_dir"
 	aba_abort "Failed to pull catalog image: $catalog_url"
 fi
@@ -152,6 +158,17 @@ _extract_from_json() {
 
 	local pkg def_ch
 	read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$pkg_src" 2>/dev/null)
+
+	# Some catalogs split olm.package into channel-specific JSON files
+	if [ -z "$pkg" ] || [ -z "$def_ch" ]; then
+		local f
+		for f in "$dir"/*.json; do
+			[ -f "$f" ] || continue
+			[ "$f" = "$pkg_src" ] && continue
+			read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$f" 2>/dev/null)
+			[ -n "$pkg" ] && [ -n "$def_ch" ] && break
+		done
+	fi
 	[ -z "$pkg" ] || [ -z "$def_ch" ] && return
 
 	# Try display name from the package source file first (single-file catalogs)
@@ -202,7 +219,7 @@ for dir in "$tmp_dir/configs"/*/; do
 		_extract_from_json "$dir" "$dir/catalog.json"
 	elif [ -f "$dir/index.json" ]; then
 		_extract_from_json "$dir" "$dir/index.json"
-	elif ls "$dir"/*.yaml "$dir"/*.yml >/dev/null 2>&1; then
+	elif compgen -G "$dir"'*.yaml' >/dev/null 2>&1 || compgen -G "$dir"'*.yml' >/dev/null 2>&1; then
 		for yf in "$dir"/*.yaml "$dir"/*.yml; do
 			[ -f "$yf" ] || continue
 			_extract_from_yaml "$yf"
@@ -210,6 +227,10 @@ for dir in "$tmp_dir/configs"/*/; do
 		done
 	fi
 done | sort > "$index_file"
+
+# Record expected operator count (for canary/validation tests)
+# Exclude dirs starting with _ (internal metadata like _operator-deprecations-content)
+find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | wc -l > "${index_file}.expected-count"
 
 # Cleanup temp dir
 rm -rf "$tmp_dir"
