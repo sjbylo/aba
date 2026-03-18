@@ -65,12 +65,13 @@ _test_combo() {
 	local catalog="$1" ver="$2"
 	local index_file="${INDEX_DIR}/${catalog}-index-v${ver}"
 	local done_file="${INDEX_DIR}/.${catalog}-index-v${ver}.done"
+	local expected_count_file="${INDEX_DIR}/.${catalog}-index-v${ver}.expected-count"
 	local yaml_file="mirror/imageset-config-${catalog}-catalog-v${ver}.yaml"
 	local tag="${catalog} v${ver}"
 	local errors=()
 
 	# Clean previous results for this combo
-	rm -f "$index_file" "$done_file" "$yaml_file"
+	rm -f "$index_file" "$done_file" "$expected_count_file" "$yaml_file"
 
 	echo -e "${CYAN}--- ${tag} ---${NC}"
 
@@ -97,10 +98,10 @@ _test_combo() {
 	fi
 
 	# Completeness check: compare extracted count against /configs/ directory count
-	# (extract-catalog-index.sh writes this to ${index_file}.expected-count when using podman path)
+	# (download-catalog-index.sh writes .expected-count as a hidden file)
 	local expected=0
-	if [[ -f "${index_file}.expected-count" ]]; then
-		expected=$(< "${index_file}.expected-count")
+	if [[ -f "$expected_count_file" ]]; then
+		expected=$(< "$expected_count_file")
 		if (( expected > 0 && count != expected )); then
 			errors+=("extracted ${count} but catalog has ${expected} operator dirs")
 		fi
@@ -122,7 +123,7 @@ _test_combo() {
 	fi
 
 	# Clean up test artifacts and cached image
-	rm -f "$index_file" "${index_file}.expected-count" "$done_file" "$yaml_file"
+	rm -f "$index_file" "$expected_count_file" "$done_file" "$yaml_file"
 	podman rmi "registry.redhat.io/redhat/${catalog}-index:v${ver}" >/dev/null 2>&1 || true
 
 	if [[ ${#errors[@]} -gt 0 ]]; then

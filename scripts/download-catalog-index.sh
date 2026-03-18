@@ -245,7 +245,8 @@ done > "$_raw_file"
 sort "$_raw_file" > "$index_file"
 
 # Record expected operator count (exclude internal metadata dirs starting with _)
-find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | wc -l > "${index_file}.expected-count"
+expected_count_file=".index/.${catalog_name}-index-v${ocp_ver_major}.expected-count"
+find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | wc -l > "$expected_count_file"
 
 # Cleanup temp dir and container image
 rm -rf "$tmp_dir"
@@ -258,7 +259,7 @@ fi
 
 op_count=$(wc -l < "$index_file")
 expected_count=0
-[ -f "${index_file}.expected-count" ] && expected_count=$(< "${index_file}.expected-count")
+[ -f "$expected_count_file" ] && expected_count=$(< "$expected_count_file")
 skipped_count=0
 [ -s "$_skipped_file" ] && skipped_count=$(wc -l < "$_skipped_file")
 
