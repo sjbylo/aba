@@ -79,4 +79,6 @@ vmware.conf.bk
 xxx/
 mirror/regcreds.bk
 .index
+.index-test/
+.index-backup/
 .cursor/
