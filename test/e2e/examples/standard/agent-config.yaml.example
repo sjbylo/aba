@@ -3,7 +3,7 @@
 apiVersion: v1alpha1
 kind: AgentConfig
 metadata:
-  name: standard1
+  name: e2e-standard1
 rendezvousIP: 10.0.2.15
 hosts:
   - hostname: master1
