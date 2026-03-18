@@ -23,7 +23,7 @@
 ABA_VERSION=20260318092334
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260318223819
+ABA_BUILD=20260318231347
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -379,10 +379,7 @@ elif [ "$1" = "--light" ]; then
 	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 	aba_debug Downloading operator index for version $ver 
 
-	# Catalog downloads need oc-mirror; ensure it's at least downloading
-	scripts/cli-download-all.sh oc-mirror
-
-	# Use new helper function for parallel catalog downloads
+	# Start parallel catalog downloads (uses podman extraction, no oc-mirror dependency)
 	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 	download_all_catalogs "$ver_short"
 
@@ -1320,14 +1317,14 @@ fi
 
 # Now we know the desired openshift version...
 
-# Trigger download of all CLI binaries first -- catalog downloads need oc-mirror
+# Trigger download of all CLI binaries (oc-mirror needed for mirror save/sync/load)
 # Note: Non-interactive mode already started these at line ~205
 # Note: Another place this is checked is in "scripts/reg-save.sh"
 scripts/cli-download-all.sh
 
 # Fetch the operator indexes (in the background to save time).
 # Use new helper function for parallel catalog downloads (runs in background)
-# NOTE: must come AFTER cli-download-all.sh since catalogs need oc-mirror
+# NOTE: catalogs use podman extraction (no oc-mirror dependency)
 ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them

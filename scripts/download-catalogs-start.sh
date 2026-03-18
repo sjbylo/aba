@@ -19,18 +19,10 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Extract major.minor version (e.g., 4.20.8 -> 4.20)
 ocp_ver_short="${ocp_version%.*}"
 
-aba_info "Starting operator catalog downloads for OCP $ocp_ver_short (background)"
-aba_info "  • redhat-operator"
-aba_info "  • certified-operator"
-aba_info "  • community-operator"
-
-# Catalog downloads need oc-mirror; ensure it's at least downloading
-ensure_oc_mirror || aba_debug "Warning: oc-mirror not yet available, catalogs may retry"
-
 # Start downloads in parallel (non-blocking, TTL from ~/.aba/config)
 download_all_catalogs "$ocp_ver_short"
 
-# Peek at task status: only show "in background" if downloads are actually running
+# Only announce if downloads are actually running (not already cached)
 _any_running=
 for catalog in redhat-operator certified-operator community-operator; do
 	if ! run_once -p -i "catalog:${ocp_ver_short}:${catalog}"; then
@@ -40,8 +32,6 @@ for catalog in redhat-operator certified-operator community-operator; do
 done
 
 if [ -n "$_any_running" ]; then
-	aba_info "Catalog downloads running in background. This may take a while to complete."
-else
-	aba_info_ok "All operator catalogs already available for OCP $ocp_ver_short."
+	aba_info "Downloading operator catalogs for OCP $ocp_ver_short in background..."
 fi
 

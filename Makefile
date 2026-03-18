@@ -145,5 +145,6 @@ reset: # Clean up *everything*.  Only use if you know what you are doing! Note t
 	rm -f .aba.conf.seen
 	rm -rf ~/.aba/cache ~/.aba/tmp ~/.aba/logs
 	rm -rf ~/.aba/runner || sleep 1 && rm -rf ~/.aba/runner || true
+	rm -rf .index
 	rm -f aba.conf ~/.aba.conf*
 

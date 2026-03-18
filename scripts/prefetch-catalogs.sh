@@ -19,9 +19,6 @@ if [[ ! -f ~/.pull-secret.json ]]; then
 	exit 0
 fi
 
-# Wait for oc-mirror (already downloading in background)
-run_once -q -w -i "$TASK_OC_MIRROR" || exit 0
-
 # Container auth for registry.redhat.io
 scripts/create-containers-auth.sh >/dev/null 2>&1 || exit 0
 

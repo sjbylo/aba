@@ -28,41 +28,36 @@ echo ""
 
 # Clean up any previous test state
 echo "Cleaning up previous test state..."
-rm -f ~/bin/oc-mirror
 rm -rf .index/*-operator-index-*
-rm -rf ~/.aba/runner/cli:install:oc-mirror
 rm -rf ~/.aba/runner/catalog:*
 
-# --- Test 1: oc-mirror binary installation via run_once ---
+# --- Test 1: Single catalog download via podman extraction ---
 echo ""
-echo "Test 1: oc-mirror binary installation (via run_once)"
-echo "-----------------------------------------------------"
+echo "Test 1: Single catalog download (podman extraction via run_once)"
+echo "-----------------------------------------------------------------"
 
-# Use download-catalog-index.sh which calls run_once for oc-mirror
-# This tests the actual usage pattern
 source <(normalize-aba-conf)
 ocp_ver_short=$(echo "$ocp_version" | cut -d. -f1-2)
 if ! scripts/download-catalog-index.sh redhat-operator "$ocp_ver_short" >&2; then
-	# Don't abort on catalog download failure - we're just testing oc-mirror install
-	aba_info "Note: Catalog download may have failed, but checking if oc-mirror was installed..." >&2
+	aba_abort "Test 1 FAILED: catalog download failed"
 fi
 
-# Verify binary exists
-if [ ! -s ~/bin/oc-mirror ]; then
-	aba_abort "Test 1 FAILED: oc-mirror binary not found in ~/bin/"
+# Verify index file was created and is non-empty
+if [ ! -s ".index/redhat-operator-index-v${ocp_ver_short}" ]; then
+	aba_abort "Test 1 FAILED: index file not found or empty"
 fi
 
 # Verify run_once task was created
-if [ ! -f ~/.aba/runner/cli:install:oc-mirror/exit ]; then
-	aba_abort "Test 1 FAILED: run_once task cli:install:oc-mirror not found"
+if [ ! -f ~/.aba/runner/catalog:${ocp_ver_short}:redhat-operator/exit ]; then
+	aba_abort "Test 1 FAILED: run_once task catalog:${ocp_ver_short}:redhat-operator not found"
 fi
 
-exit_code=$(cat ~/.aba/runner/cli:install:oc-mirror/exit)
+exit_code=$(cat ~/.aba/runner/catalog:${ocp_ver_short}:redhat-operator/exit)
 if [ "$exit_code" -ne 0 ]; then
 	aba_abort "Test 1 FAILED: Task exited with code $exit_code"
 fi
 
-aba_info_ok "Test 1 PASSED: oc-mirror installed successfully" >&2
+aba_info_ok "Test 1 PASSED: catalog downloaded via podman extraction" >&2
 
 # --- Test 2: Catalog downloads ---
 echo ""
@@ -142,9 +137,9 @@ aba_info_ok "✓ ALL INTEGRATION TESTS PASSED" >&2
 echo "========================================="
 echo ""
 echo "Summary:"
-echo "  - oc-mirror binary installed correctly"
+echo "  - Catalog download via podman extraction works"
 echo "  - Catalog downloads work with relative paths"
 echo "  - run_once tasks created and completed"
-echo "  - No $ABA_ROOT usage in registry scripts"
+echo "  - No \$ABA_ROOT usage in registry scripts"
 echo ""
 

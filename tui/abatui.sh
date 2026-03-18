@@ -1936,7 +1936,7 @@ select_operators() {
 	# If catalogs are still downloading, show a waiting dialog
 	if [[ "$need_wait" == "true" ]]; then
 		log "Catalogs still downloading, showing wait dialog..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs...\n\nThis may take a few minutes on first run." 6 55
+		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs for OCP ${version_short}...\n\nThis may take a few minutes on first run." 6 60
 	fi
 	
 	# Ensure all 3 catalogs are running in parallel (no-op if already started)
@@ -2195,7 +2195,7 @@ image synchronization process." 0 0 || true
 			# Search operators (needs index files)
 			log "User searching operators (catalog already loaded)"
 		
-		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search operator names (min 2 chars, multiple terms AND'ed):" 10 50 2>"$TMP" || continue
+		dialog --colors --backtitle "$(ui_backtitle)" --inputbox "Search by operator or display name (min 2 chars, multiple terms AND'ed):" 10 55 2>"$TMP" || continue
 			query=$(<"$TMP")
 			query=${query//$'
 '/}
@@ -2236,11 +2236,11 @@ image synchronization process." 0 0 || true
 			matches=$(
 				while IFS= read -r line; do
 					[[ -z "$line" ]] && continue
-					op_name="${line%%[[:space:]]*}"
-					op_name_lower="${op_name,,}"
-					
-					# Only keep operators that contain this term
-					if [[ "$op_name_lower" == *"$term_lower"* ]]; then
+					# Match against operator name + display name (strip last field = default channel)
+					local searchable="${line% *}"
+					searchable="${searchable,,}"
+
+					if [[ "$searchable" == *"$term_lower"* ]]; then
 						echo "$line"
 					fi
 				done <<< "$matches"
@@ -2255,7 +2255,7 @@ image synchronization process." 0 0 || true
 		matches=$(echo "$matches" | sort)
 		if [[ -z "$matches" ]]; then
 			log "No matches for: $query"
-			dialog --backtitle "$(ui_backtitle)" --msgbox "No matches for: $query\n\nAll search terms must match the operator name." 0 0
+			dialog --backtitle "$(ui_backtitle)" --msgbox "No matches for: $query\n\nAll search terms must match the operator or display name." 0 0
 			continue
 		fi
 				
@@ -2270,16 +2270,14 @@ image synchronization process." 0 0 || true
 				line=${line%%[[:space:]]}
 				[[ -z "$line" ]] && continue
 				
-				# Extract operator name (first field only)
-				# Index file format: "operator-name<spaces>default-channel"
-				# We only work with operator name for now
-				op="${line%%[[:space:]]*}"  # Get everything before first space
+				# Index format: "operator-name  Display Name Or Dash  default-channel"
+				op="${line%%[[:space:]]*}"
 				[[ -z "$op" ]] && continue
-				
+				display_name=$(echo "$line" | awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}')
+
 				state="off"
 				[[ -n "${OP_BASKET[$op]:-}" ]] && state="on"
-			# Use operator name as tag, empty description
-			items+=("$op" "" "$state")
+			items+=("$op" "${display_name:--}" "$state")
 		done <<<"$matches"
 
 			# Calculate size based on number of matching operators
@@ -2288,7 +2286,7 @@ image synchronization process." 0 0 || true
 			dialog --clear --backtitle "$(ui_backtitle)" --title "$TUI_TITLE_SELECT_OPERATORS" \
 				--ok-label "Add to Basket" \
 				--separate-output \
-				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 60 $list_h \
+				--checklist "Use spacebar to toggle, then press Add to Basket:" 0 0 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 			log "Raw user selection from search: [$(cat "$TMP")]"
@@ -2360,7 +2358,9 @@ image synchronization process." 0 0 || true
 				items=()
 				for op in $(printf "%s\n" "${!OP_BASKET[@]}" | sort); do
 					log "Adding to view: [$op]"
-					items+=("$op" "" "on")
+					local dn
+					dn=$(grep "^${op}[[:space:]]" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null | head -1 | awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}')
+					items+=("$op" "${dn:--}" "on")
 				done
 				
 			if [[ "${#items[@]}" -eq 0 ]]; then
@@ -2377,7 +2377,7 @@ image synchronization process." 0 0 || true
 				--ok-label "Apply" \
 				--separate-output \
 				--checklist "Uncheck to remove. Use spacebar to toggle:" \
-				0 60 $list_h \
+				0 0 $list_h \
 					"${items[@]}" 2>"$TMP" || continue
 
 				log "View/Edit basket selection: [$(cat "$TMP")]"
@@ -3289,20 +3289,6 @@ summary_apply() {
 	log "Pre-generating ImageSet configuration for OCP $OCP_VERSION"
 	cd "$ABA_ROOT"
 	
-	# Wait for oc-mirror to be installed (needed for isconf generation)
-	log "Ensuring oc-mirror is installed before generating ImageSet config"
-	# Show waiting dialog if oc-mirror is still downloading
-	if ! run_once -p -i "$TASK_OC_MIRROR"; then
-		dialog --backtitle "$(ui_backtitle)" --infobox "Installing oc-mirror...\n\nThis is needed before proceeding." 6 50
-	fi
-	# Let errors flow to logs, suppress stdout (informational messages only)
-	if ! run_once -w -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror >>"$LOG_FILE" 2>&1; then
-		log "ERROR: Failed to install oc-mirror"
-		show_run_once_error "$TASK_OC_MIRROR" "Failed to Install oc-mirror"
-		DIALOG_RC="back"
-		return
-	fi
-	
 	# Reset and start isconf generation in background (non-blocking)
 	# Reset ensures regeneration if user changes operators and comes back
 	log "Resetting and starting background task: aba isconf -d mirror"
@@ -3702,7 +3688,7 @@ run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./script
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_older"    -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate' >/dev/null
 
-# Download oc-mirror early (needed for catalog downloads later)
+# Download oc-mirror early (needed for mirror save/sync/load later)
 log "Starting oc-mirror download in background"
 PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
 log "oc-mirror download started"
