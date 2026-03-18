@@ -242,14 +242,14 @@ Bug fixes and improvements
 
 First release
 
-
-### Bug Fixes
-- Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
-- Fixed `oc-mirror list operators` incorrectly reporting success (exit code 0) when catalog download fails
-
----
-
-## [0.9.0] - 2026-01-21
+### Core Features
+- Air-gapped OpenShift installation and management
+- Agent-based installer support (SNO, compact, standard clusters)
+- Mirror registry setup (mirror-registry and docker-registry)
+- CLI tool management (oc, openshift-install, oc-mirror, govc, butane)
+- Bundle creation for disconnected environments
+- VMware vCenter/ESXi integration
+- Operator catalog management
 
 ### New Features
 - **TUI** - Interactive wizard for guided disconnected installation setup (`./abatui`)
@@ -262,18 +262,11 @@ First release
 - **Enhanced UX** - Cleaner screen handling, helpful waiting messages
 
 ### Bug Fixes
+- Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
+- Fixed `oc-mirror list operators` incorrectly reporting success (exit code 0) when catalog download fails
 - Fixed catalog download error detection and reporting
 - Corrected bundle filename version suffixing
 - Various workflow and error handling improvements
-
-### Core Features
-- Air-gapped OpenShift installation and management
-- Agent-based installer support (SNO, compact, standard clusters)
-- Mirror registry setup (mirror-registry and docker-registry)
-- CLI tool management (oc, openshift-install, oc-mirror, govc, butane)
-- Bundle creation for disconnected environments
-- VMware vCenter/ESXi integration
-- Operator catalog management
 
 ---
 
@@ -292,5 +285,4 @@ First release
 [0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
 [0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
 [0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
-[0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
