@@ -1860,7 +1860,7 @@ run_once() {
 			original_cwd="$(pwd)"
 			if [[ -f "$id_dir/cwd" ]]; then
 				saved_cwd="$(cat "$id_dir/cwd")"
-				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
+				cd "$saved_cwd" 2>/dev/null || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
 
 			# Use saved command for validation (it was recorded with the saved CWD)
