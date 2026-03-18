@@ -8,7 +8,7 @@ Usage: Interactive
    aba [-i]                              # Interactive mode
                                          # Let Aba lead you through the disconnected install process
 
-Usage: Create a install 'bundle archive'
+Usage: Create an install 'bundle archive'
    aba bundle \
     <<options>>:
      -y                                  # Automatically accept the default answer to all prompts
@@ -30,7 +30,7 @@ Usage: Set up and load mirror registry
    aba mirror --name <name> [options]    # Create a named mirror directory (for enclaves)
    <<options>>:
      -H, --reg-host <hostname>            # The hostname of the target mirror registry
-     -u, --reg-user <username>           # The username used to access the registry (default it 'init')
+     -u, --reg-user <username>           # The username used to access the registry (default is 'init')
      -k, --reg-ssh-key ~/.ssh/mykey      # Path to ssh key to use to install Quay to a remote host
      -U, --reg-ssh-user myuser           # Username to use to access the remote host via ssh
          --data-dir /path/to/dir         # Install Quay files/images under this directory
@@ -83,7 +83,7 @@ Usage:
      -N, --dns <ip address(es)>          # Set one DNS IP address
      -R, --default-route <next hop ip>   # Set the default route of the internal network, if any (optional)
      -T, --ntp <hostname(s) or IPs>      # Set the NTP hostname(s) or IP address(es) (optional but recommended!). 
-     -O, --ops [<list of operators>]     # Add individual operators to your image set config file (for oc-mirror)
+     -O, --ops [<list of operators>]     # Add individual operators to your image set config file
      -P, --op-sets [<operator set list>] # Add sets of operators to your ISC file, as defined by 'templates/operator-set.*' files. 'all' is accepted
      -e, --editor <editor command>       # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files. 
      -a, --ask                           # Prompt user when needed
@@ -117,14 +117,14 @@ Examples of fully disconnected mode (air-gapped):
     ./install
     aba 
 
-  Configure mirror registry on localhost (ensure 'registry.example.com' points to the mirror registry):
-    aba mirror -H registry.example.com 
+  Configure mirror registry on the local bastion (the -H flag sets the registry FQDN):
+    aba mirror -H registry.example.com
 
-  Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
+  Configure mirror registry on a *remote host* with 'registry.example.com' using 'remote-ssh-user':
     aba mirror -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
-  Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
-    aba load -H registry.example.com  --retry
+  Configure mirror registry on the local bastion and load the (previously saved) images to the mirror:
+    aba load -H registry.example.com --retry
 
   Install OpenShift:
     aba cluster --name mycluster --type standard 
@@ -132,13 +132,13 @@ Examples of fully disconnected mode (air-gapped):
 
 Examples of partially disconnected mode (e.g. via a proxy)
 
-  Configure mirror registry on localhost (ensure 'registry.example.com' points to the mirror registry) AND sync the images to the mirror:
-    aba sync -H registry.example.com  --retry
+  Configure mirror registry on the local bastion and sync the images to the mirror:
+    aba sync -H registry.example.com --retry
 
-  Configure mirror registry on localhost with 'registry.example.com' AND sync the images/operators ('operator sets' & individual operators) to the mirror:
+  Configure mirror registry on the local bastion and sync the images/operators ('operator sets' & individual operators) to the mirror:
     aba sync -H registry.example.com --op-sets ocp ocpv mesh3 --ops web-terminal --retry
 
-  Configure mirror registry on localhost with 'registry.example.com', sync *all* operators and install Quay files into custom directory:
+  Configure mirror registry on the local bastion, sync *all* operators and install Quay files into custom directory:
     aba sync -H registry.example.com --op-sets all --retry --data-dir ~/my-data-dir
 
   Save images to local disk (note, it's recommended to run the above 'bundle' command which will run 'save' for you):
