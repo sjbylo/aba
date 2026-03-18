@@ -475,6 +475,8 @@ e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
 # the poll above and the trigger (imagestream reconciliation after mesh/OSUS install)
 e2e_wait_operators_available $SNO remote
 
+e2e_wait_operators_ready $SNO remote
+
 e2e_run_remote -r 5 2 -d 60 "Trigger cluster upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"
 

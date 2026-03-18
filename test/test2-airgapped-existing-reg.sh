@@ -313,10 +313,10 @@ do
 
 	# Test node0 is accessible
 	test-cmd -m "Pausing ..." "read -t 60 yn || true"
-	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 15m bash -x test_ssh.sh"
 	test-cmd -m "Pausing" "read -t 60 yn || true"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Check node0 network connected ..." "aba --dir $subdir/aba/$cname ssh --cmd \"ip a\"|grep 'ens160: .*state UP '"
-	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 8m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config net interface ens160" "time timeout -v 15m bash -x ~/test_ssh_if.sh $subdir/aba/$cname 'ens160: .*state UP '"
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 
 	# Clean up

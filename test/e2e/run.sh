@@ -1084,7 +1084,7 @@ if [ -n "$CLI_DESTROY" ]; then
 		done
 	done
 
-	# Sweep pool folders for orphaned cluster VMs (e.g. sno1-sno1, compact1-master1)
+	# Sweep pool folders for orphaned cluster VMs (e.g. e2e-sno1-e2e-sno1, e2e-compact1-master1)
 	# that were not cleaned up by the --clean step or aba delete.
 	_base="/Datacenter/vm/aba-e2e"
 	echo ""
@@ -1488,7 +1488,8 @@ _record_result() {
 		printf "  COMPLETED: %-35s pool %-2s  \033[1;31mFAIL\033[0m (exit=%s)\n" "$suite" "$pool_num" "$rc"
 	fi
 
-	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+	# Only notify from dispatcher for non-pass results (framework already notifies on PASS)
+	if [ "$rc" -ne 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null 2>&1 &
 	fi
 }
@@ -1617,7 +1618,11 @@ _force_clean_suite() {
 			fi
 			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
 		" 2>/dev/null || true
-		# Process cleanup files for the suite being force-cleaned
+		# Skip cleanup on pools running a different suite to avoid destroying their resources
+		if [ -n "${_busy_pools[$p]:-}" ] && [ "${_busy_pools[$p]}" != "$suite" ]; then
+			echo "    Skipping con${p}: running ${_busy_pools[$p]}"
+			continue
+		fi
 		_process_pool_cleanup_files "$p"
 	done
 
