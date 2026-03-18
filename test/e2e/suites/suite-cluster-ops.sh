@@ -42,6 +42,7 @@ plan_tests \
     "ABI config: diff against known-good examples" \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
+    "SNO: IP conflict detection" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -254,7 +255,27 @@ e2e_poll 180 15 "Wait for flux (community catalog)" \
 
 e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagemanifests'"
 
-e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
+test_end
+
+# ============================================================================
+# 9. SNO: IP conflict detection
+# ============================================================================
+# The SNO cluster from test 7 is still running.  Attempt to create another
+# cluster on the same IP and verify the preflight check catches the conflict.
+test_begin "SNO: IP conflict detection"
+
+SNO_DUP="${SNO}-dup"
+e2e_run "Create duplicate SNO config with same IP" \
+    "rm -rf $SNO_DUP && aba cluster -n $SNO_DUP -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run "Generate install-config.yaml for duplicate" \
+    "aba --dir $SNO_DUP install-config.yaml"
+e2e_run "Generate agent-config.yaml for duplicate" \
+    "aba --dir $SNO_DUP agent-config.yaml"
+e2e_run_must_fail "Preflight must detect IP conflict with running SNO" \
+    "aba --dir $SNO_DUP preflight"
+e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
+
+e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
 
 test_end
 

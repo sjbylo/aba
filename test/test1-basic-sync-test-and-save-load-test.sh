@@ -381,6 +381,9 @@ test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 
+test-cmd -f -m "IP conflict: creating ISO must fail while SNO cluster is still running" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step iso
+test-cmd -m "Delete SNO cluster after IP conflict test" aba --dir sno delete
+
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target
 
