@@ -327,7 +327,7 @@ _net_test "Non-VLAN standard: bonding" \
 # ============================================================================
 test_begin "Cleanup"
 
-e2e_diag "Show remaining cluster dirs" "ls -d sno* compact* standard* 2>/dev/null || echo 'none'"
+e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard* 2>/dev/null || echo 'none'"
 
 e2e_run "Delete VLAN SNO cluster" \
     "if [ -d $_SNO_VLAN ]; then aba --dir $_SNO_VLAN delete; else echo '[cleanup] $_SNO_VLAN already removed'; fi"
