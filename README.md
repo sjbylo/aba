@@ -87,7 +87,7 @@ ABA helps you with the following and more:
 - Automatically downloads and installs matching versions of required tools (`oc`, `oc-mirror`, `openshift-install`) and RPM packages
 
 **Mirror Registry**
-- Installs [Quay or Docker registry](README.md#partially-disconnected-scenario) locally, remotely, or connects to an existing registry
+- Installs Quay or Docker registry locally, remotely, or connects to an existing registry
 - Handles pull secret merging and registry certificate trust automatically
 - Works with oc-mirror v2
 - Incremental image and Operator loading (day-1/day-2)
@@ -97,7 +97,7 @@ ABA helps you with the following and more:
 - SNO (1-node), Compact (3-nodes), Standard (3 masters + workers)
 - Generates ImageSetConfiguration and Agent-based Installer config from your settings
 - [Bonds, VLANs](README.md#q-can-bonds-andor-vlan-be-configured-on-my-nodes), static IPs, and proxy support
-- Optional VM creation in [VMware vSphere](README.md#miscellaneous) (bare-metal is the default)
+- Optional VM creation in [VMware vSphere](README.md#govc-is-used-to-create-and-manage-vms-on-esxi-or-vsphere) (bare-metal is the default)
 - Installation monitoring
 - ["Install bundle"](README.md#creating-a-custom-install-bundle) for fully disconnected transfers
 - Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
@@ -1569,6 +1569,26 @@ aba -d mirror uninstall                        # Remove the registry (reads inst
 ```
 - Note: The Quay mirror registry is supported by Red Hat but the Docker Registry is not.
 - The `install-docker-registry` and `uninstall-docker-registry` targets are still supported for backward compatibility.
+
+[Back to top](#who-should-use-aba)
+
+## Q: `aba load` fails with "network is unreachable" in an air-gapped environment
+
+This is a known `oc-mirror v2` issue where the load (disk-to-mirror) workflow
+incorrectly tries to contact the source registry even though all images are
+already saved locally.
+
+**Workaround:**
+
+```
+aba -d mirror clean                            # Clear oc-mirror working state.
+aba -d mirror load                             # Retry the load.
+```
+
+The `clean` command removes stale oc-mirror state (`data/working-dir/`) while
+preserving your saved images and configuration. If you are switching between
+`sync` and `save/load` workflows on the same bastion, run `aba -d mirror
+clean` before switching.
 
 [Back to top](#who-should-use-aba)
 
