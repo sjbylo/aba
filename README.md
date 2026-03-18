@@ -78,28 +78,44 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
 
 ABA helps you with the following and more:
 
-1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs a mirror registry -- Quay or Docker -- locally or on a remote host, or connects to your existing registry.
-1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
-1. Triggers the generation of the agent-based boot ISO.
-1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
-1. Optionally, creates the required VMs in ESXi or vSphere.
-1. Monitors the installation progress.
-1. Allows for adding more images (e.g. Operators) when synchronizing the mirror registry (day 1 or 2 operation).
-1. Configures the OperatorHub integration with the mirror registry.
-1. Can create an "install bundle" containing all the files needed to complete a fully disconnected installation.
-1. Supports named mirror directories for managing multiple enclaves (`aba -d mymirror install`).
-1. Executes several workarounds, if needed, for some typical issues with disconnected environments.
-1. Works with oc-mirror v2.
-1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
-1. Helps configure OpenShift with your NTP servers.
-1. Enables graceful cluster shutdown and startup.
-1. Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
-1. Allows for the modification of generated configuration files (image-set & agent based), if more control is required.
+**Getting Started**
+
+- [Interactive TUI wizard](README.md#install-aba) for guided setup
+- Full CLI for scripting and automation
+- Supports fully [air-gapped](README.md#fully-disconnected-air-gapped-scenario), partially disconnected, and direct Internet install
+- [Multiple architectures](README.md#supported-architectures): x86_64, ARM, s390x, ppc64le
+- Automatically downloads and installs matching versions of required tools (`oc`, `oc-mirror`, `openshift-install`) and RPM packages
+
+**Mirror Registry**
+- Installs [Quay or Docker registry](README.md#partially-disconnected-scenario) locally, remotely, or connects to an existing registry
+- Handles pull secret merging and registry certificate trust automatically
+- Works with oc-mirror v2
+- Incremental image and Operator loading (day-1/day-2)
+- [Named mirror directories](README.md#named-mirror-directories-enclaves) for multiple enclaves
+
+**Cluster Installation**
+- SNO (1-node), Compact (3-nodes), Standard (3 masters + workers)
+- Generates ImageSetConfiguration and Agent-based Installer config from your settings
+- [Bonds, VLANs](README.md#q-can-bonds-andor-vlan-be-configured-on-my-nodes), static IPs, and proxy support
+- Optional VM creation in [VMware vSphere](README.md#miscellaneous) (bare-metal is the default)
+- Installation monitoring
+- ["Install bundle"](README.md#creating-a-custom-install-bundle) for fully disconnected transfers
+- Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
+
+**Day-2 Operations**
+- Cluster [OperatorHub integration](README.md#connect-operatorhub-to-internal-mirror-registry) with the mirror registry
+- [NTP configuration](README.md#synchronize-ntp-across-cluster-nodes) during install and day-2
+- [OpenShift Update Service (OSUS)](README.md#enable-openshift-update-service-osus) for single-click upgrades
+- [Custom Kubernetes manifests](README.md#custom-manifests-for-day-2) applied during day-2
+- Graceful cluster shutdown and startup
+
+**Advanced**
+- [Customization of config files](README.md#how-to-customize-the-agent-based-configuration-files) (ImageSetConfiguration, agent-based config)
+- [Custom manifests embedded in the boot ISO](README.md#embedding-custom-manifests-in-the-iso-day-0) (e.g. MachineConfig)
+- Automatic handling of disconnected-environment pitfalls (catalog sources, release signatures)
+- Full cluster lifecycle management: install, configure, delete VMs and clean up
 
 All ABA commands are designed to be idempotent. If something goes wrong, fix it and run the command again — ABA will always try to do the right thing.
-
-ABA includes a TUI (Text User Interface) wizard that guides you through configuration and setup interactively, including registry type selection (Quay/Docker). See [Install ABA](#install-aba) for details.
 
 
 # About Installing OpenShift in a Disconnected Environment
