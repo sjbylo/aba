@@ -328,8 +328,7 @@ test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" aba -
 
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
 
-# FIXME: no need? or use 'aba clean' or?
-rm -rf mirror/data   # The process will halt, otherwise with "You already have images saved on local disk"
+aba -d mirror clean   # Clear oc-mirror working state before switching from sync to save/load workflow
 
 #####################################################################################################################
 #####################################################################################################################
