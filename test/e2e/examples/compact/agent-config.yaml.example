@@ -3,7 +3,7 @@
 apiVersion: v1alpha1
 kind: AgentConfig
 metadata:
-  name: compact1
+  name: e2e-compact1
 rendezvousIP: 10.0.2.15
 hosts:
   - hostname: master1
