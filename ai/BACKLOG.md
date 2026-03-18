@@ -252,6 +252,26 @@ pulls the catalog image directly with `podman` and doesn't depend on `oc-mirror`
 
 ## Medium Priority
 
+### oc-mirror v2 Load Failure: Replace `rm -rf mirror/data` With `aba clean` and Add FAQ
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-18
+**Plan:** `.cursor/plans/oc-mirror_working-dir_fix_1b917b02.plan.md`
+
+**Problem:**
+After consolidating `mirror/save/` and `mirror/sync/` into `mirror/data/`, all oc-mirror workflows share `data/working-dir/`. The `oc-mirror v2` `diskToMirror` (load) has a known bug where it tries to ping the source registry even in air-gapped mode. Clearing working-dir before load helps. Two test files use raw `rm -rf mirror/data` which is unrealistic user behavior and destroys saved tar archives.
+
+**Proposed fix:**
+1. Replace `rm -rf mirror/data` in `suite-mirror-sync.sh` (line 259) and `test1-basic-sync-test-and-save-load-test.sh` (line 332) with `aba -d mirror clean` (which only removes `data/working-dir`).
+2. Add README FAQ entry explaining the "collect catalog ... network is unreachable" error during load and the `aba -d mirror clean` workaround.
+3. Advise users to run `clean` before switching between `sync` and `save/load` workflows.
+
+**Where:** `test/e2e/suites/suite-mirror-sync.sh`, `test/test1-basic-sync-test-and-save-load-test.sh`, `README.md`
+
+---
+
 ### Rename E2E SNO Cluster Names to Avoid Clashes
 
 **Status:** Backlog

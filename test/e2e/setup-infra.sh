@@ -191,6 +191,8 @@ _verify_con_vm() {
 		# --- Files ---
 		test -s /home/${user}/.vmware.conf || _fail "vmware.conf missing"
 		echo "  PASS: vmware.conf"
+		test -s /root/.vmware.conf || _fail "root vmware.conf missing"
+		echo "  PASS: root vmware.conf"
 
 		# --- Podman clean ---
 		# Pool registry runs as ${user} with images, containers, and port 8443
@@ -404,6 +406,8 @@ _verify_dis_vm() {
 		# --- Files ---
 		test -s /home/${user}/.vmware.conf || _fail "vmware.conf missing"
 		echo "  PASS: vmware.conf"
+		test -s /root/.vmware.conf || _fail "root vmware.conf missing"
+		echo "  PASS: root vmware.conf"
 
 		! test -f /home/${user}/.pull-secret.json || _fail "pull-secret still exists"
 		echo "  PASS: pull-secret removed"
