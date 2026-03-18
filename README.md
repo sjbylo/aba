@@ -79,6 +79,7 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
 ABA helps you with the following and more:
 
 **Getting Started**
+
 - [Interactive TUI wizard](README.md#install-aba) for guided setup
 - Full CLI for scripting and automation
 - Supports fully [air-gapped](README.md#fully-disconnected-air-gapped-scenario), partially disconnected, and direct Internet install
@@ -99,6 +100,7 @@ ABA helps you with the following and more:
 - Optional VM creation in [VMware vSphere](README.md#miscellaneous) (bare-metal is the default)
 - Installation monitoring
 - ["Install bundle"](README.md#creating-a-custom-install-bundle) for fully disconnected transfers
+- Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
 
 **Day-2 Operations**
 - Cluster [OperatorHub integration](README.md#connect-operatorhub-to-internal-mirror-registry) with the mirror registry
@@ -535,6 +537,26 @@ aba iso
 # boot the bare-metal node(s) with the generated ISO file.
 # This can be done using a USB stick or via the server's remote management interfaces (BMC etc).
 aba mon
+```
+
+### Pre-flight Validation
+
+Before generating the ISO, ABA automatically runs pre-flight checks to catch common issues early:
+
+| Check | What it does |
+| :---- | :----------- |
+| **DNS** | Verifies each DNS server in `dns_servers` is reachable (using `dig`) |
+| **NTP** | Verifies each NTP server in `ntp_servers` is reachable (using `chronyd -Q` or UDP port 123) |
+| **IP conflicts** | Checks that none of the planned node IPs or VIPs are already in use on the network |
+
+IP conflict detection uses `arping` (ARP, Layer 2) when available — this cannot be blocked by firewalls and is more reliable than ICMP ping. If `arping` is not installed or lacks permissions, ABA falls back to `ping` automatically.
+
+- **Warnings** (e.g. one DNS server down) are reported but do not block installation.
+- **Errors** (e.g. all DNS servers down, or IP conflicts) cause the pre-flight to abort before ISO generation.
+
+To see detailed output, run in debug mode:
+```
+aba -D iso
 ```
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme.
