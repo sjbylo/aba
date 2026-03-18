@@ -110,6 +110,14 @@ agent-config.yaml: .init             cluster.conf mirror.conf  ## Create the age
 verify: agentconf  ## Extract cluster configuration details from the generated agent-based configuration files for manual verification only.
 	$(SCRIPTS)/cluster-config.sh
 
+.PHONY: preflight
+preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS, NTP, IP conflicts).
+	$(SCRIPTS)/preflight-check.sh
+
+.preflight-done: install-config.yaml agent-config.yaml
+	$(SCRIPTS)/preflight-check.sh
+	@touch .preflight-done
+
 .bm-message:
 	@echo
 	@echo "Next steps:"
@@ -130,7 +138,7 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 
 # The following "auto" targets are meant just for the full end-to-end automation, to build a cluster
 iso: iso-agent-based/agent.$(arch).iso ## Build the agent-based iso file in iso-agent-based dir.
-iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml   # Note that install-config.yaml can itself be dependent on vmware.conf params
+iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .preflight-done   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	$(SCRIPTS)/generate-image.sh
 
 .bm-nextstep:
