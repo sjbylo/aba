@@ -18,8 +18,8 @@ server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{prin
 cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-zA-Z]{2,}:[0-9]{2,}' | sed "s/^api\.//g")
 server_url=${server_url}/
 
-# Check for bare-metal installation
-if [ ! -s vmware.conf ]; then
+# Check for bare-metal installation (no hypervisor config)
+if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
 
 	# Quick check to see if servers are up?

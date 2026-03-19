@@ -227,7 +227,7 @@ test_end
 # ============================================================================
 test_begin "Cluster-level: graceful shutdown and startup"
 
-e2e_run "OpenShift graceful shutdown" "aba --dir $SNO shutdown"
+e2e_run "OpenShift graceful shutdown with --wait" "aba --dir $SNO shutdown -y --wait"
 e2e_run "Verify VMs are shut off after OCP shutdown" \
     "aba --dir $SNO ls | grep -i 'shut off'"
 
