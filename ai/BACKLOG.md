@@ -309,10 +309,12 @@ Make the `mirror-registry` prerequisite conditional on vendor. Options:
 ### Deduplicate `aba isconf` output
 
 **Status:** Partially done (2026-03-18)
+**Priority:** Medium
 **Context:** The duplicate operator listing within a single `add-operators-to-imageset.sh` run
 has been fixed (removed the redundant summary line). However, `aba isconf` still calls the
 script twice (once for save, once for sync), so operators appear in both invocations.
 **Remaining:** Suppress output on the second run or consolidate into a single generation.
+**Note:** Would be fully resolved by the `mirror/save` + `mirror/sync` consolidation (#35).
 
 ### Option to preserve registry data on `aba uninstall`
 
@@ -1027,6 +1029,44 @@ When moving logic out of Makefiles, add "ensure" patterns to 6 scripts as propos
 ---
 
 ## Completed
+
+### `verify_conf=all/conf/off` -- Configurable Preflight Validation Strictness
+**Completed:** 2026-03-19
+Added three-state `verify_conf` setting (`all`/`conf`/`off`) to control preflight and config
+validation. When the bastion is on a different network than the cluster nodes, `conf` skips
+DNS, NTP, IP conflict, DNS record validation, and registry release image checks while keeping
+config file validation. CLI flag: `aba --verify <all|conf|off>`. Backward-compatible with
+legacy boolean values. E2E test added in `suite-cluster-ops.sh`. README documented
+(Pre-flight section + FAQ).
+
+### Improve `arping` IP Conflict Detection on Multi-Homed Hosts
+**Completed:** 2026-03-19
+`preflight-check.sh` now uses `ip route get` to auto-detect the correct outgoing interface
+for `arping -I`, fixing silent failures on multi-homed E2E hosts. Falls back to `ping` if
+interface detection fails.
+
+### Improve Release Image Error Message
+**Completed:** 2026-03-19
+`verify-release-image.sh` now captures `skopeo` stderr and includes it in the error message.
+Replaced generic "not found" text with actionable troubleshooting hints (credentials, mirroring,
+version mismatch).
+
+### Ask User Before Bumping Master Memory (OCPBUGS-62790)
+**Completed:** 2026-03-19
+Changed the silent 16GB-to-20GB master memory bump in `vmw-create.sh` from an automatic
+adjustment to an interactive `ask()` prompt. Users can now confirm or decline the increase.
+
+### E2E Workaround for OCP ImagePrunerJobFailed Bug
+**Completed:** 2026-03-19
+Added `_e2e_fix_image_pruner_if_needed()` to `test/e2e/lib/framework.sh`. Detects
+`ImagePrunerJobFailed` in command output, suspends the image pruner, and deletes failed
+jobs before retry. Workaround for Red Hat KCS 5367151.
+
+### Delete SNO Clusters Before `rm -rf` in Old E2E Tests
+**Completed:** 2026-03-19
+Added explicit `aba delete` before `rm -rf sno` in `test2` and `test5` to prevent IP
+conflict failures from stale clusters. Also added deliberate negative IP conflict test
+to `test1` and `suite-cluster-ops.sh`.
 
 ### ISC Display Name Comments With Fuzzy Filtering
 **Completed:** 2026-03-18
