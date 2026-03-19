@@ -108,7 +108,7 @@ create_node() {
 			--boot uefi \
 			--check disk_size=off \
 			--graphics none \
-			--events on_poweroff=restart \
+			--events on_poweroff=restart,on_reboot=restart \
 			$extra_cpu_args \
 			--noautoconsole
 
