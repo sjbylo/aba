@@ -54,7 +54,9 @@ if [ ! -s data/imageset-config.yaml -o ! data/imageset-config.yaml -nt data/.cre
 	touch data/.created
 
 	aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
-	aba_info    "Reminder: Edit this file to add more content, e.g. Operators, and then run 'aba save' or 'aba sync' again."
+	[ ! "$ops" ] && [ ! "$op_sets" ] && \
+		aba_info "To add operators, set 'op_sets' or 'ops' in aba.conf, then re-run 'aba save' or 'aba sync'."
+	aba_info "For advanced customization, edit mirror/data/imageset-config.yaml directly (your edits will be preserved)."
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"
 	aba_info "Using existing image set config file (data/imageset-config.yaml)"
