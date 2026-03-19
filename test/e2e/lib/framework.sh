@@ -830,6 +830,32 @@ _e2e_exit_info() {
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
 #
+# Workaround for OCP bug: image-pruner degrades image-registry when registry is
+# Removed on bare-metal installs.  Red Hat KCS 5367151.
+# Suspend the pruner and delete failed jobs so the retry can succeed.
+_e2e_fix_image_pruner_if_needed() {
+	local output_file="$1"
+	[ ! -s "$output_file" ] && return 1
+
+	grep -q "ImagePrunerJobFailed" "$output_file" 2>/dev/null || return 1
+
+	_e2e_log "  Detected OCP bug: ImagePrunerJobFailed (Red Hat KCS 5367151)"
+	_e2e_log "  Applying workaround: suspend pruner + delete failed jobs"
+
+	local kc
+	for kc in */iso-agent-based/auth/kubeconfig; do
+		[ -f "$kc" ] || continue
+		_e2e_log "  Using kubeconfig: $kc"
+		KUBECONFIG="$kc" oc patch imagepruner.imageregistry/cluster \
+			--patch '{"spec":{"suspend":true}}' --type=merge 2>/dev/null && \
+		KUBECONFIG="$kc" oc -n openshift-image-registry delete jobs --all 2>/dev/null || true
+		_e2e_log "  Workaround applied -- pruner suspended, failed jobs deleted"
+		return 0
+	done
+	_e2e_log "  WARNING: Could not find kubeconfig to apply ImagePruner workaround"
+	return 1
+}
+
 e2e_run() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
@@ -962,6 +988,9 @@ e2e_run() {
 
             _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
             _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
+
+            _e2e_fix_image_pruner_if_needed "$_cmd_output_file" && \
+                _e2e_log_and_print "    Applied ImagePrunerJobFailed workaround before retry"
 
             (( attempt++ ))
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
