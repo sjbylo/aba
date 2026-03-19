@@ -273,6 +273,23 @@ e2e_run "Generate agent-config.yaml for duplicate" \
     "aba --dir $SNO_DUP agent-config.yaml"
 e2e_run_must_fail "Preflight must detect IP conflict with running SNO" \
     "aba --dir $SNO_DUP preflight"
+
+test_end
+
+# ============================================================================
+# 10. verify_conf=conf skips network checks (IP conflict still present)
+# ============================================================================
+# The SNO cluster is still running and the duplicate config still exists,
+# so the IP conflict is real.  With verify_conf=conf, preflight must pass
+# because network checks are skipped.
+test_begin "verify_conf=conf skips network checks"
+
+e2e_run "Set verify_conf=conf" \
+    "aba --verify conf"
+e2e_run "Preflight must pass with verify_conf=conf despite IP conflict" \
+    "aba --dir $SNO_DUP preflight"
+e2e_run "Restore verify_conf=all" \
+    "aba --verify all"
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
 
 e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
