@@ -109,11 +109,12 @@ create_node() {
 			--check disk_size=off \
 			--graphics none \
 			$extra_cpu_args \
-			--noautoconsole --noreboot
+			--noautoconsole
 
 		if [ -n "${START_VM:-}" ]; then
-			virsh -c "$LIBVIRT_URI" start "$vm_name"
 			virsh -c "$LIBVIRT_URI" autostart "$vm_name"
+		else
+			virsh -c "$LIBVIRT_URI" destroy "$vm_name" 2>/dev/null || true
 		fi
 
 		let i=$i+1
