@@ -24,7 +24,8 @@ header="Name CPU Memory State"
 output=
 # List all VMs with cpu, ram and power state
 for name in $CP_NAMES $WORKER_NAMES; do
-	vm_info=$(govc vm.info -json ${CLUSTER_NAME}-$name)
+	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	vm_info=$(govc vm.info -json "$vm")
 	[ ! "$vm_info" ] && continue
 
 	power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')
@@ -34,8 +35,8 @@ for name in $CP_NAMES $WORKER_NAMES; do
 	memory_mb=$(echo "$vm_info" | jq -r '.virtualMachines[0].config.hardware.memoryMB')
 	[ "$memory_mb" -a "$memory_mb" != "null" ] && memory_gb=$(expr $memory_mb / 1024)
 
-	output="$output\n${CLUSTER_NAME}-$name ${num_cpu} ${memory_gb}GB $power_state"
-done 
+	output="$output\n$vm ${num_cpu} ${memory_gb}GB $power_state"
+done
 
 if [ "$output" ]; then
 	echo -e "$header\n$output" | column -t

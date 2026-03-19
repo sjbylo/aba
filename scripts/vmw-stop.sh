@@ -35,16 +35,15 @@ hosts="$WORKER_NAMES $CP_NAMES"
 if [ "$ask" ]; then
 	echo
 	for name in $hosts; do
-		[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		[ "$VC" ] && echo $cluster_folder/$vm || echo $vm
 	done
 
 	ask "Stop the above virtual machine(s)" || exit 1
 fi
 
 for name in $hosts; do
-	# Shut down guest if vmware tools exist
-	govc vm.power -s ${CLUSTER_NAME}-$name || true
-	#govc vm.power -s ${CLUSTER_NAME}-$name 
+	govc vm.power -s "$(vm_name "$CLUSTER_NAME" "$name")" || true
 done
 
 if [ "$wait" ]; then
@@ -54,7 +53,7 @@ if [ "$wait" ]; then
 	while [ ! "$hosts_off" ];
 	do
 		for name in $hosts; do
-			vm_info=$(govc vm.info -json ${CLUSTER_NAME}-$name)
+			vm_info=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")")
 			[ ! "$vm_info" ] && continue
 
 			power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')

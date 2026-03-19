@@ -122,6 +122,22 @@ listing. Tested and working for OCP 4.16-4.22 across all catalogs.
 
 ## Medium Priority
 
+### SNO VM Name Duplication: `clustername-clustername`
+
+**Status:** Open
+**Priority:** Medium
+**Created:** 2026-03-19
+
+For SNO clusters, the agent-config template (`templates/agent-config.yaml.j2` line 25) sets the hostname to `{{ cluster_name }}`. The VM creation scripts (`kvm-create.sh`, `vmw-create.sh`) then construct the VM name as `${CLUSTER_NAME}-${hostname}`, producing `e2e-sno1-e2e-sno1`.
+
+For multi-node clusters this works fine (`mycluster-master1`), but for SNO the name is redundantly doubled. The VM name should just be `e2e-sno1`.
+
+**Fix:** Add a `vm_name()` helper function to `include_all.sh` that encapsulates the naming convention. When hostname equals cluster name (SNO), return just the hostname; otherwise return `${cluster}-${host}`. Replace all hardcoded `"${CLUSTER_NAME}-${name}"` occurrences in `kvm-*.sh` and `vmw-*.sh` scripts with `$(vm_name "$CLUSTER_NAME" "$name")`.
+
+**Files to update:** `scripts/include_all.sh` (add helper), then all lifecycle scripts: `kvm-create.sh`, `kvm-ls.sh`, `kvm-start.sh`, `kvm-stop.sh`, `kvm-kill.sh`, `kvm-delete.sh`, `kvm-exists.sh`, `kvm-on.sh`, and their `vmw-` counterparts.
+
+---
+
 ### Validate `mirror_name` Points to a Valid Mirror With Credentials
 
 **Status:** Open

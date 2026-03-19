@@ -23,14 +23,14 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 if [ "$ask" ]; then
 	echo
 	for name in $CP_NAMES $WORKER_NAMES; do
-		echo "${CLUSTER_NAME}-${name}"
+		echo "$(vm_name "$CLUSTER_NAME" "$name")"
 	done
 
 	ask "Immediately power down the above virtual machine(s)" || exit 1
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	virsh -c "$LIBVIRT_URI" destroy "${CLUSTER_NAME}-${name}" 2>/dev/null || true
+	virsh -c "$LIBVIRT_URI" destroy "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
 done
 
 exit 0

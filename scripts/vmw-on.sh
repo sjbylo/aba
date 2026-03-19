@@ -19,9 +19,9 @@ fi
 
 # Exit 0 if at least one VM is powered on
 for name in $CP_NAMES $WORKER_NAMES; do
-	power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
+	power_state=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")" | jq -r '.virtualMachines[0].runtime.powerState')
 	[ "$power_state" = "poweredOn" ] && exit 0
-done 
+done
 
 exit 1
 

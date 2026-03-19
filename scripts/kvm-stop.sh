@@ -33,14 +33,14 @@ hosts="$WORKER_NAMES $CP_NAMES"
 if [ "$ask" ]; then
 	echo
 	for name in $hosts; do
-		echo "${CLUSTER_NAME}-${name}"
+		echo "$(vm_name "$CLUSTER_NAME" "$name")"
 	done
 
 	ask "Stop the above virtual machine(s)" || exit 1
 fi
 
 for name in $hosts; do
-	virsh -c "$LIBVIRT_URI" shutdown "${CLUSTER_NAME}-${name}" 2>/dev/null || true
+	virsh -c "$LIBVIRT_URI" shutdown "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
 done
 
 if [ "$wait" ]; then
@@ -49,7 +49,7 @@ if [ "$wait" ]; then
 	hosts_off=
 	while [ ! "$hosts_off" ]; do
 		for name in $hosts; do
-			state=$(virsh -c "$LIBVIRT_URI" domstate "${CLUSTER_NAME}-${name}" 2>/dev/null)
+			state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
 			[ "$state" = "running" ] && hosts_off= && break
 			[ "$state" = "shut off" ] && hosts_off=1
 		done
