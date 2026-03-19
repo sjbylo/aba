@@ -108,7 +108,6 @@ create_node() {
 			--boot uefi \
 			--check disk_size=off \
 			--graphics none \
-			--events on_poweroff=restart,on_reboot=restart \
 			$extra_cpu_args \
 			--noautoconsole
 
@@ -127,6 +126,27 @@ create_node "control" "$CP_NAMES" CP_MAC_ADDRS_ARRAY "$master_cpu_count" "$maste
 create_node "worker" "$WORKER_NAMES" WKR_MAC_ADDRS_ARRAY "$worker_cpu_count" "$worker_mem" "$worker_nested_hv"
 
 if [ -n "${START_VM:-}" ]; then
+	# After the agent installer writes the image to disk, the VM may shut off
+	# instead of rebooting (QEMU default on_reboot=destroy for CD installs).
+	# Monitor in the background and restart any VMs that shut down.
+	(
+		sleep 120
+		for attempt in $(seq 1 30); do
+			all_running=1
+			for name in $CP_NAMES $WORKER_NAMES; do
+				vm=$(vm_name "$CLUSTER_NAME" "$name")
+				state=$(virsh -c "$LIBVIRT_URI" domstate "$vm" 2>/dev/null) || continue
+				if [ "$state" = "shut off" ]; then
+					aba_info "VM $vm shut off after image write — restarting ..."
+					virsh -c "$LIBVIRT_URI" start "$vm" 2>/dev/null || true
+					all_running=
+				fi
+			done
+			[ "$all_running" ] && break
+			sleep 30
+		done
+	) &
+
 	cp_arr=($CP_NAMES);		cp_cnt=${#cp_arr[*]}
 	wkr_arr=($WORKER_NAMES);	wkr_cnt=${#wkr_arr[*]}
 
