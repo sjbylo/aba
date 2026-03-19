@@ -107,6 +107,7 @@ create_node() {
 			--os-variant rhel9-unknown \
 			--boot uefi \
 			--check disk_size=off \
+			--graphics none \
 			$extra_cpu_args \
 			--noautoconsole --noreboot
 
