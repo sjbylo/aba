@@ -1515,7 +1515,7 @@ Running out of disk space is the most likely problem you will encounter when con
 
 ## Q: Can I install Operators from community catalogs?
 
-**Yes!** ABA supports three Red Hat operator catalogs (redhat-operator, certified-operator and community-operator). Catalog indexes are extracted directly from the container images using podman -- no oc-mirror dependency for operator listing. 
+**Yes!** ABA supports three Red Hat operator catalogs (redhat-operator, certified-operator and community-operator).
 
 [Back to top](#who-should-use-aba)
 
@@ -1556,10 +1556,10 @@ Docker Registry is a fully supported registry type in ABA — available via CLI 
 To switch from Quay to Docker Registry:
 
 ```
-aba -d mirror uninstall                        # Uninstall the current registry (Quay or Docker).
+aba -d mirror uninstall                        # Uninstall the current registry (Quay).
 
-                                               # Set reg_vendor=docker in mirror.conf, then:
-aba -d mirror install                          # Install the configured registry. Also works in disconnected env.
+aba -d mirror install --vendor docker          # Ensure reg_vendor=docker is set in mirror.conf, then:
+                                               # Install the configured registry. Also works in disconnected env.
 aba -d mirror verify                           # If verification is successful, use aba as usual (e.g. aba load/save).
 ```
 
@@ -1595,7 +1595,11 @@ clean` before switching.
 
 ## Q: Is there a discussion forum?
 
-If you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
+Post to our [GitHub Discussions Forum](https://github.com/sjbylo/aba/discussions).
+
+Post issues to [GitHub Issues](https://github.com/sjbylo/aba/issues)
+
+If you have access, join the Red Hat [Slack Channel](https://red.ht/slack-forum-aba).
 
 
 ## Q: I accidentally uninstalled my mirror registry, how can I recover?
@@ -1635,9 +1639,11 @@ cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys    # Append publ
 
 ## Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?
 
-ABA helps you generate an initial oc-mirror image configuration to get an OpenShift cluster installed quickly, focusing on day-zero requirements such as release and operator images.
+ABA's main focus is to help you generate an initial oc-mirror image-set configuration to get an OpenShift cluster installed quickly, focusing on day-zero requirements such as release and operator images.
 
-However, there are other tools intended to fully manage the lifecycle of image-config.yaml. For ongoing updates and long-term maintenance, you could try the oc-mirror Web App:
+Although ABA can be used to manage the full lifecycle of your mirror registry, there are other tools intended to fully manage the lifecycle of image-config.yaml.
+For ongoing updates and long-term maintenance, you could try the oc-mirror Web App:
+
 
 👉 https://github.com/yakovbeder/oc-mirror-web-app/
 
