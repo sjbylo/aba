@@ -158,6 +158,8 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	$(SCRIPTS)/$(HV_PREFIX)-kill.sh || true
 	@touch .autopoweroff
 
+.PHONY: upload
+upload: .autoupload  ## Upload the ISO to the hypervisor platform.
 .autoupload: $(hv_conf_dep) .autopoweroff
 	$(SCRIPTS)/$(HV_PREFIX)-upload.sh
 	@touch .autoupload
@@ -166,6 +168,9 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	$(SCRIPTS)/$(HV_PREFIX)-refresh.sh
 	@touch .autorefresh
 
+.PHONY: refresh
+refresh: $(hv_conf_dep) upload  ## Delete & re-create the VMs. Useful to redeploy a broken cluster.
+	$(SCRIPTS)/$(HV_PREFIX)-refresh.sh workers=$(workers) masters=$(masters)
 
 .install-complete: .autorefresh .auto-agent-up # mon
 	$(SCRIPTS)/monitor-install.sh
