@@ -38,6 +38,10 @@ vmw:
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
+.PHONY: kvm
+kvm:
+	@$(SCRIPTS)/install-kvm.conf.sh
+
 #.PHONY: cli
 #cli:  ## Download and install the CLI binaries into ~/bin
 #	@echo "Run either one of:"
@@ -139,6 +143,7 @@ reset: # Clean up *everything*.  Only use if you know what you are doing! Note t
 	make -sC cli reset
 	make -sC mirror reset 
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
+	test -f kvm.conf && mv kvm.conf kvm.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created

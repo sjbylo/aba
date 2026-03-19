@@ -18,31 +18,28 @@ platform := $(strip $(shell echo $(platform)))
 # The next section is (unfortunately) needed because making a bare-metal cluster has a different flow, with interruptions!
 # 1. Before iso creation, the Agent-based installer config files need to be changed: mac addresses added, disk hints ... etc.
 # 2. And, after iso creation, the servers need to be booted before the 'mon' target is run.
-ifneq ($(platform),vmw)   # if platform is not 'vmw', i.e. bare-metal is assumed 
+ifeq ($(platform),$(filter $(platform),vmw kvm))
+	# VMware or KVM: full automated chain
+	ifeq ($(platform),vmw)
+		HV_PREFIX = vmw
+		hv_conf_dep = vmware.conf
+	else
+		HV_PREFIX = kvm
+		hv_conf_dep = kvm.conf
+	endif
+	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up .install-complete
+	BOOTSTRAP_PRE_DEPS = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up
+else
+	# Bare-metal: stepped flow (no VM automation)
 	ifeq ($(wildcard .bm-message),)
-		# if .bm-message DOES NOT exists
-   		# Only create the agent based config files and show next steps
 		TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml .bm-message
 	else
-		#.bm-message exists
 		ifeq ($(wildcard .bm-nextstep),)
-			# if .bm-nextstep DOES NOT exists
-   			# Only create the iso file and show next steps
-			#TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml             iso .bm-nextstep
 			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso .bm-nextstep
 		else
-			# .bm-nextstep exists
-   			# Do all steps, including mon
-			#TARGET_DEPENDENCIES = check ../aba.conf install-config.yaml agent-config.yaml             iso              mon
 			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso    agent     mon
 		endif
 	endif
-else  # If platform is 'vmw', all steps can be automated 
-	# Create the agent based config files and the matching VMs
-	vmware_conf_dep = vmware.conf  # Add this dependency
-	TARGET_DEPENDENCIES = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up .install-complete
-	# Bootstrap: same chain as install up to agents up, then monitor bootstrap (no .install-complete)
-	BOOTSTRAP_PRE_DEPS = check ../aba.conf iso .autopoweroff .autoupload .autorefresh .auto-agent-up
 endif
 
 .PHONY: install
@@ -87,6 +84,10 @@ vmware.conf: .init ## Use VMware vCenter or ESXi to create cluster.
 	@make -sC .. vmw
 	@[ -f ../vmware.conf ] && [ ! -f vmware.conf ] && ln -s ../vmware.conf && echo [ABA] vmware.conf initialized || true
 
+kvm.conf: .init ## Use KVM/libvirt to create cluster.
+	@make -sC .. kvm
+	@[ -f ../kvm.conf ] && [ ! -f kvm.conf ] && ln -s ../kvm.conf && echo [ABA] kvm.conf initialized || true
+
 cluster.conf: .init mirror.conf  ## Initialize the OpenShift cluster.conf file.
 	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) starting_ip=$(starting_ip) int_connection=$(int_connection) num_masters=$(num_masters) num_workers=$(num_workers) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip) ports=$(ports) vlan=$(vlan) ssh_key_file=$(ssh_key_file)
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
@@ -97,7 +98,7 @@ cluster.conf: .init mirror.conf  ## Initialize the OpenShift cluster.conf file.
 agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to only generate the agent config files, so they can be edited. 
 
 # Note that install-config.yaml can be configured with vSphere params (need 'vmware.conf')
-install-config.yaml: .init $(vmware_conf_dep) cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
+install-config.yaml: .init $(hv_conf_dep) cluster.conf mirror.conf  ## Create the agent-based config file based on the cluster.conf file.
 	$(SCRIPTS)/cli-install-all.sh --wait
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh
@@ -154,16 +155,15 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	@exit 0
 
 .autopoweroff: iso-agent-based/agent.$(arch).iso
-	$(SCRIPTS)/vmw-kill.sh || true 
+	$(SCRIPTS)/$(HV_PREFIX)-kill.sh || true
 	@touch .autopoweroff
 
-.autoupload: $(vmware_conf_dep) .autopoweroff
-	$(SCRIPTS)/vmw-upload.sh
+.autoupload: $(hv_conf_dep) .autopoweroff
+	$(SCRIPTS)/$(HV_PREFIX)-upload.sh
 	@touch .autoupload
 
-# This target should only run once depending on .init .autoupload & vmware.conf
-.autorefresh: .init .autoupload $(vmware_conf_dep)
-	$(SCRIPTS)/vmw-refresh.sh
+.autorefresh: .init .autoupload $(hv_conf_dep)
+	$(SCRIPTS)/$(HV_PREFIX)-refresh.sh
 	@touch .autorefresh
 
 
@@ -193,13 +193,14 @@ mon:  ## Monitor for 'install complete' the agent-based installation of OpenShif
 bootstrap: .bootstrap-complete  ## Monitor for 'bootstrap complete' (runs config+ISO+VM chain first when needed).
 
 .PHONY: remove-cdrom
-remove-cdrom: vmware.conf  ## Remove the cdrom devise from all VMs.
+remove-cdrom: vmware.conf  ## Remove the cdrom devise from all VMs (VMware only).
 	$(SCRIPTS)/vmw-remove-cdrom-device.sh
 
 .PHONY: vmw
 vmw: vmware.conf ## Configure vCenter/ESXi API credentials in vmware.conf file.
-#@[ ! -s ../vmware.conf ] && rm -f ../vmware.conf || true #FIXME 
-#@make -sC .. vmw
+
+.PHONY: kvm
+kvm: kvm.conf ## Configure KVM/libvirt connection in kvm.conf file.
 
 .PHONY: noask
 noask:  ## Set 'ask' in aba.conf to 'false'.  Aba will assume all defaults and not prompt you for anything (allows for fully automated installations on vmw).
@@ -219,6 +220,7 @@ clean: ## Clean up files generated by 'aba', except your own configuration files
 	rm -f mirror.conf
 	@[ -L regcreds ] && rm regcreds || true
 	@[ -L vmware.conf ] && rm vmware.conf || true
+	@[ -L kvm.conf ] && rm kvm.conf || true
 	@[ -L aba.conf ] && rm aba.conf  || true
 	rm -f scripts templates
 	rm -f openshift-install-*-*  # Remove any openshift-install binary that was extracted from the mirror reg.
@@ -227,6 +229,6 @@ clean: ## Clean up files generated by 'aba', except your own configuration files
 reset: # Clean up all files.  Only use if you know what you're doing! Only used to re-distribute the repository.
 	@[ -x $(SCRIPTS)/reset-gate.sh ] && $(SCRIPTS)/reset-gate.sh $(force) || true
 	@make clean
-	rm -f cluster.conf mirror.conf vmware.conf
-	rm -f cluster.conf aba.conf                  vmware.conf                *.backup
+	rm -f cluster.conf mirror.conf vmware.conf kvm.conf
+	rm -f cluster.conf aba.conf                  vmware.conf kvm.conf      *.backup
 

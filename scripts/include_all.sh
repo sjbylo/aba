@@ -320,7 +320,7 @@ verify-aba-conf() {
 
 	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo $platform    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -649,6 +649,26 @@ normalize-vmware-conf()
 		echo "$vars"
 		echo export VC=1
 	fi
+}
+
+normalize-kvm-conf()
+{
+	[ ! -s kvm.conf ] && return 0
+
+	local vars
+	vars=$(cat kvm.conf | \
+		sed -E \
+			-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" | \
+		sed -e "s/^/export /g")
+	eval "$vars"
+	echo "$vars"
+
+	# Extract KVM_HOST (user@host) from LIBVIRT_URI for scp/ssh
+	local kvm_host
+	kvm_host=$(echo "$LIBVIRT_URI" | sed -E 's|^[^:]+://([^/]+)/.*|\1|')
+	echo "export KVM_HOST=$kvm_host"
 }
 
 install_rpms() {
@@ -2310,6 +2330,10 @@ ensure_openshift_install() {
 ensure_govc() {
 	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
+}
+
+ensure_virsh() {
+	install_rpms libvirt-client virt-install
 }
 
 # Ensure butane is installed in ~/bin
