@@ -122,6 +122,16 @@ listing. Tested and working for OCP 4.16-4.22 across all catalogs.
 
 ## Medium Priority
 
+### Validate `mirror_name` Points to a Valid Mirror With Credentials
+
+**Status:** Open
+**Priority:** Medium
+**Created:** 2026-03-19
+
+When `cluster.conf` sets `mirror_name=xxx`, ABA should verify early (during `verify-cluster-conf()` or at the start of `create-install-config.sh`) that `~/.aba/mirror/<mirror_name>/` exists and contains the expected credential files (`rootCA.pem`, `pull-secret-mirror.json` or `pull-secret-full.json`). Currently a wrong `mirror_name` silently generates an ISO without the correct root CA, causing `x509: certificate signed by unknown authority` errors at install time -- which is hard to diagnose.
+
+---
+
 ### oc-mirror v2 Load Failure: Replace `rm -rf mirror/data` With `aba clean` and Add FAQ
 
 **Status:** Done (2026-03-18)

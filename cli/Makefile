@@ -87,8 +87,8 @@ govc_tar_file := govc_Linux_$(govc_arch).tar.gz
 ocp_version := $(strip $(shell echo $(ocp_version)))
 platform := $(strip $(shell echo $(platform)))
 
-# Only if platform not "bm" we need govc for vmw or libvirt
-ifneq ($(platform),bm)
+# govc is only needed for VMware (not KVM or bare-metal)
+ifeq ($(platform),vmw)
 	govc_bin := govc
 	govc_tar_target := $(govc_tar_file)
 endif

@@ -651,8 +651,12 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		[ -s $1 ] && cp "$2" vmware.conf
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ -s "$2" ] && cp "$2" vmware.conf
+		shift 2
+	elif [ "$1" = "--kvm" -o "$1" = "-K" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ -s "$2" ] && cp "$2" kvm.conf
 		shift 2
 	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
