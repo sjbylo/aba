@@ -149,8 +149,19 @@ test_begin "SNO: install cluster on KVM"
 
 e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
-e2e_run -r 2 10 "Create and install SNO cluster on KVM" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step install"
+
+e2e_run -r 2 10 "Create VMs and start install" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step refresh"
+
+# KVM/QEMU default on_reboot=destroy causes VMs to shut off after image write.
+# Wait for that to happen, then restart.
+e2e_poll 1200 30 "Wait for VM to shut off after image write" \
+    "aba --dir $SNO ls | grep -qi 'shut off'"
+
+e2e_run "Restart VM after image write" "aba --dir $SNO start"
+e2e_run "Verify VM is running" "aba --dir $SNO ls | grep -i running"
+
+e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
