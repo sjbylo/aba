@@ -37,7 +37,9 @@ ask=true			# Ask for confirmation before major actions (install, delete, etc.).
 
 excl_platform=false		# Exclude platform images. Leave 'false' in most cases.
 
-verify_conf=true		# Validate syntax and values in all config files.
+verify_conf=all			# Validate config files and run network checks (DNS, NTP, IP conflicts).
+				# Set to 'conf' to validate config files only (skip network checks).
+				# Set to 'off' to skip all validation.
 
 #oc_mirror_version=v2            # Use version 2 of oc-mirror (v1 is deprecated and unsupported).
 				# Key v2 notes (as of Feb 2025):

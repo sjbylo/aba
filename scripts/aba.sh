@@ -23,7 +23,7 @@
 ABA_VERSION=20260319095243
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260319101132
+ABA_BUILD=20260319104941
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -625,6 +625,13 @@ elif [ "$1" = "--light" ]; then
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 			replace-value-conf -n ops -v $ops_list -f $ABA_ROOT/aba.conf
 		fi
+	elif [ "$1" = "--verify" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		case "$2" in
+			all|conf|off) replace-value-conf -n verify_conf -v "$2" -f $ABA_ROOT/aba.conf ;;
+			*) aba_abort "invalid verify_conf value '$2' (use: all, conf, off)" ;;
+		esac
+		shift 2
 	elif [ "$1" = "--excl-platform" ]; then
 		if [ "$2" = "false" ]; then
 			replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf

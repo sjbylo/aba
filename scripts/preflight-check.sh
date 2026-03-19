@@ -191,14 +191,18 @@ preflight_check_ip_conflicts() {
 }
 
 # Run all platform-agnostic checks
-preflight_check_dns
-preflight_check_ntp
-preflight_check_ip_conflicts
+if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
+	aba_info "verify_conf=$verify_conf: skipping network checks (DNS, NTP, IP conflicts)"
+else
+	preflight_check_dns
+	preflight_check_ntp
+	preflight_check_ip_conflicts
 
-# Hook for platform-specific extensions (IICCCN-55)
-if [ "$platform" = "vmw" ] && [ -f scripts/preflight-check-vsphere.sh ]; then
-	source scripts/preflight-check-vsphere.sh
-	preflight_check_vsphere
+	# Hook for platform-specific extensions (IICCCN-55)
+	if [ "$platform" = "vmw" ] && [ -f scripts/preflight-check-vsphere.sh ]; then
+		source scripts/preflight-check-vsphere.sh
+		preflight_check_vsphere
+	fi
 fi
 
 # Summary

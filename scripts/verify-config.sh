@@ -42,6 +42,20 @@ fi
 
 aba_info "Worker count: $num_workers is valid"
 
+# When verify_conf=conf, skip all DNS/network checks but warn if VIPs are missing
+if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
+	if [ ! "$SNO" ]; then
+		[ ! "$api_vip" ] && \
+			aba_warning "api_vip is not set in cluster.conf (network checks skipped, cannot auto-detect from DNS)"
+		[ ! "$ingress_vip" ] && \
+			aba_warning "ingress_vip is not set in cluster.conf (network checks skipped, cannot auto-detect from DNS)"
+	fi
+	aba_info_ok "Configuration validation passed (network checks skipped, verify_conf=$verify_conf)"
+	exit 0
+fi
+
+# --- Below runs only when verify_conf=all ---
+
 actual_ip_of_api=$(dig +time=8 +short $cl_api_domain)
 actual_ip_of_ingress=$(dig +time=8 +short $RANDOM.apps.$cl_domain)   # Use $RANDOM to avoid DNS cache issue
 

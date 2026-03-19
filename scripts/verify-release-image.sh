@@ -29,6 +29,11 @@ if [ "$ocp_version" != "$release_ver" ]; then
 		"Please run 'aba -d cli clean install' to refresh the CLIs and try again." 
 fi
 
+# When verify_conf != all, skip registry network checks (skopeo + extract)
+if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
+	aba_warning "verify_conf=$verify_conf: skipping release image verification in registry"
+	exit 0
+fi
 
 #[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 

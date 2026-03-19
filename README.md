@@ -555,6 +555,31 @@ IP conflict detection uses `arping` (ARP, Layer 2) when available — this canno
 - **Warnings** (e.g. one DNS server down) are reported but do not block installation.
 - **Errors** (e.g. all DNS servers down, or IP conflicts) cause the pre-flight to abort before ISO generation.
 
+ABA also validates DNS records for the API and Apps ingress endpoints and verifies the release image exists in the mirror registry.
+
+#### Controlling validation with `verify_conf`
+
+If the bastion is on a different network than the cluster nodes (e.g. connected side of an air-gapped setup), network checks will fail.
+Use `verify_conf` in `aba.conf` to control which checks run:
+
+| Value | Config validation | Network checks (DNS, NTP, IP conflicts, registry) |
+| :---- | :---------------- | :------------------------------------------------- |
+| `all` (default) | Yes | Yes |
+| `conf` | Yes | Skipped with warning |
+| `off` | Skipped | Skipped |
+
+Set it via the CLI:
+```
+aba --verify conf    # Validate config files only, skip network checks
+aba --verify off     # Skip all validation
+aba --verify all     # Full validation (default)
+```
+
+Or edit `aba.conf` directly:
+```
+verify_conf=conf
+```
+
 To see detailed output, run in debug mode:
 ```
 aba -D iso
@@ -1593,6 +1618,27 @@ clean` before switching.
 
 [Back to top](#who-should-use-aba)
 
+## Q: My bastion is on a different network than the cluster nodes. Pre-flight checks fail — what can I do?
+
+When the bastion (where ABA runs) cannot reach the cluster network, DNS, NTP, and IP conflict checks will fail.
+Set `verify_conf=conf` to validate only your configuration files and skip all network-dependent checks:
+
+```
+aba --verify conf
+```
+
+Or edit `aba.conf` directly:
+```
+verify_conf=conf
+```
+
+This skips DNS reachability, NTP reachability, IP conflict detection, DNS record validation for API/Apps ingress endpoints, and the release image check in the mirror registry.
+Configuration file validation (syntax, required fields, value ranges) still runs normally.
+
+See the [Controlling validation with verify_conf](#controlling-validation-with-verify_conf) section for details.
+
+[Back to top](#who-should-use-aba)
+
 ## Q: Is there a discussion forum?
 
 Post to our [GitHub Discussions Forum](https://github.com/sjbylo/aba/discussions).
@@ -1639,11 +1685,9 @@ cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys    # Append publ
 
 ## Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?
 
-ABA's main focus is to help you generate an initial oc-mirror image-set configuration to get an OpenShift cluster installed quickly, focusing on day-zero requirements such as release and operator images.
+ABA helps you jumpstart OpenShift installations by quickly generating day-zero image-set configurations for release and operator images.
 
-Although ABA can be used to manage the full lifecycle of your mirror registry, there are other tools intended to fully manage the lifecycle of image-config.yaml.
-For ongoing updates and long-term maintenance, you could try the oc-mirror Web App:
-
+While ABA handles initial mirroring well, other tools are better suited for long-term maintenance. For ongoing updates and full lifecycle management of your image-set-config.yaml, try the oc-mirror Web App.
 
 👉 https://github.com/yakovbeder/oc-mirror-web-app/
 

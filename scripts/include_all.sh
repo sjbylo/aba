@@ -296,19 +296,21 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
-			-e "s/verify_conf=0\b/verify_conf=/g" -e "s/verify_conf=false/verify_conf=/g" \
-			-e "s/verify_conf=1\b/verify_conf=true/g" \
+			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
+			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g";
 
 			#-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
+	echo 'export verify_conf=${verify_conf:-all}'  # Default undefined/empty to "all"
+
 	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
 }
 
 verify-aba-conf() {
-	[ ! "$verify_conf" ] && return 0
+	[ "$verify_conf" = "off" ] && return 0
 	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
 	[ ! -s aba.conf ] && return 0
 
@@ -395,7 +397,7 @@ normalize-mirror-conf()
 				#-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 
 verify-mirror-conf() {
-	[ ! "$verify_conf" ] && return 0
+	[ "$verify_conf" = "off" ] && return 0
 	# If the file exists and is empty?
 	#[ -f mirror.conf -a ! -s mirror.conf ] && echo_red "$PWD/mirror.conf file is empty!" && return 1  # Causes error when installing cluster directly form internet
 	[ ! -s mirror.conf ] && return 0
@@ -510,7 +512,7 @@ cidr_host_count() {
 }
 
 verify-cluster-conf() {
-	[ ! "$verify_conf" ] && return 0
+	[ "$verify_conf" = "off" ] && return 0
 	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
