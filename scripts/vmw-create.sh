@@ -64,9 +64,15 @@ worker_nested_hv=true
 num_ports_per_node=$PORTS_PER_NODE
 max_ports_per_node=$(( num_ports_per_node - 1 ))
 
-# Check if install is on vSphere and add memory, if needed,
-# due to this 'out of disk space' issue: https://issues.redhat.com/browse/OCPBUGS-62790
-[ "$GOVC_URL" ] && [ "$master_mem" -le 16 ] && master_mem=20 && aba_warning "Setting master memory to 20GB due to this bootstrap issue: https://issues.redhat.com/browse/OCPBUGS-62790" 
+# On vSphere, agent-based installs with <=16GB master RAM can fail during
+# bootstrap with "no space left on device" (OCPBUGS-62790, Red Hat KCS 7133039).
+if [ "$GOVC_URL" ] && [ "$master_mem" -le 16 ]; then
+	if ask "Increase master memory from ${master_mem}GB to 20GB to avoid bootstrap disk-space issue (OCPBUGS-62790)"; then
+		master_mem=20
+	else
+		aba_warning "Keeping master memory at ${master_mem}GB -- bootstrap may fail with 'no space left on device'"
+	fi
+fi
 aba_debug master_mem=$master_mem
 
 # Common VM creation function
