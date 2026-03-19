@@ -37,19 +37,22 @@ fi
 
 #[ ! "$tls_verify" ] && tls_verify_opts="--tls-verify=false"
 
-# Check twice for the image (skopeo sometimes fails when it shouldn't!)
-aba_debug Running: skopeo inspect docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha
-if ! skopeo inspect                  docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha >/dev/null; then
-	sleep 10
-	if ! skopeo inspect                  docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha >/dev/null; then
+_release_url="docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
 
+# Check twice for the image (skopeo sometimes fails when it shouldn't!)
+aba_debug "Running: skopeo inspect $_release_url"
+if ! skopeo inspect "$_release_url" >/dev/null 2>&1; then
+	sleep 10
+	_skopeo_err=$(skopeo inspect "$_release_url" 2>&1 >/dev/null) || {
 		aba_abort \
-			"The expected release image for OpenShift v$release_ver was not found in your registry at $reg_host:$reg_port$reg_path." \
-			"Did you complete running a 'sync' or 'save & load' operation to copy the images into your registry?" \
-			"Be sure that the images in your registry match the version of the 'openshift-install' CLI (currently version $release_ver)" \
-			"Do you have the correct image versions in your registry?" \
-			"Failed to access the release image: docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha" 
-	fi
+			"Cannot access the release image for OpenShift v$release_ver in your registry." \
+			"Image: $_release_url" \
+			"${_skopeo_err:+skopeo: $_skopeo_err}" \
+			"Possible causes:" \
+			"- Registry credentials are missing or expired (run: aba -d mirror verify)" \
+			"- Images have not been mirrored yet (run: aba sync or aba save/load)" \
+			"- OpenShift version mismatch between aba.conf (v$ocp_version) and mirrored images"
+	}
 fi
 
 # Extract openshift-install binary from the mirror, if not already.  Use this binary to install OpenShift. 
