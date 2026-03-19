@@ -251,6 +251,8 @@ find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/n
 # Cleanup temp dir and container image
 rm -rf "$tmp_dir"
 podman rmi "$catalog_url" >/dev/null 2>&1 || true
+# Podman leaves render-registry-* and render-unpack-* dirs in /tmp if interrupted
+find /tmp -maxdepth 1 \( -name 'render-registry-*' -o -name 'render-unpack-*' \) -user "$(id -un)" -mmin +60 -exec rm -rf {} + 2>/dev/null || true
 
 # Validate output
 if [ ! -s "$index_file" ]; then
