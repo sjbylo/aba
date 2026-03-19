@@ -273,6 +273,12 @@ show_error() {
 # If no first argument is provided, set a trap for errors
 [ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
+vm_name() {
+	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
+	local cluster=$1 host=$2
+	[ "${CP_REPLICAS:-${num_masters:-0}}" = "1" ] && [ "${WORKER_REPLICAS:-${num_workers:-0}}" = "0" ] && echo "$host" || echo "${cluster}-${host}"
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.

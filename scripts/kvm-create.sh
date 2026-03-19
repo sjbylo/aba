@@ -65,7 +65,7 @@ create_node() {
 	local i=0
 
 	for name in ${names}; do
-		local vm_name="${CLUSTER_NAME}-${name}"
+		local vm_name=$(vm_name "$CLUSTER_NAME" "$name")
 		local idx=$(( i * num_ports_per_node ))
 		local mac=${mac_array[$idx]}
 
@@ -108,6 +108,7 @@ create_node() {
 			--boot uefi \
 			--check disk_size=off \
 			--graphics none \
+			--events on_poweroff=restart \
 			$extra_cpu_args \
 			--noautoconsole
 

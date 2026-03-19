@@ -17,7 +17,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	virsh -c "$LIBVIRT_URI" dominfo "${CLUSTER_NAME}-${name}" >/dev/null 2>&1 && exit 0
+	virsh -c "$LIBVIRT_URI" dominfo "$(vm_name "$CLUSTER_NAME" "$name")" >/dev/null 2>&1 && exit 0
 done
 
 exit 1

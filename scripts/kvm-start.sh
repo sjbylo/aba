@@ -32,7 +32,7 @@ hosts="$WORKER_NAMES $CP_NAMES"
 
 if scripts/kvm-exists.sh; then
 	for name in $hosts; do
-		echo "${CLUSTER_NAME}-${name}"
+		echo "$(vm_name "$CLUSTER_NAME" "$name")"
 	done
 
 	ask "Start the above virtual machine(s)" || exit 1
@@ -41,7 +41,7 @@ else
 fi
 
 for name in $hosts; do
-	virsh -c "$LIBVIRT_URI" start "${CLUSTER_NAME}-${name}" 2>/dev/null || true
+	virsh -c "$LIBVIRT_URI" start "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
 done
 
 exit 0

@@ -23,7 +23,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 if scripts/kvm-exists.sh; then
 	if [ "$ask" ]; then
 		for name in $CP_NAMES $WORKER_NAMES; do
-			echo "${CLUSTER_NAME}-${name}"
+			echo "$(vm_name "$CLUSTER_NAME" "$name")"
 		done
 	fi
 else
@@ -33,9 +33,10 @@ fi
 ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	aba_info "Removing VM ${CLUSTER_NAME}-${name}"
-	virsh -c "$LIBVIRT_URI" destroy "${CLUSTER_NAME}-${name}" 2>/dev/null || true
-	virsh -c "$LIBVIRT_URI" undefine "${CLUSTER_NAME}-${name}" --remove-all-storage --nvram 2>/dev/null || true
+	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	aba_info "Removing VM $vm"
+	virsh -c "$LIBVIRT_URI" destroy "$vm" 2>/dev/null || true
+	virsh -c "$LIBVIRT_URI" undefine "$vm" --remove-all-storage --nvram 2>/dev/null || true
 done
 
 exit 0

@@ -19,7 +19,7 @@ fi
 
 # Exit 0 if at least one VMs exist
 for name in $CP_NAMES $WORKER_NAMES; do
-	power_state=$(govc vm.info -json ${CLUSTER_NAME}-$name | jq -r '.virtualMachines[0].runtime.powerState')
+	power_state=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")" | jq -r '.virtualMachines[0].runtime.powerState')
 	[ "$power_state" != "null" ] && exit 0
 done 
 

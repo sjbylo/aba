@@ -22,7 +22,7 @@ header="Name CPU Memory State"
 
 output=
 for name in $CP_NAMES $WORKER_NAMES; do
-	vm="${CLUSTER_NAME}-${name}"
+	vm=$(vm_name "$CLUSTER_NAME" "$name")
 	info=$(virsh -c "$LIBVIRT_URI" dominfo "$vm" 2>/dev/null) || continue
 
 	state=$(echo "$info" | awk '/^State:/ {$1=""; print substr($0,2)}')
