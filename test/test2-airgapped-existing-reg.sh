@@ -416,6 +416,7 @@ done
 mylog "Completed tests to check out agent config files for various cluster configs, e.g. bonding and vlan"
 #############
 
+test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete SNO cluster if running from previous test" "aba --dir $subdir/aba/sno delete"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Cleaning up $subdir/aba/sno" "rm -rf $subdir/aba/sno" 
 
 #### TESTING ACM + MCH 

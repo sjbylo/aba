@@ -225,6 +225,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Back up oc-mirror generated 
 
 # TRY test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Delete already loaded image set archive file to make space: '$subdir/aba/mirror/data/mirror_*.tar'" "rm -v $subdir/aba/mirror/data/mirror_*.tar" 
 
+test-cmd -i -h $reg_ssh_user@$int_bastion_hostname -m  "Delete SNO cluster if running from previous test" "aba --dir $subdir/aba/sno delete"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion" "rm -rf $subdir/aba/sno" 
 
 ### INSTALL SNO ###
