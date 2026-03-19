@@ -111,6 +111,8 @@ _cleanup_wasteful_dirs_local() {
 	rm -rf ~/bin
 	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
 	rm -rf ~/.oc-mirror ~/.cache/agent
+	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
+	rm -rf ~/tmp/*
 }
 
 # Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
