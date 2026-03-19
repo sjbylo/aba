@@ -136,18 +136,33 @@ preflight_check_ip_conflicts() {
 		fi
 
 		if [ "$ip_check_method" = "arping" ]; then
-			# arping uses ARP at Layer 2 — any host on the LAN must respond
-			arping_err=$(arping -c 1 -w 2 "$ip" 2>&1 >/dev/null) && arping_rc=0 || arping_rc=$?
+			# Auto-detect outgoing interface for this IP (arping needs -I on multi-homed hosts)
+			local iface=""
+			iface=$(ip route get "$ip" 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
+
+			if [ -z "$iface" ]; then
+				aba_debug "Could not determine interface for $ip, falling back to ping"
+				if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
+					aba_warning "IP conflict: $ip is already in use!"
+					_preflight_errors=$((_preflight_errors + 1))
+					conflicts=$((conflicts + 1))
+				else
+					aba_debug "IP $ip is available"
+				fi
+				continue
+			fi
+
+			aba_debug "Using interface $iface for arping $ip"
+			arping_err=$(arping -c 1 -w 2 -I "$iface" "$ip" 2>&1 >/dev/null) && arping_rc=0 || arping_rc=$?
 			if [ $arping_rc -eq 0 ]; then
 				aba_warning "IP conflict: $ip is already in use!"
 				_preflight_errors=$((_preflight_errors + 1))
 				conflicts=$((conflicts + 1))
-			elif echo "$arping_err" | grep -qi "permission\|operation not permitted\|setuid\|socket\|invalid option" 2>/dev/null; then
-				# iputils-arping returns exit 1 for both "no reply" and permission errors;
-				# detect permission failures via stderr to fall back to ping
-				aba_warning "arping failed (missing permissions?), falling back to ping"
+			elif echo "$arping_err" | grep -qi "permission\|operation not permitted\|setuid\|socket\|invalid option\|device" 2>/dev/null; then
+				# arping can fail for reasons other than "no reply" (permissions, missing device);
+				# fall back to ping for this and all subsequent IPs
+				aba_warning "arping failed ($arping_err), falling back to ping"
 				ip_check_method="ping"
-				# Re-check this IP with ping
 				if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
 					aba_warning "IP conflict: $ip is already in use!"
 					_preflight_errors=$((_preflight_errors + 1))
