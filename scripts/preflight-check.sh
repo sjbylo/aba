@@ -136,7 +136,8 @@ preflight_check_ip_conflicts() {
 		fi
 
 		if [ "$ip_check_method" = "arping" ]; then
-			# Auto-detect outgoing interface for this IP (arping needs -I on multi-homed hosts)
+			# arping can't reliably auto-detect the outgoing interface on multi-homed
+			# hosts (multiple NICs/VLANs), so use 'ip route get' to determine it.
 			local iface=""
 			iface=$(ip route get "$ip" 2>/dev/null | grep -oP 'dev \K\S+' | head -1)
 
