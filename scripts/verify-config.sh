@@ -161,7 +161,10 @@ if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$';
 	_dns_warn=1
 fi
 
-[ "$_dns_warn" ] && sleep 2
+if [ "$_dns_warn" ]; then
+	aba_info "To skip network checks, run: aba --verify conf (see aba.conf)"
+	sleep 2
+fi
 
 aba_info_ok "Cluster configuration is valid"
 

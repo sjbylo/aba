@@ -207,10 +207,12 @@ fi
 
 # Summary
 if [ $_preflight_errors -gt 0 ]; then
+	aba_info "To skip network checks, run: aba --verify conf (see aba.conf)"
 	aba_abort "Pre-flight failed: $_preflight_errors error(s), $_preflight_warnings warning(s)"
 fi
 if [ $_preflight_warnings -gt 0 ]; then
 	aba_warning "Pre-flight completed with $_preflight_warnings warning(s)"
+	aba_info "To skip network checks, run: aba --verify conf (see aba.conf)"
 	sleep 2
 fi
 aba_info_ok "Pre-flight validation passed"
