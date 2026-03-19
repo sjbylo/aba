@@ -23,7 +23,7 @@
 ABA_VERSION=20260319095243
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260319125638
+ABA_BUILD=20260319152735
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -911,9 +911,8 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				ssh|run|bundle)
-					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
-					# These are now all processed once, in code below
+				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+					# These are processed directly in code below, bypassing Make
 					:
 					;;
 				*)
@@ -927,8 +926,29 @@ elif [ "$1" = "--light" ]; then
 	fi
 done
 
+# Guard for VM lifecycle targets: validate platform + hypervisor config
+_ensure_hv_ready() {
+	source <(normalize-aba-conf)
+	case "$platform" in
+		vmw) [ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first." ;;
+		kvm) [ -s kvm.conf ]    || aba_abort "kvm.conf not found. Run 'aba kvm' first." ;;
+		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
+		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
+	esac
+	[ -f agent-config.yaml ] || aba_abort "agent-config.yaml not found. Run 'aba cluster' first."
+	HV=$platform
+}
+
 if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
+
+	# Externalized targets require a cluster directory (cluster.conf present)
+	case $cur_target in
+		info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+			[ -f cluster.conf ] || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
+			;;
+	esac
+
 	case $cur_target in
 		ssh)
 			trap - ERR  # No need for this anymore
@@ -945,6 +965,90 @@ if [ "$cur_target" ]; then
 			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
 			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
 			exit 
+		;;
+		info)
+			$ABA_ROOT/scripts/cluster-info.sh
+			exit
+		;;
+		login)
+			$ABA_ROOT/scripts/show-cluster-login.sh
+			exit
+		;;
+		shell)
+			echo "export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig"
+			exit
+		;;
+		getco)
+			oc --kubeconfig iso-agent-based/auth/kubeconfig get co
+			exit
+		;;
+		day2)
+			$ABA_ROOT/scripts/day2.sh
+			exit
+		;;
+		day2-ntp)
+			$ABA_ROOT/scripts/day2-config-ntp.sh
+			exit
+		;;
+		day2-osus)
+			$ABA_ROOT/scripts/day2-config-osus.sh
+			exit
+		;;
+		shutdown)
+			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh
+			exit
+		;;
+		startup)
+			$ABA_ROOT/scripts/cluster-startup.sh
+			exit
+		;;
+		rescue)
+			$ABA_ROOT/scripts/cluster-rescue.sh
+			exit
+		;;
+		create)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start
+			exit
+		;;
+		ls)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
+			exit
+		;;
+		start)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit 0
+			exit
+		;;
+		stop)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
+			exit
+		;;
+		kill|poweroff)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-kill.sh || exit 0
+			exit
+		;;
+		delete)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-delete.sh || exit 0
+			exit
+		;;
+		refresh)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
+			exit
+		;;
+		upload)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-upload.sh
+			exit
 		;;
 	esac
 fi
