@@ -109,9 +109,11 @@ trap myexit EXIT
 if ! all_nodes_ready; then
 	aba_info "Waiting for all nodes to be 'Ready' ..."
 
-	sleep 8
+	if ! try_cmd 10 0 60 all_nodes_ready; then
+		aba_warning "Not all nodes are 'Ready' yet, but continuing ..."
+		$OC get nodes
+	fi
 fi
-##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
 aba_info_ok "All nodes are ready!"
 $OC get nodes
