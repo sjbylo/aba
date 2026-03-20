@@ -45,6 +45,13 @@ fi
 
 cluster_id=$($OC whoami --show-server | awk -F[/:] '{print $4}') || exit 1
 
+# Resolve a debug image from the release payload (available in the mirror via IDMS).
+# The default 'oc debug' image (support-tools) lives on registry.redhat.io which is
+# unreachable in disconnected environments and has no IDMS redirect.
+debug_image=$($OC adm release info --image-for=tools 2>/dev/null || true)
+debug_image_flag=
+[ "$debug_image" ] && debug_image_flag="--image=$debug_image"
+
 aba_info Cluster $cluster_id nodes:
 echo
 $OC get nodes
@@ -60,7 +67,7 @@ eval "$(scripts/cluster-config.sh)" 2>/dev/null || true
 declare -A warmup_pids=()
 for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
 do
-	timeout 30 $OC --request-timeout=30s debug --preserve-pod node/${node} -- chroot /host hostname &
+	timeout 30 $OC --request-timeout=30s debug $debug_image_flag --preserve-pod node/${node} -- chroot /host hostname &
 	warmup_pids[$node]=$!
 done >> $logfile 2>&1
 
@@ -99,8 +106,8 @@ done
 
 if [ "$warmup_failed" ]; then
 	aba_abort "Debug pod warmup failed (image pull for 'oc debug' likely failed)." \
-		"Ensure 'aba day2' has been run to configure image mirroring (IDMS/ITMS)." \
-		"This allows the cluster to pull images like 'registry.redhat.io/rhel9/support-tools' from your mirror registry."
+		"Ensure 'aba day2' has been run to configure image mirroring (IDMS/ITMS)" \
+		"and that the mirror registry is accessible from the cluster nodes."
 fi
 
 aba_info "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
@@ -132,7 +139,7 @@ oc_debug_failed=
 nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 
 for node in $nodes; do
-	if ! timeout 30 $OC debug node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1; then
+	if ! timeout 30 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h now >> $logfile 2>&1; then
 		oc_debug_failed=1
 		aba_warning "oc debug shutdown failed for $node" | tee -a $logfile
 	fi
@@ -141,7 +148,7 @@ done
 if [ "$oc_debug_failed" ]; then
 	aba_warning "Falling back to SSH for shutdown ..." | tee -a $logfile
 	for ip in $CP_IP_ADDRESSES $WKR_IP_ADDR; do
-		timeout 30 ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip 'sudo shutdown -h 1' >> $logfile 2>&1 || \
+		timeout 30 ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip 'sudo shutdown -h now' >> $logfile 2>&1 || \
 			aba_warning "SSH shutdown also failed for $ip" | tee -a $logfile
 	done
 fi
