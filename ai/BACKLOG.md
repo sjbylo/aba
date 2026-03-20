@@ -122,9 +122,120 @@ listing. Tested and working for OCP 4.16-4.22 across all catalogs.
 
 ## Medium Priority
 
+### Rename E2E Cluster Hostnames: Move `e2e` Suffix After Cluster Type
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem:**
+Current E2E cluster names use the pattern `e2e-<type><pool>` (e.g. `e2e-sno1`, `e2e-compact1`,
+`e2e-standard-vlan1`). This front-loads the `e2e` prefix, making it harder to visually scan
+cluster types. The naming should follow `<type>-e2e<pool>` instead.
+
+**Proposed renaming:**
+
+| Current | New |
+|---|---|
+| `e2e-sno1` | `sno-e2e1` |
+| `e2e-sno-mirror1` | `sno-mirror-e2e1` |
+| `e2e-sno-proxyonly1` | `sno-proxyonly-e2e1` |
+| `e2e-sno-noproxy1` | `sno-noproxy-e2e1` |
+| `e2e-compact1` | `compact-e2e1` |
+| `e2e-standard1` | `standard-e2e1` |
+| `e2e-sno-vlan1` | `sno-vlan-e2e1` |
+| `e2e-compact-vlan1` | `compact-vlan-e2e1` |
+| `e2e-standard-vlan1` | `standard-vlan-e2e1` |
+
+**Files to update:** `test/e2e/lib/config-helpers.sh` (`pool_cluster_name` and related functions),
+all suite scripts under `test/e2e/suites/`, dnsmasq DNS records on pool hosts, `test/e2e/config.env`.
+
+---
+
+### E2E Suite: Delete VMs Before `rm -rf` Cluster Directory
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+E2E test suites (e.g. `suite-kvm-lifecycle.sh`) do `rm -rf e2e-sno1` to clean up a previous
+cluster directory without first deleting the VMs on the hypervisor. This leaves orphan VMs on
+the KVM/VMware host. If someone has a shell `cd`'d into the directory, they also get an ugly
+error cascade (see separate backlog item).
+
+**Proposed fix:**
+Before `rm -rf <cluster>`, run `aba --dir <cluster> delete || true` to clean up VMs on the
+hypervisor. The `|| true` handles the case where VMs don't exist.
+
+**Where:** `test/e2e/suites/suite-kvm-lifecycle.sh` and any other suites that `rm -rf` cluster dirs.
+
+---
+
+### Graceful Error When CWD Is Deleted
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+Running any `aba` command from a directory that has been deleted (e.g. by another process doing
+`rm -rf`) produces a long cascade of errors:
+```
+shell-init: error retrieving current directory: getcwd: cannot access parent directories
+/home/steve/bin/aba: line 160: /install: No such file or directory
+/home/steve/bin/aba: line 168: /scripts/include_all.sh: No such file or directory
+/home/steve/bin/aba: line 169: aba_debug: command not found
+... (30+ lines of noise)
+```
+
+**Proposed fix:**
+Add an early guard at the top of `aba.sh` (before sourcing any scripts):
+```bash
+if ! pwd >/dev/null 2>&1; then
+    echo "[ABA] Error: current directory no longer exists. Please cd to a valid directory." >&2
+    exit 1
+fi
+```
+
+**Where:** `scripts/aba.sh` (near the top, before `source scripts/include_all.sh`)
+
+---
+
+### Fix `aba ssh` Argument Parsing: Positional Args Overwrite Target
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+Running `aba ssh hostname` (or `aba ssh 'uptime'`) fails with `make: *** No rule to make target
+'hostname'`. The argument parser in `aba.sh` treats each positional argument as a potential target,
+so `hostname` overwrites `cur_target` from `ssh` to `hostname`, which then falls through to Make.
+
+The workaround is `aba ssh --cmd 'hostname'`, but the natural syntax `aba ssh hostname` should work.
+
+**Proposed fix:**
+After setting `cur_target` to `ssh` or `run`, consume the next argument as `$cmd` rather than
+letting the loop treat it as a new target. E.g.:
+```bash
+ssh|run)
+    cur_target=$1; shift
+    cmd="${1:-}"; [ "$cmd" ] && shift
+    ;;
+```
+
+**Where:** `scripts/aba.sh` argument parsing loop (lines ~915-930)
+
+---
+
 ### SNO VM Name Duplication: `clustername-clustername`
 
-**Status:** Open
+**Status:** Done (2026-03-19)
 **Priority:** Medium
 **Created:** 2026-03-19
 
