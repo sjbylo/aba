@@ -233,7 +233,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Tidying up internal bastion
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno cluster.conf" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step cluster.conf" 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node cpu to 24 for loading mesh test app" "sed -i 's/^master_cpu=.*/master_cpu=24/g' $subdir/aba/sno/cluster.conf"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Increase node memory to 24 for loading mesh test app" "sed -i 's/^master_mem=.*/master_mem=24/g' $subdir/aba/sno/cluster.conf"
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 -s install" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir $subdir/aba cluster -n sno -t sno --starting-ip 10.0.1.201 --verify conf -s install" 
 
 test-cmd -m "Sleep 30" "read -t 30 xy||true"
 

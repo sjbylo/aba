@@ -122,6 +122,143 @@ listing. Tested and working for OCP 4.16-4.22 across all catalogs.
 
 ## Medium Priority
 
+### Rename E2E Cluster Hostnames: Move `e2e` Suffix After Cluster Type
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem:**
+Current E2E cluster names use the pattern `e2e-<type><pool>` (e.g. `e2e-sno1`, `e2e-compact1`,
+`e2e-standard-vlan1`). This front-loads the `e2e` prefix, making it harder to visually scan
+cluster types. The naming should follow `<type>-e2e<pool>` instead.
+
+**Proposed renaming:**
+
+| Current | New |
+|---|---|
+| `e2e-sno1` | `sno-e2e1` |
+| `e2e-sno-mirror1` | `sno-mirror-e2e1` |
+| `e2e-sno-proxyonly1` | `sno-proxyonly-e2e1` |
+| `e2e-sno-noproxy1` | `sno-noproxy-e2e1` |
+| `e2e-compact1` | `compact-e2e1` |
+| `e2e-standard1` | `standard-e2e1` |
+| `e2e-sno-vlan1` | `sno-vlan-e2e1` |
+| `e2e-compact-vlan1` | `compact-vlan-e2e1` |
+| `e2e-standard-vlan1` | `standard-vlan-e2e1` |
+
+**Files to update:** `test/e2e/lib/config-helpers.sh` (`pool_cluster_name` and related functions),
+all suite scripts under `test/e2e/suites/`, dnsmasq DNS records on pool hosts, `test/e2e/config.env`.
+
+---
+
+### E2E Suite: Delete VMs Before `rm -rf` Cluster Directory
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+E2E test suites (e.g. `suite-kvm-lifecycle.sh`) do `rm -rf e2e-sno1` to clean up a previous
+cluster directory without first deleting the VMs on the hypervisor. This leaves orphan VMs on
+the KVM/VMware host. If someone has a shell `cd`'d into the directory, they also get an ugly
+error cascade (see separate backlog item).
+
+**Proposed fix:**
+Before `rm -rf <cluster>`, run `aba --dir <cluster> delete || true` to clean up VMs on the
+hypervisor. The `|| true` handles the case where VMs don't exist.
+
+**Where:** `test/e2e/suites/suite-kvm-lifecycle.sh` and any other suites that `rm -rf` cluster dirs.
+
+---
+
+### Graceful Error When CWD Is Deleted
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+Running any `aba` command from a directory that has been deleted (e.g. by another process doing
+`rm -rf`) produces a long cascade of errors:
+```
+shell-init: error retrieving current directory: getcwd: cannot access parent directories
+/home/steve/bin/aba: line 160: /install: No such file or directory
+/home/steve/bin/aba: line 168: /scripts/include_all.sh: No such file or directory
+/home/steve/bin/aba: line 169: aba_debug: command not found
+... (30+ lines of noise)
+```
+
+**Proposed fix:**
+Add an early guard at the top of `aba.sh` (before sourcing any scripts):
+```bash
+if ! pwd >/dev/null 2>&1; then
+    echo "[ABA] Error: current directory no longer exists. Please cd to a valid directory." >&2
+    exit 1
+fi
+```
+
+**Where:** `scripts/aba.sh` (near the top, before `source scripts/include_all.sh`)
+
+---
+
+### Fix `aba ssh` Argument Parsing: Positional Args Overwrite Target
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+Running `aba ssh hostname` (or `aba ssh 'uptime'`) fails with `make: *** No rule to make target
+'hostname'`. The argument parser in `aba.sh` treats each positional argument as a potential target,
+so `hostname` overwrites `cur_target` from `ssh` to `hostname`, which then falls through to Make.
+
+The workaround is `aba ssh --cmd 'hostname'`, but the natural syntax `aba ssh hostname` should work.
+
+**Proposed fix:**
+After setting `cur_target` to `ssh` or `run`, consume the next argument as `$cmd` rather than
+letting the loop treat it as a new target. E.g.:
+```bash
+ssh|run)
+    cur_target=$1; shift
+    cmd="${1:-}"; [ "$cmd" ] && shift
+    ;;
+```
+
+**Where:** `scripts/aba.sh` argument parsing loop (lines ~915-930)
+
+---
+
+### SNO VM Name Duplication: `clustername-clustername`
+
+**Status:** Done (2026-03-19)
+**Priority:** Medium
+**Created:** 2026-03-19
+
+For SNO clusters, the agent-config template (`templates/agent-config.yaml.j2` line 25) sets the hostname to `{{ cluster_name }}`. The VM creation scripts (`kvm-create.sh`, `vmw-create.sh`) then construct the VM name as `${CLUSTER_NAME}-${hostname}`, producing `e2e-sno1-e2e-sno1`.
+
+For multi-node clusters this works fine (`mycluster-master1`), but for SNO the name is redundantly doubled. The VM name should just be `e2e-sno1`.
+
+**Fix:** Add a `vm_name()` helper function to `include_all.sh` that encapsulates the naming convention. When hostname equals cluster name (SNO), return just the hostname; otherwise return `${cluster}-${host}`. Replace all hardcoded `"${CLUSTER_NAME}-${name}"` occurrences in `kvm-*.sh` and `vmw-*.sh` scripts with `$(vm_name "$CLUSTER_NAME" "$name")`.
+
+**Files to update:** `scripts/include_all.sh` (add helper), then all lifecycle scripts: `kvm-create.sh`, `kvm-ls.sh`, `kvm-start.sh`, `kvm-stop.sh`, `kvm-kill.sh`, `kvm-delete.sh`, `kvm-exists.sh`, `kvm-on.sh`, and their `vmw-` counterparts.
+
+---
+
+### Validate `mirror_name` Points to a Valid Mirror With Credentials
+
+**Status:** Open
+**Priority:** Medium
+**Created:** 2026-03-19
+
+When `cluster.conf` sets `mirror_name=xxx`, ABA should verify early (during `verify-cluster-conf()` or at the start of `create-install-config.sh`) that `~/.aba/mirror/<mirror_name>/` exists and contains the expected credential files (`rootCA.pem`, `pull-secret-mirror.json` or `pull-secret-full.json`). Currently a wrong `mirror_name` silently generates an ISO without the correct root CA, causing `x509: certificate signed by unknown authority` errors at install time -- which is hard to diagnose.
+
+---
+
 ### oc-mirror v2 Load Failure: Replace `rm -rf mirror/data` With `aba clean` and Add FAQ
 
 **Status:** Done (2026-03-18)
