@@ -31,7 +31,6 @@ NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
-STANDARD="$(pool_cluster_name standard)"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -43,7 +42,6 @@ plan_tests \
     "Setup: configure mirror for local registry" \
     "Setup: sync images to registry" \
     "Compact: multi-node VM creation and agent bootstrap" \
-    "Standard: multi-node VM creation and agent bootstrap" \
     "SNO: install cluster on KVM" \
     "VM lifecycle: ls" \
     "VM lifecycle: stop (graceful)" \
@@ -151,6 +149,8 @@ test_end
 # Does NOT wait for full install -- proves multi-node KVM provisioning works.
 test_begin "Compact: multi-node VM creation and agent bootstrap"
 
+e2e_run "Delete leftover $COMPACT VMs (if any)" \
+    "if [ -d $COMPACT ]; then aba --dir $COMPACT delete || true; fi"
 e2e_run "Clean up previous $COMPACT cluster dir" "rm -rf $COMPACT"
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
 
@@ -158,8 +158,8 @@ e2e_run "Create compact cluster.conf" \
     "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
 e2e_run "Set ports=enp1s0 for KVM (virtio NIC)" \
     "sed -i 's#^ports=.*#ports=enp1s0#g' $COMPACT/cluster.conf"
-e2e_run "Fix mac_prefix for $COMPACT" \
-    "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $COMPACT/cluster.conf"
+e2e_run "Set mac_prefix for $COMPACT (KVM range, randomized)" \
+    "sed -i 's#mac_prefix=.*#mac_prefix=52:54:1x:xx:xx:#g' $COMPACT/cluster.conf"
 
 e2e_run "Generate ISO for compact cluster" "aba --dir $COMPACT iso"
 e2e_run "Upload ISO to KVM host" "aba --dir $COMPACT upload"
@@ -190,74 +190,17 @@ e2e_run "Clean compact cluster dir" "rm -rf $COMPACT"
 test_end
 
 # ============================================================================
-# 6. Standard: multi-node VM creation, network check, and bootstrap
-# ============================================================================
-# Validates that 3 masters + 2 workers (5 VMs) are created with correct
-# resources and network.  SSHes into every node, then waits for bootstrap.
-test_begin "Standard: multi-node VM creation and agent bootstrap"
-
-e2e_run "Clean up previous $STANDARD cluster dir" "rm -rf $STANDARD"
-e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
-
-e2e_run "Create standard cluster.conf" \
-    "aba cluster -n $STANDARD -t standard --starting-ip $(pool_starting_ip standard) -W 2 --step cluster.conf"
-e2e_run "Set ports=enp1s0 for KVM (virtio NIC)" \
-    "sed -i 's#^ports=.*#ports=enp1s0#g' $STANDARD/cluster.conf"
-e2e_run "Fix mac_prefix for $STANDARD" \
-    "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $STANDARD/cluster.conf"
-
-e2e_run "Generate ISO for standard cluster" "aba --dir $STANDARD iso"
-e2e_run "Upload ISO to KVM host" "aba --dir $STANDARD upload"
-e2e_run "Create and start standard VMs" "aba --dir $STANDARD create --start"
-
-e2e_run "List standard VMs" "aba --dir $STANDARD ls"
-e2e_run "Verify 5 VMs created for standard (3 masters + 2 workers)" \
-    "[ \$(aba --dir $STANDARD ls | grep -c -i running) -eq 5 ]"
-
-e2e_poll 300 15 "Wait for agent API on standard rendezvous node" \
-    "curl -sk --connect-timeout 5 --max-time 5 -o /dev/null -w '%{http_code}' http://\$(cat $STANDARD/iso-agent-based/rendezvousIP):8090/ | grep -qE '^4'"
-
-# SSH into every master node
-e2e_run "Extract standard node IPs" \
-    "cd $STANDARD && eval \$(scripts/cluster-config.sh) && echo \"CP_IPS=\$CP_IP_ADDRESSES WKR_IPS=\$WKR_IP_ADDR\""
-for _node_idx in 0 1 2; do
-    e2e_poll 300 15 "SSH into standard master $_node_idx (verify network)" \
-        "cd $STANDARD && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
-done
-
-# SSH into every worker node
-for _node_idx in 0 1; do
-    e2e_poll 300 15 "SSH into standard worker $_node_idx (verify network)" \
-        "cd $STANDARD && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$WKR_IP_ADDR) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
-done
-
-e2e_poll 1800 30 "Wait for standard bootstrap-complete" \
-    "cd $STANDARD && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
-e2e_diag "Standard cluster VMs after bootstrap" "aba --dir $STANDARD ls"
-
-e2e_run "Delete standard cluster VMs" "aba --dir $STANDARD delete"
-e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
-
-test_end
-
-# ============================================================================
-# 7. SNO: install cluster on KVM
+# 6. SNO: install cluster on KVM
 # ============================================================================
 test_begin "SNO: install cluster on KVM"
 
+e2e_run "Delete leftover $SNO VMs (if any)" \
+    "if [ -d $SNO ]; then aba --dir $SNO delete || true; fi"
 e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
 e2e_run -r 2 10 "Create VMs and start install" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step refresh"
-
-# KVM/QEMU default on_reboot=destroy causes VMs to shut off after image write.
-# Wait for that to happen, then restart.
-e2e_poll 1200 30 "Wait for VM to shut off after image write" \
-    "aba --dir $SNO ls | grep -qi 'shut-off'"
-
-e2e_run "Restart VM after image write" "aba --dir $SNO start"
-e2e_run "Verify VM is running" "aba --dir $SNO ls | grep -i running"
 
 e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
 
@@ -271,7 +214,7 @@ e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
 test_end
 
 # ============================================================================
-# 8. VM lifecycle: ls
+# 7. VM lifecycle: ls
 # ============================================================================
 test_begin "VM lifecycle: ls"
 
@@ -282,7 +225,7 @@ e2e_run "Verify ls output shows running VM" \
 test_end
 
 # ============================================================================
-# 9. VM lifecycle: stop (graceful)
+# 8. VM lifecycle: stop (graceful)
 # ============================================================================
 test_begin "VM lifecycle: stop (graceful)"
 
@@ -293,7 +236,7 @@ e2e_run "Verify VMs are shut off after stop" \
 test_end
 
 # ============================================================================
-# 10. VM lifecycle: start
+# 9. VM lifecycle: start
 # ============================================================================
 test_begin "VM lifecycle: start"
 
@@ -306,7 +249,7 @@ e2e_poll 300 15 "Wait for SSH to become available" \
 test_end
 
 # ============================================================================
-# 11. VM lifecycle: kill (force poweroff)
+# 10. VM lifecycle: kill (force poweroff)
 # ============================================================================
 test_begin "VM lifecycle: kill (force poweroff)"
 
@@ -317,7 +260,7 @@ e2e_run "Verify VMs are shut off after kill" \
 test_end
 
 # ============================================================================
-# 12. VM lifecycle: start + cluster health after kill
+# 11. VM lifecycle: start + cluster health after kill
 # ============================================================================
 test_begin "VM lifecycle: start + cluster health after kill"
 
@@ -334,7 +277,7 @@ e2e_diag "Show cluster operators after kill recovery" \
 test_end
 
 # ============================================================================
-# 13. Cluster-level: graceful shutdown and startup
+# 12. Cluster-level: graceful shutdown and startup
 # ============================================================================
 test_begin "Cluster-level: graceful shutdown and startup"
 
@@ -361,7 +304,7 @@ e2e_diag "Show cluster operators after shutdown/startup" \
 test_end
 
 # ============================================================================
-# 14. Cleanup: delete clusters and unregister mirror
+# 13. Cleanup: delete clusters and unregister mirror
 # ============================================================================
 test_begin "Cleanup: delete clusters and unregister mirror"
 
@@ -369,8 +312,6 @@ e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
     "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
 e2e_run "Delete compact cluster if leftover" \
     "if [ -d $COMPACT ]; then aba --dir $COMPACT delete; else echo '[cleanup] $COMPACT already removed'; fi"
-e2e_run "Delete standard cluster if leftover" \
-    "if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

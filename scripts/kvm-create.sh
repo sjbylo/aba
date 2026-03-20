@@ -95,6 +95,8 @@ create_node() {
 			aba_info "Adding network interface [$((cnt + 1))/${num_ports_per_node}] with mac address: $sub_mac"
 		done
 
+		# --disk device=cdrom (not --cdrom) so --events on_reboot=restart is honoured.
+		# --cdrom silently forces on_reboot=destroy on QEMU 9.1+/libvirt 10.10+.
 		virt-install \
 			--connect "$LIBVIRT_URI" \
 			--name "$vm_name" \
@@ -102,10 +104,11 @@ create_node() {
 			--vcpus "$cpu_count" \
 			--disk "path=${disk_path},size=120,format=qcow2,bus=virtio" \
 			$extra_disk_args \
-			--cdrom "$iso_path" \
+			--disk "$iso_path",device=cdrom \
 			$net_args \
 			--os-variant rhel9-unknown \
-			--boot uefi \
+			--boot uefi,hd,cdrom \
+			--events on_reboot=restart \
 			--check disk_size=off \
 			--graphics vnc,listen=0.0.0.0 --video virtio \
 			$extra_cpu_args \

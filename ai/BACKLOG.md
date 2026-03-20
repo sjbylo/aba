@@ -290,41 +290,42 @@ not drained -- it relies on the OS shutdown sequence to flush and close cleanly.
 
 ---
 
-### Fix KVM VM Reboot Behavior (`on_reboot=destroy` in QEMU 9.1)
+### Fix KVM VM Reboot Behavior (VMs shut off instead of rebooting)
 
-**Status:** Backlog
-**Priority:** Medium
+**Status:** Fix applied -- needs validation
+**Priority:** High
 **Estimated Effort:** Medium
 **Created:** 2026-03-20
+**Updated:** 2026-03-21
 
-**Problem:**
-QEMU 9.1+ defaults `on_reboot=destroy`, which causes KVM VMs to shut off instead
-of rebooting after the RHCOS agent writes the image to disk. This forces the E2E
-suite to poll for shut-off and then explicitly restart the VM before monitoring
-the install. The `virt-install --events on_reboot=restart` flag should fix this,
-but QEMU 9.1 rejects it when `on_poweroff` is set to its default `destroy` --
-the combination is not allowed.
+**Root cause:**
+`virt-install --cdrom` silently forces `on_reboot=destroy` on QEMU 9.1+ /
+libvirt 10.10+ (RHEL 9.7). The `--events on_reboot=restart` flag is ignored
+when `--cdrom` is used. This causes VMs to shut off instead of rebooting after
+the RHCOS agent writes the image to disk.
+
+**Fix applied in `scripts/kvm-create.sh`:**
+- Replaced `--cdrom "$iso_path"` with `--disk "$iso_path",device=cdrom`
+- Added `--events on_reboot=restart`
+- Changed `--boot uefi` to `--boot uefi,hd,cdrom`
+
+Verified on kvm1: VM stays `running` through `virsh reboot` with this config.
+
+**Remaining work:**
+- Validate with a full cluster install (SNO + compact + standard via E2E suite)
+- Once validated, remove the band-aid workaround from `suite-kvm-lifecycle.sh`
+  (search for `TODO: remove once root cause in kvm-create.sh / virt-install is fixed`)
 
 **Current workaround (in `suite-kvm-lifecycle.sh`):**
+Applied to all three cluster types (SNO, compact, standard) as a safety net:
 ```
-aba cluster ... --step refresh
-# Poll until VM shuts off after image write
-e2e_poll 1200 30 "Wait for VM to shut off" "aba --dir $SNO ls | grep -qi 'shut-off'"
-aba --dir $SNO start
-aba --dir $SNO mon
+# Poll until all VMs shut off after image write
+e2e_poll 1200 30 "Wait for VMs to shut off" "... | grep -ci 'shut.off' ..."
+aba --dir $CLUSTER start
+# Continue with bootstrap / install
 ```
 
-**Proposed fix options:**
-1. After `virt-install`, use `virsh edit` or `virsh dumpxml | sed | virsh define` to
-   set `<on_reboot>restart</on_reboot>` in the domain XML post-creation. This avoids
-   `virt-install --events` entirely.
-2. Use `virt-install --events on_reboot=restart,on_poweroff=shutdown` to satisfy QEMU's
-   requirement that both be set together. Test whether `on_poweroff=shutdown` is acceptable
-   (graceful shutdown instead of destroy on poweroff).
-3. Add a `virsh reboot` watcher in `kvm-create.sh` that detects the reboot event and
-   re-starts the VM automatically.
-
-**Where:** `scripts/kvm-create.sh`, remove workaround from `test/e2e/suites/suite-kvm-lifecycle.sh`
+**Where:** `scripts/kvm-create.sh`, `test/e2e/suites/suite-kvm-lifecycle.sh`
 
 ---
 

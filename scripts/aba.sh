@@ -23,7 +23,7 @@
 ABA_VERSION=20260319095243
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260320154347
+ABA_BUILD=20260320221701
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1014,6 +1014,10 @@ if [ "$cur_target" ]; then
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
 			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start
+			# Sync Make stamp files: VMs exist, so all prior steps (poweroff, upload,
+			# refresh) are logically complete. Without these, a subsequent 'aba bootstrap'
+			# or 'aba install' would re-run the entire chain and destroy the running VMs.
+			touch .autopoweroff .autoupload .autorefresh
 			exit
 		;;
 		ls)
@@ -1041,17 +1045,24 @@ if [ "$cur_target" ]; then
 		delete)
 			_ensure_hv_ready
 			$ABA_ROOT/scripts/${HV}-delete.sh || exit 0
+			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
+			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
 			exit
 		;;
 		refresh)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
 			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
+			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
+			# are logically complete.
+			touch .autopoweroff .autoupload .autorefresh
 			exit
 		;;
 		upload)
 			_ensure_hv_ready
 			$ABA_ROOT/scripts/${HV}-upload.sh
+			# Sync Make stamp files: upload implies poweroff already happened.
+			touch .autopoweroff .autoupload
 			exit
 		;;
 	esac
