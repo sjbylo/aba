@@ -24,6 +24,7 @@ alwaysApply: true
 ## Git workflow
 
 - Work on the `dev` branch
+- When multiple branches exist, ALWAYS clarify which branch to commit to BEFORE committing. Ask: "This should go on `dev` or `feature/xxx`?" Do NOT assume.
 - Default: commit AND push together (unless told otherwise)
 - Default: AI decides how to batch commits -- group by logical scope (e.g. core / test / docs) unless user specifies otherwise
 - **NEVER commit code changes without testing first!** If there is no automated test covering the change, ask the user to verify manually before committing. Docs-only changes are exempt.

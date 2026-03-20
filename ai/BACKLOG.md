@@ -174,6 +174,53 @@ hypervisor. The `|| true` handles the case where VMs don't exist.
 
 ---
 
+### E2E Suite: Consolidate Complex Test Assertions Into Helper Functions
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small-Medium
+**Created:** 2026-03-20
+
+**Problem:**
+E2E test suites contain long, complex inline shell commands for assertions -- especially the
+operator health check pattern:
+```bash
+e2e_poll 600 30 "Wait for all operators fully available" \
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+```
+These are hard to read, error-prone to escape correctly, and duplicated across multiple tests
+and suites. The complex quoting (nested `\$`, `\"`, single quotes inside double quotes) makes
+them fragile to edit.
+
+**Proposed fix:**
+Create helper functions in `test/e2e/lib/framework.sh` (or a new `test/e2e/lib/assertions.sh`):
+```bash
+e2e_wait_operators_healthy() {
+    local dir=$1 timeout=${2:-600} interval=${3:-30}
+    e2e_poll "$timeout" "$interval" "Wait for all operators fully available" \
+        "e2e_assert_operators_healthy $dir"
+}
+
+e2e_assert_operators_healthy() {
+    local dir=$1
+    local lines
+    lines=$(aba --dir "$dir" run | tail -n +2 | awk 'NR>1{print $3,$4,$5}')
+    [ -n "$lines" ] && echo "$lines" | grep -v '^True False False$' | wc -l | grep -q ^0$
+}
+
+e2e_wait_api_ready() {
+    local dir=$1 timeout=${2:-300} interval=${3:-15}
+    e2e_poll "$timeout" "$interval" "Wait for cluster API to become reachable" \
+        "aba --dir $dir run --cmd 'oc get nodes' 2>&1 | grep -q Ready"
+}
+```
+Then suite tests become one-liners: `e2e_wait_operators_healthy "$SNO"`.
+
+**Where:** `test/e2e/lib/framework.sh` or new `test/e2e/lib/assertions.sh`,
+then refactor all suites that use operator health checks.
+
+---
+
 ### Graceful Error When CWD Is Deleted
 
 **Status:** Backlog
@@ -202,34 +249,6 @@ fi
 ```
 
 **Where:** `scripts/aba.sh` (near the top, before `source scripts/include_all.sh`)
-
----
-
-### Fix `aba ssh` Argument Parsing: Positional Args Overwrite Target
-
-**Status:** Backlog
-**Priority:** Medium
-**Estimated Effort:** Small
-**Created:** 2026-03-20
-
-**Problem:**
-Running `aba ssh hostname` (or `aba ssh 'uptime'`) fails with `make: *** No rule to make target
-'hostname'`. The argument parser in `aba.sh` treats each positional argument as a potential target,
-so `hostname` overwrites `cur_target` from `ssh` to `hostname`, which then falls through to Make.
-
-The workaround is `aba ssh --cmd 'hostname'`, but the natural syntax `aba ssh hostname` should work.
-
-**Proposed fix:**
-After setting `cur_target` to `ssh` or `run`, consume the next argument as `$cmd` rather than
-letting the loop treat it as a new target. E.g.:
-```bash
-ssh|run)
-    cur_target=$1; shift
-    cmd="${1:-}"; [ "$cmd" ] && shift
-    ;;
-```
-
-**Where:** `scripts/aba.sh` argument parsing loop (lines ~915-930)
 
 ---
 

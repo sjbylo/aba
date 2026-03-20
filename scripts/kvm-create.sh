@@ -107,7 +107,7 @@ create_node() {
 			--os-variant rhel9-unknown \
 			--boot uefi \
 			--check disk_size=off \
-			--graphics none \
+			--graphics vnc,listen=0.0.0.0 --video virtio \
 			$extra_cpu_args \
 			--noautoconsole
 
