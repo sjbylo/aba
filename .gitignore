@@ -54,6 +54,7 @@ test/docker-reg/certs
 test/docker-reg/data
 test/docker-reg/auth
 vmware.conf
+kvm.conf
 rpms/*.rpm
 mirror/reg-uninstall.sh.provision
 aba.conf
