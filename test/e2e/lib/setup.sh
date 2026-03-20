@@ -224,16 +224,24 @@ _cleanup_con_quay() {
     local _pool_reg_present=""
     [ -d "$POOL_REG_DIR" ] && _pool_reg_present=1
 
-    # Tier 1: use aba's own uninstall for any aba-installed registry.
-    # Safe even with pool registry present: aba uninstall targets whatever
-    # registry state.sh describes (Quay/Docker on disN or conN), not the
-    # pool-registry container (which lives under ~/.e2e-pool-registry/).
+    # Tier 1: use aba's own unregister/uninstall for the configured registry.
+    # For externally-managed registries (REG_VENDOR=existing), use 'unregister'
+    # which only removes local credentials. For ABA-installed registries, use
+    # 'uninstall' which also removes the registry container/data.
+    local _regcreds="$HOME/.aba/mirror/mirror"
     for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.available" ]; then
-            echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
-            ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
-                echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
-            }
+            if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh" 2>/dev/null; then
+                echo "  [cleanup] Found .available + existing registry -- running aba unregister"
+                ( cd "$_dir" && aba -y -d mirror unregister ) && _did_uninstall=1 || {
+                    echo "  [cleanup] WARNING: aba unregister failed in $_dir (rc=$?)"
+                }
+            else
+                echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
+                ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
+                    echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
+                }
+            fi
         fi
     done
 

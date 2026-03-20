@@ -477,8 +477,9 @@ test_end() {
     local result="${1:-0}"  # 0 = pass, non-zero = fail
     local test_name="$_E2E_CURRENT_TEST"
 
-    # Bug 3 fix: if this test was skipped via resume, just clear state and return
+    # Bug 3 fix: if this test was skipped via resume, preserve pass in state file and return
     if [ -n "$_E2E_SKIP_BLOCK" ]; then
+        _checkpoint_write "$test_name" "0"
         _E2E_SKIP_BLOCK=""
         _E2E_CURRENT_TEST=""
         return 0
@@ -534,6 +535,7 @@ run_test() {
     # Check checkpoint/resume -- skip if already passed
     if should_skip_checkpoint "$test_name"; then
         (( _E2E_TEST_COUNT++ )) || true
+        _checkpoint_write "$test_name" "0"
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
         _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"

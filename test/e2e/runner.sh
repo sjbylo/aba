@@ -340,29 +340,10 @@ _cleanup_dis_aba() {
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-	# 1. Clean up any registry from conN (Rule 6: uninstall from installer host).
-	#    Only ABA commands may remove .available — never rm it directly.
-	#    Use 'unregister' for externally-managed registries, 'uninstall' for ABA-installed.
-	local _regcreds="$HOME/.aba/mirror/mirror"
-	for _dir in "$_ABA_ROOT"; do
-		if [ -f "$_dir/mirror/.available" ]; then
-			if [ -f "$_regcreds/state.sh" ]; then
-				source "$_regcreds/state.sh"
-				if [ "${REG_VENDOR:-}" = "existing" ]; then
-					echo "  Deregistering existing registry (from $_dir) ..."
-					( cd "$_dir" && aba -y -d mirror unregister ) 2>&1 || echo "  WARNING: aba unregister failed in $_dir (rc=$?)"
-				else
-					echo "  Uninstalling registry via aba (from $_dir) ..."
-					( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
-				fi
-			else
-				echo "  WARNING: .available exists in $_dir but no state.sh -- running aba uninstall anyway"
-				( cd "$_dir" && aba -y -d mirror uninstall ) 2>&1 || echo "  WARNING: aba uninstall failed in $_dir (rc=$?)"
-			fi
-		fi
-	done
+	# Registry cleanup on conN is handled by _cleanup_con_quay() -- not here.
+	# This function only cleans the disN filesystem and firewall.
 
-	# 2. Stop containers, then clean disN filesystem
+	# 1. Stop containers, then clean disN filesystem
 	echo "  Cleaning disN filesystem ..."
 	# Disabled: nuclear podman cleanup destroys internal state (pause process),
 	# causing "invalid internal status" on next run. aba uninstall above is sufficient.
@@ -528,9 +509,10 @@ _pre_suite_cleanup() {
 	return 0
 }
 
-_pre_suite_cleanup
-
-if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
+if [ -n "$_RUNNER_RESUME" ]; then
+	echo "  (Skipping pre-suite cleanup -- --resume mode)"
+elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
+	_pre_suite_cleanup
 	if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 		# Legacy path: VMware snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1)
 		_revert_dis_snapshot "pool-ready" || {
