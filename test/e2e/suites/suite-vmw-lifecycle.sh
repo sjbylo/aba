@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Suite: KVM Lifecycle
+# Suite: VMware Lifecycle
 # =============================================================================
-# Purpose: End-to-end test of KVM platform support.  Exercises multi-node
+# Purpose: End-to-end test of VMware platform support.  Exercises multi-node
 #          VM provisioning (compact, standard) first for fast feedback, then
 #          installs an SNO cluster and tests every VM lifecycle command ABA
 #          exposes: ls, stop, start, kill, delete, refresh, upload, plus
@@ -11,8 +11,8 @@
 # Prerequisite:
 #   - Internet-connected bastion (conN) with aba installed.
 #   - Pre-populated Quay on conN (via setup-pool-registry.sh).
-#   - ~/.kvm.conf on conN with a working LIBVIRT_URI, KVM_STORAGE_POOL,
-#     KVM_NETWORK, and passwordless SSH to the KVM host.
+#   - ~/.vmware.conf on conN with a working GOVC_URL, GOVC_DATACENTER,
+#     GOVC_CLUSTER, GOVC_DATASTORE, GOVC_NETWORK, VC_FOLDER, and credentials.
 # =============================================================================
 
 set -u
@@ -39,12 +39,12 @@ e2e_setup
 
 plan_tests \
     "Setup: ensure pre-populated registry" \
-    "Setup: install aba, configure for KVM" \
+    "Setup: install aba, configure for VMware" \
     "Setup: configure mirror for local registry" \
     "Setup: sync images to registry" \
     "Compact: multi-node VM creation and agent bootstrap" \
     "Standard: multi-node VM creation and agent bootstrap" \
-    "SNO: install cluster on KVM" \
+    "SNO: install cluster on VMware" \
     "VM lifecycle: ls" \
     "VM lifecycle: stop (graceful)" \
     "VM lifecycle: start" \
@@ -53,7 +53,7 @@ plan_tests \
     "Cluster-level: graceful shutdown and startup" \
     "Cleanup: delete clusters and unregister mirror"
 
-suite_begin "kvm-lifecycle"
+suite_begin "vmw-lifecycle"
 
 # ============================================================================
 # 1. Ensure pre-populated registry on conN
@@ -62,7 +62,7 @@ test_begin "Setup: ensure pre-populated registry"
 
 e2e_run "Install aba (needed for version resolution)" "./install"
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
-    "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -73,31 +73,31 @@ e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
 test_end
 
 # ============================================================================
-# 2. Setup: install aba, configure for KVM
+# 2. Setup: install aba, configure for VMware
 # ============================================================================
-test_begin "Setup: install aba, configure for KVM"
+test_begin "Setup: install aba, configure for VMware"
 
 e2e_run "Reset aba to clean state" \
     "cd ~/aba && ./install && aba reset -f"
 
 e2e_run "Install aba" "./install"
 
-e2e_run "Configure aba.conf for KVM" \
-    "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Configure aba.conf for VMware" \
+    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
-e2e_run "Verify aba.conf: platform=kvm" "grep ^platform=kvm aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run "Verify aba.conf: version format" \
     "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
-e2e_run "Copy kvm.conf from home directory" \
-    "cp -v ${KVM_CONF:-~/.kvm.conf} kvm.conf"
-e2e_run "Verify kvm.conf has LIBVIRT_URI" "grep ^LIBVIRT_URI kvm.conf"
-e2e_run "Verify kvm.conf has KVM_STORAGE_POOL" "grep ^KVM_STORAGE_POOL kvm.conf"
-e2e_run "Verify kvm.conf has KVM_NETWORK" "grep ^KVM_NETWORK kvm.conf"
+e2e_run "Copy vmware.conf from home directory" \
+    "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
+e2e_run "Verify vmware.conf has GOVC_URL" "grep ^GOVC_URL vmware.conf"
+e2e_run "Verify vmware.conf has VC_FOLDER" "grep ^VC_FOLDER vmware.conf"
+e2e_run "Verify vmware.conf has GOVC_DATACENTER" "grep ^GOVC_DATACENTER vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 
@@ -148,7 +148,7 @@ test_end
 # ============================================================================
 # Validates that 3 master VMs are created with correct resources and network.
 # SSHes into every node to verify network, then waits for bootstrap-complete.
-# Does NOT wait for full install -- proves multi-node KVM provisioning works.
+# Does NOT wait for full install -- proves multi-node VMware provisioning works.
 test_begin "Compact: multi-node VM creation and agent bootstrap"
 
 e2e_run "Clean up previous $COMPACT cluster dir" "rm -rf $COMPACT"
@@ -156,18 +156,16 @@ e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
 
 e2e_run "Create compact cluster.conf" \
     "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
-e2e_run "Set ports=enp1s0 for KVM (virtio NIC)" \
-    "sed -i 's#^ports=.*#ports=enp1s0#g' $COMPACT/cluster.conf"
 e2e_run "Fix mac_prefix for $COMPACT" \
     "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $COMPACT/cluster.conf"
 
 e2e_run "Generate ISO for compact cluster" "aba --dir $COMPACT iso"
-e2e_run "Upload ISO to KVM host" "aba --dir $COMPACT upload"
+e2e_run "Upload ISO to VMware datastore" "aba --dir $COMPACT upload"
 e2e_run "Create and start compact VMs" "aba --dir $COMPACT create --start"
 
 e2e_run "List compact VMs" "aba --dir $COMPACT ls"
 e2e_run "Verify 3 VMs created for compact" \
-    "[ \$(aba --dir $COMPACT ls | grep -c -i running) -eq 3 ]"
+    "[ \$(aba --dir $COMPACT ls | grep -c -i poweredOn) -eq 3 ]"
 
 e2e_poll 300 15 "Wait for agent API on compact rendezvous node" \
     "curl -sk --connect-timeout 5 --max-time 5 -o /dev/null -w '%{http_code}' http://\$(cat $COMPACT/iso-agent-based/rendezvousIP):8090/ | grep -qE '^4'"
@@ -201,18 +199,16 @@ e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
 
 e2e_run "Create standard cluster.conf" \
     "aba cluster -n $STANDARD -t standard --starting-ip $(pool_starting_ip standard) -W 2 --step cluster.conf"
-e2e_run "Set ports=enp1s0 for KVM (virtio NIC)" \
-    "sed -i 's#^ports=.*#ports=enp1s0#g' $STANDARD/cluster.conf"
 e2e_run "Fix mac_prefix for $STANDARD" \
     "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $STANDARD/cluster.conf"
 
 e2e_run "Generate ISO for standard cluster" "aba --dir $STANDARD iso"
-e2e_run "Upload ISO to KVM host" "aba --dir $STANDARD upload"
+e2e_run "Upload ISO to VMware datastore" "aba --dir $STANDARD upload"
 e2e_run "Create and start standard VMs" "aba --dir $STANDARD create --start"
 
 e2e_run "List standard VMs" "aba --dir $STANDARD ls"
 e2e_run "Verify 5 VMs created for standard (3 masters + 2 workers)" \
-    "[ \$(aba --dir $STANDARD ls | grep -c -i running) -eq 5 ]"
+    "[ \$(aba --dir $STANDARD ls | grep -c -i poweredOn) -eq 5 ]"
 
 e2e_poll 300 15 "Wait for agent API on standard rendezvous node" \
     "curl -sk --connect-timeout 5 --max-time 5 -o /dev/null -w '%{http_code}' http://\$(cat $STANDARD/iso-agent-based/rendezvousIP):8090/ | grep -qE '^4'"
@@ -241,23 +237,15 @@ e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
 test_end
 
 # ============================================================================
-# 7. SNO: install cluster on KVM
+# 7. SNO: install cluster on VMware
 # ============================================================================
-test_begin "SNO: install cluster on KVM"
+test_begin "SNO: install cluster on VMware"
 
 e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
 e2e_run -r 2 10 "Create VMs and start install" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step refresh"
-
-# KVM/QEMU default on_reboot=destroy causes VMs to shut off after image write.
-# Wait for that to happen, then restart.
-e2e_poll 1200 30 "Wait for VM to shut off after image write" \
-    "aba --dir $SNO ls | grep -qi 'shut-off'"
-
-e2e_run "Restart VM after image write" "aba --dir $SNO start"
-e2e_run "Verify VM is running" "aba --dir $SNO ls | grep -i running"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step refresh"
 
 e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
 
@@ -275,9 +263,9 @@ test_end
 # ============================================================================
 test_begin "VM lifecycle: ls"
 
-e2e_run "List KVM VMs" "aba --dir $SNO ls"
+e2e_run "List VMware VMs" "aba --dir $SNO ls"
 e2e_run "Verify ls output shows running VM" \
-    "aba --dir $SNO ls | grep -i running"
+    "aba --dir $SNO ls | grep -i poweredOn"
 
 test_end
 
@@ -287,8 +275,8 @@ test_end
 test_begin "VM lifecycle: stop (graceful)"
 
 e2e_run "Graceful stop of VMs" "aba --dir $SNO stop --wait"
-e2e_run "Verify VMs are shut off after stop" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
+e2e_run "Verify VMs are powered off after stop" \
+    "aba --dir $SNO ls | grep -i poweredOff"
 
 test_end
 
@@ -299,7 +287,7 @@ test_begin "VM lifecycle: start"
 
 e2e_run "Start VMs" "aba --dir $SNO start"
 e2e_run "Verify VMs are running after start" \
-    "aba --dir $SNO ls | grep -i running"
+    "aba --dir $SNO ls | grep -i poweredOn"
 e2e_poll 300 15 "Wait for SSH to become available" \
     "aba --dir $SNO ssh --cmd 'hostname'"
 
@@ -311,8 +299,8 @@ test_end
 test_begin "VM lifecycle: kill (force poweroff)"
 
 e2e_run "Force power off VMs" "aba --dir $SNO kill"
-e2e_run "Verify VMs are shut off after kill" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
+e2e_run "Verify VMs are powered off after kill" \
+    "aba --dir $SNO ls | grep -i poweredOff"
 
 test_end
 
@@ -323,7 +311,7 @@ test_begin "VM lifecycle: start + cluster health after kill"
 
 e2e_run "Start VMs after hard power cycle" "aba --dir $SNO start"
 e2e_run "Verify VMs are running" \
-    "aba --dir $SNO ls | grep -i running"
+    "aba --dir $SNO ls | grep -i poweredOn"
 e2e_poll 300 15 "Wait for SSH after hard power cycle" \
     "aba --dir $SNO ssh --cmd 'hostname'"
 e2e_poll 600 30 "Wait for cluster operators healthy after kill" \
@@ -342,12 +330,12 @@ e2e_poll 300 15 "Wait for cluster API to become reachable" \
     "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
 
 e2e_run "OpenShift graceful shutdown with --wait" "aba --dir $SNO shutdown -y --wait"
-e2e_poll 120 10 "Verify VMs are shut off after OCP shutdown" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
+e2e_poll 120 10 "Verify VMs are powered off after OCP shutdown" \
+    "aba --dir $SNO ls | grep -i poweredOff"
 
 e2e_run "OpenShift cluster startup" "aba --dir $SNO startup"
 e2e_run "Verify VMs are running after startup" \
-    "aba --dir $SNO ls | grep -i running"
+    "aba --dir $SNO ls | grep -i poweredOn"
 e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
     "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
 e2e_poll 300 15 "Wait for all nodes Ready after startup" \
@@ -365,7 +353,7 @@ test_end
 # ============================================================================
 test_begin "Cleanup: delete clusters and unregister mirror"
 
-e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
+e2e_run "Delete SNO cluster (removes VMware VMs)" \
     "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
 e2e_run "Delete compact cluster if leftover" \
     "if [ -d $COMPACT ]; then aba --dir $COMPACT delete; else echo '[cleanup] $COMPACT already removed'; fi"
@@ -381,4 +369,4 @@ test_end
 
 suite_end
 
-echo "SUCCESS: suite-kvm-lifecycle.sh"
+echo "SUCCESS: suite-vmw-lifecycle.sh"
