@@ -156,7 +156,7 @@ e2e_run -r 2 10 "Create VMs and start install" \
 # KVM/QEMU default on_reboot=destroy causes VMs to shut off after image write.
 # Wait for that to happen, then restart.
 e2e_poll 1200 30 "Wait for VM to shut off after image write" \
-    "aba --dir $SNO ls | grep -qi 'shut off'"
+    "aba --dir $SNO ls | grep -qi 'shut-off'"
 
 e2e_run "Restart VM after image write" "aba --dir $SNO start"
 e2e_run "Verify VM is running" "aba --dir $SNO ls | grep -i running"
@@ -165,8 +165,10 @@ e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
+
+e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
 
 test_end
 
@@ -188,7 +190,7 @@ test_begin "VM lifecycle: stop (graceful)"
 
 e2e_run "Graceful stop of VMs" "aba --dir $SNO stop --wait"
 e2e_run "Verify VMs are shut off after stop" \
-    "aba --dir $SNO ls | grep -i 'shut off'"
+    "aba --dir $SNO ls | grep -i 'shut-off'"
 
 test_end
 
@@ -201,7 +203,7 @@ e2e_run "Start VMs" "aba --dir $SNO start"
 e2e_run "Verify VMs are running after start" \
     "aba --dir $SNO ls | grep -i running"
 e2e_poll 300 15 "Wait for SSH to become available" \
-    "aba --dir $SNO ssh 'hostname'"
+    "aba --dir $SNO ssh --cmd 'hostname'"
 
 test_end
 
@@ -212,7 +214,7 @@ test_begin "VM lifecycle: kill (force poweroff)"
 
 e2e_run "Force power off VMs" "aba --dir $SNO kill"
 e2e_run "Verify VMs are shut off after kill" \
-    "aba --dir $SNO ls | grep -i 'shut off'"
+    "aba --dir $SNO ls | grep -i 'shut-off'"
 
 test_end
 
@@ -225,9 +227,9 @@ e2e_run "Start VMs after hard power cycle" "aba --dir $SNO start"
 e2e_run "Verify VMs are running" \
     "aba --dir $SNO ls | grep -i running"
 e2e_poll 300 15 "Wait for SSH after hard power cycle" \
-    "aba --dir $SNO ssh 'hostname'"
+    "aba --dir $SNO ssh --cmd 'hostname'"
 e2e_poll 600 30 "Wait for cluster operators healthy after kill" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators after kill recovery" \
     "aba --dir $SNO run --cmd 'oc get co'"
 
@@ -238,15 +240,18 @@ test_end
 # ============================================================================
 test_begin "Cluster-level: graceful shutdown and startup"
 
+e2e_poll 300 15 "Wait for cluster API to become reachable" \
+    "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -q Ready"
+
 e2e_run "OpenShift graceful shutdown with --wait" "aba --dir $SNO shutdown -y --wait"
 e2e_run "Verify VMs are shut off after OCP shutdown" \
-    "aba --dir $SNO ls | grep -i 'shut off'"
+    "aba --dir $SNO ls | grep -i 'shut-off'"
 
 e2e_run "OpenShift cluster startup" "aba --dir $SNO startup"
 e2e_run "Verify VMs are running after startup" \
     "aba --dir $SNO ls | grep -i running"
 e2e_poll 600 30 "Wait for cluster operators healthy after shutdown/startup" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators after shutdown/startup" \
     "aba --dir $SNO run --cmd 'oc get co'"
 

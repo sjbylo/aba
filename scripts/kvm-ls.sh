@@ -25,7 +25,7 @@ for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
 	info=$(virsh -c "$LIBVIRT_URI" dominfo "$vm" 2>/dev/null) || continue
 
-	state=$(echo "$info" | awk '/^State:/ {$1=""; print substr($0,2)}')
+	state=$(echo "$info" | awk '/^State:/ {$1=""; s=substr($0,2); gsub(/ /,"-",s); print s}')
 	num_cpu=$(echo "$info" | awk '/^CPU\(s\):/ {print $2}')
 	memory_kb=$(echo "$info" | awk '/^Max memory:/ {print $3}')
 	[ "$memory_kb" ] && memory_gb=$(( memory_kb / 1048576 )) || memory_gb="?"

@@ -34,7 +34,7 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	fi
 else
 	aba_info Starting cluster $cluster_name ...
-	make -s start
+	aba start
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
