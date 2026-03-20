@@ -29,7 +29,7 @@ hosts:
     interfaces:
     {%- for port in arr_ports %}
       - name: {{ port }}
-        macAddress: {{ arr_macs[hostcnt * ports_per_host + loop.index0 + mac_offset] }}
+        macAddress: "{{ arr_macs[hostcnt * ports_per_host + loop.index0 + mac_offset] }}"
     {%- endfor %}
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"

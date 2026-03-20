@@ -137,4 +137,15 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 - Report back a summary when the user returns
 - If a fix requires core ABA changes, note it and move on
 
+## Development workflow
+
+- Default work host = bastion -- only fixes get copied to conN/disN for testing
+- Use `run.sh deploy` or `run.sh restart` to sync code to test hosts -- NEVER commit/push just to deploy
+- Always read `--help` and existing scripts/tools before inventing new workflows
+
+## Suite monitoring
+
+- At the **end of every response**, check if any E2E suites are running (via `run.sh status` or tmux sessions on active pools) and report status briefly
+- Do this alongside the `ai/SESSION_STATE.md` update -- same cadence, every reply
+
 ## For full details see `ai/RULES_OF_ENGAGEMENT.md`

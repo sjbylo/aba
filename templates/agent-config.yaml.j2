@@ -29,7 +29,7 @@ hosts:
     role: {{ role }}
     interfaces:
       - name: {{ arr_ports[0] }}
-        macAddress: {{ arr_macs[hostcnt + mac_offset] }}
+        macAddress: "{{ arr_macs[hostcnt + mac_offset] }}"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -38,7 +38,7 @@ hosts:
           description: Access mode port {{ arr_ports[0] }}
           type: ethernet
           state: up
-          mac-address: {{ arr_macs[hostcnt + mac_offset] }}
+          mac-address: "{{ arr_macs[hostcnt + mac_offset] }}"
           ipv4:
             enabled: true
             address:
