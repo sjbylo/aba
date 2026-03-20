@@ -2,10 +2,11 @@
 # =============================================================================
 # Suite: KVM Lifecycle
 # =============================================================================
-# Purpose: End-to-end test of KVM platform support.  Installs an SNO cluster
-#          on a remote KVM/libvirt host, then exercises every VM lifecycle
-#          command ABA exposes: ls, stop, start, kill, delete, refresh, upload,
-#          plus the cluster-level graceful shutdown/startup.
+# Purpose: End-to-end test of KVM platform support.  Exercises multi-node
+#          VM provisioning (compact, standard) first for fast feedback, then
+#          installs an SNO cluster and tests every VM lifecycle command ABA
+#          exposes: ls, stop, start, kill, delete, refresh, upload, plus
+#          the cluster-level graceful shutdown/startup.
 #
 # Prerequisite:
 #   - Internet-connected bastion (conN) with aba installed.
@@ -41,6 +42,8 @@ plan_tests \
     "Setup: install aba, configure for KVM" \
     "Setup: configure mirror for local registry" \
     "Setup: sync images to registry" \
+    "Compact: multi-node VM creation and agent bootstrap" \
+    "Standard: multi-node VM creation and agent bootstrap" \
     "SNO: install cluster on KVM" \
     "VM lifecycle: ls" \
     "VM lifecycle: stop (graceful)" \
@@ -48,8 +51,6 @@ plan_tests \
     "VM lifecycle: kill (force poweroff)" \
     "VM lifecycle: start + cluster health after kill" \
     "Cluster-level: graceful shutdown and startup" \
-    "Compact: multi-node VM creation and agent bootstrap" \
-    "Standard: multi-node VM creation and agent bootstrap" \
     "Cleanup: delete clusters and unregister mirror"
 
 suite_begin "kvm-lifecycle"
@@ -143,122 +144,7 @@ e2e_run -r 3 2 "Sync images to local registry" "aba -d mirror sync --retry"
 test_end
 
 # ============================================================================
-# 5. SNO: install cluster on KVM
-# ============================================================================
-test_begin "SNO: install cluster on KVM"
-
-e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
-e2e_add_to_cluster_cleanup "$PWD/$SNO"
-
-e2e_run -r 2 10 "Create VMs and start install" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step refresh"
-
-# KVM/QEMU default on_reboot=destroy causes VMs to shut off after image write.
-# Wait for that to happen, then restart.
-e2e_poll 1200 30 "Wait for VM to shut off after image write" \
-    "aba --dir $SNO ls | grep -qi 'shut-off'"
-
-e2e_run "Restart VM after image write" "aba --dir $SNO start"
-e2e_run "Verify VM is running" "aba --dir $SNO ls | grep -i running"
-
-e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
-
-e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
-e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
-
-e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
-
-test_end
-
-# ============================================================================
-# 6. VM lifecycle: ls
-# ============================================================================
-test_begin "VM lifecycle: ls"
-
-e2e_run "List KVM VMs" "aba --dir $SNO ls"
-e2e_run "Verify ls output shows running VM" \
-    "aba --dir $SNO ls | grep -i running"
-
-test_end
-
-# ============================================================================
-# 7. VM lifecycle: stop (graceful)
-# ============================================================================
-test_begin "VM lifecycle: stop (graceful)"
-
-e2e_run "Graceful stop of VMs" "aba --dir $SNO stop --wait"
-e2e_run "Verify VMs are shut off after stop" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
-
-test_end
-
-# ============================================================================
-# 8. VM lifecycle: start
-# ============================================================================
-test_begin "VM lifecycle: start"
-
-e2e_run "Start VMs" "aba --dir $SNO start"
-e2e_run "Verify VMs are running after start" \
-    "aba --dir $SNO ls | grep -i running"
-e2e_poll 300 15 "Wait for SSH to become available" \
-    "aba --dir $SNO ssh --cmd 'hostname'"
-
-test_end
-
-# ============================================================================
-# 9. VM lifecycle: kill (force poweroff)
-# ============================================================================
-test_begin "VM lifecycle: kill (force poweroff)"
-
-e2e_run "Force power off VMs" "aba --dir $SNO kill"
-e2e_run "Verify VMs are shut off after kill" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
-
-test_end
-
-# ============================================================================
-# 10. VM lifecycle: start + cluster health after kill
-# ============================================================================
-test_begin "VM lifecycle: start + cluster health after kill"
-
-e2e_run "Start VMs after hard power cycle" "aba --dir $SNO start"
-e2e_run "Verify VMs are running" \
-    "aba --dir $SNO ls | grep -i running"
-e2e_poll 300 15 "Wait for SSH after hard power cycle" \
-    "aba --dir $SNO ssh --cmd 'hostname'"
-e2e_poll 600 30 "Wait for cluster operators healthy after kill" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
-e2e_diag "Show cluster operators after kill recovery" \
-    "aba --dir $SNO run --cmd 'oc get co'"
-
-test_end
-
-# ============================================================================
-# 11. Cluster-level: graceful shutdown and startup
-# ============================================================================
-test_begin "Cluster-level: graceful shutdown and startup"
-
-e2e_poll 300 15 "Wait for cluster API to become reachable" \
-    "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -q Ready"
-
-e2e_run "OpenShift graceful shutdown with --wait" "aba --dir $SNO shutdown -y --wait"
-e2e_run "Verify VMs are shut off after OCP shutdown" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
-
-e2e_run "OpenShift cluster startup" "aba --dir $SNO startup"
-e2e_run "Verify VMs are running after startup" \
-    "aba --dir $SNO ls | grep -i running"
-e2e_poll 600 30 "Wait for cluster operators healthy after shutdown/startup" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
-e2e_diag "Show cluster operators after shutdown/startup" \
-    "aba --dir $SNO run --cmd 'oc get co'"
-
-test_end
-
-# ============================================================================
-# 12. Compact: multi-node VM creation, network check, and bootstrap
+# 5. Compact: multi-node VM creation, network check, and bootstrap
 # ============================================================================
 # Validates that 3 master VMs are created with correct resources and network.
 # SSHes into every node to verify network, then waits for bootstrap-complete.
@@ -291,7 +177,7 @@ e2e_run "Extract compact node IPs" \
     "cd $COMPACT && eval \$(scripts/cluster-config.sh) && echo \"CP_IPS=\$CP_IP_ADDRESSES\""
 for _node_idx in 0 1 2; do
     e2e_poll 300 15 "SSH into compact master $_node_idx (verify network)" \
-        "cd $COMPACT && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
+        "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
 done
 
 e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
@@ -304,7 +190,7 @@ e2e_run "Clean compact cluster dir" "rm -rf $COMPACT"
 test_end
 
 # ============================================================================
-# 13. Standard: multi-node VM creation, network check, and bootstrap
+# 6. Standard: multi-node VM creation, network check, and bootstrap
 # ============================================================================
 # Validates that 3 masters + 2 workers (5 VMs) are created with correct
 # resources and network.  SSHes into every node, then waits for bootstrap.
@@ -336,13 +222,13 @@ e2e_run "Extract standard node IPs" \
     "cd $STANDARD && eval \$(scripts/cluster-config.sh) && echo \"CP_IPS=\$CP_IP_ADDRESSES WKR_IPS=\$WKR_IP_ADDR\""
 for _node_idx in 0 1 2; do
     e2e_poll 300 15 "SSH into standard master $_node_idx (verify network)" \
-        "cd $STANDARD && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
+        "cd $STANDARD && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
 done
 
 # SSH into every worker node
 for _node_idx in 0 1; do
     e2e_poll 300 15 "SSH into standard worker $_node_idx (verify network)" \
-        "cd $STANDARD && eval \$(scripts/cluster-config.sh) && _ips=(\$WKR_IP_ADDR) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
+        "cd $STANDARD && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$WKR_IP_ADDR) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
 done
 
 e2e_poll 1800 30 "Wait for standard bootstrap-complete" \
@@ -351,6 +237,126 @@ e2e_diag "Standard cluster VMs after bootstrap" "aba --dir $STANDARD ls"
 
 e2e_run "Delete standard cluster VMs" "aba --dir $STANDARD delete"
 e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
+
+test_end
+
+# ============================================================================
+# 7. SNO: install cluster on KVM
+# ============================================================================
+test_begin "SNO: install cluster on KVM"
+
+e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
+
+e2e_run -r 2 10 "Create VMs and start install" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step refresh"
+
+# KVM/QEMU default on_reboot=destroy causes VMs to shut off after image write.
+# Wait for that to happen, then restart.
+e2e_poll 1200 30 "Wait for VM to shut off after image write" \
+    "aba --dir $SNO ls | grep -qi 'shut-off'"
+
+e2e_run "Restart VM after image write" "aba --dir $SNO start"
+e2e_run "Verify VM is running" "aba --dir $SNO ls | grep -i running"
+
+e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
+
+e2e_run "Show cluster operator status" "aba --dir $SNO run"
+e2e_poll 600 30 "Wait for all operators fully available" \
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
+
+e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
+
+test_end
+
+# ============================================================================
+# 8. VM lifecycle: ls
+# ============================================================================
+test_begin "VM lifecycle: ls"
+
+e2e_run "List KVM VMs" "aba --dir $SNO ls"
+e2e_run "Verify ls output shows running VM" \
+    "aba --dir $SNO ls | grep -i running"
+
+test_end
+
+# ============================================================================
+# 9. VM lifecycle: stop (graceful)
+# ============================================================================
+test_begin "VM lifecycle: stop (graceful)"
+
+e2e_run "Graceful stop of VMs" "aba --dir $SNO stop --wait"
+e2e_run "Verify VMs are shut off after stop" \
+    "aba --dir $SNO ls | grep -i 'shut-off'"
+
+test_end
+
+# ============================================================================
+# 10. VM lifecycle: start
+# ============================================================================
+test_begin "VM lifecycle: start"
+
+e2e_run "Start VMs" "aba --dir $SNO start"
+e2e_run "Verify VMs are running after start" \
+    "aba --dir $SNO ls | grep -i running"
+e2e_poll 300 15 "Wait for SSH to become available" \
+    "aba --dir $SNO ssh --cmd 'hostname'"
+
+test_end
+
+# ============================================================================
+# 11. VM lifecycle: kill (force poweroff)
+# ============================================================================
+test_begin "VM lifecycle: kill (force poweroff)"
+
+e2e_run "Force power off VMs" "aba --dir $SNO kill"
+e2e_run "Verify VMs are shut off after kill" \
+    "aba --dir $SNO ls | grep -i 'shut-off'"
+
+test_end
+
+# ============================================================================
+# 12. VM lifecycle: start + cluster health after kill
+# ============================================================================
+test_begin "VM lifecycle: start + cluster health after kill"
+
+e2e_run "Start VMs after hard power cycle" "aba --dir $SNO start"
+e2e_run "Verify VMs are running" \
+    "aba --dir $SNO ls | grep -i running"
+e2e_poll 300 15 "Wait for SSH after hard power cycle" \
+    "aba --dir $SNO ssh --cmd 'hostname'"
+e2e_poll 600 30 "Wait for cluster operators healthy after kill" \
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_diag "Show cluster operators after kill recovery" \
+    "aba --dir $SNO run --cmd 'oc get co'"
+
+test_end
+
+# ============================================================================
+# 13. Cluster-level: graceful shutdown and startup
+# ============================================================================
+test_begin "Cluster-level: graceful shutdown and startup"
+
+e2e_poll 300 15 "Wait for cluster API to become reachable" \
+    "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
+
+e2e_run "OpenShift graceful shutdown with --wait" "aba --dir $SNO shutdown -y --wait"
+e2e_poll 120 10 "Verify VMs are shut off after OCP shutdown" \
+    "aba --dir $SNO ls | grep -i 'shut-off'"
+
+e2e_run "OpenShift cluster startup" "aba --dir $SNO startup"
+e2e_run "Verify VMs are running after startup" \
+    "aba --dir $SNO ls | grep -i running"
+e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
+    "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
+e2e_poll 300 15 "Wait for all nodes Ready after startup" \
+    "[ \$(aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>&1 | grep -cw Ready) -eq \$(aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>&1 | wc -l) ]"
+e2e_diag "Show nodes after startup" "aba --dir $SNO run --cmd 'oc get nodes'"
+e2e_poll 600 30 "Wait for all cluster operators available after startup" \
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_diag "Show cluster operators after shutdown/startup" \
+    "aba --dir $SNO run --cmd 'oc get co'"
 
 test_end
 
