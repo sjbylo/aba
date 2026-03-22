@@ -139,7 +139,7 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 
 ## Development workflow
 
-- Default work host = bastion -- only fixes get copied to conN/disN for testing
+- ALL code changes are made ONLY on bastion (the dev server). All other hosts (conN, disN, bundle, etc.) are test-only targets -- code reaches them via `run.sh deploy`, `git pull`, or tarball, NEVER by direct editing
 - Use `run.sh deploy` or `run.sh restart` to sync code to test hosts -- NEVER commit/push just to deploy
 - Always read `--help` and existing scripts/tools before inventing new workflows
 

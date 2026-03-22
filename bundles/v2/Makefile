@@ -24,55 +24,55 @@ export VER NAME OP_SETS
 
 .PHONY: all cleanup clean
 
-all: $(M)/.done-upload
+all: $(M)/.done-07-upload
 
-$(M)/.done-setup: bundle.conf common.sh | $(M)
-	bash -e phases/00-setup.sh
+$(M)/.done-00-setup: bundle.conf common.sh | $(M)
+	bash -e scripts/00-setup-connectivity.sh
 	@touch $@
 
-$(M)/.done-install-aba: $(M)/.done-setup
-	bash -e phases/01-install-aba.sh
+$(M)/.done-01-install-aba: $(M)/.done-00-setup
+	bash -e scripts/01-install-aba-from-git.sh
 	@touch $@
 
-$(M)/.done-configure: $(M)/.done-install-aba
-	bash -e phases/02-configure.sh
+$(M)/.done-02-configure: $(M)/.done-01-install-aba
+	bash -e scripts/02-configure-aba-and-imageset.sh
 	@touch $@
 
-$(M)/.done-image-save: $(M)/.done-configure
-	bash -e phases/03-image-save.sh
+$(M)/.done-03-image-save: $(M)/.done-02-configure
+	bash -e scripts/03-save-images-to-disk.sh
 	@touch $@
 
-$(M)/.done-bundle-tar: $(M)/.done-image-save
-	bash -e phases/04-bundle-tar.sh
+$(M)/.done-04-bundle-tar: $(M)/.done-03-image-save
+	bash -e scripts/04-create-bundle-tar.sh
 	@touch $@
 
-$(M)/.done-offline: $(M)/.done-bundle-tar
-	bash -e phases/05-go-offline.sh
+$(M)/.done-05-offline: $(M)/.done-04-bundle-tar
+	bash -e scripts/05-go-offline-for-testing.sh
 	@touch $@
 
-$(M)/.done-unpacked: $(M)/.done-offline
-	bash -e phases/06a-unpack-bundle.sh
+$(M)/.done-06a-unpacked: $(M)/.done-05-offline
+	bash -e scripts/06a-unpack-bundle-tar.sh
 	@touch $@
 
-$(M)/.done-registry-installed: $(M)/.done-unpacked
-	bash -e phases/06b-install-registry.sh
+$(M)/.done-06b-registry-installed: $(M)/.done-06a-unpacked
+	bash -e scripts/06b-install-mirror-registry.sh
 	@touch $@
 
-$(M)/.done-registry-loaded: $(M)/.done-registry-installed
-	bash -e phases/06c-load-registry.sh
+$(M)/.done-06c-registry-loaded: $(M)/.done-06b-registry-installed
+	bash -e scripts/06c-load-images-to-registry.sh
 	@touch $@
 
-$(M)/.done-tests-passed: $(M)/.done-registry-loaded
-	bash -e phases/06d-test-cluster.sh
+$(M)/.done-06d-tests-passed: $(M)/.done-06c-registry-loaded
+	bash -e scripts/06d-test-cluster-and-operators.sh
 	@touch $@
 
-$(M)/.done-upload: $(M)/.done-tests-passed
-	bash -e phases/07-upload.sh
+$(M)/.done-07-upload: $(M)/.done-06d-tests-passed
+	bash -e scripts/07-upload-bundle-to-cloud.sh
 	@touch $@
 
 # Cleanup is a separate target: run after 'make all' succeeds
 cleanup:
-	bash -e phases/08-cleanup.sh
+	bash -e scripts/08-cleanup-and-go-online.sh
 
 # Create marker directory
 $(M):
