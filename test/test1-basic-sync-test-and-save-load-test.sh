@@ -154,7 +154,7 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Bring down firewalld to test
 test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 
 # Install & sync mirror on remote host
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+test-cmd -r  2 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
 test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Bring up firewalld to test the 8443 port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
@@ -261,7 +261,7 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 15 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
+test-cmd -r  2 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
@@ -340,7 +340,7 @@ mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_us
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
+test-cmd -r  2 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
@@ -376,7 +376,7 @@ test-cmd -m "Checking cluster operators" aba --dir sno run
 #  Delete the reg. first!
 test-cmd -m "Delete the registry so it will be re-created again in next test" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
+test-cmd -r  2 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
