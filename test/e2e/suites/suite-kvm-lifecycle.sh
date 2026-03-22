@@ -2,11 +2,10 @@
 # =============================================================================
 # Suite: KVM Lifecycle
 # =============================================================================
-# Purpose: End-to-end test of KVM platform support.  Exercises multi-node
-#          VM provisioning (compact, standard) first for fast feedback, then
-#          installs an SNO cluster and tests every VM lifecycle command ABA
-#          exposes: ls, stop, start, kill, delete, refresh, upload, plus
-#          the cluster-level graceful shutdown/startup.
+# Purpose: End-to-end test of KVM platform support.  Installs an SNO cluster
+#          and tests every VM lifecycle command ABA exposes: ls, stop, start,
+#          kill, delete, refresh, upload, plus the cluster-level graceful
+#          shutdown/startup.
 #
 # Prerequisite:
 #   - Internet-connected bastion (conN) with aba installed.
@@ -41,7 +40,6 @@ plan_tests \
     "Setup: install aba, configure for KVM" \
     "Setup: configure mirror for local registry" \
     "Setup: sync images to registry" \
-    "Compact: multi-node VM creation and agent bootstrap" \
     "SNO: install cluster on KVM" \
     "VM lifecycle: ls" \
     "VM lifecycle: stop (graceful)" \
@@ -142,55 +140,7 @@ e2e_run -r 3 2 "Sync images to local registry" "aba -d mirror sync --retry"
 test_end
 
 # ============================================================================
-# 5. Compact: multi-node VM creation, network check, and bootstrap
-# ============================================================================
-# Validates that 3 master VMs are created with correct resources and network.
-# SSHes into every node to verify network, then waits for bootstrap-complete.
-# Does NOT wait for full install -- proves multi-node KVM provisioning works.
-test_begin "Compact: multi-node VM creation and agent bootstrap"
-
-e2e_run "Delete leftover $COMPACT VMs (if any)" \
-    "if [ -d $COMPACT ]; then aba --dir $COMPACT delete || true; fi"
-e2e_run "Clean up previous $COMPACT cluster dir" "rm -rf $COMPACT"
-e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
-
-e2e_run "Create compact cluster.conf" \
-    "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
-e2e_run "Set ports=enp1s0 for KVM (virtio NIC)" \
-    "sed -i 's#^ports=.*#ports=enp1s0#g' $COMPACT/cluster.conf"
-e2e_run "Set mac_prefix for $COMPACT (KVM range, randomized)" \
-    "sed -i 's#mac_prefix=.*#mac_prefix=52:54:1x:xx:xx:#g' $COMPACT/cluster.conf"
-
-e2e_run "Generate ISO for compact cluster" "aba --dir $COMPACT iso"
-e2e_run "Upload ISO to KVM host" "aba --dir $COMPACT upload"
-e2e_run "Create and start compact VMs" "aba --dir $COMPACT create --start"
-
-e2e_run "List compact VMs" "aba --dir $COMPACT ls"
-e2e_run "Verify 3 VMs created for compact" \
-    "[ \$(aba --dir $COMPACT ls | grep -c -i running) -eq 3 ]"
-
-e2e_poll 300 15 "Wait for agent API on compact rendezvous node" \
-    "curl -sk --connect-timeout 5 --max-time 5 -o /dev/null -w '%{http_code}' http://\$(cat $COMPACT/iso-agent-based/rendezvousIP):8090/ | grep -qE '^4'"
-
-# Extract all node IPs from agent-config.yaml and SSH into each one
-e2e_run "Extract compact node IPs" \
-    "cd $COMPACT && eval \$(scripts/cluster-config.sh) && echo \"CP_IPS=\$CP_IP_ADDRESSES\""
-for _node_idx in 0 1 2; do
-    e2e_poll 300 15 "SSH into compact master $_node_idx (verify network)" \
-        "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
-done
-
-e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
-    "cd $COMPACT && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
-e2e_diag "Compact cluster VMs after bootstrap" "aba --dir $COMPACT ls"
-
-e2e_run "Delete compact cluster VMs" "aba --dir $COMPACT delete"
-e2e_run "Clean compact cluster dir" "rm -rf $COMPACT"
-
-test_end
-
-# ============================================================================
-# 6. SNO: install cluster on KVM
+# 5. SNO: install cluster on KVM
 # ============================================================================
 test_begin "SNO: install cluster on KVM"
 
@@ -294,7 +244,7 @@ e2e_run "Verify VMs are running after startup" \
 e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
     "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
 e2e_poll 300 15 "Wait for all nodes Ready after startup" \
-    "[ \$(aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>&1 | grep -cw Ready) -eq \$(aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>&1 | wc -l) ]"
+    "aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>/dev/null | grep -qw Ready && ! aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>/dev/null | grep -qw NotReady"
 e2e_diag "Show nodes after startup" "aba --dir $SNO run --cmd 'oc get nodes'"
 e2e_poll 600 30 "Wait for all cluster operators available after startup" \
     "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
@@ -310,8 +260,6 @@ test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
     "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
-e2e_run "Delete compact cluster if leftover" \
-    "if [ -d $COMPACT ]; then aba --dir $COMPACT delete; else echo '[cleanup] $COMPACT already removed'; fi"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

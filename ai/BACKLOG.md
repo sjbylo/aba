@@ -946,6 +946,109 @@ already handles the timing. Removing them would significantly speed up the test 
 
 ---
 
+### E2E Cleanup: `_cleanup_dis_aba()` Does Not Clean Testy User's Quay
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-03-22
+
+**Problem:**
+`suite-mirror-sync.sh` installs a Quay registry on the dis host as the `testy` user
+(`reg_ssh_user=testy`, `data_dir=~/my-quay-mirror-test1`). If the suite fails or is
+interrupted before its cleanup block runs, testy's Quay stays running (port 8443 occupied).
+The next suite (e.g. `airgapped-local-reg`) fails with "Existing Quay registry found"
+because `aba -d mirror install` detects port 8443 is occupied.
+
+**Root cause (three gaps in `_cleanup_dis_aba()` in `runner.sh`):**
+1. `rm -rf ~/quay-install $_E2E_WASTEFUL_DIRS` runs as `steve` via SSH, so `~` expands
+   to `/home/steve`. Testy's data at `/home/testy/my-quay-mirror-test1/` is untouched.
+2. `$_E2E_WASTEFUL_DIRS` contains `$HOME/my-quay-mirror-test1` but `$HOME` is steve's.
+3. No container/service cleanup: even if files were removed, the running Quay pod,
+   systemd user services (`quay-app`, `quay-redis`, `quay-pod`), and `rootlessport`
+   process under testy keep binding port 8443.
+
+**Proposed fix:**
+Add testy-specific cleanup to `_cleanup_dis_aba()`:
+```bash
+# Kill any registry occupying port 8443 (regardless of which user owns it)
+_essh "$dis_host" "sudo fuser -k 8443/tcp 2>/dev/null" 2>&1 || true
+
+# Clean testy's Quay: SSH as testy to run aba uninstall (uses testy's systemd context)
+_essh "$dis_host" "sudo -u testy bash -c '
+    export XDG_RUNTIME_DIR=/run/user/\$(id -u testy)
+    systemctl --user stop quay-app quay-redis quay-pod 2>/dev/null
+    systemctl --user disable quay-app quay-redis quay-pod 2>/dev/null
+    rm -f ~/.config/systemd/user/quay-*.service
+    systemctl --user daemon-reload 2>/dev/null
+'" 2>&1 || true
+_essh "$dis_host" "sudo rm -rf /home/testy/quay-install /home/testy/my-quay-mirror-test1" 2>&1 || true
+```
+
+Alternatively: uninstall via `ssh testy@dis aba -d mirror uninstall -y` if aba is
+present on testy's side, so testy's own aba handles the full cleanup properly.
+
+**Where:** `test/e2e/runner.sh` `_cleanup_dis_aba()` (around line 351)
+
+---
+
+### Test5: `aba mon` Failure After Reboot Is Silently Ignored
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-03-22
+
+**Problem:**
+In `test/test5-airgapped-install-local-reg.sh` line 726, after a cluster install fails
+(operators not stable within timeout), the script reboots all nodes and runs `aba mon`
+directly -- NOT via `test-cmd`. Since the test scripts do not use `set -e`, this `mon`
+failure is completely silent. The script continues to subsequent checks ("Waiting forever
+for all cluster operators available") which eventually succeed as operators settle, making
+the test appear to pass despite a significant install issue.
+
+**Observed behavior:**
+```
+ERROR Error checking cluster operator Progressing status: "context deadline exceeded"
+ERROR These cluster operators were not stable: [authentication, openshift-apiserver]
+[ABA] Error: Something went wrong with the installation...
+make: *** [Makefile:190: mon] Error 7
+Returning failed result [2]    <-- test-cmd -i returns the error
+CLUSTER INSTALL FAILED: REBOOTING ALL NODES ...
+... (reboot + restart) ...
+aba --dir ... mon              <-- bare call, no test-cmd, failure silently ignored
+... (test continues as if install succeeded) ...
+```
+
+**Root cause:**
+Line 713: `test-cmd -i` properly catches the initial failure and enters the recovery path.
+Line 726: `aba --dir ... mon` is called directly (no `test-cmd`), so its non-zero exit
+is silently ignored. The script proceeds to the operator wait loops (lines 739/742)
+which eventually succeed because the operators settle over time.
+
+**Impact:** Real installation problems (30-minute operator timeout!) are masked. The test
+appears green even though the cluster needed emergency intervention (reboot) to recover.
+
+**Proposed fix:**
+Replace line 726 with a `test-cmd` call that will fail the test if the second `mon` also fails:
+```bash
+# Before (silent failure):
+aba --dir $subdir/aba/$cluster_name mon
+
+# After (proper error propagation):
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 5 -m \
+    "Retry: checking cluster with mon after node reboot" \
+    "aba --dir $subdir/aba/$cluster_name mon"
+```
+
+Also consider: should the test fail immediately if the initial `mon` times out, rather
+than attempting a recovery path that masks the issue? The reboot-and-retry logic makes
+it impossible to distinguish between "flaky infrastructure" and "real code bug".
+
+**Where:** `test/test5-airgapped-install-local-reg.sh` lines 713-729
+
+---
+
 ## Low Priority
 
 ### Clean Up TUI Debug Logging
@@ -1124,6 +1227,25 @@ before the message.
 
 **Action:** Audit all `aba_log`, `echo "[ABA]"`, and similar patterns across
 `scripts/*.sh` and `*/Makefile` to ensure consistent left-justification.
+
+### Reduce Verbose Pre-flight Check Output
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-21
+
+**Problem:**
+`scripts/preflight-check.sh` prints a line for every successful DNS/NTP reachability check
+(e.g. "DNS server 10.0.1.8 is reachable", "NTP server ntp.example.com is reachable").
+For clusters with many servers this is noisy and buries important information.
+
+**Expected Behavior:**
+- Only print individual lines when a check **fails** (e.g. "DNS server 10.0.1.8 is NOT reachable").
+- On success, show a single summary line at the end: e.g. "All DNS/NTP servers reachable".
+- Keep the "No IP conflicts detected" and "Pre-flight validation passed" summary lines.
+
+**Files:** `scripts/preflight-check.sh`
 
 ### 11. E2E Framework: Graceful Stop / Signal Handling
 
