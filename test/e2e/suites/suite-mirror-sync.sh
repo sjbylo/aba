@@ -179,6 +179,7 @@ e2e_run "Reconfigure remote registry after reset" \
 
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
 
 e2e_diag "Check oc-mirror cache (local)" \
@@ -258,6 +259,7 @@ e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:s
 
 e2e_run "Clean mirror working state" "aba -d mirror clean"
 e2e_diag "Markers: before sync" "_marker_snap"
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"

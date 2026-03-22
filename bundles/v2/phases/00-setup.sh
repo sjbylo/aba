@@ -27,7 +27,8 @@ fi
 
 [ "$NOTIFY" ] && echo "Working on bundle: $BUNDLE_NAME ..." | notify.sh
 
-# Remove stale work dirs from previous/different bundles
+# Detect stale work dirs from previous/different bundles
+stale_dirs=()
 for d in "$WORK_DIR"/*/; do
 	[ ! -d "$d" ] && continue
 	dir_name=$(basename "$d")
@@ -35,28 +36,72 @@ for d in "$WORK_DIR"/*/; do
 		"$BUNDLE_NAME" | "test-install-$BUNDLE_NAME" | aba)
 			;;
 		*)
-			echo "Removing stale work dir: $d"
-			rm -rf "$d"
+			stale_dirs+=("$d")
 			;;
 	esac
 done
 
-# Clean any leftover registry from a previous failed run
-if podman ps | grep -q registry; then
-	echo_step "Found running registry from previous run, cleaning up ..."
-	if [ -d "$WORK_TEST_INSTALL/aba" ]; then
-		(
-			cd "$WORK_TEST_INSTALL/aba"
-			./install
-			aba -d mirror uninstall -y
-		)
+has_running_registry=
+podman ps 2>/dev/null | grep -q registry && has_running_registry=1
+
+if [ ${#stale_dirs[@]} -gt 0 ] || [ "$has_running_registry" ]; then
+	set +x
+	echo
+	echo "=========================================================="
+	echo "  Stale state detected from a previous/different bundle!"
+	echo "=========================================================="
+	if [ ${#stale_dirs[@]} -gt 0 ]; then
+		echo "  Stale work dirs:"
+		for d in "${stale_dirs[@]}"; do echo "    - $d"; done
+	fi
+	[ "$has_running_registry" ] && echo "  Running Quay registry detected (will be uninstalled first)"
+	echo
+
+	if [ "$BATCH" ]; then
+		echo "  BATCH mode: auto-cleaning stale state ..."
+		cleanup_answer=y
 	else
-		echo "ERROR: Running registry found but no aba installation to uninstall it." >&2
-		echo "       Please run 'aba -d mirror uninstall -y' from an aba directory first." >&2
+		echo -n "  Clean up and continue? [y/N]: "
+		read -t 60 cleanup_answer || true
+	fi
+	set -x
+
+	if [[ "$cleanup_answer" =~ ^[yY] ]]; then
+		# Uninstall running registry first (needs aba from the OLD test-install dir)
+		if [ "$has_running_registry" ]; then
+			echo_step "Uninstalling running registry from previous run ..."
+			aba_dir=$(ls -d "$WORK_DIR"/test-install*/aba 2>/dev/null | head -1)
+			if [ "$aba_dir" ]; then
+				( cd "$aba_dir"; ./install; aba -d mirror uninstall -y )
+			else
+				echo "WARNING: No aba installation found to uninstall registry." >&2
+				echo "         Attempting direct podman cleanup ..." >&2
+				podman pod stop quay-pod 2>/dev/null || true
+				podman pod rm quay-pod 2>/dev/null || true
+			fi
+			sudo rm -rf ~/quay-install
+			sudo rm -rf ~/docker-reg
+		fi
+
+		# Now remove stale work dirs
+		for d in "${stale_dirs[@]}"; do
+			echo "Removing stale work dir: $d"
+			rm -rf "$d"
+		done
+	else
+		echo "Aborted. Please clean up manually before re-running:" >&2
+		if [ "$has_running_registry" ]; then
+			aba_dir=$(ls -d "$WORK_DIR"/test-install*/aba 2>/dev/null | head -1)
+			if [ "$aba_dir" ]; then
+				echo "  - cd $aba_dir && aba -d mirror uninstall -y" >&2
+			else
+				echo "  - podman pod stop quay-pod && podman pod rm quay-pod" >&2
+				echo "  - sudo rm -rf ~/quay-install ~/docker-reg" >&2
+			fi
+		fi
+		for d in "${stale_dirs[@]}"; do echo "  - rm -rf $d" >&2; done
 		exit 1
 	fi
-	sudo rm -rf ~/quay-install
-	sudo rm -rf ~/docker-reg
 fi
 
 # Safety net: remove orphaned quay-* services that 'aba uninstall' missed
