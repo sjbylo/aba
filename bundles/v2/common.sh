@@ -31,7 +31,8 @@ STEP_LOG="$WORK_BUNDLE_DIR_BUILD/log-${STEP_NAME}.log"
 mkdir -p "$WORK_BUNDLE_DIR_BUILD"
 exec > >(tee "$STEP_LOG" | tee -a "$LOGFILE") 2>&1
 
-cat <<BANNER
+if [[ "$STEP_NAME" == 00-* ]]; then
+	cat <<BANNER
 ================================================================================
   BUNDLE BUILD: $BUNDLE_NAME
   OCP Version:  $VER
@@ -45,6 +46,9 @@ cat <<BANNER
   Build Log:    $LOGFILE
 ================================================================================
 BANNER
+else
+	echo "================ Step: $STEP_NAME | $BUNDLE_NAME | $(date) ================"
+fi
 
 # Notification helper
 which notify.sh &>/dev/null && NOTIFY=1 || NOTIFY=
