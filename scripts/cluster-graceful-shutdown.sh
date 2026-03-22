@@ -166,7 +166,21 @@ done
 # Only wait if installed on VMs (VMware or KVM)
 if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	aba_info "Waiting for all nodes to power down ..." | tee -a $logfile
-	until ! aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; do sleep 10; done
+	_wait_elapsed=0
+	_wait_timeout=300
+	while aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; do
+		sleep 10
+		_wait_elapsed=$((_wait_elapsed + 10))
+		if [ $_wait_elapsed -ge $_wait_timeout ]; then
+			aba_warning "Timed out after ${_wait_timeout}s waiting for VMs to power off"
+			aba ls 2>/dev/null | tee -a $logfile
+			break
+		fi
+		aba_info "Still waiting for VMs to power off (${_wait_elapsed}s) ..." | tee -a $logfile
+	done
+	if ! aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; then
+		aba_info_ok "All VMs powered off." | tee -a $logfile
+	fi
 fi
 
 exit 0

@@ -23,7 +23,7 @@
 ABA_VERSION=20260322105914
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260322105732
+ABA_BUILD=20260322131214
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -999,7 +999,8 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		shutdown)
-			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh
+			eval $BUILD_COMMAND
+			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh wait=$wait
 			exit
 		;;
 		startup)
