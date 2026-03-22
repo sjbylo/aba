@@ -329,6 +329,8 @@ e2e_run_remote "Verify no registry containers on disN" \
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
+e2e_run "Restore platform=vmw" "aba --platform vmw"
+
 test_end
 
 # ============================================================================

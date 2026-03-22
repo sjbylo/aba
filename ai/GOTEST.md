@@ -31,6 +31,36 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
 - **Use `~/bin/notify.sh`** to send Telegram notifications at least every 10 mins
   Only use it during gotest (not when the user is present in the chat).
 
+## Root cause investigation rules
+
+When a suite fails, you MUST:
+
+1. **Never skip or dismiss a failure** — every failure has a root cause. "Transient",
+   "infrastructure issue", or "timing problem" are NOT root causes. Dig deeper.
+
+2. **Trace the FULL error chain** — read the actual error output, not just the summary.
+   SSH into the failing host if needed. Read installer logs, podman logs, systemd journal.
+   Don't stop at "it failed" — find out WHY it failed.
+
+3. **Distinguish symptom from cause** — "PermissionError on quay_sqlite.db" is a symptom.
+   "reg-install-quay.sh doesn't check eval exit code" is the cause. Always reach the cause.
+
+4. **If the fix is in ABA code, say so** — never work around an ABA bug in test code.
+   If a test fails because ABA has a bug, the fix belongs in ABA, not in the suite.
+
+5. **If you can't determine the root cause from logs alone**, say exactly what information
+   is missing and what commands to run on next occurrence. Don't hand-wave.
+
+6. **Never propose a fix that masks the real problem** — no `|| true`, no `sudo rm -rf`,
+   no "add a retry". If cleanup fails, find out why cleanup fails. If install fails,
+   find out why install fails.
+
+7. **Log your investigation steps** — for each failure, document:
+   - The exact error message and where it came from
+   - What you checked (files, logs, host state)
+   - What you concluded and why
+   - What remains unknown (if anything)
+
 ## How to find this again
 
 - File: **`ai/GOTEST.md`** (this file)
