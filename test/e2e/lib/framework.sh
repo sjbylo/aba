@@ -608,6 +608,7 @@ e2e_add_to_cluster_cleanup() {
 
 # Delete all clusters in the cleanup list.  Safe to call multiple times.
 # SSHs to each stored user@fqdn and runs 'aba -d <path> delete'.
+# Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_clusters() {
 	local cleanup_file="${_E2E_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup}"
 	[ -f "$cleanup_file" ] || return 0
@@ -620,16 +621,17 @@ e2e_cleanup_clusters() {
 		if ! ( _essh "$target" \
 			"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
 			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
-			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
+			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path"
 			_all_ok=""
 		fi
 	done < "$cleanup_file"
 	if [ -n "$_all_ok" ]; then
 		rm -f "$cleanup_file"
+		_e2e_log_and_print "  Cleanup complete."
 	else
-		_e2e_log_and_print "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		_e2e_log_and_print "  ERROR: cluster cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
+		return 1
 	fi
-	_e2e_log_and_print "  Cleanup complete."
 }
 
 # --- Mirror Cleanup List ----------------------------------------------------
@@ -672,6 +674,7 @@ e2e_add_to_mirror_cleanup() {
 }
 
 # Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
+# Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_mirrors() {
 	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
 	[ -f "$cleanup_file" ] || return 0
@@ -684,22 +687,17 @@ e2e_cleanup_mirrors() {
 		if ! ( _essh "$target" \
 			"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
 			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
-			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
+			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path"
 			_all_ok=""
 		fi
-		# Force-remove Quay/Docker data dirs that may contain container-UID-owned files (e.g. UID 101000)
-		_essh "$target" "
-			d=\$(awk -F= '/^data_dir=/{gsub(/#.*/,\"\",\$2); gsub(/^[[:space:]]+|[[:space:]]+\$/,\"\",\$2); print \$2}' '$abs_path/mirror.conf' 2>/dev/null)
-			[ -z \"\$d\" ] && d=~
-			sudo rm -rf \"\$d/quay-install\" \"\$d/docker-reg\"
-		" 2>&1 || true
 	done < "$cleanup_file"
 	if [ -n "$_all_ok" ]; then
 		rm -f "$cleanup_file"
+		_e2e_log_and_print "  Mirror cleanup complete."
 	else
-		_e2e_log_and_print "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		_e2e_log_and_print "  ERROR: mirror cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
+		return 1
 	fi
-	_e2e_log_and_print "  Mirror cleanup complete."
 }
 
 # --- Interactive Prompt -----------------------------------------------------
