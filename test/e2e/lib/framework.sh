@@ -687,6 +687,12 @@ e2e_cleanup_mirrors() {
 			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
 			_all_ok=""
 		fi
+		# Force-remove Quay/Docker data dirs that may contain container-UID-owned files (e.g. UID 101000)
+		_essh "$target" "
+			d=\$(awk -F= '/^data_dir=/{gsub(/#.*/,\"\",\$2); gsub(/^[[:space:]]+|[[:space:]]+\$/,\"\",\$2); print \$2}' '$abs_path/mirror.conf' 2>/dev/null)
+			[ -z \"\$d\" ] && d=~
+			sudo rm -rf \"\$d/quay-install\" \"\$d/docker-reg\"
+		" 2>&1 || true
 	done < "$cleanup_file"
 	if [ -n "$_all_ok" ]; then
 		rm -f "$cleanup_file"

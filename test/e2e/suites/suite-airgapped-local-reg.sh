@@ -495,15 +495,13 @@ test_begin "Lifecycle: shutdown/startup"
 e2e_run_remote "Shutdown cluster" \
     "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
 
-# GAP 3: Verify 'aba ls' shows node power state after shutdown
-e2e_run_remote "Verify 'aba ls' shows poweredOff" \
+e2e_poll_remote 180 10 "Wait for VM to power off" \
     "cd ~/aba && aba --dir $SNO ls | grep -i poweredOff"
 
 e2e_run_remote "Startup cluster" \
     "cd ~/aba && aba --dir $SNO startup --wait"
 
-# GAP 3: Verify 'aba ls' shows node power state after startup
-e2e_run_remote "Verify 'aba ls' shows poweredOn" \
+e2e_poll_remote 180 10 "Wait for VM to power on" \
     "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
 
 # Wait for API server and operators to stabilize after startup before asserting

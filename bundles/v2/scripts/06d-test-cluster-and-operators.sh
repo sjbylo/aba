@@ -10,6 +10,11 @@ cd "$WORK_TEST_INSTALL/aba"
 echo_step "Be sure to delete the cached agent ISO, otherwise we may mistakenly use the cached ISO instead of a possibly bad one from the release payload!"
 rm -rf ~/.cache/agent
 
+if [ -d "$CLUSTER_NAME" ]; then
+	echo_step "Deleting existing cluster from previous failed run ..."
+	aba --dir "$CLUSTER_NAME" delete || true
+fi
+
 echo_step "Create the cluster ..."
 
 # Build cluster command based on type
