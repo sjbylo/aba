@@ -10,7 +10,7 @@ hosts:
     role: master
     interfaces:
       - name: ens160
-        macAddress: 88:88:88:88:88:01
+        macAddress: "88:88:88:88:88:01"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -19,7 +19,7 @@ hosts:
           description: Access mode port ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:01
+          mac-address: "88:88:88:88:88:01"
           ipv4:
             enabled: true
             address:
