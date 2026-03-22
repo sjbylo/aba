@@ -190,11 +190,22 @@ _ensure_pool_registry() {
 # Upgrade EXIT trap: clean up clusters/mirrors in cleanup lists on ANY exit.
 # _E2E_SUITE_NAME is set inside the child bash process (the suite script),
 # so we must set cleanup file paths explicitly from runner.sh's $SUITE var.
+# If cleanup fails, override the suite result to signal the failure.
 _runner_cleanup() {
 	_E2E_CLEANUP_FILE="${E2E_LOG_DIR}/${SUITE}.cleanup"
 	_E2E_MIRROR_CLEANUP_FILE="${E2E_LOG_DIR}/${SUITE}.mirror-cleanup"
-	e2e_cleanup_clusters || true
-	e2e_cleanup_mirrors || true
+	local _cleanup_failed=""
+	if ! e2e_cleanup_clusters; then
+		echo "ERROR: cluster cleanup failed -- investigate before re-running"
+		_cleanup_failed=1
+	fi
+	if ! e2e_cleanup_mirrors; then
+		echo "ERROR: mirror cleanup failed -- investigate before re-running"
+		_cleanup_failed=1
+	fi
+	if [ -n "$_cleanup_failed" ] && [ -f "$RC_FILE" ]; then
+		echo "3" > "$RC_FILE"
+	fi
 	rm -f "$LOCK_FILE"
 }
 trap '_runner_cleanup' EXIT
@@ -479,7 +490,9 @@ _pre_suite_cleanup() {
 		if [ -n "$_cleanup_ok" ]; then
 			rm -f "$cleanup_file"
 		else
-			echo "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+			echo "  ERROR: cluster cleanup FAILED for $(basename "$cleanup_file") -- cannot proceed"
+			echo "  Investigate why 'aba delete' failed before re-running the suite."
+			return 1
 		fi
 	done
 
@@ -494,14 +507,16 @@ _pre_suite_cleanup() {
 			if ! ( _essh "$target" \
 				"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
 				2>&1 ); then
-				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
+				echo "  ERROR: mirror cleanup SSH failed for $target:$abs_path"
 				_mirror_ok=""
 			fi
 		done < "$cleanup_file"
 		if [ -n "$_mirror_ok" ]; then
 			rm -f "$cleanup_file"
 		else
-			echo "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+			echo "  ERROR: mirror cleanup FAILED for $(basename "$cleanup_file") -- cannot proceed"
+			echo "  Investigate why 'aba uninstall' failed before re-running the suite."
+			return 1
 		fi
 	done
 
@@ -512,7 +527,14 @@ _pre_suite_cleanup() {
 if [ -n "$_RUNNER_RESUME" ]; then
 	echo "  (Skipping pre-suite cleanup -- --resume mode)"
 elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
-	_pre_suite_cleanup
+	if ! _pre_suite_cleanup; then
+		echo ""
+		echo "  FATAL: pre-suite cleanup failed. Stale clusters/mirrors could not be deleted."
+		echo "  Investigate the failure above, fix it manually, then re-run the suite."
+		echo ""
+		echo "1" > "$RC_FILE"
+		exit 1
+	fi
 	if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 		# Legacy path: VMware snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1)
 		_revert_dis_snapshot "pool-ready" || {
@@ -592,7 +614,11 @@ while true; do
 		unset E2E_RESUME_FILE 2>/dev/null || true
 		rm -f "$_STATE_FILE_PATH"
 		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
-		_pre_suite_cleanup
+		if ! _pre_suite_cleanup; then
+			echo "  FATAL: pre-suite cleanup failed during restart. Cannot proceed."
+			echo "1" > "$RC_FILE"
+			exit 1
+		fi
 		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 				_revert_dis_snapshot "pool-ready" || {

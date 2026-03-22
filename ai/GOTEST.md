@@ -28,7 +28,7 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
   Transient failures (e.g. laptop restart, IDE reconnect) are expected; the dispatcher keeps
   running independently. Retry with exponential backoff and resume polling as soon as the shell
   recovers.
-- **Use `~/bin/notify.sh`** to send Telegram notifications while the user is AFK.
+- **Use `~/bin/notify.sh`** to send Telegram notifications at least every 10 mins
   Only use it during gotest (not when the user is present in the chat).
 
 ## How to find this again
