@@ -160,6 +160,7 @@ test_end
 # ============================================================================
 test_begin "Registry: Quay install and uninstall"
 
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote "Install Quay registry" \
     "cd ~/aba && aba -d mirror install"
 e2e_poll_remote 60 5 "Wait for Quay container" \

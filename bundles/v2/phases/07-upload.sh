@@ -30,6 +30,8 @@ ls -l "$CLOUD_DIR"
 
 echo_step "Create the install bundle dir and copy the files ..."
 
+# Clean slate for idempotent retry (stale partial uploads from interrupted runs)
+rm -rf "$CLOUD_DIR_BUNDLE"
 mkdir -p "$CLOUD_DIR_BUNDLE"
 
 # Mark it as incomplete
@@ -74,7 +76,6 @@ ls -l "$WORK_BUNDLE_DIR"/ocp_*
 
 # Copy the files into the cloud sync dir
 cp -v "$WORK_BUNDLE_DIR"/ocp_*		"$CLOUD_DIR_BUNDLE"
-rm -fv "$WORK_BUNDLE_DIR"/ocp_*
 
 cp -v "$WORK_BUNDLE_DIR/CHECKSUM.txt"	"$CLOUD_DIR_BUNDLE"
 cp -v "$TEMPLATES_DIR/VERIFY.sh"	"$CLOUD_DIR_BUNDLE"
@@ -88,8 +89,11 @@ echo "Copy build artifact dir from $WORK_BUNDLE_DIR_BUILD to $CLOUD_DIR_BUNDLE"
 ls -la "$WORK_BUNDLE_DIR_BUILD"
 cp -rpv "$WORK_BUNDLE_DIR_BUILD"	"$CLOUD_DIR_BUNDLE"
 
-# Remove the warning file
+# Remove the warning file (marks upload as complete)
 rm -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING"
+
+# Only remove source tarballs after upload is fully committed
+rm -fv "$WORK_BUNDLE_DIR"/ocp_*
 
 echo_step "Show content of new bundle in cloud dir $CLOUD_DIR_BUNDLE:"
 
