@@ -70,6 +70,8 @@ cli/butane-amd64
 */*sha256sum.txt
 cli/scripts
 bundles/work
+bundles/v2/build.log
+bundles/v2/work
 .vscode*
 .bundle
 test/e2e/LAB-NETWORK.md

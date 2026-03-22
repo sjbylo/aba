@@ -69,8 +69,6 @@ fi
 if [ "$target" ]; then
 	#aba_info "Running: make -s $target" >&2
 	aba_info "Targeting step: $target in dir: $PWD" >&2
-	make -s $target
+	make -s "$target"
 fi
-
-exit 0
 

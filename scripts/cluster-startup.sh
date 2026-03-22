@@ -58,6 +58,15 @@ if ! try_cmd -q 1 0 2 $OC get nodes ; then
 fi
 
 aba_info "Cluster endpoint accessible at $server_url"
+
+# Remove stale 'oc debug' pods that may re-execute shutdown commands.
+# These persist in etcd after a graceful shutdown and can cause an
+# infinite shutdown loop when kubelet re-syncs them on startup.
+for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	aba_info "Removing stale debug pod: $pod"
+	$OC delete pod -n default "$pod" --grace-period=0 --force 2>/dev/null || true
+done
+
 aba_info Cluster $cluster_name nodes:
 if ! $OC get nodes; then
 	aba_abort "Failed to access the cluster!"
@@ -100,7 +109,7 @@ check_and_approve_csrs() {
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
-trap '_rc=$?; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_rc' EXIT
+trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_rc' EXIT
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then

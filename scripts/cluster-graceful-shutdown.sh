@@ -139,7 +139,7 @@ oc_debug_failed=
 nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 
 for node in $nodes; do
-	if ! timeout 30 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h now >> $logfile 2>&1; then
+	if ! timeout 30 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1; then
 		oc_debug_failed=1
 		aba_warning "oc debug shutdown failed for $node" | tee -a $logfile
 	fi
@@ -148,13 +148,20 @@ done
 if [ "$oc_debug_failed" ]; then
 	aba_warning "Falling back to SSH for shutdown ..." | tee -a $logfile
 	for ip in $CP_IP_ADDRESSES $WKR_IP_ADDR; do
-		timeout 30 ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip 'sudo shutdown -h now' >> $logfile 2>&1 || \
+		timeout 30 ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip 'sudo shutdown -h 1' >> $logfile 2>&1 || \
 			aba_warning "SSH shutdown also failed for $ip" | tee -a $logfile
 	done
 fi
 
 echo
 aba_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
+
+# Clean up stale debug pods that could re-execute shutdown on next boot.
+# The 'oc debug ... shutdown -h now' pods persist in etcd; if the kubelet
+# re-syncs them on startup the node enters an infinite shutdown loop.
+for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	$OC delete pod -n default "$pod" --grace-period=0 --force >> $logfile 2>&1 || true
+done
 
 # Only wait if installed on VMs (VMware or KVM)
 if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
