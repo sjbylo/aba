@@ -19,7 +19,7 @@ curl -sfkIL google.com >/dev/null
 if [ -d "$CLOUD_DIR_BUNDLE" ] && [ ! -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING" ]; then
 	echo "Install bundle dir already exists: $CLOUD_DIR_BUNDLE" >&2
 	# Touch all markers so Make sees everything as complete
-	for m in setup install-aba configure image-save bundle-tar offline unpacked registry-installed registry-loaded tests-passed upload; do
+	for m in 00-setup 01-install-aba 02-configure 03-image-save 04-bundle-tar 05-offline 06a-unpacked 06b-registry-installed 06c-registry-loaded 06d-tests-passed 07-upload; do
 		touch "$WORK_BUNDLE_DIR_BUILD/.done-$m"
 	done
 	exit 0
