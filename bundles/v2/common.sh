@@ -20,14 +20,16 @@ WORK_TEST_INSTALL=$WORK_DIR/test-install-$BUNDLE_NAME
 CLOUD_DIR_BUNDLE=$CLOUD_DIR/$BUNDLE_NAME
 BUNDLE_UPLOADING=INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt
 WORK_TEST_LOG=$WORK_BUNDLE_DIR_BUILD/tests-completed.txt
-LOGFILE="$WORK_BUNDLE_DIR_BUILD/bundle-build.log"
+LOGFILE="$WORK_DIR/bundle-build.log"
 
 export ABA_TESTING=1
 export PLAIN_OUTPUT=1
 
-# Logging: append all output to the build log
+# Per-step log: fresh on each run (overwrite). Global log: append for tail -f monitoring.
+STEP_NAME=$(basename "$0" .sh)
+STEP_LOG="$WORK_BUNDLE_DIR_BUILD/log-${STEP_NAME}.log"
 mkdir -p "$WORK_BUNDLE_DIR_BUILD"
-exec > >(tee -a "$LOGFILE") 2>&1
+exec > >(tee "$STEP_LOG" | tee -a "$LOGFILE") 2>&1
 
 cat <<BANNER
 ================================================================================
@@ -39,7 +41,8 @@ cat <<BANNER
   Started:      $(date)
   Work Dir:     $WORK_BUNDLE_DIR
   Cloud Dir:    $CLOUD_DIR_BUNDLE
-  Log File:     $LOGFILE
+  Step Log:     $STEP_LOG
+  Build Log:    $LOGFILE
 ================================================================================
 BANNER
 
