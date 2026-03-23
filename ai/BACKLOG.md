@@ -180,39 +180,16 @@ also audit `test/test2-airgapped-existing-reg.sh` and other test scripts.
 
 ### Bundle Makefile: `make NAME=opp` Without `OP_SETS` Silently Builds Empty-Operator Bundle
 
-**Status:** Backlog
+**Status:** Resolved
 **Priority:** Critical
 **Estimated Effort:** Small
 **Created:** 2026-03-23
+**Resolved:** 2026-02-26
 
-**Problem:**
-Running `make VER=4.20.11 NAME=opp` directly (without passing `OP_SETS`) silently builds
-a bundle with zero operators. The `Makefile` defaults `OP_SETS ?=` (empty), and the
-`02-configure.sh` phase checks `[ "$OP_SETS" ]` before adding `--op-sets` to the `aba`
-command. The mapping from `NAME` to `OP_SETS` only exists in `go.sh`, not in the `Makefile`.
-
-Result: The user gets a 4.20.11-opp bundle that contains only release + additional images,
-no operator catalogs. oc-mirror reports "No catalogs mirrored. Skipping CatalogSource file
-generation." and the cluster has no operators available.
-
-**Root cause:**
-The Makefile has no NAME-to-OP_SETS mapping. When invoked directly (bypassing `go.sh`),
-the caller must remember to pass the correct `OP_SETS`.
-
-**Proposed fix (pick one):**
-1. **Safety check in Makefile:** Error out if `NAME != release` and `OP_SETS` is empty:
-   ```makefile
-   ifneq ($(NAME),release)
-   ifeq ($(OP_SETS),)
-   $(error OP_SETS is required for non-release bundles. Example: make VER=4.20.11 NAME=opp OP_SETS="ocp odf sec acm")
-   endif
-   endif
-   ```
-2. **NAME-to-OP_SETS lookup in Makefile:** Define a mapping so `NAME=opp` auto-sets
-   `OP_SETS` when not provided by the caller.
-3. **Both:** Lookup + warning if overridden.
-
-**Where:** `bundles/v2/Makefile`, `bundles/v2/go.sh` (the authoritative mapping)
+**Fix applied:** Added a safety check in `bundles/v2/Makefile` that errors out when
+`NAME != release` and `OP_SETS` is empty (using `$(strip ...)` to handle whitespace).
+This prevents silently building empty-operator bundles when invoking `make` directly
+without passing `OP_SETS`.
 
 ---
 
