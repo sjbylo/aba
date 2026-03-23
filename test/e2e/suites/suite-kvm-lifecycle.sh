@@ -56,7 +56,9 @@ suite_begin "kvm-lifecycle"
 # ============================================================================
 test_begin "Setup: ensure pre-populated registry"
 
-e2e_run "Install aba (needed for version resolution)" "./install"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -74,7 +76,7 @@ test_end
 test_begin "Setup: install aba, configure for KVM"
 
 e2e_run "Reset aba to clean state" \
-    "cd ~/aba && ./install && aba reset -f"
+    "./install && aba reset -f"
 
 e2e_run "Install aba" "./install"
 

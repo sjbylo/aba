@@ -62,8 +62,11 @@ test_begin "Setup: clean slate"
 e2e_run -q "Remove old files" \
     "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
-e2e_run "Reset aba to clean state" \
-    "cd ~/aba && ./install && aba reset -f"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
+
+e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
@@ -314,8 +317,10 @@ e2e_run_remote "Verify ISO created" \
     "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
 # Clean up and restore platform on both sides
-e2e_run_remote -q "Clean up BM test dir on internal bastion" \
-    "cd ~/aba && aba --dir $STANDARD clean && aba --platform vmw"
+e2e_run_remote -q "Remove BM cluster dir on disN (no VMs to delete, platform=bm)" \
+    "cd ~/aba && rm -rf $STANDARD"
+e2e_run_remote -q "Restore VMware platform on disN" \
+    "cd ~/aba && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
 
 test_end 0

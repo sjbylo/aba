@@ -61,7 +61,9 @@ suite_begin "network-advanced"
 # ============================================================================
 test_begin "Setup: ensure pre-populated registry"
 
-e2e_run "Install aba (needed for version resolution)" "./install"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -79,7 +81,7 @@ test_end
 test_begin "Setup: install aba and configure"
 
 e2e_run "Reset aba to clean state" \
-    "cd ~/aba && ./install && aba reset -f"
+    "./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"

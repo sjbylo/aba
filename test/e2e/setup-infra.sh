@@ -193,6 +193,12 @@ _verify_con_vm() {
 		echo "  PASS: vmware.conf"
 		test -s /root/.vmware.conf || _fail "root vmware.conf missing"
 		echo "  PASS: root vmware.conf"
+		if test -s /home/${user}/.kvm.conf; then
+			echo "  PASS: kvm.conf"
+			test -s /root/.kvm.conf || echo "  WARN: root kvm.conf missing"
+		else
+			echo "  SKIP: kvm.conf (not deployed)"
+		fi
 
 		# --- Podman clean ---
 		# Pool registry runs as ${user} with images, containers, and port 8443
@@ -226,6 +232,7 @@ _configure_con_vm() {
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
+	_vm_setup_kvm_conf "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_install_aba "$vm" "$user"
@@ -262,6 +269,7 @@ _configure_dis_vm() {
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
+	_vm_setup_kvm_conf "$vm" "$user"
 	_vm_remove_pull_secret "$vm" "$user"
 	_vm_disable_proxy_autoload "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
@@ -408,6 +416,12 @@ _verify_dis_vm() {
 		echo "  PASS: vmware.conf"
 		test -s /root/.vmware.conf || _fail "root vmware.conf missing"
 		echo "  PASS: root vmware.conf"
+		if test -s /home/${user}/.kvm.conf; then
+			echo "  PASS: kvm.conf"
+			test -s /root/.kvm.conf || echo "  WARN: root kvm.conf missing"
+		else
+			echo "  SKIP: kvm.conf (not deployed)"
+		fi
 
 		! test -f /home/${user}/.pull-secret.json || _fail "pull-secret still exists"
 		echo "  PASS: pull-secret removed"
