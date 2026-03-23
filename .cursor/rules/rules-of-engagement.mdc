@@ -72,6 +72,7 @@ alwaysApply: true
 - Use `ensure_*()` functions for CLI tool installation
 - Symlinks handle cross-directory access (scripts use same paths everywhere)
 - `normalize*()` functions output ONLY config file values/defaults -- derived/computed values (e.g. `regcreds_dir`) belong in the calling script
+- **Config files (`aba.conf`, `mirror.conf`, `cluster.conf`) are the SINGLE SOURCE OF TRUTH** -- CLI flags write to config files, scripts read from config files. File presence (e.g. `vmware.conf` existing) must NEVER be used to infer settings -- only the config variable (e.g. `platform=vmw` in `aba.conf`) is authoritative. Supporting files like `vmware.conf`/`kvm.conf` are loaded conditionally based on the `platform` variable.
 - ABA was originally make-based; `aba` is a wrapper around make. All `make <target>` invocations must continue to work directly (e.g. `make -C mirror install`, `make -C sno cluster`). Never add logic that only works via the `aba` CLI.
 - Scripts in `scripts/` must NEVER be called directly — only via Makefile targets or `aba` CLI. Calling scripts directly bypasses make's dependency tracking and marker management (.available, .init, etc.)
 - Scripts must NOT manage markers (.available, .unavailable) — that is the Makefile's responsibility

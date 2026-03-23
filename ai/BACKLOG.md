@@ -4,6 +4,218 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ---
 
+## Critical
+
+### install-config.yaml.j2 Platform Detection: Corrected to Match Design (RESOLVED)
+
+**Status:** Resolved — not a regression, this is a design-correct fix
+**Priority:** N/A (was Critical, downgraded after investigation)
+**Created:** 2026-03-23
+**Resolved:** 2026-03-23
+
+**Summary:**
+On `main`, `install-config.yaml.j2` used `{%- elif GOVC_URL is defined %}` and
+`create-install-config.sh` unconditionally sourced `normalize-vmware-conf`. This violated
+ABA's core design principle: **config files are the single source of truth**.
+
+The feature branch correctly changed both to check `platform == 'vmw'` (from `aba.conf`),
+making `aba.conf`'s `platform` variable authoritative and treating `vmware.conf` as a
+supporting file loaded only when `platform=vmw`.
+
+**Verified by template rendering test:**
+- `main` with `platform=bm` + `GOVC_URL` defined → generates `vsphere:` section (WRONG — vmware.conf presence overrides aba.conf)
+- HEAD with `platform=bm` (no GOVC_URL sourced) → generates `baremetal:` section (CORRECT — respects aba.conf)
+- HEAD with `platform=vmw` → generates `vsphere:` section (CORRECT)
+
+**Impact on tests:** None. All old test scripts (`test/test[1-5]*.sh`) and all E2E suites
+already set `--platform vmw` explicitly. SNO clusters use `none: {}` regardless of platform.
+
+**Design principle documented:** Added as section 7 ("Config Files Are the Single Source of
+Truth") in `ai/RULES_OF_ENGAGEMENT.md`.
+
+---
+
+### `aba delete` After `aba clean` Fails to Destroy VMs (Re-initializes Instead)
+
+**Status:** Backlog
+**Priority:** Critical
+**Estimated Effort:** Small-Medium
+**Created:** 2026-03-23
+
+**Problem:**
+Running `aba clean` followed by `aba delete` does not destroy the VMs on the hypervisor.
+Instead, `aba delete` sees that configuration files are missing (cleaned by `aba clean`),
+re-initializes the cluster directory from scratch, then fails because `install-config.yaml`
+doesn't exist:
+
+```
+[steve@rhel-baseline sno]$ aba clean
+[steve@rhel-baseline sno]$ aba delete
+[ABA] Initialized cluster directory /home/steve/subdir/aba/sno successfully
+[ABA] vmware.conf initialized
+[ABA] 1 port(s): ens160
+[ABA] Adding DNS server(s): 10.0.1.8 10.0.2.8
+[ABA] Adding NTP server(s): 10.0.1.8 ntp.example.com
+[ABA] Generating Agent-based configuration file: .../sno/agent-config.yaml
+...
+[ABA] Error: Cannot parse cluster configuration. 'install-config.yaml' and/or 'agent-config.yaml' do not exist.
+```
+
+The VMs remain powered on with their IPs, causing IP conflicts for subsequent installs.
+
+**Observed in E2E testing:**
+- `connected-public` suite test [7] "Proxy mode: verify and delete" ran
+  `aba --dir e2e-sno1 delete` which completed in 1 second (!) without destroying the VM.
+  The VM `e2e-sno1-e2e-sno1` remained poweredOn at IP 10.0.2.12.
+- The next test (no_proxy validation) failed with "IP conflict: 10.0.2.12 is already in use!"
+- The E2E framework's orphan VM cleanup (`--force` dispatch) caught the leftover VM.
+
+**Root cause:**
+`aba delete` depends on Makefile targets that require cluster config files
+(`install-config.yaml`, `agent-config.yaml`, `cluster.conf`). If these were removed by
+`aba clean`, the Makefile re-initializes the directory instead of proceeding to VM deletion.
+The delete path needs the `vmware.conf` (or `kvm.conf`) and the VM/cluster name, but
+NOT the full agent config. It should be able to destroy VMs even when config files are missing.
+
+**Proposed fix:**
+1. `aba delete` should check for VMs on the hypervisor FIRST (using `govc find` / `virsh list`)
+   before requiring cluster config files. If VMs exist matching the cluster name pattern,
+   destroy them regardless of local config state.
+2. Alternatively, `aba clean` should NOT remove files that `aba delete` needs (e.g., keep
+   `vmware.conf`, `cluster.conf`, or a minimal state file with VM names/paths).
+3. At minimum, `aba delete` should warn loudly if it can't find VM info instead of silently
+   re-initializing the directory.
+
+**Additional variant -- `aba delete` on platform=bm requires vmware.conf (2026-03-23):**
+The E2E `create-bundle-to-disk` suite creates a standard cluster with `platform=bm`
+(bare-metal simulation). When the cleanup test runs `aba --dir e2e-standard2 delete`, it
+fails with `vmware.conf not found. Run 'aba vmw' first.` A bare-metal cluster has no
+hypervisor VMs to delete, so `aba delete` should not require `vmware.conf` for platform=bm.
+This also caused the test to exhaust 5 retries and PAUSE.
+
+**Where:** `templates/Makefile.cluster` (the `delete` / `clean` targets and their dependencies),
+`scripts/vmw-delete.sh`, `scripts/kvm-delete.sh`
+
+**Full fix plan:** See saved plan `aba_delete_and_cluster_state_f6e8ad9a.plan.md`:
+- Part 1: `aba.sh` delete case — handle platform=bm as no-op (clean stamp+bm gate files)
+- Part 2: Externalize minimal cluster state to `~/.aba/cluster/<name>/state` AFTER successful
+  install (in `monitor-install.sh`). Read as fallback in `aba delete` to survive aba.conf changes
+  and `aba clean`. Remove on successful delete.
+- Part 3: E2E suites — reorder cleanup to delete bm clusters before restoring platform=vmw
+Deferred to post-release — test-side workaround applied for now.
+
+**Related: E2E orphan VM cleanup should use `aba delete`, not sweeping govc destroy (2026-03-23):**
+The E2E framework's `run.sh` has a "sweeping pass" that finds orphaned VMs in pool folders
+and destroys them directly via `govc vm.destroy`. This bypasses ABA's own `aba delete` command.
+The proper approach is to use `aba delete` (or the suite's registered cleanup functions) to
+remove cluster VMs, so the same code path used by users is tested.
+
+Example of the sweeping pass (should be replaced):
+```
+=== Sweeping pool folders for orphaned cluster VMs ===
+  The following VMs will be DESTROYED:
+    /Datacenter/vm/aba-e2e/pool1/e2e-sno1/e2e-sno1-e2e-sno1
+  Destroy these VMs? (Y/n):
+  Destroying /Datacenter/vm/aba-e2e/pool1/e2e-sno1/e2e-sno1-e2e-sno1 ...
+```
+
+Once `aba delete` is fixed (handles platform=bm, survives aba.conf changes via externalized
+state), the sweeping pass should be replaced with proper `aba delete` calls. This also
+means the E2E cleanup/crash-recovery code (`_pre_suite_cleanup`, `run.sh destroy --clean`)
+should iterate registered cluster dirs and run `aba delete` on each, rather than raw govc.
+
+---
+
+### Old E2E test5: SNO VM Still Running at ISO Upload, Causing Install Failure
+
+**Status:** Backlog (investigation needed)
+**Priority:** Critical
+**Estimated Effort:** Small
+**Created:** 2026-03-23
+
+**Problem:**
+In `test/test5-airgapped-install-local-reg.sh`, the SNO install fails quickly (exit=2 after
+only ~4 minutes, retries also fail instantly) because the previous SNO VM (10.0.1.203) is
+still powered on. The test flow is:
+
+1. Earlier in test5, a SNO cluster is installed and tested (with Docker registry)
+2. `rm -rf subdir/aba/sno` cleans the local directory on the internal bastion
+3. A new `aba cluster ... --step cluster.conf` creates a fresh SNO config
+4. `aba cluster ... -s install` fails because the old VM is still running at the same IP
+
+The `rm -rf sno` at line "Tidying up internal bastion" only removes local files -- it does
+NOT destroy the VM on the hypervisor. This is the same root cause as the `aba delete` bug
+(see "aba delete After aba clean Fails to Destroy VMs" above).
+
+**Observed in test.log on registry2:**
+```
+Mar 23 07:37:57 R Tidying up internal bastion (rm -rf subdir/aba/sno)
+Mar 23 07:38:11 R Installing sno (aba --dir subdir/aba cluster -n sno ... -s install)
+Mar 23 07:42:11 Non-zero return value: 2    <-- fails after ~4 min (preflight IP conflict)
+Mar 23 07:42:17 Attempting command again (2/5)
+Mar 23 07:42:22 Non-zero return value: 2    <-- fails in 5 seconds (same conflict)
+```
+
+**Root cause:**
+The test should run `aba --dir subdir/aba/sno delete` BEFORE `rm -rf subdir/aba/sno` to
+destroy the VM on the hypervisor first. Without this, the VM remains powered on and its
+IP (10.0.1.201/203) causes an IP conflict in the preflight check.
+
+**Proposed fix:**
+In `test/test5-airgapped-install-local-reg.sh`, before the `rm -rf subdir/aba/sno` line,
+add an explicit VM deletion:
+```bash
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete sno cluster VMs" \
+    "aba --dir subdir/aba/sno delete || true"
+```
+
+Also audit all other `rm -rf` of cluster directories in `test/test*.sh` to ensure they
+are preceded by `aba delete`. See also the related E2E backlog item "Delete VMs Before
+`rm -rf` Cluster Directory".
+
+**Where:** `test/test5-airgapped-install-local-reg.sh` (search for `rm -rf.*sno`),
+also audit `test/test2-airgapped-existing-reg.sh` and other test scripts.
+
+---
+
+### Bundle Makefile: `make NAME=opp` Without `OP_SETS` Silently Builds Empty-Operator Bundle
+
+**Status:** Backlog
+**Priority:** Critical
+**Estimated Effort:** Small
+**Created:** 2026-03-23
+
+**Problem:**
+Running `make VER=4.20.11 NAME=opp` directly (without passing `OP_SETS`) silently builds
+a bundle with zero operators. The `Makefile` defaults `OP_SETS ?=` (empty), and the
+`02-configure.sh` phase checks `[ "$OP_SETS" ]` before adding `--op-sets` to the `aba`
+command. The mapping from `NAME` to `OP_SETS` only exists in `go.sh`, not in the `Makefile`.
+
+Result: The user gets a 4.20.11-opp bundle that contains only release + additional images,
+no operator catalogs. oc-mirror reports "No catalogs mirrored. Skipping CatalogSource file
+generation." and the cluster has no operators available.
+
+**Root cause:**
+The Makefile has no NAME-to-OP_SETS mapping. When invoked directly (bypassing `go.sh`),
+the caller must remember to pass the correct `OP_SETS`.
+
+**Proposed fix (pick one):**
+1. **Safety check in Makefile:** Error out if `NAME != release` and `OP_SETS` is empty:
+   ```makefile
+   ifneq ($(NAME),release)
+   ifeq ($(OP_SETS),)
+   $(error OP_SETS is required for non-release bundles. Example: make VER=4.20.11 NAME=opp OP_SETS="ocp odf sec acm")
+   endif
+   endif
+   ```
+2. **NAME-to-OP_SETS lookup in Makefile:** Define a mapping so `NAME=opp` auto-sets
+   `OP_SETS` when not provided by the caller.
+3. **Both:** Lookup + warning if overridden.
+
+**Where:** `bundles/v2/Makefile`, `bundles/v2/go.sh` (the authoritative mapping)
+
+---
+
 ## High Priority
 
 ### Replace `oc-mirror list operators` With Podman-Based Catalog Extraction
@@ -357,6 +569,48 @@ cluster types. The naming should follow `<type>-e2e<pool>` instead.
 
 **Files to update:** `test/e2e/lib/config-helpers.sh` (`pool_cluster_name` and related functions),
 all suite scripts under `test/e2e/suites/`, dnsmasq DNS records on pool hosts, `test/e2e/config.env`.
+
+---
+
+### Bundle Script: Smart Cluster Reuse Instead of Automatic Delete
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small-Medium
+**Created:** 2026-03-22
+
+**Problem:**
+The bundle pipeline's cluster install step currently checks if a cluster already exists and
+deletes it unconditionally before re-installing. This wastes 30-60 minutes rebuilding a
+cluster that may already be perfectly healthy.
+
+**Proposed behavior:**
+When an existing cluster is detected, check its health before deciding to delete:
+1. Is the API endpoint reachable?
+2. Are all ClusterOperators available (`True False False`)?
+3. (Optional) Does the cluster version match the expected OCP version?
+4. (Optional) Are all nodes Ready?
+
+If the cluster is healthy (all COs available), skip deletion and reuse it.
+If the cluster is unhealthy (some COs degraded/unavailable), delete and reinstall.
+
+**Example logic:**
+```bash
+if cluster_exists "$cluster_dir"; then
+    if all_cos_available "$cluster_dir"; then
+        echo "Existing cluster is healthy -- reusing"
+    else
+        echo "Existing cluster is unhealthy -- deleting and reinstalling"
+        aba --dir "$cluster_dir" delete
+        aba --dir "$cluster_dir" install
+    fi
+else
+    aba --dir "$cluster_dir" install
+fi
+```
+
+**Where:** `bundles/v2/scripts/` (cluster install phase), potentially also useful
+in E2E suites that pre-check cluster state.
 
 ---
 
@@ -1051,6 +1305,25 @@ it impossible to distinguish between "flaky infrastructure" and "real code bug".
 
 ## Low Priority
 
+### Bundle Pipeline: Empty Google Drive Trash After Sync
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-23
+
+**Problem:**
+After synchronizing a new bundle to Google Drive, the old bundle files remain in the
+Drive trash, consuming storage quota. The trash must be emptied manually.
+
+**Proposed fix:**
+Use the `gdrive` CLI tool to empty the trash folder after a successful bundle upload/sync.
+Add a `gdrive files trash empty` (or equivalent) command at the end of the bundle sync
+step in `bundles/v2/`.
+
+**Where:** `bundles/v2/go.sh` or `bundles/v2/phases/` (whichever handles the GDrive upload)
+
+---
+
 ### Clean Up TUI Debug Logging
 
 **Status:** Backlog
@@ -1173,19 +1446,18 @@ Makefile:116: *** "Value 'ocp_version' not set in aba.conf! Run aba in the root 
 
 ### 8. E2E Suite Teardown / Cleanup Independence
 
-**Status:** Backlog  
+**Status:** Partially done (2026-03-23)
 **Priority:** Low  
 **Estimated Effort:** Small  
 **Created:** 2026-02-21
 
 **Problem:**
-Suites rely on the next suite's `setup_aba_from_scratch()` to clean up. There is no per-suite teardown. Issues:
-- Running a single suite leaves state behind on conN
-- The last suite in `--all` leaves state behind
-- `suite-cluster-ops` and `suite-network-advanced` don't call `setup_aba_from_scratch` and could be affected by prior suite state
-- `cleanup_all()` in `test/e2e/lib/setup.sh` is dead code (never called)
+Suites relied on the next suite's `setup_aba_from_scratch()` to clean up. Now each suite
+installs ABA from scratch inline (git clone or curl), so they are self-contained.
+`setup_aba_from_scratch()` and `cleanup_all()` have been removed from `setup.sh`.
 
-**Action:** Remove dead `cleanup_all()` or wire it into a teardown hook. Consider adding per-suite cleanup.
+**Remaining:** Running a single suite still leaves state behind on conN (clusters, mirrors).
+Consider adding per-suite teardown hooks for environments that need a clean slate after each suite.
 
 ### 9. New Command: `aba status`
 
