@@ -15,6 +15,11 @@ endif
 ifeq ($(NAME),)
 $(error NAME is required. Example: make VER=4.18.0 NAME=release)
 endif
+ifneq ($(NAME),release)
+ifeq ($(strip $(OP_SETS)),)
+$(error OP_SETS is required for non-release bundles. Example: make VER=4.18.0 NAME=opp OP_SETS="ocp odf sec acm")
+endif
+endif
 
 BUNDLE_NAME = $(VER)-$(NAME)
 WORK_DIR    := $(shell bash -c 'source bundle.conf 2>/dev/null && echo $$WORK_DIR')
