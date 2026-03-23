@@ -69,9 +69,13 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 
-e2e_run "Install aba" "./install"
+e2e_run "Reset aba" "aba reset -f"
+e2e_run "Remove oc-mirror caches" \
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \

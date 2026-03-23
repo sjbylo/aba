@@ -58,7 +58,7 @@
 #      (e.g. run_once(), download_all_catalogs()).  Use 'aba' CLI or 'make'.
 #
 # 10e. Tests MUST NOT use 'aba reset' as a mid-process cleanup mechanism.
-#      Only use when a 100% fresh repo is needed (e.g. setup_aba_from_scratch)
+#      Only use when a 100% fresh repo is needed (e.g. suite setup block)
 #      or for dedicated reset regression tests.  For mid-process cleanup use
 #      'aba clean', 'aba uninstall', or 'aba delete'.
 #
@@ -1568,9 +1568,9 @@ _e2e_fix_ssh_config_ownership() {
 # --- Environment Setup (called by run.sh or suites directly) ---------------
 
 e2e_setup() {
-    # Navigate to aba root
-    local aba_root
-    aba_root="$(cd "$_E2E_DIR/../.." && pwd)"
+    # Navigate to aba product directory (create if needed -- suite installs ABA later)
+    local aba_root="${_ABA_ROOT:-$HOME/aba}"
+    mkdir -p "$aba_root"
     cd "$aba_root" || { echo "Cannot cd to $aba_root"; exit 1; }
 
     export ABA_TESTING=1

@@ -65,6 +65,7 @@ CLI_STATUS=""
 CLI_START=""
 _CLI_POOLS_SET=""
 CLI_VERIFY=""
+CLI_DEV=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 CLI_OS=""
 
@@ -80,9 +81,11 @@ _usage() {
 	  run.sh run --suite X --pool 2        Run suite on a specific pool
 	  run.sh run --suite X --pool 2 --force -y  Force onto pool (works with running dispatcher)
 	  run.sh run --pool 3 --resume         Re-run last suite, skip passed tests
+	  run.sh run --all --pools 3 --dev     Push local source to ~/aba, then run
 	  run.sh reschedule [--suite X] [--pools N]  Re-queue completed suites
-	  run.sh deploy [--pool N] [--force]   Sync local ABA repo to conN host(s)
-	  run.sh restart [--pool N] [--resume] Stop + deploy + re-run last suite
+	  run.sh deploy [--pool N] [--force]   Push source code + harness to conN
+	  run.sh restart [--pool N] [--resume] Stop + harness deploy + re-run last suite
+	  run.sh restart --pool N --dev        Stop + source deploy + harness + re-run
 	  run.sh restart --suite X --pool N    Stop + deploy + run suite X on pool N
 	  run.sh stop [--pool N]               Kill runner(s) (--pool: keep dispatcher)
 	  run.sh start [--pool N]              Power on pool VMs (conN + disN)
@@ -100,6 +103,8 @@ _usage() {
 	  --pools N            Number of pools (default: 1)
 	  --pool N             Target a specific pool
 	  --force              Wipe suite state before dispatching / hot-deploy
+	  --dev                Developer mode: push local source to ~/aba on conN
+	                       instead of letting the suite install ABA from internet
 	  --resume             Skip previously-passed tests (run, restart)
 	  --dry-run            Show dispatch plan, don't execute
 	  --clean              Clear checkpoints before running
@@ -138,6 +143,7 @@ while [ $# -gt 0 ]; do
 		--clean)              CLI_CLEAN=1; shift ;;
 		--dry-run)            CLI_DRY_RUN=1; shift ;;
 		-f|--force)           CLI_FORCE=1; shift ;;
+		--dev)                CLI_DEV=1; shift ;;
 		--pool)               CLI_POOL="$2"; shift 2 ;;
 		--resume)             CLI_RESUME=1; shift ;;
 		--os)                 CLI_OS="$2"; shift 2 ;;
@@ -224,8 +230,14 @@ fi
 # --os overrides INT_BASTION_RHEL_VER from config.env
 [ -n "$CLI_OS" ] && export INT_BASTION_RHEL_VER="$CLI_OS"
 
-# --- Ensure govc when we will use it (destroy or infra check / setup) ---------
+# --- Auto-detect git branch and repo from the developer's local checkout ------
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
+export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
+export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$_ABA_ROOT" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
+# user/repo slug for curl one-liner install (strip protocol + host + .git suffix)
+export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
+
+# --- Ensure govc when we will use it (destroy or infra check / setup) ---------
 _ensure_govc() {
 	if command -v govc &>/dev/null; then
 		return 0
@@ -280,7 +292,7 @@ _sweep_pool_orphan_vms() {
 _process_pool_cleanup_files() {
 	local pool_num="$1"
 	_ssh_con "$pool_num" "
-		_logs=\"\$HOME/aba/test/e2e/logs\"
+		_logs=\"\$HOME/.e2e-harness/logs\"
 		for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
 			[ -f \"\$f\" ] || continue
 			echo \"    Processing \$(basename \"\$f\") ...\"
@@ -311,7 +323,7 @@ _create_tmux_dashboard() {
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
+		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null || true
@@ -359,7 +371,7 @@ if [ -n "$CLI_ATTACH" ]; then
 		 else echo 'No e2e session found on ${host}.'; tmux list-sessions 2>/dev/null || echo '(no tmux sessions)'; fi"
 fi
 
-# --- Deploy mode --------------------------------------------------------------
+# --- Deploy mode (developer quick-fix: source-only push) ----------------------
 
 if [ -n "$CLI_DEPLOY" ]; then
 	# --pool N targets a single pool; --pools N targets 1..N
@@ -370,43 +382,20 @@ if [ -n "$CLI_DEPLOY" ]; then
 		for (( _dp=1; _dp<=_OP_POOLS; _dp++ )); do _deploy_list+=("$_dp"); done
 	fi
 	echo ""
-	echo "  Deploying ABA repo to conN hosts (${_deploy_list[*]}) ..."
+	echo "  Developer deploy: source-only push to conN (${_deploy_list[*]}) ..."
+
+	# Whitelist: only ABA source code (no binaries, data, configs, dot-flags)
 	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
 	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-		--exclude='.git' \
-		--exclude='.backup' \
-		--exclude='.cursor' \
-		--exclude='*.swp' \
-		--exclude='images' \
-		--exclude='test/e2e/logs' \
-		--exclude='*/iso-agent-based*' \
-		--exclude='bundles*' \
-		--exclude='ai' \
-		--exclude='./demo*' \
-		--exclude='./sno*' \
-		--exclude='./compact*' \
-		--exclude='./standard*' \
-		--exclude='xxx*' \
-		--exclude='cli/*.gz' \
-		--exclude='cli/*.tar*' \
-		--exclude='mirror/data' \
-		--exclude='mirror/mirror' \
-		--exclude='mirror/regcreds*' \
-		--exclude='mirror/docker-reg-image*' \
-		--exclude='mirror/mirror-registry' \
-		--exclude='.oc-mirror.log' \
-		--exclude='*.tar' \
-		--exclude='*.tar.gz' \
-		--exclude='.dnf-install.log' \
-		--exclude='*.bk' \
-		--exclude='mirror/.available' \
-		--exclude='aba.conf' \
-		--exclude='vmware.conf' \
-		--exclude='*/mirror.conf' \
-		--exclude='*/cluster.conf' \
-		.
+		--exclude='*/.*' \
+		scripts/ \
+		templates/ \
+		Makefile \
+		cli/Makefile \
+		aba \
+		install
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
-	echo "  Tarball: $_deploy_size"
+	echo "  Source tarball: $_deploy_size"
 	echo ""
 	for i in "${_deploy_list[@]}"; do
 		user="${CON_SSH_USER:-steve}"
@@ -425,44 +414,27 @@ if [ -n "$CLI_DEPLOY" ]; then
 			echo -n "RUNNING (hot-deploy) "
 		fi
 
-		# --force hot-deploy: extract on top of existing dir (preserves logs/, state)
-		# Normal deploy: clean slate (rm -rf) since pool is idle
-		if [ -n "$CLI_FORCE" ]; then
-			_remote_prep="mkdir -p ~/aba"
-		else
-			# Process any leftover cleanup files before wiping the directory
-			_process_pool_cleanup_files "$i"
-			_remote_prep="rm -rf ~/aba && mkdir ~/aba"
-		fi
-
-		if ssh $_SSH_OPTS "${target}" "$_remote_prep" 2>/dev/null &&
+		# Source deploy always overlays on existing ~/aba (never wipes)
+		if ssh $_SSH_OPTS "${target}" "mkdir -p ~/aba" 2>/dev/null &&
 		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
 		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
-			echo "done"
+			echo -n "source "
 		else
-			echo -n "FAILED -- attempting SSH repair via conN hop ... "
-			_repaired=false
-			for (( j=1; j<=${_OP_POOLS}; j++ )); do
-				[ "$j" -eq "$i" ] && continue
-				_hop="${user}@con${j}.${VM_BASE_DOMAIN}"
-				# Copy bastion's key to the hop host, then scp it to the target
-				# (avoids piping key through multi-hop SSH which can corrupt the file)
-				if scp $_SSH_OPTS ~/.ssh/id_rsa.pub "${_hop}:/tmp/_bastion_key.pub" 2>/dev/null &&
-				   ssh $_SSH_OPTS "$_hop" \
-					"scp -o BatchMode=yes -o StrictHostKeyChecking=no /tmp/_bastion_key.pub ${host}:/tmp/_bastion_key.pub && \
-					 ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${host} \
-					 'mkdir -p ~/.ssh && cat /tmp/_bastion_key.pub > ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && rm -f /tmp/_bastion_key.pub' && \
-					 rm -f /tmp/_bastion_key.pub" 2>/dev/null; then
-					if ssh $_SSH_OPTS "${target}" "$_remote_prep" 2>/dev/null &&
-					   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-					   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
-						echo "REPAIRED via con${j}, done"
-						_repaired=true
-						break
-					fi
-				fi
-			done
-			$_repaired || echo "FAILED (unreachable)"
+			echo "FAILED (source deploy)"
+			continue
+		fi
+
+		# Also push test harness to ~/.e2e-harness/
+		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" 2>/dev/null &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${target}:~/.e2e-harness/runner.sh" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env"       "${target}:~/.e2e-harness/config.env" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${target}:~/.e2e-harness/pools.conf" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${target}:~/.e2e-harness/lib/" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${target}:~/.e2e-harness/suites/" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${target}:~/.e2e-harness/scripts/"; then
+			echo "+ harness done"
+		else
+			echo "+ harness FAILED"
 		fi
 	done
 	rm -f "$_deploy_tar"
@@ -597,7 +569,7 @@ if [ -n "$CLI_RESTART" ]; then
 		printf "    con${p}: "
 		ssh $_restart_ssh "${_target}" 'set -f
 			_found=""
-			_log_dir="$HOME/aba/test/e2e/logs"
+			_log_dir="$HOME/.e2e-harness/logs"
 			_ssh="ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
 			for f in "$_log_dir"/*.cleanup; do
@@ -628,58 +600,54 @@ if [ -n "$CLI_RESTART" ]; then
 		' 2>/dev/null || echo "unreachable"
 	done
 
-	# 3) Deploy
+	# 3) Deploy harness (always) + source (only with --dev)
 	echo ""
-	echo "  [3/4] Deploying ..."
-	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
-	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-		--exclude='.git' \
-		--exclude='.backup' \
-		--exclude='.cursor' \
-		--exclude='*.swp' \
-		--exclude='images' \
-		--exclude='test/e2e/logs' \
-		--exclude='*/iso-agent-based*' \
-		--exclude='bundles*' \
-		--exclude='ai' \
-		--exclude='./demo*' \
-		--exclude='./sno*' \
-		--exclude='./compact*' \
-		--exclude='./standard*' \
-		--exclude='xxx*' \
-		--exclude='cli/*.gz' \
-		--exclude='cli/*.tar*' \
-		--exclude='mirror/data' \
-		--exclude='mirror/mirror' \
-		--exclude='mirror/regcreds*' \
-		--exclude='mirror/docker-reg-image*' \
-		--exclude='mirror/mirror-registry' \
-		--exclude='.oc-mirror.log' \
-		--exclude='*.tar' \
-		--exclude='*.tar.gz' \
-		--exclude='.dnf-install.log' \
-		--exclude='*.bk' \
-		--exclude='mirror/.available' \
-		--exclude='aba.conf' \
-		--exclude='vmware.conf' \
-		--exclude='*/mirror.conf' \
-		--exclude='*/cluster.conf' \
-		.
-	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
-	echo "    Tarball: $_deploy_size"
+	if [ -n "$CLI_DEV" ]; then
+		echo "  [3/4] Developer deploy: source + harness ..."
+		_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+		tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
+			--exclude='*/.*' \
+			scripts/ \
+			templates/ \
+			Makefile \
+			cli/Makefile \
+			aba \
+			install
+		_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+		echo "    Source tarball: $_deploy_size"
+		for p in "${_restart_pools[@]}"; do
+			_host="con${p}.${_domain}"
+			_target="${_user}@${_host}"
+			echo -n "    con${p}: "
+			if ssh $_restart_ssh "${_target}" "mkdir -p ~/aba" 2>/dev/null &&
+			   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
+			   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+				echo "source done"
+			else
+				echo "FAILED (unreachable?)"
+			fi
+		done
+		rm -f "$_deploy_tar"
+	else
+		echo "  [3/4] Deploying harness only (suite installs ABA from internet) ..."
+	fi
+
 	for p in "${_restart_pools[@]}"; do
 		_host="con${p}.${_domain}"
 		_target="${_user}@${_host}"
-		echo -n "    con${p}: "
-		if ssh $_restart_ssh "${_target}" "rm -rf ~/aba && mkdir ~/aba" 2>/dev/null &&
-		   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-		   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+		echo -n "    con${p} harness: "
+		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" 2>/dev/null &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/config.env"       "${_target}:~/.e2e-harness/config.env" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${_target}:~/.e2e-harness/scripts/"; then
 			echo "done"
 		else
-			echo "FAILED (unreachable?)"
+			echo "FAILED"
 		fi
 	done
-	rm -f "$_deploy_tar"
 
 	# 4) Re-launch last suite on each pool
 	echo ""
@@ -702,7 +670,7 @@ if [ -n "$CLI_RESTART" ]; then
 		for suite in "${_last_suites[@]}"; do
 			_resume_flag=""
 			[ -n "${CLI_RESUME:-}" ] && _resume_flag="--resume"
-			_runner_cmd="bash ~/aba/test/e2e/runner.sh $_resume_flag $p $suite"
+			_runner_cmd="bash ~/.e2e-harness/runner.sh $_resume_flag $p $suite"
 			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'; tmux rename-window -t '$E2E_TMUX_SESSION' '$suite'" 2>/dev/null; then
 				echo "    con${p}: dispatched $suite (tmux: $E2E_TMUX_SESSION)"
 				(( _restart_ok++ ))
@@ -745,7 +713,7 @@ if [ -n "$CLI_STATUS" ]; then
 			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
-				last=\$(tail -1 ~/aba/test/e2e/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+				last=\$(tail -1 ~/.e2e-harness/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
 					rc=\$(cat \"\$rc_file\" 2>/dev/null)
 					echo \"DONE|\${suite}|exit=\${rc}\"
@@ -768,7 +736,7 @@ if [ -n "$CLI_STATUS" ]; then
 				fi
 			fi
 			echo '|||TABLE|||'
-			tac ~/aba/test/e2e/logs/summary.log 2>/dev/null \
+			tac ~/.e2e-harness/logs/summary.log 2>/dev/null \
 				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \
 				| tac \
 				| sed 's/\x1b\[[0-9;]*m//g' \
@@ -1017,13 +985,13 @@ if [ -n "$CLI_DESTROY" ]; then
 
 	# --clean: SSH to each conN and delete test clusters / uninstall mirrors
 	# before destroying VMs. Processes .cleanup and .mirror-cleanup files
-	# that suites leave in ~/aba/test/e2e/logs/.
+	# that suites leave in ~/.e2e-harness/logs/.
 	if [ -n "$CLI_CLEAN" ]; then
 		echo "=== Cleaning up test clusters and mirrors on pool VMs ==="
 		_cssh="-o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 		_user="${CON_SSH_USER:-steve}"
 		_domain="${VM_BASE_DOMAIN}"
-		_e2e_logs="aba/test/e2e/logs"
+		_e2e_logs=".e2e-harness/logs"
 
 		for (( i=1; i<=10; i++ )); do
 			_host="con${i}.${_domain}"
@@ -1246,8 +1214,8 @@ _vms_ready() {
 
 	if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-		"${user}@${con}" -- "test -d ~/aba"; then
-		_reason="SSH to ${con} failed or ~/aba missing"
+		"${user}@${con}" -- "true"; then
+		_reason="SSH to ${con} failed"
 		echo "  Pool $pool_num: not ready ($_reason)" >&2
 		return 1
 	fi
@@ -1318,20 +1286,22 @@ if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
 fi
 
-# --- scp test framework + config to each conN --------------------------------
+# --- scp test harness to ~/.e2e-harness/ on each conN -------------------------
 
 echo ""
-echo "  Deploying test framework to conN hosts ..."
+echo "  Deploying test harness to conN hosts ..."
 for (( i=1; i<=CLI_POOLS; i++ )); do
 	user="${CON_SSH_USER:-steve}"
 	host="con${i}.${VM_BASE_DOMAIN}"
 	target="${user}@${host}"
 
-	if scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/aba/test/e2e/runner.sh" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/aba/test/e2e/lib/" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/aba/test/e2e/suites/"; then
+	if ssh -q $_SSH_OPTS "$target" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/.e2e-harness/config.env" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/.e2e-harness/pools.conf" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/.e2e-harness/runner.sh" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/.e2e-harness/lib/" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/.e2e-harness/suites/" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/scripts/*.sh "$target:~/.e2e-harness/scripts/"; then
 		# Deploy notify.sh if available locally (contains secrets, not in git)
 		if [ -x ~/bin/notify.sh ]; then
 			ssh -q $_SSH_OPTS "$target" "mkdir -p ~/bin" &&
@@ -1340,11 +1310,42 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 		fi
 		# Ensure rootless podman's pause process survives between SSH sessions
 		ssh -q $_SSH_OPTS "$target" "sudo loginctl enable-linger $user 2>/dev/null || true"
-		echo "    con${i}: framework + config deployed"
+		echo "    con${i}: harness deployed to ~/.e2e-harness/"
 	else
-		echo "    con${i}: FAILED to deploy framework (skipping)" >&2
+		echo "    con${i}: FAILED to deploy harness (skipping)" >&2
 	fi
 done
+
+# --- Developer mode: push source to ~/aba on each conN -----------------------
+if [ -n "$CLI_DEV" ]; then
+	echo ""
+	echo "  Developer mode: pushing ABA source to conN hosts ..."
+	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
+		--exclude='*/.*' \
+		scripts/ \
+		templates/ \
+		Makefile \
+		cli/Makefile \
+		aba \
+		install
+	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+	echo "  Source tarball: $_deploy_size"
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		user="${CON_SSH_USER:-steve}"
+		host="con${i}.${VM_BASE_DOMAIN}"
+		target="${user}@${host}"
+		echo -n "    con${i}: "
+		if ssh -q $_SSH_OPTS "$target" "mkdir -p ~/aba" 2>/dev/null &&
+		   scp -q $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
+		   ssh -q $_SSH_OPTS "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+			echo "done"
+		else
+			echo "FAILED"
+		fi
+	done
+	rm -f "$_deploy_tar"
+fi
 
 # =============================================================================
 # --- Dynamic Work-Queue Dispatcher -------------------------------------------
@@ -1384,22 +1385,24 @@ _dispatch_suite() {
 	# Remove old rc/lock/pause files (stale pause files cause false PAUSED status)
 	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
-	# Sync latest test code to conN before launching
+	# Sync latest test harness to ~/.e2e-harness/ on conN before launching
 	local _user="${CON_SSH_USER:-steve}"
 	local _host="con${pool_num}.${VM_BASE_DOMAIN}"
 	local _target="${_user}@${_host}"
-	if ! { scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh" "${_target}:~/aba/test/e2e/runner.sh" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env" "${_target}:~/aba/test/e2e/config.env" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh    "${_target}:~/aba/test/e2e/lib/" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/aba/test/e2e/suites/" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh "${_target}:~/aba/test/e2e/scripts/"; }; then
+	if ! { _ssh_con "$pool_num" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env"       "${_target}:~/.e2e-harness/config.env" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${_target}:~/.e2e-harness/scripts/"; }; then
 		echo "    ERROR: scp to con${pool_num} failed -- skipping dispatch"
 		return 1
 	fi
 
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
-	local runner_cmd="bash ~/aba/test/e2e/runner.sh $pool_num $suite$_retry_arg"
+	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
 	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'"
 
 	_busy_pools[$pool_num]="$suite"
@@ -1504,8 +1507,8 @@ _collect_pool_logs() {
 	local log_dir="$_RUN_DIR/logs"
 
 	mkdir -p "$log_dir"
-	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
-	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----

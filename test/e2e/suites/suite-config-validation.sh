@@ -39,16 +39,10 @@ suite_begin "config-validation"
 # ============================================================================
 test_begin "Setup: install and configure"
 
-e2e_run "Reset aba to clean state" \
-	"cd ~/aba && ./install && aba reset -f"
+e2e_run "Install ABA via curl" \
+	"cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
+cd ~/aba
 
-e2e_run "Remove oc-mirror caches" \
-	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
-
-e2e_run "Verify /home disk usage < 10GB after reset" \
-	"used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
-
-e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Set dns_servers" \

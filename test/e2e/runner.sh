@@ -9,7 +9,7 @@
 # Interactive mode is always on -- failures pause and wait for user input.
 #
 # Usage (sent by run.sh via tmux send-keys):
-#   bash ~/aba/test/e2e/runner.sh POOL_NUM suite_name
+#   bash ~/.e2e-harness/runner.sh POOL_NUM suite_name
 #
 # Exit code is written to $E2E_RC_PREFIX-<suite>.rc so run.sh can poll it.
 #
@@ -20,7 +20,8 @@
 set -u
 
 _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_ABA_ROOT="$(cd "$_RUNNER_DIR/../.." && pwd)"
+_ABA_ROOT="$HOME/aba"
+export _ABA_ROOT
 
 source "$_RUNNER_DIR/lib/constants.sh"
 
@@ -107,7 +108,7 @@ _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
 
 _cleanup_wasteful_dirs_local() {
 	rm -rf $_E2E_WASTEFUL_DIRS
-	# ABA-extracted CLI tools; suite reinstalls via setup_aba_from_scratch → make install
+	# ABA-extracted CLI tools; suite reinstalls via git clone + ./install
 	rm -rf ~/bin
 	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
 	rm -rf ~/.oc-mirror ~/.cache/agent
@@ -217,6 +218,12 @@ if [ -f "$_RUNNER_DIR/config.env" ]; then
 	set +a
 fi
 
+# Derive git variables needed by suites (curl/git-clone install paths).
+# These are set in run.sh on the orchestrator host but don't propagate over SSH.
+export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
+export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$_ABA_ROOT" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
+export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
+
 # Setup framework environment
 e2e_setup
 
@@ -231,22 +238,32 @@ export _E2E_INTERACTIVE=1
 
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	if ! command -v govc &>/dev/null; then
-		echo "  Bootstrapping govc ..."
-		make -sC "$_ABA_ROOT/cli" govc || {
-			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
-			exit 1
-		}
-		export PATH="$HOME/bin:$PATH"
-		command -v govc &>/dev/null || {
-			echo "  ERROR: govc not found in PATH after bootstrap." >&2
-			exit 1
-		}
+		if [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
+			echo "  Bootstrapping govc ..."
+			make -sC "$_ABA_ROOT/cli" govc || {
+				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+				exit 1
+			}
+			export PATH="$HOME/bin:$PATH"
+			command -v govc &>/dev/null || {
+				echo "  ERROR: govc not found in PATH after bootstrap." >&2
+				exit 1
+			}
+		else
+			echo "  WARNING: ABA not fully initialized (missing cli/Makefile or aba.conf)."
+			echo "           Suite will install/configure ABA before using govc."
+		fi
 	fi
 
 	# Source VMware credentials for snapshot revert
 	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
 	if [ -f "$_vmconf" ]; then
 		set -a; source "$_vmconf"; set +a
+	fi
+	# Source KVM credentials (if present)
+	_kvmconf="$(eval echo "${KVM_CONF:-~/.kvm.conf}")"
+	if [ -f "$_kvmconf" ]; then
+		set -a; source "$_kvmconf"; set +a
 	fi
 else
 	echo "  (Skipping govc bootstrap -- E2E_SKIP_SNAPSHOT_REVERT=1)"
@@ -599,6 +616,7 @@ echo ""
 _rc=0
 
 while true; do
+	mkdir -p "$_ABA_ROOT"
 	cd "$_ABA_ROOT"
 	_suite_start=$(date +%s)
 

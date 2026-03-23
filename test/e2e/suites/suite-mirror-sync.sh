@@ -53,9 +53,14 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 
-e2e_run "Install aba" "./install"
+e2e_run "Reset aba" "aba reset -f"
+e2e_run "Remove oc-mirror caches" \
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
 e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
@@ -328,6 +333,8 @@ e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
+
+e2e_run "Remove BM cluster dir (no VMs to delete, platform=bm)" "rm -rf $STANDARD"
 
 e2e_run "Restore platform=vmw" "aba --platform vmw"
 

@@ -707,6 +707,20 @@ _vm_setup_vmware_conf() {
     fi
 }
 
+# --- _vm_setup_kvm_conf ----------------------------------------------------
+# Copy kvm.conf to the VM (if present on bastion).
+#
+_vm_setup_kvm_conf() {
+    local host="$1"
+    local user="${2:-$VM_DEFAULT_USER}"
+    local kf="${KVM_CONF:-$HOME/.kvm.conf}"
+
+    if [ -f "$kf" ]; then
+        echo "  [vm] Copying kvm.conf to $host ..."
+        _escp "$kf" "${user}@${host}:"
+    fi
+}
+
 # --- _vm_remove_pull_secret -------------------------------------------------
 # Remove .pull-secret.json (not needed in fully air-gapped environment).
 #
@@ -918,9 +932,9 @@ _vm_install_aba() {
     local host="$1"
     local user="${2:-$VM_DEFAULT_USER}"
     local branch
-    branch="$(git -C "$_E2E_LIB_DIR_PL/../../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)"
+    branch="${E2E_GIT_BRANCH:-$(git -C "${_ABA_ROOT:-$HOME/aba}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
     local repo_url
-    repo_url="$(git -C "$_E2E_LIB_DIR_PL/../../.." remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)"
+    repo_url="${E2E_GIT_REPO:-$(git -C "${_ABA_ROOT:-$HOME/aba}" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
 
     echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 
@@ -1108,6 +1122,7 @@ configure_connected_bastion() {
 
     # Config
     _vm_setup_vmware_conf "$host" "$user"
+    _vm_setup_kvm_conf "$host" "$user"
     _vm_set_aba_testing "$host" "$user"
     _vm_install_aba "$host" "$user"
 
@@ -1146,8 +1161,9 @@ configure_internal_bastion() {
     _vm_cleanup_podman "$host" "$user"
     _vm_cleanup_home "$host" "$user"
 
-    # Install govc config
+    # Install hypervisor config
     _vm_setup_vmware_conf "$host" "$user"
+    _vm_setup_kvm_conf "$host" "$user"
 
     # Air-gap: remove pull-secret and proxy
     _vm_remove_pull_secret "$host" "$user"
@@ -1362,6 +1378,7 @@ create_pools() {
             touch "${signal_dir}/${conn_vm}.ready"
 
             _vm_setup_vmware_conf "$conn_vm" "$user"
+            _vm_setup_kvm_conf "$conn_vm" "$user"
             _vm_cleanup_caches "$conn_vm" "$user"
             _vm_verify_golden "$conn_vm" "$user"
             _vm_install_aba "$conn_vm" "$user"
@@ -1396,6 +1413,7 @@ create_pools() {
                 echo "  [$int_vm] $conn_vm is ready (waited ${waited}s), continuing ..."
 
                 _vm_setup_vmware_conf "$int_vm" "$user"
+                _vm_setup_kvm_conf "$int_vm" "$user"
                 _vm_cleanup_caches "$int_vm" "$user"
                 _vm_verify_golden "$int_vm" "$user"
                 _vm_remove_pull_secret "$int_vm" "$user"

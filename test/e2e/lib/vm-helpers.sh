@@ -567,6 +567,20 @@ _vm_setup_vmware_conf() {
 	fi
 }
 
+# --- _vm_setup_kvm_conf ----------------------------------------------------
+
+_vm_setup_kvm_conf() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+	local kf="${KVM_CONF:-$HOME/.kvm.conf}"
+
+	if [ -f "$kf" ]; then
+		echo "  [vm] Copying kvm.conf to $host ..."
+		_escp "$kf" "${user}@${host}:"
+		_essh "${user}@${host}" -- "sudo cp /home/${user}/.kvm.conf /root/.kvm.conf && sudo chmod 600 /root/.kvm.conf"
+	fi
+}
+
 # --- _vm_remove_pull_secret -------------------------------------------------
 
 _vm_remove_pull_secret() {
@@ -767,9 +781,9 @@ _vm_install_aba() {
 	local host="$1"
 	local user="${2:-$VM_DEFAULT_USER}"
 	local branch
-	branch="$(git -C "$_E2E_LIB_DIR_VM/../../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)"
+	branch="${E2E_GIT_BRANCH:-$(git -C "${_ABA_ROOT:-$HOME/aba}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
 	local repo_url
-	repo_url="$(git -C "$_E2E_LIB_DIR_VM/../../.." remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)"
+	repo_url="${E2E_GIT_REPO:-$(git -C "${_ABA_ROOT:-$HOME/aba}" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
 
 	echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 

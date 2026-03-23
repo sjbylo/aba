@@ -13,7 +13,6 @@ set -u
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
-source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -47,9 +46,9 @@ suite_begin "connected-public"
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
-
-e2e_run "Install aba" "./install"
+e2e_run "Install ABA via curl" \
+	"cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
+cd ~/aba
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
