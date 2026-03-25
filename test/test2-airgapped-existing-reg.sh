@@ -306,6 +306,8 @@ do
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*vlan=.*/vlan=$vlan /g\" $subdir/aba/$cname/cluster.conf"
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
 
+	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Be sure any VMs are down" "aba --dir $subdir/aba/$cname kill" 
+
 	# exec
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Create iso to ensure config files are valid" "aba --dir $subdir/aba/$cname iso" 
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Upload iso" "aba --dir $subdir/aba/$cname upload" 
