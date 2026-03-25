@@ -301,7 +301,7 @@ e2e_run "Pre-clean: remove stale iptables rules for port $_DOCKER_NEG_PORT on di
 	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT 2>/dev/null; do :; done; true'"
 
 e2e_run "Pre-clean: remove stale registry on disN" \
-	"_essh $DIS_HOST 'podman rm -f registry 2>/dev/null; rm -rf ~/docker-reg; true'"
+	"_essh $DIS_HOST 'podman rm -f registry || true; rm -rf ~/docker-reg; true'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
 e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"

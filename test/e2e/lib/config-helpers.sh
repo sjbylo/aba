@@ -239,7 +239,7 @@ gen_aba_conf() {
         p|previous) export OCP_VERSION=p ;;
     esac
 
-    _e2e_log "  Generated aba.conf: channel=$channel version=$version platform=$platform" 2>/dev/null || true
+    _e2e_log "  Generated aba.conf: channel=$channel version=$version platform=$platform" || true
 }
 
 # --- gen_mirror_conf --------------------------------------------------------
@@ -283,7 +283,7 @@ gen_mirror_conf() {
         esac
     fi
 
-    _e2e_log "  Configured mirror.conf: type=$reg_type host=$reg_host port=$reg_port" 2>/dev/null || true
+    _e2e_log "  Configured mirror.conf: type=$reg_type host=$reg_host port=$reg_port" || true
 }
 
 # --- gen_cluster_conf -------------------------------------------------------
@@ -328,7 +328,7 @@ gen_cluster_conf() {
         [ -n "$api_ip" ]      && sed -i "s/^api_ip=.*/api_ip=$api_ip/" "$dir/cluster.conf"
     fi
 
-    _e2e_log "  Configured cluster.conf in $dir" 2>/dev/null || true
+    _e2e_log "  Configured cluster.conf in $dir" || true
 }
 
 # --- gen_vmware_conf --------------------------------------------------------
@@ -342,7 +342,7 @@ gen_vmware_conf() {
 
     if [ -f "$src" ]; then
         cp "$src" "$dst"
-        _e2e_log "  Copied vmware.conf from $src" 2>/dev/null || true
+        _e2e_log "  Copied vmware.conf from $src" || true
     else
         echo "gen_vmware_conf: source file not found: $src" >&2
         return 1

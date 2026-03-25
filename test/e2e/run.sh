@@ -270,7 +270,7 @@ _sweep_pool_orphan_vms() {
 	local _known_vms="con${pool_num} dis${pool_num}"
 
 	local _all_vms
-	_all_vms=$(govc find "$_pfolder" -type m 2>/dev/null) || return 0
+	_all_vms=$(govc find "$_pfolder" -type m) || return 0
 	[ -z "$_all_vms" ] && return 0
 
 	while IFS= read -r _vm; do
@@ -283,8 +283,8 @@ _sweep_pool_orphan_vms() {
 		[ -n "$_is_known" ] && continue
 
 		echo "    Destroying orphan VM: $_vm"
-		govc vm.power -off "$_vm" 2>/dev/null || true
-		govc vm.destroy "$_vm" 2>/dev/null || true
+		govc vm.power -off "$_vm" || true
+		govc vm.destroy "$_vm" || true
 	done <<< "$_all_vms"
 }
 
@@ -415,9 +415,9 @@ if [ -n "$CLI_DEPLOY" ]; then
 		fi
 
 		# Source deploy always overlays on existing ~/aba (never wipes)
-		if ssh $_SSH_OPTS "${target}" "mkdir -p ~/aba" 2>/dev/null &&
-		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+		if ssh $_SSH_OPTS "${target}" "mkdir -p ~/aba" &&
+		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" &&
+		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"; then
 			echo -n "source "
 		else
 			echo "FAILED (source deploy)"
@@ -425,7 +425,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 		fi
 
 		# Also push test harness to ~/.e2e-harness/
-		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" 2>/dev/null &&
+		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${target}:~/.e2e-harness/runner.sh" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env"       "${target}:~/.e2e-harness/config.env" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${target}:~/.e2e-harness/pools.conf" &&
@@ -507,11 +507,11 @@ if [ -n "$CLI_START" ]; then
 	for p in "${_start_list[@]}"; do
 		for prefix in con dis; do
 			vm="${prefix}${p}"
-			_state=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 || true)
+			_state=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1 || true)
 			if [[ "$_state" == *"poweredOn"* ]]; then
 				echo "    ${vm}: already on"
 			elif govc vm.info "$vm" &>/dev/null; then
-				govc vm.power -on "$vm" 2>/dev/null || true
+				govc vm.power -on "$vm" || true
 				echo "    ${vm}: powered on"
 			else
 				echo "    ${vm}: not found (skipped)"
@@ -619,9 +619,9 @@ if [ -n "$CLI_RESTART" ]; then
 			_host="con${p}.${_domain}"
 			_target="${_user}@${_host}"
 			echo -n "    con${p}: "
-			if ssh $_restart_ssh "${_target}" "mkdir -p ~/aba" 2>/dev/null &&
-			   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-			   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+			if ssh $_restart_ssh "${_target}" "mkdir -p ~/aba" &&
+			   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" &&
+			   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"; then
 				echo "source done"
 			else
 				echo "FAILED (unreachable?)"
@@ -636,7 +636,7 @@ if [ -n "$CLI_RESTART" ]; then
 		_host="con${p}.${_domain}"
 		_target="${_user}@${_host}"
 		echo -n "    con${p} harness: "
-		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" 2>/dev/null &&
+		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/config.env"       "${_target}:~/.e2e-harness/config.env" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
@@ -1044,9 +1044,9 @@ if [ -n "$CLI_DESTROY" ]; then
 	for (( i=1; i<=10; i++ )); do
 		for prefix in con dis; do
 			vm="${prefix}${i}"
-			if govc vm.info "$vm" 2>/dev/null | grep "Name:"; then
+			if govc vm.info "$vm" | grep "Name:"; then
 				echo "  Destroying $vm ..."
-				govc vm.power -off "$vm" 2>/dev/null || true
+				govc vm.power -off "$vm" || true
 				govc vm.destroy "$vm" || true
 			fi
 		done
@@ -1060,7 +1060,7 @@ if [ -n "$CLI_DESTROY" ]; then
 	_all_orphans=""
 	for (( i=1; i<=10; i++ )); do
 		_pfolder="${_base}/pool${i}"
-		_orphans=$(govc find "$_pfolder" -type m 2>/dev/null) || continue
+		_orphans=$(govc find "$_pfolder" -type m) || continue
 		[ -z "$_orphans" ] && continue
 		_all_orphans+="$_orphans"$'\n'
 	done
@@ -1088,7 +1088,7 @@ if [ -n "$CLI_DESTROY" ]; then
 			while IFS= read -r _ovm; do
 				[ -z "$_ovm" ] && continue
 				echo "  Destroying $_ovm ..."
-				govc vm.power -off "$_ovm" 2>/dev/null || true
+				govc vm.power -off "$_ovm" || true
 				govc vm.destroy "$_ovm" || true
 			done <<< "$_all_orphans"
 		else
@@ -1336,9 +1336,9 @@ if [ -n "$CLI_DEV" ]; then
 		host="con${i}.${VM_BASE_DOMAIN}"
 		target="${user}@${host}"
 		echo -n "    con${i}: "
-		if ssh -q $_SSH_OPTS "$target" "mkdir -p ~/aba" 2>/dev/null &&
-		   scp -q $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-		   ssh -q $_SSH_OPTS "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+		if ssh -q $_SSH_OPTS "$target" "mkdir -p ~/aba" &&
+		   scp -q $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" &&
+		   ssh -q $_SSH_OPTS "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"; then
 			echo "done"
 		else
 			echo "FAILED"

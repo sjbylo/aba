@@ -246,7 +246,7 @@ e2e_run "Verify VMs are running after startup" \
 e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
     "aba --dir $SNO run --cmd 'oc get nodes' 2>&1 | grep -qw Ready"
 e2e_poll 300 15 "Wait for all nodes Ready after startup" \
-    "aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>/dev/null | grep -qw Ready && ! aba --dir $SNO run --cmd 'oc get nodes --no-headers' 2>/dev/null | grep -qw NotReady"
+    "aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw Ready && ! aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw NotReady"
 e2e_diag "Show nodes after startup" "aba --dir $SNO run --cmd 'oc get nodes'"
 e2e_poll 600 30 "Wait for all cluster operators available after startup" \
     "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
