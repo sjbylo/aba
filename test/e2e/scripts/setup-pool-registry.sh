@@ -134,16 +134,16 @@ else
     htpasswd -Bbn "$REG_USER" "$REG_PW" > "$AUTH_DIR/htpasswd"
 
     # Stop our container, any stale containers on port 8443, and orphan pods
-    podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
-    for _cid in $(podman ps -a --format '{{.ID}} {{.Ports}}' 2>/dev/null | grep ":${REG_PORT}" | awk '{print $1}'); do
+    podman rm -f "$CONTAINER_NAME" || true
+    for _cid in $(podman ps -a --format '{{.ID}} {{.Ports}}' | grep ":${REG_PORT}" | awk '{print $1}'); do
         echo "  Removing stale container $_cid holding port ${REG_PORT} ..."
-        podman rm -f "$_cid" 2>/dev/null || true
+        podman rm -f "$_cid" || true
     done
-    podman pod rm -f -a 2>/dev/null || true
+    podman pod rm -f -a || true
 
     # Open firewall port
     if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-        sudo firewall-cmd --add-port=${REG_PORT}/tcp --permanent 2>/dev/null || true
+        sudo firewall-cmd --add-port=${REG_PORT}/tcp --permanent || true
         sudo firewall-cmd --reload
     fi
 

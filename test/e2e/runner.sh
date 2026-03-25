@@ -136,7 +136,7 @@ _reset_con_firewall() {
 
 	# Verify: only pool registry port should remain
 	local _ports _unexpected=""
-	_ports=$(sudo firewall-cmd --list-ports 2>/dev/null)
+	_ports=$(sudo firewall-cmd --list-ports)
 	for _p in $_ports; do
 		case "$_p" in 8443/tcp|22/tcp) ;; *) _unexpected="$_unexpected $_p" ;; esac
 	done
@@ -152,7 +152,7 @@ _reset_con_firewall() {
 _ensure_pool_registry() {
 	[ -d "$POOL_REG_DIR" ] || return 0
 
-	if podman ps --format '{{.Names}}' 2>/dev/null | grep -q '^pool-registry$'; then
+	if podman ps --format '{{.Names}}' | grep -q '^pool-registry$'; then
 		echo "  pool-registry: running"
 		return 0
 	fi
@@ -160,7 +160,7 @@ _ensure_pool_registry() {
 	echo "  pool-registry: NOT running -- restarting from $POOL_REG_DIR ..."
 
 	# Remove stale container entry if it exists (stopped/dead)
-	podman rm -f pool-registry 2>/dev/null || true
+	podman rm -f pool-registry || true
 
 	local _reg_host
 	_reg_host="$(hostname -f)"
@@ -315,15 +315,14 @@ _revert_dis_snapshot() {
 	fi
 
 	govc snapshot.revert -vm "$DIS_VM" "$snapshot" || { echo "  ERROR: revert $DIS_VM failed" >&2; return 1; }
-	# Power on may fail if VM is already on after revert — that's benign
-	govc vm.power -on "$DIS_VM" 2>/dev/null || true
+	govc vm.power -on "$DIS_VM" || true
 	sleep "${VM_BOOT_DELAY:-8}"
 
 	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	echo "  Waiting for SSH on $dis_host ..."
 	local elapsed=0
 	while [ $elapsed -lt 120 ]; do
-		if _essh -o BatchMode=yes -o ConnectTimeout=5 "$dis_host" -- "date" 2>/dev/null; then
+		if _essh -o BatchMode=yes -o ConnectTimeout=5 "$dis_host" -- "date"; then
 			echo "  SSH ready on $dis_host"
 			# Remove stale firewall ports that may have been baked into the snapshot
 			echo "  Resetting firewall ports on $DIS_VM ..."
@@ -334,12 +333,12 @@ _revert_dis_snapshot() {
 			# Fix VC_FOLDER on disN after snapshot revert (snapshot has base value,
 			# not pool-specific). The bundle/tar only copies aba repo files, not ~/.vmware.conf.
 			if [ -n "${VC_FOLDER:-}" ]; then
-				_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
+				_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" \
 					&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
 					|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
 			fi
 			if [ -n "${VM_DATASTORE:-}" ]; then
-				_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" 2>/dev/null \
+				_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" \
 					&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
 					|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
 			fi
@@ -385,7 +384,7 @@ _cleanup_dis_aba() {
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
 
 	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
-	_essh "$dis_host" "sudo systemctl enable firewalld 2>/dev/null; sudo systemctl start firewalld 2>/dev/null" 2>&1 || true
+	_essh "$dis_host" "sudo systemctl enable firewalld; sudo systemctl start firewalld" 2>&1 || true
 
 	# 4. Remove stale firewall ports from permanent config (survive restart)
 	echo "  Resetting firewall ports on disN ..."
@@ -396,7 +395,7 @@ _cleanup_dis_aba() {
 
 	# Verify no stale ports remain on disN
 	local _dis_fw_ports
-	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports" 2>/dev/null) || true
+	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports") || true
 	if [ -n "$_dis_fw_ports" ]; then
 		echo "  WARNING: disN still has firewall ports after reset: $_dis_fw_ports"
 	else
@@ -405,18 +404,18 @@ _cleanup_dis_aba() {
 
 	# 5. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
 	if [ -n "${VC_FOLDER:-}" ]; then
-		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" 2>/dev/null \
+		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" \
 			&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
 			|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
 	fi
 	if [ -n "${VM_DATASTORE:-}" ]; then
-		_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" 2>/dev/null \
+		_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" \
 			&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
 			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
 	fi
 
 	# 6. Verify clean state
-	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q 2>/dev/null | grep -q ." 2>/dev/null; then
+	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q | grep -q ."; then
 		echo "  disN cleanup verified: clean state"
 	else
 		echo "  WARNING: disN cleanup may be incomplete -- check manually"
@@ -472,13 +471,13 @@ _pre_suite_cleanup() {
 	local found=""
 
 	# Kill stale oc-mirror processes from previous suite (they hold port 55000)
-	if pkill -f 'oc-mirror' 2>/dev/null; then
+	if pkill -f 'oc-mirror'; then
 		echo "  Killed stale oc-mirror process(es)"
 		sleep 2
 	fi
 
 	# Purge all oc-mirror caches (can grow to many GB across nested dirs)
-	sudo find ~/ -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
+	sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf
 	echo "  Purged oc-mirror caches"
 
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
@@ -493,10 +492,10 @@ _pre_suite_cleanup() {
 				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' delete; else
 					echo '  (dir not found -- sweeping vSphere for orphan VMs)'
 					_cname=\$(basename '$abs_path')
-					for vm in \$(govc find '${VC_FOLDER:-/Datacenter/vm/aba-e2e}' -type m -name \"\${_cname}-*\" 2>/dev/null); do
+					for vm in \$(govc find '${VC_FOLDER:-/Datacenter/vm/aba-e2e}' -type m -name \"\${_cname}-*\"); do
 						echo \"    Destroying orphan: \$vm\"
-						govc vm.power -off \"\$vm\" 2>/dev/null || true
-						govc vm.destroy \"\$vm\" 2>/dev/null || true
+						govc vm.power -off \"\$vm\" || true
+						govc vm.destroy \"\$vm\" || true
 					done
 				fi" \
 				2>&1 ); then

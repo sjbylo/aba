@@ -93,7 +93,7 @@ _vm_wait_ssh() {
     echo "  [vm] Waiting for SSH on ${user}@${host} (timeout: ${timeout}s) ..."
     local consecutive=0
     while true; do
-        if _essh -o BatchMode=yes "${user}@${host}" -- "date" 2>/dev/null; then
+        if _essh -o BatchMode=yes "${user}@${host}" -- "date"; then
             consecutive=$(( consecutive + 1 ))
             if [ $consecutive -ge 2 ]; then
                 echo "  [vm] SSH ready on ${user}@${host}"
@@ -452,7 +452,7 @@ _vm_setup_firewall() {
 
 		# Remove stale test ports left over from previous runs (keep ssh)
 		for _port in 8443/tcp 5000/tcp 80/tcp; do
-		    firewall-cmd --query-port="$_port" --permanent 2>/dev/null \
+		    firewall-cmd --query-port="$_port" --permanent \
 		        && firewall-cmd --remove-port="$_port" --permanent \
 		        && echo "Removed stale port $_port"
 		done
@@ -633,6 +633,8 @@ _vm_cleanup_caches() {
 
     cat <<-CACHEEOF | _essh "${user}@${host}" -- bash
 		set -ex
+		pkill -f 'oc-mirror' || true
+		sleep 1
 		rm -vrf ~/.cache/agent/
 		rm -vrf ~/bin/*
 		rm -f ~/.ssh/quay_installer*
@@ -658,7 +660,7 @@ _vm_cleanup_podman() {
     cat <<-'PODEOF' | _essh "${user}@${host}" -- bash
 		set -ex
 		podman system prune --all --force
-		podman rmi --all --force 2>/dev/null || true
+		podman rmi --all --force || true
 		# Disabled: destroys podman internal state (pause process), causing
 		# "invalid internal status" on next run. Prune above is sufficient.
 		#sudo rm -rf ~/.local/share/containers/storage
@@ -683,10 +685,10 @@ _vm_cleanup_home() {
 		#systemctl --user stop --all 2>/dev/null || true
 		#systemctl --user disable --all 2>/dev/null || true
 		# Stop all podman/docker containers so no process holds files under ~
-		podman stop -a 2>/dev/null || true
-		podman rm -af 2>/dev/null || true
-		command -v docker >/dev/null 2>&1 && docker stop $(docker ps -q) 2>/dev/null || true
-		command -v docker >/dev/null 2>&1 && docker rm -f $(docker ps -aq) 2>/dev/null || true
+		podman stop -a || true
+		podman rm -af || true
+		command -v docker >/dev/null 2>&1 && docker stop $(docker ps -q) || true
+		command -v docker >/dev/null 2>&1 && docker rm -f $(docker ps -aq) || true
 		sudo rm -rf ~/*
 		echo "=== Home directory after cleanup ==="
 		ls -la ~/
@@ -783,8 +785,8 @@ _vm_disconnect_internet() {
 		nmcli connection up ens224.10
 
 		# Ensure ens256 is down (may have come back after dnf reboot)
-		nmcli connection down ens256 2>/dev/null || true
-		ip link set ens256 down 2>/dev/null || true
+		nmcli connection down ens256 || true
+		ip link set ens256 down || true
 
 		echo '=== Routes after disconnect ==='
 		ip route
@@ -810,7 +812,7 @@ _vm_create_test_user_and_key_on_host() {
 
     # Generate a fresh key pair in the default user's ~/.ssh/ on the host.
     # ~/.ssh/ is hidden so it survives _vm_cleanup_home (sudo rm -rf ~/*).
-    _essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy -y 2>/dev/null; ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
+    _essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy -y; ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
 
     local pub_key
     pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
@@ -824,7 +826,7 @@ _vm_create_test_user_and_key_on_host() {
 		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
 		chmod 600 ~${test_user_name}/.ssh/authorized_keys
 		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
-		restorecon -R /home/${test_user_name} 2>/dev/null || true
+		restorecon -R /home/${test_user_name} || true
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
 
 		if grep "^AllowUsers" /etc/ssh/sshd_config; then
@@ -871,7 +873,7 @@ _vm_create_test_user() {
 		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
 		chmod 600 ~${test_user_name}/.ssh/authorized_keys
 		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
-		restorecon -R /home/${test_user_name} 2>/dev/null || true
+		restorecon -R /home/${test_user_name} || true
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
 
 		# Allow testy through sshd if AllowUsers is configured
@@ -969,8 +971,8 @@ _vm_verify_golden() {
 		systemctl is-active chronyd
 		ping -c 3 -W 5 -i0.2 10.0.1.8
 		dnf check-update > /dev/null 2>&1 || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
-		! podman images -q 2>/dev/null | grep . || { echo "ERROR: podman images remain"; exit 1; }
-		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
+		! podman images -q | grep . || { echo "ERROR: podman images remain"; exit 1; }
+		[ -z "$(ls ~$SUDO_USER)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
 		grep "ABA_TESTING=1" /etc/environment
 
@@ -982,7 +984,7 @@ _vm_verify_golden() {
 			|| { echo "ERROR: proxy env vars still active"; exit 1; }
 
 		# No internet connectivity expected
-		! curl -s --max-time 5 -o /dev/null http://google.com 2>/dev/null \
+		! curl -s --max-time 5 -o /dev/null http://google.com \
 			|| { echo "ERROR: internet is reachable (should be disconnected)"; exit 1; }
 
 		echo "All golden VM checks passed."
@@ -1037,7 +1039,7 @@ prepare_golden_vm() {
 		else
 			echo "  No stamp file and no '$snapshot_name' snapshot -- destroying ..."
 		fi
-		govc vm.power -off "$golden_name" 2>/dev/null || true
+		govc vm.power -off "$golden_name" || true
 		govc vm.destroy "$golden_name" || return 1
 		rm -f "$stamp_file"
 	fi
@@ -1071,7 +1073,7 @@ prepare_golden_vm() {
 
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 	sleep 10
-	govc vm.power -off "$golden_name" 2>/dev/null || true
+	govc vm.power -off "$golden_name" || true
 	govc snapshot.create -vm "$golden_name" "$snapshot_name" || return 1
 	date +%s > "$stamp_file"
 
@@ -1252,7 +1254,7 @@ create_pools() {
         echo "  Rebuilding golden VM (--rebuild-golden) ..."
         if vm_exists "$golden_name"; then
             # VM may already be powered off
-            govc vm.power -off "$golden_name" 2>/dev/null || true
+            govc vm.power -off "$golden_name" || true
             govc vm.destroy "$golden_name"
         fi
         rm -f "${HOME}/.cache/aba-e2e/${golden_name}.stamp"
@@ -1270,7 +1272,7 @@ create_pools() {
     # --- Create per-pool subfolders (idempotent) ------------------------------
     for (( i=start_at; i<=end_at; i++ )); do
         local pool_folder="${_pool_folders[$i]:-${base_folder}/pool${i}}"
-        govc folder.create "$pool_folder" 2>/dev/null || true
+        govc folder.create "$pool_folder" || true
     done
 
     if [ -n "$skip_phase2" ]; then
@@ -1495,9 +1497,9 @@ list_pools() {
     for (( i=1; i<=10; i++ )); do
         for prefix in con dis; do
             local vm="${prefix}${i}"
-            if vm_exists "$vm" 2>/dev/null; then
+            if vm_exists "$vm"; then
                 local power
-                power=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 | cut -d'"' -f4)
+                power=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1 | cut -d'"' -f4)
                 printf "  %-25s %-10s\n" "$vm" "${power:-unknown}"
             fi
         done
@@ -1512,6 +1514,6 @@ list_pools() {
 # Usage: pool_ready HOST
 #
 pool_ready() {
-    _essh -o ConnectTimeout=5 -o BatchMode=yes "$1" -- "test -d ~/aba" 2>/dev/null
+    _essh -o ConnectTimeout=5 -o BatchMode=yes "$1" -- "test -d ~/aba"
 }
 

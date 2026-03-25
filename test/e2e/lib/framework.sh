@@ -843,7 +843,7 @@ _e2e_fix_image_pruner_if_needed() {
 	local output_file="$1"
 	[ ! -s "$output_file" ] && return 1
 
-	grep -q "ImagePrunerJobFailed" "$output_file" 2>/dev/null || return 1
+	grep -q "ImagePrunerJobFailed" "$output_file" || return 1
 
 	_e2e_log "  Detected OCP bug: ImagePrunerJobFailed (Red Hat KCS 5367151)"
 	_e2e_log "  Applying workaround: suspend pruner + delete failed jobs"
@@ -853,8 +853,8 @@ _e2e_fix_image_pruner_if_needed() {
 		[ -f "$kc" ] || continue
 		_e2e_log "  Using kubeconfig: $kc"
 		KUBECONFIG="$kc" oc patch imagepruner.imageregistry/cluster \
-			--patch '{"spec":{"suspend":true}}' --type=merge 2>/dev/null && \
-		KUBECONFIG="$kc" oc -n openshift-image-registry delete jobs --all 2>/dev/null || true
+			--patch '{"spec":{"suspend":true}}' --type=merge && \
+		KUBECONFIG="$kc" oc -n openshift-image-registry delete jobs --all || true
 		_e2e_log "  Workaround applied -- pruner suspended, failed jobs deleted"
 		return 0
 	done
@@ -1455,7 +1455,7 @@ require_mirror() {
 
 require_ssh() {
     local host="$1"
-    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$host" true 2>/dev/null; then
+    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$host" true; then
         _e2e_log_and_print "  $(_e2e_yellow "GUARD: Cannot SSH to $host -- skipping")"
         return 1
     fi
@@ -1484,7 +1484,7 @@ preflight_ssh() {
     local _fail=""
 
     _e2e_log "  Preflight: checking SSH to $host (default user) ..."
-    if ! ssh $_ssh_opts "$host" true 2>/dev/null; then
+    if ! ssh $_ssh_opts "$host" true; then
         _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host (default user)")"
         _fail=1
     else
@@ -1492,7 +1492,7 @@ preflight_ssh() {
     fi
 
     _e2e_log "  Preflight: checking SSH to root@$host_only ..."
-    if ! ssh $_ssh_opts "root@$host_only" true 2>/dev/null; then
+    if ! ssh $_ssh_opts "root@$host_only" true; then
         _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to root@$host_only")"
         _fail=1
     else
@@ -1548,19 +1548,19 @@ _e2e_fix_ssh_config_ownership() {
     local needs_fix=""
     for f in "$dir" "$dir"/*.conf; do
         [ -e "$f" ] || continue
-        if [ "$(stat -c '%u' "$f" 2>/dev/null)" != "0" ]; then
+        if [ "$(stat -c '%u' "$f")" != "0" ]; then
             needs_fix=1
             break
         fi
     done
     if [ -n "$needs_fix" ]; then
         echo "  Fixing SSH config ownership in $dir ..."
-        sudo chown root:root "$dir" 2>/dev/null || true
-        sudo chmod 755 "$dir" 2>/dev/null || true
+        sudo chown root:root "$dir" || true
+        sudo chmod 755 "$dir" || true
         for f in "$dir"/*.conf; do
             [ -f "$f" ] || continue
-            sudo chown root:root "$f" 2>/dev/null || true
-            sudo chmod 644 "$f" 2>/dev/null || true
+            sudo chown root:root "$f" || true
+            sudo chmod 644 "$f" || true
         done
     fi
 }

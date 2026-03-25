@@ -245,7 +245,7 @@ e2e_run "Block direct internet (keep proxy)" \
      sudo iptables -A OUTPUT -p tcp --dport 80  -j DROP"
 
 e2e_run "Verify direct curl fails" \
-    "! curl --noproxy '*' --connect-timeout 5 -sk https://quay.io/v2/ 2>/dev/null"
+    "! curl --noproxy '*' --connect-timeout 5 -sk https://quay.io/v2/"
 
 e2e_run "Verify proxy curl works" \
     "curl --connect-timeout 10 -sk https://quay.io/v2/"

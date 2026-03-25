@@ -152,7 +152,7 @@ _cleanup_con_quay() {
     local _regcreds="$HOME/.aba/mirror/mirror"
     for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.available" ]; then
-            if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh" 2>/dev/null; then
+            if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh"; then
                 echo "  [cleanup] Found .available + existing registry -- running aba unregister"
                 ( cd "$_dir" && aba -y -d mirror unregister ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba unregister failed in $_dir (rc=$?)"
@@ -171,15 +171,15 @@ _cleanup_con_quay() {
         [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force container cleanup"
     else
         local _stale_detected=""
-        podman ps -a 2>/dev/null | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
+        podman ps -a | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
 
         if [ -n "$_stale_detected" ]; then
             echo "  [cleanup] Stale registry remnants detected -- brute-force cleanup"
-            for _cid in $(podman ps -a -q --filter "name!=pool-registry" 2>/dev/null); do
-                podman stop "$_cid" 2>/dev/null || true
-                podman rm -f "$_cid" 2>/dev/null || true
+            for _cid in $(podman ps -a -q --filter "name!=pool-registry"); do
+                podman stop "$_cid" || true
+                podman rm -f "$_cid" || true
             done
-            podman volume rm -a -f 2>/dev/null || true
+            podman volume rm -a -f || true
             echo "  [cleanup] Brute-force cleanup complete"
         elif [ -z "$_did_uninstall" ]; then
             echo "  [cleanup] No stale registry state detected -- nothing to clean"
