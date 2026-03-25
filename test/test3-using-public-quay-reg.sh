@@ -117,6 +117,9 @@ test-cmd -m "Verifying direct internet config - httpProxy does not exist" 		"! g
 test-cmd -m "Verifying direct internet config - 'BEGIN CERTIFICATE' does not exist"	"! grep 'BEGIN CERTIFICATE'	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'ImageDigestSources' does not exist" 	"! grep ImageDigestSources	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! grep mirrors:		sno/install-config.yaml"
+
+test-cmd -m "Power off SNO cluster" "aba -d sno kill; sleep 3"
+
 test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno
