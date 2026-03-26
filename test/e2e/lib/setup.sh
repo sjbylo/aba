@@ -9,10 +9,10 @@
 _E2E_LIB_DIR_SU="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source other libs if not already loaded
-if ! type remote_exec &>/dev/null 2>&1; then
+if ! type remote_exec &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
 fi
-if ! type configure_internal_bastion &>/dev/null 2>&1; then
+if ! type configure_internal_bastion &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/pool-lifecycle.sh"
 fi
 

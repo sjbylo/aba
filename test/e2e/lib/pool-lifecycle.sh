@@ -18,7 +18,7 @@
 _E2E_LIB_DIR_PL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type remote_wait_ssh &>/dev/null 2>&1; then
+if ! type remote_wait_ssh &>/dev/null; then
     source "$_E2E_LIB_DIR_PL/remote.sh"
 fi
 
@@ -43,14 +43,14 @@ declare -A VM_TEMPLATES=(
 #
 # Declare only if not already set (config.env is sourced first and takes
 # precedence).
-if ! declare -p VM_CLONE_MACS &>/dev/null 2>&1; then
+if ! declare -p VM_CLONE_MACS &>/dev/null; then
     declare -A VM_CLONE_MACS=()
 fi
 
 # --- Clone VLAN IPs (static) -----------------------------------------------
 # The 10.10.20.0/24 VLAN has no DHCP. Each clone's ens224.10 IP is defined
 # in config.env (VM_CLONE_VLAN_IPS). Used by _vm_setup_network.
-if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null 2>&1; then
+if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null; then
     declare -A VM_CLONE_VLAN_IPS=()
 fi
 
@@ -636,7 +636,7 @@ _vm_cleanup_caches() {
 		pkill -f 'oc-mirror' || true
 		sleep 1
 		rm -vrf ~/.cache/agent/
-		rm -vrf ~/bin/*
+		rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
 		rm -f ~/.ssh/quay_installer*
 		rm -rf ~/.oc-mirror/.cache
 		rm -rf ~/*/.oc-mirror/.cache
@@ -687,8 +687,8 @@ _vm_cleanup_home() {
 		# Stop all podman/docker containers so no process holds files under ~
 		podman stop -a || true
 		podman rm -af || true
-		command -v docker >/dev/null 2>&1 && docker stop $(docker ps -q) || true
-		command -v docker >/dev/null 2>&1 && docker rm -f $(docker ps -aq) || true
+		command -v docker >/dev/null && docker stop $(docker ps -q) || true
+		command -v docker >/dev/null && docker rm -f $(docker ps -aq) || true
 		sudo rm -rf ~/*
 		echo "=== Home directory after cleanup ==="
 		ls -la ~/

@@ -309,9 +309,9 @@ test_end
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes VMware VMs)" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+    "if [ -f $SNO/agent-config.yaml ]; then aba --dir $SNO delete; fi; rm -rf $SNO"
 e2e_run "Delete compact cluster if leftover" \
-    "if [ -d $COMPACT ]; then aba --dir $COMPACT delete; else echo '[cleanup] $COMPACT already removed'; fi"
+    "if [ -f $COMPACT/agent-config.yaml ]; then aba --dir $COMPACT delete; fi; rm -rf $COMPACT"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

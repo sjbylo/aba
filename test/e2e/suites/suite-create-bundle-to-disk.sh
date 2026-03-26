@@ -331,7 +331,7 @@ test_end 0
 test_begin "Cleanup: delete cluster and uninstall mirror on disN"
 
 e2e_run_remote "Delete standard cluster on disN" \
-    "cd ~/aba && if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
+    "cd ~/aba && if [ -f $STANDARD/agent-config.yaml ]; then aba --dir $STANDARD delete; fi; rm -rf $STANDARD"
 e2e_run_remote "Uninstall mirror registry on disN" \
     "cd ~/aba && aba -d mirror uninstall"
 

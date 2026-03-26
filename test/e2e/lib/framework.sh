@@ -14,8 +14,28 @@
 #  1. Tests MUST fail on error.  Never mask underlying issues.
 #     If something breaks, the test must stop and report it.
 #
-#  2. Never use '2>/dev/null' in test commands.
-#     Stderr output is diagnostic gold.  Suppressing it hides root causes.
+#  2. NEVER suppress stderr.  Stderr is diagnostic gold.
+#
+#     FORBIDDEN patterns:
+#       cmd 2>/dev/null          # hides errors entirely
+#       cmd >/dev/null 2>&1      # silences both streams -- use >/dev/null alone
+#       cmd &>/dev/null          # same problem -- silences both streams
+#       cmd 2>/dev/null | grep   # stderr discarded, grep only sees stdout
+#       cmd 2>&1 | grep          # stderr MERGED into pipe -- grep sees both
+#
+#     CORRECT alternatives:
+#       cmd || true              # error is visible, exit code is swallowed
+#       cmd >/dev/null           # stdout silenced, stderr still visible
+#       cmd >/dev/null || true   # stdout silenced, error visible, won't fail
+#
+#     NARROW EXCEPTIONS (must have a comment explaining why):
+#       command -v foo >/dev/null    # existence check; no stderr output
+#       type foo &>/dev/null         # guard check; "not found" is expected
+#       declare -p VAR &>/dev/null   # guard check; "not found" is expected
+#       kill -0 $pid 2>/dev/null     # process probe; "no such process" is noise
+#       . ~/.bash_profile 2>/dev/null # file may not exist on remote host
+#       tmux ... 2>/dev/null         # tmux session may not be running
+#       [ "$x" -gt 0 ] 2>/dev/null  # arithmetic guard; non-numeric warning
 #
 #  3. Never use '|| true' in test commands.
 #     If a command can legitimately fail, use 'e2e_diag' or embed an explicit
@@ -236,14 +256,14 @@ _e2e_notify_suffix() {
 
 _e2e_notify() {
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null 2>&1
+        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null 2>&1
+        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null
     else
         cat > /dev/null  # drain stdin
     fi

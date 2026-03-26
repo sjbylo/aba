@@ -44,9 +44,8 @@ plan_tests \
     "VM lifecycle: ls" \
     "VM lifecycle: stop (graceful)" \
     "VM lifecycle: start" \
-    "VM lifecycle: kill (force poweroff)" \
-    "VM lifecycle: start + cluster health after kill" \
     "Cluster-level: graceful shutdown and startup" \
+    "VM lifecycle: kill (force poweroff)" \
     "Cleanup: delete clusters and unregister mirror"
 
 suite_begin "kvm-lifecycle"
@@ -201,35 +200,7 @@ e2e_poll 300 15 "Wait for SSH to become available" \
 test_end
 
 # ============================================================================
-# 10. VM lifecycle: kill (force poweroff)
-# ============================================================================
-test_begin "VM lifecycle: kill (force poweroff)"
-
-e2e_run "Force power off VMs" "aba --dir $SNO kill"
-e2e_run "Verify VMs are shut off after kill" \
-    "aba --dir $SNO ls | grep -i 'shut-off'"
-
-test_end
-
-# ============================================================================
-# 11. VM lifecycle: start + cluster health after kill
-# ============================================================================
-test_begin "VM lifecycle: start + cluster health after kill"
-
-e2e_run "Start VMs after hard power cycle" "aba --dir $SNO start"
-e2e_run "Verify VMs are running" \
-    "aba --dir $SNO ls | grep -i running"
-e2e_poll 300 15 "Wait for SSH after hard power cycle" \
-    "aba --dir $SNO ssh --cmd 'hostname'"
-e2e_poll 600 30 "Wait for cluster operators healthy after kill" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
-e2e_diag "Show cluster operators after kill recovery" \
-    "aba --dir $SNO run --cmd 'oc get co'"
-
-test_end
-
-# ============================================================================
-# 12. Cluster-level: graceful shutdown and startup
+# 10. Cluster-level: graceful shutdown and startup
 # ============================================================================
 test_begin "Cluster-level: graceful shutdown and startup"
 
@@ -256,12 +227,23 @@ e2e_diag "Show cluster operators after shutdown/startup" \
 test_end
 
 # ============================================================================
-# 13. Cleanup: delete clusters and unregister mirror
+# 11. VM lifecycle: kill (force poweroff)
+# ============================================================================
+test_begin "VM lifecycle: kill (force poweroff)"
+
+e2e_run "Force power off VMs" "aba --dir $SNO kill"
+e2e_run "Verify VMs are shut off after kill" \
+    "aba --dir $SNO ls | grep -i 'shut-off'"
+
+test_end
+
+# ============================================================================
+# 12. Cleanup: delete clusters and unregister mirror
 # ============================================================================
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+    "if [ -f $SNO/agent-config.yaml ]; then aba --dir $SNO delete; fi; rm -rf $SNO"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

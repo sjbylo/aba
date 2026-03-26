@@ -331,18 +331,13 @@ test_begin "Cleanup"
 
 e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard* 2>/dev/null || echo 'none'"
 
-e2e_run "Delete VLAN SNO cluster" \
-    "if [ -d $_SNO_VLAN ]; then aba --dir $_SNO_VLAN delete; else echo '[cleanup] $_SNO_VLAN already removed'; fi"
-e2e_run "Delete VLAN compact cluster" \
-    "if [ -d $_COMPACT_VLAN ]; then aba --dir $_COMPACT_VLAN delete; else echo '[cleanup] $_COMPACT_VLAN already removed'; fi"
-e2e_run "Delete VLAN standard cluster" \
-    "if [ -d $_STANDARD_VLAN ]; then aba --dir $_STANDARD_VLAN delete; else echo '[cleanup] $_STANDARD_VLAN already removed'; fi"
-e2e_run "Delete non-VLAN SNO cluster" \
-    "if [ -d $_SNO ]; then aba --dir $_SNO delete; else echo '[cleanup] $_SNO already removed'; fi"
-e2e_run "Delete non-VLAN compact cluster" \
-    "if [ -d $_COMPACT ]; then aba --dir $_COMPACT delete; else echo '[cleanup] $_COMPACT already removed'; fi"
-e2e_run "Delete non-VLAN standard cluster" \
-    "if [ -d $_STANDARD ]; then aba --dir $_STANDARD delete; else echo '[cleanup] $_STANDARD already removed'; fi"
+# Each _net_test already runs 'aba delete' + 'aba clean'.  The dirs may still
+# exist (cluster.conf etc.) but agent-config.yaml is gone after 'aba clean',
+# so only call 'aba delete' when the config still exists (VMs might still be up).
+for _cdir in $_SNO_VLAN $_COMPACT_VLAN $_STANDARD_VLAN $_SNO $_COMPACT $_STANDARD; do
+	e2e_run "Cleanup $_cdir" \
+	    "if [ -f $_cdir/agent-config.yaml ]; then aba --dir $_cdir delete; fi; rm -rf $_cdir"
+done
 
 test_end
 

@@ -108,8 +108,8 @@ _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
 
 _cleanup_wasteful_dirs_local() {
 	rm -rf $_E2E_WASTEFUL_DIRS
-	# ABA-extracted CLI tools; suite reinstalls via git clone + ./install
-	rm -rf ~/bin
+	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
+	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
 	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
@@ -695,6 +695,43 @@ elif [ $_rc -eq 3 ]; then
 else
 	echo ""
 	echo "  Suite $SUITE: FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+fi
+
+# --- Post-suite integrity checks -------------------------------------------
+# Detect leftover resources that the suite's cleanup should have removed.
+# If anything is found, STOP so we can investigate the root cause.
+
+# 2a. Check for orphan cluster VMs in this pool's vCenter folder
+if command -v govc >/dev/null; then
+	_pfolder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${POOL_NUM}"
+	_orphans=$(govc find "$_pfolder" -type m 2>&1) || _orphans=""
+	if [ -n "$_orphans" ]; then
+		echo ""
+		echo "  *** POST-SUITE INTEGRITY FAILURE: orphan VMs found in $_pfolder ***"
+		while IFS= read -r _ovm; do
+			[ -z "$_ovm" ] && continue
+			echo "    $_ovm"
+		done <<< "$_orphans"
+		echo ""
+		echo "  Suite cleanup left VMs behind. Stopping for investigation."
+		echo "  To proceed: manually destroy the VMs and re-run the suite."
+		_rc=5
+	fi
+fi
+
+# 2b. Check for leftover registry/mirror containers on disN
+if [ -n "${DIS_VM:-}" ]; then
+	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	_containers=$(_essh "$_dis" "podman ps --format '{{.Names}}'" 2>&1) || _containers=""
+	_reg_containers=$(echo "$_containers" | grep -iE 'quay|registry|mirror' || true)
+	if [ -n "$_reg_containers" ]; then
+		echo ""
+		echo "  *** POST-SUITE INTEGRITY FAILURE: registry/mirror containers still running on $_dis ***"
+		echo "$_reg_containers"
+		echo ""
+		echo "  Suite cleanup did not uninstall the mirror. Stopping for investigation."
+		_rc=5
+	fi
 fi
 
 echo ""
