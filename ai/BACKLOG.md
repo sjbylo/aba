@@ -361,6 +361,46 @@ calls. The `tools` image IS in the mirror (covered by the IDMS rule for
 
 ## Medium Priority
 
+### Review vmware.conf / kvm.conf Symlink and ~/.vmware.conf Default File Approach
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-26
+
+**Problem:**
+The current approach for hypervisor config files uses a chain of files and symlinks:
+1. `templates/vmware.conf` (or `templates/kvm.conf`) — the default template
+2. `~/.vmware.conf` (or `~/.kvm.conf`) — user's working config, saved after first `aba vmw`
+3. `vmware.conf` in the aba root dir — created by `install-vmware.conf.sh` (copies from
+   `~/.vmware.conf` or template, then prompts for editing)
+4. `vmware.conf` symlink in cluster subdirectory — points to `../vmware.conf`
+
+This multi-level chain has caused confusion and regressions:
+- Commit `77b909a` externalized Makefile targets to `aba.sh`, losing the auto-symlink
+  creation that was previously handled by Make dependencies (fixed in `_ensure_hv_ready()`)
+- `aba clean` may or may not delete the symlinks depending on branch
+- `~/.vmware.conf` silently overrides the template on subsequent installs, which can be
+  surprising if the user expected fresh defaults
+- The E2E test infrastructure copies `~/.kvm.conf` from bastion to VMs during golden
+  template creation, adding another layer to track
+
+**Questions to investigate:**
+1. Is the `~/.vmware.conf` / `~/.kvm.conf` home-directory default necessary, or could
+   `aba vmw` / `aba kvm` always work from the aba root copy?
+2. Should the symlink from cluster subdir to `../vmware.conf` be replaced with a direct
+   copy, eliminating symlink fragility?
+3. Can the auto-symlink in `_ensure_hv_ready()` be made unnecessary by creating the
+   symlink at a more natural point (e.g., during `cluster.conf` generation when platform
+   is known)?
+4. Same review applies to `kvm.conf` — ensure both VMware and KVM follow the same pattern.
+
+**Where:** `scripts/install-vmware.conf.sh`, `scripts/install-kvm.conf.sh`,
+`scripts/aba.sh` (`_ensure_hv_ready`), `templates/Makefile.cluster` (`.init`, `clean`,
+`vmware.conf`, `kvm.conf` targets)
+
+---
+
 ### `kvm.conf` Template Should Not Hardcode a Username
 
 **Status:** Backlog
@@ -1937,6 +1977,58 @@ reformatted version of the package name. See `ai/TUI_OPERATOR_DISPLAY_ENHANCEMEN
 `test/func/test-catalog-canary.sh` -- standalone canary that auto-detects available OCP versions
 (including pre-GA), runs the production extraction entry point, and validates output. Designed
 for cron-based periodic execution. See `ai/PODMAN_CATALOG_EXTRACTION.md`.
+
+### `aba shutdown` Debug Pod Warning Shown After Successful Priming
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-25
+
+**Problem:**
+`aba shutdown` shows "Still waiting for VMs to power off (10s) ..." polling messages that
+are noisy and unhelpful. Also, when `--wait` is provided, there is no indication that the
+user can safely interrupt the wait.
+
+**Requested changes (both `cluster-graceful-shutdown.sh` and `cluster-startup.sh`):**
+
+1. Replace the polling message:
+   - **Remove:** `[ABA] Still waiting for VMs to power off (10s) ...`
+   - **Replace with:** `[ABA] Waiting for all nodes to power down. You may safely hit ctrl+c to stop waiting.`
+   (Show once, not repeatedly every 10s)
+
+2. Apply the same pattern to `cluster-startup.sh` when `--wait` is provided:
+   - `[ABA] Waiting for all nodes to power up. You may safely hit ctrl+c to stop waiting.`
+
+**Where:** `scripts/cluster-graceful-shutdown.sh`, `scripts/cluster-startup.sh`
+
+---
+
+### E2E: No "Silently Skipped" Tests in Test Code
+
+**Status:** Backlog
+**Priority:** Medium
+**Created:** 2026-03-25
+
+**Problem:**
+Test code must never silently skip tests or assertions. Every test block registered in
+`plan_tests` must have a corresponding `test_begin` with an exact name match, and every
+`test_begin` must appear in `plan_tests`. A mismatch causes the dashboard to show `--`
+instead of `PASS`/`FAIL`, hiding whether the test actually ran.
+
+**Found and fixed (2026-03-25):**
+- `suite-airgapped-existing-reg.sh`: `plan_tests` had "Load without save dir (must fail)"
+  but `test_begin` had "Load without data dir (must fail)" -- name mismatch.
+- `suite-cluster-ops.sh`: `test_begin "verify_conf=conf skips network checks"` was missing
+  from `plan_tests` entirely.
+
+**Action:**
+Consider adding a runtime check in `test_begin()` that warns (or aborts) if the test name
+is not found in `_E2E_PLAN_NAMES`. This would catch mismatches immediately instead of
+silently showing `--` on the dashboard.
+
+**Where:** `test/e2e/lib/framework.sh` (`test_begin` function), all suite files.
+
+---
 
 ### `aba shutdown` Retry and Verify
 **Completed:** 2026-03-10  
