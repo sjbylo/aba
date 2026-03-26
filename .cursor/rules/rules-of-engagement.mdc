@@ -64,6 +64,7 @@ alwaysApply: true
 - Empty lines must have NO characters (no trailing whitespace)
 - Add comments for non-obvious bash features
 - Format bash scripts with proper and correct indentaton (pretty print).
+- **NEVER use `(( var++ ))` or `(( var-- ))` for arithmetic** — when `var` is 0, `(( 0 ))` returns exit code 1, which crashes under `set -e` or an ERR trap. Use `var=$(( var + 1 ))` instead. Never band-aid with `(( var++ )) || true`.
 
 ## Key architecture
 
