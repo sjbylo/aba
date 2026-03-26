@@ -44,6 +44,7 @@ plan_tests \
     "SNO: verify operators from all catalogs" \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
+    "Regression: verify_conf=conf extracts mirror binary" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -296,6 +297,37 @@ e2e_run "Restore verify_conf=all" \
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
 
 e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
+
+test_end
+
+# ============================================================================
+# 11. Regression: verify_conf=conf must still extract mirror openshift-install
+# ============================================================================
+# OCP 4.21+ enforces sigstore verification for quay.io release images.
+# The openshift-install binary extracted from the mirror references the mirror
+# URL (not quay.io), bypassing sigstore enforcement.  A past bug caused
+# --verify conf to skip this extraction entirely, leading to install failures.
+test_begin "Regression: verify_conf=conf extracts mirror binary"
+
+_REG_HOST=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Sanity: mirror binary exists from SNO install" \
+	"test -x $SNO/openshift-install-mirror-$_REG_HOST"
+
+e2e_run "Remove mirror binary to force re-extraction" \
+	"rm -f $SNO/openshift-install-mirror-$_REG_HOST"
+
+e2e_run "Set verify_conf=conf" \
+	"aba --verify conf"
+
+e2e_run "Run verify-release-image.sh with verify_conf=conf" \
+	"cd $SNO && scripts/verify-release-image.sh"
+
+e2e_run "Assert mirror binary re-extracted despite verify_conf=conf" \
+	"test -x $SNO/openshift-install-mirror-$_REG_HOST"
+
+e2e_run "Restore verify_conf=all" \
+	"aba --verify all"
 
 test_end
 
