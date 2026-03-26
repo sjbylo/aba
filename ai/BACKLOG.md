@@ -1322,6 +1322,44 @@ it impossible to distinguish between "flaky infrastructure" and "real code bug".
 
 ## Low Priority
 
+### Curl Download Progress: Auto-Detect TTY and Show Progress Bar Only When Interactive
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-26
+
+**Problem:**
+When ABA uses `curl` to download files (e.g. `oc-mirror`, `govc`, `openshift-install`), it should
+show a graphical progress bar (`--progress-bar` / hash output) only when a user is sitting at an
+interactive terminal. When running from a test script, background process, or CI pipeline, it should
+use silent mode (`-s`) to avoid polluting logs with progress noise.
+
+**Current state (`cli/Makefile`):**
+```makefile
+ifeq ($(PLAIN_OUTPUT),1)
+  IS_TTY := no
+else
+  IS_TTY := yes
+endif
+ifeq ($(IS_TTY),yes)
+  CURL_PROGRESS := "--progress-bar"
+else
+  CURL_PROGRESS := "-s"
+endif
+```
+This defaults to `IS_TTY=yes` even when there is no TTY (e.g. running under `tmux send-keys`,
+`nohup`, piped output, or E2E test harness). The `PLAIN_OUTPUT=1` env var override exists but
+nothing sets it automatically.
+
+**Proposed fix:**
+- Auto-detect TTY properly: check if stdout is connected to a terminal (`[ -t 1 ]` in bash,
+  or `$(shell test -t 1 && echo yes || echo no)` in Make).
+- Apply consistently across all curl invocations project-wide (not just `cli/Makefile`).
+- Keep the `PLAIN_OUTPUT=1` env var as a manual override for edge cases.
+- Audit all `curl` calls in `scripts/*.sh` and Makefiles for the same pattern.
+
+---
+
 ### Bundle Pipeline: Empty Google Drive Trash After Sync
 
 **Status:** Backlog
