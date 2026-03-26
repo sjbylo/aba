@@ -28,3 +28,9 @@ CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS=20
 # oc-mirror --parallel-images value (default: 8).
 # Number of images to mirror concurrently. Reduce on slow or unreliable networks.
 # OC_MIRROR_PARALLEL_IMAGES=8
+
+# Extra flags appended to every oc-mirror invocation (sync, save, load).
+# Default: --remove-signatures=true (required for oc-mirror 4.21+ because
+# certified and community operator images often lack sigstore signatures).
+# Clear this to enforce signature verification: OC_MIRROR_FLAGS=
+OC_MIRROR_FLAGS="--remove-signatures=true"

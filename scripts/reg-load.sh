@@ -116,7 +116,7 @@ do
 	# Set up the command in a script which can be run manually if needed.
 	# Wait for oc-mirror to be available!
 	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
-	cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
+	cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS:-}"
 	echo "cd data && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 	aba_debug "Created load-mirror.sh script" 
 
