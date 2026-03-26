@@ -186,6 +186,14 @@ which yq || (
 ######################
 # This test creates the ABI (agent-based installer) config files to check they are valid
 
+# Clean up leftover clusters from previous runs (VMs may still be on vSphere)
+for cname in sno compact standard; do
+	if [ -f $cname/agent-config.yaml ]; then
+		test-cmd -i -m "Deleting leftover $cname cluster" aba --dir $cname delete
+	fi
+	rm -rf $cname
+done
+
 for cname in sno compact standard
 do
 	mkdir -v -p test/$cname
