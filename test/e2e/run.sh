@@ -675,7 +675,7 @@ if [ -n "$CLI_RESTART" ]; then
 		fi
 		if [ -z "$_last" ]; then
 			echo "    con${p}: skipped (no previous suite or unreachable)"
-			(( _restart_fail++ ))
+			_restart_fail=$(( _restart_fail + 1 ))
 			continue
 		fi
 		read -ra _last_suites <<< "$_last"
@@ -685,10 +685,10 @@ if [ -n "$CLI_RESTART" ]; then
 			_runner_cmd="bash ~/.e2e-harness/runner.sh $_resume_flag $p $suite"
 			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'; tmux rename-window -t '$E2E_TMUX_SESSION' '$suite'" 2>/dev/null; then
 				echo "    con${p}: dispatched $suite (tmux: $E2E_TMUX_SESSION)"
-				(( _restart_ok++ ))
+				_restart_ok=$(( _restart_ok + 1 ))
 			else
 				echo "    con${p}: FAILED to dispatch $suite"
-				(( _restart_fail++ ))
+				_restart_fail=$(( _restart_fail + 1 ))
 			fi
 		done
 	done
@@ -1727,8 +1727,7 @@ done
 _build_work_queue
 
 _num_completed=${#_completed[@]}
-_num_running=0
-for _ in "${!_busy_pools[@]}"; do (( _num_running++ )); done
+_num_running=${#_busy_pools[@]}
 
 echo ""
 echo "  Status: ${_num_completed} completed, ${_num_running} running, ${#_work_queue[@]} queued"
@@ -1890,10 +1889,35 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		_inj_list=""
 		while IFS= read -r _inj_suite; do
 			[ -z "$_inj_suite" ] && continue
+			# Guard: skip if this suite is already running on a pool
+			_already_running=""
+			for _bp in "${!_busy_pools[@]}"; do
+				if [ "${_busy_pools[$_bp]}" = "$_inj_suite" ]; then
+					_already_running=1
+					break
+				fi
+			done
+			if [ -n "$_already_running" ]; then
+				printf "  [%s] SKIPPED: %s (already running on a pool)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				continue
+			fi
+			# Guard: skip if already queued (avoid duplicate dispatch)
+			_already_queued=""
+			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+				if [ "${_work_queue[$_qi]}" = "$_inj_suite" ]; then
+					_already_queued=1
+					break
+				fi
+			done
+			if [ -n "$_already_queued" ]; then
+				printf "  [%s] SKIPPED: %s (already in work queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				continue
+			fi
 			_work_queue+=("$_inj_suite")
+			suites_to_run+=("$_inj_suite")
 			_inj_list+="  ${_inj_suite}
 "
-			(( _inj_count++ ))
+			_inj_count=$(( _inj_count + 1 ))
 			printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
 		done < "$E2E_INJECT_QUEUE"
 		> "$E2E_INJECT_QUEUE"
@@ -1919,10 +1943,24 @@ ${_inj_list}" < /dev/null >/dev/null
 	while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 		free=$(_find_free_pool) || break
 		suite="${_work_queue[$_queue_idx]}"
+		# Guard: skip if suite is already running on another pool
+		_dup=""
+		for _dp in "${!_busy_pools[@]}"; do
+			if [ "${_busy_pools[$_dp]}" = "$suite" ]; then
+				_dup=1
+				break
+			fi
+		done
+		if [ -n "$_dup" ]; then
+			printf "  [%s] DEFER: %s already running on pool %s -- will retry later\n" \
+				"$(date '+%H:%M:%S')" "$suite" "$_dp"
+			_queue_idx=$(( _queue_idx + 1 ))
+			continue
+		fi
 		if ! _dispatch_suite "$free" "$suite"; then
 			_record_result "$suite" "99"
 		fi
-		(( _queue_idx++ ))
+		_queue_idx=$(( _queue_idx + 1 ))
 	done
 
 	# Inline retry: when queue is drained and a free pool exists, re-queue
@@ -1940,7 +1978,7 @@ ${_inj_list}" < /dev/null >/dev/null
 				unset '_results[$_rs]'
 				_work_queue+=("$_rs")
 				printf "  [%s] RETRY %d/%d: queuing %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
-				(( _retry_added++ ))
+				_retry_added=$(( _retry_added + 1 ))
 			fi
 		done
 		# Notify on retries (exceptional circumstance)
@@ -1961,7 +1999,7 @@ ${_retry_list}" < /dev/null >/dev/null
 				if ! _dispatch_suite "$free" "$suite"; then
 					_record_result "$suite" "99"
 				fi
-				(( _queue_idx++ ))
+				_queue_idx=$(( _queue_idx + 1 ))
 			done
 		fi
 	fi
@@ -1969,8 +2007,8 @@ ${_retry_list}" < /dev/null >/dev/null
 	_write_dispatch_state
 
 	# Print status only when something changed
+	_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
 	if [ ${#_busy_pools[@]} -gt 0 ]; then
-		_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
 		_status_line="${#_results[@]}d ${#_busy_pools[@]}r ${_queued_remaining}q"
 		for p in "${!_busy_pools[@]}"; do
 			_status_line+=" con${p}:${_busy_pools[$p]}"
@@ -1987,8 +2025,9 @@ ${_retry_list}" < /dev/null >/dev/null
 			echo ""
 			_prev_status="$_status_line"
 		fi
-		sleep 30
 	fi
+	# Always sleep to avoid CPU spin (e.g. when queue has work but no pools are free)
+	sleep 30
 done
 
 # --- Collect logs from each conN and disN --------------------------------------
@@ -2021,20 +2060,20 @@ _skipped=0
 for suite in "${suites_to_run[@]}"; do
 	rc="${_results[$suite]:-}"
 	pool="${_result_pool[$suite]:-?}"
-	(( _total++ ))
+	_total=$(( _total + 1 ))
 
 	if [ -z "$rc" ]; then
 		printf "  \033[1;33m????\033[0m  %-35s pool %-2s (no result)\n" "$suite" "$pool"
 		_overall_rc=1
 	elif [ "$rc" -eq 0 ]; then
 		printf "  \033[1;32mPASS\033[0m  %-35s pool %-2s\n" "$suite" "$pool"
-		(( _passed++ ))
+		_passed=$(( _passed + 1 ))
 	elif [ "$rc" -eq 3 ]; then
 		printf "  \033[1;33mSKIP\033[0m  %-35s pool %-2s\n" "$suite" "$pool"
-		(( _skipped++ ))
+		_skipped=$(( _skipped + 1 ))
 	else
 		printf "  \033[1;31mFAIL\033[0m  %-35s pool %-2s (exit=%s)\n" "$suite" "$pool" "$rc"
-		(( _failed++ ))
+		_failed=$(( _failed + 1 ))
 		_overall_rc=1
 	fi
 done

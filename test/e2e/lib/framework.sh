@@ -634,14 +634,17 @@ e2e_cleanup_clusters() {
 	[ -f "$cleanup_file" ] || return 0
 
 	_e2e_log_and_print "  Cleaning up clusters (from cleanup list) ..."
-	local target abs_path _all_ok=1
+	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
 		_e2e_log_and_print "    $target: aba -y -d $abs_path delete"
-		if ! ( _essh "$target" \
-			"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
-			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
-			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path"
+		_cleanup_rc=0
+		_essh "$target" \
+			"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' delete; else echo '  (dir not found -- already cleaned)'; fi" \
+			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+		_cleanup_rc=${PIPESTATUS[0]}
+		if [ "$_cleanup_rc" -ne 0 ]; then
+			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
 			_all_ok=""
 		fi
 	done < "$cleanup_file"
@@ -700,14 +703,17 @@ e2e_cleanup_mirrors() {
 	[ -f "$cleanup_file" ] || return 0
 
 	_e2e_log_and_print "  Cleaning up mirrors (from cleanup list) ..."
-	local target abs_path _all_ok=1
+	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
 		_e2e_log_and_print "    $target: aba -y -d $abs_path uninstall"
-		if ! ( _essh "$target" \
-			"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
-			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
-			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path"
+		_cleanup_rc=0
+		_essh "$target" \
+			"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+		_cleanup_rc=${PIPESTATUS[0]}
+		if [ "$_cleanup_rc" -ne 0 ]; then
+			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
 			_all_ok=""
 		fi
 	done < "$cleanup_file"
@@ -1018,7 +1024,7 @@ e2e_run() {
             _e2e_fix_image_pruner_if_needed "$_cmd_output_file" && \
                 _e2e_log_and_print "    Applied ImagePrunerJobFailed workaround before retry"
 
-            (( attempt++ ))
+            attempt=$(( attempt + 1 ))
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
             sleep "$sleep_time"
             sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
