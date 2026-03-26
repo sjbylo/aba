@@ -23,7 +23,7 @@
 ABA_VERSION=20260322105914
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260322131214
+ABA_BUILD=20260326112319
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -934,8 +934,14 @@ done
 _ensure_hv_ready() {
 	source <(normalize-aba-conf)
 	case "$platform" in
-		vmw) [ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first." ;;
-		kvm) [ -s kvm.conf ]    || aba_abort "kvm.conf not found. Run 'aba kvm' first." ;;
+		vmw)
+			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
+			[ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first."
+			;;
+		kvm)
+			[ ! -s kvm.conf ] && [ -f ../kvm.conf ] && ln -s ../kvm.conf
+			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
+			;;
 		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
 	esac
