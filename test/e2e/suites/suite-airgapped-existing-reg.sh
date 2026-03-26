@@ -43,7 +43,7 @@ plan_tests \
     "Save images to disk" \
     "Tar-pipe transfer to bastion" \
     "Load without regcreds (must fail)" \
-    "Load without save dir (must fail)" \
+    "Load without data dir (must fail)" \
     "Load images into existing registry" \
     "Compact: install and delete cluster" \
     "SNO: install cluster" \

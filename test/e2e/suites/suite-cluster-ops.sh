@@ -43,6 +43,7 @@ plan_tests \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
     "SNO: IP conflict detection" \
+    "verify_conf=conf skips network checks" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -304,7 +305,7 @@ test_end
 test_begin "Cleanup: delete cluster and unregister mirror"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+    "if [ -f $SNO/agent-config.yaml ]; then aba --dir $SNO delete; fi; rm -rf $SNO"
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"
 

@@ -432,6 +432,12 @@ if [ -n "$CLI_DEPLOY" ]; then
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${target}:~/.e2e-harness/lib/" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${target}:~/.e2e-harness/suites/" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${target}:~/.e2e-harness/scripts/"; then
+			# Deploy notify.sh if configured
+			if [ -x ~/bin/notify.sh ]; then
+				ssh -q $_SSH_OPTS "${target}" "mkdir -p ~/bin" &&
+				scp -q $_SSH_OPTS ~/bin/notify.sh "${target}:~/bin/notify.sh" &&
+				ssh -q $_SSH_OPTS "${target}" "chmod +x ~/bin/notify.sh" || true
+			fi
 			echo "+ harness done"
 		else
 			echo "+ harness FAILED"
@@ -636,13 +642,19 @@ if [ -n "$CLI_RESTART" ]; then
 		_host="con${p}.${_domain}"
 		_target="${_user}@${_host}"
 		echo -n "    con${p} harness: "
-		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/config.env"       "${_target}:~/.e2e-harness/config.env" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${_target}:~/.e2e-harness/scripts/"; then
+			# Deploy notify.sh if configured
+			if [ -x ~/bin/notify.sh ]; then
+				ssh -q $_restart_ssh "${_target}" "mkdir -p ~/bin" &&
+				scp -q $_restart_ssh ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
+				ssh -q $_restart_ssh "${_target}" "chmod +x ~/bin/notify.sh" || true
+			fi
 			echo "done"
 		else
 			echo "FAILED"
@@ -709,11 +721,13 @@ if [ -n "$CLI_STATUS" ]; then
 	for p in "${_status_list[@]}"; do
 		_host="con${p}.${_domain}"
 		_info=$(ssh $_status_ssh "${_user}@${_host}" "
+			_slog=~/.e2e-harness/logs/summary.log
+			[ -f \"\$_slog\" ] || _slog=\$(ls -t ~/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
 			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null || true)
 			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
-				last=\$(tail -1 ~/.e2e-harness/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+				last=\$(tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
 					rc=\$(cat \"\$rc_file\" 2>/dev/null)
 					echo \"DONE|\${suite}|exit=\${rc}\"
@@ -736,7 +750,7 @@ if [ -n "$CLI_STATUS" ]; then
 				fi
 			fi
 			echo '|||TABLE|||'
-			tac ~/.e2e-harness/logs/summary.log 2>/dev/null \
+			tac \"\$_slog\" 2>/dev/null \
 				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \
 				| tac \
 				| sed 's/\x1b\[[0-9;]*m//g' \
@@ -1288,6 +1302,15 @@ fi
 
 # --- scp test harness to ~/.e2e-harness/ on each conN -------------------------
 
+# Pre-flight: verify notify.sh exists if NOTIFY_CMD is configured
+_notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2-)
+_notify_cmd="${_notify_cmd/#\~/$HOME}"
+if [ -n "$_notify_cmd" ] && ! [ -x "$_notify_cmd" ]; then
+	echo "FATAL: config.env sets NOTIFY_CMD=$_notify_cmd but the file does not exist." >&2
+	echo "  Create the file or clear NOTIFY_CMD in config.env." >&2
+	exit 1
+fi
+
 echo ""
 echo "  Deploying test harness to conN hosts ..."
 for (( i=1; i<=CLI_POOLS; i++ )); do
@@ -1295,17 +1318,17 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	host="con${i}.${VM_BASE_DOMAIN}"
 	target="${user}@${host}"
 
-	if ssh -q $_SSH_OPTS "$target" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+	if ssh -q $_SSH_OPTS "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/.e2e-harness/config.env" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/.e2e-harness/pools.conf" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/.e2e-harness/runner.sh" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/.e2e-harness/lib/" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/.e2e-harness/suites/" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR"/scripts/*.sh "$target:~/.e2e-harness/scripts/"; then
-		# Deploy notify.sh if available locally (contains secrets, not in git)
-		if [ -x ~/bin/notify.sh ]; then
+		# Deploy notify.sh (pre-flight already verified it exists if configured)
+		if [ -n "$_notify_cmd" ]; then
 			ssh -q $_SSH_OPTS "$target" "mkdir -p ~/bin" &&
-			scp -q $_SSH_OPTS ~/bin/notify.sh "$target:~/bin/notify.sh" &&
+			scp -q $_SSH_OPTS "$_notify_cmd" "$target:~/bin/notify.sh" &&
 			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh" || true
 		fi
 		# Ensure rootless podman's pause process survives between SSH sessions
@@ -1398,6 +1421,13 @@ _dispatch_suite() {
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${_target}:~/.e2e-harness/scripts/"; }; then
 		echo "    ERROR: scp to con${pool_num} failed -- skipping dispatch"
 		return 1
+	fi
+
+	# Deploy notify.sh if configured
+	if [ -x ~/bin/notify.sh ]; then
+		ssh -q $_SSH_OPTS "${_target}" "mkdir -p ~/bin" &&
+		scp -q $_SSH_OPTS ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
+		ssh -q $_SSH_OPTS "${_target}" "chmod +x ~/bin/notify.sh" || true
 	fi
 
 	local _retry_arg=""
@@ -1493,7 +1523,7 @@ _record_result() {
 
 	# Only notify from dispatcher for non-pass results (framework already notifies on PASS)
 	if [ "$rc" -ne 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null 2>&1 &
+		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null &
 	fi
 }
 
@@ -1742,7 +1772,7 @@ Queued:"
   ${_qs}"
 		done
 		_notify_msg="[e2e] DISPATCHER STARTED: ${#_work_queue[@]} suites queued${_notify_detail}"
-		$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null 2>&1
+		$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null
 	fi
 fi
 
@@ -1869,7 +1899,7 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		> "$E2E_INJECT_QUEUE"
 		if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 			$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected into queue:
-${_inj_list}" < /dev/null >/dev/null 2>&1
+${_inj_list}" < /dev/null >/dev/null
 		fi
 	fi
 
@@ -1921,7 +1951,7 @@ ${_inj_list}" < /dev/null >/dev/null 2>&1
 "
 			done
 			$NOTIFY_CMD "[e2e] RETRY: ${_retry_added} failed suite(s) re-queued:
-${_retry_list}" < /dev/null >/dev/null 2>&1
+${_retry_list}" < /dev/null >/dev/null
 		fi
 		# Dispatch newly queued retries immediately
 		if [ "$_retry_added" -gt 0 ]; then
@@ -2015,7 +2045,7 @@ echo "  Logs: $_RUN_DIR/logs/"
 echo "========================================"
 
 if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})" < /dev/null >/dev/null 2>&1
+	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})" < /dev/null >/dev/null
 fi
 
 # Cleanup dashboard
