@@ -85,14 +85,16 @@ alwaysApply: true
 ## E2E test golden rules
 
 - Tests MUST fail on error -- never mask underlying issues!
-- **ABSOLUTELY NEVER use `2>/dev/null` or `|| true` in test commands!  Only use ' `>/dev/null`' if there is a good reason to!**
-  - This includes inside `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, or any command string passed to the framework
-  - Stderr output is diagnostic gold -- suppressing it wastes HOURS of debugging when something goes wrong
-  - Even "harmless" cleanup commands (e.g. `podman rm -af 2>/dev/null`) hide real failures
-  - If a command might fail harmlessly, use `e2e_diag` or `e2e_diag_remote` (exit code is ignored, but output is preserved)
-  - If a file might not exist, use `rm -f` (already ignores missing files) NOT `rm 2>/dev/null`
+- **NEVER suppress stderr in test code!** Stderr is diagnostic gold -- suppressing it wastes HOURS of debugging.
+  - **Forbidden:** `2>/dev/null`, `>/dev/null 2>&1`, `&>/dev/null` -- these all hide error messages
+  - **Forbidden:** `cmd 2>&1 | grep` -- `2>&1` merges stderr into the pipe so grep sees both streams; this is almost never what you want
+  - **Correct:** `cmd || true` (error visible, exit code swallowed), `cmd >/dev/null` (stdout silenced, stderr visible)
+  - Even "harmless" cleanup commands (e.g. `podman rm -af 2>/dev/null`) hide real failures -- use `podman rm -af || true` instead
+  - Applies inside `e2e_run`, `e2e_run_remote`, `e2e_run_must_fail`, heredocs, and any command string passed to the framework
+  - If a command might fail harmlessly, use `e2e_diag` / `e2e_diag_remote` (exit code ignored, output preserved)
+  - If a file might not exist, use `rm -f` (already ignores missing) NOT `rm 2>/dev/null`
   - If a precondition is uncertain, use an explicit check: `if [ -f X ]; then ...; fi`
-  - If error suppression is truly unavoidable (extremely rare), it MUST have a comment explaining WHY
+  - **Narrow exceptions** (must have a comment explaining why): `command -v foo >/dev/null` (existence check), `type foo &>/dev/null` / `declare -p VAR &>/dev/null` (guard checks where "not found" is expected), `kill -0 $pid 2>/dev/null` (process probe), `. ~/.bash_profile 2>/dev/null` (file may not exist), `tmux ... 2>/dev/null` (session may not exist), `[ "$x" -gt 0 ] 2>/dev/null` (arithmetic guard)
 - When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
 - No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
 - NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
