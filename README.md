@@ -1140,6 +1140,7 @@ Values are commented out by default; uncomment and edit to override.
 | `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
+| `OC_MIRROR_FLAGS` | `--remove-signatures=true` | Extra flags appended to every `oc-mirror` invocation (sync, save, load). The default is required for oc-mirror 4.21+ because certified and community operator images often lack sigstore signatures. Clear to enforce signature verification. |
 
 Example — increase the image timeout to 60 minutes:
 
@@ -1158,6 +1159,15 @@ vi ~/.aba/config
 
 # Uncomment or add:
 OC_MIRROR_PARALLEL_IMAGES=4
+```
+
+Example — enforce strict signature verification (disable the default `--remove-signatures`):
+
+```bash
+vi ~/.aba/config
+
+# Clear the default flags:
+OC_MIRROR_FLAGS=
 ```
 
 ## Named Mirror Directories (Enclaves)
