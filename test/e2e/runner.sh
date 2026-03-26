@@ -520,10 +520,12 @@ _pre_suite_cleanup() {
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path uninstall"
-			if ! ( _essh "$target" \
-				"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
-				2>&1 ); then
-				echo "  ERROR: mirror cleanup SSH failed for $target:$abs_path"
+			_mirror_rc=0
+			_essh "$target" \
+				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+				2>&1 || _mirror_rc=$?
+			if [ "$_mirror_rc" -ne 0 ]; then
+				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
 				_mirror_ok=""
 			fi
 		done < "$cleanup_file"
