@@ -259,7 +259,8 @@ if [[ ! -f "$DONE_MARKER" ]]; then
         --image-timeout 15m \
         --parallel-images 4 \
         --retry-delay 30s \
-        --retry-times 3
+        --retry-times 3 \
+	--remove-signatures=true
 
     touch "$DONE_MARKER"
     echo "  Sync complete"

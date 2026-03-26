@@ -812,7 +812,7 @@ _vm_create_test_user_and_key_on_host() {
 
     # Generate a fresh key pair in the default user's ~/.ssh/ on the host.
     # ~/.ssh/ is hidden so it survives _vm_cleanup_home (sudo rm -rf ~/*).
-    _essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy -y; ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
+    _essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && rm -f ~/.ssh/testy_rsa* && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
 
     local pub_key
     pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
