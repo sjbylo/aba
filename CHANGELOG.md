@@ -1,15 +1,45 @@
 ## [Unreleased]
 
 ### New Features
+- **KVM/libvirt platform support** - Full KVM hypervisor support as a new platform alongside VMware and bare-metal. Includes 11 `kvm-*.sh` lifecycle scripts (create, delete, start, stop, kill, ls, exists, on, refresh, upload, create-folder), `kvm.conf` template, and `ensure_virsh()` helpers. Supports non-root SSH to the KVM host.
+- **Externalized Makefile targets** - 19 targets (info, login, shell, day2, shutdown, startup, create, delete, ls, start, stop, kill, etc.) moved from `Makefile.cluster` into `aba.sh` case handlers, enabling three-way platform dispatch (vmw/kvm/bm) via `_ensure_hv_ready()`.
+- **Bundle v2 pipeline** - New idempotent `bundles/v2/` pipeline with numbered phase scripts, per-step log files, and combined log in `work/`. Replaces monolithic `bundle-create-test.sh`. Supports stale work-dir cleanup and retry.
 - **Podman-based catalog extraction** - Operator catalog indexes are now extracted directly from container images using podman, replacing the oc-mirror dependency for operator listing. Faster startup, no oc-mirror wait for catalog downloads, and more accurate default channel detection.
 - **Display names in TUI** - Operator search results and basket view now show display names (e.g. "Red Hat Integration - AMQ Broker") alongside operator package names.
 - **Search by display name** - TUI operator search matches against both operator names and display names (case-insensitive).
 - **Catalog extraction hardening** - Generic JSON fallback for unknown directory formats, runtime completeness check, and end-of-extraction summary for any parsing issues.
+- **Pre-flight validation** - DNS, NTP reachability and IP conflict detection before ISO generation, integrated as a Make dependency (#22).
+- **Configurable preflight strictness** - `verify_conf=all/conf/off` controls validation: `all` (default) runs full network checks, `conf` validates config files only, `off` skips all. Use `aba --verify conf` when the bastion is on a different network than cluster nodes.
+- **`OC_MIRROR_FLAGS` for signature handling** - Configurable `OC_MIRROR_FLAGS="--remove-signatures=true"` in `~/.aba/config` for oc-mirror 4.21+, where sigstore enforcement can break operator mirroring.
+- **Auto-detect network values** - When domain, machine\_network, dns\_servers, next\_hop\_address, or ntp\_servers are empty in `aba.conf` at cluster creation time, they are auto-detected and written back so the user can review before proceeding.
 
 ### Changed
+- **Consolidated mirror data directories** - `mirror/save/` and `mirror/sync/` merged into single `mirror/data/` directory. Imageset config template renamed to `imageset-config.yaml.j2`.
 - `aba reset` now cleans up `.index/` directory (cached catalog indexes).
 - Catalog download dialog shows OCP version.
 - Error messages reference `aba catalog` instead of `oc-mirror list operators`.
+- `aba kill` and `aba delete` now warn (instead of abort) when `agent-config.yaml` is missing.
+- Show hint to skip network checks when preflight has warnings or errors.
+- ISC reminder message shows operator hint only when no operators are configured.
+- Stale podman `render-*` temp dirs cleaned up after catalog extraction.
+- Ask user before bumping master memory for OCPBUGS-62790 workaround.
+- Release image error message now includes captured skopeo stderr.
+- MAC addresses quoted in `agent-config.yaml` example files to match generated YAML.
+- `shutdown --wait` properly passed through to `cluster-graceful-shutdown.sh` (was silently dropped). Shutdown now has 5-minute timeout with progress messages instead of infinite silent wait.
+- Full banner shown only on first v2 bundle step; short header for subsequent steps.
+- Suppress `cd` stderr in `run_once()` to avoid noise in TUI output.
+
+### Bug Fixes
+- **SNO install failure with `verify_conf=conf`** - `verify-release-image.sh` was skipping `openshift-install` binary extraction from the mirror when `--verify conf` was used. The fallback generic binary embeds quay.io URLs, causing `SignatureValidationFailed` in OCP 4.21+. Fix: `--verify conf` now only skips the skopeo connectivity check, not binary extraction. Extracted binary filename simplified to `openshift-install-mirror-$reg_host`.
+- **`vmware.conf`/`kvm.conf` symlink regression** - Externalization removed auto-symlink creation. `_ensure_hv_ready()` now conditionally creates symlinks if missing.
+- **Arping IP conflict detection on multi-homed hosts** - Fixed `arping -I` interface selection.
+- **Podman state corruption** - Enable systemd lingering on conN hosts; removed destructive `rm -rf containers/storage` and `systemctl --user stop --all`.
+- **`int_down` failing when interface already disconnected** - Graceful handling of already-down interfaces.
+- **KVM lifecycle fixes** - Fixed QXL video error on headless hosts, `virsh start` on already-active domains, `on_reboot=restart` alongside `on_poweroff=restart`, SNO VM naming via `vm_name()` helper, and graceful shutdown in disconnected/KVM environments.
+- **Cluster startup infinite loops** - Fixed VIP DNS resolution and `int_down` idempotency during startup.
+- **`oc debug` in disconnected environments** - Fixed cluster lifecycle commands that failed because `oc debug` tried to pull images from the internet.
+- **Bundle pipeline fixes** - Tightened idempotency check in `00-setup-connectivity.sh` (requires `README.txt`), added `exit 1` on make failure in `go.sh`, fixed `oc-mirror v2 --help` requiring `--v2` flag, updated default `GIT_BRANCH`.
+- **Bundle Makefile** - Error when `OP_SETS` missing for non-release bundles.
 
 ### E2E Testing
 - **`--revert` flag** - `run.sh run --revert` reverts all pool VMs (conN+disN) to their `pool-ready` snapshots before starting tests, giving a clean baseline and reclaiming VMware thin-disk bloat.
@@ -18,6 +48,13 @@
 - **Dashboard fix** - Fixed stale dashboard content caused by `tail -F` not detecting symlink target changes; background monitor restarts the stream on suite change without screen flicker.
 - **DISPATCH colorization** - `DISPATCH:` and `FORCE DISPATCH:` output highlighted in bold cyan.
 - **Reduced VM disk size** - `VM_DISK_EXTRA_GB` reduced from 100 to 0; template's 522 GB is sufficient for all suites.
+- **Dispatcher audit fixes** - Replaced all `(( var++ ))` with `var=$(( var + 1 ))` (crash under ERR trap), prevented duplicate suite dispatch, fixed CPU spin, fixed final summary to include rescheduled suites.
+- **Rescheduled suite priority** - Injected suites now dispatched before the normal work queue.
+- **Duplicate operator guard** - Prevents `cincinnati-operator` from being appended twice to `imageset-config.yaml` during upgrade tests.
+- **User action logging** - Interactive prompt actions (retry, skip, restart-suite, abort) now reflected in dashboard summary.
+- **Cleanup robustness** - `PIPESTATUS[0]` captured in cleanup pipelines to prevent masking failures. Cleanup failures now halt the suite. Removed 137 inappropriate `2>/dev/null` that hid error info. Post-suite integrity checks for orphan VMs and leftover registry containers.
+- **KVM lifecycle suite** - SNO full install + VM lifecycle (ls/stop/start/kill/shutdown/startup), plus compact and standard boot validation.
+- **Regression test** - `verify_conf=conf` mirror binary extraction test added to prevent SNO install regression.
 
 ---
 
