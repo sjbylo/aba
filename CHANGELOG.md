@@ -11,6 +11,14 @@
 - Catalog download dialog shows OCP version.
 - Error messages reference `aba catalog` instead of `oc-mirror list operators`.
 
+### E2E Testing
+- **`--revert` flag** - `run.sh run --revert` reverts all pool VMs (conN+disN) to their `pool-ready` snapshots before starting tests, giving a clean baseline and reclaiming VMware thin-disk bloat.
+- **Suite banner** - Banner now reads `SUITE START:` for clearer log boundaries.
+- **Live view scrollback** - Removed `tmux clear-history` so scrolling up in the live view shows previous suite output.
+- **Dashboard fix** - Fixed stale dashboard content caused by `tail -F` not detecting symlink target changes; background monitor restarts the stream on suite change without screen flicker.
+- **DISPATCH colorization** - `DISPATCH:` and `FORCE DISPATCH:` output highlighted in bold cyan.
+- **Reduced VM disk size** - `VM_DISK_EXTRA_GB` reduced from 100 to 0; template's 522 GB is sufficient for all suites.
+
 ---
 
 ## [0.9.7] - 2026-03-15
