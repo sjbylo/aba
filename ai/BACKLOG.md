@@ -361,6 +361,95 @@ calls. The `tools` image IS in the mirror (covered by the IDMS rule for
 
 ## Medium Priority
 
+### Bundle Tests: Modular Mix-and-Match Test Scripts
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-27
+
+**Problem:**
+The bundle test scripts (`bundles/templates/*-test.sh`) are rigid, one-per-bundle-type.
+Each script (`ocp-test.sh`, `mesh3-test.sh`, `ai-test.sh`, `ocpv-test.sh`, `opp-test.sh`)
+is tightly coupled to its bundle name. The v2 pipeline (`06d-test-cluster-and-operators.sh`)
+runs `${NAME}-test.sh` — a single test file per bundle.
+
+This means:
+1. A bundle that includes both ACM and ODF cannot run both operator-specific tests.
+2. Shared logic (wait for pods, install operator, verify operand) is duplicated across
+   every test script.
+3. Adding a new operator test means copying boilerplate and creating a whole new bundle type.
+
+**Proposed fix:**
+Refactor into composable test modules that can be mixed and matched per bundle:
+
+1. **Extract shared library** (`bundles/templates/lib/test-helpers.sh`): common functions
+   like `waitAllPodsInNamespace`, `install_operator`, `verify_operand`, `resultOut`,
+   `echo_step`, etc. All current scripts duplicate these.
+
+2. **One module per operator/feature** (`bundles/templates/tests/`):
+   - `test-mesh3.sh` — install and verify Service Mesh 3
+   - `test-acm.sh` — install and verify ACM
+   - `test-odf.sh` — install and verify ODF (currently inside `opp-test.sh`)
+   - `test-ocpv.sh` — install and verify OpenShift Virtualization + MTV
+   - `test-ai.sh` — install and verify OpenShift AI
+   - `test-web-terminal.sh` — install and verify Web Terminal (currently `ocp-test.sh`)
+   Each module sources the shared library and tests one feature independently.
+
+3. **Test manifest per bundle** (`bundles/templates/test-plans/`):
+   - `release.txt` — (empty or basic cluster-only checks)
+   - `ocp.txt` — `test-web-terminal.sh`
+   - `mesh3.txt` — `test-mesh3.sh`
+   - `opp.txt` — `test-odf.sh`
+   - `full.txt` — `test-mesh3.sh`, `test-acm.sh`, `test-odf.sh`, `test-ocpv.sh`
+   Each file lists the test modules to run for that bundle, one per line.
+
+4. **Update `06d-test-cluster-and-operators.sh`**: Instead of running `${NAME}-test.sh`,
+   read the test plan file and run each listed module in sequence:
+   ```bash
+   PLAN="$TEMPLATES_DIR/test-plans/${NAME}.txt"
+   if [ -f "$PLAN" ]; then
+       while read -r test_module; do
+           [ -z "$test_module" ] || "$TEMPLATES_DIR/tests/$test_module" 3>> "$TEST_LOG"
+       done < "$PLAN"
+   fi
+   ```
+
+**Benefits:**
+- A bundle with mesh3 + ACM + ODF runs all three operator tests automatically.
+- New operator tests are easy to add without copying boilerplate.
+- Shared helper code maintained in one place.
+- Test plans are simple text files — easy to customize per bundle or customer.
+
+**Where:** `bundles/templates/*-test.sh`, `bundles/v2/scripts/06d-test-cluster-and-operators.sh`,
+`bundles/v2/bundle.conf`
+
+---
+
+### Test ABA on RHEL 10
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-27
+
+**Summary:**
+ABA has only been tested on RHEL 8 and RHEL 9. RHEL 10 is now available and should be
+validated as a bastion platform. This includes:
+
+1. Install and run ABA on a RHEL 10 bastion (connected and disconnected).
+2. Verify all CLI tools install correctly (oc, oc-mirror, openshift-install, govc, etc.).
+3. Verify mirror registry (Quay and Docker) installs and operates on RHEL 10.
+4. Verify cluster deployment (SNO, compact, standard) from a RHEL 10 bastion.
+5. Check for any Python, podman, dnf, or systemd differences that break ABA.
+6. Add a RHEL 10 E2E pool template (`aba-e2e-template-rhel10`) and run at least one
+   suite end-to-end on RHEL 10.
+
+**Where:** E2E templates (`pool-lifecycle.sh` already has a `rhel10` entry in `VM_TEMPLATES`),
+`install` script (RPM compatibility), `scripts/include_all.sh` (OS detection).
+
+---
+
 ### E2E: Pre-populate Pool Mirror Registry in pool-ready Snapshot
 
 **Status:** Backlog
