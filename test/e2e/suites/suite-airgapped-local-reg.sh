@@ -442,9 +442,13 @@ e2e_run "Configure imageset for upgrade path" \
 e2e_run "Verify catalog YAML for upgrade" \
     "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
      test -s mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml"
-e2e_run "Append cincinnati-operator to imageset config" \
+e2e_run "Append cincinnati-operator to imageset config (if not already present)" \
     "_ocp_major=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}' | cut -d. -f1-2) && \
-     grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/data/imageset-config.yaml"
+     if ! grep -q 'name: cincinnati-operator' mirror/data/imageset-config.yaml; then \
+         grep -A2 'name: cincinnati-operator\$' mirror/imageset-config-redhat-operator-catalog-v\${_ocp_major}.yaml >> mirror/data/imageset-config.yaml; \
+     else \
+         echo 'cincinnati-operator already in imageset config -- skipping'; \
+     fi"
 
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
