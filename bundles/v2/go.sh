@@ -97,6 +97,7 @@ do
 			touch ~/tmp/bundle-go.out
 			[ "$NOTIFY" ] && echo -e "Install bundle $bundle_name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh "FAILED: at $(date)") >&2
 			echo "Quitting $0 at $(date)"
+			exit 1
 		fi
 
 		# Run cleanup after each successful bundle (separate target)
