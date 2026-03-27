@@ -1723,6 +1723,40 @@ for s in "${!_completed[@]}"; do
 	_results[$s]="${_completed[$s]}"
 done
 
+# Before _build_work_queue: consume any pre-existing inject queue (from reschedule before dispatcher)
+if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+	_pre_injected=()
+	while IFS= read -r _pi; do
+		[ -z "$_pi" ] && continue
+		_pre_injected+=("$_pi")
+	done < "$E2E_INJECT_QUEUE"
+	> "$E2E_INJECT_QUEUE"
+	if [ ${#_pre_injected[@]} -gt 0 ]; then
+		_new_suites=()
+		for _pi in "${_pre_injected[@]}"; do
+			_found=""
+			for _es in "${suites_to_run[@]}"; do
+				[ "$_es" = "$_pi" ] && _found=1 && break
+			done
+			if [ -n "$_found" ]; then
+				printf "  [%s] PRIORITY: %s (from earlier reschedule, moved to front)\n" "$(date '+%H:%M:%S')" "$_pi"
+			else
+				printf "  [%s] PRIORITY: %s (from earlier reschedule, added to front)\n" "$(date '+%H:%M:%S')" "$_pi"
+				suites_to_run+=("$_pi")
+			fi
+			_new_suites+=("$_pi")
+		done
+		for _es in "${suites_to_run[@]}"; do
+			_dup=""
+			for _pi in "${_pre_injected[@]}"; do
+				[ "$_es" = "$_pi" ] && _dup=1 && break
+			done
+			[ -z "$_dup" ] && _new_suites+=("$_es")
+		done
+		suites_to_run=("${_new_suites[@]}")
+	fi
+fi
+
 # Build the work queue (excluding completed and running)
 _build_work_queue
 

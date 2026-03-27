@@ -1036,6 +1036,7 @@ e2e_run() {
 
         if [ $prompt_rc -eq 2 ]; then
             _e2e_log "  Restarting retry cycle (user requested)"
+            _e2e_summary "    $(_e2e_cyan "RETRY (user): $description")"
             continue
         elif [ $prompt_rc -eq 0 ]; then
             local _elapsed=$(( $(date +%s) - _step_start ))
@@ -1046,10 +1047,12 @@ e2e_run() {
             rm -f "$_cmd_output_file"
             return 0
         elif [ $prompt_rc -eq 3 ]; then
+            _e2e_summary "    $(_e2e_Yellow "SKIP-SUITE (user): $description")"
             _E2E_SUITE_SKIPPED=1
             rm -f "$_cmd_output_file"
             return 3
         elif [ $prompt_rc -eq 4 ]; then
+            _e2e_summary "    $(_e2e_Yellow "RESTART (user): $description")"
             rm -f "$_cmd_output_file"
             exit 4
         else
