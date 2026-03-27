@@ -361,6 +361,45 @@ calls. The `tools` image IS in the mirror (covered by the IDMS rule for
 
 ## Medium Priority
 
+### E2E: Pre-populate Pool Mirror Registry in pool-ready Snapshot
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-27
+
+**Problem:**
+Today, the pool mirror registry (`/opt/pool-reg`) is installed and populated with images
+at the beginning of each suite run, after the `pool-ready` snapshot has already been created.
+This means:
+1. Every suite start pays the cost of registry setup + image sync even when reverting to snapshot.
+2. When `--revert` is used to roll VMs back to `pool-ready`, the mirror registry data is gone
+   and must be rebuilt from scratch.
+3. The 66 GB of registry data written to `/opt/pool-reg` during each suite contributes to
+   VMware thin-disk bloat (the VMDK only grows, never shrinks).
+
+**Proposed fix:**
+Move the pool mirror registry installation and image sync into the infrastructure creation
+phase (`setup-infra.sh`), specifically:
+1. After `_configure_con_vm` completes and before the `pool-ready` snapshot is taken.
+2. Install the registry (Quay/Docker), sync the OCP release images, and verify readiness.
+3. Then take the `pool-ready` snapshot with the registry already populated.
+
+**Benefits:**
+- `--revert` gives a fully-ready VM with mirror already populated — zero extra setup time.
+- Eliminates repeated 66 GB writes per suite, reducing thin-disk bloat significantly.
+- Suites start faster since they skip registry install/sync.
+
+**Considerations:**
+- The `pool-ready` snapshot becomes larger (includes registry data), but this is a one-time cost.
+- If the OCP version changes, `pool-ready` snapshots must be rebuilt (`--recreate-vms`).
+- Suite-specific operator images (not in the base OCP release) would still need incremental sync.
+
+**Where:** `test/e2e/setup-infra.sh` (snapshot creation), `test/e2e/runner.sh` (pre-suite setup),
+`test/e2e/lib/pool-lifecycle.sh` (`create_pools`)
+
+---
+
 ### Review vmware.conf / kvm.conf Symlink and ~/.vmware.conf Default File Approach
 
 **Status:** Backlog
