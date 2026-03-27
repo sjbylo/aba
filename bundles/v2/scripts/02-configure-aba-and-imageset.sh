@@ -17,7 +17,7 @@ OP=
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 aba -d cli oc-mirror
-~/bin/oc-mirror --help > /dev/null 2>&1 && echo "oc-mirror is valid!"
+~/bin/oc-mirror version 2>&1 | head -1 && echo "oc-mirror is valid!"
 
 echo_step "Create image set config file ..."
 
