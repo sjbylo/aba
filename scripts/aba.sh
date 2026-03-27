@@ -23,7 +23,7 @@
 ABA_VERSION=20260326191045
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260326165323
+ABA_BUILD=20260327185543
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -945,7 +945,7 @@ _ensure_hv_ready() {
 		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
 	esac
-	[ -f agent-config.yaml ] || aba_abort "agent-config.yaml not found. Run 'aba cluster' first."
+	[ -f agent-config.yaml ] || aba_warning "agent-config.yaml not found. Run 'aba cluster' first."
 	HV=$platform
 }
 
