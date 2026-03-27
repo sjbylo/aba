@@ -172,6 +172,16 @@ oc get po -n openshift-operators
 #testResultOut $FEATURE_NAME Operator installation test: ok
 #testResultOut Kiali Operator installation test: ok
 
+echo_step "Detecting latest supported Istio version from CRD"
+
+ISTIO_VERSION=$(oc get crd istios.sailoperator.io -o json | \
+	jq -r '.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.version.enum[]' | \
+	grep -- '-latest$' | sort -V | tail -1)
+
+[ -z "$ISTIO_VERSION" ] && { echo "ERROR: could not detect supported Istio version from CRD"; exit 1; }
+
+echo "Using Istio version: $ISTIO_VERSION"
+
 echo_step Install $FEATURE_NAME operand:
 
 cat << EOF | oc apply -f -
@@ -189,7 +199,7 @@ spec:
   updateStrategy:
     type: InPlace
     inactiveRevisionDeletionGracePeriodSeconds: 30
-  version: v1.24.6
+  version: $ISTIO_VERSION
 ---
 apiVersion: v1
 kind: Namespace
@@ -202,7 +212,7 @@ metadata:
   name: default
 spec:
   namespace: istio-cni
-  version: v1.24.6
+  version: $ISTIO_VERSION
 EOF
 
 #operandIsUp && testResultOut $FEATURE_NAME operand installation test: ok || testResultOut $FEATURE_NAME operand installation test: failed >&2

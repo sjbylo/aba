@@ -28,6 +28,8 @@ acquire_lock
 
 cd "$(dirname "$0")"
 
+source bundle.conf
+
 vers_track="21 20"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
@@ -93,9 +95,10 @@ do
 			echo "##################################################" >&2
 			echo "FAILED: bundle $bundle_name ($op_sets) at $(date)" >&2
 			echo "##################################################" >&2
-			echo "Showing last log lines:" >&2
-			touch ~/tmp/bundle-go.out
-			[ "$NOTIFY" ] && echo -e "Install bundle $bundle_name ($op_sets)\n$(tail -20 ~/tmp/bundle-go.out)" | tee >(notify.sh "FAILED: at $(date)") >&2
+			_build_log="$WORK_DIR/bundle-build.log"
+			echo "Showing last 20 log lines:" >&2
+			tail -20 "$_build_log" 2>/dev/null >&2
+			[ "$NOTIFY" ] && echo -e "FAILED: bundle $bundle_name ($op_sets)\n\n$(tail -20 "$_build_log" 2>/dev/null)" | notify.sh "Bundle FAILED: $bundle_name at $(date)"
 			echo "Quitting $0 at $(date)"
 			exit 1
 		fi

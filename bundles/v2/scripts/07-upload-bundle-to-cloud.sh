@@ -89,6 +89,12 @@ echo "Copy build artifact dir from $WORK_BUNDLE_DIR_BUILD to $CLOUD_DIR_BUNDLE"
 ls -la "$WORK_BUNDLE_DIR_BUILD"
 cp -rpv "$WORK_BUNDLE_DIR_BUILD"	"$CLOUD_DIR_BUNDLE"
 
+# Tidy the cloud build dir: combine logs, remove build artifacts
+_cloud_build="$CLOUD_DIR_BUNDLE/build"
+cat "$_cloud_build"/log-*.log > "$_cloud_build/build.log" 2>/dev/null && rm -f "$_cloud_build"/log-*.log
+rm -f "$_cloud_build"/.done-*
+rm -f "$_cloud_build"/tests-06*.txt "$_cloud_build"/*-test.sh
+
 # Remove the warning file (marks upload as complete)
 rm -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING"
 
