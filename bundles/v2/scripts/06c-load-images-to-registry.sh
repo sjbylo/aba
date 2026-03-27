@@ -33,7 +33,7 @@ curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry at 
 scripts/cli-install-all.sh --wait
 for cmd in butane govc kubectl oc oc-mirror openshift-install
 do
-	~/bin/$cmd --help >/dev/null 2>&1 || { echo "~/bin/$cmd cannot execute!"; exit 1; }
+	~/bin/$cmd version >/dev/null 2>&1 || ~/bin/$cmd --help >/dev/null 2>&1 || { echo "~/bin/$cmd cannot execute!"; exit 1; }
 done
 
 echo "All images loaded (disk2mirror) into Quay: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
