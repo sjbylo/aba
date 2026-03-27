@@ -66,6 +66,7 @@ CLI_START=""
 _CLI_POOLS_SET=""
 CLI_VERIFY=""
 CLI_DEV=""
+CLI_REVERT=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 CLI_OS=""
 
@@ -108,6 +109,7 @@ _usage() {
 	  --resume             Skip previously-passed tests (run, restart)
 	  --dry-run            Show dispatch plan, don't execute
 	  --clean              Clear checkpoints before running
+	  --revert             Revert all pool VMs (conN+disN) to pool-ready snapshot before running
 	  --recreate-golden    Force rebuild golden VM from template
 	  --recreate-vms       Force reclone all conN/disN from golden
 	  -y, --yes            Auto-accept prompts
@@ -138,6 +140,7 @@ while [ $# -gt 0 ]; do
 		-p|--pools)           CLI_POOLS="$2"; _CLI_POOLS_SET=1; shift 2 ;;
 		-G|--recreate-golden) CLI_RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    CLI_RECREATE_VMS=1; shift ;;
+		-V|--revert)          CLI_REVERT=1; shift ;;
 		-y|--yes)             CLI_YES=1; shift ;;
 		-q|--quiet)           CLI_QUIET=1; CLI_YES=1; shift ;;
 		--clean)              CLI_CLEAN=1; shift ;;
@@ -320,10 +323,14 @@ _create_tmux_dashboard() {
 	local _user="${CON_SSH_USER:-steve}"
 	local _domain="${VM_BASE_DOMAIN}"
 
+	# Uses tail -F for smooth real-time streaming.  A background monitor
+	# checks every 10s whether the suite changed (via /tmp/e2e-last-suites);
+	# on change it kills the tail SSH so the loop restarts with fresh content.
+	# This avoids the inotify/symlink stale-content bug without screen flicker.
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
+		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; clear; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!; while kill -0 \$_tpid 2>/dev/null; do sleep 10; _ns=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break; done; wait \$_tpid 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null || true
@@ -1300,6 +1307,47 @@ if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
 fi
 
+# --- Revert pool VMs to pool-ready snapshot (optional) ------------------------
+
+if [ -n "$CLI_REVERT" ]; then
+	echo ""
+	echo "  Reverting pool VMs to pool-ready snapshot ..."
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		for prefix in con dis; do
+			vm="${prefix}${i}"
+			if govc snapshot.tree -vm "$vm" 2>&1 | grep -q "pool-ready"; then
+				govc snapshot.revert -vm "$vm" "pool-ready" || { echo "  FATAL: revert $vm failed" >&2; exit 1; }
+				govc vm.power -on "$vm" 2>/dev/null || true
+				echo "    ${vm}: reverted to pool-ready"
+			else
+				echo "    ${vm}: WARNING -- pool-ready snapshot not found, skipping" >&2
+			fi
+		done
+	done
+
+	echo "  Waiting for conN SSH readiness ..."
+	_user="${CON_SSH_USER:-steve}"
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		_host="con${i}.${VM_BASE_DOMAIN}"
+		_elapsed=0
+		while [ $_elapsed -lt 120 ]; do
+			if ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
+				-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+				"${_user}@${_host}" -- "true" 2>/dev/null; then
+				echo "    con${i}: SSH ready"
+				break
+			fi
+			sleep 5
+			_elapsed=$(( _elapsed + 5 ))
+		done
+		if [ $_elapsed -ge 120 ]; then
+			echo "  FATAL: con${i} not reachable after revert (120s timeout)" >&2
+			exit 1
+		fi
+	done
+	echo "  All pool VMs reverted and ready."
+fi
+
 # --- scp test harness to ~/.e2e-harness/ on each conN -------------------------
 
 # Pre-flight: verify notify.sh exists if NOTIFY_CMD is configured
@@ -1400,7 +1448,7 @@ _dispatch_suite() {
 	local pool_num="$1"
 	local suite="$2"
 
-	echo "  DISPATCH: $suite -> pool $pool_num (con${pool_num})"
+	printf "  \033[1;36mDISPATCH:\033[0m %s -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
 	# Kill any stale session and orphaned runner processes
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true"
@@ -1861,7 +1909,7 @@ if [ -n "$CLI_FORCE" ] && [ -n "$CLI_POOL" ] && [ -n "$CLI_SUITE" ]; then
 		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 			echo ""
 			echo "  Dispatcher running (pid $_old_dpid) -- performing one-shot dispatch"
-			echo "  FORCE DISPATCH: $CLI_SUITE -> pool $CLI_POOL"
+			printf "  \033[1;36mFORCE DISPATCH:\033[0m %s -> pool %s\n" "$CLI_SUITE" "$CLI_POOL"
 
 			declare -A _retried=()
 			_dispatch_suite "$CLI_POOL" "$CLI_SUITE"

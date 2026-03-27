@@ -449,14 +449,13 @@ else
 	fi
 fi
 
-# Reset terminal state
+# Reset terminal visually (keeps tmux scrollback so 'live' view can scroll to previous suites)
 printf '\033c'
-tmux clear-history 2>/dev/null
 
 printf '%0.s#' {1..80}; echo
 printf '%0.s#' {1..80}; echo
 printf '##  %-74s##\n' ""
-printf '##  %-74s##\n' "SUITE: $SUITE"
+printf '##  %-74s##\n' "SUITE START: $SUITE"
 printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
 printf '##  %-74s##\n' ""
 printf '%0.s#' {1..80}; echo
