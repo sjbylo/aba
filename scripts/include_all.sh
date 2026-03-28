@@ -2302,6 +2302,27 @@ wait_all_cli_downloads() {
 	scripts/cli-download-all.sh --wait
 }
 
+# Ensure the mirror registry has sigstore writes enabled in registries.d.
+# Without this, oc-mirror fails with "writing sigstore attachments is disabled"
+# when loading or syncing images whose source had use-sigstore-attachments: true.
+# Creates a per-mirror file so multiple mirrors each get their own entry.
+ensure_sigstore_mirror_config() {
+	local mirror_host_port="$1"
+	local sigstore_dir="$HOME/.config/containers/registries.d"
+
+	[ -f "$sigstore_dir/aba-sigstore.yaml" ] || return 0
+
+	# Replace colon with dash for safe filename (e.g. "mirror.example.com:8443" → "mirror.example.com-8443")
+	local safe_name="${mirror_host_port//:/-}"
+	local mirror_file="$sigstore_dir/aba-sigstore-mirror-${safe_name}.yaml"
+
+	mkdir -p "$sigstore_dir"
+	printf 'docker:\n    %s:\n        use-sigstore-attachments: true\n' \
+		"$mirror_host_port" > "$mirror_file"
+
+	aba_debug "Sigstore mirror config: $mirror_file ($mirror_host_port)"
+}
+
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
 	# Wait for oc-mirror download to complete before extracting

@@ -80,7 +80,9 @@ if [ ! -d data ]; then
 fi
 aba_debug "data/ directory exists"
 
-echo 
+ensure_sigstore_mirror_config "$reg_host:$reg_port"
+
+echo
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 
