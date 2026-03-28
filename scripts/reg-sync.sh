@@ -91,6 +91,8 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ###[ ! "$reg_root" ] && reg_root=$HOME/quay-install  # Needed for below TMPDIR
 
+ensure_sigstore_mirror_config "$reg_host:$reg_port"
+
 echo
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
