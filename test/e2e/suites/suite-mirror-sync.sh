@@ -182,10 +182,26 @@ e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
 e2e_run "Reconfigure remote registry after reset" \
     "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
+# OC_MIRROR_FLAGS missing-variable test: comment out the variable in
+# ~/.aba/config so it is unset, then run save+load.  The default
+# (--remove-signatures=true) embedded in the reg-*.sh scripts should
+# kick in automatically.
+e2e_run -q "Comment out OC_MIRROR_FLAGS in ~/.aba/config" \
+    "sed -i 's/^OC_MIRROR_FLAGS=/#OC_MIRROR_FLAGS=/' \$HOME/.aba/config && \
+     grep OC_MIRROR_FLAGS \$HOME/.aba/config"
+
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
+
+# Verify the generated save-mirror.sh picked up the default flag
+e2e_run "Verify --remove-signatures=true in generated save-mirror.sh" \
+    "grep -- '--remove-signatures=true' mirror/data/save-mirror.sh"
+
+e2e_run -q "Restore OC_MIRROR_FLAGS in ~/.aba/config" \
+    "sed -i 's/^#OC_MIRROR_FLAGS=/OC_MIRROR_FLAGS=/' \$HOME/.aba/config && \
+     grep OC_MIRROR_FLAGS \$HOME/.aba/config"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
