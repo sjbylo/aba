@@ -5,6 +5,7 @@
 #   make VER=4.18.0 NAME=ocpv OP_SETS="ocp odf ocpv"
 #   make clean VER=4.18.0 NAME=release   # clean one bundle
 #   make clean                            # clean all bundles
+#   make cleanwork                        # remove large tarballs + test-install dirs
 
 VER      ?=
 NAME     ?=
@@ -13,7 +14,7 @@ OP_SETS  ?=
 WORK_DIR    := $(shell bash -c 'source bundle.conf 2>/dev/null && echo $$WORK_DIR')
 
 # Validate required variables only for targets that need them (not clean-all)
-ifneq ($(MAKECMDGOALS),clean)
+ifeq ($(filter clean cleanwork,$(MAKECMDGOALS)),)
 ifeq ($(VER),)
 $(error VER is required. Example: make VER=4.18.0 NAME=release)
 endif
@@ -32,9 +33,9 @@ M            = $(WORK_DIR)/$(BUNDLE_NAME)/build
 
 export VER NAME OP_SETS
 
-.PHONY: all cleanup clean
+.PHONY: all clean cleanwork
 
-all: $(M)/.done-07-upload
+all: $(M)/.done-08-cleanup
 
 $(M)/.done-00-setup: bundle.conf common.sh | $(M)
 	bash -e scripts/00-setup-connectivity.sh
@@ -80,9 +81,9 @@ $(M)/.done-07-upload: $(M)/.done-06d-tests-passed
 	bash -e scripts/07-upload-bundle-to-cloud.sh
 	@touch $@
 
-# Cleanup is a separate target: run after 'make all' succeeds
-cleanup:
+$(M)/.done-08-cleanup: $(M)/.done-07-upload
 	bash -e scripts/08-cleanup-and-go-online.sh
+	@touch $@
 
 # Create marker directory
 $(M):
@@ -95,3 +96,10 @@ ifeq ($(VER),)
 else
 	rm -f $(M)/.done-*
 endif
+
+# Emergency cleanup: remove large tarballs and test-install dirs to reclaim disk space
+cleanwork:
+	@echo "Removing ocp_* tarballs and test-install-* dirs from $(WORK_DIR)/ ..."
+	find $(WORK_DIR)/ -maxdepth 2 -name 'ocp_*' -type f -delete 2>/dev/null || true
+	find $(WORK_DIR)/ -maxdepth 1 -name 'test-install-*' -type d -exec rm -rf {} + 2>/dev/null || true
+	@echo "Done. Re-run 'make clean' then 'make' to rebuild."
