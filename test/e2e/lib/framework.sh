@@ -640,7 +640,13 @@ e2e_cleanup_clusters() {
 		_e2e_log_and_print "    $target: aba -y -d $abs_path delete"
 		_cleanup_rc=0
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' delete; else echo '  (dir not found -- already cleaned)'; fi" \
+			"if [ -d '$abs_path' ]; then
+				aba -y -d '$abs_path' delete
+			else
+				echo '  WARNING: cluster dir $abs_path not found -- was it rm -rf'\''d before cleanup?'
+				echo '  Orphan VMs may still exist. Keeping cleanup file for investigation.'
+				exit 1
+			fi" \
 			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
 		_cleanup_rc=${PIPESTATUS[0]}
 		if [ "$_cleanup_rc" -ne 0 ]; then
@@ -709,7 +715,13 @@ e2e_cleanup_mirrors() {
 		_e2e_log_and_print "    $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+			"if [ -d '$abs_path' ]; then
+				aba -y -d '$abs_path' uninstall
+			else
+				echo '  WARNING: mirror dir $abs_path not found -- was it rm -rf'\''d before cleanup?'
+				echo '  Mirror data may still exist. Keeping cleanup file for investigation.'
+				exit 1
+			fi" \
 			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
 		_cleanup_rc=${PIPESTATUS[0]}
 		if [ "$_cleanup_rc" -ne 0 ]; then

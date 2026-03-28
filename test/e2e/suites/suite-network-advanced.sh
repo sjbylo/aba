@@ -336,7 +336,7 @@ e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard
 # so only call 'aba delete' when the config still exists (VMs might still be up).
 for _cdir in $_SNO_VLAN $_COMPACT_VLAN $_STANDARD_VLAN $_SNO $_COMPACT $_STANDARD; do
 	e2e_run "Cleanup $_cdir" \
-	    "if [ -f $_cdir/agent-config.yaml ]; then aba --dir $_cdir delete; fi; rm -rf $_cdir"
+	    "aba --dir $_cdir delete && rm -rf $_cdir"
 done
 
 test_end

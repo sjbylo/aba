@@ -317,7 +317,7 @@ test_end
 test_begin "Cleanup: delete cluster"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -f $SNO/agent-config.yaml ]; then aba --dir $SNO delete; fi; rm -rf $SNO"
+    "aba --dir $SNO delete && rm -rf $SNO"
 
 test_end
 
