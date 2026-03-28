@@ -622,7 +622,7 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 
 	# Verify no mirror data dirs survived cleanup on either host.
 	# If any exist, aba uninstall has a bug -- stop before starting the suite.
-	local _dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	_dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	if ! _verify_no_mirror_data_dirs "disN" "$_dis_host"; then
 		echo "1" > "$RC_FILE"
 		exit 1
@@ -717,7 +717,7 @@ while true; do
 			_reset_con_firewall
 
 			# Verify no mirror data dirs survived cleanup
-			local _dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+			_dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 			if ! _verify_no_mirror_data_dirs "disN" "$_dis_host"; then
 				echo "1" > "$RC_FILE"
 				exit 1
