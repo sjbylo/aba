@@ -193,10 +193,10 @@ for cname in sno compact standard; do
 	[ "$cname" = "sno" ]      && _ip=10.0.1.201
 	[ "$cname" = "compact" ]  && _ip=10.0.1.71
 	[ "$cname" = "standard" ] && _ip=10.0.1.81
-	if [ ! -f $cname/cluster.conf ]; then
-		aba cluster -n $cname -t $cname -i $_ip --step cluster.conf 2>/dev/null || true
-	fi
-	test-cmd -i -m "Deleting leftover $cname cluster" aba --dir $cname delete
+#	if [ ! -f $cname/cluster.conf ]; then
+#		aba cluster -n $cname -t $cname -i $_ip --step cluster.conf 2>/dev/null || true
+#	fi
+	test-cmd -i -m "Deleting leftover $cname cluster" aba --dir $cname delete || true
 	rm -rf $cname
 done
 
