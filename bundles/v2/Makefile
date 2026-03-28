@@ -3,12 +3,17 @@
 # Usage:
 #   make VER=4.18.0 NAME=release
 #   make VER=4.18.0 NAME=ocpv OP_SETS="ocp odf ocpv"
-#   make clean VER=4.18.0 NAME=release
+#   make clean VER=4.18.0 NAME=release   # clean one bundle
+#   make clean                            # clean all bundles
 
 VER      ?=
 NAME     ?=
 OP_SETS  ?=
 
+WORK_DIR    := $(shell bash -c 'source bundle.conf 2>/dev/null && echo $$WORK_DIR')
+
+# Validate required variables only for targets that need them (not clean-all)
+ifneq ($(MAKECMDGOALS),clean)
 ifeq ($(VER),)
 $(error VER is required. Example: make VER=4.18.0 NAME=release)
 endif
@@ -20,9 +25,9 @@ ifeq ($(strip $(OP_SETS)),)
 $(error OP_SETS is required for non-release bundles. Example: make VER=4.18.0 NAME=opp OP_SETS="ocp odf sec acm")
 endif
 endif
+endif
 
 BUNDLE_NAME = $(VER)-$(NAME)
-WORK_DIR    := $(shell bash -c 'source bundle.conf 2>/dev/null && echo $$WORK_DIR')
 M            = $(WORK_DIR)/$(BUNDLE_NAME)/build
 
 export VER NAME OP_SETS
@@ -84,4 +89,9 @@ $(M):
 	@mkdir -p $@
 
 clean:
+ifeq ($(VER),)
+	@echo "Cleaning all bundle build markers in $(WORK_DIR)/ ..."
+	find $(WORK_DIR)/ -name '.done-*' -delete 2>/dev/null || true
+else
 	rm -f $(M)/.done-*
+endif
