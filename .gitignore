@@ -84,4 +84,5 @@ mirror/regcreds.bk
 .index
 .index-test/
 .index-backup/
+test/e2e/.config.env.deploy
 .cursor/

@@ -240,6 +240,18 @@ export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$_ABA_ROOT" remote get-url origin
 # user/repo slug for curl one-liner install (strip protocol + host + .git suffix)
 export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
 
+# Generate deployable config.env with auto-detected git values baked in.
+# runner.sh on VMs sources this, so the correct branch/repo is always set
+# without relying on the VM's local git state.
+_DEPLOY_CONFIG_ENV="$_RUN_DIR/.config.env.deploy"
+{
+	cat "$_RUN_DIR/config.env"
+	printf '\n# --- Auto-injected by run.sh (do not edit manually) ---\n'
+	printf 'E2E_GIT_BRANCH=%s\n' "$E2E_GIT_BRANCH"
+	printf 'E2E_GIT_REPO=%s\n' "$E2E_GIT_REPO"
+	printf 'E2E_GIT_REPO_SLUG=%s\n' "$E2E_GIT_REPO_SLUG"
+} > "$_DEPLOY_CONFIG_ENV"
+
 # --- Ensure govc when we will use it (destroy or infra check / setup) ---------
 _ensure_govc() {
 	if command -v govc &>/dev/null; then
@@ -434,7 +446,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 		# Also push test harness to ~/.e2e-harness/
 		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${target}:~/.e2e-harness/runner.sh" &&
-		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env"       "${target}:~/.e2e-harness/config.env" &&
+		   scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV"                   "${target}:~/.e2e-harness/config.env" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${target}:~/.e2e-harness/pools.conf" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${target}:~/.e2e-harness/lib/" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${target}:~/.e2e-harness/suites/" &&
@@ -651,7 +663,7 @@ if [ -n "$CLI_RESTART" ]; then
 		echo -n "    con${p} harness: "
 		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
-		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/config.env"       "${_target}:~/.e2e-harness/config.env" &&
+		   scp -q $_restart_ssh "$_DEPLOY_CONFIG_ENV"                   "${_target}:~/.e2e-harness/config.env" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
 		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
@@ -1367,7 +1379,7 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 	target="${user}@${host}"
 
 	if ssh -q $_SSH_OPTS "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/.e2e-harness/config.env" &&
+	   scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV" "$target:~/.e2e-harness/config.env" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/.e2e-harness/pools.conf" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/.e2e-harness/runner.sh" &&
 	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/.e2e-harness/lib/" &&
@@ -1462,7 +1474,7 @@ _dispatch_suite() {
 	local _target="${_user}@${_host}"
 	if ! { _ssh_con "$pool_num" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env"       "${_target}:~/.e2e-harness/config.env" &&
+	       scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV"                   "${_target}:~/.e2e-harness/config.env" &&
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
@@ -1947,7 +1959,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$_DEPLOY_CONFIG_ENV"' EXIT
 
 declare -A _retried=()
 _MAX_RETRIES=2
