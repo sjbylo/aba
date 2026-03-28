@@ -33,4 +33,4 @@ CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS=20
 # Sigstore signature handling is managed by
 # $HOME/.config/containers/registries.d/aba-sigstore.yaml
 # (installed automatically by ABA).
-# OC_MIRROR_FLAGS=
+# OC_MIRROR_FLAGS="--remove-signatures=true"
