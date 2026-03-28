@@ -270,7 +270,6 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
-# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
 oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.21
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 

@@ -159,6 +159,16 @@ if [ ! -f ~/.aba/config ]; then
 	fi
 fi
 
+# Deploy per-user registries.d config for sigstore signature handling
+_SIGSTORE_DEST="$HOME/.config/containers/registries.d/aba-sigstore.yaml"
+if [ ! -f "$_SIGSTORE_DEST" ]; then
+	if [ -f templates/aba-sigstore-config.yaml ]; then
+		mkdir -p "$HOME/.config/containers/registries.d"
+		cp templates/aba-sigstore-config.yaml "$_SIGSTORE_DEST"
+	else
+		echo "Warning: templates/aba-sigstore-config.yaml not found" >&2
+	fi
+fi
 
 source scripts/include_all.sh
 

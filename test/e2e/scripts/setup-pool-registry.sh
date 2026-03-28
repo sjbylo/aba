@@ -249,6 +249,15 @@ if [[ ! -f "$DONE_MARKER" ]]; then
         _oc_mirror_tmp_installed=1
     fi
 
+    # Deploy registries.d sigstore config (oc-mirror reads it automatically)
+    _SIGSTORE_TMPL="$ABA_ROOT/templates/aba-sigstore-config.yaml"
+    _SIGSTORE_DEST="$HOME/.config/containers/registries.d/aba-sigstore.yaml"
+    if [[ -f "$_SIGSTORE_TMPL" && ! -f "$_SIGSTORE_DEST" ]]; then
+        mkdir -p "$HOME/.config/containers/registries.d"
+        cp "$_SIGSTORE_TMPL" "$_SIGSTORE_DEST"
+        echo "  Deployed registries.d sigstore config"
+    fi
+
     cd "$SYNC_DIR"
     umask 0022
     oc-mirror --v2 \
@@ -259,8 +268,7 @@ if [[ ! -f "$DONE_MARKER" ]]; then
         --image-timeout 15m \
         --parallel-images 4 \
         --retry-delay 30s \
-        --retry-times 3 \
-	--remove-signatures=true
+        --retry-times 3
 
     touch "$DONE_MARKER"
     echo "  Sync complete"

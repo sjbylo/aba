@@ -30,7 +30,7 @@ CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS=20
 # OC_MIRROR_PARALLEL_IMAGES=8
 
 # Extra flags appended to every oc-mirror invocation (sync, save, load).
-# Default: --remove-signatures=true (required for oc-mirror 4.21+ because
-# certified and community operator images often lack sigstore signatures).
-# Clear this to enforce signature verification: OC_MIRROR_FLAGS=
-OC_MIRROR_FLAGS="--remove-signatures=true"
+# Sigstore signature handling is managed by
+# $HOME/.config/containers/registries.d/aba-sigstore.yaml
+# (installed automatically by ABA).
+# OC_MIRROR_FLAGS=

@@ -1145,7 +1145,7 @@ Values are commented out by default; uncomment and edit to override.
 | `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
-| `OC_MIRROR_FLAGS` | `--remove-signatures=true` | Extra flags appended to every `oc-mirror` invocation (sync, save, load). The default is required for oc-mirror 4.21+ because certified and community operator images often lack sigstore signatures. Clear to enforce signature verification. |
+| `OC_MIRROR_FLAGS` | *(empty)* | Extra flags appended to every `oc-mirror` invocation (sync, save, load). Normally not needed — sigstore signature handling is managed by the `registries.d` config below. |
 
 Example — increase the image timeout to 60 minutes:
 
@@ -1166,13 +1166,23 @@ vi ~/.aba/config
 OC_MIRROR_PARALLEL_IMAGES=4
 ```
 
-Example — enforce strict signature verification (disable the default `--remove-signatures`):
+### Sigstore Signature Handling
+
+ABA installs a per-user [`registries.d`](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) configuration at `~/.config/containers/registries.d/aba-sigstore.yaml` that controls which registries have cosign/sigstore OCI signatures fetched during mirroring.
+By default, sigstore is **enabled** for OpenShift release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), and **disabled** for everything else (to avoid failures from unsigned certified/community operator images).
+This ensures that signatures required for OCP 4.21+ `ClusterImagePolicy` verification are preserved while allowing all operator images to mirror without errors.
+
+To customise, edit `~/.config/containers/registries.d/aba-sigstore.yaml` — see the comments in that file for examples.
+For full details on the configuration format, see [`containers-registries.d(5)`](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) and the [Red Hat container signing documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/building_running_and_managing_containers/assembly_signing-container-images_building-running-and-managing-containers).
+
+Example — enable sigstore for a custom registry:
 
 ```bash
-vi ~/.aba/config
+vi ~/.config/containers/registries.d/aba-sigstore.yaml
 
-# Clear the default flags:
-OC_MIRROR_FLAGS=
+# Add under the "docker:" section:
+#   my-registry.example.com:
+#       use-sigstore-attachments: true
 ```
 
 ## Named Mirror Directories (Enclaves)

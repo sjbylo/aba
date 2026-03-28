@@ -1,0 +1,43 @@
+# ABA: Sigstore signature handling for oc-mirror.
+#
+# This file controls which registries have sigstore (cosign) OCI
+# signature attachments fetched and preserved during mirroring.
+# It is read by oc-mirror (and other containers/image tools like
+# podman and skopeo) from:
+#   $HOME/.config/containers/registries.d/
+#
+# Why: Certified and community operator images often lack sigstore
+# signatures, causing oc-mirror 4.21+ to fail with
+# SignatureValidationFailed.  OpenShift release images and Red Hat
+# operator images DO have valid sigstore signatures and must be
+# preserved for OCP 4.21+ ClusterImagePolicy verification.
+#
+# The defaults below disable sigstore globally and re-enable it
+# only for registries known to carry valid signatures.
+#
+# --- Customisation examples ---
+#
+# Enable sigstore for a specific quay.io namespace:
+#   quay.io/my-signed-images:
+#       use-sigstore-attachments: true
+#
+# Disable sigstore for a specific registry.redhat.io path
+# (overrides the registry.redhat.io: true rule):
+#   registry.redhat.io/my-unsigned-project:
+#       use-sigstore-attachments: false
+#
+# Scopes are matched most-specific-first, so a longer path
+# always wins over a shorter one.
+#
+# Reference:
+#   man containers-registries.d(5)
+#   https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md
+# -----------------------------------------------------------
+
+default-docker:
+    use-sigstore-attachments: false
+docker:
+    quay.io/openshift-release-dev:
+        use-sigstore-attachments: true
+    registry.redhat.io:
+        use-sigstore-attachments: true
