@@ -243,7 +243,7 @@ test_end
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
-    "if [ -f $SNO/agent-config.yaml ]; then aba --dir $SNO delete; fi; rm -rf $SNO"
+    "aba --dir $SNO delete && rm -rf $SNO"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

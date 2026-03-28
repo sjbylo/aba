@@ -536,17 +536,16 @@ _pre_suite_cleanup() {
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path delete"
 			if ! ( _essh "$target" \
-				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' delete; else
-					echo '  (dir not found -- sweeping vSphere for orphan VMs)'
-					_cname=\$(basename '$abs_path')
-					for vm in \$(govc find '${VC_FOLDER:-/Datacenter/vm/aba-e2e}' -type m -name \"\${_cname}-*\"); do
-						echo \"    Destroying orphan: \$vm\"
-						govc vm.power -off \"\$vm\" || true
-						govc vm.destroy \"\$vm\" || true
-					done
+				"if [ -d '$abs_path' ]; then
+					aba -y -d '$abs_path' delete
+				else
+					echo '  FATAL: cluster dir $abs_path not found -- cannot run aba delete.'
+					echo '  The dir was likely rm -rf'\''d before cleanup could run.'
+					echo '  Orphan VMs may exist. Investigate the root cause.'
+					exit 1
 				fi" \
 				2>&1 ); then
-				echo "  WARNING: cleanup SSH failed for $target:$abs_path"
+				echo "  WARNING: cleanup failed for $target:$abs_path"
 				_cleanup_ok=""
 			fi
 		done < "$cleanup_file"

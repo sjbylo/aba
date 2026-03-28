@@ -361,9 +361,9 @@ test_end
 test_begin "Cleanup: delete clusters and uninstall mirrors"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -f $SNO/agent-config.yaml ]; then aba --dir $SNO delete; fi; rm -rf $SNO"
+    "aba --dir $SNO delete && rm -rf $SNO"
 e2e_run "Delete standard cluster" \
-    "if [ -f $STANDARD/agent-config.yaml ]; then aba --dir $STANDARD delete; fi; rm -rf $STANDARD"
+    "aba --dir $STANDARD delete && rm -rf $STANDARD"
 e2e_run "Uninstall mymirror registry" \
     "if [ -d mymirror ]; then aba --dir mymirror uninstall; else echo '[cleanup] mymirror already removed'; fi"
 e2e_run "Uninstall mirror registry on disN" \
