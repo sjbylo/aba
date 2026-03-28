@@ -122,7 +122,7 @@ do
 	[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
-	cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-"--remove-signatures=true"}"
+	cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
 	echo "cd data && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
 	aba_debug "Created sync-mirror.sh script"
 

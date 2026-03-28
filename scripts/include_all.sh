@@ -1153,7 +1153,7 @@ replace-value-conf() {
 
 			return 0
 		else
-			sed -i "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
 
 			if [ ! "$quiet" ]; then
 				[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
