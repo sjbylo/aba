@@ -177,6 +177,10 @@ if [ "$failed" ]; then
 
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
 
+	if grep -qiE 'SignatureValidationFailed|signature.*missing|sigstore' data/saved_errors/*.txt 2>/dev/null; then
+		aba_warning "Signature errors detected. To adjust sigstore settings, edit ~/.config/containers/registries.d/aba-sigstore.yaml"
+	fi
+
 	exit 1
 fi
 
