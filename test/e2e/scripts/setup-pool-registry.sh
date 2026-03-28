@@ -258,6 +258,20 @@ if [[ ! -f "$DONE_MARKER" ]]; then
         echo "  Deployed registries.d sigstore config"
     fi
 
+    # Enable sigstore writes to the pool registry (colon replaced with dash for filename)
+    _mirror_safe="${reg_host}:${REG_PORT}"
+    _mirror_safe="${_mirror_safe//:/-}"
+    _MIRROR_SIGSTORE="$HOME/.config/containers/registries.d/aba-sigstore-mirror-${_mirror_safe}.yaml"
+    if [[ ! -f "$_MIRROR_SIGSTORE" ]]; then
+        mkdir -p "$HOME/.config/containers/registries.d"
+        cat > "$_MIRROR_SIGSTORE" <<-SIGEOF
+		docker:
+		    ${reg_host}:${REG_PORT}:
+		        use-sigstore-attachments: true
+		SIGEOF
+        echo "  Deployed per-mirror sigstore config for ${reg_host}:${REG_PORT}"
+    fi
+
     cd "$SYNC_DIR"
     umask 0022
     oc-mirror --v2 \
