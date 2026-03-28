@@ -186,11 +186,17 @@ which yq || (
 ######################
 # This test creates the ABI (agent-based installer) config files to check they are valid
 
-# Clean up leftover clusters from previous runs (VMs may still be on vSphere)
+# Clean up leftover clusters from previous runs (VMs may still be on vSphere).
+# Re-create cluster config with the same starting IPs used later in this test
+# so 'aba delete' can find and destroy any orphan VMs from a previous run.
 for cname in sno compact standard; do
-	if [ -f $cname/agent-config.yaml ]; then
-		test-cmd -i -m "Deleting leftover $cname cluster" aba --dir $cname delete
+	[ "$cname" = "sno" ]      && _ip=10.0.1.201
+	[ "$cname" = "compact" ]  && _ip=10.0.1.71
+	[ "$cname" = "standard" ] && _ip=10.0.1.81
+	if [ ! -f $cname/cluster.conf ]; then
+		aba cluster -n $cname -t $cname -i $_ip --step cluster.conf 2>/dev/null || true
 	fi
+	test-cmd -i -m "Deleting leftover $cname cluster" aba --dir $cname delete
 	rm -rf $cname
 done
 
@@ -202,7 +208,7 @@ do
 
         rm -rf $cname
 
-	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
+	test-cmd -m "Adding DNS servers 10.0.1.8 10.0.2.8" "aba --dns 10.0.1.8 10.0.2.8"
 
 	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
 	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
