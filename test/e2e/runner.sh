@@ -218,11 +218,12 @@ if [ -f "$_RUNNER_DIR/config.env" ]; then
 	set +a
 fi
 
-# Derive git variables needed by suites (curl/git-clone install paths).
-# These are set in run.sh on the orchestrator host but don't propagate over SSH.
-export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
-export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$_ABA_ROOT" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
-export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
+# Git variables for suites (curl/git-clone install paths).
+# Primary source: config.env (run.sh injects auto-detected values before deploy).
+# Fallbacks here are safe defaults only -- never trust the VM's local git state.
+export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-dev}"
+export E2E_GIT_REPO="${E2E_GIT_REPO:-https://github.com/sjbylo/aba.git}"
+export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-sjbylo/aba}"
 
 # Setup framework environment
 e2e_setup
