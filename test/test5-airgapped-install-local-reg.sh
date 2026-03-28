@@ -205,7 +205,7 @@ test-cmd -m  "Delete this file that's already been copied to internal bastion: '
 # FIXME: aba should do this?
 ####ssh $reg_ssh_user@$int_bastion_hostname "rpm -q make || sudo yum install make -y"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 5 3 -m "Checking ~/.aba/mirror/mirror/ does not exist on $int_bastion_hostname" "test ! -d ~/.aba/mirror/mirror" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 3 -m "Checking ~/.aba/mirror/mirror/ does not exist on $int_bastion_hostname" "test ! -d ~/.aba/mirror/mirror" 
 
 ######################
 mylog Runtest: START - airgap
@@ -237,7 +237,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Installing sno" "aba --dir 
 
 test-cmd -m "Sleep 30" "read -t 30 xy||true"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 8 1.6 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 3 1.6 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Waiting max ~30 mins for all cluster operators to be *fully* available?" "i=0; until oc get co|tail -n +2|awk '{print \$3,\$4,\$5}'|tail -n +2|grep -v '^True False False$'|wc -l|grep ^0$; do let i=\$i+1; [ \$i -gt 180 ] && exit 1; sleep 10; echo -n \"\$i \"; done"
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Checking cluster operators" aba --dir $subdir/aba/$cluster_type run
@@ -373,13 +373,13 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "List of Operators" "aba --d
 
 mylog "Deploying test vote-app from: $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app"
 test-cmd -i -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo || true'" 
-test-cmd -r 4 20 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
+test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc rollout status deployment vote-app -n demo'"
 
 mylog "Deploying test vote-app from: quay.io/sjbylo/flask-vote-app:latest using ImageDigestMirrorSet"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc delete project demo'" 
-test-cmd -r 4 20 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
+test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_type run --cmd 'oc new-project demo'" 
 
 mylog "Applying ImageDigestMirrorSet for quay.io/sjbylo at $DIS_SSH_USER@$int_bastion_hostname"
 # This is also needed
@@ -615,7 +615,7 @@ test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Waiting max ~30 mins for all
 
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m  "Showing all cluster operators" "oc get co"
 
-test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 8 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 3 ] && exit 1; sleep 20; done" 
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Trigger upgrade briefly and then check it's working ..." -r 3 5 "cd $subdir/aba/sno; i=0; until oc adm upgrade --to-latest=true --allow-not-recommended; do let i=\$i+1; [ \$i -gt 3 ] && exit 1; sleep 20; done" 
 # Consider using "--allow-upgrade-with-warnings" in the above trigger 
 test-cmd -m "Sleeping 60s" "read -t 60 xy||true"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Output upgrade status" "oc adm upgrade --include-not-recommended" 
@@ -766,7 +766,7 @@ build_and_test_cluster() {
 
 	# Deploy test app
 	test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc delete project demo || true'"
-	test-cmd -r 4 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo'" || true
+	test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-project demo'" || true
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 	test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Wait for vote-app rollout" "aba --dir $subdir/aba/$cluster_name run --cmd 'oc rollout status deployment vote-app -n demo'"
 }

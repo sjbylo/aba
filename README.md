@@ -1,7 +1,7 @@
 # ABA makes it easier to install OpenShift in a disconnected (air-gapped) environment. <!-- omit in toc -->
 
 
-Quickly install an OpenShift cluster into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
+Quickly install an OpenShift cluster into a fully or partially disconnected environment, either onto bare-metal, VMware (vSphere/ESXi), or KVM (libvirt).
 ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/disconnected_environments/about-disconnected-environments#preferred-methods_about-disconnected-environments) into a single workflow, simplifying image mirroring for disconnected environments and providing the essential Day-2 capabilities needed to make an air-gapped OpenShift environment fully usable.
 
 Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
@@ -97,7 +97,7 @@ ABA helps you with the following and more:
 - SNO (1-node), Compact (3-nodes), Standard (3 masters + workers)
 - Generates ImageSetConfiguration and Agent-based Installer config from your settings
 - [Bonds, VLANs](README.md#q-can-bonds-andor-vlan-be-configured-on-my-nodes), static IPs, and proxy support
-- Optional VM creation in [VMware vSphere](README.md#govc-is-used-to-create-and-manage-vms-on-esxi-or-vsphere) (bare-metal is the default)
+- Optional VM creation on [VMware vSphere](README.md#govc-is-used-to-create-and-manage-vms-on-esxi-or-vsphere) or KVM/libvirt (bare-metal is the default)
 - Installation monitoring
 - ["Install bundle"](README.md#creating-a-custom-install-bundle) for fully disconnected transfers
 - Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
@@ -166,6 +166,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 #### Target Platform 
    - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
    - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+   - **KVM/libvirt API Access (optional)**: Passwordless SSH from the bastion to the KVM hypervisor host is required. Configure the connection URI, storage pool, and bridge network in `kvm.conf`.
 
 #### Existing Registry Prerequisites
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
@@ -267,7 +268,7 @@ This chart explains the flow of ABA and how ABA works, showing the main choices:
 - Fully disconnected (air-gapped)
 - Partially disconnected
 - Connected installation (without a mirror registry) and
-- Installation on VMware or bare-metal. 
+- Installation on VMware, KVM, or bare-metal. 
 
 If you run `aba` (interactive mode), you will make use of this workflow. 
 
@@ -336,6 +337,8 @@ Note that 'aba' will create the `aba.conf` file which contains some values that 
 ./abatui    # Interactive wizard to configure and prepare your environment
 ```
 Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, registry type (Auto/Quay/Docker), and creating install bundles or syncing to registries.
+
+<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="45%"> <img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="45%">
 
 
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
@@ -470,6 +473,7 @@ aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--st
 - prompts you to run `aba` inside the directory. 
 - Note: the most useful args for _--step_ are 'agentconf', 'iso' and 'mon'.
 - Take a look into the `cluster.conf` file to see what can be configured, e.g. cluster topology, port names, bonding, vlan, int_connection (e.g for _connected_ mode) etc
+- If `domain`, `machine_network`, `dns_servers`, `next_hop_address`, or `ntp_servers` are left empty in `aba.conf`, ABA auto-detects them from the host network at cluster creation time and writes the values back for you to review.
 
 ABA will guide you through the installation workflow, first generating the agent-based configuration files, then the ISO file and finally monitoring the installation:
 
@@ -481,7 +485,7 @@ aba mon
 ```
 
 Note that depending on the value of `platform` in aba.conf, the installation workflow will be different.  
-For `platform=vmw`, the installation is fully automated.  
+For `platform=vmw` or `platform=kvm`, the installation is fully automated.  
 For `platform=bm`, aba will guide you through the necessary steps to generate the agent-based configuration files, the ISO file (boot all nodes) and then monitor the installation.
 
 
@@ -603,7 +607,7 @@ Other examples of commands (aba <command>):
 | `aba startup`     | Gracefully start up a cluster. |
 | `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
-Commands for VMs (vCenter or ESXi)
+Commands for VMs (vCenter, ESXi, or KVM)
 
 | Command | Description |
 | :----- | :---------- |
@@ -728,6 +732,7 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 | `aba/mirror/mirror.conf`          | Describes your _internal mirror registry_ (either existing or to-be-installed). Can also override `ops` and `op_sets` from `aba.conf` for per-mirror operator selection. |
 | `aba/<cluster-name>/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, network interface bonding etc |
 | `aba/vmware.conf`                 | Optional vCenter/ESXi access configuration using `govc` CLI (optional) |
+| `aba/kvm.conf`                    | Optional KVM/libvirt hypervisor configuration (connection URI, storage pool, bridge network) |
 
 > **Tip — Per-mirror operator override:** You can set `op_sets=` and/or `ops=` in `mirror.conf` to override the global values from `aba.conf` for that specific mirror directory.
 > This is useful when you need different operators for different environments (e.g. separate mirrors for different teams or clusters).
@@ -1314,7 +1319,7 @@ If you do not have those RPM packages installed, aba attempts to install them us
 
 We need help!  Here are some ideas for new features and enhancements.  
 
-- Support libvirt (as well as vSphere). 
+- ~~Support libvirt (as well as vSphere).~~
 
 - Generally improve the user experience (UX) of ABA.
 

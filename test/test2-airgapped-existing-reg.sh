@@ -519,11 +519,11 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Checking cluster operator st
 
 ###test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deploying vote-app on cluster" $subdir/aba/test/deploy-test-app.sh $subdir
 test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo || true'"
-test-cmd -r 4 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
+test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Create project 'demo'" "aba --dir $subdir/aba/sno run --cmd 'oc new-project demo'"
 
 test-cmd -m "Pausing 30s - sometimes 'oc new-app' fails!" "read -t 30 xy||true"
 # error: Post "https://api.sno.example.com:6443/api/v1/namespaces/demo/services": dial tcp 10.0.1.201:6443: connect: connection refused
-test-cmd -r 5 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
+test-cmd -r 2 10 -h $DIS_SSH_USER@$int_bastion_hostname -m "Launch vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc new-app --insecure-registry=true --image $reg_host:$reg_port$reg_path/sjbylo/flask-vote-app --name vote-app -n demo'"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for vote-app rollout" "aba --dir $subdir/aba/sno run --cmd 'oc rollout status deployment vote-app -n demo'"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Deleting vote-app" "aba --dir $subdir/aba/sno run --cmd 'oc delete project demo'"
@@ -595,8 +595,8 @@ test-cmd -m "Copy over test dir for the acm-*.yaml files" scp -rp test $DIS_SSH_
 
 # Need to fetch the actual channel name from the operator catalog that's in use
 acm_channel=$(cat .index/redhat-operator-index-v$ocp_ver_major | grep ^advanced-cluster-management | awk '{print $NF}' | tail -1)
-[ "$acm_channel" ] && test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
-test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 5 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
+[ "$acm_channel" ] && test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 2 3 -m "Setting correct channel in test/acm-subs.yaml" "sed -i \"s/channel: release-.*/channel: $acm_channel/g\" $subdir/aba/test/acm-subs.yaml"
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Log into the cluster" "source <(aba -d $subdir/aba/sno login)"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 3 3 -m "Install ACM Operator" "i=0; until oc apply -f $subdir/aba/test/acm-subs.yaml; do let i=\$i+1; [ \$i -ge 5 ] && exit 1; echo -n \"\$i \"; sleep 10; done"
 
 ###test-cmd "read -t 60 xy||true"
