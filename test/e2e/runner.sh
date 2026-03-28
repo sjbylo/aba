@@ -97,23 +97,76 @@ source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
-# Wasteful dirs: test data dirs (--data-dir / reg roots) to remove on conN and disN.
-# Add new dirs here when suites create them so cleanup stays in sync.
-_E2E_WASTEFUL_DIRS="$HOME/my-quay-mirror-test1 $HOME/mymirror-data $HOME/docker-reg $HOME/aba/e2e-docker-test $HOME/aba/e2e-docker-neg"
+# Mirror data dirs that ABA manages (created by --data-dir or as default registry roots).
+# These must ONLY be cleaned up by 'aba uninstall', never by brute-force rm -rf.
+# If any survive after cleanup, that's a bug in aba uninstall that must be investigated.
+_E2E_MIRROR_DATA_DIRS="quay-install my-quay-mirror-test1 mymirror-data docker-reg aba/e2e-docker-test aba/e2e-docker-neg"
 
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
 _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
 
-_cleanup_wasteful_dirs_local() {
-	rm -rf $_E2E_WASTEFUL_DIRS
+_cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
 	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
 	rm -rf ~/tmp/*
+}
+
+# Verify no mirror data dirs survive on a host after cleanup.
+# If any exist, aba uninstall has a bug -- stop the suite so it can be investigated.
+# Usage: _verify_no_mirror_data_dirs "disN" "$dis_host"   (remote via _essh)
+#        _verify_no_mirror_data_dirs "conN"                (local)
+_verify_no_mirror_data_dirs() {
+	local label="$1"
+	local remote_target="${2:-}"
+	local _leftovers=""
+
+	for _dir in $_E2E_MIRROR_DATA_DIRS; do
+		if [ -n "$remote_target" ]; then
+			_essh "$remote_target" "test -d ~/$_dir" 2>/dev/null && _leftovers+="  ~/$_dir"$'\n' || true
+		else
+			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n' || true
+		fi
+	done
+
+	if [ -n "$_leftovers" ]; then
+		echo ""
+		echo "  FATAL: Mirror data dir(s) still exist on $label after cleanup:"
+		echo "$_leftovers"
+		echo "  These should have been removed by 'aba uninstall'."
+		echo "  Investigate and fix the uninstall bug before re-running."
+		return 1
+	fi
+	echo "  $label: no leftover mirror data dirs"
+	return 0
+}
+
+# Verify no orphan cluster VMs exist in this pool's vCenter folder after cleanup.
+# If any are found, the .cleanup mechanism failed -- stop so the root cause can
+# be investigated.  Never silently destroy them.
+_verify_no_orphan_vms() {
+	command -v govc >/dev/null 2>&1 || return 0
+	[ -z "${VC_FOLDER:-}" ] && return 0
+
+	local _pfolder="${VC_FOLDER}/pool${POOL_NUM}"
+	local _orphans
+	_orphans=$(govc find "$_pfolder" -type m 2>/dev/null) || _orphans=""
+	[ -z "$_orphans" ] && echo "  No orphan VMs in $_pfolder" && return 0
+
+	echo ""
+	echo "  FATAL: Orphan VMs found in $_pfolder after cleanup:"
+	while IFS= read -r _ovm; do
+		[ -z "$_ovm" ] && continue
+		echo "    $_ovm"
+	done <<< "$_orphans"
+	echo ""
+	echo "  The .cleanup mechanism should have deleted these via 'aba delete'."
+	echo "  Investigate why cleanup failed before re-running."
+	return 1
 }
 
 # Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
@@ -371,16 +424,10 @@ _cleanup_dis_aba() {
 	# Registry cleanup on conN is handled by _cleanup_con_quay() -- not here.
 	# This function only cleans the disN filesystem and firewall.
 
-	# 1. Stop containers, then clean disN filesystem
-	echo "  Cleaning disN filesystem ..."
-	# Disabled: nuclear podman cleanup destroys internal state (pause process),
-	# causing "invalid internal status" on next run. aba uninstall above is sufficient.
-	#_essh "$dis_host" "podman stop -a 2>/dev/null; podman rm -a -f 2>/dev/null; podman system prune --all --force 2>/dev/null; podman rmi --all --force 2>/dev/null" 2>&1 || true
+	# 1. Clean disN non-mirror filesystem (aba code, CLI tools, caches)
+	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
 	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1 || true
 	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
-	# Disabled: destroys podman internal state.
-	#_essh "$dis_host" "sudo rm -rf ~/.local/share/containers/storage ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
-	_essh "$dis_host" "sudo rm -rf ~/quay-install $_E2E_WASTEFUL_DIRS" 2>&1 || true
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
 
@@ -571,8 +618,26 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 
 	# Clean up any stale Quay/registry state on conN from previous suite
 	_cleanup_con_quay
-	_cleanup_wasteful_dirs_local
+	_cleanup_non_mirror_local
 	_reset_con_firewall
+
+	# Verify no mirror data dirs survived cleanup on either host.
+	# If any exist, aba uninstall has a bug -- stop before starting the suite.
+	local _dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	if ! _verify_no_mirror_data_dirs "disN" "$_dis_host"; then
+		echo "1" > "$RC_FILE"
+		exit 1
+	fi
+	if ! _verify_no_mirror_data_dirs "conN"; then
+		echo "1" > "$RC_FILE"
+		exit 1
+	fi
+
+	if ! _verify_no_orphan_vms; then
+		echo "1" > "$RC_FILE"
+		exit 1
+	fi
+
 	_ensure_pool_registry
 else
 	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
@@ -649,8 +714,25 @@ while true; do
 				_cleanup_dis_aba
 			fi
 			_cleanup_con_quay
-			_cleanup_wasteful_dirs_local
+			_cleanup_non_mirror_local
 			_reset_con_firewall
+
+			# Verify no mirror data dirs survived cleanup
+			local _dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+			if ! _verify_no_mirror_data_dirs "disN" "$_dis_host"; then
+				echo "1" > "$RC_FILE"
+				exit 1
+			fi
+			if ! _verify_no_mirror_data_dirs "conN"; then
+				echo "1" > "$RC_FILE"
+				exit 1
+			fi
+
+			if ! _verify_no_orphan_vms; then
+				echo "1" > "$RC_FILE"
+				exit 1
+			fi
+
 			_ensure_pool_registry
 		fi
 		# Re-apply pool-specific vmware.conf on conN (same as initial path)

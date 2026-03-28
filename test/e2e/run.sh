@@ -2107,6 +2107,10 @@ ${_retry_list}" < /dev/null >/dev/null
 		for p in "${!_busy_pools[@]}"; do
 			_status_line+=" con${p}:${_busy_pools[$p]}"
 		done
+		# Include queued suite names in fingerprint so injections trigger a reprint
+		for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+			_status_line+=" q:${_work_queue[$_qi]}"
+		done
 		if [ "${_status_line}" != "${_prev_status:-}" ]; then
 			printf "  [%s] %d done, %d running" "$(date '+%H:%M:%S')" "${#_results[@]}" "${#_busy_pools[@]}"
 			if [ "$_queued_remaining" -gt 0 ]; then
@@ -2116,6 +2120,12 @@ ${_retry_list}" < /dev/null >/dev/null
 			for p in "${!_busy_pools[@]}"; do
 				printf " con%s:%s" "$p" "${_busy_pools[$p]}"
 			done
+			if [ "$_queued_remaining" -gt 0 ]; then
+				printf " ||"
+				for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+					printf " %s" "${_work_queue[$_qi]}"
+				done
+			fi
 			echo ""
 			_prev_status="$_status_line"
 		fi
