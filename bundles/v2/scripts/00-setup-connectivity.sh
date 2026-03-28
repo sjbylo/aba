@@ -20,7 +20,7 @@ curl -sfkIL google.com >/dev/null
 if [ -d "$CLOUD_DIR_BUNDLE" ] && [ ! -f "$CLOUD_DIR_BUNDLE/$BUNDLE_UPLOADING" ] && [ -f "$CLOUD_DIR_BUNDLE/README.txt" ]; then
 	echo "Install bundle dir already exists: $CLOUD_DIR_BUNDLE" >&2
 	# Touch all markers so Make sees everything as complete
-	for m in 00-setup 01-install-aba 02-configure 03-image-save 04-bundle-tar 05-offline 06a-unpacked 06b-registry-installed 06c-registry-loaded 06d-tests-passed 07-upload; do
+	for m in 00-setup 01-install-aba 02-configure 03-image-save 04-bundle-tar 05-offline 06a-unpacked 06b-registry-installed 06c-registry-loaded 06d-tests-passed 07-upload 08-cleanup; do
 		touch "$WORK_BUNDLE_DIR_BUILD/.done-$m"
 	done
 	exit 0
@@ -80,8 +80,14 @@ if [ ${#stale_dirs[@]} -gt 0 ] || [ "$has_running_registry" ]; then
 				podman pod stop quay-pod 2>/dev/null || true
 				podman pod rm quay-pod 2>/dev/null || true
 			fi
-			sudo rm -rf ~/quay-install
-			sudo rm -rf ~/docker-reg
+			# Verify mirror data dirs were properly removed by 'aba uninstall'.
+			# Do NOT brute-force rm -rf them -- persistence means a bug in aba uninstall.
+			for _mdir in ~/quay-install ~/docker-reg; do
+				if [ -d "$_mdir" ]; then
+					echo "WARNING: $_mdir still exists after registry uninstall." >&2
+					echo "         This is a bug in aba uninstall. Investigate before re-running." >&2
+				fi
+			done
 		fi
 
 		# Now remove stale work dirs
@@ -97,7 +103,6 @@ if [ ${#stale_dirs[@]} -gt 0 ] || [ "$has_running_registry" ]; then
 				echo "  - cd $aba_dir && aba -d mirror uninstall -y" >&2
 			else
 				echo "  - podman pod stop quay-pod && podman pod rm quay-pod" >&2
-				echo "  - sudo rm -rf ~/quay-install ~/docker-reg" >&2
 			fi
 		fi
 		for d in "${stale_dirs[@]}"; do echo "  - rm -rf $d" >&2; done
