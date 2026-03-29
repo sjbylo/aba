@@ -1,8 +1,8 @@
 # ABA makes it easier to install OpenShift in a disconnected (air-gapped) environment. <!-- omit in toc -->
 
 
-Quickly install an OpenShift cluster into a fully or partially disconnected environment, either onto bare-metal or VMware (vSphere/ESXi).
-ABA integrates several standard Red Hat tools into a single workflow, simplifying image mirroring for disconnected environments and providing the essential Day-2 capabilities needed to make an air-gapped OpenShift environment fully usable.
+Quickly install an OpenShift cluster into a fully or partially disconnected environment, either onto bare-metal, VMware (vSphere/ESXi), or KVM (libvirt).
+ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/disconnected_environments/about-disconnected-environments#preferred-methods_about-disconnected-environments) into a single workflow, simplifying image mirroring for disconnected environments and providing the essential Day-2 capabilities needed to make an air-gapped OpenShift environment fully usable.
 
 Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1) there is no need to configure a load balancer, a bootstrap node or even require DHCP.
 
@@ -78,27 +78,44 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
 
 ABA helps you with the following and more:
 
-1. Helps install your first OpenShift cluster, e.g. SNO (1-node), Compact (3-nodes), Standard (5+nodes).
-1. Installs a mirror registry -- Quay or Docker -- locally or on a remote host, or connects to your existing registry.
-1. Uses the registry's credentials and other inputs to generate the Agent-based configuration files.
-1. Triggers the generation of the agent-based boot ISO.
-1. Configures NTP during installation to prevent time synchronization issues caused by nodes with incorrect date and time settings
-1. Optionally, creates the required VMs in ESXi or vSphere.
-1. Monitors the installation progress.
-1. Allows for adding more images (e.g. Operators) when synchronizing the mirror registry (day 1 or 2 operation).
-1. Configures the OperatorHub integration with the mirror registry.
-1. Can create an "install bundle" containing all the files needed to complete a fully disconnected installation.
-1. Supports named mirror directories for managing multiple enclaves (`aba -d mymirror install`).
-1. Executes several workarounds, if needed, for some typical issues with disconnected environments.
-1. Works with oc-mirror v2.
-1. Installs and integrates OpenShift Update Service (OSUS) to make upgrades a single-click.
-1. Helps configure OpenShift with your NTP servers.
-1. Enables graceful cluster shutdown and startup.
-1. Allows for the modification of generated configuration files (image-set & agent based), if more control is required. 
+**Getting Started**
+
+- [Interactive TUI wizard](README.md#install-aba) for guided setup
+- Full CLI for scripting and automation
+- Supports fully [air-gapped](README.md#fully-disconnected-air-gapped-scenario), partially disconnected, and direct Internet install
+- [Multiple architectures](README.md#supported-architectures): x86_64, ARM, s390x, ppc64le
+- Automatically downloads and installs matching versions of required tools (`oc`, `oc-mirror`, `openshift-install`) and RPM packages
+
+**Mirror Registry**
+- Installs Quay or Docker registry locally, remotely, or connects to an existing registry
+- Handles pull secret merging and registry certificate trust automatically
+- Works with oc-mirror v2
+- Incremental image and Operator loading (day-1/day-2)
+- [Named mirror directories](README.md#named-mirror-directories-enclaves) for multiple enclaves
+
+**Cluster Installation**
+- SNO (1-node), Compact (3-nodes), Standard (3 masters + workers)
+- Generates ImageSetConfiguration and Agent-based Installer config from your settings
+- [Bonds, VLANs](README.md#q-can-bonds-andor-vlan-be-configured-on-my-nodes), static IPs, and proxy support
+- Optional VM creation on [VMware vSphere](README.md#govc-is-used-to-create-and-manage-vms-on-esxi-or-vsphere) or KVM/libvirt (bare-metal is the default)
+- Installation monitoring
+- ["Install bundle"](README.md#creating-a-custom-install-bundle) for fully disconnected transfers
+- Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
+
+**Day-2 Operations**
+- Cluster [OperatorHub integration](README.md#connect-operatorhub-to-internal-mirror-registry) with the mirror registry
+- [NTP configuration](README.md#synchronize-ntp-across-cluster-nodes) during install and day-2
+- [OpenShift Update Service (OSUS)](README.md#enable-openshift-update-service-osus) for single-click upgrades
+- [Custom Kubernetes manifests](README.md#custom-manifests-for-day-2) applied during day-2
+- Graceful cluster shutdown and startup
+
+**Advanced**
+- [Customization of config files](README.md#how-to-customize-the-agent-based-configuration-files) (ImageSetConfiguration, agent-based config)
+- [Custom manifests embedded in the boot ISO](README.md#embedding-custom-manifests-in-the-iso-day-0) (e.g. MachineConfig)
+- Automatic handling of disconnected-environment pitfalls (catalog sources, release signatures)
+- Full cluster lifecycle management: install, configure, delete VMs and clean up
 
 All ABA commands are designed to be idempotent. If something goes wrong, fix it and run the command again — ABA will always try to do the right thing.
-
-ABA includes a TUI (Text User Interface) wizard that guides you through configuration and setup interactively, including registry type selection (Quay/Docker). See [Install ABA](#install-aba) for details.
 
 
 # About Installing OpenShift in a Disconnected Environment
@@ -116,7 +133,7 @@ Each scenario includes two main network zones:
 - **Connected Network**: Located on the left side of the diagram, where external resources are accessible.
 - **Private Network**: Located on the right side of the diagram, isolated from direct Internet access.
 
-Linux OS Requirements
+### Linux OS Requirements
 
 - **Workstation**: Use RHEL 8 or 9, CentOS Stream 8 or 9 or Fedora for your connected `bastion` or `workstation`.
 - **Bastion**: Must be running RHEL 8 or 9 to support OpenShift installation in a disconnected environment.
@@ -148,7 +165,8 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 #### Target Platform 
    - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
-   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+   - **KVM/libvirt API Access (optional)**: Passwordless SSH from the bastion to the KVM hypervisor host is required. Configure the connection URI, storage pool, and bridge network in `kvm.conf`.
 
 #### Existing Registry Prerequisites
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
@@ -250,7 +268,7 @@ This chart explains the flow of ABA and how ABA works, showing the main choices:
 - Fully disconnected (air-gapped)
 - Partially disconnected
 - Connected installation (without a mirror registry) and
-- Installation on VMware or bare-metal. 
+- Installation on VMware, KVM, or bare-metal. 
 
 If you run `aba` (interactive mode), you will make use of this workflow. 
 
@@ -282,16 +300,16 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
 # Download and install a stable release (recommended)
-wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.7.tar.gz
-tar xzf v0.9.7.tar.gz
-cd aba-0.9.7
+wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.8.tar.gz
+tar xzf v0.9.8.tar.gz
+cd aba-0.9.8
 ./install
 aba
 ```
 
 Or clone a specific release tag:
 ```bash
-git clone --branch v0.9.7 https://github.com/sjbylo/aba.git
+git clone --branch v0.9.8 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -319,6 +337,8 @@ Note that 'aba' will create the `aba.conf` file which contains some values that 
 ./abatui    # Interactive wizard to configure and prepare your environment
 ```
 Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, registry type (Auto/Quay/Docker), and creating install bundles or syncing to registries.
+
+<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="45%"> <img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="45%">
 
 
 Now, continue with either [Partially Disconnected Scenario](#partially-disconnected-scenario) or [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario) below.
@@ -375,7 +395,7 @@ To download and save the platform and any operator images to disk, run:
 ```
 aba -d mirror save
 ```
-- pulls the images from the Internet and saves them into the local directory as `aba/mirror/save/mirror_000001.tar`. Make sure there is [enough disk space](#prerequisites) for that directory!
+- pulls the images from the Internet and saves them into the local directory as `aba/mirror/data/mirror_000001.tar`. Make sure there is [enough disk space](#prerequisites) for that directory!
 
 Then, create the _install bundle_ using the `aba tar` command, which will copy the whole `aba/` repository (including templates, scripts, images, CLIs and other install files) to the _install bundle_ file.  You then need to move the _bundle_ to your disconnected bastion via a portable storage device, e.g. a thumb drive, or other method. 
 
@@ -390,12 +410,12 @@ aba tar --out /path/to/large/media-drive/my_bundle   # Write archive 'my_bundle.
                                                      # mounted at /dev/path/to/thumb-drive
 ```
 
-Use your portable storage device to transfer the file 'aba.tar' to your _internal bastion_.
+Use your portable storage device to transfer the bundle file (e.g. `my_bundle.tar`) to your _internal bastion_.
 
 Then, on the bastion run:
 
 ```
-tar xvf aba.tar              # Extract the tar file. Ensure file timestamps are
+tar xvf my_bundle.tar        # Extract the tar file. Ensure file timestamps are
                              # kept the same as on the connected workstation.
 cd aba
 ./install                    # Install aba on the bastion.
@@ -406,14 +426,15 @@ sudo dnf install make -y     # If dnf does not work in the disconnected environm
                              # required RPMs are pre-installed, e.g. from a DVD drive at the time of installation.
 -->
 
-### Load the images from disk into the _mirror registry_ (localhost):
+### Load the images from disk into the _mirror registry_ on the local bastion:
 
 ```
 aba -d mirror load -H registry.example.com
 ```
-- uses the install bundle to:
+- The `-H` flag sets the registry FQDN (in this case, `registry.example.com` resolves to the local bastion).
+- Uses the install bundle to:
    - check if the mirror registry is already installed and accessible. If not, ABA runs `aba -d mirror install -H registry.example.com`.
-   - if required, installs _Mirror Registry for Red Hat OpenShift_ (Quay) onto `localhost` and then loads the images into it (disk2mirror).
+   - if required, installs _Mirror Registry for Red Hat OpenShift_ (Quay) onto the local bastion and then loads the images into it (disk2mirror).
    - checks the FQDN `registry.example.com` is resolvable *and* reaches your internal bastion via ssh.
 
 >> Tip: If you experience issues pushing images into Quay, consider using the Docker Registry instead — set `reg_vendor=docker` in `mirror.conf` or select Docker in the TUI. See the [FAQ](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do) for details.
@@ -450,8 +471,9 @@ aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--st
 ```
 - the above, creates and initializes a directory `mycluster` (the same name as your cluster),
 - prompts you to run `aba` inside the directory. 
-- Note: that the most useful args for _--steps_ are 'agentconf', 'iso' and 'mon'.
+- Note: the most useful args for _--step_ are 'agentconf', 'iso' and 'mon'.
 - Take a look into the `cluster.conf` file to see what can be configured, e.g. cluster topology, port names, bonding, vlan, int_connection (e.g for _connected_ mode) etc
+- If `domain`, `machine_network`, `dns_servers`, `next_hop_address`, or `ntp_servers` are left empty in `aba.conf`, ABA auto-detects them from the host network at cluster creation time and writes the values back for you to review.
 
 ABA will guide you through the installation workflow, first generating the agent-based configuration files, then the ISO file and finally monitoring the installation:
 
@@ -463,7 +485,7 @@ aba mon
 ```
 
 Note that depending on the value of `platform` in aba.conf, the installation workflow will be different.  
-For `platform=vmw`, the installation is fully automated.  
+For `platform=vmw` or `platform=kvm`, the installation is fully automated.  
 For `platform=bm`, aba will guide you through the necessary steps to generate the agent-based configuration files, the ISO file (boot all nodes) and then monitor the installation.
 
 
@@ -522,11 +544,56 @@ aba iso
 aba mon
 ```
 
+### Pre-flight Validation
+
+Before generating the ISO, ABA automatically runs pre-flight checks to catch common issues early:
+
+| Check | What it does |
+| :---- | :----------- |
+| **DNS** | Verifies each DNS server in `dns_servers` is reachable (using `dig`) |
+| **NTP** | Verifies each NTP server in `ntp_servers` is reachable (using `chronyd -Q` or UDP port 123) |
+| **IP conflicts** | Checks that none of the planned node IPs or VIPs are already in use on the network |
+
+IP conflict detection uses `arping` (ARP, Layer 2) when available — this cannot be blocked by firewalls and is more reliable than ICMP ping. If `arping` is not installed or lacks permissions, ABA falls back to `ping` automatically.
+
+- **Warnings** (e.g. one DNS server down) are reported but do not block installation.
+- **Errors** (e.g. all DNS servers down, or IP conflicts) cause the pre-flight to abort before ISO generation.
+
+ABA also validates DNS records for the API and Apps ingress endpoints and verifies the release image exists in the mirror registry.
+
+#### Controlling validation with `verify_conf`
+
+If the bastion is on a different network than the cluster nodes (e.g. connected side of an air-gapped setup), network checks will fail.
+Use `verify_conf` in `aba.conf` to control which checks run:
+
+| Value | Config validation | Network checks (DNS, NTP, IP conflicts, registry) |
+| :---- | :---------------- | :------------------------------------------------- |
+| `all` (default) | Yes | Yes |
+| `conf` | Yes | Skipped with warning |
+| `off` | Skipped | Skipped |
+
+Set it via the CLI:
+```
+aba --verify conf    # Validate config files only, skip network checks
+aba --verify off     # Skip all validation
+aba --verify all     # Full validation (default)
+```
+
+Or edit `aba.conf` directly:
+```
+verify_conf=conf
+```
+
+To see detailed output, run in debug mode:
+```
+aba -D iso
+```
+
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme.
 
 Other examples of commands (aba <command>):
 
-cd mycluster     # change to the `cluster directory` with the agent-based install files, using `mycluster` as an example.
+`cd mycluster`     # change to the cluster directory with the agent-based install files, using `mycluster` as an example.
 
 | Command | Description |
 | :----- | :---------- |
@@ -540,14 +607,14 @@ cd mycluster     # change to the `cluster directory` with the agent-based instal
 | `aba startup`     | Gracefully start up a cluster. |
 | `aba help`        | Help is available in all Makefiles (in `aba/Makefile`,  `aba/mirror/Makefile`,  `aba/cli/Makefile` and `aba/<mycluster>/Makefile`)  |
 
-Commands for VMs (vCenter or ESXi)
+Commands for VMs (vCenter, ESXi, or KVM)
 
 | Command | Description |
 | :----- | :---------- |
 | `aba ls`          | Show list of cluster VMs and their state. |
 | `aba start`       | Power on all cluster VMs. |
 | `aba stop`        | Gracefully shut down all cluster VMs (guest shutdown). |
-| `aba poweroff `   | Power off all VMs immediately. |
+| `aba poweroff`    | Power off all VMs immediately. |
 | `aba kill`        | Same as `poweroff` |
 | `aba create`      | Create all cluster VMs. |
 | `aba refresh`     | Delete, re-create and start the cluster VMs causing the cluster to be re-installed. |
@@ -585,7 +652,7 @@ cd aba
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
-Note: It is recommended to run `aba bundle` on a fresh install of ABA or use the --force flag to overwrite any existing image-set files under aba/mirror/save.
+Note: It is recommended to run `aba bundle` on a fresh install of ABA or use the --force flag to overwrite any existing image-set files under aba/mirror/data.
 
 
 Create the install bundle with a single command, for example:
@@ -610,11 +677,11 @@ aba bundle \
 - The OpenShift version can be automatically set to the most recent 'previous' point version (using '--version p') or to the 'latest' (using --version l).
 - If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`. Create your own operator set file, if needed.
 - If needed, add individual operators after "--ops".
-- *If known*, set values --domain, --machine-network, --dns and --ntp (otherwise, these must be set in `aba.conf` after unpacking the bundle in the air-gapped env.).
+- *If known*, set values --base-domain, --machine-network, --dns and --ntp (otherwise, these must be set in `aba.conf` after unpacking the bundle in the air-gapped env.).
 - Set the target --platform, either `bm` (bare-metal) or `vmw` (vSphere or ESXi). 
 - Once the `aba bundle` command completes be sure there were no errors and verify the files are complete, e.g. with the command: `cat ocp_mycluster_4.17.16_* | tar tvf -`
 - Generate checksums for the files, e.g. `cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt`.  It is important to use these checksum values to verify the files after copying them into the air-gapped environment!
-- Warning: --force will overwrite any existing image-set files under aba/mirror/save!
+- Warning: --force will overwrite any existing image-set files under aba/mirror/data!
 - See `aba bundle --help` for more.
 
 Copy the 10GB and the CHECKSUM.txt files to your RHEL 8 or 9 bastion within the disconnected environment.
@@ -634,9 +701,9 @@ cd aba
 aba         # Run aba and follow the instructions
 ```
 
-Note: You will find the large image-set tar file under `aba/mirror/save`.
+Note: You will find the large image-set tar file under `aba/mirror/data`.
 
-You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) to localhost and then load it with images using the following command (run: aba -d mirror load --help or see below for more details):
+You can now install the _Mirror Registry for Red Hat OpenShift_ (Quay) on the local bastion and then load it with images using the following command (run `aba -d mirror load --help` or see below for more details):
 
 ```
 aba -d mirror -H registry.example.com load --retry 3
@@ -663,8 +730,9 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 | :----------                       | :---------- |
 | `aba/aba.conf`                    | Global configuration file, sets the channel and version of OpenShift, your base domain name, internal network address, DNS IP etc |
 | `aba/mirror/mirror.conf`          | Describes your _internal mirror registry_ (either existing or to-be-installed). Can also override `ops` and `op_sets` from `aba.conf` for per-mirror operator selection. |
-| `aba/`cluster-name`/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, network interface bonding etc |
+| `aba/<cluster-name>/cluster.conf` | Describes how to build an OpenShift cluster, e.g. number/size of master and worker nodes, ingress IPs, network interface bonding etc |
 | `aba/vmware.conf`                 | Optional vCenter/ESXi access configuration using `govc` CLI (optional) |
+| `aba/kvm.conf`                    | Optional KVM/libvirt hypervisor configuration (connection URI, storage pool, bridge network) |
 
 > **Tip — Per-mirror operator override:** You can set `op_sets=` and/or `ops=` in `mirror.conf` to override the global values from `aba.conf` for that specific mirror directory.
 > This is useful when you need different operators for different environments (e.g. separate mirrors for different teams or clusters).
@@ -683,7 +751,7 @@ Once a cluster config directory has been created (e.g. `mycluster`) and Agent-ba
 The workflow might look like this:
 ```
 # Create the cluster dir & generate the initial agent config files
-aba cluster --name mycluser --type compact --starting-ip 10.0.1.100 --step agentconf
+aba cluster --name mycluster --type compact --starting-ip 10.0.1.100 --step agentconf
 
 cd mycluster   # Change into the cluster configuration directory
 ```
@@ -760,7 +828,7 @@ Example:
 
 ```
 cd mycluster
-aba verify                       # Optional, example execution to show the cluster configuration extracted from the Agend-based config files.
+aba verify                       # Optional, example execution to show the cluster configuration extracted from the Agent-based config files.
 export CLUSTER_NAME=sno
 export BASE_DOMAIN=example.com
 export RENDEZVOUSIP=10.0.1.202
@@ -1012,17 +1080,17 @@ In a fully disconnected environment, you can do one of the following:
   aba -d mirror save
   ```
 - **Manually edit the image-set configuration (advanced / flexible option)**  
-  Edit `aba/mirror/save/imageset-config-save.yaml` yourself—for example, to add more images or fetch newer platform versions.
-  - To mirror images for OpenShift upgrades, you must manually adjust the `min` and `max` versions in `imageset-config-save.yaml`.  
+  Edit `aba/mirror/data/imageset-config.yaml` yourself—for example, to add more images or fetch newer platform versions.
+  - To mirror images for OpenShift upgrades, you must manually adjust the `min` and `max` versions in `imageset-config.yaml`.  
     ABA does **not** manage these values automatically.
 
 - Run `aba -d mirror save` to download the images to disk and wait for completion.
 
-- Copy the following files from the _connected workstation_ to the _internal bastion_, under `aba/mirror/save`:
+- Copy the following files from the _connected workstation_ to the _internal bastion_, under `aba/mirror/data`:
   - Image-set configuration file:  
-    aba/mirror/save/imageset-config-save.yaml
+    aba/mirror/data/imageset-config.yaml
   - Image-set archive file:  
-    aba/mirror/save/mirror_000001.tar
+    aba/mirror/data/mirror_000001.tar
 
 - On the _internal bastion_, run:
   ```
@@ -1044,7 +1112,7 @@ In a partially disconnected environment, the following workflow can be used:
 
 - Edit the image-set configuration file on the _connected bastion_:
 
-  aba/mirror/sync/imageset-sync.yaml
+  aba/mirror/data/imageset-config.yaml
 
   Add additional images or update platform versions as needed.
 
@@ -1077,6 +1145,7 @@ Values are commented out by default; uncomment and edit to override.
 | `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
+| `OC_MIRROR_FLAGS` | *(empty)* | Extra flags appended to every `oc-mirror` invocation (sync, save, load). Normally not needed — sigstore signature handling is managed by the `registries.d` config below. |
 
 Example — increase the image timeout to 60 minutes:
 
@@ -1095,6 +1164,25 @@ vi ~/.aba/config
 
 # Uncomment or add:
 OC_MIRROR_PARALLEL_IMAGES=4
+```
+
+### Sigstore Signature Handling
+
+ABA installs a per-user [`registries.d`](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) configuration at `~/.config/containers/registries.d/aba-sigstore.yaml` that controls which registries have cosign/sigstore OCI signatures fetched during mirroring.
+By default, sigstore is **enabled** for OpenShift release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), and **disabled** for everything else (to avoid failures from unsigned certified/community operator images).
+This ensures that signatures required for OCP 4.21+ `ClusterImagePolicy` verification are preserved while allowing all operator images to mirror without errors.
+
+To customise, edit `~/.config/containers/registries.d/aba-sigstore.yaml` — see the comments in that file for examples.
+For full details on the configuration format, see [`containers-registries.d(5)`](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) and the [Red Hat container signing documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/building_running_and_managing_containers/assembly_signing-container-images_building-running-and-managing-containers).
+
+Example — enable sigstore for a custom registry:
+
+```bash
+vi ~/.config/containers/registries.d/aba-sigstore.yaml
+
+# Add under the "docker:" section:
+#   my-registry.example.com:
+#       use-sigstore-attachments: true
 ```
 
 ## Named Mirror Directories (Enclaves)
@@ -1184,7 +1272,7 @@ aba bundle --light \
 ```
 
 This creates the light bundle file (e.g. `my_bundle.tar`) in the specified directory.
-The image-set archive file(s) remain under `aba/mirror/save/` and must be transferred separately.
+The image-set archive file(s) remain under `aba/mirror/data/` and must be transferred separately.
 
 See `aba bundle --help` for all available options.
 
@@ -1193,11 +1281,11 @@ See `aba bundle --help` for all available options.
 If you need more control over the process, you can run the steps individually instead of using `aba bundle`:
 
 ```
-aba -d mirror save                                    # 1. Pull and save images to aba/mirror/save/
+aba -d mirror save                                    # 1. Pull and save images to aba/mirror/data/
 aba tarrepo --out $HOME/temp/dir/aba.tar              # 2. Create bundle excluding image-set archives
 ```
 
-- `aba -d mirror save` pulls the images from the Internet and saves them to `aba/mirror/save/mirror_000001.tar`.
+- `aba -d mirror save` pulls the images from the Internet and saves them to `aba/mirror/data/mirror_000001.tar`.
 - `aba tarrepo` creates the install bundle **excluding** the large image-set archive file(s).
 
 ### Transferring to the disconnected environment
@@ -1207,7 +1295,7 @@ Copy both the light bundle and the image-set archive file(s) separately to the _
 On the _internal bastion_:
 ```
 tar xvf aba.tar
-mv /path/to/mirror_000001.tar aba/mirror/save/
+mv /path/to/mirror_000001.tar aba/mirror/data/
 cd aba
 ./install
 aba
@@ -1241,7 +1329,7 @@ If you do not have those RPM packages installed, aba attempts to install them us
 
 We need help!  Here are some ideas for new features and enhancements.  
 
-- Support libvirt (as well as vSphere). 
+- ~~Support libvirt (as well as vSphere).~~
 
 - Generally improve the user experience (UX) of ABA.
 
@@ -1277,7 +1365,7 @@ We need help!  Here are some ideas for new features and enhancements.
 
 - ~~Enable any number of ports for interface bonding, using `ports` value instead of `port0` and `port1` values in `cluster.conf`.~~
 
-- ~~Support all four operator catalogs (indexes), e.g. "certified-operator", "redhat-marketplace" & "community-operator" and not just "redhat-operator".~~
+- ~~Support all three operator catalogs (indexes), e.g. "certified-operator" & "community-operator" and not just "redhat-operator".~~
 
 - ~~Allow to specify the path to a large data volume (and not only the top dir of the Quay registry). Store all large files/cache there.~~
 
@@ -1477,7 +1565,7 @@ Running out of disk space is the most likely problem you will encounter when con
 
 ## Q: Can I install Operators from community catalogs?
 
-**Yes!** ABA currently supports all four of Red Hat’s official catalogs (redhat-operator, certified-operator, redhat-marketplace and community-operator) via `oc-mirror`. 
+**Yes!** ABA supports three Red Hat operator catalogs (redhat-operator, certified-operator and community-operator).
 
 [Back to top](#who-should-use-aba)
 
@@ -1518,10 +1606,10 @@ Docker Registry is a fully supported registry type in ABA — available via CLI 
 To switch from Quay to Docker Registry:
 
 ```
-aba -d mirror uninstall                        # Uninstall the current registry (Quay or Docker).
+aba -d mirror uninstall                        # Uninstall the current registry (Quay).
 
-                                               # Set reg_vendor=docker in mirror.conf, then:
-aba -d mirror install                          # Install the configured registry. Also works in disconnected env.
+aba -d mirror install --vendor docker          # Ensure reg_vendor=docker is set in mirror.conf, then:
+                                               # Install the configured registry. Also works in disconnected env.
 aba -d mirror verify                           # If verification is successful, use aba as usual (e.g. aba load/save).
 ```
 
@@ -1535,31 +1623,76 @@ aba -d mirror uninstall                        # Remove the registry (reads inst
 
 [Back to top](#who-should-use-aba)
 
+## Q: `aba load` fails with "network is unreachable" in an air-gapped environment
+
+This is a known `oc-mirror v2` issue where the load (disk-to-mirror) workflow
+incorrectly tries to contact the source registry even though all images are
+already saved locally.
+
+**Workaround:**
+
+```
+aba -d mirror clean                            # Clear oc-mirror working state.
+aba -d mirror load                             # Retry the load.
+```
+
+The `clean` command removes stale oc-mirror state (`data/working-dir/`) while
+preserving your saved images and configuration. If you are switching between
+`sync` and `save/load` workflows on the same bastion, run `aba -d mirror
+clean` before switching.
+
+[Back to top](#who-should-use-aba)
+
+## Q: My bastion is on a different network than the cluster nodes. Pre-flight checks fail — what can I do?
+
+When the bastion (where ABA runs) cannot reach the cluster network, DNS, NTP, and IP conflict checks will fail.
+Set `verify_conf=conf` to validate only your configuration files and skip all network-dependent checks:
+
+```
+aba --verify conf
+```
+
+Or edit `aba.conf` directly:
+```
+verify_conf=conf
+```
+
+This skips DNS reachability, NTP reachability, IP conflict detection, DNS record validation for API/Apps ingress endpoints, and the release image check in the mirror registry.
+Configuration file validation (syntax, required fields, value ranges) still runs normally.
+
+See the [Controlling validation with verify_conf](#controlling-validation-with-verify_conf) section for details.
+
+[Back to top](#who-should-use-aba)
+
 ## Q: Is there a discussion forum?
 
-If you have access, join the [Slack Channel](https://red.ht/slack-forum-aba). 
+Post to our [GitHub Discussions Forum](https://github.com/sjbylo/aba/discussions).
+
+Post issues to [GitHub Issues](https://github.com/sjbylo/aba/issues)
+
+If you have access, join the Red Hat [Slack Channel](https://red.ht/slack-forum-aba).
 
 
 ## Q: I accidentally uninstalled my mirror registry, how can I recover?
 
-You cluster cannot pull images any more since the mirror registry is no longer available. Your cluster may startup ok. but over time pods may start to fail. 
+Your cluster cannot pull images any more since the mirror registry is no longer available. Your cluster may start up ok, but over time pods may start to fail. 
 
 Ensure you can still access the running cluster, either by login/password or kubeconfig file.
 
 Next:
 
-1. In the usual way, re-install Quay and push the same set & same version of images into it. 
-1. Verify you have the aba/mirror/ dir and aba/aba.conf is all set up ok (same infos to match the existing cluster, as best you can)
-1. Ensure this command shows success: oc -d mirror verify
-1. Start the OpenShift cluster
-1. Check “oc whoami” is working
+1. In the usual way, re-install Quay and push the same set & same version of images into it.
+1. Verify you have the `aba/mirror/` dir and `aba/aba.conf` is all set up ok (same infos to match the existing cluster, as best you can).
+1. Ensure this command shows success: `aba -d mirror verify`
+1. Start the OpenShift cluster.
+1. Check `oc whoami` is working.
 1. Delete old configuration, run:
-   1. oc delete cm registry-config -n openshift-config
-   1. oc delete catalogsource  redhat-operators -n openshift-marketplace
-1. Create the <cluster>/cluster.conf file again (example uses 'sno'):
-   1. rm -rf sno; cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf    # >>> change to YOUR cluster's starting IP address
-1. aba -d sno day2    # Add back the OperatorHub conifguration.
-2. Wait 2-3 minutes and check if the OperatorHub is working in the OpenShift Console. 
+   1. `oc delete cm registry-config -n openshift-config`
+   1. `oc delete catalogsource redhat-operators -n openshift-marketplace`
+1. Create the `<cluster>/cluster.conf` file again (example uses 'sno'):
+   1. `rm -rf sno; aba cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf`    # >>> change to YOUR cluster's starting IP address
+1. `aba -d sno day2`    # Add back the OperatorHub configuration.
+1. Wait 2-3 minutes and check if the OperatorHub is working in the OpenShift Console.
 
 This SHOULD set up OperatorHub again.
 
@@ -1577,9 +1710,9 @@ cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys    # Append publ
 
 ## Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?
 
-ABA helps you generate an initial oc-mirror image configuration to get an OpenShift cluster installed quickly, focusing on day-zero requirements such as release and operator images.
+ABA helps you jumpstart OpenShift installations by quickly generating day-zero image-set configurations for release and operator images.
 
-However, there are other tools intended to fully manage the lifecycle of image-config.yaml. For ongoing updates and long-term maintenance, you could try the oc-mirror Web App:
+While ABA handles initial mirroring well, other tools are better suited for long-term maintenance. For ongoing updates and full lifecycle management of your image-set-config.yaml, try the oc-mirror Web App.
 
 👉 https://github.com/yakovbeder/oc-mirror-web-app/
 

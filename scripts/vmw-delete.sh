@@ -28,7 +28,8 @@ if scripts/vmw-exists.sh; then
 	# Only show list of existing vms if ask=1
 	if [ "$ask" ]; then
 		for name in $CP_NAMES $WORKER_NAMES; do
-			[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+			vm=$(vm_name "$CLUSTER_NAME" "$name")
+			[ "$VC" ] && echo $cluster_folder/$vm || echo $vm
 		done
 	fi
 else
@@ -39,8 +40,9 @@ fi
 ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	aba_info Destroy VM ${CLUSTER_NAME}-$name
-	govc vm.destroy ${CLUSTER_NAME}-$name || true  # FIXME: should check first if the VM exists and only then delete instead of using || true
+	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	aba_info Destroy VM $vm
+	govc vm.destroy $vm || true  # FIXME: should check first if the VM exists and only then delete instead of using || true
 done
 
 if [ "$VC" ]; then

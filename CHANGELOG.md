@@ -2,6 +2,73 @@
 
 ---
 
+## [0.9.8] - 2026-03-29
+
+KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4.21 compatibility, bug fixes and improvements
+
+<!-- Before release: git shortlog -sne <prev-tag>..HEAD | grep -v sjbylo — credit ALL external contributors -->
+
+### New Features
+- **KVM/libvirt platform support** - Full KVM hypervisor support as a new platform alongside VMware and bare-metal. Includes 11 `kvm-*.sh` lifecycle scripts (create, delete, start, stop, kill, ls, exists, on, refresh, upload, create-folder), `kvm.conf` template, and `ensure_virsh()` helpers. Supports non-root SSH to the KVM host.
+- **Externalized Makefile targets** - 19 targets (info, login, shell, day2, shutdown, startup, create, delete, ls, start, stop, kill, etc.) moved from `Makefile.cluster` into `aba.sh` case handlers, enabling three-way platform dispatch (vmw/kvm/bm) via `_ensure_hv_ready()`.
+- **Bundle v2 pipeline** - New idempotent `bundles/v2/` pipeline with numbered phase scripts, per-step log files, and combined log in `work/`. Replaces monolithic `bundle-create-test.sh`. Supports stale work-dir cleanup and retry.
+- **Podman-based catalog extraction** - Operator catalog indexes are now extracted directly from container images using podman, replacing the oc-mirror dependency for operator listing. Faster startup, no oc-mirror wait for catalog downloads, and more accurate default channel detection.
+- **Display names in TUI** - Operator search results and basket view now show display names (e.g. "Red Hat Integration - AMQ Broker") alongside operator package names.
+- **Search by display name** - TUI operator search matches against both operator names and display names (case-insensitive).
+- **Catalog extraction hardening** - Generic JSON fallback for unknown directory formats, runtime completeness check, and end-of-extraction summary for any parsing issues.
+- **Pre-flight validation** - DNS, NTP reachability and IP conflict detection before ISO generation, integrated as a Make dependency ([#22](https://github.com/sjbylo/aba/pull/22), [@mateuszslugocki](https://github.com/mateuszslugocki)).
+- **Configurable preflight strictness** - `verify_conf=all/conf/off` controls validation: `all` (default) runs full network checks, `conf` validates config files only, `off` skips all. Use `aba --verify conf` when the bastion is on a different network than cluster nodes.
+- **Sigstore-aware mirroring** - Per-registry sigstore signature control via `~/.config/containers/registries.d/aba-sigstore.yaml`. Preserves cosign signatures for OCP release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), required for OCP 4.21+ `ClusterImagePolicy` verification, while allowing unsigned certified/community operator images to mirror without errors. Optional `OC_MIRROR_FLAGS` in `~/.aba/config` for additional oc-mirror flags.
+- **Auto-detect network values** - When domain, machine\_network, dns\_servers, next\_hop\_address, or ntp\_servers are empty in `aba.conf` at cluster creation time, they are auto-detected and written back so the user can review before proceeding.
+
+### Changed
+- **Consolidated mirror data directories** - `mirror/save/` and `mirror/sync/` merged into single `mirror/data/` directory. Imageset config template renamed to `imageset-config.yaml.j2`.
+- `aba reset` now cleans up `.index/` directory (cached catalog indexes).
+- Catalog download dialog shows OCP version.
+- Error messages reference `aba catalog` instead of `oc-mirror list operators`.
+- `aba kill` and `aba delete` now warn (instead of abort) when `agent-config.yaml` is missing.
+- Show hint to skip network checks when preflight has warnings or errors.
+- ISC reminder message shows operator hint only when no operators are configured.
+- Stale podman `render-*` temp dirs cleaned up after catalog extraction.
+- Ask user before bumping master memory for OCPBUGS-62790 workaround.
+- Release image error message now includes captured skopeo stderr.
+- MAC addresses quoted in `agent-config.yaml` example files to match generated YAML.
+- `shutdown --wait` properly passed through to `cluster-graceful-shutdown.sh` (was silently dropped). Shutdown now has 5-minute timeout with progress messages instead of infinite silent wait.
+- Full banner shown only on first v2 bundle step; short header for subsequent steps.
+- Suppress `cd` stderr in `run_once()` to avoid noise in TUI output.
+
+### Bug Fixes
+- **SNO install failure with `verify_conf=conf`** - `verify-release-image.sh` was skipping `openshift-install` binary extraction from the mirror when `--verify conf` was used. The fallback generic binary embeds quay.io URLs, causing `SignatureValidationFailed` in OCP 4.21+. Fix: `--verify conf` now only skips the skopeo connectivity check, not binary extraction. Extracted binary filename simplified to `openshift-install-mirror-$reg_host`.
+- **`vmware.conf`/`kvm.conf` symlink regression** - Externalization removed auto-symlink creation. `_ensure_hv_ready()` now conditionally creates symlinks if missing.
+- **Arping IP conflict detection on multi-homed hosts** - Fixed `arping -I` interface selection.
+- **Podman state corruption** - Enable systemd lingering on conN hosts; removed destructive `rm -rf containers/storage` and `systemctl --user stop --all`.
+- **`int_down` failing when interface already disconnected** - Graceful handling of already-down interfaces.
+- **KVM lifecycle fixes** - Fixed QXL video error on headless hosts, `virsh start` on already-active domains, `on_reboot=restart` alongside `on_poweroff=restart`, SNO VM naming via `vm_name()` helper, and graceful shutdown in disconnected/KVM environments.
+- **Cluster startup infinite loops** - Fixed VIP DNS resolution and `int_down` idempotency during startup.
+- **`oc debug` in disconnected environments** - Fixed cluster lifecycle commands that failed because `oc debug` tried to pull images from the internet.
+- **Bundle pipeline fixes** - Tightened idempotency check in `00-setup-connectivity.sh` (requires `README.txt`), added `exit 1` on make failure in `go.sh`, fixed `oc-mirror v2 --help` requiring `--v2` flag, updated default `GIT_BRANCH`.
+- **Bundle Makefile** - Error when `OP_SETS` missing for non-release bundles.
+
+### E2E Testing
+- **`--revert` flag** - `run.sh run --revert` reverts all pool VMs (conN+disN) to their `pool-ready` snapshots before starting tests, giving a clean baseline and reclaiming VMware thin-disk bloat.
+- **Suite banner** - Banner now reads `SUITE START:` for clearer log boundaries.
+- **Live view scrollback** - Removed `tmux clear-history` so scrolling up in the live view shows previous suite output.
+- **Dashboard fix** - Fixed stale dashboard content caused by `tail -F` not detecting symlink target changes; background monitor restarts the stream on suite change without screen flicker.
+- **DISPATCH colorization** - `DISPATCH:` and `FORCE DISPATCH:` output highlighted in bold cyan.
+- **Reduced VM disk size** - `VM_DISK_EXTRA_GB` reduced from 100 to 0; template's 522 GB is sufficient for all suites.
+- **Dispatcher audit fixes** - Replaced all `(( var++ ))` with `var=$(( var + 1 ))` (crash under ERR trap), prevented duplicate suite dispatch, fixed CPU spin, fixed final summary to include rescheduled suites.
+- **Rescheduled suite priority** - Injected suites now dispatched before the normal work queue.
+- **Duplicate operator guard** - Prevents `cincinnati-operator` from being appended twice to `imageset-config.yaml` during upgrade tests.
+- **User action logging** - Interactive prompt actions (retry, skip, restart-suite, abort) now reflected in dashboard summary.
+- **Cleanup robustness** - `PIPESTATUS[0]` captured in cleanup pipelines to prevent masking failures. Cleanup failures now halt the suite. Removed 137 inappropriate `2>/dev/null` that hid error info. Post-suite integrity checks for orphan VMs and leftover registry containers.
+- **KVM lifecycle suite** - SNO full install + VM lifecycle (ls/stop/start/kill/shutdown/startup), plus compact and standard boot validation.
+- **Regression test** - `verify_conf=conf` mirror binary extraction test added to prevent SNO install regression.
+
+### Community
+- [@mateuszslugocki](https://github.com/mateuszslugocki) - Pre-flight validation for DNS, NTP and IP conflicts ([#22](https://github.com/sjbylo/aba/pull/22))
+
+---
+
 ## [0.9.7] - 2026-03-15
 
 Quay/Docker now first-class, improved abatui, easier existing registry support and many fixes
@@ -57,19 +124,7 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **Catalog YAML always regenerated** - Fresh index download triggers ISC regeneration.
 - **`reg_detect_existing()` fixed** - No longer blocks fresh installs due to stale credentials.
 - **Docker remote install** - Ensures `docker-reg-image.tgz` exists before scp.
-
-### E2E Testing
-- **New test framework** - Pool-aware dispatch, golden VM snapshots, crash detection, checkpoint resume, `--pool N` flag, tmux-based suites.
-- **Negative-paths suite** - Tests for blocked ports, stale state, missing configs.
-- **Regression tests** - stdout purity, mirror reset, save/load, bare-metal ISO, idempotent install.
-- **Old v1 framework removed** - `test/e2e-v1` deleted.
-- **E2E README with network diagram** - Documents pool topology and test architecture.
-
-### TUI Automated Tests
-- **Centralised keystroke helpers** - `send_enter`, `send_tab_enter`, `send_input`, `send_tab_tab_enter`, `send_tab_tab_tab_enter` with configurable pause before Enter.
-- **Channel and version verified in ISC** - Every ISC verification asserts expected channel and OCP version.
-- **Varied channel/version selections** - Tests alternate between stable/Latest, fast/Previous, and candidate to catch regressions.
-- **Faster action tests** - `run_and_interrupt` detects oc-mirror output and sends Ctrl-C immediately instead of waiting 90s.
+- **Nested directories in custom manifests** - Day2 custom manifest support now handles nested directory structures ([#20](https://github.com/sjbylo/aba/pull/20), [@mateuszslugocki](https://github.com/mateuszslugocki))
 
 ---
 
@@ -79,8 +134,8 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 
 
 ### New Features
-- **Custom manifest support (agent-based installer)** - Place `.yaml`/`.yml` files in `openshift/` or `manifests/` directories in a cluster folder to embed custom Kubernetes manifests (MachineConfig, networking, storage) into the agent-based ISO at bootstrap time (#18)
-- **Custom manifest support (day2)** - Place `.yaml`/`.yml` files in `day2-custom-manifests/` to have them automatically applied during `aba day2`, after oc-mirror resources and signatures (#19)
+- **Custom manifest support (agent-based installer)** - Place `.yaml`/`.yml` files in `openshift/` or `manifests/` directories in a cluster folder to embed custom Kubernetes manifests (MachineConfig, networking, storage) into the agent-based ISO at bootstrap time ([#18](https://github.com/sjbylo/aba/pull/18), [@mateuszslugocki](https://github.com/mateuszslugocki))
+- **Custom manifest support (day2)** - Place `.yaml`/`.yml` files in `day2-custom-manifests/` to have them automatically applied during `aba day2`, after oc-mirror resources and signatures ([#19](https://github.com/sjbylo/aba/pull/19), [@mateuszslugocki](https://github.com/mateuszslugocki))
 - **oc-mirror parallel images setting** - New `OC_MIRROR_PARALLEL_IMAGES` in `~/.aba/config` (default 8) controls `--parallel-images` for save/load/sync, useful for reducing concurrency on slow or unreliable networks
 - **oc-mirror image timeout setting** - New `OC_MIRROR_IMAGE_TIMEOUT` in `~/.aba/config` (default 30m) controls the `--image-timeout` for save/load/sync
 - **IP-in-CIDR validation** - `cluster.conf` validation now checks that `starting_ip`, all node IPs, `api_vip`, and `ingress_vip` fall within `machine_network`; error messages show the valid IP range
@@ -214,6 +269,9 @@ TUI polish, new E2E test framework, reliability and UX fixes
 - Version-aware download task IDs prevent stale cache across OCP version changes
 - E2E suites use pool-aware helpers instead of hardcoded IPs
 
+### Community
+- [@sylviyayy](https://github.com/sylviyayy) - Added FAQ section and Day 2 documentation to README
+
 ---
 
 ## [0.9.1] - 2026-02-08
@@ -224,12 +282,13 @@ Bug fixes and improvements
 ### Bug Fixes
 - Fixed TUI hang: use dynamic version in catalog peek checks
 - Fixed segfault caused by tar extracting incomplete tarball during download
-- Fixed bundle creation with non-standard directory names (#13)
+- Fixed bundle creation with non-standard directory names ([#13](https://github.com/sjbylo/aba/pull/13), [@mateuszslugocki](https://github.com/mateuszslugocki))
 - Fixed race condition in run_once validation logic
 - Use mv instead of cp for error files to prevent false failures
 - Added error handling for all ensure_*() function calls
 - Fixed 'Version unavailable' error
 - Fixed 'missing release image' error for wrong channel/version combination
+- Fixed `oc-mirror list operators` requiring `--v1` flag ([#11](https://github.com/sjbylo/aba/pull/11), [@KamilBlaz](https://github.com/KamilBlaz))
 
 ### Improvements
 - Added log rotation and history file to run_once()
@@ -238,20 +297,23 @@ Bug fixes and improvements
 - Removed duplicate ensure_oc_mirror() call in reg-sync.sh
 - Removed redhat-marketplace catalog references
 
+### Community
+- [@KamilBlaz](https://github.com/KamilBlaz) - Fixed oc-mirror operator listing ([#11](https://github.com/sjbylo/aba/pull/11))
+
 ---
 
 ## [0.9.0] - 2026-01-26
 
 First release
 
-
-### Bug Fixes
-- Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
-- Fixed `oc-mirror list operators` incorrectly reporting success (exit code 0) when catalog download fails
-
----
-
-## [0.9.0] - 2026-01-21
+### Core Features
+- Air-gapped OpenShift installation and management
+- Agent-based installer support (SNO, compact, standard clusters)
+- Mirror registry setup (mirror-registry and docker-registry)
+- CLI tool management (oc, openshift-install, oc-mirror, govc, butane)
+- Bundle creation for disconnected environments
+- VMware vCenter/ESXi integration
+- Operator catalog management
 
 ### New Features
 - **TUI** - Interactive wizard for guided disconnected installation setup (`./abatui`)
@@ -264,18 +326,11 @@ First release
 - **Enhanced UX** - Cleaner screen handling, helpful waiting messages
 
 ### Bug Fixes
+- Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
+- Fixed `oc-mirror list operators` incorrectly reporting success (exit code 0) when catalog download fails
 - Fixed catalog download error detection and reporting
 - Corrected bundle filename version suffixing
 - Various workflow and error handling improvements
-
-### Core Features
-- Air-gapped OpenShift installation and management
-- Agent-based installer support (SNO, compact, standard clusters)
-- Mirror registry setup (mirror-registry and docker-registry)
-- CLI tool management (oc, openshift-install, oc-mirror, govc, butane)
-- Bundle creation for disconnected environments
-- VMware vCenter/ESXi integration
-- Operator catalog management
 
 ---
 
@@ -287,12 +342,12 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.8...HEAD
+[0.9.8]: https://github.com/sjbylo/aba/releases/tag/v0.9.8
 [0.9.7]: https://github.com/sjbylo/aba/releases/tag/v0.9.7
 [0.9.6]: https://github.com/sjbylo/aba/releases/tag/v0.9.6
 [0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
 [0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
 [0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
 [0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
-[0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
 [0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0

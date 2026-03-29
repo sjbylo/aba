@@ -33,19 +33,19 @@ Related commands:
 
 Examples of fully disconnected mode (air-gapped):
 
-  Configure mirror registry on *localhost* (ensure 'registry.example.com' points to the mirror registry):
-    aba [-d mirror] install -H registry.example.com 
+  Configure mirror registry on the local bastion (the -H flag sets the registry FQDN):
+    aba [-d mirror] install -H registry.example.com
 
-  Configure mirror registry on *remote host* with 'registry.example.com' using 'remote-ssh-user':
+  Configure mirror registry on a *remote host* with 'registry.example.com' using 'remote-ssh-user':
     aba [-d mirror] install -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user
 
   Configure mirror registry and use path ocp4/openshift4 and store all data under /mnt/large/drive/my-data
     aba [-d mirror] install -H registry.example.com -k ~/.ssh/id_rsa -U remote-ssh-user --reg-path ocp4/openshift4 --data-dir /mnt/large/drive/my-data
 
-  Configure mirror registry on localhost with 'registry.example.com' and load the (previously saved) images to the mirror:
-    aba [-d mirror] load -H registry.example.com  --retry 8
+  Configure mirror registry on the local bastion and load the (previously saved) images to the mirror:
+    aba [-d mirror] load -H registry.example.com --retry 8
 
-  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in ~/.aba/mirror/mirror/ dir.
+  Verify connection to mirror registry. First, install Quay or manually set up pull secret & CA cert files in ~/.aba/mirror/<mirror-name>/ dir.
     aba [-d mirror] verify
 
   Install OpenShift:

@@ -7,8 +7,6 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 
-# Warn about missing aba.conf values but don't abort — the explicit
-# ocp_version check below catches the critical case.
 verify-aba-conf
 
 if [ ! "$ocp_version" ]; then
@@ -31,6 +29,44 @@ type=standard
 . <(process_args $*)
 
 aba_debug "Creating cluster directory for [$name] of type [$type]"
+
+# Network values are optional in aba.conf (e.g. bundle workflow) but mandatory
+# for cluster.conf.  Auto-detect any missing values and write them into aba.conf,
+# then abort so the user can review before proceeding.
+_filled=0
+if [ ! "$domain" ]; then
+	v=$(get_domain) && [ "$v" ] && replace-value-conf -n domain -v "$v" -f aba.conf && domain="$v"
+	[ "$domain" ] && { aba_info "Auto-detected domain=$domain"; _filled=$((_filled+1)); }
+fi
+if [ ! "$machine_network" ]; then
+	v=$(get_machine_network) && [ "$v" ] && replace-value-conf -n machine_network -v "$v" -f aba.conf && machine_network="$v"
+	[ "$machine_network" ] && { aba_info "Auto-detected machine_network=$machine_network"; _filled=$((_filled+1)); }
+fi
+if [ ! "$dns_servers" ]; then
+	v=$(get_dns_servers) && [ "$v" ] && replace-value-conf -n dns_servers -v "$v" -f aba.conf && dns_servers="$v"
+	[ "$dns_servers" ] && { aba_info "Auto-detected dns_servers=$dns_servers"; _filled=$((_filled+1)); }
+fi
+if [ ! "$next_hop_address" ]; then
+	v=$(get_next_hop) && [ "$v" ] && replace-value-conf -n next_hop_address -v "$v" -f aba.conf && next_hop_address="$v"
+	[ "$next_hop_address" ] && { aba_info "Auto-detected next_hop_address=$next_hop_address"; _filled=$((_filled+1)); }
+fi
+if [ ! "$ntp_servers" ]; then
+	v=$(get_ntp_servers) && [ "$v" ] && replace-value-conf -n ntp_servers -v "$v" -f aba.conf && ntp_servers="$v"
+	[ "$ntp_servers" ] && { aba_info "Auto-detected ntp_servers=$ntp_servers"; _filled=$((_filled+1)); }
+fi
+if [ $_filled -gt 0 ]; then
+	aba_abort \
+		"$_filled network value(s) were auto-detected and written to aba.conf." \
+		"Please review aba.conf and re-run the command."
+fi
+# If auto-detection failed for any values, tell the user which ones
+_missing=0
+[ ! "$domain" ]			&& { echo_red "Error: 'domain' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
+[ ! "$machine_network" ]	&& { echo_red "Error: 'machine_network' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
+[ ! "$dns_servers" ]		&& { echo_red "Error: 'dns_servers' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
+[ ! "$next_hop_address" ]	&& { echo_red "Error: 'next_hop_address' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
+[ ! "$ntp_servers" ]		&& { echo_red "Error: 'ntp_servers' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
+[ $_missing -gt 0 ] && aba_abort "$_missing network value(s) could not be auto-detected. Set them in aba.conf."
 
 # If not already set, set reasonable defaults
 # Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 

@@ -43,7 +43,7 @@ plan_tests \
     "Save images to disk" \
     "Tar-pipe transfer to bastion" \
     "Load without regcreds (must fail)" \
-    "Load without save dir (must fail)" \
+    "Load without data dir (must fail)" \
     "Load images into existing registry" \
     "Compact: install and delete cluster" \
     "SNO: install cluster" \
@@ -64,9 +64,13 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 
-e2e_run "Install aba" "./install"
+e2e_run "Reset aba" "aba reset -f"
+e2e_run "Remove oc-mirror caches" \
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
@@ -165,7 +169,7 @@ test_begin "Save images to disk"
 
 e2e_run -r 3 2 "Save images" "aba -d mirror save --retry"
 
-e2e_run "Show saved files" "ls -lh mirror/save/"
+e2e_run "Show saved files" "ls -lh mirror/data/"
 
 test_end
 
@@ -196,7 +200,7 @@ e2e_run "Stage pool registry creds for transfer" \
 # Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
     "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
-e2e_run -q "Remove saved archives after transfer" "rm -f mirror/save/mirror_*.tar"
+e2e_run -q "Remove saved archives after transfer" "rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Remove dialog RPM to force dnf install path" \
     "sudo dnf remove -y dialog"
@@ -244,16 +248,16 @@ test_end
 # ============================================================================
 # 7b. Load without save dir -- must fail
 # ============================================================================
-test_begin "Load without save dir (must fail)"
+test_begin "Load without data dir (must fail)"
 
-e2e_run_remote -q "Move save dir aside" \
-	"cd ~/aba && mv mirror/save mirror/save.bak"
+e2e_run_remote -q "Move data dir aside" \
+	"cd ~/aba && mv mirror/data mirror/data.bak"
 
-e2e_run_must_fail_remote "Load without save dir should fail" \
+e2e_run_must_fail_remote "Load without data dir should fail" \
 	"cd ~/aba && aba -d mirror load"
 
-e2e_run_remote -q "Restore save dir" \
-	"cd ~/aba && mv mirror/save.bak mirror/save"
+e2e_run_remote -q "Restore data dir" \
+	"cd ~/aba && mv mirror/data.bak mirror/data"
 
 test_end
 
@@ -264,7 +268,7 @@ test_begin "Load images into existing registry"
 
 e2e_run_remote -r 3 2 "Load images into registry" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 test_end
 
@@ -322,7 +326,7 @@ test_end
 test_begin "Deploy vote-app"
 
 e2e_run "Create fresh imageset config for vote-app only" \
-    "tee mirror/save/imageset-config-save.yaml <<'EOF'
+    "tee mirror/data/imageset-config.yaml <<'EOF'
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -332,11 +336,11 @@ EOF"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
-    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
-e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && skopeo inspect --tls-verify=false docker://\$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app:latest"
@@ -370,7 +374,7 @@ e2e_run "Set op_sets=acm" "aba --op-sets acm"
 
 OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
 e2e_run "Create operators-only imageset config for ACM" \
-    "cat > mirror/save/imageset-config-save.yaml <<EOF
+    "cat > mirror/data/imageset-config.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -383,11 +387,11 @@ EOF"
 
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
 e2e_run "Transfer ACM archive+config to internal bastion" \
-    "scp mirror/save/mirror_*.tar mirror/save/imageset-config-save.yaml ${INTERNAL_BASTION}:aba/mirror/save/"
-e2e_run -q "Remove transferred archives" "rm -f mirror/save/mirror_*.tar"
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
-e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/save/mirror_*.tar"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (ACM operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"

@@ -9,8 +9,8 @@ Usage:
     -P, --op-sets [<list of operator sets>]   # Provide names of sets of operators: ocp, odf, ocpv, ai etc.
     -O, --ops [<list of operator names>]      # Provide individual operator names.
     -y, --yes                                 # Automatically accept the default answer to all prompts.
-    -f, --force                               # Remove any existing files under mirror/save or mirror/sync.
-        --light                               # Create *light* bundle, excluding all aba/save/mirror_*.tar file(s).
+    -f, --force                               # Remove any existing files under mirror/data.
+        --light                               # Create *light* bundle, excluding all aba/mirror/data/mirror_*.tar file(s).
                                               # Manual merging of image-set archive file(s) (ISA) required!
 
   The 'bundle' command creates an 'install bundle' which is used to install OpenShift in a fully disconnected

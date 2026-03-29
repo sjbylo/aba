@@ -65,7 +65,7 @@ test-cmd() {
 
 	local ignore_result=    # No matter what the command's exit code is, return 0 (success)
 	local must_fail=    	# The command MUST fail (must be non-zero) for the test to pass!
-	local tot_cnt=5		# Try to run the command max tot_cnt times. If it fails, try one more time by def.
+	local tot_cnt=2		# Try to run the command max tot_cnt times.
 	local backoff=1.5	# Default to wait after failed command is a few sec.
 	local host=localhost	# def. host to run on
 	local mark=L		# Mark in the log output, L (local) or R (remote)

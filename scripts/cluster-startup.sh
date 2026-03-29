@@ -12,14 +12,15 @@ scripts/cli-install-all.sh --wait oc
 
 unset KUBECONFIG
 # Use the actual kubeconfig used after the cluster was installed, in case it was overwritten
+[ -f iso-agent-based/auth.backup/kubeconfig ] || aba_abort "Missing kubeconfig backup at iso-agent-based/auth.backup/kubeconfig!"
 cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
 
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
 cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-zA-Z]{2,}:[0-9]{2,}' | sed "s/^api\.//g")
 server_url=${server_url}/
 
-# Check for bare-metal installation
-if [ ! -s vmware.conf ]; then
+# Check for bare-metal installation (no hypervisor config)
+if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
 
 	# Quick check to see if servers are up?
@@ -34,7 +35,7 @@ if [ ! -s vmware.conf ]; then
 	fi
 else
 	aba_info Starting cluster $cluster_name ...
-	make -s start
+	aba start
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
@@ -57,28 +58,34 @@ if ! try_cmd -q 1 0 2 $OC get nodes ; then
 fi
 
 aba_info "Cluster endpoint accessible at $server_url"
+
+# Remove stale 'oc debug' pods that may re-execute shutdown commands.
+# These persist in etcd after a graceful shutdown and can cause an
+# infinite shutdown loop when kubelet re-syncs them on startup.
+for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	aba_info "Removing stale debug pod: $pod"
+	$OC delete pod -n default "$pod" --grace-period=0 --force 2>/dev/null || true
+done
+
 aba_info Cluster $cluster_name nodes:
 if ! $OC get nodes; then
 	aba_abort "Failed to access the cluster!"
 fi
 
-uncorden_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC adm uncordon ${node}; done; }
+uncordon_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}'); do $OC adm uncordon ${node}; done; }
 
 sleep 5 	# Sometimes need to wait to avoid uncordon errors!
 
 aba_info "Making all nodes schedulable (uncordon):"
-until uncorden_all_nodes
-do
-	sleep 5
-done
+if ! try_cmd -q 5 0 120 uncordon_all_nodes; then
+	aba_warning "Uncordon did not fully complete after 10 minutes, continuing ..."
+fi
 
 # Wait for this command to work!
-until $OC get nodes &>/dev/null # >/dev/null 2>&1
-do
-	sleep 10
-done
+if ! try_cmd -q 10 0 30 $OC get nodes; then
+	aba_warning "Could not reach cluster API after 5 minutes, continuing ..."
+fi
 
-#all_nodes_ready() { $OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v "^True$" || true | wc -l | grep -q "^0$"; }
 all_nodes_ready() { [ -z "$($OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v ^True$)" ]; }
 
 check_and_approve_csrs() {
@@ -102,18 +109,20 @@ check_and_approve_csrs() {
 
 (check_and_approve_csrs) &>/dev/null & 
 pid=$!
-myexit() { [ "$pid" ] && { kill $pid &>/dev/null; wait $pid 2>/dev/null; }; exit $1; }
-trap myexit EXIT
+trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_rc' EXIT
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
 	aba_info "Waiting for all nodes to be 'Ready' ..."
 
-	sleep 8
+	if ! try_cmd 10 0 60 all_nodes_ready; then
+		aba_warning "Not all nodes are 'Ready' yet, but continuing ..."
+	fi
 fi
-##$OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 
-aba_info_ok "All nodes are ready!"
+if all_nodes_ready; then
+	aba_info_ok "All nodes are ready!"
+fi
 $OC get nodes
 aba_info "Note the certificate expiration date of this cluster ($cluster_name):"
 echo_yellow $($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
@@ -122,8 +131,6 @@ console=$($OC whoami --show-console)/
 if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
 	aba_info_ok "The cluster will complete startup and become fully available shortly!"
 	aba_info "Waiting for the console to become available at $console"
-
-	#check_and_approve_csrs
 
 	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
 		aba_info "Giving up waiting for the console!"
@@ -139,11 +146,11 @@ if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v
 
 	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
 		aba_info "Giving up waiting for the operators!"
-		myexit 0
+		exit 0
 	fi
 fi
 
 aba_info_ok "All cluster operators are fully available!"
 
-myexit 0
+exit 0
 

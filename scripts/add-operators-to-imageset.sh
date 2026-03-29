@@ -48,12 +48,63 @@ export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 declare -A added_operators  # Associative array to track added operators
 op_names_arr=()  # Array to output op. list 
 
+# Return 0 (true) if the display name adds information beyond the operator package name.
+# Skip comments when the display name is just a reformatted version of the op name
+# (e.g. web-terminal → "Web Terminal") -- only add when genuinely different
+# (e.g. cincinnati-operator → "OpenShift Update Service").
+_display_name_adds_info() {
+	local op_name="$1" display_name="$2"
+
+	# Normalize op name: strip common suffixes, hyphens → spaces, lowercase
+	local norm_op="${op_name%-operator-rh}"
+	norm_op="${norm_op%-operator}"
+	norm_op="${norm_op%-rh}"
+	norm_op="${norm_op//-/ }"
+	norm_op="${norm_op,,}"
+
+	local norm_dn="${display_name,,}"
+
+	# Filter out noise word "operator" (already stripped from the package
+	# name suffix, but can still appear in the display name)
+	local word filtered_op="" filtered_dn=""
+	for word in $norm_op; do
+		[[ "$word" == "operator" ]] || filtered_op+="$word "
+	done
+	for word in $norm_dn; do
+		[[ "$word" == "operator" ]] || filtered_dn+="$word "
+	done
+	norm_op="${filtered_op% }"
+	norm_dn="${filtered_dn% }"
+
+	# Redundant if all op-name words appear in the display name
+	local all_found=true
+	for word in $norm_op; do
+		[[ "$norm_dn" != *"$word"* ]] && { all_found=false; break; }
+	done
+	$all_found && return 1
+
+	# Redundant if all display-name words appear in the op name
+	all_found=true
+	for word in $norm_dn; do
+		[[ "$norm_op" != *"$word"* ]] && { all_found=false; break; }
+	done
+	$all_found && return 1
+
+	return 0
+}
+
 add_op() {
 	local op=$1
 	local catalog=$2
 
-	# Extract operator name and default channel from the file
-	read op_name op_default_channel < <(grep "^$op " .index/$catalog-index-v$ocp_ver_major | awk '{print $1, $NF}')
+	# Extract operator name, display name and default channel from the index
+	local index_line
+	index_line=$(grep "^$op " .index/$catalog-index-v$ocp_ver_major)
+	op_name=$(awk '{print $1}' <<< "$index_line")
+	op_default_channel=$(awk '{print $NF}' <<< "$index_line")
+	# Display name is everything between the first and last fields
+	local op_display_name
+	op_display_name=$(awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}' <<< "$index_line")
 
 	# Check if the operator name exists
 	if [ "$op_name" ]; then
@@ -67,16 +118,21 @@ add_op() {
 		added_operators["$op_name"]=1
 		op_names_arr+=("$op_name")
 
+	local comment=""
+	if [ -n "$op_display_name" ] && [ "$op_display_name" != "-" ] && _display_name_adds_info "$op_name" "$op_display_name"; then
+		comment="  # $op_display_name"
+	fi
+
 	# Output the operator information
 	if [ "$op_default_channel" ]; then
 		cat <<-END >> "$OUTPUT_FILE"
-		    - name: $op_name
+		    - name: $op_name${comment}
 		      channels:
 		      - name: "$op_default_channel"
 		END
 	else
 		cat <<-END >> "$OUTPUT_FILE"
-		    - name: $op_name
+		    - name: $op_name${comment}
 		END
 	fi
 	else
@@ -107,8 +163,7 @@ if [ "$ops" -o "$op_sets" ]; then
 			"Your options are:" \
 			"- Refresh any existing catalog files by running: 'cd $PWD; rm -f .index/redhat-operator-index-v${ocp_ver_major}*' and try again." \
 			"- run 'cd mirror; aba catalog' to try to download the catalog file again." \
-			"- Check that the following command is working:" \
-			"    oc-mirror --v1 list operators --catalog registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major" \
+			"- Re-download the operator catalog:  aba catalog" \
 			"- Check access to registry is working: 'curl -IL http://registry.redhat.io/v2'" 
 		# We want to ensure the user gets what they expect, i.e. operators downloaded! So we abort.
 	fi
@@ -249,7 +304,6 @@ do
 done
 
 #echo >&2
-aba_info_ok "Number of operators added: ${#op_names_arr[@]}:" >&2
-aba_info_ok "${op_names_arr[@]}" >&2
+aba_info_ok "Number of operators added: ${#op_names_arr[@]}" >&2
 
 exit 0

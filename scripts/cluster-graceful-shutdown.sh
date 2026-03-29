@@ -45,6 +45,13 @@ fi
 
 cluster_id=$($OC whoami --show-server | awk -F[/:] '{print $4}') || exit 1
 
+# Resolve a debug image from the release payload (available in the mirror via IDMS).
+# The default 'oc debug' image (support-tools) lives on registry.redhat.io which is
+# unreachable in disconnected environments and has no IDMS redirect.
+debug_image=$($OC adm release info --image-for=tools 2>/dev/null || true)
+debug_image_flag=
+[ "$debug_image" ] && debug_image_flag="--image=$debug_image"
+
 aba_info Cluster $cluster_id nodes:
 echo
 $OC get nodes
@@ -53,12 +60,16 @@ echo
 logfile=.shutdown.log
 aba_info Start of shutdown $(date) > $logfile
 
-# Preparing debug pods for gracefull shutdown (ensure all nodes are 'Ready') ...
+# Load cluster config for SSH fallback (provides CP_IP_ADDRESSES, WKR_IP_ADDR)
+eval "$(scripts/cluster-config.sh)" 2>/dev/null || true
+
+# Preparing debug pods for graceful shutdown (pods persist for fast reuse by the actual shutdown call)
+declare -A warmup_pids=()
 for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
 do
-	$OC --request-timeout=30s debug --preserve-pod node/${node} -- chroot /host hostname &
+	timeout 30 $OC --request-timeout=30s debug $debug_image_flag --preserve-pod node/${node} -- chroot /host hostname &
+	warmup_pids[$node]=$!
 done >> $logfile 2>&1
-#wait
 
 if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
 	cluster_exp_date=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
@@ -84,8 +95,20 @@ fi
 echo
 ask "Gracefully shut down the cluster" || exit 1
 
-# wait for all debug pods to have completed successfully.
-wait
+# Wait for all warmup debug pods; abort if any fail (e.g. image pull issue in disconnected env)
+warmup_failed=
+for node in "${!warmup_pids[@]}"; do
+	if ! wait ${warmup_pids[$node]}; then
+		warmup_failed=1
+		aba_warning "Debug pod warmup failed for node $node" | tee -a $logfile
+	fi
+done
+
+if [ "$warmup_failed" ]; then
+	aba_abort "Debug pod warmup failed (image pull for 'oc debug' likely failed)." \
+		"Ensure 'aba day2' has been run to configure image mirroring (IDMS/ITMS)" \
+		"and that the mirror registry is accessible from the cluster nodes."
+fi
 
 aba_info "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
 
@@ -112,48 +135,52 @@ fi
 
 aba_info Shutting down all nodes ... | tee -a $logfile
 
-max_attempts=3
-delay=20
-failed_nodes=()
-
+oc_debug_failed=
 nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 
-for attempt in $(seq 1 $max_attempts); do
-	if [ $attempt -gt 1 ]; then
-		aba_warning "Retry attempt $attempt/$max_attempts for: ${failed_nodes[*]}" | tee -a $logfile
-		sleep $delay
-		nodes="${failed_nodes[*]}"
-		failed_nodes=()
+for node in $nodes; do
+	if ! timeout 30 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1; then
+		oc_debug_failed=1
+		aba_warning "oc debug shutdown failed for $node" | tee -a $logfile
 	fi
-
-	declare -A pids=()
-	for node in $nodes; do
-		$OC --request-timeout=30s debug node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1 &
-		pids[$node]=$!
-	done
-
-	for node in "${!pids[@]}"; do
-		if ! wait ${pids[$node]}; then
-			failed_nodes+=("$node")
-			echo_red "[ABA] Warning: shutdown failed for node $node (attempt $attempt/$max_attempts)" | tee -a $logfile
-		fi
-	done
-
-	[ ${#failed_nodes[@]} -eq 0 ] && break
 done
 
-echo
-if [ ${#failed_nodes[@]} -gt 0 ]; then
-	echo_red "[ABA] WARNING: Could not shut down these nodes after $max_attempts attempts: ${failed_nodes[*]}" | tee -a $logfile
-	echo_red "[ABA] Check node status manually or power off via hypervisor." | tee -a $logfile
-else
-	aba_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
+if [ "$oc_debug_failed" ]; then
+	aba_warning "Falling back to SSH for shutdown ..." | tee -a $logfile
+	for ip in $CP_IP_ADDRESSES $WKR_IP_ADDR; do
+		timeout 30 ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip 'sudo shutdown -h 1' >> $logfile 2>&1 || \
+			aba_warning "SSH shutdown also failed for $ip" | tee -a $logfile
+	done
 fi
 
-# Only wait if installed on VMs
-if [ "$wait" -a -s vmware.conf ]; then
+echo
+aba_info_ok "All servers in the cluster will complete shutdown and power off shortly!" | tee -a $logfile
+
+# Clean up stale debug pods that could re-execute shutdown on next boot.
+# The 'oc debug ... shutdown -h now' pods persist in etcd; if the kubelet
+# re-syncs them on startup the node enters an infinite shutdown loop.
+for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	$OC delete pod -n default "$pod" --grace-period=0 --force >> $logfile 2>&1 || true
+done
+
+# Only wait if installed on VMs (VMware or KVM)
+if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	aba_info "Waiting for all nodes to power down ..." | tee -a $logfile
-	until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
+	_wait_elapsed=0
+	_wait_timeout=300
+	while aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; do
+		sleep 10
+		_wait_elapsed=$((_wait_elapsed + 10))
+		if [ $_wait_elapsed -ge $_wait_timeout ]; then
+			aba_warning "Timed out after ${_wait_timeout}s waiting for VMs to power off"
+			aba ls 2>/dev/null | tee -a $logfile
+			break
+		fi
+		aba_info "Still waiting for VMs to power off (${_wait_elapsed}s) ..." | tee -a $logfile
+	done
+	if ! aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; then
+		aba_info_ok "All VMs powered off." | tee -a $logfile
+	fi
 fi
 
 exit 0

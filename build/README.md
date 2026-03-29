@@ -1,6 +1,6 @@
 # A toolbox container 
 
-A toolbox container that can be used on an internel bastion in case rpms cannot be installed.
+A toolbox container that can be used on an internal bastion in case rpms cannot be installed.
 
 Current status:
 nmstate not working inside a UBI container. Seeing errors with NM.SettingBond.get_valid_options() failing.

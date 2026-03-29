@@ -102,12 +102,12 @@ _verify_con_vm() {
 		echo "  PASS: default route via ens256"
 
 		for _iface in ens192 ens224 ens224.10; do
-			_mtu=\$(ip link show \$_iface 2>/dev/null | grep -o 'mtu [0-9]*' | awk '{print \$2}')
+			_mtu=\$(ip link show \$_iface | grep -o 'mtu [0-9]*' | awk '{print \$2}')
 			[ "\$_mtu" = "1500" ] || _fail "\$_iface MTU is \$_mtu (expected 1500)"
 		done
 		echo "  PASS: MTU 1500 on all interfaces"
 
-		nmcli -g ipv4.ignore-auto-dns connection show ens256 2>/dev/null | grep -q yes || _fail "ens256 ignore-auto-dns"
+		nmcli -g ipv4.ignore-auto-dns connection show ens256 | grep -q yes || _fail "ens256 ignore-auto-dns"
 		echo "  PASS: ens256 ignore-auto-dns"
 
 		# --- Firewall / NAT ---
@@ -166,7 +166,7 @@ _verify_con_vm() {
 		id testy > /dev/null 2>&1 || _fail "testy user missing"
 		echo "  PASS: testy user exists"
 
-		sudo -u testy sudo -n whoami 2>/dev/null | grep -q root || _fail "testy cannot sudo"
+		sudo -u testy sudo -n whoami | grep -q root || _fail "testy cannot sudo"
 		echo "  PASS: testy sudo"
 
 		test -f /home/${user}/.ssh/testy_rsa || _fail "testy_rsa key missing"
@@ -191,18 +191,26 @@ _verify_con_vm() {
 		# --- Files ---
 		test -s /home/${user}/.vmware.conf || _fail "vmware.conf missing"
 		echo "  PASS: vmware.conf"
+		test -s /root/.vmware.conf || _fail "root vmware.conf missing"
+		echo "  PASS: root vmware.conf"
+		if test -s /home/${user}/.kvm.conf; then
+			echo "  PASS: kvm.conf"
+			test -s /root/.kvm.conf || echo "  WARN: root kvm.conf missing"
+		else
+			echo "  SKIP: kvm.conf (not deployed)"
+		fi
 
 		# --- Podman clean ---
 		# Pool registry runs as ${user} with images, containers, and port 8443
 		if [ -d $POOL_REG_DIR ]; then
 			echo "  SKIP: podman/port checks for ${user} (pool registry present)"
 		else
-			! sudo -u ${user} podman ps -q 2>/dev/null | grep -q . || _fail "running containers (${user})"
+			! sudo -u ${user} podman ps -q | grep -q . || _fail "running containers (${user})"
 			echo "  PASS: no running containers (${user})"
 			! ss -tlnp | grep -q ':8443 ' || _fail "port 8443 in use"
 			echo "  PASS: port 8443 free"
 		fi
-		! podman ps -q 2>/dev/null | grep -q . || _fail "running containers (root)"
+		! podman ps -q | grep -q . || _fail "running containers (root)"
 		echo "  PASS: no running containers (root)"
 
 		echo "  [$vm] All checks PASSED"
@@ -224,6 +232,7 @@ _configure_con_vm() {
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
+	_vm_setup_kvm_conf "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_install_aba "$vm" "$user"
@@ -260,6 +269,7 @@ _configure_dis_vm() {
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
+	_vm_setup_kvm_conf "$vm" "$user"
 	_vm_remove_pull_secret "$vm" "$user"
 	_vm_disable_proxy_autoload "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
@@ -268,7 +278,7 @@ _configure_dis_vm() {
 
 	echo "  [$vm] Verifying NTP sync (server: ${NTP_SERVER:-10.0.1.8}) ..."
 	for ((_ntp=0; _ntp<20; _ntp++)); do
-		if _essh "${user}@${vm}" -- "chronyc sources 2>/dev/null" | grep "^\^\*.*${NTP_SERVER:-10.0.1.8}"; then
+		if _essh "${user}@${vm}" -- "chronyc sources" | grep "^\^\*.*${NTP_SERVER:-10.0.1.8}"; then
 			echo "  [$vm] NTP synced to ${NTP_SERVER:-10.0.1.8}."
 			break
 		fi
@@ -316,7 +326,7 @@ _verify_dis_vm() {
 		echo "  PASS: no internet (disconnected)"
 
 		for _iface in ens192 ens224 ens224.10; do
-			_mtu=\$(ip link show \$_iface 2>/dev/null | grep -o 'mtu [0-9]*' | awk '{print \$2}')
+			_mtu=\$(ip link show \$_iface | grep -o 'mtu [0-9]*' | awk '{print \$2}')
 			[ "\$_mtu" = "1500" ] || _fail "\$_iface MTU is \$_mtu (expected 1500)"
 		done
 		echo "  PASS: MTU 1500 on all interfaces"
@@ -389,7 +399,7 @@ _verify_dis_vm() {
 		id testy > /dev/null 2>&1 || _fail "testy user missing"
 		echo "  PASS: testy user exists"
 
-		sudo -u testy sudo -n whoami 2>/dev/null | grep -q root || _fail "testy cannot sudo"
+		sudo -u testy sudo -n whoami | grep -q root || _fail "testy cannot sudo"
 		echo "  PASS: testy sudo"
 
 		test -f /home/${user}/.ssh/testy_rsa || _fail "testy_rsa key missing"
@@ -404,20 +414,28 @@ _verify_dis_vm() {
 		# --- Files ---
 		test -s /home/${user}/.vmware.conf || _fail "vmware.conf missing"
 		echo "  PASS: vmware.conf"
+		test -s /root/.vmware.conf || _fail "root vmware.conf missing"
+		echo "  PASS: root vmware.conf"
+		if test -s /home/${user}/.kvm.conf; then
+			echo "  PASS: kvm.conf"
+			test -s /root/.kvm.conf || echo "  WARN: root kvm.conf missing"
+		else
+			echo "  SKIP: kvm.conf (not deployed)"
+		fi
 
 		! test -f /home/${user}/.pull-secret.json || _fail "pull-secret still exists"
 		echo "  PASS: pull-secret removed"
 
-		! grep -q "^source.*proxy-set" /home/${user}/.bashrc 2>/dev/null || _fail "proxy still in .bashrc"
+		! grep -q "^source.*proxy-set" /home/${user}/.bashrc || _fail "proxy still in .bashrc"
 		echo "  PASS: proxy disabled"
 
 		command -v rsync > /dev/null || _fail "rsync not installed"
 		echo "  PASS: rsync installed"
 
 		# --- No running containers ---
-		! podman ps -q 2>/dev/null | grep -q . || _fail "running containers (root)"
+		! podman ps -q | grep -q . || _fail "running containers (root)"
 		echo "  PASS: no running containers (root)"
-		! sudo -u ${user} podman ps -q 2>/dev/null | grep -q . || _fail "running containers (${user})"
+		! sudo -u ${user} podman ps -q | grep -q . || _fail "running containers (${user})"
 		echo "  PASS: no running containers (${user})"
 
 		# --- No service on registry port ---
@@ -609,7 +627,7 @@ _prepare_golden() {
 	if [ -n "$_RECREATE_GOLDEN" ]; then
 		echo "  -G/--recreate-golden: destroying existing golden VM ..."
 		if vm_exists "$_GOLDEN_NAME"; then
-			govc vm.power -off "$_GOLDEN_NAME" 2>/dev/null || true
+			govc vm.power -off "$_GOLDEN_NAME" || true
 			govc vm.destroy "$_GOLDEN_NAME"
 		fi
 	fi
@@ -627,7 +645,7 @@ _prepare_golden() {
 		echo ""
 		if _confirm "  Destroy and rebuild from template? (Y/n)"; then
 			echo "  Destroying golden VM ..."
-			govc vm.power -off "$_GOLDEN_NAME" 2>/dev/null || true
+			govc vm.power -off "$_GOLDEN_NAME" || true
 			govc vm.destroy "$_GOLDEN_NAME"
 		else
 			echo "  Aborted." >&2
@@ -637,8 +655,8 @@ _prepare_golden() {
 
 	echo "  Cloning from template: $_VM_TEMPLATE ..."
 
-	govc folder.create "${_VC_PARENT}/aba-e2e" 2>/dev/null || true
-	govc folder.create "$_GOLDEN_FOLDER" 2>/dev/null || true
+	govc folder.create "${_VC_PARENT}/aba-e2e" || true
+	govc folder.create "$_GOLDEN_FOLDER" || true
 	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" || return 1
 
 	local ip
@@ -730,7 +748,7 @@ for prefix in con dis; do
 		pool_log="$_LOG_DIR/create-pool${i}.log"
 		> "$pool_log"
 
-		govc folder.create "$pool_folder" 2>/dev/null || true
+		govc folder.create "$pool_folder" || true
 
 		vm_name="${prefix}${i}"
 		status=$(_vm_needs_clone "$vm_name")
@@ -742,20 +760,22 @@ for prefix in con dis; do
 		revert)
 			echo "  $vm_name: exists but SSH failed -- reverting to $_SNAPSHOT_NAME"
 			govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
-			govc vm.power -on "$vm_name" 2>/dev/null || true
+			govc vm.power -on "$vm_name" || true
 			# After revert, re-add the bastion's SSH key to the user account.
 			# The pool-ready snapshot only has root's authorized_keys; the user
 			# key was added later.  Wait for SSH then fix user keys.
 			_revert_host="${vm_name}.${VM_BASE_DOMAIN:-example.com}"
 			_revert_user="$VM_DEFAULT_USER"
 			echo "  $vm_name: waiting for SSH after revert ..."
-			if _vm_wait_ssh "$_revert_host" "$_revert_user" 2>/dev/null \
-				|| _vm_wait_ssh "$_revert_host" "root" 2>/dev/null; then
-				_vm_setup_ssh_keys "$_revert_host" "$_revert_user" 2>/dev/null \
+			if _vm_wait_ssh "$_revert_host" "$_revert_user" \
+				|| _vm_wait_ssh "$_revert_host" "root"; then
+				_vm_setup_ssh_keys "$_revert_host" "$_revert_user" \
 					|| echo "  $vm_name: WARNING: could not set up SSH keys after revert"
 				# Remove stale firewall ports that may have been baked into the snapshot
-				_vm_setup_firewall "$_revert_host" "$_revert_user" 2>/dev/null \
+				_vm_setup_firewall "$_revert_host" "$_revert_user" \
 					|| echo "  $vm_name: WARNING: firewall reset failed after revert"
+				# Kill stale oc-mirror (holds port 55000)
+				_essh "${_revert_user}@${_revert_host}" "pkill -f 'oc-mirror' || true"
 			else
 				echo "  $vm_name: WARNING: SSH still down after revert"
 			fi
@@ -763,7 +783,7 @@ for prefix in con dis; do
 	broken)
 			echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot)"
 			if _confirm "  Replace $vm_name? (Y/n)"; then
-				govc vm.power -off "$vm_name" 2>/dev/null || true
+				govc vm.power -off "$vm_name" || true
 				govc vm.destroy "$vm_name" || true
 				VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
 				_clone_pids+=($!)
@@ -776,7 +796,7 @@ for prefix in con dis; do
 			missing|recreate)
 				echo "  $vm_name: $status -- cloning from $_GOLDEN_NAME ..."
 				if vm_exists "$vm_name"; then
-					govc vm.power -off "$vm_name" 2>/dev/null || true
+					govc vm.power -off "$vm_name" || true
 					govc vm.destroy "$vm_name" || true
 				fi
 				VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
@@ -852,7 +872,7 @@ done
 # While background config jobs run, tail their logs so the user sees progress
 _tail_pid=""
 if [ ${#_cfg_pids[@]} -gt 0 ] && [ ${#_cfg_logs[@]} -gt 0 ] && [ -t 1 ]; then
-	tail -f "${_cfg_logs[@]}" 2>/dev/null &
+	tail -f "${_cfg_logs[@]}" &
 	_tail_pid=$!
 fi
 

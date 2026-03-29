@@ -75,7 +75,7 @@ remote_wait_ssh() {
 
     while true; do
         if ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
-               "$host" -- "echo 'ssh-ready'" 2>/dev/null; then
+               "$host" -- "echo 'ssh-ready'"; then
             echo "  SSH ready on $host (${elapsed}s)"
             return 0
         fi
@@ -108,15 +108,15 @@ _get_nic_network() {
 
     # Get the portgroupKey from the device's backing info (dvSwitch)
     local pg_key
-    pg_key=$(govc device.info -vm "$vm" -json "$device" 2>/dev/null \
-        | jq -r '.devices[0].backing.port.portgroupKey // empty' 2>/dev/null)
+    pg_key=$(govc device.info -vm "$vm" -json "$device" \
+        | jq -r '.devices[0].backing.port.portgroupKey // empty')
 
     if [ -n "$pg_key" ]; then
         # Distributed switch -- resolve portgroupKey to name
-        govc object.collect -s "$pg_key" name 2>/dev/null
+        govc object.collect -s "$pg_key" name
     else
         # Standard switch -- Summary field has the network name directly
-        govc device.info -vm "$vm" "$device" 2>/dev/null \
+        govc device.info -vm "$vm" "$device" \
             | awk '/Summary:/{$1=""; print substr($0,2)}'
     fi
 }
@@ -159,7 +159,7 @@ clone_vm() {
     # Destroy existing clone if present (clones are disposable)
     if vm_exists "$clone_name"; then
         echo "  Destroying previous clone '$clone_name' ..."
-        govc vm.power -off "$clone_name" 2>/dev/null || true
+        govc vm.power -off "$clone_name" || true
         govc vm.destroy "$clone_name" || true
     fi
 
@@ -219,8 +219,8 @@ clone_vm() {
     # Expand disk if VM_DISK_EXTRA_GB is set (expand-home.service grows /home on boot)
     if [ "${VM_DISK_EXTRA_GB:-0}" -gt 0 ] 2>/dev/null; then
         local _cur_kb _new_gb
-        _cur_kb=$(govc device.info -vm "$clone_name" -json disk-1000-0 2>/dev/null \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['devices'][0]['capacityInKB'])" 2>/dev/null) || true
+        _cur_kb=$(govc device.info -vm "$clone_name" -json disk-1000-0 \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['devices'][0]['capacityInKB'])") || true
         if [ -n "$_cur_kb" ] && [ "$_cur_kb" -gt 0 ] 2>/dev/null; then
             _new_gb=$(( (_cur_kb / 1048576) + VM_DISK_EXTRA_GB ))
             echo "  Expanding disk by ${VM_DISK_EXTRA_GB}GB (total: ${_new_gb}GB) ..."
@@ -233,7 +233,7 @@ clone_vm() {
 
     echo "  Powering on clone '$clone_name' ..."
     # Tolerate exit 1: VM may already be powered on (e.g. retry or race)
-    govc vm.power -on "$clone_name" 2>/dev/null || true
+    govc vm.power -on "$clone_name" || true
 
     sleep "${VM_BOOT_DELAY:-8}"
 
@@ -252,7 +252,7 @@ destroy_vm() {
 
     if vm_exists "$vm_name"; then
         echo "  Destroying VM '$vm_name' ..."
-        govc vm.power -off "$vm_name" 2>/dev/null || true
+        govc vm.power -off "$vm_name" || true
         govc vm.destroy "$vm_name" || true
     else
         echo "  VM '$vm_name' does not exist, nothing to destroy."
@@ -265,7 +265,7 @@ destroy_vm() {
 #
 power_off_vm() {
     local vm_name="$1"
-    govc vm.power -s -force "$vm_name" 2>/dev/null || true
+    govc vm.power -s -force "$vm_name" || true
 }
 
 # --- power_on_vm ------------------------------------------------------------
@@ -274,8 +274,7 @@ power_off_vm() {
 #
 power_on_vm() {
     local vm_name="$1"
-    # Tolerate exit 1: VM may already be powered on
-    govc vm.power -on "$vm_name" 2>/dev/null || true
+    govc vm.power -on "$vm_name" || true
 }
 
 # --- vm_exists --------------------------------------------------------------
@@ -286,7 +285,7 @@ vm_exists() {
     local vm_name="$1"
     # govc vm.info exits 0 even for non-existent VMs (empty output),
     # so check that output contains at least a "Name:" field.
-    govc vm.info "$vm_name" 2>/dev/null | grep "Name:"
+    govc vm.info "$vm_name" | grep "Name:"
 }
 
 # --- setup_ssh_to_root ------------------------------------------------------

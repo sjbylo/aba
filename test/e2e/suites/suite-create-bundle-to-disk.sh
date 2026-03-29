@@ -62,8 +62,11 @@ test_begin "Setup: clean slate"
 e2e_run -q "Remove old files" \
     "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
-e2e_run "Reset aba to clean state" \
-    "cd ~/aba && ./install && aba reset -f"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
+
+e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
@@ -172,7 +175,7 @@ e2e_run "Show tar file size" "ls -l /tmp/delete-me*tar"
 e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
 e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
-    "tar tvf /tmp/delete-me*tar | grep mirror/save/mirror_000001.tar"
+    "tar tvf /tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
 
 test_end 0
 
@@ -186,14 +189,14 @@ test_begin "All-operators imageset: generate and verify YAML"
 e2e_run -q "Set op-sets to 'all' in aba.conf" "aba --op-sets all"
 
 # Remove any previously generated imageset YAML so it's regenerated
-e2e_run -q "Clean old imageset YAML" "rm -f mirror/save/imageset-config-save.yaml"
+e2e_run -q "Clean old imageset YAML" "rm -f mirror/data/imageset-config.yaml"
 
 # Generate the imageset config YAML (without actually saving images)
 e2e_run "Generate imageset-config for ops=all" "aba -d mirror imagesetconf"
 
 # Verify: the YAML must contain the redhat-operator-index catalog entry
 e2e_run "Verify redhat-operator-index in imageset YAML" \
-    "grep 'redhat-operator-index' mirror/save/imageset-config-save.yaml"
+    "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
 
 # TODO: Replace with a proper verification for op-sets=all (backlog item)
 
@@ -245,6 +248,7 @@ e2e_run "Stream bundle to internal bastion" \
 e2e_run -q "Clean up local bundle tarball" "rm -fv /tmp/delete-me*tar"
 e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
 e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote -r 3 2 "Install mirror registry and load images from bundle" \
     "cd ~/aba && aba -d mirror load -H $DIS_HOST --retry"
 
@@ -313,19 +317,20 @@ e2e_run_remote "Verify ISO created" \
     "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
 # Clean up and restore platform on both sides
-e2e_run_remote -q "Clean up BM test dir on internal bastion" \
-    "cd ~/aba && aba --dir $STANDARD clean && aba --platform vmw"
+e2e_run_remote -q "Remove BM cluster dir on disN (no VMs to delete, platform=bm)" \
+    "cd ~/aba && rm -rf $STANDARD"
+e2e_run_remote -q "Restore VMware platform on disN" \
+    "cd ~/aba && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
 
 test_end 0
 
 # ============================================================================
-# End-of-suite cleanup: delete cluster and uninstall mirror on disN
+# End-of-suite cleanup: uninstall mirror on disN
+# (BM cluster dir already removed after bare-metal simulation above)
 # ============================================================================
 test_begin "Cleanup: delete cluster and uninstall mirror on disN"
 
-e2e_run_remote "Delete standard cluster on disN" \
-    "cd ~/aba && if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
 e2e_run_remote "Uninstall mirror registry on disN" \
     "cd ~/aba && aba -d mirror uninstall"
 

@@ -20,10 +20,10 @@
 _E2E_LIB_DIR_VM="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type remote_wait_ssh &>/dev/null 2>&1; then
+if ! type remote_wait_ssh &>/dev/null; then
 	source "$_E2E_LIB_DIR_VM/remote.sh"
 fi
-if ! type pool_domain &>/dev/null 2>&1; then
+if ! type pool_domain &>/dev/null; then
 	source "$_E2E_LIB_DIR_VM/config-helpers.sh"
 fi
 
@@ -36,12 +36,12 @@ declare -A VM_TEMPLATES=(
 )
 
 # MAC addresses per clone (set via config.env, declared here if not already)
-if ! declare -p VM_CLONE_MACS &>/dev/null 2>&1; then
+if ! declare -p VM_CLONE_MACS &>/dev/null; then
 	declare -A VM_CLONE_MACS=()
 fi
 
 # VLAN IPs per clone (set via config.env)
-if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null 2>&1; then
+if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null; then
 	declare -A VM_CLONE_VLAN_IPS=()
 fi
 
@@ -72,7 +72,7 @@ _vm_wait_ssh() {
 	echo "  [vm] Waiting for SSH on ${user}@${host} (timeout: ${timeout}s) ..."
 	local consecutive=0
 	while true; do
-		if _essh -o BatchMode=yes "${user}@${host}" -- "date" 2>/dev/null; then
+		if _essh -o BatchMode=yes "${user}@${host}" -- "date"; then
 			consecutive=$(( consecutive + 1 ))
 			if [ $consecutive -ge 2 ]; then
 				echo "  [vm] SSH ready on ${user}@${host}"
@@ -111,7 +111,7 @@ _vm_setup_ssh_keys() {
 
 		# Also add the bastion's key to the user account (run.sh connects as user, not root)
 		mkdir -p /home/${user}/.ssh
-		grep -qF '${pub_key}' /home/${user}/.ssh/authorized_keys 2>/dev/null || echo '${pub_key}' >> /home/${user}/.ssh/authorized_keys
+		grep -qF '${pub_key}' /home/${user}/.ssh/authorized_keys || echo '${pub_key}' >> /home/${user}/.ssh/authorized_keys
 		chmod 600 /home/${user}/.ssh/authorized_keys
 		chown -R ${user}:${user} /home/${user}/.ssh
 
@@ -364,7 +364,7 @@ _vm_setup_firewall() {
 
 		# Remove stale test ports left over from previous runs (keep ssh)
 		for _port in 8443/tcp 5000/tcp 80/tcp; do
-		    firewall-cmd --query-port="$_port" --permanent 2>/dev/null \
+		    firewall-cmd --query-port="$_port" --permanent \
 		        && firewall-cmd --remove-port="$_port" --permanent \
 		        && echo "Removed stale port $_port"
 		done
@@ -495,8 +495,10 @@ _vm_cleanup_caches() {
 
 	cat <<-CACHEEOF | _essh "${user}@${host}" -- bash
 		set -ex
+		pkill -f 'oc-mirror' || true
+		sleep 1
 		rm -vrf ~/.cache/agent/
-		rm -vrf ~/bin/*
+		rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
 		rm -f ~/.ssh/quay_installer*
 		rm -rf ~/.oc-mirror/.cache
 		rm -rf ~/*/.oc-mirror/.cache
@@ -518,8 +520,10 @@ _vm_cleanup_podman() {
 	cat <<-'PODEOF' | _essh "${user}@${host}" -- bash
 		set -ex
 		podman system prune --all --force
-		podman rmi --all --force 2>/dev/null || true
-		sudo rm -rf ~/.local/share/containers/storage
+		podman rmi --all --force || true
+		# Disabled: destroys podman internal state (pause process), causing
+		# "invalid internal status" on next run. Prune above is sufficient.
+		#sudo rm -rf ~/.local/share/containers/storage
 		rm -rf ~/test
 	PODEOF
 }
@@ -535,14 +539,15 @@ _vm_cleanup_home() {
 	echo "  [vm] Cleaning home directory on $host ..."
 	cat <<-'HOMEEOF' | _essh "${user}@${host}" -- bash
 		set -ex
-		# Stop/disable systemd user services (Quay/mirror-registry install creates these)
-		systemctl --user stop --all 2>/dev/null || true
-		systemctl --user disable --all 2>/dev/null || true
+		# Disabled: kills podman's pause process and user socket, causing
+		# "invalid internal status" on next run. podman stop/rm below is sufficient.
+		#systemctl --user stop --all 2>/dev/null || true
+		#systemctl --user disable --all 2>/dev/null || true
 		# Stop all podman/docker containers so no process holds files under ~
-		podman stop -a 2>/dev/null || true
-		podman rm -af 2>/dev/null || true
-		command -v docker >/dev/null 2>&1 && docker stop $(docker ps -q) 2>/dev/null || true
-		command -v docker >/dev/null 2>&1 && docker rm -f $(docker ps -aq) 2>/dev/null || true
+		podman stop -a || true
+		podman rm -af || true
+		command -v docker >/dev/null && docker stop $(docker ps -q) || true
+		command -v docker >/dev/null && docker rm -f $(docker ps -aq) || true
 		sudo rm -rf ~/*
 		echo "=== Home directory after cleanup ==="
 		ls -la ~/
@@ -559,6 +564,22 @@ _vm_setup_vmware_conf() {
 	echo "  [vm] Copying vmware.conf to $host ..."
 	if [ -f "$vf" ]; then
 		_escp "$vf" "${user}@${host}:"
+		# Also place in /root/ so root@disN tests can find it
+		_essh "${user}@${host}" -- "sudo cp /home/${user}/.vmware.conf /root/.vmware.conf && sudo chmod 600 /root/.vmware.conf"
+	fi
+}
+
+# --- _vm_setup_kvm_conf ----------------------------------------------------
+
+_vm_setup_kvm_conf() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+	local kf="${KVM_CONF:-$HOME/.kvm.conf}"
+
+	if [ -f "$kf" ]; then
+		echo "  [vm] Copying kvm.conf to $host ..."
+		_escp "$kf" "${user}@${host}:"
+		_essh "${user}@${host}" -- "sudo cp /home/${user}/.kvm.conf /root/.kvm.conf && sudo chmod 600 /root/.kvm.conf"
 	fi
 }
 
@@ -646,7 +667,7 @@ _vm_create_test_user_and_key_on_host() {
 
 	# Generate a fresh key pair in the default user's ~/.ssh/ on the host.
 	# ~/.ssh/ is hidden so it survives _vm_cleanup_home (sudo rm -rf ~/*).
-	_essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy -y 2>/dev/null; ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
+	_essh "${def_user}@${host}" -- "mkdir -p ~/.ssh && chmod 700 ~/.ssh && rm -f ~/.ssh/testy_rsa* && ssh-keygen -t rsa -f ~/.ssh/testy_rsa -N '' -C testy"
 
 	local pub_key
 	pub_key=$(_essh "${def_user}@${host}" -- "cat ~/.ssh/testy_rsa.pub")
@@ -660,7 +681,7 @@ _vm_create_test_user_and_key_on_host() {
 		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
 		chmod 600 ~${test_user_name}/.ssh/authorized_keys
 		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
-		restorecon -R /home/${test_user_name} 2>/dev/null || true
+		restorecon -R /home/${test_user_name} || true
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
 
 		if grep "^AllowUsers" /etc/ssh/sshd_config; then
@@ -707,7 +728,7 @@ _vm_create_test_user() {
 		echo "$pub_key" > ~${test_user_name}/.ssh/authorized_keys
 		chmod 600 ~${test_user_name}/.ssh/authorized_keys
 		chown -R ${test_user_name}.${test_user_name} ~${test_user_name}
-		restorecon -R /home/${test_user_name} 2>/dev/null || true
+		restorecon -R /home/${test_user_name} || true
 		echo '${test_user_name} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${test_user_name}
 
 		if grep "^AllowUsers" /etc/ssh/sshd_config; then
@@ -762,9 +783,9 @@ _vm_install_aba() {
 	local host="$1"
 	local user="${2:-$VM_DEFAULT_USER}"
 	local branch
-	branch="$(git -C "$_E2E_LIB_DIR_VM/../../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)"
+	branch="${E2E_GIT_BRANCH:-$(git -C "${_ABA_ROOT:-$HOME/aba}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
 	local repo_url
-	repo_url="$(git -C "$_E2E_LIB_DIR_VM/../../.." remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)"
+	repo_url="${E2E_GIT_REPO:-$(git -C "${_ABA_ROOT:-$HOME/aba}" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
 
 	echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 
@@ -794,7 +815,7 @@ _vm_verify_golden() {
 		ping -c 3 -W 5 -i0.2 10.0.1.8
 		dnf check-update || { rc=$?; [ "$rc" -eq 100 ] && exit 1; exit "$rc"; }
 		! podman images -q | grep . || { echo "ERROR: podman images remain"; exit 1; }
-		[ -z "$(ls ~$SUDO_USER 2>/dev/null)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
+		[ -z "$(ls ~$SUDO_USER)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
 		grep "ABA_TESTING=1" /etc/environment
 

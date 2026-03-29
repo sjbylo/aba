@@ -10,7 +10,6 @@ mirror.conf
 mirror/.dnf-install.log
 mirror/execution-environment.tar
 mirror/image-archive.tar
-mirror/imageset-config-sync.yaml
 mirror/imageset-config*yaml
 mirror/.initialized
 mirror/.available
@@ -25,11 +24,10 @@ mirror/redis.tar
 mirror/regcreds
 mirror/.registry-creds.txt
 mirror/.rpms
-mirror/save
+mirror/data
 mirror/scripts
 mirror/templates
 mirror/*.sh
-mirror/sync
 mirror/.synced
 mirror/.unavailable
 mirror/.*
@@ -56,6 +54,7 @@ test/docker-reg/certs
 test/docker-reg/data
 test/docker-reg/auth
 vmware.conf
+kvm.conf
 rpms/*.rpm
 mirror/reg-uninstall.sh.provision
 aba.conf
@@ -71,6 +70,8 @@ cli/butane-amd64
 */*sha256sum.txt
 cli/scripts
 bundles/work
+bundles/v2/build.log
+bundles/v2/work
 .vscode*
 .bundle
 test/e2e/LAB-NETWORK.md
@@ -81,4 +82,7 @@ vmware.conf.bk
 xxx/
 mirror/regcreds.bk
 .index
+.index-test/
+.index-backup/
+test/e2e/.config.env.deploy
 .cursor/

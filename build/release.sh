@@ -210,6 +210,49 @@ if [ -z "$UNRELEASED_CONTENT" ]; then
 fi
 echo -e "${GREEN}CHANGELOG [Unreleased] section has content${NC}\n"
 
+# Release bullets file is used as the GitHub release body (user-facing summary).
+# Format: plain-text one-liner on line 1, then ### sections with bullet points.
+RELEASE_BULLETS_FILE="ai/RELEASE_BULLETS_${NEW_VERSION}.md"
+if [ ! -f "$RELEASE_BULLETS_FILE" ]; then
+    echo -e "${RED}Error: Release bullets file not found: $RELEASE_BULLETS_FILE${NC}"
+    echo -e "${YELLOW}Create the file with user-facing release highlights.${NC}"
+    echo -e "${YELLOW}Format: one-liner summary on line 1, then ### sections.${NC}"
+    echo -e "${YELLOW}See ai/RELEASE_BULLETS_0.9.7.md for an example.${NC}"
+    exit 1
+fi
+if [ ! -s "$RELEASE_BULLETS_FILE" ]; then
+    echo -e "${RED}Error: Release bullets file is empty: $RELEASE_BULLETS_FILE${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Release bullets file found: $RELEASE_BULLETS_FILE${NC}\n"
+
+# Check for external contributors whose commits are in this release but who
+# are not yet credited in the CHANGELOG [Unreleased] section.
+PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+if [ -n "$PREV_TAG" ]; then
+	UNRELEASED_SECTION=$(sed -n '/^## \[Unreleased\]/,/^---$/p' CHANGELOG.md)
+	MISSING_CONTRIBUTORS=""
+	# Pipe-delimited "name|email" for each unique non-owner author since last tag
+	while IFS='|' read -r name email; do
+		# GitHub noreply addresses encode the handle after the '+' sign
+		handle=$(echo "$email" | grep -oP '\+\K[^@]+' || echo "")
+		[ -z "$handle" ] && continue
+		if ! echo "$UNRELEASED_SECTION" | grep -qi "$handle"; then
+			MISSING_CONTRIBUTORS="${MISSING_CONTRIBUTORS}\n  - $name (@$handle)"
+		fi
+	done < <(git log "$PREV_TAG"..HEAD --format="%an|%ae" | sort -u | grep -v sjbylo)
+
+	if [ -n "$MISSING_CONTRIBUTORS" ]; then
+		echo -e "${YELLOW}Warning: These contributors have commits but are not credited in CHANGELOG [Unreleased]:${NC}"
+		echo -e "$MISSING_CONTRIBUTORS"
+		echo
+		read -r -p "Continue anyway? (y/N) " ans
+		[ "$ans" = "y" ] || exit 1
+	else
+		echo -e "${GREEN}All external contributors are credited in CHANGELOG${NC}\n"
+	fi
+fi
+
 # =============================================================================
 # Dry-run: show a summary then exit — nothing is written to disk or git.
 # =============================================================================

@@ -42,6 +42,9 @@ plan_tests \
     "ABI config: diff against known-good examples" \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
+    "SNO: IP conflict detection" \
+    "verify_conf=conf skips network checks" \
+    "Regression: verify_conf=conf extracts mirror binary" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -53,7 +56,9 @@ test_begin "Setup: ensure pre-populated registry"
 
 # Resolve OCP version: use OCP_VERSION env or fall back to "p" (previous)
 # We need the actual x.y.z version for the registry setup script.
-e2e_run "Install aba (needed for version resolution)" "./install"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -72,7 +77,7 @@ test_end
 test_begin "Setup: install aba and configure"
 
 e2e_run "Reset aba to clean state" \
-    "cd ~/aba && ./install && aba reset -f"
+    "./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
@@ -254,7 +259,75 @@ e2e_poll 180 15 "Wait for flux (community catalog)" \
 
 e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagemanifests'"
 
-e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
+test_end
+
+# ============================================================================
+# 9. SNO: IP conflict detection
+# ============================================================================
+# The SNO cluster from test 7 is still running.  Attempt to create another
+# cluster on the same IP and verify the preflight check catches the conflict.
+test_begin "SNO: IP conflict detection"
+
+SNO_DUP="${SNO}-dup"
+e2e_run "Create duplicate SNO config with same IP" \
+    "rm -rf $SNO_DUP && aba cluster -n $SNO_DUP -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run "Generate install-config.yaml for duplicate" \
+    "aba --dir $SNO_DUP install-config.yaml"
+e2e_run "Generate agent-config.yaml for duplicate" \
+    "aba --dir $SNO_DUP agent-config.yaml"
+e2e_run_must_fail "Preflight must detect IP conflict with running SNO" \
+    "aba --dir $SNO_DUP preflight"
+
+test_end
+
+# ============================================================================
+# 10. verify_conf=conf skips network checks (IP conflict still present)
+# ============================================================================
+# The SNO cluster is still running and the duplicate config still exists,
+# so the IP conflict is real.  With verify_conf=conf, preflight must pass
+# because network checks are skipped.
+test_begin "verify_conf=conf skips network checks"
+
+e2e_run "Set verify_conf=conf" \
+    "aba --verify conf"
+e2e_run "Preflight must pass with verify_conf=conf despite IP conflict" \
+    "aba --dir $SNO_DUP preflight"
+e2e_run "Restore verify_conf=all" \
+    "aba --verify all"
+e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
+
+e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
+
+test_end
+
+# ============================================================================
+# 11. Regression: verify_conf=conf must still extract mirror openshift-install
+# ============================================================================
+# OCP 4.21+ enforces sigstore verification for quay.io release images.
+# The openshift-install binary extracted from the mirror references the mirror
+# URL (not quay.io), bypassing sigstore enforcement.  A past bug caused
+# --verify conf to skip this extraction entirely, leading to install failures.
+test_begin "Regression: verify_conf=conf extracts mirror binary"
+
+_REG_HOST=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Sanity: mirror binary exists from SNO install" \
+	"test -x $SNO/openshift-install-mirror-$_REG_HOST"
+
+e2e_run "Remove mirror binary to force re-extraction" \
+	"rm -f $SNO/openshift-install-mirror-$_REG_HOST"
+
+e2e_run "Set verify_conf=conf" \
+	"aba --verify conf"
+
+e2e_run "Run verify-release-image.sh with verify_conf=conf" \
+	"cd $SNO && scripts/verify-release-image.sh"
+
+e2e_run "Assert mirror binary re-extracted despite verify_conf=conf" \
+	"test -x $SNO/openshift-install-mirror-$_REG_HOST"
+
+e2e_run "Restore verify_conf=all" \
+	"aba --verify all"
 
 test_end
 
@@ -264,7 +337,7 @@ test_end
 test_begin "Cleanup: delete cluster and unregister mirror"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+    "aba --dir $SNO delete && rm -rf $SNO"
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"
 

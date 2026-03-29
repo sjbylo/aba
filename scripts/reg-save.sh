@@ -36,7 +36,7 @@ aba_debug "Configuration validated"
 # Still downloading?
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
-aba_info "Ensuring CLI installation binaries are downloading"
+aba_info "Ensuring CLI installation binaries are available"
 #pwd
 sleep 1
 #run_once -w -i download_all_cli -- make -sC ../cli download #|| aba_abort "Downloading CLI binaries failed.  Please try again!"
@@ -58,29 +58,29 @@ aba_debug "Creating containers auth file"
 scripts/create-containers-auth.sh || exit 1
 
 # Check disk space before downloading images
-aba_debug "Checking disk space in save/ directory"
-mkdir -p save
-avail=$(df -m save | awk '{print $4}' | tail -1)
+aba_debug "Checking disk space in data/ directory"
+mkdir -p data
+avail=$(df -m data | awk '{print $4}' | tail -1)
 aba_debug "Available disk space: $avail MB"
 
 # Minimum 20GB for base platform
 if [ $avail -lt 20500 ]; then
-	aba_abort "Not enough disk space available under $PWD/save (only $avail MB)" \
+	aba_abort "Not enough disk space available under $PWD/data (only $avail MB)" \
 		"At least 20GB is required for the base OpenShift platform alone" \
 		"Operators require additional 40-400GB of space"
 fi
 
 # Warning for operators (if less than 50GB available)
 if [ $avail -lt 51250 ]; then
-	aba_warning "Less than 50GB of space available under $PWD/save (only $avail MB)" >&2
+	aba_warning "Less than 50GB of space available under $PWD/data (only $avail MB)" >&2
 	aba_warning "Operator images require between ~40 to ~400GB of disk space!" >&2
 	echo >&2
 fi
 
-aba_info "Now saving (mirror2disk) images from external network to mirror/save/ directory."
+aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
 aba_warning \
-	"Ensure there is enough disk space under $PWD/save." \
+	"Ensure there is enough disk space under $PWD/data." \
 	"This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
 echo 
 
@@ -113,11 +113,12 @@ failed=1
 aba_debug "Starting retry loop: try_tot=$try_tot"
 while [ $try -le $try_tot ]
 do
+	[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
 	# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
-	cmd="oc-mirror --v2 --config=imageset-config-save.yaml file://. --since 2025-01-01  --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd save && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
+	cmd="oc-mirror --v2 --config=imageset-config.yaml file://. --since 2025-01-01  --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+	echo "cd data && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
 	aba_debug "Created save-mirror.sh script"
 
 	echo
@@ -136,7 +137,7 @@ do
 	#if [ $ret -eq 0 ]; then
 	#if ./save-mirror.sh; then
 	# Check for error files (only required for v2 of oc-mirror)
-	error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 	# Example error file:  mirroring_errors_20250914_230908.txt 
 	aba_debug "error_file=${error_file:-none}"
 
@@ -148,10 +149,10 @@ do
 	fi
 
 	if [ -s "$error_file" ]; then
-		aba_debug "Error file found: $error_file - saving to save/saved_errors/"
-		mkdir -p save/saved_errors
-		mv $error_file save/saved_errors
-		echo_red "[ABA] Error detected and log file saved in save/saved_errors/$(basename $error_file)" >&2
+		aba_debug "Error file found: $error_file - saving to data/saved_errors/"
+		mkdir -p data/saved_errors
+		mv $error_file data/saved_errors
+		echo_red "[ABA] Error detected and log file saved in data/saved_errors/$(basename $error_file)" >&2
 	fi
 	#fi
 
@@ -175,6 +176,10 @@ if [ "$failed" ]; then
 		"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
 		"View https://status.redhat.com/ for any current issues or planned maintenance." 
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
+
+	if grep -qiE 'SignatureValidationFailed|signature.*missing|sigstore' data/saved_errors/*.txt 2>/dev/null; then
+		aba_warning "Signature errors detected. To adjust sigstore settings, edit ~/.config/containers/registries.d/aba-sigstore.yaml"
+	fi
 
 	exit 1
 fi

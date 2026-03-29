@@ -273,6 +273,12 @@ show_error() {
 # If no first argument is provided, set a trap for errors
 [ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
+vm_name() {
+	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
+	local cluster=$1 host=$2
+	[ "${CP_REPLICAS:-${num_masters:-0}}" = "1" ] && [ "${WORKER_REPLICAS:-${num_workers:-0}}" = "0" ] && echo "$host" || echo "${cluster}-${host}"
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.
@@ -296,19 +302,21 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
-			-e "s/verify_conf=0\b/verify_conf=/g" -e "s/verify_conf=false/verify_conf=/g" \
-			-e "s/verify_conf=1\b/verify_conf=true/g" \
+			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
+			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
 		awk '{print $1}' | \
 		sed	-e "s/^/export /g";
 
 			#-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
+	echo 'export verify_conf=${verify_conf:-all}'  # Default undefined/empty to "all"
+
 	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
 }
 
 verify-aba-conf() {
-	[ ! "$verify_conf" ] && return 0
+	[ "$verify_conf" = "off" ] && return 0
 	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
 	[ ! -s aba.conf ] && return 0
 
@@ -318,7 +326,7 @@ verify-aba-conf() {
 
 	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
 	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo $platform    | grep -q -E "bm|vmw" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo $platform    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
@@ -395,7 +403,7 @@ normalize-mirror-conf()
 				#-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 
 verify-mirror-conf() {
-	[ ! "$verify_conf" ] && return 0
+	[ "$verify_conf" = "off" ] && return 0
 	# If the file exists and is empty?
 	#[ -f mirror.conf -a ! -s mirror.conf ] && echo_red "$PWD/mirror.conf file is empty!" && return 1  # Causes error when installing cluster directly form internet
 	[ ! -s mirror.conf ] && return 0
@@ -510,7 +518,7 @@ cidr_host_count() {
 }
 
 verify-cluster-conf() {
-	[ ! "$verify_conf" ] && return 0
+	[ "$verify_conf" = "off" ] && return 0
 	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
@@ -647,6 +655,26 @@ normalize-vmware-conf()
 		echo "$vars"
 		echo export VC=1
 	fi
+}
+
+normalize-kvm-conf()
+{
+	[ ! -s kvm.conf ] && return 0
+
+	local vars
+	vars=$(cat kvm.conf | \
+		sed -E \
+			-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" | \
+		sed -e "s/^/export /g")
+	eval "$vars"
+	echo "$vars"
+
+	# Extract KVM_HOST (user@host) from LIBVIRT_URI for scp/ssh
+	local kvm_host
+	kvm_host=$(echo "$LIBVIRT_URI" | sed -E 's|^[^:]+://([^/]+)/.*|\1|')
+	echo "export KVM_HOST=$kvm_host"
 }
 
 install_rpms() {
@@ -1125,7 +1153,7 @@ replace-value-conf() {
 
 			return 0
 		else
-			sed -i "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
 
 			if [ ! "$quiet" ]; then
 				[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
@@ -1860,7 +1888,7 @@ run_once() {
 			original_cwd="$(pwd)"
 			if [[ -f "$id_dir/cwd" ]]; then
 				saved_cwd="$(cat "$id_dir/cwd")"
-				cd "$saved_cwd" || aba_debug "Warning: Could not restore CWD to $saved_cwd"
+				cd "$saved_cwd" 2>/dev/null || aba_debug "Warning: Could not restore CWD to $saved_cwd"
 			fi
 
 			# Use saved command for validation (it was recorded with the saved CWD)
@@ -2274,6 +2302,27 @@ wait_all_cli_downloads() {
 	scripts/cli-download-all.sh --wait
 }
 
+# Ensure the mirror registry has sigstore writes enabled in registries.d.
+# Without this, oc-mirror fails with "writing sigstore attachments is disabled"
+# when loading or syncing images whose source had use-sigstore-attachments: true.
+# Creates a per-mirror file so multiple mirrors each get their own entry.
+ensure_sigstore_mirror_config() {
+	local mirror_host_port="$1"
+	local sigstore_dir="$HOME/.config/containers/registries.d"
+
+	[ -f "$sigstore_dir/aba-sigstore.yaml" ] || return 0
+
+	# Replace colon with dash for safe filename (e.g. "mirror.example.com:8443" → "mirror.example.com-8443")
+	local safe_name="${mirror_host_port//:/-}"
+	local mirror_file="$sigstore_dir/aba-sigstore-mirror-${safe_name}.yaml"
+
+	mkdir -p "$sigstore_dir"
+	printf 'docker:\n    %s:\n        use-sigstore-attachments: true\n' \
+		"$mirror_host_port" > "$mirror_file"
+
+	aba_debug "Sigstore mirror config: $mirror_file ($mirror_host_port)"
+}
+
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
 	# Wait for oc-mirror download to complete before extracting
@@ -2308,6 +2357,10 @@ ensure_openshift_install() {
 ensure_govc() {
 	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
+}
+
+ensure_virsh() {
+	install_rpms libvirt-client virt-install
 }
 
 # Ensure butane is installed in ~/bin

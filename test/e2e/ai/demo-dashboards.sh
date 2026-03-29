@@ -92,7 +92,7 @@ sleep 2
 _log "    ${G}PASS${N}: Install aba  (2s)"
 sleep 1
 _log "  L ${G}Create SNO cluster${N} ${Y}[steve@con1:~/testing/aba]${N}"
-_log "    ${C}aba cluster -n sno1 -t sno --step install${N}"
+_log "    ${C}aba cluster -n e2e-sno1 -t sno --step install${N}"
 sleep 3
 _log "    ${R}FAIL${N}: Create SNO cluster  (3s)"
 _log "${R}FAILED: 'Create SNO cluster'  [r]etry [s]kip [S]kip-suite [a]bort [cmd]: ${N}"
@@ -143,7 +143,7 @@ sleep 2
 _log "    ${G}PASS${N}: Install aba  (2s)"
 sleep 1
 _log "  L ${G}Install SNO from public registry${N} ${Y}[steve@con2:~/testing/aba]${N}"
-_log "    ${C}aba -d sno1 install${N}"
+_log "    ${C}aba -d e2e-sno1 install${N}"
 sleep 4
 _log "    ${G}PASS${N}: Install SNO from public registry  (4s)"
 _log "${G}========== PASSED: connected-public  (10s) ==========${N}"

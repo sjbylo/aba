@@ -14,8 +14,28 @@
 #  1. Tests MUST fail on error.  Never mask underlying issues.
 #     If something breaks, the test must stop and report it.
 #
-#  2. Never use '2>/dev/null' in test commands.
-#     Stderr output is diagnostic gold.  Suppressing it hides root causes.
+#  2. NEVER suppress stderr.  Stderr is diagnostic gold.
+#
+#     FORBIDDEN patterns:
+#       cmd 2>/dev/null          # hides errors entirely
+#       cmd >/dev/null 2>&1      # silences both streams -- use >/dev/null alone
+#       cmd &>/dev/null          # same problem -- silences both streams
+#       cmd 2>/dev/null | grep   # stderr discarded, grep only sees stdout
+#       cmd 2>&1 | grep          # stderr MERGED into pipe -- grep sees both
+#
+#     CORRECT alternatives:
+#       cmd || true              # error is visible, exit code is swallowed
+#       cmd >/dev/null           # stdout silenced, stderr still visible
+#       cmd >/dev/null || true   # stdout silenced, error visible, won't fail
+#
+#     NARROW EXCEPTIONS (must have a comment explaining why):
+#       command -v foo >/dev/null    # existence check; no stderr output
+#       type foo &>/dev/null         # guard check; "not found" is expected
+#       declare -p VAR &>/dev/null   # guard check; "not found" is expected
+#       kill -0 $pid 2>/dev/null     # process probe; "no such process" is noise
+#       . ~/.bash_profile 2>/dev/null # file may not exist on remote host
+#       tmux ... 2>/dev/null         # tmux session may not be running
+#       [ "$x" -gt 0 ] 2>/dev/null  # arithmetic guard; non-numeric warning
 #
 #  3. Never use '|| true' in test commands.
 #     If a command can legitimately fail, use 'e2e_diag' or embed an explicit
@@ -58,7 +78,7 @@
 #      (e.g. run_once(), download_all_catalogs()).  Use 'aba' CLI or 'make'.
 #
 # 10e. Tests MUST NOT use 'aba reset' as a mid-process cleanup mechanism.
-#      Only use when a 100% fresh repo is needed (e.g. setup_aba_from_scratch)
+#      Only use when a 100% fresh repo is needed (e.g. suite setup block)
 #      or for dedicated reset regression tests.  For mid-process cleanup use
 #      'aba clean', 'aba uninstall', or 'aba delete'.
 #
@@ -236,14 +256,14 @@ _e2e_notify_suffix() {
 
 _e2e_notify() {
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null 2>&1
+        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null 2>&1
+        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null
     else
         cat > /dev/null  # drain stdin
     fi
@@ -428,7 +448,7 @@ suite_end() {
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         # #region agent log
         printf '{"sessionId":"23cf03","hypothesisId":"H2","location":"framework.sh:finalize_suite:FAIL","message":"about to send suite FAIL notification","data":{"suite":"%s","fail_count":%d,"NOTIFY_CMD":"%s"},"timestamp":%s}\n' \
-            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log
         # #endregion
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
@@ -477,8 +497,9 @@ test_end() {
     local result="${1:-0}"  # 0 = pass, non-zero = fail
     local test_name="$_E2E_CURRENT_TEST"
 
-    # Bug 3 fix: if this test was skipped via resume, just clear state and return
+    # Bug 3 fix: if this test was skipped via resume, preserve pass in state file and return
     if [ -n "$_E2E_SKIP_BLOCK" ]; then
+        _checkpoint_write "$test_name" "0"
         _E2E_SKIP_BLOCK=""
         _E2E_CURRENT_TEST=""
         return 0
@@ -534,6 +555,7 @@ run_test() {
     # Check checkpoint/resume -- skip if already passed
     if should_skip_checkpoint "$test_name"; then
         (( _E2E_TEST_COUNT++ )) || true
+        _checkpoint_write "$test_name" "0"
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
         _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
@@ -598,7 +620,7 @@ e2e_add_to_cluster_cleanup() {
 	fi
 
 	local entry="$target $abs_path"
-	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" 2>/dev/null || \
+	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" || \
 		echo "$entry" >> "$_E2E_CLEANUP_FILE"
 
 	_e2e_log "  Added cluster to cleanup list: $entry"
@@ -606,28 +628,38 @@ e2e_add_to_cluster_cleanup() {
 
 # Delete all clusters in the cleanup list.  Safe to call multiple times.
 # SSHs to each stored user@fqdn and runs 'aba -d <path> delete'.
+# Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_clusters() {
 	local cleanup_file="${_E2E_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup}"
 	[ -f "$cleanup_file" ] || return 0
 
 	_e2e_log_and_print "  Cleaning up clusters (from cleanup list) ..."
-	local target abs_path _all_ok=1
+	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
 		_e2e_log_and_print "    $target: aba -y -d $abs_path delete"
-		if ! ( _essh "$target" \
-			"[ -d '$abs_path' ] && aba -y -d '$abs_path' delete || echo '  (dir not found -- already cleaned)'" \
-			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
-			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
+		_cleanup_rc=0
+		# < /dev/null prevents ssh from consuming the while-read loop's stdin
+		_essh "$target" \
+			"if [ -d '$abs_path' ]; then
+				aba -y -d '$abs_path' delete
+			else
+				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
+			fi" \
+			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+		_cleanup_rc=${PIPESTATUS[0]}
+		if [ "$_cleanup_rc" -ne 0 ]; then
+			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
 			_all_ok=""
 		fi
 	done < "$cleanup_file"
 	if [ -n "$_all_ok" ]; then
 		rm -f "$cleanup_file"
+		_e2e_log_and_print "  Cleanup complete."
 	else
-		_e2e_log_and_print "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		_e2e_log_and_print "  ERROR: cluster cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
+		return 1
 	fi
-	_e2e_log_and_print "  Cleanup complete."
 }
 
 # --- Mirror Cleanup List ----------------------------------------------------
@@ -663,35 +695,45 @@ e2e_add_to_mirror_cleanup() {
 	fi
 
 	local entry="$target $abs_path"
-	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" 2>/dev/null || \
+	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" || \
 		echo "$entry" >> "$_E2E_MIRROR_CLEANUP_FILE"
 
 	_e2e_log "  Added mirror to cleanup list: $entry"
 }
 
 # Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
+# Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_mirrors() {
 	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
 	[ -f "$cleanup_file" ] || return 0
 
 	_e2e_log_and_print "  Cleaning up mirrors (from cleanup list) ..."
-	local target abs_path _all_ok=1
+	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
 		_e2e_log_and_print "    $target: aba -y -d $abs_path uninstall"
-		if ! ( _essh "$target" \
-			"[ -d '$abs_path' ] && aba -y -d '$abs_path' uninstall || echo '  (dir not found -- already cleaned)'" \
-			2>&1 ) | tee -a "${E2E_LOG_FILE:-/dev/null}"; then
-			_e2e_log_and_print "  WARNING: cleanup SSH failed for $target:$abs_path"
+		_cleanup_rc=0
+		# < /dev/null prevents ssh from consuming the while-read loop's stdin
+		_essh "$target" \
+			"if [ -d '$abs_path' ]; then
+				aba -y -d '$abs_path' uninstall
+			else
+				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
+			fi" \
+			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+		_cleanup_rc=${PIPESTATUS[0]}
+		if [ "$_cleanup_rc" -ne 0 ]; then
+			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
 			_all_ok=""
 		fi
 	done < "$cleanup_file"
 	if [ -n "$_all_ok" ]; then
 		rm -f "$cleanup_file"
+		_e2e_log_and_print "  Mirror cleanup complete."
 	else
-		_e2e_log_and_print "  WARNING: keeping $(basename "$cleanup_file") -- some entries failed"
+		_e2e_log_and_print "  ERROR: mirror cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
+		return 1
 	fi
-	_e2e_log_and_print "  Mirror cleanup complete."
 }
 
 # --- Interactive Prompt -----------------------------------------------------
@@ -830,6 +872,32 @@ _e2e_exit_info() {
 #   "description"        First non-flag argument = human-readable description
 #   command...           Remaining arguments = the command to run
 #
+# Workaround for OCP bug: image-pruner degrades image-registry when registry is
+# Removed on bare-metal installs.  Red Hat KCS 5367151.
+# Suspend the pruner and delete failed jobs so the retry can succeed.
+_e2e_fix_image_pruner_if_needed() {
+	local output_file="$1"
+	[ ! -s "$output_file" ] && return 1
+
+	grep -q "ImagePrunerJobFailed" "$output_file" || return 1
+
+	_e2e_log "  Detected OCP bug: ImagePrunerJobFailed (Red Hat KCS 5367151)"
+	_e2e_log "  Applying workaround: suspend pruner + delete failed jobs"
+
+	local kc
+	for kc in */iso-agent-based/auth/kubeconfig; do
+		[ -f "$kc" ] || continue
+		_e2e_log "  Using kubeconfig: $kc"
+		KUBECONFIG="$kc" oc patch imagepruner.imageregistry/cluster \
+			--patch '{"spec":{"suspend":true}}' --type=merge && \
+		KUBECONFIG="$kc" oc -n openshift-image-registry delete jobs --all || true
+		_e2e_log "  Workaround applied -- pruner suspended, failed jobs deleted"
+		return 0
+	done
+	_e2e_log "  WARNING: Could not find kubeconfig to apply ImagePruner workaround"
+	return 1
+}
+
 e2e_run() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
@@ -908,6 +976,7 @@ e2e_run() {
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
                     _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
+                    _e2e_notify "RECOVERED: $description (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "    $(_e2e_green "OK") ($_dur)"
                 _e2e_summary "    $(_e2e_Green "OK ($_dur)")"
@@ -922,7 +991,7 @@ e2e_run() {
             # Notify on the very first failure (before exhausted check so tot_cnt=1 still fires)
             # #region agent log
             printf '{"sessionId":"23cf03","hypothesisId":"H1","location":"framework.sh:retry_loop","message":"failure in retry loop","data":{"attempt":%d,"tot_cnt":%d,"description":"%s","ret":%d},"timestamp":%s}\n' \
-                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log
             # #endregion
             if [ $attempt -eq 1 ]; then
                 (
@@ -934,7 +1003,7 @@ e2e_run() {
                     echo ""
                     echo "--- Last 20 lines of suite log ---"
                     echo ""
-                    tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                    tail -20 "$E2E_LOG_FILE"
                 ) | _e2e_notify_stdin "FIRST FAIL: $description"
             fi
 
@@ -953,7 +1022,7 @@ e2e_run() {
                         echo ""
                         echo "--- Last 20 lines of suite log ---"
                         echo ""
-                        tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                        tail -20 "$E2E_LOG_FILE"
                     ) | _e2e_notify_stdin "EXHAUSTED: $description"
                 fi
                 break
@@ -962,7 +1031,10 @@ e2e_run() {
             _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
             _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
 
-            (( attempt++ ))
+            _e2e_fix_image_pruner_if_needed "$_cmd_output_file" && \
+                _e2e_log_and_print "    Applied ImagePrunerJobFailed workaround before retry"
+
+            attempt=$(( attempt + 1 ))
             echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
             sleep "$sleep_time"
             sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
@@ -974,6 +1046,7 @@ e2e_run() {
 
         if [ $prompt_rc -eq 2 ]; then
             _e2e_log "  Restarting retry cycle (user requested)"
+            _e2e_summary "    $(_e2e_cyan "RETRY (user): $description")"
             continue
         elif [ $prompt_rc -eq 0 ]; then
             local _elapsed=$(( $(date +%s) - _step_start ))
@@ -984,10 +1057,12 @@ e2e_run() {
             rm -f "$_cmd_output_file"
             return 0
         elif [ $prompt_rc -eq 3 ]; then
+            _e2e_summary "    $(_e2e_Yellow "SKIP-SUITE (user): $description")"
             _E2E_SUITE_SKIPPED=1
             rm -f "$_cmd_output_file"
             return 3
         elif [ $prompt_rc -eq 4 ]; then
+            _e2e_summary "    $(_e2e_Yellow "RESTART (user): $description")"
             rm -f "$_cmd_output_file"
             exit 4
         else
@@ -1389,9 +1464,9 @@ adapt_example_for_pool() {
     sed \
         -e "s/p1\.example\.com/p${pool}.example.com/g" \
         -e "s/con1\.example\.com/con${pool}.example.com/g" \
-        -e "s/\bsno1\b/sno${pool}/g" \
-        -e "s/\bcompact1\b/compact${pool}/g" \
-        -e "s/\bstandard1\b/standard${pool}/g" \
+        -e "s/\be2e-sno1\b/e2e-sno${pool}/g" \
+        -e "s/\be2e-compact1\b/e2e-compact${pool}/g" \
+        -e "s/\be2e-standard1\b/e2e-standard${pool}/g" \
         -e "s/10\.0\.2\.1\([0-9]\)/10.0.2.${pool}\1/g" \
         -e "s/aba-e2e\/pool1/aba-e2e\/pool${pool}/g" \
         -e "s/Datastore4-1/Datastore4-${pool}/g" \
@@ -1419,7 +1494,7 @@ require_mirror() {
 
 require_ssh() {
     local host="$1"
-    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$host" true 2>/dev/null; then
+    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$host" true; then
         _e2e_log_and_print "  $(_e2e_yellow "GUARD: Cannot SSH to $host -- skipping")"
         return 1
     fi
@@ -1448,7 +1523,7 @@ preflight_ssh() {
     local _fail=""
 
     _e2e_log "  Preflight: checking SSH to $host (default user) ..."
-    if ! ssh $_ssh_opts "$host" true 2>/dev/null; then
+    if ! ssh $_ssh_opts "$host" true; then
         _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to $host (default user)")"
         _fail=1
     else
@@ -1456,7 +1531,7 @@ preflight_ssh() {
     fi
 
     _e2e_log "  Preflight: checking SSH to root@$host_only ..."
-    if ! ssh $_ssh_opts "root@$host_only" true 2>/dev/null; then
+    if ! ssh $_ssh_opts "root@$host_only" true; then
         _e2e_log_and_print "  $(_e2e_Red "PREFLIGHT FAIL: Cannot SSH to root@$host_only")"
         _fail=1
     else
@@ -1512,19 +1587,19 @@ _e2e_fix_ssh_config_ownership() {
     local needs_fix=""
     for f in "$dir" "$dir"/*.conf; do
         [ -e "$f" ] || continue
-        if [ "$(stat -c '%u' "$f" 2>/dev/null)" != "0" ]; then
+        if [ "$(stat -c '%u' "$f")" != "0" ]; then
             needs_fix=1
             break
         fi
     done
     if [ -n "$needs_fix" ]; then
         echo "  Fixing SSH config ownership in $dir ..."
-        sudo chown root:root "$dir" 2>/dev/null || true
-        sudo chmod 755 "$dir" 2>/dev/null || true
+        sudo chown root:root "$dir" || true
+        sudo chmod 755 "$dir" || true
         for f in "$dir"/*.conf; do
             [ -f "$f" ] || continue
-            sudo chown root:root "$f" 2>/dev/null || true
-            sudo chmod 644 "$f" 2>/dev/null || true
+            sudo chown root:root "$f" || true
+            sudo chmod 644 "$f" || true
         done
     fi
 }
@@ -1532,9 +1607,9 @@ _e2e_fix_ssh_config_ownership() {
 # --- Environment Setup (called by run.sh or suites directly) ---------------
 
 e2e_setup() {
-    # Navigate to aba root
-    local aba_root
-    aba_root="$(cd "$_E2E_DIR/../.." && pwd)"
+    # Navigate to aba product directory (create if needed -- suite installs ABA later)
+    local aba_root="${_ABA_ROOT:-$HOME/aba}"
+    mkdir -p "$aba_root"
     cd "$aba_root" || { echo "Cannot cd to $aba_root"; exit 1; }
 
     export ABA_TESTING=1
@@ -1558,8 +1633,8 @@ e2e_setup() {
 
     # Log git state so we know exactly what was tested
     local _git_head _git_dirty
-    _git_head="$(git -C "$aba_root" log -1 --format='%h %s' 2>/dev/null || echo 'unknown')"
-    _git_dirty="$(git -C "$aba_root" status --porcelain 2>/dev/null | head -20)"
+    _git_head="$(git -C "$aba_root" log -1 --format='%h %s' || echo 'unknown')"
+    _git_dirty="$(git -C "$aba_root" status --porcelain | head -20)"
 
     _e2e_log "=== E2E Environment ==="
     _e2e_log "  ABA_ROOT=$aba_root"

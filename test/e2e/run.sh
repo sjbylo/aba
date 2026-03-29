@@ -65,6 +65,8 @@ CLI_STATUS=""
 CLI_START=""
 _CLI_POOLS_SET=""
 CLI_VERIFY=""
+CLI_DEV=""
+CLI_REVERT=""
 CLI_POOLS_FILE="$_RUN_DIR/pools.conf"
 CLI_OS=""
 
@@ -80,9 +82,11 @@ _usage() {
 	  run.sh run --suite X --pool 2        Run suite on a specific pool
 	  run.sh run --suite X --pool 2 --force -y  Force onto pool (works with running dispatcher)
 	  run.sh run --pool 3 --resume         Re-run last suite, skip passed tests
+	  run.sh run --all --pools 3 --dev     Push local source to ~/aba, then run
 	  run.sh reschedule [--suite X] [--pools N]  Re-queue completed suites
-	  run.sh deploy [--pool N] [--force]   Sync local ABA repo to conN host(s)
-	  run.sh restart [--pool N] [--resume] Stop + deploy + re-run last suite
+	  run.sh deploy [--pool N] [--force]   Push source code + harness to conN
+	  run.sh restart [--pool N] [--resume] Stop + harness deploy + re-run last suite
+	  run.sh restart --pool N --dev        Stop + source deploy + harness + re-run
 	  run.sh restart --suite X --pool N    Stop + deploy + run suite X on pool N
 	  run.sh stop [--pool N]               Kill runner(s) (--pool: keep dispatcher)
 	  run.sh start [--pool N]              Power on pool VMs (conN + disN)
@@ -100,9 +104,12 @@ _usage() {
 	  --pools N            Number of pools (default: 1)
 	  --pool N             Target a specific pool
 	  --force              Wipe suite state before dispatching / hot-deploy
+	  --dev                Developer mode: push local source to ~/aba on conN
+	                       instead of letting the suite install ABA from internet
 	  --resume             Skip previously-passed tests (run, restart)
 	  --dry-run            Show dispatch plan, don't execute
 	  --clean              Clear checkpoints before running
+	  --revert             Revert all pool VMs (conN+disN) to pool-ready snapshot before running
 	  --recreate-golden    Force rebuild golden VM from template
 	  --recreate-vms       Force reclone all conN/disN from golden
 	  -y, --yes            Auto-accept prompts
@@ -133,11 +140,13 @@ while [ $# -gt 0 ]; do
 		-p|--pools)           CLI_POOLS="$2"; _CLI_POOLS_SET=1; shift 2 ;;
 		-G|--recreate-golden) CLI_RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    CLI_RECREATE_VMS=1; shift ;;
+		-V|--revert)          CLI_REVERT=1; shift ;;
 		-y|--yes)             CLI_YES=1; shift ;;
 		-q|--quiet)           CLI_QUIET=1; CLI_YES=1; shift ;;
 		--clean)              CLI_CLEAN=1; shift ;;
 		--dry-run)            CLI_DRY_RUN=1; shift ;;
 		-f|--force)           CLI_FORCE=1; shift ;;
+		--dev)                CLI_DEV=1; shift ;;
 		--pool)               CLI_POOL="$2"; shift 2 ;;
 		--resume)             CLI_RESUME=1; shift ;;
 		--os)                 CLI_OS="$2"; shift 2 ;;
@@ -224,8 +233,26 @@ fi
 # --os overrides INT_BASTION_RHEL_VER from config.env
 [ -n "$CLI_OS" ] && export INT_BASTION_RHEL_VER="$CLI_OS"
 
-# --- Ensure govc when we will use it (destroy or infra check / setup) ---------
+# --- Auto-detect git branch and repo from the developer's local checkout ------
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
+export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$_ABA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
+export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$_ABA_ROOT" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
+# user/repo slug for curl one-liner install (strip protocol + host + .git suffix)
+export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
+
+# Generate deployable config.env with auto-detected git values baked in.
+# runner.sh on VMs sources this, so the correct branch/repo is always set
+# without relying on the VM's local git state.
+_DEPLOY_CONFIG_ENV="$_RUN_DIR/.config.env.deploy"
+{
+	cat "$_RUN_DIR/config.env"
+	printf '\n# --- Auto-injected by run.sh (do not edit manually) ---\n'
+	printf 'E2E_GIT_BRANCH=%s\n' "$E2E_GIT_BRANCH"
+	printf 'E2E_GIT_REPO=%s\n' "$E2E_GIT_REPO"
+	printf 'E2E_GIT_REPO_SLUG=%s\n' "$E2E_GIT_REPO_SLUG"
+} > "$_DEPLOY_CONFIG_ENV"
+
+# --- Ensure govc when we will use it (destroy or infra check / setup) ---------
 _ensure_govc() {
 	if command -v govc &>/dev/null; then
 		return 0
@@ -258,7 +285,7 @@ _sweep_pool_orphan_vms() {
 	local _known_vms="con${pool_num} dis${pool_num}"
 
 	local _all_vms
-	_all_vms=$(govc find "$_pfolder" -type m 2>/dev/null) || return 0
+	_all_vms=$(govc find "$_pfolder" -type m) || return 0
 	[ -z "$_all_vms" ] && return 0
 
 	while IFS= read -r _vm; do
@@ -271,8 +298,8 @@ _sweep_pool_orphan_vms() {
 		[ -n "$_is_known" ] && continue
 
 		echo "    Destroying orphan VM: $_vm"
-		govc vm.power -off "$_vm" 2>/dev/null || true
-		govc vm.destroy "$_vm" 2>/dev/null || true
+		govc vm.power -off "$_vm" || true
+		govc vm.destroy "$_vm" || true
 	done <<< "$_all_vms"
 }
 
@@ -280,7 +307,7 @@ _sweep_pool_orphan_vms() {
 _process_pool_cleanup_files() {
 	local pool_num="$1"
 	_ssh_con "$pool_num" "
-		_logs=\"\$HOME/aba/test/e2e/logs\"
+		_logs=\"\$HOME/.e2e-harness/logs\"
 		for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
 			[ -f \"\$f\" ] || continue
 			echo \"    Processing \$(basename \"\$f\") ...\"
@@ -297,8 +324,7 @@ _process_pool_cleanup_files() {
 			done < \"\$f\"
 			rm -f \"\$f\"
 		done
-	" 2>/dev/null || true
-	_sweep_pool_orphan_vms "$pool_num"
+	" || true
 }
 
 # --- Shared: create a tmux dashboard with one tail pane per pool --------------
@@ -308,10 +334,14 @@ _create_tmux_dashboard() {
 	local _user="${CON_SSH_USER:-steve}"
 	local _domain="${VM_BASE_DOMAIN}"
 
+	# Uses tail -F for smooth real-time streaming.  A background monitor
+	# checks every 10s whether the suite changed (via /tmp/e2e-last-suites);
+	# on change it kills the tail SSH so the loop restarts with fresh content.
+	# This avoids the inotify/symlink stale-content bug without screen flicker.
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/aba/test/e2e/logs/${_logfile}' 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
+		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; clear; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!; while kill -0 \$_tpid 2>/dev/null; do sleep 10; _ns=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break; done; wait \$_tpid 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null || true
@@ -359,7 +389,7 @@ if [ -n "$CLI_ATTACH" ]; then
 		 else echo 'No e2e session found on ${host}.'; tmux list-sessions 2>/dev/null || echo '(no tmux sessions)'; fi"
 fi
 
-# --- Deploy mode --------------------------------------------------------------
+# --- Deploy mode (developer quick-fix: source-only push) ----------------------
 
 if [ -n "$CLI_DEPLOY" ]; then
 	# --pool N targets a single pool; --pools N targets 1..N
@@ -370,43 +400,20 @@ if [ -n "$CLI_DEPLOY" ]; then
 		for (( _dp=1; _dp<=_OP_POOLS; _dp++ )); do _deploy_list+=("$_dp"); done
 	fi
 	echo ""
-	echo "  Deploying ABA repo to conN hosts (${_deploy_list[*]}) ..."
+	echo "  Developer deploy: source-only push to conN (${_deploy_list[*]}) ..."
+
+	# Whitelist: only ABA source code (no binaries, data, configs, dot-flags)
 	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
 	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-		--exclude='.git' \
-		--exclude='.backup' \
-		--exclude='.cursor' \
-		--exclude='*.swp' \
-		--exclude='images' \
-		--exclude='test/e2e/logs' \
-		--exclude='*/iso-agent-based*' \
-		--exclude='bundles*' \
-		--exclude='ai' \
-		--exclude='./demo*' \
-		--exclude='./sno*' \
-		--exclude='./compact*' \
-		--exclude='./standard*' \
-		--exclude='xxx*' \
-		--exclude='cli/*.gz' \
-		--exclude='cli/*.tar*' \
-		--exclude='mirror/save' \
-		--exclude='mirror/mirror' \
-		--exclude='mirror/regcreds*' \
-		--exclude='mirror/docker-reg-image*' \
-		--exclude='mirror/mirror-registry' \
-		--exclude='.oc-mirror.log' \
-		--exclude='*.tar' \
-		--exclude='*.tar.gz' \
-		--exclude='.dnf-install.log' \
-		--exclude='*.bk' \
-		--exclude='mirror/.available' \
-		--exclude='aba.conf' \
-		--exclude='vmware.conf' \
-		--exclude='*/mirror.conf' \
-		--exclude='*/cluster.conf' \
-		.
+		--exclude='*/.*' \
+		scripts/ \
+		templates/ \
+		Makefile \
+		cli/Makefile \
+		aba \
+		install
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
-	echo "  Tarball: $_deploy_size"
+	echo "  Source tarball: $_deploy_size"
 	echo ""
 	for i in "${_deploy_list[@]}"; do
 		user="${CON_SSH_USER:-steve}"
@@ -425,44 +432,33 @@ if [ -n "$CLI_DEPLOY" ]; then
 			echo -n "RUNNING (hot-deploy) "
 		fi
 
-		# --force hot-deploy: extract on top of existing dir (preserves logs/, state)
-		# Normal deploy: clean slate (rm -rf) since pool is idle
-		if [ -n "$CLI_FORCE" ]; then
-			_remote_prep="mkdir -p ~/aba"
+		# Source deploy always overlays on existing ~/aba (never wipes)
+		if ssh $_SSH_OPTS "${target}" "mkdir -p ~/aba" &&
+		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" &&
+		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"; then
+			echo -n "source "
 		else
-			# Process any leftover cleanup files before wiping the directory
-			_process_pool_cleanup_files "$i"
-			_remote_prep="rm -rf ~/aba && mkdir ~/aba"
+			echo "FAILED (source deploy)"
+			continue
 		fi
 
-		if ssh $_SSH_OPTS "${target}" "$_remote_prep" 2>/dev/null &&
-		   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-		   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
-			echo "done"
+		# Also push test harness to ~/.e2e-harness/
+		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${target}:~/.e2e-harness/runner.sh" &&
+		   scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV"                   "${target}:~/.e2e-harness/config.env" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${target}:~/.e2e-harness/pools.conf" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${target}:~/.e2e-harness/lib/" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${target}:~/.e2e-harness/suites/" &&
+		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${target}:~/.e2e-harness/scripts/"; then
+			# Deploy notify.sh if configured
+			if [ -x ~/bin/notify.sh ]; then
+				ssh -q $_SSH_OPTS "${target}" "mkdir -p ~/bin" &&
+				scp -q $_SSH_OPTS ~/bin/notify.sh "${target}:~/bin/notify.sh" &&
+				ssh -q $_SSH_OPTS "${target}" "chmod +x ~/bin/notify.sh" || true
+			fi
+			echo "+ harness done"
 		else
-			echo -n "FAILED -- attempting SSH repair via conN hop ... "
-			_repaired=false
-			for (( j=1; j<=${_OP_POOLS}; j++ )); do
-				[ "$j" -eq "$i" ] && continue
-				_hop="${user}@con${j}.${VM_BASE_DOMAIN}"
-				# Copy bastion's key to the hop host, then scp it to the target
-				# (avoids piping key through multi-hop SSH which can corrupt the file)
-				if scp $_SSH_OPTS ~/.ssh/id_rsa.pub "${_hop}:/tmp/_bastion_key.pub" 2>/dev/null &&
-				   ssh $_SSH_OPTS "$_hop" \
-					"scp -o BatchMode=yes -o StrictHostKeyChecking=no /tmp/_bastion_key.pub ${host}:/tmp/_bastion_key.pub && \
-					 ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${host} \
-					 'mkdir -p ~/.ssh && cat /tmp/_bastion_key.pub > ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && rm -f /tmp/_bastion_key.pub' && \
-					 rm -f /tmp/_bastion_key.pub" 2>/dev/null; then
-					if ssh $_SSH_OPTS "${target}" "$_remote_prep" 2>/dev/null &&
-					   scp $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-					   ssh $_SSH_OPTS "${target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
-						echo "REPAIRED via con${j}, done"
-						_repaired=true
-						break
-					fi
-				fi
-			done
-			$_repaired || echo "FAILED (unreachable)"
+			echo "+ harness FAILED"
 		fi
 	done
 	rm -f "$_deploy_tar"
@@ -506,7 +502,7 @@ if [ -n "$CLI_STOP" ]; then
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*
 			echo stopped
-		" 2>/dev/null; then
+		"; then
 			:
 		else
 			echo "unreachable"
@@ -535,11 +531,11 @@ if [ -n "$CLI_START" ]; then
 	for p in "${_start_list[@]}"; do
 		for prefix in con dis; do
 			vm="${prefix}${p}"
-			_state=$(govc vm.info -json "$vm" 2>/dev/null | grep -o '"powerState":"[^"]*"' | head -1 || true)
+			_state=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1 || true)
 			if [[ "$_state" == *"poweredOn"* ]]; then
 				echo "    ${vm}: already on"
 			elif govc vm.info "$vm" &>/dev/null; then
-				govc vm.power -on "$vm" 2>/dev/null || true
+				govc vm.power -on "$vm" || true
 				echo "    ${vm}: powered on"
 			else
 				echo "    ${vm}: not found (skipped)"
@@ -579,7 +575,7 @@ if [ -n "$CLI_RESTART" ]; then
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
 			echo stopped
-		" 2>/dev/null; then
+		"; then
 			:
 		else
 			echo "unreachable"
@@ -597,7 +593,7 @@ if [ -n "$CLI_RESTART" ]; then
 		printf "    con${p}: "
 		ssh $_restart_ssh "${_target}" 'set -f
 			_found=""
-			_log_dir="$HOME/aba/test/e2e/logs"
+			_log_dir="$HOME/.e2e-harness/logs"
 			_ssh="ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
 			for f in "$_log_dir"/*.cleanup; do
@@ -628,58 +624,60 @@ if [ -n "$CLI_RESTART" ]; then
 		' 2>/dev/null || echo "unreachable"
 	done
 
-	# 3) Deploy
+	# 3) Deploy harness (always) + source (only with --dev)
 	echo ""
-	echo "  [3/4] Deploying ..."
-	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
-	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-		--exclude='.git' \
-		--exclude='.backup' \
-		--exclude='.cursor' \
-		--exclude='*.swp' \
-		--exclude='images' \
-		--exclude='test/e2e/logs' \
-		--exclude='*/iso-agent-based*' \
-		--exclude='bundles*' \
-		--exclude='ai' \
-		--exclude='./demo*' \
-		--exclude='./sno*' \
-		--exclude='./compact*' \
-		--exclude='./standard*' \
-		--exclude='xxx*' \
-		--exclude='cli/*.gz' \
-		--exclude='cli/*.tar*' \
-		--exclude='mirror/save' \
-		--exclude='mirror/mirror' \
-		--exclude='mirror/regcreds*' \
-		--exclude='mirror/docker-reg-image*' \
-		--exclude='mirror/mirror-registry' \
-		--exclude='.oc-mirror.log' \
-		--exclude='*.tar' \
-		--exclude='*.tar.gz' \
-		--exclude='.dnf-install.log' \
-		--exclude='*.bk' \
-		--exclude='mirror/.available' \
-		--exclude='aba.conf' \
-		--exclude='vmware.conf' \
-		--exclude='*/mirror.conf' \
-		--exclude='*/cluster.conf' \
-		.
-	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
-	echo "    Tarball: $_deploy_size"
+	if [ -n "$CLI_DEV" ]; then
+		echo "  [3/4] Developer deploy: source + harness ..."
+		_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+		tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
+			--exclude='*/.*' \
+			scripts/ \
+			templates/ \
+			Makefile \
+			cli/Makefile \
+			aba \
+			install
+		_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+		echo "    Source tarball: $_deploy_size"
+		for p in "${_restart_pools[@]}"; do
+			_host="con${p}.${_domain}"
+			_target="${_user}@${_host}"
+			echo -n "    con${p}: "
+			if ssh $_restart_ssh "${_target}" "mkdir -p ~/aba" &&
+			   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" &&
+			   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"; then
+				echo "source done"
+			else
+				echo "FAILED (unreachable?)"
+			fi
+		done
+		rm -f "$_deploy_tar"
+	else
+		echo "  [3/4] Deploying harness only (suite installs ABA from internet) ..."
+	fi
+
 	for p in "${_restart_pools[@]}"; do
 		_host="con${p}.${_domain}"
 		_target="${_user}@${_host}"
-		echo -n "    con${p}: "
-		if ssh $_restart_ssh "${_target}" "rm -rf ~/aba && mkdir ~/aba" 2>/dev/null &&
-		   scp $_restart_ssh "$_deploy_tar" "${_target}:/tmp/aba-deploy.tar.gz" 2>/dev/null &&
-		   ssh $_restart_ssh "${_target}" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz" 2>/dev/null; then
+		echo -n "    con${p} harness: "
+		if ssh $_restart_ssh "${_target}" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
+		   scp -q $_restart_ssh "$_DEPLOY_CONFIG_ENV"                   "${_target}:~/.e2e-harness/config.env" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
+		   scp -q $_restart_ssh "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${_target}:~/.e2e-harness/scripts/"; then
+			# Deploy notify.sh if configured
+			if [ -x ~/bin/notify.sh ]; then
+				ssh -q $_restart_ssh "${_target}" "mkdir -p ~/bin" &&
+				scp -q $_restart_ssh ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
+				ssh -q $_restart_ssh "${_target}" "chmod +x ~/bin/notify.sh" || true
+			fi
 			echo "done"
 		else
-			echo "FAILED (unreachable?)"
+			echo "FAILED"
 		fi
 	done
-	rm -f "$_deploy_tar"
 
 	# 4) Re-launch last suite on each pool
 	echo ""
@@ -695,20 +693,20 @@ if [ -n "$CLI_RESTART" ]; then
 		fi
 		if [ -z "$_last" ]; then
 			echo "    con${p}: skipped (no previous suite or unreachable)"
-			(( _restart_fail++ ))
+			_restart_fail=$(( _restart_fail + 1 ))
 			continue
 		fi
 		read -ra _last_suites <<< "$_last"
 		for suite in "${_last_suites[@]}"; do
 			_resume_flag=""
 			[ -n "${CLI_RESUME:-}" ] && _resume_flag="--resume"
-			_runner_cmd="bash ~/aba/test/e2e/runner.sh $_resume_flag $p $suite"
+			_runner_cmd="bash ~/.e2e-harness/runner.sh $_resume_flag $p $suite"
 			if ssh $_restart_ssh "${_user}@${_host}" "tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'; tmux rename-window -t '$E2E_TMUX_SESSION' '$suite'" 2>/dev/null; then
 				echo "    con${p}: dispatched $suite (tmux: $E2E_TMUX_SESSION)"
-				(( _restart_ok++ ))
+				_restart_ok=$(( _restart_ok + 1 ))
 			else
 				echo "    con${p}: FAILED to dispatch $suite"
-				(( _restart_fail++ ))
+				_restart_fail=$(( _restart_fail + 1 ))
 			fi
 		done
 	done
@@ -741,11 +739,13 @@ if [ -n "$CLI_STATUS" ]; then
 	for p in "${_status_list[@]}"; do
 		_host="con${p}.${_domain}"
 		_info=$(ssh $_status_ssh "${_user}@${_host}" "
+			_slog=~/.e2e-harness/logs/summary.log
+			[ -f \"\$_slog\" ] || _slog=\$(ls -t ~/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
 			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null || true)
 			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
-				last=\$(tail -1 ~/aba/test/e2e/logs/summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+				last=\$(tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
 					rc=\$(cat \"\$rc_file\" 2>/dev/null)
 					echo \"DONE|\${suite}|exit=\${rc}\"
@@ -768,7 +768,7 @@ if [ -n "$CLI_STATUS" ]; then
 				fi
 			fi
 			echo '|||TABLE|||'
-			tac ~/aba/test/e2e/logs/summary.log 2>/dev/null \
+			tac \"\$_slog\" 2>/dev/null \
 				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \
 				| tac \
 				| sed 's/\x1b\[[0-9;]*m//g' \
@@ -1017,13 +1017,13 @@ if [ -n "$CLI_DESTROY" ]; then
 
 	# --clean: SSH to each conN and delete test clusters / uninstall mirrors
 	# before destroying VMs. Processes .cleanup and .mirror-cleanup files
-	# that suites leave in ~/aba/test/e2e/logs/.
+	# that suites leave in ~/.e2e-harness/logs/.
 	if [ -n "$CLI_CLEAN" ]; then
 		echo "=== Cleaning up test clusters and mirrors on pool VMs ==="
 		_cssh="-o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 		_user="${CON_SSH_USER:-steve}"
 		_domain="${VM_BASE_DOMAIN}"
-		_e2e_logs="aba/test/e2e/logs"
+		_e2e_logs=".e2e-harness/logs"
 
 		for (( i=1; i<=10; i++ )); do
 			_host="con${i}.${_domain}"
@@ -1076,15 +1076,15 @@ if [ -n "$CLI_DESTROY" ]; then
 	for (( i=1; i<=10; i++ )); do
 		for prefix in con dis; do
 			vm="${prefix}${i}"
-			if govc vm.info "$vm" 2>/dev/null | grep "Name:"; then
+			if govc vm.info "$vm" | grep "Name:"; then
 				echo "  Destroying $vm ..."
-				govc vm.power -off "$vm" 2>/dev/null || true
+				govc vm.power -off "$vm" || true
 				govc vm.destroy "$vm" || true
 			fi
 		done
 	done
 
-	# Sweep pool folders for orphaned cluster VMs (e.g. sno1-sno1, compact1-master1)
+	# Sweep pool folders for orphaned cluster VMs (e.g. e2e-sno1-e2e-sno1, e2e-compact1-master1)
 	# that were not cleaned up by the --clean step or aba delete.
 	_base="/Datacenter/vm/aba-e2e"
 	echo ""
@@ -1092,7 +1092,7 @@ if [ -n "$CLI_DESTROY" ]; then
 	_all_orphans=""
 	for (( i=1; i<=10; i++ )); do
 		_pfolder="${_base}/pool${i}"
-		_orphans=$(govc find "$_pfolder" -type m 2>/dev/null) || continue
+		_orphans=$(govc find "$_pfolder" -type m) || continue
 		[ -z "$_orphans" ] && continue
 		_all_orphans+="$_orphans"$'\n'
 	done
@@ -1120,7 +1120,7 @@ if [ -n "$CLI_DESTROY" ]; then
 			while IFS= read -r _ovm; do
 				[ -z "$_ovm" ] && continue
 				echo "  Destroying $_ovm ..."
-				govc vm.power -off "$_ovm" 2>/dev/null || true
+				govc vm.power -off "$_ovm" || true
 				govc vm.destroy "$_ovm" || true
 			done <<< "$_all_orphans"
 		else
@@ -1246,8 +1246,8 @@ _vms_ready() {
 
 	if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-		"${user}@${con}" -- "test -d ~/aba"; then
-		_reason="SSH to ${con} failed or ~/aba missing"
+		"${user}@${con}" -- "true"; then
+		_reason="SSH to ${con} failed"
 		echo "  Pool $pool_num: not ready ($_reason)" >&2
 		return 1
 	fi
@@ -1318,31 +1318,116 @@ if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
 fi
 
-# --- scp test framework + config to each conN --------------------------------
+# --- Revert pool VMs to pool-ready snapshot (optional) ------------------------
+
+if [ -n "$CLI_REVERT" ]; then
+	echo ""
+	echo "  Reverting pool VMs to pool-ready snapshot ..."
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		for prefix in con dis; do
+			vm="${prefix}${i}"
+			if govc snapshot.tree -vm "$vm" 2>&1 | grep -q "pool-ready"; then
+				govc snapshot.revert -vm "$vm" "pool-ready" || { echo "  FATAL: revert $vm failed" >&2; exit 1; }
+				govc vm.power -on "$vm" 2>/dev/null || true
+				echo "    ${vm}: reverted to pool-ready"
+			else
+				echo "    ${vm}: WARNING -- pool-ready snapshot not found, skipping" >&2
+			fi
+		done
+	done
+
+	echo "  Waiting for conN SSH readiness ..."
+	_user="${CON_SSH_USER:-steve}"
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		_host="con${i}.${VM_BASE_DOMAIN}"
+		_elapsed=0
+		while [ $_elapsed -lt 120 ]; do
+			if ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
+				-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+				"${_user}@${_host}" -- "true" 2>/dev/null; then
+				echo "    con${i}: SSH ready"
+				break
+			fi
+			sleep 5
+			_elapsed=$(( _elapsed + 5 ))
+		done
+		if [ $_elapsed -ge 120 ]; then
+			echo "  FATAL: con${i} not reachable after revert (120s timeout)" >&2
+			exit 1
+		fi
+	done
+	echo "  All pool VMs reverted and ready."
+fi
+
+# --- scp test harness to ~/.e2e-harness/ on each conN -------------------------
+
+# Pre-flight: verify notify.sh exists if NOTIFY_CMD is configured
+_notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2-)
+_notify_cmd="${_notify_cmd/#\~/$HOME}"
+if [ -n "$_notify_cmd" ] && ! [ -x "$_notify_cmd" ]; then
+	echo "FATAL: config.env sets NOTIFY_CMD=$_notify_cmd but the file does not exist." >&2
+	echo "  Create the file or clear NOTIFY_CMD in config.env." >&2
+	exit 1
+fi
 
 echo ""
-echo "  Deploying test framework to conN hosts ..."
+echo "  Deploying test harness to conN hosts ..."
 for (( i=1; i<=CLI_POOLS; i++ )); do
 	user="${CON_SSH_USER:-steve}"
 	host="con${i}.${VM_BASE_DOMAIN}"
 	target="${user}@${host}"
 
-	if scp -q $_SSH_OPTS "$_RUN_DIR/config.env" "$target:~/aba/test/e2e/config.env" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/aba/test/e2e/pools.conf" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/aba/test/e2e/runner.sh" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/aba/test/e2e/lib/" &&
-	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/aba/test/e2e/suites/"; then
-		# Deploy notify.sh if available locally (contains secrets, not in git)
-		if [ -x ~/bin/notify.sh ]; then
+	if ssh -q $_SSH_OPTS "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+	   scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV" "$target:~/.e2e-harness/config.env" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/pools.conf" "$target:~/.e2e-harness/pools.conf" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR/runner.sh"  "$target:~/.e2e-harness/runner.sh" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/lib/*.sh   "$target:~/.e2e-harness/lib/" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/suites/suite-*.sh "$target:~/.e2e-harness/suites/" &&
+	   scp -q $_SSH_OPTS "$_RUN_DIR"/scripts/*.sh "$target:~/.e2e-harness/scripts/"; then
+		# Deploy notify.sh (pre-flight already verified it exists if configured)
+		if [ -n "$_notify_cmd" ]; then
 			ssh -q $_SSH_OPTS "$target" "mkdir -p ~/bin" &&
-			scp -q $_SSH_OPTS ~/bin/notify.sh "$target:~/bin/notify.sh" &&
+			scp -q $_SSH_OPTS "$_notify_cmd" "$target:~/bin/notify.sh" &&
 			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh" || true
 		fi
-		echo "    con${i}: framework + config deployed"
+		# Ensure rootless podman's pause process survives between SSH sessions
+		ssh -q $_SSH_OPTS "$target" "sudo loginctl enable-linger $user 2>/dev/null || true"
+		echo "    con${i}: harness deployed to ~/.e2e-harness/"
 	else
-		echo "    con${i}: FAILED to deploy framework (skipping)" >&2
+		echo "    con${i}: FAILED to deploy harness (skipping)" >&2
 	fi
 done
+
+# --- Developer mode: push source to ~/aba on each conN -----------------------
+if [ -n "$CLI_DEV" ]; then
+	echo ""
+	echo "  Developer mode: pushing ABA source to conN hosts ..."
+	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
+		--exclude='*/.*' \
+		scripts/ \
+		templates/ \
+		Makefile \
+		cli/Makefile \
+		aba \
+		install
+	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+	echo "  Source tarball: $_deploy_size"
+	for (( i=1; i<=CLI_POOLS; i++ )); do
+		user="${CON_SSH_USER:-steve}"
+		host="con${i}.${VM_BASE_DOMAIN}"
+		target="${user}@${host}"
+		echo -n "    con${i}: "
+		if ssh -q $_SSH_OPTS "$target" "mkdir -p ~/aba" &&
+		   scp -q $_SSH_OPTS "$_deploy_tar" "${target}:/tmp/aba-deploy.tar.gz" &&
+		   ssh -q $_SSH_OPTS "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"; then
+			echo "done"
+		else
+			echo "FAILED"
+		fi
+	done
+	rm -f "$_deploy_tar"
+fi
 
 # =============================================================================
 # --- Dynamic Work-Queue Dispatcher -------------------------------------------
@@ -1374,7 +1459,7 @@ _dispatch_suite() {
 	local pool_num="$1"
 	local suite="$2"
 
-	echo "  DISPATCH: $suite -> pool $pool_num (con${pool_num})"
+	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
 	# Kill any stale session and orphaned runner processes
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true"
@@ -1382,22 +1467,36 @@ _dispatch_suite() {
 	# Remove old rc/lock/pause files (stale pause files cause false PAUSED status)
 	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
-	# Sync latest test code to conN before launching
+	# Process any leftover .cleanup/.mirror-cleanup files from a previously crashed
+	# suite BEFORE wiping the harness directory.  Without this, a hard-killed runner
+	# leaves orphan VMs/mirrors because its .cleanup file is destroyed.
+	_process_pool_cleanup_files "$pool_num"
+
+	# Sync latest test harness to ~/.e2e-harness/ on conN before launching
 	local _user="${CON_SSH_USER:-steve}"
 	local _host="con${pool_num}.${VM_BASE_DOMAIN}"
 	local _target="${_user}@${_host}"
-	if ! { scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh" "${_target}:~/aba/test/e2e/runner.sh" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/config.env" "${_target}:~/aba/test/e2e/config.env" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh    "${_target}:~/aba/test/e2e/lib/" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/aba/test/e2e/suites/" &&
-	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh "${_target}:~/aba/test/e2e/scripts/"; }; then
+	if ! { _ssh_con "$pool_num" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
+	       scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV"                   "${_target}:~/.e2e-harness/config.env" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/lib/*.sh          "${_target}:~/.e2e-harness/lib/" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/suites/suite-*.sh "${_target}:~/.e2e-harness/suites/" &&
+	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e"/scripts/*.sh      "${_target}:~/.e2e-harness/scripts/"; }; then
 		echo "    ERROR: scp to con${pool_num} failed -- skipping dispatch"
 		return 1
 	fi
 
+	# Deploy notify.sh if configured
+	if [ -x ~/bin/notify.sh ]; then
+		ssh -q $_SSH_OPTS "${_target}" "mkdir -p ~/bin" &&
+		scp -q $_SSH_OPTS ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
+		ssh -q $_SSH_OPTS "${_target}" "chmod +x ~/bin/notify.sh" || true
+	fi
+
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
-	local runner_cmd="bash ~/aba/test/e2e/runner.sh $pool_num $suite$_retry_arg"
+	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
 	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'"
 
 	_busy_pools[$pool_num]="$suite"
@@ -1486,8 +1585,9 @@ _record_result() {
 		printf "  COMPLETED: %-35s pool %-2s  \033[1;31mFAIL\033[0m (exit=%s)\n" "$suite" "$pool_num" "$rc"
 	fi
 
-	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null 2>&1 &
+	# Only notify from dispatcher for non-pass results (framework already notifies on PASS)
+	if [ "$rc" -ne 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null &
 	fi
 }
 
@@ -1501,8 +1601,8 @@ _collect_pool_logs() {
 	local log_dir="$_RUN_DIR/logs"
 
 	mkdir -p "$log_dir"
-	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
-	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/aba/test/e2e/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/" || true
+	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/" || true
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----
@@ -1570,7 +1670,7 @@ _force_clean_all() {
 		_ssh_con "$p" "
 			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-		" 2>/dev/null || true
+		" || true
 		_process_pool_cleanup_files "$p"
 		echo "    con${p}: cleaned"
 	done
@@ -1584,7 +1684,7 @@ _force_clean_pool() {
 	_ssh_con "$pool_num" "
 		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 		rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-	" 2>/dev/null || true
+	" || true
 	_process_pool_cleanup_files "$pool_num"
 
 	# Remove any entries associated with this pool
@@ -1614,8 +1714,12 @@ _force_clean_suite() {
 				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 			fi
 			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
-		" 2>/dev/null || true
-		# Process cleanup files for the suite being force-cleaned
+		" || true
+		# Skip cleanup on pools running a different suite to avoid destroying their resources
+		if [ -n "${_busy_pools[$p]:-}" ] && [ "${_busy_pools[$p]}" != "$suite" ]; then
+			echo "    Skipping con${p}: running ${_busy_pools[$p]}"
+			continue
+		fi
 		_process_pool_cleanup_files "$p"
 	done
 
@@ -1683,12 +1787,45 @@ for s in "${!_completed[@]}"; do
 	_results[$s]="${_completed[$s]}"
 done
 
+# Before _build_work_queue: consume any pre-existing inject queue (from reschedule before dispatcher)
+if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+	_pre_injected=()
+	while IFS= read -r _pi; do
+		[ -z "$_pi" ] && continue
+		_pre_injected+=("$_pi")
+	done < "$E2E_INJECT_QUEUE"
+	> "$E2E_INJECT_QUEUE"
+	if [ ${#_pre_injected[@]} -gt 0 ]; then
+		_new_suites=()
+		for _pi in "${_pre_injected[@]}"; do
+			_found=""
+			for _es in "${suites_to_run[@]}"; do
+				[ "$_es" = "$_pi" ] && _found=1 && break
+			done
+			if [ -n "$_found" ]; then
+				printf "  [%s] PRIORITY: %s (from earlier reschedule, moved to front)\n" "$(date '+%H:%M:%S')" "$_pi"
+			else
+				printf "  [%s] PRIORITY: %s (from earlier reschedule, added to front)\n" "$(date '+%H:%M:%S')" "$_pi"
+				suites_to_run+=("$_pi")
+			fi
+			_new_suites+=("$_pi")
+		done
+		for _es in "${suites_to_run[@]}"; do
+			_dup=""
+			for _pi in "${_pre_injected[@]}"; do
+				[ "$_es" = "$_pi" ] && _dup=1 && break
+			done
+			[ -z "$_dup" ] && _new_suites+=("$_es")
+		done
+		suites_to_run=("${_new_suites[@]}")
+	fi
+fi
+
 # Build the work queue (excluding completed and running)
 _build_work_queue
 
 _num_completed=${#_completed[@]}
-_num_running=0
-for _ in "${!_busy_pools[@]}"; do (( _num_running++ )); done
+_num_running=${#_busy_pools[@]}
 
 echo ""
 echo "  Status: ${_num_completed} completed, ${_num_running} running, ${#_work_queue[@]} queued"
@@ -1732,7 +1869,7 @@ Queued:"
   ${_qs}"
 		done
 		_notify_msg="[e2e] DISPATCHER STARTED: ${#_work_queue[@]} suites queued${_notify_detail}"
-		$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null 2>&1
+		$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null
 	fi
 fi
 
@@ -1788,7 +1925,7 @@ if [ -n "$CLI_FORCE" ] && [ -n "$CLI_POOL" ] && [ -n "$CLI_SUITE" ]; then
 		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 			echo ""
 			echo "  Dispatcher running (pid $_old_dpid) -- performing one-shot dispatch"
-			echo "  FORCE DISPATCH: $CLI_SUITE -> pool $CLI_POOL"
+			printf "  \033[1;36mFORCE DISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s\n" "$CLI_SUITE" "$CLI_POOL"
 
 			declare -A _retried=()
 			_dispatch_suite "$CLI_POOL" "$CLI_SUITE"
@@ -1826,7 +1963,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$_DEPLOY_CONFIG_ENV"' EXIT
 
 declare -A _retried=()
 _MAX_RETRIES=2
@@ -1850,16 +1987,41 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		_inj_list=""
 		while IFS= read -r _inj_suite; do
 			[ -z "$_inj_suite" ] && continue
+			# Guard: skip if this suite is already running on a pool
+			_already_running=""
+			for _bp in "${!_busy_pools[@]}"; do
+				if [ "${_busy_pools[$_bp]}" = "$_inj_suite" ]; then
+					_already_running=1
+					break
+				fi
+			done
+			if [ -n "$_already_running" ]; then
+				printf "  [%s] SKIPPED: %s (already running on a pool)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				continue
+			fi
+			# Guard: skip if already queued (avoid duplicate dispatch)
+			_already_queued=""
+			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+				if [ "${_work_queue[$_qi]}" = "$_inj_suite" ]; then
+					_already_queued=1
+					break
+				fi
+			done
+			if [ -n "$_already_queued" ]; then
+				printf "  [%s] SKIPPED: %s (already in work queue)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+				continue
+			fi
 			_work_queue+=("$_inj_suite")
+			suites_to_run+=("$_inj_suite")
 			_inj_list+="  ${_inj_suite}
 "
-			(( _inj_count++ ))
+			_inj_count=$(( _inj_count + 1 ))
 			printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
 		done < "$E2E_INJECT_QUEUE"
 		> "$E2E_INJECT_QUEUE"
 		if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 			$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected into queue:
-${_inj_list}" < /dev/null >/dev/null 2>&1
+${_inj_list}" < /dev/null >/dev/null
 		fi
 	fi
 
@@ -1879,10 +2041,24 @@ ${_inj_list}" < /dev/null >/dev/null 2>&1
 	while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 		free=$(_find_free_pool) || break
 		suite="${_work_queue[$_queue_idx]}"
+		# Guard: skip if suite is already running on another pool
+		_dup=""
+		for _dp in "${!_busy_pools[@]}"; do
+			if [ "${_busy_pools[$_dp]}" = "$suite" ]; then
+				_dup=1
+				break
+			fi
+		done
+		if [ -n "$_dup" ]; then
+			printf "  [%s] DEFER: %s already running on pool %s -- will retry later\n" \
+				"$(date '+%H:%M:%S')" "$suite" "$_dp"
+			_queue_idx=$(( _queue_idx + 1 ))
+			continue
+		fi
 		if ! _dispatch_suite "$free" "$suite"; then
 			_record_result "$suite" "99"
 		fi
-		(( _queue_idx++ ))
+		_queue_idx=$(( _queue_idx + 1 ))
 	done
 
 	# Inline retry: when queue is drained and a free pool exists, re-queue
@@ -1900,7 +2076,7 @@ ${_inj_list}" < /dev/null >/dev/null 2>&1
 				unset '_results[$_rs]'
 				_work_queue+=("$_rs")
 				printf "  [%s] RETRY %d/%d: queuing %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
-				(( _retry_added++ ))
+				_retry_added=$(( _retry_added + 1 ))
 			fi
 		done
 		# Notify on retries (exceptional circumstance)
@@ -1911,7 +2087,7 @@ ${_inj_list}" < /dev/null >/dev/null 2>&1
 "
 			done
 			$NOTIFY_CMD "[e2e] RETRY: ${_retry_added} failed suite(s) re-queued:
-${_retry_list}" < /dev/null >/dev/null 2>&1
+${_retry_list}" < /dev/null >/dev/null
 		fi
 		# Dispatch newly queued retries immediately
 		if [ "$_retry_added" -gt 0 ]; then
@@ -1921,7 +2097,7 @@ ${_retry_list}" < /dev/null >/dev/null 2>&1
 				if ! _dispatch_suite "$free" "$suite"; then
 					_record_result "$suite" "99"
 				fi
-				(( _queue_idx++ ))
+				_queue_idx=$(( _queue_idx + 1 ))
 			done
 		fi
 	fi
@@ -1929,11 +2105,15 @@ ${_retry_list}" < /dev/null >/dev/null 2>&1
 	_write_dispatch_state
 
 	# Print status only when something changed
+	_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
 	if [ ${#_busy_pools[@]} -gt 0 ]; then
-		_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
 		_status_line="${#_results[@]}d ${#_busy_pools[@]}r ${_queued_remaining}q"
 		for p in "${!_busy_pools[@]}"; do
 			_status_line+=" con${p}:${_busy_pools[$p]}"
+		done
+		# Include queued suite names in fingerprint so injections trigger a reprint
+		for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+			_status_line+=" q:${_work_queue[$_qi]}"
 		done
 		if [ "${_status_line}" != "${_prev_status:-}" ]; then
 			printf "  [%s] %d done, %d running" "$(date '+%H:%M:%S')" "${#_results[@]}" "${#_busy_pools[@]}"
@@ -1944,11 +2124,18 @@ ${_retry_list}" < /dev/null >/dev/null 2>&1
 			for p in "${!_busy_pools[@]}"; do
 				printf " con%s:%s" "$p" "${_busy_pools[$p]}"
 			done
+			if [ "$_queued_remaining" -gt 0 ]; then
+				printf " ||"
+				for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+					printf " %s" "${_work_queue[$_qi]}"
+				done
+			fi
 			echo ""
 			_prev_status="$_status_line"
 		fi
-		sleep 30
 	fi
+	# Always sleep to avoid CPU spin (e.g. when queue has work but no pools are free)
+	sleep 30
 done
 
 # --- Collect logs from each conN and disN --------------------------------------
@@ -1981,20 +2168,20 @@ _skipped=0
 for suite in "${suites_to_run[@]}"; do
 	rc="${_results[$suite]:-}"
 	pool="${_result_pool[$suite]:-?}"
-	(( _total++ ))
+	_total=$(( _total + 1 ))
 
 	if [ -z "$rc" ]; then
 		printf "  \033[1;33m????\033[0m  %-35s pool %-2s (no result)\n" "$suite" "$pool"
 		_overall_rc=1
 	elif [ "$rc" -eq 0 ]; then
 		printf "  \033[1;32mPASS\033[0m  %-35s pool %-2s\n" "$suite" "$pool"
-		(( _passed++ ))
+		_passed=$(( _passed + 1 ))
 	elif [ "$rc" -eq 3 ]; then
 		printf "  \033[1;33mSKIP\033[0m  %-35s pool %-2s\n" "$suite" "$pool"
-		(( _skipped++ ))
+		_skipped=$(( _skipped + 1 ))
 	else
 		printf "  \033[1;31mFAIL\033[0m  %-35s pool %-2s (exit=%s)\n" "$suite" "$pool" "$rc"
-		(( _failed++ ))
+		_failed=$(( _failed + 1 ))
 		_overall_rc=1
 	fi
 done
@@ -2005,7 +2192,7 @@ echo "  Logs: $_RUN_DIR/logs/"
 echo "========================================"
 
 if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})" < /dev/null >/dev/null 2>&1
+	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})" < /dev/null >/dev/null
 fi
 
 # Cleanup dashboard
