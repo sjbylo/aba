@@ -1,4 +1,5 @@
 ## [Unreleased]
+<!-- Before release: git shortlog -sne <prev-tag>..HEAD | grep -v sjbylo — credit ALL external contributors -->
 
 ### New Features
 - **KVM/libvirt platform support** - Full KVM hypervisor support as a new platform alongside VMware and bare-metal. Includes 11 `kvm-*.sh` lifecycle scripts (create, delete, start, stop, kill, ls, exists, on, refresh, upload, create-folder), `kvm.conf` template, and `ensure_virsh()` helpers. Supports non-root SSH to the KVM host.
@@ -116,6 +117,7 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **Catalog YAML always regenerated** - Fresh index download triggers ISC regeneration.
 - **`reg_detect_existing()` fixed** - No longer blocks fresh installs due to stale credentials.
 - **Docker remote install** - Ensures `docker-reg-image.tgz` exists before scp.
+- **Nested directories in custom manifests** - Day2 custom manifest support now handles nested directory structures ([#20](https://github.com/sjbylo/aba/pull/20), [@mateuszslugocki](https://github.com/mateuszslugocki))
 
 ---
 
@@ -260,6 +262,9 @@ TUI polish, new E2E test framework, reliability and UX fixes
 - Version-aware download task IDs prevent stale cache across OCP version changes
 - E2E suites use pool-aware helpers instead of hardcoded IPs
 
+### Community
+- [@sylviyayy](https://github.com/sylviyayy) - Added FAQ section and Day 2 documentation to README
+
 ---
 
 ## [0.9.1] - 2026-02-08
@@ -276,6 +281,7 @@ Bug fixes and improvements
 - Added error handling for all ensure_*() function calls
 - Fixed 'Version unavailable' error
 - Fixed 'missing release image' error for wrong channel/version combination
+- Fixed `oc-mirror list operators` requiring `--v1` flag ([#11](https://github.com/sjbylo/aba/pull/11), [@KamilBlaz](https://github.com/KamilBlaz))
 
 ### Improvements
 - Added log rotation and history file to run_once()
@@ -283,6 +289,9 @@ Bug fixes and improvements
 - Removed oc-mirror v1 mirroring code and oc_mirror_version variable
 - Removed duplicate ensure_oc_mirror() call in reg-sync.sh
 - Removed redhat-marketplace catalog references
+
+### Community
+- [@KamilBlaz](https://github.com/KamilBlaz) - Fixed oc-mirror operator listing ([#11](https://github.com/sjbylo/aba/pull/11))
 
 ---
 

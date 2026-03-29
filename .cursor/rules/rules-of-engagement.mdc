@@ -152,4 +152,13 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 - At the **end of every response**, check if any E2E suites are running (via `run.sh status` or tmux sessions on active pools) and report status briefly
 - Do this alongside the `ai/SESSION_STATE.md` update -- same cadence, every reply
 
+## Community contributor credits
+
+- When updating CHANGELOG.md for a release, ALWAYS check for external contributors:
+  `git shortlog -sne <prev-tag>..HEAD | grep -v sjbylo`
+- Every external contributor MUST be credited:
+  1. Inline on their PR bullet: `(#NN, @handle)`
+  2. In a `### Community` section at the end of the release block
+- Check ALL PRs in the range, not just the latest -- contributors may have multiple PRs
+
 ## For full details see `ai/RULES_OF_ENGAGEMENT.md`
