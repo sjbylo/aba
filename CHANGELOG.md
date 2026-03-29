@@ -1,4 +1,11 @@
 ## [Unreleased]
+
+---
+
+## [0.9.8] - 2026-03-29
+
+KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4.21 compatibility, bug fixes and improvements
+
 <!-- Before release: git shortlog -sne <prev-tag>..HEAD | grep -v sjbylo — credit ALL external contributors -->
 
 ### New Features
@@ -335,7 +342,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.8...HEAD
+[0.9.8]: https://github.com/sjbylo/aba/releases/tag/v0.9.8
 [0.9.7]: https://github.com/sjbylo/aba/releases/tag/v0.9.7
 [0.9.6]: https://github.com/sjbylo/aba/releases/tag/v0.9.6
 [0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
