@@ -145,9 +145,8 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster on KVM"
 
-e2e_run "Delete leftover $SNO VMs (if any)" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete || true; fi"
-e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
+e2e_run "Delete any leftover $SNO cluster" \
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
 e2e_run -r 2 10 "Create VMs and start install" \
@@ -243,7 +242,7 @@ test_end
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
-    "aba --dir $SNO delete && rm -rf $SNO"
+    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

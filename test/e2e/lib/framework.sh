@@ -24,22 +24,20 @@
 #       cmd 2>&1 | grep          # stderr MERGED into pipe -- grep sees both
 #
 #     CORRECT alternatives:
-#       cmd || true              # error is visible, exit code is swallowed
 #       cmd >/dev/null           # stdout silenced, stderr still visible
-#       cmd >/dev/null || true   # stdout silenced, error visible, won't fail
+#       var=$(cmd) || var=""     # capture output; empty on failure (explicit)
 #
 #     NARROW EXCEPTIONS (must have a comment explaining why):
 #       command -v foo >/dev/null    # existence check; no stderr output
-#       type foo &>/dev/null         # guard check; "not found" is expected
-#       declare -p VAR &>/dev/null   # guard check; "not found" is expected
 #       kill -0 $pid 2>/dev/null     # process probe; "no such process" is noise
-#       . ~/.bash_profile 2>/dev/null # file may not exist on remote host
-#       tmux ... 2>/dev/null         # tmux session may not be running
+#       tmux ... 2>/dev/null         # tmux session may not exist
 #       [ "$x" -gt 0 ] 2>/dev/null  # arithmetic guard; non-numeric warning
 #
-#  3. Never use '|| true' in test commands.
-#     If a command can legitimately fail, use 'e2e_diag' or embed an explicit
-#     precondition check (e.g. if [ -f X ]; then ...; fi).
+#  3. NEVER use '|| true' in framework or test code.
+#     These scripts do NOT use set -e, so || true does nothing except
+#     signal "I don't care if this fails" -- which is always wrong in a
+#     test framework.  If a command can legitimately fail, use an explicit
+#     guard (e.g. if [ -f X ]; then ...; fi) or capture with || var="".
 #
 #  4. When a test fails, check if the fix belongs in ABA code FIRST.
 #     Tests exercise the product -- don't paper over product bugs.
@@ -464,12 +462,12 @@ suite_end() {
 test_begin() {
     local test_name="$1"
     _E2E_CURRENT_TEST="$test_name"
-    (( _E2E_TEST_COUNT++ )) || true
+    (( _E2E_TEST_COUNT++ ))
 
     # If suite was skipped via interactive prompt, mark remaining tests SKIP
     if [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _E2E_SKIP_BLOCK=1
-        (( _E2E_SKIP_COUNT++ )) || true
+        (( _E2E_SKIP_COUNT++ ))
         _update_plan "$test_name" "SKIP"
         _e2e_log_and_print "$(_e2e_yellow "  SKIP (suite skipped): $test_name")"
         _e2e_summary "$(_e2e_Yellow "  SKIP (suite skipped): $test_name")"
@@ -513,7 +511,7 @@ test_end() {
     # If user picked [s]kip from interactive menu, record as SKIP
     if [ -n "$_E2E_USER_SKIPPED" ]; then
         _E2E_USER_SKIPPED=""
-        (( _E2E_SKIP_COUNT++ )) || true
+        (( _E2E_SKIP_COUNT++ ))
         _update_plan "$test_name" "SKIP"
         _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
         _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
@@ -523,12 +521,12 @@ test_end() {
     fi
 
     if [ "$result" -eq 0 ]; then
-        (( _E2E_PASS_COUNT++ )) || true
+        (( _E2E_PASS_COUNT++ ))
         _update_plan "$test_name" "PASS"
         _e2e_log_and_print "$(_e2e_green "  PASS: $test_name")"
         _e2e_summary "$(_e2e_Green "  PASS: $test_name")"
     else
-        (( _E2E_FAIL_COUNT++ )) || true
+        (( _E2E_FAIL_COUNT++ ))
         _update_plan "$test_name" "FAIL"
         _e2e_log_and_print "$(_e2e_red "  FAIL: $test_name")"
         _e2e_summary "$(_e2e_Red "  FAIL: $test_name")"
@@ -540,7 +538,7 @@ test_end() {
 
 test_skip() {
     local test_name="${1:-$_E2E_CURRENT_TEST}"
-    (( _E2E_SKIP_COUNT++ )) || true
+    (( _E2E_SKIP_COUNT++ ))
     _update_plan "$test_name" "SKIP"
     _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
     _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
@@ -554,7 +552,7 @@ run_test() {
 
     # Check checkpoint/resume -- skip if already passed
     if should_skip_checkpoint "$test_name"; then
-        (( _E2E_TEST_COUNT++ )) || true
+        (( _E2E_TEST_COUNT++ ))
         _checkpoint_write "$test_name" "0"
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
@@ -646,7 +644,7 @@ e2e_cleanup_clusters() {
 			else
 				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
 			fi" \
-			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
 		_cleanup_rc=${PIPESTATUS[0]}
 		if [ "$_cleanup_rc" -ne 0 ]; then
 			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
@@ -720,7 +718,7 @@ e2e_cleanup_mirrors() {
 			else
 				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
 			fi" \
-			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
 		_cleanup_rc=${PIPESTATUS[0]}
 		if [ "$_cleanup_rc" -ne 0 ]; then
 			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
@@ -759,7 +757,7 @@ _interactive_prompt() {
         [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
         [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        read -t 0 -n 10000 </dev/tty 2>/dev/null || true
+        read -t 0 -n 10000 </dev/tty 2>/dev/null
         if [ "$_clock_stopped" ]; then
             printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
             read -r ans </dev/tty
@@ -890,7 +888,7 @@ _e2e_fix_image_pruner_if_needed() {
 		_e2e_log "  Using kubeconfig: $kc"
 		KUBECONFIG="$kc" oc patch imagepruner.imageregistry/cluster \
 			--patch '{"spec":{"suspend":true}}' --type=merge && \
-		KUBECONFIG="$kc" oc -n openshift-image-registry delete jobs --all || true
+		KUBECONFIG="$kc" oc -n openshift-image-registry delete jobs --all
 		_e2e_log "  Workaround applied -- pruner suspended, failed jobs deleted"
 		return 0
 	done
@@ -1594,12 +1592,12 @@ _e2e_fix_ssh_config_ownership() {
     done
     if [ -n "$needs_fix" ]; then
         echo "  Fixing SSH config ownership in $dir ..."
-        sudo chown root:root "$dir" || true
-        sudo chmod 755 "$dir" || true
+        sudo chown root:root "$dir"
+        sudo chmod 755 "$dir"
         for f in "$dir"/*.conf; do
             [ -f "$f" ] || continue
-            sudo chown root:root "$f" || true
-            sudo chmod 644 "$f" || true
+            sudo chown root:root "$f"
+            sudo chmod 644 "$f"
         done
     fi
 }
@@ -1662,6 +1660,6 @@ e2e_teardown() {
 
     # Print final summary if suite was started
     if [ -n "$_E2E_SUITE_NAME" ]; then
-        suite_end || true
+        suite_end
     fi
 }

@@ -86,6 +86,7 @@ e2e_run "Verify /home disk usage < 10GB after reset" \
     "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
 
 # Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
+# || true: some packages may not be installed -- dnf returns non-zero if any are missing
 e2e_run "Remove packages to test clean bootstrap" \
     "sudo dnf remove -y git hostname make jq bind-utils nmstate net-tools skopeo python3-jinja2 python3-pyyaml openssl coreos-installer --disableplugin=subscription-manager || true"
 
@@ -190,8 +191,10 @@ for ctype in sno compact standard; do
 
     _extra_args=""
     [ "$ctype" = "standard" ] && _extra_args="-W 2"
+    e2e_run "Delete any leftover $cname cluster" \
+        "if [ -d $cname ]; then aba -y --dir $cname delete; fi"
     e2e_run "Create cluster.conf for $cname" \
-        "rm -rf $cname && aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
+        "aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
@@ -229,7 +232,8 @@ test_end
 # ============================================================================
 test_begin "SNO: install cluster"
 
-e2e_run "Clean up previous $SNO cluster dir" "rm -rf $SNO"
+e2e_run "Delete any leftover $SNO cluster" \
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
@@ -337,7 +341,7 @@ test_end
 test_begin "Cleanup: delete cluster and unregister mirror"
 
 e2e_run "Delete SNO cluster" \
-    "aba --dir $SNO delete && rm -rf $SNO"
+    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"
 

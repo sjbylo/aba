@@ -190,8 +190,9 @@ e2e_run "Verify aba-sigstore.yaml deployed" \
 
 # Ensure OC_MIRROR_FLAGS is not set (registries.d handles sigstore now)
 e2e_run -q "Ensure OC_MIRROR_FLAGS is unset in ~/.aba/config" \
-    "grep -q '^OC_MIRROR_FLAGS=' \$HOME/.aba/config && \
-     sed -i 's/^OC_MIRROR_FLAGS=/#OC_MIRROR_FLAGS=/' \$HOME/.aba/config || true"
+    "if grep -q '^OC_MIRROR_FLAGS=' \$HOME/.aba/config; then
+         sed -i 's/^OC_MIRROR_FLAGS=/#OC_MIRROR_FLAGS=/' \$HOME/.aba/config
+     fi"
 
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
@@ -323,7 +324,8 @@ e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
 e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
 e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
 
-e2e_run "Clean standard cluster dir" "rm -rf $STANDARD"
+e2e_run "Delete any leftover $STANDARD cluster" \
+    "if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
 e2e_add_to_cluster_cleanup "$PWD/$STANDARD"
 e2e_run "Create agent configs (bare-metal)" \
     "aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
@@ -349,7 +351,8 @@ e2e_run_remote "Verify no registry containers on disN" \
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
-e2e_run "Remove BM cluster dir (no VMs to delete, platform=bm)" "rm -rf $STANDARD"
+e2e_run "Delete $STANDARD cluster (platform=bm, no VMs expected)" \
+    "if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
 
 e2e_run "Restore platform=vmw" "aba --platform vmw"
 
@@ -361,9 +364,9 @@ test_end
 test_begin "Cleanup: delete clusters and uninstall mirrors"
 
 e2e_run "Delete SNO cluster" \
-    "aba --dir $SNO delete && rm -rf $SNO"
+    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
 e2e_run "Delete standard cluster" \
-    "aba --dir $STANDARD delete && rm -rf $STANDARD"
+    "if [ -d $STANDARD ]; then aba --dir $STANDARD delete && rm -rf $STANDARD; else echo '[cleanup] $STANDARD already removed'; fi"
 e2e_run "Uninstall mymirror registry" \
     "if [ -d mymirror ]; then aba --dir mymirror uninstall; else echo '[cleanup] mymirror already removed'; fi"
 e2e_run "Uninstall mirror registry on disN" \

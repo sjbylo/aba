@@ -300,8 +300,10 @@ e2e_run "Data directory removed" \
 e2e_run "Pre-clean: remove stale iptables rules for port $_DOCKER_NEG_PORT on disN" \
 	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"
 
-e2e_run "Pre-clean: remove stale registry on disN" \
-	"_essh $DIS_HOST 'podman rm -f registry || true; rm -rf ~/docker-reg; true'"
+# If a registry container still exists here, the previous test (Test C: uninstall
+# with missing state) has a bug -- it should have cleaned it up.  Verify, don't sweep.
+e2e_run "Verify no stale registry container on disN before Test B" \
+	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
 e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"
@@ -332,11 +334,11 @@ e2e_run "Uninstall neg-test registry" \
 
 # --- Cleanup ---------------------------------------------------------------
 
-e2e_run "Remove test mirror dirs" \
-	"rm -rf $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR"
+e2e_run "Clean test mirror dirs (registries already uninstalled above)" \
+	"for d in $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR; do [ -d \$d ] && aba -y -d \$d uninstall; done"
 
-e2e_run "Remove leftover data dirs on disN" \
-	"_essh $DIS_HOST 'rm -rf ~/docker-reg'"
+e2e_run "Verify data dirs removed on disN" \
+	"_essh $DIS_HOST 'test ! -d ~/docker-reg || echo WARNING: ~/docker-reg still exists'"
 
 e2e_run "Remove all iptables rules for port $_DOCKER_NEG_PORT on disN" \
 	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"

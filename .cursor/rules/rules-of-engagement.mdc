@@ -86,6 +86,7 @@ alwaysApply: true
 ## E2E test golden rules
 
 - Tests MUST fail on error -- never mask underlying issues!
+- **NEVER use `|| true` on `aba delete`, `aba uninstall`, or any cleanup/lifecycle command in test suites!** If delete/uninstall fails, that IS the bug -- the suite MUST stop so the failure can be investigated. `|| true` silently swallows the failure, leaves orphan VMs/mirrors running, and causes cascading IP conflicts in later tests. The ONLY place `|| true` is acceptable on cleanup commands is inside the framework's crash-recovery functions (`e2e_cleanup_clusters`, `e2e_cleanup_mirrors`) where multiple entries must be attempted. In suite code: let the error propagate.
 - **NEVER suppress stderr in test code!** Stderr is diagnostic gold -- suppressing it wastes HOURS of debugging.
   - **Forbidden:** `2>/dev/null`, `>/dev/null 2>&1`, `&>/dev/null` -- these all hide error messages
   - **Forbidden:** `cmd 2>&1 | grep` -- `2>&1` merges stderr into the pipe so grep sees both streams; this is almost never what you want

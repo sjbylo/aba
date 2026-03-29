@@ -53,7 +53,7 @@ RC_FILE="${E2E_RC_PREFIX}-${SUITE}.rc"
 _LOCK_MAX_AGE=86400  # 24 hours
 
 if [ -f "$LOCK_FILE" ]; then
-	read -r _lock_pid _lock_ts _ < "$LOCK_FILE" 2>/dev/null || true
+	read -r _lock_pid _lock_ts _ < "$LOCK_FILE"
 	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
 		echo "ERROR: runner.sh for suite '$SUITE' already executing on $(hostname) (pid $_lock_pid). Aborting."
 		echo "255" > "$RC_FILE"
@@ -79,8 +79,7 @@ rm -f "$RC_FILE"
 echo "$SUITE" > /tmp/e2e-last-suites
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
-# Tolerate failure: runner may be invoked outside tmux (e.g. direct bash invocation)
-tmux rename-window "$SUITE" 2>/dev/null || true
+tmux rename-window "$SUITE" 2>/dev/null
 
 echo ""
 echo "========================================"
@@ -96,6 +95,11 @@ source "$_RUNNER_DIR/lib/framework.sh"
 source "$_RUNNER_DIR/lib/config-helpers.sh"
 source "$_RUNNER_DIR/lib/vm-helpers.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
+
+# Framework's own bin directory -- never deleted by suite cleanup.
+# Tools here (e.g. govc) are used by pre/post-suite integrity checks.
+_FRAMEWORK_BIN="${_RUNNER_DIR}/bin"
+mkdir -p "$_FRAMEWORK_BIN"
 
 # Mirror data dirs that ABA manages (created by --data-dir or as default registry roots).
 # These must ONLY be cleaned up by 'aba uninstall', never by brute-force rm -rf.
@@ -125,11 +129,21 @@ _verify_no_mirror_data_dirs() {
 	local remote_target="${2:-}"
 	local _leftovers=""
 
+	# First verify we can reach the remote host (if checking remotely).
+	# Without this, every "test -d" would fail silently and we'd report "all clean".
+	if [ -n "$remote_target" ]; then
+		if ! _essh "$remote_target" "true" 2>&1; then
+			echo ""
+			echo "  FATAL: Cannot SSH to $remote_target -- cannot verify mirror data dirs on $label"
+			return 1
+		fi
+	fi
+
 	for _dir in $_E2E_MIRROR_DATA_DIRS; do
 		if [ -n "$remote_target" ]; then
-			_essh "$remote_target" "test -d ~/$_dir" && _leftovers+="  ~/$_dir"$'\n' || true
+			_essh "$remote_target" "test -d ~/$_dir" && _leftovers+="  ~/$_dir"$'\n'
 		else
-			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n' || true
+			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n'
 		fi
 	done
 
@@ -145,19 +159,26 @@ _verify_no_mirror_data_dirs() {
 	return 0
 }
 
-# Verify no orphan cluster VMs exist in this pool's vCenter folder after cleanup.
+# Verify no orphan cluster VMs exist in this pool's vCenter folder.
 # If any are found, the .cleanup mechanism failed -- stop so the root cause can
 # be investigated.  Never silently destroy them.
+# Uses $_FRAMEWORK_BIN/govc (installed once at runner startup, never cleaned by suites).
 # NOTE: VC_FOLDER from pools.conf already includes the pool path
 #       (e.g. /Datacenter/vm/aba-e2e/pool2) -- do NOT append /pool${POOL_NUM}.
 _verify_no_orphan_vms() {
-	command -v govc >/dev/null || return 0
 	[ -z "${VC_FOLDER:-}" ] && return 0
+	local _govc="${_FRAMEWORK_BIN}/govc"
+	if [ ! -x "$_govc" ]; then
+		echo ""
+		echo "  FATAL: VC_FOLDER is set ($VC_FOLDER) but govc not found at $_govc"
+		echo "  Cannot verify whether orphan VMs exist. Refusing to continue."
+		return 1
+	fi
 
 	# conN and disN are pool infrastructure VMs, not orphans
 	local _known="con${POOL_NUM} dis${POOL_NUM}"
 	local _all_vms
-	_all_vms=$(govc find "$VC_FOLDER" -type m) || _all_vms=""
+	_all_vms=$("$_govc" find "$VC_FOLDER" -type m) || _all_vms=""
 	[ -z "$_all_vms" ] && echo "  No VMs in $VC_FOLDER" && return 0
 
 	local _real_orphans=""
@@ -176,7 +197,7 @@ _verify_no_orphan_vms() {
 	[ -z "$_real_orphans" ] && echo "  No orphan VMs in $VC_FOLDER" && return 0
 
 	echo ""
-	echo "  FATAL: Orphan VMs found in $VC_FOLDER after cleanup:"
+	echo "  FATAL: Orphan VMs found in $VC_FOLDER:"
 	while IFS= read -r _o; do
 		[ -z "$_o" ] && continue
 		echo "    $_o"
@@ -230,8 +251,9 @@ _ensure_pool_registry() {
 
 	echo "  pool-registry: NOT running -- restarting from $POOL_REG_DIR ..."
 
-	# Remove stale container entry if it exists (stopped/dead)
-	podman rm -f pool-registry || true
+	# Remove stale container entry if it exists (stopped/dead).
+	# podman rm -f returns 0 even when container doesn't exist (with -f).
+	podman rm -f pool-registry
 
 	local _reg_host
 	_reg_host="$(hostname -f)"
@@ -394,7 +416,7 @@ _revert_dis_snapshot() {
 	fi
 
 	govc snapshot.revert -vm "$DIS_VM" "$snapshot" || { echo "  ERROR: revert $DIS_VM failed" >&2; return 1; }
-	govc vm.power -on "$DIS_VM" || true
+	govc vm.power -on "$DIS_VM" || { echo "  ERROR: vm.power -on $DIS_VM failed" >&2; return 1; }
 	sleep "${VM_BOOT_DELAY:-8}"
 
 	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
@@ -406,9 +428,9 @@ _revert_dis_snapshot() {
 			# Remove stale firewall ports that may have been baked into the snapshot
 			echo "  Resetting firewall ports on $DIS_VM ..."
 			for _port in $_E2E_STALE_FW_PORTS; do
-				_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1 || true
+				_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
 			done
-			_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1 || true
+			_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1
 			# Fix VC_FOLDER on disN after snapshot revert (snapshot has base value,
 			# not pool-specific). The bundle/tar only copies aba repo files, not ~/.vmware.conf.
 			if [ -n "${VC_FOLDER:-}" ]; then
@@ -451,24 +473,24 @@ _cleanup_dis_aba() {
 
 	# 1. Clean disN non-mirror filesystem (aba code, CLI tools, caches)
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
-	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1 || true
-	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1 || true
+	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1
+	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
 	# Remove stale CA trust anchors from previous registry installs
-	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1 || true
+	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 
 	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
-	_essh "$dis_host" "sudo systemctl enable firewalld; sudo systemctl start firewalld" 2>&1 || true
+	_essh "$dis_host" "sudo systemctl enable firewalld; sudo systemctl start firewalld" 2>&1
 
 	# 4. Remove stale firewall ports from permanent config (survive restart)
 	echo "  Resetting firewall ports on disN ..."
 	for _port in $_E2E_STALE_FW_PORTS; do
-		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1 || true
+		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
 	done
-	_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1 || true
+	_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1
 
 	# Verify no stale ports remain on disN
 	local _dis_fw_ports
-	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports") || true
+	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports")
 	if [ -n "$_dis_fw_ports" ]; then
 		echo "  WARNING: disN still has firewall ports after reset: $_dis_fw_ports"
 	else
@@ -515,7 +537,7 @@ if [ -n "$_RUNNER_RESUME" ] && [ -f "$_STATE_FILE_PATH" ]; then
 	echo "  Resuming from state file: $_STATE_FILE_PATH"
 	echo "  Tests previously passed will be skipped."
 else
-	unset E2E_RESUME_FILE 2>/dev/null || true
+	unset E2E_RESUME_FILE
 	if [ -n "$_RUNNER_RESUME" ]; then
 		echo "  --resume requested but no state file found at $_STATE_FILE_PATH"
 		echo "  Running suite from the beginning."
@@ -561,14 +583,15 @@ _pre_suite_cleanup() {
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path delete"
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
+			# Note: _verify_no_orphan_vms has already run and passed before we get here,
+			# so a missing cluster dir means the cluster was never created or already cleaned
+			# (not silently rm -rf'd with orphan VMs left behind).
 			if ! ( _essh "$target" \
 				"if [ -d '$abs_path' ]; then
 					aba -y -d '$abs_path' delete
 				else
-					echo '  FATAL: cluster dir $abs_path not found -- cannot run aba delete.'
-					echo '  The dir was likely rm -rf'\''d before cleanup could run.'
-					echo '  Orphan VMs may exist. Investigate the root cause.'
-					exit 1
+					echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
+					echo '  (orphan VM check already passed -- no dangling VMs)'
 				fi" \
 				< /dev/null 2>&1 ); then
 				echo "  WARNING: cleanup failed for $target:$abs_path"
@@ -618,6 +641,34 @@ _pre_suite_cleanup() {
 if [ -n "$_RUNNER_RESUME" ]; then
 	echo "  (Skipping pre-suite cleanup -- --resume mode)"
 elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
+	# Install govc into the framework bin dir (once) so orphan checks always work.
+	# Suite cleanup wipes ~/bin/govc but never touches $_FRAMEWORK_BIN.
+	if [ ! -x "$_FRAMEWORK_BIN/govc" ] && [ -n "${VC_FOLDER:-}" ]; then
+		if command -v govc >/dev/null; then
+			cp "$(command -v govc)" "$_FRAMEWORK_BIN/govc"
+			echo "  Copied govc to $_FRAMEWORK_BIN/govc"
+		elif [ -f "$_ABA_ROOT/scripts/include_all.sh" ]; then
+			( source "$_ABA_ROOT/scripts/include_all.sh" && ensure_govc )
+			if [ -x ~/bin/govc ]; then
+				cp ~/bin/govc "$_FRAMEWORK_BIN/govc"
+				echo "  Installed govc to $_FRAMEWORK_BIN/govc"
+			fi
+		fi
+		if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
+			echo ""
+			echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
+			echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
+			echo "1" > "$RC_FILE"
+			exit 1
+		fi
+	fi
+
+	# Check for orphan VMs FIRST, before any cleanup runs.
+	if ! _verify_no_orphan_vms; then
+		echo "5" > "$RC_FILE"
+		exit 5
+	fi
+
 	if ! _pre_suite_cleanup; then
 		echo ""
 		echo "  FATAL: pre-suite cleanup failed. Stale clusters/mirrors could not be deleted."
@@ -639,7 +690,14 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		}
 	else
 		# Default: clean disN using ABA's own commands (exercises product code paths)
-		_cleanup_dis_aba
+		if ! _cleanup_dis_aba; then
+			echo ""
+			echo "  ERROR: disN cleanup failed -- cannot proceed with a dirty disN."
+			echo "  Check SSH connectivity and disk state on ${DIS_VM}.${VM_BASE_DOMAIN}"
+			echo ""
+			echo "1" > "$RC_FILE"
+			exit 1
+		fi
 	fi
 
 	# Clean up any stale Quay/registry state on conN from previous suite
@@ -655,11 +713,6 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		exit 1
 	fi
 	if ! _verify_no_mirror_data_dirs "conN"; then
-		echo "1" > "$RC_FILE"
-		exit 1
-	fi
-
-	if ! _verify_no_orphan_vms; then
 		echo "1" > "$RC_FILE"
 		exit 1
 	fi
@@ -689,7 +742,7 @@ echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
 echo "  --- ls -ltr ~/ ---"
 ls -ltr ~/
 echo "  --- ls -ltr ~/* ---"
-ls -ltr ~/* || true
+ls -ltr ~/*
 echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
 sudo du -am ~/ | sort -rn | head -30
 if [ -n "${DIS_VM:-}" ]; then
@@ -697,11 +750,11 @@ if [ -n "${DIS_VM:-}" ]; then
 	echo ""
 	echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
 	echo "  --- ls -ltr ~/ ---"
-	_essh "$_dis" "ls -ltr ~/" 2>&1 || true
+	_essh "$_dis" "ls -ltr ~/" 2>&1
 	echo "  --- ls -ltr ~/* ---"
-	_essh "$_dis" "ls -ltr ~/*" 2>&1 || true
+	_essh "$_dis" "ls -ltr ~/*" 2>&1
 	echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-	_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1 || true
+	_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1
 fi
 echo ""
 
@@ -721,7 +774,7 @@ while true; do
 		echo ""
 		# Full restart: do NOT resume -- cleanup tears down everything,
 		# so previously-passed setup steps must run again.
-		unset E2E_RESUME_FILE 2>/dev/null || true
+		unset E2E_RESUME_FILE
 		rm -f "$_STATE_FILE_PATH"
 		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
 		if ! _pre_suite_cleanup; then
@@ -737,7 +790,11 @@ while true; do
 					exit 1
 				}
 			else
-				_cleanup_dis_aba
+				if ! _cleanup_dis_aba; then
+					echo "  ERROR: disN cleanup failed during restart -- cannot proceed."
+					echo "1" > "$RC_FILE"
+					exit 1
+				fi
 			fi
 			_cleanup_con_quay
 			_cleanup_non_mirror_local
@@ -772,7 +829,7 @@ while true; do
 		echo "  --- ls -ltr ~/ ---"
 		ls -ltr ~/
 		echo "  --- ls -ltr ~/* ---"
-		ls -ltr ~/* || true
+		ls -ltr ~/*
 		echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
 		sudo du -am ~/ | sort -rn | head -30
 		if [ -n "${DIS_VM:-}" ]; then
@@ -780,11 +837,11 @@ while true; do
 			echo ""
 			echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
 			echo "  --- ls -ltr ~/ ---"
-			_essh "$_dis" "ls -ltr ~/" 2>&1 || true
+			_essh "$_dis" "ls -ltr ~/" 2>&1
 			echo "  --- ls -ltr ~/* ---"
-			_essh "$_dis" "ls -ltr ~/*" 2>&1 || true
+			_essh "$_dis" "ls -ltr ~/*" 2>&1
 			echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-			_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1 || true
+			_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1
 		fi
 		echo ""
 		continue
@@ -813,9 +870,16 @@ fi
 
 # 2a. Check for orphan cluster VMs in this pool's vCenter folder
 # VC_FOLDER from pools.conf already includes the pool path -- do NOT append /pool${POOL_NUM}
-if command -v govc >/dev/null && [ -n "${VC_FOLDER:-}" ]; then
+_govc="${_FRAMEWORK_BIN}/govc"
+if [ -n "${VC_FOLDER:-}" ] && [ ! -x "$_govc" ]; then
+	echo ""
+	echo "  FATAL: VC_FOLDER is set but govc not found at $_govc -- cannot verify orphan VMs"
+	echo "1" > "$RC_FILE"
+	exit 1
+fi
+if [ -x "$_govc" ] && [ -n "${VC_FOLDER:-}" ]; then
 	_known_vms="con${POOL_NUM} dis${POOL_NUM}"
-	_all_vms=$(govc find "$VC_FOLDER" -type m) || _all_vms=""
+	_all_vms=$("$_govc" find "$VC_FOLDER" -type m) || _all_vms=""
 	_orphan_vms=""
 	while IFS= read -r _ovm; do
 		[ -z "$_ovm" ] && continue
@@ -846,7 +910,7 @@ fi
 if [ -n "${DIS_VM:-}" ]; then
 	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	_containers=$(_essh "$_dis" "podman ps --format '{{.Names}}'" 2>&1) || _containers=""
-	_reg_containers=$(echo "$_containers" | grep -iE 'quay|registry|mirror' || true)
+	_reg_containers=$(echo "$_containers" | grep -iE 'quay|registry|mirror') || _reg_containers=""
 	if [ -n "$_reg_containers" ]; then
 		echo ""
 		echo "  *** POST-SUITE INTEGRITY FAILURE: registry/mirror containers still running on $_dis ***"

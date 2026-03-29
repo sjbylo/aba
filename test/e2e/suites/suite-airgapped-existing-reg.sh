@@ -88,8 +88,11 @@ e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
+e2e_run "Delete any leftover $SNO cluster" \
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+e2e_run "Delete any leftover $COMPACT cluster" \
+    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete; fi"
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Clean cluster dirs" "rm -rf $SNO $COMPACT"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
@@ -349,7 +352,7 @@ e2e_run_remote "Apply day2 config (vote-app mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"
 
 e2e_run_remote "Create demo project" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get project demo || oc new-project demo'"
 e2e_run_remote -r 3 2 "Launch vote-app from mirror" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
 e2e_poll_remote 480 30 "Wait for vote-app rollout" \

@@ -208,7 +208,11 @@ fi
 # restart) when --pools was not explicitly given.  Dispatch commands (--all,
 # --suite) keep the CLI_POOLS default of 1.
 _pool_count_from_conf() {
-	grep -c '^[^#]' "$CLI_POOLS_FILE" 2>/dev/null || echo "$CLI_POOLS"
+	if [ -f "$CLI_POOLS_FILE" ]; then
+		grep -c '^[^#]' "$CLI_POOLS_FILE"
+	else
+		echo "$CLI_POOLS"
+	fi
 }
 if [ -z "$_CLI_POOLS_SET" ]; then
 	if [ -n "$CLI_POOL" ]; then
@@ -278,53 +282,41 @@ _ssh_con() {
 	ssh $_SSH_OPTS "${user}@${host}" "$@"
 }
 
-_sweep_pool_orphan_vms() {
-	local pool_num="$1"
-	local _base="${VC_FOLDER_BASE:-/Datacenter/vm/aba-e2e}"
-	local _pfolder="${_base}/pool${pool_num}"
-	local _known_vms="con${pool_num} dis${pool_num}"
-
-	local _all_vms
-	_all_vms=$(govc find "$_pfolder" -type m) || return 0
-	[ -z "$_all_vms" ] && return 0
-
-	while IFS= read -r _vm; do
-		[ -z "$_vm" ] && continue
-		local _vmname; _vmname=$(basename "$_vm")
-		local _is_known=""
-		for _k in $_known_vms; do
-			[ "$_vmname" = "$_k" ] && _is_known=1 && break
-		done
-		[ -n "$_is_known" ] && continue
-
-		echo "    Destroying orphan VM: $_vm"
-		govc vm.power -off "$_vm" || true
-		govc vm.destroy "$_vm" || true
-	done <<< "$_all_vms"
-}
 
 # Process .cleanup and .mirror-cleanup files on a pool before wiping state.
 _process_pool_cleanup_files() {
 	local pool_num="$1"
 	_ssh_con "$pool_num" "
 		_logs=\"\$HOME/.e2e-harness/logs\"
+		_ok=1
 		for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
 			[ -f \"\$f\" ] || continue
 			echo \"    Processing \$(basename \"\$f\") ...\"
 			_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
 			while IFS=' ' read -r target abs_path; do
 				[ -z \"\$abs_path\" ] && continue
-				if echo \"\$f\" | grep -q '\.cleanup$'; then
+				if echo \"\$f\" | grep -q '\.cleanup\$'; then
 					echo \"      \$target: aba -y -d \$abs_path delete\"
-					ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" 2>&1 || true
+					# < /dev/null prevents ssh from consuming the while-read loop's stdin
+					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" < /dev/null 2>&1; then
+						echo \"      ERROR: aba delete failed for \$abs_path on \$target\"
+						_ok=
+					fi
 				else
 					echo \"      \$target: aba -y -d \$abs_path uninstall\"
-					ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" 2>&1 || true
+					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" < /dev/null 2>&1; then
+						echo \"      ERROR: aba uninstall failed for \$abs_path on \$target\"
+						_ok=
+					fi
 				fi
 			done < \"\$f\"
-			rm -f \"\$f\"
+			if [ -n \"\$_ok\" ]; then
+				rm -f \"\$f\"
+			else
+				echo \"    ERROR: cleanup FAILED -- keeping \$(basename \"\$f\") for investigation\"
+			fi
 		done
-	" || true
+	"
 }
 
 # --- Shared: create a tmux dashboard with one tail pane per pool --------------
@@ -344,7 +336,7 @@ _create_tmux_dashboard() {
 		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; clear; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!; while kill -0 \$_tpid 2>/dev/null; do sleep 10; _ns=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break; done; wait \$_tpid 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
 	}
 
-	tmux kill-session -t "$_sess" 2>/dev/null || true
+	tmux kill-session -t "$_sess" 2>/dev/null
 
 	if [ "$_np" -le 2 ]; then
 		tmux new-session -d -s "$_sess" "$(_dash_pane_cmd 1)"
@@ -423,7 +415,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 
 		# Skip pools with running suites unless --force is used
 		_running_sess=$(ssh $_SSH_OPTS "${target}" \
-			"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+			"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _running_sess=""
 		if [ "$_running_sess" = "yes" ]; then
 			if [ -z "$CLI_FORCE" ]; then
 				echo "RUNNING (skipped -- use --force to deploy anyway)"
@@ -454,7 +446,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 			if [ -x ~/bin/notify.sh ]; then
 				ssh -q $_SSH_OPTS "${target}" "mkdir -p ~/bin" &&
 				scp -q $_SSH_OPTS ~/bin/notify.sh "${target}:~/bin/notify.sh" &&
-				ssh -q $_SSH_OPTS "${target}" "chmod +x ~/bin/notify.sh" || true
+				ssh -q $_SSH_OPTS "${target}" "chmod +x ~/bin/notify.sh"
 			fi
 			echo "+ harness done"
 		else
@@ -479,9 +471,9 @@ if [ -n "$CLI_STOP" ]; then
 	# detect the freed pool and dispatch the next queued suite.
 	if [ -z "$CLI_POOL" ]; then
 		if [ -f "$E2E_DISPATCHER_PID" ]; then
-			_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+			_dpid=$(cat "$E2E_DISPATCHER_PID")
 			if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
-				kill "$_dpid" 2>/dev/null && echo "Dispatcher (pid $_dpid) stopped."
+				kill "$_dpid" && echo "Dispatcher (pid $_dpid) stopped."
 			fi
 			rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
 		fi
@@ -499,7 +491,7 @@ if [ -n "$CLI_STOP" ]; then
 		_host="con${p}.${_domain}"
 		printf "  con${p}: "
 		if ssh $_stop_ssh "${_user}@${_host}" "
-			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
+			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
 			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*
 			echo stopped
 		"; then
@@ -531,11 +523,11 @@ if [ -n "$CLI_START" ]; then
 	for p in "${_start_list[@]}"; do
 		for prefix in con dis; do
 			vm="${prefix}${p}"
-			_state=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1 || true)
+			_state=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1) || _state=""
 			if [[ "$_state" == *"poweredOn"* ]]; then
 				echo "    ${vm}: already on"
 			elif govc vm.info "$vm" &>/dev/null; then
-				govc vm.power -on "$vm" || true
+				govc vm.power -on "$vm"
 				echo "    ${vm}: powered on"
 			else
 				echo "    ${vm}: not found (skipped)"
@@ -572,7 +564,7 @@ if [ -n "$CLI_RESTART" ]; then
 		_host="con${p}.${_domain}"
 		printf "    con${p}: "
 		if ssh $_restart_ssh "${_user}@${_host}" "
-			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
+			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
 			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
 			echo stopped
 		"; then
@@ -603,7 +595,8 @@ if [ -n "$CLI_RESTART" ]; then
 				while IFS=" " read -r tgt path; do
 					[ -z "$path" ] && continue
 					echo "  cluster: $tgt $path"
-					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' delete || echo '\''  (dir not found)'\''" 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
+					# < /dev/null prevents ssh from consuming the while-read loop stdin
+					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' delete || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
 				done < "$f"
 				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
 			done
@@ -615,7 +608,8 @@ if [ -n "$CLI_RESTART" ]; then
 				while IFS=" " read -r tgt path; do
 					[ -z "$path" ] && continue
 					echo "  mirror: $tgt $path"
-					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' uninstall || echo '\''  (dir not found)'\''" 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
+					# < /dev/null prevents ssh from consuming the while-read loop stdin
+					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' uninstall || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
 				done < "$f"
 				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
 			done
@@ -671,7 +665,7 @@ if [ -n "$CLI_RESTART" ]; then
 			if [ -x ~/bin/notify.sh ]; then
 				ssh -q $_restart_ssh "${_target}" "mkdir -p ~/bin" &&
 				scp -q $_restart_ssh ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
-				ssh -q $_restart_ssh "${_target}" "chmod +x ~/bin/notify.sh" || true
+				ssh -q $_restart_ssh "${_target}" "chmod +x ~/bin/notify.sh"
 			fi
 			echo "done"
 		else
@@ -689,7 +683,7 @@ if [ -n "$CLI_RESTART" ]; then
 		if [ -n "$CLI_SUITE" ]; then
 			_last="$CLI_SUITE"
 		else
-			_last=$(ssh $_restart_ssh "${_user}@${_host}" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
+			_last=$(ssh $_restart_ssh "${_user}@${_host}" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || _last=""
 		fi
 		if [ -z "$_last" ]; then
 			echo "    con${p}: skipped (no previous suite or unreachable)"
@@ -741,7 +735,7 @@ if [ -n "$CLI_STATUS" ]; then
 		_info=$(ssh $_status_ssh "${_user}@${_host}" "
 			_slog=~/.e2e-harness/logs/summary.log
 			[ -f \"\$_slog\" ] || _slog=\$(ls -t ~/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
-			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null || true)
+			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null) || suite=""
 			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
@@ -842,13 +836,13 @@ if [ -n "$CLI_STATUS" ]; then
 		fi
 	done
 
-	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)" 2>/dev/null; then
+	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")" 2>/dev/null; then
 		printf "  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)" "$(cat "$E2E_DISPATCHER_PID")"
 		if [ -f "$E2E_DISPATCH_STATE" ]; then
-			_ds_pending=$(grep '^PENDING=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
-			_ds_running=$(grep '^RUNNING=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
-			_ds_done=$(grep '^DONE=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
-			_ds_done_list=$(grep '^DONE_LIST=' "$E2E_DISPATCH_STATE" 2>/dev/null | cut -d= -f2-)
+			_ds_pending=$(grep '^PENDING=' "$E2E_DISPATCH_STATE" | cut -d= -f2-)
+			_ds_running=$(grep '^RUNNING=' "$E2E_DISPATCH_STATE" | cut -d= -f2-)
+			_ds_done=$(grep '^DONE=' "$E2E_DISPATCH_STATE" | cut -d= -f2-)
+			_ds_done_list=$(grep '^DONE_LIST=' "$E2E_DISPATCH_STATE" | cut -d= -f2-)
 			echo ""
 		if [ -n "$_ds_running" ]; then
 			# shellcheck disable=SC2086
@@ -902,13 +896,17 @@ if [ -n "${CLI_LIVE+set}" ]; then
 	if [ -n "$CLI_LIVE" ]; then
 		_num_pools="$CLI_LIVE"
 	else
-		_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf" 2>/dev/null || echo 3)
+		if [ -f "$_RUN_DIR/pools.conf" ]; then
+			_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf")
+		else
+			_num_pools=3
+		fi
 	fi
 	_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN}"
 	LIVE_SESSION="e2e-live"
 
-	tmux kill-session -t "$LIVE_SESSION" 2>/dev/null || true
+	tmux kill-session -t "$LIVE_SESSION" 2>/dev/null
 
 	# Claim ownership: write a unique ID to /tmp/e2e-live-owner on each conN.
 	# Pane scripts check this before re-attaching — if another live dashboard
@@ -917,7 +915,7 @@ if [ -n "${CLI_LIVE+set}" ]; then
 	_live_so="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	for (( _lp=1; _lp<=_num_pools; _lp++ )); do
 		ssh $_live_so "${_user}@con${_lp}.${_domain}" \
-			"echo '$_live_id' > /tmp/e2e-live-owner" 2>/dev/null || true
+			"echo '$_live_id' > /tmp/e2e-live-owner"
 	done
 
 	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
@@ -980,7 +978,11 @@ if [ -n "${CLI_DASHBOARD+set}" ]; then
 	if [ -n "$CLI_DASHBOARD" ]; then
 		_num_pools="$CLI_DASHBOARD"
 	else
-		_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf" 2>/dev/null || echo 3)
+		if [ -f "$_RUN_DIR/pools.conf" ]; then
+			_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf")
+		else
+			_num_pools=3
+		fi
 	fi
 	_create_tmux_dashboard "e2e-dashboard" "$_num_pools" "$CLI_DASH_LOG"
 	echo "Attaching to dashboard (${_num_pools} pools) ..."
@@ -996,7 +998,7 @@ if [ -n "$CLI_LIST" ]; then
 		[ -f "$f" ] || continue
 		name="$(basename "$f" .sh)"
 		name="${name#suite-}"
-		desc="$(grep -m1 '^# Suite:' "$f" 2>/dev/null | sed 's/^# Suite: *//')"
+		desc="$(grep -m1 '^# Suite:' "$f" | sed 's/^# Suite: *//')"
 		printf "  %-35s %s\n" "$name" "$desc"
 	done
 	echo ""
@@ -1045,9 +1047,10 @@ if [ -n "$CLI_DESTROY" ]; then
 					while IFS=' ' read -r target abs_path; do
 						[ -z "\$abs_path" ] && continue
 						echo "      \$target: aba -y -d \$abs_path delete"
+					# < /dev/null prevents ssh from consuming the while-read loop stdin
 					ssh \$_ssh_opts "\$target" \
 						"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete || echo '      (dir not found)'" \
-						2>&1 || { echo "      WARNING: SSH failed"; _ok=; }
+						< /dev/null 2>&1 || { echo "      WARNING: SSH failed"; _ok=; }
 					done < "\$f"
 					[ -n "\$_ok" ] && rm -f "\$f"
 				done
@@ -1059,9 +1062,10 @@ if [ -n "$CLI_DESTROY" ]; then
 					while IFS=' ' read -r target abs_path; do
 						[ -z "\$abs_path" ] && continue
 						echo "      \$target: aba -y -d \$abs_path uninstall"
-						ssh \$_ssh_opts "\$target" \
+					# < /dev/null prevents ssh from consuming the while-read loop stdin
+					ssh \$_ssh_opts "\$target" \
 							"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall || echo '      (dir not found)'" \
-							2>&1 || { echo "      WARNING: SSH failed"; _ok=; }
+							< /dev/null 2>&1 || { echo "      WARNING: SSH failed"; _ok=; }
 					done < "\$f"
 					[ -n "\$_ok" ] && rm -f "\$f"
 				done
@@ -1078,8 +1082,9 @@ if [ -n "$CLI_DESTROY" ]; then
 			vm="${prefix}${i}"
 			if govc vm.info "$vm" | grep "Name:"; then
 				echo "  Destroying $vm ..."
+				# power-off returns non-zero if VM is already off -- not an error
 				govc vm.power -off "$vm" || true
-				govc vm.destroy "$vm" || true
+				govc vm.destroy "$vm"
 			fi
 		done
 	done
@@ -1120,8 +1125,9 @@ if [ -n "$CLI_DESTROY" ]; then
 			while IFS= read -r _ovm; do
 				[ -z "$_ovm" ] && continue
 				echo "  Destroying $_ovm ..."
+				# power-off returns non-zero if VM is already off -- not an error
 				govc vm.power -off "$_ovm" || true
-				govc vm.destroy "$_ovm" || true
+				govc vm.destroy "$_ovm"
 			done <<< "$_all_orphans"
 		else
 			echo "  Skipped orphan cleanup."
@@ -1173,7 +1179,7 @@ if [ -n "$CLI_RESUME" ]; then
 	_last_host="con${CLI_POOL}.${VM_BASE_DOMAIN}"
 	_last_user="${CON_SSH_USER:-steve}"
 	_last_ssh="-o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-	_last=$(ssh $_last_ssh "${_last_user}@${_last_host}" "cat /tmp/e2e-last-suites 2>/dev/null" || true)
+	_last=$(ssh $_last_ssh "${_last_user}@${_last_host}" "cat /tmp/e2e-last-suites 2>/dev/null") || _last=""
 	if [ -z "$_last" ]; then
 		echo "ERROR: No previous suite record on con${CLI_POOL} (/tmp/e2e-last-suites not found)" >&2
 		exit 1
@@ -1226,7 +1232,7 @@ if [ -n "$CLI_RESCHEDULE" ]; then
 		printf "  Queued: \033[1;36m%s\033[0m (front)\n" "$suite"
 	done
 	echo ""
-	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)" 2>/dev/null; then
+	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")" 2>/dev/null; then
 		echo "  Dispatcher is running -- will pick this up on its next cycle (~30s)."
 	else
 		echo "  WARNING: No dispatcher running. Start one with: run.sh run --all"
@@ -1328,7 +1334,7 @@ if [ -n "$CLI_REVERT" ]; then
 			vm="${prefix}${i}"
 			if govc snapshot.tree -vm "$vm" 2>&1 | grep -q "pool-ready"; then
 				govc snapshot.revert -vm "$vm" "pool-ready" || { echo "  FATAL: revert $vm failed" >&2; exit 1; }
-				govc vm.power -on "$vm" 2>/dev/null || true
+				govc vm.power -on "$vm"
 				echo "    ${vm}: reverted to pool-ready"
 			else
 				echo "    ${vm}: WARNING -- pool-ready snapshot not found, skipping" >&2
@@ -1388,10 +1394,10 @@ for (( i=1; i<=CLI_POOLS; i++ )); do
 		if [ -n "$_notify_cmd" ]; then
 			ssh -q $_SSH_OPTS "$target" "mkdir -p ~/bin" &&
 			scp -q $_SSH_OPTS "$_notify_cmd" "$target:~/bin/notify.sh" &&
-			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh" || true
+			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh"
 		fi
 		# Ensure rootless podman's pause process survives between SSH sessions
-		ssh -q $_SSH_OPTS "$target" "sudo loginctl enable-linger $user 2>/dev/null || true"
+		ssh -q $_SSH_OPTS "$target" "sudo loginctl enable-linger $user"
 		echo "    con${i}: harness deployed to ~/.e2e-harness/"
 	else
 		echo "    con${i}: FAILED to deploy harness (skipping)" >&2
@@ -1462,8 +1468,8 @@ _dispatch_suite() {
 	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
 	# Kill any stale session and orphaned runner processes
-	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true"
-	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null || true"
+	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
+	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
 	# Remove old rc/lock/pause files (stale pause files cause false PAUSED status)
 	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
@@ -1491,7 +1497,7 @@ _dispatch_suite() {
 	if [ -x ~/bin/notify.sh ]; then
 		ssh -q $_SSH_OPTS "${_target}" "mkdir -p ~/bin" &&
 		scp -q $_SSH_OPTS ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
-		ssh -q $_SSH_OPTS "${_target}" "chmod +x ~/bin/notify.sh" || true
+		ssh -q $_SSH_OPTS "${_target}" "chmod +x ~/bin/notify.sh"
 	fi
 
 	local _retry_arg=""
@@ -1511,7 +1517,7 @@ _check_pool() {
 	local suite="$2"
 	local rc_content
 
-	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc' 2>/dev/null" 2>/dev/null || true)
+	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc' 2>/dev/null" 2>/dev/null) || rc_content=""
 	if [ -n "$rc_content" ]; then
 		rc_content="${rc_content//[^0-9]/}"
 		echo "${rc_content:-255}"
@@ -1521,12 +1527,12 @@ _check_pool() {
 	# No .rc file -- check if the tmux session is still alive.
 	# If the session is gone, the suite crashed or was killed (e.g. Ctrl-C).
 	local sess_alive
-	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_alive=""
 	if [ "$sess_alive" != "yes" ]; then
 		# Grace period: a manual restart (kill + relaunch) creates a brief
 		# window with no tmux session.  Wait and re-check before declaring crash.
 		sleep 5
-		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_alive=""
 		if [ "$sess_alive" = "yes" ]; then
 			return
 		fi
@@ -1555,7 +1561,7 @@ _find_free_pool() {
 			# Also check for tmux sessions the dispatcher doesn't track
 			# (e.g. manual launches via ssh + tmux new-session)
 			local _has_sess
-			_has_sess=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+			_has_sess=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _has_sess=""
 			[ "$_has_sess" = "yes" ] && continue
 			echo "$p"
 			return 0
@@ -1601,8 +1607,8 @@ _collect_pool_logs() {
 	local log_dir="$_RUN_DIR/logs"
 
 	mkdir -p "$log_dir"
-	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/" || true
-	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/" || true
+	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/"
+	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/"
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----
@@ -1621,10 +1627,10 @@ _detect_running_and_completed() {
 	local -A _running_suites=()
 	for (( p=1; p<=_max_pools; p++ )); do
 		local sess_exists
-		sess_exists=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null || true)
+		sess_exists=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
 		if [ "$sess_exists" = "yes" ]; then
 			local suite
-			suite=$(_ssh_con "$p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null || true)
+			suite=$(_ssh_con "$p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
 			if [ -n "$suite" ]; then
 				_busy_pools[$p]="$suite"
 				_result_pool[$suite]="$p"
@@ -1637,7 +1643,7 @@ _detect_running_and_completed() {
 	# Pass 2: detect completed suites (.rc files), skipping any that are running
 	for (( p=1; p<=_max_pools; p++ )); do
 		local rc_files
-		rc_files=$(_ssh_con "$p" "ls ${_RC_PREFIX}-*.rc 2>/dev/null" 2>/dev/null || true)
+		rc_files=$(_ssh_con "$p" "ls ${_RC_PREFIX}-*.rc 2>/dev/null" 2>/dev/null) || rc_files=""
 		if [ -n "$rc_files" ]; then
 			while IFS= read -r rc_file; do
 				[ -z "$rc_file" ] && continue
@@ -1649,7 +1655,7 @@ _detect_running_and_completed() {
 					continue
 				fi
 				local rc
-				rc=$(_ssh_con "$p" "cat '$rc_file' 2>/dev/null" 2>/dev/null || true)
+				rc=$(_ssh_con "$p" "cat '$rc_file' 2>/dev/null" 2>/dev/null) || rc=""
 				rc="${rc//[^0-9]/}"
 				_completed[$suite]="${rc:-255}"
 				_result_pool[$suite]="$p"
@@ -1668,9 +1674,9 @@ _force_clean_all() {
 	[ "$CLI_POOLS" -gt "$_max_pools" ] 2>/dev/null && _max_pools="$CLI_POOLS"
 	for (( p=1; p<=_max_pools; p++ )); do
 		_ssh_con "$p" "
-			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
 			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-		" || true
+		"
 		_process_pool_cleanup_files "$p"
 		echo "    con${p}: cleaned"
 	done
@@ -1682,9 +1688,9 @@ _force_clean_pool() {
 	local pool_num="$1"
 	echo "  --force --pool $pool_num: wiping suite state on con${pool_num} ..."
 	_ssh_con "$pool_num" "
-		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
 		rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-	" || true
+	"
 	_process_pool_cleanup_files "$pool_num"
 
 	# Remove any entries associated with this pool
@@ -1709,12 +1715,12 @@ _force_clean_suite() {
 	for (( p=1; p<=CLI_POOLS; p++ )); do
 		# Only kill the tmux session if this pool is running the target suite
 		_ssh_con "$p" "
-			running=\$(cat /tmp/e2e-last-suites 2>/dev/null || true)
+			running=\$(cat /tmp/e2e-last-suites 2>/dev/null) || running=''
 			if [ \"\$running\" = '$suite' ]; then
-				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
 			fi
 			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
-		" || true
+		"
 		# Skip cleanup on pools running a different suite to avoid destroying their resources
 		if [ -n "${_busy_pools[$p]:-}" ] && [ "${_busy_pools[$p]}" != "$suite" ]; then
 			echo "    Skipping con${p}: running ${_busy_pools[$p]}"
@@ -1921,7 +1927,7 @@ _write_dispatch_state() {
 # Instead of replacing the dispatcher, dispatch directly and signal it.
 if [ -n "$CLI_FORCE" ] && [ -n "$CLI_POOL" ] && [ -n "$CLI_SUITE" ]; then
 	if [ -f "$E2E_DISPATCHER_PID" ]; then
-		_old_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+		_old_dpid=$(cat "$E2E_DISPATCHER_PID")
 		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 			echo ""
 			echo "  Dispatcher running (pid $_old_dpid) -- performing one-shot dispatch"
@@ -1942,7 +1948,7 @@ fi
 
 # Check for an existing dispatcher
 if [ -f "$E2E_DISPATCHER_PID" ]; then
-	_old_dpid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+	_old_dpid=$(cat "$E2E_DISPATCHER_PID")
 	if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 		echo ""
 		printf "  \033[1;33mWARNING: Another dispatcher is already running (pid %s)\033[0m\n" "$_old_dpid"
@@ -1953,7 +1959,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 			read -r -t 30 _answer || _answer="n"
 		fi
 		if [[ "$_answer" =~ ^[Yy]?$ ]]; then
-			kill "$_old_dpid" 2>/dev/null || true
+			kill "$_old_dpid" 2>/dev/null
 			sleep 1
 			echo "  Killed old dispatcher."
 		else
@@ -2071,7 +2077,7 @@ ${_inj_list}" < /dev/null >/dev/null
 				_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
 				_rp="${_result_pool[$_rs]:-}"
 				if [ -n "$_rp" ]; then
-					_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${_rs}.rc'" 2>/dev/null || true
+					_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${_rs}.rc'"
 				fi
 				unset '_results[$_rs]'
 				_work_queue+=("$_rs")
@@ -2197,7 +2203,7 @@ fi
 
 # Cleanup dashboard
 if [ -n "$DASH_SESSION" ]; then
-	tmux kill-session -t "$DASH_SESSION" 2>/dev/null || true
+	tmux kill-session -t "$DASH_SESSION" 2>/dev/null
 fi
 
 exit "$_overall_rc"
