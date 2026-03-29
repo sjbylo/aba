@@ -8,7 +8,7 @@
 - **Display names in TUI** - Operator search results and basket view now show display names (e.g. "Red Hat Integration - AMQ Broker") alongside operator package names.
 - **Search by display name** - TUI operator search matches against both operator names and display names (case-insensitive).
 - **Catalog extraction hardening** - Generic JSON fallback for unknown directory formats, runtime completeness check, and end-of-extraction summary for any parsing issues.
-- **Pre-flight validation** - DNS, NTP reachability and IP conflict detection before ISO generation, integrated as a Make dependency (#22).
+- **Pre-flight validation** - DNS, NTP reachability and IP conflict detection before ISO generation, integrated as a Make dependency ([#22](https://github.com/sjbylo/aba/pull/22), [@mateuszslugocki](https://github.com/mateuszslugocki)).
 - **Configurable preflight strictness** - `verify_conf=all/conf/off` controls validation: `all` (default) runs full network checks, `conf` validates config files only, `off` skips all. Use `aba --verify conf` when the bastion is on a different network than cluster nodes.
 - **Sigstore-aware mirroring** - Per-registry sigstore signature control via `~/.config/containers/registries.d/aba-sigstore.yaml`. Preserves cosign signatures for OCP release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), required for OCP 4.21+ `ClusterImagePolicy` verification, while allowing unsigned certified/community operator images to mirror without errors. Optional `OC_MIRROR_FLAGS` in `~/.aba/config` for additional oc-mirror flags.
 - **Auto-detect network values** - When domain, machine\_network, dns\_servers, next\_hop\_address, or ntp\_servers are empty in `aba.conf` at cluster creation time, they are auto-detected and written back so the user can review before proceeding.
@@ -55,6 +55,9 @@
 - **Cleanup robustness** - `PIPESTATUS[0]` captured in cleanup pipelines to prevent masking failures. Cleanup failures now halt the suite. Removed 137 inappropriate `2>/dev/null` that hid error info. Post-suite integrity checks for orphan VMs and leftover registry containers.
 - **KVM lifecycle suite** - SNO full install + VM lifecycle (ls/stop/start/kill/shutdown/startup), plus compact and standard boot validation.
 - **Regression test** - `verify_conf=conf` mirror binary extraction test added to prevent SNO install regression.
+
+### Community
+- [@mateuszslugocki](https://github.com/mateuszslugocki) - Pre-flight validation for DNS, NTP and IP conflicts ([#22](https://github.com/sjbylo/aba/pull/22))
 
 ---
 
@@ -122,8 +125,8 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 
 
 ### New Features
-- **Custom manifest support (agent-based installer)** - Place `.yaml`/`.yml` files in `openshift/` or `manifests/` directories in a cluster folder to embed custom Kubernetes manifests (MachineConfig, networking, storage) into the agent-based ISO at bootstrap time (#18)
-- **Custom manifest support (day2)** - Place `.yaml`/`.yml` files in `day2-custom-manifests/` to have them automatically applied during `aba day2`, after oc-mirror resources and signatures (#19)
+- **Custom manifest support (agent-based installer)** - Place `.yaml`/`.yml` files in `openshift/` or `manifests/` directories in a cluster folder to embed custom Kubernetes manifests (MachineConfig, networking, storage) into the agent-based ISO at bootstrap time ([#18](https://github.com/sjbylo/aba/pull/18), [@mateuszslugocki](https://github.com/mateuszslugocki))
+- **Custom manifest support (day2)** - Place `.yaml`/`.yml` files in `day2-custom-manifests/` to have them automatically applied during `aba day2`, after oc-mirror resources and signatures ([#19](https://github.com/sjbylo/aba/pull/19), [@mateuszslugocki](https://github.com/mateuszslugocki))
 - **oc-mirror parallel images setting** - New `OC_MIRROR_PARALLEL_IMAGES` in `~/.aba/config` (default 8) controls `--parallel-images` for save/load/sync, useful for reducing concurrency on slow or unreliable networks
 - **oc-mirror image timeout setting** - New `OC_MIRROR_IMAGE_TIMEOUT` in `~/.aba/config` (default 30m) controls the `--image-timeout` for save/load/sync
 - **IP-in-CIDR validation** - `cluster.conf` validation now checks that `starting_ip`, all node IPs, `api_vip`, and `ingress_vip` fall within `machine_network`; error messages show the valid IP range
@@ -267,7 +270,7 @@ Bug fixes and improvements
 ### Bug Fixes
 - Fixed TUI hang: use dynamic version in catalog peek checks
 - Fixed segfault caused by tar extracting incomplete tarball during download
-- Fixed bundle creation with non-standard directory names (#13)
+- Fixed bundle creation with non-standard directory names ([#13](https://github.com/sjbylo/aba/pull/13), [@mateuszslugocki](https://github.com/mateuszslugocki))
 - Fixed race condition in run_once validation logic
 - Use mv instead of cp for error files to prevent false failures
 - Added error handling for all ensure_*() function calls
