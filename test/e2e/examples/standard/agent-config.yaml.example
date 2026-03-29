@@ -3,14 +3,14 @@
 apiVersion: v1alpha1
 kind: AgentConfig
 metadata:
-  name: standard1
+  name: e2e-standard1
 rendezvousIP: 10.0.2.15
 hosts:
   - hostname: master1
     role: master
     interfaces:
       - name: ens160
-        macAddress: 88:88:88:88:88:01
+        macAddress: "88:88:88:88:88:01"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -19,7 +19,7 @@ hosts:
           description: Access mode port ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:01
+          mac-address: "88:88:88:88:88:01"
           ipv4:
             enabled: true
             address:
@@ -39,7 +39,7 @@ hosts:
     role: master
     interfaces:
       - name: ens160
-        macAddress: 88:88:88:88:88:02
+        macAddress: "88:88:88:88:88:02"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -48,7 +48,7 @@ hosts:
           description: Access mode port ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:02
+          mac-address: "88:88:88:88:88:02"
           ipv4:
             enabled: true
             address:
@@ -68,7 +68,7 @@ hosts:
     role: master
     interfaces:
       - name: ens160
-        macAddress: 88:88:88:88:88:03
+        macAddress: "88:88:88:88:88:03"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -77,7 +77,7 @@ hosts:
           description: Access mode port ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:03
+          mac-address: "88:88:88:88:88:03"
           ipv4:
             enabled: true
             address:
@@ -97,7 +97,7 @@ hosts:
     role: worker
     interfaces:
       - name: ens160
-        macAddress: 88:88:88:88:88:04
+        macAddress: "88:88:88:88:88:04"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -106,7 +106,7 @@ hosts:
           description: Access mode port ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:04
+          mac-address: "88:88:88:88:88:04"
           ipv4:
             enabled: true
             address:
@@ -126,7 +126,7 @@ hosts:
     role: worker
     interfaces:
       - name: ens160
-        macAddress: 88:88:88:88:88:05
+        macAddress: "88:88:88:88:88:05"
 #    rootDeviceHints:
 #      deviceName: "/dev/sda"
     networkConfig:
@@ -135,7 +135,7 @@ hosts:
           description: Access mode port ens160
           type: ethernet
           state: up
-          mac-address: 88:88:88:88:88:05
+          mac-address: "88:88:88:88:88:05"
           ipv4:
             enabled: true
             address:

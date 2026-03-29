@@ -88,16 +88,17 @@ pool_standard_apps_vip()  { pool_apps_vip "$@"; }
 
 # --- Pool-Unique Cluster Names ------------------------------------------------
 # When parallel pools create VMs, names must not collide in vCenter.
-# Every pool always appends the pool number: sno1, compact1, sno-vlan2, etc.
+# The e2e- prefix avoids clashes with user-created clusters (e.g. "sno1").
+# Every pool always appends the pool number: e2e-sno1, e2e-compact2, etc.
 #
 # Usage: pool_cluster_name <base_type> [POOL_NUM]
-#   e.g. pool_cluster_name sno        -> "sno1"        (pool 1)
-#        pool_cluster_name sno 2      -> "sno2"        (pool 2)
-#        pool_cluster_name sno-vlan 1 -> "sno-vlan1"   (pool 1)
+#   e.g. pool_cluster_name sno        -> "e2e-sno1"        (pool 1)
+#        pool_cluster_name sno 2      -> "e2e-sno2"        (pool 2)
+#        pool_cluster_name sno-vlan 1 -> "e2e-sno-vlan1"   (pool 1)
 pool_cluster_name() {
     local base="$1"
     local p="${2:-${POOL_NUM:-1}}"
-    echo "${base}${p}"
+    echo "e2e-${base}${p}"
 }
 
 # Get starting IP for a cluster type: pool_starting_ip <sno|compact|standard> [POOL_NUM]
@@ -238,7 +239,7 @@ gen_aba_conf() {
         p|previous) export OCP_VERSION=p ;;
     esac
 
-    _e2e_log "  Generated aba.conf: channel=$channel version=$version platform=$platform" 2>/dev/null || true
+    _e2e_log "  Generated aba.conf: channel=$channel version=$version platform=$platform" || true
 }
 
 # --- gen_mirror_conf --------------------------------------------------------
@@ -282,7 +283,7 @@ gen_mirror_conf() {
         esac
     fi
 
-    _e2e_log "  Configured mirror.conf: type=$reg_type host=$reg_host port=$reg_port" 2>/dev/null || true
+    _e2e_log "  Configured mirror.conf: type=$reg_type host=$reg_host port=$reg_port" || true
 }
 
 # --- gen_cluster_conf -------------------------------------------------------
@@ -327,7 +328,7 @@ gen_cluster_conf() {
         [ -n "$api_ip" ]      && sed -i "s/^api_ip=.*/api_ip=$api_ip/" "$dir/cluster.conf"
     fi
 
-    _e2e_log "  Configured cluster.conf in $dir" 2>/dev/null || true
+    _e2e_log "  Configured cluster.conf in $dir" || true
 }
 
 # --- gen_vmware_conf --------------------------------------------------------
@@ -341,7 +342,7 @@ gen_vmware_conf() {
 
     if [ -f "$src" ]; then
         cp "$src" "$dst"
-        _e2e_log "  Copied vmware.conf from $src" 2>/dev/null || true
+        _e2e_log "  Copied vmware.conf from $src" || true
     else
         echo "gen_vmware_conf: source file not found: $src" >&2
         return 1

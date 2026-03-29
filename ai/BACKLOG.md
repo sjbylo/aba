@@ -4,7 +4,1072 @@ This file tracks architectural improvements and technical debt that should be ad
 
 ---
 
+## Critical
+
+### install-config.yaml.j2 Platform Detection: Corrected to Match Design (RESOLVED)
+
+**Status:** Resolved — not a regression, this is a design-correct fix
+**Priority:** N/A (was Critical, downgraded after investigation)
+**Created:** 2026-03-23
+**Resolved:** 2026-03-23
+
+**Summary:**
+On `main`, `install-config.yaml.j2` used `{%- elif GOVC_URL is defined %}` and
+`create-install-config.sh` unconditionally sourced `normalize-vmware-conf`. This violated
+ABA's core design principle: **config files are the single source of truth**.
+
+The feature branch correctly changed both to check `platform == 'vmw'` (from `aba.conf`),
+making `aba.conf`'s `platform` variable authoritative and treating `vmware.conf` as a
+supporting file loaded only when `platform=vmw`.
+
+**Verified by template rendering test:**
+- `main` with `platform=bm` + `GOVC_URL` defined → generates `vsphere:` section (WRONG — vmware.conf presence overrides aba.conf)
+- HEAD with `platform=bm` (no GOVC_URL sourced) → generates `baremetal:` section (CORRECT — respects aba.conf)
+- HEAD with `platform=vmw` → generates `vsphere:` section (CORRECT)
+
+**Impact on tests:** None. All old test scripts (`test/test[1-5]*.sh`) and all E2E suites
+already set `--platform vmw` explicitly. SNO clusters use `none: {}` regardless of platform.
+
+**Design principle documented:** Added as section 7 ("Config Files Are the Single Source of
+Truth") in `ai/RULES_OF_ENGAGEMENT.md`.
+
+---
+
+### `aba delete` After `aba clean` Fails to Destroy VMs (Re-initializes Instead)
+
+**Status:** Backlog
+**Priority:** Critical
+**Estimated Effort:** Small-Medium
+**Created:** 2026-03-23
+
+**Problem:**
+Running `aba clean` followed by `aba delete` does not destroy the VMs on the hypervisor.
+Instead, `aba delete` sees that configuration files are missing (cleaned by `aba clean`),
+re-initializes the cluster directory from scratch, then fails because `install-config.yaml`
+doesn't exist:
+
+```
+[steve@rhel-baseline sno]$ aba clean
+[steve@rhel-baseline sno]$ aba delete
+[ABA] Initialized cluster directory /home/steve/subdir/aba/sno successfully
+[ABA] vmware.conf initialized
+[ABA] 1 port(s): ens160
+[ABA] Adding DNS server(s): 10.0.1.8 10.0.2.8
+[ABA] Adding NTP server(s): 10.0.1.8 ntp.example.com
+[ABA] Generating Agent-based configuration file: .../sno/agent-config.yaml
+...
+[ABA] Error: Cannot parse cluster configuration. 'install-config.yaml' and/or 'agent-config.yaml' do not exist.
+```
+
+The VMs remain powered on with their IPs, causing IP conflicts for subsequent installs.
+
+**Observed in E2E testing:**
+- `connected-public` suite test [7] "Proxy mode: verify and delete" ran
+  `aba --dir e2e-sno1 delete` which completed in 1 second (!) without destroying the VM.
+  The VM `e2e-sno1-e2e-sno1` remained poweredOn at IP 10.0.2.12.
+- The next test (no_proxy validation) failed with "IP conflict: 10.0.2.12 is already in use!"
+- The E2E framework's orphan VM cleanup (`--force` dispatch) caught the leftover VM.
+
+**Root cause:**
+`aba delete` depends on Makefile targets that require cluster config files
+(`install-config.yaml`, `agent-config.yaml`, `cluster.conf`). If these were removed by
+`aba clean`, the Makefile re-initializes the directory instead of proceeding to VM deletion.
+The delete path needs the `vmware.conf` (or `kvm.conf`) and the VM/cluster name, but
+NOT the full agent config. It should be able to destroy VMs even when config files are missing.
+
+**Proposed fix:**
+1. `aba delete` should check for VMs on the hypervisor FIRST (using `govc find` / `virsh list`)
+   before requiring cluster config files. If VMs exist matching the cluster name pattern,
+   destroy them regardless of local config state.
+2. Alternatively, `aba clean` should NOT remove files that `aba delete` needs (e.g., keep
+   `vmware.conf`, `cluster.conf`, or a minimal state file with VM names/paths).
+3. At minimum, `aba delete` should warn loudly if it can't find VM info instead of silently
+   re-initializing the directory.
+
+**Additional variant -- `aba delete` on platform=bm requires vmware.conf (2026-03-23):**
+The E2E `create-bundle-to-disk` suite creates a standard cluster with `platform=bm`
+(bare-metal simulation). When the cleanup test runs `aba --dir e2e-standard2 delete`, it
+fails with `vmware.conf not found. Run 'aba vmw' first.` A bare-metal cluster has no
+hypervisor VMs to delete, so `aba delete` should not require `vmware.conf` for platform=bm.
+This also caused the test to exhaust 5 retries and PAUSE.
+
+**Where:** `templates/Makefile.cluster` (the `delete` / `clean` targets and their dependencies),
+`scripts/vmw-delete.sh`, `scripts/kvm-delete.sh`
+
+**Full fix plan:** See saved plan `aba_delete_and_cluster_state_f6e8ad9a.plan.md`:
+- Part 1: `aba.sh` delete case — handle platform=bm as no-op (clean stamp+bm gate files)
+- Part 2: Externalize minimal cluster state to `~/.aba/cluster/<name>/state` AFTER successful
+  install (in `monitor-install.sh`). Read as fallback in `aba delete` to survive aba.conf changes
+  and `aba clean`. Remove on successful delete.
+- Part 3: E2E suites — reorder cleanup to delete bm clusters before restoring platform=vmw
+Deferred to post-release — test-side workaround applied for now.
+
+**Related: E2E orphan VM cleanup should use `aba delete`, not sweeping govc destroy (2026-03-23):**
+The E2E framework's `run.sh` has a "sweeping pass" that finds orphaned VMs in pool folders
+and destroys them directly via `govc vm.destroy`. This bypasses ABA's own `aba delete` command.
+The proper approach is to use `aba delete` (or the suite's registered cleanup functions) to
+remove cluster VMs, so the same code path used by users is tested.
+
+Example of the sweeping pass (should be replaced):
+```
+=== Sweeping pool folders for orphaned cluster VMs ===
+  The following VMs will be DESTROYED:
+    /Datacenter/vm/aba-e2e/pool1/e2e-sno1/e2e-sno1-e2e-sno1
+  Destroy these VMs? (Y/n):
+  Destroying /Datacenter/vm/aba-e2e/pool1/e2e-sno1/e2e-sno1-e2e-sno1 ...
+```
+
+Once `aba delete` is fixed (handles platform=bm, survives aba.conf changes via externalized
+state), the sweeping pass should be replaced with proper `aba delete` calls. This also
+means the E2E cleanup/crash-recovery code (`_pre_suite_cleanup`, `run.sh destroy --clean`)
+should iterate registered cluster dirs and run `aba delete` on each, rather than raw govc.
+
+---
+
+### Old E2E test5: SNO VM Still Running at ISO Upload, Causing Install Failure
+
+**Status:** Backlog (investigation needed)
+**Priority:** Critical
+**Estimated Effort:** Small
+**Created:** 2026-03-23
+
+**Problem:**
+In `test/test5-airgapped-install-local-reg.sh`, the SNO install fails quickly (exit=2 after
+only ~4 minutes, retries also fail instantly) because the previous SNO VM (10.0.1.203) is
+still powered on. The test flow is:
+
+1. Earlier in test5, a SNO cluster is installed and tested (with Docker registry)
+2. `rm -rf subdir/aba/sno` cleans the local directory on the internal bastion
+3. A new `aba cluster ... --step cluster.conf` creates a fresh SNO config
+4. `aba cluster ... -s install` fails because the old VM is still running at the same IP
+
+The `rm -rf sno` at line "Tidying up internal bastion" only removes local files -- it does
+NOT destroy the VM on the hypervisor. This is the same root cause as the `aba delete` bug
+(see "aba delete After aba clean Fails to Destroy VMs" above).
+
+**Observed in test.log on registry2:**
+```
+Mar 23 07:37:57 R Tidying up internal bastion (rm -rf subdir/aba/sno)
+Mar 23 07:38:11 R Installing sno (aba --dir subdir/aba cluster -n sno ... -s install)
+Mar 23 07:42:11 Non-zero return value: 2    <-- fails after ~4 min (preflight IP conflict)
+Mar 23 07:42:17 Attempting command again (2/5)
+Mar 23 07:42:22 Non-zero return value: 2    <-- fails in 5 seconds (same conflict)
+```
+
+**Root cause:**
+The test should run `aba --dir subdir/aba/sno delete` BEFORE `rm -rf subdir/aba/sno` to
+destroy the VM on the hypervisor first. Without this, the VM remains powered on and its
+IP (10.0.1.201/203) causes an IP conflict in the preflight check.
+
+**Proposed fix:**
+In `test/test5-airgapped-install-local-reg.sh`, before the `rm -rf subdir/aba/sno` line,
+add an explicit VM deletion:
+```bash
+test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Delete sno cluster VMs" \
+    "aba --dir subdir/aba/sno delete || true"
+```
+
+Also audit all other `rm -rf` of cluster directories in `test/test*.sh` to ensure they
+are preceded by `aba delete`. See also the related E2E backlog item "Delete VMs Before
+`rm -rf` Cluster Directory".
+
+**Where:** `test/test5-airgapped-install-local-reg.sh` (search for `rm -rf.*sno`),
+also audit `test/test2-airgapped-existing-reg.sh` and other test scripts.
+
+---
+
+### Bundle Makefile: `make NAME=opp` Without `OP_SETS` Silently Builds Empty-Operator Bundle
+
+**Status:** Resolved
+**Priority:** Critical
+**Estimated Effort:** Small
+**Created:** 2026-03-23
+**Resolved:** 2026-02-26
+
+**Fix applied:** Added a safety check in `bundles/v2/Makefile` that errors out when
+`NAME != release` and `OP_SETS` is empty (using `$(strip ...)` to handle whitespace).
+This prevents silently building empty-operator bundles when invoking `make` directly
+without passing `OP_SETS`.
+
+---
+
+## High Priority
+
+### Replace `oc-mirror list operators` With Podman-Based Catalog Extraction
+
+**Status:** Done (2026-03-18)
+**Priority:** High
+**Created:** 2026-03-15
+
+Replaced `oc-mirror list operators` with direct podman-based extraction from catalog
+container images. Eliminates oc-mirror dependency for operator listing, improves accuracy,
+and enables display name extraction. Tested across OCP 4.16-4.22 and all 3 catalogs.
+
+**See:** `ai/PODMAN_CATALOG_EXTRACTION.md` for full details.
+
+---
+
+### Use Display Names in TUI Operator Search and Basket
+
+**Status:** Done (2026-03-18)
+**Priority:** High
+**Created:** 2026-03-15
+
+TUI operator list and basket now show display names from the catalog index. Search
+matches against both package name and display name (case-insensitive), excluding
+default channel. Search optimised from awk forks to pure bash parameter expansion.
+
+**See:** `ai/TUI_OPERATOR_DISPLAY_ENHANCEMENT.md` for full details.
+
+---
+
+### Catalog Download Dialog Should Show the OCP Version
+
+**Status:** Done (2026-03-18)
+**Priority:** High
+**Created:** 2026-02-26
+
+TUI catalog download dialog now shows OCP version:
+`"Downloading operator catalogs for OCP 4.21..."`
+
+---
+
+### `aba reset` Should Delete Root `.index/` Directory
+
+**Status:** Done (2026-03-18)
+**Priority:** High
+**Created:** 2026-02-26
+
+Added `rm -rf .index` to the root Makefile `reset` target.
+
+---
+
+### Investigate and Reduce Pool Registry Disk Usage in E2E Tests
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Medium
+**Created:** 2026-03-16
+
+**Problem:**
+The pool-registry on conN hosts (`/opt/pool-reg/`) consumes 27–57GB per host. Combined
+with the oc-mirror workspace (~9.4GB), each pool devotes ~36–66GB just to the pre-populated
+registry. The conN/disN VMs are thin-provisioned and already large (con1: 367GB used,
+dis1: 304GB used on Datastore4-1). As tests run, accumulated registry data risks
+out-of-disk errors.
+
+**Findings (2026-03-16):**
+- `setup-pool-registry.sh` correctly pins oc-mirror to exactly ONE OCP version
+  (`minVersion` = `maxVersion`), but:
+  - Each single-version sync costs ~27GB in registry blob storage (1309 blobs for OCP
+    4.20.15 + 3 operators + graph data).
+  - The oc-mirror workspace (`/opt/pool-reg/sync/`) adds ~9.4GB on top.
+  - Data accumulates across suite runs: con2 had 57GB / 2883 blobs vs con1's 27GB / 1309
+    blobs, despite both having only `.synced-4.20.15`. Prior runs left behind orphan blobs.
+- The Docker distribution registry has no built-in garbage collection that runs automatically.
+  Stale blobs from previous versions persist indefinitely.
+- Four suites use the pool-registry: `network-advanced`, `connected-public`, `cluster-ops`,
+  `airgapped-existing-reg`. All read the version from `aba.conf` at runtime — if a pool
+  previously ran with version X and now runs with version Y, both versions' blobs accumulate.
+
+**Questions to investigate:**
+1. Do we really need the full OCP release payload in the pool-registry for all suites?
+   Some suites (e.g. `cluster-ops`) need release images to install a cluster, but others
+   (e.g. `connected-public` in public mode) may only need operator catalogs.
+2. Can we use `oc-mirror --dry-run` or a more selective imageset config to reduce what
+   gets synced? E.g. skip graph data (`graph: false`), skip unused architectures.
+3. Should `setup-pool-registry.sh` run Docker registry GC (`registry garbage-collect`)
+   before or after each sync to reclaim stale blobs?
+4. Should the pool-registry data be wiped when the pool gets a new suite with a different
+   OCP version, instead of accumulating?
+5. Can we reduce the 3 test operators to 1 small one (e.g. `flux` community operator only)?
+
+**Proposed improvements (pick and test):**
+- Add `registry garbage-collect /etc/docker/registry/config.yml` step to
+  `setup-pool-registry.sh` after each sync.
+- Wipe `/opt/pool-reg/data` when the requested version differs from the last-synced version
+  (delete old `.synced-*` markers + data, fresh start).
+- Set `graph: false` in the imageset config if graph data isn't needed for pool tests.
+- Reduce operator set to a single small operator.
+- Consider pre-baking the pool-registry data into the VM snapshot so each revert starts clean.
+
+**Where:** `test/e2e/scripts/setup-pool-registry.sh`, `test/e2e/lib/vm-helpers.sh`,
+`test/e2e/lib/pool-lifecycle.sh`
+
+---
+
+### oc-mirror Fails With v1/v2 Error on OCP 4.19 Catalog Image
+
+**Status:** Resolved (2026-03-18) -- eliminated by podman catalog extraction
+**Priority:** High
+**Created:** 2026-03-16
+
+No longer relevant. Podman-based extraction bypasses oc-mirror entirely for catalog
+listing. Tested and working for OCP 4.16-4.22 across all catalogs.
+
+---
+
+### Fix `oc debug node/` Failure in Mirror-Based Disconnected Clusters
+
+**Status:** Backlog (investigation needed)
+**Priority:** High
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem:**
+`oc debug node/` fails with `ErrImagePull` for `registry.redhat.io/rhel9/support-tools`
+on mirror-based disconnected clusters (observed on both KVM and VMware E2E installs).
+The command works on connected-install clusters only because the image is cached from
+installation time.
+
+**Key findings so far:**
+- `oc debug node/` defaults to `registry.redhat.io/rhel9/support-tools:latest`.
+- IDMS/ITMS rules generated by `oc-mirror` only cover `quay.io/openshift-release-dev/*`
+  -- there is no redirect rule for `registry.redhat.io`.
+- The `support-tools` image is NOT in the E2E pool mirror.
+- On a connected-install VMware cluster, the image is cached from install time -- that is
+  why `oc debug` "always worked" there.
+- **Not yet verified on a proper mirror-based disconnected cluster** -- need to install one
+  and test `oc debug` to confirm the behavior and determine the correct fix.
+
+**Current band-aid:**
+`cluster-graceful-shutdown.sh` resolves the `tools` image from the release payload
+(`oc adm release info --image-for=tools`) and passes `--image=<tools>` to all `oc debug`
+calls. The `tools` image IS in the mirror (covered by the IDMS rule for
+`quay.io/openshift-release-dev/ocp-v4.0-art-dev`). This works but is a workaround.
+
+**Investigation needed (once a mirror-based cluster is available):**
+1. Confirm `oc debug node/` fails without the `--image` workaround.
+2. Check whether adding `registry.redhat.io/rhel9/support-tools` to the
+   `ImageSetConfiguration` (`additionalImages`) causes `oc-mirror` to mirror it and
+   generate a matching IDMS/ITMS rule.
+3. Decide on the proper fix:
+   - **Option A:** Add `support-tools` to the default `ImageSetConfiguration` template so
+     it is always mirrored. Pros: fixes all `oc debug` usage cluster-wide. Cons: adds
+     ~390 MB to every mirror.
+   - **Option B:** Keep the `--image` approach in `cluster-graceful-shutdown.sh` using the
+     release payload `tools` image. Pros: zero extra mirror size. Cons: only fixes the
+     shutdown script; manual `oc debug` still fails.
+   - **Option C:** Hybrid -- keep `--image` in the shutdown script AND document how users
+     can add `support-tools` to their `ImageSetConfiguration` if they need manual
+     `oc debug`.
+
+**Where:** `scripts/cluster-graceful-shutdown.sh`, `templates/imageset-config*.yaml`,
+`ai/BACKLOG.md`
+
+---
+
 ## Medium Priority
+
+### Bundle Tests: Modular Mix-and-Match Test Scripts
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-27
+
+**Problem:**
+The bundle test scripts (`bundles/templates/*-test.sh`) are rigid, one-per-bundle-type.
+Each script (`ocp-test.sh`, `mesh3-test.sh`, `ai-test.sh`, `ocpv-test.sh`, `opp-test.sh`)
+is tightly coupled to its bundle name. The v2 pipeline (`06d-test-cluster-and-operators.sh`)
+runs `${NAME}-test.sh` — a single test file per bundle.
+
+This means:
+1. A bundle that includes both ACM and ODF cannot run both operator-specific tests.
+2. Shared logic (wait for pods, install operator, verify operand) is duplicated across
+   every test script.
+3. Adding a new operator test means copying boilerplate and creating a whole new bundle type.
+
+**Proposed fix:**
+Refactor into composable test modules that can be mixed and matched per bundle:
+
+1. **Extract shared library** (`bundles/templates/lib/test-helpers.sh`): common functions
+   like `waitAllPodsInNamespace`, `install_operator`, `verify_operand`, `resultOut`,
+   `echo_step`, etc. All current scripts duplicate these.
+
+2. **One module per operator/feature** (`bundles/templates/tests/`):
+   - `test-mesh3.sh` — install and verify Service Mesh 3
+   - `test-acm.sh` — install and verify ACM
+   - `test-odf.sh` — install and verify ODF (currently inside `opp-test.sh`)
+   - `test-ocpv.sh` — install and verify OpenShift Virtualization + MTV
+   - `test-ai.sh` — install and verify OpenShift AI
+   - `test-web-terminal.sh` — install and verify Web Terminal (currently `ocp-test.sh`)
+   Each module sources the shared library and tests one feature independently.
+
+3. **Test manifest per bundle** (`bundles/templates/test-plans/`):
+   - `release.txt` — (empty or basic cluster-only checks)
+   - `ocp.txt` — `test-web-terminal.sh`
+   - `mesh3.txt` — `test-mesh3.sh`
+   - `opp.txt` — `test-odf.sh`
+   - `full.txt` — `test-mesh3.sh`, `test-acm.sh`, `test-odf.sh`, `test-ocpv.sh`
+   Each file lists the test modules to run for that bundle, one per line.
+
+4. **Update `06d-test-cluster-and-operators.sh`**: Instead of running `${NAME}-test.sh`,
+   read the test plan file and run each listed module in sequence:
+   ```bash
+   PLAN="$TEMPLATES_DIR/test-plans/${NAME}.txt"
+   if [ -f "$PLAN" ]; then
+       while read -r test_module; do
+           [ -z "$test_module" ] || "$TEMPLATES_DIR/tests/$test_module" 3>> "$TEST_LOG"
+       done < "$PLAN"
+   fi
+   ```
+
+**Benefits:**
+- A bundle with mesh3 + ACM + ODF runs all three operator tests automatically.
+- New operator tests are easy to add without copying boilerplate.
+- Shared helper code maintained in one place.
+- Test plans are simple text files — easy to customize per bundle or customer.
+
+**Where:** `bundles/templates/*-test.sh`, `bundles/v2/scripts/06d-test-cluster-and-operators.sh`,
+`bundles/v2/bundle.conf`
+
+---
+
+### Test ABA on RHEL 10
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-27
+
+**Summary:**
+ABA has only been tested on RHEL 8 and RHEL 9. RHEL 10 is now available and should be
+validated as a bastion platform. This includes:
+
+1. Install and run ABA on a RHEL 10 bastion (connected and disconnected).
+2. Verify all CLI tools install correctly (oc, oc-mirror, openshift-install, govc, etc.).
+3. Verify mirror registry (Quay and Docker) installs and operates on RHEL 10.
+4. Verify cluster deployment (SNO, compact, standard) from a RHEL 10 bastion.
+5. Check for any Python, podman, dnf, or systemd differences that break ABA.
+6. Add a RHEL 10 E2E pool template (`aba-e2e-template-rhel10`) and run at least one
+   suite end-to-end on RHEL 10.
+
+**Where:** E2E templates (`pool-lifecycle.sh` already has a `rhel10` entry in `VM_TEMPLATES`),
+`install` script (RPM compatibility), `scripts/include_all.sh` (OS detection).
+
+---
+
+### E2E: Pre-populate Pool Mirror Registry in pool-ready Snapshot
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-27
+
+**Problem:**
+Today, the pool mirror registry (`/opt/pool-reg`) is installed and populated with images
+at the beginning of each suite run, after the `pool-ready` snapshot has already been created.
+This means:
+1. Every suite start pays the cost of registry setup + image sync even when reverting to snapshot.
+2. When `--revert` is used to roll VMs back to `pool-ready`, the mirror registry data is gone
+   and must be rebuilt from scratch.
+3. The 66 GB of registry data written to `/opt/pool-reg` during each suite contributes to
+   VMware thin-disk bloat (the VMDK only grows, never shrinks).
+
+**Proposed fix:**
+Move the pool mirror registry installation and image sync into the infrastructure creation
+phase (`setup-infra.sh`), specifically:
+1. After `_configure_con_vm` completes and before the `pool-ready` snapshot is taken.
+2. Install the registry (Quay/Docker), sync the OCP release images, and verify readiness.
+3. Then take the `pool-ready` snapshot with the registry already populated.
+
+**Benefits:**
+- `--revert` gives a fully-ready VM with mirror already populated — zero extra setup time.
+- Eliminates repeated 66 GB writes per suite, reducing thin-disk bloat significantly.
+- Suites start faster since they skip registry install/sync.
+
+**Considerations:**
+- The `pool-ready` snapshot becomes larger (includes registry data), but this is a one-time cost.
+- If the OCP version changes, `pool-ready` snapshots must be rebuilt (`--recreate-vms`).
+- Suite-specific operator images (not in the base OCP release) would still need incremental sync.
+
+**Where:** `test/e2e/setup-infra.sh` (snapshot creation), `test/e2e/runner.sh` (pre-suite setup),
+`test/e2e/lib/pool-lifecycle.sh` (`create_pools`)
+
+---
+
+### Review vmware.conf / kvm.conf Symlink and ~/.vmware.conf Default File Approach
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-26
+
+**Problem:**
+The current approach for hypervisor config files uses a chain of files and symlinks:
+1. `templates/vmware.conf` (or `templates/kvm.conf`) — the default template
+2. `~/.vmware.conf` (or `~/.kvm.conf`) — user's working config, saved after first `aba vmw`
+3. `vmware.conf` in the aba root dir — created by `install-vmware.conf.sh` (copies from
+   `~/.vmware.conf` or template, then prompts for editing)
+4. `vmware.conf` symlink in cluster subdirectory — points to `../vmware.conf`
+
+This multi-level chain has caused confusion and regressions:
+- Commit `77b909a` externalized Makefile targets to `aba.sh`, losing the auto-symlink
+  creation that was previously handled by Make dependencies (fixed in `_ensure_hv_ready()`)
+- `aba clean` may or may not delete the symlinks depending on branch
+- `~/.vmware.conf` silently overrides the template on subsequent installs, which can be
+  surprising if the user expected fresh defaults
+- The E2E test infrastructure copies `~/.kvm.conf` from bastion to VMs during golden
+  template creation, adding another layer to track
+
+**Questions to investigate:**
+1. Is the `~/.vmware.conf` / `~/.kvm.conf` home-directory default necessary, or could
+   `aba vmw` / `aba kvm` always work from the aba root copy?
+2. Should the symlink from cluster subdir to `../vmware.conf` be replaced with a direct
+   copy, eliminating symlink fragility?
+3. Can the auto-symlink in `_ensure_hv_ready()` be made unnecessary by creating the
+   symlink at a more natural point (e.g., during `cluster.conf` generation when platform
+   is known)?
+4. Same review applies to `kvm.conf` — ensure both VMware and KVM follow the same pattern.
+
+**Where:** `scripts/install-vmware.conf.sh`, `scripts/install-kvm.conf.sh`,
+`scripts/aba.sh` (`_ensure_hv_ready`), `templates/Makefile.cluster` (`.init`, `clean`,
+`vmware.conf`, `kvm.conf` targets)
+
+---
+
+### `kvm.conf` Template Should Not Hardcode a Username
+
+**Status:** Backlog
+**Priority:** Medium
+**Created:** 2026-03-20
+
+The `templates/kvm.conf` template currently uses `root@kvmhost.lan` as the example `LIBVIRT_URI`.
+This is misleading for environments where root SSH is disabled and a non-root user with sudo is
+required (which is the common setup). The template should either:
+
+- Auto-detect the current user (e.g. `$(whoami)`) during `aba kvm` configuration, or
+- Use a clear placeholder like `<user>@kvmhost.lan` that forces the user to fill in their own name
+
+The `install-kvm.conf.sh` script (which generates `kvm.conf` from the template) is the right place
+to inject the current username automatically.
+
+**Where:** `templates/kvm.conf`, `scripts/install-kvm.conf.sh`
+
+---
+
+### Eject/Clean CDROM ISO From All Nodes After Install Completes
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+After a successful cluster installation, the boot ISO remains attached to VMs:
+- **VMware:** The ISO stays mounted in the CDROM device permanently. While harmless
+  (UEFI boot order prefers disk), it's untidy and keeps a reference to the datastore
+  ISO file, preventing cleanup.
+- **KVM:** `virt-install --cdrom` auto-ejects after first boot, so the CDROM source
+  is already empty. However, the ISO file itself remains on the KVM host storage pool.
+
+**Proposed fix:**
+After `.install-complete` is set, eject/clean the CDROM from all cluster VMs:
+- **VMware:** `govc device.cdrom.eject -vm <vm-name>` for each node.
+- **KVM:** No CDROM action needed (already ejected). Optionally remove the ISO file
+  from `$KVM_STORAGE_POOL/agent-<cluster>.iso` to reclaim disk space.
+
+This could be a post-install step in `monitor-install.sh` or a new cleanup target
+that runs after `install-complete`.
+
+**Where:** `scripts/monitor-install.sh` or new `scripts/vmw-eject-iso.sh` /
+`scripts/kvm-cleanup-iso.sh`, `templates/Makefile.cluster`
+
+---
+
+### Audit: Is the `regcreds` Symlink in Cluster Directories Still Needed?
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem:**
+Each cluster directory contains a `regcreds` symlink pointing to
+`~/.aba/mirror/<mirror_name>` (e.g. `regcreds -> /home/steve/.aba/mirror/mirror`).
+This symlink is created by `Makefile.cluster` (lines 72, 96) and `Makefile.mirror`
+(line 71).
+
+Meanwhile, many scripts already compute `regcreds_dir` dynamically via
+`reg_load_config()` in `reg-common.sh`, which derives it as
+`$HOME/.aba/mirror/$(basename "$PWD")` or reads it from `mirror.conf`. This means
+there are two parallel mechanisms for locating mirror credentials:
+1. The `regcreds` symlink in the cluster directory (filesystem-level).
+2. The `regcreds_dir` variable computed at runtime (script-level).
+
+**Questions to answer:**
+1. Which scripts actually use the `regcreds` symlink directly (e.g. `$PWD/regcreds/`)
+   vs the `regcreds_dir` variable? Audit all ~25 scripts that reference `regcreds`.
+2. Can all symlink users be migrated to use `regcreds_dir` instead?
+3. If the symlink is eliminated, does anything break for users who `ls` or manually
+   inspect the cluster directory?
+4. Does the `mirror` symlink (also in the cluster dir) overlap with `regcreds`?
+
+**If redundant:** Remove the symlink creation from `Makefile.cluster` and
+`Makefile.mirror`, update any scripts that rely on it, and clean it up in `make clean`.
+
+**If still needed:** Document why and ensure both mechanisms stay in sync.
+
+**Where:** `templates/Makefile.cluster` (lines 72, 96), `templates/Makefile.mirror`
+(line 71), `scripts/reg-common.sh`, and all ~25 scripts in `scripts/` that reference
+`regcreds`.
+
+---
+
+### Reconsider `shutdown -h now` vs `shutdown -h 1` in Graceful Shutdown
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+`cluster-graceful-shutdown.sh` was changed from `shutdown -h 1` (halt in 1 minute)
+to `shutdown -h now` (halt immediately) to speed up E2E test runs. The 1-minute
+grace period existed to give the OS time to cleanly terminate remaining processes
+(journald, kubelet, etcd, etc.) before halting.
+
+For SNO this is likely fine (no etcd quorum concerns). For multi-node clusters,
+an immediate halt could risk etcd data corruption if a member is mid-write when
+the OS yanks the disk. The cordon+drain step runs beforehand, but etcd itself is
+not drained -- it relies on the OS shutdown sequence to flush and close cleanly.
+
+**Action needed:**
+- Test `shutdown -h now` on a multi-node cluster (compact/standard) with a
+  shutdown+startup cycle and verify etcd health afterwards.
+- If etcd issues appear, revert to `shutdown -h 1` (or a shorter grace like
+  `shutdown -h +0` which is equivalent to `now`, or use `systemctl poweroff`
+  which lets systemd orchestrate a clean unit shutdown).
+- Consider whether the grace period should differ by cluster type (SNO vs multi-node).
+
+**Where:** `scripts/cluster-graceful-shutdown.sh` lines 135, 144
+
+---
+
+### Fix KVM VM Reboot Behavior (VMs shut off instead of rebooting)
+
+**Status:** Fix applied -- needs validation
+**Priority:** High
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+**Updated:** 2026-03-21
+
+**Root cause:**
+`virt-install --cdrom` silently forces `on_reboot=destroy` on QEMU 9.1+ /
+libvirt 10.10+ (RHEL 9.7). The `--events on_reboot=restart` flag is ignored
+when `--cdrom` is used. This causes VMs to shut off instead of rebooting after
+the RHCOS agent writes the image to disk.
+
+**Fix applied in `scripts/kvm-create.sh`:**
+- Replaced `--cdrom "$iso_path"` with `--disk "$iso_path",device=cdrom`
+- Added `--events on_reboot=restart`
+- Changed `--boot uefi` to `--boot uefi,hd,cdrom`
+
+Verified on kvm1: VM stays `running` through `virsh reboot` with this config.
+
+**Remaining work:**
+- Validate with a full cluster install (SNO + compact + standard via E2E suite)
+- Once validated, remove the band-aid workaround from `suite-kvm-lifecycle.sh`
+  (search for `TODO: remove once root cause in kvm-create.sh / virt-install is fixed`)
+
+**Current workaround (in `suite-kvm-lifecycle.sh`):**
+Applied to all three cluster types (SNO, compact, standard) as a safety net:
+```
+# Poll until all VMs shut off after image write
+e2e_poll 1200 30 "Wait for VMs to shut off" "... | grep -ci 'shut.off' ..."
+aba --dir $CLUSTER start
+# Continue with bootstrap / install
+```
+
+**Where:** `scripts/kvm-create.sh`, `test/e2e/suites/suite-kvm-lifecycle.sh`
+
+---
+
+### Rename E2E Cluster Hostnames: Move `e2e` Suffix After Cluster Type
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem:**
+Current E2E cluster names use the pattern `e2e-<type><pool>` (e.g. `e2e-sno1`, `e2e-compact1`,
+`e2e-standard-vlan1`). This front-loads the `e2e` prefix, making it harder to visually scan
+cluster types. The naming should follow `<type>-e2e<pool>` instead.
+
+**Proposed renaming:**
+
+| Current | New |
+|---|---|
+| `e2e-sno1` | `sno-e2e1` |
+| `e2e-sno-mirror1` | `sno-mirror-e2e1` |
+| `e2e-sno-proxyonly1` | `sno-proxyonly-e2e1` |
+| `e2e-sno-noproxy1` | `sno-noproxy-e2e1` |
+| `e2e-compact1` | `compact-e2e1` |
+| `e2e-standard1` | `standard-e2e1` |
+| `e2e-sno-vlan1` | `sno-vlan-e2e1` |
+| `e2e-compact-vlan1` | `compact-vlan-e2e1` |
+| `e2e-standard-vlan1` | `standard-vlan-e2e1` |
+
+**Files to update:** `test/e2e/lib/config-helpers.sh` (`pool_cluster_name` and related functions),
+all suite scripts under `test/e2e/suites/`, dnsmasq DNS records on pool hosts, `test/e2e/config.env`.
+
+---
+
+### Bundle Script: Smart Cluster Reuse Instead of Automatic Delete
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small-Medium
+**Created:** 2026-03-22
+
+**Problem:**
+The bundle pipeline's cluster install step currently checks if a cluster already exists and
+deletes it unconditionally before re-installing. This wastes 30-60 minutes rebuilding a
+cluster that may already be perfectly healthy.
+
+**Proposed behavior:**
+When an existing cluster is detected, check its health before deciding to delete:
+1. Is the API endpoint reachable?
+2. Are all ClusterOperators available (`True False False`)?
+3. (Optional) Does the cluster version match the expected OCP version?
+4. (Optional) Are all nodes Ready?
+
+If the cluster is healthy (all COs available), skip deletion and reuse it.
+If the cluster is unhealthy (some COs degraded/unavailable), delete and reinstall.
+
+**Example logic:**
+```bash
+if cluster_exists "$cluster_dir"; then
+    if all_cos_available "$cluster_dir"; then
+        echo "Existing cluster is healthy -- reusing"
+    else
+        echo "Existing cluster is unhealthy -- deleting and reinstalling"
+        aba --dir "$cluster_dir" delete
+        aba --dir "$cluster_dir" install
+    fi
+else
+    aba --dir "$cluster_dir" install
+fi
+```
+
+**Where:** `bundles/v2/scripts/` (cluster install phase), potentially also useful
+in E2E suites that pre-check cluster state.
+
+---
+
+### E2E Suite: Delete VMs Before `rm -rf` Cluster Directory
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+E2E test suites (e.g. `suite-kvm-lifecycle.sh`) do `rm -rf e2e-sno1` to clean up a previous
+cluster directory without first deleting the VMs on the hypervisor. This leaves orphan VMs on
+the KVM/VMware host. If someone has a shell `cd`'d into the directory, they also get an ugly
+error cascade (see separate backlog item).
+
+**Proposed fix:**
+Before `rm -rf <cluster>`, run `aba --dir <cluster> delete || true` to clean up VMs on the
+hypervisor. The `|| true` handles the case where VMs don't exist.
+
+**Where:** `test/e2e/suites/suite-kvm-lifecycle.sh` and any other suites that `rm -rf` cluster dirs.
+
+---
+
+### E2E Suite: Consolidate Complex Test Assertions Into Helper Functions
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small-Medium
+**Created:** 2026-03-20
+
+**Problem:**
+E2E test suites contain long, complex inline shell commands for assertions -- especially the
+operator health check pattern:
+```bash
+e2e_poll 600 30 "Wait for all operators fully available" \
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+```
+These are hard to read, error-prone to escape correctly, and duplicated across multiple tests
+and suites. The complex quoting (nested `\$`, `\"`, single quotes inside double quotes) makes
+them fragile to edit.
+
+**Proposed fix:**
+Create helper functions in `test/e2e/lib/framework.sh` (or a new `test/e2e/lib/assertions.sh`):
+```bash
+e2e_wait_operators_healthy() {
+    local dir=$1 timeout=${2:-600} interval=${3:-30}
+    e2e_poll "$timeout" "$interval" "Wait for all operators fully available" \
+        "e2e_assert_operators_healthy $dir"
+}
+
+e2e_assert_operators_healthy() {
+    local dir=$1
+    local lines
+    lines=$(aba --dir "$dir" run | tail -n +2 | awk 'NR>1{print $3,$4,$5}')
+    [ -n "$lines" ] && echo "$lines" | grep -v '^True False False$' | wc -l | grep -q ^0$
+}
+
+e2e_wait_api_ready() {
+    local dir=$1 timeout=${2:-300} interval=${3:-15}
+    e2e_poll "$timeout" "$interval" "Wait for cluster API to become reachable" \
+        "aba --dir $dir run --cmd 'oc get nodes' 2>&1 | grep -q Ready"
+}
+```
+Then suite tests become one-liners: `e2e_wait_operators_healthy "$SNO"`.
+
+**Where:** `test/e2e/lib/framework.sh` or new `test/e2e/lib/assertions.sh`,
+then refactor all suites that use operator health checks.
+
+---
+
+### E2E Suite: Extract Long Inline Commands Into Helper Functions
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem:**
+E2E test suites contain very long inline shell commands that are hard to read,
+maintain, and debug. The complex quoting and escaping makes them fragile.
+
+Example (SSH into a node to verify network):
+```bash
+e2e_poll 300 15 "SSH into compact master 0 (verify network)" \
+    "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[0]} 'hostname && ip -4 addr show | grep inet'"
+```
+
+**Action needed:**
+1. Audit both lifecycle suites for long inline commands (especially the `e2e_poll`
+   and `e2e_run` one-liners that span multiple concepts).
+2. Extract common patterns into helper functions in `test/e2e/lib/` (e.g. a new
+   `assertions.sh` or extend `config-helpers.sh`). Candidates:
+   - `e2e_ssh_node <cluster_dir> <node_index> <command>` -- loads cluster.conf +
+     cluster-config.sh, SSHes into node by index, runs command.
+   - `e2e_wait_agent_api <cluster_dir> [timeout] [interval]` -- polls agent port 8090.
+   - `e2e_wait_bootstrap <cluster_dir> [timeout]` -- wraps `openshift-install agent
+     wait-for bootstrap-complete`.
+   - `e2e_verify_vm_count <cluster_dir> <count> <state>` -- checks `aba ls` output.
+3. Keep the helpers parameterized so they work across KVM and VMware suites.
+
+**Related:** See also "Consolidate Complex Test Assertions Into Helper Functions"
+backlog item, which covers the operator health check pattern specifically.
+
+**Where:** `test/e2e/suites/suite-kvm-lifecycle.sh`, `test/e2e/suites/suite-vmw-lifecycle.sh`,
+new `test/e2e/lib/assertions.sh` or extend existing helpers.
+
+---
+
+### E2E Runner: Audit and Fix Pre-Suite Cleanup Scope
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-03-20
+
+**Problem (two sides):**
+
+**1. Fresh runs delete too much:**
+`_cleanup_wasteful_dirs_local()` in `runner.sh` does `rm -rf ~/bin`, which
+nukes every CLI binary (`aba`, `oc`, `kubectl`, `openshift-install`, `oc-mirror`,
+`govc`). It also deletes `~/.oc-mirror`, `~/.cache/agent`, and `~/tmp/*`. The
+comment says "suite reinstalls via setup_aba_from_scratch → make install", but
+this is fragile: if any path changes, CLI tools vanish silently. Consider a
+more targeted cleanup (e.g. only remove known test artifacts, not the entire
+`~/bin` directory).
+
+**2. `--resume` had no cleanup skip (now fixed, but needs review):**
+A quick fix was applied: `--resume` now skips ALL pre-suite cleanup (disN revert,
+conN quay cleanup, wasteful dirs, firewall reset, pool registry ensure). This
+is correct for the common case but may be too broad -- e.g. if a previous run
+left stale firewall ports or oc-mirror caches, `--resume` won't clean them.
+The right approach is probably to skip only the destructive steps (`rm -rf ~/bin`,
+disN revert, cluster deletion from `.cleanup` files) while keeping lightweight
+hygiene steps (firewall reset, oc-mirror cache purge).
+
+**3. Dispatcher retry dispatches to occupied pools:**
+The `run.sh` dispatcher auto-started a `vmw-lifecycle retry` on pool 1 while
+a KVM suite was already running there (started manually). The dispatcher should
+check for ANY running suite (including manual tmux sessions) before dispatching.
+
+**4. `.cleanup` file scope:**
+`_pre_suite_cleanup()` iterates ALL `.cleanup` files, not just the current
+suite's. This means clusters from a still-running resumed suite can be deleted
+by a concurrent cleanup. `.cleanup` files should be namespaced per-suite and
+only processed for the current suite.
+
+**Where:** `test/e2e/runner.sh` (`_cleanup_wasteful_dirs_local`,
+`_pre_suite_cleanup`, the `--resume` skip block), `test/e2e/run.sh`
+(retry dispatch logic)
+
+---
+
+### `aba startup` Fails When `.install-complete` Exists
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+Running `aba startup` on an already-installed cluster fails because the `start`
+target internally hits the `check` target, which sees `.install-complete` and
+aborts with:
+```
+This cluster has already been deployed successfully!
+Run 'aba clean; aba install' to re-install the cluster or remove the
+'.install-complete' flag file and try again.
+```
+This guard is meant to prevent accidentally re-running `install` on a completed
+cluster, but `aba startup` is a post-install operation -- it should not trigger
+the install-complete guard at all.
+
+**Workaround:** `rm .install-complete` before running `aba startup`, but then
+`aba startup` re-runs `openshift-install agent wait-for install-complete` which
+is wrong -- it should just start VMs and wait for the API, not re-run the
+installer.
+
+**Root cause:**
+`aba startup` calls `aba -s start`, which maps to a Makefile target that
+depends on `check`. The `check` target guards against re-installation but
+doesn't distinguish between "install" and "start/startup" operations.
+
+**Proposed fix:**
+- The `startup` / `start` code path should NOT depend on the `check` target.
+  These are VM lifecycle operations, not install operations.
+- Alternatively, the `check` target should only fire for install-related
+  targets (`install`, `mon`, `wait-for-install`), not for lifecycle targets
+  (`start`, `stop`, `kill`, `ls`, `startup`, `shutdown`).
+
+**Where:** `templates/Makefile.cluster` (the `check` target and its
+dependents), `scripts/cluster-startup.sh`
+
+---
+
+### Graceful Error When CWD Is Deleted
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-20
+
+**Problem:**
+Running any `aba` command from a directory that has been deleted (e.g. by another process doing
+`rm -rf`) produces a long cascade of errors:
+```
+shell-init: error retrieving current directory: getcwd: cannot access parent directories
+/home/steve/bin/aba: line 160: /install: No such file or directory
+/home/steve/bin/aba: line 168: /scripts/include_all.sh: No such file or directory
+/home/steve/bin/aba: line 169: aba_debug: command not found
+... (30+ lines of noise)
+```
+
+**Proposed fix:**
+Add an early guard at the top of `aba.sh` (before sourcing any scripts):
+```bash
+if ! pwd >/dev/null 2>&1; then
+    echo "[ABA] Error: current directory no longer exists. Please cd to a valid directory." >&2
+    exit 1
+fi
+```
+
+**Where:** `scripts/aba.sh` (near the top, before `source scripts/include_all.sh`)
+
+---
+
+### SNO VM Name Duplication: `clustername-clustername`
+
+**Status:** Done (2026-03-19)
+**Priority:** Medium
+**Created:** 2026-03-19
+
+For SNO clusters, the agent-config template (`templates/agent-config.yaml.j2` line 25) sets the hostname to `{{ cluster_name }}`. The VM creation scripts (`kvm-create.sh`, `vmw-create.sh`) then construct the VM name as `${CLUSTER_NAME}-${hostname}`, producing `e2e-sno1-e2e-sno1`.
+
+For multi-node clusters this works fine (`mycluster-master1`), but for SNO the name is redundantly doubled. The VM name should just be `e2e-sno1`.
+
+**Fix:** Add a `vm_name()` helper function to `include_all.sh` that encapsulates the naming convention. When hostname equals cluster name (SNO), return just the hostname; otherwise return `${cluster}-${host}`. Replace all hardcoded `"${CLUSTER_NAME}-${name}"` occurrences in `kvm-*.sh` and `vmw-*.sh` scripts with `$(vm_name "$CLUSTER_NAME" "$name")`.
+
+**Files to update:** `scripts/include_all.sh` (add helper), then all lifecycle scripts: `kvm-create.sh`, `kvm-ls.sh`, `kvm-start.sh`, `kvm-stop.sh`, `kvm-kill.sh`, `kvm-delete.sh`, `kvm-exists.sh`, `kvm-on.sh`, and their `vmw-` counterparts.
+
+---
+
+### Validate `mirror_name` Points to a Valid Mirror With Credentials
+
+**Status:** Open
+**Priority:** Medium
+**Created:** 2026-03-19
+
+When `cluster.conf` sets `mirror_name=xxx`, ABA should verify early (during `verify-cluster-conf()` or at the start of `create-install-config.sh`) that `~/.aba/mirror/<mirror_name>/` exists and contains the expected credential files (`rootCA.pem`, `pull-secret-mirror.json` or `pull-secret-full.json`). Currently a wrong `mirror_name` silently generates an ISO without the correct root CA, causing `x509: certificate signed by unknown authority` errors at install time -- which is hard to diagnose.
+
+---
+
+### oc-mirror v2 Load Failure: Replace `rm -rf mirror/data` With `aba clean` and Add FAQ
+
+**Status:** Done (2026-03-18)
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-18
+**Plan:** `.cursor/plans/oc-mirror_working-dir_fix_1b917b02.plan.md`
+
+**Problem:**
+After consolidating `mirror/save/` and `mirror/sync/` into `mirror/data/`, all oc-mirror workflows share `data/working-dir/`. The `oc-mirror v2` `diskToMirror` (load) has a known bug where it tries to ping the source registry even in air-gapped mode. Clearing working-dir before load helps. Two test files use raw `rm -rf mirror/data` which is unrealistic user behavior and destroys saved tar archives.
+
+**Proposed fix:**
+1. Replace `rm -rf mirror/data` in `suite-mirror-sync.sh` (line 259) and `test1-basic-sync-test-and-save-load-test.sh` (line 332) with `aba -d mirror clean` (which only removes `data/working-dir`).
+2. Add README FAQ entry explaining the "collect catalog ... network is unreachable" error during load and the `aba -d mirror clean` workaround.
+3. Advise users to run `clean` before switching between `sync` and `save/load` workflows.
+
+**Where:** `test/e2e/suites/suite-mirror-sync.sh`, `test/test1-basic-sync-test-and-save-load-test.sh`, `README.md`
+
+---
+
+### Rename E2E SNO Cluster Names to Avoid Clashes
+
+**Status:** Done (2026-03-18)
+**Priority:** Medium
+**Estimated Effort:** Small-Medium
+**Created:** 2026-02-26
+
+**Problem:**
+The new E2E test suites use SNO cluster names `sno1`, `sno2`, `sno3`, `sno4` which clash with other tests that also use the same names. This can cause cross-test interference when multiple suites run concurrently on different pools.
+
+**Proposed fix:**
+Rename the E2E SNO clusters to `e2e-sno1`, `e2e-sno2`, `e2e-sno3`, `e2e-sno4` (or similar unique prefix). Update all E2E suite scripts, cluster config templates, and dnsmasq DNS records accordingly.
+
+**Where:** `test/e2e/suites/`, dnsmasq config on pool hosts, any cluster config templates used by E2E tests.
+
+---
+
+### Check VM Existence Before Prompting to Power Down
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Small
+**Created:** 2026-03-17
+
+**Problem:**
+After generating the agent ISO, ABA lists the VM paths and asks "Immediately power down the above virtual machine(s)? (Y/n):" — even when the VMs do not exist yet. If the user answers Yes, `govc` fails with `vm 'sno4-sno4' not found`.
+
+**Observed output:**
+```
+[ABA] The agent based ISO has been created in the /home/steve/aba/sno4/iso-agent-based directory
+
+/Datacenter/vm/abatesting/sno4/sno4-sno4
+[ABA] Immediately power down the above virtual machine(s)? (Y/n):
+govc: vm 'sno4-sno4' not found
+```
+
+**Expected behavior:**
+ABA should check (`govc vm.info` or similar) whether each VM exists before prompting. If no VMs exist yet, skip the prompt entirely. If some exist and some don't, only list and act on the ones that exist.
+
+**Where:** `scripts/vmw-create.sh` or wherever the power-down prompt is issued after ISO generation.
+
+---
 
 ### Empty Values in aba.conf Propagate Into cluster.conf via Template Generation
 
@@ -129,12 +1194,13 @@ Make the `mirror-registry` prerequisite conditional on vendor. Options:
 
 ### Deduplicate `aba isconf` output
 
-**Status:** Backlog
-**Context:** `aba isconf` generates both `sync/imageset-config-sync.yaml` and `save/imageset-config-save.yaml`. Each target independently calls `add-operators-to-imageset.sh`, producing duplicate operator listings in the output. The user sees the same operator list printed twice, which looks like a bug.
-**Fix options:**
-- Suppress verbose operator output on the second run (e.g. a `--quiet` flag to `add-operators-to-imageset.sh`)
-- Consolidate: generate one base config then copy/adapt for sync vs save
-- Simply note in the first run's output that both configs are being generated
+**Status:** Partially done (2026-03-18)
+**Priority:** Medium
+**Context:** The duplicate operator listing within a single `add-operators-to-imageset.sh` run
+has been fixed (removed the redundant summary line). However, `aba isconf` still calls the
+script twice (once for save, once for sync), so operators appear in both invocations.
+**Remaining:** Suppress output on the second run or consolidate into a single generation.
+**Note:** Would be fully resolved by the `mirror/save` + `mirror/sync` consolidation (#35).
 
 ### Option to preserve registry data on `aba uninstall`
 
@@ -251,7 +1317,195 @@ After adding an operator via the TUI and running `aba sync`, ABA refuses to rege
 
 ---
 
+### TUI Test Framework: Replace `sleep` With `wait_for` Polling
+
+**Status:** Backlog
+**Priority:** Medium
+**Estimated Effort:** Medium
+**Created:** 2026-02-26
+
+**Problem:**
+The TUI test framework (`test/func/tui-test-lib.sh` and test files) uses `sleep 1` between
+nearly every tmux `send-keys` call and the next assertion/action. Since tmux interaction is
+asynchronous, these sleeps are dead wait time. The framework already has `wait_for()` which
+polls the screen every 1s until a target string appears.
+
+Most `sleep 1` calls occur right before a `wait_for` and are therefore redundant — `wait_for`
+already handles the timing. Removing them would significantly speed up the test suite.
+
+**Proposed refactor:**
+- Remove `sleep` calls that immediately precede a `wait_for` (the polling handles it).
+- Keep `sleep 1` only in: (a) `send()` for `--slow` mode visibility, (b) before a raw
+  `capture` with no `wait_for`, (c) after the final action before script exit.
+- Consider adding a tiny `sleep 0.1` in `send()` (non-slow mode) to let tmux process
+  keystrokes, if any races appear after removing the larger sleeps.
+
+**Files:** `test/func/tui-test-lib.sh`, `test/func/test-tui-v2-01-wizard.sh`,
+`test/func/test-tui-v2-02-basket.sh`, `test/func/test-tui-v2-03-actions.sh`
+
+---
+
+### E2E Cleanup: `_cleanup_dis_aba()` Does Not Clean Testy User's Quay
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-03-22
+
+**Problem:**
+`suite-mirror-sync.sh` installs a Quay registry on the dis host as the `testy` user
+(`reg_ssh_user=testy`, `data_dir=~/my-quay-mirror-test1`). If the suite fails or is
+interrupted before its cleanup block runs, testy's Quay stays running (port 8443 occupied).
+The next suite (e.g. `airgapped-local-reg`) fails with "Existing Quay registry found"
+because `aba -d mirror install` detects port 8443 is occupied.
+
+**Root cause (three gaps in `_cleanup_dis_aba()` in `runner.sh`):**
+1. `rm -rf ~/quay-install $_E2E_WASTEFUL_DIRS` runs as `steve` via SSH, so `~` expands
+   to `/home/steve`. Testy's data at `/home/testy/my-quay-mirror-test1/` is untouched.
+2. `$_E2E_WASTEFUL_DIRS` contains `$HOME/my-quay-mirror-test1` but `$HOME` is steve's.
+3. No container/service cleanup: even if files were removed, the running Quay pod,
+   systemd user services (`quay-app`, `quay-redis`, `quay-pod`), and `rootlessport`
+   process under testy keep binding port 8443.
+
+**Proposed fix:**
+Add testy-specific cleanup to `_cleanup_dis_aba()`:
+```bash
+# Kill any registry occupying port 8443 (regardless of which user owns it)
+_essh "$dis_host" "sudo fuser -k 8443/tcp 2>/dev/null" 2>&1 || true
+
+# Clean testy's Quay: SSH as testy to run aba uninstall (uses testy's systemd context)
+_essh "$dis_host" "sudo -u testy bash -c '
+    export XDG_RUNTIME_DIR=/run/user/\$(id -u testy)
+    systemctl --user stop quay-app quay-redis quay-pod 2>/dev/null
+    systemctl --user disable quay-app quay-redis quay-pod 2>/dev/null
+    rm -f ~/.config/systemd/user/quay-*.service
+    systemctl --user daemon-reload 2>/dev/null
+'" 2>&1 || true
+_essh "$dis_host" "sudo rm -rf /home/testy/quay-install /home/testy/my-quay-mirror-test1" 2>&1 || true
+```
+
+Alternatively: uninstall via `ssh testy@dis aba -d mirror uninstall -y` if aba is
+present on testy's side, so testy's own aba handles the full cleanup properly.
+
+**Where:** `test/e2e/runner.sh` `_cleanup_dis_aba()` (around line 351)
+
+---
+
+### Test5: `aba mon` Failure After Reboot Is Silently Ignored
+
+**Status:** Backlog
+**Priority:** High
+**Estimated Effort:** Small
+**Created:** 2026-03-22
+
+**Problem:**
+In `test/test5-airgapped-install-local-reg.sh` line 726, after a cluster install fails
+(operators not stable within timeout), the script reboots all nodes and runs `aba mon`
+directly -- NOT via `test-cmd`. Since the test scripts do not use `set -e`, this `mon`
+failure is completely silent. The script continues to subsequent checks ("Waiting forever
+for all cluster operators available") which eventually succeed as operators settle, making
+the test appear to pass despite a significant install issue.
+
+**Observed behavior:**
+```
+ERROR Error checking cluster operator Progressing status: "context deadline exceeded"
+ERROR These cluster operators were not stable: [authentication, openshift-apiserver]
+[ABA] Error: Something went wrong with the installation...
+make: *** [Makefile:190: mon] Error 7
+Returning failed result [2]    <-- test-cmd -i returns the error
+CLUSTER INSTALL FAILED: REBOOTING ALL NODES ...
+... (reboot + restart) ...
+aba --dir ... mon              <-- bare call, no test-cmd, failure silently ignored
+... (test continues as if install succeeded) ...
+```
+
+**Root cause:**
+Line 713: `test-cmd -i` properly catches the initial failure and enters the recovery path.
+Line 726: `aba --dir ... mon` is called directly (no `test-cmd`), so its non-zero exit
+is silently ignored. The script proceeds to the operator wait loops (lines 739/742)
+which eventually succeed because the operators settle over time.
+
+**Impact:** Real installation problems (30-minute operator timeout!) are masked. The test
+appears green even though the cluster needed emergency intervention (reboot) to recover.
+
+**Proposed fix:**
+Replace line 726 with a `test-cmd` call that will fail the test if the second `mon` also fails:
+```bash
+# Before (silent failure):
+aba --dir $subdir/aba/$cluster_name mon
+
+# After (proper error propagation):
+test-cmd -h $reg_ssh_user@$int_bastion_hostname -r 2 5 -m \
+    "Retry: checking cluster with mon after node reboot" \
+    "aba --dir $subdir/aba/$cluster_name mon"
+```
+
+Also consider: should the test fail immediately if the initial `mon` times out, rather
+than attempting a recovery path that masks the issue? The reboot-and-retry logic makes
+it impossible to distinguish between "flaky infrastructure" and "real code bug".
+
+**Where:** `test/test5-airgapped-install-local-reg.sh` lines 713-729
+
+---
+
 ## Low Priority
+
+### Curl Download Progress: Auto-Detect TTY and Show Progress Bar Only When Interactive
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-26
+
+**Problem:**
+When ABA uses `curl` to download files (e.g. `oc-mirror`, `govc`, `openshift-install`), it should
+show a graphical progress bar (`--progress-bar` / hash output) only when a user is sitting at an
+interactive terminal. When running from a test script, background process, or CI pipeline, it should
+use silent mode (`-s`) to avoid polluting logs with progress noise.
+
+**Current state (`cli/Makefile`):**
+```makefile
+ifeq ($(PLAIN_OUTPUT),1)
+  IS_TTY := no
+else
+  IS_TTY := yes
+endif
+ifeq ($(IS_TTY),yes)
+  CURL_PROGRESS := "--progress-bar"
+else
+  CURL_PROGRESS := "-s"
+endif
+```
+This defaults to `IS_TTY=yes` even when there is no TTY (e.g. running under `tmux send-keys`,
+`nohup`, piped output, or E2E test harness). The `PLAIN_OUTPUT=1` env var override exists but
+nothing sets it automatically.
+
+**Proposed fix:**
+- Auto-detect TTY properly: check if stdout is connected to a terminal (`[ -t 1 ]` in bash,
+  or `$(shell test -t 1 && echo yes || echo no)` in Make).
+- Apply consistently across all curl invocations project-wide (not just `cli/Makefile`).
+- Keep the `PLAIN_OUTPUT=1` env var as a manual override for edge cases.
+- Audit all `curl` calls in `scripts/*.sh` and Makefiles for the same pattern.
+
+---
+
+### Bundle Pipeline: Empty Google Drive Trash After Sync
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-23
+
+**Problem:**
+After synchronizing a new bundle to Google Drive, the old bundle files remain in the
+Drive trash, consuming storage quota. The trash must be emptied manually.
+
+**Proposed fix:**
+Use the `gdrive` CLI tool to empty the trash folder after a successful bundle upload/sync.
+Add a `gdrive files trash empty` (or equivalent) command at the end of the bundle sync
+step in `bundles/v2/`.
+
+**Where:** `bundles/v2/go.sh` or `bundles/v2/phases/` (whichever handles the GDrive upload)
+
+---
 
 ### Clean Up TUI Debug Logging
 
@@ -375,19 +1629,18 @@ Makefile:116: *** "Value 'ocp_version' not set in aba.conf! Run aba in the root 
 
 ### 8. E2E Suite Teardown / Cleanup Independence
 
-**Status:** Backlog  
+**Status:** Partially done (2026-03-23)
 **Priority:** Low  
 **Estimated Effort:** Small  
 **Created:** 2026-02-21
 
 **Problem:**
-Suites rely on the next suite's `setup_aba_from_scratch()` to clean up. There is no per-suite teardown. Issues:
-- Running a single suite leaves state behind on conN
-- The last suite in `--all` leaves state behind
-- `suite-cluster-ops` and `suite-network-advanced` don't call `setup_aba_from_scratch` and could be affected by prior suite state
-- `cleanup_all()` in `test/e2e/lib/setup.sh` is dead code (never called)
+Suites relied on the next suite's `setup_aba_from_scratch()` to clean up. Now each suite
+installs ABA from scratch inline (git clone or curl), so they are self-contained.
+`setup_aba_from_scratch()` and `cleanup_all()` have been removed from `setup.sh`.
 
-**Action:** Remove dead `cleanup_all()` or wire it into a teardown hook. Consider adding per-suite cleanup.
+**Remaining:** Running a single suite still leaves state behind on conN (clusters, mirrors).
+Consider adding per-suite teardown hooks for environments that need a clean slate after each suite.
 
 ### 9. New Command: `aba status`
 
@@ -429,6 +1682,25 @@ before the message.
 
 **Action:** Audit all `aba_log`, `echo "[ABA]"`, and similar patterns across
 `scripts/*.sh` and `*/Makefile` to ensure consistent left-justification.
+
+### Reduce Verbose Pre-flight Check Output
+
+**Status:** Backlog  
+**Priority:** Low  
+**Estimated Effort:** Small  
+**Created:** 2026-03-21
+
+**Problem:**
+`scripts/preflight-check.sh` prints a line for every successful DNS/NTP reachability check
+(e.g. "DNS server 10.0.1.8 is reachable", "NTP server ntp.example.com is reachable").
+For clusters with many servers this is noisy and buries important information.
+
+**Expected Behavior:**
+- Only print individual lines when a check **fails** (e.g. "DNS server 10.0.1.8 is NOT reachable").
+- On success, show a single summary line at the end: e.g. "All DNS/NTP servers reachable".
+- Keep the "No IP conflicts detected" and "Pre-flight validation passed" summary lines.
+
+**Files:** `scripts/preflight-check.sh`
 
 ### 11. E2E Framework: Graceful Stop / Signal Handling
 
@@ -821,6 +2093,108 @@ When moving logic out of Makefiles, add "ensure" patterns to 6 scripts as propos
 ---
 
 ## Completed
+
+### `verify_conf=all/conf/off` -- Configurable Preflight Validation Strictness
+**Completed:** 2026-03-19
+Added three-state `verify_conf` setting (`all`/`conf`/`off`) to control preflight and config
+validation. When the bastion is on a different network than the cluster nodes, `conf` skips
+DNS, NTP, IP conflict, DNS record validation, and registry release image checks while keeping
+config file validation. CLI flag: `aba --verify <all|conf|off>`. Backward-compatible with
+legacy boolean values. E2E test added in `suite-cluster-ops.sh`. README documented
+(Pre-flight section + FAQ).
+
+### Improve `arping` IP Conflict Detection on Multi-Homed Hosts
+**Completed:** 2026-03-19
+`preflight-check.sh` now uses `ip route get` to auto-detect the correct outgoing interface
+for `arping -I`, fixing silent failures on multi-homed E2E hosts. Falls back to `ping` if
+interface detection fails.
+
+### Improve Release Image Error Message
+**Completed:** 2026-03-19
+`verify-release-image.sh` now captures `skopeo` stderr and includes it in the error message.
+Replaced generic "not found" text with actionable troubleshooting hints (credentials, mirroring,
+version mismatch).
+
+### Ask User Before Bumping Master Memory (OCPBUGS-62790)
+**Completed:** 2026-03-19
+Changed the silent 16GB-to-20GB master memory bump in `vmw-create.sh` from an automatic
+adjustment to an interactive `ask()` prompt. Users can now confirm or decline the increase.
+
+### E2E Workaround for OCP ImagePrunerJobFailed Bug
+**Completed:** 2026-03-19
+Added `_e2e_fix_image_pruner_if_needed()` to `test/e2e/lib/framework.sh`. Detects
+`ImagePrunerJobFailed` in command output, suspends the image pruner, and deletes failed
+jobs before retry. Workaround for Red Hat KCS 5367151.
+
+### Delete SNO Clusters Before `rm -rf` in Old E2E Tests
+**Completed:** 2026-03-19
+Added explicit `aba delete` before `rm -rf sno` in `test2` and `test5` to prevent IP
+conflict failures from stale clusters. Also added deliberate negative IP conflict test
+to `test1` and `suite-cluster-ops.sh`.
+
+### ISC Display Name Comments With Fuzzy Filtering
+**Completed:** 2026-03-18
+Generated ISC files now include display names as YAML comments (e.g. `- name: cincinnati-operator  # OpenShift Update Service`).
+Fuzzy logic (`_display_name_adds_info()`) skips redundant comments where the display name is just a
+reformatted version of the package name. See `ai/TUI_OPERATOR_DISPLAY_ENHANCEMENT.md`.
+
+### Catalog Canary Test Script
+**Completed:** 2026-03-18
+`test/func/test-catalog-canary.sh` -- standalone canary that auto-detects available OCP versions
+(including pre-GA), runs the production extraction entry point, and validates output. Designed
+for cron-based periodic execution. See `ai/PODMAN_CATALOG_EXTRACTION.md`.
+
+### `aba shutdown` Debug Pod Warning Shown After Successful Priming
+
+**Status:** Backlog
+**Priority:** Low
+**Created:** 2026-03-25
+
+**Problem:**
+`aba shutdown` shows "Still waiting for VMs to power off (10s) ..." polling messages that
+are noisy and unhelpful. Also, when `--wait` is provided, there is no indication that the
+user can safely interrupt the wait.
+
+**Requested changes (both `cluster-graceful-shutdown.sh` and `cluster-startup.sh`):**
+
+1. Replace the polling message:
+   - **Remove:** `[ABA] Still waiting for VMs to power off (10s) ...`
+   - **Replace with:** `[ABA] Waiting for all nodes to power down. You may safely hit ctrl+c to stop waiting.`
+   (Show once, not repeatedly every 10s)
+
+2. Apply the same pattern to `cluster-startup.sh` when `--wait` is provided:
+   - `[ABA] Waiting for all nodes to power up. You may safely hit ctrl+c to stop waiting.`
+
+**Where:** `scripts/cluster-graceful-shutdown.sh`, `scripts/cluster-startup.sh`
+
+---
+
+### E2E: No "Silently Skipped" Tests in Test Code
+
+**Status:** Backlog
+**Priority:** Medium
+**Created:** 2026-03-25
+
+**Problem:**
+Test code must never silently skip tests or assertions. Every test block registered in
+`plan_tests` must have a corresponding `test_begin` with an exact name match, and every
+`test_begin` must appear in `plan_tests`. A mismatch causes the dashboard to show `--`
+instead of `PASS`/`FAIL`, hiding whether the test actually ran.
+
+**Found and fixed (2026-03-25):**
+- `suite-airgapped-existing-reg.sh`: `plan_tests` had "Load without save dir (must fail)"
+  but `test_begin` had "Load without data dir (must fail)" -- name mismatch.
+- `suite-cluster-ops.sh`: `test_begin "verify_conf=conf skips network checks"` was missing
+  from `plan_tests` entirely.
+
+**Action:**
+Consider adding a runtime check in `test_begin()` that warns (or aborts) if the test name
+is not found in `_E2E_PLAN_NAMES`. This would catch mismatches immediately instead of
+silently showing `--` on the dashboard.
+
+**Where:** `test/e2e/lib/framework.sh` (`test_begin` function), all suite files.
+
+---
 
 ### `aba shutdown` Retry and Verify
 **Completed:** 2026-03-10  

@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=0.9.7
+ABA_VERSION=0.9.8
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260315224415
+ABA_BUILD=20260329220120
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -379,10 +379,7 @@ elif [ "$1" = "--light" ]; then
 	# Now we have the required ocp version, we can fetch the operator index in the background (to save time).
 	aba_debug Downloading operator index for version $ver 
 
-	# Catalog downloads need oc-mirror; ensure it's at least downloading
-	scripts/cli-download-all.sh oc-mirror
-
-	# Use new helper function for parallel catalog downloads
+	# Start parallel catalog downloads (uses podman extraction, no oc-mirror dependency)
 	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 	download_all_catalogs "$ver_short"
 
@@ -628,6 +625,13 @@ elif [ "$1" = "--light" ]; then
 			ops_list=$(echo $ops_list | xargs | tr -s " " | tr " " ",")  # Trim white space and add ','
 			replace-value-conf -n ops -v $ops_list -f $ABA_ROOT/aba.conf
 		fi
+	elif [ "$1" = "--verify" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		case "$2" in
+			all|conf|off) replace-value-conf -n verify_conf -v "$2" -f $ABA_ROOT/aba.conf ;;
+			*) aba_abort "invalid verify_conf value '$2' (use: all, conf, off)" ;;
+		esac
+		shift 2
 	elif [ "$1" = "--excl-platform" ]; then
 		if [ "$2" = "false" ]; then
 			replace-value-conf -n excl_platform -v "false" -f $ABA_ROOT/aba.conf
@@ -647,8 +651,12 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n pull_secret_file -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		[ -s $1 ] && cp "$2" vmware.conf
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ -s "$2" ] && cp "$2" vmware.conf
+		shift 2
+	elif [ "$1" = "--kvm" -o "$1" = "-K" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		[ -s "$2" ] && cp "$2" kvm.conf
 		shift 2
 	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
@@ -907,9 +915,8 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				ssh|run|bundle)
-					# FIXME: Add more here: day2 day2-ntp day2-osus shell login etc  (all items without any deps)
-					# These are now all processed once, in code below
+				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+					# These are processed directly in code below, bypassing Make
 					:
 					;;
 				*)
@@ -923,8 +930,35 @@ elif [ "$1" = "--light" ]; then
 	fi
 done
 
+# Guard for VM lifecycle targets: validate platform + hypervisor config
+_ensure_hv_ready() {
+	source <(normalize-aba-conf)
+	case "$platform" in
+		vmw)
+			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
+			[ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first."
+			;;
+		kvm)
+			[ ! -s kvm.conf ] && [ -f ../kvm.conf ] && ln -s ../kvm.conf
+			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
+			;;
+		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
+		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
+	esac
+	[ -f agent-config.yaml ] || aba_warning "agent-config.yaml not found. Run 'aba cluster' first."
+	HV=$platform
+}
+
 if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
+
+	# Externalized targets require a cluster directory (cluster.conf present)
+	case $cur_target in
+		info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+			[ -f cluster.conf ] || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
+			;;
+	esac
+
 	case $cur_target in
 		ssh)
 			trap - ERR  # No need for this anymore
@@ -941,6 +975,102 @@ if [ "$cur_target" ]; then
 			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
 			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
 			exit 
+		;;
+		info)
+			$ABA_ROOT/scripts/cluster-info.sh
+			exit
+		;;
+		login)
+			$ABA_ROOT/scripts/show-cluster-login.sh
+			exit
+		;;
+		shell)
+			echo "export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig"
+			exit
+		;;
+		getco)
+			oc --kubeconfig iso-agent-based/auth/kubeconfig get co
+			exit
+		;;
+		day2)
+			$ABA_ROOT/scripts/day2.sh
+			exit
+		;;
+		day2-ntp)
+			$ABA_ROOT/scripts/day2-config-ntp.sh
+			exit
+		;;
+		day2-osus)
+			$ABA_ROOT/scripts/day2-config-osus.sh
+			exit
+		;;
+		shutdown)
+			eval $BUILD_COMMAND
+			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh wait=$wait
+			exit
+		;;
+		startup)
+			$ABA_ROOT/scripts/cluster-startup.sh
+			exit
+		;;
+		rescue)
+			$ABA_ROOT/scripts/cluster-rescue.sh
+			exit
+		;;
+		create)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start
+			# Sync Make stamp files: VMs exist, so all prior steps (poweroff, upload,
+			# refresh) are logically complete. Without these, a subsequent 'aba bootstrap'
+			# or 'aba install' would re-run the entire chain and destroy the running VMs.
+			touch .autopoweroff .autoupload .autorefresh
+			exit
+		;;
+		ls)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
+			exit
+		;;
+		start)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit 0
+			exit
+		;;
+		stop)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
+			exit
+		;;
+		kill|poweroff)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-kill.sh || exit 0
+			exit
+		;;
+		delete)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-delete.sh || exit 0
+			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
+			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
+			exit
+		;;
+		refresh)
+			eval $BUILD_COMMAND
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
+			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
+			# are logically complete.
+			touch .autopoweroff .autoupload .autorefresh
+			exit
+		;;
+		upload)
+			_ensure_hv_ready
+			$ABA_ROOT/scripts/${HV}-upload.sh
+			# Sync Make stamp files: upload implies poweroff already happened.
+			touch .autopoweroff .autoupload
+			exit
 		;;
 	esac
 fi
@@ -1026,16 +1156,16 @@ if [ -f .bundle ]; then
 	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
 
 	# Check if tar files are already in place
-	if [ ! "$(ls mirror/save/mirror_*tar 2>/dev/null)" ]; then
+	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
 		{
 			echo
 			aba_warning -p "IMPORANT" \
 				"The Image-set archive file(s) (ISA image payload) are not included in this install bundle." \
 				"The ISA file(s) were left out of the install bundle during its creation and *must be*" \
-				"moved or copied into the install bundle under the aba/mirror/save directory before continuing!"
+				"moved or copied into the install bundle under the aba/mirror/data directory before continuing!"
 			echo
 			echo_white "Example (copy ISA from portable media):" 
-			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/save/" 
+			echo_white "  cp /path/to/portable/media/mirror_*.tar aba/mirror/data/" 
 			echo_white "Run aba again for further instructions." 
 		} >&2
 
@@ -1320,14 +1450,14 @@ fi
 
 # Now we know the desired openshift version...
 
-# Trigger download of all CLI binaries first -- catalog downloads need oc-mirror
+# Trigger download of all CLI binaries (oc-mirror needed for mirror save/sync/load)
 # Note: Non-interactive mode already started these at line ~205
 # Note: Another place this is checked is in "scripts/reg-save.sh"
 scripts/cli-download-all.sh
 
 # Fetch the operator indexes (in the background to save time).
 # Use new helper function for parallel catalog downloads (runs in background)
-# NOTE: must come AFTER cli-download-all.sh since catalogs need oc-mirror
+# NOTE: catalogs use podman extraction (no oc-mirror dependency)
 ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
 download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them

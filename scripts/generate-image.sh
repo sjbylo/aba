@@ -7,17 +7,16 @@ aba_debug "Starting: $0 $*"
 
 aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
-export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
-# Only use the binary from the mirror to install OpenShift.  For fully online installs (e.g. via proxy/NAT) reg_host etc is NOT defined. 
-#[ "$reg_host" ] && openshift_install_mirror=./openshift-install-$ocp_version-$reg_host || openshift_install_mirror=openshift-install
-#openshift_install_mirror=./openshift-install-$ocp_version-$reg_host
-openshift_install_mirror="./openshift-install-$ocp_version-$reg_host-$reg_port-$(echo $reg_path | tr / -)"
+# Use the binary extracted from the mirror to install OpenShift.  For fully online installs (e.g. via proxy/NAT) reg_host etc is NOT defined.
+openshift_install_mirror="./openshift-install-mirror-$reg_host"
 [ ! -x "$openshift_install_mirror" ] && openshift_install_mirror=openshift-install # fallback to the regular binary
 aba_debug "openshift_install_mirror=$openshift_install_mirror"
 

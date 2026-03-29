@@ -35,14 +35,15 @@ Options:
   -N, --dns <ip address(es)>            # Set one or more DNS IP addresses
   -R, --default-route <next hop ip>     # Set the default route of the disconnected network
   -T, --ntp <hostname(s) or IPs>        # Set the NTP hostname(s) or IP address(es) 
-  -O, --ops [<list of operators>]       # Add individual operators to your image set config (ISC) file (for oc-mirror)
+  -O, --ops [<list of operators>]       # Add individual operators to your image set config (ISC) file
   -P, --op-sets [<operator set list>]   # Add sets of operators to your ISC file, as defined by 'aba/templates/operator-set.*' files. 'all' is accepted
   -e, --editor <editor command>         # Set the editor to use, e.g. vi, emacs, pico, none...  'none' means manual editing of config files
   -a, --ask                             # Prompt user when needed, permanently
   -Y, --yes-permanent                   # Permanently accept defaults (writes ask=false to aba.conf)
-  -o, --out <file|->                    # Output Install Bundle to destination, e.g. file or stdout (-). See 'aba bundle -h`
+  -o, --out <file|->                    # Output Install Bundle to destination, e.g. file or stdout (-). See 'aba bundle -h'
   -f, --force                           # Only used with 'aba reset --force' and 'aba bundle --force'
   -V, --vmware                          # Apply this VMware config file (for govc)
+      --verify <all|conf|off>            # Control validation: all (default), conf (config only), off (skip)
   -D, --debug                           # Increase output
   -q, --quiet                           # Less output
       --info                            # Increase output (default)

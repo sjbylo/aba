@@ -18,8 +18,6 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Extract major.minor version (e.g., 4.20.8 -> 4.20)
 ocp_ver_short="${ocp_version%.*}"
 
-aba_info "Downloading operator catalogs for OCP $ocp_ver_short"
-
 # Download all catalogs in parallel (TTL from ~/.aba/config)
 download_all_catalogs "$ocp_ver_short"
 

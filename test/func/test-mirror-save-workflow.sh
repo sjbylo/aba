@@ -29,7 +29,7 @@ rm -f ~/bin/oc-mirror
 rm -rf .index/*-operator-index-*
 rm -rf ~/.aba/runner/cli:install:oc-mirror
 rm -rf ~/.aba/runner/catalog:*
-rm -rf mirror/save/mirror_*.tar 2>/dev/null || true
+rm -rf mirror/data/mirror_*.tar 2>/dev/null || true
 
 # Test 1: oc-mirror installation
 echo ""
@@ -79,23 +79,23 @@ echo "Test 3: Generate imageset config"
 echo "---------------------------------"
 
 # Remove old config to force regeneration
-rm -f mirror/save/imageset-config-save.yaml
+rm -f mirror/data/imageset-config.yaml
 
-if ! make -sC mirror save/imageset-config-save.yaml; then
+if ! make -sC mirror data/imageset-config.yaml; then
 	aba_abort "Test 3 FAILED: Failed to create imageset config"
 fi
 
-if [ ! -f mirror/save/imageset-config-save.yaml ]; then
-	aba_abort "Test 3 FAILED: imageset-config-save.yaml not created"
+if [ ! -f mirror/data/imageset-config.yaml ]; then
+	aba_abort "Test 3 FAILED: imageset-config.yaml not created"
 fi
 
 # Verify it's valid YAML (basic check)
-if ! grep -q "kind: ImageSetConfiguration" mirror/save/imageset-config-save.yaml; then
+if ! grep -q "kind: ImageSetConfiguration" mirror/data/imageset-config.yaml; then
 	aba_abort "Test 3 FAILED: Invalid imageset config (missing ImageSetConfiguration)"
 fi
 
 # Verify it has platform section
-if ! grep -q "platform:" mirror/save/imageset-config-save.yaml; then
+if ! grep -q "platform:" mirror/data/imageset-config.yaml; then
 	aba_abort "Test 3 FAILED: No platform section in imageset config"
 fi
 
@@ -107,12 +107,12 @@ echo "Test 4: Verify config contents"
 echo "-------------------------------"
 
 # Count operators (if any)
-op_count=$(grep -c "name: " mirror/save/imageset-config-save.yaml 2>/dev/null || echo 0)
+op_count=$(grep -c "name: " mirror/data/imageset-config.yaml 2>/dev/null || echo 0)
 aba_info "Operators in config: $op_count" >&2
 
 # Show sample of config
 aba_info "Sample of imageset config:" >&2
-head -20 mirror/save/imageset-config-save.yaml | sed 's/^/  /' >&2
+head -20 mirror/data/imageset-config.yaml | sed 's/^/  /' >&2
 
 aba_info_ok "Test 4 PASSED: Config verified" >&2
 

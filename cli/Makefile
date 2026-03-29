@@ -87,8 +87,8 @@ govc_tar_file := govc_Linux_$(govc_arch).tar.gz
 ocp_version := $(strip $(shell echo $(ocp_version)))
 platform := $(strip $(shell echo $(platform)))
 
-# Only if platform not "bm" we need govc for vmw or libvirt
-ifneq ($(platform),bm)
+# govc is only needed for VMware (not KVM or bare-metal)
+ifeq ($(platform),vmw)
 	govc_bin := govc
 	govc_tar_target := $(govc_tar_file)
 endif
@@ -270,8 +270,7 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 
 # Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
-# Had to switch from 4.21 (latest) to 4.20 due to "signature missing" errors.
-oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.20
+oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.21
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball

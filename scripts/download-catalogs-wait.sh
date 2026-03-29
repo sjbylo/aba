@@ -22,12 +22,8 @@ ocp_ver_short="${ocp_version%.*}"
 # Wait for each catalog individually
 for catalog in redhat-operator certified-operator community-operator; do
 	task_id="catalog:${ocp_ver_short}:${catalog}"
-	
-	# run_once handles everything: idempotency, waiting, messages
-	if run_once -w -m "Waiting for operator index: ${catalog} v${ocp_ver_short} to finish downloading in the background" -i "$task_id"; then
-		aba_info_ok "Operator ${catalog} index v${ocp_ver_short} ready at .index/${catalog}-index-v${ocp_ver_short}"
-	else
-		# Get error details from the failed task
+
+	if ! run_once -w -m "Waiting for ${catalog} catalog v${ocp_ver_short}" -i "$task_id"; then
 		error_output=$(run_once -e -i "$task_id" | head -20)
 		aba_abort "Failed to download ${catalog} catalog for OCP ${ocp_ver_short}" \
 			"Error details from download task:" \

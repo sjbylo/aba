@@ -933,7 +933,47 @@ regcreds_dir=$HOME/.aba/mirror/$mirror_name
 
 **Rule of thumb**: If a value does not appear in `aba.conf`, `mirror.conf`, or `cluster.conf`, it does not belong in the corresponding normalize function.
 
-### 7. Make-First Architecture
+### 7. Config Files Are the Single Source of Truth
+
+**CRITICAL DESIGN PRINCIPLE**: ABA's config files (`aba.conf`, `mirror.conf`, `cluster.conf`) are the **single source of truth** for all settings. CLI flags (e.g. `--platform vmw`, `-v p`, `-c s`) write their values into the config files and nothing else — all scripts then read from the config files.
+
+**Implications for platform detection:**
+
+- `aba.conf` → `platform=vmw|kvm|bm` is the **definitive** way to know the deployment platform.
+- `vmware.conf` is a **supporting** config file that is only loaded when `platform=vmw`.
+- `kvm.conf` is a **supporting** config file that is only loaded when `platform=kvm`.
+- The **presence** of `vmware.conf` or `kvm.conf` must **never** be used to infer or override the platform. If `platform=bm`, those files are ignored even if they exist.
+
+**Correct pattern (HEAD):**
+```bash
+# In scripts that need hypervisor config:
+source <(normalize-aba-conf)
+[ "$platform" = "vmw" ] && source <(normalize-vmware-conf)
+[ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
+```
+
+**Incorrect pattern (was on main):**
+```bash
+# ❌ WRONG — unconditionally sourcing vmware.conf lets file presence override aba.conf
+source <(normalize-vmware-conf)
+```
+
+**In Jinja2 templates:**
+```yaml
+# ✅ CORRECT — check the config variable
+{%- elif platform == 'vmw' %}
+  vsphere:
+
+# ❌ WRONG — checks for a side-effect of sourcing vmware.conf
+{%- elif GOVC_URL is defined %}
+  vsphere:
+```
+
+**Why this matters:** On `main`, `install-config.yaml.j2` used `GOVC_URL is defined` to decide the platform section, and `create-install-config.sh` unconditionally sourced `normalize-vmware-conf`. This meant a user with `platform=bm` but a `vmware.conf` present would silently get a vSphere install-config. The feature branch fixed this by checking `platform == 'vmw'` in both places, correctly treating `aba.conf` as authoritative.
+
+**General rule:** If a script needs to decide behavior based on a setting, it reads the config file variable — never infers from the presence of another file or the existence of a side-effect variable.
+
+### 8. Make-First Architecture
 
 **Key Principle**: ABA was primarily make-based from the start. The `aba` CLI (`scripts/aba.sh`) is a convenience wrapper that resolves directories, parses CLI flags, and calls `make`.
 
@@ -1384,6 +1424,12 @@ for test in test/func/test-*.sh; do
     $test || echo "FAILED: $test"
 done
 ```
+
+**TUI v2 tests (test-tui-v2-*.sh)** — run order matters:
+- **Run 01 first**: `test/func/test-tui-v2-01-wizard.sh` sets up state (aba.conf, cached catalogs, etc.) for the rest.
+- **Then 02, 03, 04 in any order**: `test-tui-v2-02-basket.sh`, `test-tui-v2-03-actions.sh`, `test-tui-v2-04-isconf.sh` can run in any order and can be repeated.
+- **Do not run 02/03/04 in parallel**: they share tmux session and state; run sequentially after 01.
+- If `reset_test_state` fails with "Permission denied" on `~/.aba/runner` or `~/.aba/cache`, fix permissions (e.g. `chmod -R u+rwx ~/.aba`) or remove those dirs and re-run.
 
 ### Creating New Tests
 

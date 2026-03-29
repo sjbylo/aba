@@ -9,7 +9,8 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
-source <(normalize-vmware-conf)  # Some values needed for install-config.yaml
+[ "$platform" = "vmw" ] && source <(normalize-vmware-conf)  # vSphere values needed for install-config.yaml
+[ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
@@ -18,7 +19,7 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 #to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
 if [ "$platform" = "bm" ]; then
 	to_output=$(normalize-cluster-conf | sed -E -e "s/^export //g" -e 's/^(mac_prefix|master_cpu_count|master_mem|worker_cpu_count|worker_mem|data_disk)=.*//g')
-elif [ "$platform" = "vmw" ]; then
+elif [ "$platform" = "vmw" -o "$platform" = "kvm" ]; then
 	to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
 fi
 echo

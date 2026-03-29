@@ -36,6 +36,8 @@ if [ -s vmware.conf ]; then
 
 	aba_debug Govc config file $PWD/vmware.conf ok
 
+	[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf && aba_debug "Saved vmware.conf to ~/.vmware.conf"
+
 	exit 0
 else
 	aba_info vmware.conf exists but is empty ...

@@ -35,7 +35,8 @@ hosts="$WORKER_NAMES $CP_NAMES"
 # If at least one VM exists, then show vms.
 if scripts/vmw-exists.sh; then
 	for name in $hosts; do
-		[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		[ "$VC" ] && echo $cluster_folder/$vm || echo $vm
 	done
 
 	ask "Start the above virtual machine(s)" || exit 1
@@ -44,7 +45,7 @@ else
 fi
 
 for name in $hosts ; do
-	govc vm.power -on ${CLUSTER_NAME}-$name || true
+	govc vm.power -on "$(vm_name "$CLUSTER_NAME" "$name")" || true
 done
 
 exit 0 

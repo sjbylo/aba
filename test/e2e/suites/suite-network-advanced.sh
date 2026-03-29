@@ -61,7 +61,9 @@ suite_begin "network-advanced"
 # ============================================================================
 test_begin "Setup: ensure pre-populated registry"
 
-e2e_run "Install aba (needed for version resolution)" "./install"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -79,7 +81,7 @@ test_end
 test_begin "Setup: install aba and configure"
 
 e2e_run "Reset aba to clean state" \
-    "cd ~/aba && ./install && aba reset -f"
+    "./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
     "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
@@ -327,20 +329,15 @@ _net_test "Non-VLAN standard: bonding" \
 # ============================================================================
 test_begin "Cleanup"
 
-e2e_diag "Show remaining cluster dirs" "ls -d sno* compact* standard* 2>/dev/null || echo 'none'"
+e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard* || echo 'none'"
 
-e2e_run "Delete VLAN SNO cluster" \
-    "if [ -d $_SNO_VLAN ]; then aba --dir $_SNO_VLAN delete; else echo '[cleanup] $_SNO_VLAN already removed'; fi"
-e2e_run "Delete VLAN compact cluster" \
-    "if [ -d $_COMPACT_VLAN ]; then aba --dir $_COMPACT_VLAN delete; else echo '[cleanup] $_COMPACT_VLAN already removed'; fi"
-e2e_run "Delete VLAN standard cluster" \
-    "if [ -d $_STANDARD_VLAN ]; then aba --dir $_STANDARD_VLAN delete; else echo '[cleanup] $_STANDARD_VLAN already removed'; fi"
-e2e_run "Delete non-VLAN SNO cluster" \
-    "if [ -d $_SNO ]; then aba --dir $_SNO delete; else echo '[cleanup] $_SNO already removed'; fi"
-e2e_run "Delete non-VLAN compact cluster" \
-    "if [ -d $_COMPACT ]; then aba --dir $_COMPACT delete; else echo '[cleanup] $_COMPACT already removed'; fi"
-e2e_run "Delete non-VLAN standard cluster" \
-    "if [ -d $_STANDARD ]; then aba --dir $_STANDARD delete; else echo '[cleanup] $_STANDARD already removed'; fi"
+# Each _net_test already runs 'aba delete' + 'aba clean'.  The dirs may still
+# exist (cluster.conf etc.) but agent-config.yaml is gone after 'aba clean',
+# so only call 'aba delete' when the config still exists (VMs might still be up).
+for _cdir in $_SNO_VLAN $_COMPACT_VLAN $_STANDARD_VLAN $_SNO $_COMPACT $_STANDARD; do
+	e2e_run "Cleanup $_cdir" \
+	    "aba --dir $_cdir delete && rm -rf $_cdir"
+done
 
 test_end
 

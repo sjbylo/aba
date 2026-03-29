@@ -26,14 +26,15 @@ cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 if [ "$ask" ]; then
 	echo
 	for name in $CP_NAMES $WORKER_NAMES; do
-		[ "$VC" ] && echo $cluster_folder/${CLUSTER_NAME}-$name || echo ${CLUSTER_NAME}-$name
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		[ "$VC" ] && echo $cluster_folder/$vm || echo $vm
 	done
 
 	ask "Immediately power down the above virtual machine(s)" || exit 1
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	govc vm.power -off ${CLUSTER_NAME}-$name || true 
+	govc vm.power -off "$(vm_name "$CLUSTER_NAME" "$name")" || true
 done
 
 exit 0

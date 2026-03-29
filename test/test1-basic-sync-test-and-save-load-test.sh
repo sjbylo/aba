@@ -91,7 +91,7 @@ v=4.16.3
 #echo ocp_version=$v > aba.conf  # needed so reset works without calling aba (interactive). aba.conf is created below. 
 #####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### test-cmd -m "Show content of mirror/data" 'ls -l mirror mirror/data || true'
 #aba clean
 
 # Set up aba.conf properly
@@ -154,7 +154,7 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Bring down firewalld to test
 test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 
 # Install & sync mirror on remote host
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+test-cmd -r  2 3 -m "Syncing images from external network to internal mirror registry (single command)" "aba -d mirror sync --retry -H $int_bastion_hostname -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
 test-cmd -m "Show Firewalld status" -h $DIS_SSH_USER@$int_bastion_hostname "sudo firewall-offline-cmd --list-all && sudo systemctl status firewalld || true"
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Bring up firewalld to test the 8443 port was added during mirror installation (above)" "sudo systemctl enable firewalld && sudo systemctl start firewalld"
@@ -186,6 +186,20 @@ which yq || (
 ######################
 # This test creates the ABI (agent-based installer) config files to check they are valid
 
+# Clean up leftover clusters from previous runs (VMs may still be on vSphere).
+# Re-create cluster config with the same starting IPs used later in this test
+# so 'aba delete' can find and destroy any orphan VMs from a previous run.
+for cname in sno compact standard; do
+	[ "$cname" = "sno" ]      && _ip=10.0.1.201
+	[ "$cname" = "compact" ]  && _ip=10.0.1.71
+	[ "$cname" = "standard" ] && _ip=10.0.1.81
+#	if [ ! -f $cname/cluster.conf ]; then
+#		aba cluster -n $cname -t $cname -i $_ip --step cluster.conf 2>/dev/null || true
+#	fi
+	test-cmd -i -m "Deleting leftover $cname cluster" aba --dir $cname delete || true
+	rm -rf $cname
+done
+
 for cname in sno compact standard
 do
 	mkdir -v -p test/$cname
@@ -194,7 +208,7 @@ do
 
         rm -rf $cname
 
-	test-cmd -m "Adding 10.0.2.8 to ntp servers" "aba --dns 10.0.1.8 10.0.2.8"
+	test-cmd -m "Adding DNS servers 10.0.1.8 10.0.2.8" "aba --dns 10.0.1.8 10.0.2.8"
 
 	[ "$cname" = "sno" ] && starting_ip=10.0.1.201
 	[ "$cname" = "compact" ] && starting_ip=10.0.1.71
@@ -261,7 +275,7 @@ test-cmd -i -m "Deleting sno cluster (if it was created)" aba --dir sno delete
 
 #######################
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 15 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
+test-cmd -r  2 3 -m "Saving and then loading cluster images into mirror" "aba --dir mirror save load" 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
@@ -328,8 +342,7 @@ test-cmd -m "Setting reg_ssh_key=~/.ssh/testy_rsa for remote installation" aba -
 
 test-cmd -m "Checking values in $PWD/mirror/mirror.conf" cat mirror/mirror.conf | cut -d\# -f1| sed '/^[ \t]*$/d'
 
-# FIXME: no need? or use 'aba clean' or?
-rm -rf mirror/save   # The process will halt, otherwise with "You already have images saved on local disk"
+aba -d mirror clean   # Clear oc-mirror working state before switching from sync to save/load workflow
 
 #####################################################################################################################
 #####################################################################################################################
@@ -341,7 +354,7 @@ mylog "Using remote container mirror at $reg_host:$reg_port and using reg_ssh_us
 
 ######################
 # This will install the reg. and sync the images
-test-cmd -r 15 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
+test-cmd -r  2 3 -m "Syncing images from external network to internal mirror registry" aba --dir mirror sync --retry
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
@@ -366,7 +379,7 @@ test-cmd -m "Creating iso: CIDR 10.0.0.0/20 with start ip 10.0.1.201" aba cluste
 #test-cmd -m "Setting starting_ip=10.0.1.201" "sed -i 's/^starting_ip=[^ \t]*/starting_ip=10.0.1.201 /g' sno/cluster.conf"
 ###test-cmd -m "Setting starting_ip=10.0.1.201" aba -d sno -i 10.0.1.201
 
-test-cmd -m "Installing sno cluster" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step install
+test-cmd -m "Installing sno cluster" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --verify conf --step install
 test-cmd -m "Checking cluster operators" aba --dir sno run
 
 #####################################################################################################################
@@ -377,10 +390,13 @@ test-cmd -m "Checking cluster operators" aba --dir sno run
 #  Delete the reg. first!
 test-cmd -m "Delete the registry so it will be re-created again in next test" aba --dir mirror uninstall 
 #  This will save the images, install (the reg.) then load the images
-test-cmd -r 15 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
+test-cmd -r  2 3 -m "Saving and loading images into mirror (should install quay again)" aba --dir mirror save load 
 
 test-cmd -m "Check location of oc-mirror .cache dir" 						"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
 test-cmd -m "Check location of oc-mirror .cache dir" -h $DIS_SSH_USER@$int_bastion_hostname	"sudo find ~/ | grep \.oc-mirror/\.cache$ || true"
+
+test-cmd -f -m "IP conflict: creating ISO must fail while SNO cluster is still running" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step iso
+test-cmd -m "Delete SNO cluster after IP conflict test" aba --dir sno delete
 
 aba --dir sno clean # This should clean up the cluster and 'make' should start from scratch next time. Instead of running "rm -rf sno"
 test-cmd -m "Installing sno cluster with 'aba cluster -n sno -t sno --step $default_target'" aba cluster -n sno -t sno --starting-ip 10.0.1.201 --step $default_target

@@ -49,8 +49,11 @@ suite_begin "negative-paths"
 # ============================================================================
 test_begin "Setup: install and configure"
 
-e2e_run "Reset aba to clean state" \
-	"cd ~/aba && ./install && aba reset -f"
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
+
+e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
 	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
@@ -117,7 +120,7 @@ test_begin "Clean commands"
 e2e_run "Ensure mirror dir exists" "mkdir -p mirror"
 e2e_run "Run aba -d mirror clean" "aba -d mirror clean"
 e2e_run "Verify init marker removed" "test ! -f mirror/.init"
-e2e_run "Verify imageset configs removed" "! ls mirror/imageset-config-*.yaml 2>/dev/null"
+e2e_run "Verify imageset configs removed" "! ls mirror/imageset-config-*.yaml"
 
 e2e_run "Run aba clean (top-level)" "aba clean"
 e2e_run "Verify aba.conf.seen cleaned" "test ! -f .aba.conf.seen"
@@ -138,7 +141,7 @@ test_begin "Version mismatch"
 
 e2e_run "Ensure CLIs are installed" "aba -d cli install"
 e2e_run "Create dummy imageset-config for mismatch check" \
-	"mkdir -p mirror/save && touch mirror/save/.created && sleep 1 && cat > mirror/save/imageset-config-save.yaml <<'ENDYAML'
+	"mkdir -p mirror/data && touch mirror/data/.created && sleep 1 && cat > mirror/data/imageset-config.yaml <<'ENDYAML'
 mirror:
   platform:
     channels:
@@ -150,7 +153,7 @@ e2e_run "Save current version" "grep '^ocp_version=' aba.conf > /tmp/e2e-saved-v
 e2e_run "Set mismatched version" "sed -i 's/^ocp_version=.*/ocp_version=4.14.0/' aba.conf"
 e2e_run_must_fail "Version mismatch detected" "make -sC mirror checkversion"
 e2e_run "Restore version" "source /tmp/e2e-saved-version && sed -i \"s/^ocp_version=.*/ocp_version=\$ocp_version/\" aba.conf"
-e2e_run "Remove dummy imageset-config" "rm -f mirror/save/imageset-config-save.yaml"
+e2e_run "Remove dummy imageset-config" "rm -f mirror/data/imageset-config.yaml"
 
 test_end 0
 
@@ -295,10 +298,10 @@ e2e_run "Data directory removed" \
 # --- Test B: Credentials saved despite connectivity failure ----------------
 
 e2e_run "Pre-clean: remove stale iptables rules for port $_DOCKER_NEG_PORT on disN" \
-	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT 2>/dev/null; do :; done; true'"
+	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"
 
 e2e_run "Pre-clean: remove stale registry on disN" \
-	"_essh $DIS_HOST 'podman rm -f registry 2>/dev/null; rm -rf ~/docker-reg; true'"
+	"_essh $DIS_HOST 'podman rm -f registry || true; rm -rf ~/docker-reg; true'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
 e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"
@@ -336,7 +339,7 @@ e2e_run "Remove leftover data dirs on disN" \
 	"_essh $DIS_HOST 'rm -rf ~/docker-reg'"
 
 e2e_run "Remove all iptables rules for port $_DOCKER_NEG_PORT on disN" \
-	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT 2>/dev/null; do :; done; true'"
+	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"
 
 test_end 0
 

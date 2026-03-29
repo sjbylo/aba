@@ -113,9 +113,6 @@ if [ -d $WORK_DIR/test-install/aba ]; then
 		# Use one of the following:
 		aba -d mirror uninstall -y
 		#aba -d mirror uninstall-docker-registry -y
-
-		sudo rm -rf ~/quay-install
-		sudo rm -rf ~/docker-reg
 	)
 fi
 
@@ -129,14 +126,10 @@ if podman ps | grep registry; then
 	#aba uninstall  || true
 	cd mirror
 	./mirror-registry uninstall --autoApprove -v || true
-	sudo rm -rf ~/quay-install
-	sudo rm -rf ~/docker-reg
 	./mirror-registry uninstall --autoApprove -v || true
 	podman rmi `podman images -q` ##--force
 )
 fi
-sudo rm -rf ~/quay-install
-sudo rm -rf ~/docker-reg
 
 ######################
 
@@ -170,12 +163,11 @@ rm -rf aba
 export GIT_BRANCH=${GIT_BRANCH:-main}
 echo_step Install Aba from branch $GIT_BRANCH
 set +x
-#bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
+bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
 #bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+#bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 set -x
 cd aba
-####./install  # Done above
 
 # Create bundle? 
 echo Create the bundle in $WORK_BUNDLE_DIR ...
@@ -191,35 +183,22 @@ OP=
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 aba -d cli oc-mirror
-mypause 2
-ls -l ~/bin/oc-mirror 
 ~/bin/oc-mirror  --help > /dev/null 2>&1 && echo "oc-mirror is valid!"
-mypause 5
+
 set -x
-mypause 10 # wait for "download-operator"
-ps -ef | grep download-operator
-mypause 60 # Give some time ... # Hack: must wait for oc-mirror to d/l in the background b4 running "aba catalog" again! Otherwise the download happens in parallel causing trouble
-while ps -ef | grep -v grep | grep download-operator
-do
-	echo -n .
-	mypause 10
-done
-ls -l ~/bin/oc-mirror 
-##timeout 120 bash -c 'until [ -f ~/bin/oc-mirror ]; do mypause 1; done'; echo ~/bin/oc-mirror installed
-ps -ef | grep download 
 
 echo_step Create image set config file ...
 
 aba -d mirror isconf
 
-uncomment_line additionalImages:			mirror/save/imageset-config-save.yaml
-uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/save/imageset-config-save.yaml
-uncomment_line registry.redhat.io/rhel9/support-tools	mirror/save/imageset-config-save.yaml
-uncomment_line quay.io/openshifttest/hello-openshift	mirror/save/imageset-config-save.yaml
-uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yaml
-#[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/save/imageset-config-save.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/save/imageset-config-save.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/save/imageset-config-save.yaml
+uncomment_line additionalImages:			mirror/data/imageset-config.yaml
+uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/data/imageset-config.yaml
+uncomment_line registry.redhat.io/rhel9/support-tools	mirror/data/imageset-config.yaml
+uncomment_line quay.io/openshifttest/hello-openshift	mirror/data/imageset-config.yaml
+uncomment_line registry.redhat.io/ubi9/ubi		mirror/data/imageset-config.yaml
+#[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/data/imageset-config.yaml
+[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
+[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
 
 # START - Exception since issue with v2.10 #########
 # Replace release-v2.10 with release-v2.9 - in the 2 lines - after mtv-operator found:
@@ -228,9 +207,9 @@ uncomment_line registry.redhat.io/ubi9/ubi		mirror/save/imageset-config-save.yam
 #      defaultChannel: release-v2.8
 #      channels:
 #      - name: "release-v2.8"
-# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/save/imageset-config-save.yaml
+# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/data/imageset-config.yaml
 # Append or insert line after "mtv-operator" line
-# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/save/imageset-config-save.yaml
+# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/data/imageset-config.yaml
 # END - Exception since issue with v2.10 ##########
 
 echo_step Show image set config file ...
@@ -245,7 +224,7 @@ echo_step Show image set config file ...
 #  - name: quay.io/containerdisks/centos-stream:9
 #  - name: quay.io/containerdisks/fedora:latest
 
-cat mirror/save/imageset-config-save.yaml
+cat mirror/data/imageset-config.yaml
 
 echo Pausing 6s ...
 read -t 6  || true
@@ -486,11 +465,11 @@ sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < $TEMPLAT
 	echo 
 	echo "## The oc-mirror Image Set Config file used for this install bundle:"
 	echo
-	cat $WORK_DIR/test-install/aba/mirror/save/imageset-config-save.yaml 
+	cat $WORK_DIR/test-install/aba/mirror/data/imageset-config.yaml 
 ) >> $CLOUD_DIR_BUNDLE/README.txt
 
 # Copy in the image set config file used (for good measure)
-cp $WORK_DIR/test-install/aba/mirror/save/imageset-config-save.yaml $WORK_BUNDLE_DIR_BUILD
+cp $WORK_DIR/test-install/aba/mirror/data/imageset-config.yaml $WORK_BUNDLE_DIR_BUILD
 
 ## Output the files to copy:
 ls -l $WORK_BUNDLE_DIR/ocp_* || true
@@ -544,8 +523,6 @@ aba --noask
 # Use one of the following two:
 aba -d mirror uninstall -y
 #aba -d mirror uninstall-docker-registry -y
-sudo rm -rf ~/quay-install
-sudo rm -rf ~/docker-reg
 
 ##. ~steve/.proxy-set.sh  # Go online!
 int_down

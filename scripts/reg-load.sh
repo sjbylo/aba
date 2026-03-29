@@ -75,13 +75,15 @@ fi
 reg_root=$data_dir/quay-install
 aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
-if [ ! -d save ]; then
-	aba_abort "Error: Missing 'mirror/save' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" 
+if [ ! -d data ]; then
+	aba_abort "Error: Missing 'mirror/data' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" 
 fi
-aba_debug "save/ directory exists"
+aba_debug "data/ directory exists"
 
-echo 
-aba_info "Now loading (disk2mirror) the images from mirror/save/ directory to registry $reg_host:$reg_port$reg_path."
+ensure_sigstore_mirror_config "$reg_host:$reg_port"
+
+echo
+aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
@@ -112,12 +114,13 @@ failed=1
 aba_debug "Starting retry loop: try_tot=$try_tot"
 while [ $try -le $try_tot ]
 do
+	[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
 	# Wait for oc-mirror to be available!
 	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
-	cmd="oc-mirror --v2 --config imageset-config-save.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times"
-	echo "cd save && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
+	cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+	echo "cd data && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
 	aba_debug "Created load-mirror.sh script" 
 
 	echo
@@ -135,8 +138,8 @@ do
 	#if [ $ret -eq 0 ]; then
 	#if ./load-mirror.sh; then
 	# Check for error files (only required for v2 of oc-mirror)
-	#ls -lt save/working-dir/logs > /tmp/error_file.out
-	error_file=$(ls -t save/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
+	#ls -lt data/working-dir/logs > /tmp/error_file.out
+	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 	# Example error file:  mirroring_errors_20250914_230908.txt 
 	aba_debug "error_file=${error_file:-none}"
 
@@ -148,10 +151,10 @@ do
 	fi
 
 	if [ -s "$error_file" ]; then
-		aba_debug "Error file found: $error_file - saving to save/saved_errors/"
-		mkdir -p save/saved_errors
-		mv $error_file save/saved_errors
-		aba_warning "An error was detected and the log file was saved in save/saved_errors/$(basename $error_file)"
+		aba_debug "Error file found: $error_file - saving to data/saved_errors/"
+		mkdir -p data/saved_errors
+		mv $error_file data/saved_errors
+		aba_warning "An error was detected and the log file was saved in data/saved_errors/$(basename $error_file)"
 	fi
 	#fi
 
@@ -175,6 +178,10 @@ if [ "$failed" ]; then
 		"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." 
 
 	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
+
+	if grep -qiE 'SignatureValidationFailed|signature.*missing|sigstore' data/saved_errors/*.txt 2>/dev/null; then
+		aba_warning "Signature errors detected. To adjust sigstore settings, edit ~/.config/containers/registries.d/aba-sigstore.yaml"
+	fi
 
 	exit 1
 fi

@@ -2,8 +2,8 @@
 # Run some day 2 changes
 # Set up cluster trust CA with the internal registry's Root CA
 # Configure OperatorHub using the internal mirror registry.
-# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (aba -d mirror sync/load)
-## This script also solves the problem that multiple sync/save runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597
+# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (aba -d mirror sync or load)
+## This script also solves the problem that multiple mirroring runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
 # Apply any user-provided custom manifests from day2-custom-manifests/ in cluster folder
@@ -53,7 +53,7 @@ fi
 aba_info "What this 'day2' script does:"
 aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
 aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
-aba_info "- Apply any/all idms/itms resource files under aba/mirror/save/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync/load)."
+aba_info "- Apply any/all idms/itms resource files under aba/mirror/data/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync or load)."
 aba_info "- For fully disconnected environments, disable online public catalog sources."
 aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
 aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
@@ -192,11 +192,10 @@ apply_custom_manifests() {
 # Only oc-mirror v2 is supported now
 # Note for oc-mirror v2:
 # resources/idms-oc-mirror.yaml
-# mirror/sync/working-dir/cluster-resources/itms-oc-mirror.yaml
-# ls mirror/{save,sync}/working-dir/cluster-resources/{idms,itms}*yaml
+# mirror/data/working-dir/cluster-resources/itms-oc-mirror.yaml
+# ls mirror/data/working-dir/cluster-resources/{idms,itms}*yaml
 
-latest_working_dir=$(ls -dt mirror/{save,sync}/working-dir 2>/dev/null | head -1 || true)  # One of these should exist!
-# FIXME: Since v2, use just one dir, e.g. "aba/mirror/data" 
+latest_working_dir=$(echo mirror/data/working-dir) 
 
 ns=openshift-marketplace
 
@@ -314,13 +313,13 @@ if [ "$latest_working_dir" ]; then
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
-	aba_warning "Missing oc-mirror working directory: $PWD/mirror/save/working-dir and/or $PWD/mirror/sync/working-dir"
+	aba_warning "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
 	aba_warning -p IMPORANT \
 		"No cluster resource files found (CatalogSource, idms/itms ...) " \
 		"This usually occurs when Aba has not yet pushed any operator images to your mirror registry — either because mirroring" \
 		"hasn’t been run, or it wasn’t done from this host." \
 		"If the registry was filled using another method, you must manually create and apply the required CatalogSources for the operators." \
-		"If the oc-mirror working-dir/ is on another host, copy the directory to this host and try again!" 
+		"If the oc-mirror data/working-dir/ is on another host, copy the directory to this host and try again!" 
 
 		#"This usually means that Aba has not yet pushed any operator images to your mirror registry (or not from this host)." \
 		#"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."

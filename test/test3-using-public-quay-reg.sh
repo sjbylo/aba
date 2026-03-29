@@ -73,7 +73,7 @@ v=4.16.3
 aba --dir ~/aba reset --force
 #####mv cli cli.m && mkdir -v cli && cp cli.m/Makefile cli && aba reset --force; rm -rf cli && mv cli.m cli
 ### aba -d cli reset --force  # Ensure there are no old and potentially broken binaries
-### test-cmd -m "Show content of mirror/save" 'ls -l mirror mirror/save || true'
+### test-cmd -m "Show content of mirror/data" 'ls -l mirror mirror/data || true'
 #aba clean
 
 # Set up aba.conf properly
@@ -117,6 +117,9 @@ test-cmd -m "Verifying direct internet config - httpProxy does not exist" 		"! g
 test-cmd -m "Verifying direct internet config - 'BEGIN CERTIFICATE' does not exist"	"! grep 'BEGIN CERTIFICATE'	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'ImageDigestSources' does not exist" 	"! grep ImageDigestSources	sno/install-config.yaml"
 test-cmd -m "Verifying direct internet config - 'mirrors:' does not exist" 		"! grep mirrors:		sno/install-config.yaml"
+
+test-cmd -m "Power off SNO cluster" "aba -d sno kill; sleep 3"
+
 test-cmd -m "Creating iso for 'int_connection=direct' SNO cluster" aba -d sno iso
 
 test-cmd -m "Removing sno dir" rm -rf sno

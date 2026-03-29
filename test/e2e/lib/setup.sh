@@ -2,65 +2,19 @@
 # =============================================================================
 # E2E Test Framework -- Shared Setup Functions
 # =============================================================================
-# Extracts the ~50-line setup boilerplate duplicated across all 5 original
-# test scripts into reusable functions. Each suite calls these instead of
-# copying the same preamble.
+# Reusable setup helpers for bastion management, registry cleanup, etc.
+# ABA installation is handled inline by each suite (git clone or curl).
 # =============================================================================
 
 _E2E_LIB_DIR_SU="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source other libs if not already loaded
-if ! type remote_exec &>/dev/null 2>&1; then
+if ! type remote_exec &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
 fi
-if ! type configure_internal_bastion &>/dev/null 2>&1; then
+if ! type configure_internal_bastion &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/pool-lifecycle.sh"
 fi
-
-# --- setup_aba_from_scratch -------------------------------------------------
-#
-# Full clean-slate setup of aba for testing. This replaces the duplicated
-# preamble that appeared at the top of every test[1-5]-*.sh:
-#   - Remove RPMs (so aba tests auto-install)
-#   - Reset aba state
-#   - Clean podman images and caches
-#
-# NOTE: Does NOT generate aba.conf or vmware.conf -- use the aba CLI for that.
-#
-setup_aba_from_scratch() {
-    local aba_root
-    aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
-    cd "$aba_root" || { echo "Cannot cd to aba root: $aba_root" >&2; return 1; }
-
-    echo "=== setup_aba_from_scratch ==="
-
-    # Ensure aba is installed (runner.sh cleanup removes ~/bin).
-    if ! command -v aba &>/dev/null; then
-        echo "  aba not in PATH -- reinstalling ..."
-        ( cd "$aba_root" && ./install )
-    fi
-
-    # _cleanup_con_quay (called by runner.sh before this) handles registry
-    # uninstall via aba commands and cleans ~/.aba/mirror/.  No need to
-    # manually remove .available here — only ABA should manage that marker.
-    e2e_run "Reset aba" \
-        "cd $aba_root && aba reset -f"
-
-    # NOTE: No blanket "podman system prune / rmi / rm -rf storage" here.
-    # That nuclear cleanup belongs only in the one-time pool setup (setup-infra)
-    # before creating the pool-ready snapshot.  Between suites, targeted cleanup
-    # in runner.sh (_cleanup_con_quay, _cleanup_dis_aba) is sufficient and avoids
-    # destroying the pool registry on conN.
-
-    # Remove oc-mirror caches
-    e2e_run "Remove oc-mirror caches" \
-        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
-
-    e2e_run "Verify /home disk usage < 10GB after reset" \
-        "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 10 ]"
-
-    echo "=== setup_aba_from_scratch complete ==="
-}
 
 # --- setup_bastion ----------------------------------------------------------
 #
@@ -118,7 +72,7 @@ setup_connected_bastion() {
 #
 # Handles two installation scenarios:
 #   - Connected suites: registry was installed on disN remotely FROM conN.
-#     The uninstall already happened from conN in setup_aba_from_scratch.
+#     The uninstall already happened from conN in the suite setup block.
 #     (Rule 6: uninstall from the same host that installed.)
 #   - Airgapped suites: registry was installed on disN locally.
 #     The aba CLI and make should be available from the previous run.
@@ -136,8 +90,7 @@ reset_internal_bastion() {
 
     echo "=== reset_internal_bastion: $_dis_host ==="
 
-    local _aba_root
-    _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
+    local _aba_root="${_ABA_ROOT:-$HOME/aba}"
 
     # NOTE: We do NOT rsync the aba tree to disN here.  Only aba itself
     # (via 'mirror sync', 'bundle', etc.) should manage files on disN.
@@ -152,48 +105,20 @@ reset_internal_bastion() {
     e2e_run "Verify registry is down on $_dis_bare" \
         "! curl -sk --connect-timeout 5 https://${_dis_bare}:8443/v2/"
 
-    # 3. Clean slate on disN: remove aba tree, caches, container storage.
+    # 3. Clean slate on disN: remove aba tree and caches.
     e2e_run_remote "Remove aba tree on internal bastion" \
         "rm -rf ~/aba"
-    e2e_run_remote "Clean podman images on internal bastion" \
-        "podman system prune --all --force; podman rmi --all --force"
+    # Disabled: destroys podman internal state (pause process), causing
+    # "invalid internal status" on next run. aba uninstall above is sufficient.
+    #e2e_run_remote "Clean podman images on internal bastion" \
+    #    "podman system prune --all --force; podman rmi --all --force"
     e2e_run_remote "Clean oc-mirror caches on internal bastion" \
         "rm -rf ~/.cache/agent ~/.oc-mirror"
-    e2e_run_remote "Clean containers storage on internal bastion" \
-        "sudo rm -rf ~/.local/share/containers/storage"
+    # Disabled: destroys podman internal state.
+    #e2e_run_remote "Clean containers storage on internal bastion" \
+    #    "sudo rm -rf ~/.local/share/containers/storage"
 
     echo "=== reset_internal_bastion complete ==="
-}
-
-# --- cleanup_all ------------------------------------------------------------
-#
-# Full cleanup: reset aba state, clean caches, remove cluster directories.
-#
-cleanup_all() {
-    local aba_root
-    aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
-    cd "$aba_root" || return 1
-
-    echo "=== cleanup_all ==="
-
-    e2e_run "Reset aba to clean state" \
-        "cd $aba_root && aba reset -f"
-
-    # Remove cluster directories (pool-specific names)
-    local _sno _compact _standard
-    _sno="$(pool_cluster_name sno)"
-    _compact="$(pool_cluster_name compact)"
-    _standard="$(pool_cluster_name standard)"
-    e2e_run "Remove cluster directories" \
-        "rm -rf $_sno $_compact $_standard"
-
-    # NOTE: No blanket podman nuke here -- see setup_aba_from_scratch comment.
-
-    # Remove caches
-    e2e_run "Remove oc-mirror caches" \
-        "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
-
-    echo "=== cleanup_all complete ==="
 }
 
 # --- _cleanup_con_quay ------------------------------------------------------
@@ -213,24 +138,31 @@ cleanup_all() {
 #        from brute-force cleanup.
 #
 _cleanup_con_quay() {
-    local _aba_root
-    _aba_root="$(cd "$_E2E_LIB_DIR_SU/../../.." && pwd)"
+    local _aba_root="${_ABA_ROOT:-$HOME/aba}"
 
     local _did_uninstall=""
 
     local _pool_reg_present=""
     [ -d "$POOL_REG_DIR" ] && _pool_reg_present=1
 
-    # Tier 1: use aba's own uninstall for any aba-installed registry.
-    # Safe even with pool registry present: aba uninstall targets whatever
-    # registry state.sh describes (Quay/Docker on disN or conN), not the
-    # pool-registry container (which lives under ~/.e2e-pool-registry/).
+    # Tier 1: use aba's own unregister/uninstall for the configured registry.
+    # For externally-managed registries (REG_VENDOR=existing), use 'unregister'
+    # which only removes local credentials. For ABA-installed registries, use
+    # 'uninstall' which also removes the registry container/data.
+    local _regcreds="$HOME/.aba/mirror/mirror"
     for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.available" ]; then
-            echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
-            ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
-                echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
-            }
+            if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh"; then
+                echo "  [cleanup] Found .available + existing registry -- running aba unregister"
+                ( cd "$_dir" && aba -y -d mirror unregister ) && _did_uninstall=1 || {
+                    echo "  [cleanup] WARNING: aba unregister failed in $_dir (rc=$?)"
+                }
+            else
+                echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
+                ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
+                    echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
+                }
+            fi
         fi
     done
 
@@ -239,15 +171,15 @@ _cleanup_con_quay() {
         [ -z "$_did_uninstall" ] && echo "  [cleanup] Pool registry present -- skipping brute-force container cleanup"
     else
         local _stale_detected=""
-        podman ps -a 2>/dev/null | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
+        podman ps -a | grep -v -e pool-registry -e CONTAINER | grep -q . && _stale_detected=1
 
         if [ -n "$_stale_detected" ]; then
             echo "  [cleanup] Stale registry remnants detected -- brute-force cleanup"
-            for _cid in $(podman ps -a -q --filter "name!=pool-registry" 2>/dev/null); do
-                podman stop "$_cid" 2>/dev/null || true
-                podman rm -f "$_cid" 2>/dev/null || true
+            for _cid in $(podman ps -a -q --filter "name!=pool-registry"); do
+                podman stop "$_cid" || true
+                podman rm -f "$_cid" || true
             done
-            podman volume rm -a -f 2>/dev/null || true
+            podman volume rm -a -f || true
             echo "  [cleanup] Brute-force cleanup complete"
         elif [ -z "$_did_uninstall" ]; then
             echo "  [cleanup] No stale registry state detected -- nothing to clean"

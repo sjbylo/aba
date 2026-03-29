@@ -38,6 +38,10 @@ vmw:
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
+.PHONY: kvm
+kvm:
+	@$(SCRIPTS)/install-kvm.conf.sh
+
 #.PHONY: cli
 #cli:  ## Download and install the CLI binaries into ~/bin
 #	@echo "Run either one of:"
@@ -61,11 +65,13 @@ vmw:
 
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
+	@$(SCRIPTS)/cli-download-all.sh --wait >&2
 	$(SCRIPTS)/backup.sh $(out)
 
 # Note, the '@' is required for valid tar format output!
 .PHONY: tarrepo
 tarrepo:  ## Archive the repo *excluding* the aba/mirror/mirror_*.tar files. Works in the same way as 'aba tar'.
+	@$(SCRIPTS)/cli-download-all.sh --wait >&2
 	@$(SCRIPTS)/backup.sh --repo $(out)
 
 .PHONY: download
@@ -139,11 +145,13 @@ reset: # Clean up *everything*.  Only use if you know what you are doing! Note t
 	make -sC cli reset
 	make -sC mirror reset 
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
+	test -f kvm.conf && mv kvm.conf kvm.conf.bk || true
 	test -f aba.conf && mv aba.conf aba.conf.bk || true
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created
 	rm -f .aba.conf.seen
 	rm -rf ~/.aba/cache ~/.aba/tmp ~/.aba/logs
 	rm -rf ~/.aba/runner || sleep 1 && rm -rf ~/.aba/runner || true
+	rm -rf .index
 	rm -f aba.conf ~/.aba.conf*
 

@@ -3,7 +3,7 @@
 apiVersion: v1
 baseDomain: p1.example.com
 metadata:
-  name: sno1
+  name: e2e-sno1
 compute:
   - architecture: amd64
     hyperthreading: Enabled

@@ -66,11 +66,13 @@ int_up() {
 }
 
 int_down() {
-    local if_name=$(_find_internet_iface)
-    [ -n "$if_name" ] && {
-        echo "Downing $if_name..."
-        sudo nmcli device disconnect "$if_name"
-    }
-    unset http_proxy https_proxy no_proxy
-    echo "Environment cleaned."
+	local if_name=$(_find_internet_iface)
+	if [ -n "$if_name" ]; then
+		echo "Downing $if_name..."
+		if ! sudo nmcli device disconnect "$if_name" 2>/dev/null; then
+			echo "Interface $if_name already inactive."
+		fi
+	fi
+	unset http_proxy https_proxy no_proxy
+	echo "Environment cleaned."
 }

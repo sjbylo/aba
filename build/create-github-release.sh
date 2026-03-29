@@ -84,25 +84,23 @@ else
 fi
 echo
 
-# Check if CHANGELOG.md exists and has this version
-if [ ! -f CHANGELOG.md ]; then
-    echo -e "${RED}Error: CHANGELOG.md not found${NC}"
+# Release bullets file provides the user-facing GitHub release body.
+# Format: one-liner summary on line 1, then ### sections with bullets.
+RELEASE_BULLETS_FILE="ai/RELEASE_BULLETS_${VERSION}.md"
+if [ ! -f "$RELEASE_BULLETS_FILE" ]; then
+    echo -e "${RED}Error: Release bullets file not found: $RELEASE_BULLETS_FILE${NC}"
+    echo -e "${YELLOW}Create the file with user-facing release highlights before running this script.${NC}"
+    echo -e "${YELLOW}Format: one-liner summary on line 1, then ### sections with bullet points.${NC}"
+    echo -e "${YELLOW}See ai/RELEASE_BULLETS_0.9.7.md for an example.${NC}"
+    exit 1
+fi
+if [ ! -s "$RELEASE_BULLETS_FILE" ]; then
+    echo -e "${RED}Error: Release bullets file is empty: $RELEASE_BULLETS_FILE${NC}"
     exit 1
 fi
 
-# Extract release notes from CHANGELOG.md
-echo -e "${YELLOW}Extracting release notes from CHANGELOG.md...${NC}"
-
-# Find the section for this version
-RELEASE_NOTES=$(sed -n "/^## \[$VERSION\]/,/^---$/p" CHANGELOG.md | sed '1d;$d' | sed '/^$/d')
-
-if [ -z "$RELEASE_NOTES" ]; then
-    echo -e "${RED}Error: No release notes found for version $VERSION in CHANGELOG.md${NC}"
-    echo -e "${YELLOW}Expected section: ## [$VERSION]${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✓ Found release notes for $VERSION${NC}\n"
+RELEASE_NOTES=$(cat "$RELEASE_BULLETS_FILE")
+echo -e "${GREEN}✓ Loaded release notes from $RELEASE_BULLETS_FILE${NC}\n"
 
 # Show preview
 echo -e "${CYAN}Release Notes Preview:${NC}"
@@ -124,29 +122,21 @@ fi
 # Create release
 echo -e "${YELLOW}Creating GitHub release...${NC}"
 
-# Save release notes to temp file
-TEMP_NOTES=$(mktemp)
-echo "$RELEASE_NOTES" > "$TEMP_NOTES"
-
-# Create the release
 if [ "$DRAFT_FLAG" ]; then
     gh release create "$TAG" \
         --title "Aba $TAG" \
-        --notes-file "$TEMP_NOTES" \
+        --notes-file "$RELEASE_BULLETS_FILE" \
         --draft
     echo -e "${GREEN}✓ Draft release created: $TAG${NC}"
     echo -e "${CYAN}Review and publish at: https://github.com/sjbylo/aba/releases${NC}"
 else
     gh release create "$TAG" \
         --title "Aba $TAG" \
-        --notes-file "$TEMP_NOTES" \
+        --notes-file "$RELEASE_BULLETS_FILE" \
         --latest
     echo -e "${GREEN}✓ Release published: $TAG${NC}"
     echo -e "${CYAN}View at: https://github.com/sjbylo/aba/releases/tag/$TAG${NC}"
 fi
-
-# Cleanup
-rm -f "$TEMP_NOTES"
 
 echo
 echo -e "${GREEN}=== GitHub Release Created! ===${NC}"

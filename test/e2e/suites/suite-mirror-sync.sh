@@ -53,9 +53,14 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-setup_aba_from_scratch
+e2e_run "Install ABA from git" \
+	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+cd ~/aba
 
-e2e_run "Install aba" "./install"
+e2e_run "Reset aba" "aba reset -f"
+e2e_run "Remove oc-mirror caches" \
+    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
 e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
@@ -177,9 +182,25 @@ e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
 e2e_run "Reconfigure remote registry after reset" \
     "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
 
+# Registries.d sigstore config test: verify the config file is deployed
+# and that oc-mirror works without --remove-signatures (relying on
+# the per-registry sigstore rules in aba-sigstore.yaml).
+e2e_run "Verify aba-sigstore.yaml deployed" \
+    "test -f \$HOME/.config/containers/registries.d/aba-sigstore.yaml"
+
+# Ensure OC_MIRROR_FLAGS is not set (registries.d handles sigstore now)
+e2e_run -q "Ensure OC_MIRROR_FLAGS is unset in ~/.aba/config" \
+    "grep -q '^OC_MIRROR_FLAGS=' \$HOME/.aba/config && \
+     sed -i 's/^OC_MIRROR_FLAGS=/#OC_MIRROR_FLAGS=/' \$HOME/.aba/config || true"
+
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
+
+# Verify the generated save-mirror.sh does NOT contain --remove-signatures
+e2e_run "Verify no --remove-signatures in generated save-mirror.sh" \
+    "! grep -- '--remove-signatures' mirror/data/save-mirror.sh"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
@@ -230,7 +251,7 @@ test_end
 # ============================================================================
 test_begin "Testy user: re-sync with custom mirror conf"
 
-_marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror/.unavailable 2>&1; echo "--- state.sh ---"; cat ~/.aba/mirror/mirror/state.sh 2>/dev/null || echo "(absent)"; }
+_marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror/.unavailable 2>&1; echo "--- state.sh ---"; cat ~/.aba/mirror/mirror/state.sh || echo "(absent)"; }
 
 e2e_diag "Markers: before uninstall-1" "_marker_snap"
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
@@ -256,8 +277,9 @@ e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
 e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
-e2e_run "Clean saved data" "rm -rf mirror/save"
+e2e_run "Clean mirror working state" "aba -d mirror clean"
 e2e_diag "Markers: before sync" "_marker_snap"
+e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
@@ -327,6 +349,10 @@ e2e_run_remote "Verify no registry containers on disN" \
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
+e2e_run "Remove BM cluster dir (no VMs to delete, platform=bm)" "rm -rf $STANDARD"
+
+e2e_run "Restore platform=vmw" "aba --platform vmw"
+
 test_end
 
 # ============================================================================
@@ -335,9 +361,9 @@ test_end
 test_begin "Cleanup: delete clusters and uninstall mirrors"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete; else echo '[cleanup] $SNO already removed'; fi"
+    "aba --dir $SNO delete && rm -rf $SNO"
 e2e_run "Delete standard cluster" \
-    "if [ -d $STANDARD ]; then aba --dir $STANDARD delete; else echo '[cleanup] $STANDARD already removed'; fi"
+    "aba --dir $STANDARD delete && rm -rf $STANDARD"
 e2e_run "Uninstall mymirror registry" \
     "if [ -d mymirror ]; then aba --dir mymirror uninstall; else echo '[cleanup] mymirror already removed'; fi"
 e2e_run "Uninstall mirror registry on disN" \
