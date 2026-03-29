@@ -210,6 +210,22 @@ if [ -z "$UNRELEASED_CONTENT" ]; then
 fi
 echo -e "${GREEN}CHANGELOG [Unreleased] section has content${NC}\n"
 
+# Release bullets file is used as the GitHub release body (user-facing summary).
+# Format: plain-text one-liner on line 1, then ### sections with bullet points.
+RELEASE_BULLETS_FILE="ai/RELEASE_BULLETS_${NEW_VERSION}.md"
+if [ ! -f "$RELEASE_BULLETS_FILE" ]; then
+    echo -e "${RED}Error: Release bullets file not found: $RELEASE_BULLETS_FILE${NC}"
+    echo -e "${YELLOW}Create the file with user-facing release highlights.${NC}"
+    echo -e "${YELLOW}Format: one-liner summary on line 1, then ### sections.${NC}"
+    echo -e "${YELLOW}See ai/RELEASE_BULLETS_0.9.7.md for an example.${NC}"
+    exit 1
+fi
+if [ ! -s "$RELEASE_BULLETS_FILE" ]; then
+    echo -e "${RED}Error: Release bullets file is empty: $RELEASE_BULLETS_FILE${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Release bullets file found: $RELEASE_BULLETS_FILE${NC}\n"
+
 # =============================================================================
 # Dry-run: show a summary then exit — nothing is written to disk or git.
 # =============================================================================
