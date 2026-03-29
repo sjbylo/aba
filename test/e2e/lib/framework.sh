@@ -639,13 +639,14 @@ e2e_cleanup_clusters() {
 		[ -z "$abs_path" ] && continue
 		_e2e_log_and_print "    $target: aba -y -d $abs_path delete"
 		_cleanup_rc=0
+		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
 				aba -y -d '$abs_path' delete
 			else
 				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
 			fi" \
-			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
 		_cleanup_rc=${PIPESTATUS[0]}
 		if [ "$_cleanup_rc" -ne 0 ]; then
 			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
@@ -712,13 +713,14 @@ e2e_cleanup_mirrors() {
 		[ -z "$abs_path" ] && continue
 		_e2e_log_and_print "    $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
+		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
 				aba -y -d '$abs_path' uninstall
 			else
 				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
 			fi" \
-			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
+			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
 		_cleanup_rc=${PIPESTATUS[0]}
 		if [ "$_cleanup_rc" -ne 0 ]; then
 			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
