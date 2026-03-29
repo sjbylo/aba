@@ -319,7 +319,7 @@ test_begin "Deploy: vote-app with IDMS"
 
 # --- (a) Deploy directly from mirror registry path ---
 e2e_run_remote "Create demo project" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo' || true"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get project demo || oc new-project demo'"
 e2e_run_remote -r 3 2 "Launch vote-app from mirror (direct path)" \
     "cd ~/aba && source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && aba --dir $SNO run --cmd \"oc new-app --insecure-registry=true --image \$reg_host:\$reg_port\$reg_path/sjbylo/flask-vote-app --name vote-app -n demo\""
 e2e_poll_remote 480 30 "Wait for vote-app rollout" \
@@ -535,9 +535,9 @@ e2e_run_remote "Delete SNO cluster" \
 e2e_run_remote "Clean sno cluster dir" \
     "cd ~/aba && aba --dir $SNO clean"
 
-# Build standard cluster
-e2e_run_remote "Clean standard cluster dir" \
-    "cd ~/aba && rm -rf $STANDARD"
+# Build standard cluster -- delete any leftover VMs before removing the dir
+e2e_run_remote "Delete any leftover $STANDARD cluster" \
+    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \

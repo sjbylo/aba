@@ -291,8 +291,8 @@ e2e_run "Verify govc tarball exists after download-all" \
 # BM two-step install runs on internal bastion (registry is there, loaded from bundle)
 e2e_run_remote "Switch to bare-metal platform on internal bastion" \
     "cd ~/aba && aba --platform bm"
-e2e_run_remote "Clean standard cluster dir" \
-    "cd ~/aba && rm -rf $STANDARD"
+e2e_run_remote "Delete any leftover $STANDARD cluster" \
+    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
 e2e_add_to_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Create agent configs (bare-metal)" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
@@ -317,8 +317,8 @@ e2e_run_remote "Verify ISO created" \
     "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
 # Clean up and restore platform on both sides
-e2e_run_remote -q "Remove BM cluster dir on disN (no VMs to delete, platform=bm)" \
-    "cd ~/aba && rm -rf $STANDARD"
+e2e_run_remote -q "Delete $STANDARD cluster (platform=bm, no VMs expected)" \
+    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
 e2e_run_remote -q "Restore VMware platform on disN" \
     "cd ~/aba && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"

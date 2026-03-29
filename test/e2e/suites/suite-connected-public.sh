@@ -79,7 +79,8 @@ unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 e2e_run "Verify proxy is unset" "test -z \"\${http_proxy:-}\" && echo 'proxy unset OK'"
 
-e2e_run "Clean sno cluster dir" "rm -rf $SNO"
+e2e_run "Delete any leftover $SNO cluster" \
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
 e2e_run "Create SNO config with -I direct" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -121,7 +122,8 @@ fi
 
 e2e_run "Verify proxy is set" "test -n \"\${http_proxy:-}\" && echo \"proxy set: \$http_proxy\""
 
-e2e_run "Clean sno cluster dir" "rm -rf $SNO"
+e2e_run "Delete any leftover $SNO cluster" \
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -188,7 +190,8 @@ e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
 
 SNO_MIRROR="$(pool_cluster_name sno-mirror)"
 
-e2e_run "Clean sno-mirror cluster dir" "rm -rf $SNO_MIRROR"
+e2e_run "Delete any leftover $SNO_MIRROR cluster" \
+    "if [ -d $SNO_MIRROR ]; then aba -y --dir $SNO_MIRROR delete; fi"
 
 # Default int_connection (empty) = mirror mode.
 # Create mirror.conf pointing at the pool registry on conN.
@@ -252,7 +255,8 @@ e2e_run "Verify proxy curl works" \
 
 # Create a proxy-mode cluster config and verify it generates correctly
 SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
-e2e_run "Clean sno-proxyonly cluster dir" "rm -rf $SNO_PROXY_ONLY"
+e2e_run "Delete any leftover $SNO_PROXY_ONLY cluster" \
+    "if [ -d $SNO_PROXY_ONLY ]; then aba -y --dir $SNO_PROXY_ONLY delete; fi"
 e2e_run "Create SNO config with -I proxy (proxy-only bastion)" \
     "aba cluster -n $SNO_PROXY_ONLY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
@@ -291,7 +295,8 @@ e2e_run "Verify no_proxy includes 10.0.0.0/8 or broad local range" \
 # Verify aba's monitor/wait scripts append rendezvous IP to no_proxy.
 # Create a cluster dir and check agent-related scripts handle proxy correctly.
 SNO_NOPROXY="$(pool_cluster_name sno-noproxy)"
-e2e_run "Clean sno-noproxy cluster dir" "rm -rf $SNO_NOPROXY"
+e2e_run "Delete any leftover $SNO_NOPROXY cluster" \
+    "if [ -d $SNO_NOPROXY ]; then aba -y --dir $SNO_NOPROXY delete; fi"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO_NOPROXY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate ISO (runs agent config + ISO validation)" "aba -d $SNO_NOPROXY iso"
@@ -317,7 +322,7 @@ test_end
 test_begin "Cleanup: delete cluster"
 
 e2e_run "Delete SNO cluster" \
-    "aba --dir $SNO delete && rm -rf $SNO"
+    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
 
 test_end
 

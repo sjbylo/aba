@@ -202,7 +202,8 @@ _net_test() {
             "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" aba.conf"
     fi
 
-    e2e_run "Clean $cname cluster dir" "rm -rf $cname"
+    e2e_run "Delete any leftover $cname cluster" \
+        "if [ -d $cname ]; then aba -y --dir $cname delete; fi"
 
     e2e_run "Generate cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
@@ -336,7 +337,7 @@ e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard
 # so only call 'aba delete' when the config still exists (VMs might still be up).
 for _cdir in $_SNO_VLAN $_COMPACT_VLAN $_STANDARD_VLAN $_SNO $_COMPACT $_STANDARD; do
 	e2e_run "Cleanup $_cdir" \
-	    "aba --dir $_cdir delete && rm -rf $_cdir"
+	    "if [ -d $_cdir ]; then aba --dir $_cdir delete && rm -rf $_cdir; else echo '[cleanup] $_cdir already removed'; fi"
 done
 
 test_end
