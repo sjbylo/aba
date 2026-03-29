@@ -560,6 +560,7 @@ _pre_suite_cleanup() {
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path delete"
+			# < /dev/null prevents ssh from consuming the while-read loop's stdin
 			if ! ( _essh "$target" \
 				"if [ -d '$abs_path' ]; then
 					aba -y -d '$abs_path' delete
@@ -569,7 +570,7 @@ _pre_suite_cleanup() {
 					echo '  Orphan VMs may exist. Investigate the root cause.'
 					exit 1
 				fi" \
-				2>&1 ); then
+				< /dev/null 2>&1 ); then
 				echo "  WARNING: cleanup failed for $target:$abs_path"
 				_cleanup_ok=""
 			fi
@@ -592,9 +593,10 @@ _pre_suite_cleanup() {
 			[ -z "$abs_path" ] && continue
 			echo "    $target: aba -y -d $abs_path uninstall"
 			_mirror_rc=0
+			# < /dev/null prevents ssh from consuming the while-read loop's stdin
 			_essh "$target" \
 				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
-				2>&1 || _mirror_rc=$?
+				< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
 				_mirror_ok=""
