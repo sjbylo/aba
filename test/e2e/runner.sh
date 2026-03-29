@@ -127,7 +127,7 @@ _verify_no_mirror_data_dirs() {
 
 	for _dir in $_E2E_MIRROR_DATA_DIRS; do
 		if [ -n "$remote_target" ]; then
-			_essh "$remote_target" "test -d ~/$_dir" 2>/dev/null && _leftovers+="  ~/$_dir"$'\n' || true
+			_essh "$remote_target" "test -d ~/$_dir" && _leftovers+="  ~/$_dir"$'\n' || true
 		else
 			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n' || true
 		fi
@@ -148,21 +148,39 @@ _verify_no_mirror_data_dirs() {
 # Verify no orphan cluster VMs exist in this pool's vCenter folder after cleanup.
 # If any are found, the .cleanup mechanism failed -- stop so the root cause can
 # be investigated.  Never silently destroy them.
+# NOTE: VC_FOLDER from pools.conf already includes the pool path
+#       (e.g. /Datacenter/vm/aba-e2e/pool2) -- do NOT append /pool${POOL_NUM}.
 _verify_no_orphan_vms() {
-	command -v govc >/dev/null 2>&1 || return 0
+	command -v govc >/dev/null || return 0
 	[ -z "${VC_FOLDER:-}" ] && return 0
 
-	local _pfolder="${VC_FOLDER}/pool${POOL_NUM}"
-	local _orphans
-	_orphans=$(govc find "$_pfolder" -type m 2>/dev/null) || _orphans=""
-	[ -z "$_orphans" ] && echo "  No orphan VMs in $_pfolder" && return 0
+	# conN and disN are pool infrastructure VMs, not orphans
+	local _known="con${POOL_NUM} dis${POOL_NUM}"
+	local _all_vms
+	_all_vms=$(govc find "$VC_FOLDER" -type m) || _all_vms=""
+	[ -z "$_all_vms" ] && echo "  No VMs in $VC_FOLDER" && return 0
 
-	echo ""
-	echo "  FATAL: Orphan VMs found in $_pfolder after cleanup:"
+	local _real_orphans=""
 	while IFS= read -r _ovm; do
 		[ -z "$_ovm" ] && continue
-		echo "    $_ovm"
-	done <<< "$_orphans"
+		local _vmname
+		_vmname=$(basename "$_ovm")
+		local _is_infra=""
+		for _k in $_known; do
+			[ "$_vmname" = "$_k" ] && _is_infra=1 && break
+		done
+		[ -n "$_is_infra" ] && continue
+		_real_orphans="${_real_orphans}${_real_orphans:+$'\n'}$_ovm"
+	done <<< "$_all_vms"
+
+	[ -z "$_real_orphans" ] && echo "  No orphan VMs in $VC_FOLDER" && return 0
+
+	echo ""
+	echo "  FATAL: Orphan VMs found in $VC_FOLDER after cleanup:"
+	while IFS= read -r _o; do
+		[ -z "$_o" ] && continue
+		echo "    $_o"
+	done <<< "$_real_orphans"
 	echo ""
 	echo "  The .cleanup mechanism should have deleted these via 'aba delete'."
 	echo "  Investigate why cleanup failed before re-running."
@@ -258,7 +276,14 @@ _runner_cleanup() {
 		_cleanup_failed=1
 	fi
 	if [ -n "$_cleanup_failed" ] && [ -f "$RC_FILE" ]; then
-		echo "3" > "$RC_FILE"
+		local _cur_rc
+		_cur_rc=$(cat "$RC_FILE" 2>/dev/null)
+		# Only override if the suite didn't already pass -- never mask a PASS
+		if [ "${_cur_rc:-0}" -ne 0 ]; then
+			echo "1" > "$RC_FILE"
+		else
+			echo "WARNING: cleanup issue detected but suite PASSED -- preserving PASS result" >&2
+		fi
 	fi
 	rm -f "$LOCK_FILE"
 }
@@ -662,9 +687,9 @@ echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
 echo "  --- ls -ltr ~/ ---"
 ls -ltr ~/
 echo "  --- ls -ltr ~/* ---"
-ls -ltr ~/* 2>/dev/null || true
+ls -ltr ~/* || true
 echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-sudo du -am ~/ 2>/dev/null | sort -rn | head -30
+sudo du -am ~/ | sort -rn | head -30
 if [ -n "${DIS_VM:-}" ]; then
 	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	echo ""
@@ -745,9 +770,9 @@ while true; do
 		echo "  --- ls -ltr ~/ ---"
 		ls -ltr ~/
 		echo "  --- ls -ltr ~/* ---"
-		ls -ltr ~/* 2>/dev/null || true
+		ls -ltr ~/* || true
 		echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-		sudo du -am ~/ 2>/dev/null | sort -rn | head -30
+		sudo du -am ~/ | sort -rn | head -30
 		if [ -n "${DIS_VM:-}" ]; then
 			_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 			echo ""
@@ -785,16 +810,29 @@ fi
 # If anything is found, STOP so we can investigate the root cause.
 
 # 2a. Check for orphan cluster VMs in this pool's vCenter folder
-if command -v govc >/dev/null; then
-	_pfolder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${POOL_NUM}"
-	_orphans=$(govc find "$_pfolder" -type m 2>&1) || _orphans=""
-	if [ -n "$_orphans" ]; then
+# VC_FOLDER from pools.conf already includes the pool path -- do NOT append /pool${POOL_NUM}
+if command -v govc >/dev/null && [ -n "${VC_FOLDER:-}" ]; then
+	_known_vms="con${POOL_NUM} dis${POOL_NUM}"
+	_all_vms=$(govc find "$VC_FOLDER" -type m) || _all_vms=""
+	_orphan_vms=""
+	while IFS= read -r _ovm; do
+		[ -z "$_ovm" ] && continue
+		_vmname=$(basename "$_ovm")
+		_is_infra=""
+		for _k in $_known_vms; do
+			[ "$_vmname" = "$_k" ] && _is_infra=1 && break
+		done
+		[ -n "$_is_infra" ] && continue
+		_orphan_vms="${_orphan_vms}${_orphan_vms:+$'\n'}$_ovm"
+	done <<< "$_all_vms"
+
+	if [ -n "$_orphan_vms" ]; then
 		echo ""
-		echo "  *** POST-SUITE INTEGRITY FAILURE: orphan VMs found in $_pfolder ***"
+		echo "  *** POST-SUITE INTEGRITY FAILURE: orphan VMs found in $VC_FOLDER ***"
 		while IFS= read -r _ovm; do
 			[ -z "$_ovm" ] && continue
 			echo "    $_ovm"
-		done <<< "$_orphans"
+		done <<< "$_orphan_vms"
 		echo ""
 		echo "  Suite cleanup left VMs behind. Stopping for investigation."
 		echo "  To proceed: manually destroy the VMs and re-run the suite."

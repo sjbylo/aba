@@ -251,7 +251,7 @@ test_end
 # ============================================================================
 test_begin "Testy user: re-sync with custom mirror conf"
 
-_marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror/.unavailable 2>&1; echo "--- state.sh ---"; cat ~/.aba/mirror/mirror/state.sh 2>/dev/null || echo "(absent)"; }
+_marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror/.unavailable 2>&1; echo "--- state.sh ---"; cat ~/.aba/mirror/mirror/state.sh || echo "(absent)"; }
 
 e2e_diag "Markers: before uninstall-1" "_marker_snap"
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"

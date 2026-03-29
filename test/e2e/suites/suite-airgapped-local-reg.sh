@@ -486,8 +486,8 @@ e2e_wait_operators_available $SNO remote
 
 e2e_wait_operators_ready $SNO remote
 
-e2e_run_remote -r 5 2 -d 60 "Trigger cluster upgrade" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade --to-latest=true --allow-not-recommended'"
+e2e_run_remote "Trigger cluster upgrade (max 10m)" \
+    "cd ~/aba && timeout 10m bash -c 'until aba --dir $SNO run --cmd \"oc adm upgrade --to-latest=true --allow-not-recommended\"; do sleep 30; done'"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \

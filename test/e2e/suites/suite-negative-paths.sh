@@ -120,7 +120,7 @@ test_begin "Clean commands"
 e2e_run "Ensure mirror dir exists" "mkdir -p mirror"
 e2e_run "Run aba -d mirror clean" "aba -d mirror clean"
 e2e_run "Verify init marker removed" "test ! -f mirror/.init"
-e2e_run "Verify imageset configs removed" "! ls mirror/imageset-config-*.yaml 2>/dev/null"
+e2e_run "Verify imageset configs removed" "! ls mirror/imageset-config-*.yaml"
 
 e2e_run "Run aba clean (top-level)" "aba clean"
 e2e_run "Verify aba.conf.seen cleaned" "test ! -f .aba.conf.seen"
@@ -298,7 +298,7 @@ e2e_run "Data directory removed" \
 # --- Test B: Credentials saved despite connectivity failure ----------------
 
 e2e_run "Pre-clean: remove stale iptables rules for port $_DOCKER_NEG_PORT on disN" \
-	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT 2>/dev/null; do :; done; true'"
+	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"
 
 e2e_run "Pre-clean: remove stale registry on disN" \
 	"_essh $DIS_HOST 'podman rm -f registry || true; rm -rf ~/docker-reg; true'"
@@ -339,7 +339,7 @@ e2e_run "Remove leftover data dirs on disN" \
 	"_essh $DIS_HOST 'rm -rf ~/docker-reg'"
 
 e2e_run "Remove all iptables rules for port $_DOCKER_NEG_PORT on disN" \
-	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT 2>/dev/null; do :; done; true'"
+	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"
 
 test_end 0
 

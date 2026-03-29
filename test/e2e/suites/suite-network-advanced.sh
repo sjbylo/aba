@@ -329,7 +329,7 @@ _net_test "Non-VLAN standard: bonding" \
 # ============================================================================
 test_begin "Cleanup"
 
-e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard* 2>/dev/null || echo 'none'"
+e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard* || echo 'none'"
 
 # Each _net_test already runs 'aba delete' + 'aba clean'.  The dirs may still
 # exist (cluster.conf etc.) but agent-config.yaml is gone after 'aba clean',
