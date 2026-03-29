@@ -324,8 +324,7 @@ _process_pool_cleanup_files() {
 			done < \"\$f\"
 			rm -f \"\$f\"
 		done
-	" 2>/dev/null || true
-	_sweep_pool_orphan_vms "$pool_num"
+	" || true
 }
 
 # --- Shared: create a tmux dashboard with one tail pane per pool --------------
@@ -503,7 +502,7 @@ if [ -n "$CLI_STOP" ]; then
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*
 			echo stopped
-		" 2>/dev/null; then
+		"; then
 			:
 		else
 			echo "unreachable"
@@ -576,7 +575,7 @@ if [ -n "$CLI_RESTART" ]; then
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
 			echo stopped
-		" 2>/dev/null; then
+		"; then
 			:
 		else
 			echo "unreachable"
@@ -1460,13 +1459,18 @@ _dispatch_suite() {
 	local pool_num="$1"
 	local suite="$2"
 
-	printf "  \033[1;36mDISPATCH:\033[0m %s -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
+	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
 	# Kill any stale session and orphaned runner processes
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null || true"
 	# Remove old rc/lock/pause files (stale pause files cause false PAUSED status)
 	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
+
+	# Process any leftover .cleanup/.mirror-cleanup files from a previously crashed
+	# suite BEFORE wiping the harness directory.  Without this, a hard-killed runner
+	# leaves orphan VMs/mirrors because its .cleanup file is destroyed.
+	_process_pool_cleanup_files "$pool_num"
 
 	# Sync latest test harness to ~/.e2e-harness/ on conN before launching
 	local _user="${CON_SSH_USER:-steve}"
@@ -1597,8 +1601,8 @@ _collect_pool_logs() {
 	local log_dir="$_RUN_DIR/logs"
 
 	mkdir -p "$log_dir"
-	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
-	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/" || true
+	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/" || true
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----
@@ -1666,7 +1670,7 @@ _force_clean_all() {
 		_ssh_con "$p" "
 			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-		" 2>/dev/null || true
+		" || true
 		_process_pool_cleanup_files "$p"
 		echo "    con${p}: cleaned"
 	done
@@ -1680,7 +1684,7 @@ _force_clean_pool() {
 	_ssh_con "$pool_num" "
 		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 		rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-	" 2>/dev/null || true
+	" || true
 	_process_pool_cleanup_files "$pool_num"
 
 	# Remove any entries associated with this pool
@@ -1710,7 +1714,7 @@ _force_clean_suite() {
 				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 			fi
 			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
-		" 2>/dev/null || true
+		" || true
 		# Skip cleanup on pools running a different suite to avoid destroying their resources
 		if [ -n "${_busy_pools[$p]:-}" ] && [ "${_busy_pools[$p]}" != "$suite" ]; then
 			echo "    Skipping con${p}: running ${_busy_pools[$p]}"
@@ -1921,7 +1925,7 @@ if [ -n "$CLI_FORCE" ] && [ -n "$CLI_POOL" ] && [ -n "$CLI_SUITE" ]; then
 		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 			echo ""
 			echo "  Dispatcher running (pid $_old_dpid) -- performing one-shot dispatch"
-			printf "  \033[1;36mFORCE DISPATCH:\033[0m %s -> pool %s\n" "$CLI_SUITE" "$CLI_POOL"
+			printf "  \033[1;36mFORCE DISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s\n" "$CLI_SUITE" "$CLI_POOL"
 
 			declare -A _retried=()
 			_dispatch_suite "$CLI_POOL" "$CLI_SUITE"

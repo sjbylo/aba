@@ -326,12 +326,11 @@ e2e_run -q "Restore VMware platform" "aba --platform vmw"
 test_end 0
 
 # ============================================================================
-# End-of-suite cleanup: delete cluster and uninstall mirror on disN
+# End-of-suite cleanup: uninstall mirror on disN
+# (BM cluster dir already removed after bare-metal simulation above)
 # ============================================================================
 test_begin "Cleanup: delete cluster and uninstall mirror on disN"
 
-e2e_run_remote "Delete standard cluster on disN" \
-    "cd ~/aba && aba --dir $STANDARD delete && rm -rf $STANDARD"
 e2e_run_remote "Uninstall mirror registry on disN" \
     "cd ~/aba && aba -d mirror uninstall"
 

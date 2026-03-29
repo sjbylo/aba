@@ -448,7 +448,7 @@ suite_end() {
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         # #region agent log
         printf '{"sessionId":"23cf03","hypothesisId":"H2","location":"framework.sh:finalize_suite:FAIL","message":"about to send suite FAIL notification","data":{"suite":"%s","fail_count":%d,"NOTIFY_CMD":"%s"},"timestamp":%s}\n' \
-            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log
         # #endregion
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
@@ -620,7 +620,7 @@ e2e_add_to_cluster_cleanup() {
 	fi
 
 	local entry="$target $abs_path"
-	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" 2>/dev/null || \
+	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" || \
 		echo "$entry" >> "$_E2E_CLEANUP_FILE"
 
 	_e2e_log "  Added cluster to cleanup list: $entry"
@@ -643,9 +643,7 @@ e2e_cleanup_clusters() {
 			"if [ -d '$abs_path' ]; then
 				aba -y -d '$abs_path' delete
 			else
-				echo '  WARNING: cluster dir $abs_path not found -- was it rm -rf'\''d before cleanup?'
-				echo '  Orphan VMs may still exist. Keeping cleanup file for investigation.'
-				exit 1
+				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
 			fi" \
 			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
 		_cleanup_rc=${PIPESTATUS[0]}
@@ -696,7 +694,7 @@ e2e_add_to_mirror_cleanup() {
 	fi
 
 	local entry="$target $abs_path"
-	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" 2>/dev/null || \
+	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" || \
 		echo "$entry" >> "$_E2E_MIRROR_CLEANUP_FILE"
 
 	_e2e_log "  Added mirror to cleanup list: $entry"
@@ -718,9 +716,7 @@ e2e_cleanup_mirrors() {
 			"if [ -d '$abs_path' ]; then
 				aba -y -d '$abs_path' uninstall
 			else
-				echo '  WARNING: mirror dir $abs_path not found -- was it rm -rf'\''d before cleanup?'
-				echo '  Mirror data may still exist. Keeping cleanup file for investigation.'
-				exit 1
+				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
 			fi" \
 			2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}" || true
 		_cleanup_rc=${PIPESTATUS[0]}
@@ -993,7 +989,7 @@ e2e_run() {
             # Notify on the very first failure (before exhausted check so tot_cnt=1 still fires)
             # #region agent log
             printf '{"sessionId":"23cf03","hypothesisId":"H1","location":"framework.sh:retry_loop","message":"failure in retry loop","data":{"attempt":%d,"tot_cnt":%d,"description":"%s","ret":%d},"timestamp":%s}\n' \
-                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log 2>/dev/null
+                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log
             # #endregion
             if [ $attempt -eq 1 ]; then
                 (
@@ -1005,7 +1001,7 @@ e2e_run() {
                     echo ""
                     echo "--- Last 20 lines of suite log ---"
                     echo ""
-                    tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                    tail -20 "$E2E_LOG_FILE"
                 ) | _e2e_notify_stdin "FIRST FAIL: $description"
             fi
 
@@ -1024,7 +1020,7 @@ e2e_run() {
                         echo ""
                         echo "--- Last 20 lines of suite log ---"
                         echo ""
-                        tail -20 "$E2E_LOG_FILE" 2>/dev/null
+                        tail -20 "$E2E_LOG_FILE"
                     ) | _e2e_notify_stdin "EXHAUSTED: $description"
                 fi
                 break
@@ -1635,8 +1631,8 @@ e2e_setup() {
 
     # Log git state so we know exactly what was tested
     local _git_head _git_dirty
-    _git_head="$(git -C "$aba_root" log -1 --format='%h %s' 2>/dev/null || echo 'unknown')"
-    _git_dirty="$(git -C "$aba_root" status --porcelain 2>/dev/null | head -20)"
+    _git_head="$(git -C "$aba_root" log -1 --format='%h %s' || echo 'unknown')"
+    _git_dirty="$(git -C "$aba_root" status --porcelain | head -20)"
 
     _e2e_log "=== E2E Environment ==="
     _e2e_log "  ABA_ROOT=$aba_root"

@@ -872,7 +872,7 @@ done
 # While background config jobs run, tail their logs so the user sees progress
 _tail_pid=""
 if [ ${#_cfg_pids[@]} -gt 0 ] && [ ${#_cfg_logs[@]} -gt 0 ] && [ -t 1 ]; then
-	tail -f "${_cfg_logs[@]}" 2>/dev/null &
+	tail -f "${_cfg_logs[@]}" &
 	_tail_pid=$!
 fi
 
