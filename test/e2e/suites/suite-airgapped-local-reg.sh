@@ -563,6 +563,8 @@ e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
     "cd ~/aba && aba --dir $STANDARD delete"
+e2e_run_remote "Clean standard cluster dir" \
+    "cd ~/aba && rm -rf $STANDARD"
 
 test_end
 

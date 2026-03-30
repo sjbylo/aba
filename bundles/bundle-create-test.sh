@@ -197,8 +197,8 @@ uncomment_line registry.redhat.io/rhel9/support-tools	mirror/data/imageset-confi
 uncomment_line quay.io/openshifttest/hello-openshift	mirror/data/imageset-config.yaml
 uncomment_line registry.redhat.io/ubi9/ubi		mirror/data/imageset-config.yaml
 #[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/data/imageset-config.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
+[ "$NAME" = "virt" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
+[ "$NAME" = "virt" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
 
 # START - Exception since issue with v2.10 #########
 # Replace release-v2.10 with release-v2.9 - in the 2 lines - after mtv-operator found:
@@ -207,9 +207,9 @@ uncomment_line registry.redhat.io/ubi9/ubi		mirror/data/imageset-config.yaml
 #      defaultChannel: release-v2.8
 #      channels:
 #      - name: "release-v2.8"
-# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/data/imageset-config.yaml
+# SHOULD WORK NOW [ "$NAME" = "virt" ] && sed -i -e '/mtv-operator/{n;N; s/release-v2.1[01]/release-v2.8/g}' mirror/data/imageset-config.yaml
 # Append or insert line after "mtv-operator" line
-# SHOULD WORK NOW [ "$NAME" = "ocpv" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/data/imageset-config.yaml
+# SHOULD WORK NOW [ "$NAME" = "virt" ] && sed -i -e '/mtv-operator/a\      defaultChannel: release-v2.8' mirror/data/imageset-config.yaml
 # END - Exception since issue with v2.10 ##########
 
 echo_step Show image set config file ...
@@ -419,7 +419,7 @@ echo_step Determine older bundles ... to delete later
 
 # Before we create the bundle dir, fetch list of old dirs to delete.  Will be deleted at the end of the script!
 MAJOR_VER=$(echo $VER | cut -d\. -f1,2)
-# Delete any bundles with the exact same name OR e.g. 4.19.10-ocp-* # To replace a bundle rename it to e.g. 4.19.10-ocpv-to-be-removed, and it will be replaced
+# Delete any bundles with the exact same name OR e.g. 4.19.10-ocp-* # To replace a bundle rename it to e.g. 4.19.10-virt-to-be-removed, and it will be replaced
 todel=$(ls -d $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true)
 ls -l  $CLOUD_DIR
 ls -ld $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-* 2>/dev/null || true
@@ -428,7 +428,7 @@ ls -ld $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME   $CLOUD_DIR/$MAJOR_VER.[0-9]*-$NAME-*
 
 echo_step Create the install bundle dir and copy the files ...
 
-# Create bundle in cloud drive, e.g. /nas/redhat/aba-openshift-install-bundles/4.18.19-ocpv
+# Create bundle in cloud drive, e.g. /nas/redhat/aba-openshift-install-bundles/4.18.19-virt
 mkdir -p $CLOUD_DIR_BUNDLE
 
 # Mark it as incomplete

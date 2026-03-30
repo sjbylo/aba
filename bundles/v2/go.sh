@@ -42,16 +42,16 @@ int_up
 
 echo "Starting $0 at $(date)"
 
-# Define bundle types: name, operator sets
-#   name        op_sets
-arr_op_sets=();				arr_name=();
-arr_op_sets+=(" ");			arr_name+=(release);
-arr_op_sets+=("ocp");			arr_name+=(ocp);
-arr_op_sets+=("ocp mesh3");		arr_name+=(mesh3);
-arr_op_sets+=("ocp odf sec acm");	arr_name+=(opp);
-arr_op_sets+=("ocp odf ocpv");		arr_name+=(ocpv);
-arr_op_sets+=("ocp sec");		arr_name+=(sec);
-arr_op_sets+=("ocp gpu ai");		arr_name+=(ai);
+# Define bundle types: name, operator sets, tests to run
+#   op_sets                          name       tests (space-separated test module names)
+arr_op_sets=();				arr_name=();	arr_tests=();
+arr_op_sets+=(" ");			arr_name+=(release);	arr_tests+=("");
+arr_op_sets+=("ocp");			arr_name+=(ocp);	arr_tests+=("ocp");
+arr_op_sets+=("ocp mesh3");		arr_name+=(mesh3);	arr_tests+=("ocp mesh3");
+arr_op_sets+=("ocp odf sec acm");	arr_name+=(opp);	arr_tests+=("odf acm acs");
+arr_op_sets+=("ocp odf virt");		arr_name+=(virt);	arr_tests+=("odf virt mtv");
+arr_op_sets+=("ocp sec");		arr_name+=(sec);	arr_tests+=("acs");
+arr_op_sets+=("ocp gpu ai");		arr_name+=(ai);		arr_tests+=("ai");
 
 export OC_MIRROR_CACHE=$HOME
 export PLAIN_OUTPUT=1
@@ -86,12 +86,13 @@ do
 	do
 		op_sets=${arr_op_sets[$i]}
 		name=${arr_name[$i]}
+		tests=${arr_tests[$i]}
 		bundle_name="${ver}-$name"
 
 		echo
-		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\""
+		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\" TESTS=\"$tests\""
 		sleep 1
-		if ! time make VER="$ver" NAME="$name" OP_SETS="$op_sets"; then
+		if ! time make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests"; then
 			echo "##################################################" >&2
 			echo "FAILED: bundle $bundle_name ($op_sets) at $(date)" >&2
 			echo "##################################################" >&2
@@ -104,7 +105,7 @@ do
 		fi
 
 		# Run cleanup after each successful bundle (separate target)
-		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" cleanup; then
+		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" cleanup; then
 			echo "WARNING: cleanup failed for $bundle_name -- next run's 00-setup.sh will retry" >&2
 		fi
 	done

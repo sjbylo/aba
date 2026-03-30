@@ -450,6 +450,8 @@ test_begin "Delete cluster"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_run_remote "Clean SNO cluster dir" \
+    "cd ~/aba && rm -rf $SNO"
 
 test_end
 

@@ -70,11 +70,22 @@ TEST_LOG_06D="$WORK_BUNDLE_DIR_BUILD/tests-06d.txt"
 		echo "OpenShift Update Service (OSUS) integration test: n/a" >> "$TEST_LOG_06D"
 	fi
 
-	echo "Running specific tests for bundle type:"
-	if [ -x "$TEMPLATES_DIR/${NAME}-test.sh" ]; then
-		cp -p "$TEMPLATES_DIR/${NAME}-test.sh" "$WORK_BUNDLE_DIR_BUILD"
-		timeout 1800 "$WORK_BUNDLE_DIR_BUILD/${NAME}-test.sh" 3>> "$TEST_LOG_06D"
-	fi
+	# Run modular test scripts from bundles/v2/templates/
+	V2_TEMPLATES="$(cd "$(dirname "$0")/../templates" && pwd)"
+
+	cp -p "$V2_TEMPLATES/bundle-test-lib.sh" "$WORK_BUNDLE_DIR_BUILD/"
+
+	echo "Running operator integration tests: ${TESTS:-none}"
+	for test_module in $TESTS; do
+		test_script="$V2_TEMPLATES/test-${test_module}.sh"
+		if [ -x "$test_script" ]; then
+			echo_step "Running test module: test-${test_module}.sh"
+			cp -p "$test_script" "$WORK_BUNDLE_DIR_BUILD/"
+			timeout 1800 "$WORK_BUNDLE_DIR_BUILD/test-${test_module}.sh" 3>> "$TEST_LOG_06D"
+		else
+			echo "WARNING: No test module for '$test_module' at $test_script -- skipping" >&2
+		fi
+	done
 
 	aba kill
 	set +x
