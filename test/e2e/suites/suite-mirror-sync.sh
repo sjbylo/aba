@@ -367,12 +367,18 @@ e2e_run "Delete SNO cluster" \
     "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
 e2e_run "Delete standard cluster" \
     "if [ -d $STANDARD ]; then aba --dir $STANDARD delete && rm -rf $STANDARD; else echo '[cleanup] $STANDARD already removed'; fi"
-e2e_run "Uninstall mymirror registry" \
-    "if [ -d mymirror ]; then aba --dir mymirror uninstall; else echo '[cleanup] mymirror already removed'; fi"
+e2e_run "Uninstall mymirror registry and remove dir" \
+    "if [ -d mymirror ]; then aba --dir mymirror uninstall && rm -rf mymirror; else echo '[cleanup] mymirror already removed'; fi"
+e2e_run_remote "Remove mymirror-data on disN" \
+    "rm -rf ~/mymirror-data"
 e2e_run "Uninstall mirror registry on disN" \
     "aba --dir mirror uninstall"
+e2e_run_remote "Remove my-quay-mirror-test1 on disN" \
+    "rm -rf ~/my-quay-mirror-test1"
 e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
+e2e_run_remote "Verify no leftover mirror data dirs on disN" \
+    "test ! -d ~/mymirror-data && test ! -d ~/my-quay-mirror-test1"
 
 test_end
 

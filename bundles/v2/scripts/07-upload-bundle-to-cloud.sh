@@ -55,10 +55,16 @@ op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-s
 # Create readme file from template
 sed -e "s/<VERSION>/$VER/g" -e "s/<CLIS>/$s/g" -e "s/<DATETIME>/$d/g" < "$TEMPLATES_DIR/README.txt" > "$CLOUD_DIR_BUNDLE/README.txt"
 
-# Append test results and operator list to README
+# Insert test results into the <TEST_RESULTS> placeholder (strip the markdown header)
+test_body=$(grep -v '^## ' "$WORK_TEST_LOG")
+awk -v results="$test_body" '{
+	if ($0 == "<TEST_RESULTS>") print results
+	else print
+}' "$CLOUD_DIR_BUNDLE/README.txt" > "$CLOUD_DIR_BUNDLE/README.txt.tmp" \
+	&& mv "$CLOUD_DIR_BUNDLE/README.txt.tmp" "$CLOUD_DIR_BUNDLE/README.txt"
+
+# Append operator list and imageset-config to README
 (
-	echo
-	cat "$WORK_TEST_LOG"
 	echo
 	echo "## List of Operators included in this install bundle:"
 	echo

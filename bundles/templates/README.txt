@@ -14,6 +14,9 @@ Content of this OpenShift install bundle:
 
 
 This install bundle has been tested. 
+
+<TEST_RESULTS>
+
 See the files in the build folder for all test results, full log
 of the bundle build/test and this install bundle's test script.
 
