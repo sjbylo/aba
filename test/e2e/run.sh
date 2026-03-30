@@ -88,7 +88,7 @@ _usage() {
 	  run.sh restart [--pool N] [--resume] Stop + harness deploy + re-run last suite
 	  run.sh restart --pool N --dev        Stop + source deploy + harness + re-run
 	  run.sh restart --suite X --pool N    Stop + deploy + run suite X on pool N
-	  run.sh stop [--pool N]               Kill runner(s) (--pool: keep dispatcher)
+	  run.sh stop [--pool N] [--clean]     Kill runner(s) (--clean: delete clusters/mirrors)
 	  run.sh start [--pool N]              Power on pool VMs (conN + disN)
 	  run.sh status [--pool N]             Show what's running
 	  run.sh verify [--pools N|--pool N]   Verify pool VMs (no dispatch)
@@ -501,6 +501,57 @@ if [ -n "$CLI_STOP" ]; then
 		fi
 	done
 	echo "Done."
+
+	# --clean: process .cleanup and .mirror-cleanup files to delete clusters
+	# and uninstall mirrors that the stopped suites left behind.
+	if [ -n "$CLI_CLEAN" ]; then
+		echo ""
+		echo "=== Cleaning up test clusters and mirrors ==="
+		_e2e_logs=".e2e-harness/logs"
+		for p in "${_stop_list[@]}"; do
+			_host="con${p}.${_domain}"
+			_has_files=$(ssh $_stop_ssh "${_user}@${_host}" \
+				"ls ~/$_e2e_logs/*.cleanup ~/$_e2e_logs/*.mirror-cleanup 2>/dev/null | head -1" 2>/dev/null) || continue
+			[ -z "$_has_files" ] && { echo "  con${p}: no cleanup files"; continue; }
+
+			echo "  con${p}: processing cleanup files ..."
+			ssh $_stop_ssh "${_user}@${_host}" bash <<-REMOTE
+				_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+				_logs="\$HOME/$_e2e_logs"
+
+				for f in "\$_logs"/*.cleanup; do
+					[ -f "\$f" ] || continue
+					echo "    Processing \$(basename "\$f") ..."
+					_ok=1
+					while IFS=' ' read -r target abs_path; do
+						[ -z "\$abs_path" ] && continue
+						echo "      \$target: aba -y -d \$abs_path delete"
+						ssh \$_ssh_opts "\$target" \
+							"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete || echo '      (dir not found)'" \
+							< /dev/null 2>&1 || { echo "      WARNING: cleanup failed"; _ok=; }
+					done < "\$f"
+					[ -n "\$_ok" ] && rm -f "\$f"
+				done
+
+				for f in "\$_logs"/*.mirror-cleanup; do
+					[ -f "\$f" ] || continue
+					echo "    Processing \$(basename "\$f") ..."
+					_ok=1
+					while IFS=' ' read -r target abs_path; do
+						[ -z "\$abs_path" ] && continue
+						echo "      \$target: aba -y -d \$abs_path uninstall"
+						ssh \$_ssh_opts "\$target" \
+							"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall || echo '      (dir not found)'" \
+							< /dev/null 2>&1 || { echo "      WARNING: cleanup failed"; _ok=; }
+					done < "\$f"
+					[ -n "\$_ok" ] && rm -f "\$f"
+				done
+			REMOTE
+			echo "  con${p}: cleanup done."
+		done
+		echo "=== Cleanup complete ==="
+	fi
+
 	exit 0
 fi
 
