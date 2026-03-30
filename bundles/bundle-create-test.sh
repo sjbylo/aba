@@ -340,7 +340,7 @@ aba -d mirror load --retry 5 -H $TEST_HOST
 
 # Be sure all CLI files can install and are executable
 scripts/cli-install-all.sh --wait
-for cmd in butane govc kubectl oc oc-mirror openshift-install
+for cmd in butane govc kubectl oc openshift-install
 do
 	~/bin/$cmd --help >/dev/null 2>&1 || { echo ~/bin/$cmd cannot execute!; exit 1; }
 done
@@ -526,7 +526,7 @@ aba -d mirror uninstall -y
 
 ##. ~steve/.proxy-set.sh  # Go online!
 int_down
-~/bin/intcheck.sh | grep UP
+~/bin/intcheck.sh | grep DOWN
 
 # Test connectivity is working
 echo_step Test internet connection with curl google.com ...

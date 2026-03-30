@@ -42,12 +42,18 @@ read -t 60 yn || true
 # pasta only needs it present when the pod is created.
 echo_step "Adding temporary default route for pasta hairpin ..."
 local_iface=$(ip route get $GATEWAY_IP | grep -oP 'dev \K\S+')
-sudo ip route add default via $GATEWAY_IP dev $local_iface
+if ip route show default | grep -q "via $GATEWAY_IP"; then
+	echo "Default route via $GATEWAY_IP already exists, skipping add"
+else
+	sudo ip route add default via $GATEWAY_IP dev $local_iface
+fi
 
 aba -d mirror install -H $TEST_HOST
 
 echo_step "Removing temporary default route ..."
-sudo ip route del default via $GATEWAY_IP dev $local_iface
+if ip route show default | grep -q "via $GATEWAY_IP"; then
+	sudo ip route del default via $GATEWAY_IP dev $local_iface
+fi
 
 # Verify registry is actually working after install
 echo_step "Verifying registry is accessible ..."
