@@ -79,8 +79,8 @@ unset http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 e2e_run "Verify proxy is unset" "test -z \"\${http_proxy:-}\" && echo 'proxy unset OK'"
 
-e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+# Simulate user reconfiguring cluster dir: remove old config entirely so -I flag takes effect
+e2e_run "Remove $SNO config dir (no VMs at this point)" "rm -rf $SNO"
 e2e_run "Create SNO config with -I direct" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I direct --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"
@@ -122,8 +122,8 @@ fi
 
 e2e_run "Verify proxy is set" "test -n \"\${http_proxy:-}\" && echo \"proxy set: \$http_proxy\""
 
-e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+# Simulate user reconfiguring cluster dir: remove old config entirely so -I flag takes effect
+e2e_run "Remove $SNO config dir (no VMs at this point)" "rm -rf $SNO"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate agent config" "aba -d $SNO agentconf"

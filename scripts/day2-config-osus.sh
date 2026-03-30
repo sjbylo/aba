@@ -124,19 +124,24 @@ END
 aba_info "Waiting for operator to be installed (this can take up to 3 minutes)..."
 
 csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
-CSV=$(eval $csv_cmd)
+CSV=$(eval $csv_cmd) || true
+retries=0
 until [ "$CSV" ]
 do
 	echo -n .
 	sleep 10
-	CSV=$(oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}')
-	CSV=$(eval $csv_cmd)
+	CSV=$(eval $csv_cmd) || true
+	retries=$((retries + 1))
+	[ $retries -ge 60 ] && aba_abort "Timed out waiting for OSUS operator subscription (10 min)"
 done
 
-while ! oc get csv -n $NAMESPACE $CSV -o jsonpath='{.status.phase}' | grep Succeeded 
+retries=0
+while ! oc get csv -n $NAMESPACE $CSV -o jsonpath='{.status.phase}' | grep Succeeded
 do
 	echo -n .
 	sleep 10
+	retries=$((retries + 1))
+	[ $retries -ge 60 ] && aba_abort "Timed out waiting for OSUS CSV to reach Succeeded (10 min)"
 done
 
 #####################
