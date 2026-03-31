@@ -187,20 +187,6 @@ else
 fi
 
 #####################
-# The cert/proxy patches above -- and prior steps like aba day2-ntp (MachineConfig)
-# and aba day2 (IDMS) -- may trigger MCO to roll nodes. MCO takes ~10-15s to detect
-# changes and flip MCP Updating=True. Wait for any rolling update to finish before
-# creating the subscription, otherwise the OLM bundle unpack job may fail due to
-# node instability (pods evicted, images unavailable during reboot).
-aba_info "Allowing time for MCO to detect configuration changes ..."
-sleep 15
-
-aba_info "Waiting for any node rolling updates to complete ..."
-if ! oc wait mcp --all --for=condition=Updated --timeout=30m; then
-	aba_warning "MachineConfigPool not fully updated after 30 minutes -- continuing anyway"
-fi
-
-#####################
 # Pre-flight: if the OSUS operator is already installed and healthy, skip to deployment.
 # If the subscription exists but is not healthy/complete (previous failed attempt, stuck,
 # etc.), clean up so we can start fresh. This makes the script safely re-runnable.
@@ -221,6 +207,23 @@ elif oc get sub update-service-subscription -n $NAMESPACE >/dev/null 2>&1; then
 	aba_info "OSUS subscription exists but has no installedCSV -- cleaning up"
 	_osus_log
 	_osus_cleanup_sub
+fi
+
+#####################
+# The cert/proxy patches above -- and prior steps like aba day2-ntp (MachineConfig)
+# and aba day2 (IDMS) -- may trigger MCO to roll nodes. MCO takes ~10-15s to detect
+# changes and flip MCP Updating=True. Wait for any rolling update to finish before
+# creating the subscription, otherwise the OLM bundle unpack job may fail due to
+# node instability (pods evicted, images unavailable during reboot).
+# Skip if OSUS is already installed -- certs are already in place from a previous run.
+if [ -z "$_osus_installed" ]; then
+	aba_info "Allowing time for MCO to detect configuration changes ..."
+	sleep 15
+
+	aba_info "Waiting for any node rolling updates to complete ..."
+	if ! oc wait mcp --all --for=condition=Updated --timeout=30m; then
+		aba_warning "MachineConfigPool not fully updated after 30 minutes -- continuing anyway"
+	fi
 fi
 
 #####################
