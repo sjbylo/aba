@@ -55,9 +55,10 @@ arr_op_sets+=("ocp gpu ai");		arr_name+=(ai);		arr_tests+=("ai");
 
 export OC_MIRROR_CACHE=$HOME
 export PLAIN_OUTPUT=1
+export BATCH=1
 
-rm -vf ~/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
-rm -rf ~/.aba
+# CLI tools and ~/.aba state are NOT cleaned here -- use 'make clean' for a fresh start.
+# This allows go.sh to be re-run idempotently after a failure (make resumes from markers).
 
 # Discover latest OCP versions
 versions=()
@@ -90,6 +91,14 @@ do
 		bundle_name="${ver}-$name"
 
 		echo
+		# Skip if bundle already exists and is complete in cloud dir
+		# (To force a rebuild, delete or rename the cloud dir first)
+		cloud_bundle="$CLOUD_DIR/$bundle_name"
+		if [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
+			echo "Install bundle already exists: $cloud_bundle -- skipping"
+			continue
+		fi
+
 		echo "Running: make VER=$ver NAME=$name OP_SETS=\"$op_sets\" TESTS=\"$tests\""
 		sleep 1
 		if ! time make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests"; then

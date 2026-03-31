@@ -100,7 +100,7 @@ EOF
 OPERAND_KIND=(Istio IstioCNI)
 OPERAND_NAME=(default default)
 OPERAND_NS=(istio-system istio-system)
-OPERAND_STATUS=('^healthy$' '^healthy$')
+OPERAND_STATUS=('^Healthy$' '^Healthy$')
 
 for i in "${!OPERAND_KIND[@]}"; do
 	wait_for_operand "${OPERAND_KIND[$i]}" "${OPERAND_NAME[$i]}" "${OPERAND_NS[$i]}" \
