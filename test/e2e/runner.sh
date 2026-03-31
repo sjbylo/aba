@@ -717,6 +717,13 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		exit 1
 	fi
 
+	# Ensure disN has a default route for pasta hairpin (rootless podman ≥5.x).
+	# int_down adds a device-only default route if none exists.
+	_dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+	echo "  Ensuring pasta hairpin route on disN ..."
+	scp -q "$_ABA_ROOT/test/lib.sh" "$_dis_host:/tmp/.e2e-lib.sh"
+	_essh "$_dis_host" "source /tmp/.e2e-lib.sh && int_down; rm -f /tmp/.e2e-lib.sh"
+
 	_ensure_pool_registry
 else
 	echo "  (Skipping disN cleanup and Quay cleanup -- E2E_SKIP_SNAPSHOT_REVERT=1)"
@@ -815,6 +822,12 @@ while true; do
 				echo "1" > "$RC_FILE"
 				exit 1
 			fi
+
+			# Ensure disN has a default route for pasta hairpin (same as initial path)
+			_dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+			echo "  Ensuring pasta hairpin route on disN ..."
+			scp -q "$_ABA_ROOT/test/lib.sh" "$_dis_host:/tmp/.e2e-lib.sh"
+			_essh "$_dis_host" "source /tmp/.e2e-lib.sh && int_down; rm -f /tmp/.e2e-lib.sh"
 
 			_ensure_pool_registry
 		fi

@@ -381,6 +381,23 @@ if [ -n "$CLI_ATTACH" ]; then
 		 else echo 'No e2e session found on ${host}.'; tmux list-sessions 2>/dev/null || echo '(no tmux sessions)'; fi"
 fi
 
+# --- Source tarball helper (single source of truth for --dev deploys) ----------
+
+_make_source_tar() {
+	local _tar
+	_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+	tar czf "$_tar" -C "$_ABA_ROOT" \
+		--exclude='*/.*' \
+		scripts/ \
+		templates/ \
+		test/lib.sh \
+		Makefile \
+		cli/Makefile \
+		aba \
+		install
+	echo "$_tar"
+}
+
 # --- Deploy mode (developer quick-fix: source-only push) ----------------------
 
 if [ -n "$CLI_DEPLOY" ]; then
@@ -394,16 +411,7 @@ if [ -n "$CLI_DEPLOY" ]; then
 	echo ""
 	echo "  Developer deploy: source-only push to conN (${_deploy_list[*]}) ..."
 
-	# Whitelist: only ABA source code (no binaries, data, configs, dot-flags)
-	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
-	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-		--exclude='*/.*' \
-		scripts/ \
-		templates/ \
-		Makefile \
-		cli/Makefile \
-		aba \
-		install
+	_deploy_tar=$(_make_source_tar)
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Source tarball: $_deploy_size"
 	echo ""
@@ -673,15 +681,7 @@ if [ -n "$CLI_RESTART" ]; then
 	echo ""
 	if [ -n "$CLI_DEV" ]; then
 		echo "  [3/4] Developer deploy: source + harness ..."
-		_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
-		tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-			--exclude='*/.*' \
-			scripts/ \
-			templates/ \
-			Makefile \
-			cli/Makefile \
-			aba \
-			install
+		_deploy_tar=$(_make_source_tar)
 		_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 		echo "    Source tarball: $_deploy_size"
 		for p in "${_restart_pools[@]}"; do
@@ -1459,15 +1459,7 @@ done
 if [ -n "$CLI_DEV" ]; then
 	echo ""
 	echo "  Developer mode: pushing ABA source to conN hosts ..."
-	_deploy_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
-	tar czf "$_deploy_tar" -C "$_ABA_ROOT" \
-		--exclude='*/.*' \
-		scripts/ \
-		templates/ \
-		Makefile \
-		cli/Makefile \
-		aba \
-		install
+	_deploy_tar=$(_make_source_tar)
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Source tarball: $_deploy_size"
 	for (( i=1; i<=CLI_POOLS; i++ )); do
