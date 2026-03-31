@@ -185,7 +185,7 @@ spec:
 EOF
 
 wait_for_operand StorageCluster ocs-storagecluster openshift-storage \
-	'{.status.phase}' '^[Rr]eady$'
+	'{.status.phase}' '^[Rr]eady$' 1800
 
 wait_all_pods openshift-storage
 

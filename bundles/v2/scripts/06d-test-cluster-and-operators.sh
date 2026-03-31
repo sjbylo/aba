@@ -72,71 +72,63 @@ TEST_LOG_06D="$WORK_BUNDLE_DIR_BUILD/tests-06d.txt"
 # Truncate this phase's log (idempotent on retry)
 : > "$TEST_LOG_06D"
 
-# Run tests, then ALWAYS delete cluster VMs -- pass or fail.
-# All bundles share the same cluster name/IPs, so leaving VMs behind
-# would cause IP conflicts for the next bundle.
-_test_rc=0
-(
-	cd "$CLUSTER_NAME"
+# set -e is active (#!/bin/bash -e) -- any failure aborts immediately.
+# Cluster VMs are left alive on failure so you can debug.
+# On re-run, the cluster health check above handles stale/leftover clusters.
 
-	. <(aba shell)
-	oc whoami
-	. <(aba login)
-	oc whoami
+cd "$CLUSTER_NAME"
 
-	aba day2-ntp
-	aba day2
+. <(aba shell)
+oc whoami
+. <(aba login)
+oc whoami
 
-	echo_step "Test this cluster type: $NAME ..."
+aba day2-ntp
+aba day2
 
-	echo "Cluster installation test: ok" >> "$TEST_LOG_06D"
+echo_step "Test this cluster type: $NAME ..."
 
-	# OperatorHub + OSUS only make sense when operators are present
-	if [ "$NAME" != "release" ]; then
-		echo "Pausing 100s ..."
-		mypause 100
+echo "Cluster installation test: ok" >> "$TEST_LOG_06D"
 
-		until oc get packagemanifests | grep cincinnati-operator; do echo -n .; mypause 10; done
-		echo "OperatorHub integration test: ok" >> "$TEST_LOG_06D"
+# OperatorHub + OSUS only make sense when operators are present
+if [ "$NAME" != "release" ]; then
+	echo "Pausing 100s ..."
+	mypause 100
 
-		mypause 10
+	until oc get packagemanifests | grep cincinnati-operator; do echo -n .; mypause 10; done
+	echo "OperatorHub integration test: ok" >> "$TEST_LOG_06D"
 
-		echo "List of packagemanifests:"
-		oc get packagemanifests
+	mypause 10
 
-		mypause 60
+	echo "List of packagemanifests:"
+	oc get packagemanifests
 
-		aba day2-osus
-		echo "OpenShift Update Service (OSUS) integration test: ok" >> "$TEST_LOG_06D"
+	mypause 60
+
+	aba day2-osus
+	echo "OpenShift Update Service (OSUS) integration test: ok" >> "$TEST_LOG_06D"
+else
+	echo "OperatorHub integration test: n/a" >> "$TEST_LOG_06D"
+	echo "OpenShift Update Service (OSUS) integration test: n/a" >> "$TEST_LOG_06D"
+fi
+
+# Run modular test scripts from bundles/v2/templates/
+V2_TEMPLATES="$V2_DIR/templates"
+
+cp -p "$V2_TEMPLATES/bundle-test-lib.sh" "$WORK_BUNDLE_DIR_BUILD/"
+
+echo "Running operator integration tests: ${TESTS:-none}"
+for test_module in $TESTS; do
+	test_script="$V2_TEMPLATES/test-${test_module}.sh"
+	if [ -x "$test_script" ]; then
+		echo_step "Running test module: test-${test_module}.sh"
+		cp -p "$test_script" "$WORK_BUNDLE_DIR_BUILD/"
+		timeout 2700 "$WORK_BUNDLE_DIR_BUILD/test-${test_module}.sh" 3>> "$TEST_LOG_06D"
 	else
-		echo "OperatorHub integration test: n/a" >> "$TEST_LOG_06D"
-		echo "OpenShift Update Service (OSUS) integration test: n/a" >> "$TEST_LOG_06D"
+		echo "WARNING: No test module for '$test_module' at $test_script -- skipping" >&2
 	fi
+done
 
-	# Run modular test scripts from bundles/v2/templates/
-	V2_TEMPLATES="$V2_DIR/templates"
-
-	cp -p "$V2_TEMPLATES/bundle-test-lib.sh" "$WORK_BUNDLE_DIR_BUILD/"
-
-	echo "Running operator integration tests: ${TESTS:-none}"
-	for test_module in $TESTS; do
-		test_script="$V2_TEMPLATES/test-${test_module}.sh"
-		if [ -x "$test_script" ]; then
-			echo_step "Running test module: test-${test_module}.sh"
-			cp -p "$test_script" "$WORK_BUNDLE_DIR_BUILD/"
-			timeout 1800 "$WORK_BUNDLE_DIR_BUILD/test-${test_module}.sh" 3>> "$TEST_LOG_06D"
-		else
-			echo "WARNING: No test module for '$test_module' at $test_script -- skipping" >&2
-		fi
-	done
-
-	set +x
-) || _test_rc=$?
-
-# Always delete the test cluster VMs -- they are no longer needed.
-echo_step "Delete test cluster VMs ..."
-aba --dir "$CLUSTER_NAME" delete || true
-
-[ $_test_rc -ne 0 ] && exit $_test_rc
+set +x
 
 echo "All tests: passed" >> "$TEST_LOG_06D"

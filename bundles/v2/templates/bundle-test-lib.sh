@@ -12,10 +12,20 @@ oc whoami || . <(aba login)
 # whether fd 3 was pre-opened by the caller.
 { true >&3; } 2>/dev/null || exec 3>&1
 
+_LAST_BANNER_S=$(date +%s)
+
 echo_step() {
+	local _now_s _elapsed_s _mins _secs _wall _delta
+	_now_s=$(date +%s)
+	_elapsed_s=$(( _now_s - _LAST_BANNER_S ))
+	_mins=$(( _elapsed_s / 60 ))
+	_secs=$(( _elapsed_s % 60 ))
+	_wall=$(date +%H:%M:%S)
+	_delta="${_mins}m${_secs}s"
+	_LAST_BANNER_S=$_now_s
 	echo
 	echo "###########################################################"
-	echo "$@"
+	echo "$@ ($_wall / $_delta)"
 	echo "###########################################################"
 	echo
 }
