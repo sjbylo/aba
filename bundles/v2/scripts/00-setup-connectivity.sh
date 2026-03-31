@@ -28,19 +28,18 @@ fi
 
 [ "$NOTIFY" ] && echo "Working on bundle: $BUNDLE_NAME ..." | notify.sh
 
-# Detect stale work dirs from previous/different bundles
+# Detect stale work dirs from previous/different bundles.
+# Only flag test-install-* and aba/ dirs (large, contain cluster/registry data).
+# Preserve other bundles' marker dirs (e.g., 4.21.6-release/build/.done-*).
 stale_dirs=()
-for d in "$WORK_DIR"/*/; do
+for d in "$WORK_DIR"/test-install-*/; do
 	[ ! -d "$d" ] && continue
-	dir_name=$(basename "$d")
-	case "$dir_name" in
-		"$BUNDLE_NAME" | "test-install-$BUNDLE_NAME" | aba)
-			;;
-		*)
-			stale_dirs+=("$d")
-			;;
-	esac
+	[ "$(basename "$d")" = "test-install-$BUNDLE_NAME" ] && continue
+	stale_dirs+=("$d")
 done
+if [ -d "$WORK_DIR/aba" ]; then
+	stale_dirs+=("$WORK_DIR/aba")
+fi
 
 has_running_registry=
 podman ps 2>/dev/null | grep -q registry && has_running_registry=1

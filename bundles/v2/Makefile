@@ -94,6 +94,9 @@ clean:
 ifeq ($(VER),)
 	@echo "Cleaning all bundle build markers in $(WORK_DIR)/ ..."
 	find $(WORK_DIR)/ -name '.done-*' -delete 2>/dev/null || true
+	@echo "Removing installed CLI tools and ABA state ..."
+	rm -vf $(HOME)/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
+	rm -rf $(HOME)/.aba
 else
 	rm -f $(M)/.done-*
 endif

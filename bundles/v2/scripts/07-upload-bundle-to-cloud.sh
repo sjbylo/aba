@@ -5,6 +5,11 @@ set -x
 
 source "$(cd "$(dirname "$0")/.." && pwd)/common.sh"
 
+# Ensure internet is down for disconnected testing. On re-runs, go.sh puts
+# internet UP to fetch OCP versions, and Make skips step 05 (already done),
+# so the internet would stay UP without this guard.
+int_down
+
 cd "$WORK_TEST_INSTALL/aba"
 
 # Assemble the final test log from per-phase results
