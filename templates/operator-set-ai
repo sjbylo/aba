@@ -3,12 +3,16 @@
 
 rhods-operator
 authorino-operator
-serverless-operator
+gpu-operator-certified
+nfd
 
 # Mesh v2 operators are also needed
 kiali-ossm
-jaeger-product
-servicemeshoperator
+servicemeshoperator3
+
+# Red Hat Connectivity Link
+rhcl-operator
 
 # Required for OSUS
 cincinnati-operator
+
