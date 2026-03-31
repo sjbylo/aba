@@ -19,9 +19,7 @@ kind: OperatorGroup
 metadata:
   name: rhacs-operator-group
   namespace: $NS
-spec:
-  targetNamespaces:
-  - $NS
+spec: {}
 ---
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
