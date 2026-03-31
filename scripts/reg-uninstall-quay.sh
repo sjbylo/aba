@@ -24,6 +24,11 @@ if ask "Uninstall Quay mirror registry on localhost, installed at $REG_HOST:$REG
 
 	ensure_quay_registry
 
+	# Check for existing "ansible_runner_instance" container
+	podman ps -a | grep -q quay.io.*ansible_runner_instance && \
+		aba_info "Removing stale ansible_runner_instance ..." && \
+		podman stop ansible_runner_instance && podman rm ansible_runner_instance
+
 	cmd="./mirror-registry uninstall -v --autoApprove $REG_ROOT_OPTS"
 
 	aba_info "Running command: $cmd"
