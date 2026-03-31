@@ -135,6 +135,8 @@ aba_info "Accessing the cluster ..."
 
 oc whoami || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
+warn_if_cluster_unstable
+
 oc apply -f 99-master-chrony-conf-override.yaml
 oc apply -f 99-worker-chrony-conf-override.yaml
 
