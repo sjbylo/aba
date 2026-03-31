@@ -74,5 +74,28 @@ int_down() {
 		fi
 	fi
 	unset http_proxy https_proxy no_proxy
+
+	# Pasta (rootless podman ≥5.x on RHEL 9) needs a default route to handle
+	# hairpin connections (host connecting to its own FQDN/IP).  Without one,
+	# mirror-registry's Ansible health-check gets "Connection reset by peer".
+	# A device-only route suffices; pasta only checks the route exists.
+	# Always replace (not conditional) -- DHCP may remove a snapshot-inherited
+	# default route after we check, causing a race condition.
+	local candidate_iface
+	candidate_iface=$(ip -o link show up | \
+		awk -F': ' '{print $2}' | cut -d@ -f1 | \
+		grep -Ev '^(lo|docker|podman|cni|virbr|br-|veth|tun|tap|zt|wg|flannel|cilium|kube|ovs|vnet|vmnet|dummy|sit|ip6tnl|gre)' | \
+		grep -v '\.' | \
+		while read -r _iface; do
+			if ip -4 addr show dev "$_iface" scope global | grep -q "inet "; then
+				echo "$_iface"
+				break
+			fi
+		done)
+	if [ -n "$candidate_iface" ]; then
+		sudo ip route replace default dev "$candidate_iface" \
+			&& echo "Default route: dev $candidate_iface (pasta hairpin)"
+	fi
+
 	echo "Environment cleaned."
 }
