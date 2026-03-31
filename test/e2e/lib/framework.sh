@@ -762,10 +762,10 @@ _interactive_prompt() {
             printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
             read -r ans </dev/tty
         else
-            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (20m timeout): ")"
-            if ! read -t 1200 -r ans </dev/tty; then
+            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (24h timeout): ")"
+            if ! read -t 86400 -r ans </dev/tty; then
                 rm -f "$_paused_file"
-                _e2e_log_and_print "  >> $(_e2e_red "No input for 20 mins -- auto-aborting suite")"
+                _e2e_log_and_print "  >> $(_e2e_red "No input for 24 hours -- auto-aborting suite")"
                 e2e_cleanup_clusters
                 e2e_cleanup_mirrors
                 exit 1
