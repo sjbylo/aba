@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Bug Fixes
+- **Pasta hairpin fix for rootless Podman 5.x** - `int_down()` now unconditionally adds a device-only default route so `pasta` networking can handle hairpin connections (host connecting to its own FQDN/IP). Fixes "Connection reset by peer" during mirror-registry install on RHEL 9 with rootless Podman.
+- **CLI download retry in bundle creation** - `scripts/make-bundle.sh` now retries CLI binary downloads (3 attempts, 30s backoff) to handle transient network failures during `aba bundle`.
+- **OSUS operator install resilience** - `day2-config-osus.sh` now waits for MCO rolling updates to complete before creating the OSUS subscription, preventing OLM unpack job failures due to node instability. Includes automatic retry on subscription timeout, pre-flight cleanup of stale subscriptions, and skips the MCO wait entirely on re-run when OSUS is already installed.
+
+### E2E Testing
+- **Refactored `run.sh` deploy tarball** - Consolidated three duplicate `tar` commands into `_make_source_tar()`, ensuring `test/lib.sh` is always deployed to conN hosts (including with `--dev`).
+- **Fixed `--pool N` vs `--pools N` semantics** - `--pool N` now targets a single specific pool for all operations (deploy, detect, dispatch); `--pools N` sets the range 1..N. Previously `--pool N` behaved like `--pools N`.
+- **Fixed suite completion detection** - `_detect_running_and_completed` now only considers completed results from the target pool when `--pool N` is set, preventing stale results on other pools from blocking dispatch.
+- **Bundle maker test hardening** - Removed subshell pattern that silently swallowed test script failures; now relies on `set -e` for immediate abort. Cluster VMs left alive on failure for debugging.
+- **ODF StorageCluster timeout** - Increased from 600s to 1800s (30 min) in `test-odf.sh` to accommodate Ceph OSD self-healing during MCO rolling reboots. Outer per-module timeout raised to 2700s (45 min).
+- **Banner timing** - `echo_step` in `bundle-test-lib.sh` now shows wall clock time and elapsed since last banner (e.g. `(17:38:45 / 2m10s)`).
+- **Log collection fix** - `_collect_pool_logs` no longer prints errors when `~/.e2e-harness/logs/` doesn't exist on disN; logs separated into per-pool subdirectories.
+
 ---
 
 ## [0.9.8] - 2026-03-29
