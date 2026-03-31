@@ -1,5 +1,33 @@
 # ABA Backlog
 
+## Bug: bare `sudo` in SSH commands should use `$SUDO` or detect availability
+
+**Discovered:** While fixing the mirror-sync E2E BM delete regression (Mar 31).
+
+### Problem
+
+`reg-uninstall.sh` line 127 uses bare `sudo` inside an SSH command:
+```bash
+$_ssh "podman rm -f registry; sudo rm -rf $reg_root" || true
+```
+
+The remote host may not have `sudo` installed (e.g. inside a container or minimal image). ABA already defines `$SUDO` in `include_all.sh` (set to `sudo` if available, empty otherwise), but this doesn't help for SSH commands since `$SUDO` is expanded locally.
+
+`reg-uninstall-remote.sh` line 81-82 has the same issue -- `$SUDO` is expanded locally before being sent over SSH.
+
+### Proposed fix
+
+Detect `sudo` availability on the remote host before using it in SSH commands. For example:
+```bash
+_remote_sudo=$($_ssh "which sudo 2>/dev/null && echo sudo")
+$_ssh "podman rm -f registry; $_remote_sudo rm -rf $reg_root" || true
+```
+
+### References
+- `scripts/include_all.sh` lines 13-15: local `$SUDO` detection
+- `scripts/reg-uninstall.sh` line 127: bare `sudo` in SSH
+- `scripts/reg-uninstall-remote.sh` line 81-82: `$SUDO` expanded locally before SSH
+
 ## Bug: CLI flags silently ignored via `aba cluster` when cluster.conf exists
 
 **Discovered:** While investigating the `connected-public` E2E regression (commit `9b3ca98`, Mar 29). The E2E test was fixed by restoring `rm -rf` for mid-suite cleanups, but the underlying ABA core bug remains.

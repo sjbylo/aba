@@ -130,6 +130,10 @@ do
 
 	# Run save command (v2 requires extra error checks)
 	# v2 will return zero even if some images failed to mirror
+	# Remove stale error files before each attempt. Save, load, and sync all
+	# share data/working-dir/logs/, so a leftover file from a previous load
+	# (or failed save) would cause a false failure detection after this run.
+	rm -f data/working-dir/logs/mirroring_errors_*.txt
 	aba_debug "Running save-mirror.sh"
 	./save-mirror.sh
 	ret=$?
