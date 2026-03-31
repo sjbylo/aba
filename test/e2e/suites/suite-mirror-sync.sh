@@ -375,9 +375,13 @@ e2e_run "Uninstall mirror registry on disN" \
     "aba --dir mirror uninstall"
 e2e_run_remote "Remove my-quay-mirror-test1 on disN" \
     "rm -rf ~/my-quay-mirror-test1"
+e2e_run "Remove my-quay-mirror-test1 on conN" \
+    "rm -rf ~/my-quay-mirror-test1"
 e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run_remote "Verify no leftover mirror data dirs on disN" \
+    "test ! -d ~/mymirror-data && test ! -d ~/my-quay-mirror-test1"
+e2e_run "Verify no leftover mirror data dirs on conN" \
     "test ! -d ~/mymirror-data && test ! -d ~/my-quay-mirror-test1"
 
 test_end
