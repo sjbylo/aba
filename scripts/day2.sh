@@ -50,6 +50,8 @@ if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	fi
 fi
 
+warn_if_cluster_unstable
+
 aba_info "What this 'day2' script does:"
 aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
 aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
