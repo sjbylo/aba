@@ -1353,8 +1353,15 @@ echo "  Suites: ${suites_to_run[*]}"
 echo "  Pools: $CLI_POOLS"
 echo ""
 
+# --pool N checks only that pool; --pools N checks 1..N
 _need_infra=""
-for (( i=1; i<=CLI_POOLS; i++ )); do
+if [ -n "$CLI_POOL" ]; then
+	_check_pools=("$CLI_POOL")
+else
+	_check_pools=()
+	for (( _cp=1; _cp<=CLI_POOLS; _cp++ )); do _check_pools+=("$_cp"); done
+fi
+for i in "${_check_pools[@]}"; do
 	if [ -n "$CLI_RECREATE_VMS" ]; then
 		echo "  Pool $i: will be recreated (--recreate-vms)"
 		_need_infra=1
@@ -1380,7 +1387,7 @@ fi
 if [ -n "$CLI_REVERT" ]; then
 	echo ""
 	echo "  Reverting pool VMs to pool-ready snapshot ..."
-	for (( i=1; i<=CLI_POOLS; i++ )); do
+	for i in "${_check_pools[@]}"; do
 		for prefix in con dis; do
 			vm="${prefix}${i}"
 			if govc snapshot.tree -vm "$vm" 2>&1 | grep -q "pool-ready"; then
@@ -1395,7 +1402,7 @@ if [ -n "$CLI_REVERT" ]; then
 
 	echo "  Waiting for conN SSH readiness ..."
 	_user="${CON_SSH_USER:-steve}"
-	for (( i=1; i<=CLI_POOLS; i++ )); do
+	for i in "${_check_pools[@]}"; do
 		_host="con${i}.${VM_BASE_DOMAIN}"
 		_elapsed=0
 		while [ $_elapsed -lt 120 ]; do
@@ -1427,9 +1434,17 @@ if [ -n "$_notify_cmd" ] && ! [ -x "$_notify_cmd" ]; then
 	exit 1
 fi
 
+# --pool N targets a single pool; otherwise deploy to pools 1..CLI_POOLS
+if [ -n "$CLI_POOL" ]; then
+	_run_deploy_list=("$CLI_POOL")
+else
+	_run_deploy_list=()
+	for (( _rdp=1; _rdp<=CLI_POOLS; _rdp++ )); do _run_deploy_list+=("$_rdp"); done
+fi
+
 echo ""
 echo "  Deploying test harness to conN hosts ..."
-for (( i=1; i<=CLI_POOLS; i++ )); do
+for i in "${_run_deploy_list[@]}"; do
 	user="${CON_SSH_USER:-steve}"
 	host="con${i}.${VM_BASE_DOMAIN}"
 	target="${user}@${host}"
@@ -1462,7 +1477,7 @@ if [ -n "$CLI_DEV" ]; then
 	_deploy_tar=$(_make_source_tar)
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Source tarball: $_deploy_size"
-	for (( i=1; i<=CLI_POOLS; i++ )); do
+	for i in "${_run_deploy_list[@]}"; do
 		user="${CON_SSH_USER:-steve}"
 		host="con${i}.${VM_BASE_DOMAIN}"
 		target="${user}@${host}"
@@ -1587,22 +1602,23 @@ _check_pool() {
 # --- Find a free pool (no active suite) ---------------------------------------
 
 _find_free_pool() {
-	# Dynamic ceiling: use the larger of CLI_POOLS and pools.conf count so
-	# pools that come online after startup are discovered automatically.
-	local _max_pools
-	_max_pools=$(_pool_count_from_conf)
-	[ "$CLI_POOLS" -gt "$_max_pools" ] 2>/dev/null && _max_pools="$CLI_POOLS"
-	for (( p=1; p<=_max_pools; p++ )); do
+	# --pool N: only consider that specific pool (user wants to target it)
+	# --pools N: consider pools 1..N (or higher from pools.conf)
+	local _start=1 _max_pools
+	if [ -n "${CLI_POOL:-}" ]; then
+		_start="$CLI_POOL"
+		_max_pools="$CLI_POOL"
+	else
+		_max_pools=$(_pool_count_from_conf)
+		[ "$CLI_POOLS" -gt "$_max_pools" ] 2>/dev/null && _max_pools="$CLI_POOLS"
+	fi
+	for (( p=_start; p<=_max_pools; p++ )); do
 		if [ -z "${_busy_pools[$p]:-}" ]; then
-			# Fast reachability probe (5s) -- skip unreachable pools instead of
-			# letting _dispatch_suite burn ~2 min on SSH timeouts per attempt.
 			local _user="${CON_SSH_USER:-steve}"
 			local _host="con${p}.${VM_BASE_DOMAIN}"
 			ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
 				-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
 				"${_user}@${_host}" "true" 2>/dev/null || continue
-			# Also check for tmux sessions the dispatcher doesn't track
-			# (e.g. manual launches via ssh + tmux new-session)
 			local _has_sess
 			_has_sess=$(_ssh_con "$p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _has_sess=""
 			[ "$_has_sess" = "yes" ] && continue
@@ -1647,11 +1663,11 @@ _collect_pool_logs() {
 	local user="${CON_SSH_USER:-steve}"
 	local con_host="con${pool_num}.${VM_BASE_DOMAIN}"
 	local dis_host="dis${pool_num}.${VM_BASE_DOMAIN}"
-	local log_dir="$_RUN_DIR/logs"
+	local log_dir="$_RUN_DIR/logs/pool${pool_num}"
 
 	mkdir -p "$log_dir"
-	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/"
-	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/"
+	scp -q -r $_SSH_OPTS "${user}@${con_host}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
+	scp -q -r $_SSH_OPTS "${user}@${dis_host}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
 }
 
 # --- Detect running and completed suites on all conN (stateless reconnect) ----
@@ -1683,8 +1699,13 @@ _detect_running_and_completed() {
 		fi
 	done
 
-	# Pass 2: detect completed suites (.rc files), skipping any that are running
+	# Pass 2: detect completed suites (.rc files), skipping any that are running.
+	# When --pool N is set, only consider completions from pool N -- results
+	# from other pools are irrelevant and should not block a new dispatch.
 	for (( p=1; p<=_max_pools; p++ )); do
+		if [ -n "${CLI_POOL:-}" ] && [ "$p" != "$CLI_POOL" ]; then
+			continue
+		fi
 		local rc_files
 		rc_files=$(_ssh_con "$p" "ls ${_RC_PREFIX}-*.rc 2>/dev/null" 2>/dev/null) || rc_files=""
 		if [ -n "$rc_files" ]; then
