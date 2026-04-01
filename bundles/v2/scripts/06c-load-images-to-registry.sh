@@ -5,6 +5,11 @@ set -x
 
 source "$(cd "$(dirname "$0")/.." && pwd)/common.sh"
 
+# Ensure internet is down for disconnected testing. On re-runs, go.sh puts
+# internet UP to fetch OCP versions, and Make skips step 05 (already done),
+# so the internet would stay UP without this guard.
+int_down
+
 cd "$WORK_TEST_INSTALL/aba"
 
 echo_step "Load images into Quay ..."
@@ -31,9 +36,10 @@ curl -sk "https://$TEST_HOST:8443/v2/" >/dev/null || { echo "ERROR: Registry at 
 
 # Verify all CLI files can install and are executable
 scripts/cli-install-all.sh --wait
-for cmd in butane govc kubectl oc oc-mirror openshift-install
+for cmd in butane govc kubectl oc openshift-install
 do
-	~/bin/$cmd version >/dev/null 2>&1 || ~/bin/$cmd --help >/dev/null 2>&1 || { echo "~/bin/$cmd cannot execute!"; exit 1; }
+	~/bin/$cmd version >/dev/null || ~/bin/$cmd --help >/dev/null || { echo "~/bin/$cmd cannot execute!"; exit 1; }
 done
+oc-mirror --v2 --help > /dev/null
 
 echo "All images loaded (disk2mirror) into Quay: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"

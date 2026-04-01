@@ -28,6 +28,9 @@ echo
 cat aba.conf
 read -t 60 || true
 
+# Remove any partial split files from a previous failed attempt
+rm -f "$WORK_BUNDLE_DIR"/ocp_*
+
 # Use 'make tar' instead of 'aba tar' because aba re-fills the values
 # --no-print-directory prevents make's "Entering directory" messages from
 # corrupting the tar stream on stdout

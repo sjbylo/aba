@@ -315,6 +315,19 @@ normalize-aba-conf() {
 	# "true" needed, otherwise this function returns non-zero (error)
 }
 
+warn_if_cluster_unstable() {
+	local _co_unavail
+	_co_unavail=$(oc get co --no-headers 2>/dev/null | awk '$3 != "True" { printf "%s ", $1 }')
+	if [ -n "${_co_unavail% }" ]; then
+		aba_warning "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"
+	fi
+
+	if oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null \
+		| grep -q True; then
+		aba_warning "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
+	fi
+}
+
 verify-aba-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1

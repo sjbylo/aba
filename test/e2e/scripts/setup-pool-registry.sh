@@ -39,6 +39,73 @@ OP_REDHAT="cincinnati-operator"
 OP_CERTIFIED="nginx-ingress-operator"
 OP_COMMUNITY="flux"
 
+# --- Purge repos not in the ISC keep-list, then garbage-collect blobs -------
+
+# Repo prefixes that belong to the ISC (OCP release + 3 operators + catalogs).
+# Anything outside these prefixes was left behind by a previous test suite.
+KEEP_PREFIXES=(
+    "ocp4/openshift4/openshift/"
+    "ocp4/openshift4/openshift-update-service/"
+    "ocp4/openshift4/nginx/"
+    "ocp4/openshift4/fluxcd/"
+    "ocp4/openshift4/community-operator-pipeline-prod/"
+    "ocp4/openshift4/redhat/"
+    "ocp4/openshift4/brancz/"
+)
+
+pool_registry_purge_extras() {
+    local _reg="https://${1}:${REG_PORT}"
+    local _auth="${REG_USER}:${REG_PW}"
+
+    local all_repos
+    all_repos=$(curl -sk -u "$_auth" "${_reg}/v2/_catalog?n=500" 2>/dev/null \
+        | python3 -c 'import json,sys; [print(r) for r in json.load(sys.stdin).get("repositories",[])]' 2>/dev/null)
+
+    local deleted=0 kept=0
+
+    for repo in $all_repos; do
+        local skip=0
+        for prefix in "${KEEP_PREFIXES[@]}"; do
+            [[ "$repo" == "${prefix}"* ]] && { skip=1; break; }
+        done
+        [[ $skip -eq 1 ]] && { kept=$((kept + 1)); continue; }
+
+        local tags
+        tags=$(curl -sk -u "$_auth" "${_reg}/v2/${repo}/tags/list" 2>/dev/null \
+            | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tags") or []; [print(x) for x in t]' 2>/dev/null)
+        [[ -z "$tags" ]] && continue
+
+        for tag in $tags; do
+            local digest
+            digest=$(curl -skI -u "$_auth" \
+                -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+                -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+                -H "Accept: application/vnd.oci.image.index.v1+json" \
+                -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+                "${_reg}/v2/${repo}/manifests/${tag}" 2>/dev/null \
+                | grep -i docker-content-digest | awk '{print $2}' | tr -d '\r\n')
+            [[ -z "$digest" ]] && continue
+
+            local rc
+            rc=$(curl -sk -u "$_auth" -X DELETE "${_reg}/v2/${repo}/manifests/${digest}" \
+                -o /dev/null -w "%{http_code}" 2>/dev/null)
+            [[ "$rc" == "202" ]] && deleted=$((deleted + 1))
+        done
+    done
+
+    if [[ $deleted -gt 0 ]]; then
+        echo "  Purged $deleted manifest(s) from non-ISC repos ($kept repos kept)"
+        echo "  Running garbage collection (registry will restart) ..."
+        podman stop "$CONTAINER_NAME" >/dev/null
+        podman run --rm \
+            -v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
+            docker.io/library/registry:latest \
+            garbage-collect --delete-untagged /etc/distribution/config.yml >/dev/null 2>&1
+        podman start "$CONTAINER_NAME" >/dev/null
+        echo "  GC complete -- $(du -sh "${POOL_REG_DIR}/data" | awk '{print $1}') in data dir"
+    fi
+}
+
 # --- Parse arguments --------------------------------------------------------
 
 channel=""
@@ -175,6 +242,15 @@ else
     fi
 
     echo "  Docker registry installed successfully"
+fi
+
+# --- Step 1b: Purge leftover repos from previous test suites ----------------
+# Other suites (e.g. airgapped-existing-reg) load ACM, vote-app, etc. into
+# this pool registry. Without cleanup, blobs accumulate and fill the disk.
+
+if curl --retry 3 -sfk -o /dev/null -u "${REG_USER}:${REG_PW}" "https://${reg_host}:${REG_PORT}/v2/"; then
+    echo "[1b/4] Checking for leftover repos from previous test suites ..."
+    pool_registry_purge_extras "$reg_host"
 fi
 
 # --- Step 2: Merge auth (pull-secret + local registry creds) ----------------

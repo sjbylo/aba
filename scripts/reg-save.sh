@@ -130,6 +130,13 @@ do
 
 	# Run save command (v2 requires extra error checks)
 	# v2 will return zero even if some images failed to mirror
+	# Remove stale error files before each attempt. Save, load, and sync all
+	# share data/working-dir/logs/, so a leftover file from a previous load
+	# (or failed save) would cause a false failure detection after this run.
+	if ls data/working-dir/logs/mirroring_errors_*.txt >/dev/null 2>&1; then
+		aba_warning "Stale oc-mirror error files detected from a previous run -- removing"
+		rm -f data/working-dir/logs/mirroring_errors_*.txt
+	fi
 	aba_debug "Running save-mirror.sh"
 	./save-mirror.sh
 	ret=$?

@@ -176,10 +176,10 @@ _cleanup_con_quay() {
         if [ -n "$_stale_detected" ]; then
             echo "  [cleanup] Stale registry remnants detected -- brute-force cleanup"
             for _cid in $(podman ps -a -q --filter "name!=pool-registry"); do
-                podman stop "$_cid" || true
-                podman rm -f "$_cid" || true
+                podman stop "$_cid"
+                podman rm -f "$_cid"
             done
-            podman volume rm -a -f || true
+            podman volume rm -a -f
             echo "  [cleanup] Brute-force cleanup complete"
         elif [ -z "$_did_uninstall" ]; then
             echo "  [cleanup] No stale registry state detected -- nothing to clean"

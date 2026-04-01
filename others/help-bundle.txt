@@ -6,7 +6,7 @@ Usage:
     -v, --version <version>                   # OpenShift version to install (x.y.z, x.y, latest|l or previous|p).
     -o, --out /path/to/file                   # File to write install bundle to.
     -S, --pull-secret ~/.pull-secret.json     # Location of your Red Hat pull secret.
-    -P, --op-sets [<list of operator sets>]   # Provide names of sets of operators: ocp, odf, ocpv, ai etc.
+    -P, --op-sets [<list of operator sets>]   # Provide names of sets of operators: ocp, odf, virt, ai etc.
     -O, --ops [<list of operator names>]      # Provide individual operator names.
     -y, --yes                                 # Automatically accept the default answer to all prompts.
     -f, --force                               # Remove any existing files under mirror/data.
@@ -21,7 +21,7 @@ Example of fully disconnected mode (air-gapped):
 
   Create install bundle:
 
-    aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 \
+    aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp virt mesh3 \
       -O web-terminal -o /path/to/portable/media/ocp-install-bundle
 
   Transfer the generated "ocp-install-bundle.tar" file to the air-gapped env. and unpack it.

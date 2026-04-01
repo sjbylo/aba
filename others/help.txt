@@ -108,7 +108,7 @@ Examples:
 Examples of fully disconnected mode (air-gapped):
 
   Create install bundle:
-    aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp ocpv mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
+    aba bundle --force -c stable -v latest -S ~/.pull-secret.json -P ocp virt mesh3 -O web-terminal -o /path/to/portable/media/ocp-install-bundle
     # Now transfer the "ocp-install-bundle*" tar file to the air-gapped env.
 
   Extracting the bundle on internal bastion:
@@ -136,7 +136,7 @@ Examples of partially disconnected mode (e.g. via a proxy)
     aba sync -H registry.example.com --retry
 
   Configure mirror registry on the local bastion and sync the images/operators ('operator sets' & individual operators) to the mirror:
-    aba sync -H registry.example.com --op-sets ocp ocpv mesh3 --ops web-terminal --retry
+    aba sync -H registry.example.com --op-sets ocp virt mesh3 --ops web-terminal --retry
 
   Configure mirror registry on the local bastion, sync *all* operators and install Quay files into custom directory:
     aba sync -H registry.example.com --op-sets all --retry --data-dir ~/my-data-dir
@@ -145,7 +145,7 @@ Examples of partially disconnected mode (e.g. via a proxy)
     aba save --retry
 
   Save images and operators to local disk:
-    aba save --op-sets ocp ocpv mesh3 --ops web-terminal --retry
+    aba save --op-sets ocp virt mesh3 --ops web-terminal --retry
 
   Create the bundle archive:
     aba tar --out /path/to/external/media

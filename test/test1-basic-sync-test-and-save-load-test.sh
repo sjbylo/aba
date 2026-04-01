@@ -261,6 +261,7 @@ do
 	# Run only once
         test-cmd -r 0 0 -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff
 
+        test-cmd -m "Kill any existing cluster: '$cname'" "aba --dir $cname kill || true"
         test-cmd -m "Generate iso file for cluster type '$cname'" "aba --dir $cname iso"
 done
 

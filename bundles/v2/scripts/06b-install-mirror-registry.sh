@@ -5,6 +5,11 @@ set -x
 
 source "$(cd "$(dirname "$0")/.." && pwd)/common.sh"
 
+# Ensure internet is down for disconnected testing. On re-runs, go.sh puts
+# internet UP to fetch OCP versions, and Make skips step 05 (already done),
+# so the internet would stay UP without this guard.
+int_down
+
 cd "$WORK_TEST_INSTALL/aba"
 
 # Switch to the test platform
@@ -35,19 +40,8 @@ ls -lta mirror
 echo -n "Pausing: "
 read -t 60 yn || true
 
-# Pasta needs a default route to handle hairpin connections (host to own IP).
-# Without it, the ansible health check (which curls the hostname from the host
-# itself) gets "Connection reset by peer" even though external clients work fine.
-# Add a temp route via the internal gateway -- it can't reach the internet, but
-# pasta only needs it present when the pod is created.
-echo_step "Adding temporary default route for pasta hairpin ..."
-local_iface=$(ip route get $GATEWAY_IP | grep -oP 'dev \K\S+')
-sudo ip route add default via $GATEWAY_IP dev $local_iface
-
+# Pasta hairpin route is now handled by int_down() in test/lib.sh
 aba -d mirror install -H $TEST_HOST
-
-echo_step "Removing temporary default route ..."
-sudo ip route del default via $GATEWAY_IP dev $local_iface
 
 # Verify registry is actually working after install
 echo_step "Verifying registry is accessible ..."

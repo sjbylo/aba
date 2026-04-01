@@ -281,6 +281,8 @@ If you run `aba` (interactive mode), you will make use of this workflow.
 
 >> Note that ABA requires root access, either directly or via passwordless sudo. 
 
+> **Upgrading:** When upgrading ABA to a new version, backward compatibility is not guaranteed. It is recommended to start with a fresh clone of the repository rather than updating an existing installation in-place.
+
 ## Method 1: Single command
 
 Download and install ABA in one command:
@@ -300,16 +302,16 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
 # Download and install a stable release (recommended)
-wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.8.tar.gz
-tar xzf v0.9.8.tar.gz
-cd aba-0.9.8
+wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.9.tar.gz
+tar xzf v0.9.9.tar.gz
+cd aba-0.9.9
 ./install
 aba
 ```
 
 Or clone a specific release tag:
 ```bash
-git clone --branch v0.9.8 https://github.com/sjbylo/aba.git
+git clone --branch v0.9.9 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -662,7 +664,7 @@ aba bundle \
     --pull-secret "~/.pull-secret.json" \
     --channel stable \
     --version latest \
-    --op-sets ocp odf ocpv \
+    --op-sets ocp odf virt \
     --ops web-terminal devworkspace-operator \
     --base-domain example.com \
     --machine-network 10.0.0.0/20 \

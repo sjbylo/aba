@@ -138,6 +138,13 @@ do
 	###./sync-mirror.sh && failed= && break
 
 	# Run sync command (v2 requires extra error checks)
+	# Remove stale error files before each attempt. Save, load, and sync all
+	# share data/working-dir/logs/, so a leftover file from a previous save
+	# (or failed sync) would cause a false failure detection after this run.
+	if ls data/working-dir/logs/mirroring_errors_*.txt >/dev/null 2>&1; then
+		aba_warning "Stale oc-mirror error files detected from a previous run -- removing"
+		rm -f data/working-dir/logs/mirroring_errors_*.txt
+	fi
 	aba_debug "Running sync-mirror.sh"
 	./sync-mirror.sh
 	ret=$?

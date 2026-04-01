@@ -158,11 +158,11 @@ test_end 0
 # ============================================================================
 test_begin "Bundle without operator filters: create"
 
-e2e_run -q "Clean previous bundles" "rm -fv /tmp/delete-me*tar"
+e2e_run -q "Clean previous bundles" "rm -fv ~/tmp/delete-me*tar"
 
 # No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
 e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o /tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o ~/tmp/delete-me -y"
 
 test_end 0
 
@@ -171,11 +171,11 @@ test_end 0
 # ============================================================================
 test_begin "Bundle without operator filters: verify contents"
 
-e2e_run "Show tar file size" "ls -l /tmp/delete-me*tar"
-e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
-e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
+e2e_run "Show tar file size" "ls -l ~/tmp/delete-me*tar"
+e2e_run "Show tar file size (human)" "ls -lh ~/tmp/delete-me*tar"
+e2e_run "List tar contents" "tar tvf ~/tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
-    "tar tvf /tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
+    "tar tvf ~/tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
 
 test_end 0
 
@@ -244,8 +244,8 @@ test_end 0
 test_begin "Load bundle to internal bastion"
 
 e2e_run "Stream bundle to internal bastion" \
-    "cat /tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
-e2e_run -q "Clean up local bundle tarball" "rm -fv /tmp/delete-me*tar"
+    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+e2e_run -q "Clean up local bundle tarball" "rm -fv ~/tmp/delete-me*tar"
 e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
 e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
@@ -291,9 +291,10 @@ e2e_run "Verify govc tarball exists after download-all" \
 # BM two-step install runs on internal bastion (registry is there, loaded from bundle)
 e2e_run_remote "Switch to bare-metal platform on internal bastion" \
     "cd ~/aba && aba --platform bm"
-e2e_run_remote "Clean standard cluster dir" \
+e2e_run_remote "Delete any leftover $STANDARD cluster dir (bm has no VMs)" \
     "cd ~/aba && rm -rf $STANDARD"
-e2e_add_to_cluster_cleanup "$PWD/$STANDARD" remote
+# No e2e_add_to_cluster_cleanup: bm has no VMs, 'aba delete' doesn't support bm.
+# The explicit rm -rf at end of test handles cleanup.
 e2e_run_remote "Create agent configs (bare-metal)" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 -s agentconf"
 e2e_run_remote "Verify cluster.conf" "ls ~/aba/$STANDARD/cluster.conf"
@@ -317,7 +318,7 @@ e2e_run_remote "Verify ISO created" \
     "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
 # Clean up and restore platform on both sides
-e2e_run_remote -q "Remove BM cluster dir on disN (no VMs to delete, platform=bm)" \
+e2e_run_remote -q "Delete $STANDARD cluster dir (platform=bm, no VMs)" \
     "cd ~/aba && rm -rf $STANDARD"
 e2e_run_remote -q "Restore VMware platform on disN" \
     "cd ~/aba && aba --platform vmw"

@@ -36,11 +36,18 @@ curl -sfkIL google.com >/dev/null
 
 [ "$NOTIFY" ] && notify.sh "New bundle created for $BUNDLE_NAME"
 
+echo_step "Delete test cluster VMs (no longer needed -- tests passed, bundle uploaded) ..."
+
+if [ -d "$WORK_TEST_INSTALL/aba/$CLUSTER_NAME" ]; then
+	cd "$WORK_TEST_INSTALL/aba"
+	aba --dir "$CLUSTER_NAME" delete || true
+fi
+
 echo_step "Reset ..."
 
 rm -f "$V2_DIR/build.log"
 rm -rf "$WORK_DIR/aba"
-rm -rf "$WORK_BUNDLE_DIR"
+# Keep WORK_BUNDLE_DIR (build markers + logs) -- tarballs already removed by step 07
 rm -rf "$WORK_TEST_INSTALL"
 
 echo_step "Done $0"
