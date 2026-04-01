@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [0.9.9] - 2026-04-01
+
+Hardening, stability and bug fixes
+
+
 ### Improvements
 - **Graceful shutdown resilience** - Debug pod warmup timeout increased to 90s (from 30s) for slow image pulls. Warmup failure now warns and attempts shutdown via SSH fallback instead of aborting. Shutdown `oc debug` timeout increased to 60s. Compact single-line wait progress output.
 - **Day2 cluster health checks** - `day2`, `day2-osus`, and `day2-ntp` now show a one-liner warning when cluster operators or MCP are degraded/updating, replacing the blocking 30-minute MCO wait.
@@ -370,7 +377,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.8...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.9...HEAD
+[0.9.9]: https://github.com/sjbylo/aba/releases/tag/v0.9.9
 [0.9.8]: https://github.com/sjbylo/aba/releases/tag/v0.9.8
 [0.9.7]: https://github.com/sjbylo/aba/releases/tag/v0.9.7
 [0.9.6]: https://github.com/sjbylo/aba/releases/tag/v0.9.6
