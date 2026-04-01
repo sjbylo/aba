@@ -2,7 +2,7 @@
 #
 # Usage:
 #   make VER=4.18.0 NAME=release
-#   make VER=4.18.0 NAME=ocpv OP_SETS="ocp odf ocpv"
+#   make VER=4.18.0 NAME=virt OP_SETS="ocp odf virt" TESTS="odf virt mtv"
 #   make clean VER=4.18.0 NAME=release   # clean one bundle
 #   make clean                            # clean all bundles
 #   make cleanwork                        # remove large tarballs + test-install dirs
@@ -10,6 +10,7 @@
 VER      ?=
 NAME     ?=
 OP_SETS  ?=
+TESTS    ?=
 
 WORK_DIR    := $(shell bash -c 'source bundle.conf 2>/dev/null && echo $$WORK_DIR')
 
@@ -31,7 +32,7 @@ endif
 BUNDLE_NAME = $(VER)-$(NAME)
 M            = $(WORK_DIR)/$(BUNDLE_NAME)/build
 
-export VER NAME OP_SETS
+export VER NAME OP_SETS TESTS
 
 .PHONY: all clean cleanwork
 
@@ -93,12 +94,31 @@ clean:
 ifeq ($(VER),)
 	@echo "Cleaning all bundle build markers in $(WORK_DIR)/ ..."
 	find $(WORK_DIR)/ -name '.done-*' -delete 2>/dev/null || true
+	@echo "Removing installed CLI tools and ABA state ..."
+	rm -vf $(HOME)/bin/{aba,butane,govc,kubectl,oc,oc-mirror,openshift-install}
+	rm -rf $(HOME)/.aba
 else
 	rm -f $(M)/.done-*
 endif
 
 # Emergency cleanup: remove large tarballs and test-install dirs to reclaim disk space
+# Deletes test cluster VMs on vSphere before removing local dirs.
 cleanwork:
+	@echo ""
+	@echo "WARNING: This will remove test-install dirs from $(WORK_DIR)/"
+	@echo "         If test cluster VMs are still running on vSphere, they will be deleted first."
+	@echo ""
+	@read -p "Continue? (Y/n): " ans; \
+	case "$$ans" in [nN]*) echo "Aborted."; exit 1;; esac
+	@cluster_name=$$(bash -c 'source bundle.conf 2>/dev/null && echo $$CLUSTER_NAME'); \
+	if [ -n "$$cluster_name" ]; then \
+		for d in $(WORK_DIR)/test-install-*/aba; do \
+			if [ -d "$$d/$$cluster_name" ]; then \
+				echo "Deleting test cluster VMs: $$d/$$cluster_name"; \
+				(cd "$$d" && aba --dir "$$cluster_name" delete) || true; \
+			fi; \
+		done; \
+	fi
 	@echo "Removing ocp_* tarballs and test-install-* dirs from $(WORK_DIR)/ ..."
 	find $(WORK_DIR)/ -maxdepth 2 -name 'ocp_*' -type f -delete 2>/dev/null || true
 	find $(WORK_DIR)/ -maxdepth 1 -name 'test-install-*' -type d -exec rm -rf {} + 2>/dev/null || true

@@ -28,8 +28,8 @@ uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/data/imageset-config
 uncomment_line registry.redhat.io/rhel9/support-tools	mirror/data/imageset-config.yaml
 uncomment_line quay.io/openshifttest/hello-openshift	mirror/data/imageset-config.yaml
 uncomment_line registry.redhat.io/ubi9/ubi		mirror/data/imageset-config.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
-[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
+[ "$NAME" = "virt" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
+[ "$NAME" = "virt" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
 
 echo_step "Show image set config file ..."
 

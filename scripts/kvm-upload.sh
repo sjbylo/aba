@@ -28,9 +28,9 @@ aba_info "Uploading image ${iso_src} to ${KVM_HOST}:${iso_dest}"
 
 # Remove existing ISO if present: libvirt changes ownership to qemu:qemu 0600
 # when attached to a VM, preventing non-root users from overwriting via SCP.
-ssh -o StrictHostKeyChecking=no "${KVM_HOST}" "sudo rm -f '${iso_dest}'" 2>/dev/null || true
+ssh -F ~/.aba/ssh.conf "${KVM_HOST}" "sudo rm -f '${iso_dest}'" 2>/dev/null || true
 
-if ! scp -o StrictHostKeyChecking=no "$iso_src" "${KVM_HOST}:${iso_dest}"; then
+if ! scp -F ~/.aba/ssh.conf "$iso_src" "${KVM_HOST}:${iso_dest}"; then
 	echo_red "ISO file failed to upload to KVM host!"
 	exit 1
 fi

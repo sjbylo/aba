@@ -6,7 +6,7 @@ Content:
 
   "base"  - all files needed to install just OpenShift, no Operators included.
   "ocp"   - all files needed to install OpenShift and some useful Operators.
-  "ocpv"  - OpenShift and Operators for OpenShift Virtualization.
+  "virt"  - OpenShift and Operators for OpenShift Virtualization.
   "ai"    - OpenShift and Operators for OpenShift AI.
   "opp"   - OpenShift and Operators for ACM, ACS and ODF.
   "mesh3" - OpenShift and Operators for Service Mesh v3.

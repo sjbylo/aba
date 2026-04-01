@@ -32,10 +32,114 @@ NAME=osus
 NAMESPACE=openshift-update-service
 
 #####################
+# Debug log for post-mortem analysis of OSUS subscription failures.
+# Captures MCP, node, catalog, and subscription state on every poll iteration
+# so we have a full timeline if something goes wrong.
+_OSUS_LOG="$HOME/.aba/logs/.day2-osus.log"
+mkdir -p "$(dirname "$_OSUS_LOG")"
+: > "$_OSUS_LOG"
+aba_info "OSUS debug log: $_OSUS_LOG"
+
+# Logs cluster state to the debug file. Called every poll iteration for a full timeline.
+_osus_log() {
+	{
+		echo "--- $(date) ---"
+		echo "MCP status:"
+		oc get mcp
+		echo "Node status:"
+		oc get nodes
+		echo "CatalogSource status:"
+		oc get catalogsource -n openshift-marketplace
+		echo "Subscription status:"
+		oc get sub -n $NAMESPACE update-service-subscription -o yaml || echo "(not found)"
+		echo "Failed jobs in openshift-marketplace:"
+		oc get jobs -n openshift-marketplace --field-selector=status.successful=0 || echo "(none)"
+		echo ""
+	} >> "$_OSUS_LOG" 2>&1
+}
+
+# Deletes the OSUS subscription and any failed OLM unpack jobs so we can start fresh.
+# OLM does not auto-retry after a failed unpack job -- the job must be deleted first.
+_osus_cleanup_sub() {
+	oc delete sub update-service-subscription -n $NAMESPACE 2>&1 || true
+	oc delete jobs --field-selector=status.successful=0 -n openshift-marketplace 2>&1 || true
+}
+
+# Creates the OSUS namespace, operatorgroup, and subscription.
+_osus_apply_sub() {
+	oc apply -f - <<END
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $NAMESPACE
+  annotations:
+    openshift.io/node-selector: ""
+  labels:
+    openshift.io/cluster-monitoring: "true"
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: update-service-operator-group
+  namespace: $NAMESPACE
+spec:
+  targetNamespaces:
+  - $NAMESPACE
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: update-service-subscription
+  namespace: $NAMESPACE
+spec:
+  channel: v1
+  installPlanApproval: "Automatic"
+  source: "redhat-operators"
+  sourceNamespace: "openshift-marketplace"
+  name: "cincinnati-operator"
+END
+}
+
+# Waits up to ~10 minutes for the subscription to produce an installed CSV
+# with phase Succeeded. Logs cluster state to $_OSUS_LOG on every iteration.
+# Returns 0 on success, 1 on timeout.
+_osus_wait_for_csv() {
+	local csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
+	CSV=$(eval $csv_cmd) || true
+	local retries=0
+	until [ "$CSV" ]; do
+		echo -n .
+		sleep 10
+		_osus_log
+		CSV=$(eval $csv_cmd) || true
+		retries=$((retries + 1))
+		if [ $retries -ge 60 ]; then
+			return 1
+		fi
+	done
+
+	retries=0
+	while ! oc get csv -n $NAMESPACE $CSV -o jsonpath='{.status.phase}' | grep -q Succeeded; do
+		echo -n .
+		sleep 10
+		_osus_log
+		retries=$((retries + 1))
+		if [ $retries -ge 60 ]; then
+			return 1
+		fi
+	done
+
+	return 0
+}
+
+#####################
 aba_info "Accessing the cluster ..."
 
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 ! oc whoami && aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
+
+warn_if_cluster_unstable
 
 #####################
 if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
@@ -85,59 +189,56 @@ else
 fi
 
 #####################
-aba_info "Provisioning OpenShift Update Service Operator ..."
-
-oc apply -f - <<END
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: $NAMESPACE
-  annotations:
-    openshift.io/node-selector: ""
-  labels:
-    openshift.io/cluster-monitoring: "true"
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: update-service-operator-group
-  namespace: $NAMESPACE
-spec:
-  targetNamespaces:
-  - $NAMESPACE
-  upgradeStrategy: Default
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: update-service-subscription
-  namespace: $NAMESPACE
-spec:
-  channel: v1
-  installPlanApproval: "Automatic"
-  source: "redhat-operators"
-  sourceNamespace: "openshift-marketplace"
-  name: "cincinnati-operator"
-END
+# Pre-flight: if the OSUS operator is already installed and healthy, skip to deployment.
+# If the subscription exists but is not healthy/complete (previous failed attempt, stuck,
+# etc.), clean up so we can start fresh. This makes the script safely re-runnable.
+_osus_installed=
+_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' 2>&1 || true)
+if [ "$_existing_csv" ]; then
+	_csv_phase=$(oc get csv "$_existing_csv" -n $NAMESPACE -o jsonpath='{.status.phase}' 2>&1 || true)
+	if [ "$_csv_phase" = "Succeeded" ]; then
+		aba_info "OSUS operator already installed ($_existing_csv) -- skipping to deployment"
+		_osus_installed=1
+	else
+		aba_info "OSUS subscription not healthy/complete (CSV=$_existing_csv, phase=$_csv_phase) -- cleaning up"
+		_osus_log
+		_osus_cleanup_sub
+	fi
+elif oc get sub update-service-subscription -n $NAMESPACE >/dev/null 2>&1; then
+	# Subscription exists but has no installedCSV at all (stuck/failed)
+	aba_info "OSUS subscription exists but has no installedCSV -- cleaning up"
+	_osus_log
+	_osus_cleanup_sub
+fi
 
 #####################
-aba_info "Waiting for operator to be installed (this can take up to 3 minutes)..."
+if [ -z "$_osus_installed" ]; then
+	aba_info "Provisioning OpenShift Update Service Operator ..."
+	_osus_log
+	_osus_apply_sub
 
-csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
-CSV=$(eval $csv_cmd)
-until [ "$CSV" ]
-do
-	echo -n .
-	sleep 10
-	CSV=$(oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}')
-	CSV=$(eval $csv_cmd)
-done
+	aba_info "Waiting for operator to be installed (this can take up to 10 minutes)..."
 
-while ! oc get csv -n $NAMESPACE $CSV -o jsonpath='{.status.phase}' | grep Succeeded 
-do
-	echo -n .
-	sleep 10
-done
+	if ! _osus_wait_for_csv; then
+		# First attempt timed out. Clean up and retry once.
+		echo
+		echo_yellow "[ABA] OSUS operator subscription did not complete in time. Retrying ... Hit Ctrl-C to stop."
+		_osus_log
+		_osus_cleanup_sub
+		sleep 30
+		_osus_apply_sub
+
+		aba_info "Waiting for operator to be installed (retry, up to 10 more minutes)..."
+		_osus_log
+
+		if ! _osus_wait_for_csv; then
+			_osus_log
+			aba_abort "Timed out waiting for OSUS operator (retry exhausted)." \
+				"See $_OSUS_LOG for cluster state during the wait."
+		fi
+	fi
+	echo
+fi
 
 #####################
 aba_info "Deploying OpenShift Update Service ..."
@@ -183,4 +284,3 @@ oc patch clusterversion version -p $PATCH --type merge
 
 aba_info_ok "Update Service configuration completed successfully!"
 aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."
-

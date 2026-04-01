@@ -289,6 +289,8 @@ e2e_run "Verify state.sh is gone" \
 e2e_run "Uninstall with missing state (fallback path)" \
 	"aba -y -d $_DOCKER_MIRROR uninstall"
 
+e2e_run "Remove local $_DOCKER_MIRROR dir" "rm -rf $_DOCKER_MIRROR"
+
 e2e_run "Registry container gone after stateless uninstall" \
 	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
 
@@ -300,8 +302,10 @@ e2e_run "Data directory removed" \
 e2e_run "Pre-clean: remove stale iptables rules for port $_DOCKER_NEG_PORT on disN" \
 	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"
 
-e2e_run "Pre-clean: remove stale registry on disN" \
-	"_essh $DIS_HOST 'podman rm -f registry || true; rm -rf ~/docker-reg; true'"
+# If a registry container still exists here, the previous test (Test C: uninstall
+# with missing state) has a bug -- it should have cleaned it up.  Verify, don't sweep.
+e2e_run "Verify no stale registry container on disN before Test B" \
+	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
 e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"
@@ -330,13 +334,20 @@ e2e_run "Verify now succeeds after unblocking" \
 e2e_run "Uninstall neg-test registry" \
 	"aba -y -d $_DOCKER_NEG_MIRROR uninstall"
 
+e2e_run "Remove local $_DOCKER_NEG_MIRROR dir" "rm -rf $_DOCKER_NEG_MIRROR"
+
 # --- Cleanup ---------------------------------------------------------------
 
-e2e_run "Remove test mirror dirs" \
-	"rm -rf $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR"
+e2e_run "Clean leftover mirror dirs (uninstall + remove if exist)" \
+	"for d in $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR; do
+		if [ -d \$d ]; then aba -y -d \$d uninstall && rm -rf \$d; fi
+	done"
 
-e2e_run "Remove leftover data dirs on disN" \
-	"_essh $DIS_HOST 'rm -rf ~/docker-reg'"
+e2e_run "Verify docker-reg removed on disN" \
+	"_essh $DIS_HOST 'test ! -d ~/docker-reg'"
+
+e2e_run "Verify local mirror dirs removed on conN" \
+	"test ! -d $_DOCKER_MIRROR && test ! -d $_DOCKER_NEG_MIRROR"
 
 e2e_run "Remove all iptables rules for port $_DOCKER_NEG_PORT on disN" \
 	"_essh $DIS_HOST 'while sudo iptables -D INPUT -p tcp --dport $_DOCKER_NEG_PORT -j REJECT; do :; done; true'"

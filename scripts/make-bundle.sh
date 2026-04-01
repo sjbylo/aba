@@ -10,6 +10,22 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Wait for all CLI tarballs with retry-on-failure.
+# run_once caches failures, so a bare --wait after a transient network error
+# returns the stale error instantly.  Reset + backoff lets curl re-attempt.
+_wait_for_cli_downloads() {
+	local _max=3
+	for (( _try=1; _try<=_max; _try++ )); do
+		if scripts/cli-download-all.sh --wait >&2; then
+			return 0
+		fi
+		[ $_try -lt $_max ] || { aba_info "CLI download failed after $_max attempts." >&2; return 1; }
+		aba_info "CLI download failed (attempt $_try/$_max), resetting and retrying in 30s ..." >&2
+		scripts/cli-download-all.sh --reset >&2
+		sleep 30
+	done
+}
+
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -160,10 +176,14 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "Stdout mode: streaming tar bundle to stdout"
 	aba_info "Downloading binary data." >&2  # Must use stderr channel here
 
-	# FIXME - is this needed since make save will do this - make -s -C cli download        >&2 	|| exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
 	aba_debug "Calling: make -s -C mirror save retry=7"
-	make -s -C mirror save retry=7 >&2 	|| exit 1  # Add this here since if there is issue (e.g. op. index failed to d/l) should stop.
+	make -s -C mirror save retry=7 >&2 	|| exit 1
 	aba_debug "Mirror save completed successfully"
+
+	aba_info "Ensuring all CLI installation files are downloaded..." >&2
+	aba_debug "Waiting for all CLI tarball downloads to complete"
+	_wait_for_cli_downloads || exit 1
+	aba_debug "All CLI tarballs downloaded"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
 	aba_debug "Calling: make -s tar out=-"
@@ -202,10 +222,9 @@ if [ "$light_bundle" ]; then
 	make -C mirror save retry=7				# Pull required release (and possibly operator) images.  Retry on failure. 
 	aba_debug "Mirror save completed"
 	
-	# Ensure all CLI tarballs are downloaded before creating bundle tar file
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
-	scripts/cli-download-all.sh --wait
+	_wait_for_cli_downloads || exit 1
 	aba_debug "All CLI tarballs downloaded"
 	
 	aba_info "Creating *light* install bundle archive ..."
@@ -245,10 +264,9 @@ else
 	make -C mirror save retry=7		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
 	
-	# Ensure all CLI tarballs are downloaded before creating bundle tar file
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
-	scripts/cli-download-all.sh --wait
+	_wait_for_cli_downloads || exit 1
 	aba_debug "All CLI tarballs downloaded"
 	
 	aba_info "Creating install bundle archive ..."

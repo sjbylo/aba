@@ -46,7 +46,7 @@ arr_op_sets+=(" ");			arr_name+=(base); 	arr_tests+=();
 arr_op_sets+=("ocp");			arr_name+=(ocp);	arr_tests+=(ocp);
 arr_op_sets+=("ocp mesh3");		arr_name+=(mesh3);	arr_tests+=(ocp mesh3);
 arr_op_sets+=("ocp odf sec acm");	arr_name+=(opp);	arr_tests+=(odf acm acs);
-arr_op_sets+=("ocp odf ocpv");		arr_name+=(ocpv);	arr_tests+=(odf virt);
+arr_op_sets+=("ocp odf virt");		arr_name+=(virt);	arr_tests+=(odf virt);
 arr_op_sets+=("ocp sec");		arr_name+=(sec);	arr_tests+=(acs);
 arr_op_sets+=("ocp gpu ai"); 		arr_name+=(ai);		arr_tests+=(ai);
 
