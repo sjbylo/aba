@@ -1,11 +1,25 @@
 ## [Unreleased]
 
+### Improvements
+- **Graceful shutdown resilience** - Debug pod warmup timeout increased to 90s (from 30s) for slow image pulls. Warmup failure now warns and attempts shutdown via SSH fallback instead of aborting. Shutdown `oc debug` timeout increased to 60s. Compact single-line wait progress output.
+- **Day2 cluster health checks** - `day2`, `day2-osus`, and `day2-ntp` now show a one-liner warning when cluster operators or MCP are degraded/updating, replacing the blocking 30-minute MCO wait.
+- **Updated `operator-set-ai`** - Replaced `serverless-operator` with `gpu-operator-certified` and `nfd`. Updated mesh from v2 to v3 (`servicemeshoperator3`). Added `rhcl-operator` (Red Hat Connectivity Link).
+- **Renamed `operator-set-ocpv` → `operator-set-virt`** - Consistent naming for the virtualization operator set.
+- **Consistent SSH config** - All `ssh`/`scp` calls in ABA scripts now use `-F ~/.aba/ssh.conf`, eliminating noisy host-key warnings and ensuring uniform connection settings (`cluster-rescue.sh`, `kvm-upload.sh`).
+
 ### Bug Fixes
+- **False oc-mirror failure from stale error files** - Save, load, and sync share `data/working-dir/logs/`. A leftover `mirroring_errors_*.txt` from a previous operation caused the next run to report failure even when oc-mirror succeeded. Stale error files are now cleared before each oc-mirror attempt with a warning logged.
 - **Pasta hairpin fix for rootless Podman 5.x** - `int_down()` now unconditionally adds a device-only default route so `pasta` networking can handle hairpin connections (host connecting to its own FQDN/IP). Fixes "Connection reset by peer" during mirror-registry install on RHEL 9 with rootless Podman.
 - **CLI download retry in bundle creation** - `scripts/make-bundle.sh` now retries CLI binary downloads (3 attempts, 30s backoff) to handle transient network failures during `aba bundle`.
 - **OSUS operator install resilience** - `day2-config-osus.sh` now waits for MCO rolling updates to complete before creating the OSUS subscription, preventing OLM unpack job failures due to node instability. Includes automatic retry on subscription timeout, pre-flight cleanup of stale subscriptions, and skips the MCO wait entirely on re-run when OSUS is already installed.
+- **Stale Quay container on re-install** - `reg-uninstall-quay.sh` now removes leftover containers that block a fresh install.
+- **Bundle script idempotency** - `ip route add` no longer fails with "File exists" on re-run; removed unreliable `oc-mirror` executability check.
+- **v2 bundle pipeline TEMPLATES_DIR** - Fixed path that incorrectly pointed to old v1 templates. v2 templates (README, VERIFY, UNPACK) are now self-contained under `bundles/v2/templates/`.
 
 ### E2E Testing
+- **Periodic Telegram notifications** - Dispatcher now sends status updates every 10 minutes from its own in-memory state, replacing the unreliable external monitor script.
+- **Pool registry purge** - `setup-pool-registry.sh` now purges extraneous repositories from the pool registry, preventing disk exhaustion on conN hosts.
+- **Bundle suite /tmp fix** - Changed bundle tests to use `~/tmp/delete-me` instead of `/tmp/delete-me` to avoid "No space left on device" on small `/tmp` partitions.
 - **Refactored `run.sh` deploy tarball** - Consolidated three duplicate `tar` commands into `_make_source_tar()`, ensuring `test/lib.sh` is always deployed to conN hosts (including with `--dev`).
 - **Fixed `--pool N` vs `--pools N` semantics** - `--pool N` now targets a single specific pool for all operations (deploy, detect, dispatch); `--pools N` sets the range 1..N. Previously `--pool N` behaved like `--pools N`.
 - **Fixed suite completion detection** - `_detect_running_and_completed` now only considers completed results from the target pool when `--pool N` is set, preventing stale results on other pools from blocking dispatch.

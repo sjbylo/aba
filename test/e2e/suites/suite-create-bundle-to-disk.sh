@@ -158,11 +158,11 @@ test_end 0
 # ============================================================================
 test_begin "Bundle without operator filters: create"
 
-e2e_run -q "Clean previous bundles" "rm -fv /tmp/delete-me*tar"
+e2e_run -q "Clean previous bundles" "rm -fv ~/tmp/delete-me*tar"
 
 # No --op-sets, no --ops: zero operators are downloaded (only OCP release images)
 e2e_run -r 3 2 "Create bundle without operators (channel=$TEST_CHANNEL version=$ocp_version)" \
-    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o /tmp/delete-me -y"
+    "aba -f bundle --pull-secret '~/.pull-secret.json' --op-sets --ops -o ~/tmp/delete-me -y"
 
 test_end 0
 
@@ -171,11 +171,11 @@ test_end 0
 # ============================================================================
 test_begin "Bundle without operator filters: verify contents"
 
-e2e_run "Show tar file size" "ls -l /tmp/delete-me*tar"
-e2e_run "Show tar file size (human)" "ls -lh /tmp/delete-me*tar"
-e2e_run "List tar contents" "tar tvf /tmp/delete-me*tar"
+e2e_run "Show tar file size" "ls -l ~/tmp/delete-me*tar"
+e2e_run "Show tar file size (human)" "ls -lh ~/tmp/delete-me*tar"
+e2e_run "List tar contents" "tar tvf ~/tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
-    "tar tvf /tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
+    "tar tvf ~/tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
 
 test_end 0
 
@@ -244,8 +244,8 @@ test_end 0
 test_begin "Load bundle to internal bastion"
 
 e2e_run "Stream bundle to internal bastion" \
-    "cat /tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
-e2e_run -q "Clean up local bundle tarball" "rm -fv /tmp/delete-me*tar"
+    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+e2e_run -q "Clean up local bundle tarball" "rm -fv ~/tmp/delete-me*tar"
 e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
 e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
