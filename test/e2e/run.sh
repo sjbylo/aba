@@ -2038,6 +2038,44 @@ trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2
 declare -A _retried=()
 _MAX_RETRIES=2
 
+# Periodic status notification (replaces external /tmp/e2e-monitor.sh)
+_NOTIFY_STATUS_INTERVAL=600
+_last_status_notify_s=$SECONDS
+
+_notify_periodic_status() {
+	[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] || return 0
+	local _now_s=$SECONDS
+	[ $(( _now_s - _last_status_notify_s )) -ge $_NOTIFY_STATUS_INTERVAL ] || return 0
+	_last_status_notify_s=$_now_s
+
+	local _n_ok=0 _n_fail=0 _n_skip=0
+	local _notify_body=""
+	for _ns in "${!_busy_pools[@]}"; do
+		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} RUNNING
+"
+	done
+	for _ns in "${!_results[@]}"; do
+		local _nrc="${_results[$_ns]}"
+		local _np="${_result_pool[$_ns]:-?}"
+		if [ "$_nrc" -eq 0 ] 2>/dev/null; then
+			_notify_body+="  con${_np}: ${_ns} PASS
+"
+			((_n_ok++))
+		elif [ "$_nrc" -eq 3 ] 2>/dev/null; then
+			((_n_skip++))
+		else
+			_notify_body+="  con${_np}: ${_ns} FAIL(${_nrc})
+"
+			((_n_fail++))
+		fi
+	done
+	local _q_left=$(( ${#_work_queue[@]} - _queue_idx ))
+	local _hdr="[e2e $(date '+%H:%M:%S')] ${#_results[@]} done (${_n_ok}ok ${_n_fail}fail), ${#_busy_pools[@]} running"
+	[ "$_q_left" -gt 0 ] && _hdr+=", ${_q_left} queued"
+	$NOTIFY_CMD "${_hdr}
+${_notify_body}" < /dev/null >/dev/null &
+}
+
 while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 
 	# Check all busy pools for completion
@@ -2173,6 +2211,7 @@ ${_retry_list}" < /dev/null >/dev/null
 	fi
 
 	_write_dispatch_state
+	_notify_periodic_status
 
 	# Print status only when something changed
 	_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
