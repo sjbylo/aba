@@ -64,10 +64,11 @@ aba_info Start of shutdown $(date) > $logfile
 eval "$(scripts/cluster-config.sh)" 2>/dev/null || true
 
 # Preparing debug pods for graceful shutdown (pods persist for fast reuse by the actual shutdown call)
+aba_info "Warming up debug pods on all nodes (please wait, up to 90s) ..."
 declare -A warmup_pids=()
 for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
 do
-	timeout 30 $OC --request-timeout=30s debug $debug_image_flag --preserve-pod node/${node} -- chroot /host hostname &
+	timeout 90 $OC --request-timeout=60s debug $debug_image_flag --preserve-pod node/${node} -- chroot /host hostname &
 	warmup_pids[$node]=$!
 done >> $logfile 2>&1
 
@@ -105,9 +106,9 @@ for node in "${!warmup_pids[@]}"; do
 done
 
 if [ "$warmup_failed" ]; then
-	aba_abort "Debug pod warmup failed (image pull for 'oc debug' likely failed)." \
-		"Ensure 'aba day2' has been run to configure image mirroring (IDMS/ITMS)" \
-		"and that the mirror registry is accessible from the cluster nodes."
+	aba_warning "Debug pod warmup failed (image pull for 'oc debug' likely failed)." \
+		"Will attempt shutdown anyway, falling back to SSH if needed." \
+		"If this persists, ensure 'aba day2' has been run to configure image mirroring (IDMS/ITMS)."
 fi
 
 aba_info "Cluster ready for gracefull shutdown!  Sending all output to $logfile ..." | tee -a $logfile
@@ -139,7 +140,7 @@ oc_debug_failed=
 nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 
 for node in $nodes; do
-	if ! timeout 30 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1; then
+	if ! timeout 60 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1; then
 		oc_debug_failed=1
 		aba_warning "oc debug shutdown failed for $node" | tee -a $logfile
 	fi
@@ -165,19 +166,21 @@ done
 
 # Only wait if installed on VMs (VMware or KVM)
 if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
-	aba_info "Waiting for all nodes to power down ..." | tee -a $logfile
+	printf "[ABA] Waiting for VMs to power off ..." | tee -a $logfile
 	_wait_elapsed=0
 	_wait_timeout=300
 	while aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; do
 		sleep 10
 		_wait_elapsed=$((_wait_elapsed + 10))
 		if [ $_wait_elapsed -ge $_wait_timeout ]; then
+			echo "" | tee -a $logfile
 			aba_warning "Timed out after ${_wait_timeout}s waiting for VMs to power off"
 			aba ls 2>/dev/null | tee -a $logfile
 			break
 		fi
-		aba_info "Still waiting for VMs to power off (${_wait_elapsed}s) ..." | tee -a $logfile
+		printf " %ds" "$_wait_elapsed" | tee -a $logfile
 	done
+	echo "" | tee -a $logfile
 	if ! aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; then
 		aba_info_ok "All VMs powered off." | tee -a $logfile
 	fi
