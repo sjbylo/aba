@@ -640,7 +640,7 @@ e2e_add_to_cluster_cleanup() {
 	fi
 
 	local entry="$target $abs_path"
-	grep -qxF "$entry" "$_E2E_CLEANUP_FILE" || \
+	{ [ -f "$_E2E_CLEANUP_FILE" ] && grep -qxF "$entry" "$_E2E_CLEANUP_FILE"; } || \
 		echo "$entry" >> "$_E2E_CLEANUP_FILE"
 
 	_e2e_log "  Added cluster to cleanup list: $entry"
@@ -715,7 +715,7 @@ e2e_add_to_mirror_cleanup() {
 	fi
 
 	local entry="$target $abs_path"
-	grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE" || \
+	{ [ -f "$_E2E_MIRROR_CLEANUP_FILE" ] && grep -qxF "$entry" "$_E2E_MIRROR_CLEANUP_FILE"; } || \
 		echo "$entry" >> "$_E2E_MIRROR_CLEANUP_FILE"
 
 	_e2e_log "  Added mirror to cleanup list: $entry"
