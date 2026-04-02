@@ -19,17 +19,18 @@ server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{prin
 cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-zA-Z]{2,}:[0-9]{2,}' | sed "s/^api\.//g")
 server_url=${server_url}/
 
+_cluster_startup_api_up() {
+	curl --connect-timeout 10 --retry 2 -skIL "$server_url"
+}
+
 # Check for bare-metal installation (no hypervisor config)
 if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
 
 	# Quick check to see if servers are up?
-	if ! try_cmd -q 1 0 2 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
-		# If not, then wait check for longer ...
+	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url"; then
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
-
-		# Usage: try_cmd [-q] <pause> <interval> <total>
-		if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+		if ! aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up; then
 			aba_abort "Giving up waiting for the cluster endpoint to become available.  Once the servers start up, please try again!"
 		fi
 	fi
@@ -39,22 +40,25 @@ else
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
-if ! try_cmd -q 1 0 1 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url"; then
 	aba_info Waiting for cluster API endpoint to become alive at $server_url ...
-
-	# Now wait for longer...
-	if ! try_cmd -q 5 0 60 curl --connect-timeout 10 --retry 2 -skIL $server_url; then
+	if ! aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up; then
 		aba_info "Giving up waiting for the cluster endpoint to become available!"
-
 		exit 1
 	fi
 fi
 
 OC="oc --kubeconfig $PWD/iso-agent-based/auth/kubeconfig"
 
+_cluster_startup_oc_get_nodes() {
+	$OC get nodes
+}
+
 # Just to be as sure as possible we can access the cluster!
-if ! try_cmd -q 1 0 2 $OC get nodes ; then
-	try_cmd -q 3 0 40 $OC get nodes || aba_abort "Giving up waiting!"
+if ! $OC get nodes; then
+	if ! aba_wait_show "Waiting for oc get nodes" 3 120 _cluster_startup_oc_get_nodes; then
+		aba_abort "Giving up waiting!"
+	fi
 fi
 
 aba_info "Cluster endpoint accessible at $server_url"
@@ -77,12 +81,12 @@ uncordon_all_nodes() { for node in $($OC get nodes -o jsonpath='{.items[*].metad
 sleep 5 	# Sometimes need to wait to avoid uncordon errors!
 
 aba_info "Making all nodes schedulable (uncordon):"
-if ! try_cmd -q 5 0 120 uncordon_all_nodes; then
+if ! aba_wait_show "Uncordon all nodes" 5 600 uncordon_all_nodes; then
 	aba_warning "Uncordon did not fully complete after 10 minutes, continuing ..."
 fi
 
 # Wait for this command to work!
-if ! try_cmd -q 10 0 30 $OC get nodes; then
+if ! aba_wait_show "Waiting for cluster API after uncordon" 10 300 _cluster_startup_oc_get_nodes; then
 	aba_warning "Could not reach cluster API after 5 minutes, continuing ..."
 fi
 
@@ -113,9 +117,7 @@ trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_r
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
-	aba_info "Waiting for all nodes to be 'Ready' ..."
-
-	if ! try_cmd 10 0 60 all_nodes_ready; then
+	if ! aba_wait_show "Waiting for all nodes Ready (up to ~10 min)" 10 600 all_nodes_ready; then
 		aba_warning "Not all nodes are 'Ready' yet, but continuing ..."
 	fi
 fi
@@ -128,11 +130,19 @@ aba_info "Note the certificate expiration date of this cluster ($cluster_name):"
 echo_yellow $($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
 
 console=$($OC whoami --show-console)/
-if ! try_cmd -q 1 0 2 "curl -skL $console | grep 'Red Hat OpenShift'"; then
+
+_cluster_startup_console_ready() {
+	curl --retry 2 -skL "$console" | grep -q 'Red Hat OpenShift'
+}
+
+_cluster_startup_cos_ready() {
+	$OC get co --no-headers | awk '{print $3,$5}' | grep -v '^True False$' | wc -l | grep -q '^0$'
+}
+
+if ! curl -skL "$console" | grep -q 'Red Hat OpenShift'; then
 	aba_info_ok "The cluster will complete startup and become fully available shortly!"
 	aba_info "Waiting for the console to become available at $console"
-
-	if ! try_cmd -q 5 0 60 "curl --retry 2 -skL $console | grep 'Red Hat OpenShift'"; then
+	if ! aba_wait_show "Waiting for OpenShift console" 5 300 _cluster_startup_console_ready; then
 		aba_info "Giving up waiting for the console!"
 	else
 		aba_info_ok "Cluster console is accessible at $console"
@@ -141,10 +151,9 @@ else
 	aba_info_ok "Cluster console is accessible at $console"
 fi
 
-if ! try_cmd -q 1 0 2 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
+if ! _cluster_startup_cos_ready; then
 	aba_info "Waiting for all cluster operators ..."
-
-	if ! try_cmd -q 5 0 60 "$OC get co --no-headers | awk '{print \$3,\$5}' | grep -v '^True False\$' | wc -l| grep '^0$'"; then
+	if ! aba_wait_show "Waiting for all cluster operators" 5 300 _cluster_startup_cos_ready; then
 		aba_info "Giving up waiting for the operators!"
 		exit 0
 	fi
