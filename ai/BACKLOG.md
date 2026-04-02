@@ -1,5 +1,21 @@
 # ABA Backlog
 
+## URGENT: Shutdown power-off timeout and failure handling (hotfix on `main`)
+
+Increase the shutdown VM power-off timeout from 5 min to 40 min and ensure `aba_abort` on timeout (not just a warning). Fix already exists on `dev` (commits `6550923`, `2b81278`). Cherry-pick to `main`.
+
+## Enhancement: Warn when changing mirror registry identity after install
+
+When a mirror registry is installed and the user changes an "identity" field in `mirror.conf` (`reg_host`, `reg_port`, `reg_vendor`), display a warning via `ask()`:
+
+```
+Warning: Registry is installed at old-host:8443 but you're changing reg_host to X ... continue anyway (Y/n):
+```
+
+Default is **yes** so automation (`ask=false`) passes through without blocking. Non-identity fields (`reg_path`, `reg_user`, `reg_password`, operator sets, channels) remain freely editable.
+
+**Implementation:** When processing `--reg-host`, `--reg-port`, or `--reg-vendor` flags in `aba.sh` (or the underlying normalize/config scripts), compare the new value against the installed state in `~/.aba/mirror/<dir>/state.sh`. If `state.sh` exists and the value differs, fire the `ask()` warning.
+
 ## Bug: bare `sudo` in SSH commands should use `$SUDO` or detect availability
 
 **Discovered:** While fixing the mirror-sync E2E BM delete regression (Mar 31).
