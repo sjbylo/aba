@@ -23,7 +23,7 @@
 ABA_VERSION=0.9.9
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260402204855
+ABA_BUILD=20260403000725
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1030,29 +1030,34 @@ if [ "$cur_target" ]; then
 		;;
 		ls)
 			_ensure_hv_ready
+			make -s init
 			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
 			exit
 		;;
 		start)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
+			make -s init
 			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit 0
 			exit
 		;;
 		stop)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
+			make -s init
 			$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
 			exit
 		;;
 		kill|poweroff)
 			_ensure_hv_ready
+			make -s init
 			$ABA_ROOT/scripts/${HV}-kill.sh || exit 0
 			exit
 		;;
 		delete)
 			_ensure_hv_ready
-			$ABA_ROOT/scripts/${HV}-delete.sh || exit 0
+			make -s init
+			$ABA_ROOT/scripts/${HV}-delete.sh
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
 			exit
@@ -1060,6 +1065,7 @@ if [ "$cur_target" ]; then
 		refresh)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
+			make -s init
 			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
@@ -1068,6 +1074,7 @@ if [ "$cur_target" ]; then
 		;;
 		upload)
 			_ensure_hv_ready
+			make -s init
 			$ABA_ROOT/scripts/${HV}-upload.sh
 			# Sync Make stamp files: upload implies poweroff already happened.
 			touch .autopoweroff .autoupload
