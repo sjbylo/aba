@@ -1007,7 +1007,8 @@ if [ "$cur_target" ]; then
 		shutdown)
 			eval $BUILD_COMMAND
 			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh wait=$wait
-			exit
+			_shutdown_rc=$?
+			exit "$_shutdown_rc"
 		;;
 		startup)
 			$ABA_ROOT/scripts/cluster-startup.sh
