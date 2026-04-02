@@ -38,6 +38,7 @@ if [[ "$STEP_NAME" == 00-* ]]; then
   OCP Version:  $VER
   Bundle Type:  $NAME
   Operators:    ${OP_SETS:-none (release)}
+  Arch:         $(uname -m)
   Host:         $(hostname -f)
   Started:      $(date)
   Work Dir:     $WORK_BUNDLE_DIR
