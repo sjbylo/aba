@@ -44,4 +44,23 @@ for name in $hosts; do
 	virsh -c "$LIBVIRT_URI" start "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
 done
 
+# Return 0 when every VM is running (optional wait after start).
+_kvm_start_all_running() {
+	local name state
+	for name in $hosts; do
+		state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
+		[ "$state" = "running" ] || return 1
+	done
+	return 0
+}
+
+if [ "$wait" ]; then
+	_wait_mins=40
+	_wait_timeout=$(( 60 * _wait_mins ))
+	if ! aba_wait_show "Waiting for VMs to be running (max ${_wait_mins} min)" 10 "$_wait_timeout" \
+		_kvm_start_all_running; then
+		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to be running"
+	fi
+fi
+
 exit 0
