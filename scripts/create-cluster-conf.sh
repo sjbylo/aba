@@ -78,10 +78,10 @@ _missing=0
 [ ! "$port0" ]			&& export port0=ens160
 [ ! "$port1" ]			&& export port1=
 [ ! "$vlan" ]			&& export vlan=
-[ ! "$master_cpu_count" ]	&& export master_cpu_count=8
-[ ! "$master_mem" ]		&& export master_mem=16
-[ ! "$worker_cpu_count" ]	&& export worker_cpu_count=4
-[ ! "$worker_mem" ]		&& export worker_mem=8
+[ ! "$master_cpu_count" ]	&& export master_cpu_count=10
+[ ! "$master_mem" ]		&& export master_mem=20
+[ ! "$worker_cpu_count" ]	&& export worker_cpu_count=5
+[ ! "$worker_mem" ]		&& export worker_mem=10
 [ ! "$int_connection" ]		&& export int_connection=
 [ ! "$data_disk" ]		&& export data_disk=500
 
