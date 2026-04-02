@@ -122,7 +122,7 @@ done
 
 {
 	date
-	for d in /nas/redhat/aba-bundles-v2-test/4*; do
+	for d in "$CLOUD_DIR"/4*; do
 		[ -d "$d" ] && du -h -s "$d"
 	done
 	echo
