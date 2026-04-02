@@ -6,6 +6,7 @@ set -x
 source "$(cd "$(dirname "$0")/.." && pwd)/common.sh"
 
 cd "$WORK_DIR/aba"
+./install
 
 echo "Create the bundle in $WORK_BUNDLE_DIR ..."
 mkdir -p "$WORK_BUNDLE_DIR_BUILD"

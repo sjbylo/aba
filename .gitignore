@@ -86,3 +86,4 @@ mirror/regcreds.bk
 .index-backup/
 test/e2e/.config.env.deploy
 .cursor/
+ai/aba-installations-chart.html
