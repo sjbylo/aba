@@ -55,9 +55,10 @@ if [ ! "$ntp_servers" ]; then
 	[ "$ntp_servers" ] && { aba_info "Auto-detected ntp_servers=$ntp_servers"; _filled=$((_filled+1)); }
 fi
 if [ $_filled -gt 0 ]; then
-	aba_abort \
+	aba_warning \
 		"$_filled network value(s) were auto-detected and written to aba.conf." \
 		"Please review aba.conf and re-run the command."
+	exit 1
 fi
 # If auto-detection failed for any values, tell the user which ones
 _missing=0
