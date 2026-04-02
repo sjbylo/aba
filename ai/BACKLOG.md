@@ -58,6 +58,36 @@ The following changes were prototyped and can be re-applied:
 - `tui-test-lib.sh`: `TUI_CATALOG_PARALLEL` injected into tmux `start_tui()` command
 - Both default to non-intrusive values (scale=1, parallel=3)
 
+## Enhancement: Replace dot-waiting loops with `aba_wait_show`
+
+Several scripts use hand-rolled `echo -n .` + `sleep` loops for progress indication. These should be migrated to `aba_wait_show()` which provides a proper elapsed-time display (e.g. `5s 10s 15s ...`).
+
+**Known locations:**
+- `scripts/day2-config-osus.sh` line 112: CSV subscription wait (`echo -n .` + `sleep 10`, up to 60 retries)
+- `scripts/day2-config-osus.sh` line 124: CSV phase=Succeeded wait (same pattern)
+- `scripts/day2-config-osus.sh` line 276: OSUS policy engine graph URI curl check (inline `while true` with `echo -n .`)
+- Any other `echo -n .` or `printf .` patterns in `scripts/`
+
+**Also fix:** `scripts/cluster-startup.sh` curl checks were dumping raw HTTP 503 headers to stdout (fixed with `>/dev/null` -- verify this is committed).
+
+**Approach:** Extract the condition into a function, then call `aba_wait_show "description" interval timeout condition_fn`. This gives consistent UX across all wait points.
+
+## Investigate: is the oauth-proxy imagestream deletion still needed?
+
+After `aba day2` (IDMS/ITMS/CatalogSource apply), ABA patches `image.config.openshift.io/cluster` with `additionalTrustedCA` and then scans imagestreams for "Unknown authority" errors, deleting affected imagestreams (e.g. `oauth-proxy` in `openshift` namespace) so they get re-imported with the trusted CA. The deletion retries up to 15 times with increasing backoff.
+
+**Question:** Is this still necessary on modern OCP versions (4.14+)? The `additionalTrustedCA` patch should propagate to all nodes and the image registry operator should reconcile imagestreams automatically. If so, the retry loop is wasted time and noise in logs.
+
+**Action:**
+1. Understand why "Unknown authority" appears in `oauth-proxy` imagestream after mirrored install
+2. Test on a fresh 4.16+ mirrored install -- apply `additionalTrustedCA` but skip the imagestream deletion
+3. Monitor: does the imagestream fix itself once the CA propagates? How long does it take?
+4. If it self-heals within a reasonable time, remove the deletion + retry logic
+
+**References:**
+- The log output showing the retry loop (15 attempts with backoff)
+- `scripts/day2.sh` or wherever the imagestream scanning/deletion is implemented
+
 ## Bug: bare `sudo` in SSH commands should use `$SUDO` or detect availability
 
 **Discovered:** While fixing the mirror-sync E2E BM delete regression (Mar 31).

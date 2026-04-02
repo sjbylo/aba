@@ -20,7 +20,7 @@ cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-z
 server_url=${server_url}/
 
 _cluster_startup_api_up() {
-	curl --connect-timeout 10 --retry 2 -skIL "$server_url"
+	curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null
 }
 
 # Check for bare-metal installation (no hypervisor config)
@@ -28,7 +28,7 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	echo_yellow "Please power on all bare-metal servers for cluster '$cluster_name'." >&2
 
 	# Quick check to see if servers are up?
-	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url"; then
+	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 		if ! aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up; then
 			aba_abort "Giving up waiting for the cluster endpoint to become available.  Once the servers start up, please try again!"
@@ -40,7 +40,7 @@ else
 fi
 
 # Have quick check if endpoint is available (cluster may already be running)
-if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url"; then
+if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 	aba_info Waiting for cluster API endpoint to become alive at $server_url ...
 	if ! aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up; then
 		aba_info "Giving up waiting for the cluster endpoint to become available!"
