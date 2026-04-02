@@ -1426,7 +1426,7 @@ fi
 # --- scp test harness to ~/.e2e-harness/ on each conN -------------------------
 
 # Pre-flight: verify notify.sh exists if NOTIFY_CMD is configured
-_notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2-)
+_notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 _notify_cmd="${_notify_cmd/#\~/$HOME}"
 if [ -n "$_notify_cmd" ] && ! [ -x "$_notify_cmd" ]; then
 	echo "FATAL: config.env sets NOTIFY_CMD=$_notify_cmd but the file does not exist." >&2
