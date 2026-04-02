@@ -8,6 +8,9 @@ REPO_ROOT="$(cd "$V2_DIR/../.." && pwd)"
 source "$V2_DIR/bundle.conf"
 source "$REPO_ROOT/test/lib.sh"
 
+# Ensure ~/bin is in PATH (cron doesn't expand $HOME in its PATH= line)
+PATH="$HOME/bin:$PATH"
+
 # VER and NAME must be set in the environment (passed by Makefile)
 [ -z "$VER" ] && echo "ERROR: VER not set" >&2 && exit 1
 [ -z "$NAME" ] && echo "ERROR: NAME not set" >&2 && exit 1
