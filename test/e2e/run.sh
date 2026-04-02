@@ -1937,13 +1937,15 @@ echo ""
 # Exceptional events (retries, reschedules) send their own notifications.
 if [ $_num_completed -eq 0 ] && [ $_num_running -eq 0 ] && [ ${#_work_queue[@]} -gt 0 ]; then
 	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-		_notify_detail="
-Queued:"
+		_notify_detail="Pools: ${CLI_POOLS}  Host: $(hostname -s)
+Started: $(date '+%Y-%m-%d %H:%M')
+Queued (${#_work_queue[@]}):"
 		for _qs in "${_work_queue[@]}"; do
 			_notify_detail+="
   ${_qs}"
 		done
-		_notify_msg="[e2e] DISPATCHER STARTED: ${#_work_queue[@]} suites queued${_notify_detail}"
+		_notify_msg="[e2e] DISPATCHER STARTED: ${#_work_queue[@]} suites on ${CLI_POOLS} pools
+${_notify_detail}"
 		$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null
 	fi
 fi
@@ -2306,7 +2308,26 @@ echo "  Logs: $_RUN_DIR/logs/"
 echo "========================================"
 
 if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})" < /dev/null >/dev/null
+	_done_detail=""
+	for _ds in "${suites_to_run[@]}"; do
+		_drc="${_results[$_ds]:-}"
+		_dp="${_result_pool[$_ds]:-?}"
+		if [ -z "$_drc" ]; then
+			_done_detail+="  ???? $_ds (pool $_dp)
+"
+		elif [ "$_drc" -eq 0 ]; then
+			_done_detail+="  PASS $_ds (pool $_dp)
+"
+		elif [ "$_drc" -eq 3 ]; then
+			_done_detail+="  SKIP $_ds (pool $_dp)
+"
+		else
+			_done_detail+="  FAIL $_ds (pool $_dp, exit=$_drc)
+"
+		fi
+	done
+	$NOTIFY_CMD "[e2e] ALL DONE: ${_passed} passed, ${_failed} failed, ${_skipped} skipped (of ${_total})
+${_done_detail}Finished: $(date '+%Y-%m-%d %H:%M')" < /dev/null >/dev/null
 fi
 
 # Cleanup dashboard
