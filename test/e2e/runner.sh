@@ -935,10 +935,20 @@ if [ -n "${DIS_VM:-}" ]; then
 fi
 
 echo ""
-echo "========================================"
-echo "  Pool $POOL_NUM Result: $SUITE"
-echo "  Exit code: $_rc  Time: ${_mins}m ${_secs}s"
-echo "========================================"
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
+if [ $_rc -eq 0 ]; then
+	echo "  SUITE FINISHED: $SUITE -- PASS (${_mins}m ${_secs}s)"
+elif [ $_rc -eq 3 ]; then
+	echo "  SUITE FINISHED: $SUITE -- SKIPPED (${_mins}m ${_secs}s)"
+else
+	echo "  SUITE FINISHED: $SUITE -- FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+fi
+echo "  Pool $POOL_NUM | $(hostname) | $(date '+%Y-%m-%d %H:%M:%S')"
+echo "  Log: ${E2E_LOG_FILE:-$E2E_LOG_DIR/${SUITE}-latest.log}"
+echo "  Waiting for next suite dispatch ..."
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
 echo ""
 
 # Write exit code for run.sh to read

@@ -1530,6 +1530,8 @@ _dispatch_suite() {
 
 	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
+	# Capture scrollback from previous suite before killing the session
+	_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
 	# Kill any stale session and orphaned runner processes
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
@@ -1566,7 +1568,7 @@ _dispatch_suite() {
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
-	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'"
+	_ssh_con "$pool_num" "tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on; tmux set-option -t '$_TMUX_SESSION' history-limit 50000"
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
