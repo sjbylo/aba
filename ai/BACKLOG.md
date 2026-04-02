@@ -116,6 +116,73 @@ $_ssh "podman rm -f registry; $_remote_sudo rm -rf $reg_root" || true
 - `scripts/reg-uninstall.sh` line 127: bare `sudo` in SSH
 - `scripts/reg-uninstall-remote.sh` line 81-82: `$SUDO` expanded locally before SSH
 
+## Audit: VM lifecycle scripts that bypass Make init (similar to delete fix)
+
+**Discovered:** While fixing `aba delete` silent failure after `aba clean` removes symlinks (Apr 2).
+
+### Problem fixed
+
+`aba.sh` calls VM lifecycle scripts (`vmw-delete.sh`, `vmw-start.sh`, etc.) directly, bypassing Make's dependency chain. These scripts use `source scripts/include_all.sh` with a relative path, which requires the `scripts/` symlink to exist in the cluster directory. After `aba clean`, the symlink is removed and the scripts fail with "No such file or directory".
+
+**Fix applied:** Added `make -s init` before every VM lifecycle call in `aba.sh` (ls, start, stop, kill, delete, refresh, upload). Also removed `|| exit 0` from `delete)` so errors propagate.
+
+### Remaining audit
+
+1. **Check all `source scripts/include_all.sh` callers** -- are there other scripts that assume the symlink exists? Search for `source scripts/include_all.sh` and `source ./scripts/include_all.sh` across the codebase.
+2. **Check all `source templates/` callers** -- same issue with the `templates/` symlink.
+3. **Review `|| exit 0` on `start)` and `kill|poweroff)`** -- currently kept because VMs might already be running/off, but these mask real errors too. Consider replacing with more targeted error handling (e.g. check if VMs exist first, then start/kill without masking).
+4. **Review `|| echo "No vm(s)."` on `ls)`** -- is this the right fallback? Should it check whether VMs are expected first?
+
+### References
+- `aba.sh` lines 1031-1080: all VM lifecycle cases with `make -s init`
+- `templates/Makefile.cluster` clean target: removes `.init`, `scripts`, `templates` symlinks
+- `scripts/vmw-delete.sh` line 4: `source scripts/include_all.sh`
+
+## Architecture: Review symlink dependency and consider `/opt/aba` for static files
+
+### Current design
+
+Cluster directories (e.g. `sno/`, `compact/`, `e2e-sno1/`) use symlinks to reference shared code:
+- `scripts -> ../scripts`
+- `templates -> ../templates`
+- `Makefile -> ../templates/Makefile.cluster`
+- `aba.conf -> ../aba.conf`
+- `mirror -> ../mirror`
+
+This design means scripts can use relative paths (`source scripts/include_all.sh`) and everything "just works" -- until a symlink is removed (e.g. by `aba clean`, manual deletion, or tar/rsync without `-L`).
+
+### Problems with symlinks
+
+1. **Fragile**: `aba clean` removes `scripts/` and `templates/` symlinks, breaking all VM lifecycle commands until `make init` recreates them. Fixed with `make -s init` guard, but it's a band-aid.
+2. **Relative paths**: Symlinks use `../scripts` which only works when the cluster dir is one level below ABA root. Nested or relocated directories break.
+3. **Bundle/tar portability**: Archives that don't follow symlinks (`tar` without `-h`, `rsync` without `-L`) create broken links.
+4. **Confusion**: New contributors don't expect `scripts/` inside a cluster dir to be a symlink.
+
+### Proposed alternative: Install static files to `/opt/aba`
+
+Place immutable/shared files in a fixed location:
+```
+/opt/aba/
+  scripts/       # all scripts
+  templates/     # Makefile.cluster, cluster.conf template, etc.
+  cli/           # aba CLI wrapper
+```
+
+Cluster directories would then reference scripts via `$ABA_SCRIPTS` or `/opt/aba/scripts/` instead of relying on symlinks. The `scripts/` and `templates/` symlinks in cluster dirs would no longer be needed.
+
+### Considerations
+
+- **Backward compatibility**: `make -C sno install` must still work. Makefiles would use `$ABA_SCRIPTS` or `/opt/aba/scripts/` instead of relative `scripts/`.
+- **Multi-version**: If two ABA versions are installed, `/opt/aba` would need versioning or the user must choose.
+- **Dev workflow**: Developers editing `scripts/` need changes to be picked up immediately -- a symlink from `/opt/aba/scripts -> ~/aba/scripts` during dev would preserve this.
+- **Permissions**: `/opt/aba` owned by root or the installing user?
+- **Install step**: `./install` would need to copy/link files to `/opt/aba`.
+- **Bundle builds**: The bundle host clones from git -- would it install to `/opt/aba` or keep using the repo directly?
+
+### Decision needed
+
+Is this worth the migration effort? The `make -s init` guard fixes the immediate problem. The `/opt/aba` approach is cleaner long-term but touches nearly every Makefile and script.
+
 ## Bug: CLI flags silently ignored via `aba cluster` when cluster.conf exists
 
 **Discovered:** While investigating the `connected-public` E2E regression (commit `9b3ca98`, Mar 29). The E2E test was fixed by restoring `rm -rf` for mid-suite cleanups, but the underlying ABA core bug remains.
