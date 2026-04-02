@@ -727,7 +727,7 @@ ask() {
 		[ "${ASK_OVERRIDE:-}" ] && ret_default="-y" #return 0  # reply "default reply"
 		source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
 		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
-		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="aba.conf:ask=false" #return 0  # reply "default reply"
+		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="ask=false" #return 0  # reply "default reply"
 	fi
 
 	# Default reply is 'yes' (or 'no') and return 0
@@ -740,7 +740,7 @@ ask() {
 
 	#echo
  	echo_yellow -n "[ABA] $@? $yn_opts: "
-	[ "$ret_default" ] && echo_white "<default answer provided due to '$ret_default'>" && return 0
+	[ "$ret_default" ] && echo_white "[default: $ret_default]" && return 0
 	read $timer yn
 
 	# Return default response, 0
@@ -806,6 +806,105 @@ try_cmd() {
 
 		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
 		echo cmd $* >>.cmd.out 
+	done
+}
+
+# Compact elapsed for aba_wait_show: "45s" if <1m; "4m" or "4m20s" if >=1m (no spaces).
+_aba_format_elapsed() {
+	local s=$1
+	local m=$(( s / 60 ))
+	local r=$(( s % 60 ))
+	if [ "$s" -lt 60 ]; then
+		printf '%ds' "$s"
+	elif [ "$r" -eq 0 ]; then
+		printf '%dm' "$m"
+	else
+		printf '%dm%ds' "$m" "$r"
+	fi
+}
+
+# Poll until command succeeds or wall-clock budget is exhausted.
+# Usage: aba_wait_show <message> <interval_sec> <max_sec> <command>
+# Evaluates <command> each iteration; exit 0 => success. Always prints progress (not gated by INFO_ABA).
+# TTY: spinner + elapsed refresh every 1s while sleeping (check still runs each interval). Non-TTY: one tick per interval.
+aba_wait_show() {
+	local msg=$1
+	local interval=$2
+	local max=$3
+	shift 3
+	local check_cmd=$*
+
+	if ! [[ "$interval" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
+		echo_red "[ABA] aba_wait_show: interval and max_sec must be non-negative integers" >&2
+		return 2
+	fi
+
+	local use_tty=0
+	if [ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
+		use_tty=1
+	fi
+
+	local elapsed=0
+	local spin=0
+	local hdr_done=
+	# ASCII spinner (avoid backslash quoting issues in array literals)
+	local _spin_frames=( '|' '/' '-' '\' )
+
+	while true; do
+		if eval "$check_cmd"; then
+			if [ "$use_tty" -eq 1 ] && [ "$elapsed" -gt 0 ]; then
+				printf '\n'
+			elif [ -n "$hdr_done" ]; then
+				printf '\n'
+			fi
+			return 0
+		fi
+
+		if [ "$elapsed" -ge "$max" ]; then
+			if [ "$use_tty" -eq 1 ] && [ "$elapsed" -gt 0 ]; then
+				printf '\n'
+			elif [ -n "$hdr_done" ]; then
+				printf '\n'
+			fi
+			return 1
+		fi
+
+		local remaining=$(( max - elapsed ))
+		if [ "$remaining" -le 0 ]; then
+			if [ "$use_tty" -eq 1 ] && [ "$elapsed" -gt 0 ]; then
+				printf '\n'
+			elif [ -n "$hdr_done" ]; then
+				printf '\n'
+			fi
+			return 1
+		fi
+
+		local sleep_time=$interval
+		if [ "$interval" -gt "$remaining" ]; then
+			sleep_time=$remaining
+		fi
+
+		if [ "$use_tty" -eq 1 ]; then
+			# Sleep in 1s steps so the spinner moves every second (interval may be 10s+).
+			local left=$sleep_time
+			while [ "$left" -gt 0 ]; do
+				sleep 1
+				left=$(( left - 1 ))
+				elapsed=$(( elapsed + 1 ))
+				local spin_idx=$(( spin % 4 ))
+				spin=$(( spin + 1 ))
+				printf '\r[ABA] %s  %s  %s' "$msg" "${_spin_frames[$spin_idx]}" "$( _aba_format_elapsed "$elapsed" )"
+				printf '\033[K'
+			done
+		else
+			sleep "$sleep_time"
+			elapsed=$(( elapsed + sleep_time ))
+			if [ -z "$hdr_done" ]; then
+				printf '[ABA] %s ... ' "$msg"
+				hdr_done=1
+			fi
+			printf '%s ' "$( _aba_format_elapsed "$elapsed" )"
+		fi
 	done
 }
 
