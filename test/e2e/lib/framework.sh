@@ -247,21 +247,36 @@ _e2e_summary() {
 #   - Prefixed with [e2e] for easy filtering
 #   - Include pool number and hostname (never "localhost")
 #   - Failure notifications include last ~20 lines of suite log for context
+#
+# Framework runs on conN where internet may be down (air-gapped tests).
+# Notifications are relayed via SSH to NOTIFY_RELAY_HOST (bastion) which
+# always has internet access.
 
 _e2e_notify_suffix() {
     echo "(pool${POOL_NUM:-?}/$(hostname -s))"
 }
 
 _e2e_notify() {
-    if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "[e2e] $* $(_e2e_notify_suffix)" < /dev/null >/dev/null
+    [ -n "$NOTIFY_CMD" ] || return 0
+    local _msg="[e2e] $* $(_e2e_notify_suffix)"
+    if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
+        ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
+            "$NOTIFY_CMD '$_msg'" < /dev/null >/dev/null 2>&1 &
+    else
+        $NOTIFY_CMD "$_msg" < /dev/null >/dev/null &
     fi
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
-        $NOTIFY_CMD "[e2e] $subject $(_e2e_notify_suffix)" >/dev/null
+        local _msg="[e2e] $subject $(_e2e_notify_suffix)"
+        if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
+            ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
+                "$NOTIFY_CMD '$_msg'" >/dev/null 2>&1
+        else
+            $NOTIFY_CMD "$_msg" >/dev/null
+        fi
     else
         cat > /dev/null  # drain stdin
     fi

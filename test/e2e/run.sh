@@ -2044,7 +2044,7 @@ declare -A _retried=()
 _MAX_RETRIES=2
 
 # Periodic status notification (replaces external /tmp/e2e-monitor.sh)
-_NOTIFY_STATUS_INTERVAL=600
+_NOTIFY_STATUS_INTERVAL=3600
 _last_status_notify_s=$SECONDS
 
 _notify_periodic_status() {
