@@ -45,8 +45,33 @@ else
 fi
 
 for name in $hosts ; do
-	govc vm.power -on "$(vm_name "$CLUSTER_NAME" "$name")" || true
+	vm_path="$(vm_name "$CLUSTER_NAME" "$name")"
+	# Skip power-on when already on — avoids govc "cannot be performed in the current state (Powered on)"
+	power_state=$(govc vm.info -json "$vm_path" | jq -r '.virtualMachines[0].runtime.powerState')
+	if [ "$power_state" != "poweredOn" ]; then
+		govc vm.power -on "$vm_path"
+	fi
 done
+
+# Return 0 when every VM in $hosts is poweredOn (optional wait after start).
+_vmw_start_all_powered_on() {
+	local name vm_path power_state
+	for name in $hosts; do
+		vm_path="$(vm_name "$CLUSTER_NAME" "$name")"
+		power_state=$(govc vm.info -json "$vm_path" | jq -r '.virtualMachines[0].runtime.powerState')
+		[ "$power_state" = "poweredOn" ] || return 1
+	done
+	return 0
+}
+
+if [ "$wait" ]; then
+	_wait_mins=40
+	_wait_timeout=$(( 60 * _wait_mins ))
+	if ! aba_wait_show "Waiting for VMs to power on (max ${_wait_mins} min)" 10 "$_wait_timeout" \
+		_vmw_start_all_powered_on; then
+		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to power on"
+	fi
+fi
 
 exit 0 
 
