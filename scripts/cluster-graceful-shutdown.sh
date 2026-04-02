@@ -5,8 +5,14 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Honor wait= from aba (e.g. wait=1) or any argv token (robust if order differs).
+wait=
+for _arg in "$@"; do
+	case "$_arg" in
+		wait=1|wait=true|wait=yes) wait=1 ;;
+	esac
+done
 [ "$1" = "wait=1" ] && wait=1 && shift
-
 
 [ ! -s iso-agent-based/auth/kubeconfig ] && aba_abort "Cannot find iso-agent-based/auth/kubeconfig file!"
 
@@ -164,26 +170,60 @@ for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" 
 	$OC delete pod -n default "$pod" --grace-period=0 --force >> $logfile 2>&1 || true
 done
 
+# True when every node VM for this cluster is off (VMware: poweredOff only; KVM: shut off).
+# Do not use "aba ls | grep" alone — empty output or non-off states (e.g. suspended) must not pass.
+_shutdown_all_node_vms_off() {
+	if [ -s vmware.conf ]; then
+		ensure_govc
+		source <(normalize-vmware-conf)
+		if [ ! "$CLUSTER_NAME" ]; then
+			scripts/cluster-config-check.sh || return 1
+			eval "$(scripts/cluster-config.sh)" || return 1
+		fi
+		local name vm_info power_state
+		for name in $CP_NAMES $WORKER_NAMES; do
+			vm=$(vm_name "$CLUSTER_NAME" "$name")
+			vm_info=$(govc vm.info -json "$vm")
+			[ ! "$vm_info" ] && return 1
+			power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')
+			[ "$power_state" = "null" ] && return 1
+			[ "$power_state" = "poweredOff" ] || return 1
+		done
+		return 0
+	fi
+	if [ -s kvm.conf ]; then
+		ensure_virsh
+		source <(normalize-kvm-conf)
+		if [ ! "$CLUSTER_NAME" ]; then
+			scripts/cluster-config-check.sh || return 1
+			eval "$(scripts/cluster-config.sh)" || return 1
+		fi
+		local name state
+		for name in $CP_NAMES $WORKER_NAMES; do
+			vm=$(vm_name "$CLUSTER_NAME" "$name")
+			state=$(virsh -c "$LIBVIRT_URI" domstate "$vm" 2>/dev/null)
+			[ "$state" = "shut off" ] || return 1
+		done
+		return 0
+	fi
+	return 1
+}
+
 # Only wait if installed on VMs (VMware or KVM)
 if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
-	printf "[ABA] Waiting for VMs to power off ..." | tee -a $logfile
-	_wait_elapsed=0
-	_wait_timeout=300
-	while aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; do
-		sleep 10
-		_wait_elapsed=$((_wait_elapsed + 10))
-		if [ $_wait_elapsed -ge $_wait_timeout ]; then
-			echo "" | tee -a $logfile
-			aba_warning "Timed out after ${_wait_timeout}s waiting for VMs to power off"
-			aba ls 2>/dev/null | tee -a $logfile
-			break
-		fi
-		printf " %ds" "$_wait_elapsed" | tee -a $logfile
-	done
-	echo "" | tee -a $logfile
-	if ! aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; then
-		aba_info_ok "All VMs powered off." | tee -a $logfile
+	_wait_mins=40
+	_wait_timeout=$(( 60 * _wait_mins ))
+	# Log start; do not pipe aba_wait_show to tee — keeps a real TTY so spinner works when interactive.
+	echo "[ABA] Waiting up to ${_wait_mins} min for VMs to power off (started $(date -Iseconds))" >> $logfile
+	if ! aba_wait_show "Waiting for VMs to power off (max ${_wait_mins} min)" 10 "$_wait_timeout" \
+		_shutdown_all_node_vms_off; then
+		echo "" | tee -a $logfile
+		aba ls 2>/dev/null | tee -a $logfile
+		aba_abort "Timed out after ${_wait_timeout}s waiting for all node VMs to power off"
 	fi
+	echo "" | tee -a $logfile
+	echo "[ABA] VM power-off wait finished ($(date -Iseconds))" >> $logfile
+	aba_info_ok "All VMs powered off." | tee -a $logfile
 fi
 
 exit 0
