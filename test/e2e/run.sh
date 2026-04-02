@@ -1266,6 +1266,11 @@ if [ -z "$CLI_RESUME" ]; then
 	done
 fi
 
+# Randomize suite order so tests don't depend on alphabetical sequencing
+if [ -n "$CLI_ALL" ] && [ ${#suites_to_run[@]} -gt 1 ]; then
+	readarray -t suites_to_run < <(printf '%s\n' "${suites_to_run[@]}" | shuf)
+fi
+
 # --- Reschedule: inject suites into the running dispatcher's queue -----------
 # Lightweight command: writes to the inject-queue file and exits immediately.
 # The running dispatcher polls this file and picks up injected suites.
