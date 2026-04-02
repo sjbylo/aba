@@ -47,7 +47,7 @@ echo_step "Reset ..."
 
 rm -f "$V2_DIR/build.log"
 rm -rf "$WORK_DIR/aba"
-# Keep WORK_BUNDLE_DIR (build markers + logs) -- tarballs already removed by step 07
 rm -rf "$WORK_TEST_INSTALL"
+rm -rf "$WORK_BUNDLE_DIR"
 
 echo_step "Done $0"
