@@ -155,6 +155,17 @@ _E2E_FAIL_COUNT=0
 _E2E_SKIP_COUNT=0
 _E2E_START_TIME=""
 
+# Ring buffer: last N commands for failure notifications
+declare -a _E2E_CMD_RING=()
+_E2E_CMD_RING_SIZE=3
+
+_e2e_cmd_ring_push() {
+	_E2E_CMD_RING+=("$1")
+	while [ ${#_E2E_CMD_RING[@]} -gt $_E2E_CMD_RING_SIZE ]; do
+		_E2E_CMD_RING=("${_E2E_CMD_RING[@]:1}")
+	done
+}
+
 # Resume skip-block: when set, test_begin/e2e_run skip commands until test_end
 _E2E_SKIP_BLOCK=""
 
@@ -459,10 +470,6 @@ suite_end() {
 
     if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
-        # #region agent log
-        printf '{"sessionId":"23cf03","hypothesisId":"H2","location":"framework.sh:finalize_suite:FAIL","message":"about to send suite FAIL notification","data":{"suite":"%s","fail_count":%d,"NOTIFY_CMD":"%s"},"timestamp":%s}\n' \
-            "$_E2E_SUITE_NAME" "$_E2E_FAIL_COUNT" "${NOTIFY_CMD:-EMPTY}" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log
-        # #endregion
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
     else
@@ -939,6 +946,8 @@ e2e_run() {
     local _lf="${E2E_LOG_FILE:-/dev/null}"
     local _display_host="${host:-$USER@$(hostname -s)}"
 
+    _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
+
     _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
     _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
     _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
@@ -1001,23 +1010,24 @@ e2e_run() {
             local _exi; _exi="$(_e2e_exit_info $ret)"
             _e2e_log "  Attempt $attempt/$tot_cnt failed ($_exi)"
 
-            # Notify on the very first failure (before exhausted check so tot_cnt=1 still fires)
-            # #region agent log
-            printf '{"sessionId":"23cf03","hypothesisId":"H1","location":"framework.sh:retry_loop","message":"failure in retry loop","data":{"attempt":%d,"tot_cnt":%d,"description":"%s","ret":%d},"timestamp":%s}\n' \
-                "$attempt" "$tot_cnt" "$description" "$ret" "$(date +%s%3N)" >> /tmp/e2e-debug-23cf03.log
-            # #endregion
             if [ $attempt -eq 1 ]; then
                 (
                     echo "$(date '+%H:%M:%S') FIRST FAILURE"
                     echo "Suite: $_E2E_SUITE_NAME"
                     echo "Test: ${_E2E_CURRENT_TEST:-$description}"
                     echo "Command: $cmd"
+                    echo "Exit: $(_e2e_exit_info $ret)"
                     echo "Host: ${host:-$(hostname -s)}"
                     echo ""
-                    echo "--- Last 20 lines of suite log ---"
+                    echo "--- Last ${_E2E_CMD_RING_SIZE} commands ---"
+                    for _rc_entry in "${_E2E_CMD_RING[@]}"; do
+                        echo "  $_rc_entry"
+                    done
                     echo ""
-                    tail -20 "$E2E_LOG_FILE"
-                ) | _e2e_notify_stdin "FIRST FAIL: $description"
+                    echo "--- Last 20 lines of output ---"
+                    echo ""
+                    tail -20 "$_cmd_output_file" 2>/dev/null
+                ) | _e2e_notify_stdin "FIRST FAIL: $description ($_exi)"
             fi
 
             if [ $attempt -ge $tot_cnt ]; then
@@ -1031,12 +1041,18 @@ e2e_run() {
                         echo "Suite: $_E2E_SUITE_NAME"
                         echo "Test: ${_E2E_CURRENT_TEST:-$description}"
                         echo "Command: $cmd"
+                        echo "Exit: $(_e2e_exit_info $ret)"
                         echo "Host: ${host:-$(hostname -s)}"
                         echo ""
-                        echo "--- Last 20 lines of suite log ---"
+                        echo "--- Last ${_E2E_CMD_RING_SIZE} commands ---"
+                        for _rc_entry in "${_E2E_CMD_RING[@]}"; do
+                            echo "  $_rc_entry"
+                        done
                         echo ""
-                        tail -20 "$E2E_LOG_FILE"
-                    ) | _e2e_notify_stdin "EXHAUSTED: $description"
+                        echo "--- Last 20 lines of output ---"
+                        echo ""
+                        tail -20 "$_cmd_output_file" 2>/dev/null
+                    ) | _e2e_notify_stdin "EXHAUSTED: $description ($_exi)"
                 fi
                 break
             fi
