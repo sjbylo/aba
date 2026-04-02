@@ -49,5 +49,6 @@ rm -f "$V2_DIR/build.log"
 rm -rf "$WORK_DIR/aba"
 rm -rf "$WORK_TEST_INSTALL"
 rm -rf "$WORK_BUNDLE_DIR"
+#mkdir -p "$WORK_BUNDLE_DIR/build"  # Not needed, since we don't touch the marker from the Makefile anymore
 
 echo_step "Done $0"
