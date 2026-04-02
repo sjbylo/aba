@@ -84,7 +84,7 @@ $(M)/.done-07-upload: $(M)/.done-06d-tests-passed
 
 $(M)/.done-08-cleanup: $(M)/.done-07-upload
 	bash -e scripts/08-cleanup-and-go-online.sh
-	@touch $@
+#	@touch $@  # No need for this marker since the bundle is already deployed
 
 # Create marker directory
 $(M):
