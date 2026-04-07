@@ -66,7 +66,7 @@ aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
 aba_info_ok "Run 'aba info' to view this information again."
 aba_info_ok "Run 'aba help' and 'aba -h' for more options."
 
-if [ ! -f ~/.aba/.first_cluster_success ]; then
+if [ ! -f ~/.aba_first_cluster_success ]; then
 	_bdr=$(printf '═%.0s' $(seq 1 64))
 	_g=$(tput setaf 10 2>/dev/null)
 	_r=$(tput sgr0 2>/dev/null)
@@ -86,7 +86,7 @@ if [ ! -f ~/.aba/.first_cluster_success ]; then
 	echo_bright_green  "  ╚${_bdr}╝"
 	echo
 
-	touch ~/.aba/.first_cluster_success
+	touch ~/.aba_first_cluster_success
 fi
 
 exit 0

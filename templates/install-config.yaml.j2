@@ -32,7 +32,7 @@ networking:
 platform:
   {%- if num_workers == '0' and num_masters == '1' %}
   none: {}
-  {%- elif platform == 'vmw' %}
+  {%- elif platform == 'vmw' and VC == '1' %}
   vsphere:
     apiVIP: {{ api_vip }}
     ingressVIP: {{ ingress_vip }}
