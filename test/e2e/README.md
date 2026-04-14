@@ -5,6 +5,244 @@ containing a connected bastion (`conN`) and a disconnected bastion (`disN`).
 
 See `ai/HANDOFF_CONTEXT.md` for backlog, rules, and session context.
 
+## Quick Start
+
+### Configuration
+
+All settings live in `config.env` (defaults) and `pools.conf` (per-pool overrides).
+CLI flags take highest precedence.
+
+**RHEL version** (rhel8 or rhel9):
+
+```bash
+# In config.env (applies to all pools):
+INT_BASTION_RHEL_VER=rhel8
+
+# Or per-pool in pools.conf:
+pool1  con1  dis1  aba-e2e-template-rhel9  INT_BASTION_RHEL_VER=rhel9  POOL_NUM=1  ...
+
+# Or via CLI (overrides everything):
+./run.sh run --all --pools 4 --os rhel9
+```
+
+**vCenter vs ESXi API**:
+
+All current suites use `--platform vmw` which defaults to vCenter (`VC=1`).
+To test ESXi-direct installs, use a different `vmware.conf` that points at
+an ESXi host instead of vCenter (e.g. `GOVC_URL=https://esxi4.lan/sdk`).
+Override per-pool in `pools.conf` via `VMWARE_CONF=~/.vmware-esxi.conf`.
+**Note:** ESXi-direct E2E coverage is currently missing -- see BACKLOG.md.
+
+**Number of pools** (1 to 4):
+
+```bash
+# Always pass --pools to tell run.sh how many pools are active
+./run.sh run --all --pools 4
+./run.sh status --pools 4
+./run.sh stop --pools 4
+```
+
+Enable/disable pools by commenting lines in `pools.conf`:
+
+```
+pool1  con1  dis1  aba-e2e-template-rhel8  INT_BASTION_RHEL_VER=rhel8  POOL_NUM=1  VM_DATASTORE=Datastore4-1  VC_FOLDER=/Datacenter/vm/aba-e2e/pool1
+pool2  con2  dis2  aba-e2e-template-rhel8  INT_BASTION_RHEL_VER=rhel8  POOL_NUM=2  VM_DATASTORE=Datastore4-2  VC_FOLDER=/Datacenter/vm/aba-e2e/pool2
+# pool3  ...  (commented out = inactive)
+# pool4  ...
+```
+
+**OCP channel and version**:
+
+```bash
+# In config.env:
+TEST_CHANNEL=stable     # stable | fast | candidate
+OCP_VERSION=p           # p = previous minor, l = latest minor, or explicit e.g. 4.17.12
+```
+
+**SSH user on conN** (run as root or non-root):
+
+```bash
+# In config.env (default: steve):
+CON_SSH_USER=steve
+
+# To test as root on conN:
+CON_SSH_USER=root
+```
+
+**SSH user on disN** (run as root or non-root):
+
+```bash
+# In config.env (default: steve):
+DIS_SSH_USER=steve
+
+# To test as root on disN:
+DIS_SSH_USER=root
+```
+
+Both can also be overridden per-pool in `pools.conf`:
+
+```
+pool1  con1  dis1  aba-e2e-template-rhel8  CON_SSH_USER=root  DIS_SSH_USER=root  POOL_NUM=1  ...
+```
+
+**Test a specific git branch** (e.g. `main`):
+
+```bash
+# In config.env (auto-detected from local checkout by default):
+E2E_GIT_BRANCH=main
+E2E_GIT_REPO=https://github.com/sjbylo/aba.git
+
+# Or use --dev mode to push your local working tree directly:
+./run.sh run --all --pools 4 --dev
+```
+
+Without `--dev`, suites clone ABA from git on the conN host. With `--dev`,
+your local source tree is pushed to `~/aba` on conN via rsync.
+
+**Extra disk space on conN/disN**:
+
+```bash
+# In config.env (default: 0 = no expansion):
+VM_DISK_EXTRA_GB=20     # Add 20GB to each cloned VM disk
+```
+
+The golden template includes an `expand-home.service` that automatically
+grows `/home` on first boot when the disk is larger than expected.
+Per-pool override is possible in `pools.conf`: `VM_DISK_EXTRA_GB=30`.
+
+**Other config.env settings**:
+
+```bash
+OC_MIRROR_VER=v2              # v1 (deprecated) | v2
+VMWARE_CONF=~/.vmware.conf    # Path to govc configuration file
+KVM_CONF=~/.kvm.conf          # Path to KVM/libvirt configuration file
+VM_SNAPSHOT=aba-test           # Snapshot name to revert VMs to before cloning
+VM_DATASTORE=Datastore4-1     # Target datastore for clones (per-pool in pools.conf)
+VC_FOLDER=/Datacenter/vm/aba-e2e  # vCenter folder for test VMs (per-pool in pools.conf)
+NOTIFY_CMD=~/bin/notify.sh    # Notification command (e.g. Telegram alerts)
+NOTIFY_RELAY_HOST=bastion     # SSH relay for notifications from air-gapped conN
+```
+
+### Destroying and Recreating Pool VMs
+
+```bash
+# Destroy all pool VMs (deletes conN + disN clones from vSphere):
+./run.sh destroy --pools 4
+
+# Destroy and also clean up any clusters/mirrors left on them:
+./run.sh destroy --clean --pools 4
+
+# Force rebuild golden VM from template, then reclone all pools:
+./run.sh run --all --pools 4 --recreate-golden --recreate-vms
+
+# Reclone pool VMs without rebuilding the golden:
+./run.sh run --all --pools 4 --recreate-vms
+
+# Revert pool VMs to snapshot before running:
+./run.sh run --all --pools 4 --revert
+```
+
+## run.sh Command Reference
+
+```
+Commands:
+  run.sh run [--suite X] [--pools N]   Run suites (default: --all)
+  run.sh run --pools 3                 Run all suites across 3 pools
+  run.sh run --suite X --pool 2        Run suite on a specific pool
+  run.sh run --suite X --pool 2 --force -y  Force onto pool (works with running dispatcher)
+  run.sh run --pool 3 --resume         Re-run last suite, skip passed tests
+  run.sh run --all --pools 3 --dev     Push local source to ~/aba, then run
+  run.sh reschedule [--suite X] [--pools N]  Re-queue completed suites
+  run.sh deploy [--pool N] [--force]   Push source code + harness to conN
+  run.sh restart [--pool N] [--resume] Stop + harness deploy + re-run last suite
+  run.sh restart --pool N --dev        Stop + source deploy + harness + re-run
+  run.sh restart --suite X --pool N    Stop + deploy + run suite X on pool N
+  run.sh stop [--pool N] [--clean]     Kill runner(s) (--clean: delete clusters/mirrors)
+  run.sh start [--pool N]              Power on pool VMs (conN + disN)
+  run.sh status [--pool N]             Show what's running
+  run.sh verify [--pools N|--pool N]   Verify pool VMs (no dispatch)
+  run.sh list                          List available suites
+  run.sh destroy [--clean]             Destroy pool VMs (--clean: delete clusters first)
+  run.sh attach conN                   Attach to conN's tmux session
+  run.sh live [N]                      Interactive multi-pane dashboard
+  run.sh dash [N] [log]                Read-only summary dashboard
+
+Options:
+  --suite X,Y          Select specific suite(s)
+  --all                Select all suites (default for run/reschedule)
+  --pools N            Number of pools (default: 1)
+  --pool N             Target a specific pool
+  --force              Wipe suite state before dispatching / hot-deploy
+  --dev                Push local source to ~/aba on conN (developer mode)
+  --resume             Skip previously-passed tests (run, restart)
+  --dry-run            Show dispatch plan, don't execute
+  --clean              Clear checkpoints before running
+  --revert             Revert pool VMs to pool-ready snapshot before running
+  --recreate-golden    Force rebuild golden VM from template
+  --recreate-vms       Force reclone all conN/disN from golden
+  -y, --yes            Auto-accept prompts
+  -q, --quiet          CI mode: no interactive prompts (implies -y)
+  --os rhel8|rhel9     RHEL version for pool VMs (overrides config.env)
+  --pools-file F       Custom pools.conf path
+```
+
+### Common Workflows
+
+```bash
+# Full test run across all 4 pools:
+./run.sh run --all --pools 4
+
+# Run a single suite on pool 2:
+./run.sh run --suite cluster-ops --pool 2
+
+# Check status of all pools:
+./run.sh status --pools 4
+
+# Attach to pool 1's tmux session (see live output):
+./run.sh attach con1
+
+# Live multi-pane dashboard:
+./run.sh live 4
+
+# Stop all pools:
+./run.sh stop --pools 4
+
+# Stop pool 3 and clean up its clusters/mirrors:
+./run.sh stop --pool 3 --clean
+
+# Re-run the last suite on pool 2, skipping passed tests:
+./run.sh restart --pool 2 --resume
+
+# Deploy local code changes to all pools (no suite run):
+./run.sh deploy --pools 4
+
+# Deploy + run with local source (developer mode):
+./run.sh run --all --pools 4 --dev
+
+# List available suites:
+./run.sh list
+
+# Verify pool VMs are healthy (SSH, networking, etc.):
+./run.sh verify --pools 4
+```
+
+## Available Suites
+
+| Suite | Description |
+|-------|-------------|
+| `connected-public` | Connected install from public registry |
+| `mirror-sync` | Mirror sync + bare-metal flow |
+| `airgapped-local-reg` | Airgapped install with local registry on disN |
+| `airgapped-existing-reg` | Airgapped install with pre-existing registry |
+| `cluster-ops` | Cluster install, day2 operations, operators |
+| `vmw-lifecycle` | VMware cluster lifecycle (install, shutdown, startup, delete) |
+| `kvm-lifecycle` | KVM cluster lifecycle |
+| `network-advanced` | VLAN-based cluster installs |
+| `create-bundle-to-disk` | Bundle creation and transfer to disk |
+| `negative-paths` | Error handling and edge cases |
+| `cli-validation` | CLI argument validation |
+| `config-validation` | Config file validation |
+
 ## Lab Network Topology
 
 ```mermaid
@@ -80,7 +318,7 @@ Coordinator (run.sh)
 ### vSphere Layout
 
 - Folder: `/Datacenter/vm/aba-e2e/poolN`
-- Source template: `aba-e2e-template-rhel8`
+- Source template: `aba-e2e-template-rhel8` (or `rhel9`)
 - Golden VM: `aba-e2e-golden-rhel8` (cloned per pool)
 - Snapshot: `aba-test` (reverted before each clone)
 - Datastores: `Datastore4-1` through `Datastore4-4` (one per pool)
@@ -107,7 +345,7 @@ Pool  VLAN Node      VLAN API VIP   VLAN Apps VIP
   4   10.10.20.204   10.10.20.214   10.10.20.224
 ```
 
-## Quick Reference
+## Directory Structure
 
 ```
 test/e2e/
@@ -117,39 +355,31 @@ test/e2e/
 ├── config.env          # Default test parameters, IPs, MACs
 ├── lib/
 │   ├── framework.sh    # Core: e2e_run, suite/test lifecycle, checkpoints
-│   ├── remote.sh       # SSH helpers (_essh, e2e_run_remote)
+│   ├── remote.sh       # SSH helpers (_essh, e2e_run_remote), VM cloning
 │   ├── pool-lifecycle.sh  # VM cloning, network, NTP, firewall, dnsmasq
-│   └── config-helpers.sh  # IP/domain/cluster-name helpers per pool
+│   ├── vm-helpers.sh   # govc wrappers, snapshot management
+│   ├── config-helpers.sh  # IP/domain/cluster-name helpers per pool
+│   ├── constants.sh    # Shared constants (paths, snapshot names, etc.)
+│   └── setup.sh        # One-time pool infrastructure setup
 └── suites/
-    ├── suite-cluster-ops.sh           # Cluster install, day2, operators
-    ├── suite-mirror-sync.sh           # Mirror sync + bare-metal flow
-    ├── suite-airgapped-local-reg.sh   # Airgapped with local registry
-    ├── suite-airgapped-existing-reg.sh # Airgapped with existing registry
-    ├── suite-connected-public.sh      # Connected/proxy cluster installs
-    ├── suite-network-advanced.sh      # VLAN-based cluster installs
-    ├── suite-create-bundle-to-disk.sh # Bundle creation and transfer
-    ├── suite-negative-paths.sh        # Error handling and edge cases
-    ├── suite-cli-validation.sh        # CLI argument validation
-    └── suite-config-validation.sh     # Config file validation
+    ├── suite-cluster-ops.sh
+    ├── suite-mirror-sync.sh
+    ├── suite-airgapped-local-reg.sh
+    ├── suite-airgapped-existing-reg.sh
+    ├── suite-connected-public.sh
+    ├── suite-network-advanced.sh
+    ├── suite-create-bundle-to-disk.sh
+    ├── suite-negative-paths.sh
+    ├── suite-cli-validation.sh
+    ├── suite-config-validation.sh
+    ├── suite-vmw-lifecycle.sh
+    └── suite-kvm-lifecycle.sh
 ```
 
-## Running Tests
+## Configuration Precedence
 
-```bash
-cd /home/steve/aba/test/e2e
+Settings can be defined at three levels (highest precedence wins):
 
-# Run all suites across 4 pools:
-bash run.sh run --all --pools 4
-
-# Run a single suite on a specific pool:
-bash run.sh run --suite cluster-ops --pool 1
-
-# Check status:
-bash run.sh status
-
-# Attach to a pool's tmux session:
-bash run.sh attach con1
-
-# List available suites:
-bash run.sh list
-```
+1. **CLI flags** (`--os rhel9`, `--pools 4`, etc.)
+2. **Per-pool overrides** in `pools.conf` (`CON_SSH_USER=root`, `VM_DATASTORE=...`)
+3. **Defaults** in `config.env`
