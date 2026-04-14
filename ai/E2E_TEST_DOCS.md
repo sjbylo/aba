@@ -169,7 +169,6 @@ Key variables (see `test/e2e/config.env` for full list):
 | `VM_BASE_DOMAIN` | `example.com` | Base domain for all VMs |
 | `VMWARE_CONF` | `~/.vmware.conf` | govc credentials file |
 | `KVM_CONF` | `~/.kvm.conf` | KVM/libvirt config for KVM suites |
-| `OPERATOR_WAIT_TIMEOUT` | `1800` | Seconds to wait for cluster operators |
 | `SSH_WAIT_TIMEOUT` | `300` | Seconds to wait for SSH availability |
 
 **Precedence**: CLI flags > pool overrides in `pools.conf` > `config.env`

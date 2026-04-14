@@ -971,8 +971,20 @@ ARCH="${ARCH:-amd64}"
 
 # Cache settings
 ABA_CACHE_DIR="${ABA_CACHE_DIR:-$HOME/.aba/cache}"
-ABA_CACHE_TTL="${ABA_CACHE_TTL:-6000}"	# seconds
+ABA_CACHE_TTL="${ABA_CACHE_TTL:-100m}"
 # Note: Cache directory is created lazily when first needed
+
+# Convert human-readable duration string to seconds (e.g. 30m, 12h, 1d, 300s, or bare integer)
+parse_duration() {
+	local val="$1"
+	case "$val" in
+		*d) echo $(( ${val%d} * 86400 )) ;;
+		*h) echo $(( ${val%h} * 3600 )) ;;
+		*m) echo $(( ${val%m} * 60 )) ;;
+		*s) echo $(( ${val%s} )) ;;
+		*)  echo "$val" ;;
+	esac
+}
 
 ############################################
 # Helpers (best-effort, no error output)
@@ -1059,7 +1071,7 @@ fetch_latest_minor_version() {
 	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
 	local latest_ver minor prev
 
-	_fetch_cached "$url" "$cache_file" "$ABA_CACHE_TTL" "" || { echo ""; return 0; }
+	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
 
 	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
 	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
@@ -1095,7 +1107,7 @@ _fetch_graph_cached() {
 	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
 	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
 
-	_fetch_cached "$url" "$cache_file" "$ABA_CACHE_TTL" _validate_json_file || return 0
+	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
 	cat "$cache_file"
 }
 
@@ -2064,7 +2076,7 @@ run_once() {
 
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
-# Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL_SECS from ~/.aba/config)
+# Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)
 # Example: download_all_catalogs "4.19" 5        (explicit TTL override, e.g. for tests)
 download_all_catalogs() {
 	local version_short="${1}"
@@ -2081,7 +2093,7 @@ download_all_catalogs() {
 		source "$HOME/.aba/config"
 		max_parallel="${CATALOG_MAX_PARALLEL:-3}"
 	fi
-	[[ -z "$ttl" ]] && ttl="${CATALOG_CACHE_TTL_SECS:-43200}"
+	[[ -z "$ttl" ]] && ttl="$(parse_duration "${CATALOG_CACHE_TTL:-12h}")"
 
 	local catalogs=(redhat-operator certified-operator community-operator)
 	local running=0
@@ -2118,15 +2130,14 @@ wait_for_all_catalogs() {
 		return 1
 	fi
 	
-	# Read timeout from user config (default: 20 minutes)
-	local timeout_mins=20
+	# Read timeout from user config (default: 20m)
 	if [[ -f "$HOME/.aba/config" ]]; then
 		source "$HOME/.aba/config"
-		timeout_mins="${CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS:-${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}}"
 	fi
-	local timeout_secs=$((timeout_mins * 60))
+	local timeout_secs
+	timeout_secs="$(parse_duration "${CATALOG_INDEX_DOWNLOAD_TIMEOUT:-20m}")"
 	
-	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_mins} minutes)"
+	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_secs}s)"
 	
 	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
 	
