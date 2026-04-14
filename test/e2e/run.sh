@@ -132,6 +132,19 @@ if [ $# -gt 0 ]; then
 	esac
 fi
 
+# Consume positional args for commands that take them (before flag parsing)
+case "${CLI_COMMAND:-}" in
+	attach)
+		if [ $# -gt 0 ] && [[ "$1" != -* ]]; then CLI_ATTACH="$1"; shift; fi ;;
+	live)
+		CLI_LIVE=""
+		if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
+	dash)
+		CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
+		if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
+		if [ $# -gt 0 ] && [[ "$1" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
+esac
+
 # Parse flags
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -182,13 +195,9 @@ case "${CLI_COMMAND:-}" in
 	verify)       CLI_VERIFY=1 ;;
 	list)         CLI_LIST=1 ;;
 	destroy)      CLI_DESTROY=1 ;;
-	attach)       if [ $# -lt 1 ]; then echo "ERROR: attach requires a host (e.g. con1)" >&2; exit 1; fi
-	              CLI_ATTACH="$1"; shift ;;
-	live)         CLI_LIVE=""
-	              if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then CLI_LIVE="$1"; shift; fi ;;
-	dash)         CLI_DASHBOARD=""; CLI_DASH_LOG="summary.log"
-	              if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then CLI_DASHBOARD="$1"; shift; fi
-	              if [ $# -gt 0 ] && [[ "$1" == "log" ]]; then CLI_DASH_LOG="latest.log"; shift; fi ;;
+	attach)       if [ -z "${CLI_ATTACH:-}" ]; then echo "ERROR: attach requires a host (e.g. con1)" >&2; exit 1; fi ;;
+	live)         ;;
+	dash)         ;;
 	"")           echo "ERROR: No command specified. Use: run, reschedule, deploy, status, list, etc." >&2
 	              _usage; exit 1 ;;
 esac

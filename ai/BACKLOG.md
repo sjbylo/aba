@@ -322,6 +322,25 @@ Three approaches considered:
 
 ---
 
+## Enhancement: E2E tests MUST support ESXi-direct API (no vCenter)
+
+**Added**: 2026-04-14
+**Priority**: High
+
+All current E2E suites hardcode `--platform vmw` which defaults to vCenter (`VC=1`). We have no E2E coverage for ESXi-direct installs (`VC=` empty), which is a supported ABA deployment mode.
+
+The old (pre-v2) E2E tests supported this simply by using a different `vmware.conf` that pointed directly at an ESXi host instead of vCenter. The same approach should work in the new framework.
+
+**Proposed approach:**
+- Add a `VMWARE_CONF` per-pool override in `pools.conf` (already possible) pointing to an ESXi-only `vmware.conf`
+- Or add a pool-level `VC=` override that suites can pick up
+- At minimum: one pool should run with ESXi-direct to catch regressions in the `VC=` empty code path
+- The `vmware.conf` for ESXi-direct uses `GOVC_URL=https://esxiN.lan/sdk` (host, not vCenter)
+
+**Key risk:** Without this, bugs in ESXi-direct installs (e.g. the doubled `resourcePool` path bug we already found) go undetected until a user reports them.
+
+---
+
 ## Investigate: Stale VolumeAttachments after ungraceful cluster shutdown
 
 **Added**: 2026-04-13
