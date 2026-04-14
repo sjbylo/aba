@@ -329,7 +329,6 @@ clean:  ## Clean up derived/temporary files only. Keeps tarballs, binaries, mirr
 	rm -rf .index
 	rm -f imageset-config-*.yaml
 	rm -f ~/.aba.previous.backup
-	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f .cmd.out
 	rm -f .reg_vendor
 	rm -rf data/working-dir
@@ -353,7 +352,6 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	rm -rf mirror-registry-*.tar.gz
 	rm -f *.conf *.yaml 
 	rm -rf data 
-	rm -f save-mirror.sh sync-mirror.sh load-mirror.sh
 	rm -f *.log .*.log
 	rm -f .ssh.conf
 	rm -f .redhat-operator-index* 
