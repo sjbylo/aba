@@ -901,6 +901,7 @@ echo "=== Phase 2 complete ==="
 echo ""
 echo "=== Phase 3: Create pool-ready snapshots ==="
 
+_snapshot_vms=()
 for (( i=1; i<=_POOLS; i++ )); do
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
@@ -910,15 +911,24 @@ for (( i=1; i<=_POOLS; i++ )); do
 				continue
 			fi
 		fi
-		echo "  Shutting down $vm_name before snapshot ..."
-		govc vm.power -s -force "$vm_name" || true
-		sleep 15
+		echo "  Shutting down $vm_name ..."
+		govc vm.power -s -force "$vm_name" &
+		_snapshot_vms+=("$vm_name")
+	done
+done
+
+if [ ${#_snapshot_vms[@]} -gt 0 ]; then
+	wait
+	sleep 15
+
+	for vm_name in "${_snapshot_vms[@]}"; do
 		echo "  Creating snapshot '$_SNAPSHOT_NAME' on $vm_name ..."
 		govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
 		echo "  Powering on $vm_name ..."
-		govc vm.power -on "$vm_name" || true
+		govc vm.power -on "$vm_name" &
 	done
-done
+	wait
+fi
 
 echo "=== Phase 3 complete ==="
 
