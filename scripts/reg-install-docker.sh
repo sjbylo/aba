@@ -86,6 +86,14 @@ podman run -d \
 	-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
 	docker.io/library/registry:latest
 
+# Ensure rootless podman containers with --restart=always survive VM reboot
+if [ "$(id -u)" -ne 0 ] && command -v loginctl >/dev/null 2>&1; then
+	if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
+		aba_info "Enabling loginctl linger for $USER (so registry survives reboot) ..."
+		$SUDO loginctl enable-linger "$USER"
+	fi
+fi
+
 reg_open_firewall
 
 # Save credentials and state BEFORE the connectivity check, so the user
