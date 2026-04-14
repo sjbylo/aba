@@ -183,6 +183,61 @@ Cluster directories would then reference scripts via `$ABA_SCRIPTS` or `/opt/aba
 
 Is this worth the migration effort? The `make -s init` guard fixes the immediate problem. The `/opt/aba` approach is cleaner long-term but touches nearly every Makefile and script.
 
+## Bug: `aba_wait_show` timer freezes while the polled command runs
+
+The `aba_wait_show` function displays elapsed time (e.g. `[ABA] Waiting for OpenShift console  |  9s`) but the counter only advances between poll iterations. If the polled command (e.g. `curl --connect-timeout 10`) takes 5-10 seconds to complete, the displayed time freezes during that period, making it look stuck.
+
+**Expected:** The timer should show wall-clock time that updates continuously (or at least reflects total elapsed seconds accurately when it does update).
+
+**Proposed fix:** Run the polled command in the background and keep updating the timer every second while it runs:
+
+```bash
+$cmd_func &
+cmd_pid=$!
+while kill -0 $cmd_pid 2>/dev/null; do
+    elapsed=$(( $(date +%s) - start ))
+    printf "\r[ABA] %s  |  %ds" "$desc" "$elapsed"
+    sleep 1
+done
+wait $cmd_pid; rc=$?
+```
+
+This gives a smooth, continuously updating timer (e.g. `5s 6s 7s 8s ...`) even when `curl --connect-timeout 10` blocks for 10 seconds. Falls back gracefully -- if backgrounding isn't possible, use wall-clock `$(( $(date +%s) - start ))` instead of incrementing by the sleep interval so the jump is at least accurate.
+
+**Location:** `aba_wait_show()` in `scripts/include_all.sh`
+
+## Enhancement: Clean up `aba startup` output (reduce redundancy)
+
+`aba startup` currently shows the `oc get nodes` output **4 times**: before uncordon (SchedulingDisabled), the uncordon messages, after uncordon (Ready), and a final listing. It also displays the full vCenter VM path (e.g. `/Datacenter/vm/abatesting/demo1/demo1-master1`) instead of just the VM name.
+
+**Proposed changes:**
+1. **VM listing**: Show only the VM name (e.g. `demo1-master1`), not the full vCenter/ESXi path. Strip the path prefix before display.
+2. **Node status**: Show nodes **once** with `SchedulingDisabled`, then show uncordon results, then show nodes **once** as Ready. Remove the redundant intermediate/final listings.
+3. **Target output** -- concise and clear:
+   ```
+   [ABA] Starting cluster demo1.example.com:6443 ...
+   demo1-master1
+   demo1-master2
+   demo1-master3
+   [ABA] Start the above virtual machine(s)? (Y/n): [default: -y]
+   Powering on VirtualMachine ... OK (x3)
+   [ABA] Waiting for cluster API  |  45s
+   [ABA] Cluster endpoint accessible at https://api.demo1.example.com:6443/
+   [ABA] Making all nodes schedulable (uncordon) ...
+   [ABA] All nodes are ready!
+   NAME      STATUS   ROLES                         AGE    VERSION
+   master1   Ready    control-plane,master,worker   244d   v1.33.8
+   master2   Ready    control-plane,master,worker   244d   v1.33.8
+   master3   Ready    control-plane,master,worker   244d   v1.33.8
+   [ABA] Certificate expiration: 2027-04-13T01:18:17Z
+   [ABA] Waiting for OpenShift console  |  30s
+   [ABA] Waiting for all cluster operators  |  1m4s
+   ```
+
+**Location:** `scripts/cluster-startup.sh` (or `scripts/vmw-start.sh` depending on where the output logic lives)
+
+**Also:** Apply the same cleanup to `aba shutdown` output if it has similar redundancy.
+
 ## Bug: CLI flags silently ignored via `aba cluster` when cluster.conf exists
 
 **Discovered:** While investigating the `connected-public` E2E regression (commit `9b3ca98`, Mar 29). The E2E test was fixed by restoring `rm -rf` for mid-suite cleanups, but the underlying ABA core bug remains.
@@ -264,3 +319,24 @@ Three approaches considered:
 - `setup-cluster.sh` line 47: `create_cluster_cmd` omits several values
 - `setup-cluster.sh` lines 28-30: commented-out code showing prior rejection of full overwrite
 - `create-cluster-conf.sh` line 21: `[ -s cluster.conf ] && exit 0` (early exit on existing file)
+
+---
+
+## Investigate: Stale VolumeAttachments after ungraceful cluster shutdown
+
+**Added**: 2026-04-13
+
+After ungraceful VM power-off (e.g. `aba shutdown`, ESXi power-off), the vSphere CSI driver doesn't get to cleanly detach volumes. On next startup, stale VolumeAttachment objects are stuck with `deletionTimestamp` set and a finalizer that the CSI driver can't clear. This blocks rook-ceph-osd pods from re-attaching PVs.
+
+**Current workaround** (manual each time):
+```bash
+oc get volumeattachment -o jsonpath='{range .items[?(@.metadata.deletionTimestamp)]}{.metadata.name}{"\n"}{end}'
+oc patch volumeattachment <name> -p '{"metadata":{"finalizers":null}}' --type=merge
+oc delete pod <stuck-pod>
+```
+
+**Possible solutions to investigate:**
+1. Add cleanup to `cluster-startup.sh` (auto-clear stale VAs after uncordon)
+2. Improve `cluster-graceful-shutdown.sh` to give CSI driver more time to detach before power-off
+3. Investigate if OCP has a built-in recovery mechanism that could be enabled
+4. Consider if this is a vSphere CSI bug worth reporting upstream

@@ -87,3 +87,4 @@ mirror/regcreds.bk
 test/e2e/.config.env.deploy
 .cursor/
 ai/aba-installations-chart.html
+e2e-parallel.log.*
