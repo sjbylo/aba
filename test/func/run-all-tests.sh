@@ -50,6 +50,7 @@ unit_tests=(
 	test/func/test-symlinks-exist.sh
 	test/func/test-aba-root-only-in-aba-sh.sh
 	test/func/test-wait-show.sh
+	test/func/test-resource-pool-resolution.sh
 )
 
 # Integration tests (slow, may download)
