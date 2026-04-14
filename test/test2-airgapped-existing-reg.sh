@@ -254,7 +254,7 @@ do
 		if [ "$vlan" = 10 ]; then
 			next_hop_address=10.10.10.1
 			machine_network=10.10.10.0/24
-			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"Private Network\" /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.10.10.10
@@ -272,7 +272,7 @@ do
 		else
 			next_hop_address=10.0.1.1
 			machine_network=10.0.0.0/20
-			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"VM Network\" /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.0.1.201
@@ -368,7 +368,7 @@ do
 	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=10 /g' $subdir/aba/$cname/cluster.conf"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
-	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
+	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"Private Network\" /g' $subdir/aba/vmware.conf"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/$cname/cluster.conf"
 
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
@@ -405,7 +405,7 @@ do
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 	#
-	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"VM Network\" /g' $subdir/aba/vmware.conf"
 	#
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
 	#
