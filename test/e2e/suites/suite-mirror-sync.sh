@@ -199,9 +199,9 @@ e2e_run -q "Ensure OC_MIRROR_FLAGS is unset in ~/.aba/config" \
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
 
-# Verify the generated save-mirror.sh does NOT contain --remove-signatures
-e2e_run "Verify no --remove-signatures in generated save-mirror.sh" \
-    "! grep -- '--remove-signatures' mirror/data/save-mirror.sh"
+# Verify --remove-signatures is NOT active in OC_MIRROR_FLAGS
+e2e_run "Verify no active --remove-signatures in config" \
+    "! grep -q '^OC_MIRROR_FLAGS=.*--remove-signatures' \$HOME/.aba/config"
 
 e2e_diag "Check oc-mirror cache (local)" \
     "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"

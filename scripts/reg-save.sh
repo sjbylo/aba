@@ -118,14 +118,11 @@ do
 	# Set up the command in a script which can be run manually if needed.
 	# --since string Include all new content since specified date (format yyyy-MM-dd). When not provided, new content since previous mirroring is mirrored (only m2d)
 	cmd="oc-mirror --v2 --config=imageset-config.yaml file://. --since 2025-01-01  --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
-	echo "cd data && umask 0022 && $cmd" > save-mirror.sh && chmod 700 save-mirror.sh
-	aba_debug "Created save-mirror.sh script"
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror save --retry <count>'" || echo
-	aba_info "Running:"
-	aba_info "$(cat save-mirror.sh)"
+	aba_info "Running: cd data && umask 0022 && $cmd"
 	echo
 
 	# Run save command (v2 requires extra error checks)
@@ -137,12 +134,10 @@ do
 		aba_warning "Stale oc-mirror error files detected from a previous run -- removing"
 		rm -f data/working-dir/logs/mirroring_errors_*.txt
 	fi
-	aba_debug "Running save-mirror.sh"
-	./save-mirror.sh
+	aba_debug "Running oc-mirror save"
+	( cd data && umask 0022 && eval "$cmd" )
 	ret=$?
-	aba_debug "save-mirror.sh exit code: $ret"
-	#if [ $ret -eq 0 ]; then
-	#if ./save-mirror.sh; then
+	aba_debug "oc-mirror save exit code: $ret"
 	# Check for error files (only required for v2 of oc-mirror)
 	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 	# Example error file:  mirroring_errors_20250914_230908.txt 

@@ -120,14 +120,11 @@ do
 	# Wait for oc-mirror to be available!
 	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
 	cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
-	echo "cd data && umask 0022 && $cmd" > load-mirror.sh && chmod 700 load-mirror.sh 
-	aba_debug "Created load-mirror.sh script" 
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror load --retry <count>'" || echo
-	aba_info "Running:"
-	aba_info "$(cat load-mirror.sh)"
+	aba_info "Running: cd data && umask 0022 && $cmd"
 	echo
 
 	# Run load command (v2 requires extra error checks)
@@ -138,12 +135,10 @@ do
 		aba_warning "Stale oc-mirror error files detected from a previous run -- removing"
 		rm -f data/working-dir/logs/mirroring_errors_*.txt
 	fi
-	aba_debug "Running load-mirror.sh"
-	./load-mirror.sh
+	aba_debug "Running oc-mirror load"
+	( cd data && umask 0022 && eval "$cmd" )
 	ret=$?
-	aba_debug "load-mirror.sh exit code: $ret"
-	#if [ $ret -eq 0 ]; then
-	#if ./load-mirror.sh; then
+	aba_debug "oc-mirror load exit code: $ret"
 	# Check for error files (only required for v2 of oc-mirror)
 	#ls -lt data/working-dir/logs > /tmp/error_file.out
 	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)

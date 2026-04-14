@@ -125,17 +125,12 @@ do
 	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 	# Set up the command in a script which can be run manually if needed.
 	cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
-	echo "cd data && umask 0022 && $cmd" > sync-mirror.sh && chmod 700 sync-mirror.sh
-	aba_debug "Created sync-mirror.sh script"
 
 	echo
 	aba_info -n "Attempt ($try/$try_tot)."
 	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror sync --retry <count>'" || echo
-	aba_info "Running:"
-	aba_info "$(cat sync-mirror.sh)"
+	aba_info "Running: cd data && umask 0022 && $cmd"
 	echo
-
-	###./sync-mirror.sh && failed= && break
 
 	# Run sync command (v2 requires extra error checks)
 	# Remove stale error files before each attempt. Save, load, and sync all
@@ -145,11 +140,10 @@ do
 		aba_warning "Stale oc-mirror error files detected from a previous run -- removing"
 		rm -f data/working-dir/logs/mirroring_errors_*.txt
 	fi
-	aba_debug "Running sync-mirror.sh"
-	./sync-mirror.sh
+	aba_debug "Running oc-mirror sync"
+	( cd data && umask 0022 && eval "$cmd" )
 	ret=$?
-	aba_debug "sync-mirror.sh exit code: $ret"
-	#if [ $ret -eq 0 ]; then
+	aba_debug "oc-mirror sync exit code: $ret"
 	# Check for error files (only required for v2 of oc-mirror)
 	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
 	# Example error file:  mirroring_errors_20250914_230908.txt 
