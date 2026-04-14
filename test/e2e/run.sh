@@ -2094,6 +2094,10 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		if [ -n "$rc" ]; then
 			_record_result "$local_suite" "$rc"
 			_collect_pool_logs "$p"
+			# Capture scrollback then kill the dead tmux session so
+			# _find_free_pool sees the pool as free (remain-on-exit keeps it alive)
+			_ssh_con "$p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
+			_ssh_con "$p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 			unset '_busy_pools[$p]'
 		fi
 	done

@@ -14,8 +14,8 @@
 #     done
 #   done
 #
-# VLAN tests use GOVC_NETWORK=PRIVATE-DPG (VLAN-capable port group).
-# Non-VLAN tests use GOVC_NETWORK=VMNET-DPG (regular lab network).
+# VLAN tests use GOVC_NETWORK="Private Network" (VLAN-capable port group).
+# Non-VLAN tests use GOVC_NETWORK="VM Network" (regular lab network).
 # =============================================================================
 
 set -u
@@ -180,12 +180,12 @@ _net_test() {
     _saved_aba_machine_network="$(pool_machine_network)"
 
     if [ -n "$vlan" ]; then
-        govc_network="PRIVATE-DPG"
+        govc_network="Private Network"
         machine_network="$(pool_vlan_network)"
         next_hop="$(pool_vlan_gateway)"
         start_ip="$(pool_vlan_node_ip)"
     else
-        govc_network="VMNET-DPG"
+        govc_network="VM Network"
         machine_network="$(pool_machine_network)"
         next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
         start_ip="$(pool_node_ip)"
@@ -194,7 +194,7 @@ _net_test() {
     test_begin "$label"
 
     e2e_run "Set GOVC_NETWORK=$govc_network" \
-        "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=$govc_network /g' vmware.conf"
+        "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"$govc_network\" /g' vmware.conf"
 
     if [ -n "$vlan" ]; then
         # aba validates starting_ip against aba.conf's machine_network during iso/refresh
@@ -273,7 +273,7 @@ _net_test() {
 }
 
 # ============================================================================
-# 5-10. VLAN tests (GOVC_NETWORK=PRIVATE-DPG)
+# 5-10. VLAN tests (GOVC_NETWORK="Private Network")
 # ============================================================================
 
 # Pool-unique cluster names
@@ -309,7 +309,7 @@ _net_test "VLAN standard: bonding" \
     standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # ============================================================================
-# 11-13. Non-VLAN bonding tests (GOVC_NETWORK=VMNET-DPG)
+# 11-13. Non-VLAN bonding tests (GOVC_NETWORK="VM Network")
 #         Single-port non-VLAN is already tested by cluster-ops/mirror-sync suites.
 # ============================================================================
 
