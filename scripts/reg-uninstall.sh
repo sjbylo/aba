@@ -124,7 +124,7 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 		case "$vendor" in
 			docker)
 				aba_info "Removing Docker registry container and data on $reg_host ..."
-				$_ssh "podman rm -f registry; sudo rm -rf $reg_root" || true
+				$_ssh "podman rm -f registry; $SUDO rm -rf $reg_root" || true
 				;;
 			quay)
 				ensure_quay_registry
