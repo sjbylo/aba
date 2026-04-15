@@ -149,6 +149,7 @@ mirror:
       minVersion: 4.20.0
       maxVersion: 4.20.14
 ENDYAML"
+e2e_diag "Show dummy imageset-config" "cat mirror/data/imageset-config.yaml"
 e2e_run "Save current version" "grep '^ocp_version=' aba.conf > /tmp/e2e-saved-version"
 e2e_run "Set mismatched version" "sed -i 's/^ocp_version=.*/ocp_version=4.14.0/' aba.conf"
 e2e_run_must_fail "Version mismatch detected" "make -sC mirror checkversion"

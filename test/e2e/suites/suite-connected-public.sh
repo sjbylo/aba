@@ -202,6 +202,7 @@ e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 # Set up regcreds/ with the pre-populated registry's CA and pull secret
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"

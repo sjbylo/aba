@@ -101,6 +101,7 @@ e2e_run "Set operator sets" \
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror hostname in mirror.conf" \
     "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 test_end
 
@@ -219,6 +220,7 @@ e2e_run_remote "Generate SNO cluster.conf" \
 e2e_run_remote "Increase SNO resources for mesh/upgrade" \
     "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=28/' $SNO/cluster.conf && \
      sed -i 's/^master_mem=.*/master_mem=28/' $SNO/cluster.conf"
+e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
@@ -384,28 +386,15 @@ e2e_run "Verify catalog YAML exists" \
 e2e_run "Verify servicemeshoperator3 in catalog" \
     "grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
 
-# Save config: only the NEW operators (mesh3).  No platform section -- oc-mirror
-# v2 errors with "no release images found" when platform is present but the
-# delta tar has no release images.  This keeps the save fast and the archive small.
-e2e_run "Create save config for mesh (new operators only)" \
+# Save+Load config: ALL operators (old + new) so the archive is self-contained.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators
+# not in the archive cause oc-mirror to reach upstream (fails on disconnected
+# hosts).  No platform section -- oc-mirror v2 errors with "no release images
+# found" when platform is present but the delta tar has no release images.
+# oc-mirror only saves the delta since the last mirrorToDisk, so including
+# already-mirrored operators (kiali-ossm) adds negligible overhead.
+e2e_run "Create config with all operators for save+load" \
     "cat > mirror/data/imageset-config.yaml <<EOF
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
-mirror:
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
-    packages:
-\$(grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
-EOF"
-
-e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
-
-# Load config: must list ALL operators that should remain in OperatorHub.
-# During load, oc-mirror rebuilds the catalog index from this config and
-# overwrites the previous index in the registry.  Operators not listed here
-# will silently disappear from OperatorHub.
-e2e_run "Create full load config (all operators for catalog rebuild)" \
-    "cat > mirror/data/imageset-config-load.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -415,10 +404,12 @@ mirror:
 \$(grep -A2 'name: kiali-ossm\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 \$(grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 EOF"
+e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 
-e2e_run "Transfer archive and full load config to internal bastion" \
-    "scp mirror/data/mirror_*.tar ${INTERNAL_BASTION}:aba/mirror/data/ && \
-     scp mirror/data/imageset-config-load.yaml ${INTERNAL_BASTION}:aba/mirror/data/imageset-config.yaml"
+e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
+
+e2e_run "Transfer archive and config to internal bastion" \
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"

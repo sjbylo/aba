@@ -88,6 +88,8 @@ e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
+e2e_diag "Show aba.conf" "grep -E '^\w' aba.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 test_end
 
@@ -181,6 +183,7 @@ e2e_run "Verify mirror-registry exists after re-extract" \
 e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
 e2e_run "Reconfigure remote registry after reset" \
     "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+e2e_diag "Show mirror.conf after reset+reconfigure" "grep -E '^\w' mirror/mirror.conf"
 
 # Registries.d sigstore config test: verify the config file is deployed
 # and that oc-mirror works without --remove-signatures (relying on
