@@ -646,6 +646,32 @@ e2e_add_to_cluster_cleanup() {
 	_e2e_log "  Added cluster to cleanup list: $entry"
 }
 
+# Remove a cluster from the cleanup list after successful deletion.
+# Call this immediately after a successful 'aba delete' in suite code so the
+# post-suite dispatcher cleanup doesn't try to delete an already-gone cluster.
+#   e2e_remove_from_cluster_cleanup "$PWD/$SNO"              # local
+#   e2e_remove_from_cluster_cleanup "$PWD/$COMPACT" remote   # remote
+e2e_remove_from_cluster_cleanup() {
+	local abs_path="$1"
+	local location="${2:-local}"
+	local cleanup_file="${_E2E_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup}"
+	[ -f "$cleanup_file" ] || return 0
+
+	local target
+	if [ "$location" = "remote" ]; then
+		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	else
+		target="$(whoami)@$(hostname -f)"
+	fi
+
+	local entry="$target $abs_path"
+	local tmp="${cleanup_file}.tmp"
+	grep -vxF "$entry" "$cleanup_file" > "$tmp" 2>/dev/null || true
+	mv "$tmp" "$cleanup_file"
+	[ -s "$cleanup_file" ] || rm -f "$cleanup_file"
+	_e2e_log "  Removed cluster from cleanup list: $entry"
+}
+
 # Delete all clusters in the cleanup list.  Safe to call multiple times.
 # SSHs to each stored user@fqdn and runs 'aba -d <path> delete'.
 # Returns 1 if ANY cleanup entry fails -- caller must handle the failure.

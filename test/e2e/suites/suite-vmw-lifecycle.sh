@@ -186,6 +186,7 @@ e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
 e2e_diag "Compact cluster VMs after bootstrap" "aba --dir $COMPACT ls"
 
 e2e_run "Delete compact cluster" "aba -y --dir $COMPACT delete"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
 test_end
 
@@ -309,8 +310,10 @@ test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes VMware VMs)" \
     "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 e2e_run "Delete compact cluster if leftover" \
     "if [ -d $COMPACT ]; then aba --dir $COMPACT delete && rm -rf $COMPACT; else echo '[cleanup] $COMPACT already removed'; fi"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"
