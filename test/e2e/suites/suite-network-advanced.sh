@@ -121,6 +121,7 @@ e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run "Copy Quay root CA to regcreds" \
@@ -237,8 +238,7 @@ _net_test() {
     fi
 
     assert_file_exists "$cname/cluster.conf"
-    e2e_diag "Show cluster.conf" \
-        "grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
+    e2e_diag "Show cluster.conf" "grep -E '^\w' $cname/cluster.conf"
 
     e2e_run "Create ISO for $cname" "aba --dir $cname iso"
     e2e_run "Upload ISO for $cname" "aba --dir $cname upload"

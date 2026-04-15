@@ -144,6 +144,7 @@ e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 # Generate the pull secret for the pool registry
 e2e_run "Generate pool-registry pull secret" \
@@ -197,6 +198,7 @@ for ctype in sno compact standard; do
         "aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
+    e2e_diag "Show $cname cluster.conf" "grep -E '^\w' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
         "aba --dir $cname install-config.yaml"
     e2e_run "Generate agent-config.yaml for $cname" \

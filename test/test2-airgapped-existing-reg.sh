@@ -557,42 +557,27 @@ END
 
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
-# Append the correct values for each operator
+# Append ALL operators (old + new) so archive is self-contained for airgapped load.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators not
+# in the archive cause oc-mirror to reach upstream (fails on disconnected hosts).
+test-cmd -m "Adding kiali-ossm                   operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: kiali-ossm$'                 mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
+
 test-cmd -m "Adding advanced-cluster-management  operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
 
 test-cmd -m "Adding multicluster-engine          operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
-### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/data/imageset-config.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"   # Fetch all ??
 
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 
-test-cmd -r  2 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
-
-# Load config: must list ALL operators that should remain in OperatorHub.
-# During load, oc-mirror rebuilds the catalog index from this config and
-# overwrites the previous index in the registry.  Operators not listed here
-# will silently disappear from OperatorHub (see ai/OC-MIRROR-INTERNALS.md).
-tee mirror/data/imageset-config-load.yaml <<END
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/$gvk
-mirror:
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
-    packages:
-$(grep -A2 'name: kiali-ossm$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml)
-$(grep -A2 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml)
-$(grep -A2 'name: multicluster-engine$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml)
-END
+test-cmd -r  2 1 -m "Saving ACM images to local disk" "aba --dir mirror save  --retry"
 
 test-cmd -m "Listing image set files created" "ls -lh mirror/data/mirror_*.tar"
 mylog "Use 'scp' to copy mirror/data/mirror_*.tar file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
-test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/data/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data"
+test-cmd -m "Copy archive and config to $int_bastion_hostname" "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/data/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/data/mirror_*\.tar"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
-
-test-cmd -m "Copy full load config to $int_bastion_hostname" scp mirror/data/imageset-config-load.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data/imageset-config.yaml
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r  2 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 

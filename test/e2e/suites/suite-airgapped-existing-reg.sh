@@ -124,6 +124,7 @@ e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 e2e_run "Register pool registry with ABA" \
     "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
@@ -147,6 +148,7 @@ e2e_run_must_fail "Sync to unknown host should fail" \
 # Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf).
 e2e_run "Restore reg_host after must-fail" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf after restore" "grep -E '^\w' mirror/mirror.conf"
 
 # Pool registry is already registered -- idempotent install must succeed (skip)
 e2e_run "Install on already-registered registry succeeds (idempotent)" \
@@ -288,6 +290,7 @@ e2e_run_remote "Create compact cluster.conf" \
 e2e_run_remote "Increase compact resources for reliable bootstrap" \
     "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=14/' $COMPACT/cluster.conf && \
      sed -i 's/^master_mem=.*/master_mem=28/' $COMPACT/cluster.conf"
+e2e_diag_remote "Show compact cluster.conf" "grep -E '^\w' ~/aba/$COMPACT/cluster.conf"
 e2e_run_remote -r 1 1 "Bootstrap compact cluster" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
@@ -309,6 +312,7 @@ e2e_run_remote "Generate SNO cluster.conf" \
 e2e_run_remote "Increase SNO resources for ACM" \
     "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=28/' $SNO/cluster.conf && \
      sed -i 's/^master_mem=.*/master_mem=46/' $SNO/cluster.conf"
+e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
@@ -365,32 +369,18 @@ test_end
 # ============================================================================
 test_begin "ACM: install operators"
 
-# Save config: only the NEW operators (ACM + MCE).  No platform section --
-# oc-mirror v2 errors with "no release images found" when platform is present
-# but the delta tar has no release images.  This keeps the save fast.
+# Save+Load config: ALL operators (old + new) so the archive is self-contained.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators
+# not in the archive cause oc-mirror to reach upstream (fails on disconnected
+# hosts).  No platform section -- oc-mirror v2 errors with "no release images
+# found" when platform is present but the delta tar has no release images.
+# oc-mirror only saves the delta since the last mirrorToDisk, so including
+# already-mirrored operators (kiali-ossm) adds negligible overhead.
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
 
 OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-e2e_run "Create save config for ACM (new operators only)" \
+e2e_run "Create config with all operators for save+load" \
     "cat > mirror/data/imageset-config.yaml <<EOF
-kind: ImageSetConfiguration
-apiVersion: mirror.openshift.io/v2alpha1
-mirror:
-  operators:
-  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
-    packages:
-\$(grep -A2 'name: advanced-cluster-management\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
-\$(grep -A2 'name: multicluster-engine\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
-EOF"
-
-e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
-
-# Load config: must list ALL operators that should remain in OperatorHub.
-# During load, oc-mirror rebuilds the catalog index from this config and
-# overwrites the previous index in the registry.  Operators not listed here
-# will silently disappear from OperatorHub.
-e2e_run "Create full load config (all operators for catalog rebuild)" \
-    "cat > mirror/data/imageset-config-load.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
@@ -401,10 +391,12 @@ mirror:
 \$(grep -A2 'name: advanced-cluster-management\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 \$(grep -A2 'name: multicluster-engine\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 EOF"
+e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 
-e2e_run "Transfer archive and full load config to internal bastion" \
-    "scp mirror/data/mirror_*.tar ${INTERNAL_BASTION}:aba/mirror/data/ && \
-     scp mirror/data/imageset-config-load.yaml ${INTERNAL_BASTION}:aba/mirror/data/imageset-config.yaml"
+e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
+
+e2e_run "Transfer archive and config to internal bastion" \
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"

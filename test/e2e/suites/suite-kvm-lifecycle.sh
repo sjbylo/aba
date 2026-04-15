@@ -112,6 +112,7 @@ e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 e2e_run "Generate pool-registry pull secret" \
     "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
