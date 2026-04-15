@@ -2172,6 +2172,106 @@ wait_for_all_catalogs() {
 # -----------------------------------------------------------------------------
 
 # Probe HTTP/HTTPS endpoint with sensible timeouts
+# --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
+#
+# Usage: _run_oc_mirror_with_retry <action> <try_tot> <oc_mirror_cmd>
+#   action:    "save", "sync", or "load" (for log messages)
+#   try_tot:   total attempts (1 = no retry)
+#   oc_mirror_cmd: the oc-mirror command WITHOUT tuning flags (those are appended)
+#
+# Reads from environment: OC_MIRROR_PARALLEL_IMAGES, OC_MIRROR_IMAGE_TIMEOUT, OC_MIRROR_FLAGS
+# Exits the calling script with 0 on success or 1 on failure.
+_oc_mirror_decode_exit() {
+	local code=$1
+	local parts=""
+	[ $(( code & 2 )) -ne 0 ] && parts="${parts}release "
+	[ $(( code & 4 )) -ne 0 ] && parts="${parts}operator "
+	[ $(( code & 8 )) -ne 0 ] && parts="${parts}additional-image "
+	[ $(( code & 16 )) -ne 0 ] && parts="${parts}helm "
+	if [ -n "$parts" ]; then
+		echo "${parts% }"
+	elif [ "$code" -eq 1 ]; then
+		echo "generic/pre-batch"
+	else
+		echo "unknown($code)"
+	fi
+}
+
+_run_oc_mirror_with_retry() {
+	local action="$1"
+	local try_tot="$2"
+	local base_cmd="$3"
+
+	local parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
+	local retry_delay=2
+	local retry_times=2
+	local image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
+	aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
+
+	local try=1
+	local failed=1
+	local exit_history=""
+	aba_debug "Starting retry loop: try_tot=$try_tot"
+
+	while [ $try -le $try_tot ]; do
+		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
+		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+
+		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+
+		echo
+		aba_info -n "Attempt ($try/$try_tot)."
+		[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
+		aba_info "Running: cd data && umask 0022 && $cmd"
+
+		aba_debug "Running oc-mirror $action"
+		( cd data && umask 0022 && eval "$cmd" )
+		local ret=$?
+		aba_debug "oc-mirror $action exit code: $ret"
+
+		if [ $ret -eq 0 ]; then
+			aba_debug "$action completed successfully (ret=0)"
+			failed=
+			break
+		fi
+
+		# Decode the bitmask exit code for user feedback
+		local decoded
+		decoded=$(_oc_mirror_decode_exit $ret)
+		exit_history="${exit_history:+$exit_history, }$ret"
+
+		# Reduce oc-mirror parallelism and increase retry backoff on failure
+		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 ))
+		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 ))
+		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 ))
+		aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+
+		try=$(( try + 1 ))
+		if [ $try -le $try_tot ]; then
+			echo_red "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
+		fi
+	done
+
+	if [ "$failed" ]; then
+		try=$(( try - 1 ))
+		aba_warning -n "Image $action aborted ..." >&2
+		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
+		aba_warning \
+			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
+			"View https://status.redhat.com/ for any current issues or planned maintenance."
+		[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
+
+		return 1
+	fi
+
+	echo
+	local _past="${action}ed"; [ "$action" = "save" ] && _past="saved"
+	aba_info_ok -n "Images $_past successfully!"
+	[ $try_tot -gt 1 ] && [ $try -gt 1 ] && echo_white " (after $try attempts!)" || echo
+
+	return 0
+}
+
 # Usage: probe_host <url> [description]
 # Returns: 0 if reachable, 1 if not
 # Errors shown naturally by curl to stderr

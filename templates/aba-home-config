@@ -22,6 +22,14 @@ CATALOG_INDEX_DOWNLOAD_TIMEOUT=20m
 
 # --- oc-mirror Settings ---
 
+# oc-mirror --since date for mirror-to-disk (save) only (format: yyyy-MM-dd).
+# When set, oc-mirror includes all content since this date -- use a far-back date
+# (e.g. 2020-01-01) to force a complete archive every time (safe for fresh registries).
+# When unset (default), oc-mirror creates differential archives (only new blobs
+# since the last save). Differential archives are smaller but require that every
+# previous archive was loaded into the disconnected registry in order.
+# OC_MIRROR_SINCE=
+
 # oc-mirror --image-timeout value (default: 30m).
 # Increase for slow networks or large operator images.
 # OC_MIRROR_IMAGE_TIMEOUT=30m
