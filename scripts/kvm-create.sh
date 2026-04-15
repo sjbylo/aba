@@ -114,6 +114,10 @@ create_node() {
 			$extra_cpu_args \
 			--noautoconsole
 
+		local annotation
+		annotation=$(_vm_annotation "$role")
+		virsh -c "$LIBVIRT_URI" desc "$vm_name" --title "ABA: ${CLUSTER_NAME}.${base_domain}" --new-desc "$annotation"
+
 		if [ -n "${START_VM:-}" ]; then
 			virsh -c "$LIBVIRT_URI" autostart "$vm_name"
 		else
