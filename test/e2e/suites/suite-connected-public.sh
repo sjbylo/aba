@@ -168,6 +168,7 @@ e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 

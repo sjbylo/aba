@@ -23,7 +23,7 @@
 ABA_VERSION=20260407165514
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260416004501
+ABA_BUILD=20260416074013
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1056,7 +1056,10 @@ if [ "$cur_target" ]; then
 		;;
 		delete)
 			_ensure_hv_ready
-			make -s init agentconf
+			# Config regeneration may fail (e.g. missing pull secret on a
+			# disconnected host after registry deregistration). Still attempt
+			# delete -- the HV delete script exits 0 when no VMs exist.
+			make -s init agentconf || true
 			$ABA_ROOT/scripts/${HV}-delete.sh
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete

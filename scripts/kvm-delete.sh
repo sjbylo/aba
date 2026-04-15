@@ -27,7 +27,8 @@ if scripts/kvm-exists.sh; then
 		done
 	fi
 else
-	exit 1
+	aba_info "No VMs found -- nothing to delete"
+	exit 0
 fi
 
 ask "Delete the above virtual machine(s)" || exit 1

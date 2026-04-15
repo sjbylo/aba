@@ -545,6 +545,7 @@ test_begin "Standard: cluster with macs.conf"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Clean sno cluster dir" \
     "cd ~/aba && aba --dir $SNO clean"
 
@@ -576,6 +577,7 @@ e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
     "cd ~/aba && aba --dir $STANDARD delete"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
 

@@ -295,6 +295,7 @@ e2e_run_remote -r 1 1 "Bootstrap compact cluster" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT" remote
 e2e_run_remote -q "Clean compact dir" \
     "cd ~/aba && aba --dir $COMPACT clean"
 
@@ -462,6 +463,7 @@ test_begin "Delete cluster"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Clean SNO cluster dir" \
     "cd ~/aba && rm -rf $SNO"
 

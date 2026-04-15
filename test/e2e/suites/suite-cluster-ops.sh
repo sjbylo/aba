@@ -303,6 +303,7 @@ e2e_run "Restore verify_conf=all" \
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
 
 e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 
