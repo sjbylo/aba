@@ -34,9 +34,17 @@ ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	if ! virsh -c "$LIBVIRT_URI" dominfo "$vm" >/dev/null 2>&1; then
+		aba_info "VM $vm does not exist (skipping)"
+		continue
+	fi
 	aba_info "Removing VM $vm"
-	virsh -c "$LIBVIRT_URI" destroy "$vm" 2>/dev/null || true
-	virsh -c "$LIBVIRT_URI" undefine "$vm" --remove-all-storage --nvram 2>/dev/null || true
+	# Power off first -- ignore error if already off
+	virsh -c "$LIBVIRT_URI" destroy "$vm" || true
+	virsh -c "$LIBVIRT_URI" undefine "$vm" --remove-all-storage --nvram
+	if virsh -c "$LIBVIRT_URI" dominfo "$vm" >/dev/null 2>&1; then
+		aba_abort "VM $vm still exists after undefine"
+	fi
 done
 
 exit 0

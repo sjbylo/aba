@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=20260415214032
+ABA_VERSION=20260407165514
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260415151837
+ABA_BUILD=20260415230327
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1056,7 +1056,7 @@ if [ "$cur_target" ]; then
 		;;
 		delete)
 			_ensure_hv_ready
-			make -s init
+			make -s init agentconf
 			$ABA_ROOT/scripts/${HV}-delete.sh
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete

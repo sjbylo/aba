@@ -41,13 +41,24 @@ ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
-	aba_info Destroy VM $vm
-	govc vm.destroy $vm || true  # FIXME: should check first if the VM exists and only then delete instead of using || true
+	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
+	if [ "$power_state" = "null" ]; then
+		aba_info "VM $vm does not exist (skipping)"
+		continue
+	fi
+	aba_info "Destroy VM $vm (was $power_state)"
+	govc vm.destroy "$vm"
+	# Verify the VM is actually gone
+	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
+	[ "$power_state" != "null" ] && aba_abort "VM $vm still exists after destroy (state=$power_state)"
 done
 
 if [ "$VC" ]; then
-	aba_info Deleting cluster folder $cluster_folder
-	govc object.destroy $cluster_folder || true
+	# Only destroy the cluster folder if it exists and is empty (VMs already removed above)
+	if govc object.collect -s "$cluster_folder" name >/dev/null 2>&1; then
+		aba_info "Deleting cluster folder $cluster_folder"
+		govc object.destroy "$cluster_folder"
+	fi
 fi
 
 exit 0
