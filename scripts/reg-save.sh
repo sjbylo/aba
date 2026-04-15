@@ -167,7 +167,7 @@ do
 	aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
 
 	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "[ABA] Image saving failed ($ret) ... Trying again. " >&2
+	[ $try -le $try_tot ] && echo_red -n "[ABA] Image saving failed (exit=$ret) ... Trying again. " >&2
 done
 
 if [ "$failed" ]; then
