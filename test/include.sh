@@ -284,14 +284,17 @@ init_bastion() {
 		# Ensure test VMs are located together
 		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" ~/.vmware.conf
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	mylog "VM Update and reboot..."
 	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
 		set -ex
 		whoami
+		subscription-manager refresh && sudo dnf clean all
 		dnf update -y   # We should do this and add to the vmw snap every now and then
 		reboot
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	test-cmd -m "Wait for restart" sleep 20
 
@@ -432,6 +435,7 @@ init_bastion() {
 		#dnf update -y # This moved upwards due to restart issues!  # I guess we should do this and add to the vmw snap every now and then
 		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	# reboot now done above # test-cmd -m "Wait for restart" sleep 20
 
@@ -488,6 +492,7 @@ init_bastion() {
 		chown -R $u.$u ~$u
 		echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami | grep testy"
 	test-cmd -m "Delete and create 'sub dir' on remote host for user $u" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname -- 'rm -vrf $subdir && mkdir -v $subdir'"

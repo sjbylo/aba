@@ -277,13 +277,19 @@ _configure_dis_vm() {
 	_vm_disconnect_internet "$vm" "$user"
 
 	echo "  [$vm] Verifying NTP sync (server: ${NTP_SERVER:-10.0.1.8}) ..."
+	local _ntp_synced=0
 	for ((_ntp=0; _ntp<20; _ntp++)); do
 		if _essh "${user}@${vm}" -- "chronyc sources" | grep "^\^\*.*${NTP_SERVER:-10.0.1.8}"; then
 			echo "  [$vm] NTP synced to ${NTP_SERVER:-10.0.1.8}."
+			_ntp_synced=1
 			break
 		fi
 		sleep 5
 	done
+	if [ "$_ntp_synced" -eq 0 ]; then
+		echo "  [$vm] ERROR: NTP failed to sync to ${NTP_SERVER:-10.0.1.8} after 100s" >&2
+		return 1
+	fi
 
 	_verify_dis_vm "$vm" "$user" "$con_vm"
 
@@ -867,6 +873,9 @@ for (( i=1; i<=_POOLS; i++ )); do
 	_cfg_pids+=($!)
 	_cfg_labels+=("configure pool $i ($con_vm + $dis_vm)")
 	_cfg_logs+=("$con_log" "$dis_log")
+
+	# Stagger pool launches to avoid CDN thundering-herd
+	[ $i -lt $_POOLS ] && sleep 5
 done
 
 # While background config jobs run, tail their logs so the user sees progress
