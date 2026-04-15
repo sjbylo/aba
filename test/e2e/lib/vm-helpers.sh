@@ -133,7 +133,26 @@ _vm_install_packages() {
 
 	echo "  [vm] Installing required packages on $host ..."
 
-	_essh "${user}@${host}" -- sudo dnf install -y chrony dnsmasq bind-utils podman rsync < /dev/null
+	cat <<-'PKGEOF' | _essh "${user}@${host}" -- sudo bash
+		set -ex
+		# Refresh entitlement certs -- VMs restored from snapshot may have stale certs
+		subscription-manager refresh || true
+		dnf clean all
+
+		for attempt in 1 2 3; do
+			if dnf install -y chrony dnsmasq bind-utils podman rsync; then
+				echo "package-install exit=0 (attempt $attempt)"
+				break
+			fi
+			if [ "$attempt" -eq 3 ]; then
+				echo "package-install FAILED after 3 attempts" >&2
+				exit 1
+			fi
+			echo "package-install attempt $attempt failed -- retrying in 30s ..."
+			dnf clean all
+			sleep 30
+		done
+	PKGEOF
 }
 
 # --- _vm_setup_time ---------------------------------------------------------
@@ -180,6 +199,10 @@ _vm_dnf_update() {
 			if dnf update -y 2>&1 | tee /tmp/dnf-update.log; then
 				echo "dnf-update exit=0 (attempt $attempt)"
 				break
+			fi
+			if [ "$attempt" -eq 3 ]; then
+				echo "dnf-update FAILED after 3 attempts" >&2
+				exit 1
 			fi
 			echo "dnf-update attempt $attempt failed -- retrying in 30s ..."
 			sleep 30
