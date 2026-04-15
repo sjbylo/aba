@@ -267,8 +267,8 @@ _osus_check_policy_engine_uri() {
 	test "$scheme" = http -o "$scheme" = https
 }
 
-if ! aba_wait_show "Obtaining the policy engine route" 2 300 _osus_check_policy_engine_uri; then
-	aba_abort "Timed out waiting for the policy engine route (5 min)."
+if ! aba_wait_show "Obtaining the policy engine route" 2 900 _osus_check_policy_engine_uri; then
+	aba_abort "Timed out waiting for the policy engine route (15 min)."
 fi
 
 POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}")"
@@ -285,8 +285,8 @@ _osus_check_graph_available() {
 	test "$http_code" -eq 200
 }
 
-if ! aba_wait_show "Checking graph endpoint" 10 300 _osus_check_graph_available; then
-	aba_abort "Timed out waiting for graph endpoint (5 min): ${POLICY_ENGINE_GRAPH_URI}?channel=$CH"
+if ! aba_wait_show "Checking graph endpoint" 10 900 _osus_check_graph_available; then
+	aba_abort "Timed out waiting for graph endpoint (15 min): ${POLICY_ENGINE_GRAPH_URI}?channel=$CH"
 fi
 aba_info_ok "Graph endpoint available"
 
