@@ -924,13 +924,14 @@ aba_wait_show() (
 		_spinner_pid=
 	}
 
+	_cleaned=
 	_cleanup() {
+		[ -n "$_cleaned" ] && return
+		_cleaned=1
 		_stop_spinner
 		if [ "$use_tty" -eq 1 ]; then
 			_final=$(( $(date +%s) - start_ts ))
-			if [ "$_final" -gt 0 ]; then
-				printf '\r[ABA] %s     %s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")"
-			fi
+			printf '\r[ABA] %s     %s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")"
 		elif [ -n "$hdr_done" ]; then
 			printf '\n'
 		fi
