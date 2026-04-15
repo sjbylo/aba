@@ -341,6 +341,151 @@ The old (pre-v2) E2E tests supported this simply by using a different `vmware.co
 
 ---
 
+## Enhancement: Use oc-mirror v2 bitmask exit codes for smarter error handling
+
+**Added**: 2026-04-15
+**Priority**: Medium
+**Upstream PR**: [openshift/oc-mirror#1062](https://github.com/openshift/oc-mirror/pull/1062) (merged Apr 4, 2025, cherry-picked to 4.18)
+
+Since oc-mirror v2 (OCP 4.18+/4.19+), `oc-mirror` returns bitmask exit codes that identify which category of images failed:
+
+| Code | Meaning |
+|------|---------|
+| 1 | Generic error (pre-batch: config, auth, collection phase) |
+| 2 | Release image copy error |
+| 4 | Operator image copy error |
+| 8 | Additional image copy error |
+| 16 | Helm image copy error |
+
+Codes 2/4/8/16 are combined via bitwise OR (e.g. exit 12 = operator + additional image errors). Code 1 (generic) is returned for errors *outside* the batch worker (config parse, auth handshake, collector phase). The `BatchError.ExitCode()` method in `v2/internal/pkg/batch/common.go` computes the bitmask. `main.go`'s `exitCodeFromError()` returns `GenericErr` (1) for any error that doesn't implement `CodeExiter`.
+
+**IMPORTANT -- bitmask tells you WHAT failed, not WHY**: The exit code identifies the *category* of image that failed (release, operator, etc.), but does NOT distinguish between transient network errors and permanent problems (bad auth, missing image). A release image that fails due to a 2-second network blip returns exit 2 -- identical to a permanent auth failure. Verified in source: `concurrent_chan_worker.go` computes `releaseCountDiff` as `expected - copied` with no cause inspection. Similarly, exit 1 (generic) can be a transient collector-phase timeout or a permanent config error.
+
+**Affected ABA files**: `scripts/reg-save.sh`, `scripts/reg-sync.sh`, `scripts/reg-load.sh`
+
+**Current behavior**: All three scripts capture `ret=$?` after `oc-mirror` and treat any non-zero as a generic failure. They also check for `mirroring_errors_*.txt` files (which can indicate failure even when `ret=0` in older v2 builds). Since we control the oc-mirror version (4.18+/4.19+), the error file detection is now redundant -- the bitmask exit code is the single source of truth.
+
+**Proposed improvements**:
+1. **Remove error file detection**: Drop the `mirroring_errors_*.txt` existence checks and the stale-file cleanup logic. The bitmask exit code is sufficient and more reliable. This simplifies all three scripts significantly.
+2. **Decode the bitmask** in the retry loop to give the user actionable feedback:
+   - Exit 1 (generic): pre-batch failure (config, auth, collection). Log: "oc-mirror failed before image copying started"
+   - Exit 2 (release): release image copy failed. Log: "release image(s) failed to mirror"
+   - Exit 4 (operator): warn which catalog/package failed, suggest `--retry` or removing the operator
+   - Exit 8 (additional): warn about specific additional images
+   - Exit 16 (helm): warn about helm chart failures
+   - Combined codes (e.g. 12): report each category separately
+3. **Retry ALL non-zero exit codes** (up to the configured retry limit): Since any exit code -- including release (2) and generic (1) -- can be caused by transient network issues, all codes are retryable.
+4. **Log decoded exit code + running history** each attempt so the user can see whether retries are making progress or stuck on the same error. Example output:
+   ```
+   oc-mirror attempt 1/5 failed (exit 6: release + operator)
+   oc-mirror attempt 2/5 failed (exit 4: operator) -- history: [6, 4]
+   oc-mirror attempt 3/5 failed (exit 4: operator) -- history: [6, 4, 4]
+   ```
+   A narrowing code (6 → 4) means progress; a repeating code (4 → 4 → 4) suggests a permanent issue. Keep it simple -- just log the trail, no automated heuristics.
+5. **Extract shared retry loop first**: The retry loops in `reg-save.sh`, `reg-sync.sh`, and `reg-load.sh` are ~70 lines of near-identical copy-paste (~210 lines total). The only differences are the `oc-mirror` command args and the action name in messages. Before adding bitmask decoding, extract a shared function (e.g. `_run_oc_mirror_with_retry "$action" "$cmd"`) in `include_all.sh` or a dedicated helper. This avoids modifying 3 copies of the same loop and prevents inconsistencies.
+
+**Source code references** (commit `be3d7693`):
+- Error code constants: `v2/internal/pkg/errcode/code.go`
+- Bitmask computation: `v2/internal/pkg/batch/common.go` (`BatchError.ExitCode()`)
+- Release fail-fast + cancel: `v2/internal/pkg/batch/concurrent_chan_worker.go` (line: `if res.imgType.IsRelease() { cancel(); break }`)
+- Process exit code: `v2/cmd/oc-mirror/main.go` (`exitCodeFromError()` -- returns `GenericErr` for non-`CodeExiter` errors)
+
+---
+
+## Enhancement: Make oc-mirror `--since` configurable (move out of reg-save.sh)
+
+**Added**: 2026-04-15
+**Priority**: Medium
+**Affected file**: `scripts/reg-save.sh`
+
+`reg-save.sh` currently hardcodes `--since 2025-01-01` in the oc-mirror command. This should be a user-configurable variable in `~/.aba/config`, OFF by default.
+
+### Why `--since` matters for disconnected environments
+
+oc-mirror keeps a history of previously archived blobs in `working-dir/.history/`. On subsequent `save` runs:
+
+- **Without `--since`**: oc-mirror creates a **differential** (incremental) archive containing only blobs not in any previous run. The archive is smaller, but it only works if the disconnected registry already has all images from every previous `load`. If the registry was rebuilt, or a transfer was skipped, the differential archive is **incomplete** -- `load` will fail because blobs it references aren't in the archive or the registry.
+
+- **With `--since <far-back-date>`**: oc-mirror ignores history newer than that date. If no history predates the date (typical), the archive includes **all blobs** -- a complete, self-contained tarball that works on a fresh registry every time. Larger, but safe.
+
+For ABA's air-gapped workflow, a complete archive is the safe default -- users can't always guarantee every previous archive was loaded in order.
+
+### The imageset-config must always be complete (not additive)
+
+Verified in source (`v2/internal/pkg/operator/local_stored_collector.go` and `v2/internal/pkg/cli/executor.go`):
+
+During `load` (disk-to-mirror), oc-mirror reads the `imageset-config.yaml` passed via `--config` on the command line. Both `save` and `load` in ABA use the same file (`--config imageset-config.yaml` in `data/`).
+
+The operator collector iterates over `o.Config.Mirror.Operators` from **that** config and for each catalog:
+1. Reads the catalog from the extracted archive/cache
+2. Filters to only the selected packages
+3. **Rebuilds** the catalog index with those packages
+4. Pushes the rebuilt index to the disconnected registry, **overwriting** any previous version
+
+This means the imageset-config is **the complete truth for each round -- not additive**. Consequences:
+
+- If you remove an operator from imageset-config between rounds, it **disappears from OperatorHub** (the rebuilt catalog no longer references it, even though its blobs may still sit in the registry).
+- If you add a new operator, its blobs get collected during `save` regardless of `--since` (the history tracks blobs, not config entries -- new operator blobs aren't in history, so they're always archived).
+- **To keep OperatorHub complete, the imageset-config must always list ALL operators you want** -- not just the ones added since the last round.
+
+For ABA users this means: never trim the imageset-config between save/load cycles unless you intentionally want to remove operators from OperatorHub.
+
+### Proposed change
+
+1. Add `OC_MIRROR_SINCE` to `~/.aba/config` template, commented out (OFF by default):
+   ```bash
+   # oc-mirror --since date for mirror-to-disk (save) only (format: yyyy-MM-dd).
+   # When set, oc-mirror includes all content since this date -- use a far-back date
+   # (e.g. 2020-01-01) to force a complete archive every time.
+   # When unset (default), oc-mirror creates differential archives (only new blobs
+   # since the last save). Differential archives are smaller but require that every
+   # previous archive was loaded into the disconnected registry in order.
+   # OC_MIRROR_SINCE=
+   ```
+2. In `reg-save.sh`, replace the hardcoded `--since 2025-01-01` with:
+   ```bash
+   ${OC_MIRROR_SINCE:+--since $OC_MIRROR_SINCE}
+   ```
+   This expands to `--since <date>` when set, or nothing when empty/unset.
+3. Remove the stale comment about `--since`.
+
+---
+
+## Enhancement: Improve VM notes/descriptions for VMware and KVM
+
+**Added**: 2026-04-15
+**Priority**: Low
+**Affected files**: `scripts/vmw-create.sh`, `scripts/kvm-create.sh`
+
+### Current state
+
+**VMware** (`vmw-create.sh` line 98): VMs get a `-annotation` on creation:
+```
+Created on Wed Apr 15 13:39:37 +08 2026 as control node for OpenShift cluster
+e2e-compact2.p2.example.com version v4.20.17 from dis2:/home/steve/aba/e2e-compact2
+```
+Useful but doesn't immediately say "ABA" and misses some helpful info.
+
+**KVM** (`kvm-create.sh`): `virt-install` creates VMs with **no description at all**.
+
+### Proposed improvements
+
+1. Make it immediately obvious that ABA installed the VM:
+   ```
+   Installed by ABA (https://github.com/sjbylo/aba) on Wed Apr 15 13:39:37 +08 2026
+   Role: control node
+   Cluster: e2e-compact2.p2.example.com
+   OCP version: v4.20.17
+   Installed from: dis2:/home/steve/aba/e2e-compact2
+   Console: https://console-openshift-console.apps.e2e-compact2.p2.example.com
+   API: https://api.e2e-compact2.p2.example.com:6443
+   ```
+2. Consider adding: platform (vmw/kvm), ABA git branch/commit, cluster type (sno/compact/standard).
+3. For **KVM**: add `virsh desc "$vm_name" --title "..." --new-desc "..."` after `virt-install` to set the description. `virt-install` itself has no `--description` flag, but `virsh desc` works on an existing domain.
+4. For **VMware**: update the existing `-annotation` in `govc vm.create`.
+
+---
+
 ## Investigate: Stale VolumeAttachments after ungraceful cluster shutdown
 
 **Added**: 2026-04-13
