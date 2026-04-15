@@ -283,16 +283,19 @@ init_bastion() {
 
 		# Ensure test VMs are located together
 		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" ~/.vmware.conf
+		exit 0
 	END
 	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	mylog "VM Update and reboot..."
-	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
+	#cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
+	ssh $def_user@$int_bastion_hostname -- sudo bash <<-END
 		set -ex
 		whoami
 		subscription-manager refresh && sudo dnf clean all
 		dnf update -y   # We should do this and add to the vmw snap every now and then
 		reboot
+		exit 0
 	END
 	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
@@ -434,6 +437,7 @@ init_bastion() {
 
 		#dnf update -y # This moved upwards due to restart issues!  # I guess we should do this and add to the vmw snap every now and then
 		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
+		exit 0
 	END
 	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
@@ -491,6 +495,7 @@ init_bastion() {
 		chmod 600 ~$u/.ssh/authorized_keys
 		chown -R $u.$u ~$u
 		echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+		exit 0
 	END
 	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
