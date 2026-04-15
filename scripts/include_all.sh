@@ -868,7 +868,7 @@ _aba_format_elapsed() {
 # Evaluates <command> each iteration; exit 0 => success. Always prints progress (not gated by INFO_ABA).
 # The spinner runs in the background so it keeps updating even when the
 # check command blocks (e.g. curl --connect-timeout 10).  The check command
-# runs in the foreground (via timeout) for clean signal delivery.
+# runs via eval so caller-defined functions are available.
 # TTY: spinner refreshes every 0.2s. Non-TTY: one elapsed tick per check cycle.
 #
 # Uses ( ) function body so job table, traps, and set options are isolated.
@@ -939,13 +939,20 @@ aba_wait_show() (
 		elapsed=$(( $(date +%s) - start_ts ))
 		[ "$elapsed" -ge "$max" ] && break
 
-		# Run check command in the foreground.  timeout enforces the
-		# remaining wall-clock budget so a hung command can't overrun.
-		# --foreground keeps the child in our process group so Ctrl+C
-		# (group-wide SIGINT) reaches it directly.
+		# Run check command via eval in a forked subshell so caller-defined
+		# functions are available (bash -c would start a fresh process
+		# without them).  The subshell is killed if it exceeds the
+		# remaining wall-clock budget.
 		remaining=$(( max - elapsed ))
 		cmd_rc=0
-		timeout --foreground "$remaining" bash -c "$check_cmd" >/dev/null 2>&1 || cmd_rc=$?
+		( eval "$check_cmd" ) >/dev/null 2>&1 &
+		_cmd_pid=$!
+		_deadline=$(( $(date +%s) + remaining ))
+		while kill -0 "$_cmd_pid" 2>/dev/null; do
+			[ "$(date +%s)" -ge "$_deadline" ] && { kill "$_cmd_pid" 2>/dev/null; break; }
+			sleep 0.2
+		done
+		wait "$_cmd_pid" 2>/dev/null || cmd_rc=$?
 
 		elapsed=$(( $(date +%s) - start_ts ))
 		[ "$cmd_rc" -eq 0 ] && { _rc=0; break; }
