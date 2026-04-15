@@ -151,6 +151,8 @@ image and continues with the rest.
 
 ## 5. Source file reference
 
+Related Pull Request: https://github.com/openshift/oc-mirror/pull/1062 
+
 All paths relative to `github.com/openshift/oc-mirror` at commit `be3d7693`:
 
 | File | What it does |

@@ -568,6 +568,22 @@ test-cmd -m "Adding multicluster-engine          operator to mirror/data/imagese
 
 test-cmd -r  2 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
 
+# Load config: must list ALL operators that should remain in OperatorHub.
+# During load, oc-mirror rebuilds the catalog index from this config and
+# overwrites the previous index in the registry.  Operators not listed here
+# will silently disappear from OperatorHub (see ai/OC-MIRROR-INTERNALS.md).
+tee mirror/data/imageset-config-load.yaml <<END
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/$gvk
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
+    packages:
+$(grep -A2 'name: kiali-ossm$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml)
+$(grep -A2 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml)
+$(grep -A2 'name: multicluster-engine$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml)
+END
+
 test-cmd -m "Listing image set files created" "ls -lh mirror/data/mirror_*.tar"
 mylog "Use 'scp' to copy mirror/data/mirror_*.tar file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
 test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/data/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data"
@@ -576,8 +592,7 @@ test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file 
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
 
-#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
-test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
+test-cmd -m "Copy full load config to $int_bastion_hostname" scp mirror/data/imageset-config-load.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data/imageset-config.yaml
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r  2 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 

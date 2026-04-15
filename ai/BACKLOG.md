@@ -430,6 +430,18 @@ This means the imageset-config is **the complete truth for each round -- not add
 
 For ABA users this means: never trim the imageset-config between save/load cycles unless you intentionally want to remove operators from OperatorHub.
 
+### Bug found: E2E suites were silently clobbering operator catalogs
+
+**Fixed**: 2026-04-15
+
+The E2E suites `suite-airgapped-local-reg.sh` (mesh step) and `suite-airgapped-existing-reg.sh` (ACM step) were creating incremental operator configs listing ONLY the new operators. During `load`, oc-mirror rebuilt the catalog index with only those operators, silently dropping the initially loaded `kiali-ossm` from OperatorHub.
+
+The tests passed because no assertion checked that previously loaded operators survived. The catalog was restored later (in suite 1 by the upgrade step's full config regeneration; in suite 2 because the suite ends without checking).
+
+**Fix applied**: Both suites now include `kiali-ossm` in every incremental operator config, and assert `kiali-ossm` is still in OperatorHub after each incremental load. This catches catalog clobber regressions.
+
+**Broader concern for ABA users**: ABA should warn users (or prevent them) from running `aba load` with a partial imageset-config. A possible future enhancement: `reg-load.sh` could compare the config's operator list against what's currently in the registry catalog and warn if operators would be dropped.
+
 ### Proposed change
 
 1. Add `OC_MIRROR_SINCE` to `~/.aba/config` template, commented out (OFF by default):

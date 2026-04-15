@@ -384,12 +384,10 @@ e2e_run "Verify catalog YAML exists" \
 e2e_run "Verify servicemeshoperator3 in catalog" \
     "grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
 
-# For incremental operator saves, create a minimal imageset config with ONLY the
-# operators section (no platform).  oc-mirror v2 errors with "no release images
-# found" when the config includes a platform section but the delta tar doesn't
-# contain release images.  No aba/make target generates this minimal format,
-# so the file is created directly here.
-e2e_run "Create operators-only imageset config for mesh" \
+# Save config: only the NEW operators (mesh3).  No platform section -- oc-mirror
+# v2 errors with "no release images found" when platform is present but the
+# delta tar has no release images.  This keeps the save fast and the archive small.
+e2e_run "Create save config for mesh (new operators only)" \
     "cat > mirror/data/imageset-config.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
@@ -401,8 +399,26 @@ mirror:
 EOF"
 
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
-e2e_run "Transfer mesh archive+config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+
+# Load config: must list ALL operators that should remain in OperatorHub.
+# During load, oc-mirror rebuilds the catalog index from this config and
+# overwrites the previous index in the registry.  Operators not listed here
+# will silently disappear from OperatorHub.
+e2e_run "Create full load config (all operators for catalog rebuild)" \
+    "cat > mirror/data/imageset-config-load.yaml <<EOF
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
+    packages:
+\$(grep -A2 'name: kiali-ossm\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+\$(grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
+EOF"
+
+e2e_run "Transfer archive and full load config to internal bastion" \
+    "scp mirror/data/mirror_*.tar ${INTERNAL_BASTION}:aba/mirror/data/ && \
+     scp mirror/data/imageset-config-load.yaml ${INTERNAL_BASTION}:aba/mirror/data/imageset-config.yaml"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -410,6 +426,12 @@ e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror
 
 e2e_run_remote "Apply day2 config (mesh operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"
+
+# Verify previously loaded operators survived the incremental load.
+# oc-mirror rebuilds the catalog index during load; a partial config would
+# silently drop operators not listed (see ai/OC-MIRROR-INTERNALS.md).
+e2e_poll_remote 180 15 "Verify kiali-ossm still in OperatorHub after mesh load" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^kiali-ossm"
 
 test_end
 
