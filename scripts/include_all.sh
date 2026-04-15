@@ -279,6 +279,36 @@ vm_name() {
 	[ "${CP_REPLICAS:-${num_masters:-0}}" = "1" ] && [ "${WORKER_REPLICAS:-${num_workers:-0}}" = "0" ] && echo "$host" || echo "${cluster}-${host}"
 }
 
+_vm_annotation() {
+	local role=$1
+	local cluster_type
+	if [ "${CP_REPLICAS:-3}" = "1" ] && [ "${WORKER_REPLICAS:-0}" = "0" ]; then
+		cluster_type=sno
+	elif [ "${WORKER_REPLICAS:-0}" = "0" ]; then
+		cluster_type=compact
+	else
+		cluster_type=standard
+	fi
+	local aba_ver
+	aba_ver="$(cat "${ABA_ROOT:-..}/VERSION" 2>/dev/null || echo unknown)"
+	local role_label
+	[ "$role" = "control" ] && role_label="Control" || role_label="Worker"
+	cat <<-EOF
+	Installed by ABA v${aba_ver} (github.com/sjbylo/aba) on $(date)
+	Role: OpenShift ${role_label} Node
+	Cluster: ${CLUSTER_NAME}.${base_domain} (${cluster_type})
+	Initial OCP version: v${ocp_version}
+	Console: https://console-openshift-console.apps.${CLUSTER_NAME}.${base_domain}
+	API: https://api.${CLUSTER_NAME}.${base_domain}:6443
+	Manage this cluster using ABA from: $(hostname):${PWD}
+	Examples:
+	  aba -d ${CLUSTER_NAME} info
+	  aba -d ${CLUSTER_NAME} startup
+	  aba -d ${CLUSTER_NAME} shutdown
+	  aba -d ${CLUSTER_NAME} delete
+	EOF
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.
