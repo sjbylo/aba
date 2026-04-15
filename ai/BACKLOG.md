@@ -440,6 +440,14 @@ The tests passed because no assertion checked that previously loaded operators s
 
 **Fix applied**: Both suites now include `kiali-ossm` in every incremental operator config, and assert `kiali-ossm` is still in OperatorHub after each incremental load. This catches catalog clobber regressions.
 
+**IMPORTANT regression (2026-04-15):** The initial fix (`df21642`) used a "save-B, load-A+B" pattern (save only new operators, load with all operators via a separate `imageset-config-load.yaml`). This broke airgapped (disconnected) workflows: oc-mirror v2 `diskToMirror` resolves catalog data from the archive -- operators not in the archive cause oc-mirror to reach upstream `registry.redhat.io`, which fails on disconnected hosts. Fixed by changing to "save A+B, load A+B" -- the same ISC (with ALL operators) is used for both save and load, making the archive self-contained.
+
+**MUST RE-TEST:** The save-A+B / load-A+B pattern needs end-to-end verification:
+1. Save with full operator list (A + B) -- verify archive contains catalog data for all operators
+2. Load on disconnected host -- verify no upstream registry access attempted
+3. Verify ALL operators (both old and new) appear in OperatorHub after load
+4. Verify incremental save overhead is negligible (oc-mirror delta logic should skip already-archived blobs)
+
 **Broader concern for ABA users**: ABA should warn users (or prevent them) from running `aba load` with a partial imageset-config. A possible future enhancement: `reg-load.sh` could compare the config's operator list against what's currently in the registry catalog and warn if operators would be dropped.
 
 ### Proposed change
@@ -463,38 +471,48 @@ The tests passed because no assertion checked that previously loaded operators s
 
 ---
 
-## Enhancement: Improve VM notes/descriptions for VMware and KVM
+## ~~Enhancement: Improve VM notes/descriptions for VMware and KVM~~ DONE
+
+**Implemented**: 2026-04-15 (commit `96b0df3`)
+
+Added `_vm_annotation()` helper in `include_all.sh`. VMware: rich multiline govc annotation. KVM: `virsh desc` with title + full description. Includes ABA version, cluster type, OCP version, console/API URLs, and management examples.
+
+---
+
+## Enhancement: Externalize installed-cluster state for robust `aba delete`
 
 **Added**: 2026-04-15
-**Priority**: Low
-**Affected files**: `scripts/vmw-create.sh`, `scripts/kvm-create.sh`
+**Priority**: Medium
+**Related**: reliable VM delete fix (`e5c310b`)
 
-### Current state
+### Problem
 
-**VMware** (`vmw-create.sh` line 98): VMs get a `-annotation` on creation:
+`aba delete` currently requires `cluster.conf` (and now regenerates `agent-config.yaml`/`install-config.yaml` via `make agentconf`) to determine which VMs to delete. If the entire cluster directory is wiped (e.g. by a killed suite or accidental `rm -rf`), `aba delete` has no way to know what VMs existed.
+
+### Proposed approach
+
+Externalize "installed cluster" metadata to `~/.aba/clusters/<cluster-name>/state.sh` (similar to how mirror state lives in `~/.aba/mirror/<dir>/state.sh`). This file would be written at VM creation time and contain:
+
+```bash
+cluster_name=sno2
+base_domain=example.com
+cluster_type=sno
+platform=vmw
+cp_names="sno2"
+worker_names=""
+vc_folder="/Datacenter/vm/aba-e2e/pool1"
+installed_from="/home/steve/aba/sno2"
+installed_on="2026-04-15T23:00:00"
 ```
-Created on Wed Apr 15 13:39:37 +08 2026 as control node for OpenShift cluster
-e2e-compact2.p2.example.com version v4.20.17 from dis2:/home/steve/aba/e2e-compact2
-```
-Useful but doesn't immediately say "ABA" and misses some helpful info.
 
-**KVM** (`kvm-create.sh`): `virt-install` creates VMs with **no description at all**.
+`aba delete` could then fall back to this state file when the cluster directory or its configs are missing, enabling cleanup even after a total directory loss.
 
-### Proposed improvements
+### Considerations
 
-1. Make it immediately obvious that ABA installed the VM:
-   ```
-   Installed by ABA (https://github.com/sjbylo/aba) on Wed Apr 15 13:39:37 +08 2026
-   Role: control node
-   Cluster: e2e-compact2.p2.example.com
-   OCP version: v4.20.17
-   Installed from: dis2:/home/steve/aba/e2e-compact2
-   Console: https://console-openshift-console.apps.e2e-compact2.p2.example.com
-   API: https://api.e2e-compact2.p2.example.com:6443
-   ```
-2. Consider adding: platform (vmw/kvm), ABA git branch/commit, cluster type (sno/compact/standard).
-3. For **KVM**: add `virsh desc "$vm_name" --title "..." --new-desc "..."` after `virt-install` to set the description. `virt-install` itself has no `--description` flag, but `virsh desc` works on an existing domain.
-4. For **VMware**: update the existing `-annotation` in `govc vm.create`.
+- Must not conflict with the existing config-as-truth model -- state file is a fallback, not primary
+- Write at VM creation, update at delete (remove state file after successful delete)
+- Should `aba clean` remove the state file? Probably not -- it's external state
+- May make the `make -s init agentconf` fallback in `aba.sh delete)` unnecessary
 
 ---
 
