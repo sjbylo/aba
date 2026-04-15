@@ -866,87 +866,106 @@ _aba_format_elapsed() {
 # Poll until command succeeds or wall-clock budget is exhausted.
 # Usage: aba_wait_show <message> <interval_sec> <max_sec> <command>
 # Evaluates <command> each iteration; exit 0 => success. Always prints progress (not gated by INFO_ABA).
-# TTY: spinner + elapsed refresh every 1s while sleeping (check still runs each interval). Non-TTY: one tick per interval.
-aba_wait_show() {
-	local msg=$1
-	local interval=$2
-	local max=$3
+# The spinner runs in the background so it keeps updating even when the
+# check command blocks (e.g. curl --connect-timeout 10).  The check command
+# runs in the foreground (via timeout) for clean signal delivery.
+# TTY: spinner refreshes every 0.2s. Non-TTY: one elapsed tick per check cycle.
+#
+# Uses ( ) function body so job table, traps, and set options are isolated.
+aba_wait_show() (
+	msg=$1
+	interval=$2
+	max=$3
 	shift 3
-	local check_cmd=$*
+	check_cmd=$*
 
 	if ! [[ "$interval" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
 		echo_red "[ABA] aba_wait_show: interval and max_sec must be non-negative integers" >&2
 		return 2
 	fi
 
-	local use_tty=0
-	if [ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
-		use_tty=1
-	fi
+	set +m
+	trap - ERR
 
-	local elapsed=0
-	local spin=0
-	local hdr_done=
-	# ASCII spinner (avoid backslash quoting issues in array literals)
-	local _spin_frames=( '|' '/' '-' '\' )
+	use_tty=0
+	[ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
+
+	start_ts=$(date +%s)
+	_spinner_pid=
+	hdr_done=
+
+	# Launch a background spinner that updates every 0.5s (TTY only).
+	_start_spinner() {
+		[ "$use_tty" -eq 0 ] && return
+		[ -n "$_spinner_pid" ] && return
+		(
+			_frames=( '|' '/' '-' '\' )
+			_s=0
+			while true; do
+				_e=$(( $(date +%s) - start_ts ))
+				printf '\r[ABA] %s  %s  %s\033[K' "$msg" "${_frames[$(( _s % 4 ))]}" "$(_aba_format_elapsed "$_e")"
+				_s=$(( _s + 1 ))
+				sleep 0.2
+			done
+		) &
+		_spinner_pid=$!
+	}
+
+	_stop_spinner() {
+		[ -z "$_spinner_pid" ] && return
+		kill "$_spinner_pid" 2>/dev/null
+		wait "$_spinner_pid" 2>/dev/null || true
+		_spinner_pid=
+	}
+
+	_cleanup() {
+		_stop_spinner
+		if [ "$use_tty" -eq 1 ]; then
+			_final=$(( $(date +%s) - start_ts ))
+			if [ "$_final" -gt 0 ]; then
+				printf '\r[ABA] %s     %s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")"
+			fi
+		elif [ -n "$hdr_done" ]; then
+			printf '\n'
+		fi
+	}
+	trap '_cleanup; exit 130' INT
+	trap '_cleanup; exit 143' TERM
+
+	_rc=1
+	_start_spinner
 
 	while true; do
-		if eval "$check_cmd"; then
-			if [ "$use_tty" -eq 1 ] && [ "$elapsed" -gt 0 ]; then
-				printf '\n'
-			elif [ -n "$hdr_done" ]; then
-				printf '\n'
-			fi
-			return 0
+		elapsed=$(( $(date +%s) - start_ts ))
+		[ "$elapsed" -ge "$max" ] && break
+
+		# Run check command in the foreground.  timeout enforces the
+		# remaining wall-clock budget so a hung command can't overrun.
+		# --foreground keeps the child in our process group so Ctrl+C
+		# (group-wide SIGINT) reaches it directly.
+		remaining=$(( max - elapsed ))
+		cmd_rc=0
+		timeout --foreground "$remaining" bash -c "$check_cmd" >/dev/null 2>&1 || cmd_rc=$?
+
+		elapsed=$(( $(date +%s) - start_ts ))
+		[ "$cmd_rc" -eq 0 ] && { _rc=0; break; }
+		[ "$elapsed" -ge "$max" ] && break
+
+		# Non-TTY: print elapsed tick after each failed check
+		if [ "$use_tty" -eq 0 ]; then
+			[ -z "$hdr_done" ] && { printf '[ABA] %s ... ' "$msg"; hdr_done=1; }
+			printf '%s ' "$(_aba_format_elapsed "$elapsed")"
 		fi
 
-		if [ "$elapsed" -ge "$max" ]; then
-			if [ "$use_tty" -eq 1 ] && [ "$elapsed" -gt 0 ]; then
-				printf '\n'
-			elif [ -n "$hdr_done" ]; then
-				printf '\n'
-			fi
-			return 1
-		fi
-
-		local remaining=$(( max - elapsed ))
-		if [ "$remaining" -le 0 ]; then
-			if [ "$use_tty" -eq 1 ] && [ "$elapsed" -gt 0 ]; then
-				printf '\n'
-			elif [ -n "$hdr_done" ]; then
-				printf '\n'
-			fi
-			return 1
-		fi
-
-		local sleep_time=$interval
-		if [ "$interval" -gt "$remaining" ]; then
-			sleep_time=$remaining
-		fi
-
-		if [ "$use_tty" -eq 1 ]; then
-			# Sleep in 1s steps so the spinner moves every second (interval may be 10s+).
-			local left=$sleep_time
-			while [ "$left" -gt 0 ]; do
-				sleep 1
-				left=$(( left - 1 ))
-				elapsed=$(( elapsed + 1 ))
-				local spin_idx=$(( spin % 4 ))
-				spin=$(( spin + 1 ))
-				printf '\r[ABA] %s  %s  %s' "$msg" "${_spin_frames[$spin_idx]}" "$( _aba_format_elapsed "$elapsed" )"
-				printf '\033[K'
-			done
-		else
-			sleep "$sleep_time"
-			elapsed=$(( elapsed + sleep_time ))
-			if [ -z "$hdr_done" ]; then
-				printf '[ABA] %s ... ' "$msg"
-				hdr_done=1
-			fi
-			printf '%s ' "$( _aba_format_elapsed "$elapsed" )"
-		fi
+		# Sleep for the interval (or remaining budget, whichever is less)
+		remaining=$(( max - elapsed ))
+		wait_secs=$(( interval < remaining ? interval : remaining ))
+		[ "$wait_secs" -gt 0 ] && sleep "$wait_secs" 2>/dev/null || true
 	done
-}
+
+	_cleanup
+	return "$_rc"
+)
 
 # Function to check if a version is greater than another version
 is_version_greater() {
