@@ -101,105 +101,20 @@ echo
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir.
 [[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
-# oc-mirror v2 tuning params
-parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
-retry_delay=2
-retry_times=2
-image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
-aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
+base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path"
 
-# This loop is based on the "retry=?" value
-try=1
-failed=1
-aba_debug "Starting retry loop: try_tot=$try_tot"
-while [ $try -le $try_tot ]
-do
-	[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
-	aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
-	# Set up the command in a script which can be run manually if needed.
-	# Wait for oc-mirror to be available!
-	#run_once -w -i cli:install:oc-mirror -- make -sC cli oc-mirror 
-	cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
-
-	echo
-	aba_info -n "Attempt ($try/$try_tot)."
-	[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror load --retry <count>'" || echo
-	aba_info "Running: cd data && umask 0022 && $cmd"
-	echo
-
-	# Run load command (v2 requires extra error checks)
-	# Remove stale error files before each attempt. Save, load, and sync all
-	# share data/working-dir/logs/, so a leftover file from a previous save
-	# (or failed load) would cause a false failure detection after this run.
-	if ls data/working-dir/logs/mirroring_errors_*.txt >/dev/null 2>&1; then
-		aba_warning "Stale oc-mirror error files detected from a previous run -- removing"
-		rm -f data/working-dir/logs/mirroring_errors_*.txt
-	fi
-	aba_debug "Running oc-mirror load"
-	( cd data && umask 0022 && eval "$cmd" )
-	ret=$?
-	aba_debug "oc-mirror load exit code: $ret"
-	# Check for error files (only required for v2 of oc-mirror)
-	#ls -lt data/working-dir/logs > /tmp/error_file.out
-	error_file=$(ls -t data/working-dir/logs/mirroring_errors_*_*.txt 2>/dev/null | head -1)
-	# Example error file:  mirroring_errors_20250914_230908.txt 
-	aba_debug "error_file=${error_file:-none}"
-
-	# v2 of oc-mirror can be in error, even if ret=0!
-	if [ ! "$error_file" -a $ret -eq 0 ]; then
-		aba_debug "Load completed successfully (no error file, ret=0)"
-		failed=
-		break    # stop the "try loop"
-	fi
-
-	if [ -s "$error_file" ]; then
-		aba_debug "Error file found: $error_file - saving to data/saved_errors/"
-		mkdir -p data/saved_errors
-		mv $error_file data/saved_errors
-		aba_warning "An error was detected and the log file was saved in data/saved_errors/$(basename $error_file)"
-	fi
-	#fi
-
-	# At this point we have an error, so we adjust the tuning of v2 to reduce 'pressure' on the mirror registry
-	aba_debug "Adjusting tuning parameters for next retry"
-	#parallel_images=$(( parallel_images / 2 < 1 ? 1 : parallel_images / 2 ))	# half the value but it must always be at least 1
-	parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 )) 	# Subtract 2 but never less than 2
-	retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 )) 			# Add 2 but never more than value 10
-	retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 )) 			# Add 2 but never more than value 10
-	aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
-
-	let try=$try+1
-	[ $try -le $try_tot ] && echo_red -n "[ABA] Image loading failed (exit=$ret) ... Trying again. " >&2
-done
-
-if [ "$failed" ]; then
-	let try=$try-1
-	aba_warning -n "Image loading aborted ..."
-	[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts!)" || echo
-	aba_warning \
-		"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." 
-
-	[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
-
-	if grep -qiE 'SignatureValidationFailed|signature.*missing|sigstore' data/saved_errors/*.txt 2>/dev/null; then
-		aba_warning "Signature errors detected. To adjust sigstore settings, edit ~/.config/containers/registries.d/aba-sigstore.yaml"
-	fi
-
+if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
 echo
-aba_info_ok -n "Images loaded successfully!"
-[ $try_tot -gt 1 -a $try -gt 1 ] && echo_white " (after $try attempts!)" || echo   # Show if more than 1 attempt
-
-echo 
 aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"
 aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
 aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
-	aba_warning -c magenta -p IMPORANT \
+	aba_warning -c magenta -p IMPORTANT \
 		"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
 		"to configure/refresh OperatorHub/Catalogs, Signatures etc."
 	echo

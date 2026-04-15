@@ -217,7 +217,7 @@ if [ "$latest_working_dir" ]; then
 	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
 	[ ! "$cs_file_list" ] && \
-		aba_warning -p IMPORANT \
+		aba_warning -p IMPORTANT \
 			"No CatalogSource files found under $latest_working_dir/cluster-resources" \
 			"This usually means that Aba has not yet pushed any operator images to your mirror registry." \
 			"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
@@ -316,7 +316,7 @@ if [ "$latest_working_dir" ]; then
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
 	aba_warning "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
-	aba_warning -p IMPORANT \
+	aba_warning -p IMPORTANT \
 		"No cluster resource files found (CatalogSource, idms/itms ...) " \
 		"This usually occurs when Aba has not yet pushed any operator images to your mirror registry — either because mirroring" \
 		"hasn’t been run, or it wasn’t done from this host." \

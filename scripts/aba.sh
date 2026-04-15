@@ -1167,7 +1167,7 @@ if [ -f .bundle ]; then
 	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
 		{
 			echo
-			aba_warning -p "IMPORANT" \
+			aba_warning -p "IMPORTANT" \
 				"The Image-set archive file(s) (ISA image payload) are not included in this install bundle." \
 				"The ISA file(s) were left out of the install bundle during its creation and *must be*" \
 				"moved or copied into the install bundle under the aba/mirror/data directory before continuing!"
