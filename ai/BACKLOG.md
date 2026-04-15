@@ -471,7 +471,61 @@ The tests passed because no assertion checked that previously loaded operators s
 
 ---
 
-## ~~Enhancement: Improve VM notes/descriptions for VMware and KVM~~ DONE
+## BUG: KVM `virsh desc` fails with "metadata title can't contain newlines"
+
+**Found**: 2026-04-16 (Pool 3, kvm-lifecycle suite)
+**Severity**: High -- blocks ALL KVM cluster creation
+**Introduced by**: commit `96b0df3` (_vm_annotation() helper)
+
+### Root cause
+
+In `kvm-create.sh`, the `virsh desc` command is called as:
+```bash
+virsh desc "$vm_name" --title "ABA: ${CLUSTER_NAME}.${base_domain}" --new-desc "$annotation"
+```
+But `--title` is a **flag** (not an option taking a value). When `--title` is present, `--new-desc` sets the **title**, not the description. So the multi-line `$annotation` is assigned to the title, causing `error: metadata title can't contain newlines`.
+
+### Fix
+
+Split into two separate `virsh desc` calls:
+```bash
+virsh desc "$vm_name" --title --new-desc "ABA: ${CLUSTER_NAME}.${base_domain}"
+virsh desc "$vm_name" --new-desc "$annotation"
+```
+
+The second attempt also fails because `virsh undefine` removed the ISO volume, so re-create couldn't find `agent-*.iso`. This is a cascading failure from the first error.
+
+---
+
+## BUG: oc-mirror v2 diskToMirror always tries upstream catalog on incremental loads
+
+**Found**: 2026-04-16 (Pool 2, airgapped-local-reg suite, "Incremental: mesh operators")
+**Severity**: High -- blocks incremental operator loads on disconnected hosts
+**Related**: catalog clobber fix (`0281f6d`), `--since` delta behavior
+
+### Root cause
+
+oc-mirror v2 `diskToMirror` (load from archive) ALWAYS attempts to contact the upstream catalog source (`registry.redhat.io`) during the "collecting operator images" phase. The initial full load works because the archive contains complete catalog data. But an incremental (delta) archive -- even with "save A+B" ISC -- doesn't include enough catalog metadata for oc-mirror to resolve operators without reaching upstream.
+
+Evidence from Pool 2 logs:
+- Initial load: `Collected catalog registry.redhat.io/...v4.20` succeeds in <1s (found in archive)
+- Incremental load: same catalog collection attempts `registry.redhat.io`, gets `no route to host` (exit=4)
+
+This appears to be an **oc-mirror v2 limitation**: delta archives created with `--since` don't embed sufficient catalog index data for standalone `diskToMirror` resolution.
+
+### Possible workarounds
+
+1. **Force full save**: Use `--since 2020-01-01` for incremental saves to force a complete archive (large but self-contained). Already available via `OC_MIRROR_SINCE` config.
+2. **Clear oc-mirror state before save**: Remove `.oc-mirror/` working dir before the incremental save so oc-mirror treats it as a fresh save (downloads everything).
+3. **File upstream bug**: oc-mirror v2 `diskToMirror` should not require network access when the archive is self-contained.
+
+### Impact on E2E tests
+
+The suite's "save A+B, load A+B" approach is necessary but not sufficient for incremental airgapped loads. Need to investigate whether clearing oc-mirror state before save produces a complete archive.
+
+---
+
+## ~~Enhancement: Improve VM notes/descriptions for VMware and KVM~~ DONE (but KVM broken -- see BUG above)
 
 **Implemented**: 2026-04-15 (commit `96b0df3`)
 
@@ -513,6 +567,39 @@ installed_on="2026-04-15T23:00:00"
 - Write at VM creation, update at delete (remove state file after successful delete)
 - Should `aba clean` remove the state file? Probably not -- it's external state
 - May make the `make -s init agentconf` fallback in `aba.sh delete)` unnecessary
+
+---
+
+## TESTING NEEDED: `aba delete` non-fatal config regen (`make -s init agentconf || true`)
+
+**Added**: 2026-04-16
+**Priority**: High
+**Affected file**: `scripts/aba.sh` `delete)` case
+
+### Change
+
+The `delete)` case now runs `make -s init agentconf 2>/dev/null || true` instead of `make -s init agentconf`. This allows `aba delete` to proceed even when config regeneration fails (e.g. missing pull secret on a disconnected host after registry deregistration).
+
+### Risk
+
+The `2>/dev/null || true` suppresses ALL errors from `make -s init agentconf`, not just "missing pull secret". If `agentconf` silently produces a corrupt/partial `agent-config.yaml`, the subsequent `${HV}-delete.sh` may:
+- Delete the wrong VMs (if VM names were generated from corrupt config)
+- Miss VMs (if config is incomplete and lists fewer nodes than actually exist)
+- Fail in a confusing way (if the delete script assumes valid config)
+
+### Test scenarios needed
+
+1. **Happy path**: `aba delete` after normal install -- should work identically to before
+2. **Missing pull secret**: `aba delete` on disconnected host after `aba unregister` -- should succeed, exit 0
+3. **Missing mirror creds**: `aba delete` when mirror registry is down or creds expired -- should succeed
+4. **Corrupt cluster.conf**: `aba delete` with a malformed `cluster.conf` -- should it exit 0 or error?
+5. **No cluster.conf at all**: `aba delete` in a fresh directory -- should exit 0 (no VMs)
+6. **Partial agentconf**: What if `make agentconf` creates `agent-config.yaml` but not `install-config.yaml`? Does `${HV}-delete.sh` handle that?
+7. **Wrong VM count**: What if `agent-config.yaml` lists 1 master but 3 VMs actually exist? Only 1 gets deleted?
+
+### Long-term fix
+
+The "Externalize installed-cluster state" backlog item would eliminate this risk entirely -- `aba delete` would read VM names from `~/.aba/clusters/<name>/state.sh` instead of regenerating config.
 
 ---
 
