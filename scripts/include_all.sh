@@ -890,6 +890,12 @@ aba_wait_show() (
 	use_tty=0
 	[ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
 
+	# Check command output goes to a debug log (not /dev/null) so failures
+	# are diagnosable.  Truncated on each aba_wait_show invocation.
+	_wait_log="$HOME/.aba/logs/.aba-wait-show.log"
+	mkdir -p "$(dirname "$_wait_log")"
+	: > "$_wait_log"
+
 	start_ts=$(date +%s)
 	_spinner_pid=
 	hdr_done=
@@ -942,10 +948,10 @@ aba_wait_show() (
 		# Run check command via eval in a forked subshell so caller-defined
 		# functions are available (bash -c would start a fresh process
 		# without them).  The subshell is killed if it exceeds the
-		# remaining wall-clock budget.
+		# remaining wall-clock budget.  Output goes to debug log.
 		remaining=$(( max - elapsed ))
 		cmd_rc=0
-		( eval "$check_cmd" ) >/dev/null 2>&1 &
+		( eval "$check_cmd" ) >> "$_wait_log" 2>&1 &
 		_cmd_pid=$!
 		_deadline=$(( $(date +%s) + remaining ))
 		while kill -0 "$_cmd_pid" 2>/dev/null; do
