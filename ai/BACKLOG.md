@@ -603,6 +603,47 @@ The "Externalize installed-cluster state" backlog item would eliminate this risk
 
 ---
 
+## BUG: `ensure_govc` fails when called from outside ABA root (relative path)
+
+**Found**: 2026-04-16
+**Severity**: Medium -- blocks `run.sh` and other callers after `~/bin/govc` is removed
+**Triggered by**: TUI test `aba reset` removing `~/bin/govc`, then `run.sh` calling `_ensure_govc()`
+
+### Root cause
+
+`ensure_govc()` in `scripts/include_all.sh` calls `make -sC cli govc`. The `cli` path is **relative** to CWD. When sourced from `test/e2e/run.sh` (whose CWD is `~/aba/test/e2e`), the relative path resolves to `~/aba/test/e2e/cli/` which doesn't exist:
+
+```
+make: *** cli: No such file or directory.  Stop.
+ERROR: govc installation failed.
+```
+
+### Reproduction
+
+```bash
+cd ~/aba && aba reset -f        # removes ~/bin/govc and cli/.init
+cd ~/aba/test/e2e && ./run.sh run --all --pools 4
+# ERROR: govc installation failed.
+```
+
+### Proposed fix
+
+Use `$ABA_ROOT` or compute the absolute path in `ensure_govc()`:
+```bash
+ensure_govc() {
+    run_once -q -w -i "cli:download:govc" -- make -sC "$ABA_ROOT/cli" download-govc
+    run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC "$ABA_ROOT/cli" govc
+}
+```
+
+Or the same pattern used by other `ensure_*()` functions. Check if `ensure_oc`, `ensure_oc_mirror`, etc. have the same relative-path bug.
+
+### References
+- `scripts/include_all.sh` line 2654: `ensure_govc()` with `make -sC cli`
+- `test/e2e/run.sh` line 269: `_ensure_govc()` sources `include_all.sh` and calls `ensure_govc`
+
+---
+
 ## Investigate: Stale VolumeAttachments after ungraceful cluster shutdown
 
 **Added**: 2026-04-13

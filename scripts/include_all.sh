@@ -878,6 +878,7 @@ aba_wait_show() (
 	max=$3
 	shift 3
 	check_cmd=$*
+	max_fmt=$(_aba_format_elapsed "$max")
 
 	if ! [[ "$interval" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
 		echo_red "[ABA] aba_wait_show: interval and max_sec must be non-negative integers" >&2
@@ -909,7 +910,7 @@ aba_wait_show() (
 			_s=0
 			while true; do
 				_e=$(( $(date +%s) - start_ts ))
-				printf '\r[ABA] %s  %s  %s\033[K' "$msg" "${_frames[$(( _s % 4 ))]}" "$(_aba_format_elapsed "$_e")"
+				printf '\r[ABA] %s  %s  %s/%s\033[K' "$msg" "${_frames[$(( _s % 4 ))]}" "$(_aba_format_elapsed "$_e")" "$max_fmt"
 				_s=$(( _s + 1 ))
 				sleep 0.2
 			done
@@ -931,7 +932,7 @@ aba_wait_show() (
 		_stop_spinner
 		if [ "$use_tty" -eq 1 ]; then
 			_final=$(( $(date +%s) - start_ts ))
-			printf '\r[ABA] %s     %s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")"
+			printf '\r[ABA] %s     %s/%s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")" "$max_fmt"
 		elif [ -n "$hdr_done" ]; then
 			printf '\n'
 		fi
@@ -967,7 +968,7 @@ aba_wait_show() (
 
 		# Non-TTY: print elapsed tick after each failed check
 		if [ "$use_tty" -eq 0 ]; then
-			[ -z "$hdr_done" ] && { printf '[ABA] %s ... ' "$msg"; hdr_done=1; }
+			[ -z "$hdr_done" ] && { printf '[ABA] %s (max %s) ... ' "$msg" "$max_fmt"; hdr_done=1; }
 			printf '%s ' "$(_aba_format_elapsed "$elapsed")"
 		fi
 

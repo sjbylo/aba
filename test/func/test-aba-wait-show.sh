@@ -248,7 +248,7 @@ rc=0
 PLAIN_OUTPUT=1 aba_wait_show "fmt-test" 1 4 false > "$out" 2>&1 || rc=$?
 unset PLAIN_OUTPUT
 assert_rc 1 "$rc" "returns 1 on timeout"
-assert_output_matches "$out" '^\[ABA\] fmt-test \.\.\.' "non-TTY header present"
+assert_output_matches "$out" '^\[ABA\] fmt-test .* \.\.\.' "non-TTY header present"
 assert_output_matches "$out" '[0-9]+s' "elapsed time shown"
 assert_output_no_match "$out" '\[1\]' "no job control noise"
 _show_output "$out"

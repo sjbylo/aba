@@ -117,7 +117,7 @@ trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_r
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
-	if ! aba_wait_show "Waiting for all nodes Ready (up to ~10 min)" 10 600 all_nodes_ready; then
+	if ! aba_wait_show "Waiting for all nodes Ready" 10 600 all_nodes_ready; then
 		aba_warning "Not all nodes are 'Ready' yet, but continuing ..."
 	fi
 fi

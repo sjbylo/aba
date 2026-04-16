@@ -57,7 +57,7 @@ _kvm_start_all_running() {
 if [ "$wait" ]; then
 	_wait_mins=40
 	_wait_timeout=$(( 60 * _wait_mins ))
-	if ! aba_wait_show "Waiting for VMs to be running (max ${_wait_mins} min)" 10 "$_wait_timeout" \
+	if ! aba_wait_show "Waiting for VMs to be running" 10 "$_wait_timeout" \
 		_kvm_start_all_running; then
 		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to be running"
 	fi
