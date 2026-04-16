@@ -67,7 +67,7 @@ _vmw_start_all_powered_on() {
 if [ "$wait" ]; then
 	_wait_mins=40
 	_wait_timeout=$(( 60 * _wait_mins ))
-	if ! aba_wait_show "Waiting for VMs to power on (max ${_wait_mins} min)" 10 "$_wait_timeout" \
+	if ! aba_wait_show "Waiting for VMs to power on" 10 "$_wait_timeout" \
 		_vmw_start_all_powered_on; then
 		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to power on"
 	fi

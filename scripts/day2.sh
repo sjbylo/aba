@@ -2,12 +2,11 @@
 # Run some day 2 changes
 # Set up cluster trust CA with the internal registry's Root CA
 # Configure OperatorHub using the internal mirror registry.
-# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (aba -d mirror sync or load)
-## This script also solves the problem that multiple mirroring runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597
+# Apply IDMS/ITMS resource files created by oc-mirror v2 (aba -d mirror sync or load)
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
 # Apply any user-provided custom manifests from day2-custom-manifests/ in cluster folder
-# Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html-single/registry/index#images-configuration-cas_configuring-registry-operator 
+# Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html-single/registry/index#images-configuration-cas_configuring-registry-operator
 
 source scripts/include_all.sh
 
@@ -39,7 +38,7 @@ aba_info "Accessing the cluster ..."
 
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
-	if ! oc whoami; then
+	if ! oc whoami >/dev/null; then
 		aba_warning "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 		. <(aba login)
@@ -63,53 +62,59 @@ aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/
 echo
 
 
-aba_info_ok For disconnected environments, disabling online public catalog sources
-
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
-	aba_info "Running: oc patch OperatorHub cluster --type json -p '[{\"op\": \"add\", \"path\": \"/spec/disableAllDefaultSources\", \"value\": true}]'"
-	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
-       		aba_info "Patched OperatorHub, disabled Red Hat default catalog sources"
+	oc patch OperatorHub cluster --type json \
+		-p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' >/dev/null
+	aba_info "Disabled default catalog sources (disconnected mode)"
 else
 	aba_info "Assuming internet connection (e.g. proxy) in use, not disabling default catalog sources"
 fi
 
 
-aba_info "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
-aba_info "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
-aba_info "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
-echo
-cm_existing=$(oc get cm registry-config -n openshift-config || true)
+# Workaround: https://access.redhat.com/solutions/5514331
+# Fixes 'Imagestream openshift/oauth-proxy x509 certificate signed by unknown authority'
+aba_info "Adding mirror registry CA to cluster trust store"
+cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
 if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
-	aba_info "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
-	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
+	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
 	aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
-	aba_info "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
-	try_cmd 5 5 15 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
+	_day2_patch_additional_ca() {
+		oc patch image.config.openshift.io cluster \
+			--type='json' \
+			-p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]' \
+			>/dev/null 2>&1
+	}
 
-	# Sometimes see: 'error: the server doesn't have a resource type "imagestream"' ... so, need to check and wait! ...
-	aba_info "Ensuring 'imagestream' resource is available!" 
-	try_cmd 5 5 20 oc get imagestream 
+	if ! aba_wait_show "Patching cluster trust CA" 5 120 _day2_patch_additional_ca; then
+		aba_abort "Timed out patching cluster trust CA (2 min)"
+	fi
+
+	_day2_imagestream_available() {
+		oc get imagestream >/dev/null 2>&1
+	}
+
+	if ! aba_wait_show "Waiting for imagestream API" 5 120 _day2_imagestream_available; then
+		aba_abort "Timed out waiting for imagestream API (2 min)"
+	fi
 
 	# The above workaround describes re-creating the is/oauth-proxy 
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		aba_info "'Unknown authority' found in imagestream/oauth-proxy in namespace openshift."
-		try_cmd 5 5 15 oc delete imagestream -n openshift oauth-proxy
+		oc delete imagestream -n openshift oauth-proxy >/dev/null 2>&1 || true
 
-		echo_red "[ABA] Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2 to 3 minutes."
+		_day2_oauth_proxy_recreated() {
+			oc get imagestream -n openshift oauth-proxy >/dev/null 2>&1
+		}
 
-		sleep 30
-
-		# Assume once it's re-created then it's working
-		while ! oc get imagestream -n openshift oauth-proxy 2>/dev/null
-		do
-			sleep 10
-		done
+		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 180 _day2_oauth_proxy_recreated; then
+			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (3 min)"
+		fi
 	else
 		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
 	fi
