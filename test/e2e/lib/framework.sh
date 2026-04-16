@@ -1277,6 +1277,51 @@ e2e_diag_remote() {
     e2e_diag -h "$INTERNAL_BASTION" "$@"
 }
 
+# --- e2e_snapshot_file -------------------------------------------------------
+#
+# Copy a local file into the suite's snapshot directory for post-mortem analysis.
+# Each snapshot is numbered sequentially so the ISC "flow" is easy to reconstruct.
+#
+#   e2e_snapshot_file "initial-save" "mirror/data/imageset-config.yaml"
+#   -> snapshots/00-initial-save-imageset-config.yaml
+#
+e2e_snapshot_file() {
+	[ -n "$_E2E_SKIP_BLOCK" ] && return 0
+	[ -n "$_E2E_SUITE_SKIPPED" ] && return 0
+	local label="$1" file="$2"
+	local snap_dir="${E2E_LOG_DIR}/${_E2E_SUITE_NAME}/snapshots"
+	mkdir -p "$snap_dir"
+	local seq
+	seq=$(printf "%02d" "$(ls "$snap_dir" 2>/dev/null | wc -l)")
+	local dest="${snap_dir}/${seq}-${label}-$(basename "$file")"
+	if cp "$file" "$dest" 2>/dev/null; then
+		_e2e_log "  Snapshot: $dest"
+	else
+		_e2e_log "  Snapshot FAILED (file missing?): $file"
+	fi
+}
+
+# Copy a file from $INTERNAL_BASTION into the suite's snapshot directory.
+#
+#   e2e_snapshot_file_remote "initial-load" "mirror/data/imageset-config.yaml"
+#
+e2e_snapshot_file_remote() {
+	[ -n "$_E2E_SKIP_BLOCK" ] && return 0
+	[ -n "$_E2E_SUITE_SKIPPED" ] && return 0
+	local label="$1" file="$2"
+	local snap_dir="${E2E_LOG_DIR}/${_E2E_SUITE_NAME}/snapshots"
+	mkdir -p "$snap_dir"
+	local seq
+	seq=$(printf "%02d" "$(ls "$snap_dir" 2>/dev/null | wc -l)")
+	local dest="${snap_dir}/${seq}-${label}-$(basename "$file")"
+	if scp -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes \
+		"${INTERNAL_BASTION}:${file}" "$dest" 2>/dev/null; then
+		_e2e_log "  Snapshot (remote): $dest"
+	else
+		_e2e_log "  Snapshot FAILED (remote file missing?): ${INTERNAL_BASTION}:${file}"
+	fi
+}
+
 # --- e2e_run_must_fail ------------------------------------------------------
 #
 # Assert that a command fails (non-zero exit). If the command succeeds, this
