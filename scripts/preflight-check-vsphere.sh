@@ -355,6 +355,28 @@ _vsphere_check_writeaccess() {
 	return 0
 }
 
+# Layer 4 sequencer. Runs _vsphere_check_writeaccess against VC_FOLDER with the
+# folder VM-create allowlist, then against the resolved resource-pool path with
+# the RP VM-create allowlist. Per-scope failures collect all; query-level failures
+# become warnings and don't short-circuit the other scope. Phase 2's allowlists
+# are the narrow VM-create subset; Phase 3 will iterate the full VSPHERE_PRIVS_*
+# arrays for its broader privilege query.
+_vsphere_probe_writeaccess() {
+	local pool_path
+	pool_path=$(resolve-default-resource-pool)
+
+	# Folder VM-create allowlist.
+	_vsphere_check_writeaccess "$VC_FOLDER" \
+		VirtualMachine.Inventory.Create \
+		VirtualMachine.Config.AddNewDisk
+
+	# Resource-pool VM-create allowlist.
+	_vsphere_check_writeaccess "$pool_path" \
+		Resource.AssignVMToPool
+
+	return 0
+}
+
 preflight_check_vsphere() {
 	# Double-gate: parent at scripts/preflight-check.sh:202 already checks platform=vmw,
 	# but this short-circuit protects against direct sourcing.
@@ -404,12 +426,11 @@ preflight_check_vsphere() {
 	# Phase 2 Layer 1 + Layer 2: connectivity (TCP + TLS) + auth. Short-circuit the
 	# function on any layer failure; the `return 0` is deliberate - preflight_check_vsphere
 	# always returns 0; counters signal gaps for the parent to aggregate.
-	_vsphere_probe_tcp       || return 0
-	_vsphere_probe_tls       || return 0
-	_vsphere_probe_auth      || return 0
-	_vsphere_probe_resources || return 0
+	_vsphere_probe_tcp         || return 0
+	_vsphere_probe_tls         || return 0
+	_vsphere_probe_auth        || return 0
+	_vsphere_probe_resources   || return 0
+	_vsphere_probe_writeaccess
 
-	# (Plan 02-03 inserts the resource-pool probe INSIDE _vsphere_probe_resources above;
-	#  Plan 02-04 appends _vsphere_probe_writeaccess here.)
 	# Phase 3 will add privilege validation here (sources scripts/vmware-required-privileges.sh).
 }
