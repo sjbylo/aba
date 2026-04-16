@@ -185,6 +185,50 @@ _vsphere_probe_resources_network_on_cluster() {
 	return 0
 }
 
+# Layer 3 sequencer. Probes each referenced vSphere object in turn; collects all
+# failures within the layer (D-04) except for the DC-missing cascade (D-07) which
+# short-circuits the rest of Layer 3 and emits one informational cascade note.
+# Resource pool (RES-06) is probed by a separate helper added by Plan 02-03.
+# Return contract:
+#   0 - DC exists (some siblings may have failed; counters carry the signal)
+#   1 - DC missing (Layer 3 short-circuited; caller should stop)
+_vsphere_probe_resources() {
+	# D-07: if DC is missing, emit cascade note and bail. The note is aba_info
+	# (NOT aba_warning) and must NOT bump _preflight_errors - _vsphere_object_exists
+	# already bumped once for the "not found" line, keeping the total at exactly 1.
+	if ! _vsphere_object_exists datacenter "/$GOVC_DATACENTER"; then
+		aba_info "vSphere: skipping cluster/datastore/network/folder/resource-pool checks until datacenter resolves"
+		return 1
+	fi
+
+	# RES-02: cluster under DC. `|| :` keeps the layer in collect-all mode (D-04).
+	_vsphere_object_exists cluster "/$GOVC_DATACENTER/host/$GOVC_CLUSTER" || :
+
+	# RES-03a: primary datastore.
+	_vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE" || :
+
+	# RES-03b: optional ISO_DATASTORE - probe only if set, non-empty, AND different
+	# from GOVC_DATASTORE (D-06 + Pitfall 5 dedup guard: don't double-probe same path).
+	if [ -n "${ISO_DATASTORE:-}" ] && [ "$ISO_DATASTORE" != "$GOVC_DATASTORE" ]; then
+		_vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$ISO_DATASTORE" || :
+	fi
+
+	# RES-04: network existence AND attachment-to-cluster cross-check (D-08).
+	# The attachment probe only runs when the network exists - no point cross-checking
+	# a portgroup that isn't there; the basic probe already warned about it.
+	if _vsphere_object_exists network "/$GOVC_DATACENTER/network/$GOVC_NETWORK"; then
+		_vsphere_probe_resources_network_on_cluster || :
+	fi
+
+	# RES-05: VM folder (absolute path from VC_FOLDER).
+	_vsphere_object_exists folder "$VC_FOLDER" || :
+
+	# RES-06 resource pool is wired by Plan 02-03 (after the resolve-default-resource-pool
+	# helper lands in include_all.sh).
+
+	return 0
+}
+
 preflight_check_vsphere() {
 	# Double-gate: parent at scripts/preflight-check.sh:202 already checks platform=vmw,
 	# but this short-circuit protects against direct sourcing.
@@ -234,10 +278,12 @@ preflight_check_vsphere() {
 	# Phase 2 Layer 1 + Layer 2: connectivity (TCP + TLS) + auth. Short-circuit the
 	# function on any layer failure; the `return 0` is deliberate - preflight_check_vsphere
 	# always returns 0; counters signal gaps for the parent to aggregate.
-	_vsphere_probe_tcp  || return 0
-	_vsphere_probe_tls  || return 0
-	_vsphere_probe_auth || return 0
+	_vsphere_probe_tcp       || return 0
+	_vsphere_probe_tls       || return 0
+	_vsphere_probe_auth      || return 0
+	_vsphere_probe_resources || return 0
 
-	# (Plans 02-02 / 02-03 / 02-04 append _vsphere_probe_resources and _vsphere_probe_writeaccess here.)
+	# (Plan 02-03 inserts the resource-pool probe INSIDE _vsphere_probe_resources above;
+	#  Plan 02-04 appends _vsphere_probe_writeaccess here.)
 	# Phase 3 will add privilege validation here (sources scripts/vmware-required-privileges.sh).
 }
