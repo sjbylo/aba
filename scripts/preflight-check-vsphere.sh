@@ -223,8 +223,43 @@ _vsphere_probe_resources() {
 	# RES-05: VM folder (absolute path from VC_FOLDER).
 	_vsphere_object_exists folder "$VC_FOLDER" || :
 
-	# RES-06 resource pool is wired by Plan 02-03 (after the resolve-default-resource-pool
-	# helper lands in include_all.sh).
+	# RES-06: resource pool - configured OR implicit default (Phase 2).
+	# resolve-default-resource-pool lives in scripts/include_all.sh; this caller invokes it
+	# and branches the warning wording when the UNSET-path case fails vs the SET-path case.
+	# We use a custom probe inline instead of _vsphere_object_exists so we can swap the
+	# error wording: when the DEFAULT path is missing, the broken link is the CLUSTER
+	# (not the RP field) - we specifically do NOT tell the user "try setting GOVC_RESOURCE_POOL".
+	local pool_path pool_is_default=0
+	pool_path=$(resolve-default-resource-pool)
+	if [ -z "${GOVC_RESOURCE_POOL:-}" ]; then
+		pool_is_default=1
+	fi
+
+	# Note: `out=$(cmd 2>&1)` captures stderr INTO a variable; allowed idiom per CLAUDE.md
+	# (NOT the banned `cmd 2>&1 | grep` pipeline).
+	local rp_out rp_rc=0
+	rp_out=$(govc object.collect -s "$pool_path" name 2>&1) || rp_rc=$?
+
+	if [ "$rp_rc" -eq 0 ]; then
+		if [ "$pool_is_default" -eq 1 ]; then
+			# Debug-only announcement that the default is in use (NOT aba_info -
+			# quiet-on-success convention from Phase 1).
+			aba_debug "vSphere: using default resource pool '$pool_path'"
+		else
+			aba_debug "vSphere: resource pool '$pool_path' exists"
+		fi
+	else
+		if [ "$pool_is_default" -eq 1 ]; then
+			# Custom wording when the default path is missing: the cluster itself is the
+			# broken link (the cluster always ships a default "Resources" pool). Do NOT hint
+			# at setting GOVC_RESOURCE_POOL - that would mislead the user into masking a
+			# genuine cluster-configuration problem.
+			aba_warning "vSphere: default resource pool '$pool_path' not found - verify the cluster is properly configured."
+		else
+			aba_warning "vSphere: resource pool '$pool_path' not found"
+		fi
+		_preflight_errors=$(( _preflight_errors + 1 ))
+	fi
 
 	return 0
 }
