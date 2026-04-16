@@ -1,9 +1,5 @@
 # ABA Backlog
 
-## URGENT: Shutdown power-off timeout and failure handling (hotfix on `main`)
-
-Increase the shutdown VM power-off timeout from 5 min to 40 min and ensure `aba_abort` on timeout (not just a warning). Fix already exists on `dev` (commits `6550923`, `2b81278`). Cherry-pick to `main`.
-
 ## Enhancement: Warn when changing mirror registry identity after install
 
 When a mirror registry is installed and the user changes an "identity" field in `mirror.conf` (`reg_host`, `reg_port`, `reg_vendor`), display a warning via `ask()`:
@@ -125,6 +121,14 @@ $_ssh "podman rm -f registry; $_remote_sudo rm -rf $reg_root" || true
 `aba.sh` calls VM lifecycle scripts (`vmw-delete.sh`, `vmw-start.sh`, etc.) directly, bypassing Make's dependency chain. These scripts use `source scripts/include_all.sh` with a relative path, which requires the `scripts/` symlink to exist in the cluster directory. After `aba clean`, the symlink is removed and the scripts fail with "No such file or directory".
 
 **Fix applied:** Added `make -s init` before every VM lifecycle call in `aba.sh` (ls, start, stop, kill, delete, refresh, upload). Also removed `|| exit 0` from `delete)` so errors propagate.
+
+### Additional symptoms found (2026-04-16)
+
+5. **`aba clean refresh` -- chaining a Make target with an externalized target fails:**
+   `clean` is not in the externalized target list (`case $cur_target` line 918), so it gets appended to `BUILD_COMMAND`. `refresh` IS externalized, so it becomes `cur_target`. The `refresh)` handler (line 1068) runs `eval $BUILD_COMMAND` which tries to execute `clean` as a bare shell command: `line 1069: clean: command not found`. The same bug affects any combination of a Make target + externalized target (e.g. `aba clean delete`, `aba clean start`).
+
+6. **`aba clean` then any Make-passthrough target -- symlink breakage:**
+   `aba clean` removes the `scripts` and `templates` symlinks. Any subsequent command that goes through Make (e.g. `mon`, `install`, `day2`) fails with `scripts/include_all.sh: No such file or directory`. The externalized targets (`delete`, `start`, `stop`, etc.) already have `make -s init` guards, but Make-passthrough targets don't. Fix: either add `make -s init` before `eval make -s $BUILD_COMMAND` in `aba.sh`, or add `.init` as a dependency of the relevant Makefile targets.
 
 ### Remaining audit
 
