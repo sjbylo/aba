@@ -18,6 +18,19 @@
 # Phase 3 will extend it with privilege validation using VSPHERE_PRIVS_* arrays
 # from scripts/vmware-required-privileges.sh.
 
+# Phase 3 per-scope "object found" flags. Populated by _vsphere_probe_resources on
+# each successful existence probe. _vsphere_probe_privileges reads them to skip
+# privilege queries on missing objects (must not conflate "privilege not granted"
+# with "object not found"). ROOT has no flag: '/' always exists when Layer 2
+# auth is green.
+_vsphere_dc_found=0
+_vsphere_cluster_found=0
+_vsphere_datastore_found=0
+_vsphere_iso_datastore_found=0
+_vsphere_network_found=0
+_vsphere_folder_found=0
+_vsphere_resource_pool_found=0
+
 # --- Phase 2 Layer 1 helpers (private to this file) -----------------------
 
 # Extract host + port from GOVC_URL into two fields echoed on stdout.
@@ -200,28 +213,41 @@ _vsphere_probe_resources() {
 		aba_info "vSphere: skipping cluster/datastore/network/folder/resource-pool checks until datacenter resolves"
 		return 1
 	fi
+	_vsphere_dc_found=1
 
-	# RES-02: cluster under DC. `|| :` keeps the layer in collect-all mode (D-04).
-	_vsphere_object_exists cluster "/$GOVC_DATACENTER/host/$GOVC_CLUSTER" || :
+	# RES-02: cluster under DC. Flag-set runs only on success so Layer 4 skips
+	# privilege queries when the cluster object is missing (D-08 + D-06).
+	if _vsphere_object_exists cluster "/$GOVC_DATACENTER/host/$GOVC_CLUSTER"; then
+		_vsphere_cluster_found=1
+	fi
 
 	# RES-03a: primary datastore.
-	_vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE" || :
+	if _vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE"; then
+		_vsphere_datastore_found=1
+	fi
 
 	# RES-03b: optional ISO_DATASTORE - probe only if set, non-empty, AND different
 	# from GOVC_DATASTORE (D-06 + Pitfall 5 dedup guard: don't double-probe same path).
 	if [ -n "${ISO_DATASTORE:-}" ] && [ "$ISO_DATASTORE" != "$GOVC_DATASTORE" ]; then
-		_vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$ISO_DATASTORE" || :
+		if _vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$ISO_DATASTORE"; then
+			_vsphere_iso_datastore_found=1
+		fi
 	fi
 
 	# RES-04: network existence AND attachment-to-cluster cross-check (D-08).
 	# The attachment probe only runs when the network exists - no point cross-checking
 	# a portgroup that isn't there; the basic probe already warned about it.
+	# Flag reflects "network object exists" (Layer 3 RES-04 existence); attachment
+	# cross-check is an additional quality gate that does not alter the found state.
 	if _vsphere_object_exists network "/$GOVC_DATACENTER/network/$GOVC_NETWORK"; then
+		_vsphere_network_found=1
 		_vsphere_probe_resources_network_on_cluster || :
 	fi
 
 	# RES-05: VM folder (absolute path from VC_FOLDER).
-	_vsphere_object_exists folder "$VC_FOLDER" || :
+	if _vsphere_object_exists folder "$VC_FOLDER"; then
+		_vsphere_folder_found=1
+	fi
 
 	# RES-06: resource pool - configured OR implicit default (Phase 2).
 	# resolve-default-resource-pool lives in scripts/include_all.sh; this caller invokes it
@@ -241,6 +267,7 @@ _vsphere_probe_resources() {
 	rp_out=$(govc object.collect -s "$pool_path" name 2>&1) || rp_rc=$?
 
 	if [ "$rp_rc" -eq 0 ]; then
+		_vsphere_resource_pool_found=1
 		if [ "$pool_is_default" -eq 1 ]; then
 			# Debug-only announcement that the default is in use (NOT aba_info -
 			# quiet-on-success convention from Phase 1).
@@ -357,24 +384,125 @@ _vsphere_check_privileges() {
 	return 0
 }
 
-# Layer 4 sequencer. Runs _vsphere_check_privileges against VC_FOLDER with the
-# folder VM-create allowlist, then against the resolved resource-pool path with
-# the RP VM-create allowlist. Per-scope failures collect all; query-level failures
-# become warnings and don't short-circuit the other scope. Phase 2's allowlists
-# are the narrow VM-create subset; Phase 3 will iterate the full VSPHERE_PRIVS_*
-# arrays for its broader privilege query.
-_vsphere_probe_writeaccess() {
+# Layer 4 sequencer (Phase 3). Iterates the 7 curated privilege scopes from
+# scripts/vmware-required-privileges.sh and dispatches each to
+# _vsphere_check_privileges with the matching VSPHERE_PRIVS_<SCOPE> array.
+#
+# D-09: ROOT is unconditional (/ always exists if Layer 2 auth passed).
+# D-08: other six scopes are gated on the per-scope found-flag; a missing
+#       object emits ONE aba_debug skip line (no counter bump - Layer 3's
+#       "not found" warning already bumped once).
+# D-11: ISO_DATASTORE is checked as a second DATASTORE scope only when set,
+#       different from GOVC_DATASTORE, and confirmed present by Layer 3.
+# D-17: after all scopes processed, emit ONE multi-line aba_warning summary
+#       when at least one gap was recorded; emit nothing on clean pass.
+# D-18: summary does NOT bump _preflight_errors (presentation only; the
+#       individual gap warnings already bumped once each).
+_vsphere_probe_privileges() {
+	# Source the curated privilege arrays. Re-sourcing is idempotent.
+	source scripts/vmware-required-privileges.sh
+
 	local pool_path
 	pool_path=$(resolve-default-resource-pool)
 
-	# Folder VM-create allowlist.
-	_vsphere_check_privileges "folder" "$VC_FOLDER" \
-		VirtualMachine.Inventory.Create \
-		VirtualMachine.Config.AddNewDisk
+	# D-17 mechanism: diff _preflight_errors pre/post for gap count (N);
+	# increment scopes_with_gaps in each scope block for (M).
+	local errors_before="$_preflight_errors"
+	local scopes_with_gaps=0
+	local before_scope
 
-	# Resource-pool VM-create allowlist.
-	_vsphere_check_privileges "resource pool" "$pool_path" \
-		Resource.AssignVMToPool
+	# D-09: ROOT check is unconditional.
+	before_scope="$_preflight_errors"
+	_vsphere_check_privileges "root" "/" "${VSPHERE_PRIVS_ROOT[@]}"
+	if [ "$_preflight_errors" -gt "$before_scope" ]; then
+		scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+	fi
+
+	# DATACENTER - gated on Layer 3 "datacenter found" flag.
+	if [ "${_vsphere_dc_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "datacenter" "/$GOVC_DATACENTER" "${VSPHERE_PRIVS_DATACENTER[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	else
+		aba_debug "vSphere: skipping privilege check for missing datacenter '/$GOVC_DATACENTER'"
+	fi
+
+	# CLUSTER - gated on Layer 3 "cluster found" flag.
+	if [ "${_vsphere_cluster_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "cluster" "/$GOVC_DATACENTER/host/$GOVC_CLUSTER" "${VSPHERE_PRIVS_CLUSTER[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	else
+		aba_debug "vSphere: skipping privilege check for missing cluster '/$GOVC_DATACENTER/host/$GOVC_CLUSTER'"
+	fi
+
+	# DATASTORE (primary) - gated on Layer 3 "datastore found" flag.
+	if [ "${_vsphere_datastore_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "datastore" "/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE" "${VSPHERE_PRIVS_DATASTORE[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	else
+		aba_debug "vSphere: skipping privilege check for missing datastore '/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE'"
+	fi
+
+	# D-11: ISO_DATASTORE only when set, different from primary, AND found.
+	if [ -n "${ISO_DATASTORE:-}" ] \
+			&& [ "$ISO_DATASTORE" != "$GOVC_DATASTORE" ] \
+			&& [ "${_vsphere_iso_datastore_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "datastore" "/$GOVC_DATACENTER/datastore/$ISO_DATASTORE" "${VSPHERE_PRIVS_DATASTORE[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	fi
+
+	# NETWORK - gated on Layer 3 "network found" flag.
+	if [ "${_vsphere_network_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "network" "/$GOVC_DATACENTER/network/$GOVC_NETWORK" "${VSPHERE_PRIVS_NETWORK[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	else
+		aba_debug "vSphere: skipping privilege check for missing network '/$GOVC_DATACENTER/network/$GOVC_NETWORK'"
+	fi
+
+	# FOLDER - gated on Layer 3 "folder found" flag.
+	if [ "${_vsphere_folder_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "folder" "$VC_FOLDER" "${VSPHERE_PRIVS_FOLDER[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	else
+		aba_debug "vSphere: skipping privilege check for missing folder '$VC_FOLDER'"
+	fi
+
+	# RESOURCE_POOL - gated on Layer 3 "resource pool found" flag.
+	if [ "${_vsphere_resource_pool_found:-0}" -eq 1 ]; then
+		before_scope="$_preflight_errors"
+		_vsphere_check_privileges "resource pool" "$pool_path" "${VSPHERE_PRIVS_RESOURCE_POOL[@]}"
+		if [ "$_preflight_errors" -gt "$before_scope" ]; then
+			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
+		fi
+	else
+		aba_debug "vSphere: skipping privilege check for missing resource pool '$pool_path'"
+	fi
+
+	# D-17 summary: emit ONLY when gaps recorded (D-14 quiet-on-success).
+	# D-18: summary does NOT bump _preflight_errors.
+	local gap_count=$(( _preflight_errors - errors_before ))
+	if [ "$gap_count" -gt 0 ]; then
+		aba_warning "vSphere: $gap_count privilege gap(s) across $scopes_with_gaps scope(s)" \
+			"Next: review the curated list at scripts/vmware-required-privileges.sh and the OpenShift docs linked in its header." \
+			"Grant the missing privileges to the vCenter user or role and re-run aba install."
+	fi
 
 	return 0
 }
@@ -432,7 +560,5 @@ preflight_check_vsphere() {
 	_vsphere_probe_tls         || return 0
 	_vsphere_probe_auth        || return 0
 	_vsphere_probe_resources   || return 0
-	_vsphere_probe_writeaccess
-
-	# Phase 3 will add privilege validation here (sources scripts/vmware-required-privileges.sh).
+	_vsphere_probe_privileges
 }
