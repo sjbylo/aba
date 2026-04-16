@@ -124,6 +124,67 @@ _vsphere_probe_auth() {
 	return 1
 }
 
+# --- Phase 2 Layer 3 helpers (private to this file) -----------------------
+
+# Generic single-object existence probe (D-05 canonical pattern).
+# Uses `govc object.collect -s <absolute path> name`. Exit 0 = object exists.
+# Non-zero covers both "object not found" and permission-denied; the write-access
+# layer (RES-07) clarifies permission edge cases, so here we report as "not found".
+# $1 = human kind label (e.g. "datacenter", "cluster", "datastore", "network",
+#      "folder", "resource pool").
+# $2 = absolute vSphere inventory path.
+# Returns 0 on success; on failure emits one aba_warning + bumps _preflight_errors + returns 1.
+# Note: `out=$(cmd 2>&1)` captures stderr INTO a variable; this is an allowed idiom
+# per CLAUDE.md - it is NOT the banned `cmd 2>&1 | grep` pipeline.
+_vsphere_object_exists() {
+	local kind="$1" path="$2"
+	local out rc=0
+	out=$(govc object.collect -s "$path" name 2>&1) || rc=$?
+	if [ "$rc" -eq 0 ]; then
+		aba_debug "vSphere: $kind '$path' exists"
+		return 0
+	fi
+	aba_warning "vSphere: $kind '$path' not found"
+	_preflight_errors=$(( _preflight_errors + 1 ))
+	return 1
+}
+
+# RES-04 attachment cross-check (D-08): the named portgroup must be visible to at
+# least one host of GOVC_CLUSTER. This is an ADDITIONAL check on top of the basic
+# existence probe - "right-name, wrong-cluster" would otherwise silently pass RES-04.
+# Uses `govc object.collect -s <network> host` to list HostSystem morefs seeing the
+# portgroup, and `govc find -i -type h <cluster>` to list the cluster's host morefs.
+# Set-intersect via per-line grep -xF. If either query errors (non-zero rc), soft-skip
+# with an aba_debug: the basic existence probes already covered the "missing" case and
+# we don't want to double-count an error here.
+# Returns 0 on success (overlap found OR soft-skip); 1 if the attachment gap is real.
+_vsphere_probe_resources_network_on_cluster() {
+	local net_hosts cluster_hosts net_rc=0 cluster_rc=0
+	net_hosts=$(govc object.collect -s "/$GOVC_DATACENTER/network/$GOVC_NETWORK" host 2>&1) || net_rc=$?
+	cluster_hosts=$(govc find -i -type h "/$GOVC_DATACENTER/host/$GOVC_CLUSTER" 2>&1) || cluster_rc=$?
+
+	if [ "$net_rc" -ne 0 ] || [ "$cluster_rc" -ne 0 ]; then
+		aba_debug "vSphere: could not verify network-on-cluster attachment (govc read error)"
+		return 0
+	fi
+
+	local h overlap=0
+	for h in $cluster_hosts; do
+		if echo "$net_hosts" | grep -qxF -- "$h"; then
+			overlap=1
+			break
+		fi
+	done
+
+	if [ "$overlap" -eq 0 ]; then
+		aba_warning "vSphere: network '$GOVC_NETWORK' is not attached to any host in cluster '$GOVC_CLUSTER'"
+		_preflight_errors=$(( _preflight_errors + 1 ))
+		return 1
+	fi
+	aba_debug "vSphere: network '$GOVC_NETWORK' attached to cluster '$GOVC_CLUSTER'"
+	return 0
+}
+
 preflight_check_vsphere() {
 	# Double-gate: parent at scripts/preflight-check.sh:202 already checks platform=vmw,
 	# but this short-circuit protects against direct sourcing.
