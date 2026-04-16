@@ -199,12 +199,13 @@ else
 fi
 
 # 20. Path C: platform=vmw + all fields present -> 1 OK line, _preflight_errors=0
-# Stub the Phase 2 Layer 1/2 probes so Path C exercises ONLY the field-presence
-# gate + the OK line, without reaching the network. Phase 2 Plan 02-05 adds
-# dedicated behavioural paths (D-P) that exercise the probes with fixtures.
-_vsphere_probe_tcp()  { :; }
-_vsphere_probe_tls()  { :; }
-_vsphere_probe_auth() { :; }
+# Stub the Phase 2 Layer 1/2/3 probes so Path C exercises ONLY the field-presence
+# gate + the OK line, without reaching the network or vCenter. Phase 2 Plan 02-05
+# adds dedicated behavioural paths (D-P) that exercise the probes with fixtures.
+_vsphere_probe_tcp()       { :; }
+_vsphere_probe_tls()       { :; }
+_vsphere_probe_auth()      { :; }
+_vsphere_probe_resources() { :; }
 export GOVC_URL=x GOVC_USERNAME=x GOVC_PASSWORD=x GOVC_DATACENTER=x GOVC_CLUSTER=x GOVC_DATASTORE=x GOVC_NETWORK=x
 _preflight_errors=0
 preflight_check_vsphere >"$_smoke_out" 2>&1
