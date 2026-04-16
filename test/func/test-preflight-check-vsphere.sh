@@ -95,9 +95,17 @@ else
 fi
 
 # 13. No banned stderr-suppression patterns (CLAUDE.md).
-# The only allowed narrow exception is 'command -v govc >/dev/null' (stdout-only suppression).
-# We reject any '2>/dev/null', '&>/dev/null', '>/dev/null 2>&1', or '2>&1 |'.
-banned=$(grep -nE '(2>/dev/null|&>/dev/null|>/dev/null 2>&1|2>&1 \|)' "$SCRIPT" || true)
+# Narrow exceptions (each matched by its own grep -v filter):
+#   - 'command -v <tool> >/dev/null'  (stdout-only, Phase 1 D-15)
+#   - '/dev/tcp/...'  (the NTP-probe idiom at scripts/preflight-check.sh:75 -
+#     2>/dev/null is INSIDE the bash -c subshell to suppress bash's own
+#     "connect: Connection refused" stderr noise; Phase 2 Pitfall 6 in RESEARCH.md)
+# We reject any '2>/dev/null', '&>/dev/null', '>/dev/null 2>&1', or '2>&1 |' outside these.
+banned=$(grep -nE '(2>/dev/null|&>/dev/null|>/dev/null 2>&1|2>&1 \|)' "$SCRIPT" \
+	| grep -Pv '^\d+:\s*#' \
+	| grep -v 'command -v' \
+	| grep -v '/dev/tcp/' \
+	|| true)
 if [ -n "$banned" ]; then
 	test_fail "Contains banned stderr-suppression patterns"
 else
@@ -191,6 +199,10 @@ else
 fi
 
 # 20. Path C: platform=vmw + all fields present -> 1 OK line, _preflight_errors=0
+# Stub the Phase 2 Layer 1 TCP probe so Path C exercises ONLY the field-presence
+# gate + the OK line, without reaching the network. Phase 2 Plan 02-05 adds
+# dedicated behavioural paths (D-P) that exercise _vsphere_probe_tcp with fixtures.
+_vsphere_probe_tcp() { :; }
 export GOVC_URL=x GOVC_USERNAME=x GOVC_PASSWORD=x GOVC_DATACENTER=x GOVC_CLUSTER=x GOVC_DATASTORE=x GOVC_NETWORK=x
 _preflight_errors=0
 preflight_check_vsphere >"$_smoke_out" 2>&1

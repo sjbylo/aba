@@ -18,6 +18,48 @@
 # Phase 3 will extend it with privilege validation using VSPHERE_PRIVS_* arrays
 # from scripts/vmware-required-privileges.sh.
 
+# --- Phase 2 Layer 1 helpers (private to this file) -----------------------
+
+# Extract host + port from GOVC_URL into two fields echoed on stdout.
+# Accepts: hostname | hostname:port | https://hostname | https://hostname:port | https://hostname:port/sdk
+# Defaults port to 443 (vCenter standard). IPv6 bracket form ([::1]:443) is NOT supported -
+# aba's templates/vmware.conf only documents hostname forms. If a user supplies an IPv6
+# literal anyway, the TCP probe will legitimately fail with "cannot reach".
+# Out: echoes "<host> <port>" on stdout. Callers: read host port < <(_vsphere_parse_govc_url "$GOVC_URL").
+_vsphere_parse_govc_url() {
+	local url="$1"
+	url="${url#http://}"
+	url="${url#https://}"
+	url="${url%%/*}"
+	local h p
+	if [[ "$url" == *:* ]]; then
+		h="${url%:*}"
+		p="${url##*:}"
+	else
+		h="$url"
+		p=443
+	fi
+	echo "$h $p"
+}
+
+# Layer 1 Stage 1: TCP reachability probe.
+# Matches the NTP UDP probe idiom at scripts/preflight-check.sh:75 - the 2>/dev/null
+# is INSIDE the `bash -c` subshell to suppress bash's own "connect: Connection refused"
+# stderr noise that /dev/tcp prints on failure. It does NOT suppress stderr of anything
+# the caller runs; it is the documented narrow exception (see CLAUDE.md rule + Pitfall 6 in RESEARCH.md).
+# Returns 0 on success; on failure emits one aba_warning, bumps _preflight_errors, returns 1.
+_vsphere_probe_tcp() {
+	local host port
+	read host port < <(_vsphere_parse_govc_url "$GOVC_URL")
+	if timeout 3 bash -c "echo >/dev/tcp/$host/$port 2>/dev/null"; then
+		aba_debug "vSphere: TCP reach to $host:$port ok"
+		return 0
+	fi
+	aba_warning "vSphere: cannot reach $host:$port (TCP) - check DNS/firewall/GOVC_URL"
+	_preflight_errors=$(( _preflight_errors + 1 ))
+	return 1
+}
+
 preflight_check_vsphere() {
 	# Double-gate: parent at scripts/preflight-check.sh:202 already checks platform=vmw,
 	# but this short-circuit protects against direct sourcing.
@@ -64,6 +106,11 @@ preflight_check_vsphere() {
 	# Phase 2/3 can append connectivity / privilege check lines without rewording.
 	aba_info_ok "vSphere: configuration fields present, running checks..."
 
-	# Phase 2 will add connectivity/TLS/resource checks here.
+	# Phase 2 Layer 1: connectivity (TCP + TLS). Short-circuit the function on failure;
+	# the `return 0` is deliberate - preflight_check_vsphere always returns 0; counters signal gaps.
+	_vsphere_probe_tcp || return 0
+
+	# (subsequent tasks add _vsphere_probe_tls, _vsphere_probe_auth, _vsphere_probe_resources,
+	#  _vsphere_probe_writeaccess here in Plans 02-01 Task 2, 02-02, 02-03, 02-04.)
 	# Phase 3 will add privilege validation here (sources scripts/vmware-required-privileges.sh).
 }
