@@ -60,6 +60,70 @@ _vsphere_probe_tcp() {
 	return 1
 }
 
+# Layer 1 Stage 2: TLS trust-chain probe.
+# Skipped entirely when GOVC_INSECURE is truthy (D-02). Uses openssl s_client with
+# BOTH -verify_return_error (makes exit code meaningful on chain failure) AND a
+# belt-and-suspenders parse of "Verify return code: 0 (ok)" in the captured output -
+# some RHEL openssl builds exit 0 even on trust failure (openssl/openssl#8079).
+# The `out=$(cmd 2>&1)` idiom captures stderr into a variable for inspection; this is
+# an ALLOWED pattern per CLAUDE.md (it is NOT the banned `cmd 2>&1 | grep` pipeline).
+# Returns 0 on success; on failure emits one multi-line aba_warning with D-03 remediation.
+_vsphere_probe_tls() {
+	case "${GOVC_INSECURE:-}" in
+		1|true|True|TRUE|yes|YES)
+			aba_debug "vSphere: skipping TLS check (GOVC_INSECURE=$GOVC_INSECURE)"
+			return 0
+			;;
+	esac
+
+	local host port
+	read host port < <(_vsphere_parse_govc_url "$GOVC_URL")
+
+	# Belt-and-suspenders: rely on -verify_return_error exit code AND the stderr line.
+	local tls_out tls_rc=0
+	tls_out=$(timeout 5 openssl s_client \
+		-verify_return_error \
+		-connect "$host:$port" \
+		-servername "$host" \
+		</dev/null 2>&1) || tls_rc=$?
+
+	if [ "$tls_rc" -eq 0 ]; then
+		aba_debug "vSphere: TLS trust chain ok for $host"
+		return 0
+	fi
+	if echo "$tls_out" | grep -qE 'Verify return code:[[:space:]]*0[[:space:]]*\(ok\)'; then
+		aba_debug "vSphere: TLS trust chain ok for $host (parsed)"
+		return 0
+	fi
+
+	# D-03 two-option remediation - GOVC_INSECURE=1 listed FIRST, then CA install.
+	aba_warning "vSphere: TLS trust chain failure talking to $host" \
+		"Set GOVC_INSECURE=1 in vmware.conf to skip trust validation (development/lab only)" \
+		"OR add the vCenter CA certificate to the system trust store for production use"
+	_preflight_errors=$(( _preflight_errors + 1 ))
+	return 1
+}
+
+# Layer 2: vCenter credential probe via `govc about`.
+# Assumes Layer 1 (TCP + TLS) already green, so any failure here is authentication or
+# vCenter-API-level. Captures stderr into a variable (allowed; not a `2>&1 | grep` pipeline).
+# Never includes the password in output (T-02-01-01 information-disclosure mitigation).
+_vsphere_probe_auth() {
+	local about_out about_rc=0
+	about_out=$(govc about 2>&1) || about_rc=$?
+	if [ "$about_rc" -eq 0 ]; then
+		aba_debug "vSphere: auth ok"
+		return 0
+	fi
+	# Trim to first line so we don't dump a multi-line error blob to the user.
+	local first_line
+	first_line=$(echo "$about_out" | head -1)
+	aba_warning "vSphere: authentication to $GOVC_URL as '$GOVC_USERNAME' failed" \
+		"govc said: $first_line"
+	_preflight_errors=$(( _preflight_errors + 1 ))
+	return 1
+}
+
 preflight_check_vsphere() {
 	# Double-gate: parent at scripts/preflight-check.sh:202 already checks platform=vmw,
 	# but this short-circuit protects against direct sourcing.
@@ -106,11 +170,13 @@ preflight_check_vsphere() {
 	# Phase 2/3 can append connectivity / privilege check lines without rewording.
 	aba_info_ok "vSphere: configuration fields present, running checks..."
 
-	# Phase 2 Layer 1: connectivity (TCP + TLS). Short-circuit the function on failure;
-	# the `return 0` is deliberate - preflight_check_vsphere always returns 0; counters signal gaps.
-	_vsphere_probe_tcp || return 0
+	# Phase 2 Layer 1 + Layer 2: connectivity (TCP + TLS) + auth. Short-circuit the
+	# function on any layer failure; the `return 0` is deliberate - preflight_check_vsphere
+	# always returns 0; counters signal gaps for the parent to aggregate.
+	_vsphere_probe_tcp  || return 0
+	_vsphere_probe_tls  || return 0
+	_vsphere_probe_auth || return 0
 
-	# (subsequent tasks add _vsphere_probe_tls, _vsphere_probe_auth, _vsphere_probe_resources,
-	#  _vsphere_probe_writeaccess here in Plans 02-01 Task 2, 02-02, 02-03, 02-04.)
+	# (Plans 02-02 / 02-03 / 02-04 append _vsphere_probe_resources and _vsphere_probe_writeaccess here.)
 	# Phase 3 will add privilege validation here (sources scripts/vmware-required-privileges.sh).
 }
