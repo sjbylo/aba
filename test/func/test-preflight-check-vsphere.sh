@@ -160,9 +160,113 @@ aba_debug()     { :; }
 # The process substitution runs normalize-vmware-conf and sources its stdout as shell code.
 # Outputting nothing from the stub produces a source of an empty stream (no-op).
 normalize-vmware-conf() { :; }
-# Stub govc: 'command -v govc' succeeds when a shell function named govc exists.
-# This avoids a PATH-based govc install requirement in the test environment.
-govc() { :; }
+
+# -------- Phase 2 stubs (argument-dispatch govc + openssl + helpers) ---------
+# Each stub reads test-controlled env vars to decide behaviour, so Path D-P can
+# configure failure modes without rewriting the stub. Defaults emit canned success.
+#
+# govc() dispatches on $1 (subcommand). For object.collect, parses argv for -s <path>.
+# Path shape conventions used by Path D-P below:
+#   /MissingDC/*                         -> return 1 ("not found")
+#   /GoodDC/host/Missing*                -> return 1 ("not found")
+#   /GoodDC/datastore/Missing*           -> return 1 ("not found")
+#   /GoodDC/network/Missing*             -> return 1 ("not found")
+#   /MissingFolder*                      -> return 1 ("not found")
+#   /GoodDC/network/*    (prop=host)     -> emit "HostSystem:host-1"
+#   /GoodDC/network/WrongCluster* (host) -> emit "HostSystem:host-99" (no overlap)
+#   /GoodDC/*            (prop=name)     -> emit "GoodName"
+#
+# find -i -type h /GoodDC/host/GoodCluster -> "HostSystem:host-1"
+#
+# permissions.ls dispatches via GOVC_STUB_PERMS_OUT (full captured output) + GOVC_STUB_PERMS_RC.
+# role.ls dispatches via GOVC_STUB_ROLE_OUT + GOVC_STUB_ROLE_RC.
+# about dispatches via GOVC_STUB_ABOUT_RC.
+govc() {
+	case "$1" in
+		about)
+			return "${GOVC_STUB_ABOUT_RC:-0}"
+			;;
+		object.collect)
+			# Parse for -s <path> [property]. We tolerate the argument order
+			# used by production: `govc object.collect -s <path> <property>`.
+			local path="" prop=""
+			shift
+			while [ $# -gt 0 ]; do
+				case "$1" in
+					-s) path="$2"; shift 2 ;;
+					*)  prop="$1"; shift ;;
+				esac
+			done
+			# For RES-04 attachment check (prop == "host"), emit host morefs.
+			if [ "$prop" = "host" ]; then
+				case "$path" in
+					*/network/WrongCluster*) echo "HostSystem:host-99"; return 0 ;;
+					*/network/*)             echo "HostSystem:host-1";  return 0 ;;
+				esac
+			fi
+			# Generic existence probe (prop == "name").
+			case "$path" in
+				/MissingDC*)                 return 1 ;;
+				/MissingPool*)               return 1 ;;
+				/GoodDC/datastore/Missing*)  return 1 ;;
+				/GoodDC/host/Missing*)       return 1 ;;
+				/GoodDC/network/Missing*)    return 1 ;;
+				/MissingFolder*)             return 1 ;;
+				/GoodDC*)                    echo "GoodName"; return 0 ;;
+				*)                           return 1 ;;
+			esac
+			;;
+		find)
+			# govc find -i -type h /GoodDC/host/GoodCluster -> one cluster host moref.
+			echo "HostSystem:host-1"
+			return 0
+			;;
+		permissions.ls)
+			echo "${GOVC_STUB_PERMS_OUT:-}"
+			return "${GOVC_STUB_PERMS_RC:-0}"
+			;;
+		role.ls)
+			echo "${GOVC_STUB_ROLE_OUT:-}"
+			return "${GOVC_STUB_ROLE_RC:-0}"
+			;;
+		*)
+			return 0
+			;;
+	esac
+}
+
+# openssl stub: honours OPENSSL_STUB_RC (exit code) and OPENSSL_STUB_OUT (stdout/stderr body).
+openssl() {
+	if [ -n "${OPENSSL_STUB_OUT:-}" ]; then
+		echo "$OPENSSL_STUB_OUT"
+	fi
+	return "${OPENSSL_STUB_RC:-0}"
+}
+
+# timeout stub: the production TCP probe runs `timeout 3 bash -c "..."`; the TLS
+# probe runs `timeout 5 openssl s_client ...`. In both cases we shift off the
+# seconds argument and dispatch based on the first remaining token.
+#   - If first remaining token is `bash` AND TCP_STUB_RC is set, short-circuit
+#     with that RC (avoids a real `/dev/tcp` network call).
+#   - Otherwise, exec the remaining args so our `openssl` / `govc` stubs run.
+timeout() {
+	shift   # drop the seconds argument (e.g. 3, 5)
+	if [ "${1:-}" = "bash" ] && [ -n "${TCP_STUB_RC:-}" ]; then
+		return "$TCP_STUB_RC"
+	fi
+	"$@"
+}
+
+# resolve-default-resource-pool shell-function stub (mirrors include_all.sh helper).
+# Tests stay self-contained; no sourcing of scripts/include_all.sh.
+resolve-default-resource-pool() {
+	if [ -n "${GOVC_RESOURCE_POOL:-}" ]; then
+		echo "$GOVC_RESOURCE_POOL"
+	else
+		echo "/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources"
+	fi
+}
+
 # Global counters (parent owns these in real flow).
 _preflight_errors=0
 _preflight_warnings=0
@@ -198,24 +302,35 @@ else
 	test_fail "Path B broken: warn_count=$warn_count errors=$_preflight_errors out='$_path_b_out'"
 fi
 
-# 20. Path C: platform=vmw + all fields present -> 1 OK line, _preflight_errors=0
-# Stub the Phase 2 Layer 1/2/3/4 probes so Path C exercises ONLY the field-presence
-# gate + the OK line, without reaching the network or vCenter. Phase 2 Plan 02-05
-# adds dedicated behavioural paths (D-P) that exercise the probes with fixtures.
-_vsphere_probe_tcp()         { :; }
-_vsphere_probe_tls()         { :; }
-_vsphere_probe_auth()        { :; }
-_vsphere_probe_resources()   { :; }
-_vsphere_probe_writeaccess() { :; }
-export GOVC_URL=x GOVC_USERNAME=x GOVC_PASSWORD=x GOVC_DATACENTER=x GOVC_CLUSTER=x GOVC_DATASTORE=x GOVC_NETWORK=x
+# 20. Path C: platform=vmw + all fields present -> 1 OK line, _preflight_errors=0, 0 warnings.
+# With Phase 2 extensions, Path C now passes through Layer 1-4 (TCP/TLS/auth/resources/
+# write-access) using the argument-dispatch stubs above. All stubs are set to
+# all-green defaults so the full pipeline produces exactly one OK line and no warnings.
+export GOVC_URL=https://vcenter.example.com
+export GOVC_USERNAME=admin@vsphere.local
+export GOVC_PASSWORD=secret
+export GOVC_DATACENTER=GoodDC
+export GOVC_CLUSTER=GoodCluster
+export GOVC_DATASTORE=GoodDS
+export GOVC_NETWORK=GoodNet
+export VC_FOLDER=/GoodDC/vm/folder
+unset GOVC_INSECURE ISO_DATASTORE GOVC_RESOURCE_POOL
+TCP_STUB_RC=0
+OPENSSL_STUB_RC=0
+OPENSSL_STUB_OUT="Verify return code: 0 (ok)"
+GOVC_STUB_ABOUT_RC=0
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_PERMS_RC=0
 _preflight_errors=0
+_preflight_warnings=0
 preflight_check_vsphere >"$_smoke_out" 2>&1
 _path_c_out=$(cat "$_smoke_out")
 ok_count=$(grep -c '^OK: vSphere: configuration fields present' "$_smoke_out" || true)
-if [ "$ok_count" -eq 1 ] && [ "$_preflight_errors" -eq 0 ]; then
-	test_pass "Path C: all fields present produces 1 OK line + no errors"
+warn_count=$(grep -c '^WARN:' "$_smoke_out" || true)
+if [ "$ok_count" -eq 1 ] && [ "$_preflight_errors" -eq 0 ] && [ "$warn_count" -eq 0 ]; then
+	test_pass "Path C: all fields present produces 1 OK line + no errors + no warnings"
 else
-	test_fail "Path C broken: ok_count=$ok_count errors=$_preflight_errors out='$_path_c_out'"
+	test_fail "Path C broken: ok_count=$ok_count warns=$warn_count errors=$_preflight_errors out='$_path_c_out'"
 fi
 
 echo
