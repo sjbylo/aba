@@ -57,9 +57,10 @@ else
 	test_pass "No trailing whitespace on any line"
 fi
 
-# 7. No IICCCN (DOC-03)
-if grep -q 'IICCCN' "$PRIVS"; then
-	test_fail "Contains internal-ticket reference (IICCCN)"
+# 7. No internal-ticket tokens in the shipped code (DOC-03)
+# Matches JIRA-style IDs: 4-7 uppercase letters, a dash, and digits (e.g. PROJ-123)
+if grep -Eq '\b[A-Z]{4,7}-[0-9]+\b' "$PRIVS"; then
+	test_fail "Contains internal-ticket reference (matched [A-Z]{4,7}-[0-9]+)"
 else
 	test_pass "No internal-ticket references"
 fi
