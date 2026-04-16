@@ -294,10 +294,13 @@ init_bastion() {
 		whoami
 		subscription-manager refresh && sudo dnf clean all
 		dnf update -y   # We should do this and add to the vmw snap every now and then
-		reboot
-		exit 0
+		# reboot now added below
 	END
 	[ $? -ne 0 ] && echo "Script failed!" && exit 1
+
+	ssh $def_user@$int_bastion_hostname -- sudo bash <<-END
+		reboot
+	END
 
 	test-cmd -m "Wait for restart" sleep 20
 
