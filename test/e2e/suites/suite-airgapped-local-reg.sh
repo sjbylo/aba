@@ -202,6 +202,7 @@ e2e_run_remote "Verify Docker registry running" \
 e2e_run_remote "Verify Docker registry accessible" \
     "cd ~/aba && aba -d mirror verify"
 
+e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load images into Docker registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -261,11 +262,13 @@ mirror:
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 EOF"
+e2e_snapshot_file "ubi-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "ubi-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -293,11 +296,13 @@ mirror:
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 EOF"
+e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -406,11 +411,13 @@ mirror:
 EOF"
 e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 
+e2e_snapshot_file "mesh-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 
 e2e_run "Transfer archive and config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "mesh-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -463,10 +470,12 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
          echo 'cincinnati-operator already in imageset config -- skipping'; \
      fi"
 
+e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
