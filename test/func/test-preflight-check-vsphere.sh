@@ -333,6 +333,225 @@ else
 	test_fail "Path C broken: ok_count=$ok_count warns=$warn_count errors=$_preflight_errors out='$_path_c_out'"
 fi
 
+# -------- Phase 2 Layer 1-4 behavioural paths (D through P) ------------------
+# Each path configures stubs to reach a specific failure branch, invokes
+# preflight_check_vsphere directly (NOT in a subshell - counter mutations
+# must propagate), captures output to $_smoke_out, and asserts exact message
+# patterns + exact counter deltas.
+
+# Reset test state between paths. Defaults clear Layer 1-4 gates to success;
+# callers override only what the path under test needs to break.
+_reset_path_state() {
+	_preflight_errors=0
+	_preflight_warnings=0
+	export platform=vmw
+	export GOVC_URL=https://vcenter.example.com
+	export GOVC_USERNAME=admin@vsphere.local
+	export GOVC_PASSWORD=secret
+	export GOVC_DATACENTER=GoodDC
+	export GOVC_CLUSTER=GoodCluster
+	export GOVC_DATASTORE=GoodDS
+	export GOVC_NETWORK=GoodNet
+	export VC_FOLDER=/GoodDC/vm/folder
+	unset GOVC_INSECURE ISO_DATASTORE GOVC_RESOURCE_POOL
+	TCP_STUB_RC=0
+	OPENSSL_STUB_RC=0
+	OPENSSL_STUB_OUT="Verify return code: 0 (ok)"
+	GOVC_STUB_ABOUT_RC=0
+	GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
+	GOVC_STUB_PERMS_RC=0
+	GOVC_STUB_ROLE_OUT=""
+	GOVC_STUB_ROLE_RC=0
+}
+
+# 21. Path D: Layer 1 TCP failure -> 1 "cannot reach" warning + errors=1.
+_reset_path_state
+TCP_STUB_RC=1
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+warn=$(grep -c '^WARN: vSphere: cannot reach' "$_smoke_out" || true)
+if [ "$warn" -eq 1 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path D: TCP failure -> 1 cannot-reach warning + errors=1"
+else
+	test_fail "Path D broken: warn=$warn errors=$_preflight_errors out='$(cat "$_smoke_out")'"
+fi
+
+# 22. Path E: Layer 1 TLS failure (GOVC_INSECURE unset) -> 1 trust-chain warning
+# + 2 remediation lines (GOVC_INSECURE=1 hint FIRST, CA-trust-store hint SECOND)
+# + errors=1. Production emits a multi-arg aba_warning; our stub joins args with
+# space, so the three pieces appear on the same WARN line.
+_reset_path_state
+OPENSSL_STUB_RC=1
+OPENSSL_STUB_OUT="depth=0 verify error:num=18:self-signed certificate"
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+trust_line=$(grep -c '^WARN: vSphere: TLS trust chain failure talking to' "$_smoke_out" || true)
+insecure_hint=$(grep -c 'GOVC_INSECURE=1 in vmware.conf' "$_smoke_out" || true)
+ca_hint=$(grep -c 'add the vCenter CA certificate to the system trust store' "$_smoke_out" || true)
+if [ "$trust_line" -eq 1 ] && [ "$insecure_hint" -ge 1 ] && [ "$ca_hint" -ge 1 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path E: TLS failure -> trust-chain warning + 2 remediation lines + errors=1"
+else
+	test_fail "Path E broken: trust=$trust_line insecure=$insecure_hint ca=$ca_hint errors=$_preflight_errors"
+fi
+
+# 23. Path F: TLS skipped (GOVC_INSECURE=1) -> no TLS call, proceeds to auth;
+# errors=0 when downstream layers succeed. OPENSSL_STUB_RC=99 is a canary that
+# would fail loudly if openssl WERE called - the whole point is it is not.
+_reset_path_state
+export GOVC_INSECURE=1
+OPENSSL_STUB_RC=99
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+tls_warn=$(grep -c 'TLS trust chain failure' "$_smoke_out" || true)
+if [ "$tls_warn" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path F: GOVC_INSECURE=1 skips TLS; no TLS warning; errors=0"
+else
+	test_fail "Path F broken: tls_warn=$tls_warn errors=$_preflight_errors"
+fi
+
+# 24. Path G: Layer 2 auth failure -> 1 "authentication to" warning + errors=1;
+# no Layer 3 probes reached.
+_reset_path_state
+GOVC_STUB_ABOUT_RC=1
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+auth_line=$(grep -c '^WARN: vSphere: authentication to' "$_smoke_out" || true)
+ds_line=$(grep -c 'datastore' "$_smoke_out" || true)
+if [ "$auth_line" -eq 1 ] && [ "$_preflight_errors" -eq 1 ] && [ "$ds_line" -eq 0 ]; then
+	test_pass "Path G: auth failure -> 1 auth warning + errors=1 + no Layer 3 probes"
+else
+	test_fail "Path G broken: auth=$auth_line ds=$ds_line errors=$_preflight_errors"
+fi
+
+# 25. Path H: Layer 3 DC missing -> 1 "datacenter not found" WARNING + 1 cascade
+# INFO + errors=1 (not 2: the cascade note must NOT bump the counter).
+# Downstream Layer 3 probes (cluster, datastore, network, folder, RP) must be
+# skipped entirely.
+_reset_path_state
+export GOVC_DATACENTER=MissingDC
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+dc_warn=$(grep -c "^WARN: vSphere: datacenter '/MissingDC' not found" "$_smoke_out" || true)
+cascade_info=$(grep -c '^INFO: vSphere: skipping cluster/datastore/network/folder/resource-pool' "$_smoke_out" || true)
+cluster_probe=$(grep -c "cluster '/MissingDC" "$_smoke_out" || true)
+if [ "$dc_warn" -eq 1 ] && [ "$cascade_info" -eq 1 ] && [ "$_preflight_errors" -eq 1 ] && [ "$cluster_probe" -eq 0 ]; then
+	test_pass "Path H: DC missing -> 1 warning + 1 cascade info + errors=1 (no downstream Layer 3 probes)"
+else
+	test_fail "Path H broken: dc_warn=$dc_warn cascade=$cascade_info cluster_probe=$cluster_probe errors=$_preflight_errors"
+fi
+
+# 26. Path I: Network exists but is NOT attached to cluster -> 1 attachment
+# warning + errors=1. Stub dispatches /GoodDC/network/WrongCluster* to host-99,
+# cluster-host query returns host-1 -> no overlap.
+_reset_path_state
+export GOVC_NETWORK=WrongCluster
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+attach_warn=$(grep -c "is not attached to any host in cluster 'GoodCluster'" "$_smoke_out" || true)
+if [ "$attach_warn" -eq 1 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path I: network-on-wrong-cluster -> 1 attachment warning + errors=1"
+else
+	test_fail "Path I broken: attach_warn=$attach_warn errors=$_preflight_errors"
+fi
+
+# 27. Path J: ISO_DATASTORE equals GOVC_DATASTORE -> dedup guard must skip the
+# second probe. Set both to Missing; assert exactly 1 "not found" line for the
+# datastore path (not 2).
+_reset_path_state
+export GOVC_DATASTORE=Missing
+export ISO_DATASTORE=Missing
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+ds_warn=$(grep -c "^WARN: vSphere: datastore '/GoodDC/datastore/Missing' not found" "$_smoke_out" || true)
+if [ "$ds_warn" -eq 1 ]; then
+	test_pass "Path J: ISO_DATASTORE equals GOVC_DATASTORE -> dedup; 1 probe only"
+else
+	test_fail "Path J broken: ds_warn=$ds_warn out='$(cat "$_smoke_out")'"
+fi
+
+# 28. Path K: GOVC_RESOURCE_POOL unset + default exists -> aba_debug line
+# (NOT aba_info - D-16 guard: quiet-on-success convention) + errors=0.
+# Temporarily override aba_debug to echo so we can observe the emission.
+_reset_path_state
+aba_debug() { echo "DEBUG: $*"; }
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+rp_debug=$(grep -c "^DEBUG: vSphere: using default resource pool '/GoodDC/host/GoodCluster/Resources'" "$_smoke_out" || true)
+rp_info=$(grep -c "^INFO: vSphere: using default resource pool" "$_smoke_out" || true)
+if [ "$rp_debug" -eq 1 ] && [ "$rp_info" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path K: default RP used -> aba_debug (not aba_info) + errors=0"
+else
+	test_fail "Path K broken: debug=$rp_debug info=$rp_info errors=$_preflight_errors"
+fi
+aba_debug() { :; }    # restore silent stub before Path L+
+
+# 29. Path L: GOVC_RESOURCE_POOL unset + default missing -> D-15 wording:
+# "default resource pool '...' not found - verify the cluster is properly
+# configured". Must NOT hint at setting GOVC_RESOURCE_POOL (would mask the
+# real cluster-configuration fault). With GOVC_CLUSTER=MissingCluster the
+# RP path /GoodDC/host/MissingCluster/Resources hits the Missing* stub branch.
+_reset_path_state
+export GOVC_CLUSTER=MissingCluster
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+d15=$(grep -c "default resource pool '.*' not found - verify the cluster is properly configured" "$_smoke_out" || true)
+hint=$(grep -c 'set GOVC_RESOURCE_POOL' "$_smoke_out" || true)
+if [ "$d15" -eq 1 ] && [ "$hint" -eq 0 ] && [ "$_preflight_errors" -ge 1 ]; then
+	test_pass "Path L: default RP missing -> D-15 wording + no 'set GOVC_RESOURCE_POOL' hint"
+else
+	test_fail "Path L broken: d15=$d15 hint=$hint errors=$_preflight_errors"
+fi
+
+# 30. Path M: Admin role on both scopes -> fast-path; 0 warnings, 0 error
+# bumps, 0 warning-counter bumps.
+_reset_path_state
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+warn=$(grep -c '^WARN:' "$_smoke_out" || true)
+if [ "$warn" -eq 0 ] && [ "$_preflight_errors" -eq 0 ] && [ "$_preflight_warnings" -eq 0 ]; then
+	test_pass "Path M: Admin role -> 0 warnings, 0 errors, 0 warning-counter bumps"
+else
+	test_fail "Path M broken: warn=$warn errors=$_preflight_errors warnings=$_preflight_warnings"
+fi
+
+# 31. Path N: No-access role on all scopes -> one missing-priv warning per
+# required priv per scope. Folder allowlist has 2 privs
+# (VirtualMachine.Inventory.Create + VirtualMachine.Config.AddNewDisk), pool
+# allowlist has 1 (Resource.AssignVMToPool); total 3 warnings + errors=3.
+# The stub returns the same No-access row for both folder + pool scopes.
+_reset_path_state
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nNo access\t/scope\tadmin@vsphere.local\tYes\n'
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+folder_missing=$(grep -c "missing VM-create privilege 'VirtualMachine.Inventory.Create' (user has role 'No access')" "$_smoke_out" || true)
+disk_missing=$(grep -c "missing VM-create privilege 'VirtualMachine.Config.AddNewDisk' (user has role 'No access')" "$_smoke_out" || true)
+pool_missing=$(grep -c "missing VM-create privilege 'Resource.AssignVMToPool' (user has role 'No access')" "$_smoke_out" || true)
+if [ "$folder_missing" -eq 1 ] && [ "$disk_missing" -eq 1 ] && [ "$pool_missing" -eq 1 ] && [ "$_preflight_errors" -eq 3 ]; then
+	test_pass "Path N: No-access role -> 3 missing-priv warnings (2 folder + 1 pool) + errors=3"
+else
+	test_fail "Path N broken: folder=$folder_missing disk=$disk_missing pool=$pool_missing errors=$_preflight_errors"
+fi
+
+# 32. Path O: permissions.ls query fails on both scopes -> D-12 "cannot verify
+# write-access" warning per scope; _preflight_warnings bumped (NOT
+# _preflight_errors - Phase 3 may still catch the gap).
+_reset_path_state
+GOVC_STUB_PERMS_RC=1
+GOVC_STUB_PERMS_OUT="permission denied: user lacks read right"
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+d12=$(grep -c "^WARN: vSphere: cannot verify write-access on " "$_smoke_out" || true)
+if [ "$d12" -eq 2 ] && [ "$_preflight_warnings" -eq 2 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path O: permissions.ls fails both scopes -> 2 D-12 warnings + warnings=2 + errors=0"
+else
+	test_fail "Path O broken: d12=$d12 warnings=$_preflight_warnings errors=$_preflight_errors"
+fi
+
+# 33. Path P: Custom role "VMBuilder" missing one VM-create priv on folder.
+# role.ls returns Inventory.Create + AssignVMToPool (NOT Config.AddNewDisk).
+# Folder: Inventory.Create present, Config.AddNewDisk missing -> 1 warning.
+# Pool: AssignVMToPool present -> 0 warnings. Total 1 warning + errors=1.
+_reset_path_state
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nVMBuilder\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_ROLE_OUT=$'VirtualMachine.Inventory.Create\nResource.AssignVMToPool\n'
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+missing=$(grep -c "missing VM-create privilege 'VirtualMachine.Config.AddNewDisk'" "$_smoke_out" || true)
+present=$(grep -c "missing VM-create privilege 'VirtualMachine.Inventory.Create'" "$_smoke_out" || true)
+if [ "$missing" -eq 1 ] && [ "$present" -eq 0 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path P: custom role missing AddNewDisk -> 1 warning for that priv only + errors=1"
+else
+	test_fail "Path P broken: missing=$missing present=$present errors=$_preflight_errors"
+fi
+
 echo
 echo -e "${GREEN}=== All Tests Passed ===${NC}"
 echo
