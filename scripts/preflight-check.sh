@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Pre-flight validation: DNS/NTP reachability + IP conflict detection
 # Runs from cluster directory before ISO generation.
-# Designed for extensibility — IICCCN-55 vSphere checks can source and extend.
+# Designed for extensibility: platform-specific vSphere checks can source and extend.
 
 source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
@@ -198,7 +198,7 @@ else
 	preflight_check_ntp
 	preflight_check_ip_conflicts
 
-	# Hook for platform-specific extensions (IICCCN-55)
+	# Hook for platform-specific extensions (vSphere preflight checks)
 	if [ "$platform" = "vmw" ] && [ -f scripts/preflight-check-vsphere.sh ]; then
 		source scripts/preflight-check-vsphere.sh
 		preflight_check_vsphere
