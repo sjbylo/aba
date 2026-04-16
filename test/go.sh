@@ -42,6 +42,7 @@ if [ "$1" ]; then
 	# Used for testing from git
 #	make -C mirror reset yes=1 # Remove old big tar files. Need all space on disk!
 	rm -rf ~/testing && mkdir -p ~/testing
+	rm -rf ~/.aba 
 	cd ~/testing
 	rm -rf aba
 	which git || sudo dnf install git -y 

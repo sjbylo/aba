@@ -50,8 +50,10 @@ declare -A wait_for_exit_reasons=(
 [ $ret -eq 8 ] && exit 0
 
 if [ $ret -ne 0 ]; then
-	echo_red "[ABA] Error: Something went wrong with the installation.  Fix the problem and try again!" >&2
+	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
+	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
+	echo_yellow "[ABA] If the problem persists, check the output above for clues."
 
 	exit $ret
 fi
