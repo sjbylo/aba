@@ -78,7 +78,11 @@ $(M)/.done-06d-tests-passed: $(M)/.done-06c-registry-loaded
 	bash -e scripts/06d-test-cluster-and-operators.sh
 	@touch $@
 
-$(M)/.done-07-upload: $(M)/.done-06d-tests-passed
+$(M)/.done-06e-cluster-deleted: $(M)/.done-06d-tests-passed
+	bash -e scripts/06e-delete-test-cluster.sh
+	@touch $@
+
+$(M)/.done-07-upload: $(M)/.done-06e-cluster-deleted
 	bash -e scripts/07-upload-bundle-to-cloud.sh
 	@touch $@
 
