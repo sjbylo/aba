@@ -264,6 +264,97 @@ _vsphere_probe_resources() {
 	return 0
 }
 
+# --- Phase 2 Layer 4 helpers (private to this file) -----------------------
+
+# Per-scope write-access probe (RES-07, Phase 2 corrected two-step algorithm per 02-RESEARCH.md):
+#   1. `govc permissions.ls <scope>`  - 4-col tab-separated output:
+#        Role | Entity | Principal | Propagate   (header row NR=1 must be skipped)
+#   2. awk-filter rows where Principal column equals $GOVC_USERNAME; read Role from col 1.
+#      (permissions.ls has no principal-filter flag - verified upstream in cli/permissions/ls.go.)
+#   3. If role is "Admin" - fast-path: vCenter built-in Admin has all privileges.
+#      If role is "No access" - explicit deny; every required priv is missing.
+#      Else: `govc role.ls <roleName>` - one privilege per line - and grep each required string.
+#   4. Query-level failures emit ONE warning and increment `_preflight_warnings`
+#      (NOT `_preflight_errors`); Phase 3 may still catch gaps.
+#
+# $1  = absolute scope path (VC_FOLDER or resolved resource-pool path)
+# $@  = required privilege strings (allowlist)
+_vsphere_check_writeaccess() {
+	local scope_path="$1"
+	shift
+	local -a required_privs=("$@")
+
+	# Step 1: list permissions. `-a=true` (default) includes inherited.
+	# `out=$(cmd 2>&1)` is allowed variable capture (NOT `cmd 2>&1 | grep` pipeline).
+	local perms_out perms_rc=0
+	perms_out=$(govc permissions.ls "$scope_path" 2>&1) || perms_rc=$?
+
+	# Query itself failed - emit a warning and return without bumping _preflight_errors.
+	if [ "$perms_rc" -ne 0 ]; then
+		local first_line
+		first_line=$(echo "$perms_out" | head -1)
+		aba_warning "vSphere: cannot verify write-access on '$scope_path'" \
+			"govc permissions.ls said: $first_line" \
+			"User may lack 'Permissions.ModifyPermissions' or equivalent read right." \
+			"Skipping RES-07 for this scope; Phase 3 privilege query may still catch gaps."
+		_preflight_warnings=$(( _preflight_warnings + 1 ))
+		return 0
+	fi
+
+	# Step 2: find role assigned to the configured user. Skip header row (NR>1).
+	# Use default awk whitespace split to tolerate both literal-tab and
+	# tabwriter-expanded-space outputs. Principal is typically field 3, Role field 1.
+	# However: default splitting breaks if Role name contains a space (e.g. "No access").
+	# Compromise: try tab-split FIRST, fall back to default whitespace split.
+	local role_name
+	role_name=$(echo "$perms_out" | awk -F'\t' 'NR>1 && $3 == u { print $1; exit }' u="$GOVC_USERNAME")
+	if [ -z "$role_name" ]; then
+		role_name=$(echo "$perms_out" | awk 'NR>1 && $3 == u { print $1; exit }' u="$GOVC_USERNAME")
+	fi
+
+	if [ -z "$role_name" ]; then
+		aba_warning "vSphere: user '$GOVC_USERNAME' has no role assigned on '$scope_path' (D-12; group assignments not resolved)"
+		_preflight_warnings=$(( _preflight_warnings + 1 ))
+		return 0
+	fi
+
+	# Step 3a: Admin role fast-path - vCenter built-in Admin has all privs by construction.
+	if [ "$role_name" = "Admin" ]; then
+		aba_debug "vSphere: '$scope_path' user '$GOVC_USERNAME' has Admin role (all privileges granted)"
+		return 0
+	fi
+
+	# Step 3b: "No access" explicit-deny role - every required priv is missing.
+	if [ "$role_name" = "No access" ]; then
+		local req
+		for req in "${required_privs[@]}"; do
+			aba_warning "vSphere: $scope_path missing VM-create privilege '$req' (user has role 'No access')"
+			_preflight_errors=$(( _preflight_errors + 1 ))
+		done
+		return 0
+	fi
+
+	# Step 3c: Resolve role -> privilege list. Query-failure -> warning (not error).
+	local role_privs role_rc=0
+	role_privs=$(govc role.ls "$role_name" 2>&1) || role_rc=$?
+	if [ "$role_rc" -ne 0 ]; then
+		aba_warning "vSphere: cannot resolve privileges for role '$role_name' on '$scope_path'"
+		_preflight_warnings=$(( _preflight_warnings + 1 ))
+		return 0
+	fi
+
+	# Step 4: for each required privilege, grep the role's privilege set.
+	# grep -qxF: quiet, whole-line, fixed-string (privilege names are exact matches, not regex).
+	local req
+	for req in "${required_privs[@]}"; do
+		if ! echo "$role_privs" | grep -qxF -- "$req"; then
+			aba_warning "vSphere: $scope_path missing VM-create privilege '$req'"
+			_preflight_errors=$(( _preflight_errors + 1 ))
+		fi
+	done
+	return 0
+}
+
 preflight_check_vsphere() {
 	# Double-gate: parent at scripts/preflight-check.sh:202 already checks platform=vmw,
 	# but this short-circuit protects against direct sourcing.
