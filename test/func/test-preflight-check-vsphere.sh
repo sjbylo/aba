@@ -513,9 +513,9 @@ fi
 _reset_path_state
 GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nNo access\t/scope\tadmin@vsphere.local\tYes\n'
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-folder_missing=$(grep -c "missing VM-create privilege 'VirtualMachine.Inventory.Create' (user has role 'No access')" "$_smoke_out" || true)
-disk_missing=$(grep -c "missing VM-create privilege 'VirtualMachine.Config.AddNewDisk' (user has role 'No access')" "$_smoke_out" || true)
-pool_missing=$(grep -c "missing VM-create privilege 'Resource.AssignVMToPool' (user has role 'No access')" "$_smoke_out" || true)
+folder_missing=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Inventory.Create' (user has role 'No access')" "$_smoke_out" || true)
+disk_missing=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Config.AddNewDisk' (user has role 'No access')" "$_smoke_out" || true)
+pool_missing=$(grep -c "resource pool '/GoodDC/host/GoodCluster/Resources' missing privilege 'Resource.AssignVMToPool' (user has role 'No access')" "$_smoke_out" || true)
 if [ "$folder_missing" -eq 1 ] && [ "$disk_missing" -eq 1 ] && [ "$pool_missing" -eq 1 ] && [ "$_preflight_errors" -eq 3 ]; then
 	test_pass "Path N: No-access role -> 3 missing-priv warnings (2 folder + 1 pool) + errors=3"
 else
@@ -544,8 +544,8 @@ _reset_path_state
 GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nVMBuilder\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
 GOVC_STUB_ROLE_OUT=$'VirtualMachine.Inventory.Create\nResource.AssignVMToPool\n'
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-missing=$(grep -c "missing VM-create privilege 'VirtualMachine.Config.AddNewDisk'" "$_smoke_out" || true)
-present=$(grep -c "missing VM-create privilege 'VirtualMachine.Inventory.Create'" "$_smoke_out" || true)
+missing=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Config.AddNewDisk'" "$_smoke_out" || true)
+present=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Inventory.Create'" "$_smoke_out" || true)
 if [ "$missing" -eq 1 ] && [ "$present" -eq 0 ] && [ "$_preflight_errors" -eq 1 ]; then
 	test_pass "Path P: custom role missing AddNewDisk -> 1 warning for that priv only + errors=1"
 else

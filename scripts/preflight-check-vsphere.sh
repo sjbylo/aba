@@ -266,7 +266,7 @@ _vsphere_probe_resources() {
 
 # --- Phase 2 Layer 4 helpers (private to this file) -----------------------
 
-# Per-scope write-access probe (RES-07, Phase 2 corrected two-step algorithm per 02-RESEARCH.md):
+# Per-scope privilege probe (Phase 3 privilege validation; reuses Phase 2's two-step RBAC algorithm verbatim):
 #   1. `govc permissions.ls <scope>`  - 4-col tab-separated output:
 #        Role | Entity | Principal | Propagate   (header row NR=1 must be skipped)
 #   2. awk-filter rows where Principal column equals $GOVC_USERNAME; read Role from col 1.
@@ -277,11 +277,13 @@ _vsphere_probe_resources() {
 #   4. Query-level failures emit ONE warning and increment `_preflight_warnings`
 #      (NOT `_preflight_errors`); Phase 3 may still catch gaps.
 #
-# $1  = absolute scope path (VC_FOLDER or resolved resource-pool path)
+# $1  = lowercase scope-kind label ('root', 'datacenter', 'cluster', 'datastore', 'network', 'folder', 'resource pool')
+# $2  = absolute scope path (e.g. '/', '/$GOVC_DATACENTER', or the resolved resource-pool path)
 # $@  = required privilege strings (allowlist)
-_vsphere_check_writeaccess() {
-	local scope_path="$1"
-	shift
+_vsphere_check_privileges() {
+	local kind="$1"
+	local scope_path="$2"
+	shift 2
 	local -a required_privs=("$@")
 
 	# Step 1: list permissions. `-a=true` (default) includes inherited.
@@ -328,7 +330,7 @@ _vsphere_check_writeaccess() {
 	if [ "$role_name" = "No access" ]; then
 		local req
 		for req in "${required_privs[@]}"; do
-			aba_warning "vSphere: $scope_path missing VM-create privilege '$req' (user has role 'No access')"
+			aba_warning "vSphere: $kind '$scope_path' missing privilege '$req' (user has role 'No access')"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 		done
 		return 0
@@ -348,14 +350,14 @@ _vsphere_check_writeaccess() {
 	local req
 	for req in "${required_privs[@]}"; do
 		if ! echo "$role_privs" | grep -qxF -- "$req"; then
-			aba_warning "vSphere: $scope_path missing VM-create privilege '$req'"
+			aba_warning "vSphere: $kind '$scope_path' missing privilege '$req'"
 			_preflight_errors=$(( _preflight_errors + 1 ))
 		fi
 	done
 	return 0
 }
 
-# Layer 4 sequencer. Runs _vsphere_check_writeaccess against VC_FOLDER with the
+# Layer 4 sequencer. Runs _vsphere_check_privileges against VC_FOLDER with the
 # folder VM-create allowlist, then against the resolved resource-pool path with
 # the RP VM-create allowlist. Per-scope failures collect all; query-level failures
 # become warnings and don't short-circuit the other scope. Phase 2's allowlists
@@ -366,12 +368,12 @@ _vsphere_probe_writeaccess() {
 	pool_path=$(resolve-default-resource-pool)
 
 	# Folder VM-create allowlist.
-	_vsphere_check_writeaccess "$VC_FOLDER" \
+	_vsphere_check_privileges "folder" "$VC_FOLDER" \
 		VirtualMachine.Inventory.Create \
 		VirtualMachine.Config.AddNewDisk
 
 	# Resource-pool VM-create allowlist.
-	_vsphere_check_writeaccess "$pool_path" \
+	_vsphere_check_privileges "resource pool" "$pool_path" \
 		Resource.AssignVMToPool
 
 	return 0
