@@ -294,18 +294,11 @@ _vm_annotation() {
 	local role_label
 	[ "$role" = "control" ] && role_label="Control" || role_label="Worker"
 	cat <<-EOF
+	OpenShift ${role_label} Node (${cluster_type}), initial version v${ocp_version}
 	Installed by ABA v${aba_ver} (github.com/sjbylo/aba) on $(date)
-	Role: OpenShift ${role_label} Node
-	Cluster: ${CLUSTER_NAME}.${base_domain} (${cluster_type})
-	Initial OCP version: v${ocp_version}
 	Console: https://console-openshift-console.apps.${CLUSTER_NAME}.${base_domain}
 	API: https://api.${CLUSTER_NAME}.${base_domain}:6443
-	Manage this cluster using ABA from: $(hostname):${PWD}
-	Examples:
-	  aba -d ${CLUSTER_NAME} info
-	  aba -d ${CLUSTER_NAME} startup
-	  aba -d ${CLUSTER_NAME} shutdown
-	  aba -d ${CLUSTER_NAME} delete
+	Manage from $(hostname):${PWD} — aba -d ${CLUSTER_NAME} [info|startup|shutdown|delete]
 	EOF
 }
 
