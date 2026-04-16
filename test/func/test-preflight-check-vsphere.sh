@@ -222,11 +222,38 @@ govc() {
 			return 0
 			;;
 		permissions.ls)
-			echo "${GOVC_STUB_PERMS_OUT:-}"
+			# Phase 3 extension: per-scope-path dispatch via
+			# GOVC_STUB_PERMS_OUT_<sanitized-path>; falls back to the flat
+			# GOVC_STUB_PERMS_OUT for backward-compat with Paths M/N/O/P.
+			# Use `printf '%s'` (not `echo`): echo appends a trailing newline,
+			# which `tr -c '[:alnum:]' '_'` maps to `_`, producing wrong keys.
+			local scope_arg="$2"
+			local out_key="GOVC_STUB_PERMS_OUT_$(printf '%s' "$scope_arg" | tr -c '[:alnum:]' '_')"
+			if [ -n "${!out_key:-}" ]; then
+				echo "${!out_key}"
+			else
+				echo "${GOVC_STUB_PERMS_OUT:-}"
+			fi
+			local rc_key="GOVC_STUB_PERMS_RC_$(printf '%s' "$scope_arg" | tr -c '[:alnum:]' '_')"
+			if [ -n "${!rc_key:-}" ]; then
+				return "${!rc_key}"
+			fi
 			return "${GOVC_STUB_PERMS_RC:-0}"
 			;;
 		role.ls)
-			echo "${GOVC_STUB_ROLE_OUT:-}"
+			# Phase 3 extension: per-role dispatch via
+			# GOVC_STUB_ROLE_OUT_<role>; falls back to the flat GOVC_STUB_ROLE_OUT.
+			local role_arg="$2"
+			local role_out_key="GOVC_STUB_ROLE_OUT_$(printf '%s' "$role_arg" | tr -c '[:alnum:]' '_')"
+			if [ -n "${!role_out_key:-}" ]; then
+				echo "${!role_out_key}"
+			else
+				echo "${GOVC_STUB_ROLE_OUT:-}"
+			fi
+			local role_rc_key="GOVC_STUB_ROLE_RC_$(printf '%s' "$role_arg" | tr -c '[:alnum:]' '_')"
+			if [ -n "${!role_rc_key:-}" ]; then
+				return "${!role_rc_key}"
+			fi
 			return "${GOVC_STUB_ROLE_RC:-0}"
 			;;
 		*)
@@ -362,6 +389,15 @@ _reset_path_state() {
 	GOVC_STUB_PERMS_RC=0
 	GOVC_STUB_ROLE_OUT=""
 	GOVC_STUB_ROLE_RC=0
+	# Phase 3 per-scope "found" flags. Production file defaults them to 0 at file
+	# scope; per-path presets in Paths Q-Z flip to 1 before invoking the sequencer.
+	_vsphere_dc_found=0
+	_vsphere_cluster_found=0
+	_vsphere_datastore_found=0
+	_vsphere_iso_datastore_found=0
+	_vsphere_network_found=0
+	_vsphere_folder_found=0
+	_vsphere_resource_pool_found=0
 }
 
 # 21. Path D: Layer 1 TCP failure -> 1 "cannot reach" warning + errors=1.
@@ -493,63 +529,290 @@ else
 	test_fail "Path L broken: d15=$d15 hint=$hint errors=$_preflight_errors"
 fi
 
-# 30. Path M: Admin role on both scopes -> fast-path; 0 warnings, 0 error
-# bumps, 0 warning-counter bumps.
+# 30. Path M: Admin role across all 7 Phase 3 scopes -> fast-path; 0 warnings,
+# 0 error bumps, 0 warning-counter bumps. Mirrors the Phase 2 Path M but now
+# exercises the full 7-scope iteration shipped in Plan 03-02.
 _reset_path_state
-GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
+_vsphere_dc_found=1
+_vsphere_cluster_found=1
+_vsphere_datastore_found=1
+_vsphere_network_found=1
+_vsphere_folder_found=1
+_vsphere_resource_pool_found=1
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/scope\tadmin@vsphere.local\tYes\n'
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
 warn=$(grep -c '^WARN:' "$_smoke_out" || true)
 if [ "$warn" -eq 0 ] && [ "$_preflight_errors" -eq 0 ] && [ "$_preflight_warnings" -eq 0 ]; then
-	test_pass "Path M: Admin role -> 0 warnings, 0 errors, 0 warning-counter bumps"
+	test_pass "Path M: Admin across 7 scopes -> 0 warnings, 0 errors, 0 warning-counter bumps"
 else
 	test_fail "Path M broken: warn=$warn errors=$_preflight_errors warnings=$_preflight_warnings"
 fi
 
-# 31. Path N: No-access role on all scopes -> one missing-priv warning per
-# required priv per scope. Folder allowlist has 2 privs
-# (VirtualMachine.Inventory.Create + VirtualMachine.Config.AddNewDisk), pool
-# allowlist has 1 (Resource.AssignVMToPool); total 3 warnings + errors=3.
-# The stub returns the same No-access row for both folder + pool scopes.
+# 31. Path N: No-access role across all 7 Phase 3 scopes -> every priv in every
+# scope's VSPHERE_PRIVS_<SCOPE> array is missing. Flat sum of array lengths:
+# ROOT(11) + DC(30) + CLUSTER(5) + DS(3) + NET(1) + FOLDER(28) + RP(5) = 83.
+# ISO_DATASTORE is unset so no 8th scope.
 _reset_path_state
+_vsphere_dc_found=1
+_vsphere_cluster_found=1
+_vsphere_datastore_found=1
+_vsphere_network_found=1
+_vsphere_folder_found=1
+_vsphere_resource_pool_found=1
 GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nNo access\t/scope\tadmin@vsphere.local\tYes\n'
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-folder_missing=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Inventory.Create' (user has role 'No access')" "$_smoke_out" || true)
-disk_missing=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Config.AddNewDisk' (user has role 'No access')" "$_smoke_out" || true)
-pool_missing=$(grep -c "resource pool '/GoodDC/host/GoodCluster/Resources' missing privilege 'Resource.AssignVMToPool' (user has role 'No access')" "$_smoke_out" || true)
-if [ "$folder_missing" -eq 1 ] && [ "$disk_missing" -eq 1 ] && [ "$pool_missing" -eq 1 ] && [ "$_preflight_errors" -eq 3 ]; then
-	test_pass "Path N: No-access role -> 3 missing-priv warnings (2 folder + 1 pool) + errors=3"
+miss=$(grep -c "missing privilege '" "$_smoke_out" || true)
+if [ "$miss" -eq 83 ] && [ "$_preflight_errors" -eq 83 ]; then
+	test_pass "Path N: No-access across 7 scopes -> 83 missing-priv warnings + errors=83"
 else
-	test_fail "Path N broken: folder=$folder_missing disk=$disk_missing pool=$pool_missing errors=$_preflight_errors"
+	test_fail "Path N broken: miss=$miss errors=$_preflight_errors out-tail='$(tail -5 "$_smoke_out")'"
 fi
 
-# 32. Path O: permissions.ls query fails on both scopes -> D-12 "cannot verify
-# write-access" warning per scope; _preflight_warnings bumped (NOT
-# _preflight_errors - Phase 3 may still catch the gap).
+# 32. Path O: permissions.ls fails on all 7 Phase 3 scopes -> D-12 "cannot
+# verify write-access" warning per scope + _preflight_warnings bumped per
+# scope. _preflight_errors stays 0 (query-level failure is a warning, not an
+# error; Phase 3 may still catch genuine gaps on other scopes).
 _reset_path_state
+_vsphere_dc_found=1
+_vsphere_cluster_found=1
+_vsphere_datastore_found=1
+_vsphere_network_found=1
+_vsphere_folder_found=1
+_vsphere_resource_pool_found=1
 GOVC_STUB_PERMS_RC=1
 GOVC_STUB_PERMS_OUT="permission denied: user lacks read right"
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
 d12=$(grep -c "^WARN: vSphere: cannot verify write-access on " "$_smoke_out" || true)
-if [ "$d12" -eq 2 ] && [ "$_preflight_warnings" -eq 2 ] && [ "$_preflight_errors" -eq 0 ]; then
-	test_pass "Path O: permissions.ls fails both scopes -> 2 D-12 warnings + warnings=2 + errors=0"
+if [ "$d12" -eq 7 ] && [ "$_preflight_warnings" -eq 7 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path O: permissions.ls fails all 7 scopes -> 7 D-12 warnings + warnings=7 + errors=0"
 else
 	test_fail "Path O broken: d12=$d12 warnings=$_preflight_warnings errors=$_preflight_errors"
 fi
 
-# 33. Path P: Custom role "VMBuilder" missing one VM-create priv on folder.
-# role.ls returns Inventory.Create + AssignVMToPool (NOT Config.AddNewDisk).
-# Folder: Inventory.Create present, Config.AddNewDisk missing -> 1 warning.
-# Pool: AssignVMToPool present -> 0 warnings. Total 1 warning + errors=1.
+# 33. Path P: Custom role "VMBuilder" grants exactly VirtualMachine.Inventory.Create.
+# Layer 3 sets all 6 non-root found flags to 1 (all Good* objects resolve via the
+# argument-dispatch stub), so Layer 4 iterates every scope. VirtualMachine.Inventory.Create
+# appears in VSPHERE_PRIVS_DATACENTER and VSPHERE_PRIVS_FOLDER but not in the
+# other 5 scopes. Missing counts per scope: ROOT 11, DC 30-1=29, CLUSTER 5,
+# DATASTORE 3, NETWORK 1, FOLDER 28-1=27, RP 5. Total 11+29+5+3+1+27+5 = 81.
+# The test codifies OBSERVED behaviour (Plan 02-05 "tests document behaviour"
+# convention): the one priv VMBuilder grants is never reported as missing on
+# DC or FOLDER, and appears missing on every scope that does not include it.
 _reset_path_state
-GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nVMBuilder\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
-GOVC_STUB_ROLE_OUT=$'VirtualMachine.Inventory.Create\nResource.AssignVMToPool\n'
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nVMBuilder\t/scope\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_ROLE_OUT=$'VirtualMachine.Inventory.Create\n'
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-missing=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Config.AddNewDisk'" "$_smoke_out" || true)
-present=$(grep -c "folder '/GoodDC/vm/folder' missing privilege 'VirtualMachine.Inventory.Create'" "$_smoke_out" || true)
-if [ "$missing" -eq 1 ] && [ "$present" -eq 0 ] && [ "$_preflight_errors" -eq 1 ]; then
-	test_pass "Path P: custom role missing AddNewDisk -> 1 warning for that priv only + errors=1"
+miss=$(grep -c "missing privilege '" "$_smoke_out" || true)
+inv_create=$(grep -c "missing privilege 'VirtualMachine.Inventory.Create'" "$_smoke_out" || true)
+dc_missing=$(grep -c "^WARN: vSphere: datacenter '/GoodDC' missing privilege '" "$_smoke_out" || true)
+folder_missing=$(grep -c "^WARN: vSphere: folder '/GoodDC/vm/folder' missing privilege '" "$_smoke_out" || true)
+if [ "$miss" -eq 81 ] && [ "$inv_create" -eq 0 ] && [ "$dc_missing" -eq 29 ] && [ "$folder_missing" -eq 27 ] && [ "$_preflight_errors" -eq 81 ]; then
+	test_pass "Path P: VMBuilder with only Inventory.Create -> 81 missing (DC 29 + FOLDER 27 dedupe the one granted priv) + errors=81"
 else
-	test_fail "Path P broken: missing=$missing present=$present errors=$_preflight_errors"
+	test_fail "Path P broken: miss=$miss inv_create=$inv_create dc_missing=$dc_missing folder_missing=$folder_missing errors=$_preflight_errors"
+fi
+
+# -------- Phase 3 Layer 4 behavioural paths (Q through Z) --------------------
+# Paths Q-Z exercise the 7-scope privilege sequencer directly via
+# _vsphere_probe_privileges (not through the full preflight_check_vsphere).
+# This lets each path control the 6 non-root found-flags precisely without
+# Layer 3 clobbering them from the argument-dispatch object.collect stub.
+# Paths Q-Z pre-source and pre-normalise vmware.conf via _reset_path_state so
+# GOVC_* env vars and resolve-default-resource-pool are already in scope.
+
+# 34. Path Q: ROOT priv gap (D-09 unconditional). Custom role "RootOnly"
+# returns 10 of 11 VSPHERE_PRIVS_ROOT privs; Sessions.ValidateSession is
+# missing. All other found flags stay 0 so no other scope check fires (only
+# aba_debug skip lines, which the silent stub drops). Expected: exactly 1
+# missing-priv warning + errors=1 + D-17 summary '1 privilege gap(s) across
+# 1 scope(s)'.
+_reset_path_state
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nRootOnly\t/\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_ROLE_OUT=$'Cns.Searchable\nInventoryService.Tagging.AttachTag\nInventoryService.Tagging.CreateCategory\nInventoryService.Tagging.CreateTag\nInventoryService.Tagging.DeleteCategory\nInventoryService.Tagging.DeleteTag\nInventoryService.Tagging.EditCategory\nInventoryService.Tagging.EditTag\nStorageProfile.Update\nStorageProfile.View\n'
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+miss=$(grep -c "root '/' missing privilege 'Sessions.ValidateSession'" "$_smoke_out" || true)
+summary=$(grep -c "vSphere: 1 privilege gap(s) across 1 scope(s)" "$_smoke_out" || true)
+if [ "$miss" -eq 1 ] && [ "$summary" -eq 1 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path Q: ROOT priv gap -> 1 missing + errors=1 + D-17 summary '1 across 1'"
+else
+	test_fail "Path Q broken: miss=$miss summary=$summary errors=$_preflight_errors"
+fi
+
+# 35. Path R: multi-scope gaps - Admin at ROOT, No-access at DATACENTER. Uses
+# per-scope permissions.ls dispatch (GOVC_STUB_PERMS_OUT_<path-key>). Only
+# ROOT + DATACENTER scope checks fire (DC flag on; other 5 non-root flags
+# stay off and emit silent aba_debug skip lines). Expected: 0 ROOT missings
+# (Admin fast-path) + 30 DC missings (full VSPHERE_PRIVS_DATACENTER array) +
+# D-17 summary '30 privilege gap(s) across 1 scope(s)'.
+_reset_path_state
+_vsphere_dc_found=1
+export GOVC_STUB_PERMS_OUT__=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/\tadmin@vsphere.local\tYes\n'
+export GOVC_STUB_PERMS_OUT__GoodDC=$'Role\tEntity\tPrincipal\tPropagate\nNo access\t/GoodDC\tadmin@vsphere.local\tYes\n'
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+dc_miss=$(grep -c "datacenter '/GoodDC' missing privilege '" "$_smoke_out" || true)
+root_miss=$(grep -c "root '/' missing privilege '" "$_smoke_out" || true)
+summary=$(grep -c "vSphere: 30 privilege gap(s) across 1 scope(s)" "$_smoke_out" || true)
+unset GOVC_STUB_PERMS_OUT__ GOVC_STUB_PERMS_OUT__GoodDC
+if [ "$dc_miss" -eq 30 ] && [ "$root_miss" -eq 0 ] && [ "$summary" -eq 1 ] && [ "$_preflight_errors" -eq 30 ]; then
+	test_pass "Path R: Admin@ROOT + No-access@DC -> 30 DC-only missings + D-17 '30 across 1'"
+else
+	test_fail "Path R broken: dc_miss=$dc_miss root_miss=$root_miss summary=$summary errors=$_preflight_errors"
+fi
+
+# 36. Path S: missing-object skip emits aba_debug, NOT aba_warning (D-06
+# no-conflation decision: do not confuse "privilege not granted" with
+# "object not found"). All 6 non-root found flags stay 0. Temporarily
+# override aba_debug to observe the skip line. Expected: exactly 1
+# 'skipping privilege check for missing datacenter' DEBUG line + 0
+# aba_warning for DATACENTER privileges + counters unchanged for DC scope.
+_reset_path_state
+aba_debug() { echo "DEBUG: $*"; }
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/\tadmin@vsphere.local\tYes\n'
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+skip_dc=$(grep -c "^DEBUG: vSphere: skipping privilege check for missing datacenter" "$_smoke_out" || true)
+warn_dc=$(grep -c "datacenter '/GoodDC' missing privilege" "$_smoke_out" || true)
+if [ "$skip_dc" -eq 1 ] && [ "$warn_dc" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path S: DC found=0 -> aba_debug skip (NOT aba_warning) + errors=0"
+else
+	test_fail "Path S broken: skip_dc=$skip_dc warn_dc=$warn_dc errors=$_preflight_errors"
+fi
+aba_debug() { :; }    # restore silent stub before Path T
+
+# 37. Path T: ISO_DATASTORE dedup when ISO_DATASTORE == GOVC_DATASTORE. Both
+# DS flags set. Force permissions.ls failure globally (GOVC_STUB_PERMS_RC=1).
+# Expected: exactly 1 D-12 'cannot verify write-access' warning for the
+# primary DS path; NO second D-12 for the ISO path (D-11 dedup guard
+# suppressed the repeat probe, carried forward from Phase 2 Pitfall 5).
+_reset_path_state
+_vsphere_datastore_found=1
+_vsphere_iso_datastore_found=1
+export ISO_DATASTORE=GoodDS
+GOVC_STUB_PERMS_RC=1
+GOVC_STUB_PERMS_OUT="permission denied"
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+ds_d12=$(grep -c "cannot verify write-access on '/GoodDC/datastore/GoodDS'" "$_smoke_out" || true)
+unset ISO_DATASTORE
+if [ "$ds_d12" -eq 1 ]; then
+	test_pass "Path T: ISO_DATASTORE == GOVC_DATASTORE -> dedup; single DS D-12 warning"
+else
+	test_fail "Path T broken: ds_d12=$ds_d12"
+fi
+
+# 38. Path U: Admin 7-scope fast-path -> D-17 summary suppressed (D-14
+# quiet-on-success). Asserts the summary headline ('privilege gap(s) across')
+# does NOT appear in output.
+_reset_path_state
+_vsphere_dc_found=1
+_vsphere_cluster_found=1
+_vsphere_datastore_found=1
+_vsphere_network_found=1
+_vsphere_folder_found=1
+_vsphere_resource_pool_found=1
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/scope\tadmin@vsphere.local\tYes\n'
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+summary=$(grep -c 'privilege gap(s) across' "$_smoke_out" || true)
+warn=$(grep -c '^WARN:' "$_smoke_out" || true)
+if [ "$summary" -eq 0 ] && [ "$warn" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path U: Admin 7-scope -> D-17 summary suppressed (quiet-on-success)"
+else
+	test_fail "Path U broken: summary=$summary warn=$warn errors=$_preflight_errors"
+fi
+
+# 39. Path V: role.ls failure on FOLDER scope -> 1 'cannot resolve' warning
+# + _preflight_warnings bumped + _preflight_errors=0 on that scope (D-12
+# semantics: query-level failure is a warning, not an error).
+_reset_path_state
+_vsphere_folder_found=1
+export GOVC_STUB_PERMS_OUT__GoodDC_vm_folder=$'Role\tEntity\tPrincipal\tPropagate\nCustomRole\t/GoodDC/vm/folder\tadmin@vsphere.local\tYes\n'
+export GOVC_STUB_ROLE_OUT="dummy-priv-list"
+export GOVC_STUB_ROLE_RC_CustomRole=1
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+cannot=$(grep -c "cannot resolve privileges for role 'CustomRole' on '/GoodDC/vm/folder'" "$_smoke_out" || true)
+unset GOVC_STUB_PERMS_OUT__GoodDC_vm_folder GOVC_STUB_ROLE_RC_CustomRole
+if [ "$cannot" -eq 1 ] && [ "$_preflight_warnings" -ge 1 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path V: role.ls fails on folder -> 1 'cannot resolve' warning + warnings>=1 + errors=0"
+else
+	test_fail "Path V broken: cannot=$cannot warnings=$_preflight_warnings errors=$_preflight_errors"
+fi
+
+# 40. Path W: D-17 summary silence on clean pass with a custom role that grants
+# every required priv. FOLDER scope active + ROOT (unconditional). role.ls
+# returns the union of VSPHERE_PRIVS_ROOT + VSPHERE_PRIVS_FOLDER (sourced by
+# awk from scripts/vmware-required-privileges.sh). Expected: 0 missing-priv
+# warnings + no D-17 summary headline.
+_reset_path_state
+_vsphere_folder_found=1
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nGranted\t/scope\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_ROLE_OUT="$(awk '/^VSPHERE_PRIVS_(ROOT|FOLDER)=\(/{take=1;next} take && /^\)/{take=0;next} take {gsub(/^[[:space:]]+|[[:space:]]+$/,""); print}' scripts/vmware-required-privileges.sh)"
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+miss=$(grep -c "missing privilege '" "$_smoke_out" || true)
+summary=$(grep -c 'privilege gap(s) across' "$_smoke_out" || true)
+if [ "$miss" -eq 0 ] && [ "$summary" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path W: custom role with all privs -> 0 missings + no D-17 summary"
+else
+	test_fail "Path W broken: miss=$miss summary=$summary errors=$_preflight_errors"
+fi
+
+# 41. Path X: D-17 summary appearance on exactly one gap. NearlyComplete role
+# has all 28 FOLDER + 11 ROOT privs EXCEPT VirtualMachine.Provisioning.Clone.
+# Expected: exactly 1 missing-priv warning + D-17 headline + next-step line +
+# grant-and-rerun line + errors=1 (D-18: summary must NOT double-count).
+_reset_path_state
+_vsphere_folder_found=1
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nNearlyComplete\t/scope\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_ROLE_OUT="$(awk '/^VSPHERE_PRIVS_(ROOT|FOLDER)=\(/{take=1;next} take && /^\)/{take=0;next} take {gsub(/^[[:space:]]+|[[:space:]]+$/,""); print}' scripts/vmware-required-privileges.sh | grep -vxF 'VirtualMachine.Provisioning.Clone')"
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+miss=$(grep -c "missing privilege 'VirtualMachine.Provisioning.Clone'" "$_smoke_out" || true)
+total_miss=$(grep -c "missing privilege '" "$_smoke_out" || true)
+summary=$(grep -c 'vSphere: 1 privilege gap(s) across 1 scope(s)' "$_smoke_out" || true)
+next_step=$(grep -c 'Next: review the curated list at scripts/vmware-required-privileges.sh' "$_smoke_out" || true)
+grant=$(grep -c 'Grant the missing privileges to the vCenter user or role and re-run aba install' "$_smoke_out" || true)
+if [ "$miss" -eq 1 ] && [ "$total_miss" -eq 1 ] && [ "$summary" -eq 1 ] && [ "$next_step" -eq 1 ] && [ "$grant" -eq 1 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path X: one gap -> 1 per-gap warning + D-17 summary + errors=1 (D-18 no double-count)"
+else
+	test_fail "Path X broken: miss=$miss total=$total_miss summary=$summary next=$next_step grant=$grant errors=$_preflight_errors"
+fi
+
+# 42. Path Y: ISO_DATASTORE present + different + both found. Both DS scopes
+# iterate the same VSPHERE_PRIVS_DATASTORE (3 privs). No-access on every scope
+# the stub serves - so ROOT also fires (11 missings) since D-09 makes ROOT
+# unconditional. Observed: 11 ROOT + 3 primary DS + 3 ISO DS = 17 missings +
+# D-17 summary '17 privilege gap(s) across 3 scope(s)'. Test codifies observed
+# behaviour (Plan 02-05 "tests document behaviour" convention).
+_reset_path_state
+_vsphere_datastore_found=1
+_vsphere_iso_datastore_found=1
+export ISO_DATASTORE=IsoDS
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nNo access\t/scope\tadmin@vsphere.local\tYes\n'
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+primary=$(grep -c "datastore '/GoodDC/datastore/GoodDS' missing privilege" "$_smoke_out" || true)
+iso=$(grep -c "datastore '/GoodDC/datastore/IsoDS' missing privilege" "$_smoke_out" || true)
+root_miss=$(grep -c "root '/' missing privilege" "$_smoke_out" || true)
+summary=$(grep -c 'vSphere: 17 privilege gap(s) across 3 scope(s)' "$_smoke_out" || true)
+unset ISO_DATASTORE
+if [ "$primary" -eq 3 ] && [ "$iso" -eq 3 ] && [ "$root_miss" -eq 11 ] && [ "$summary" -eq 1 ] && [ "$_preflight_errors" -eq 17 ]; then
+	test_pass "Path Y: ISO!=GOVC both found + ROOT No-access -> 11+3+3 missings + D-17 '17 across 3'"
+else
+	test_fail "Path Y broken: primary=$primary iso=$iso root_miss=$root_miss summary=$summary errors=$_preflight_errors"
+fi
+
+# 43. Path Z: D-18 explicit no-double-count. Reuses Path X's one-gap shape;
+# captures _preflight_errors BEFORE and AFTER the call; asserts the delta
+# equals the per-gap warning count (i.e. the D-17 summary did NOT bump
+# _preflight_errors an extra time).
+_reset_path_state
+_vsphere_folder_found=1
+GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nNearlyComplete\t/scope\tadmin@vsphere.local\tYes\n'
+GOVC_STUB_ROLE_OUT="$(awk '/^VSPHERE_PRIVS_(ROOT|FOLDER)=\(/{take=1;next} take && /^\)/{take=0;next} take {gsub(/^[[:space:]]+|[[:space:]]+$/,""); print}' scripts/vmware-required-privileges.sh | grep -vxF 'VirtualMachine.Provisioning.Clone')"
+err_before=$_preflight_errors
+_vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
+err_after=$_preflight_errors
+delta=$(( err_after - err_before ))
+gap_warns=$(grep -c "missing privilege '" "$_smoke_out" || true)
+if [ "$delta" -eq "$gap_warns" ] && [ "$delta" -eq 1 ]; then
+	test_pass "Path Z: D-18 summary does not double-count - delta=$delta matches gap_warns=$gap_warns"
+else
+	test_fail "Path Z broken: delta=$delta gap_warns=$gap_warns"
 fi
 
 echo
