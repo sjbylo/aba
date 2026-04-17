@@ -4,6 +4,27 @@
 
 set -e
 
+# ============================================================================
+# TEST-02 negative-path matrix: 7 scenarios -> existing lettered Paths.
+# ============================================================================
+# Each scenario asserts a non-zero exit (via `_preflight_errors` > 0 at the
+# summary-emit site) PLUS a scenario-distinguishing substring match. Assertions
+# use substring matches on key tokens (D-03) and counter-delta checks (D-04);
+# they do NOT use exact-line equality or `^vSphere:` regex anchors.
+#
+# | Scenario                    | Path  | Distinguishing substring + counter-delta |
+# |-----------------------------|-------|------------------------------------------|
+# | Unreachable vCenter (TCP)   | D     | 'cannot reach'             + errors += 1 |
+# | Untrusted CA (TLS)          | E     | 'trust chain failure'      + errors += 1 |
+# | Wrong password (auth)       | G     | 'authentication to'        + errors += 1 |
+# | Missing datastore           | J     | 'datastore ... not found'  + errors += 1 |
+# | Missing network             | I     | 'network ... not attached' + errors += 1 |
+# | Missing folder              | H+AA  | 'datacenter not found' DC-cascade (Path H); dedicated folder-missing Path AA added |
+# | Missing privilege           | Q-Z   | "missing privilege '..."   + errors += N |
+#
+# Traceability: grep this file for 'Path <letter>:' to reach each assertion.
+# ============================================================================
+
 cd "$(dirname "$0")/../.."
 
 GREEN='\033[0;32m'
@@ -400,6 +421,7 @@ _reset_path_state() {
 	_vsphere_resource_pool_found=0
 }
 
+# (TEST-02 scenario: Unreachable vCenter)
 # 21. Path D: Layer 1 TCP failure -> 1 "cannot reach" warning + errors=1.
 _reset_path_state
 TCP_STUB_RC=1
@@ -411,6 +433,7 @@ else
 	test_fail "Path D broken: warn=$warn errors=$_preflight_errors out='$(cat "$_smoke_out")'"
 fi
 
+# (TEST-02 scenario: Untrusted CA)
 # 22. Path E: Layer 1 TLS failure (GOVC_INSECURE unset) -> 1 trust-chain warning
 # + 2 remediation lines (GOVC_INSECURE=1 hint FIRST, CA-trust-store hint SECOND)
 # + errors=1. Production emits a multi-arg aba_warning; our stub joins args with
@@ -442,6 +465,7 @@ else
 	test_fail "Path F broken: tls_warn=$tls_warn errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Wrong password)
 # 24. Path G: Layer 2 auth failure -> 1 "authentication to" warning + errors=1;
 # no Layer 3 probes reached.
 _reset_path_state
@@ -455,6 +479,7 @@ else
 	test_fail "Path G broken: auth=$auth_line ds=$ds_line errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing folder / missing datacenter cascade)
 # 25. Path H: Layer 3 DC missing -> 1 "datacenter not found" WARNING + 1 cascade
 # INFO + errors=1 (not 2: the cascade note must NOT bump the counter).
 # Downstream Layer 3 probes (cluster, datastore, network, folder, RP) must be
@@ -471,6 +496,7 @@ else
 	test_fail "Path H broken: dc_warn=$dc_warn cascade=$cascade_info cluster_probe=$cluster_probe errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing network)
 # 26. Path I: Network exists but is NOT attached to cluster -> 1 attachment
 # warning + errors=1. Stub dispatches /GoodDC/network/WrongCluster* to host-99,
 # cluster-host query returns host-1 -> no overlap.
@@ -484,6 +510,7 @@ else
 	test_fail "Path I broken: attach_warn=$attach_warn errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing datastore)
 # 27. Path J: ISO_DATASTORE equals GOVC_DATASTORE -> dedup guard must skip the
 # second probe. Set both to Missing; assert exactly 1 "not found" line for the
 # datastore path (not 2).
@@ -620,6 +647,7 @@ fi
 # Paths Q-Z pre-source and pre-normalise vmware.conf via _reset_path_state so
 # GOVC_* env vars and resolve-default-resource-pool are already in scope.
 
+# (TEST-02 scenario: Missing privilege)
 # 34. Path Q: ROOT priv gap (D-09 unconditional). Custom role "RootOnly"
 # returns 10 of 11 VSPHERE_PRIVS_ROOT privs; Sessions.ValidateSession is
 # missing. All other found flags stay 0 so no other scope check fires (only
@@ -638,6 +666,7 @@ else
 	test_fail "Path Q broken: miss=$miss summary=$summary errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 35. Path R: multi-scope gaps - Admin at ROOT, No-access at DATACENTER. Uses
 # per-scope permissions.ls dispatch (GOVC_STUB_PERMS_OUT_<path-key>). Only
 # ROOT + DATACENTER scope checks fire (DC flag on; other 5 non-root flags
@@ -659,6 +688,7 @@ else
 	test_fail "Path R broken: dc_miss=$dc_miss root_miss=$root_miss summary=$summary errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 36. Path S: missing-object skip emits aba_debug, NOT aba_warning (D-06
 # no-conflation decision: do not confuse "privilege not granted" with
 # "object not found"). All 6 non-root found flags stay 0. Temporarily
@@ -678,6 +708,7 @@ else
 fi
 aba_debug() { :; }    # restore silent stub before Path T
 
+# (TEST-02 scenario: Missing privilege)
 # 37. Path T: ISO_DATASTORE dedup when ISO_DATASTORE == GOVC_DATASTORE. Both
 # DS flags set. Force permissions.ls failure globally (GOVC_STUB_PERMS_RC=1).
 # Expected: exactly 1 D-12 'cannot verify write-access' warning for the
@@ -698,6 +729,7 @@ else
 	test_fail "Path T broken: ds_d12=$ds_d12"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 38. Path U: Admin 7-scope fast-path -> D-17 summary suppressed (D-14
 # quiet-on-success). Asserts the summary headline ('privilege gap(s) across')
 # does NOT appear in output.
@@ -718,6 +750,7 @@ else
 	test_fail "Path U broken: summary=$summary warn=$warn errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 39. Path V: role.ls failure on FOLDER scope -> 1 'cannot resolve' warning
 # + _preflight_warnings bumped + _preflight_errors=0 on that scope (D-12
 # semantics: query-level failure is a warning, not an error).
@@ -735,6 +768,7 @@ else
 	test_fail "Path V broken: cannot=$cannot warnings=$_preflight_warnings errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 40. Path W: D-17 summary silence on clean pass with a custom role that grants
 # every required priv. FOLDER scope active + ROOT (unconditional). role.ls
 # returns the union of VSPHERE_PRIVS_ROOT + VSPHERE_PRIVS_FOLDER (sourced by
@@ -753,6 +787,7 @@ else
 	test_fail "Path W broken: miss=$miss summary=$summary errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 41. Path X: D-17 summary appearance on exactly one gap. NearlyComplete role
 # has all 28 FOLDER + 11 ROOT privs EXCEPT VirtualMachine.Provisioning.Clone.
 # Expected: exactly 1 missing-priv warning + D-17 headline + next-step line +
@@ -773,6 +808,7 @@ else
 	test_fail "Path X broken: miss=$miss total=$total_miss summary=$summary next=$next_step grant=$grant errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 42. Path Y: ISO_DATASTORE present + different + both found. Both DS scopes
 # iterate the same VSPHERE_PRIVS_DATASTORE (3 privs). No-access on every scope
 # the stub serves - so ROOT also fires (11 missings) since D-09 makes ROOT
@@ -796,6 +832,7 @@ else
 	test_fail "Path Y broken: primary=$primary iso=$iso root_miss=$root_miss summary=$summary errors=$_preflight_errors"
 fi
 
+# (TEST-02 scenario: Missing privilege)
 # 43. Path Z: D-18 explicit no-double-count. Reuses Path X's one-gap shape;
 # captures _preflight_errors BEFORE and AFTER the call; asserts the delta
 # equals the per-gap warning count (i.e. the D-17 summary did NOT bump
@@ -814,6 +851,25 @@ if [ "$delta" -eq "$gap_warns" ] && [ "$delta" -eq 1 ]; then
 else
 	test_fail "Path Z broken: delta=$delta gap_warns=$gap_warns"
 fi
+
+# (TEST-02 scenario: Missing folder)
+# 44. Path AA: VC_FOLDER points at a folder that does not exist on an otherwise
+# healthy DC -> 1 "folder ... not found" warning + errors=1. Proves the missing-
+# folder scenario is detectable independent of the DC-cascade (Path H).
+_reset_path_state
+export VC_FOLDER=/MissingFolder
+err_before=$_preflight_errors
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+err_after=$_preflight_errors
+delta=$(( err_after - err_before ))
+folder_warn=$(grep -cE "^WARN: vSphere: .*folder.*not found|folder '/MissingFolder' not found" "$_smoke_out" || true)
+if [ "$folder_warn" -ge 1 ] && [ "$delta" -eq 1 ]; then
+	test_pass "Path AA: missing folder -> 'folder ... not found' warning + errors delta=1"
+else
+	test_fail "Path AA broken: folder_warn=$folder_warn delta=$delta out='$(cat "$_smoke_out")'"
+fi
+# Restore VC_FOLDER to the default known-good value for any subsequent Paths.
+export VC_FOLDER=/GoodDC/vm/folder
 
 echo
 echo -e "${GREEN}=== All Tests Passed ===${NC}"
