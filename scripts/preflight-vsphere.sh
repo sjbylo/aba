@@ -36,11 +36,6 @@ if [ ! -f vmware.conf ]; then
 	exit 2
 fi
 
-# Turn on the ABA debug channel so every layer emits its 'ok' / 'resolved'
-# aba_debug line into the captured output. The report below greps that
-# output to decide per-check status.
-export DEBUG_ABA=1
-
 # Disable set -e so individual layer failures don't abort the wrapper
 # before we print the report. Counters carry the real status.
 set +e
@@ -53,6 +48,12 @@ source scripts/include_all.sh
 # the trap so all 4 layers can run to completion and the report can
 # summarise every finding.
 trap - ERR
+
+# Turn on the ABA debug channel so every layer emits its 'ok' / 'resolved'
+# aba_debug line into the captured output (the report below greps that
+# output to decide per-check status). Set AFTER sourcing include_all.sh so
+# the "Error trap set" self-announcement (include_all.sh:274) stays silent.
+export DEBUG_ABA=1
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
