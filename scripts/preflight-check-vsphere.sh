@@ -32,7 +32,7 @@ _vsphere_folder_found=0
 _vsphere_resource_pool_found=0
 
 # Resolved absolute paths populated by Layer 3 and reused by Layer 4. When a
-# user writes a bare name (e.g. GOVC_NETWORK='VLAN1400') or a nested value
+# user writes a bare name (e.g. GOVC_NETWORK='<portgroup>') or a nested value
 # (e.g. GOVC_DATASTORE='folder/ds-name'), the Layer 3 resolver walks the
 # inventory to find the matching object and stores its absolute path here.
 # Layer 4 (_vsphere_probe_privileges) passes these paths to
@@ -187,9 +187,9 @@ _vsphere_object_exists() {
 # Resolve a vSphere inventory object by path OR bare name. Accepts the same
 # input shapes OpenShift accepts (see templates/install-config.yaml.j2:48 and
 # the install-config generator for datastore / folder / resource-pool):
-#   - Absolute path:  /DC/network/dvSwitch-Foo/VLAN1400   (use verbatim)
+#   - Absolute path:  /DC/network/dvSwitch-Foo/<portgroup>   (use verbatim)
 #   - Nested path:    folder/datastore-name                (appended to search_root)
-#   - Bare leaf:      VLAN1400, ICC-ResourcePool          (searched under search_root)
+#   - Bare leaf:      <portgroup>, <resource-pool>          (searched under search_root)
 #
 # Algorithm:
 #   1. Absolute path (starts with /): object.collect verbatim; no fallback.
@@ -376,8 +376,8 @@ _vsphere_probe_resources() {
 	fi
 
 	# RES-04: network existence AND attachment-to-cluster cross-check (D-08).
-	# Resolver accepts bare DVS portgroup names (VLAN1400), nested paths
-	# (dvSwitch-Foo/VLAN1400), and absolute paths - matches how OpenShift
+	# Resolver accepts bare DVS portgroup names (<portgroup>), nested paths
+	# (dvSwitch-Foo/<portgroup>), and absolute paths - matches how OpenShift
 	# consumes networks in install-config.yaml.
 	# The attachment probe only runs when the network exists; the probe reads
 	# _vsphere_network_path which is populated here before the call.
@@ -400,7 +400,7 @@ _vsphere_probe_resources() {
 	# CLUSTER itself (not the RP field), and we specifically do NOT tell the user
 	# "try setting GOVC_RESOURCE_POOL" - that would mislead them into masking a
 	# genuine cluster-configuration problem.
-	# When set, the resolver handles bare names ('ICC-ResourcePool'), nested
+	# When set, the resolver handles bare names ('<resource-pool>'), nested
 	# paths, and absolute paths - matches how OpenShift resolves resourcePool.
 	if [ -z "${GOVC_RESOURCE_POOL:-}" ]; then
 		local default_rp_path="/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources"
