@@ -1147,6 +1147,7 @@ Values are commented out by default; uncomment and edit to override.
 | `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
+| `OC_MIRROR_SINCE` | `2020-01-01` | Date passed to `oc-mirror --since` during `save` (mirror-to-disk) only. Forces a complete, self-contained archive every time — required for reliable air-gapped `load`. Set to empty to use oc-mirror's differential mode (smaller archives, but each must be loaded in order). |
 | `OC_MIRROR_FLAGS` | *(empty)* | Extra flags appended to every `oc-mirror` invocation (sync, save, load). Normally not needed — sigstore signature handling is managed by the `registries.d` config below. |
 
 Example — increase the image timeout to 60 minutes:
