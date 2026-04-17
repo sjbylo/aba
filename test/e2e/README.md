@@ -433,65 +433,32 @@ Settings can be defined at three levels (highest precedence wins):
 ## Lab provisioning for vSphere preflight tests
 
 The `suite-vsphere-preflight.sh` suite verifies both the happy path (install
-proceeds past preflight) and the negative path (preflight aborts `aba install`
-when the vCenter user is missing a required privilege). The negative test
-requires a vCenter user that is **intentionally** missing exactly one privilege.
+proceeds past preflight, TEST-03) and the negative path (preflight aborts
+`aba install` before any ISO is generated, TEST-04).
 
-This is a **one-time per lab vCenter** setup. A vSphere admin MUST provision
-the following before the suite runs:
+**No custom role or user provisioning is required.** The negative test
+triggers a Layer 1 (authentication) preflight failure by swapping
+`vmware.conf` to bogus credentials. Fine-grained privilege scenarios
+(missing `Resource.AssignVMToPool`, etc.) are covered exhaustively by
+`test/func/test-preflight-check-vsphere.sh` (Paths A-Z + AA, 44 assertions,
+mocked `govc`); the E2E suite's unique value is proving that `aba install`
+actually invokes preflight and preflight actually gates the make chain.
 
-### Broken role
+### `pools.conf` tokens
 
-Create a role named `aba-preflight-broken` that holds **every** privilege
-listed in `scripts/vmware-required-privileges.sh` **except** one:
-
-- Strip `Resource.AssignVMToPool` from the role.
-- Keep every other privilege from every `VSPHERE_PRIVS_*` array.
-
-### Broken user per pool
-
-Create one user per pool, binding the `aba-preflight-broken` role to the
-pool's **resource pool, folder, and datacenter scopes** (the same three
-scopes the positive install user is bound to, so authentication succeeds
-and only the `Resource.AssignVMToPool` privilege is the intentional gap).
-
-Recommended user naming (matches the defaults in `pools.conf`):
-
-- `aba-preflight-broken1@vsphere.local` bound to pool 1 scopes
-- `aba-preflight-broken2@vsphere.local` bound to pool 2 scopes
-- `aba-preflight-broken3@vsphere.local` bound to pool 3 scopes
-- `aba-preflight-broken4@vsphere.local` bound to pool 4 scopes
-
-### Record the credentials in `pools.conf`
-
-Each active pool line has two tokens the suite reads:
+Each active pool line carries two tokens the suite reads:
 
 ```
-pool1  con1  dis1  aba-e2e-template-rhel8  ...  GOVC_USERNAME_BROKEN=aba-preflight-broken1@vsphere.local  GOVC_PASSWORD_BROKEN=<password>
+pool1  con1  dis1  aba-e2e-template-rhel8  ...  GOVC_USERNAME_BROKEN=NOT-A-REAL-USER@vsphere.local  GOVC_PASSWORD_BROKEN=NOT-A-REAL-PASSWORD
 ```
 
-The password **MUST** use only characters from `[A-Za-z0-9._@+-]`. The
-`pools.conf` parser (see `test/e2e/runner.sh`) whitespace-splits tokens
-and does not support quoted values, so any space, `#`, or shell-special
-character in the password will be silently truncated or misparsed and the
-suite will fail at the sanity-check step with an authentication error that
-does not point at the password.
+The defaults shipped in `pools.conf` are ready to use. The values **MUST**
+use only characters from `[A-Za-z0-9._@+-]`; the `pools.conf` parser (see
+`test/e2e/runner.sh`) whitespace-splits tokens and does not support quoted
+values, so any space, `#`, or shell-special character will be silently
+truncated or misparsed.
 
-### Suite-side sanity check
-
-Before the negative install runs, the suite runs a `Setup: verify broken role
-still missing Resource.AssignVMToPool` block that:
-
-1. Calls `govc permissions.ls` against the pool's resource pool scope to
-   resolve the role bound to the broken user (via an `awk` filter on the
-   `Principal` column - note: `govc permissions.ls` does NOT accept a
-   `-principal` flag; filtering happens client-side).
-2. Calls `govc role.ls <role>` and asserts that `Resource.AssignVMToPool` is
-   NOT in the privilege list.
-
-If the lab admin ever restores `Resource.AssignVMToPool` to the role, this
-sanity check fails with an actionable message: "broken role is no longer
-broken - ask lab admin to re-strip Resource.AssignVMToPool from
-aba-preflight-broken on the resource pool scope". If the admin forgot to
-bind the role to the resource pool scope entirely, the check fails with
-"broken user has no role on RP; bind aba-preflight-broken to this scope".
+If you ever need to override the defaults (e.g. to force a different
+failure path), any clearly-not-real username / password within that
+character class will work - the only requirement is that vCenter rejects
+them at authentication time.
