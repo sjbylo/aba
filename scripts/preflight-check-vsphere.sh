@@ -31,6 +31,19 @@ _vsphere_network_found=0
 _vsphere_folder_found=0
 _vsphere_resource_pool_found=0
 
+# Resolved absolute paths populated by Layer 3 and reused by Layer 4. When a
+# user writes a bare name (e.g. GOVC_NETWORK='VLAN1400') or a nested value
+# (e.g. GOVC_DATASTORE='folder/ds-name'), the Layer 3 resolver walks the
+# inventory to find the matching object and stores its absolute path here.
+# Layer 4 (_vsphere_probe_privileges) passes these paths to
+# `govc permissions.ls` so RBAC queries use the same path OpenShift will,
+# not a flat-path construction that may miss DVS-nested or bare-name objects.
+_vsphere_datastore_path=""
+_vsphere_iso_datastore_path=""
+_vsphere_network_path=""
+_vsphere_folder_path=""
+_vsphere_resource_pool_path=""
+
 # --- Phase 2 Layer 1 helpers (private to this file) -----------------------
 
 # Extract host + port from GOVC_URL into two fields echoed on stdout.
@@ -162,6 +175,110 @@ _vsphere_object_exists() {
 	return 1
 }
 
+# Resolve a vSphere inventory object by path OR bare name. Accepts the same
+# input shapes OpenShift accepts (see templates/install-config.yaml.j2:48 and
+# the install-config generator for datastore / folder / resource-pool):
+#   - Absolute path:  /DC/network/dvSwitch-Foo/VLAN1400   (use verbatim)
+#   - Nested path:    folder/datastore-name                (appended to search_root)
+#   - Bare leaf:      VLAN1400, ICC-ResourcePool          (searched under search_root)
+#
+# Algorithm:
+#   1. Absolute path (starts with /): object.collect verbatim; no fallback.
+#   2. Relative path or bare name: try flat-append <search_root>/<value> first
+#      (fast path, preserves existing configs where the value already contains
+#      folder prefixes). If that fails, fall back to `govc find <search_root>
+#      -name <leaf>` where leaf = basename of the value. Exactly one hit =
+#      resolved. Zero hits = not found. Multiple hits = ambiguous.
+#
+# $1 = human kind label ("network", "datastore", "folder", "resource pool")
+# $2 = user-configured value
+# $3 = search root for fallback ("/$DC/network", "/$DC/host/$CLUSTER", etc.)
+# $4 = optional govc find -type flag (e.g. "p" to scope bare-name RP searches
+#      to resource pools rather than any object sharing the leaf name)
+#
+# On success: writes the resolved absolute path to _vsphere_resolver_result and returns 0.
+# On failure: emits one aba_warning, bumps _preflight_errors, returns 1.
+#
+# Important: the resolved path is returned via the module variable
+# _vsphere_resolver_result, NOT via stdout. aba_warning / aba_debug helpers
+# write to stdout, and capturing stdout from this function would swallow
+# those messages instead of letting them reach the user.
+#
+# Note: `out=$(cmd 2>&1)` is the allowed stderr-capture idiom per CLAUDE.md
+# (NOT the banned `cmd 2>&1 | grep` pipeline).
+_vsphere_resolver_result=""
+_vsphere_resolve_object() {
+	local kind="$1" hint="$2" search_root="$3" find_type="${4:-}"
+	local out rc=0
+	_vsphere_resolver_result=""
+
+	# Absolute path: verify verbatim, no fallback. Users who write absolute
+	# paths have committed to a specific location; silently walking the tree
+	# would mask typos.
+	if [[ "$hint" = /* ]]; then
+		out=$(govc object.collect -s "$hint" name 2>&1) || rc=$?
+		if [ "$rc" -eq 0 ]; then
+			aba_debug "vSphere: $kind '$hint' exists"
+			_vsphere_resolver_result="$hint"
+			return 0
+		fi
+		aba_warning "vSphere: $kind '$hint' not found"
+		_preflight_errors=$(( _preflight_errors + 1 ))
+		return 1
+	fi
+
+	# Fast path: flat-append under search_root. Preserves the historical
+	# behaviour where GOVC_DATASTORE='folder/DS' works because the flat
+	# concatenation happens to land on the real object.
+	local flat="$search_root/$hint"
+	out=$(govc object.collect -s "$flat" name 2>&1) || rc=$?
+	if [ "$rc" -eq 0 ]; then
+		aba_debug "vSphere: $kind '$flat' exists"
+		_vsphere_resolver_result="$flat"
+		return 0
+	fi
+
+	# Fallback: name-based search under search_root. Handles DVS-nested
+	# portgroups, bare-name resource pools, and any other case where the
+	# user's value matches an object reachable from search_root but not at
+	# the flat-appended path.
+	local leaf="${hint##*/}"
+	local find_out find_rc=0
+	if [ -n "$find_type" ]; then
+		find_out=$(govc find "$search_root" -type "$find_type" -name "$leaf" 2>&1) || find_rc=$?
+	else
+		find_out=$(govc find "$search_root" -name "$leaf" 2>&1) || find_rc=$?
+	fi
+
+	# Count lines starting with '/' - govc find emits one absolute path per
+	# match; blank lines and stray output are ignored.
+	local hits_count=0
+	if [ "$find_rc" -eq 0 ]; then
+		hits_count=$(printf "%s\n" "$find_out" | grep -c '^/' || true)
+	fi
+
+	if [ "$hits_count" -eq 1 ]; then
+		local resolved
+		resolved=$(printf "%s\n" "$find_out" | grep '^/' | head -1)
+		aba_debug "vSphere: $kind '$hint' resolved to '$resolved'"
+		_vsphere_resolver_result="$resolved"
+		return 0
+	fi
+
+	if [ "$hits_count" -gt 1 ]; then
+		aba_warning "vSphere: $kind '$hint' matches $hits_count objects under '$search_root' (ambiguous; use an absolute path in vmware.conf)"
+		_preflight_errors=$(( _preflight_errors + 1 ))
+		return 1
+	fi
+
+	# Neither flat-path nor find found anything. Use the flat path in the
+	# warning message for backward compatibility with existing tests /
+	# tooling that matches on the old "$kind '$flat' not found" wording.
+	aba_warning "vSphere: $kind '$flat' not found"
+	_preflight_errors=$(( _preflight_errors + 1 ))
+	return 1
+}
+
 # RES-04 attachment cross-check (D-08): the named portgroup must be visible to at
 # least one host of GOVC_CLUSTER. This is an ADDITIONAL check on top of the basic
 # existence probe - "right-name, wrong-cluster" would otherwise silently pass RES-04.
@@ -173,8 +290,17 @@ _vsphere_object_exists() {
 # Returns 0 on success (overlap found OR soft-skip); 1 if the attachment gap is real.
 _vsphere_probe_resources_network_on_cluster() {
 	local net_hosts cluster_hosts net_rc=0 cluster_rc=0
-	net_hosts=$(govc object.collect -s "/$GOVC_DATACENTER/network/$GOVC_NETWORK" host 2>&1) || net_rc=$?
+	# Use the Layer 3 resolved network path so the attachment check reads the
+	# actual object, not a flat-path construction that would miss DVS-nested
+	# portgroups (the network existence probe above populated this variable).
+	net_hosts=$(govc object.collect -s "$_vsphere_network_path" host 2>&1) || net_rc=$?
 	cluster_hosts=$(govc find -i -type h "/$GOVC_DATACENTER/host/$GOVC_CLUSTER" 2>&1) || cluster_rc=$?
+
+	# Normalize net_hosts to one moref per line. `govc object.collect -s <obj>
+	# host` emits morefs newline-separated for simple portgroups but comma-
+	# separated for DVS-backed portgroups (6+ hosts); the grep -xF overlap
+	# check below requires newline-separated input to match via whole-line.
+	net_hosts=$(printf '%s' "$net_hosts" | tr ',' '\n')
 
 	if [ "$net_rc" -ne 0 ] || [ "$cluster_rc" -ne 0 ]; then
 		aba_debug "vSphere: could not verify network-on-cluster attachment (govc read error)"
@@ -221,71 +347,71 @@ _vsphere_probe_resources() {
 		_vsphere_cluster_found=1
 	fi
 
-	# RES-03a: primary datastore.
-	if _vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE"; then
+	# RES-03a: primary datastore. Values may be bare names, folder-prefixed
+	# (e.g. 'Folder/DS'), or absolute paths; the resolver handles all three.
+	# Resolver return convention: success -> _vsphere_resolver_result holds
+	# the resolved absolute path; failure -> resolver has already emitted the
+	# warning and bumped _preflight_errors.
+	if _vsphere_resolve_object datastore "$GOVC_DATASTORE" "/$GOVC_DATACENTER/datastore"; then
+		_vsphere_datastore_path="$_vsphere_resolver_result"
 		_vsphere_datastore_found=1
 	fi
 
 	# RES-03b: optional ISO_DATASTORE - probe only if set, non-empty, AND different
 	# from GOVC_DATASTORE (D-06 + Pitfall 5 dedup guard: don't double-probe same path).
 	if [ -n "${ISO_DATASTORE:-}" ] && [ "$ISO_DATASTORE" != "$GOVC_DATASTORE" ]; then
-		if _vsphere_object_exists datastore "/$GOVC_DATACENTER/datastore/$ISO_DATASTORE"; then
+		if _vsphere_resolve_object datastore "$ISO_DATASTORE" "/$GOVC_DATACENTER/datastore"; then
+			_vsphere_iso_datastore_path="$_vsphere_resolver_result"
 			_vsphere_iso_datastore_found=1
 		fi
 	fi
 
 	# RES-04: network existence AND attachment-to-cluster cross-check (D-08).
-	# The attachment probe only runs when the network exists - no point cross-checking
-	# a portgroup that isn't there; the basic probe already warned about it.
-	# Flag reflects "network object exists" (Layer 3 RES-04 existence); attachment
-	# cross-check is an additional quality gate that does not alter the found state.
-	if _vsphere_object_exists network "/$GOVC_DATACENTER/network/$GOVC_NETWORK"; then
+	# Resolver accepts bare DVS portgroup names (VLAN1400), nested paths
+	# (dvSwitch-Foo/VLAN1400), and absolute paths - matches how OpenShift
+	# consumes networks in install-config.yaml.
+	# The attachment probe only runs when the network exists; the probe reads
+	# _vsphere_network_path which is populated here before the call.
+	if _vsphere_resolve_object network "$GOVC_NETWORK" "/$GOVC_DATACENTER/network"; then
+		_vsphere_network_path="$_vsphere_resolver_result"
 		_vsphere_network_found=1
 		_vsphere_probe_resources_network_on_cluster || :
 	fi
 
-	# RES-05: VM folder (absolute path from VC_FOLDER).
-	if _vsphere_object_exists folder "$VC_FOLDER"; then
+	# RES-05: VM folder. VC_FOLDER is typically already an absolute path
+	# (e.g. /DC/vm/MyFolder) but the resolver also handles a bare leaf name.
+	if _vsphere_resolve_object folder "$VC_FOLDER" "/$GOVC_DATACENTER/vm"; then
+		_vsphere_folder_path="$_vsphere_resolver_result"
 		_vsphere_folder_found=1
 	fi
 
 	# RES-06: resource pool - configured OR implicit default (Phase 2).
-	# resolve-default-resource-pool lives in scripts/include_all.sh; this caller invokes it
-	# and branches the warning wording when the UNSET-path case fails vs the SET-path case.
-	# We use a custom probe inline instead of _vsphere_object_exists so we can swap the
-	# error wording: when the DEFAULT path is missing, the broken link is the CLUSTER
-	# (not the RP field) - we specifically do NOT tell the user "try setting GOVC_RESOURCE_POOL".
-	local pool_path pool_is_default=0
-	pool_path=$(resolve-default-resource-pool)
+	# When GOVC_RESOURCE_POOL is unset we use the cluster's always-present default
+	# pool path and a custom warning wording: the broken link in that case is the
+	# CLUSTER itself (not the RP field), and we specifically do NOT tell the user
+	# "try setting GOVC_RESOURCE_POOL" - that would mislead them into masking a
+	# genuine cluster-configuration problem.
+	# When set, the resolver handles bare names ('ICC-ResourcePool'), nested
+	# paths, and absolute paths - matches how OpenShift resolves resourcePool.
 	if [ -z "${GOVC_RESOURCE_POOL:-}" ]; then
-		pool_is_default=1
-	fi
-
-	# Note: `out=$(cmd 2>&1)` captures stderr INTO a variable; allowed idiom per CLAUDE.md
-	# (NOT the banned `cmd 2>&1 | grep` pipeline).
-	local rp_out rp_rc=0
-	rp_out=$(govc object.collect -s "$pool_path" name 2>&1) || rp_rc=$?
-
-	if [ "$rp_rc" -eq 0 ]; then
-		_vsphere_resource_pool_found=1
-		if [ "$pool_is_default" -eq 1 ]; then
-			# Debug-only announcement that the default is in use (NOT aba_info -
-			# quiet-on-success convention from Phase 1).
-			aba_debug "vSphere: using default resource pool '$pool_path'"
+		local default_rp_path="/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources"
+		local rp_out rp_rc=0
+		rp_out=$(govc object.collect -s "$default_rp_path" name 2>&1) || rp_rc=$?
+		if [ "$rp_rc" -eq 0 ]; then
+			_vsphere_resource_pool_path="$default_rp_path"
+			_vsphere_resource_pool_found=1
+			aba_debug "vSphere: using default resource pool '$default_rp_path'"
 		else
-			aba_debug "vSphere: resource pool '$pool_path' exists"
+			aba_warning "vSphere: default resource pool '$default_rp_path' not found - verify the cluster is properly configured."
+			_preflight_errors=$(( _preflight_errors + 1 ))
 		fi
 	else
-		if [ "$pool_is_default" -eq 1 ]; then
-			# Custom wording when the default path is missing: the cluster itself is the
-			# broken link (the cluster always ships a default "Resources" pool). Do NOT hint
-			# at setting GOVC_RESOURCE_POOL - that would mislead the user into masking a
-			# genuine cluster-configuration problem.
-			aba_warning "vSphere: default resource pool '$pool_path' not found - verify the cluster is properly configured."
-		else
-			aba_warning "vSphere: resource pool '$pool_path' not found"
+		# 'p' = resource pool type filter on govc find; scopes bare-name searches
+		# so we don't accidentally match a same-named object of a different type.
+		if _vsphere_resolve_object "resource pool" "$GOVC_RESOURCE_POOL" "/$GOVC_DATACENTER/host/$GOVC_CLUSTER" p; then
+			_vsphere_resource_pool_path="$_vsphere_resolver_result"
+			_vsphere_resource_pool_found=1
 		fi
-		_preflight_errors=$(( _preflight_errors + 1 ))
 	fi
 
 	return 0
@@ -402,9 +528,6 @@ _vsphere_probe_privileges() {
 	# Source the curated privilege arrays. Re-sourcing is idempotent.
 	source scripts/vmware-required-privileges.sh
 
-	local pool_path
-	pool_path=$(resolve-default-resource-pool)
-
 	# D-17 mechanism: diff _preflight_errors pre/post for gap count (N);
 	# increment scopes_with_gaps in each scope block for (M).
 	local errors_before="$_preflight_errors"
@@ -440,15 +563,25 @@ _vsphere_probe_privileges() {
 		aba_debug "vSphere: skipping privilege check for missing cluster '/$GOVC_DATACENTER/host/$GOVC_CLUSTER'"
 	fi
 
+	# Per-scope privilege paths: prefer the Layer 3 resolved path (handles
+	# bare names / DVS-nested portgroups / cluster-scoped RPs); fall back to
+	# the flat-path construction so callers that invoke Layer 4 directly
+	# without a prior Layer 3 probe still work against predictable paths.
+	local ds_scope="${_vsphere_datastore_path:-/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE}"
+	local iso_ds_scope="${_vsphere_iso_datastore_path:-/$GOVC_DATACENTER/datastore/${ISO_DATASTORE:-}}"
+	local net_scope="${_vsphere_network_path:-/$GOVC_DATACENTER/network/$GOVC_NETWORK}"
+	local folder_scope="${_vsphere_folder_path:-$VC_FOLDER}"
+	local rp_scope="${_vsphere_resource_pool_path:-$(resolve-default-resource-pool)}"
+
 	# DATASTORE (primary) - gated on Layer 3 "datastore found" flag.
 	if [ "${_vsphere_datastore_found:-0}" -eq 1 ]; then
 		before_scope="$_preflight_errors"
-		_vsphere_check_privileges "datastore" "/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE" "${VSPHERE_PRIVS_DATASTORE[@]}"
+		_vsphere_check_privileges "datastore" "$ds_scope" "${VSPHERE_PRIVS_DATASTORE[@]}"
 		if [ "$_preflight_errors" -gt "$before_scope" ]; then
 			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
 		fi
 	else
-		aba_debug "vSphere: skipping privilege check for missing datastore '/$GOVC_DATACENTER/datastore/$GOVC_DATASTORE'"
+		aba_debug "vSphere: skipping privilege check for missing datastore '$ds_scope'"
 	fi
 
 	# D-11: ISO_DATASTORE only when set, different from primary, AND found.
@@ -456,7 +589,7 @@ _vsphere_probe_privileges() {
 			&& [ "$ISO_DATASTORE" != "$GOVC_DATASTORE" ] \
 			&& [ "${_vsphere_iso_datastore_found:-0}" -eq 1 ]; then
 		before_scope="$_preflight_errors"
-		_vsphere_check_privileges "datastore" "/$GOVC_DATACENTER/datastore/$ISO_DATASTORE" "${VSPHERE_PRIVS_DATASTORE[@]}"
+		_vsphere_check_privileges "datastore" "$iso_ds_scope" "${VSPHERE_PRIVS_DATASTORE[@]}"
 		if [ "$_preflight_errors" -gt "$before_scope" ]; then
 			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
 		fi
@@ -465,34 +598,34 @@ _vsphere_probe_privileges() {
 	# NETWORK - gated on Layer 3 "network found" flag.
 	if [ "${_vsphere_network_found:-0}" -eq 1 ]; then
 		before_scope="$_preflight_errors"
-		_vsphere_check_privileges "network" "/$GOVC_DATACENTER/network/$GOVC_NETWORK" "${VSPHERE_PRIVS_NETWORK[@]}"
+		_vsphere_check_privileges "network" "$net_scope" "${VSPHERE_PRIVS_NETWORK[@]}"
 		if [ "$_preflight_errors" -gt "$before_scope" ]; then
 			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
 		fi
 	else
-		aba_debug "vSphere: skipping privilege check for missing network '/$GOVC_DATACENTER/network/$GOVC_NETWORK'"
+		aba_debug "vSphere: skipping privilege check for missing network '$net_scope'"
 	fi
 
 	# FOLDER - gated on Layer 3 "folder found" flag.
 	if [ "${_vsphere_folder_found:-0}" -eq 1 ]; then
 		before_scope="$_preflight_errors"
-		_vsphere_check_privileges "folder" "$VC_FOLDER" "${VSPHERE_PRIVS_FOLDER[@]}"
+		_vsphere_check_privileges "folder" "$folder_scope" "${VSPHERE_PRIVS_FOLDER[@]}"
 		if [ "$_preflight_errors" -gt "$before_scope" ]; then
 			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
 		fi
 	else
-		aba_debug "vSphere: skipping privilege check for missing folder '$VC_FOLDER'"
+		aba_debug "vSphere: skipping privilege check for missing folder '$folder_scope'"
 	fi
 
 	# RESOURCE_POOL - gated on Layer 3 "resource pool found" flag.
 	if [ "${_vsphere_resource_pool_found:-0}" -eq 1 ]; then
 		before_scope="$_preflight_errors"
-		_vsphere_check_privileges "resource pool" "$pool_path" "${VSPHERE_PRIVS_RESOURCE_POOL[@]}"
+		_vsphere_check_privileges "resource pool" "$rp_scope" "${VSPHERE_PRIVS_RESOURCE_POOL[@]}"
 		if [ "$_preflight_errors" -gt "$before_scope" ]; then
 			scopes_with_gaps=$(( scopes_with_gaps + 1 ))
 		fi
 	else
-		aba_debug "vSphere: skipping privilege check for missing resource pool '$pool_path'"
+		aba_debug "vSphere: skipping privilege check for missing resource pool '$rp_scope'"
 	fi
 
 	# D-17 summary: emit ONLY when gaps recorded (D-14 quiet-on-success).
