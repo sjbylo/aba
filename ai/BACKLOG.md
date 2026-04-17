@@ -648,21 +648,17 @@ Or the same pattern used by other `ensure_*()` functions. Check if `ensure_oc`, 
 
 ---
 
-## Investigate: Stale VolumeAttachments after ungraceful cluster shutdown
+## Cleanup: Promote bundles/v2/ to bundles/ and remove v1
 
-**Added**: 2026-04-13
+**Added**: 2026-04-17
+**Priority**: Low (post-1.0.0)
+**Prerequisite**: v2 bundle pipeline fully proven in production
 
-After ungraceful VM power-off (e.g. `aba shutdown`, ESXi power-off), the vSphere CSI driver doesn't get to cleanly detach volumes. On next startup, stale VolumeAttachment objects are stuck with `deletionTimestamp` set and a finalizer that the CSI driver can't clear. This blocks rook-ceph-osd pods from re-attaching PVs.
+Once `bundles/v2/` is the confirmed production pipeline, promote its contents up to `bundles/` and delete the old v1 code (`bundles/go.sh`, `bundles/bundle-create-test.sh`, `bundles/templates/`).
 
-**Current workaround** (manual each time):
-```bash
-oc get volumeattachment -o jsonpath='{range .items[?(@.metadata.deletionTimestamp)]}{.metadata.name}{"\n"}{end}'
-oc patch volumeattachment <name> -p '{"metadata":{"finalizers":null}}' --type=merge
-oc delete pod <stuck-pod>
-```
+**Changes needed when promoting:**
+- `git mv` all v2 contents up one level
+- Update `common.sh` `REPO_ROOT` path (one fewer `../`)
+- Update `.gitignore` (`bundles/v2/build.log` -> `bundles/build.log`)
+- Update path references in `CHANGELOG.md` and `ai/` docs
 
-**Possible solutions to investigate:**
-1. Add cleanup to `cluster-startup.sh` (auto-clear stale VAs after uncordon)
-2. Improve `cluster-graceful-shutdown.sh` to give CSI driver more time to detach before power-off
-3. Investigate if OCP has a built-in recovery mechanism that could be enabled
-4. Consider if this is a vSphere CSI bug worth reporting upstream
