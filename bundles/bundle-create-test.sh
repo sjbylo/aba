@@ -233,7 +233,7 @@ read -t 6  || true
 echo_step Save images to disk ...
 
 ##### TRY WITHOUT rm -rf ~/.oc-mirror  # We don't want to include all the older images?!?!
-sed -i "s/--since 2025-01-01//g" scripts/reg-save.sh  # Experimental: keeping the cache for re-use to speed things up
+sed -i 's/^OC_MIRROR_SINCE=.*/OC_MIRROR_SINCE=/' ~/.aba/config
 aba -d cli download-all  # Just to be sure we have everything
 aba -d mirror save -r 2
 

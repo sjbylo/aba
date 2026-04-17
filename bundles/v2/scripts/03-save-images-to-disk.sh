@@ -9,8 +9,9 @@ cd "$WORK_DIR/aba"
 
 echo_step "Save images to disk ..."
 
-# Keep the oc-mirror cache for reuse across bundles of the same version
-sed -i "s/--since 2025-01-01//g" scripts/reg-save.sh
+# Bundle builds want differential archives (cache reused across bundle types
+# of the same OCP version). Disable OC_MIRROR_SINCE from ~/.aba/config.
+sed -i 's/^OC_MIRROR_SINCE=.*/OC_MIRROR_SINCE=/' ~/.aba/config
 aba -d cli download-all
 aba -d mirror save -r 2
 
