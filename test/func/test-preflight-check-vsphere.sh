@@ -419,6 +419,8 @@ _reset_path_state() {
 	_vsphere_network_found=0
 	_vsphere_folder_found=0
 	_vsphere_resource_pool_found=0
+	# D-12 counter - reset so it doesn't carry across paths.
+	_vsphere_d12_count=0
 }
 
 # (TEST-02 scenario: Unreachable vCenter)
@@ -525,20 +527,17 @@ else
 	test_fail "Path J broken: ds_warn=$ds_warn out='$(cat "$_smoke_out")'"
 fi
 
-# 28. Path K: GOVC_RESOURCE_POOL unset + default exists -> aba_debug line
-# (NOT aba_info - D-16 guard: quiet-on-success convention) + errors=0.
-# Temporarily override aba_debug to echo so we can observe the emission.
+# 28. Path K: GOVC_RESOURCE_POOL unset + default exists -> visible OK line
+# via aba_info_ok (verbose-on-success convention: users asked to see every
+# check pass, not just failures) + errors=0.
 _reset_path_state
-aba_debug() { echo "DEBUG: $*"; }
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-rp_debug=$(grep -c "^DEBUG: vSphere: using default resource pool '/GoodDC/host/GoodCluster/Resources'" "$_smoke_out" || true)
-rp_info=$(grep -c "^INFO: vSphere: using default resource pool" "$_smoke_out" || true)
-if [ "$rp_debug" -eq 1 ] && [ "$rp_info" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
-	test_pass "Path K: default RP used -> aba_debug (not aba_info) + errors=0"
+rp_ok=$(grep -c "^OK: vSphere: using default resource pool '/GoodDC/host/GoodCluster/Resources'" "$_smoke_out" || true)
+if [ "$rp_ok" -eq 1 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path K: default RP used -> aba_info_ok line + errors=0"
 else
-	test_fail "Path K broken: debug=$rp_debug info=$rp_info errors=$_preflight_errors"
+	test_fail "Path K broken: rp_ok=$rp_ok errors=$_preflight_errors"
 fi
-aba_debug() { :; }    # restore silent stub before Path L+
 
 # 29. Path L: GOVC_RESOURCE_POOL unset + default missing -> D-15 wording:
 # "default resource pool '...' not found - verify the cluster is properly

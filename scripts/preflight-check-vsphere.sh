@@ -44,6 +44,15 @@ _vsphere_network_path=""
 _vsphere_folder_path=""
 _vsphere_resource_pool_path=""
 
+# D-12 counter: number of privilege scopes where govc permissions.ls
+# returned no DIRECT role binding for our user - typically because the
+# privileges come from AD/LDAP group membership, which govc cannot
+# expand. Tracked separately from _preflight_warnings so the summary
+# footer can reassure the user that these are informational, not
+# blockers. `aba install` proceeds; any real gap will surface later
+# with a concrete privilege error.
+_vsphere_d12_count=0
+
 # --- Phase 2 Layer 1 helpers (private to this file) -----------------------
 
 # Extract host + port from GOVC_URL into two fields echoed on stdout.
@@ -78,7 +87,7 @@ _vsphere_probe_tcp() {
 	local host port
 	read host port < <(_vsphere_parse_govc_url "$GOVC_URL")
 	if timeout 3 bash -c "echo >/dev/tcp/$host/$port 2>/dev/null"; then
-		aba_debug "vSphere: TCP reach to $host:$port ok"
+		aba_info_ok "vSphere: TCP reachable ($host:$port)"
 		return 0
 	fi
 	aba_warning "vSphere: cannot reach $host:$port (TCP) - check DNS/firewall/GOVC_URL"
@@ -97,7 +106,7 @@ _vsphere_probe_tcp() {
 _vsphere_probe_tls() {
 	case "${GOVC_INSECURE:-}" in
 		1|true|True|TRUE|yes|YES)
-			aba_debug "vSphere: skipping TLS check (GOVC_INSECURE=$GOVC_INSECURE)"
+			aba_info "vSphere: TLS trust check skipped (GOVC_INSECURE=$GOVC_INSECURE)"
 			return 0
 			;;
 	esac
@@ -114,11 +123,11 @@ _vsphere_probe_tls() {
 		</dev/null 2>&1) || tls_rc=$?
 
 	if [ "$tls_rc" -eq 0 ]; then
-		aba_debug "vSphere: TLS trust chain ok for $host"
+		aba_info_ok "vSphere: TLS trust chain verified ($host)"
 		return 0
 	fi
 	if echo "$tls_out" | grep -qE 'Verify return code:[[:space:]]*0[[:space:]]*\(ok\)'; then
-		aba_debug "vSphere: TLS trust chain ok for $host (parsed)"
+		aba_info_ok "vSphere: TLS trust chain verified ($host)"
 		return 0
 	fi
 
@@ -138,7 +147,7 @@ _vsphere_probe_auth() {
 	local about_out about_rc=0
 	about_out=$(govc about 2>&1) || about_rc=$?
 	if [ "$about_rc" -eq 0 ]; then
-		aba_debug "vSphere: auth ok"
+		aba_info_ok "vSphere: authenticated as $GOVC_USERNAME"
 		return 0
 	fi
 	# Trim to first line so we don't dump a multi-line error blob to the user.
@@ -167,7 +176,7 @@ _vsphere_object_exists() {
 	local out rc=0
 	out=$(govc object.collect -s "$path" name 2>&1) || rc=$?
 	if [ "$rc" -eq 0 ]; then
-		aba_debug "vSphere: $kind '$path' exists"
+		aba_info_ok "vSphere: $kind '$path'"
 		return 0
 	fi
 	aba_warning "vSphere: $kind '$path' not found"
@@ -218,7 +227,7 @@ _vsphere_resolve_object() {
 	if [[ "$hint" = /* ]]; then
 		out=$(govc object.collect -s "$hint" name 2>&1) || rc=$?
 		if [ "$rc" -eq 0 ]; then
-			aba_debug "vSphere: $kind '$hint' exists"
+			aba_info_ok "vSphere: $kind '$hint'"
 			_vsphere_resolver_result="$hint"
 			return 0
 		fi
@@ -233,7 +242,7 @@ _vsphere_resolve_object() {
 	local flat="$search_root/$hint"
 	out=$(govc object.collect -s "$flat" name 2>&1) || rc=$?
 	if [ "$rc" -eq 0 ]; then
-		aba_debug "vSphere: $kind '$flat' exists"
+		aba_info_ok "vSphere: $kind '$flat'"
 		_vsphere_resolver_result="$flat"
 		return 0
 	fi
@@ -260,7 +269,7 @@ _vsphere_resolve_object() {
 	if [ "$hits_count" -eq 1 ]; then
 		local resolved
 		resolved=$(printf "%s\n" "$find_out" | grep '^/' | head -1)
-		aba_debug "vSphere: $kind '$hint' resolved to '$resolved'"
+		aba_info_ok "vSphere: $kind '$hint' -> $resolved"
 		_vsphere_resolver_result="$resolved"
 		return 0
 	fi
@@ -320,7 +329,7 @@ _vsphere_probe_resources_network_on_cluster() {
 		_preflight_errors=$(( _preflight_errors + 1 ))
 		return 1
 	fi
-	aba_debug "vSphere: network '$GOVC_NETWORK' attached to cluster '$GOVC_CLUSTER'"
+	aba_info_ok "vSphere: network '$GOVC_NETWORK' attached to cluster '$GOVC_CLUSTER'"
 	return 0
 }
 
@@ -400,7 +409,7 @@ _vsphere_probe_resources() {
 		if [ "$rp_rc" -eq 0 ]; then
 			_vsphere_resource_pool_path="$default_rp_path"
 			_vsphere_resource_pool_found=1
-			aba_debug "vSphere: using default resource pool '$default_rp_path'"
+			aba_info_ok "vSphere: using default resource pool '$default_rp_path'"
 		else
 			aba_warning "vSphere: default resource pool '$default_rp_path' not found - verify the cluster is properly configured."
 			_preflight_errors=$(( _preflight_errors + 1 ))
@@ -470,12 +479,13 @@ _vsphere_check_privileges() {
 	if [ -z "$role_name" ]; then
 		aba_warning "vSphere: user '$GOVC_USERNAME' has no role assigned on '$scope_path' (D-12; group assignments not resolved)"
 		_preflight_warnings=$(( _preflight_warnings + 1 ))
+		_vsphere_d12_count=$(( _vsphere_d12_count + 1 ))
 		return 0
 	fi
 
 	# Step 3a: Admin role fast-path - vCenter built-in Admin has all privs by construction.
 	if [ "$role_name" = "Admin" ]; then
-		aba_debug "vSphere: '$scope_path' user '$GOVC_USERNAME' has Admin role (all privileges granted)"
+		aba_info_ok "vSphere: $kind '$scope_path' user '$GOVC_USERNAME' has Admin role"
 		return 0
 	fi
 
@@ -635,6 +645,20 @@ _vsphere_probe_privileges() {
 		aba_warning "vSphere: $gap_count privilege gap(s) across $scopes_with_gaps scope(s)" \
 			"Next: review the curated list at scripts/vmware-required-privileges.sh and the OpenShift docs linked in its header." \
 			"Grant the missing privileges to the vCenter user or role and re-run aba install."
+	fi
+
+	# D-12 footer: explain the 'no role assigned' warnings are informational.
+	# These fire when govc permissions.ls returns no DIRECT role binding for
+	# the user - on enterprise vCenter deployments that almost always means
+	# privileges arrive via AD/LDAP group membership, which govc cannot
+	# expand. The install still proceeds; if the groups don't actually grant
+	# the required privileges, the installer will fail later with a clear
+	# privilege error at the real failure point.
+	if [ "$_vsphere_d12_count" -gt 0 ]; then
+		aba_info "vSphere: $_vsphere_d12_count privilege check(s) could not be pre-verified" \
+			"Your user's privileges likely come from AD/LDAP group membership (govc cannot introspect groups)." \
+			"This is INFORMATIONAL - the $_vsphere_d12_count warning(s) above do NOT block the install." \
+			"aba install will proceed; if the effective privileges are insufficient, the installer will fail with a concrete privilege error."
 	fi
 
 	return 0
