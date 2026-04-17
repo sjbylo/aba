@@ -429,3 +429,69 @@ Settings can be defined at three levels (highest precedence wins):
 1. **CLI flags** (`-o rhel9`, `-p 1-4`, etc.)
 2. **Per-pool overrides** in `pools.conf` (`CON_SSH_USER=root`, `VM_DATASTORE=...`)
 3. **Defaults** in `config.env`
+
+## Lab provisioning for vSphere preflight tests
+
+The `suite-vsphere-preflight.sh` suite verifies both the happy path (install
+proceeds past preflight) and the negative path (preflight aborts `aba install`
+when the vCenter user is missing a required privilege). The negative test
+requires a vCenter user that is **intentionally** missing exactly one privilege.
+
+This is a **one-time per lab vCenter** setup. A vSphere admin MUST provision
+the following before the suite runs:
+
+### Broken role
+
+Create a role named `aba-preflight-broken` that holds **every** privilege
+listed in `scripts/vmware-required-privileges.sh` **except** one:
+
+- Strip `Resource.AssignVMToPool` from the role.
+- Keep every other privilege from every `VSPHERE_PRIVS_*` array.
+
+### Broken user per pool
+
+Create one user per pool, binding the `aba-preflight-broken` role to the
+pool's **resource pool, folder, and datacenter scopes** (the same three
+scopes the positive install user is bound to, so authentication succeeds
+and only the `Resource.AssignVMToPool` privilege is the intentional gap).
+
+Recommended user naming (matches the defaults in `pools.conf`):
+
+- `aba-preflight-broken1@vsphere.local` bound to pool 1 scopes
+- `aba-preflight-broken2@vsphere.local` bound to pool 2 scopes
+- `aba-preflight-broken3@vsphere.local` bound to pool 3 scopes
+- `aba-preflight-broken4@vsphere.local` bound to pool 4 scopes
+
+### Record the credentials in `pools.conf`
+
+Each active pool line has two tokens the suite reads:
+
+```
+pool1  con1  dis1  aba-e2e-template-rhel8  ...  GOVC_USERNAME_BROKEN=aba-preflight-broken1@vsphere.local  GOVC_PASSWORD_BROKEN=<password>
+```
+
+The password **MUST** use only characters from `[A-Za-z0-9._@+-]`. The
+`pools.conf` parser (see `test/e2e/runner.sh`) whitespace-splits tokens
+and does not support quoted values, so any space, `#`, or shell-special
+character in the password will be silently truncated or misparsed and the
+suite will fail at the sanity-check step with an authentication error that
+does not point at the password.
+
+### Suite-side sanity check
+
+Before the negative install runs, the suite runs a `Setup: verify broken role
+still missing Resource.AssignVMToPool` block that:
+
+1. Calls `govc permissions.ls` against the pool's resource pool scope to
+   resolve the role bound to the broken user (via an `awk` filter on the
+   `Principal` column - note: `govc permissions.ls` does NOT accept a
+   `-principal` flag; filtering happens client-side).
+2. Calls `govc role.ls <role>` and asserts that `Resource.AssignVMToPool` is
+   NOT in the privilege list.
+
+If the lab admin ever restores `Resource.AssignVMToPool` to the role, this
+sanity check fails with an actionable message: "broken role is no longer
+broken - ask lab admin to re-strip Resource.AssignVMToPool from
+aba-preflight-broken on the resource pool scope". If the admin forgot to
+bind the role to the resource pool scope entirely, the check fails with
+"broken user has no role on RP; bind aba-preflight-broken to this scope".
