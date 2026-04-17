@@ -46,9 +46,16 @@ export DEBUG_ABA=1
 set +e
 
 source scripts/include_all.sh
+
+# include_all.sh installs an ERR trap that calls `exit $?` on any non-zero
+# command. That is incompatible with the preflight layer design: probes
+# return non-zero as a counter-bump signal, NOT as a fatal error. Remove
+# the trap so all 4 layers can run to completion and the report can
+# summarise every finding.
+trap - ERR
+
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-source <(normalize-vmware-conf)
 
 _preflight_errors=0
 _preflight_warnings=0
