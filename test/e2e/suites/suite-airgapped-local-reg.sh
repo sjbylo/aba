@@ -54,6 +54,7 @@ plan_tests \
     "Incremental: vote-app image load" \
     "Deploy: vote-app with IDMS" \
     "Incremental: mesh operators" \
+    "Deploy: service mesh demo" \
     "Upgrade: OSUS and cluster upgrade" \
     "Lifecycle: shutdown/startup" \
     "Standard: cluster with macs.conf" \
@@ -75,7 +76,7 @@ cd ~/aba
 
 e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
@@ -110,17 +111,15 @@ test_end
 # ============================================================================
 test_begin "Setup: calculate older version for upgrade"
 
-e2e_run "Source aba.conf and compute older version" "
-    source <(normalize-aba-conf)
+e2e_run "Read aba.conf and compute older version" "
+    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2)
     echo ocp_version=\$ocp_version
-    ocp_version_desired=\$ocp_version
-    ocp_version_major=\$(echo \$ocp_version_desired | cut -d. -f1-2)
-    ocp_version_point=\$(echo \$ocp_version_desired | cut -d. -f3)
-    ocp_version_older_point=\$(expr \$ocp_version_point - 1)
-    ocp_version_older=\${ocp_version_major}.\${ocp_version_older_point}
+    ocp_version_major=\$(echo \$ocp_version | cut -d. -f1-2)
+    ocp_version_point=\$(echo \$ocp_version | cut -d. -f3)
+    ocp_version_older=\${ocp_version_major}.\$(( ocp_version_point - 1 ))
     echo ocp_version_older=\$ocp_version_older
-    # Save for later steps
-    echo \$ocp_version_desired > /tmp/e2e-ocp-version-desired
+    sudo rm -f /tmp/e2e-ocp-version-desired /tmp/e2e-ocp-version-older
+    echo \$ocp_version > /tmp/e2e-ocp-version-desired
     echo \$ocp_version_older > /tmp/e2e-ocp-version-older
 "
 
@@ -430,6 +429,85 @@ e2e_run_remote "Apply day2 config (mesh operator resources)" \
 # silently drop operators not listed (see ai/OC-MIRROR-INTERNALS.md).
 e2e_poll_remote 180 15 "Verify kiali-ossm still in OperatorHub after mesh load" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^kiali-ossm"
+
+test_end
+
+# ============================================================================
+# 13b. Deploy: service mesh demo application
+# FIXME: Disabled -- mesh demo install (00-install-all-mesh3.sh) fails with
+#        "No route available" on current OCP versions. Re-enable once the
+#        openshift-service-mesh-demo repo is updated/fixed.
+# ============================================================================
+test_begin "Deploy: service mesh demo"
+echo "  SKIPPED: mesh demo install broken upstream (openshift-service-mesh-demo repo)"
+if false; then
+
+# Mirror the Kiali demo app images (not included in operator catalogs).
+e2e_run "Create imageset config for mesh demo app images" \
+    "cat > mirror/data/imageset-config.yaml <<EOF
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/kiali/demo_travels_cars:v1
+  - name: quay.io/kiali/demo_travels_control:v1
+  - name: quay.io/kiali/demo_travels_discounts:v1
+  - name: quay.io/kiali/demo_travels_flights:v1
+  - name: quay.io/kiali/demo_travels_hotels:v1
+  - name: quay.io/kiali/demo_travels_insurances:v1
+  - name: quay.io/kiali/demo_travels_mysqldb:v1
+  - name: quay.io/kiali/demo_travels_portal:v1
+  - name: quay.io/kiali/demo_travels_travels:v1
+EOF"
+e2e_snapshot_file "mesh-demo-save" "mirror/data/imageset-config.yaml"
+e2e_run -r 3 2 "Save mesh demo app images" "aba -d mirror save --retry"
+e2e_run "Transfer demo app archive to internal bastion" \
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_run_remote -r 3 2 "Load mesh demo app images" \
+    "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
+e2e_run_remote "Apply day2 config (mesh demo image resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
+
+# Clone the demo repo on the connected side, rewrite image references to
+# point at the mirror registry, then transfer and run on the air-gapped side.
+e2e_run "Clone service mesh demo repo" \
+    "rm -rf /tmp/mesh-demo && git clone --depth 1 https://github.com/sjbylo/openshift-service-mesh-demo.git /tmp/mesh-demo"
+
+# Rewrite image references: quay.io -> mirror registry
+e2e_run "Rewrite image refs to mirror" \
+    "source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && \
+     find /tmp/mesh-demo -name '*.yaml' -exec sed -i \"s#quay\\.io#\${reg_host}:\${reg_port}\${reg_path}#g\" {} + && \
+     sed -i 's/source: .*/source: redhat-operators/g' /tmp/mesh-demo/operators/*"
+
+e2e_run "Transfer mesh demo to internal bastion" \
+    "scp -rp /tmp/mesh-demo ${INTERNAL_BASTION}:mesh-demo"
+
+e2e_run_remote "Install service mesh demo" \
+    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./00-install-all-mesh3.sh"
+
+e2e_poll_remote 600 30 "Wait for Istio control plane ready" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get istio default -n istio-system -o jsonpath={.status.state}' | grep -q Healthy"
+
+e2e_poll_remote 300 15 "Wait for travels app pods ready" \
+    "cd ~/aba && for ns in travel-control travel-agency travel-portal; do \
+       _pods=\$(aba --dir $SNO run --cmd \"oc get pods -n \$ns --no-headers\") && \
+       echo \"\$_pods\" | grep -q Running || exit 1; \
+       echo \"\$_pods\" | grep -Ev 'Running|Completed' | grep -q . && exit 1; \
+     done"
+
+e2e_diag_remote "Show Istio control plane status" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get istio,istiocni -A'"
+e2e_diag_remote "Show travels app pods" \
+    "cd ~/aba && for ns in travel-control travel-agency travel-portal; do echo \"--- \$ns ---\"; aba --dir $SNO run --cmd \"oc get pods -n \$ns\"; done"
+
+# Cleanup: uninstall mesh demo (free resources before upgrade)
+e2e_run_remote "Uninstall service mesh demo" \
+    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./99-uninstall-all-mesh3.sh || true"
+e2e_run_remote "Remove mesh demo dir" "rm -rf ~/mesh-demo"
+e2e_run "Remove local mesh demo clone" "rm -rf /tmp/mesh-demo"
+fi
 
 test_end
 

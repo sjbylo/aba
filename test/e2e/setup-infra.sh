@@ -40,8 +40,9 @@ if [ -f "$_INFRA_DIR/config.env" ]; then
 	source "$_INFRA_DIR/config.env"
 fi
 
-# Source VMware credentials
-_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+# Source VMware credentials for framework VM operations (always vCenter).
+# --vmware-conf override is only for suites/ABA, not for pool management.
+_vmconf="$HOME/.vmware.conf"
 if [ -f "$_vmconf" ]; then
 	set -a; source "$_vmconf"; set +a
 else
@@ -686,6 +687,7 @@ _prepare_golden() {
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
+	_vm_provision_root_user "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 

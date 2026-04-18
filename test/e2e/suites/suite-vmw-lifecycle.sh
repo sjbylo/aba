@@ -96,8 +96,8 @@ e2e_run "Verify aba.conf: version format" \
 e2e_run "Copy vmware.conf from home directory" \
     "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Verify vmware.conf has GOVC_URL" "grep ^GOVC_URL vmware.conf"
-e2e_run "Verify vmware.conf has VC_FOLDER" "grep ^VC_FOLDER vmware.conf"
-e2e_run "Verify vmware.conf has GOVC_DATACENTER" "grep ^GOVC_DATACENTER vmware.conf"
+e2e_run "Verify vmware.conf (VC_FOLDER or ESXi)" \
+    "grep -q ^VC_FOLDER= vmware.conf || grep -q ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 

@@ -80,7 +80,7 @@ e2e_run "Reset aba to clean state" \
     "./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Verify /home disk usage < 10GB after reset" \
     "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
@@ -111,7 +111,7 @@ e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
+e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 # Operators verified after cluster install (one per catalog).
@@ -203,6 +203,9 @@ for ctype in sno compact standard; do
         "aba --dir $cname install-config.yaml"
     e2e_run "Generate agent-config.yaml for $cname" \
         "aba --dir $cname agent-config.yaml"
+    e2e_snapshot_file "${ctype}-generated" "$cname/install-config.yaml"
+    e2e_snapshot_file "${ctype}-generated" "$cname/agent-config.yaml"
+    e2e_snapshot_file "${ctype}-generated" "$cname/cluster.conf"
     e2e_run "Generate ISO for $cname" \
         "aba --dir $cname iso"
 done
@@ -216,6 +219,8 @@ test_begin "ABI config: diff against known-good examples"
 
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
+    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/install-config.yaml.example"
+    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/agent-config.yaml.example"
     e2e_run "Diff $cname install-config.yaml against example" \
         "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/install-config.yaml.example) --strip-secrets"
 

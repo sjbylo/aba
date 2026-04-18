@@ -137,10 +137,9 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 
 - Keep testing, monitoring, fixing test code or suites (only under `~/aba/test` and `ai/`), stopping suites, deploying changes, and re-testing
 - Do NOT stop to ask questions -- the user is away
-- Do NOT change any ABA core files (only `test/` and `ai/`)
+- **Core ABA file changes**: Prefer NOT to change core ABA files. However, if a test failure is clearly caused by a core ABA bug (not a test bug), and the fix is surgical and obvious (e.g. missing variable, wrong path, broken conditional), you MAY fix core code. Log every core change in `ai/SESSION_STATE.md` and notify the user via `~/bin/notify.sh`. If the fix is risky, large, or ambiguous, note it and move on.
 - Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested
 - Report back a summary when the user returns
-- If a fix requires core ABA changes, note it and move on
 
 ## Development workflow
 

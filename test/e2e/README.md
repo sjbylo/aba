@@ -27,11 +27,20 @@ pool1  con1  dis1  aba-e2e-template-rhel9  INT_BASTION_RHEL_VER=rhel9  POOL_NUM=
 
 **vCenter vs ESXi API**:
 
-All current suites use `--platform vmw` which defaults to vCenter (`VC=1`).
-To test ESXi-direct installs, use a different `vmware.conf` that points at
-an ESXi host instead of vCenter (e.g. `GOVC_URL=https://esxi4.lan/sdk`).
-Override per-pool in `pools.conf` via `VMWARE_CONF=~/.vmware-esxi.conf`.
-**Note:** ESXi-direct E2E coverage is currently missing -- see BACKLOG.md.
+All current suites use `--platform vmw` which defaults to vCenter.
+To test ESXi-direct installs, create a `~/.vmware-esxi.conf` that points at
+an ESXi host (e.g. `GOVC_URL=esxi4.lan`, no `VC_FOLDER`, no `GOVC_DATACENTER`).
+
+```bash
+# Via CLI (applies to all pools):
+./run.sh run --all --pools 4 --vmware-conf ~/.vmware-esxi.conf
+
+# Or in config.env:
+VMWARE_CONF=~/.vmware-esxi.conf
+
+# Or per-pool in pools.conf:
+pool1  con1  dis1  aba-e2e-template-rhel8  VMWARE_CONF=~/.vmware-esxi.conf  POOL_NUM=1  ...
+```
 
 **Number of pools** (1 to 4):
 
@@ -59,29 +68,20 @@ TEST_CHANNEL=stable     # stable | fast | candidate
 OCP_VERSION=p           # p = previous minor, l = latest minor, or explicit e.g. 4.17.12
 ```
 
-**SSH user on conN** (run as root or non-root):
+**SSH user on conN/disN** (root vs non-root):
 
 ```bash
+# Quick switch: same user for both conN and disN:
+./run.sh run --all --pools 4 --user root
+
+# Or separately:
+./run.sh run --all --pools 4 --con-user steve --dis-user root
+
 # In config.env (default: steve):
 CON_SSH_USER=steve
-
-# To test as root on conN:
-CON_SSH_USER=root
-```
-
-**SSH user on disN** (run as root or non-root):
-
-```bash
-# In config.env (default: steve):
 DIS_SSH_USER=steve
 
-# To test as root on disN:
-DIS_SSH_USER=root
-```
-
-Both can also be overridden per-pool in `pools.conf`:
-
-```
+# Per-pool in pools.conf:
 pool1  con1  dis1  aba-e2e-template-rhel8  CON_SSH_USER=root  DIS_SSH_USER=root  POOL_NUM=1  ...
 ```
 
@@ -224,6 +224,43 @@ Options:
 
 # Verify pool VMs are healthy (SSH, networking, etc.):
 ./run.sh verify --pools 4
+```
+
+### Test Profiles
+
+Switch the test environment with CLI flags. Combine them freely:
+
+```bash
+# Default: vCenter API, RHEL 8, non-root user
+./run.sh run --all --pools 4
+
+# ESXi-direct API (bypass vCenter):
+./run.sh run --all --pools 4 --vmware-conf ~/.vmware-esxi.conf
+
+# RHEL 9 pool VMs:
+./run.sh run --all --pools 4 --os rhel9
+
+# Run as root on all bastions:
+./run.sh run --all --pools 4 --user root
+
+# Full matrix example: ESXi + RHEL 9 + root
+./run.sh run --all --pools 4 --vmware-conf ~/.vmware-esxi.conf --os rhel9 --user root
+
+# Per-pool profiles in pools.conf (e.g. pool1=vCenter, pool2=ESXi):
+#   pool1  con1  dis1  aba-e2e-template-rhel8  POOL_NUM=1  ...
+#   pool2  con2  dis2  aba-e2e-template-rhel9  VMWARE_CONF=~/.vmware-esxi.conf  POOL_NUM=2  ...
+```
+
+**Prerequisite for ESXi testing**: Create `~/.vmware-esxi.conf` on bastion:
+
+```bash
+GOVC_URL=esxi4.lan
+GOVC_USERNAME=root
+GOVC_PASSWORD='...'
+GOVC_DATASTORE=datastore1
+GOVC_NETWORK="VM Network"
+GOVC_INSECURE=true
+# No VC_FOLDER, GOVC_DATACENTER, or GOVC_CLUSTER for ESXi-direct
 ```
 
 ## Available Suites

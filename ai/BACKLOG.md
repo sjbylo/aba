@@ -662,3 +662,36 @@ Once `bundles/v2/` is the confirmed production pipeline, promote its contents up
 - Update `.gitignore` (`bundles/v2/build.log` -> `bundles/build.log`)
 - Update path references in `CHANGELOG.md` and `ai/` docs
 
+---
+
+## E2E: Fix mesh demo test in suite-airgapped-local-reg
+
+**Added**: 2026-04-18
+**Priority**: Medium
+**Currently**: Disabled (`if false; then ... fi` block in `suite-airgapped-local-reg.sh`)
+
+### Problem
+
+The "Deploy: service mesh demo" test step fails because the upstream demo install script
+(`00-install-all-mesh3.sh` from `github.com/sjbylo/openshift-service-mesh-demo`) reports
+"No route available" on current OCP versions. This is not an ABA bug -- it's an issue with
+the demo repo's Sail/Istio operator installation on OCP 4.20+.
+
+### What needs fixing
+
+1. **Investigate upstream**: Check if `openshift-service-mesh-demo` repo has been updated
+   for newer OCP / Sail operator versions. The `00-install-all-mesh3.sh` script may need
+   updating for API changes in the Sail operator.
+2. **Test manually**: On an air-gapped SNO with mesh operators loaded, run the demo script
+   interactively and diagnose exactly where "No route available" comes from.
+3. **Fix or replace**: Either update the demo repo script, or replace the test with a simpler
+   mesh smoke test (e.g. just verify Sail operator installs and Istio control plane goes Healthy,
+   skip the travels app deployment).
+4. **Re-enable**: Remove the `if false; then ... fi` wrapper and verify the test passes end-to-end.
+
+### References
+- `test/e2e/suites/suite-airgapped-local-reg.sh` lines 437-508: disabled mesh demo block
+- `github.com/sjbylo/openshift-service-mesh-demo`: upstream demo repo
+- The test mirrors 9 `quay.io/kiali/demo_travels_*` images, clones the repo, rewrites image
+  refs to the mirror registry, then runs `00-install-all-mesh3.sh` on the air-gapped side
+
