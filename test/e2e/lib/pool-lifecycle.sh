@@ -1068,6 +1068,7 @@ prepare_golden_vm() {
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
+	_vm_provision_root_user "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 

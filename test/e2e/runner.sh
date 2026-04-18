@@ -77,6 +77,7 @@ rm -f "$RC_FILE"
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
 echo "$SUITE" > /tmp/e2e-last-suites
+whoami > /tmp/e2e-suite-user
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
 tmux rename-window "$SUITE" 2>/dev/null
@@ -118,6 +119,24 @@ _cleanup_non_mirror_local() {
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
 	rm -rf ~/tmp/*
+
+	# When switching between --user root and --user steve (or any user), the
+	# OTHER user's home may still contain large artifacts from a previous run.
+	local _my_home
+	_my_home=$(eval echo "~")
+	local _h
+	for _h in /root /home/*; do
+		[ -d "$_h" ] || continue
+		[ "$_h" = "$_my_home" ] && continue
+		if [ -d "$_h/aba" ]; then
+			echo "  Cleaning stale ABA artifacts in $_h ..."
+			sudo rm -rf "$_h/aba/mirror/data/mirror_"*.tar
+			sudo rm -rf "$_h/aba/cli/"*.tar.gz
+			sudo rm -rf "$_h/.oc-mirror"
+			sudo rm -rf "$_h/.cache/agent"
+			sudo rm -rf "$_h/tmp/"*
+		fi
+	done
 }
 
 # Verify no mirror data dirs survive on a host after cleanup.
@@ -318,6 +337,13 @@ if [ -f "$_RUNNER_DIR/config.env" ]; then
 	set +a
 fi
 
+echo "  Config:"
+echo "    CON_SSH_USER=${CON_SSH_USER:-steve}"
+echo "    DIS_SSH_USER=${DIS_SSH_USER:-steve}"
+echo "    OS=${INT_BASTION_RHEL_VER:-rhel8}"
+echo "    VMWARE_CONF=${VMWARE_CONF:-~/.vmware.conf}"
+echo ""
+
 # Git variables for suites (curl/git-clone install paths).
 # Primary source: config.env (run.sh injects auto-detected values before deploy).
 # Fallbacks here are safe defaults only -- never trust the VM's local git state.
@@ -339,7 +365,15 @@ export _E2E_INTERACTIVE=1
 
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	if ! command -v govc &>/dev/null; then
-		if [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
+		# govc not in PATH -- check ~/bin/ and harness bin/ (deployed by run.sh)
+		if [ -x "$HOME/bin/govc" ]; then
+			export PATH="$HOME/bin:$PATH"
+		elif [ -x "$HOME/.e2e-harness/bin/govc" ]; then
+			mkdir -p "$HOME/bin"
+			cp "$HOME/.e2e-harness/bin/govc" "$HOME/bin/govc"
+			chmod 755 "$HOME/bin/govc"
+			export PATH="$HOME/bin:$PATH"
+		elif [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
 			echo "  Bootstrapping govc ..."
 			make -sC "$_ABA_ROOT/cli" govc || {
 				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
@@ -371,6 +405,15 @@ else
 fi
 
 # --- Load per-pool overrides from pools.conf ----------------------------------
+# CLI overrides (--os, --user, etc.) must win over pools.conf defaults.
+# run.sh sets _E2E_CLI_OVERRIDES="OS CON_USER ..." to mark which vars are
+# explicitly CLI-provided; save those before pools.conf can clobber them.
+
+_cli_overrides=" ${_E2E_CLI_OVERRIDES:-} "
+[[ "$_cli_overrides" == *" OS "* ]]       && _cli_saved_os="$INT_BASTION_RHEL_VER"
+[[ "$_cli_overrides" == *" CON_USER "* ]] && _cli_saved_con_user="$CON_SSH_USER"
+[[ "$_cli_overrides" == *" DIS_USER "* ]] && _cli_saved_dis_user="$DIS_SSH_USER"
+[[ "$_cli_overrides" == *" VMWARE "* ]]   && _cli_saved_vmware="$VMWARE_CONF"
 
 if [ -f "$_RUNNER_DIR/pools.conf" ]; then
 	while IFS= read -r _line; do
@@ -388,6 +431,12 @@ if [ -f "$_RUNNER_DIR/pools.conf" ]; then
 		fi
 	done < "$_RUNNER_DIR/pools.conf"
 fi
+
+# Re-apply CLI overrides that pools.conf may have clobbered
+[[ "$_cli_overrides" == *" OS "* ]]       && export INT_BASTION_RHEL_VER="$_cli_saved_os"
+[[ "$_cli_overrides" == *" CON_USER "* ]] && export CON_SSH_USER="$_cli_saved_con_user"
+[[ "$_cli_overrides" == *" DIS_USER "* ]] && export DIS_SSH_USER="$_cli_saved_dis_user"
+[[ "$_cli_overrides" == *" VMWARE "* ]]   && export VMWARE_CONF="$_cli_saved_vmware"
 
 # --- Resolve pool variables ---------------------------------------------------
 
@@ -553,6 +602,9 @@ printf '##  %-74s##\n' ""
 printf '##  %-74s##\n' "SUITE START: $SUITE"
 printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
 printf '##  %-74s##\n' ""
+printf '##  %-74s##\n' "CON_USER=${CON_SSH_USER:-steve}  DIS_USER=${DIS_SSH_USER:-steve}  OS=${INT_BASTION_RHEL_VER:-rhel8}"
+printf '##  %-74s##\n' "VMWARE_CONF=${VMWARE_CONF:-~/.vmware.conf}"
+printf '##  %-74s##\n' ""
 printf '%0.s#' {1..80}; echo
 printf '%0.s#' {1..80}; echo
 echo ""
@@ -570,8 +622,9 @@ _pre_suite_cleanup() {
 		sleep 2
 	fi
 
-	# Purge all oc-mirror caches (can grow to many GB across nested dirs)
-	sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf
+	# Purge all oc-mirror caches (can grow to many GB across nested dirs).
+	# Search both /root/ and /home/ so --user root cleans steve leftovers and vice versa.
+	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
 	echo "  Purged oc-mirror caches"
 
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do

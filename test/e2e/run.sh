@@ -115,6 +115,10 @@ _usage() {
 	  -y, --yes            Auto-accept prompts
 	  -q, --quiet          CI mode: no interactive prompts (implies -y)
 	  --os rhel8|rhel9     RHEL version for pool VMs (default: config.env)
+	  --vmware-conf F      Path to vmware.conf (e.g. ~/.vmware-esxi.conf for ESXi API)
+	  --user USER          SSH user for both conN and disN (shortcut for --con-user + --dis-user)
+	  --con-user USER      SSH user for conN only
+	  --dis-user USER      SSH user for disN only
 	  --pools-file F       Custom pools.conf path
 
 	The script auto-detects VM state and only creates/configures
@@ -163,6 +167,10 @@ while [ $# -gt 0 ]; do
 		--pool)               CLI_POOL="$2"; shift 2 ;;
 		--resume)             CLI_RESUME=1; shift ;;
 		--os)                 CLI_OS="$2"; shift 2 ;;
+		--vmware-conf)        CLI_VMWARE_CONF="$2"; shift 2 ;;
+		--user)               CLI_CON_USER="$2"; CLI_DIS_USER="$2"; shift 2 ;;
+		--con-user)           CLI_CON_USER="$2"; shift 2 ;;
+		--dis-user)           CLI_DIS_USER="$2"; shift 2 ;;
 		--pools-file)         CLI_POOLS_FILE="$2"; shift 2 ;;
 		--help|-h)            _usage; exit 0 ;;
 		# Deprecated flag-as-subcommand forms (backwards compat)
@@ -223,6 +231,28 @@ _pool_count_from_conf() {
 		echo "$CLI_POOLS"
 	fi
 }
+
+# --- Autodetect from last run ------------------------------------------------
+# Read-only commands (status, live, dash, stop, watch, attach, verify) inherit
+# --pools, --user, --os, --vmware-conf from the last "run" invocation so the
+# operator doesn't have to repeat them every time.
+_LAST_RUN_FILE="$_RUN_DIR/.e2e-last-run"
+_is_readonly_cmd() {
+	case "${CLI_COMMAND:-}" in
+		status|live|dash|stop|attach|verify|watch|start) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+if _is_readonly_cmd && [ -f "$_LAST_RUN_FILE" ]; then
+	set -a; source "$_LAST_RUN_FILE"; set +a
+	# Only apply saved values when the user didn't explicitly override them
+	[ -z "$_CLI_POOLS_SET" ] && [ -n "${_SAVED_POOLS:-}" ] && CLI_POOLS="$_SAVED_POOLS" && _CLI_POOLS_SET=1
+	[ -z "$CLI_OS" ]         && [ -n "${_SAVED_OS:-}" ]    && CLI_OS="$_SAVED_OS"
+	[ -z "${CLI_CON_USER:-}" ] && [ -n "${_SAVED_CON_USER:-}" ] && CLI_CON_USER="$_SAVED_CON_USER"
+	[ -z "${CLI_DIS_USER:-}" ] && [ -n "${_SAVED_DIS_USER:-}" ] && CLI_DIS_USER="$_SAVED_DIS_USER"
+	[ -z "${CLI_VMWARE_CONF:-}" ] && [ -n "${_SAVED_VMWARE_CONF:-}" ] && CLI_VMWARE_CONF="$_SAVED_VMWARE_CONF"
+fi
+
 if [ -z "$_CLI_POOLS_SET" ]; then
 	if [ -n "$CLI_POOL" ]; then
 		# --pool N without --pools: limit scope to pool N (avoid touching higher pools)
@@ -243,8 +273,11 @@ if [ -f "$_RUN_DIR/config.env" ]; then
 	set +a
 fi
 
-# --os overrides INT_BASTION_RHEL_VER from config.env
+# CLI overrides for config.env defaults
 [ -n "$CLI_OS" ] && export INT_BASTION_RHEL_VER="$CLI_OS"
+[ -n "${CLI_VMWARE_CONF:-}" ] && export VMWARE_CONF="$CLI_VMWARE_CONF"
+[ -n "${CLI_CON_USER:-}" ] && export CON_SSH_USER="$CLI_CON_USER"
+[ -n "${CLI_DIS_USER:-}" ] && export DIS_SSH_USER="$CLI_DIS_USER"
 
 # --- Auto-detect git branch and repo from the developer's local checkout ------
 _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
@@ -253,17 +286,42 @@ export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$_ABA_ROOT" remote get-url origin
 # user/repo slug for curl one-liner install (strip protocol + host + .git suffix)
 export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
 
-# Generate deployable config.env with auto-detected git values baked in.
-# runner.sh on VMs sources this, so the correct branch/repo is always set
-# without relying on the VM's local git state.
+# Generate deployable config.env only for commands that transfer it to conN.
+# Skipped for status/stop/verify/list/etc. to avoid overwriting CLI-flagged
+# versions when 'watch run.sh status' runs in a loop.
 _DEPLOY_CONFIG_ENV="$_RUN_DIR/.config.env.deploy"
-{
-	cat "$_RUN_DIR/config.env"
-	printf '\n# --- Auto-injected by run.sh (do not edit manually) ---\n'
-	printf 'E2E_GIT_BRANCH=%s\n' "$E2E_GIT_BRANCH"
-	printf 'E2E_GIT_REPO=%s\n' "$E2E_GIT_REPO"
-	printf 'E2E_GIT_REPO_SLUG=%s\n' "$E2E_GIT_REPO_SLUG"
-} > "$_DEPLOY_CONFIG_ENV"
+case "${CLI_COMMAND:-}" in
+	run|deploy|restart|reschedule)
+		{
+			cat "$_RUN_DIR/config.env"
+			printf '\n# --- Auto-injected by run.sh (do not edit manually) ---\n'
+			printf 'E2E_GIT_BRANCH=%s\n' "$E2E_GIT_BRANCH"
+			printf 'E2E_GIT_REPO=%s\n' "$E2E_GIT_REPO"
+			printf 'E2E_GIT_REPO_SLUG=%s\n' "$E2E_GIT_REPO_SLUG"
+			# Propagate CLI overrides so runner.sh on conN sees them.
+			# _E2E_CLI_OVERRIDES tells runner.sh which vars were explicitly
+			# set via CLI flags (so pools.conf defaults don't clobber them).
+			_cli_flags=""
+			if [ -n "$CLI_OS" ]; then
+				printf 'INT_BASTION_RHEL_VER=%s\n' "$CLI_OS"
+				_cli_flags="${_cli_flags} OS"
+			fi
+			if [ -n "${CLI_VMWARE_CONF:-}" ]; then
+				printf 'VMWARE_CONF=%s\n' "$CLI_VMWARE_CONF"
+				_cli_flags="${_cli_flags} VMWARE"
+			fi
+			if [ -n "${CLI_CON_USER:-}" ]; then
+				printf 'CON_SSH_USER=%s\n' "$CLI_CON_USER"
+				_cli_flags="${_cli_flags} CON_USER"
+			fi
+			if [ -n "${CLI_DIS_USER:-}" ]; then
+				printf 'DIS_SSH_USER=%s\n' "$CLI_DIS_USER"
+				_cli_flags="${_cli_flags} DIS_USER"
+			fi
+			[ -n "$_cli_flags" ] && printf '_E2E_CLI_OVERRIDES="%s"\n' "${_cli_flags# }"
+		} > "$_DEPLOY_CONFIG_ENV"
+		;;
+esac
 
 # --- Ensure govc when we will use it (destroy or infra check / setup) ---------
 _ensure_govc() {
@@ -291,6 +349,27 @@ _ssh_con() {
 	ssh $_SSH_OPTS "${user}@${host}" "$@"
 }
 
+# Deploy govc, pull-secret, and vmware.conf to a conN target.
+# Called after every harness deploy so that root users (or freshly reverted VMs)
+# have the essentials before runner.sh's pre-suite checks.
+_deploy_root_essentials() {
+	local target="$1"
+	local user="$2"
+	# govc into the harness bin dir (survives suite cleanup that wipes ~/bin)
+	ssh -q $_SSH_OPTS "$target" "mkdir -p ~/.e2e-harness/bin ~/bin"
+	local _govc_src="${HOME}/bin/govc"
+	if [ -x "$_govc_src" ]; then
+		scp -q $_SSH_OPTS "$_govc_src" "${target}:~/.e2e-harness/bin/govc"
+		ssh -q $_SSH_OPTS "$target" "cp ~/.e2e-harness/bin/govc ~/bin/govc && chmod 755 ~/bin/govc"
+	fi
+	# root-specific: pull-secret and default vmware.conf (always vCenter)
+	if [ "$user" = "root" ]; then
+		local _ps="$HOME/.pull-secret.json"
+		[ -f "$_ps" ] && scp -q $_SSH_OPTS "$_ps" "${target}:~/.pull-secret.json"
+		local _vf="$HOME/.vmware.conf"
+		[ -f "$_vf" ] && scp -q $_SSH_OPTS "$_vf" "${target}:~/.vmware.conf"
+	fi
+}
 
 # Process .cleanup and .mirror-cleanup files on a pool before wiping state.
 _process_pool_cleanup_files() {
@@ -465,6 +544,11 @@ if [ -n "$CLI_DEPLOY" ]; then
 				scp -q $_SSH_OPTS ~/bin/notify.sh "${target}:~/bin/notify.sh" &&
 				ssh -q $_SSH_OPTS "${target}" "chmod +x ~/bin/notify.sh"
 			fi
+			# Deploy custom vmware.conf if specified via --vmware-conf
+			if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
+				scp -q $_SSH_OPTS "$CLI_VMWARE_CONF" "${target}:${CLI_VMWARE_CONF}"
+			fi
+			_deploy_root_essentials "$target" "$user"
 			echo "+ harness done"
 		else
 			echo "+ harness FAILED"
@@ -576,7 +660,7 @@ fi
 
 if [ -n "$CLI_START" ]; then
 	_ensure_govc
-	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+	_vmconf="$HOME/.vmware.conf"
 	[ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
 
 	# --pool N targets a single pool; --pools N targets 1..N
@@ -727,6 +811,11 @@ if [ -n "$CLI_RESTART" ]; then
 				scp -q $_restart_ssh ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
 				ssh -q $_restart_ssh "${_target}" "chmod +x ~/bin/notify.sh"
 			fi
+			# Deploy custom vmware.conf if specified via --vmware-conf
+			if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
+				scp -q $_restart_ssh "$CLI_VMWARE_CONF" "${_target}:${CLI_VMWARE_CONF}"
+			fi
+			_deploy_root_essentials "${_target}" "$_user"
 			echo "done"
 		else
 			echo "FAILED"
@@ -956,13 +1045,9 @@ if [ -n "${CLI_LIVE+set}" ]; then
 	if [ -n "$CLI_LIVE" ]; then
 		_num_pools="$CLI_LIVE"
 	else
-		if [ -f "$_RUN_DIR/pools.conf" ]; then
-			_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf")
-		else
-			_num_pools=3
-		fi
+		_num_pools="$CLI_POOLS"
 	fi
-	_user="${CON_SSH_USER:-steve}"
+	_default_user="${CON_SSH_USER:-steve}"
 	_domain="${VM_BASE_DOMAIN}"
 	LIVE_SESSION="e2e-live"
 
@@ -971,13 +1056,15 @@ if [ -n "${CLI_LIVE+set}" ]; then
 	# Claim ownership: write a unique ID to /tmp/e2e-live-owner on each conN.
 	# Pane scripts check this before re-attaching — if another live dashboard
 	# has taken over (different ID), the old pane exits instead of fighting.
+	# Try both steve and root so the file is writable regardless of who created it.
 	_live_id="$$-$(date +%s)"
 	_live_so="-o LogLevel=ERROR -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 	for (( _lp=1; _lp<=_num_pools; _lp++ )); do
-		ssh $_live_so "${_user}@con${_lp}.${_domain}" \
-			"echo '$_live_id' > /tmp/e2e-live-owner"
+		ssh $_live_so "steve@con${_lp}.${_domain}" \
+			"sudo rm -f /tmp/e2e-live-owner; echo '$_live_id' > /tmp/e2e-live-owner" 2>/dev/null || true
 	done
 
+	rm -rf /tmp/e2e-live.* 2>/dev/null
 	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
 	_live_create_script() {
 		local p=$1
@@ -988,17 +1075,22 @@ if [ -n "${CLI_LIVE+set}" ]; then
 			echo '#!/bin/bash'
 			echo 'stty -ixon 2>/dev/null'
 			echo "_MY_ID='${_live_id}'"
+			echo "_DEFAULT_USER='${_default_user}'"
+			echo "_HOST='${_h}'"
 		echo 'while true; do'
-		echo "  _owner=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)"
+		echo '  # Detect which user owns the tmux session on this pool'
+		echo "  _suite_user=\$(ssh $_so steve@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)"
+		echo '  _user="${_suite_user:-$_DEFAULT_USER}"'
+		echo "  _owner=\$(ssh $_so \${_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)"
 		echo '  if [ -n "$_owner" ] && [ "$_owner" != "$_MY_ID" ]; then'
 		echo "    echo 'Another live dashboard took over con${p}. Exiting.'"
 		echo '    exit 0'
 		echo '  fi'
-		echo "  _suite=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
-		printf "  printf '\\\\033]2;live | Pool %d (con%d)%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\"\n" "$p" "$p"
+		echo "  _suite=\$(ssh $_so \${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
+		printf "  printf '\\\\033]2;live | Pool %d (con%d) %%s%%s\\\\033\\\\\\\\' \"\${_user}\" \"\${_suite:+ | \$_suite}\"\n" "$p" "$p"
 		echo '  clear'
-		echo "  ssh -t $_so ${_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
-		echo "    echo 'No e2e session on con${p}. Waiting for suite to start...'"
+		echo "  ssh -t $_so \${_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
+		echo "    echo \"No e2e session on con${p} (user: \${_user}). Waiting for suite to start...\""
 		echo '  }'
 		echo '  sleep 5'
 			echo 'done'
@@ -1029,7 +1121,11 @@ if [ -n "${CLI_LIVE+set}" ]; then
 	tmux set-option -t "$LIVE_SESSION" pane-border-status top 2>/dev/null
 	tmux set-option -t "$LIVE_SESSION" pane-border-format " #{pane_title} " 2>/dev/null
 	echo "Live dashboard (${_num_pools} pools) -- Ctrl-b + arrow to switch panes"
-	exec tmux attach -t "$LIVE_SESSION"
+	if [ -n "${TMUX:-}" ]; then
+		exec tmux switch-client -t "$LIVE_SESSION"
+	else
+		exec tmux attach -t "$LIVE_SESSION"
+	fi
 fi
 
 # --- Dashboard mode ----------------------------------------------------------
@@ -1038,11 +1134,7 @@ if [ -n "${CLI_DASHBOARD+set}" ]; then
 	if [ -n "$CLI_DASHBOARD" ]; then
 		_num_pools="$CLI_DASHBOARD"
 	else
-		if [ -f "$_RUN_DIR/pools.conf" ]; then
-			_num_pools=$(grep -c '^[^#]' "$_RUN_DIR/pools.conf")
-		else
-			_num_pools=3
-		fi
+		_num_pools="$CLI_POOLS"
 	fi
 	_create_tmux_dashboard "e2e-dashboard" "$_num_pools" "$CLI_DASH_LOG"
 	echo "Attaching to dashboard (${_num_pools} pools) ..."
@@ -1071,7 +1163,7 @@ fi
 
 if [ -n "$CLI_DESTROY" ]; then
 	_ensure_govc
-	_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+	_vmconf="$HOME/.vmware.conf"
 	if [ -f "$_vmconf" ]; then
 		set -a; source "$_vmconf"; set +a
 	fi
@@ -1358,7 +1450,10 @@ fi
 # --- Ensure infrastructure ---------------------------------------------------
 
 _ensure_govc
-_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+# Framework always uses the default vCenter vmware.conf for its own VM
+# operations (snapshots, orphan checks).  The --vmware-conf override is only
+# deployed to conN for the suites to use with ABA.
+_vmconf="$HOME/.vmware.conf"
 [ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
 
 echo ""
@@ -1456,6 +1551,17 @@ else
 	for (( _rdp=1; _rdp<=CLI_POOLS; _rdp++ )); do _run_deploy_list+=("$_rdp"); done
 fi
 
+# Save active run config so read-only commands (status, live, dash) can
+# autodetect --pools, --user, --os, --vmware-conf without requiring flags.
+{
+	echo "# Written by run.sh at $(date +%Y-%m-%dT%H:%M:%S)"
+	echo "_SAVED_POOLS=$CLI_POOLS"
+	echo "_SAVED_OS=${INT_BASTION_RHEL_VER:-rhel8}"
+	echo "_SAVED_CON_USER=${CON_SSH_USER:-steve}"
+	echo "_SAVED_DIS_USER=${DIS_SSH_USER:-steve}"
+	echo "_SAVED_VMWARE_CONF=${VMWARE_CONF:-}"
+} > "$_LAST_RUN_FILE"
+
 echo ""
 echo "  Deploying test harness to conN hosts ..."
 for i in "${_run_deploy_list[@]}"; do
@@ -1476,6 +1582,11 @@ for i in "${_run_deploy_list[@]}"; do
 			scp -q $_SSH_OPTS "$_notify_cmd" "$target:~/bin/notify.sh" &&
 			ssh -q $_SSH_OPTS "$target" "chmod +x ~/bin/notify.sh"
 		fi
+		# Deploy custom vmware.conf if specified via --vmware-conf
+		if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
+			scp -q $_SSH_OPTS "$CLI_VMWARE_CONF" "${target}:${CLI_VMWARE_CONF}"
+		fi
+		_deploy_root_essentials "$target" "$user"
 		# Ensure rootless podman's pause process survives between SSH sessions
 		ssh -q $_SSH_OPTS "$target" "sudo loginctl enable-linger $user"
 		echo "    con${i}: harness deployed to ~/.e2e-harness/"
@@ -1573,6 +1684,12 @@ _dispatch_suite() {
 		scp -q $_SSH_OPTS ~/bin/notify.sh "${_target}:~/bin/notify.sh" &&
 		ssh -q $_SSH_OPTS "${_target}" "chmod +x ~/bin/notify.sh"
 	fi
+
+	# Deploy custom vmware.conf if specified via --vmware-conf
+	if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
+		scp -q $_SSH_OPTS "$CLI_VMWARE_CONF" "${_target}:${CLI_VMWARE_CONF}"
+	fi
+	_deploy_root_essentials "${_target}" "$_user"
 
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"

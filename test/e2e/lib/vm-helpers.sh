@@ -616,6 +616,60 @@ _vm_remove_pull_secret() {
 	_essh "${user}@${host}" -- "rm -fv ~/.pull-secret.json"
 }
 
+# --- _vm_provision_root_user ------------------------------------------------
+# Provisions /root/ on the golden VM with files that root-user test runs need.
+# Called once during golden VM creation; clones inherit everything.
+#
+# What this provisions:
+#   - pull-secret.json  (from bastion -- needed by mirror/catalog operations)
+#   - vmware.conf       (from bastion -- govc credentials for VMware pools)
+#   - govc binary       (from bastion ~/bin/govc -- used by runner.sh pre-suite checks)
+
+_vm_provision_root_user() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [vm] Provisioning root user environment on $host ..."
+
+	# Pull secret -- needed by any suite that mirrors images or downloads catalogs
+	local ps="$HOME/.pull-secret.json"
+	if [ -f "$ps" ]; then
+		_escp "$ps" "${user}@${host}:/tmp/.pull-secret-root.json"
+		_essh "${user}@${host}" -- "sudo cp /tmp/.pull-secret-root.json /root/.pull-secret.json && sudo chmod 600 /root/.pull-secret.json && sudo chown root:root /root/.pull-secret.json && rm -f /tmp/.pull-secret-root.json"
+		echo "    pull-secret.json -> /root/"
+	else
+		echo "    WARNING: $ps not found on bastion -- root test runs needing pull-secret will fail"
+	fi
+
+	# vmware.conf -- govc credentials for VMware operations
+	local vf="${VMWARE_CONF:-$HOME/.vmware.conf}"
+	if [ -f "$vf" ]; then
+		_escp "$vf" "${user}@${host}:/tmp/.vmware-root.conf"
+		_essh "${user}@${host}" -- "sudo cp /tmp/.vmware-root.conf /root/.vmware.conf && sudo chmod 600 /root/.vmware.conf && sudo chown root:root /root/.vmware.conf && rm -f /tmp/.vmware-root.conf"
+		echo "    vmware.conf -> /root/"
+	fi
+
+	# govc binary -- runner.sh needs it for orphan VM checks before ABA is installed
+	local govc_bin="$HOME/bin/govc"
+	if [ -x "$govc_bin" ]; then
+		_escp "$govc_bin" "${user}@${host}:/tmp/govc-root"
+		_essh "${user}@${host}" -- "sudo mkdir -p /root/bin && sudo cp /tmp/govc-root /root/bin/govc && sudo chmod 755 /root/bin/govc && rm -f /tmp/govc-root"
+		echo "    govc -> /root/bin/"
+	else
+		echo "    WARNING: $govc_bin not found on bastion -- govc will be bootstrapped at runtime"
+	fi
+
+	# Proxy env scripts -- needed by connected-public and proxy-mode tests
+	_essh "${user}@${host}" -- "sudo bash -c '
+		for f in .proxy-set.sh .proxy-unset.sh; do
+			[ -f /home/${user}/\$f ] && [ ! -f /root/\$f ] && cp /home/${user}/\$f /root/\$f
+		done
+	'"
+	echo "    proxy scripts -> /root/"
+
+	echo "  [vm] Root user provisioning complete on $host"
+}
+
 # --- _vm_fix_proxy_noproxy ---------------------------------------------------
 
 _vm_fix_proxy_noproxy() {
@@ -725,6 +779,54 @@ _vm_create_test_user_and_key_on_host() {
 		return 1
 	fi
 	echo "  [vm] testy key created and SSH to $test_user_name@localhost verified on $host"
+
+	# Generate cross-host keypairs for root and the default user.
+	# Both conN and disN are cloned from this golden image, so both
+	# inherit the same keys.  This enables root@conN -> root@disN
+	# and steve@conN -> steve@disN (needed for --user root / --user steve).
+	echo "  [vm] Setting up cross-host SSH keys for root and $def_user ..."
+
+	cat <<-CROSSEOF | _essh "${def_user}@${host}" -- sudo bash
+		set -ex
+		# root keypair
+		if [ ! -f /root/.ssh/id_rsa ]; then
+			ssh-keygen -t rsa -f /root/.ssh/id_rsa -N '' -C 'root@golden'
+		fi
+		ROOT_PUB=\$(cat /root/.ssh/id_rsa.pub)
+
+		# default user keypair
+		if [ ! -f /home/${def_user}/.ssh/id_rsa ]; then
+			su - ${def_user} -c "ssh-keygen -t rsa -f ~/.ssh/id_rsa -N '' -C '${def_user}@golden'"
+		fi
+		USER_PUB=\$(cat /home/${def_user}/.ssh/id_rsa.pub)
+
+		# Authorize root's key on root and user accounts
+		grep -qF "\$ROOT_PUB" /root/.ssh/authorized_keys || echo "\$ROOT_PUB" >> /root/.ssh/authorized_keys
+		grep -qF "\$ROOT_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$ROOT_PUB" >> /home/${def_user}/.ssh/authorized_keys
+
+		# Authorize user's key on root and user accounts
+		grep -qF "\$USER_PUB" /root/.ssh/authorized_keys || echo "\$USER_PUB" >> /root/.ssh/authorized_keys
+		grep -qF "\$USER_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$USER_PUB" >> /home/${def_user}/.ssh/authorized_keys
+
+		# Fix permissions
+		chmod 600 /root/.ssh/authorized_keys /root/.ssh/id_rsa
+		chmod 600 /home/${def_user}/.ssh/authorized_keys
+		chown -R ${def_user}:${def_user} /home/${def_user}/.ssh
+
+		# Copy SSH config to root if not already there
+		[ -f /home/${def_user}/.ssh/config ] && [ ! -f /root/.ssh/config ] && cp /home/${def_user}/.ssh/config /root/.ssh/config
+
+		# Copy testy_rsa key to root so --user root suites can SSH as testy
+		if [ -f /home/${def_user}/.ssh/testy_rsa ] && [ ! -f /root/.ssh/testy_rsa ]; then
+			cp /home/${def_user}/.ssh/testy_rsa /root/.ssh/testy_rsa
+			cp /home/${def_user}/.ssh/testy_rsa.pub /root/.ssh/testy_rsa.pub
+			chmod 600 /root/.ssh/testy_rsa
+		fi
+
+		echo "Cross-host SSH keys configured."
+	CROSSEOF
+
+	echo "  [vm] Cross-host SSH keys set up for root and $def_user on $host"
 }
 
 # --- _vm_create_test_user ---------------------------------------------------
