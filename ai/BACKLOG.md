@@ -1,5 +1,46 @@
 # ABA Backlog
 
+## IMPORTANT (post code-freeze): Audit and fix exit code handling in ABA scripts
+
+**Plan**: `~/.cursor/plans/audit-exit-codes.plan.md`
+**Priority**: Important -- do NOT change during code freeze
+
+37 scripts end with `exit 0`, silently swallowing errors. Confirmed bug: `vmw-create.sh` govc failure returns exit 0 because `create_node()` errors don't trigger the ERR trap (no `set -E`) and `exit 0` forces success regardless.
+
+**Phase 1** (minimal, targeted):
+- Add `set -E` to `include_all.sh` (one-line fix, makes ERR trap work in ALL functions)
+- Remove `exit 0` from `vmw-create.sh` and `kvm-create.sh` (the confirmed bugs)
+
+**Phase 2** (systematic):
+- Audit all 37 scripts, remove unnecessary `exit 0`, add explicit error handling
+- Consider `set -o pipefail` for pipeline failures
+
+---
+
+## IMPORTANT (post code-freeze): Remove ABA-internal function calls from E2E suites
+
+**Plan**: `~/.cursor/plans/remove-internal-calls-from-suites.plan.md`
+**Priority**: Important -- do NOT change during code freeze
+**Status**: Phase 1 complete (replaced `normalize-aba-conf` calls in 2 suites)
+
+Suites should never call ABA-internal functions directly. Three suites still `source include_all.sh` to call `verify-*-conf` functions for validation testing.
+
+**Phase 2**: Create `aba verify` CLI command so validation suites use the CLI instead of sourcing internals.
+
+---
+
+## IMPORTANT (post code-freeze): Refactor normalize-*-conf() with `set -a/+a`
+
+**Plan**: `~/.cursor/plans/normalize_conf_set_a_refactor.plan.md`
+**Priority**: Important -- do NOT change during code freeze
+
+5 normalize functions share duplicate sed pipelines and use an awkward `source <(func)` pattern. Also, `cluster-config.sh` has 4 different eval syntax variants across 25 callers.
+
+**Phase 1** (internal cleanup, same caller interface): Extract `_parse_conf()` helper, rewrite function internals.
+**Phase 2** (caller migration): Switch to `set -a/+a`, update ~75 callers, refactor `cluster-config.sh` into `load-cluster-config()` function.
+
+---
+
 ## Enhancement: Warn when changing mirror registry identity after install
 
 When a mirror registry is installed and the user changes an "identity" field in `mirror.conf` (`reg_host`, `reg_port`, `reg_vendor`), display a warning via `ask()`:
