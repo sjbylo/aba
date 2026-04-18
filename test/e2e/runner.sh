@@ -77,6 +77,7 @@ rm -f "$RC_FILE"
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
 echo "$SUITE" > /tmp/e2e-last-suites
+sudo rm -f /tmp/e2e-suite-user
 whoami > /tmp/e2e-suite-user
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
@@ -158,13 +159,21 @@ _verify_no_mirror_data_dirs() {
 		fi
 	fi
 
-	for _dir in $_E2E_MIRROR_DATA_DIRS; do
-		if [ -n "$remote_target" ]; then
-			_essh "$remote_target" "test -d ~/$_dir" && _leftovers+="  ~/$_dir"$'\n'
-		else
+	if [ -n "$remote_target" ]; then
+		# Check ALL users on the remote host (cross-user leftovers are the common case)
+		local _dis_fqdn
+		_dis_fqdn=$(echo "$remote_target" | sed 's/.*@//')
+		local _default_user="${VM_DEFAULT_USER:-steve}"
+		for _check_user in root "$_default_user"; do
+			for _dir in $_E2E_MIRROR_DATA_DIRS; do
+				_essh "${_check_user}@${_dis_fqdn}" "test -d ~/$_dir" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
+			done
+		done
+	else
+		for _dir in $_E2E_MIRROR_DATA_DIRS; do
 			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n'
-		fi
-	done
+		done
+	fi
 
 	if [ -n "$_leftovers" ]; then
 		echo ""
@@ -438,6 +447,12 @@ fi
 [[ "$_cli_overrides" == *" DIS_USER "* ]] && export DIS_SSH_USER="$_cli_saved_dis_user"
 [[ "$_cli_overrides" == *" VMWARE "* ]]   && export VMWARE_CONF="$_cli_saved_vmware"
 
+# Metadata for live dashboard pane titles (written after config.env + CLI overrides are final)
+echo "${INT_BASTION_RHEL_VER:-rhel8}" > /tmp/e2e-suite-os
+_vmconf_display="${VMWARE_CONF:-}"
+[ -z "$_vmconf_display" ] && _vmconf_display="~/.vmware.conf"
+echo "$_vmconf_display" > /tmp/e2e-suite-vmconf
+
 # --- Resolve pool variables ---------------------------------------------------
 
 DIS_VM="dis${POOL_NUM}"
@@ -520,10 +535,38 @@ _cleanup_dis_aba() {
 	# Registry cleanup on conN is handled by _cleanup_con_quay() -- not here.
 	# This function only cleans the disN filesystem and firewall.
 
-	# 1. Clean disN non-mirror filesystem (aba code, CLI tools, caches)
+	# 0. Uninstall any stale registry on disN via aba, for EACH user that may
+	#    have installed one.  A previous suite may have run as a different user
+	#    (e.g. steve when current is root), leaving a rootless registry that the
+	#    current user's podman can't see.
+	echo "  Checking for stale registries on disN (all users) ..."
+	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
+	# Try both root and the default non-root user (the only two users on E2E VMs)
+	local _default_user="${VM_DEFAULT_USER:-steve}"
+	local _try_user
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		# Try aba uninstall if .available exists OR if ~/aba/mirror dir exists
+		# (covers interrupted installs where .available was never created)
+		_essh "$_uhost" "
+			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
+				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
+				cd ~/aba && aba -y -d mirror uninstall || true
+			fi
+		" 2>&1 || echo "  [cleanup] WARNING: aba uninstall as $_try_user on disN failed (rc=$?)"
+	done
+
+	# 1. Clean disN filesystem for all users (aba code, CLI tools, caches, mirror data)
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
-	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1
-	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		_essh "$_uhost" "rm -rf ~/aba ~/bin ~/tmp ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+		# Mirror data dirs may contain files owned by container-mapped UIDs
+		# (rootless podman UID remapping), so sudo is needed for cleanup.
+		for _mdir in $_E2E_MIRROR_DATA_DIRS; do
+			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
+		done
+	done
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 
@@ -558,13 +601,35 @@ _cleanup_dis_aba() {
 			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
 	fi
 
-	# 6. Verify clean state
-	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q | grep -q ."; then
-		echo "  disN cleanup verified: clean state"
-	else
-		echo "  WARNING: disN cleanup may be incomplete -- check manually"
+	# 6. Verify port 8443 is free (registry fully uninstalled).
+	#    Cross-user scenarios (steve->root) are handled by snapshot revert in run.sh.
+	#    This catches same-user partial installs where aba uninstall couldn't fully
+	#    tear down orphaned containers.
+	if _essh "$dis_host" "ss -tlnp | grep -q ':8443 '"; then
+		echo "  WARNING: port 8443 still occupied after cleanup -- retrying aba uninstall"
+		for _try_user in root "$_default_user"; do
+			local _uhost="${_try_user}@${_dis_fqdn}"
+			# Crash-recovery fallback: aba uninstall already ran but couldn't stop
+			# orphaned containers (partial install, no config left).  podman stop
+			# is the only option when aba state is gone.
+			_essh "$_uhost" "
+				cd /tmp
+				if podman ps -q 2>/dev/null | grep -q .; then
+					echo '  [cleanup] Stopping $_try_user containers on disN'
+					podman stop -a -t 5 || true
+					podman rm -af || true
+				fi
+			" 2>&1 || true
+		done
+		# Final check
+		if _essh "$dis_host" "ss -tlnp | grep -q ':8443 '"; then
+			echo "  FATAL: port 8443 STILL occupied on disN after all cleanup attempts"
+			return 1
+		fi
+		echo "  disN port 8443 freed after retry"
 	fi
 
+	echo "  disN cleanup verified: clean state"
 	echo "  disN cleanup complete."
 }
 

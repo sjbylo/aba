@@ -616,6 +616,33 @@ _vm_remove_pull_secret() {
 	_essh "${user}@${host}" -- "rm -fv ~/.pull-secret.json"
 }
 
+# --- _vm_deploy_tmux_conf ---------------------------------------------------
+# Deploys bastion's ~/.tmux.conf to both the default user and root on the
+# golden VM.  This ensures tmux sessions (suite runners, live dashboard)
+# use Ctrl-a prefix, vi mode, and a large history-limit on all clones.
+#
+_vm_deploy_tmux_conf() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [vm] Deploying .tmux.conf to $host ..."
+
+	local src="$HOME/.tmux.conf"
+	if [ ! -f "$src" ]; then
+		echo "    WARNING: $src not found on bastion -- skipping tmux config"
+		return 0
+	fi
+
+	# Default user
+	_escp "$src" "${user}@${host}:~/.tmux.conf"
+	echo "    .tmux.conf -> ~${user}/"
+
+	# Root user (via sudo)
+	_escp "$src" "${user}@${host}:/tmp/.tmux-root.conf"
+	_essh "${user}@${host}" -- "sudo cp /tmp/.tmux-root.conf /root/.tmux.conf && sudo chown root:root /root/.tmux.conf && rm -f /tmp/.tmux-root.conf"
+	echo "    .tmux.conf -> /root/"
+}
+
 # --- _vm_provision_root_user ------------------------------------------------
 # Provisions /root/ on the golden VM with files that root-user test runs need.
 # Called once during golden VM creation; clones inherit everything.
