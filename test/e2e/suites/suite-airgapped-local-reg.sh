@@ -112,7 +112,7 @@ test_end
 test_begin "Setup: calculate older version for upgrade"
 
 e2e_run "Read aba.conf and compute older version" "
-    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2)
+    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
     echo ocp_version=\$ocp_version
     ocp_version_major=\$(echo \$ocp_version | cut -d. -f1-2)
     ocp_version_point=\$(echo \$ocp_version | cut -d. -f3)
