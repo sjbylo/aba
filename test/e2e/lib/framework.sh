@@ -683,7 +683,7 @@ e2e_cleanup_clusters() {
 	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
-		_e2e_log_and_print "    $target: aba -y -d $abs_path delete"
+		_e2e_log_and_print "  $target: aba -y -d $abs_path delete"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
@@ -757,7 +757,7 @@ e2e_cleanup_mirrors() {
 	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
-		_e2e_log_and_print "    $target: aba -y -d $abs_path uninstall"
+		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
@@ -974,10 +974,15 @@ e2e_run() {
 
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
-    _e2e_log_and_print "  $mark $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
-    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
-    _e2e_summary "  $mark $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
-    _e2e_summary "    $(_e2e_Cyan "$cmd")"
+    if [ -n "$host" ]; then
+        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+    else
+        _e2e_log_and_print "  $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+    fi
+    _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
+    _e2e_summary "  $(_e2e_Cyan "$cmd")"
 
     local _step_start
     _step_start=$(date +%s)
@@ -1014,8 +1019,8 @@ e2e_run() {
 
             # Ctrl-C (SIGINT=130): skip retry loop, go straight to interactive prompt
             if [ $ret -eq 130 ]; then
-                _e2e_log_and_print "    $(_e2e_yellow "Interrupted (Ctrl-C)")"
-                _e2e_summary "    $(_e2e_Yellow "Interrupted (Ctrl-C): $description")"
+                _e2e_log_and_print "  $(_e2e_yellow "Interrupted (Ctrl-C)")"
+                _e2e_summary "  $(_e2e_Yellow "Interrupted (Ctrl-C): $description")"
                 break
             fi
 
@@ -1023,11 +1028,11 @@ e2e_run() {
                 local _elapsed=$(( $(date +%s) - _step_start ))
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
-                    _e2e_summary "    $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
+                    _e2e_summary "  $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
                     _e2e_notify "RECOVERED: $description (attempt $attempt/$tot_cnt, $_dur)"
                 fi
-                _e2e_log_and_print "    $(_e2e_green "OK") ($_dur)"
-                _e2e_summary "    $(_e2e_Green "OK ($_dur)")"
+                _e2e_log_and_print "  $(_e2e_green "OK") ($_dur)"
+                _e2e_summary "  $(_e2e_Green "OK ($_dur)")"
                 _e2e_log "  OK (attempt $attempt, $_dur)"
                 rm -f "$_cmd_output_file"
                 return 0
@@ -1058,9 +1063,9 @@ e2e_run() {
 
             if [ $attempt -ge $tot_cnt ]; then
                 _e2e_log "  All $tot_cnt attempts exhausted"
-                _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
-                _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
-                _e2e_summary "    $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
+                _e2e_log_and_print "  $(_e2e_red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
+                _e2e_summary "  $(_e2e_Red "Attempt ($attempt/$tot_cnt) FAILED ($_exi): $description")"
+                _e2e_summary "  $(_e2e_Red "EXHAUSTED $tot_cnt attempts: $description")"
                 if [ $tot_cnt -gt 1 ]; then
                     (
                         echo "$(date '+%H:%M:%S') EXHAUSTED $tot_cnt attempts"
@@ -1083,14 +1088,14 @@ e2e_run() {
                 break
             fi
 
-            _e2e_log_and_print "    $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
-            _e2e_summary "    $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
+            _e2e_log_and_print "  $(_e2e_red "Attempt ($attempt/$tot_cnt) failed ($_exi): $description") -- retrying ..."
+            _e2e_summary "  $(_e2e_Red "Attempt ($attempt/$tot_cnt) failed ($_exi)") $description -- retrying ..."
 
             _e2e_fix_image_pruner_if_needed "$_cmd_output_file" && \
-                _e2e_log_and_print "    Applied ImagePrunerJobFailed workaround before retry"
+                _e2e_log_and_print "  Applied ImagePrunerJobFailed workaround before retry"
 
             attempt=$(( attempt + 1 ))
-            echo "    Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
+            echo "  Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
             sleep "$sleep_time"
             sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
             [ "$sleep_time" -gt "$max_delay" ] && sleep_time="$max_delay"
@@ -1101,30 +1106,30 @@ e2e_run() {
 
         if [ $prompt_rc -eq 2 ]; then
             _e2e_log "  Restarting retry cycle (user requested)"
-            _e2e_summary "    $(_e2e_cyan "RETRY (user): $description")"
+            _e2e_summary "  $(_e2e_cyan "RETRY (user): $description")"
             continue
         elif [ $prompt_rc -eq 0 ]; then
             local _elapsed=$(( $(date +%s) - _step_start ))
             local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
-            _e2e_log_and_print "    $(_e2e_yellow "SKIP (user)") ($_dur)"
-            _e2e_summary "    $(_e2e_Yellow "SKIP (user): $description") ($_dur)"
+            _e2e_log_and_print "  $(_e2e_yellow "SKIP (user)") ($_dur)"
+            _e2e_summary "  $(_e2e_Yellow "SKIP (user): $description") ($_dur)"
             _E2E_USER_SKIPPED=1
             rm -f "$_cmd_output_file"
             return 0
         elif [ $prompt_rc -eq 3 ]; then
-            _e2e_summary "    $(_e2e_Yellow "SKIP-SUITE (user): $description")"
+            _e2e_summary "  $(_e2e_Yellow "SKIP-SUITE (user): $description")"
             _E2E_SUITE_SKIPPED=1
             rm -f "$_cmd_output_file"
             return 3
         elif [ $prompt_rc -eq 4 ]; then
-            _e2e_summary "    $(_e2e_Yellow "RESTART (user): $description")"
+            _e2e_summary "  $(_e2e_Yellow "RESTART (user): $description")"
             rm -f "$_cmd_output_file"
             exit 4
         else
             local _exf; _exf="$(_e2e_exit_info $ret)"
             _e2e_log "  FAILED: $description ($_exf)"
             _e2e_log_and_print "  $(_e2e_red "FATAL: $description ($_exf) -- aborting suite")"
-            _e2e_summary "    $(_e2e_Red "FATAL: $description ($_exf) -- aborting suite")"
+            _e2e_summary "  $(_e2e_Red "FATAL: $description ($_exf) -- aborting suite")"
             if [ -n "$_E2E_CURRENT_TEST" ]; then
                 test_end "$ret"
             fi
@@ -1249,8 +1254,12 @@ e2e_diag() {
 
     local _display_host="${host:-$USER@$(hostname -s)}"
 
-    _e2e_log_and_print "  $mark $(_e2e_yellow "[diag]") $description $(_e2e_yellow "[$_display_host:$PWD]")"
-    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
+    if [ -n "$host" ]; then
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_cyan "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+    else
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+    fi
+    _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
 
     if [ -n "$host" ]; then
         ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
@@ -1337,23 +1346,23 @@ e2e_run_must_fail() {
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
 
-    _e2e_log_and_print "  L $(_e2e_yellow "[EXPECT-FAIL]") $description $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
-    _e2e_log_and_print "    $(_e2e_cyan "$cmd")"
-    _e2e_log "    CMD (must-fail): $cmd"
-    _e2e_summary "  L $(_e2e_Yellow "[EXPECT-FAIL] $description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
-    _e2e_summary "    $(_e2e_Cyan "$cmd")"
+    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_green "$description") $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
+    _e2e_log "  CMD (must-fail): $cmd"
+    _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_Green "$description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_summary "  $(_e2e_Cyan "$cmd")"
 
     local ret=0
     ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
-        _e2e_log_and_print "    $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
-        _e2e_summary "    $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
+        _e2e_log_and_print "  $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
+        _e2e_summary "  $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
         return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
-        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
+        _e2e_log_and_print "  $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
+        _e2e_summary "  $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
         if [ -n "$_E2E_CURRENT_TEST" ]; then
             test_end 1
         fi
@@ -1378,11 +1387,11 @@ e2e_run_must_fail_remote() {
         exit 1
     fi
 
-    _e2e_log_and_print "  R $(_e2e_yellow "[EXPECT-FAIL]") $description"
-    _e2e_log_and_print "    $(_e2e_cyan "($cmd)")"
-    _e2e_log "    CMD (must-fail on $INTERNAL_BASTION): $cmd"
-    _e2e_summary "  R $(_e2e_Yellow "[EXPECT-FAIL] $description")"
-    _e2e_summary "    $(_e2e_Cyan "($cmd)")"
+    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_cyan "$description")"
+    _e2e_log_and_print "  $(_e2e_cyan "($cmd)")"
+    _e2e_log "  CMD (must-fail on $INTERNAL_BASTION): $cmd"
+    _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_Cyan "$description")"
+    _e2e_summary "  $(_e2e_Cyan "($cmd)")"
 
     local ret=0
     ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$INTERNAL_BASTION" -- \
@@ -1391,12 +1400,12 @@ e2e_run_must_fail_remote() {
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
-        _e2e_log_and_print "    $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
-        _e2e_summary "    $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
+        _e2e_log_and_print "  $(_e2e_green "[EXPECT-FAIL] OK: failed as expected ($(_e2e_exit_info $ret))")"
+        _e2e_summary "  $(_e2e_Green "[EXPECT-FAIL] OK ($(_e2e_exit_info $ret))")"
         return 0
     else
-        _e2e_log_and_print "    $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
-        _e2e_summary "    $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
+        _e2e_log_and_print "  $(_e2e_red "EXPECTED FAILURE but command succeeded: $description")"
+        _e2e_summary "  $(_e2e_Red "UNEXPECTED SUCCESS: $description -- aborting suite")"
         if [ -n "$_E2E_CURRENT_TEST" ]; then
             test_end 1
         fi
@@ -1411,8 +1420,8 @@ e2e_run_must_fail_remote() {
 
 _assert_fail() {
     local msg="$1"
-    _e2e_log_and_print "    $(_e2e_red "ASSERT FAIL: $msg")"
-    _e2e_summary "    $(_e2e_Red "ASSERT FAIL: $msg -- aborting suite")"
+    _e2e_log_and_print "  $(_e2e_red "ASSERT FAIL: $msg")"
+    _e2e_summary "  $(_e2e_Red "ASSERT FAIL: $msg -- aborting suite")"
     if [ -n "${_E2E_CURRENT_TEST:-}" ]; then
         test_end 1
     fi
