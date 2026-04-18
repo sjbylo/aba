@@ -686,6 +686,7 @@ normalize-vmware-conf()
 	# FIXME: Is this the right place to check?!
         if govc about | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
+		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
 		echo export VC=
 	else
 		echo "$vars"
