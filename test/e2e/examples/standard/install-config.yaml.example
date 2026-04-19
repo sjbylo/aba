@@ -34,7 +34,6 @@ platform:
           datacenter: Datacenter
           networks:
             - VM Network
-          resourcePool: "/Datacenter/host/Cluster/Resources"
           folder: "/Datacenter/vm/aba-e2e/pool1"
     vcenters:
       - datacenters:
