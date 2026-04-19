@@ -421,79 +421,7 @@ _create_tmux_dashboard() {
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		local _so="$_SSH_OPTS"
-		local _sess_name="${E2E_TMUX_SESSION:-e2e-suite}"
-		cat <<-DASHEOF
-		while true; do
-			_u=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
-			_u="\${_u:-${_user}}"
-			if ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name} 2>/dev/null' 2>/dev/null; then
-				_s=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
-				_os=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)
-				_vc=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)
-				_vt=""
-				[ -n "\$_vc" ] && [ "\$_vc" != "~/.vmware.conf" ] && _vt=" | \$(basename "\$_vc")"
-				printf '\033]2;dashboard | Pool ${_p} | %s | %s%s%s\033\\\\' "\$_s" "\$_u" "\${_os:+ | \$_os}" "\$_vt"
-				clear
-				ssh $_so \${_u}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null &
-				_tpid=\$!
-				_suite_done=
-				while kill -0 \$_tpid 2>/dev/null; do
-					sleep 10
-					_ns=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
-					[ -n "\$_ns" ] && [ "\$_ns" != "\$_s" ] && kill \$_tpid 2>/dev/null && break
-					# Check if suite finished (pane dead)
-					_pd=\$(ssh $_so \${_u}@${_h} "tmux list-panes -t '${_sess_name}' -F '#{pane_dead}' 2>/dev/null" 2>/dev/null)
-					if [ "\$_pd" = "1" ]; then
-						_suite_done=1
-						kill \$_tpid 2>/dev/null
-						break
-					fi
-				done
-				wait \$_tpid 2>/dev/null
-				# Suite finished -- show completion banner (no clear, preserves scrollback)
-				if [ "\$_suite_done" = "1" ]; then
-					_result=\$(ssh $_so \${_u}@${_h} "grep -E '(PASSED|FAILED):' ~/.e2e-harness/logs/\${_s}-summary.log 2>/dev/null | tail -1 | sed 's/\x1b\[[0-9;]*m//g'" 2>/dev/null)
-					_result=\$(echo "\$_result" | sed 's/^[0-9:]*[[:space:]]*//' | sed 's/=//g' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*\$//')
-					[ -z "\$_result" ] && _result="Suite ended (aborted or no result)"
-					_ts=\$(date '+%Y-%m-%d %H:%M:%S')
-					_meta="Pool ${_p} | \${_u}\${_os:+ | \$_os}\${_vt}"
-					echo ""
-					echo "================================================================================"
-					echo "  \$_result"
-					echo "  \$_meta"
-					echo "  Completed: \$_ts"
-					echo ""
-					echo "  Scroll up to review output. Waiting for next suite ..."
-					echo "================================================================================"
-					echo ""
-					_sr="DONE"
-					echo "\$_result" | grep -q "PASSED" && _sr="PASSED"
-					echo "\$_result" | grep -q "FAILED" && _sr="FAILED"
-					printf '\033]2;dashboard | Pool ${_p} | %s | %s%s%s\033\\\\' "\$_s" "\$_sr" "\${_os:+ | \$_os}" "\$_vt"
-					while true; do
-						sleep 5
-						_pd=\$(ssh $_so \${_u}@${_h} "tmux list-panes -t '${_sess_name}' -F '#{pane_dead}' 2>/dev/null" 2>/dev/null)
-						[ -z "\$_pd" ] && continue
-						[ "\$_pd" != "1" ] && break
-						if ! ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name} 2>/dev/null' 2>/dev/null; then
-							break
-						fi
-						_nu=\$(ssh $_so ${_user}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
-						_nu="\${_nu:-${_user}}"
-						if [ "\$_nu" != "\$_u" ]; then
-							ssh $_so \${_nu}@${_h} 'tmux has-session -t ${_sess_name} 2>/dev/null' 2>/dev/null && break
-						fi
-					done
-				fi
-			else
-				printf '\033]2;dashboard | Pool ${_p} | (idle)\033\\\\'
-				clear
-				echo 'No e2e session on pool ${_p}. Waiting for suite to start...'
-				sleep 5
-			fi
-		done
-		DASHEOF
+		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; clear; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!; while kill -0 \$_tpid 2>/dev/null; do sleep 10; _ns=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break; done; wait \$_tpid 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null
@@ -660,12 +588,13 @@ if [ -n "$CLI_STOP" ]; then
 		for (( _sp=1; _sp<=_OP_POOLS; _sp++ )); do _stop_list+=("$_sp"); done
 	fi
 	echo "Stopping runners on pool(s) ${_stop_list[*]} ..."
+	_rc_glob="${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*"
 	for p in "${_stop_list[@]}"; do
 		_host="con${p}.${_domain}"
 		printf "  con${p}: "
 		if ssh $_stop_ssh "${_user}@${_host}" "
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
-			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*
+			sudo rm -f $_rc_glob
 			echo stopped
 		"; then
 			:
@@ -784,12 +713,13 @@ if [ -n "$CLI_RESTART" ]; then
 	# 1) Stop
 	echo ""
 	echo "  [1/4] Stopping suites ..."
+	_rc_glob="${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock"
 	for p in "${_restart_pools[@]}"; do
 		_host="con${p}.${_domain}"
 		printf "    con${p}: "
 		if ssh $_restart_ssh "${_user}@${_host}" "
 			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
-			rm -f ${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock
+			sudo rm -f $_rc_glob
 			echo stopped
 		"; then
 			:
@@ -1139,26 +1069,30 @@ if [ -n "${CLI_LIVE+set}" ]; then
 
 	rm -rf /tmp/e2e-live.*
 	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
-	# The pane logic lives in scripts/live-pane.sh so it can be updated without
-	# restarting run.sh live.  The generated wrapper just sets env vars and loops.
-	_live_pane_script="${_ABA_ROOT}/test/e2e/scripts/live-pane.sh"
 	_live_create_script() {
 		local p=$1
+		local _h="con${p}.${_domain}"
 		local _so="-o LogLevel=ERROR -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 		local _script="${_live_script_dir}/pool${p}.sh"
-		cat > "$_script" <<-WRAPPER
-		#!/bin/bash
-		stty -ixon 2>/dev/null
-		export _POOL_NUM='${p}'
-		export _DOMAIN='${_domain}'
-		export _SSH_OPTS='${_so}'
-		export _DEFAULT_USER='${_default_user}'
-		export _LIVE_ID='${_live_id}'
-		export _E2E_TMUX_SESSION='${E2E_TMUX_SESSION:-e2e-suite}'
-		while true; do
-		    source '${_live_pane_script}'
-		done
-		WRAPPER
+		{
+			echo '#!/bin/bash'
+			echo 'stty -ixon 2>/dev/null'
+			echo "_MY_ID='${_live_id}'"
+		echo 'while true; do'
+		echo "  _owner=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)"
+		echo '  if [ -n "$_owner" ] && [ "$_owner" != "$_MY_ID" ]; then'
+		echo "    echo 'Another live dashboard took over pool ${p}. Exiting.'"
+		echo '    exit 0'
+		echo '  fi'
+		echo "  _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
+		printf "  printf '\\\\033]2;live | Pool %d (con%d)%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\"\n" "$p" "$p"
+		echo '  clear'
+		echo "  ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
+		echo "    echo 'No e2e session on pool ${p}. Waiting for suite to start...'"
+		echo '  }'
+		echo '  sleep 5'
+			echo 'done'
+		} > "$_script"
 		chmod +x "$_script"
 		echo "$_script"
 	}
@@ -1752,7 +1686,7 @@ _dispatch_suite() {
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
 	# Remove old rc/lock/pause files (stale pause files cause false PAUSED status)
-	_ssh_con "$pool_num" "rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
+	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
 	# Detect whether the SSH user changed since the last run on this pool.
 	# Must happen BEFORE _process_pool_cleanup_files so we can process the
@@ -2041,7 +1975,7 @@ _force_clean_all() {
 	for (( p=1; p<=_max_pools; p++ )); do
 		_ssh_con "$p" "
 			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
-			rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
+			sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
 		"
 		_process_pool_cleanup_files "$p"
 		echo "    con${p}: cleaned"
@@ -2055,7 +1989,7 @@ _force_clean_pool() {
 	echo "  --force --pool $pool_num: wiping suite state on con${pool_num} ..."
 	_ssh_con "$pool_num" "
 		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
-		rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
+		sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
 	"
 	_process_pool_cleanup_files "$pool_num"
 
@@ -2085,7 +2019,7 @@ _force_clean_suite() {
 			if [ \"\$running\" = '$suite' ]; then
 				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
 			fi
-			rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
+			sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
 		"
 		# Skip cleanup on pools running a different suite to avoid destroying their resources
 		if [ -n "${_busy_pools[$p]:-}" ] && [ "${_busy_pools[$p]}" != "$suite" ]; then
@@ -2487,7 +2421,7 @@ ${_inj_list}" < /dev/null >/dev/null
 				_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
 				_rp="${_result_pool[$_rs]:-}"
 				if [ -n "$_rp" ]; then
-					_ssh_con "$_rp" "rm -f '${_RC_PREFIX}-${_rs}.rc'"
+					_ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
 				fi
 				unset '_results[$_rs]'
 				_work_queue+=("$_rs")
