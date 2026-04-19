@@ -1733,7 +1733,7 @@ e2e_install_aba() {
 
 	if [ "$mode" = "curl" ]; then
 		e2e_run "Install ABA via curl" \
-			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && bash -c \"\\\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
+			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
 	else
 		e2e_run "Install ABA from git" \
 			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
