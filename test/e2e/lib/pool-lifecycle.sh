@@ -941,7 +941,7 @@ _vm_install_aba() {
     echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 
     _essh "${user}@${host}" -- "
-        rm -rf ~/aba
+        rm -rf ~/aba/* ~/aba/.??*
         git clone --depth 1 --branch $branch $repo_url ~/aba
         cd ~/aba && ./install
     "

@@ -58,9 +58,7 @@ suite_begin "vmw-lifecycle"
 # ============================================================================
 test_begin "Setup: ensure pre-populated registry"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 

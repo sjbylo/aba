@@ -62,9 +62,7 @@ test_begin "Setup: clean slate"
 e2e_run -q "Remove old files" \
     "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
 
@@ -244,7 +242,7 @@ test_end 0
 test_begin "Load bundle to internal bastion"
 
 e2e_run "Stream bundle to internal bastion" \
-    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba/* ~/aba/.??* && tar xf - -C ~'"
 e2e_run -q "Clean up local bundle tarball" "rm -fv ~/tmp/delete-me*tar"
 e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
 e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
