@@ -189,26 +189,69 @@ _vm_setup_time() {
 _vm_dnf_update() {
 	local host="$1"
 	local user="${2:-$VM_DEFAULT_USER}"
+	local poll_timeout=900
+	local poll_interval=20
 
-	echo "  [vm] Running dnf clean + update on $host ..."
+	echo "  [vm] Running dnf clean + update on $host (detached) ..."
 
-	cat <<-'DNFEOF' | _essh "${user}@${host}" -- sudo bash
-		set -ex
+	# Upload a script and run it via nohup so RPM scriptlets that
+	# restart sshd (e.g. grub2-common, openssh-server) don't kill
+	# the transaction mid-way.
+	cat <<-'SCRIPT' | _essh "${user}@${host}" -- "sudo tee /tmp/dnf-update.sh >/dev/null"
+		#!/bin/bash
+		rm -f /tmp/dnf-update.rc
 		for attempt in 1 2 3; do
 			dnf clean all
-			if dnf update -y 2>&1 | tee /tmp/dnf-update.log; then
-				echo "dnf-update exit=0 (attempt $attempt)"
+			if dnf update -y >>/tmp/dnf-update.log 2>&1; then
+				echo 0 > /tmp/dnf-update.rc
 				break
 			fi
 			if [ "$attempt" -eq 3 ]; then
-				echo "dnf-update FAILED after 3 attempts" >&2
+				echo 1 > /tmp/dnf-update.rc
 				exit 1
 			fi
-			echo "dnf-update attempt $attempt failed -- retrying in 30s ..."
+			echo "dnf-update attempt $attempt failed -- retrying in 30s" >> /tmp/dnf-update.log
 			sleep 30
 		done
-		dnf clean all
-	DNFEOF
+		dnf clean all >>/tmp/dnf-update.log 2>&1
+		[ ! -f /tmp/dnf-update.rc ] && echo 0 > /tmp/dnf-update.rc
+	SCRIPT
+
+	_essh "${user}@${host}" -- \
+		"sudo bash -c 'rm -f /tmp/dnf-update.rc /tmp/dnf-update.log; nohup bash /tmp/dnf-update.sh </dev/null >>/tmp/dnf-update.log 2>&1 &'"
+
+	# Poll for the marker file.  SSH may be briefly unreachable while
+	# sshd is restarted by an RPM scriptlet -- that is expected.
+	local elapsed=0
+	echo "  [vm] Polling for dnf update completion (timeout: ${poll_timeout}s) ..."
+	while [ $elapsed -lt $poll_timeout ]; do
+		sleep "$poll_interval"
+		elapsed=$(( elapsed + poll_interval ))
+
+		local rc
+		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc 2>/dev/null" 2>/dev/null) || true
+
+		if [ -n "$rc" ]; then
+			if [ "$rc" = "0" ]; then
+				echo "  [vm] dnf update succeeded after ~${elapsed}s"
+			else
+				echo "  [vm] dnf update FAILED (rc=$rc) after ~${elapsed}s" >&2
+				_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+				return 1
+			fi
+			break
+		fi
+
+		if [ $(( elapsed % 60 )) -eq 0 ]; then
+			echo "  [vm] dnf update still running (~${elapsed}s) ..."
+		fi
+	done
+
+	if [ $elapsed -ge $poll_timeout ]; then
+		echo "  [vm] ERROR: dnf update did not complete within ${poll_timeout}s" >&2
+		_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+		return 1
+	fi
 
 	echo "  [vm] Rebooting $host ..."
 	_essh "${user}@${host}" -- "sudo reboot" || true
@@ -693,6 +736,18 @@ _vm_provision_root_user() {
 		done
 	'"
 	echo "    proxy scripts -> /root/"
+
+	# Symlinks to redirect root's heavy data to /home (larger partition).
+	# ~/aba and ~/tmp on conN are never deleted outright by E2E code --
+	# only their contents are cleaned -- so these symlinks are stable.
+	_essh "${user}@${host}" -- "sudo bash -c '
+		mkdir -p /home/root/aba /home/root/tmp
+		chown root:root /home/root /home/root/aba /home/root/tmp
+		rm -rf /root/aba /root/tmp
+		ln -sfn /home/root/aba /root/aba
+		ln -sfn /home/root/tmp /root/tmp
+	'"
+	echo "    symlinks: /root/aba -> /home/root/aba, /root/tmp -> /home/root/tmp"
 
 	echo "  [vm] Root user provisioning complete on $host"
 }

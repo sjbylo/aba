@@ -118,6 +118,7 @@ e2e_run "Set operator sets in aba.conf" "aba --op-sets abatest"
 
 # Create mirror directory and mirror.conf (needed by the bundle command)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 
 # Read ocp_version/ocp_channel directly from aba.conf (no internal functions needed).
 ocp_version=$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
