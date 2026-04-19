@@ -386,6 +386,40 @@ The old (pre-v2) E2E tests supported this simply by using a different `vmware.co
 
 ---
 
+## Enhancement: Add backoff/retry delay when mirroring images with oc-mirror
+
+**Added**: 2026-04-18
+**Priority**: Medium
+
+### Problem
+
+When oc-mirror encounters transient failures (network blips, registry throttling, CDN rate-limits), it retries immediately. Rapid-fire retries against a throttling registry make the problem worse and can exhaust all attempts before the rate-limit window resets.
+
+### Proposed change
+
+Add an exponential backoff between oc-mirror retry attempts in `reg-save.sh`, `reg-sync.sh`, and `reg-load.sh`. Currently these scripts retry in a tight loop (`while` with immediate re-invocation). Add a configurable delay that increases with each attempt:
+
+```bash
+# Example: 30s, 60s, 120s, 240s between attempts
+_delay=30
+for (( attempt=1; attempt<=max_retries; attempt++ )); do
+    oc-mirror ... && break
+    echo "[ABA] oc-mirror attempt $attempt/$max_retries failed. Retrying in ${_delay}s ..."
+    sleep $_delay
+    _delay=$(( _delay * 2 ))
+    [ $_delay -gt 600 ] && _delay=600  # cap at 10 minutes
+done
+```
+
+Consider making the initial delay and max delay configurable via `~/.aba/config` (e.g. `OC_MIRROR_RETRY_DELAY=30`, `OC_MIRROR_RETRY_MAX_DELAY=600`).
+
+### Related
+
+- Bitmask exit codes backlog item (below) -- backoff logic pairs well with decoded exit codes for smarter retry decisions
+- CDN resilience improvements already in E2E framework (`stagger`, `sub-manager refresh`)
+
+---
+
 ## Enhancement: Use oc-mirror v2 bitmask exit codes for smarter error handling
 
 **Added**: 2026-04-15
@@ -702,6 +736,88 @@ Once `bundles/v2/` is the confirmed production pipeline, promote its contents up
 - Update `common.sh` `REPO_ROOT` path (one fewer `../`)
 - Update `.gitignore` (`bundles/v2/build.log` -> `bundles/build.log`)
 - Update path references in `CHANGELOG.md` and `ai/` docs
+
+---
+
+## Refactor: Replace `$regcreds_dir` with `regcreds/` symlink across all scripts
+
+**Added**: 2026-04-17
+**Priority**: Low (cleanup)
+
+### Problem
+
+21 scripts in `scripts/` manually compute `regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")` (mirror-side) or `regcreds_dir=$HOME/.aba/mirror/$mirror_name` (cluster-side). This is redundant because both `Makefile.mirror` and `Makefile.cluster` already create a `regcreds` symlink during `make init`:
+
+- Mirror dir: `ln -sfn ~/.aba/mirror/$(basename $PWD) regcreds` (Makefile.mirror line 71)
+- Cluster dir: `ln -sfn ~/.aba/mirror/$mirror_name regcreds` (Makefile.cluster line 72)
+
+Every script could just use `regcreds/` (relative path) instead of computing `$regcreds_dir`.
+
+### Affected scripts (21)
+
+Mirror-side (13): `reg-load.sh`, `reg-sync.sh`, `reg-install.sh`, `reg-verify.sh`, `reg-register.sh`, `reg-uninstall.sh`, `reg-uninstall-quay.sh`, `reg-uninstall-docker.sh`, `reg-uninstall-remote.sh`, `reg-unregister.sh`, `reg-existing-create-pull-secret.sh`, `reg-common.sh`, `add-operators-to-imageset.sh`
+
+Cluster-side (8): `day2.sh`, `day2-config-osus.sh`, `verify-config.sh`, `verify-release-image.sh`, `create-install-config.sh`, `create-agent-config.sh`, `generate-image.sh`, `cluster-info.sh`
+
+### Change
+
+For each script: remove `export regcreds_dir=...` line, replace all `$regcreds_dir` references with `regcreds`. The `regcreds` symlink is guaranteed to exist because every script runs after `make init`.
+
+Also update `create-containers-auth.sh` which reads `$regcreds_dir` from the caller's environment -- change it to use `regcreds/` directly.
+
+### Risk
+
+Low -- the symlink is already created and used by Makefiles. The only risk is if a script is called from a directory where `regcreds` symlink doesn't exist (but all scripts are called via Make targets which ensure `.init` ran first).
+
+---
+
+## Enhancement: Add `aba_debug` before every important CLI invocation
+
+**Added**: 2026-04-17
+**Priority**: Medium (improves debuggability)
+
+### Problem
+
+When debugging ABA failures, it's often unclear exactly which CLI command was executed and with what arguments. Some scripts already have `aba_debug "Running: $cmd"` (e.g. `vmw-create.sh`), but coverage is inconsistent. Many critical CLI calls have no debug logging at all.
+
+### Proposed change
+
+Add `aba_debug` lines before every invocation of the following CLIs, logging the exact command with all arguments:
+
+**High priority (`~/bin/` -- ABA-managed, critical path):**
+- `oc-mirror` -- long-running, error-prone, complex args (save/load/sync)
+- `oc` -- cluster operations, day2, monitoring (`oc apply`, `oc get`, `oc adm`, etc.)
+- `govc` -- VMware operations (`vm.clone`, `vm.power`, `vm.destroy`, `snapshot.*`, etc.)
+- `openshift-install` -- agent-based install (`create`, `wait-for bootstrap-complete/install-complete`)
+- `opm` -- operator catalog operations
+- `kubectl` -- cluster access (where used instead of `oc`)
+- `yq` -- YAML processing (where non-trivial transformations occur)
+
+**Medium priority (system CLIs, important for diagnostics):**
+- `podman` -- registry container lifecycle, image operations
+- `virsh` -- KVM VM operations (create, start, stop, destroy, desc)
+- `nmcli` -- network configuration during VM setup
+- `curl` -- registry connectivity checks, downloads (where not already logged)
+
+**Format:** Use consistent pattern:
+```bash
+aba_debug "Running: oc-mirror --v2 --config imageset-config.yaml file://. --since 2020-01-01"
+```
+
+For commands built dynamically in variables:
+```bash
+aba_debug "Running: $cmd"
+```
+
+### Scope
+
+Audit all `scripts/*.sh` files. Some already have debug logging (e.g. `vmw-create.sh` has `aba_debug Running: $cmd` for govc calls). Fill in the gaps -- don't duplicate existing debug lines.
+
+### Notes
+
+- `aba_debug` output is only visible when `ABA_DEBUG=1` or `--debug` is passed, so this adds zero noise in normal operation
+- Particularly valuable for `oc-mirror` failures where the exact flags matter (e.g. `--since`, `--config`, `--from`)
+- Also valuable for `govc` where the resource path, datastore, and folder args are often the source of bugs
 
 ---
 
