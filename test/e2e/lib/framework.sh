@@ -206,18 +206,20 @@ _e2e_color_always() {
     printf '\033[%sm%s\033[0m' "$code" "$*"
 }
 
-_e2e_red()    { _e2e_color "0;31" "$@"; }
-_e2e_green()  { _e2e_color "0;32" "$@"; }
-_e2e_yellow() { _e2e_color "0;33" "$@"; }
-_e2e_cyan()   { _e2e_color "0;36" "$@"; }
-_e2e_bold()   { _e2e_color "1"    "$@"; }
+_e2e_red()     { _e2e_color "0;31" "$@"; }
+_e2e_green()   { _e2e_color "0;32" "$@"; }
+_e2e_yellow()  { _e2e_color "0;33" "$@"; }
+_e2e_magenta() { _e2e_color "1;34" "$@"; }  # bold blue (color-blind safe vs green)
+_e2e_cyan()    { _e2e_color "0;36" "$@"; }
+_e2e_bold()    { _e2e_color "1"    "$@"; }
 
 # Always-colored variants (for summary log, always readable via tail -f)
-_e2e_Red()    { _e2e_color_always "1;31" "$@"; }
-_e2e_Green()  { _e2e_color_always "1;32" "$@"; }
-_e2e_Yellow() { _e2e_color_always "1;33" "$@"; }
-_e2e_Cyan()   { _e2e_color_always "1;36" "$@"; }
-_e2e_Bold()   { _e2e_color_always "1"    "$@"; }
+_e2e_Red()     { _e2e_color_always "1;31" "$@"; }
+_e2e_Green()   { _e2e_color_always "1;32" "$@"; }
+_e2e_Yellow()  { _e2e_color_always "1;33" "$@"; }
+_e2e_Magenta() { _e2e_color_always "1;34" "$@"; }  # bold blue (color-blind safe)
+_e2e_Cyan()    { _e2e_color_always "1;36" "$@"; }
+_e2e_Bold()    { _e2e_color_always "1"    "$@"; }
 
 # --- Logging ----------------------------------------------------------------
 
@@ -828,7 +830,7 @@ _interactive_prompt() {
                 ;;
             r|R|"")
                 rm -f "$_paused_file"
-                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ...")"
+                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $cmd"
                 return 2
                 ;;
             s)
@@ -975,14 +977,16 @@ e2e_run() {
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Magenta "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_magenta "$cmd")"
+        _e2e_summary "  $(_e2e_Magenta "$cmd")"
     else
         _e2e_log_and_print "  $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
         _e2e_summary "  $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
+        _e2e_summary "  $(_e2e_Cyan "$cmd")"
     fi
-    _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
-    _e2e_summary "  $(_e2e_Cyan "$cmd")"
 
     local _step_start
     _step_start=$(date +%s)
@@ -1095,7 +1099,11 @@ e2e_run() {
                 _e2e_log_and_print "  Applied ImagePrunerJobFailed workaround before retry"
 
             attempt=$(( attempt + 1 ))
-            echo "  Next attempt ($attempt/$tot_cnt) in ${sleep_time}s ..."
+            if [ -n "$host" ]; then
+                _e2e_log_and_print "  >> $(_e2e_magenta "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $(_e2e_magenta "$cmd")"
+            else
+                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $cmd"
+            fi
             sleep "$sleep_time"
             sleep_time=$(awk -v s="$sleep_time" -v b="$backoff" 'BEGIN {print int(s * b)}')
             [ "$sleep_time" -gt "$max_delay" ] && sleep_time="$max_delay"
@@ -1255,11 +1263,12 @@ e2e_diag() {
     local _display_host="${host:-$USER@$(hostname -s)}"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_cyan "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_magenta "$cmd")"
     else
         _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
     fi
-    _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
 
     if [ -n "$host" ]; then
         ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
@@ -1387,11 +1396,11 @@ e2e_run_must_fail_remote() {
         exit 1
     fi
 
-    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_cyan "$description")"
-    _e2e_log_and_print "  $(_e2e_cyan "($cmd)")"
+    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_magenta "$description")"
+    _e2e_log_and_print "  $(_e2e_magenta "($cmd)")"
     _e2e_log "  CMD (must-fail on $INTERNAL_BASTION): $cmd"
-    _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_Cyan "$description")"
-    _e2e_summary "  $(_e2e_Cyan "($cmd)")"
+    _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_Magenta "$description")"
+    _e2e_summary "  $(_e2e_Magenta "($cmd)")"
 
     local ret=0
     ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$INTERNAL_BASTION" -- \
