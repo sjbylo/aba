@@ -69,7 +69,9 @@ e2e_run "Install ABA from git" \
 cd ~/aba
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Remove oc-mirror caches" \
+e2e_run "Remove oc-mirror caches (conN)" \
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+e2e_run_remote -q "Remove oc-mirror caches (disN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Configure aba.conf" \
@@ -121,6 +123,7 @@ e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
     "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"

@@ -23,6 +23,14 @@ _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$HOME/aba"
 export _ABA_ROOT
 
+# For root, redirect mirror data (oc-mirror cache, registry, TMPDIR) to /home
+# via ABA's existing data_dir mechanism. Suites use E2E_DATA_DIR with --data-dir.
+if [ "$(id -u)" = "0" ]; then
+	export E2E_DATA_DIR="/home/root"
+else
+	export E2E_DATA_DIR=""
+fi
+
 source "$_RUNNER_DIR/lib/constants.sh"
 
 # --- Parse arguments ----------------------------------------------------------
@@ -120,6 +128,8 @@ _cleanup_non_mirror_local() {
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
 	rm -rf ~/tmp/*
+	# When root uses data_dir=/home/root, caches land there instead of /root
+	[ -d /home/root ] && sudo rm -rf /home/root/.oc-mirror /home/root/.cache/agent /home/root/.tmp /home/root/tmp/*
 
 	# When switching between --user root and --user steve (or any user), the
 	# OTHER user's home may still contain large artifacts from a previous run.
@@ -547,11 +557,15 @@ _cleanup_dis_aba() {
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		# Try aba uninstall if .available exists OR if ~/aba/mirror dir exists
-		# (covers interrupted installs where .available was never created)
+		# (covers interrupted installs where .available was never created).
+		# Also check /home/root/aba for root's data_dir-redirected paths.
 		_essh "$_uhost" "
-			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
+			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ] || \
+			   [ -f /home/root/aba/mirror/.available ] || [ -d /home/root/aba/mirror ]; then
+				_aba_dir=~/aba
+				[ -d /home/root/aba/mirror ] && _aba_dir=/home/root/aba
 				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
-				cd ~/aba && aba -y -d mirror uninstall || true
+				cd \$_aba_dir && aba -y -d mirror uninstall || true
 			fi
 		" 2>&1 || echo "  [cleanup] WARNING: aba uninstall as $_try_user on disN failed (rc=$?)"
 	done
@@ -561,10 +575,12 @@ _cleanup_dis_aba() {
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "rm -rf ~/aba ~/bin ~/tmp ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+		# Also clean /home/root if root used data_dir=/home/root (symlinks + data_dir)
+		_essh "$_uhost" "sudo rm -rf /home/root/aba /home/root/tmp /home/root/.oc-mirror /home/root/.cache /home/root/.tmp" 2>&1
 		# Mirror data dirs may contain files owned by container-mapped UIDs
 		# (rootless podman UID remapping), so sudo is needed for cleanup.
 		for _mdir in $_E2E_MIRROR_DATA_DIRS; do
-			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
+			_essh "$_uhost" "sudo rm -rf ~/$_mdir /home/root/$_mdir" 2>&1
 		done
 	done
 	# Remove stale CA trust anchors from previous registry installs

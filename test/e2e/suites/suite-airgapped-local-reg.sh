@@ -75,7 +75,9 @@ e2e_run "Install ABA from git" \
 cd ~/aba
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Remove oc-mirror caches" \
+e2e_run "Remove oc-mirror caches (conN)" \
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+e2e_run_remote -q "Remove oc-mirror caches (disN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
@@ -100,6 +102,7 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set mirror hostname in mirror.conf" \
     "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
