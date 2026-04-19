@@ -29,6 +29,7 @@ umask 077
 
 aba_debug "Loading and validating configuration"
 source <(normalize-aba-conf)
+source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration validated"
