@@ -574,9 +574,7 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "rm -rf ~/aba ~/bin ~/tmp ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
-		# Also clean /home/root if root used data_dir=/home/root (symlinks + data_dir)
-		_essh "$_uhost" "sudo rm -rf /home/root/aba /home/root/tmp /home/root/.oc-mirror /home/root/.cache /home/root/.tmp" 2>&1
+		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/tmp/.??* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
 		# Mirror data dirs may contain files owned by container-mapped UIDs
 		# (rootless podman UID remapping), so sudo is needed for cleanup.
 		for _mdir in $_E2E_MIRROR_DATA_DIRS; do

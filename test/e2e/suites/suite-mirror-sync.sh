@@ -53,9 +53,7 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \

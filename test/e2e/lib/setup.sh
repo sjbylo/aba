@@ -107,7 +107,7 @@ reset_internal_bastion() {
 
     # 3. Clean slate on disN: remove aba tree and caches.
     e2e_run_remote "Remove aba tree on internal bastion" \
-        "rm -rf ~/aba"
+        "rm -rf ~/aba/* ~/aba/.??*"
     # Disabled: destroys podman internal state (pause process), causing
     # "invalid internal status" on next run. aba uninstall above is sufficient.
     #e2e_run_remote "Clean podman images on internal bastion" \
