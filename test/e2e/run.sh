@@ -1504,25 +1504,59 @@ else
 	_check_pools=()
 	for (( _cp=1; _cp<=CLI_POOLS; _cp++ )); do _check_pools+=("$_cp"); done
 fi
+
+# Per-pool OS tracking: detect when --os changes require a VM rebuild.
+# Tracked on bastion (not conN) so it's available before the readiness check.
+_POOL_OS_DIR="$_RUN_DIR/.pool-os"
+mkdir -p "$_POOL_OS_DIR"
+_cur_os="${INT_BASTION_RHEL_VER:-rhel8}"
+declare -a _pools_needing_reclone=()
+
 for i in "${_check_pools[@]}"; do
+	_pool_os_file="$_POOL_OS_DIR/pool-${i}"
 	if [ -n "$CLI_RECREATE_VMS" ]; then
 		echo "  Pool $i: will be recreated (--recreate-vms)"
 		_need_infra=1
+	elif [ -f "$_pool_os_file" ] && [ "$(cat "$_pool_os_file")" != "$_cur_os" ]; then
+		echo "  Pool $i: OS changed ($(cat "$_pool_os_file") -> $_cur_os) -- VMs will be recloned"
+		_pools_needing_reclone+=("$i")
+		_need_infra=1
 	elif _vms_ready "$i"; then
 		echo "  Pool $i: ready"
+		echo "$_cur_os" > "$_pool_os_file"
 	else
 		_need_infra=1
 	fi
 done
 
+# If only some pools need recloning (OS change), destroy their snapshots so
+# setup-infra.sh rebuilds them without --recreate-vms (which is global).
+if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "$CLI_RECREATE_VMS" ]; then
+	for i in "${_pools_needing_reclone[@]}"; do
+		for prefix in con dis; do
+			vm="${prefix}${i}"
+			if vm_exists "$vm" > /dev/null 2>&1; then
+				echo "  Destroying $vm (OS mismatch) ..."
+				govc vm.power -off "$vm" 2>/dev/null || true
+				govc vm.destroy "$vm" 2>/dev/null || true
+			fi
+		done
+	done
+fi
+
 if [ -n "$_need_infra" ] || [ -n "$CLI_RECREATE_GOLDEN" ] || [ -n "$CLI_RECREATE_VMS" ]; then
 	echo ""
 	echo "  Running setup-infra.sh ..."
 	_infra_flags="--pools $CLI_POOLS --pools-file $CLI_POOLS_FILE"
+	[ -n "$CLI_POOL" ]            && _infra_flags+=" --pool $CLI_POOL"
 	[ -n "$CLI_RECREATE_GOLDEN" ] && _infra_flags+=" --recreate-golden"
 	[ -n "$CLI_RECREATE_VMS" ]    && _infra_flags+=" --recreate-vms"
 	[ -n "$CLI_YES" ]             && _infra_flags+=" --yes"
 	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+	# Record OS for rebuilt pools
+	for i in "${_check_pools[@]}"; do
+		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${i}"
+	done
 fi
 
 # --- Revert pool VMs to pool-ready snapshot (optional) ------------------------
@@ -2307,7 +2341,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$_DEPLOY_CONFIG_ENV"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH"' EXIT
 
 declare -A _retried=()
 _MAX_RETRIES=2
