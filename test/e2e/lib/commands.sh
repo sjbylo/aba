@@ -268,19 +268,15 @@ cmd_verify() {
 	local run_dir="$2"
 	local pools_file="${run_dir}/pools.conf"
 
-	# Count pools to pass as --pools N (setup-infra.sh expects a count)
-	local _count=0
-	local _p
-	for _p in $pool_list; do
-		_count=$(( _count + 1 ))
-	done
-
 	echo ""
 	echo "=== Verifying pool VMs (pools ${pool_list}) ==="
-	"$BASH" "${run_dir}/setup-infra.sh" --verify --pools "$_count" --pools-file "$pools_file" || {
-		echo "FATAL: Verification failed" >&2
-		return 1
-	}
+	local _p
+	for _p in $pool_list; do
+		"$BASH" "${run_dir}/setup-infra.sh" --verify --pool "$_p" --pools-file "$pools_file" || {
+			echo "FATAL: Verification of pool $_p failed" >&2
+			return 1
+		}
+	done
 }
 
 # --- list --------------------------------------------------------------------
