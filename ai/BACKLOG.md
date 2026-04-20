@@ -1109,3 +1109,46 @@ The `aba` CLI and Makefiles would `export ABA_CALLED_VIA_MAKE=1` or `ABA_CALLED_
 - E2E tests that call `aba` CLI are fine (they go through the proper path)
 - The guard variable name should be documented in `dev/SPEC.md`
 
+---
+
+## Review and simplify `vmw-create-folder.sh`
+
+**Priority:** Low
+**Added:** 2026-04-15
+
+### Problem
+
+`scripts/vmw-create-folder.sh` has complex retry/fallback logic for creating vSphere folders (iteratively stripping path components and rebuilding). It's unclear whether this complexity is still needed or whether a simpler approach (e.g. single `govc folder.create` with proper error handling) would suffice.
+
+### Action items
+
+- Review whether vSphere/ESXi actually requires the incremental folder-creation logic
+- Determine if `govc folder.create` can handle nested paths in one call (may depend on govc version)
+- Simplify if possible, or add comments explaining why the complexity is necessary
+- Verify the script is actually called (check Makefiles for the target that invokes it)
+- Consider whether ESXi vs vCenter behavior differs here
+
+---
+
+## Improve `aba refresh` confirmation UX
+
+**Priority:** Low
+**Added:** 2026-04-15
+
+### Problem
+
+`aba refresh` (which calls `vmw-refresh.sh` / `kvm-refresh.sh`) has an awkward user experience:
+
+1. It asks **twice** to delete existing VMs (once in refresh, once in the underlying delete script)
+2. It asks for confirmation **even when no VMs exist** (nothing to delete)
+
+This makes the command feel clunky and unpolished, especially for new users.
+
+### Action items
+
+- Review the refresh flow: `aba refresh` → `{vmw,kvm}-refresh.sh` → `{vmw,kvm}-delete.sh` + `{vmw,kvm}-create.sh`
+- Pass a flag (e.g. `--yes` or `ask=`) from refresh to delete to skip the redundant second prompt
+- Check for existing VMs before prompting -- if none exist, skip the delete confirmation entirely
+- Ensure the single prompt clearly communicates what will happen (delete + recreate)
+- Test with both VMware and KVM paths
+
