@@ -206,8 +206,17 @@ _e2e_fmt_duration() {
 # changed to always emit colors, making both functions identical.
 #
 # The two-tier naming convention is still useful:
-#   lowercase (_e2e_green)  -- regular weight (0;32), used by _e2e_log_and_print
-#   Uppercase (_e2e_Green)  -- bold weight (1;32), used by _e2e_summary for logs
+#   lowercase (_e2e_green)  -- regular weight, used by _e2e_log_and_print
+#   Uppercase (_e2e_Green)  -- bold weight, used by _e2e_summary for logs
+#
+# Color assignments (what each color means in the UI):
+#   white/White (0;97)  -- local test descriptions (bright white, distinct from Suite header)
+#   magenta/Magenta     -- remote test descriptions (bold blue, color-blind safe vs green)
+#   green/Green         -- OK / PASS status
+#   red/Red             -- FAIL status
+#   yellow/Yellow       -- warnings, [diag], [EXPECT-FAIL] tags, SKIP status
+#   cyan/Cyan           -- test names (plan table + header), commands, RUNNING status, retry messages
+#   bold/Bold (1)       -- Suite header (bold default foreground)
 #
 # If conditional coloring is ever needed, the fix is to cache the original
 # stdout fd before tee and test that instead of [ -t 1 ].
@@ -227,6 +236,7 @@ _e2e_green()   { _e2e_color "0;32" "$@"; }
 _e2e_yellow()  { _e2e_color "0;33" "$@"; }
 _e2e_magenta() { _e2e_color "1;34" "$@"; }  # bold blue (color-blind safe vs green)
 _e2e_cyan()    { _e2e_color "0;36" "$@"; }
+_e2e_white()   { _e2e_color "0;97" "$@"; }  # bright white (distinct from bold-default Suite header)
 _e2e_bold()    { _e2e_color "1"    "$@"; }
 
 # Bold/always-colored variants (for summary log, viewed via tail -f / run.sh dash)
@@ -235,6 +245,7 @@ _e2e_Green()   { _e2e_color_always "1;32" "$@"; }
 _e2e_Yellow()  { _e2e_color_always "1;33" "$@"; }
 _e2e_Magenta() { _e2e_color_always "1;34" "$@"; }  # bold blue (color-blind safe)
 _e2e_Cyan()    { _e2e_color_always "1;36" "$@"; }
+_e2e_White()   { _e2e_color_always "0;97" "$@"; }  # bright white (for summary log)
 _e2e_Bold()    { _e2e_color_always "1"    "$@"; }
 
 # --- Logging ----------------------------------------------------------------
@@ -368,7 +379,7 @@ _print_progress() {
             DONE)    status_str="$(_e2e_green "DONE (resumed)")"; status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
             *)       status_str="  --";                          status_str_color="  --" ;;
         esac
-        printf "  %-${_col}s %s\n" "${_E2E_PLAN_NAMES[$i]}" "$status_str"
+        printf "  %s %s\n" "$(_e2e_cyan "$(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}")")" "$status_str"
     done
 
     _e2e_draw_line "="
@@ -396,7 +407,7 @@ _print_progress() {
             DONE)    status_str_color="$(_e2e_Green "DONE (resumed)")" ;;
             *)       status_str_color="  --" ;;
         esac
-        _e2e_summary "  $(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}") $status_str_color"
+        _e2e_summary "  $(_e2e_Cyan "$(printf "%-${_col}s" "${_E2E_PLAN_NAMES[$i]}")") $status_str_color"
     done
     printf -v _line '%*s' $(( _col + 20 )) '' ; _line="${_line// /=}"
     _e2e_summary "  $_line"
@@ -996,8 +1007,8 @@ e2e_run() {
         _e2e_log_and_print "  $(_e2e_magenta "$description") $(_e2e_magenta "[$_display_host:$PWD]")"
         _e2e_summary "  $(_e2e_Magenta "$description") $(_e2e_Magenta "[$_display_host:$PWD]")"
     else
-        _e2e_log_and_print "  $(_e2e_bold "$(_e2e_green "$description")") $(_e2e_green "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Green "$description") $(_e2e_Green "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"
     fi
     _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
     _e2e_summary "  $(_e2e_Cyan "$cmd")"
@@ -1280,7 +1291,7 @@ e2e_diag() {
         _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
         _e2e_log_and_print "  $(_e2e_magenta "$cmd")"
     else
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_bold "$(_e2e_green "$description")") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_white "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
         _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
     fi
 
@@ -1369,10 +1380,10 @@ e2e_run_must_fail() {
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
 
-    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_bold "$(_e2e_green "$description")") $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_white "$description") $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
     _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
     _e2e_log "  CMD (must-fail): $cmd"
-    _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_Green "$description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_White "$description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
     _e2e_summary "  $(_e2e_Cyan "$cmd")"
 
     local ret=0

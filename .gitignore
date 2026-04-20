@@ -89,3 +89,5 @@ test/e2e/.e2e-last-run
 .cursor/
 ai/aba-installations-chart.html
 e2e-parallel.log.*
+ai/OPP*docx
+ai/OPP*pdf
