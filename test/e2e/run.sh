@@ -180,7 +180,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 				while IFS=" " read -r tgt path; do
 					[ -z "$path" ] && continue
 					echo "  cluster: $tgt $path"
-					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' delete || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
+					$_ssh "$tgt" "[ -d '\''$path'\'' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\''$path'\'' delete || make -C '\''$path'\'' delete; } || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
 				done < "$f"
 				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
 			done
@@ -192,7 +192,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 				while IFS=" " read -r tgt path; do
 					[ -z "$path" ] && continue
 					echo "  mirror: $tgt $path"
-					$_ssh "$tgt" "[ -d '\''$path'\'' ] && aba -y -d '\''$path'\'' uninstall || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
+					$_ssh "$tgt" "[ -d '\''$path'\'' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\''$path'\'' uninstall || make -C '\''$path'\'' uninstall; } || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
 				done < "$f"
 				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
 			done
@@ -386,11 +386,11 @@ if [ -n "${CLI_REVERT:-}" ]; then
 					while IFS=' ' read -r target abs_path; do
 						[ -z \"\$abs_path\" ] && continue
 						if echo \"\$f\" | grep -q '\.cleanup\$'; then
-							echo \"        \$target: aba -y -d \$abs_path delete\"
-							ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" < /dev/null 2>&1 || true
+							echo \"        \$target: delete \$abs_path\"
+							ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; }\" < /dev/null 2>&1 || true
 						else
-							echo \"        \$target: aba -y -d \$abs_path uninstall\"
-							ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" < /dev/null 2>&1 || true
+							echo \"        \$target: uninstall \$abs_path\"
+							ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; }\" < /dev/null 2>&1 || true
 						fi
 					done < \"\$f\"
 					rm -f \"\$f\"
