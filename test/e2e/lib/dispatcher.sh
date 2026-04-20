@@ -92,11 +92,11 @@ _dispatch_suite() {
 				while IFS=' ' read -r target abs_path; do
 					[ -z \"\$abs_path\" ] && continue
 					if echo \"\$f\" | grep -q '\.cleanup\$'; then
-						echo \"        \$target: aba -y -d \$abs_path delete\"
-						ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" < /dev/null 2>&1 || true
+						echo \"        \$target: delete \$abs_path\"
+						ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; }\" < /dev/null 2>&1 || true
 					else
-						echo \"        \$target: aba -y -d \$abs_path uninstall\"
-						ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" < /dev/null 2>&1 || true
+						echo \"        \$target: uninstall \$abs_path\"
+						ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; }\" < /dev/null 2>&1 || true
 					fi
 				done < \"\$f\"
 				rm -f \"\$f\"

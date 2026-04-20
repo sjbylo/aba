@@ -113,16 +113,15 @@ _vm_setup_ssh_keys() {
 		set -ex
 		mkdir -p /root/.ssh
 		chmod 700 /root/.ssh
-		echo '${pub_key}' > /root/.ssh/authorized_keys
+		grep -qF '${pub_key}' /root/.ssh/authorized_keys 2>/dev/null || echo '${pub_key}' >> /root/.ssh/authorized_keys
 		chmod 600 /root/.ssh/authorized_keys
 
-		# Also add the bastion's key to the user account (run.sh connects as user, not root)
 		mkdir -p /home/${user}/.ssh
-		grep -qF '${pub_key}' /home/${user}/.ssh/authorized_keys || echo '${pub_key}' >> /home/${user}/.ssh/authorized_keys
+		grep -qF '${pub_key}' /home/${user}/.ssh/authorized_keys 2>/dev/null || echo '${pub_key}' >> /home/${user}/.ssh/authorized_keys
 		chmod 600 /home/${user}/.ssh/authorized_keys
 		chown -R ${user}:${user} /home/${user}/.ssh
 
-		[ -f /home/${user}/.ssh/config ] && cp /home/${user}/.ssh/config /root/.ssh/config
+		[ -f /home/${user}/.ssh/config ] && [ ! -f /root/.ssh/config ] && cp /home/${user}/.ssh/config /root/.ssh/config
 
 		sed -i '/^ClientAliveInterval/d; /^ClientAliveCountMax/d' /etc/ssh/sshd_config
 		echo "ClientAliveInterval 60"  >> /etc/ssh/sshd_config
