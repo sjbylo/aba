@@ -1,6 +1,6 @@
 ## [Unreleased]
 
-Feature-complete release with reliability hardening across oc-mirror workflows, VM lifecycle, and cluster operations.
+Stability and reliability improvements.
 
 ### Improvements
 - **Unified spinner/progress UI (`aba_wait_show`)** - All long-running polling loops (cluster startup, VM power-on/off, OSUS install, day2 operations) now use a consistent background spinner with timeout display, replacing inconsistent dot-printing and silent waits. Includes `parse_duration()` for human-readable time config values.
