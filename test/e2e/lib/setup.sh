@@ -13,7 +13,7 @@ if ! type remote_exec &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
 fi
 if ! type configure_internal_bastion &>/dev/null; then
-    source "$_E2E_LIB_DIR_SU/pool-lifecycle.sh"
+    source "$_E2E_LIB_DIR_SU/pool-ops.sh"
 fi
 
 # --- setup_bastion ----------------------------------------------------------

@@ -16,7 +16,7 @@ _h="con${_POOL_NUM}.${_DOMAIN}"
 _sess="${_E2E_TMUX_SESSION:-e2e-suite}"
 
 # Detect which user owns the tmux session on this pool
-_suite_user=$(ssh $_SSH_OPTS steve@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
+_suite_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
 _user="${_suite_user:-$_DEFAULT_USER}"
 
 # Check if another live dashboard took over this pool
@@ -90,7 +90,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 			_gone_count=0
 
 			# Re-check user in case a new suite started as a different user
-			_new_user=$(ssh $_SSH_OPTS steve@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
+			_new_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
 			_new_user="${_new_user:-$_DEFAULT_USER}"
 			if [ "$_new_user" != "$_user" ]; then
 				if ssh $_SSH_OPTS ${_new_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/dev/null; then

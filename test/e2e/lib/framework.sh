@@ -778,6 +778,30 @@ e2e_add_to_mirror_cleanup() {
 	_e2e_log "  Added mirror to cleanup list: $entry"
 }
 
+# Remove a mirror from the cleanup list after successful uninstall.
+#   e2e_remove_from_mirror_cleanup "$PWD/mirror"              # local
+#   e2e_remove_from_mirror_cleanup "$PWD/mirror" remote       # remote
+e2e_remove_from_mirror_cleanup() {
+	local abs_path="$1"
+	local location="${2:-local}"
+	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
+	[ -f "$cleanup_file" ] || return 0
+
+	local target
+	if [ "$location" = "remote" ]; then
+		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	else
+		target="$(whoami)@$(hostname -f)"
+	fi
+
+	local entry="$target $abs_path"
+	local tmp="${cleanup_file}.tmp"
+	grep -vxF "$entry" "$cleanup_file" > "$tmp" 2>/dev/null || true
+	mv "$tmp" "$cleanup_file"
+	[ -s "$cleanup_file" ] || rm -f "$cleanup_file"
+	_e2e_log "  Removed mirror from cleanup list: $entry"
+}
+
 # Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
 # Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_mirrors() {
@@ -864,9 +888,7 @@ _interactive_prompt() {
                 ;;
             s)
                 rm -f "$_paused_file"
-                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test -- cleaning up ...")"
-                e2e_cleanup_clusters
-                e2e_cleanup_mirrors
+                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test -- continuing to next test")"
                 return 0
                 ;;
             S)
