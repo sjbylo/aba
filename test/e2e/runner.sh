@@ -84,8 +84,9 @@ rm -f "$RC_FILE"
 # clean up clusters/mirrors in the cleanup lists.  This ensures VMs are deleted
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
+# Use sudo to remove previous user's files (cross-user switch)
+sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
 echo "$SUITE" > /tmp/e2e-last-suites
-sudo rm -f /tmp/e2e-suite-user
 whoami > /tmp/e2e-suite-user
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
@@ -103,7 +104,7 @@ echo ""
 
 source "$_RUNNER_DIR/lib/framework.sh"
 source "$_RUNNER_DIR/lib/config-helpers.sh"
-source "$_RUNNER_DIR/lib/vm-helpers.sh"
+source "$_RUNNER_DIR/lib/vm-ops.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
 # Framework's own bin directory -- never deleted by suite cleanup.
@@ -682,9 +683,9 @@ _start_time=$(date +%s)
 
 suite_file="$_RUNNER_DIR/suites/suite-${SUITE}.sh"
 if [ ! -f "$suite_file" ]; then
-	echo "  ERROR: Suite file not found: $suite_file"
-	echo "1" > "$RC_FILE"
-	exit 1
+	echo "  ERROR: Suite file not found: $suite_file (harness incomplete?)"
+	echo "99" > "$RC_FILE"
+	exit 99
 fi
 
 # Resume mode: point E2E_RESUME_FILE at the previous run's state file
@@ -815,13 +816,13 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 				echo "  Installed govc to $_FRAMEWORK_BIN/govc"
 			fi
 		fi
-		if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
-			echo ""
-			echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
-			echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
-			echo "1" > "$RC_FILE"
-			exit 1
-		fi
+	if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
+		echo ""
+		echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
+		echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
+		echo "99" > "$RC_FILE"
+		exit 99
+	fi
 	fi
 
 	# Check for orphan VMs FIRST, before any cleanup runs.
@@ -835,8 +836,8 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		echo "  FATAL: pre-suite cleanup failed. Stale clusters/mirrors could not be deleted."
 		echo "  Investigate the failure above, fix it manually, then re-run the suite."
 		echo ""
-		echo "1" > "$RC_FILE"
-		exit 1
+		echo "99" > "$RC_FILE"
+		exit 99
 	fi
 	if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 		# Legacy path: VMware snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1)
@@ -846,8 +847,8 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
 			echo "  clone-and-check (or setup-infra Phase 3) for this pool."
 			echo ""
-			echo "1" > "$RC_FILE"
-			exit 1
+			echo "99" > "$RC_FILE"
+			exit 99
 		}
 	else
 		# Default: clean disN using ABA's own commands (exercises product code paths)
@@ -856,8 +857,8 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			echo "  ERROR: disN cleanup failed -- cannot proceed with a dirty disN."
 			echo "  Check SSH connectivity and disk state on ${DIS_VM}.${VM_BASE_DOMAIN}"
 			echo ""
-			echo "1" > "$RC_FILE"
-			exit 1
+			echo "99" > "$RC_FILE"
+			exit 99
 		fi
 	fi
 
@@ -947,21 +948,21 @@ while true; do
 		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
 		if ! _pre_suite_cleanup; then
 			echo "  FATAL: pre-suite cleanup failed during restart. Cannot proceed."
-			echo "1" > "$RC_FILE"
-			exit 1
+			echo "99" > "$RC_FILE"
+			exit 99
 		fi
 		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 				_revert_dis_snapshot "pool-ready" || {
 					echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
-					echo "1" > "$RC_FILE"
-					exit 1
+					echo "99" > "$RC_FILE"
+					exit 99
 				}
 			else
 				if ! _cleanup_dis_aba; then
 					echo "  ERROR: disN cleanup failed during restart -- cannot proceed."
-					echo "1" > "$RC_FILE"
-					exit 1
+					echo "99" > "$RC_FILE"
+					exit 99
 				fi
 			fi
 			_cleanup_con_quay

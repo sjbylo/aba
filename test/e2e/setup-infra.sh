@@ -32,7 +32,7 @@ _ABA_ROOT="$(cd "$_INFRA_DIR/../.." && pwd)"
 # Source libraries
 source "$_INFRA_DIR/lib/constants.sh"
 source "$_INFRA_DIR/lib/config-helpers.sh"
-source "$_INFRA_DIR/lib/vm-helpers.sh"
+source "$_INFRA_DIR/lib/vm-ops.sh"
 source "$_INFRA_DIR/lib/remote.sh"
 
 # Source config.env
