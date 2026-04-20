@@ -292,6 +292,7 @@ init_bastion() {
 	ssh $def_user@$int_bastion_hostname -- sudo bash <<-END
 		set -ex
 		whoami
+		echo ABA_TESTING=1 | sudo tee -a /etc/environment
 		subscription-manager refresh && sudo dnf clean all
 		dnf update -y   # We should do this and add to the vmw snap every now and then
 		# reboot now added below
@@ -359,6 +360,8 @@ init_bastion() {
 		echo $pub_key > /root/.ssh/authorized_keys
 		chmod 600 /root/.ssh/authorized_keys
 		mkdir -p ~/subdir
+		echo "export ABA_TESTING=1  # No usage reporting" >> /root/.bashrc
+		echo "export ABA_TESTING=1  # No usage reporting" >> /root/.bash_profile
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
 
@@ -498,6 +501,8 @@ init_bastion() {
 		chmod 600 ~$u/.ssh/authorized_keys
 		chown -R $u.$u ~$u
 		echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+		echo "export ABA_TESTING=1  # No usage reporting" >> /home/testy/.bashrc
+		echo "export ABA_TESTING=1  # No usage reporting" >> /home/testy/.bash_profile
 		exit 0
 	END
 	[ $? -ne 0 ] && echo "Script failed!" && exit 1

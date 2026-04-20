@@ -974,13 +974,17 @@ _vm_set_aba_testing() {
 
 		for home_dir in /root "/home/$SUDO_USER" /home/testy; do
 		    [ -d "$home_dir" ] || continue
-		    rc="$home_dir/.bashrc"
-		    touch "$rc"
-		    sed -i '/^export ABA_TESTING=/d' "$rc"
-		    echo 'export ABA_TESTING=1' >> "$rc"
 		    user_name=$(basename "$home_dir")
 		    [ "$home_dir" = "/root" ] && user_name=root
-		    chown "$user_name":"$user_name" "$rc"
+
+		    # Set in both .bashrc (interactive) and .bash_profile (login/SSH)
+		    for rcfile in .bashrc .bash_profile; do
+		        rc="$home_dir/$rcfile"
+		        touch "$rc"
+		        sed -i '/^export ABA_TESTING=/d' "$rc"
+		        echo 'export ABA_TESTING=1' >> "$rc"
+		        chown "$user_name":"$user_name" "$rc"
+		    done
 		done
 	TESTEOF
 }
