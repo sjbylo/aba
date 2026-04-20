@@ -36,15 +36,15 @@ _process_pool_cleanup_files() {
 			while IFS=' ' read -r target abs_path; do
 				[ -z \"\$abs_path\" ] && continue
 				if echo \"\$f\" | grep -q '\.cleanup\$'; then
-					echo \"      \$target: aba -y -d \$abs_path delete\"
-					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete\" < /dev/null 2>&1; then
-						echo \"      ERROR: aba delete failed for \$abs_path on \$target\"
+					echo \"      \$target: delete \$abs_path\"
+					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; }\" < /dev/null 2>&1; then
+						echo \"      ERROR: delete failed for \$abs_path on \$target\"
 						_ok=
 					fi
 				else
-					echo \"      \$target: aba -y -d \$abs_path uninstall\"
-					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall\" < /dev/null 2>&1; then
-						echo \"      ERROR: aba uninstall failed for \$abs_path on \$target\"
+					echo \"      \$target: uninstall \$abs_path\"
+					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; }\" < /dev/null 2>&1; then
+						echo \"      ERROR: uninstall failed for \$abs_path on \$target\"
 						_ok=
 					fi
 				fi
@@ -328,27 +328,40 @@ _force_clean_pool() {
 }
 
 _force_clean_suite() {
-	local suite="$1"
-	echo "  --force: wiping state for suite '$suite' ..."
+	local _raw="$1"
+	local _suite_list=()
+	IFS=',' read -ra _suite_list <<< "$_raw"
+
+	echo "  --force: wiping state for suite '$_raw' ..."
 	for _p in $CLI_POOL_LIST; do
-		_ssh_con "$_p" "
-			running=\$(cat /tmp/e2e-last-suites 2>/dev/null) || running=''
-			if [ \"\$running\" = '$suite' ]; then
-				tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
-			fi
-			sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
-		"
-		if [ -n "${_busy_pools[$_p]:-}" ] && [ "${_busy_pools[$_p]}" != "$suite" ]; then
+		for suite in "${_suite_list[@]}"; do
+			_ssh_con "$_p" "
+				running=\$(cat /tmp/e2e-last-suites 2>/dev/null) || running=''
+				if [ \"\$running\" = '$suite' ]; then
+					tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
+				fi
+				sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
+			" 2>/dev/null
+		done
+		local _dominated=""
+		if [ -n "${_busy_pools[$_p]:-}" ]; then
+			for suite in "${_suite_list[@]}"; do
+				[ "${_busy_pools[$_p]}" = "$suite" ] && _dominated=1 && break
+			done
+		fi
+		if [ -n "${_busy_pools[$_p]:-}" ] && [ -z "$_dominated" ]; then
 			echo "    Skipping con${_p}: running ${_busy_pools[$_p]}"
 			continue
 		fi
 		_process_pool_cleanup_files "$_p"
 	done
-	unset '_completed[$suite]'
-	for _p in "${!_busy_pools[@]}"; do
-		[ "${_busy_pools[$_p]}" = "$suite" ] && unset '_busy_pools[$_p]'
+	for suite in "${_suite_list[@]}"; do
+		unset '_completed[$suite]'
+		for _p in "${!_busy_pools[@]}"; do
+			[ "${_busy_pools[$_p]}" = "$suite" ] && unset '_busy_pools[$_p]'
+		done
 	done
-	echo "    $suite: cleaned"
+	echo "    $_raw: cleaned"
 }
 
 # --- Build work queue from suites_to_run minus completed/running --------------

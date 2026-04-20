@@ -445,9 +445,9 @@ _process_cleanup_on_pools() {
 				_ok=1
 				while IFS=' ' read -r target abs_path; do
 					[ -z "\$abs_path" ] && continue
-					echo "      \$target: aba -y -d \$abs_path delete"
+					echo "      \$target: delete \$abs_path"
 					ssh \$_ssh_opts "\$target" \
-						"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' delete || echo '      (dir not found)'" \
+						"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; } || echo '      (dir not found)'" \
 						< /dev/null 2>&1 || { echo "      WARNING: cleanup failed"; _ok=; }
 				done < "\$f"
 				[ -n "\$_ok" ] && rm -f "\$f"
@@ -459,9 +459,9 @@ _process_cleanup_on_pools() {
 				_ok=1
 				while IFS=' ' read -r target abs_path; do
 					[ -z "\$abs_path" ] && continue
-					echo "      \$target: aba -y -d \$abs_path uninstall"
+					echo "      \$target: uninstall \$abs_path"
 					ssh \$_ssh_opts "\$target" \
-						"[ -d '\$abs_path' ] && aba -y -d '\$abs_path' uninstall || echo '      (dir not found)'" \
+						"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; } || echo '      (dir not found)'" \
 						< /dev/null 2>&1 || { echo "      WARNING: cleanup failed"; _ok=; }
 				done < "\$f"
 				[ -n "\$_ok" ] && rm -f "\$f"
