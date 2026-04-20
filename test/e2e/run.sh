@@ -616,10 +616,18 @@ if [ -n "${CLI_FORCE:-}" ] && [ "$_pool_count" -eq 1 ] && [ -n "${CLI_SUITE:-}" 
 		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
 			_pool=$(echo "$CLI_POOL_LIST" | tr -d ' ')
 			printf "\n  Dispatcher running (pid %s) -- one-shot dispatch\n" "$_old_dpid"
-			printf "  \033[1;36mFORCE DISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s\n" "$CLI_SUITE" "$_pool"
 			declare -A _retried=()
-			_dispatch_suite "$_pool" "$CLI_SUITE"
-			echo "$_pool $CLI_SUITE" >> "$E2E_FORCED_DISPATCH"
+			_force_suite="${suites_to_run[0]}"
+			printf "  \033[1;36mFORCE DISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s\n" "$_force_suite" "$_pool"
+			_dispatch_suite "$_pool" "$_force_suite"
+			echo "$_pool $_force_suite" >> "$E2E_FORCED_DISPATCH"
+			if [ ${#suites_to_run[@]} -gt 1 ]; then
+				printf "  NOTE: Only first suite dispatched (one pool = one suite). Remaining queued:\n"
+				for (( _fi=1; _fi<${#suites_to_run[@]}; _fi++ )); do
+					printf "    %s\n" "${suites_to_run[$_fi]}"
+					echo "${suites_to_run[$_fi]}" >> "$E2E_INJECT_QUEUE"
+				done
+			fi
 			echo "  Done."
 			exit 0
 		fi

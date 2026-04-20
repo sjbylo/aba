@@ -354,6 +354,10 @@ prompt immediately (fire-and-forget). The dispatcher assigns suites from the
 work queue to free pools. If a dispatcher is already running, appends new
 suites to the queue (unless `--force` is used, which wipes queue state first).
 
+**One-shot force dispatch:** When `--force` targets a single pool (`-p N`),
+only the first suite in `--suite X,Y,Z` is dispatched immediately; remaining
+suites are injected into the running dispatcher's queue for later dispatch.
+
 ```
 run.sh run                               # Run all suites on all pools (default)
 run.sh run --suite X,Y -p 1,2            # Run specific suites on specific pools
@@ -1044,6 +1048,12 @@ e2e_add_to_cluster_cleanup "e2e-fake-sno"
 | `suites/suite-dummy-cleanup-crash.sh` | Register fake clusters + mirrors, then `exit 1`. Next suite's `_pre_suite_cleanup` must process the orphans. |
 | `suites/suite-dummy-cleanup-stale.sh` | Create cleanup file referencing non-existent directories. Pre-suite cleanup must handle gracefully. |
 
+Additional framework test suites:
+
+| Suite | What it tests |
+|-------|--------------|
+| `suites/suite-dummy-interactive-menu.sh` | Interactive menu: deliberate failure triggers menu, tests `[s]kip`, `[S]kip-suite`, `[0]restart`, `[R]etry`, `[a]bort` options |
+
 **Not yet implemented:** `suite-dummy-cleanup-remote.sh` (register fake mirror on
 disN, cleanup SSHes to disN). Can be added when cross-host cleanup is tested.
 
@@ -1094,14 +1104,14 @@ summary.
 
 | Module | Lines | Responsibility |
 |--------|-------|---------------|
-| `run.sh` | ~778 | Orchestrator: source libs, route subcommands, infra checks, dispatcher loop |
+| `run.sh` | ~786 | Orchestrator: source libs, route subcommands, infra checks, dispatcher loop |
 | `lib/cli.sh` | ~401 | Argument parsing, `_parse_pools()`, defaults, config.env generation |
 | `lib/deploy.sh` | ~152 | `sync_harness()`, `sync_source()`, `sync_extras()`, source tarball |
 | `lib/tmux-ui.sh` | ~256 | Dashboard builder (`dash`), `live` (+ `live-pane.sh`), `attach` |
 | `lib/commands.sh` | ~577 | One-shot commands: stop, start, status, verify, list, destroy, reschedule |
-| `lib/dispatcher.sh` | ~515 | Dispatcher helpers: dispatch, check, record, cleanup, force-clean, summary |
+| `lib/dispatcher.sh` | ~528 | Dispatcher helpers: dispatch, check, record, cleanup, force-clean, summary |
 
-**Note:** `run.sh` is ~778 lines (not the ~400 target) because the dispatcher
+**Note:** `run.sh` is ~786 lines (not the ~400 target) because the dispatcher
 main loop, state arrays, force-dispatch, and takeover logic remain inline --
 they manage top-level flow control (PID file, EXIT trap, `while` loop) that
 can't be encapsulated in a single function. The helper functions (14 total)
@@ -1122,7 +1132,7 @@ behavior.
 | `lib/pool-ops.sh` | Pool-level orchestration: golden VM prep, pool creation, bastion configuration |
 
 **Status: COMPLETE.** Merged best versions of all shared functions into
-`vm-ops.sh` (~830 lines) and `pool-ops.sh` (~370 lines). Key merges:
+`vm-ops.sh` (~1075 lines) and `pool-ops.sh` (~496 lines). Key merges:
 retry logic from vm-helpers + fuller package list from pool-lifecycle,
 detached dnf-update, registry DNS entry, cross-host SSH keys. Since `setup-infra.sh` (declared
 out of scope) directly calls many `_vm_*` functions from `vm-helpers.sh`,
@@ -1191,9 +1201,8 @@ flowchart TD
     dispatcher --> deploy
 ```
 
-**Current state:** `vm-helpers.sh` and `pool-lifecycle.sh` remain unchanged
-(Phase 4 deferred). When Phase 4 completes, they become `vm-ops.sh` and
-`pool-ops.sh` with the same dependency edges.
+**Current state:** Phase 4 complete. `vm-helpers.sh` and `pool-lifecycle.sh` are
+thin compatibility wrappers that source `vm-ops.sh` and `pool-ops.sh` respectively.
 
 **Invariants:**
 - No circular dependencies between lib files
@@ -1224,7 +1233,7 @@ flowchart TD
 
 ```
 test/e2e/
-  run.sh                    # Orchestrator (~778 lines, sources lib/ modules)
+  run.sh                    # Orchestrator (~786 lines, sources lib/ modules)
   runner.sh                 # On-conN suite executor (exit 99 for framework failures)
   setup-infra.sh            # VM provisioning (stable, do not change)
   config.env                # Deployable runtime config
@@ -1235,10 +1244,10 @@ test/e2e/
     deploy.sh               # [new] sync_harness(), sync_source(), sync_extras() (~152 lines)
     tmux-ui.sh              # [new] Dashboard, live, dash, attach (~256 lines)
     commands.sh             # [new] One-shot subcommands (~577 lines)
-    dispatcher.sh           # [new] Dispatcher helpers: dispatch, check, cleanup (~515 lines)
+    dispatcher.sh           # [new] Dispatcher helpers: dispatch, check, cleanup (~528 lines)
     remote.sh               # SSH wrappers, _essh, _escp (~73 lines)
-    vm-ops.sh               # [new] VM operations: all _vm_* helpers (~830 lines)
-    pool-ops.sh             # [new] Pool orchestration: bastion config, create/destroy (~370 lines)
+    vm-ops.sh               # [new] VM operations: all _vm_* helpers (~1075 lines)
+    pool-ops.sh             # [new] Pool orchestration: bastion config, create/destroy (~496 lines)
     vm-helpers.sh           # Compat wrapper -> vm-ops.sh
     pool-lifecycle.sh       # Compat wrapper -> pool-ops.sh
     framework.sh            # Core harness (e2e_run, lifecycle, interactive menu)
