@@ -743,6 +743,7 @@ _vm_provision_root_user() {
 	_essh "${user}@${host}" -- "sudo bash -c '
 		mkdir -p /home/root/aba /home/root/tmp
 		chown root:root /home/root /home/root/aba /home/root/tmp
+		chmod 700 /home/root /home/root/aba /home/root/tmp
 		rm -rf /root/aba /root/tmp
 		ln -sfn /home/root/aba /root/aba
 		ln -sfn /home/root/tmp /root/tmp

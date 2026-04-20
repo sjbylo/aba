@@ -239,7 +239,7 @@ _pool_count_from_conf() {
 _LAST_RUN_FILE="$_RUN_DIR/.e2e-last-run"
 _is_readonly_cmd() {
 	case "${CLI_COMMAND:-}" in
-		status|live|dash|stop|attach|verify|watch|start) return 0 ;;
+		status|live|dash|stop|attach|verify|watch|start|deploy|reschedule) return 0 ;;
 		*) return 1 ;;
 	esac
 }
@@ -421,7 +421,32 @@ _create_tmux_dashboard() {
 	_dash_pane_cmd() {
 		local _p=$1
 		local _h="con${_p}.${_domain}"
-		echo "while true; do if ssh $_SSH_OPTS ${_user}@${_h} 'tmux has-session -t ${E2E_TMUX_SESSION:-e2e-suite} 2>/dev/null' 2>/dev/null; then _s=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); printf '\\033]2;dashboard | Pool ${_p} (con${_p})%s\\033\\\\' \"\${_s:+ | \$_s}\"; clear; ssh $_SSH_OPTS ${_user}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!; while kill -0 \$_tpid 2>/dev/null; do sleep 10; _ns=\$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null); [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break; done; wait \$_tpid 2>/dev/null; else printf '\\033]2;dashboard | Pool ${_p} (con${_p})\\033\\\\'; clear; echo 'No e2e session on con${_p}. Waiting for suite to start...'; sleep 5; fi; done"
+		local _so="$_SSH_OPTS"
+		local _sess_name="${E2E_TMUX_SESSION:-e2e-suite}"
+		echo "while true; do"\
+" _u=\$(ssh $_so steve@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null);"\
+" _u=\${_u:-${_user}};"\
+" _os=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null);"\
+" _vc=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null);"\
+" _vt=''; [ -n \"\$_vc\" ] && [ \"\$_vc\" != '~/.vmware.conf' ] && _vt=\" | \$(basename \"\$_vc\")\";"\
+" if ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name} 2>/dev/null' 2>/dev/null; then"\
+"   _s=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null);"\
+"   printf '\\033]2;dashboard | Pool ${_p} | %s%s%s%s\\033\\\\' \"\${_u}\" \"\${_s:+ | \$_s}\" \"\${_os:+ | \$_os}\" \"\$_vt\";"\
+"   clear;"\
+"   ssh $_so \${_u}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!;"\
+"   while kill -0 \$_tpid 2>/dev/null; do"\
+"     sleep 10;"\
+"     _ns=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null);"\
+"     [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break;"\
+"   done;"\
+"   wait \$_tpid 2>/dev/null;"\
+" else"\
+"   printf '\\033]2;dashboard | Pool ${_p} | %s | (idle)\\033\\\\' \"\${_u}\";"\
+"   clear;"\
+"   echo 'No e2e session on pool ${_p}. Waiting for suite to start...';"\
+"   sleep 5;"\
+" fi;"\
+" done"
 	}
 
 	tmux kill-session -t "$_sess" 2>/dev/null
@@ -530,8 +555,8 @@ if [ -n "$CLI_DEPLOY" ]; then
 			continue
 		fi
 
-		# Also push test harness to ~/.e2e-harness/
-		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+		# Also push test harness to ~/.e2e-harness/ (preserve logs/)
+		if ssh $_SSH_OPTS "${target}" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${target}:~/.e2e-harness/runner.sh" &&
 		   scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV"                   "${target}:~/.e2e-harness/config.env" &&
 		   scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${target}:~/.e2e-harness/pools.conf" &&
@@ -878,8 +903,8 @@ if [ -n "$CLI_STATUS" ]; then
 		for (( _ssp=1; _ssp<=_OP_POOLS; _ssp++ )); do _status_list+=("$_ssp"); done
 	fi
 
-	printf "  %-6s  %-10s  %-40s  %s\n" "POOL" "STATE" "SUITE" "LAST OUTPUT"
-	printf "  %-6s  %-10s  %-40s  %s\n" "------" "----------" "----------------------------------------" "--------------------"
+	printf "  %-6s  %-10s  %-40s  %-8s  %s\n" "POOL" "STATE" "SUITE" "SINCE" "LAST OUTPUT"
+	printf "  %-6s  %-10s  %-40s  %-8s  %s\n" "------" "----------" "----------------------------------------" "--------" "--------------------"
 
 	for p in "${_status_list[@]}"; do
 		_host="con${p}.${_domain}"
@@ -887,29 +912,34 @@ if [ -n "$CLI_STATUS" ]; then
 			_slog=~/.e2e-harness/logs/summary.log
 			[ -f \"\$_slog\" ] || _slog=\$(ls -t ~/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
 			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null) || suite=""
+			_ts() { stat -c %Y \"\$1\" 2>/dev/null | xargs -I{} date -d @{} +%H:%M 2>/dev/null; }
 			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
 				last=\$(tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
 					rc=\$(cat \"\$rc_file\" 2>/dev/null)
-					echo \"DONE|\${suite}|exit=\${rc}\"
+					_since=\$(_ts \"\$rc_file\")
+					echo \"DONE|\${suite}|exit=\${rc}|\${_since}\"
 				elif [ -f \"/tmp/e2e-paused-\${suite}\" ]; then
-					echo \"PAUSED|\${suite}|\${last}\"
+					_since=\$(_ts \"/tmp/e2e-paused-\${suite}\")
+					echo \"PAUSED|\${suite}|\${last}|\${_since}\"
 				else
-					echo \"RUNNING|\${suite}|\${last}\"
+					_since=\$(_ts /tmp/e2e-last-suites)
+					echo \"RUNNING|\${suite}|\${last}|\${_since}\"
 				fi
 			else
 				if [ -n \"\$suite\" ]; then
 					rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
 					if [ -f \"\$rc_file\" ]; then
 						rc=\$(cat \"\$rc_file\" 2>/dev/null)
-						echo \"FINISHED|\${suite}|exit=\${rc}\"
+						_since=\$(_ts \"\$rc_file\")
+						echo \"FINISHED|\${suite}|exit=\${rc}|\${_since}\"
 					else
-						echo \"IDLE|\${suite}|(no result)\"
+						echo \"IDLE|\${suite}|(no result)|\"
 					fi
 				else
-					echo \"IDLE|-|-\"
+					echo \"IDLE|-|-|\"
 				fi
 			fi
 			echo '|||TABLE|||'
@@ -919,14 +949,14 @@ if [ -n "$CLI_STATUS" ]; then
 				| sed 's/\x1b\[[0-9;]*m//g' \
 				| grep -E 'PASS|FAIL|SKIP|RUNNING|PENDING|  --' \
 				| sed 's/^[0-9: ]*//'
-		" 2>/dev/null || echo "UNREACHABLE|-|-")
+		" 2>/dev/null || echo "UNREACHABLE|-|-|")
 
 		_status_line="${_info%%|||TABLE|||*}"
 		_table_data="${_info#*|||TABLE|||}"
 		# Trim leading/trailing whitespace from table data
 		_table_data="$(echo "$_table_data" | sed '/^[[:space:]]*$/d')"
 
-		IFS='|' read -r _state _suite _detail <<< "$_status_line"
+		IFS='|' read -r _state _suite _detail _since <<< "$_status_line"
 		case "$_state" in
 			RUNNING)     _sc="\033[1;32m" ;;  # bold green
 			PAUSED)      _sc="\033[1;33m" ;;  # bold yellow
@@ -946,9 +976,9 @@ if [ -n "$CLI_STATUS" ]; then
 		esac
 		# Show detail on header for DONE/FINISHED/IDLE (exit code). RUNNING/PAUSED put detail on the RUNNING... table line.
 		if [[ "$_state" == "RUNNING" || "$_state" == "PAUSED" ]]; then
-			printf "  con%-3s  ${_sc}%-10s\033[0m  %s\033[0m\n" "$p" "$_state" "$_suite"
+			printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_since"
 		else
-			printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_detail"
+			printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %-8s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_since" "$_detail"
 		fi
 
 		if [ -n "$_table_data" ]; then
@@ -1067,7 +1097,8 @@ if [ -n "${CLI_LIVE+set}" ]; then
 			"sudo rm -f /tmp/e2e-live-owner; echo '$_live_id' > /tmp/e2e-live-owner" || true
 	done
 
-	rm -rf /tmp/e2e-live.*
+	# Clean up own temp dirs; ignore dirs owned by other users (e.g. root from --user root runs)
+	find /tmp -maxdepth 1 -name 'e2e-live.*' -user "$(id -un)" -exec rm -rf {} + 2>/dev/null; true
 	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
 	_live_create_script() {
 		local p=$1
@@ -1077,20 +1108,25 @@ if [ -n "${CLI_LIVE+set}" ]; then
 		{
 			echo '#!/bin/bash'
 			echo 'stty -ixon 2>/dev/null'
-			echo "_MY_ID='${_live_id}'"
-		echo 'while true; do'
-		echo "  _owner=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)"
-		echo '  if [ -n "$_owner" ] && [ "$_owner" != "$_MY_ID" ]; then'
-		echo "    echo 'Another live dashboard took over pool ${p}. Exiting.'"
-		echo '    exit 0'
-		echo '  fi'
-		echo "  _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
-		printf "  printf '\\\\033]2;live | Pool %d (con%d)%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\"\n" "$p" "$p"
-		echo '  clear'
-		echo "  ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && exec tmux attach -d -t '$E2E_TMUX_SESSION'\" 2>/dev/null || {"
-		echo "    echo 'No e2e session on pool ${p}. Waiting for suite to start...'"
-		echo '  }'
-		echo '  sleep 5'
+			echo "export _POOL_NUM=$p"
+			echo "export _DOMAIN='${_domain}'"
+			echo "export _SSH_OPTS='$_so'"
+			echo "export _DEFAULT_USER='${_default_user}'"
+			echo "export _LIVE_ID='${_live_id}'"
+			echo "export _E2E_TMUX_SESSION='${E2E_TMUX_SESSION}'"
+			echo "_PANE_SCRIPT='${_RUN_DIR}/scripts/live-pane.sh'"
+			echo 'while true; do'
+			echo '  if [ -f "$_PANE_SCRIPT" ]; then'
+			echo '    source "$_PANE_SCRIPT"'
+			echo '  else'
+			echo "    _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
+			printf "    printf '\\\\033]2;live | Pool %d | ${_default_user}%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\"\n" "$p"
+			echo '    clear'
+			echo "    ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '${E2E_TMUX_SESSION}' 2>/dev/null && exec tmux attach -d -t '${E2E_TMUX_SESSION}'\" 2>/dev/null || {"
+			echo "      echo 'No e2e session on pool ${p}. Waiting for suite to start...'"
+			echo '    }'
+			echo '    sleep 5'
+			echo '  fi'
 			echo 'done'
 		} > "$_script"
 		chmod +x "$_script"
@@ -1769,7 +1805,7 @@ _dispatch_suite() {
 	local _user="${CON_SSH_USER:-steve}"
 	local _host="con${pool_num}.${VM_BASE_DOMAIN}"
 	local _target="${_user}@${_host}"
-	if ! { _ssh_con "$pool_num" "rm -rf ~/.e2e-harness && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
+	if ! { _ssh_con "$pool_num" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" &&
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/runner.sh"        "${_target}:~/.e2e-harness/runner.sh" &&
 	       scp -q $_SSH_OPTS "$_DEPLOY_CONFIG_ENV"                   "${_target}:~/.e2e-harness/config.env" &&
 	       scp -q $_SSH_OPTS "$_ABA_ROOT/test/e2e/pools.conf"       "${_target}:~/.e2e-harness/pools.conf" &&

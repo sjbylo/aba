@@ -168,7 +168,7 @@ e2e_run_must_fail "Invalid op-set name" \
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run_must_fail "Bundle to read-only path" \
-	"aba bundle --out /root/e2e-noperm-test"
+	"aba bundle --out /proc/e2e-noperm-test"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 test_end 0

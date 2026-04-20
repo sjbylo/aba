@@ -443,7 +443,7 @@ e2e_run_remote "Set ACM channel to $ACM_CHANNEL" \
 e2e_run_remote -r 5 1.5 "Install ACM subscription" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-subs.yaml'"
 e2e_poll_remote 300 30 "Wait for ACM operator CSV" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management | grep advanced-cluster-management.*Succeeded'"
 e2e_run_remote -r 5 1.5 "Install MultiClusterHub" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-mch.yaml'"
 e2e_poll_remote 1800 60 "Wait for MCH ready" \
