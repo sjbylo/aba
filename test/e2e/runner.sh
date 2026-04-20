@@ -234,16 +234,45 @@ _verify_no_orphan_vms() {
 
 	[ -z "$_real_orphans" ] && echo "  No orphan VMs in $VC_FOLDER" && return 0
 
+	# Safety: only auto-destroy if VC_FOLDER is an aba-e2e pool folder
+	if [[ "$VC_FOLDER" != */aba-e2e/pool* ]]; then
+		echo ""
+		echo "  FATAL: Orphan VMs found but VC_FOLDER ($VC_FOLDER) is not an aba-e2e pool folder."
+		echo "  Refusing to auto-destroy. Delete manually:"
+		while IFS= read -r _o; do
+			[ -z "$_o" ] && continue
+			echo "    $_o"
+		done <<< "$_real_orphans"
+		return 1
+	fi
+
 	echo ""
-	echo "  FATAL: Orphan VMs found in $VC_FOLDER:"
-	while IFS= read -r _o; do
-		[ -z "$_o" ] && continue
-		echo "    $_o"
+	echo "  WARNING: Orphan VMs found in $VC_FOLDER -- cleaning up ..."
+	local _cleanup_failed=""
+	while IFS= read -r _ovm; do
+		[ -z "$_ovm" ] && continue
+		echo "    Destroying orphan: $_ovm"
+		"$_govc" vm.power -off -force "$_ovm" 2>/dev/null || true
+		if ! "$_govc" vm.destroy "$_ovm" 2>/dev/null; then
+			echo "    ERROR: failed to destroy $_ovm"
+			_cleanup_failed=1
+			continue
+		fi
+		# Remove the parent folder if it's a cluster subfolder (e.g. /pool3/e2e-sno3/)
+		local _parent
+		_parent=$(dirname "$_ovm")
+		if [ "$_parent" != "$VC_FOLDER" ]; then
+			"$_govc" object.destroy "$_parent" 2>/dev/null || true
+		fi
 	done <<< "$_real_orphans"
-	echo ""
-	echo "  The .cleanup mechanism should have deleted these via 'aba delete'."
-	echo "  Investigate why cleanup failed before re-running."
-	return 1
+
+	if [ -n "$_cleanup_failed" ]; then
+		echo ""
+		echo "  FATAL: Could not destroy all orphan VMs. Investigate manually."
+		return 1
+	fi
+	echo "  Orphan cleanup complete."
+	return 0
 }
 
 # Reset firewall on conN: remove stale test ports, preserve pool registry (8443).

@@ -193,14 +193,30 @@ _e2e_fmt_duration() {
 }
 
 # --- Color helpers ----------------------------------------------------------
+#
+# Two tiers: _e2e_color (lowercase wrappers) and _e2e_color_always (Uppercase).
+#
+# Original intent: _e2e_color was conditional (strip ANSI when stdout is not a
+# TTY, for clean piping/grep), while _e2e_color_always emitted ANSI
+# unconditionally (for log files viewed via tail -f).
+#
+# In practice, _e2e_log_and_print uses tee to write to both terminal and log.
+# Since tee makes stdout a pipe (not a TTY), a [ -t 1 ] check in _e2e_color
+# would strip ALL colors -- including terminal output.  So _e2e_color was
+# changed to always emit colors, making both functions identical.
+#
+# The two-tier naming convention is still useful:
+#   lowercase (_e2e_green)  -- regular weight (0;32), used by _e2e_log_and_print
+#   Uppercase (_e2e_Green)  -- bold weight (1;32), used by _e2e_summary for logs
+#
+# If conditional coloring is ever needed, the fix is to cache the original
+# stdout fd before tee and test that instead of [ -t 1 ].
 
 _e2e_color() {
     local code="$1"; shift
-    # Always emit ANSI colors -- output is viewed via 'tail -f' on log files
     printf '\033[%sm%s\033[0m' "$code" "$*"
 }
 
-# Force ANSI colors regardless of TTY (for log files viewed via tail -f)
 _e2e_color_always() {
     local code="$1"; shift
     printf '\033[%sm%s\033[0m' "$code" "$*"
@@ -213,7 +229,7 @@ _e2e_magenta() { _e2e_color "1;34" "$@"; }  # bold blue (color-blind safe vs gre
 _e2e_cyan()    { _e2e_color "0;36" "$@"; }
 _e2e_bold()    { _e2e_color "1"    "$@"; }
 
-# Always-colored variants (for summary log, always readable via tail -f)
+# Bold/always-colored variants (for summary log, viewed via tail -f / run.sh dash)
 _e2e_Red()     { _e2e_color_always "1;31" "$@"; }
 _e2e_Green()   { _e2e_color_always "1;32" "$@"; }
 _e2e_Yellow()  { _e2e_color_always "1;33" "$@"; }
@@ -977,16 +993,14 @@ e2e_run() {
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Magenta "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
-        _e2e_log_and_print "  $(_e2e_magenta "$cmd")"
-        _e2e_summary "  $(_e2e_Magenta "$cmd")"
+        _e2e_log_and_print "  $(_e2e_magenta "$description") $(_e2e_magenta "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Magenta "$description") $(_e2e_Magenta "[$_display_host:$PWD]")"
     else
-        _e2e_log_and_print "  $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Green "$description") $(_e2e_Yellow "[$_display_host:$PWD]")"
-        _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
-        _e2e_summary "  $(_e2e_Cyan "$cmd")"
+        _e2e_log_and_print "  $(_e2e_bold "$(_e2e_green "$description")") $(_e2e_green "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Green "$description") $(_e2e_Green "[$_display_host:$PWD]")"
     fi
+    _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
+    _e2e_summary "  $(_e2e_Cyan "$cmd")"
 
     local _step_start
     _step_start=$(date +%s)
@@ -1266,7 +1280,7 @@ e2e_diag() {
         _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
         _e2e_log_and_print "  $(_e2e_magenta "$cmd")"
     else
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_green "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_bold "$(_e2e_green "$description")") $(_e2e_yellow "[$_display_host:$PWD]")"
         _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
     fi
 
@@ -1355,7 +1369,7 @@ e2e_run_must_fail() {
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
 
-    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_green "$description") $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
+    _e2e_log_and_print "  $(_e2e_yellow "[EXPECT-FAIL]") $(_e2e_bold "$(_e2e_green "$description")") $(_e2e_yellow "[$USER@$(hostname -s):$PWD]")"
     _e2e_log_and_print "  $(_e2e_cyan "$cmd")"
     _e2e_log "  CMD (must-fail): $cmd"
     _e2e_summary "  $(_e2e_Yellow "[EXPECT-FAIL]") $(_e2e_Green "$description") $(_e2e_Yellow "[$USER@$(hostname -s):$PWD]")"
@@ -1531,8 +1545,9 @@ assert_command_exists() {
 
 # --- YAML helpers -----------------------------------------------------------
 
-# Normalize a YAML file (sort-free pretty-print) and write to stdout.
+# Normalize a YAML file (sorted pretty-print) and write to stdout.
 # Optionally strips secrets/environment-specific fields from install-config.
+# Keys are sorted for stable diff output (works on Python 3.6+ / PyYAML <5.1).
 #   Usage: yaml_normalize FILE [--strip-secrets]
 yaml_normalize() {
     local file="$1" strip="${2:-}"
@@ -1550,21 +1565,34 @@ if fds:
     for k in ('name', 'region', 'zone'):
         fds[0].pop(k, None)
     fds[0].get('topology', {}).pop('datastore', None)
-yaml.dump(d, sys.stdout, default_flow_style=False, sort_keys=False)
+yaml.dump(d, sys.stdout, default_flow_style=False)
 "
     else
         python3 -c "
 import yaml, sys
-yaml.dump(yaml.safe_load(open('$file')), sys.stdout, default_flow_style=False, sort_keys=False)
+yaml.dump(yaml.safe_load(open('$file')), sys.stdout, default_flow_style=False)
 "
     fi
 }
 
 # Diff two YAML files after normalizing.  Returns non-zero on differences.
+# Fails if either normalization produces empty output (guards against silent
+# python crashes like the PyYAML sort_keys bug on Python 3.6).
 #   Usage: yaml_diff FILE_A FILE_B [--strip-secrets]
 yaml_diff() {
     local file_a="$1" file_b="$2" strip="${3:-}"
-    diff <(yaml_normalize "$file_a" $strip) <(yaml_normalize "$file_b" $strip)
+    local _norm_a _norm_b
+    _norm_a=$(yaml_normalize "$file_a" $strip)
+    _norm_b=$(yaml_normalize "$file_b" $strip)
+    if [ -z "$_norm_a" ]; then
+        echo "yaml_diff: normalization of $file_a produced empty output" >&2
+        return 1
+    fi
+    if [ -z "$_norm_b" ]; then
+        echo "yaml_diff: normalization of $file_b produced empty output" >&2
+        return 1
+    fi
+    diff <(echo "$_norm_a") <(echo "$_norm_b")
 }
 
 # Adapt an example file written for pool 1 to the current pool.

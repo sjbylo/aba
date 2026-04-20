@@ -109,7 +109,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 	fi
 else
 	# No session at all -- idle pool. No clear: preserve banner/scrollback.
-	_set_title "(idle)" "" "" ""
+	_set_title "(idle)" "${_user}" "" ""
 	if [ "${_IDLE_MSG_SHOWN:-}" != "1" ]; then
 		echo "No e2e session on pool ${_POOL_NUM}. Waiting for suite to start..."
 		_IDLE_MSG_SHOWN=1

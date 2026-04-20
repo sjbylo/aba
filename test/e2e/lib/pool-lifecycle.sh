@@ -723,6 +723,42 @@ _vm_setup_kvm_conf() {
     fi
 }
 
+# --- _vm_authorize_root_on_kvm_host -----------------------------------------
+# Ensure root's SSH key from the golden VM is authorized on the KVM hypervisor.
+# Without this, --user root test runs fail because virsh connects as the
+# non-root user (e.g. steve) to the KVM host via qemu+ssh://.
+#
+_vm_authorize_root_on_kvm_host() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+	local kf="${KVM_CONF:-$HOME/.kvm.conf}"
+
+	[ ! -f "$kf" ] && return 0
+
+	local _kvm_uri
+	_kvm_uri=$(grep '^LIBVIRT_URI=' "$kf" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+	[ -z "$_kvm_uri" ] && return 0
+
+	# Extract user@host from qemu+ssh://user@host/system
+	local _kvm_userhost
+	_kvm_userhost=$(echo "$_kvm_uri" | sed -n 's|.*ssh://\([^/]*\)/.*|\1|p')
+	[ -z "$_kvm_userhost" ] && return 0
+
+	echo "  [vm] Authorizing root's SSH key on KVM host ($_kvm_userhost) ..."
+
+	local _root_pub
+	_root_pub=$(_essh "${user}@${host}" -- "sudo cat /root/.ssh/id_rsa.pub")
+	[ -z "$_root_pub" ] && { echo "  [vm] WARNING: no root SSH key found on $host"; return 0; }
+
+	# Authorize on the KVM host (idempotent)
+	if ssh -F "${SSH_CONF:-$HOME/.aba/ssh.conf}" "$_kvm_userhost" \
+		"grep -qF '$_root_pub' ~/.ssh/authorized_keys 2>/dev/null || echo '$_root_pub' >> ~/.ssh/authorized_keys"; then
+		echo "  [vm] Root key authorized on $_kvm_userhost"
+	else
+		echo "  [vm] WARNING: could not authorize root key on $_kvm_userhost"
+	fi
+}
+
 # --- _vm_remove_pull_secret -------------------------------------------------
 # Remove .pull-secret.json (not needed in fully air-gapped environment).
 #
@@ -1069,6 +1105,7 @@ prepare_golden_vm() {
 	_vm_cleanup_home "$ip" "$user"        || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
 	_vm_provision_root_user "$ip" "$user" || return 1
+	_vm_authorize_root_on_kvm_host "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 
