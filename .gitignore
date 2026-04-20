@@ -86,6 +86,7 @@ mirror/regcreds.bk
 .index-backup/
 test/e2e/.config.env.deploy
 test/e2e/.e2e-last-run
+test/e2e/.pool-os/
 .cursor/
 ai/aba-installations-chart.html
 e2e-parallel.log.*

@@ -154,12 +154,12 @@ _cleanup_con_quay() {
         if [ -f "$_dir/mirror/.available" ]; then
             if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh"; then
                 echo "  [cleanup] Found .available + existing registry -- running aba unregister"
-                ( cd "$_dir" && aba -y -d mirror unregister ) && _did_uninstall=1 || {
+                ( cd "$_dir" && ./aba -y -d mirror unregister ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba unregister failed in $_dir (rc=$?)"
                 }
             else
                 echo "  [cleanup] Found .available in $_dir/mirror -- running aba uninstall"
-                ( cd "$_dir" && aba -y -d mirror uninstall ) && _did_uninstall=1 || {
+                ( cd "$_dir" && ./aba -y -d mirror uninstall ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba uninstall failed in $_dir (rc=$?)"
                 }
             fi
