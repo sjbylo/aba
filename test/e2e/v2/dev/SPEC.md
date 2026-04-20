@@ -72,6 +72,13 @@ framework bug, not a suite bug.**
    everywhere. Golden VM provisioning copies the key to each user's `~/.ssh/`
    and adds it to `authorized_keys` for all users (`_vm_setup_cross_host_ssh`).
    No user should ever need a separate key.
+   **Status:** Bug confirmed on pool-ready snapshots. `_vm_setup_ssh_keys` in
+   `pool-ops.sh` overwrites (`>`) authorized_keys with just the bastion key,
+   undoing the cross-host keys added by `_vm_create_test_user_and_key_on_host`.
+   The pool-ready snapshot inherits this broken state. Fix: change `>` to `>>`
+   in `_vm_setup_ssh_keys` or rebuild golden + pool snapshots. Framework
+   workaround: cleanup uses `|| true` for pre-revert cleanup (best-effort),
+   and the snapshot revert itself is the primary cross-user cleanup mechanism.
 
 3. **Hardcoded paths**: References to `/home/root/`, `/home/steve/` in runner.sh
    and cleanup code. Fix: use `~` or `$HOME` consistently.
