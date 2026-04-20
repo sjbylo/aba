@@ -253,7 +253,7 @@ _DOCKER_FQDN="$DIS_HOST"
 # --- Test A: Docker install/verify/uninstall with --network host -----------
 
 e2e_run "Create $_DOCKER_MIRROR dir" "aba mirror --name $_DOCKER_MIRROR"
-e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_MIRROR"
+e2e_add_to_mirror_cleanup "$PWD/$_DOCKER_MIRROR"
 
 e2e_run "Install Docker registry on port $_DOCKER_PORT" \
 	"aba -d $_DOCKER_MIRROR install --vendor docker --reg-port $_DOCKER_PORT -H $_DOCKER_FQDN -k ~/.ssh/id_rsa"
@@ -307,7 +307,7 @@ e2e_run "Verify no stale registry container on disN before Test B" \
 	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
-e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"
+e2e_add_to_mirror_cleanup "$PWD/$_DOCKER_NEG_MIRROR"
 
 e2e_run "Install Docker registry on port $_DOCKER_NEG_PORT" \
 	"aba -d $_DOCKER_NEG_MIRROR install --vendor docker --reg-port $_DOCKER_NEG_PORT -H $_DOCKER_FQDN -k ~/.ssh/id_rsa"
