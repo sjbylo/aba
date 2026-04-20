@@ -821,6 +821,150 @@ Audit all `scripts/*.sh` files. Some already have debug logging (e.g. `vmw-creat
 
 ---
 
+## Plan: Restore `run.sh live` and `run.sh dash` dashboard features
+
+**Added**: 2026-04-19
+**Priority**: Medium (post-1.0.0)
+**Related commits**: `5995c2a` (original enhancement), `0d301fb` (revert to fix flapping)
+
+### Background
+
+Commit `5995c2a` added rich dashboard features to `run.sh live` and `run.sh dash`:
+- Pane titles showing user, OS, vmware.conf basename (e.g. `live | Pool 2 | root | rhel9 | esxi.conf`)
+- Completion banners with PASSED/FAILED status, metadata, and timestamp
+- Scrollback preservation (no `clear` after suite completion -- banner + output stay visible)
+- Dead-pane detection via `tmux list-panes -F '#{pane_dead}'` for smooth suite transitions
+- Suite user detection (`/tmp/e2e-suite-user`) for multi-user awareness
+
+Commit `0d301fb` reverted `_dash_pane_cmd()` and `_live_create_script()` to simpler versions because the richer logic caused "flapping" (rapid re-attach/disconnect cycling). The revert fixed flapping but lost all the above features.
+
+### What was lost (current state)
+
+**`run.sh live`** pane titles show only: `live | Pool N (conN) | suite-name`
+- Missing: user, OS, vmware.conf
+- No completion banner -- when a suite finishes, the pane just shows "No e2e session. Waiting..."
+- `clear` on every loop iteration wipes scrollback
+
+**`run.sh dash`** pane titles show only: `dashboard | Pool N (conN) | suite-name`
+- Missing: user, OS, vmware.conf
+- No smart reconnect when suite changes -- kills and restarts `tail -F`
+
+### Root cause of flapping
+
+The flapping was likely caused by the live pane script doing `ssh -t ... tmux attach -d` (detach-others) on every loop iteration, combined with aggressive reconnect logic. When the SSH session drops (normal), the outer loop immediately reconnects, which detaches the previous session, causing a rapid attach/detach cycle.
+
+### Proposed fix: use `live-pane.sh` as an external script
+
+`test/e2e/scripts/live-pane.sh` already contains the full richer logic and is deployed to `~/.e2e-harness/scripts/` on conN hosts. The key insight is to make the generated `poolN.sh` wrapper call `live-pane.sh` in a loop instead of inlining all the logic. This allows:
+
+1. **Hot-reload**: Changes to `live-pane.sh` take effect on the next loop iteration (~5s) without restarting `run.sh live`
+2. **Cleaner wrapper**: The generated script just sets env vars and loops, calling `source live-pane.sh`
+3. **Anti-flap**: Add a post-attach delay (e.g. `sleep 2`) after `ssh -t ... tmux attach` returns, so the loop doesn't immediately re-enter. The `live-pane.sh` script already has careful state tracking (dead pane detection, gone-count threshold) that prevents premature reconnection.
+
+### Implementation plan
+
+#### Phase 1: Fix the anti-flap mechanism
+
+1. In `_live_create_script()`, add a 2-second `sleep` after the `ssh -t ... tmux attach` call returns (the attach exit means SSH dropped or session was killed). This is the minimal fix for flapping.
+
+2. Test: run `run.sh live --pools 4` with suites active on all pools. Verify no flapping for 10+ minutes.
+
+#### Phase 2: Re-integrate `live-pane.sh` into live dashboard
+
+1. Modify `_live_create_script()` to generate a wrapper that:
+   - Sets env vars: `_POOL_NUM`, `_DOMAIN`, `_SSH_OPTS`, `_DEFAULT_USER`, `_LIVE_ID`, `_E2E_TMUX_SESSION`
+   - Runs `source $HOME/.e2e-harness/scripts/live-pane.sh` in a `while true` loop
+   - Falls back to the current simple logic if `live-pane.sh` doesn't exist on the bastion
+
+2. Verify `live-pane.sh` is deployed to the bastion (it's in `test/e2e/scripts/`, which gets deployed via `_make_source_tar`)
+
+3. Test: verify pane titles show user, OS, vmconf; completion banners appear; scrollback preserved
+
+#### Phase 3: Enrich `run.sh dash` pane titles
+
+1. Modify `_dash_pane_cmd()` to also read `/tmp/e2e-suite-user`, `/tmp/e2e-suite-os`, `/tmp/e2e-suite-vmconf` and include them in the pane title
+2. The dash pane is simpler (just `tail -F` of log file) so flapping is not a concern
+3. Test: verify dash pane titles show enriched metadata
+
+#### Data files on conN (already written by `runner.sh`)
+
+| File | Content | Written by |
+|------|---------|------------|
+| `/tmp/e2e-last-suites` | Suite name | `runner.sh` |
+| `/tmp/e2e-suite-user` | SSH user running the suite | `runner.sh` |
+| `/tmp/e2e-suite-os` | OS (e.g. `rhel9`) | `runner.sh` |
+| `/tmp/e2e-suite-vmconf` | vmware.conf path | `runner.sh` |
+| `/tmp/e2e-live-owner` | Live session ID | `run.sh live` |
+
+### Expected pane title formats
+
+**Live**: `live | Pool 2 | root | airgapped-existing-reg | rhel9 | esxi.conf`
+**Live (idle)**: `live | Pool 2 | (idle)`
+**Live (done)**: `live | Pool 2 | airgapped-existing-reg | PASSED | rhel9`
+**Dash**: `dashboard | Pool 2 | root | airgapped-existing-reg | rhel9`
+
+### Completion banner format (live only)
+
+```
+================================================================================
+  PASSED: airgapped-existing-reg (4 passed, 0 failed, 0 skipped)
+  Pool 2 | root | rhel9 | esxi.conf
+  Completed: 2026-04-19 15:30:45
+
+  Scroll up to review suite output. Waiting for next suite ...
+================================================================================
+```
+
+### Risk
+
+- Phase 1 is low-risk (just a sleep)
+- Phase 2 depends on `live-pane.sh` being correct -- it needs testing on all 4 pools with different users/OS combos
+- Phase 3 is low-risk (dash panes don't have the flapping problem)
+
+---
+
+## Enhancement: Ctrl-C in `run.sh live` should show interactive mini-menu
+
+**Added**: 2026-04-15
+**Priority**: Medium (post-1.0.0)
+
+### Problem
+
+When the user presses Ctrl-C in a `run.sh live` window (attached to a running suite via SSH + tmux), the signal kills the SSH session and drops back to the outer loop which immediately reconnects. There's no opportunity for the user to interact with the running suite (e.g. re-run the failed command, skip the current test, pause the suite, or detach gracefully).
+
+### Proposed behavior
+
+When Ctrl-C is detected in a live pane:
+
+1. **Trap SIGINT** in the live pane loop script (the generated `poolN.sh` wrapper or `live-pane.sh`)
+2. **Show a mini-menu** to the user:
+   ```
+   Ctrl-C detected. Choose an action:
+     r) Re-run the current/last command
+     s) Skip current test and continue
+     p) Pause suite (send SIGUSR1 to runner)
+     d) Detach (return to shell, suite keeps running)
+     q) Quit live view
+     c) Continue (re-attach, ignore Ctrl-C)
+   >
+   ```
+3. **Execute the chosen action** and either re-attach or exit the live view
+
+### Considerations
+
+- The live pane connects via `ssh -t conN tmux attach -t e2e-suite`. Ctrl-C inside tmux goes to the running command inside the tmux session. So the trap needs to be at the SSH/wrapper level, not inside the tmux session.
+- One approach: use `ssh -t conN tmux attach` but trap SIGINT in the outer wrapper. When SSH exits (due to Ctrl-C killing the ssh process), the wrapper catches it and shows the menu instead of immediately looping.
+- The "re-run" action would need to communicate with `runner.sh` on conN (e.g. write a signal file like `/tmp/e2e-rerun` that runner checks between tests).
+- The "skip" action could write `/tmp/e2e-skip` for runner to pick up.
+- The "pause" action could send `SIGUSR1` to the runner's PID (stored in `/tmp/e2e-runner.pid`).
+
+### Related
+
+- Plan: Restore `run.sh live` and `run.sh dash` dashboard features (above)
+- `test/e2e/scripts/live-pane.sh` already has loop logic that could host this menu
+
+---
+
 ## E2E: Fix mesh demo test in suite-airgapped-local-reg
 
 **Added**: 2026-04-18
@@ -851,4 +995,78 @@ the demo repo's Sail/Istio operator installation on OCP 4.20+.
 - `github.com/sjbylo/openshift-service-mesh-demo`: upstream demo repo
 - The test mirrors 9 `quay.io/kiali/demo_travels_*` images, clones the repo, rewrites image
   refs to the mirror registry, then runs `00-install-all-mesh3.sh` on the air-gapped side
+
+---
+
+## E2E: Increase wait before `oc apply` of MultiClusterHub CR
+
+**Added**: 2026-04-20
+**Priority**: Medium
+**Affected suite**: `suite-airgapped-existing-reg.sh` (ACM: MultiClusterHub step)
+
+### Problem
+
+After installing the ACM operator (via `aba day2`), the suite immediately attempts `oc apply -f ~/aba/test/acm-mch.yaml` to create the MultiClusterHub CR. The validating webhook (`multiclusterhub-operator-webhook`) is not yet ready:
+
+```
+Error from server (InternalError): failed calling webhook
+"multiclusterhub.validating-webhook.open-cluster-management.io":
+no endpoints available for service "multiclusterhub-operator-webhook"
+```
+
+The framework retries (5 attempts, 5s between), and it succeeds on retry 2. But the 5-second retry interval is too short for a webhook that needs operator pods to schedule and start. If the cluster is under load or slow, all 5 retries could fail.
+
+### Proposed fix
+
+Add a wait/poll step before the `oc apply` that checks the webhook endpoint is ready:
+
+```bash
+e2e_run "Wait for MCH webhook" \
+    "aba --dir e2e-snoN run --cmd 'oc wait --for=condition=Available deployment/multiclusterhub-operator -n open-cluster-management --timeout=120s'"
+```
+
+Or alternatively, increase the retry delay for this specific step to 30s (giving the operator ~2.5 minutes total to become ready).
+
+### References
+- Error log: Pool 2, `airgapped-existing-reg` suite, "Install MultiClusterHub" step
+- The ACM operator webhook pod needs time to start after CatalogSource/Subscription are applied
+
+---
+
+## E2E: Improve ACM CSV readiness check in `suite-airgapped-existing-reg`
+
+**Added**: 2026-04-20
+**Priority**: Low
+**Affected suite**: `suite-airgapped-existing-reg.sh` (ACM: install operators step)
+
+### Problem
+
+The test waits for the ACM CSV to appear with:
+```bash
+oc get csv -n open-cluster-management -o name | grep advanced-cluster-management
+```
+
+Two issues:
+
+1. **`-o name` is misleading here**: The output is `clusterserviceversion.operators.coreos.com/advanced-cluster-management.v2.16.0` -- still a resource path, not just a name. Without `-o name` the default tabular output includes the `PHASE` column (e.g. `Succeeded`, `Installing`, `Pending`), which is more useful for debugging.
+
+2. **Doesn't check for `Succeeded` phase**: The grep matches as soon as the CSV *exists*, but a CSV can exist in `Pending` or `Installing` phase for a long time before it becomes usable. The test should also verify the CSV has reached `Succeeded` to ensure the operator is actually ready before proceeding to the MultiClusterHub CR apply.
+
+### Proposed fix
+
+Replace:
+```bash
+oc get csv -n open-cluster-management -o name | grep advanced-cluster-management
+```
+
+With:
+```bash
+oc get csv -n open-cluster-management | grep 'advanced-cluster-management.*Succeeded'
+```
+
+This gives better log output (shows the full CSV status line including version and phase) and only proceeds once the operator is fully installed. This would also reduce or eliminate the webhook-not-ready issue in the subsequent MCH apply step (see backlog item above).
+
+### References
+- Pool 2 log: CSV appears after ~60s but webhook not ready for another ~30s
+- Checking `Succeeded` phase would naturally add the wait time needed for the webhook to come up
 

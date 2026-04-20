@@ -1,5 +1,38 @@
 ## [Unreleased]
 
+Feature-complete release with reliability hardening across oc-mirror workflows, VM lifecycle, and cluster operations.
+
+### Improvements
+- **Unified spinner/progress UI (`aba_wait_show`)** - All long-running polling loops (cluster startup, VM power-on/off, OSUS install, day2 operations) now use a consistent background spinner with timeout display, replacing inconsistent dot-printing and silent waits. Includes `parse_duration()` for human-readable time config values.
+- **Improved VM annotations** - VMware VM annotations now show richer metadata (cluster name, role, network, install date, console/API URLs). Added `virsh desc` annotations for KVM VMs. Condensed to 5 lines for readability; KVM descriptions persisted to XML.
+- **Reliable `aba delete`** - Verified VM destruction with config regeneration. `aba delete` now exits 0 on no-op (already deleted), deregisters deleted clusters properly, and ensures symlinks via `make init` after a clean.
+- **Shared oc-mirror retry loop** - Extracted `_run_oc_mirror_with_retry` into `include_all.sh`, consolidating retry logic across save/load/sync. Exit code shown in retry messages. `OC_MIRROR_SINCE` made configurable via `~/.aba/config` (use a far-back date to force full archives instead of differential).
+- **Hardened shutdown** - 40-minute timeout with `aba_abort` on failure; exit code properly propagated. VM start/stop scripts converted to `aba_wait_show` with 40-min timeout.
+- **Better install failure messages** - Actionable recovery hint shown when `./install` fails, guiding the user to check prerequisites.
+- **Cleaner output** - Day2 operations show condensed progress; spinner displays max timeout; startup curl noise suppressed.
+- **ESXi compatibility** - `normalize-vmware-conf` adds `VC_FOLDER` fallback for standalone ESXi hosts (no vCenter). Proper ESXi detection for non-VC environments.
+- **`GOVC_RESOURCE_POOL` fix** - Removed hardcoded `resourcePool` from example install-configs; simplified placeholder resolution to avoid path duplication.
+- **Removed generated mirror scripts** - Eliminated `*-mirror.sh` wrapper scripts; oc-mirror execution is now inlined, reducing confusion about which script actually runs.
+
+### Bug Fixes
+- **`reg-save.sh` missing `normalize-mirror-conf`** - `reg-save.sh` did not source `normalize-mirror-conf`, silently ignoring `data_dir` from `mirror.conf`. This caused oc-mirror caches and `TMPDIR` to default to `$HOME` instead of the configured larger partition. Fixed by adding the missing `source`.
+- **Bundle builds forced full archives** - `OC_MIRROR_SINCE` was being applied to bundle builds, causing oc-mirror to create full archives on every run instead of reusing cached data across bundle types of the same OCP version. Disabled for bundle workflows.
+- **`aba delete` after `aba clean`** - Ensure symlinks are recreated via `make init` so `aba delete` works even after a `make clean`.
+- **`sudo` vs `$SUDO` consistency** - Fixed hardcoded `sudo` calls to use `$SUDO` variable, and enabled `loginctl linger` for Docker registry (rootless Podman user session persistence).
+- **Grep noise on missing cleanup files** - Silenced harmless grep errors when cleanup state files don't exist yet.
+- **Typo in warning messages** - Fixed "IMPORANT" to "IMPORTANT" across warning messages.
+
+### E2E Testing
+- **Symlink-safe ABA installation** - New `e2e_install_aba` helper function replaces 12 duplicate inline install blocks across suite files. Uses `rm -rf ~/aba/* ~/aba/.??*` pattern to preserve symlinks for root user disk redirection.
+- **Root disk space via symlinks** - Golden VM now creates `/root/aba -> /home/root/aba` and `/root/tmp -> /home/root/tmp` symlinks during provisioning, redirecting disk-heavy directories to the larger `/home` partition. `data_dir` mechanism handles oc-mirror cache redirection.
+- **Robust `dnf update` in golden VM** - Uses `nohup` + polling instead of inline execution, preventing SSH timeout during long OS updates.
+- **Color-coded output** - Bold blue for remote commands (improved color-blind accessibility), distinct formatting for local vs remote execution.
+- **CDN resilience** - Staggered pool startup, `subscription-manager refresh` before installs, fail-on-exhaustion for CDN rate limits.
+- **Randomized suite order** - `--all` now randomizes suite execution order to surface ordering-dependent bugs.
+- **Pool 4 enabled** - Full 4-pool E2E execution support.
+- **Suite notifications** - Command ring buffer, enriched start/done notifications via Telegram, relayed through SSH to bastion for disconnected pools.
+- **Bundle improvements** - Delete test cluster before upload to free resources sooner; build oldest/missing bundle types first; clean up work dir after successful upload.
+
 ---
 
 ## [0.9.9] - 2026-04-01
