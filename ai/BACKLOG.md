@@ -1070,3 +1070,42 @@ This gives better log output (shows the full CSV status line including version a
 - Pool 2 log: CSV appears after ~60s but webhook not ready for another ~30s
 - Checking `Succeeded` phase would naturally add the wait time needed for the webhook to come up
 
+---
+
+## Enhancement: Guardrail to prevent direct script execution
+
+**Added**: 2026-04-20
+**Priority**: Medium (post-1.0.0)
+
+### Problem
+
+Scripts under `scripts/` must only be called via Make targets or the `aba` CLI -- never directly. Direct execution bypasses Make's dependency tracking, marker management, and CWD setup. Today this is only an honor-system rule (documented in `.cursor/rules/` and `dev/SPEC.md`). There is no runtime enforcement.
+
+### Proposed fix
+
+Add a guardrail near the top of every `scripts/*.sh` file (after the shebang and header contract) that detects direct invocation and aborts with a clear error message. For example:
+
+```bash
+# Guardrail: scripts must be called via Make or aba, never directly
+if [ -z "${ABA_CALLED_VIA_MAKE:-}" ] && [ -z "${ABA_CALLED_VIA_ABA:-}" ]; then
+    echo "[ABA] Error: $(basename "$0") must not be run directly." >&2
+    echo "[ABA] Use 'aba <command>' or 'make <target>' instead." >&2
+    exit 2
+fi
+```
+
+The `aba` CLI and Makefiles would `export ABA_CALLED_VIA_MAKE=1` or `ABA_CALLED_VIA_ABA=1` before invoking scripts. This is a simple, zero-overhead guard that catches accidental direct execution.
+
+### Scope
+
+- ~37 scripts in `scripts/`
+- `aba.sh` sets `ABA_CALLED_VIA_ABA=1`
+- Makefiles set `ABA_CALLED_VIA_MAKE=1`
+- `include_all.sh` could check and abort if neither is set (single enforcement point)
+
+### Considerations
+
+- Must not break `test/func/` tests that source `include_all.sh` for utility functions
+- E2E tests that call `aba` CLI are fine (they go through the proper path)
+- The guard variable name should be documented in `dev/SPEC.md`
+

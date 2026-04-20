@@ -102,6 +102,7 @@ alwaysApply: true
 - No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
 - NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
 - If cleanup fails, the cleanup mechanism itself is broken -- fix IT, don't add out-of-band workarounds
+- **If stale resources (mirror dirs, VMs, containers) survive after a suite crash/interrupt, ALWAYS investigate the root cause.** The crash-recovery mechanism (`_runner_cleanup` EXIT trap → `e2e_cleanup_clusters` / `e2e_cleanup_mirrors`) must handle the full lifecycle: `aba delete` for clusters AND `aba uninstall` + directory removal for mirrors. If resources leak, the crash-recovery is incomplete — fix the mechanism, don't add band-aid `rm -rf` elsewhere.
 - Proper cleanup uses registered cleanup files (`.cleanup`, `.mirror-cleanup`) and `aba uninstall` / `aba delete` -- never bypass these with manual filesystem deletion
 - Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
