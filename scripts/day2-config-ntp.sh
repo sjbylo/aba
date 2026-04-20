@@ -133,12 +133,18 @@ aba_info "Accessing the cluster ..."
 
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 
-oc whoami || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
+exec_cmd="oc whoami"
+aba_debug "Running: $exec_cmd"
+$exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 warn_if_cluster_unstable
 
-oc apply -f 99-master-chrony-conf-override.yaml
-oc apply -f 99-worker-chrony-conf-override.yaml
+exec_cmd="oc apply -f 99-master-chrony-conf-override.yaml"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
+exec_cmd="oc apply -f 99-worker-chrony-conf-override.yaml"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 
 echo
 aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
@@ -174,6 +180,7 @@ IFS=$'\n' ntp_targets=($(sort -u <<<"${temp_ips[*]}"))
 unset IFS
 
 # 2. Get list of Node IPs
+aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
 # 3. Check function: returns 0 when all nodes have all NTP targets configured

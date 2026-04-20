@@ -30,19 +30,17 @@ echo Uploading image $ASSETS_DIR/agent.$ARCH.iso to [$ISO_DATASTORE] images/agen
 ret=0
 if [ "$PLAIN_OUTPUT" ]; then
 	cmd="cat $ASSETS_DIR/agent.$ARCH.iso | govc datastore.upload -ds $ISO_DATASTORE - images/agent-${CLUSTER_NAME}.iso"
+	aba_debug "Running: $cmd"
 	trap - ERR
 	set +e
 	eval $cmd 
 	ret=$?
 else
-	#FIXME: Is log_file needed if govc returns sensible value
-	#mkdir -p $HOME/.aba/tmp
-	#log_file=$HOME/.aba/tmp/.upload.$$.log
-	#touch $log_file
 	cmd="govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso"
+	aba_debug "Running: $cmd"
 	set +e
 	trap - ERR
-	eval $cmd #| tee $log_file #|| true
+	eval $cmd
 	ret=$?
 	#! grep -qi "Uploading.*OK" $log_file && ret=1
 fi

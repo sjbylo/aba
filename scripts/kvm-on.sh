@@ -17,6 +17,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
+	aba_debug "Running: virsh -c $LIBVIRT_URI domstate $(vm_name "$CLUSTER_NAME" "$name")"
 	state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
 	[ "$state" = "running" ] && exit 0
 done

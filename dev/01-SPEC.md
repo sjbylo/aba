@@ -220,6 +220,76 @@ Things ABA intentionally does not do (currently):
 
 ---
 
+## Observability
+
+### Debug logging (aba_debug)
+
+When `DEBUG_ABA` is set (via `aba --debug` / `aba -D` / `export DEBUG_ABA=1`),
+scripts log diagnostic information to stderr via `aba_debug`. Debug output is
+invisible to users unless explicitly enabled.
+
+#### What must be logged
+
+**Tier 1 -- every invocation of these external commands must have a preceding
+`aba_debug "Running: ..."` call:**
+
+| Command | Why |
+|---------|-----|
+| `oc-mirror` | Core mirroring engine; failures waste hours. Log full command + flags. |
+| `openshift-install` | Cluster installer; expensive failures. Log subcommand + dir. |
+| `govc` | VMware VM lifecycle; silent failures leave orphan VMs. Log subcommand + VM name. |
+| `virsh` | KVM VM lifecycle; same orphan risk. Log subcommand + domain name. |
+| `oc` | Cluster operations (day2, startup, shutdown). Log subcommand + key args. |
+| `make` (internal) | Orchestration dispatch; wrong target is subtle. Log target + directory. |
+
+Script entry/exit logging (`aba_debug "Starting: $0 $*"`) is recommended but
+not mandatory for every script.
+
+#### Format contract
+
+- **Use `$exec_cmd`** to define the command once, log it, execute it.
+  This eliminates drift between what is logged and what runs.
+  `exec_cmd` is reserved for this purpose -- never use `$cmd` (already
+  used for other purposes in many scripts).
+
+  ```bash
+  exec_cmd="govc vm.power -on $vm_name"
+  aba_debug "Running: $exec_cmd"
+  $exec_cmd
+  ```
+
+  For commands needing `eval` (pipes, redirects, embedded quotes):
+
+  ```bash
+  exec_cmd="oc get nodes --no-headers"
+  aba_debug "Running: $exec_cmd"
+  eval $exec_cmd
+  ```
+
+  For scripts that already use `$cmd` (e.g. `vmw-create.sh`,
+  `reg-uninstall.sh`), add `aba_debug "Running: $cmd"` before the
+  existing execution -- do not introduce a second variable.
+
+- Output: always stderr, never stdout (handled by `aba_debug` itself)
+- Gate: `DEBUG_ABA` env var (empty = silent, non-empty = active)
+- Timestamp: added automatically by `aba_debug`
+- **Consecutive dedup**: `aba_debug` suppresses consecutive identical messages
+  automatically. This means polling functions (called every N seconds by
+  `aba_wait_show`) can and should include `aba_debug` calls -- the first
+  invocation is logged, subsequent identical calls are silently suppressed.
+  No special exception needed for polling code.
+- For commands in heredocs or remote SSH, log what will be sent:
+  `aba_debug "Running on $host: <command>"`
+
+#### Non-goals (for now)
+
+- Tier 2/3 commands (podman, ssh, curl, skopeo, firewall-cmd, dnf, tar) --
+  future work, tracked in BACKLOG.md
+- Structured/JSON logging
+- Log levels beyond debug/info
+
+---
+
 ## Coding Conventions
 
 - Tabs for indentation, never spaces

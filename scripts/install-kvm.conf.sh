@@ -50,6 +50,7 @@ else
 	source <(normalize-kvm-conf)
 
 	aba_info Checking kvm config file: $PWD/kvm.conf
+	aba_debug "Running: virsh -c $LIBVIRT_URI version"
 	if ! virsh -c "$LIBVIRT_URI" version; then
 		aba_abort "Cannot connect to libvirt at $LIBVIRT_URI.  Please edit $PWD/kvm.conf and try again!"
 	else

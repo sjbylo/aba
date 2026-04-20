@@ -41,13 +41,16 @@ else
 fi
 
 for name in $hosts; do
-	virsh -c "$LIBVIRT_URI" start "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
+	exec_cmd="virsh -c $LIBVIRT_URI start $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd 2>/dev/null || true
 done
 
 # Return 0 when every VM is running (optional wait after start).
 _kvm_start_all_running() {
 	local name state
 	for name in $hosts; do
+		aba_debug "Running: virsh -c $LIBVIRT_URI domstate $(vm_name "$CLUSTER_NAME" "$name")"
 		state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
 		[ "$state" = "running" ] || return 1
 	done

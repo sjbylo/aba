@@ -116,12 +116,17 @@ create_node() {
 
 		local annotation
 		annotation=$(_vm_annotation "$role")
+		aba_debug "Running: virsh -c $LIBVIRT_URI desc $vm_name --config --title"
 		virsh -c "$LIBVIRT_URI" desc "$vm_name" --config --title --new-desc "ABA: ${CLUSTER_NAME}.${base_domain}"
+		aba_debug "Running: virsh -c $LIBVIRT_URI desc $vm_name --config --new-desc"
 		virsh -c "$LIBVIRT_URI" desc "$vm_name" --config --new-desc "$annotation"
 
 		if [ -n "${START_VM:-}" ]; then
-			virsh -c "$LIBVIRT_URI" autostart "$vm_name"
+			exec_cmd="virsh -c $LIBVIRT_URI autostart $vm_name"
+			aba_debug "Running: $exec_cmd"
+			$exec_cmd
 		else
+			aba_debug "Running: virsh -c $LIBVIRT_URI destroy $vm_name (post-create power-off)"
 			virsh -c "$LIBVIRT_URI" destroy "$vm_name" 2>/dev/null || true
 		fi
 

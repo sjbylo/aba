@@ -43,13 +43,16 @@ if [ "$ask" ]; then
 fi
 
 for name in $hosts; do
-	govc vm.power -s "$(vm_name "$CLUSTER_NAME" "$name")" || true
+	exec_cmd="govc vm.power -s $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd || true
 done
 
 # Return 0 when every VM in $hosts is poweredOff (aligned with cluster-graceful-shutdown aba_wait_show).
 _vmw_stop_all_powered_off() {
 	local name vm_info power_state
 	for name in $hosts; do
+		aba_debug "Running: govc vm.info -json $(vm_name "$CLUSTER_NAME" "$name")"
 		vm_info=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")")
 		[ ! "$vm_info" ] && return 1
 		power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')

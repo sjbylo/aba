@@ -23,7 +23,7 @@
 ABA_VERSION=20260416224844
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260420104211
+ABA_BUILD=20260420144743
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -989,7 +989,9 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		getco)
-			oc --kubeconfig iso-agent-based/auth/kubeconfig get co
+			exec_cmd="oc --kubeconfig iso-agent-based/auth/kubeconfig get co"
+			aba_debug "Running: $exec_cmd"
+			$exec_cmd
 			exit
 		;;
 		day2)
@@ -1030,27 +1032,35 @@ if [ "$cur_target" ]; then
 		;;
 		ls)
 			_ensure_hv_ready
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (ls)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
 			exit
 		;;
 		start)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (start)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit 0
 			exit
 		;;
 		stop)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (stop)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
 			exit
 		;;
 		kill|poweroff)
 			_ensure_hv_ready
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (kill)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-kill.sh || exit 0
 			exit
 		;;
@@ -1059,7 +1069,9 @@ if [ "$cur_target" ]; then
 			# Config regeneration may fail (e.g. missing pull secret on a
 			# disconnected host after registry deregistration). Still attempt
 			# delete -- the HV delete script exits 0 when no VMs exist.
-			make -s init agentconf || true
+			exec_cmd="make -s init agentconf"
+			aba_debug "Running: $exec_cmd (delete)"
+			$exec_cmd || true
 			$ABA_ROOT/scripts/${HV}-delete.sh
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
@@ -1068,7 +1080,9 @@ if [ "$cur_target" ]; then
 		refresh)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (refresh)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
@@ -1077,7 +1091,9 @@ if [ "$cur_target" ]; then
 		;;
 		upload)
 			_ensure_hv_ready
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (upload)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-upload.sh
 			# Sync Make stamp files: upload implies poweroff already happened.
 			touch .autopoweroff .autoupload

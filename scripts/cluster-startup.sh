@@ -51,10 +51,13 @@ fi
 OC="oc --kubeconfig $PWD/iso-agent-based/auth/kubeconfig"
 
 _cluster_startup_oc_get_nodes() {
-	$OC get nodes
+	exec_cmd="$OC get nodes"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd
 }
 
 # Just to be as sure as possible we can access the cluster!
+aba_debug "Running: $OC get nodes"
 if ! $OC get nodes; then
 	if ! aba_wait_show "Waiting for oc get nodes" 3 120 _cluster_startup_oc_get_nodes; then
 		aba_abort "Giving up waiting!"
@@ -66,12 +69,15 @@ aba_info "Cluster endpoint accessible at $server_url"
 # Remove stale 'oc debug' pods that may re-execute shutdown commands.
 # These persist in etcd after a graceful shutdown and can cause an
 # infinite shutdown loop when kubelet re-syncs them on startup.
+aba_debug "Running: $OC get pods -n default (checking for stale debug pods)"
 for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
 	aba_info "Removing stale debug pod: $pod"
+	aba_debug "Running: $OC delete pod -n default $pod --grace-period=0 --force"
 	$OC delete pod -n default "$pod" --grace-period=0 --force 2>/dev/null || true
 done
 
 aba_info Cluster $cluster_name nodes:
+aba_debug "Running: $OC get nodes"
 if ! $OC get nodes; then
 	aba_abort "Failed to access the cluster!"
 fi
@@ -90,7 +96,7 @@ if ! aba_wait_show "Waiting for cluster API after uncordon" 10 300 _cluster_star
 	aba_warning "Could not reach cluster API after 5 minutes, continuing ..."
 fi
 
-all_nodes_ready() { [ -z "$($OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v ^True$)" ]; }
+all_nodes_ready() { aba_debug "Running: $OC get nodes (all_nodes_ready check)"; [ -z "$($OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v ^True$)" ]; }
 
 check_and_approve_csrs() {
 	# Keep on watching for and approving those CSRs ...
@@ -125,17 +131,23 @@ fi
 if all_nodes_ready; then
 	aba_info_ok "All nodes are ready!"
 fi
-$OC get nodes
+exec_cmd="$OC get nodes"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 aba_info "Note the certificate expiration date of this cluster ($cluster_name):"
+aba_debug "Running: $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer"
 echo_yellow $($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
 
+aba_debug "Running: $OC whoami --show-console"
 console=$($OC whoami --show-console)/
 
 _cluster_startup_console_ready() {
+	aba_debug "Running: curl -skL $console (console ready check)"
 	curl --retry 2 -skL "$console" | grep -q 'Red Hat OpenShift'
 }
 
 _cluster_startup_cos_ready() {
+	aba_debug "Running: $OC get co --no-headers (cluster operators ready check)"
 	$OC get co --no-headers | awk '{print $3,$5}' | grep -v '^True False$' | wc -l | grep -q '^0$'
 }
 

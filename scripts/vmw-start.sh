@@ -46,10 +46,13 @@ fi
 
 for name in $hosts ; do
 	vm_path="$(vm_name "$CLUSTER_NAME" "$name")"
-	# Skip power-on when already on — avoids govc "cannot be performed in the current state (Powered on)"
+	# Skip power-on when already on -- avoids govc "cannot be performed in the current state (Powered on)"
+	aba_debug "Running: govc vm.info -json $vm_path"
 	power_state=$(govc vm.info -json "$vm_path" | jq -r '.virtualMachines[0].runtime.powerState')
 	if [ "$power_state" != "poweredOn" ]; then
-		govc vm.power -on "$vm_path"
+		exec_cmd="govc vm.power -on $vm_path"
+		aba_debug "Running: $exec_cmd"
+		$exec_cmd
 	fi
 done
 
@@ -58,6 +61,7 @@ _vmw_start_all_powered_on() {
 	local name vm_path power_state
 	for name in $hosts; do
 		vm_path="$(vm_name "$CLUSTER_NAME" "$name")"
+		aba_debug "Running: govc vm.info -json $vm_path"
 		power_state=$(govc vm.info -json "$vm_path" | jq -r '.virtualMachines[0].runtime.powerState')
 		[ "$power_state" = "poweredOn" ] || return 1
 	done

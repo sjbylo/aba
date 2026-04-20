@@ -18,19 +18,25 @@ if [ ! -d "$name" ]; then
 	mkdir "$name"
 	cd "$name"
 	ln -fs ../templates/Makefile.mirror Makefile
-	make -s init
+	exec_cmd="make -s init"
+	aba_debug "Running: $exec_cmd (new mirror dir $name)"
+	$exec_cmd
 else
 	if [ -s "$name/Makefile" ]; then
 		if grep -q "Mirror Makefile" "$name/Makefile"; then
 			cd "$name"
-			make -s init
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (existing mirror dir $name)"
+			$exec_cmd
 		else
 			aba_abort "Error: Directory $name is not a valid mirror dir."
 		fi
 	else
 		cd "$name"
 		ln -fs ../templates/Makefile.mirror Makefile
-		make -s init
+		exec_cmd="make -s init"
+		aba_debug "Running: $exec_cmd (empty mirror dir $name)"
+		$exec_cmd
 	fi
 fi
 
@@ -40,7 +46,9 @@ else
 	aba_info "Creating '$name/mirror.conf'."
 fi
 
-make -s mirror.conf
+exec_cmd="make -s mirror.conf"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 
 echo
 aba_info "Mirror directory created: $name"

@@ -143,10 +143,15 @@ echo_warn() {
 	fi
 }
 
+_aba_debug_last=
 aba_debug() {
     local newline=1
 
     [ ! "${DEBUG_ABA:-}" ] && return 0
+
+    # Suppress consecutive duplicate messages (e.g. polling loops)
+    [ "$*" = "$_aba_debug_last" ] && return 0
+    _aba_debug_last="$*"
 
     # Erase to col1 and return
     [ "$TERM" ] && { tput el1 && tput cr; } >&2
@@ -340,11 +345,13 @@ normalize-aba-conf() {
 
 warn_if_cluster_unstable() {
 	local _co_unavail
+	aba_debug "Running: oc get co --no-headers (cluster stability check)"
 	_co_unavail=$(oc get co --no-headers 2>/dev/null | awk '$3 != "True" { printf "%s ", $1 }')
 	if [ -n "${_co_unavail% }" ]; then
 		aba_warning "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"
 	fi
 
+	aba_debug "Running: oc get mcp (MCP update check)"
 	if oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null \
 		| grep -q True; then
 		aba_warning "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
@@ -684,6 +691,7 @@ normalize-vmware-conf()
 	eval "$vars"
 	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
 	# FIXME: Is this the right place to check?!
+	aba_debug "Running: govc about (ESXi detection)"
         if govc about | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
 		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
@@ -2620,6 +2628,7 @@ ensure_oc_mirror() {
 	# (cli-download-all.sh starts downloads in background; extracting a
 	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
 	# Provide command so run_once can start the download if task was reset
+	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
 	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
@@ -2646,6 +2655,7 @@ ensure_openshift_install() {
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
+	aba_debug "ensure_govc: downloading and installing govc"
 	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
 }
@@ -2656,12 +2666,14 @@ ensure_virsh() {
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
+	aba_debug "ensure_butane: downloading and installing butane"
 	run_once -q -w -i "cli:download:butane" -- make -sC cli download-butane
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
 ensure_quay_registry() {
+	aba_debug "ensure_quay_registry: installing mirror-registry"
 	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
 }
 
