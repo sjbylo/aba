@@ -91,16 +91,16 @@ if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 			>/dev/null 2>&1
 	}
 
-	if ! aba_wait_show "Patching cluster trust CA" 5 120 _day2_patch_additional_ca; then
-		aba_abort "Timed out patching cluster trust CA (2 min)"
+	if ! aba_wait_show "Patching cluster trust CA" 5 180 _day2_patch_additional_ca; then
+		aba_abort "Timed out patching cluster trust CA (3 min)"
 	fi
 
 	_day2_imagestream_available() {
 		oc get imagestream >/dev/null 2>&1
 	}
 
-	if ! aba_wait_show "Waiting for imagestream API" 5 120 _day2_imagestream_available; then
-		aba_abort "Timed out waiting for imagestream API (2 min)"
+	if ! aba_wait_show "Waiting for imagestream API" 5 180 _day2_imagestream_available; then
+		aba_abort "Timed out waiting for imagestream API (3 min)"
 	fi
 
 	# The above workaround describes re-creating the is/oauth-proxy 
@@ -112,8 +112,8 @@ if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 			oc get imagestream -n openshift oauth-proxy >/dev/null 2>&1
 		}
 
-		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 180 _day2_oauth_proxy_recreated; then
-			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (3 min)"
+		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 270 _day2_oauth_proxy_recreated; then
+			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (4.5 min)"
 		fi
 	else
 		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
