@@ -23,6 +23,7 @@ header="Name CPU Memory State"
 output=
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $vm"
 	info=$(virsh -c "$LIBVIRT_URI" dominfo "$vm" 2>/dev/null) || continue
 
 	state=$(echo "$info" | awk '/^State:/ {$1=""; s=substr($0,2); gsub(/ /,"-",s); print s}')

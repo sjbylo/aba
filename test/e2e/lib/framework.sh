@@ -766,10 +766,6 @@ e2e_add_to_mirror_cleanup() {
 }
 
 # Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
-# Runs 'aba uninstall' to remove the registry, then removes the mirror
-# working directory itself (tarballs, configs, imageset data).  Without the
-# directory removal, multi-GB artifacts survive on conN and trip the
-# pre-suite _verify_no_mirror_data_dirs check.
 # Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_mirrors() {
 	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
@@ -779,12 +775,12 @@ e2e_cleanup_mirrors() {
 	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
-		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall + rm -rf $abs_path"
+		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				aba -y -d '$abs_path' uninstall && rm -rf '$abs_path'
+				aba -y -d '$abs_path' uninstall
 			else
 				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
 			fi" \

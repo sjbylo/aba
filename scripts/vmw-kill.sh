@@ -34,7 +34,9 @@ if [ "$ask" ]; then
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	govc vm.power -off "$(vm_name "$CLUSTER_NAME" "$name")" || true
+	exec_cmd="govc vm.power -off $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd || true
 done
 
 exit 0

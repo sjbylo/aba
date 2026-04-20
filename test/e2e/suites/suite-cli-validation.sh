@@ -38,7 +38,8 @@ plan_tests \
     "Invalid platform, vendor, type" \
     "Invalid network arguments" \
     "Unknown flags" \
-    "Bundle output collision"
+    "Bundle output collision" \
+    "Debug mode on/off"
 
 suite_begin "cli-validation"
 
@@ -179,6 +180,37 @@ e2e_run_must_fail "Bundle --out to existing tar" \
 
 e2e_run -q "Clean up collision test file" \
     "rm -f /tmp/e2e-cli-collision-test.tar"
+
+test_end 0
+
+# ============================================================================
+# 10. Debug mode on/off
+# ============================================================================
+test_begin "Debug mode on/off"
+
+# --debug / -D must produce [ABA_DEBUG] markers on stderr.
+# Using --help as test vehicle: fast, no side effects, goes through main parser.
+e2e_run "aba --debug produces ABA_DEBUG output" \
+    "aba --debug --help 2>&1 | grep -q ABA_DEBUG"
+
+e2e_run "aba -D produces ABA_DEBUG output" \
+    "aba -D --help 2>&1 | grep -q ABA_DEBUG"
+
+# DEBUG_ABA env var has the same effect as --debug flag
+e2e_run "DEBUG_ABA=1 env var produces ABA_DEBUG output" \
+    "DEBUG_ABA=1 aba --help 2>&1 | grep -q ABA_DEBUG"
+
+# Without --debug and with DEBUG_ABA unset, no ABA_DEBUG output
+e2e_run "No debug output without --debug flag" \
+    "unset DEBUG_ABA; aba --help 2>&1 | { ! grep -q ABA_DEBUG; }"
+
+# --debug with a make target: verify debug messages appear during real execution
+e2e_run "Debug mode with make target produces ABA_DEBUG" \
+    "aba --debug -d mirror init 2>&1 | grep -q ABA_DEBUG"
+
+# Same target without debug: no ABA_DEBUG in output
+e2e_run "Non-debug mode: no ABA_DEBUG in output" \
+    "unset DEBUG_ABA; aba -d mirror init 2>&1 | { ! grep -q ABA_DEBUG; }"
 
 test_end 0
 

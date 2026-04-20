@@ -25,6 +25,7 @@ output=
 # List all VMs with cpu, ram and power state
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	aba_debug "Running: govc vm.info -json $vm"
 	vm_info=$(govc vm.info -json "$vm")
 	[ ! "$vm_info" ] && continue
 

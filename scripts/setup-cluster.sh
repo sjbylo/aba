@@ -20,21 +20,25 @@ if [ ! -d "$name" ]; then
 	mkdir $name
 	cd $name
 	ln -fs ../templates/Makefile.cluster Makefile
-	make -s init
+	exec_cmd="make -s init"
+	aba_debug "Running: $exec_cmd (new cluster dir $name)"
+	$exec_cmd
 else
 	if [ -s $name/Makefile ]; then
 	       	if grep -q "Cluster Makefile" $name/Makefile; then
 			cd $name 
-			#rm -f $name/cluster.conf  # Refresh/overwrite the config if creating the cluster dir
-			#make -s clean init  # We clean here since 'aba cluster' is meant to cerate a fresh/new cluster dir and not re-use it.
-			make -s       init  # Allow the dir to be "re-used",. i.e. don't touch any already created artifacts (cluster.con, agent*yaml, iso etc) 
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (existing cluster dir $name)"
+			$exec_cmd  # Allow the dir to be "re-used",. i.e. don't touch any already created artifacts (cluster.con, agent*yaml, iso etc) 
 		else
 			aba_abort "Error: Directory $name invalid cluster dir."
 		fi
 	else
 		cd $name
 		ln -fs ../templates/Makefile.cluster Makefile
-		make -s init
+		exec_cmd="make -s init"
+		aba_debug "Running: $exec_cmd (empty cluster dir $name)"
+		$exec_cmd
 	fi
 fi
 
@@ -44,11 +48,11 @@ else
 	aba_info "Creating '$name/cluster.conf' file for cluster type '$type'."
 fi
 
-create_cluster_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
+exec_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip"
 
-aba_debug Running: $create_cluster_cmd
+aba_debug "Running: $exec_cmd"
 
-$create_cluster_cmd
+$exec_cmd
 
 [ "$step" ] && target="$step"
 
@@ -67,8 +71,9 @@ fi
 
 # Let's be explicit, only run make if there is a given target, e.g. 'install' or 'iso' etc
 if [ "$target" ]; then
-	#aba_info "Running: make -s $target" >&2
 	aba_info "Targeting step: $target in dir: $PWD" >&2
-	make -s "$target"
+	exec_cmd="make -s $target"
+	aba_debug "Running: $exec_cmd (in $PWD)"
+	$exec_cmd
 fi
 

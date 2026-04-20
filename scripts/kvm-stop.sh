@@ -40,13 +40,16 @@ if [ "$ask" ]; then
 fi
 
 for name in $hosts; do
-	virsh -c "$LIBVIRT_URI" shutdown "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
+	exec_cmd="virsh -c $LIBVIRT_URI shutdown $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd 2>/dev/null || true
 done
 
 # Return 0 when every VM is shut off (aligned with cluster-graceful-shutdown aba_wait_show).
 _kvm_stop_all_shut_off() {
 	local name state
 	for name in $hosts; do
+		aba_debug "Running: virsh -c $LIBVIRT_URI domstate $(vm_name "$CLUSTER_NAME" "$name")"
 		state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
 		[ "$state" = "shut off" ] || return 1
 	done

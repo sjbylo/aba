@@ -36,13 +36,16 @@ scripts/cli-install-all.sh --wait oc
 
 aba_info "Accessing the cluster ..."
 
+aba_debug "Running: oc whoami --request-timeout=20s"
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+	aba_debug "Running: oc whoami (with KUBECONFIG=$KUBECONFIG)"
 	if ! oc whoami >/dev/null; then
 		aba_warning "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 		. <(aba login)
 
+		aba_debug "Running: oc whoami --request-timeout=20s (after login)"
 		if ! oc whoami --request-timeout='20s' >/dev/null; then
 			aba_abort "Unable to log into the cluster" 
 		fi
@@ -64,6 +67,7 @@ echo
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
+	aba_debug "Running: oc patch OperatorHub cluster --type json (disable default sources)"
 	oc patch OperatorHub cluster --type json \
 		-p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' >/dev/null
 	aba_info "Disabled default catalog sources (disconnected mode)"
@@ -75,6 +79,7 @@ fi
 # Workaround: https://access.redhat.com/solutions/5514331
 # Fixes 'Imagestream openshift/oauth-proxy x509 certificate signed by unknown authority'
 aba_info "Adding mirror registry CA to cluster trust store"
+aba_debug "Running: oc get cm registry-config -n openshift-config"
 cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
 if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
@@ -82,9 +87,11 @@ if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
 	aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 
+	aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	_day2_patch_additional_ca() {
+		aba_debug "Running: oc patch image.config.openshift.io cluster (additionalTrustedCA)"
 		oc patch image.config.openshift.io cluster \
 			--type='json' \
 			-p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]' \
@@ -96,6 +103,7 @@ if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	fi
 
 	_day2_imagestream_available() {
+		aba_debug "Running: oc get imagestream"
 		oc get imagestream >/dev/null 2>&1
 	}
 
@@ -104,11 +112,14 @@ if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	fi
 
 	# The above workaround describes re-creating the is/oauth-proxy 
+	aba_debug "Running: oc get imagestream -n openshift oauth-proxy -o yaml"
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		aba_info "'Unknown authority' found in imagestream/oauth-proxy in namespace openshift."
+		aba_debug "Running: oc delete imagestream -n openshift oauth-proxy"
 		oc delete imagestream -n openshift oauth-proxy >/dev/null 2>&1 || true
 
 		_day2_oauth_proxy_recreated() {
+			aba_debug "Running: oc get imagestream -n openshift oauth-proxy"
 			oc get imagestream -n openshift oauth-proxy >/dev/null 2>&1
 		}
 
@@ -173,7 +184,7 @@ apply_custom_manifests() {
 
 		# Apply the manifest
 		aba_info "oc apply -f $rel_path"
-
+		aba_debug "Running: oc apply -f $manifest_file"
 		if oc apply -f "$manifest_file"; then
 			success_count=$((success_count + 1))
 		else
@@ -212,7 +223,9 @@ if [ "$latest_working_dir" ]; then
 	do
 		if [ -s $f ]; then
 			aba_info oc apply -f $f
-			oc apply -f $f
+			exec_cmd="oc apply -f $f"
+			aba_debug "Running: $exec_cmd"
+			$exec_cmd
 		else
 			aba_warning "no such file: $f"
 		fi
@@ -257,12 +270,15 @@ if [ "$latest_working_dir" ]; then
 		fi
 
 		aba_info Applying CatalogSource: $cs_name
+		aba_debug "Running: cat $f | sed ... | oc apply -f - (CatalogSource $cs_name)"
 	       	cat $f | sed "s/name: cs-.*-index.*/name: $cs_name/g" | oc apply -f - # 2>/dev/null
 
 		aba_info "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
+		aba_debug "Running: oc patch CatalogSource $cs_name -n $ns --type merge (displayName)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"displayName": "'$cs_name' ('$reg_host')"}}'
 
 		aba_info "Patching CatalogSource poll interval for $cs_name to 2m"
+		aba_debug "Running: oc patch CatalogSource $cs_name -n $ns --type merge (pollInterval)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 
 		wait_for_cs=true
@@ -309,12 +325,16 @@ if [ "$latest_working_dir" ]; then
 	[ "$wait_for_cs" ] && wait
 
 	aba_info "Showing status of all CatalogSource resources:"
-	oc get CatalogSource -A
+	exec_cmd="oc get CatalogSource -A"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd
 
 	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
 	if [ -s $sig_file ]; then
 		aba_info "Applying signatures from: $sig_file ..."
-		oc apply -f $sig_file
+		exec_cmd="oc apply -f $sig_file"
+		aba_debug "Running: $exec_cmd"
+		$exec_cmd
 	else
 		aba_info "No Signature files found in $latest_working_dir/cluster-resources" >&2
 	fi
