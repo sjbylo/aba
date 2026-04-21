@@ -918,14 +918,15 @@ _vm_provision_root_user() {
 	echo "    proxy scripts -> /root/"
 
 	_essh "${user}@${host}" -- "sudo bash -c '
-		mkdir -p /home/root/aba /home/root/tmp
-		chown root:root /home/root /home/root/aba /home/root/tmp
-		chmod 700 /home/root /home/root/aba /home/root/tmp
-		rm -rf /root/aba /root/tmp
-		ln -sfn /home/root/aba /root/aba
-		ln -sfn /home/root/tmp /root/tmp
+		for d in aba tmp .oc-mirror .aba .cache; do
+			mkdir -p /home/root/\$d
+			rm -rf /root/\$d
+			ln -sfn /home/root/\$d /root/\$d
+		done
+		chown -R root:root /home/root
+		chmod 700 /home/root
 	'"
-	echo "    symlinks: /root/aba -> /home/root/aba, /root/tmp -> /home/root/tmp"
+	echo "    symlinks: /root/{aba,tmp,.oc-mirror,.aba,.cache} -> /home/root/"
 
 	echo "  [vm] Root user provisioning complete on $host"
 }

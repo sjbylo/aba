@@ -23,10 +23,28 @@ _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$HOME/aba"
 export _ABA_ROOT
 
-# For root, redirect mirror data (oc-mirror cache, registry, TMPDIR) to /home
-# via ABA's existing data_dir mechanism. Suites use E2E_DATA_DIR with --data-dir.
+# For root, redirect large directories to /home to avoid filling the small /
+# filesystem. Symlinks are set up during golden VM creation but may be missing
+# if the golden predates the provisioning code, so enforce them here too.
 if [ "$(id -u)" = "0" ]; then
 	export E2E_DATA_DIR="/home/root"
+	_root_home="/home/root"
+	mkdir -p "$_root_home"
+	for _dir in aba tmp .oc-mirror .aba .cache; do
+		_src="/root/$_dir"
+		_dst="$_root_home/$_dir"
+		if [ -d "$_src" ] && [ ! -L "$_src" ]; then
+			mkdir -p "$_dst"
+			# Move existing content to /home then replace with symlink
+			rsync -a "$_src/" "$_dst/" 2>/dev/null && rm -rf "$_src"
+			ln -sfn "$_dst" "$_src"
+			echo "  [root] Relocated $_src -> $_dst"
+		elif [ ! -e "$_src" ]; then
+			mkdir -p "$_dst"
+			ln -sfn "$_dst" "$_src"
+		fi
+	done
+	unset _root_home _dir _src _dst
 else
 	export E2E_DATA_DIR=""
 fi
