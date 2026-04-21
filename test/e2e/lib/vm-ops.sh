@@ -446,6 +446,11 @@ _vm_setup_network_connected() {
 		nmcli -g NAME connection show | grep "^Wired connection 2$" && \
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
+		# --- Force MTU 1500 on all NICs (DHCP may hand out 9000) ---
+		for _c in ens192 ens224 ens256; do
+		    nmcli connection modify "\$_c" 802-3-ethernet.mtu 1500 2>/dev/null || true
+		done
+
 		# --- ens192: lab network (NOT default route) ---
 		nmcli connection modify ens192 \
 		    ipv4.never-default yes \
@@ -472,7 +477,8 @@ _vm_setup_network_connected() {
 		nmcli -g NAME connection show | grep "^ens224\.10$" && \
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
-		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes
+		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes \
+		    802-3-ethernet.mtu 1500
 
 		hostnamectl set-hostname $clone_name
 
@@ -505,6 +511,11 @@ _vm_setup_network_disconnected() {
 		nmcli -g NAME connection show | grep "^Wired connection 2$" && \
 		    nmcli connection modify "Wired connection 2" connection.id ens256
 
+		# --- Force MTU 1500 on all NICs (DHCP may hand out 9000) ---
+		for _c in ens192 ens224 ens256; do
+		    nmcli connection modify "\$_c" 802-3-ethernet.mtu 1500 2>/dev/null || true
+		done
+
 		# --- ens256: DISABLE (disconnected host has no direct internet) ---
 		nmcli connection modify ens256 \
 		    autoconnect no \
@@ -532,7 +543,8 @@ _vm_setup_network_disconnected() {
 		    nmcli connection delete ens224.10
 		nmcli connection add type vlan con-name ens224.10 ifname ens224.10 dev ens224 \
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip \
-		    ipv4.gateway $gateway_ip
+		    ipv4.gateway $gateway_ip \
+		    802-3-ethernet.mtu 1500
 
 		# --- DNS: point at connected bastion's dnsmasq ---
 		cat > /etc/NetworkManager/conf.d/no-dns.conf << 'NMEOF'
@@ -916,6 +928,39 @@ _vm_provision_root_user() {
 	echo "    symlinks: /root/aba -> /home/root/aba, /root/tmp -> /home/root/tmp"
 
 	echo "  [vm] Root user provisioning complete on $host"
+}
+
+# --- _vm_fix_mtu --------------------------------------------------------------
+# Force MTU 1500 on all Ethernet NICs.  The ESXi DHCP server hands out
+# interface_mtu=9000 (jumbo frames from the vSwitch), which breaks ABA's
+# networking expectations.  Setting it in the golden image means every clone
+# inherits the correct value.
+
+_vm_fix_mtu() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [vm] Fixing MTU to 1500 on all NICs on $host ..."
+
+	cat <<-'MTUEOF' | _essh "${user}@${host}" -- sudo bash
+		set -e
+		for conn in $(nmcli -g NAME connection show); do
+			type=$(nmcli -g connection.type connection show "$conn" 2>/dev/null)
+			case "$type" in
+				802-3-ethernet|vlan)
+					cur=$(nmcli -g 802-3-ethernet.mtu connection show "$conn" 2>/dev/null)
+					if [ "$cur" != "1500" ]; then
+						nmcli connection modify "$conn" 802-3-ethernet.mtu 1500
+						echo "    $conn: MTU set to 1500 (was: ${cur:-auto})"
+					fi
+					;;
+			esac
+		done
+		# Apply immediately on active connections
+		for conn in $(nmcli -g NAME connection show --active); do
+			nmcli connection up "$conn" 2>/dev/null || true
+		done
+	MTUEOF
 }
 
 # --- _vm_fix_proxy_noproxy ---------------------------------------------------

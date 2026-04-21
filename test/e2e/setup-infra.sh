@@ -529,6 +529,13 @@ _LOG_DIR="$_INFRA_DIR/logs"
 
 mkdir -p "$_LOG_DIR"
 
+# --pool N targets a single pool; translate to loop range
+_POOL_START=1
+if [ -n "$_POOL_SINGLE" ]; then
+	_POOL_START=$_POOL_SINGLE
+	_POOLS=$_POOL_SINGLE
+fi
+
 # =============================================================================
 # --verify: run post-config checks on all pools, skip infra setup
 # =============================================================================
@@ -614,7 +621,7 @@ set -x
 
 echo ""
 echo "=== E2E Infrastructure Setup ==="
-echo "  Pools: $_POOLS"
+echo "  Pools: ${_POOL_START}..${_POOLS}"
 echo "  RHEL: $_RHEL_VER"
 echo "  Golden: $_GOLDEN_NAME"
 echo "  Template: $_VM_TEMPLATE"
@@ -674,6 +681,7 @@ _prepare_golden() {
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_setup_ssh_keys "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_fix_mtu "$ip" "$user"             || return 1
 	_vm_setup_default_route "$ip" "$user" || return 1
 	_vm_fix_proxy_noproxy "$ip" "$user"   || return 1
 	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
@@ -712,7 +720,7 @@ _r=$?
 # =============================================================================
 
 echo ""
-echo "=== Phase 1: Ensure conN/disN VMs (pools 1..$_POOLS) ==="
+echo "=== Phase 1: Ensure conN/disN VMs (pools ${_POOL_START}..$_POOLS) ==="
 
 if ! govc snapshot.tree -vm "$_GOLDEN_NAME" | grep "golden-ready"; then
 	echo "FATAL: golden VM '$_GOLDEN_NAME' has no 'golden-ready' snapshot -- cannot clone pool VMs" >&2
@@ -751,7 +759,7 @@ for prefix in con dis; do
 
 	echo "  --- Cloning ${prefix}1..${prefix}${_POOLS} ---"
 
-	for (( i=1; i<=_POOLS; i++ )); do
+	for (( i=_POOL_START; i<=_POOLS; i++ )); do
 		pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
 		pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
 		pool_log="$_LOG_DIR/create-pool${i}.log"
@@ -846,7 +854,7 @@ declare -a _cfg_labels=()
 declare -a _cfg_logs=()
 _cfg_failed=0
 
-for (( i=1; i<=_POOLS; i++ )); do
+for (( i=_POOL_START; i<=_POOLS; i++ )); do
 	pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
 	con_log="$_LOG_DIR/create-pool${i}-con.log"
 	dis_log="$_LOG_DIR/create-pool${i}-dis.log"
@@ -914,7 +922,7 @@ echo ""
 echo "=== Phase 3: Create pool-ready snapshots ==="
 
 _snapshot_vms=()
-for (( i=1; i<=_POOLS; i++ )); do
+for (( i=_POOL_START; i<=_POOLS; i++ )); do
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
 		if govc snapshot.tree -vm "$vm_name" 2>&1 | grep -q "$_SNAPSHOT_NAME"; then
