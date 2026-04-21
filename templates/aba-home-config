@@ -4,22 +4,32 @@
 # Uncomment and adjust values as needed.
 
 # --- Catalog Index Settings ---
+# All timeout/TTL values accept duration strings: 30s, 20m, 12h, 1d (or bare seconds).
 
-# Cache TTL in SECONDS for downloaded operator catalog indexes (default: 43200 = 12 hours).
+# Cache TTL for downloaded operator catalog indexes (default: 12h).
 # Indexes are re-downloaded when older than this value.
 # Increase for stable environments; decrease if upstream catalog changes cause oc-mirror errors.
-CATALOG_CACHE_TTL_SECS=43200
+CATALOG_CACHE_TTL=12h
 
-# Download timeout in MINUTES for catalog index downloads (default: 20).
-# This controls how long 'aba' waits for the small operator index files (.index/*) to download.
+# Download timeout for catalog index downloads (default: 20m).
+# This controls how long 'aba' waits for the operator index files (.index/*) to download.
 # Increase for slow networks. Not related to oc-mirror image mirroring (see OC_MIRROR_IMAGE_TIMEOUT).
-CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS=20
+CATALOG_INDEX_DOWNLOAD_TIMEOUT=20m
 
 # Max concurrent catalog downloads (default: 3 = all three catalogs in parallel).
 # Set to 1 for sequential downloads on constrained systems.
 # CATALOG_MAX_PARALLEL=3
 
 # --- oc-mirror Settings ---
+
+# oc-mirror --since date for mirror-to-disk (save) only (format: yyyy-MM-dd).
+# Ensures every archive is self-contained with full catalog metadata, which is
+# required for reliable diskToMirror (load) on disconnected hosts.
+# Without this, oc-mirror's default differential archives may lack catalog data,
+# causing load to attempt upstream access (fails in airgapped environments).
+# Set to empty to use oc-mirror's differential mode (smaller archives, but each
+# archive must be loaded in order and may need network access for catalog resolution).
+OC_MIRROR_SINCE=2020-01-01
 
 # oc-mirror --image-timeout value (default: 30m).
 # Increase for slow networks or large operator images.

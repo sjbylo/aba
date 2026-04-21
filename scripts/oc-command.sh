@@ -18,5 +18,6 @@ echo "$cmd" | grep "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command
 export KUBECONFIG=iso-agent-based/auth/kubeconfig
 
 aba_info "Running command: oc $cmd"
+aba_debug "Running: oc $cmd"
 eval oc $cmd
 

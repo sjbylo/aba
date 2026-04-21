@@ -2,6 +2,17 @@
 # Shared helper library for TUI automated tests
 # Source this file — do not execute directly.
 #
+# Running:
+#   bash test/func/test-tui-v2-01-wizard.sh
+#   bash test/func/test-tui-v2-02-basket.sh
+#   bash test/func/test-tui-v2-03-actions.sh
+#   bash test/func/test-tui-v2-04-isconf.sh
+#
+# Watching live (from another terminal):
+#   TMUX= tmux attach -t tui-test -r
+#
+# The -r flag attaches read-only. Prefix with TMUX= if already in tmux.
+#
 # Provides:
 #   start_tui / stop_tui   — tmux session management
 #   capture / send          — screen interaction
@@ -33,7 +44,7 @@ for _arg in "$@"; do
 done
 
 # --- Config ---
-SESSION="${SESSION:-tui-test-$$}"
+SESSION="${SESSION:-tui-test}"
 TUI_CMD="${TUI_CMD:-tui/abatui.sh}"
 TIMEOUT="${TIMEOUT:-30}"
 POLL_INTERVAL="${POLL_INTERVAL:-1}"

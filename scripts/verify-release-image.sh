@@ -72,8 +72,10 @@ if [ ! -x $openshift_install_mirror ]; then
 
 	aba_info Extracting openshift-install from the release-image: $reg_host:$reg_port$reg_path/openshift/release-images$release_sha
 	# This fails for oc versions up to v4.14 since the wrong/old version of 'oc' is used (i.e. 'idms' not supported).
-	# So, I added || true to ignore errors (which is a hack!) 
-	oc adm release extract --idms-file=.idms.yaml  --command=openshift-install $reg_host:$reg_port$reg_path/openshift/release-images$release_sha --insecure=true || true
+	# So, I added || true to ignore errors (which is a hack!)
+	exec_cmd="oc adm release extract --idms-file=.idms.yaml --command=openshift-install $reg_host:$reg_port$reg_path/openshift/release-images$release_sha --insecure=true"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd || true
 	[ -x openshift-install ] && mv openshift-install $openshift_install_mirror
 	# Now use the one in CWD # [ -s openshift-install ] && mv openshift-install ~/bin
 	rm -f .idms.yaml

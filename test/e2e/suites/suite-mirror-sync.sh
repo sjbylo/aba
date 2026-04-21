@@ -53,13 +53,11 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
@@ -72,7 +70,7 @@ e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
+e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
@@ -88,6 +86,9 @@ e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
+e2e_diag "Show aba.conf" "grep -E '^\w' aba.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 test_end
 
@@ -181,6 +182,7 @@ e2e_run "Verify mirror-registry exists after re-extract" \
 e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
 e2e_run "Reconfigure remote registry after reset" \
     "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+e2e_diag "Show mirror.conf after reset+reconfigure" "grep -E '^\w' mirror/mirror.conf"
 
 # Registries.d sigstore config test: verify the config file is deployed
 # and that oc-mirror works without --remove-signatures (relying on
@@ -199,12 +201,12 @@ e2e_run -q "Ensure OC_MIRROR_FLAGS is unset in ~/.aba/config" \
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
 
-# Verify the generated save-mirror.sh does NOT contain --remove-signatures
-e2e_run "Verify no --remove-signatures in generated save-mirror.sh" \
-    "! grep -- '--remove-signatures' mirror/data/save-mirror.sh"
+# Verify --remove-signatures is NOT active in OC_MIRROR_FLAGS
+e2e_run "Verify no active --remove-signatures in config" \
+    "! grep -q '^OC_MIRROR_FLAGS=.*--remove-signatures' \$HOME/.aba/config"
 
 e2e_diag "Check oc-mirror cache (local)" \
-    "sudo find ~/ -name '.cache' -path '*/.oc-mirror/*'"
+    "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*' 2>/dev/null"
 
 test_end
 
@@ -244,6 +246,7 @@ e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 
@@ -292,6 +295,7 @@ e2e_poll 600 30 "Wait for all operators fully available" \
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 

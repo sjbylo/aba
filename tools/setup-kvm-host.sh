@@ -150,8 +150,29 @@ sudo virsh pool-autostart default
 sudo virsh pool-info default
 POOL_SCRIPT
 
-# ── Step 8: Verify ───────────────────────────────────────────────────────────
-echo "--- Step 8: Verification ---"
+# ── Step 8: Authorize E2E golden VM root key ─────────────────────────────────
+# When E2E suites run with --user root, root@conN connects to the KVM host as
+# $SSH_USER via LIBVIRT_URI (qemu+ssh://$SSH_USER@host/system).  The conN VMs
+# are cloned from a golden image with a fixed root keypair.  Authorize that key
+# so virsh/virt-install works without a password prompt.
+echo "--- Step 8: Authorizing E2E root keys on KVM host ---"
+
+_golden_root_key="$HOME/.ssh/e2e-golden-root.pub"
+if [ -f "$_golden_root_key" ]; then
+	echo "    Authorizing golden VM root key on $KVM_HOST ..."
+	_pubkey=$(cat "$_golden_root_key")
+	$RSSH "grep -qF '$(echo "$_pubkey" | cut -d' ' -f2)' ~/.ssh/authorized_keys 2>/dev/null || echo '$_pubkey' >> ~/.ssh/authorized_keys"
+	echo "    Done."
+else
+	echo "    NOTE: $_golden_root_key not found on bastion."
+	echo "           After creating the golden VM, copy root's public key:"
+	echo "             ssh root@conN 'cat /root/.ssh/id_rsa.pub' > ~/.ssh/e2e-golden-root.pub"
+	echo "           Then re-run this script, or manually authorize it:"
+	echo "             cat ~/.ssh/e2e-golden-root.pub | ssh ${SSH_USER}@${KVM_HOST} 'cat >> ~/.ssh/authorized_keys'"
+fi
+
+# ── Step 9: Verify ───────────────────────────────────────────────────────────
+echo "--- Step 9: Verification ---"
 
 $RSSH bash <<'VERIFY_SCRIPT'
 echo "=== virt-host-validate ==="
@@ -174,3 +195,6 @@ VERIFY_SCRIPT
 echo
 echo "=== KVM host setup complete at $KVM_HOST ==="
 echo "    Connect with: virsh -c qemu+ssh://${SSH_USER}@${KVM_HOST}/system"
+echo
+echo "    For E2E --user root support, ensure ~/.ssh/e2e-golden-root.pub exists"
+echo "    on bastion and re-run this script (Step 8 authorizes it)."

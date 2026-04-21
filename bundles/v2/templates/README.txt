@@ -42,26 +42,26 @@ cat ocp_<VERSION>* | tar -C <destination-dir> -xvf -
 
 cd <destination-dir>/aba
 ./install 
-aba                                                               # Follow the instructions.
-                                                                  # Verify all parameters aba.conf are set correctly.
+aba                                                                    # Follow the instructions.
+                                                                       # Verify all parameters aba.conf are set correctly.
 
 
 ## Install & load Quay with the images (either local or remote):
 
-aba load --retry 8 -H registry.example.com                        # Replace with your registry's FQDN which
-                                                                  # normally points to the default local IP address.
-aba load --retry 8 -H registry.example.com -k ~/.ssh/id_rsa       # Install Quay on a *remote* host using your ssh key.
+aba -d mirror load --retry 8 -H registry.example.com                   # Replace with your registry's FQDN which
+                                                                       # normally points to the default local IP address.
+aba -d mirror load --retry 8 -H registry.example.com -k ~/.ssh/id_rsa  # Install Quay on a *remote* host using your ssh key.
 
-aba load -h                                                       # See more options.
+aba load -h                                                            # See more options.
 
 
 ## Example of installing OpenShift:
 
-aba cluster --name sno --type sno                                 # Init sno/cluster.conf file, then follow instructions.
+aba cluster --name sno --type sno                                      # Init sno/cluster.conf file, then follow instructions.
 cd sno
-aba                                                               # Install OpenShift, follow instructions.
+aba                                                                    # Install OpenShift, follow instructions.
 
-aba cluster -h                                                    # See help on how to install a cluster.
+aba cluster -h                                                         # See help on how to install a cluster.
 
 ## See Aba's README.md for help:
 https://github.com/sjbylo/aba/blob/main/README.md

@@ -58,9 +58,7 @@ suite_begin "vmw-lifecycle"
 # ============================================================================
 test_begin "Setup: ensure pre-populated registry"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -96,8 +94,8 @@ e2e_run "Verify aba.conf: version format" \
 e2e_run "Copy vmware.conf from home directory" \
     "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Verify vmware.conf has GOVC_URL" "grep ^GOVC_URL vmware.conf"
-e2e_run "Verify vmware.conf has VC_FOLDER" "grep ^VC_FOLDER vmware.conf"
-e2e_run "Verify vmware.conf has GOVC_DATACENTER" "grep ^GOVC_DATACENTER vmware.conf"
+e2e_run "Verify vmware.conf (VC_FOLDER or ESXi)" \
+    "grep -q ^VC_FOLDER= vmware.conf || grep -q ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 
@@ -109,12 +107,14 @@ test_end
 test_begin "Setup: configure mirror for local registry"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 e2e_run "Generate pool-registry pull secret" \
     "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
@@ -159,6 +159,7 @@ e2e_run "Create compact cluster.conf" \
     "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
 e2e_run "Set mac_prefix for $COMPACT (VMware range, randomized)" \
     "sed -i 's#mac_prefix=.*#mac_prefix=00:50:56:1x:xx:#g' $COMPACT/cluster.conf"
+e2e_diag "Show compact cluster.conf" "grep -E '^\w' $COMPACT/cluster.conf"
 
 e2e_run "Generate ISO for compact cluster" "aba --dir $COMPACT iso"
 e2e_run "Upload ISO to VMware datastore" "aba --dir $COMPACT upload"
@@ -184,6 +185,7 @@ e2e_poll 1800 30 "Wait for compact bootstrap-complete" \
 e2e_diag "Compact cluster VMs after bootstrap" "aba --dir $COMPACT ls"
 
 e2e_run "Delete compact cluster" "aba -y --dir $COMPACT delete"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
 test_end
 
@@ -307,8 +309,10 @@ test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes VMware VMs)" \
     "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 e2e_run "Delete compact cluster if leftover" \
     "if [ -d $COMPACT ]; then aba --dir $COMPACT delete && rm -rf $COMPACT; else echo '[cleanup] $COMPACT already removed'; fi"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"

@@ -2,12 +2,11 @@
 # Run some day 2 changes
 # Set up cluster trust CA with the internal registry's Root CA
 # Configure OperatorHub using the internal mirror registry.
-# Apply the imageContentSourcePolicy resource files that were created by oc-mirror (aba -d mirror sync or load)
-## This script also solves the problem that multiple mirroring runs do not containing all ICSPs. See: https://github.com/openshift/oc-mirror/issues/597
+# Apply IDMS/ITMS resource files created by oc-mirror v2 (aba -d mirror sync or load)
 # For disconnected environments, disable online public catalog sources
 # Install any CatalogSources
 # Apply any user-provided custom manifests from day2-custom-manifests/ in cluster folder
-# Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html-single/registry/index#images-configuration-cas_configuring-registry-operator 
+# Note: https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html-single/registry/index#images-configuration-cas_configuring-registry-operator
 
 source scripts/include_all.sh
 
@@ -37,13 +36,16 @@ scripts/cli-install-all.sh --wait oc
 
 aba_info "Accessing the cluster ..."
 
+aba_debug "Running: oc whoami --request-timeout=20s"
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
-	if ! oc whoami; then
+	aba_debug "Running: oc whoami (with KUBECONFIG=$KUBECONFIG)"
+	if ! oc whoami >/dev/null; then
 		aba_warning "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 		. <(aba login)
 
+		aba_debug "Running: oc whoami --request-timeout=20s (after login)"
 		if ! oc whoami --request-timeout='20s' >/dev/null; then
 			aba_abort "Unable to log into the cluster" 
 		fi
@@ -63,53 +65,67 @@ aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/
 echo
 
 
-aba_info_ok For disconnected environments, disabling online public catalog sources
-
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if [ ! "$int_connection" ]; then
-	aba_info "Running: oc patch OperatorHub cluster --type json -p '[{\"op\": \"add\", \"path\": \"/spec/disableAllDefaultSources\", \"value\": true}]'"
-	oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' && \
-       		aba_info "Patched OperatorHub, disabled Red Hat default catalog sources"
+	aba_debug "Running: oc patch OperatorHub cluster --type json (disable default sources)"
+	oc patch OperatorHub cluster --type json \
+		-p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' >/dev/null
+	aba_info "Disabled default catalog sources (disconnected mode)"
 else
 	aba_info "Assuming internet connection (e.g. proxy) in use, not disabling default catalog sources"
 fi
 
 
-aba_info "Adding workaround for 'Imagestream openshift/oauth-proxy shows x509 certificate signed by unknown authority error while accessing mirror registry'"
-aba_info "and 'Image pull backoff for 'registry.redhat.io/openshift4/ose-oauth-proxy:<tag> image'."
-aba_info "Adding registry CA to the cluster.  See workaround: https://access.redhat.com/solutions/5514331 for more."
-echo
-cm_existing=$(oc get cm registry-config -n openshift-config || true)
+# Workaround: https://access.redhat.com/solutions/5514331
+# Fixes 'Imagestream openshift/oauth-proxy x509 certificate signed by unknown authority'
+aba_info "Adding mirror registry CA to cluster trust store"
+aba_debug "Running: oc get cm registry-config -n openshift-config"
+cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
 if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
-	aba_info "To fix https://access.redhat.com/solutions/5514331 and solve 'image pull errors in disconnected environment'."
-	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
+	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
 	aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
 
+	aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
-	aba_info "Running: oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
-	try_cmd 5 5 15 "oc patch image.config.openshift.io cluster --type='json' -p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]'"
+	_day2_patch_additional_ca() {
+		aba_debug "Running: oc patch image.config.openshift.io cluster (additionalTrustedCA)"
+		oc patch image.config.openshift.io cluster \
+			--type='json' \
+			-p='[{"op": "add", "path": "/spec/additionalTrustedCA", "value": {"name": "registry-config"}}]' \
+			>/dev/null 2>&1
+	}
 
-	# Sometimes see: 'error: the server doesn't have a resource type "imagestream"' ... so, need to check and wait! ...
-	aba_info "Ensuring 'imagestream' resource is available!" 
-	try_cmd 5 5 20 oc get imagestream 
+	if ! aba_wait_show "Patching cluster trust CA" 5 180 _day2_patch_additional_ca; then
+		aba_abort "Timed out patching cluster trust CA (3 min)"
+	fi
+
+	_day2_imagestream_available() {
+		aba_debug "Running: oc get imagestream"
+		oc get imagestream >/dev/null 2>&1
+	}
+
+	if ! aba_wait_show "Waiting for imagestream API" 5 180 _day2_imagestream_available; then
+		aba_abort "Timed out waiting for imagestream API (3 min)"
+	fi
 
 	# The above workaround describes re-creating the is/oauth-proxy 
+	aba_debug "Running: oc get imagestream -n openshift oauth-proxy -o yaml"
 	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
 		aba_info "'Unknown authority' found in imagestream/oauth-proxy in namespace openshift."
-		try_cmd 5 5 15 oc delete imagestream -n openshift oauth-proxy
+		aba_debug "Running: oc delete imagestream -n openshift oauth-proxy"
+		oc delete imagestream -n openshift oauth-proxy >/dev/null 2>&1 || true
 
-		echo_red "[ABA] Waiting for imagestream oauth-proxy in namespace openshift to be created.  This can take 2 to 3 minutes."
+		_day2_oauth_proxy_recreated() {
+			aba_debug "Running: oc get imagestream -n openshift oauth-proxy"
+			oc get imagestream -n openshift oauth-proxy >/dev/null 2>&1
+		}
 
-		sleep 30
-
-		# Assume once it's re-created then it's working
-		while ! oc get imagestream -n openshift oauth-proxy 2>/dev/null
-		do
-			sleep 10
-		done
+		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 360 _day2_oauth_proxy_recreated; then
+			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (6 min)"
+		fi
 	else
 		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
 	fi
@@ -168,7 +184,7 @@ apply_custom_manifests() {
 
 		# Apply the manifest
 		aba_info "oc apply -f $rel_path"
-
+		aba_debug "Running: oc apply -f $manifest_file"
 		if oc apply -f "$manifest_file"; then
 			success_count=$((success_count + 1))
 		else
@@ -207,7 +223,9 @@ if [ "$latest_working_dir" ]; then
 	do
 		if [ -s $f ]; then
 			aba_info oc apply -f $f
-			oc apply -f $f
+			exec_cmd="oc apply -f $f"
+			aba_debug "Running: $exec_cmd"
+			$exec_cmd
 		else
 			aba_warning "no such file: $f"
 		fi
@@ -217,7 +235,7 @@ if [ "$latest_working_dir" ]; then
 	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
 	[ ! "$cs_file_list" ] && \
-		aba_warning -p IMPORANT \
+		aba_warning -p IMPORTANT \
 			"No CatalogSource files found under $latest_working_dir/cluster-resources" \
 			"This usually means that Aba has not yet pushed any operator images to your mirror registry." \
 			"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
@@ -252,12 +270,15 @@ if [ "$latest_working_dir" ]; then
 		fi
 
 		aba_info Applying CatalogSource: $cs_name
+		aba_debug "Running: cat $f | sed ... | oc apply -f - (CatalogSource $cs_name)"
 	       	cat $f | sed "s/name: cs-.*-index.*/name: $cs_name/g" | oc apply -f - # 2>/dev/null
 
 		aba_info "Patching CatalogSource display name for $cs_name: $cs_name ($reg_host)"
+		aba_debug "Running: oc patch CatalogSource $cs_name -n $ns --type merge (displayName)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"displayName": "'$cs_name' ('$reg_host')"}}'
 
 		aba_info "Patching CatalogSource poll interval for $cs_name to 2m"
+		aba_debug "Running: oc patch CatalogSource $cs_name -n $ns --type merge (pollInterval)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 
 		wait_for_cs=true
@@ -304,19 +325,23 @@ if [ "$latest_working_dir" ]; then
 	[ "$wait_for_cs" ] && wait
 
 	aba_info "Showing status of all CatalogSource resources:"
-	oc get CatalogSource -A
+	exec_cmd="oc get CatalogSource -A"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd
 
 	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
 	if [ -s $sig_file ]; then
 		aba_info "Applying signatures from: $sig_file ..."
-		oc apply -f $sig_file
+		exec_cmd="oc apply -f $sig_file"
+		aba_debug "Running: $exec_cmd"
+		$exec_cmd
 	else
 		aba_info "No Signature files found in $latest_working_dir/cluster-resources" >&2
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
 	aba_warning "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
-	aba_warning -p IMPORANT \
+	aba_warning -p IMPORTANT \
 		"No cluster resource files found (CatalogSource, idms/itms ...) " \
 		"This usually occurs when Aba has not yet pushed any operator images to your mirror registry — either because mirroring" \
 		"hasn’t been run, or it wasn’t done from this host." \

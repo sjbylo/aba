@@ -458,20 +458,22 @@ END
 
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
-# Append the correct values for each operator
-mylog Append sm and kiali operators to imageset conf
+# Append ALL operators (old + new) so archive is self-contained for airgapped load.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators not
+# in the archive cause oc-mirror to reach upstream (fails on disconnected hosts).
+mylog Append kiali-ossm and servicemeshoperator3 to imageset conf
+grep -A2 -e "name: kiali-ossm$"  mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml
 grep -A2 -e "name: servicemeshoperator3$"  mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml
 
-^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
+test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 ########
 test-cmd -r 3 3 -m "Saving mesh operators to local disk" "aba --dir mirror save --retry"
 
 test-cmd -m "Show content of dir/" "ls -lh mirror/data/"
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/data/mirror_*.tar"
-test-cmd -m "Copy over image set archive file" "scp mirror/data/mirror_*.tar $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/data"
+test-cmd -m "Copy archive and config to internal bastion" "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/data"
 test-cmd -m "Delete the image set tar file that was saved and copied" rm -v mirror/data/mirror_*.tar
-test-cmd -m "Copy over image set conf file (needed for oc-mirror v2 load)" "scp mirror/data/imageset-config.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/data"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set tar file exists" "ls -lh $subdir/aba/mirror/data/mirror_*.tar"
 
 ## REMOVED #mylog Create incremental tar and ssh to internal bastion
@@ -530,8 +532,11 @@ END
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 ## upgrade tests
-mylog Appending cincinnati operator to imageset conf
-grep -A2 -e "name: cincinnati-operator$"	mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml
+# Include ALL operators (old + new) so archive is self-contained for airgapped load.
+mylog Appending all operators to imageset conf for upgrade save
+grep -A2 -e "name: kiali-ossm$"            mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml
+grep -A2 -e "name: servicemeshoperator3$"   mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml
+grep -A2 -e "name: cincinnati-operator$"    mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml
 
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
@@ -545,7 +550,7 @@ sed -i "s/^#      shortestPath: true.*/      shortestPath: true/g" mirror/data/i
 test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml 
 ####### upgrade cluster?
 
-test-cmd -r 3 3 -m "Saving cincinnati operator images to local disk" "aba --dir mirror save --retry"
+test-cmd -r 3 3 -m "Saving upgrade + operator images to local disk" "aba --dir mirror save --retry"
 
 mylog Downloading the mesh demo into test/mesh, for use by deploy script
 (
@@ -564,9 +569,8 @@ rm -f test/mirror-registry-amd64.tar.gz  # No need to copy this over!
 
 test-cmd -m "Listing mirror/data/" "ls -lh mirror/data/"
 test-cmd -m "Listing image set files that need to be copied also" "ls -lh mirror/data/mirror_*.tar"
-test-cmd -m "Listing image set conf file that need to be copied also" "ls -lh mirror/data/imageset-config.yaml"
 
-test-cmd -m "Copy mirror archive and ISC file to $reg_ssh_user@$int_bastion_hostname:$subdir" "scp mirror/data/mirror*tar mirror/data/imageset*yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/data"
+test-cmd -m "Copy archive and config to $reg_ssh_user@$int_bastion_hostname:$subdir" "scp mirror/data/mirror*tar mirror/data/imageset-config.yaml $reg_ssh_user@$int_bastion_hostname:$subdir/aba/mirror/data"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Verify image set archive 2 file" "ls -lh $subdir/aba/mirror/data/mirror_*.tar"
 test-cmd -h $reg_ssh_user@$int_bastion_hostname -m "Ensure image set conf file exists" "ls -lh $subdir/aba/mirror/data/imageset-config.yaml"
 

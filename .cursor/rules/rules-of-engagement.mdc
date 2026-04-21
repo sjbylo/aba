@@ -52,6 +52,15 @@ alwaysApply: true
 - Never edit a file without explicitly mentioning it in the response
 - If multiple files were edited, list every file and summarize each change
 
+## NEVER delete or lose existing comments when editing code
+
+- When using StrReplace, the `old_string` often includes surrounding comments to make the match unique
+- **Every comment in `old_string` MUST appear in `new_string`** unless the user explicitly asked to remove it
+- Before submitting a StrReplace call: visually diff old_string vs new_string and verify every comment line is preserved
+- This includes: inline comments (`# ...`), end-of-line comments, multi-line comment blocks, and `|| true` / error-handling explanations
+- If a comment needs to move (e.g. above a new `exec_cmd=` line), move it -- don't drop it
+- Violations of this rule have caused repeated bugs -- treat comment deletion as seriously as code deletion
+
 ## File modification permissions
 
 - CAN modify freely: `test/func/*`, `ai/*`, `test/*`
@@ -65,6 +74,7 @@ alwaysApply: true
 - Add comments for non-obvious bash features
 - Format bash scripts with proper and correct indentaton (pretty print).
 - **NEVER use `(( var++ ))` or `(( var-- ))` for arithmetic** — when `var` is 0, `(( 0 ))` returns exit code 1, which crashes under `set -e` or an ERR trap. Use `var=$(( var + 1 ))` instead. Never band-aid with `(( var++ )) || true`.
+- **Always prefer `sudo` over running as root directly.** SSH to a host as the normal user and use `sudo <command>` for privileged operations. Never SSH as root just to avoid typing `sudo`. This keeps audit trails, reduces blast radius, and matches how real users operate.
 
 ## Key architecture
 
@@ -101,6 +111,7 @@ alwaysApply: true
 - No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
 - NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
 - If cleanup fails, the cleanup mechanism itself is broken -- fix IT, don't add out-of-band workarounds
+- **If stale resources (mirror dirs, VMs, containers, data dirs) survive after a suite crash/interrupt, ALWAYS investigate the root cause.** `aba uninstall` removes registry containers AND data dirs; `aba delete` removes VMs.  If resources leak after crash-recovery (`_runner_cleanup` EXIT trap), the question is: did `aba uninstall`/`aba delete` actually run?  Investigate whether the EXIT trap fired, whether the `.cleanup`/`.mirror-cleanup` file was processed, and whether `aba` itself has a bug.  Never paper over leaked resources with out-of-band `rm -rf`.
 - Proper cleanup uses registered cleanup files (`.cleanup`, `.mirror-cleanup`) and `aba uninstall` / `aba delete` -- never bypass these with manual filesystem deletion
 - Uninstall from the same host that installed (e.g. registry installed from conN must be uninstalled from conN)
 - Never remove tools before operations that need them (e.g. `dnf remove make` before `aba reset`)
@@ -137,10 +148,9 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 
 - Keep testing, monitoring, fixing test code or suites (only under `~/aba/test` and `ai/`), stopping suites, deploying changes, and re-testing
 - Do NOT stop to ask questions -- the user is away
-- Do NOT change any ABA core files (only `test/` and `ai/`)
+- **Core ABA file changes**: Prefer NOT to change core ABA files. However, if a test failure is clearly caused by a core ABA bug (not a test bug), and the fix is surgical and obvious (e.g. missing variable, wrong path, broken conditional), you MAY fix core code. Log every core change in `ai/SESSION_STATE.md` and notify the user via `~/bin/notify.sh`. If the fix is risky, large, or ambiguous, note it and move on.
 - Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested
 - Report back a summary when the user returns
-- If a fix requires core ABA changes, note it and move on
 
 ## Development workflow
 

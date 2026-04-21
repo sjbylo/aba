@@ -1,0 +1,23 @@
+# Example tmux configuration for use with ABA.
+# Copy to ~/.tmux.conf on the bastion and any test hosts.
+# Reload with: tmux source-file ~/.tmux.conf
+
+# Remap prefix from Ctrl-b to Ctrl-a (easier to reach)
+unbind C-b
+set-option -g prefix C-a
+bind-key C-a send-prefix
+
+# Vi-style copy mode (navigate with h/j/k/l, search with /)
+setw -g mode-keys vi
+
+# Pane resizing shortcuts (prefix + h/j/k/l)
+bind j resize-pane -D 5
+bind k resize-pane -U 5
+bind h resize-pane -L 10
+bind l resize-pane -R 10
+
+# Reload config with prefix + R
+bind-key R source-file ~/.tmux.conf \; display-message "tmux.conf reloaded"
+
+# Large scrollback buffer (default is 2000)
+set -g history-limit 200000

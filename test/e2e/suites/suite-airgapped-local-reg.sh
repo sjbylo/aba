@@ -54,6 +54,7 @@ plan_tests \
     "Incremental: vote-app image load" \
     "Deploy: vote-app with IDMS" \
     "Incremental: mesh operators" \
+    "Deploy: service mesh demo" \
     "Upgrade: OSUS and cluster upgrade" \
     "Lifecycle: shutdown/startup" \
     "Standard: cluster with macs.conf" \
@@ -69,13 +70,13 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+e2e_run "Remove oc-mirror caches (conN)" \
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+e2e_run_remote -q "Remove oc-mirror caches (disN)" \
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
@@ -99,8 +100,10 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set mirror hostname in mirror.conf" \
     "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 test_end
 
@@ -109,17 +112,15 @@ test_end
 # ============================================================================
 test_begin "Setup: calculate older version for upgrade"
 
-e2e_run "Source aba.conf and compute older version" "
-    source <(normalize-aba-conf)
+e2e_run "Read aba.conf and compute older version" "
+    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
     echo ocp_version=\$ocp_version
-    ocp_version_desired=\$ocp_version
-    ocp_version_major=\$(echo \$ocp_version_desired | cut -d. -f1-2)
-    ocp_version_point=\$(echo \$ocp_version_desired | cut -d. -f3)
-    ocp_version_older_point=\$(expr \$ocp_version_point - 1)
-    ocp_version_older=\${ocp_version_major}.\${ocp_version_older_point}
+    ocp_version_major=\$(echo \$ocp_version | cut -d. -f1-2)
+    ocp_version_point=\$(echo \$ocp_version | cut -d. -f3)
+    ocp_version_older=\${ocp_version_major}.\$(( ocp_version_point - 1 ))
     echo ocp_version_older=\$ocp_version_older
-    # Save for later steps
-    echo \$ocp_version_desired > /tmp/e2e-ocp-version-desired
+    sudo rm -f /tmp/e2e-ocp-version-desired /tmp/e2e-ocp-version-older
+    echo \$ocp_version > /tmp/e2e-ocp-version-desired
     echo \$ocp_version_older > /tmp/e2e-ocp-version-older
 "
 
@@ -201,6 +202,7 @@ e2e_run_remote "Verify Docker registry running" \
 e2e_run_remote "Verify Docker registry accessible" \
     "cd ~/aba && aba -d mirror verify"
 
+e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load images into Docker registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -217,8 +219,9 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Generate SNO cluster.conf" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 e2e_run_remote "Increase SNO resources for mesh/upgrade" \
-    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=24/' $SNO/cluster.conf && \
-     sed -i 's/^master_mem=.*/master_mem=24/' $SNO/cluster.conf"
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=28/' $SNO/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=28/' $SNO/cluster.conf"
+e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
@@ -259,11 +262,13 @@ mirror:
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi:latest
 EOF"
+e2e_snapshot_file "ubi-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "ubi-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load UBI images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -291,11 +296,13 @@ mirror:
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 EOF"
+e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -384,12 +391,14 @@ e2e_run "Verify catalog YAML exists" \
 e2e_run "Verify servicemeshoperator3 in catalog" \
     "grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml"
 
-# For incremental operator saves, create a minimal imageset config with ONLY the
-# operators section (no platform).  oc-mirror v2 errors with "no release images
-# found" when the config includes a platform section but the delta tar doesn't
-# contain release images.  No aba/make target generates this minimal format,
-# so the file is created directly here.
-e2e_run "Create operators-only imageset config for mesh" \
+# Save+Load config: ALL operators (old + new) so the archive is self-contained.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators
+# not in the archive cause oc-mirror to reach upstream (fails on disconnected
+# hosts).  No platform section -- oc-mirror v2 errors with "no release images
+# found" when platform is present but the delta tar has no release images.
+# oc-mirror only saves the delta since the last mirrorToDisk, so including
+# already-mirrored operators (kiali-ossm) adds negligible overhead.
+e2e_run "Create config with all operators for save+load" \
     "cat > mirror/data/imageset-config.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
@@ -397,19 +406,109 @@ mirror:
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
     packages:
+\$(grep -A2 'name: kiali-ossm\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 \$(grep -A2 'name: servicemeshoperator3\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 EOF"
+e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 
+e2e_snapshot_file "mesh-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
-e2e_run "Transfer mesh archive+config to internal bastion" \
+
+e2e_run "Transfer archive and config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "mesh-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load mesh images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (mesh operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"
+
+# Verify previously loaded operators survived the incremental load.
+# oc-mirror rebuilds the catalog index during load; a partial config would
+# silently drop operators not listed (see ai/OC-MIRROR-INTERNALS.md).
+e2e_poll_remote 180 15 "Verify kiali-ossm still in OperatorHub after mesh load" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^kiali-ossm"
+
+test_end
+
+# ============================================================================
+# 13b. Deploy: service mesh demo application
+# FIXME: Disabled -- mesh demo install (00-install-all-mesh3.sh) fails with
+#        "No route available" on current OCP versions. Re-enable once the
+#        openshift-service-mesh-demo repo is updated/fixed.
+# ============================================================================
+test_begin "Deploy: service mesh demo"
+echo "  SKIPPED: mesh demo install broken upstream (openshift-service-mesh-demo repo)"
+if false; then
+
+# Mirror the Kiali demo app images (not included in operator catalogs).
+e2e_run "Create imageset config for mesh demo app images" \
+    "cat > mirror/data/imageset-config.yaml <<EOF
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/kiali/demo_travels_cars:v1
+  - name: quay.io/kiali/demo_travels_control:v1
+  - name: quay.io/kiali/demo_travels_discounts:v1
+  - name: quay.io/kiali/demo_travels_flights:v1
+  - name: quay.io/kiali/demo_travels_hotels:v1
+  - name: quay.io/kiali/demo_travels_insurances:v1
+  - name: quay.io/kiali/demo_travels_mysqldb:v1
+  - name: quay.io/kiali/demo_travels_portal:v1
+  - name: quay.io/kiali/demo_travels_travels:v1
+EOF"
+e2e_snapshot_file "mesh-demo-save" "mirror/data/imageset-config.yaml"
+e2e_run -r 3 2 "Save mesh demo app images" "aba -d mirror save --retry"
+e2e_run "Transfer demo app archive to internal bastion" \
+    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_run_remote -r 3 2 "Load mesh demo app images" \
+    "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
+e2e_run_remote "Apply day2 config (mesh demo image resources)" \
+    "cd ~/aba && aba --dir $SNO day2"
+
+# Clone the demo repo on the connected side, rewrite image references to
+# point at the mirror registry, then transfer and run on the air-gapped side.
+e2e_run "Clone service mesh demo repo" \
+    "rm -rf /tmp/mesh-demo && git clone --depth 1 https://github.com/sjbylo/openshift-service-mesh-demo.git /tmp/mesh-demo"
+
+# Rewrite image references: quay.io -> mirror registry
+e2e_run "Rewrite image refs to mirror" \
+    "source <(grep -E '^reg_host=|^reg_port=|^reg_path=' mirror/mirror.conf) && \
+     find /tmp/mesh-demo -name '*.yaml' -exec sed -i \"s#quay\\.io#\${reg_host}:\${reg_port}\${reg_path}#g\" {} + && \
+     sed -i 's/source: .*/source: redhat-operators/g' /tmp/mesh-demo/operators/*"
+
+e2e_run "Transfer mesh demo to internal bastion" \
+    "scp -rp /tmp/mesh-demo ${INTERNAL_BASTION}:mesh-demo"
+
+e2e_run_remote "Install service mesh demo" \
+    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./00-install-all-mesh3.sh"
+
+e2e_poll_remote 600 30 "Wait for Istio control plane ready" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get istio default -n istio-system -o jsonpath={.status.state}' | grep -q Healthy"
+
+e2e_poll_remote 300 15 "Wait for travels app pods ready" \
+    "cd ~/aba && for ns in travel-control travel-agency travel-portal; do \
+       _pods=\$(aba --dir $SNO run --cmd \"oc get pods -n \$ns --no-headers\") && \
+       echo \"\$_pods\" | grep -q Running || exit 1; \
+       echo \"\$_pods\" | grep -Ev 'Running|Completed' | grep -q . && exit 1; \
+     done"
+
+e2e_diag_remote "Show Istio control plane status" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get istio,istiocni -A'"
+e2e_diag_remote "Show travels app pods" \
+    "cd ~/aba && for ns in travel-control travel-agency travel-portal; do echo \"--- \$ns ---\"; aba --dir $SNO run --cmd \"oc get pods -n \$ns\"; done"
+
+# Cleanup: uninstall mesh demo (free resources before upgrade)
+e2e_run_remote "Uninstall service mesh demo" \
+    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./99-uninstall-all-mesh3.sh || true"
+e2e_run_remote "Remove mesh demo dir" "rm -rf ~/mesh-demo"
+e2e_run "Remove local mesh demo clone" "rm -rf /tmp/mesh-demo"
+fi
 
 test_end
 
@@ -450,10 +549,12 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
          echo 'cincinnati-operator already in imageset config -- skipping'; \
      fi"
 
+e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -532,6 +633,7 @@ test_begin "Standard: cluster with macs.conf"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Clean sno cluster dir" \
     "cd ~/aba && aba --dir $SNO clean"
 
@@ -563,6 +665,7 @@ e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
     "cd ~/aba && aba --dir $STANDARD delete"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
 

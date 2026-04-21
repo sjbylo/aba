@@ -46,9 +46,7 @@ suite_begin "connected-public"
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Install ABA via curl" \
-	"cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
-cd ~/aba
+e2e_install_aba --curl
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
@@ -168,6 +166,7 @@ e2e_poll 600 30 "Wait for all operators fully available" \
     "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 
@@ -196,12 +195,14 @@ e2e_run "Delete any leftover $SNO_MIRROR cluster" \
 # Default int_connection (empty) = mirror mode.
 # Create mirror.conf pointing at the pool registry on conN.
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 # Set up regcreds/ with the pre-populated registry's CA and pull secret
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"

@@ -30,7 +30,9 @@ if [ "$ask" ]; then
 fi
 
 for name in $CP_NAMES $WORKER_NAMES; do
-	virsh -c "$LIBVIRT_URI" destroy "$(vm_name "$CLUSTER_NAME" "$name")" || true
+	exec_cmd="virsh -c $LIBVIRT_URI destroy $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd || true
 done
 
 exit 0

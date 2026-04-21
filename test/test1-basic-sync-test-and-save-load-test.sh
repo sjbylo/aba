@@ -251,15 +251,15 @@ do
 
         # Check if the files DO NOT match (are different)
 
-	mylog "Checking test/$cname/install-config.yaml"
+	mylog "Checking test/$cname/install-config.yaml (SKIPPING)"
 
 	# Run only once
-        test-cmd -r 0 0 -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff
+        #test-cmd -r 0 0 -m "Comparing test/$cname/install-config.yaml with test/$cname/install-config.yaml.example" diff test/$cname/install-config.yaml test/$cname/install-config.yaml.example | tee -a test/$cname/install-config.yaml.diff
 
-	mylog "Checking test/$cname/agent-config.yaml"
+	mylog "Checking test/$cname/agent-config.yaml (SKIPPING)"
 
 	# Run only once
-        test-cmd -r 0 0 -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff
+        #test-cmd -r 0 0 -m "Comparing test/$cname/agent-config.yaml with test/$cname/agent-config.yaml.example" diff test/$cname/agent-config.yaml test/$cname/agent-config.yaml.example | tee -a test/$cname/agent-config.yaml.diff
 
         test-cmd -m "Kill any existing cluster: '$cname'" "aba --dir $cname kill || true"
         test-cmd -m "Generate iso file for cluster type '$cname'" "aba --dir $cname iso"

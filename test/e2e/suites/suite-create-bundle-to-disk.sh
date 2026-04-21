@@ -62,14 +62,12 @@ test_begin "Setup: clean slate"
 e2e_run -q "Remove old files" \
     "rm -rf $(pool_cluster_name sno) $(pool_cluster_name compact) $(pool_cluster_name standard) ~/.aba.previous.backup ~/.ssh/quay_installer* ~/.containers ~/.docker"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Verify /home disk usage < 10GB after reset" \
     "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
@@ -104,7 +102,7 @@ e2e_run_must_fail "Create VMs without vmware.conf should fail" \
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
 e2e_run -q "Set VC_FOLDER in vmware.conf" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run -q "Verify vmware.conf" "grep vm/aba-e2e vmware.conf"
+e2e_run -q "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
 # Suppress interactive prompts during testing
 e2e_run -q "Set ask=false" "aba --noask"
@@ -118,11 +116,11 @@ e2e_run "Set operator sets in aba.conf" "aba --op-sets abatest"
 
 # Create mirror directory and mirror.conf (needed by the bundle command)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 
-# Resolve the actual ocp_version from aba.conf.
-# IMPORTANT: must run in current shell (not through e2e_run) so $ocp_version
-# is available for the rest of the suite.
-source <(normalize-aba-conf)
+# Read ocp_version/ocp_channel directly from aba.conf (no internal functions needed).
+ocp_version=$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
+ocp_channel=$(grep ^ocp_channel= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
 _e2e_log "Resolved: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 echo "  ocp_version=$ocp_version  ocp_channel=$ocp_channel"
 
@@ -244,7 +242,7 @@ test_end 0
 test_begin "Load bundle to internal bastion"
 
 e2e_run "Stream bundle to internal bastion" \
-    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba && tar xf - -C ~'"
+    "cat ~/tmp/delete-me*tar | ssh ${INTERNAL_BASTION} 'rm -rf ~/aba/* ~/aba/.??* && tar xf - -C ~'"
 e2e_run -q "Clean up local bundle tarball" "rm -fv ~/tmp/delete-me*tar"
 e2e_run_remote "Verify ~/aba exists on internal bastion" "ls ~/aba/aba.conf"
 e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"

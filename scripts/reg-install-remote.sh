@@ -174,6 +174,14 @@ case "$vendor" in
 				-e 'REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm' \
 				-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
 				docker.io/library/registry:latest
+
+			# Ensure rootless podman containers with --restart=always survive VM reboot
+			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
+				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+					echo 'Enabling loginctl linger for rootless podman restart persistence ...'
+					$SUDO loginctl enable-linger \"\$USER\"
+				fi
+			fi
 		"; then
 			aba_abort "Docker registry install failed on remote host $reg_host." \
 				"Check the output above for details."

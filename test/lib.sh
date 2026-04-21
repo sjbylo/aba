@@ -30,6 +30,11 @@ int_up() {
 
     echo "Auto-detected Internet Interface: $if_name"
 
+    # Remove any device-only default route added by int_down() for pasta hairpin.
+    # It has no metric so it beats the DHCP route on the internet interface.
+    local _stale_dev=$(ip route show default | grep -v via | awk '{print $3}' | head -1)
+    [ -n "$_stale_dev" ] && sudo ip route del default dev "$_stale_dev" scope link 2>/dev/null || true
+
     # Ensure the connection profile matches the device name for reliability
     # Modify the connection associated with this device
     local con_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^${if_name}:" | cut -d: -f2)

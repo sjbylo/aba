@@ -13,8 +13,14 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
   If not running, start it: `run.sh run --all --force` (queues all suites, dispatches to idle pools).
   Never rely solely on manual SSH launches; the dispatcher handles queuing and pool allocation.
 - **Do NOT stop to ask questions** — the user is away
-- **Do NOT change ANY code** — no ABA core, no test code, no scripts. Read-only.
-  The only files you may write to are `ai/SESSION_STATE.md` and plan files.
+- **Core ABA file changes** — prefer NOT to change core ABA files. However, if a test
+  failure is clearly caused by a core ABA bug (not a test bug), and the fix is surgical
+  and obvious (e.g. missing variable, wrong path, broken conditional), you MAY fix core
+  code. Log every core change in `ai/SESSION_STATE.md` and notify the user via
+  `~/bin/notify.sh`. If the fix is risky, large, or ambiguous, add it to a plan and move on.
+- **Test code** — you MAY fix test framework/suite code to correct bugs, but do NOT change
+  the actual test logic (what is being tested). Log all changes.
+- Files you may always write to: `ai/SESSION_STATE.md`, plan files, `ai/*.md`.
 - **Keep ALL pools busy** — queue additional suites on idle pools, even if already tested
 - **Don't wait for pools to free up** — if a pool just finished (pass or fail), force-dispatch
   the suite you need onto it immediately: `run.sh run --suite <name> --pool N --force`

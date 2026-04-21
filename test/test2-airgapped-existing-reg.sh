@@ -254,7 +254,7 @@ do
 		if [ "$vlan" = 10 ]; then
 			next_hop_address=10.10.10.1
 			machine_network=10.10.10.0/24
-			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"Private Network\" /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.10.10.10
@@ -272,7 +272,7 @@ do
 		else
 			next_hop_address=10.0.1.1
 			machine_network=10.0.0.0/20
-			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"VM Network\" /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.0.1.201
@@ -368,7 +368,7 @@ do
 	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i 's/^.*vlan=.*/vlan=10 /g' $subdir/aba/$cname/cluster.conf"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Adding vlan" "sed -i \"s/^.*next_hop_address=.*/next_hop_address=$next_hop_address /g\" $subdir/aba/$cname/cluster.conf"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting machine_network" "sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $subdir/aba/$cname/cluster.conf"
-	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=PRIVATE-DPG /g' $subdir/aba/vmware.conf"
+	##test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"Private Network\" /g' $subdir/aba/vmware.conf"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Setting ports" "sed -i 's/^.*ports=.*/ports=ens160,ens192 /g' $subdir/aba/$cname/cluster.conf"
 
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Show config" "grep -e ^vlan= -e ^ports= -e ^port0= -e ^port1= $subdir/aba/$cname/cluster.conf | awk '{print $1}'"
@@ -405,7 +405,7 @@ do
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r 1 1 -m "Waiting for node0 to be reachable (test_ssh.sh)" "time timeout -v 8m bash -x test_ssh.sh"
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Waiting for node0 to config NTP" "time timeout -v 8m bash -x ~/test_ssh_ntp.sh $subdir/aba/$cname '$ntp_ip_grep'"
 	#
-	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=VMNET-DPG /g' $subdir/aba/vmware.conf"
+	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Reset vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"VM Network\" /g' $subdir/aba/vmware.conf"
 	#
 	#test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Refresh VMs" "aba --dir $subdir/aba/$cname delete" 
 	#
@@ -557,27 +557,27 @@ END
 
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
-# Append the correct values for each operator
+# Append ALL operators (old + new) so archive is self-contained for airgapped load.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators not
+# in the archive cause oc-mirror to reach upstream (fails on disconnected hosts).
+test-cmd -m "Adding kiali-ossm                   operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: kiali-ossm$'                 mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
+
 test-cmd -m "Adding advanced-cluster-management  operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: advanced-cluster-management$' mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
 
 test-cmd -m "Adding multicluster-engine          operator to mirror/data/imageset-config.yaml on `hostname`" "grep -A2 -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"
-### WORKING BUT 60+ GB OF DATA !!! ### test-cmd -m "Adding multicluster-engine          operator to mirror/data/imageset-config.yaml on `hostname`" "grep     -e 'name: multicluster-engine$'         mirror/imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml | tee -a mirror/data/imageset-config.yaml"   # Fetch all ??
 
 ^test-cmd -m "Output imageset conf file" cat mirror/data/imageset-config.yaml
 
 
-test-cmd -r  2 1 -m "Saving advanced-cluster-management images to local disk" "aba --dir mirror save  --retry"
+test-cmd -r  2 1 -m "Saving ACM images to local disk" "aba --dir mirror save  --retry"
 
 test-cmd -m "Listing image set files created" "ls -lh mirror/data/mirror_*.tar"
 mylog "Use 'scp' to copy mirror/data/mirror_*.tar file from `hostname` over to internal bastion @ $DIS_SSH_USER@$int_bastion_hostname"
-test-cmd -m "Copy image set 3 file to $int_bastion_hostname" "scp mirror/data/mirror_*.tar $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data"
+test-cmd -m "Copy archive and config to $int_bastion_hostname" "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying existance of file '$subdir/aba/mirror/data/mirror_*\.tar'" "ls -lh $subdir/aba/mirror/data/mirror_*\.tar"
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Verifying mirror registry access $reg_host:$reg_port" "aba --dir $subdir/aba/mirror verify"
-
-#[ "$oc_mirror_ver_override" = "v2" ] && test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
-test-cmd -m "Copy image set file over also (oc-mirror v2 needs it) to $int_bastion_hostname" scp mirror/data/imageset-config.yaml $DIS_SSH_USER@$int_bastion_hostname:$subdir/aba/mirror/data
 
 test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -r  2 1 -m "Loading images into mirror $reg_host:$reg_port on remote host" "aba --dir $subdir/aba/mirror load --retry"
 

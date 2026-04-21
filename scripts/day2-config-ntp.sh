@@ -133,12 +133,18 @@ aba_info "Accessing the cluster ..."
 
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 
-oc whoami || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
+exec_cmd="oc whoami"
+aba_debug "Running: $exec_cmd"
+$exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 warn_if_cluster_unstable
 
-oc apply -f 99-master-chrony-conf-override.yaml
-oc apply -f 99-worker-chrony-conf-override.yaml
+exec_cmd="oc apply -f 99-master-chrony-conf-override.yaml"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
+exec_cmd="oc apply -f 99-worker-chrony-conf-override.yaml"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 
 echo
 aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
@@ -173,47 +179,31 @@ done
 IFS=$'\n' ntp_targets=($(sort -u <<<"${temp_ips[*]}"))
 unset IFS
 
-echo_yellow "[ABA] Verifying all nodes have the following NTP sources configured: ${ntp_targets[*]} ... Hit Ctrl-C to stop."
-
 # 2. Get list of Node IPs
+aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
-# 3. Loop indefinitely until verification passes
-while true; do
-	all_nodes_compliant=true
-
+# 3. Check function: returns 0 when all nodes have all NTP targets configured
+_ntp_all_nodes_compliant() {
 	for host in $nodesIPs; do
 		aba_debug "Checking NTP config in host: $host"
-
-		# Fetch the chronyc sources output (IPs only) ONCE per host
-		# Added Timeout and HostKey flags so script doesn't hang
 		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources -n' 2>&1)
-
 		aba_debug "Node: $host config:"
 		aba_debug "\n$node_sources"
 
-		# Check for EACH target IP inside the node's source list
 		for target_ip in "${ntp_targets[@]}"; do
-			
 			aba_debug "Checking IP $target_ip in chrony config"
-
-			# Use grep -F (fixed string) to match IP.
 			if ! echo "$node_sources" | grep -Fq " $target_ip "; then
-				# If ANY IP is missing, mark this run as failed
-				all_nodes_compliant=false
-				break 2 # Break out of both loops to wait/sleep
+				return 1
 			fi
 			aba_debug "target_ip $target_ip found!"
 		done
 	done
+	return 0
+}
 
-	# If the flag is still true, all nodes have all IPs
-	if [ "$all_nodes_compliant" = true ]; then
-		break
-	fi
+if ! aba_wait_show "Verifying NTP on all nodes (${ntp_targets[*]})" 10 900 _ntp_all_nodes_compliant; then
+	aba_abort "Timed out after 15 min waiting for NTP configuration on all nodes."
+fi
 
-	# Wait before retrying
-	sleep 5
-done
-
-aba_info "All nodes are synchronized!"
+aba_info_ok "All nodes are synchronized!"

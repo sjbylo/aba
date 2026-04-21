@@ -40,24 +40,29 @@ if [ "$ask" ]; then
 fi
 
 for name in $hosts; do
-	virsh -c "$LIBVIRT_URI" shutdown "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null || true
+	exec_cmd="virsh -c $LIBVIRT_URI shutdown $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd 2>/dev/null || true
 done
 
-if [ "$wait" ]; then
-	aba_info "Waiting for nodes to power down ..."
-
-	hosts_off=
-	while [ ! "$hosts_off" ]; do
-		for name in $hosts; do
-			state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
-			[ "$state" = "running" ] && hosts_off= && break
-			[ "$state" = "shut off" ] && hosts_off=1
-		done
-
-		[ "$hosts_off" ] && exit 0
-
-		sleep 10
+# Return 0 when every VM is shut off (aligned with cluster-graceful-shutdown aba_wait_show).
+_kvm_stop_all_shut_off() {
+	local name state
+	for name in $hosts; do
+		aba_debug "Running: virsh -c $LIBVIRT_URI domstate $(vm_name "$CLUSTER_NAME" "$name")"
+		state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
+		[ "$state" = "shut off" ] || return 1
 	done
+	return 0
+}
+
+if [ "$wait" ]; then
+	_wait_mins=40
+	_wait_timeout=$(( 60 * _wait_mins ))
+	if ! aba_wait_show "Waiting for VMs to shut off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
+		_kvm_stop_all_shut_off; then
+		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to shut off"
+	fi
 fi
 
 exit 0

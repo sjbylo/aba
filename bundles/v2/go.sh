@@ -50,7 +50,7 @@ arr_op_sets+=("ocp");			arr_name+=(ocp);	arr_tests+=("ocp");
 arr_op_sets+=("ocp mesh3");		arr_name+=(mesh3);	arr_tests+=("ocp mesh3");
 arr_op_sets+=("ocp odf sec acm");	arr_name+=(opp);	arr_tests+=("odf acm acs");
 arr_op_sets+=("ocp odf virt");		arr_name+=(virt);	arr_tests+=("odf virt mtv");
-arr_op_sets+=("ocp sec");		arr_name+=(sec);	arr_tests+=("acs");
+#arr_op_sets+=("ocp odf sec");		arr_name+=(sec);	arr_tests+=("odf acs");
 arr_op_sets+=("ocp gpu ai");		arr_name+=(ai);		arr_tests+=("ai");
 
 export OC_MIRROR_CACHE=$HOME
@@ -83,8 +83,29 @@ do
 	# Clear oc-mirror cache between OCP versions to reclaim disk space
 	rm -rf ~/.oc-mirror/
 
-	for i in "${!arr_name[@]}"
+	# Sort bundle types so the oldest (or missing) bundles are built first.
+	# For each type, find the current patch version in CLOUD_DIR.
+	# Missing/incomplete bundles get -1, so they're built before stale ones.
+	major_ver=$(echo "$ver" | cut -d. -f1,2)
+	build_order=()
+	for i in "${!arr_name[@]}"; do
+		_bname=${arr_name[$i]}
+		current_patch=-1
+		for d in "$CLOUD_DIR/${major_ver}".*-"${_bname}"; do
+			if [ -d "$d" ] && [ -f "$d/README.txt" ] && [ ! -f "$d/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ]; then
+				p=$(basename "$d" | sed "s/^${major_ver}\.\([0-9]*\)-.*/\1/")
+				[ "$p" -gt "$current_patch" ] 2>/dev/null && current_patch=$p
+			fi
+		done
+		build_order+=("$current_patch:$i")
+	done
+	IFS=$'\n' sorted=($(sort -t: -k1,1n <<<"${build_order[*]}")); unset IFS
+
+	echo "Build order for $ver (oldest first): $(for e in "${sorted[@]}"; do echo -n "${arr_name[${e#*:}]}(${e%%:*}) "; done)"
+
+	for entry in "${sorted[@]}"
 	do
+		i=${entry#*:}
 		op_sets=${arr_op_sets[$i]}
 		name=${arr_name[$i]}
 		tests=${arr_tests[$i]}

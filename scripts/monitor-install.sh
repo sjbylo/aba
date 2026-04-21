@@ -28,10 +28,10 @@ if ! ensure_openshift_install >/dev/null; then
 	aba_abort "Failed to install openshift-install:\n$error_msg"
 fi
 
-echo_yellow "[ABA] Running: openshift-install agent wait-for install-complete --dir $ASSETS_DIR"
-
-#sleep 60  # wait a bit to ensure the agent is running
-openshift-install agent wait-for install-complete --dir $ASSETS_DIR $opts
+exec_cmd="openshift-install agent wait-for install-complete --dir $ASSETS_DIR $opts"
+echo_yellow "[ABA] Running: $exec_cmd"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 ret=$?
 aba_debug openshift-install returned: $ret 
 
@@ -50,8 +50,10 @@ declare -A wait_for_exit_reasons=(
 [ $ret -eq 8 ] && exit 0
 
 if [ $ret -ne 0 ]; then
-	echo_red "[ABA] Error: Something went wrong with the installation.  Fix the problem and try again!" >&2
+	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
+	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
+	echo_yellow "[ABA] If the problem persists, check the output above for clues."
 
 	exit $ret
 fi
@@ -66,7 +68,7 @@ aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
 aba_info_ok "Run 'aba info' to view this information again."
 aba_info_ok "Run 'aba help' and 'aba -h' for more options."
 
-if [ ! -f ~/.aba/.first_cluster_success ]; then
+if [ ! -f ~/.aba_first_cluster_success ]; then
 	_bdr=$(printf '═%.0s' $(seq 1 64))
 	_g=$(tput setaf 10 2>/dev/null)
 	_r=$(tput sgr0 2>/dev/null)
@@ -86,7 +88,7 @@ if [ ! -f ~/.aba/.first_cluster_success ]; then
 	echo_bright_green  "  ╚${_bdr}╝"
 	echo
 
-	touch ~/.aba/.first_cluster_success
+	touch ~/.aba_first_cluster_success
 fi
 
 exit 0
