@@ -65,7 +65,7 @@ _vmw_stop_all_powered_off() {
 if [ "$wait" ]; then
 	_wait_mins=40
 	_wait_timeout=$(( 60 * _wait_mins ))
-	if ! aba_wait_show "Waiting for VMs to power off" 10 "$_wait_timeout" \
+	if ! aba_wait_show "Waiting for VMs to power off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
 		_vmw_stop_all_powered_off; then
 		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to power off"
 	fi
