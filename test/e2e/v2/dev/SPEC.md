@@ -942,7 +942,11 @@ unchanged into v2. No changes to the naming or addressing scheme.
 
 **OS change handling:**
 - Per-pool OS tracking in `.pool-os/pool-N` files on bastion
-- When OS changes for a pool, only that pool's VMs are destroyed and recloned
+- When OS changes for a pool, ALL VMs in the pool folder are destroyed and
+  recloned (not just conN/disN -- also cluster VMs like `e2e-sno2`)
+- Before destroying VMs, cleanup files are processed via SSH to properly
+  `aba delete` clusters and `aba uninstall` mirrors (if conN is reachable)
+- `--recreate-vms` also destroys orphaned cluster VMs in pool folders
 - `--recreate-vms` flag is scoped to the pools selected by `-p` (not global)
 - OS change on pool N must NOT cascade to pool M
 
