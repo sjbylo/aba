@@ -406,6 +406,19 @@ e2e_setup
 # Interactive mode always on
 export _E2E_INTERACTIVE=1
 
+# --- Ensure current user can self-SSH (needed by _pre_suite_cleanup) ----------
+# Pool-ready snapshots may predate the idempotent-append fix in _vm_setup_ssh_keys.
+# Without this, root-as-runner can't SSH to root@conN to clean up stale resources.
+_my_pub="$(cat "$HOME/.ssh/id_rsa.pub" 2>/dev/null || true)"
+if [ -n "$_my_pub" ] && [ -f "$HOME/.ssh/authorized_keys" ]; then
+	if ! grep -qF "$_my_pub" "$HOME/.ssh/authorized_keys" 2>/dev/null; then
+		echo "$_my_pub" >> "$HOME/.ssh/authorized_keys"
+		chmod 600 "$HOME/.ssh/authorized_keys"
+		echo "  Fixed: added own public key to authorized_keys (self-SSH)"
+	fi
+fi
+unset _my_pub
+
 # --- Bootstrap: ensure govc is available -------------------------------------
 # Set E2E_SKIP_SNAPSHOT_REVERT=1 for lightweight suites (e.g. dummy-pass/fail)
 # that don't need VMware infrastructure.
@@ -424,15 +437,17 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			export PATH="$HOME/bin:$PATH"
 		elif [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
 			echo "  Bootstrapping govc ..."
-			make -sC "$_ABA_ROOT/cli" govc || {
-				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
-				exit 1
-			}
-			export PATH="$HOME/bin:$PATH"
-			command -v govc &>/dev/null || {
-				echo "  ERROR: govc not found in PATH after bootstrap." >&2
-				exit 1
-			}
+		make -sC "$_ABA_ROOT/cli" govc || {
+			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+			echo "99" > "$RC_FILE"
+			exit 1
+		}
+		export PATH="$HOME/bin:$PATH"
+		command -v govc &>/dev/null || {
+			echo "  ERROR: govc not found in PATH after bootstrap." >&2
+			echo "99" > "$RC_FILE"
+			exit 1
+		}
 		else
 			echo "  WARNING: ABA not fully initialized (missing cli/Makefile or aba.conf)."
 			echo "           Suite will install/configure ABA before using govc."
@@ -748,14 +763,14 @@ _pre_suite_cleanup() {
 			# Note: _verify_no_orphan_vms has already run and passed before we get here,
 			# so a missing cluster dir means the cluster was never created or already cleaned
 			# (not silently rm -rf'd with orphan VMs left behind).
-			if ! ( _essh "$target" \
-				"if [ -d '$abs_path' ]; then
-					aba -y -d '$abs_path' delete
-				else
-					echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
-					echo '  (orphan VM check already passed -- no dangling VMs)'
-				fi" \
-				< /dev/null 2>&1 ); then
+		if ! ( _essh "$target" \
+			"if [ -d '$abs_path' ]; then
+				command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete
+			else
+				echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
+				echo '  (orphan VM check already passed -- no dangling VMs)'
+			fi" \
+			< /dev/null 2>&1 ); then
 				echo "  WARNING: cleanup failed for $target:$abs_path"
 				_cleanup_ok=""
 			fi
@@ -779,9 +794,9 @@ _pre_suite_cleanup() {
 			echo "    $target: aba -y -d $abs_path uninstall"
 			_mirror_rc=0
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
-			_essh "$target" \
-				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
-				< /dev/null 2>&1 || _mirror_rc=$?
+		_essh "$target" \
+			"if [ -d '$abs_path' ]; then command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' uninstall || make -C '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+			< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
 				_mirror_ok=""

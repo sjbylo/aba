@@ -64,7 +64,8 @@ case "$CLI_COMMAND" in
 		exit 0
 		;;
 	stop)
-		cmd_stop "$CLI_POOL_LIST"
+		_all_pools=$(_all_pool_numbers "${_RUN_DIR}/pools.conf") || _all_pools="$CLI_POOL_LIST"
+		cmd_stop "$CLI_POOL_LIST" "$_all_pools"
 		exit 0
 		;;
 	start)
@@ -250,6 +251,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 
 	echo ""
 	echo "  Restart complete: ${_restart_ok} suite(s) launched, ${_restart_fail} pool(s) skipped."
+	_save_last_run "$_RUN_DIR"
 	exit 0
 fi
 
@@ -351,14 +353,14 @@ fi
 
 if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_RECREATE_VMS:-}" ]; then
 	echo ""
-	echo "  Running setup-infra.sh ..."
-	_npool=0
-	for _p in $CLI_POOL_LIST; do _npool=$(( _npool + 1 )); done
-	_infra_flags="--pools $_npool --pools-file ${_RUN_DIR}/pools.conf"
-	[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _infra_flags+=" --recreate-golden"
-	[ -n "${CLI_RECREATE_VMS:-}" ]    && _infra_flags+=" --recreate-vms"
-	[ -n "${CLI_YES:-}" ]             && _infra_flags+=" --yes"
-	"$BASH" "$_RUN_DIR/setup-infra.sh" $_infra_flags || { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+	echo "  Running setup-infra.sh for pools: $CLI_POOL_LIST ..."
+	_base_infra_flags="--pools-file ${_RUN_DIR}/pools.conf"
+	[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _base_infra_flags+=" --recreate-golden"
+	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
+	[ -n "${CLI_YES:-}" ]             && _base_infra_flags+=" --yes"
+	for _p in $CLI_POOL_LIST; do
+		"$BASH" "$_RUN_DIR/setup-infra.sh" --pool "$_p" $_base_infra_flags || { echo "FATAL: Infrastructure setup failed for pool $_p" >&2; exit 1; }
+	done
 	for _p in $CLI_POOL_LIST; do
 		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${_p}"
 	done

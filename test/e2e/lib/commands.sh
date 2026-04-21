@@ -13,10 +13,11 @@
 
 cmd_stop() {
 	local pool_list="$1"
+	local all_pools="${2:-$pool_list}"
 	local do_clean="${CLI_CLEAN:-}"
 
-	# Kill the dispatcher when stopping ALL pools (not a subset).
-	if [ -z "${_stop_single_pool:-}" ]; then
+	# Kill the dispatcher only when stopping ALL configured pools.
+	if [ "$pool_list" = "$all_pools" ]; then
 		if [ -f "$E2E_DISPATCHER_PID" ]; then
 			local _dpid
 			_dpid=$(cat "$E2E_DISPATCHER_PID")
@@ -270,13 +271,18 @@ cmd_verify() {
 
 	echo ""
 	echo "=== Verifying pool VMs (pools ${pool_list}) ==="
-	local _p
+	local _p _any_failed=0
 	for _p in $pool_list; do
 		"$BASH" "${run_dir}/setup-infra.sh" --verify --pool "$_p" --pools-file "$pools_file" || {
-			echo "FATAL: Verification of pool $_p failed" >&2
-			return 1
+			echo "FAILED: Verification of pool $_p failed" >&2
+			_any_failed=1
 		}
 	done
+	if [ "$_any_failed" -eq 1 ]; then
+		echo ""
+		echo "ERROR: One or more pool verifications failed (see above)" >&2
+		return 1
+	fi
 }
 
 # --- list --------------------------------------------------------------------
