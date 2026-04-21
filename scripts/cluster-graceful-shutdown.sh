@@ -232,7 +232,7 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	_wait_timeout=$(( 60 * _wait_mins ))
 	# Log start; do not pipe aba_wait_show to tee — keeps a real TTY so spinner works when interactive.
 	echo "[ABA] Waiting up to ${_wait_mins} min for VMs to power off (started $(date -Iseconds))" >> $logfile
-	if ! aba_wait_show "Waiting for VMs to power off" 10 "$_wait_timeout" \
+	if ! aba_wait_show "Waiting for VMs to power off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
 		_shutdown_all_node_vms_off; then
 		echo "" | tee -a $logfile
 		aba ls 2>/dev/null | tee -a $logfile
