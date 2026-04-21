@@ -1,6 +1,6 @@
 # ABA 1.0.0 - Release Notes
 
-Stability and reliability improvements.
+Stability, reliability and UX improvements.
 
 ## New Features
 
