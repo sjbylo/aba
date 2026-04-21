@@ -662,12 +662,14 @@ When `-p` / `--pools` is not given, the framework auto-detects which pools
 **Read-only commands** (`status`, `live`, `dash`, `attach`, `verify`, `stop`,
 `start`, `deploy`, `reschedule`):
 
-1. Load `.e2e-last-run` state file (written by every `run`/`restart`)
-2. Inherit pools, user, OS, and vmware.conf from the last `run`/`restart`
-3. If no last-run state exists, fall back to all pools in `pools.conf`
+1. Default to **all pools from `pools.conf`** (not last-run pools). This
+   ensures `run.sh status` shows every pool with an active suite, even when
+   multiple dispatchers target different pool subsets.
+2. Load `.e2e-last-run` for **user/OS/vmware.conf context** only (not pools).
+3. Unreachable pools are silently skipped in the output.
 
-This means `run.sh live` "just works" -- it uses the same pools as the
-last `run.sh run` invocation.
+This means `run.sh status` and `run.sh live` always show the complete
+picture without needing `-p`.
 
 **Write commands** (`run`, `restart`):
 
@@ -683,9 +685,9 @@ _SAVED_DIS_USER="steve"
 _SAVED_VMWARE_CONF="/home/steve/.vmware.conf"
 ```
 
-**Result:** After `run.sh run -p 1-4 --user root --os rhel9`, subsequent
-`run.sh live`, `run.sh status`, `run.sh dash` automatically use pools 1-4
-with root/rhel9 context -- no need to repeat `-p 1-4` every time.
+**Note:** `_SAVED_POOLS` is retained in the file for backward compatibility
+and for `run`/`restart` to know which pools were last used, but read-only
+commands no longer use it for pool selection.
 
 ### Changes from v1
 

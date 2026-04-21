@@ -166,7 +166,10 @@ cmd_status() {
 			*)           _sc="\033[0m" ;;
 		esac
 
-		if [[ "$_state" == "RUNNING" || "$_state" == "PAUSED" ]]; then
+		if [[ "$_state" == "UNREACHABLE" ]]; then
+			printf "  con%-3s  ${_sc}%-10s\033[0m\n" "$p" "$_state"
+			continue
+		elif [[ "$_state" == "RUNNING" || "$_state" == "PAUSED" ]]; then
 			printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_since"
 		else
 			printf "  con%-3s  ${_sc}%-10s\033[0m  %-40s  %-8s  %s\033[0m\n" "$p" "$_state" "$_suite" "$_since" "$_detail"

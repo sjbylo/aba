@@ -274,24 +274,22 @@ _resolve_pools() {
 		# Explicit -p/--pools given
 		CLI_POOL_LIST=$(_parse_pools "$CLI_POOLS" "$pools_file") || exit 1
 	else
-		# No -p given -- try last-run state for readonly commands
+		# No -p given: read-only commands default to ALL pools (show everything).
+		# User/OS/vmware.conf context is still inherited from last-run.
 		if _is_readonly_cmd && [ -f "$last_run_file" ]; then
 			local _SAVED_POOLS=""
 			local _SAVED_OS="" _SAVED_CON_USER="" _SAVED_DIS_USER="" _SAVED_VMWARE_CONF=""
 			source "$last_run_file"
-			if [ -n "$_SAVED_POOLS" ]; then
-				CLI_POOL_LIST="$_SAVED_POOLS"
-			fi
-			# Inherit other saved values when not explicitly set
+			# Inherit user/OS/vmware context (but NOT pools -- see below)
 			[ -z "$CLI_OS" ] && [ -n "$_SAVED_OS" ] && CLI_OS="$_SAVED_OS"
 			[ -z "$CLI_CON_USER" ] && [ -n "$_SAVED_CON_USER" ] && CLI_CON_USER="$_SAVED_CON_USER"
 			[ -z "$CLI_DIS_USER" ] && [ -n "$_SAVED_DIS_USER" ] && CLI_DIS_USER="$_SAVED_DIS_USER"
 			[ -z "$CLI_VMWARE_CONF" ] && [ -n "$_SAVED_VMWARE_CONF" ] && CLI_VMWARE_CONF="$_SAVED_VMWARE_CONF"
 		fi
-		# Still empty -- default to all pools from pools.conf
-		if [ -z "$CLI_POOL_LIST" ]; then
-			CLI_POOL_LIST=$(_all_pool_numbers "$pools_file") || exit 1
-		fi
+		# Default to all pools from pools.conf (not last-run pools).
+		# Multiple dispatchers may target different pools; showing only the
+		# last-run set hides active suites on other pools.
+		CLI_POOL_LIST=$(_all_pool_numbers "$pools_file") || exit 1
 	fi
 
 	# Trim trailing whitespace
