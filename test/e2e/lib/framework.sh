@@ -116,6 +116,12 @@ _E2E_DIR="$(cd "$_E2E_LIB_DIR/.." && pwd)"
 
 source "$_E2E_LIB_DIR/constants.sh"
 
+# SIGINT (Ctrl-C) must NOT kill the suite process.  Instead, the child command
+# dies with exit 130, and e2e_run() catches it and opens the interactive menu.
+# Uses a no-op handler (':') rather than ignore ('') so that child subshells
+# can restore default SIGINT behavior with 'trap - INT'.
+trap ':' INT
+
 # --- SSH wrapper ------------------------------------------------------------
 # Cleanup functions (e2e_cleanup_clusters, e2e_cleanup_mirrors) need _essh().
 # Suites run as child bash processes (runner.sh line 588: bash "$suite_file"),
@@ -921,7 +927,7 @@ _interactive_prompt() {
                 local user_cmd="${ans#!}"
                 _e2e_log "User entered command: $user_cmd"
                 echo "Running: $user_cmd"
-                ( eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+                ( trap - INT; eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                 local new_rc=${PIPESTATUS[0]}
                 if [ $new_rc -eq 0 ]; then
                     _e2e_log "User command succeeded"
@@ -1064,9 +1070,9 @@ e2e_run() {
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ( eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
+                    ( trap - INT; eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
+                    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
@@ -1323,7 +1329,7 @@ e2e_diag() {
         ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
             2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     else
-        ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+        ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     fi
 
     if [ $ret -ne 0 ]; then
@@ -1411,7 +1417,7 @@ e2e_run_must_fail() {
     _e2e_summary "  $(_e2e_Dim "$cmd")"
 
     local ret=0
-    ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
