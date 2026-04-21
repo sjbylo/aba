@@ -40,8 +40,9 @@ if [ -f "$_INFRA_DIR/config.env" ]; then
 	source "$_INFRA_DIR/config.env"
 fi
 
-# Source VMware credentials
-_vmconf="$(eval echo "${VMWARE_CONF:-~/.vmware.conf}")"
+# Source VMware credentials for framework VM operations (always vCenter).
+# --vmware-conf override is only for suites/ABA, not for pool management.
+_vmconf="$HOME/.vmware.conf"
 if [ -f "$_vmconf" ]; then
 	set -a; source "$_vmconf"; set +a
 else
@@ -277,13 +278,19 @@ _configure_dis_vm() {
 	_vm_disconnect_internet "$vm" "$user"
 
 	echo "  [$vm] Verifying NTP sync (server: ${NTP_SERVER:-10.0.1.8}) ..."
+	local _ntp_synced=0
 	for ((_ntp=0; _ntp<20; _ntp++)); do
 		if _essh "${user}@${vm}" -- "chronyc sources" | grep "^\^\*.*${NTP_SERVER:-10.0.1.8}"; then
 			echo "  [$vm] NTP synced to ${NTP_SERVER:-10.0.1.8}."
+			_ntp_synced=1
 			break
 		fi
 		sleep 5
 	done
+	if [ "$_ntp_synced" -eq 0 ]; then
+		echo "  [$vm] ERROR: NTP failed to sync to ${NTP_SERVER:-10.0.1.8} after 100s" >&2
+		return 1
+	fi
 
 	_verify_dis_vm "$vm" "$user" "$con_vm"
 
@@ -680,6 +687,8 @@ _prepare_golden() {
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
+	_vm_deploy_tmux_conf "$ip" "$user"   || return 1
+	_vm_provision_root_user "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 
@@ -867,6 +876,9 @@ for (( i=1; i<=_POOLS; i++ )); do
 	_cfg_pids+=($!)
 	_cfg_labels+=("configure pool $i ($con_vm + $dis_vm)")
 	_cfg_logs+=("$con_log" "$dis_log")
+
+	# Stagger pool launches to avoid CDN thundering-herd
+	[ $i -lt $_POOLS ] && sleep 5
 done
 
 # While background config jobs run, tail their logs so the user sees progress
@@ -901,6 +913,7 @@ echo "=== Phase 2 complete ==="
 echo ""
 echo "=== Phase 3: Create pool-ready snapshots ==="
 
+_snapshot_vms=()
 for (( i=1; i<=_POOLS; i++ )); do
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
@@ -910,15 +923,24 @@ for (( i=1; i<=_POOLS; i++ )); do
 				continue
 			fi
 		fi
-		echo "  Shutting down $vm_name before snapshot ..."
-		govc vm.power -s -force "$vm_name" || true
-		sleep 15
+		echo "  Shutting down $vm_name ..."
+		govc vm.power -s -force "$vm_name" &
+		_snapshot_vms+=("$vm_name")
+	done
+done
+
+if [ ${#_snapshot_vms[@]} -gt 0 ]; then
+	wait
+	sleep 15
+
+	for vm_name in "${_snapshot_vms[@]}"; do
 		echo "  Creating snapshot '$_SNAPSHOT_NAME' on $vm_name ..."
 		govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
 		echo "  Powering on $vm_name ..."
-		govc vm.power -on "$vm_name" || true
+		govc vm.power -on "$vm_name" &
 	done
-done
+	wait
+fi
 
 echo "=== Phase 3 complete ==="
 

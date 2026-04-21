@@ -33,8 +33,7 @@ platform:
           computeCluster: "/Datacenter/host/Cluster"
           datacenter: Datacenter
           networks:
-            - VMNET-DPG
-          #        resourcePool: "/Datacenter/host/Cluster/Resources/"
+            - VM Network
           folder: "/Datacenter/vm/abatesting"
     vcenters:
       - datacenters:

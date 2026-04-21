@@ -143,10 +143,15 @@ echo_warn() {
 	fi
 }
 
+_aba_debug_last=
 aba_debug() {
     local newline=1
 
     [ ! "${DEBUG_ABA:-}" ] && return 0
+
+    # Suppress consecutive duplicate messages (e.g. polling loops)
+    [ "$*" = "$_aba_debug_last" ] && return 0
+    _aba_debug_last="$*"
 
     # Erase to col1 and return
     [ "$TERM" ] && { tput el1 && tput cr; } >&2
@@ -279,6 +284,29 @@ vm_name() {
 	[ "${CP_REPLICAS:-${num_masters:-0}}" = "1" ] && [ "${WORKER_REPLICAS:-${num_workers:-0}}" = "0" ] && echo "$host" || echo "${cluster}-${host}"
 }
 
+_vm_annotation() {
+	local role=$1
+	local cluster_type
+	if [ "${CP_REPLICAS:-3}" = "1" ] && [ "${WORKER_REPLICAS:-0}" = "0" ]; then
+		cluster_type=sno
+	elif [ "${WORKER_REPLICAS:-0}" = "0" ]; then
+		cluster_type=compact
+	else
+		cluster_type=standard
+	fi
+	local aba_ver
+	aba_ver="$(cat "${ABA_ROOT:-..}/VERSION" 2>/dev/null || echo unknown)"
+	local role_label
+	[ "$role" = "control" ] && role_label="Control" || role_label="Worker"
+	cat <<-EOF
+	OpenShift ${role_label} Node (${cluster_type}), initial version v${ocp_version}
+	Installed by ABA v${aba_ver} (github.com/sjbylo/aba) on $(date)
+	Console: https://console-openshift-console.apps.${CLUSTER_NAME}.${base_domain}
+	API: https://api.${CLUSTER_NAME}.${base_domain}:6443
+	Manage from $(hostname):${PWD} — aba -d ${CLUSTER_NAME} [info|startup|shutdown|delete]
+	EOF
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.
@@ -317,11 +345,13 @@ normalize-aba-conf() {
 
 warn_if_cluster_unstable() {
 	local _co_unavail
+	aba_debug "Running: oc get co --no-headers (cluster stability check)"
 	_co_unavail=$(oc get co --no-headers 2>/dev/null | awk '$3 != "True" { printf "%s ", $1 }')
 	if [ -n "${_co_unavail% }" ]; then
 		aba_warning "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"
 	fi
 
+	aba_debug "Running: oc get mcp (MCP update check)"
 	if oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null \
 		| grep -q True; then
 		aba_warning "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
@@ -661,12 +691,24 @@ normalize-vmware-conf()
 	eval "$vars"
 	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
 	# FIXME: Is this the right place to check?!
+	aba_debug "Running: govc about (ESXi detection)"
         if govc about | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
+		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
 		echo export VC=
 	else
 		echo "$vars"
 		echo export VC=1
+		# Resolve $GOVC_DATACENTER and $GOVC_CLUSTER placeholders in GOVC_RESOURCE_POOL.
+		# Users can write e.g. '/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources' in vmware.conf
+		# and ABA expands it to the absolute path openshift-install requires.
+		# ${var//pattern/replacement} replaces all occurrences of pattern in var.
+		# The \$ in the pattern matches a literal '$' character.
+		if [ -n "$GOVC_RESOURCE_POOL" ]; then
+			local _rp="${GOVC_RESOURCE_POOL//\$GOVC_DATACENTER/$GOVC_DATACENTER}"
+			_rp="${_rp//\$GOVC_CLUSTER/$GOVC_CLUSTER}"
+			echo "export GOVC_RESOURCE_POOL='$_rp'"
+		fi
 	fi
 }
 
@@ -727,7 +769,7 @@ ask() {
 		[ "${ASK_OVERRIDE:-}" ] && ret_default="-y" #return 0  # reply "default reply"
 		source <(normalize-aba-conf)  # if aba.conf does not exist, this outputs 'ask=true' to be on the safe side.
 		aba_debug $0: aba.conf ask=$ask ASK_OVERRIDE=${ASK_OVERRIDE:-}
-		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="aba.conf:ask=false" #return 0  # reply "default reply"
+		[ ! "$ret_default" ] && [ ! "$ask" ] && ret_default="ask=false" #return 0  # reply "default reply"
 	fi
 
 	# Default reply is 'yes' (or 'no') and return 0
@@ -740,7 +782,7 @@ ask() {
 
 	#echo
  	echo_yellow -n "[ABA] $@? $yn_opts: "
-	[ "$ret_default" ] && echo_white "<default answer provided due to '$ret_default'>" && return 0
+	[ "$ret_default" ] && echo_white "[default: $ret_default]" && return 0
 	read $timer yn
 
 	# Return default response, 0
@@ -809,6 +851,139 @@ try_cmd() {
 	done
 }
 
+# Compact elapsed for aba_wait_show: "45s" if <1m; "4m" or "4m20s" if >=1m (no spaces).
+_aba_format_elapsed() {
+	local s=$1
+	local m=$(( s / 60 ))
+	local r=$(( s % 60 ))
+	if [ "$s" -lt 60 ]; then
+		printf '%ds' "$s"
+	elif [ "$r" -eq 0 ]; then
+		printf '%dm' "$m"
+	else
+		printf '%dm%ds' "$m" "$r"
+	fi
+}
+
+# Poll until command succeeds or wall-clock budget is exhausted.
+# Usage: aba_wait_show <message> <interval_sec> <max_sec> <command>
+# Evaluates <command> each iteration; exit 0 => success. Always prints progress (not gated by INFO_ABA).
+# The spinner runs in the background so it keeps updating even when the
+# check command blocks (e.g. curl --connect-timeout 10).  The check command
+# runs via eval so caller-defined functions are available.
+# TTY: spinner refreshes every 0.2s. Non-TTY: one elapsed tick per check cycle.
+#
+# Uses ( ) function body so job table, traps, and set options are isolated.
+aba_wait_show() (
+	msg=$1
+	interval=$2
+	max=$3
+	shift 3
+	check_cmd=$*
+	max_fmt=$(_aba_format_elapsed "$max")
+
+	if ! [[ "$interval" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
+		echo_red "[ABA] aba_wait_show: interval and max_sec must be non-negative integers" >&2
+		return 2
+	fi
+
+	set +m
+	trap - ERR
+
+	use_tty=0
+	[ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
+
+	# Check command output goes to a debug log (not /dev/null) so failures
+	# are diagnosable.  Truncated on each aba_wait_show invocation.
+	_wait_log="$HOME/.aba/logs/.aba-wait-show.log"
+	mkdir -p "$(dirname "$_wait_log")"
+	: > "$_wait_log"
+
+	start_ts=$(date +%s)
+	_spinner_pid=
+	hdr_done=
+
+	# Launch a background spinner that updates every 0.5s (TTY only).
+	_start_spinner() {
+		[ "$use_tty" -eq 0 ] && return
+		[ -n "$_spinner_pid" ] && return
+		(
+			_frames=( '|' '/' '-' '\' )
+			_s=0
+			while true; do
+				_e=$(( $(date +%s) - start_ts ))
+				printf '\r[ABA] %s  %s  %s/%s\033[K' "$msg" "${_frames[$(( _s % 4 ))]}" "$(_aba_format_elapsed "$_e")" "$max_fmt"
+				_s=$(( _s + 1 ))
+				sleep 0.2
+			done
+		) &
+		_spinner_pid=$!
+	}
+
+	_stop_spinner() {
+		[ -z "$_spinner_pid" ] && return
+		kill "$_spinner_pid" 2>/dev/null
+		wait "$_spinner_pid" 2>/dev/null || true
+		_spinner_pid=
+	}
+
+	_cleaned=
+	_cleanup() {
+		[ -n "$_cleaned" ] && return
+		_cleaned=1
+		_stop_spinner
+		if [ "$use_tty" -eq 1 ]; then
+			_final=$(( $(date +%s) - start_ts ))
+			printf '\r[ABA] %s     %s/%s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")" "$max_fmt"
+		elif [ -n "$hdr_done" ]; then
+			printf '\n'
+		fi
+	}
+	trap '_cleanup; exit 130' INT
+	trap '_cleanup; exit 143' TERM
+
+	_rc=1
+	_start_spinner
+
+	while true; do
+		elapsed=$(( $(date +%s) - start_ts ))
+		[ "$elapsed" -ge "$max" ] && break
+
+		# Run check command via eval in a forked subshell so caller-defined
+		# functions are available (bash -c would start a fresh process
+		# without them).  The subshell is killed if it exceeds the
+		# remaining wall-clock budget.  Output goes to debug log.
+		remaining=$(( max - elapsed ))
+		cmd_rc=0
+		( eval "$check_cmd" ) >> "$_wait_log" 2>&1 &
+		_cmd_pid=$!
+		_deadline=$(( $(date +%s) + remaining ))
+		while kill -0 "$_cmd_pid" 2>/dev/null; do
+			[ "$(date +%s)" -ge "$_deadline" ] && { kill "$_cmd_pid" 2>/dev/null; break; }
+			sleep 0.2
+		done
+		wait "$_cmd_pid" 2>/dev/null || cmd_rc=$?
+
+		elapsed=$(( $(date +%s) - start_ts ))
+		[ "$cmd_rc" -eq 0 ] && { _rc=0; break; }
+		[ "$elapsed" -ge "$max" ] && break
+
+		# Non-TTY: print elapsed tick after each failed check
+		if [ "$use_tty" -eq 0 ]; then
+			[ -z "$hdr_done" ] && { printf '[ABA] %s (max %s) ... ' "$msg" "$max_fmt"; hdr_done=1; }
+			printf '%s ' "$(_aba_format_elapsed "$elapsed")"
+		fi
+
+		# Sleep for the interval (or remaining budget, whichever is less)
+		remaining=$(( max - elapsed ))
+		wait_secs=$(( interval < remaining ? interval : remaining ))
+		[ "$wait_secs" -gt 0 ] && sleep "$wait_secs" 2>/dev/null || true
+	done
+
+	_cleanup
+	return "$_rc"
+)
+
 # Function to check if a version is greater than another version
 is_version_greater() {
     local version1=$1
@@ -862,8 +1037,20 @@ ARCH="${ARCH:-amd64}"
 
 # Cache settings
 ABA_CACHE_DIR="${ABA_CACHE_DIR:-$HOME/.aba/cache}"
-ABA_CACHE_TTL="${ABA_CACHE_TTL:-6000}"	# seconds
+ABA_CACHE_TTL="${ABA_CACHE_TTL:-100m}"
 # Note: Cache directory is created lazily when first needed
+
+# Convert human-readable duration string to seconds (e.g. 30m, 12h, 1d, 300s, or bare integer)
+parse_duration() {
+	local val="$1"
+	case "$val" in
+		*d) echo $(( ${val%d} * 86400 )) ;;
+		*h) echo $(( ${val%h} * 3600 )) ;;
+		*m) echo $(( ${val%m} * 60 )) ;;
+		*s) echo $(( ${val%s} )) ;;
+		*)  echo "$val" ;;
+	esac
+}
 
 ############################################
 # Helpers (best-effort, no error output)
@@ -950,7 +1137,7 @@ fetch_latest_minor_version() {
 	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
 	local latest_ver minor prev
 
-	_fetch_cached "$url" "$cache_file" "$ABA_CACHE_TTL" "" || { echo ""; return 0; }
+	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" "" || { echo ""; return 0; }
 
 	latest_ver="$(grep -Eo 'Version: +[0-9]+\.[0-9]+\..+' "$cache_file" 2>/dev/null | awk '{print $2}' | head -n1)"
 	[[ -n "$latest_ver" ]] || { echo ""; return 0; }
@@ -986,7 +1173,7 @@ _fetch_graph_cached() {
 	cache_file="${ABA_CACHE_DIR}/graph_${chann_minor}_${ARCH}.json"
 	url="${ABA_GRAPH_API}?channel=${chann_minor}&arch=${ARCH}"
 
-	_fetch_cached "$url" "$cache_file" "$ABA_CACHE_TTL" _validate_json_file || return 0
+	_fetch_cached "$url" "$cache_file" "$(parse_duration "$ABA_CACHE_TTL")" _validate_json_file || return 0
 	cat "$cache_file"
 }
 
@@ -1955,7 +2142,7 @@ run_once() {
 
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
-# Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL_SECS from ~/.aba/config)
+# Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)
 # Example: download_all_catalogs "4.19" 5        (explicit TTL override, e.g. for tests)
 download_all_catalogs() {
 	local version_short="${1}"
@@ -1972,7 +2159,7 @@ download_all_catalogs() {
 		source "$HOME/.aba/config"
 		max_parallel="${CATALOG_MAX_PARALLEL:-3}"
 	fi
-	[[ -z "$ttl" ]] && ttl="${CATALOG_CACHE_TTL_SECS:-43200}"
+	[[ -z "$ttl" ]] && ttl="$(parse_duration "${CATALOG_CACHE_TTL:-12h}")"
 
 	local catalogs=(redhat-operator certified-operator community-operator)
 	local running=0
@@ -2009,15 +2196,14 @@ wait_for_all_catalogs() {
 		return 1
 	fi
 	
-	# Read timeout from user config (default: 20 minutes)
-	local timeout_mins=20
+	# Read timeout from user config (default: 20m)
 	if [[ -f "$HOME/.aba/config" ]]; then
 		source "$HOME/.aba/config"
-		timeout_mins="${CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS:-${CATALOG_DOWNLOAD_TIMEOUT_MINS:-20}}"
 	fi
-	local timeout_secs=$((timeout_mins * 60))
+	local timeout_secs
+	timeout_secs="$(parse_duration "${CATALOG_INDEX_DOWNLOAD_TIMEOUT:-20m}")"
 	
-	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_mins} minutes)"
+	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_secs}s)"
 	
 	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
 	
@@ -2052,6 +2238,106 @@ wait_for_all_catalogs() {
 # -----------------------------------------------------------------------------
 
 # Probe HTTP/HTTPS endpoint with sensible timeouts
+# --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
+#
+# Usage: _run_oc_mirror_with_retry <action> <try_tot> <oc_mirror_cmd>
+#   action:    "save", "sync", or "load" (for log messages)
+#   try_tot:   total attempts (1 = no retry)
+#   oc_mirror_cmd: the oc-mirror command WITHOUT tuning flags (those are appended)
+#
+# Reads from environment: OC_MIRROR_PARALLEL_IMAGES, OC_MIRROR_IMAGE_TIMEOUT, OC_MIRROR_FLAGS
+# Exits the calling script with 0 on success or 1 on failure.
+_oc_mirror_decode_exit() {
+	local code=$1
+	local parts=""
+	[ $(( code & 2 )) -ne 0 ] && parts="${parts}release "
+	[ $(( code & 4 )) -ne 0 ] && parts="${parts}operator "
+	[ $(( code & 8 )) -ne 0 ] && parts="${parts}additional-image "
+	[ $(( code & 16 )) -ne 0 ] && parts="${parts}helm "
+	if [ -n "$parts" ]; then
+		echo "${parts% }"
+	elif [ "$code" -eq 1 ]; then
+		echo "generic/pre-batch"
+	else
+		echo "unknown($code)"
+	fi
+}
+
+_run_oc_mirror_with_retry() {
+	local action="$1"
+	local try_tot="$2"
+	local base_cmd="$3"
+
+	local parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
+	local retry_delay=2
+	local retry_times=2
+	local image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
+	aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
+
+	local try=1
+	local failed=1
+	local exit_history=""
+	aba_debug "Starting retry loop: try_tot=$try_tot"
+
+	while [ $try -le $try_tot ]; do
+		[[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
+		aba_debug "Attempt $try/$try_tot: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+
+		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
+
+		echo
+		aba_info -n "Attempt ($try/$try_tot)."
+		[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
+		aba_info "Running: cd data && umask 0022 && $cmd"
+
+		aba_debug "Running oc-mirror $action"
+		( cd data && umask 0022 && eval "$cmd" )
+		local ret=$?
+		aba_debug "oc-mirror $action exit code: $ret"
+
+		if [ $ret -eq 0 ]; then
+			aba_debug "$action completed successfully (ret=0)"
+			failed=
+			break
+		fi
+
+		# Decode the bitmask exit code for user feedback
+		local decoded
+		decoded=$(_oc_mirror_decode_exit $ret)
+		exit_history="${exit_history:+$exit_history, }$ret"
+
+		# Reduce oc-mirror parallelism and increase retry backoff on failure
+		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 ))
+		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 ))
+		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 ))
+		aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+
+		try=$(( try + 1 ))
+		if [ $try -le $try_tot ]; then
+			echo_red "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
+		fi
+	done
+
+	if [ "$failed" ]; then
+		try=$(( try - 1 ))
+		aba_warning -n "Image $action aborted ..." >&2
+		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
+		aba_warning \
+			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
+			"View https://status.redhat.com/ for any current issues or planned maintenance."
+		[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
+
+		return 1
+	fi
+
+	echo
+	local _past="${action}ed"; [ "$action" = "save" ] && _past="saved"
+	aba_info_ok -n "Images $_past successfully!"
+	[ $try_tot -gt 1 ] && [ $try -gt 1 ] && echo_white " (after $try attempts!)" || echo
+
+	return 0
+}
+
 # Usage: probe_host <url> [description]
 # Returns: 0 if reachable, 1 if not
 # Errors shown naturally by curl to stderr
@@ -2342,6 +2628,7 @@ ensure_oc_mirror() {
 	# (cli-download-all.sh starts downloads in background; extracting a
 	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
 	# Provide command so run_once can start the download if task was reset
+	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
 	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
@@ -2368,6 +2655,7 @@ ensure_openshift_install() {
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
+	aba_debug "ensure_govc: downloading and installing govc"
 	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
 	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
 }
@@ -2378,12 +2666,14 @@ ensure_virsh() {
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
+	aba_debug "ensure_butane: downloading and installing butane"
 	run_once -q -w -i "cli:download:butane" -- make -sC cli download-butane
 	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
 ensure_quay_registry() {
+	aba_debug "ensure_quay_registry: installing mirror-registry"
 	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
 }
 

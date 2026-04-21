@@ -22,29 +22,22 @@ if [ ! -f .install-complete ]; then
 	AGENT_IP=$(cat $ASSETS_DIR/rendezvousIP)
 	AGENT_PORT=8090
 	agent_url="http://$AGENT_IP:$AGENT_PORT/"
-	max_retries=10
-	delay=8
 
-	aba_info "Waiting for Agent to come alive at $agent_url ..."
-	for ((i=1; i<=max_retries; i++)); do
+	[ "$no_proxy" ] && no_proxy="$AGENT_IP,$no_proxy"
+	[ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy"
 
-		[ "$no_proxy" ] && no_proxy="$AGENT_IP,$no_proxy"
-		[ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy"
+	# Agent returns 4xx when alive (API endpoints return 404 at root)
+	_agent_is_alive() {
+		local code
+		code=$(curl --connect-timeout 10 -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url") || return 1
+		[[ $code =~ ^4..$ ]]
+	}
 
-		code=$(curl --connect-timeout 10 -s -o /dev/null -w "%{http_code}" --max-time 3 "$agent_url")
-
-		aba_debug return code=$code
-
-		# If return code is 4xx, then stop
-		if [[ $code =~ ^4..$ ]]; then
-			aba_info_ok "Agent alive!"
-			sleep 8
-			exit 0
-		fi
-
-		sleep "$delay"
-		let delay=$delay+2
-	done
+	if aba_wait_show "Waiting for Agent at $agent_url" 8 180 _agent_is_alive; then
+		aba_info_ok "Agent alive!"
+		sleep 8
+		exit 0
+	fi
 
 	echo_red "[ABA] Agent not detected"
 	sleep 8

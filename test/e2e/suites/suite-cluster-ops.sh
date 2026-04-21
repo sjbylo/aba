@@ -56,9 +56,7 @@ test_begin "Setup: ensure pre-populated registry"
 
 # Resolve OCP version: use OCP_VERSION env or fall back to "p" (previous)
 # We need the actual x.y.z version for the registry setup script.
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -80,7 +78,7 @@ e2e_run "Reset aba to clean state" \
     "./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Verify /home disk usage < 10GB after reset" \
     "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
@@ -111,7 +109,7 @@ e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Verify vmware.conf" "grep aba-e2e vmware.conf"
+e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 # Operators verified after cluster install (one per catalog).
@@ -138,12 +136,14 @@ test_begin "Setup: configure mirror for local registry"
 
 # Create mirror.conf pointing to conN's local pool registry (not disN)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 # Generate the pull secret for the pool registry
 e2e_run "Generate pool-registry pull secret" \
@@ -197,10 +197,14 @@ for ctype in sno compact standard; do
         "aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
         "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $cname/cluster.conf"
+    e2e_diag "Show $cname cluster.conf" "grep -E '^\w' $cname/cluster.conf"
     e2e_run "Generate install-config.yaml for $cname" \
         "aba --dir $cname install-config.yaml"
     e2e_run "Generate agent-config.yaml for $cname" \
         "aba --dir $cname agent-config.yaml"
+    e2e_snapshot_file "${ctype}-generated" "$cname/install-config.yaml"
+    e2e_snapshot_file "${ctype}-generated" "$cname/agent-config.yaml"
+    e2e_snapshot_file "${ctype}-generated" "$cname/cluster.conf"
     e2e_run "Generate ISO for $cname" \
         "aba --dir $cname iso"
 done
@@ -214,6 +218,8 @@ test_begin "ABI config: diff against known-good examples"
 
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
+    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/install-config.yaml.example"
+    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/agent-config.yaml.example"
     e2e_run "Diff $cname install-config.yaml against example" \
         "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/install-config.yaml.example) --strip-secrets"
 
@@ -301,6 +307,7 @@ e2e_run "Restore verify_conf=all" \
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
 
 e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 

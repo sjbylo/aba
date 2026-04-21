@@ -14,8 +14,8 @@
 #     done
 #   done
 #
-# VLAN tests use GOVC_NETWORK=PRIVATE-DPG (VLAN-capable port group).
-# Non-VLAN tests use GOVC_NETWORK=VMNET-DPG (regular lab network).
+# VLAN tests use GOVC_NETWORK="Private Network" (VLAN-capable port group).
+# Non-VLAN tests use GOVC_NETWORK="VM Network" (regular lab network).
 # =============================================================================
 
 set -u
@@ -61,9 +61,7 @@ suite_begin "network-advanced"
 # ============================================================================
 test_begin "Setup: ensure pre-populated registry"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
@@ -84,7 +82,7 @@ e2e_run "Reset aba to clean state" \
     "./install && aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Verify /home disk usage < 10GB after reset" \
     "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
@@ -114,6 +112,7 @@ test_end
 test_begin "Setup: configure mirror for local registry"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
@@ -121,6 +120,7 @@ e2e_run "Clear reg_ssh_key (local registry)" \
     "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
 e2e_run "Copy Quay root CA to regcreds" \
@@ -180,12 +180,12 @@ _net_test() {
     _saved_aba_machine_network="$(pool_machine_network)"
 
     if [ -n "$vlan" ]; then
-        govc_network="PRIVATE-DPG"
+        govc_network="Private Network"
         machine_network="$(pool_vlan_network)"
         next_hop="$(pool_vlan_gateway)"
         start_ip="$(pool_vlan_node_ip)"
     else
-        govc_network="VMNET-DPG"
+        govc_network="VM Network"
         machine_network="$(pool_machine_network)"
         next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
         start_ip="$(pool_node_ip)"
@@ -194,7 +194,7 @@ _net_test() {
     test_begin "$label"
 
     e2e_run "Set GOVC_NETWORK=$govc_network" \
-        "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=$govc_network /g' vmware.conf"
+        "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"$govc_network\" /g' vmware.conf"
 
     if [ -n "$vlan" ]; then
         # aba validates starting_ip against aba.conf's machine_network during iso/refresh
@@ -237,8 +237,7 @@ _net_test() {
     fi
 
     assert_file_exists "$cname/cluster.conf"
-    e2e_diag "Show cluster.conf" \
-        "grep -e ^vlan= -e ^ports= -e ^port1= $cname/cluster.conf | awk '{print \$1}'"
+    e2e_diag "Show cluster.conf" "grep -E '^\w' $cname/cluster.conf"
 
     e2e_run "Create ISO for $cname" "aba --dir $cname iso"
     e2e_run "Upload ISO for $cname" "aba --dir $cname upload"
@@ -262,6 +261,7 @@ _net_test() {
         "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
     e2e_run "Delete $cname VMs" "aba --dir $cname delete"
+    e2e_remove_from_cluster_cleanup "$PWD/$cname"
     e2e_run "Clean $cname cluster files" "aba -d $cname clean"
 
     if [ -n "$vlan" ]; then
@@ -273,7 +273,7 @@ _net_test() {
 }
 
 # ============================================================================
-# 5-10. VLAN tests (GOVC_NETWORK=PRIVATE-DPG)
+# 5-10. VLAN tests (GOVC_NETWORK="Private Network")
 # ============================================================================
 
 # Pool-unique cluster names
@@ -309,7 +309,7 @@ _net_test "VLAN standard: bonding" \
     standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # ============================================================================
-# 11-13. Non-VLAN bonding tests (GOVC_NETWORK=VMNET-DPG)
+# 11-13. Non-VLAN bonding tests (GOVC_NETWORK="VM Network")
 #         Single-port non-VLAN is already tested by cluster-ops/mirror-sync suites.
 # ============================================================================
 

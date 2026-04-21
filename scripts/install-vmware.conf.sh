@@ -56,7 +56,7 @@ else
 	source <(normalize-vmware-conf)
 
 	aba_info Checking govc config file: $PWD/vmware.conf
-	# Check access
+	aba_debug "Running: govc about"
 	if ! govc about; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
 	else

@@ -101,34 +101,38 @@ spec:
 END
 }
 
+# Check functions for aba_wait_show -- each runs _osus_log for the debug
+# timeline, then tests the condition.
+_osus_check_csv_exists() {
+	_osus_log
+	local csv
+	csv=$(oc get subscription -n $NAMESPACE update-service-subscription \
+		-o jsonpath='{.status.installedCSV}' 2>/dev/null) || true
+	[ "$csv" ]
+}
+
+_osus_check_csv_succeeded() {
+	_osus_log
+	oc get csv -n $NAMESPACE "$CSV" -o jsonpath='{.status.phase}' 2>/dev/null | grep -q Succeeded
+}
+
 # Waits up to ~10 minutes for the subscription to produce an installed CSV
 # with phase Succeeded. Logs cluster state to $_OSUS_LOG on every iteration.
 # Returns 0 on success, 1 on timeout.
 _osus_wait_for_csv() {
-	local csv_cmd="oc get subscription -n $NAMESPACE update-service-subscription -o jsonpath='{.status.installedCSV}'"
-	CSV=$(eval $csv_cmd) || true
-	local retries=0
-	until [ "$CSV" ]; do
-		echo -n .
-		sleep 10
-		_osus_log
-		CSV=$(eval $csv_cmd) || true
-		retries=$((retries + 1))
-		if [ $retries -ge 60 ]; then
-			return 1
-		fi
-	done
+	# Phase 1: wait for installedCSV to appear (up to 10 min)
+	if ! aba_wait_show "Waiting for OSUS subscription" 10 600 _osus_check_csv_exists; then
+		return 1
+	fi
 
-	retries=0
-	while ! oc get csv -n $NAMESPACE $CSV -o jsonpath='{.status.phase}' | grep -q Succeeded; do
-		echo -n .
-		sleep 10
-		_osus_log
-		retries=$((retries + 1))
-		if [ $retries -ge 60 ]; then
-			return 1
-		fi
-	done
+	# Re-read CSV name (aba_wait_show runs in a subshell, so side effects are lost)
+	CSV=$(oc get subscription -n $NAMESPACE update-service-subscription \
+		-o jsonpath='{.status.installedCSV}')
+
+	# Phase 2: wait for CSV phase Succeeded (up to 10 min)
+	if ! aba_wait_show "Waiting for CSV $CSV phase Succeeded" 10 600 _osus_check_csv_succeeded; then
+		return 1
+	fi
 
 	return 0
 }
@@ -217,18 +221,13 @@ if [ -z "$_osus_installed" ]; then
 	_osus_log
 	_osus_apply_sub
 
-	aba_info "Waiting for operator to be installed (this can take up to 10 minutes)..."
-
 	if ! _osus_wait_for_csv; then
-		# First attempt timed out. Clean up and retry once.
-		echo
 		echo_yellow "[ABA] OSUS operator subscription did not complete in time. Retrying ... Hit Ctrl-C to stop."
 		_osus_log
 		_osus_cleanup_sub
 		sleep 30
 		_osus_apply_sub
 
-		aba_info "Waiting for operator to be installed (retry, up to 10 more minutes)..."
 		_osus_log
 
 		if ! _osus_wait_for_csv; then
@@ -237,7 +236,6 @@ if [ -z "$_osus_installed" ]; then
 				"See $_OSUS_LOG for cluster state during the wait."
 		fi
 	fi
-	echo
 fi
 
 #####################
@@ -262,19 +260,35 @@ spec:
 END
 
 #####################
-aba_info -n "Obtaining the policy engine route ... "
+_osus_check_policy_engine_uri() {
+	local uri scheme
+	uri=$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}" 2>/dev/null) || return 1
+	scheme="${uri%%:*}"
+	test "$scheme" = http -o "$scheme" = https
+}
 
-while sleep 1; do POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph{"\n"}' updateservice "${NAME}")"; SCHEME="${POLICY_ENGINE_GRAPH_URI%%:*}"; if test "${SCHEME}" = http -o "${SCHEME}" = https; then break; fi; done
+if ! aba_wait_show "Obtaining the policy engine route" 2 900 _osus_check_policy_engine_uri; then
+	aba_abort "Timed out waiting for the policy engine route (15 min)."
+fi
 
-echo_green "$POLICY_ENGINE_GRAPH_URI"
+POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}")"
+aba_info_ok "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 aba_debug CH=$CH
 
-aba_info "Checking access to $POLICY_ENGINE_GRAPH_URI/?channel=$CH (this can take 1-2 minutes) ..."
+_osus_check_graph_available() {
+	local http_code
+	http_code=$(curl --cacert .openshift-ingress.cacert.pem --header Accept:application/json \
+		-s --connect-timeout 10 --output /dev/null --write-out "%{http_code}" \
+		"${POLICY_ENGINE_GRAPH_URI}?channel=$CH") || return 1
+	test "$http_code" -eq 200
+}
 
-while true; do HTTP_CODE="$(curl --cacert .openshift-ingress.cacert.pem --header Accept:application/json -s --output /dev/null --write-out "%{http_code}" "${POLICY_ENGINE_GRAPH_URI}?channel=$CH")"; if test "${HTTP_CODE}" -eq 200; then break; fi; echo -n .; sleep 10; done
-echo_green Available # No aba_info_ok!
+if ! aba_wait_show "Checking graph endpoint" 10 900 _osus_check_graph_available; then
+	aba_abort "Timed out waiting for graph endpoint (15 min): ${POLICY_ENGINE_GRAPH_URI}?channel=$CH"
+fi
+aba_info_ok "Graph endpoint available"
 
 #####################
 aba_info "Updating cluster version with $POLICY_ENGINE_GRAPH_URI ..."

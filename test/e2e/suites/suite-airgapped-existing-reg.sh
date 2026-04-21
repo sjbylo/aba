@@ -64,13 +64,13 @@ preflight_ssh
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
-e2e_run "Remove oc-mirror caches" \
-    "sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+e2e_run "Remove oc-mirror caches (conN)" \
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+e2e_run_remote -q "Remove oc-mirror caches (disN)" \
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
@@ -121,9 +121,11 @@ e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
     "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
+e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 e2e_run "Register pool registry with ABA" \
     "aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
@@ -147,6 +149,7 @@ e2e_run_must_fail "Sync to unknown host should fail" \
 # Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf).
 e2e_run "Restore reg_host after must-fail" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_diag "Show mirror.conf after restore" "grep -E '^\w' mirror/mirror.conf"
 
 # Pool registry is already registered -- idempotent install must succeed (skip)
 e2e_run "Install on already-registered registry succeeds (idempotent)" \
@@ -170,6 +173,7 @@ test_end
 # ============================================================================
 test_begin "Save images to disk"
 
+e2e_snapshot_file "initial-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save images" "aba -d mirror save --retry"
 
 e2e_run "Show saved files" "ls -lh mirror/data/"
@@ -269,6 +273,7 @@ test_end
 # ============================================================================
 test_begin "Load images into existing registry"
 
+e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load images into registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -286,12 +291,14 @@ e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
 e2e_run_remote "Create compact cluster.conf" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
 e2e_run_remote "Increase compact resources for reliable bootstrap" \
-    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=12/' $COMPACT/cluster.conf && \
-     sed -i 's/^master_mem=.*/master_mem=24/' $COMPACT/cluster.conf"
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=14/' $COMPACT/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=28/' $COMPACT/cluster.conf"
+e2e_diag_remote "Show compact cluster.conf" "grep -E '^\w' ~/aba/$COMPACT/cluster.conf"
 e2e_run_remote -r 1 1 "Bootstrap compact cluster" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
+e2e_remove_from_cluster_cleanup "$PWD/$COMPACT" remote
 e2e_run_remote -q "Clean compact dir" \
     "cd ~/aba && aba --dir $COMPACT clean"
 
@@ -307,8 +314,9 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Generate SNO cluster.conf" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 e2e_run_remote "Increase SNO resources for ACM" \
-    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=24/' $SNO/cluster.conf && \
-     sed -i 's/^master_mem=.*/master_mem=40/' $SNO/cluster.conf"
+    "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=28/' $SNO/cluster.conf && \
+     sed -i 's/^master_mem=.*/master_mem=46/' $SNO/cluster.conf"
+e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
@@ -336,11 +344,13 @@ mirror:
   additionalImages:
   - name: quay.io/sjbylo/flask-vote-app:latest
 EOF"
+e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -365,18 +375,17 @@ test_end
 # ============================================================================
 test_begin "ACM: install operators"
 
-# Add ACM operator to imageset and sync.
-# For incremental operator saves, create a minimal imageset config with ONLY the
-# operators section (no platform).  oc-mirror v2 errors with "no release images
-# found" when the config includes a platform section but the delta tar doesn't
-# contain release images.  This matches the UBI/vote-app incremental pattern.
-# The grep -A2 from the catalog YAML simulates a user manually editing the ISC
-# file (as documented in aba's workflow).  The catalog YAML must be kept in sync
-# with .index/ by download-catalog-index.sh for this to work correctly.
+# Save+Load config: ALL operators (old + new) so the archive is self-contained.
+# oc-mirror v2 diskToMirror resolves catalog data from the archive; operators
+# not in the archive cause oc-mirror to reach upstream (fails on disconnected
+# hosts).  No platform section -- oc-mirror v2 errors with "no release images
+# found" when platform is present but the delta tar has no release images.
+# oc-mirror only saves the delta since the last mirrorToDisk, so including
+# already-mirrored operators (kiali-ossm) adds negligible overhead.
 e2e_run "Set op_sets=acm" "aba --op-sets acm"
 
 OCP_VER_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-e2e_run "Create operators-only imageset config for ACM" \
+e2e_run "Create config with all operators for save+load" \
     "cat > mirror/data/imageset-config.yaml <<EOF
 kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
@@ -384,20 +393,31 @@ mirror:
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v${OCP_VER_MAJOR}
     packages:
+\$(grep -A2 'name: kiali-ossm\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 \$(grep -A2 'name: advanced-cluster-management\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 \$(grep -A2 'name: multicluster-engine\$' mirror/imageset-config-redhat-operator-catalog-v${OCP_VER_MAJOR}.yaml)
 EOF"
+e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 
+e2e_snapshot_file "acm-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
-e2e_run "Transfer ACM archive+config to internal bastion" \
+
+e2e_run "Transfer archive and config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
+e2e_snapshot_file_remote "acm-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load ACM images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (ACM operator resources)" \
     "cd ~/aba && aba --dir $SNO day2"
+
+# Verify previously loaded operators survived the incremental load.
+# oc-mirror rebuilds the catalog index during load; a partial config would
+# silently drop operators not listed (see ai/OC-MIRROR-INTERNALS.md).
+e2e_poll_remote 180 15 "Verify kiali-ossm still in OperatorHub after ACM load" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get packagemanifests' | grep ^kiali-ossm"
 
 test_end
 
@@ -423,7 +443,7 @@ e2e_run_remote "Set ACM channel to $ACM_CHANNEL" \
 e2e_run_remote -r 5 1.5 "Install ACM subscription" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-subs.yaml'"
 e2e_poll_remote 300 30 "Wait for ACM operator CSV" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management -o name | grep advanced-cluster-management'"
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get csv -n open-cluster-management | grep advanced-cluster-management.*Succeeded'"
 e2e_run_remote -r 5 1.5 "Install MultiClusterHub" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc apply -f ~/aba/test/acm-mch.yaml'"
 e2e_poll_remote 1800 60 "Wait for MCH ready" \
@@ -450,6 +470,7 @@ test_begin "Delete cluster"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Clean SNO cluster dir" \
     "cd ~/aba && rm -rf $SNO"
 

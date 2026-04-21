@@ -49,14 +49,12 @@ suite_begin "negative-paths"
 # ============================================================================
 test_begin "Setup: install and configure"
 
-e2e_run "Install ABA from git" \
-	"cd ~ && rm -rf ~/aba && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
-cd ~/aba
+e2e_install_aba
 
 e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
-	"sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf"
+	"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Verify /home disk usage < 10GB after reset" \
 	"used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
@@ -149,6 +147,7 @@ mirror:
       minVersion: 4.20.0
       maxVersion: 4.20.14
 ENDYAML"
+e2e_diag "Show dummy imageset-config" "cat mirror/data/imageset-config.yaml"
 e2e_run "Save current version" "grep '^ocp_version=' aba.conf > /tmp/e2e-saved-version"
 e2e_run "Set mismatched version" "sed -i 's/^ocp_version=.*/ocp_version=4.14.0/' aba.conf"
 e2e_run_must_fail "Version mismatch detected" "make -sC mirror checkversion"
@@ -169,7 +168,7 @@ e2e_run_must_fail "Invalid op-set name" \
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 e2e_run_must_fail "Bundle to read-only path" \
-	"aba bundle --out /root/e2e-noperm-test"
+	"aba bundle --out /proc/e2e-noperm-test"
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
 
 test_end 0
@@ -254,7 +253,7 @@ _DOCKER_FQDN="$DIS_HOST"
 # --- Test A: Docker install/verify/uninstall with --network host -----------
 
 e2e_run "Create $_DOCKER_MIRROR dir" "aba mirror --name $_DOCKER_MIRROR"
-e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_MIRROR"
+e2e_add_to_mirror_cleanup "$PWD/$_DOCKER_MIRROR"
 
 e2e_run "Install Docker registry on port $_DOCKER_PORT" \
 	"aba -d $_DOCKER_MIRROR install --vendor docker --reg-port $_DOCKER_PORT -H $_DOCKER_FQDN -k ~/.ssh/id_rsa"
@@ -308,7 +307,7 @@ e2e_run "Verify no stale registry container on disN before Test B" \
 	"! _essh $DIS_HOST \"podman ps -a --format '{{.Names}}'\" | grep '^registry\$'"
 
 e2e_run "Create $_DOCKER_NEG_MIRROR dir" "aba mirror --name $_DOCKER_NEG_MIRROR"
-e2e_add_to_mirror_cleanup "\$PWD/$_DOCKER_NEG_MIRROR"
+e2e_add_to_mirror_cleanup "$PWD/$_DOCKER_NEG_MIRROR"
 
 e2e_run "Install Docker registry on port $_DOCKER_NEG_PORT" \
 	"aba -d $_DOCKER_NEG_MIRROR install --vendor docker --reg-port $_DOCKER_NEG_PORT -H $_DOCKER_FQDN -k ~/.ssh/id_rsa"

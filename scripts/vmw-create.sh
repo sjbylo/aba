@@ -94,8 +94,11 @@ create_node() {
 
 		aba_info "Create VM: $vm_name: [${cpu_count}C/${mem_gb}G] [$GOVC_DATASTORE] [$GOVC_NETWORK] [$mac] [$ISO_DATASTORE:images/agent-${CLUSTER_NAME}.iso] [$cluster_folder]"
 
+		local annotation
+		annotation=$(_vm_annotation "$role")
+
 		cmd="govc vm.create \
-			-annotation='Created on $(date) as ${role} node for OpenShift cluster ${CLUSTER_NAME}.${base_domain} version v${ocp_version} from $(hostname):$PWD' \
+			-annotation='$annotation' \
 			-version vmx-15 \
 			-g rhel8_64Guest \
 			-firmware=efi \

@@ -5,8 +5,14 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Honor wait= from aba (e.g. wait=1) or any argv token (robust if order differs).
+wait=
+for _arg in "$@"; do
+	case "$_arg" in
+		wait=1|wait=true|wait=yes) wait=1 ;;
+	esac
+done
 [ "$1" = "wait=1" ] && wait=1 && shift
-
 
 [ ! -s iso-agent-based/auth/kubeconfig ] && aba_abort "Cannot find iso-agent-based/auth/kubeconfig file!"
 
@@ -37,24 +43,29 @@ unset KUBECONFIG
 cp iso-agent-based/auth.backup/kubeconfig  iso-agent-based/auth/kubeconfig
 OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
 
+aba_debug "Running: $OC whoami"
 if ! $OC whoami >/dev/null; then
 	echo_red "Error: Cannot access the cluster using iso-agent-based/auth/kubeconfig file!" >&2
 
 	exit 1
 fi
 
+aba_debug "Running: $OC whoami --show-server"
 cluster_id=$($OC whoami --show-server | awk -F[/:] '{print $4}') || exit 1
 
 # Resolve a debug image from the release payload (available in the mirror via IDMS).
 # The default 'oc debug' image (support-tools) lives on registry.redhat.io which is
 # unreachable in disconnected environments and has no IDMS redirect.
+aba_debug "Running: $OC adm release info --image-for=tools"
 debug_image=$($OC adm release info --image-for=tools 2>/dev/null || true)
 debug_image_flag=
 [ "$debug_image" ] && debug_image_flag="--image=$debug_image"
 
 aba_info Cluster $cluster_id nodes:
 echo
-$OC get nodes
+exec_cmd="$OC get nodes"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 echo
 
 logfile=.shutdown.log
@@ -66,12 +77,15 @@ eval "$(scripts/cluster-config.sh)" 2>/dev/null || true
 # Preparing debug pods for graceful shutdown (pods persist for fast reuse by the actual shutdown call)
 aba_info "Warming up debug pods on all nodes (please wait, up to 90s) ..."
 declare -A warmup_pids=()
+aba_debug "Running: $OC get nodes (warmup loop)"
 for node in $($OC --request-timeout=30s get nodes -o jsonpath='{.items[*].metadata.name}')
 do
+	aba_debug "Running: $OC debug $debug_image_flag --preserve-pod node/$node -- chroot /host hostname"
 	timeout 90 $OC --request-timeout=60s debug $debug_image_flag --preserve-pod node/${node} -- chroot /host hostname &
 	warmup_pids[$node]=$!
 done >> $logfile 2>&1
 
+aba_debug "Running: $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer"
 if $OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer > /dev/null; then
 	cluster_exp_date=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver-to-kubelet-signer -o jsonpath='{.metadata.annotations.auth\.openshift\.io/certificate-not-after}')
 
@@ -118,15 +132,18 @@ if [ $num_masters -ne 1 -o $num_workers -ne 0 ]; then
 	aba_info "Making all nodes unschedulable (corden) ..." | tee -a $logfile
 	for node in $($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 	do
+		aba_debug "Running: $OC adm cordon $node"
 		$OC adm cordon ${node} 2>> $logfile &
 	done | tee -a $logfile
 	wait
 
 	aba_info "Draining all pods from all worker nodes ..." | tee -a $logfile
 	sleep 1
+	aba_debug "Running: $OC get nodes -l node-role.kubernetes.io/worker (drain loop)"
 	for node in $($OC get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); 
 	do
 		aba_info Drain ${node}
+		aba_debug "Running: $OC adm drain $node --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force"
 		$OC adm drain ${node} --delete-emptydir-data --ignore-daemonsets=true --timeout=60s --force &
 		# See: https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html-single/backup_and_restore/index#graceful-shutdown_graceful-shutdown-cluster
 	done >> $logfile 2>&1
@@ -137,9 +154,11 @@ fi
 aba_info Shutting down all nodes ... | tee -a $logfile
 
 oc_debug_failed=
+aba_debug "Running: $OC get nodes (shutdown loop)"
 nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
 
 for node in $nodes; do
+	aba_debug "Running: $OC debug $debug_image_flag node/$node -- chroot /host shutdown -h 1"
 	if ! timeout 60 $OC debug $debug_image_flag node/${node} -- chroot /host shutdown -h 1 >> $logfile 2>&1; then
 		oc_debug_failed=1
 		aba_warning "oc debug shutdown failed for $node" | tee -a $logfile
@@ -160,30 +179,68 @@ aba_info_ok "All servers in the cluster will complete shutdown and power off sho
 # Clean up stale debug pods that could re-execute shutdown on next boot.
 # The 'oc debug ... shutdown -h now' pods persist in etcd; if the kubelet
 # re-syncs them on startup the node enters an infinite shutdown loop.
+aba_debug "Running: $OC get pods -n default (cleanup stale debug pods)"
 for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	aba_debug "Running: $OC delete pod -n default $pod --grace-period=0 --force"
 	$OC delete pod -n default "$pod" --grace-period=0 --force >> $logfile 2>&1 || true
 done
 
+# True when every node VM for this cluster is off (VMware: poweredOff only; KVM: shut off).
+# Do not use "aba ls | grep" alone — empty output or non-off states (e.g. suspended) must not pass.
+_shutdown_all_node_vms_off() {
+	if [ -s vmware.conf ]; then
+		ensure_govc
+		source <(normalize-vmware-conf)
+		if [ ! "$CLUSTER_NAME" ]; then
+			scripts/cluster-config-check.sh || return 1
+			eval "$(scripts/cluster-config.sh)" || return 1
+		fi
+		local name vm_info power_state
+		for name in $CP_NAMES $WORKER_NAMES; do
+			vm=$(vm_name "$CLUSTER_NAME" "$name")
+			aba_debug "Running: govc vm.info -json $vm"
+			vm_info=$(govc vm.info -json "$vm")
+			[ ! "$vm_info" ] && return 1
+			power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')
+			[ "$power_state" = "null" ] && return 1
+			[ "$power_state" = "poweredOff" ] || return 1
+		done
+		return 0
+	fi
+	if [ -s kvm.conf ]; then
+		ensure_virsh
+		source <(normalize-kvm-conf)
+		if [ ! "$CLUSTER_NAME" ]; then
+			scripts/cluster-config-check.sh || return 1
+			eval "$(scripts/cluster-config.sh)" || return 1
+		fi
+		local name state
+		for name in $CP_NAMES $WORKER_NAMES; do
+			vm=$(vm_name "$CLUSTER_NAME" "$name")
+			aba_debug "Running: virsh -c $LIBVIRT_URI domstate $vm"
+			state=$(virsh -c "$LIBVIRT_URI" domstate "$vm" 2>/dev/null)
+			[ "$state" = "shut off" ] || return 1
+		done
+		return 0
+	fi
+	return 1
+}
+
 # Only wait if installed on VMs (VMware or KVM)
 if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
-	printf "[ABA] Waiting for VMs to power off ..." | tee -a $logfile
-	_wait_elapsed=0
-	_wait_timeout=300
-	while aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; do
-		sleep 10
-		_wait_elapsed=$((_wait_elapsed + 10))
-		if [ $_wait_elapsed -ge $_wait_timeout ]; then
-			echo "" | tee -a $logfile
-			aba_warning "Timed out after ${_wait_timeout}s waiting for VMs to power off"
-			aba ls 2>/dev/null | tee -a $logfile
-			break
-		fi
-		printf " %ds" "$_wait_elapsed" | tee -a $logfile
-	done
-	echo "" | tee -a $logfile
-	if ! aba ls 2>/dev/null | grep -qiE 'poweredOn|running'; then
-		aba_info_ok "All VMs powered off." | tee -a $logfile
+	_wait_mins=40
+	_wait_timeout=$(( 60 * _wait_mins ))
+	# Log start; do not pipe aba_wait_show to tee — keeps a real TTY so spinner works when interactive.
+	echo "[ABA] Waiting up to ${_wait_mins} min for VMs to power off (started $(date -Iseconds))" >> $logfile
+	if ! aba_wait_show "Waiting for VMs to power off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
+		_shutdown_all_node_vms_off; then
+		echo "" | tee -a $logfile
+		aba ls 2>/dev/null | tee -a $logfile
+		aba_abort "Timed out after ${_wait_timeout}s waiting for all node VMs to power off"
 	fi
+	echo "" | tee -a $logfile
+	echo "[ABA] VM power-off wait finished ($(date -Iseconds))" >> $logfile
+	aba_info_ok "All VMs powered off." | tee -a $logfile
 fi
 
 exit 0

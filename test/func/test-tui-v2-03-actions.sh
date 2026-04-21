@@ -388,9 +388,14 @@ if wait_for "Choose Next Action - Help\|REVIEW:\|AIR-GAPPED" 10; then
 	assert_screen "Save Images" "H: help mentions Save Images"
 	assert_screen "Local Registry" "H: help mentions Local Registry"
 	assert_screen "Remote Registry" "H: help mentions Remote Registry"
+	screenshot "H-action-help-top"
+
+	# CONFIGURE and ADVANCED sections are below the fold in scrollable msgbox
+	send End
+	sleep 1
 	assert_screen "CONFIGURE" "H: help mentions CONFIGURE section"
 	assert_screen "ADVANCED" "H: help mentions ADVANCED section"
-	screenshot "H-action-help"
+	screenshot "H-action-help-bottom"
 else
 	log_fail "H: help dialog did not appear"
 	screenshot "H-action-no-help"

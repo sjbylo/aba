@@ -283,13 +283,23 @@ init_bastion() {
 
 		# Ensure test VMs are located together
 		[ -s ~/.vmware.conf ] && sed -i "s#^VC_FOLDER=.*#VC_FOLDER=/Datacenter/vm/abatesting#g" ~/.vmware.conf
+		exit 0
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	mylog "VM Update and reboot..."
-	cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
+	#cat <<-END | ssh $def_user@$int_bastion_hostname -- sudo bash
+	ssh $def_user@$int_bastion_hostname -- sudo bash <<-END
 		set -ex
 		whoami
+		echo ABA_TESTING=1 | sudo tee -a /etc/environment
+		subscription-manager refresh && sudo dnf clean all
 		dnf update -y   # We should do this and add to the vmw snap every now and then
+		# reboot now added below
+	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
+
+	ssh $def_user@$int_bastion_hostname -- sudo bash <<-END
 		reboot
 	END
 
@@ -350,6 +360,8 @@ init_bastion() {
 		echo $pub_key > /root/.ssh/authorized_keys
 		chmod 600 /root/.ssh/authorized_keys
 		mkdir -p ~/subdir
+		echo "export ABA_TESTING=1  # No usage reporting" >> /root/.bashrc
+		echo "export ABA_TESTING=1  # No usage reporting" >> /root/.bash_profile
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bashrc
 		echo "export ABA_TESTING=1  # No usage reporting" >> $HOME/.bash_profile
 
@@ -431,7 +443,9 @@ init_bastion() {
 
 		#dnf update -y # This moved upwards due to restart issues!  # I guess we should do this and add to the vmw snap every now and then
 		#reboot  # For some reason, a reboot causes the quay to fail installation to remote host ;/
+		exit 0
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	# reboot now done above # test-cmd -m "Wait for restart" sleep 20
 
@@ -487,7 +501,11 @@ init_bastion() {
 		chmod 600 ~$u/.ssh/authorized_keys
 		chown -R $u.$u ~$u
 		echo '$u ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$u
+		echo "export ABA_TESTING=1  # No usage reporting" >> /home/testy/.bashrc
+		echo "export ABA_TESTING=1  # No usage reporting" >> /home/testy/.bash_profile
+		exit 0
 	END
+	[ $? -ne 0 ] && echo "Script failed!" && exit 1
 
 	test-cmd -m "Verify ssh to testy@$int_bastion_hostname" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname whoami | grep testy"
 	test-cmd -m "Delete and create 'sub dir' on remote host for user $u" "ssh -i ~/.ssh/testy_rsa testy@$int_bastion_hostname -- 'rm -vrf $subdir && mkdir -v $subdir'"

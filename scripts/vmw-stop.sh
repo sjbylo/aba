@@ -43,31 +43,32 @@ if [ "$ask" ]; then
 fi
 
 for name in $hosts; do
-	govc vm.power -s "$(vm_name "$CLUSTER_NAME" "$name")" || true
+	exec_cmd="govc vm.power -s $(vm_name "$CLUSTER_NAME" "$name")"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd || true
 done
 
-if [ "$wait" ]; then
-	aba_info "Waiting for nodes to power down ..."
-
-	hosts_off=
-	while [ ! "$hosts_off" ];
-	do
-		for name in $hosts; do
-			vm_info=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")")
-			[ ! "$vm_info" ] && continue
-
-			power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')
-			[ "$power_state" == "null" ] && continue
-
-			[ "$power_state" == "poweredOn" ] && hosts_off= && break
-			[ "$power_state" == "poweredOff" ] && hosts_off=1
-		done
-
-		[ "$hosts_off" ] && exit 0
-
-		sleep 10
+# Return 0 when every VM in $hosts is poweredOff (aligned with cluster-graceful-shutdown aba_wait_show).
+_vmw_stop_all_powered_off() {
+	local name vm_info power_state
+	for name in $hosts; do
+		aba_debug "Running: govc vm.info -json $(vm_name "$CLUSTER_NAME" "$name")"
+		vm_info=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")")
+		[ ! "$vm_info" ] && return 1
+		power_state=$(echo "$vm_info" | jq -r '.virtualMachines[0].runtime.powerState')
+		[ "$power_state" = "null" ] && return 1
+		[ "$power_state" = "poweredOn" ] && return 1
 	done
-	#until make -s ls | grep poweredOn | wc -l | grep -q ^0$; do sleep 10; done
+	return 0
+}
+
+if [ "$wait" ]; then
+	_wait_mins=40
+	_wait_timeout=$(( 60 * _wait_mins ))
+	if ! aba_wait_show "Waiting for VMs to power off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
+		_vmw_stop_all_powered_off; then
+		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to power off"
+	fi
 fi
 
 exit 0

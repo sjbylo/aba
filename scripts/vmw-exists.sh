@@ -19,6 +19,7 @@ fi
 
 # Exit 0 if at least one VMs exist
 for name in $CP_NAMES $WORKER_NAMES; do
+	aba_debug "Running: govc vm.info -json $(vm_name "$CLUSTER_NAME" "$name")"
 	power_state=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")" | jq -r '.virtualMachines[0].runtime.powerState')
 	[ "$power_state" != "null" ] && exit 0
 done 

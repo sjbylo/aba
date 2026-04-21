@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=0.9.9
+ABA_VERSION=1.0.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260401130254
+ABA_BUILD=20260421223550
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -989,7 +989,9 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		getco)
-			oc --kubeconfig iso-agent-based/auth/kubeconfig get co
+			exec_cmd="oc --kubeconfig iso-agent-based/auth/kubeconfig get co"
+			aba_debug "Running: $exec_cmd"
+			$exec_cmd
 			exit
 		;;
 		day2)
@@ -1007,7 +1009,8 @@ if [ "$cur_target" ]; then
 		shutdown)
 			eval $BUILD_COMMAND
 			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh wait=$wait
-			exit
+			_shutdown_rc=$?
+			exit "$_shutdown_rc"
 		;;
 		startup)
 			$ABA_ROOT/scripts/cluster-startup.sh
@@ -1029,29 +1032,47 @@ if [ "$cur_target" ]; then
 		;;
 		ls)
 			_ensure_hv_ready
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (ls)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-ls.sh || echo "No vm(s)."
 			exit
 		;;
 		start)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (start)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit 0
 			exit
 		;;
 		stop)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (stop)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-stop.sh wait=$wait workers=$workers masters=$masters
 			exit
 		;;
 		kill|poweroff)
 			_ensure_hv_ready
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (kill)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-kill.sh || exit 0
 			exit
 		;;
 		delete)
 			_ensure_hv_ready
-			$ABA_ROOT/scripts/${HV}-delete.sh || exit 0
+			# Config regeneration may fail (e.g. missing pull secret on a
+			# disconnected host after registry deregistration). Still attempt
+			# delete -- the HV delete script exits 0 when no VMs exist.
+			exec_cmd="make -s init agentconf"
+			aba_debug "Running: $exec_cmd (delete)"
+			$exec_cmd || true
+			$ABA_ROOT/scripts/${HV}-delete.sh
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
 			exit
@@ -1059,6 +1080,9 @@ if [ "$cur_target" ]; then
 		refresh)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (refresh)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
@@ -1067,6 +1091,9 @@ if [ "$cur_target" ]; then
 		;;
 		upload)
 			_ensure_hv_ready
+			exec_cmd="make -s init"
+			aba_debug "Running: $exec_cmd (upload)"
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-upload.sh
 			# Sync Make stamp files: upload implies poweroff already happened.
 			touch .autopoweroff .autoupload
@@ -1159,7 +1186,7 @@ if [ -f .bundle ]; then
 	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
 		{
 			echo
-			aba_warning -p "IMPORANT" \
+			aba_warning -p "IMPORTANT" \
 				"The Image-set archive file(s) (ISA image payload) are not included in this install bundle." \
 				"The ISA file(s) were left out of the install bundle during its creation and *must be*" \
 				"moved or copied into the install bundle under the aba/mirror/data directory before continuing!"

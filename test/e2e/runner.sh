@@ -23,6 +23,14 @@ _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$HOME/aba"
 export _ABA_ROOT
 
+# For root, redirect mirror data (oc-mirror cache, registry, TMPDIR) to /home
+# via ABA's existing data_dir mechanism. Suites use E2E_DATA_DIR with --data-dir.
+if [ "$(id -u)" = "0" ]; then
+	export E2E_DATA_DIR="/home/root"
+else
+	export E2E_DATA_DIR=""
+fi
+
 source "$_RUNNER_DIR/lib/constants.sh"
 
 # --- Parse arguments ----------------------------------------------------------
@@ -77,6 +85,8 @@ rm -f "$RC_FILE"
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
 echo "$SUITE" > /tmp/e2e-last-suites
+sudo rm -f /tmp/e2e-suite-user
+whoami > /tmp/e2e-suite-user
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
 tmux rename-window "$SUITE" 2>/dev/null
@@ -109,7 +119,7 @@ _E2E_MIRROR_DATA_DIRS="quay-install my-quay-mirror-test1 mymirror-data docker-re
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
-_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 80/tcp"
+_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 80/tcp"
 
 _cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
@@ -118,6 +128,26 @@ _cleanup_non_mirror_local() {
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
 	rm -rf ~/tmp/*
+	# When root uses data_dir=/home/root, caches land there instead of /root
+	[ -d /home/root ] && sudo rm -rf /home/root/.oc-mirror /home/root/.cache/agent /home/root/.tmp /home/root/tmp/*
+
+	# When switching between --user root and --user steve (or any user), the
+	# OTHER user's home may still contain large artifacts from a previous run.
+	local _my_home
+	_my_home=$(eval echo "~")
+	local _h
+	for _h in /root /home/*; do
+		[ -d "$_h" ] || continue
+		[ "$_h" = "$_my_home" ] && continue
+		if [ -d "$_h/aba" ]; then
+			echo "  Cleaning stale ABA artifacts in $_h ..."
+			sudo rm -rf "$_h/aba/mirror/data/mirror_"*.tar
+			sudo rm -rf "$_h/aba/cli/"*.tar.gz
+			sudo rm -rf "$_h/.oc-mirror"
+			sudo rm -rf "$_h/.cache/agent"
+			sudo rm -rf "$_h/tmp/"*
+		fi
+	done
 }
 
 # Verify no mirror data dirs survive on a host after cleanup.
@@ -139,13 +169,21 @@ _verify_no_mirror_data_dirs() {
 		fi
 	fi
 
-	for _dir in $_E2E_MIRROR_DATA_DIRS; do
-		if [ -n "$remote_target" ]; then
-			_essh "$remote_target" "test -d ~/$_dir" && _leftovers+="  ~/$_dir"$'\n'
-		else
+	if [ -n "$remote_target" ]; then
+		# Check ALL users on the remote host (cross-user leftovers are the common case)
+		local _dis_fqdn
+		_dis_fqdn=$(echo "$remote_target" | sed 's/.*@//')
+		local _default_user="${VM_DEFAULT_USER:-steve}"
+		for _check_user in root "$_default_user"; do
+			for _dir in $_E2E_MIRROR_DATA_DIRS; do
+				_essh "${_check_user}@${_dis_fqdn}" "test -d ~/$_dir" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
+			done
+		done
+	else
+		for _dir in $_E2E_MIRROR_DATA_DIRS; do
 			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n'
-		fi
-	done
+		done
+	fi
 
 	if [ -n "$_leftovers" ]; then
 		echo ""
@@ -196,16 +234,45 @@ _verify_no_orphan_vms() {
 
 	[ -z "$_real_orphans" ] && echo "  No orphan VMs in $VC_FOLDER" && return 0
 
+	# Safety: only auto-destroy if VC_FOLDER is an aba-e2e pool folder
+	if [[ "$VC_FOLDER" != */aba-e2e/pool* ]]; then
+		echo ""
+		echo "  FATAL: Orphan VMs found but VC_FOLDER ($VC_FOLDER) is not an aba-e2e pool folder."
+		echo "  Refusing to auto-destroy. Delete manually:"
+		while IFS= read -r _o; do
+			[ -z "$_o" ] && continue
+			echo "    $_o"
+		done <<< "$_real_orphans"
+		return 1
+	fi
+
 	echo ""
-	echo "  FATAL: Orphan VMs found in $VC_FOLDER:"
-	while IFS= read -r _o; do
-		[ -z "$_o" ] && continue
-		echo "    $_o"
+	echo "  WARNING: Orphan VMs found in $VC_FOLDER -- cleaning up ..."
+	local _cleanup_failed=""
+	while IFS= read -r _ovm; do
+		[ -z "$_ovm" ] && continue
+		echo "    Destroying orphan: $_ovm"
+		"$_govc" vm.power -off -force "$_ovm" 2>/dev/null || true
+		if ! "$_govc" vm.destroy "$_ovm" 2>/dev/null; then
+			echo "    ERROR: failed to destroy $_ovm"
+			_cleanup_failed=1
+			continue
+		fi
+		# Remove the parent folder if it's a cluster subfolder (e.g. /pool3/e2e-sno3/)
+		local _parent
+		_parent=$(dirname "$_ovm")
+		if [ "$_parent" != "$VC_FOLDER" ]; then
+			"$_govc" object.destroy "$_parent" 2>/dev/null || true
+		fi
 	done <<< "$_real_orphans"
-	echo ""
-	echo "  The .cleanup mechanism should have deleted these via 'aba delete'."
-	echo "  Investigate why cleanup failed before re-running."
-	return 1
+
+	if [ -n "$_cleanup_failed" ]; then
+		echo ""
+		echo "  FATAL: Could not destroy all orphan VMs. Investigate manually."
+		return 1
+	fi
+	echo "  Orphan cleanup complete."
+	return 0
 }
 
 # Reset firewall on conN: remove stale test ports, preserve pool registry (8443).
@@ -318,6 +385,13 @@ if [ -f "$_RUNNER_DIR/config.env" ]; then
 	set +a
 fi
 
+echo "  Config:"
+echo "    CON_SSH_USER=${CON_SSH_USER:-steve}"
+echo "    DIS_SSH_USER=${DIS_SSH_USER:-steve}"
+echo "    OS=${INT_BASTION_RHEL_VER:-rhel8}"
+echo "    VMWARE_CONF=${VMWARE_CONF:-~/.vmware.conf}"
+echo ""
+
 # Git variables for suites (curl/git-clone install paths).
 # Primary source: config.env (run.sh injects auto-detected values before deploy).
 # Fallbacks here are safe defaults only -- never trust the VM's local git state.
@@ -339,7 +413,15 @@ export _E2E_INTERACTIVE=1
 
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	if ! command -v govc &>/dev/null; then
-		if [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
+		# govc not in PATH -- check ~/bin/ and harness bin/ (deployed by run.sh)
+		if [ -x "$HOME/bin/govc" ]; then
+			export PATH="$HOME/bin:$PATH"
+		elif [ -x "$HOME/.e2e-harness/bin/govc" ]; then
+			mkdir -p "$HOME/bin"
+			cp "$HOME/.e2e-harness/bin/govc" "$HOME/bin/govc"
+			chmod 755 "$HOME/bin/govc"
+			export PATH="$HOME/bin:$PATH"
+		elif [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
 			echo "  Bootstrapping govc ..."
 			make -sC "$_ABA_ROOT/cli" govc || {
 				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
@@ -371,6 +453,15 @@ else
 fi
 
 # --- Load per-pool overrides from pools.conf ----------------------------------
+# CLI overrides (--os, --user, etc.) must win over pools.conf defaults.
+# run.sh sets _E2E_CLI_OVERRIDES="OS CON_USER ..." to mark which vars are
+# explicitly CLI-provided; save those before pools.conf can clobber them.
+
+_cli_overrides=" ${_E2E_CLI_OVERRIDES:-} "
+[[ "$_cli_overrides" == *" OS "* ]]       && _cli_saved_os="$INT_BASTION_RHEL_VER"
+[[ "$_cli_overrides" == *" CON_USER "* ]] && _cli_saved_con_user="$CON_SSH_USER"
+[[ "$_cli_overrides" == *" DIS_USER "* ]] && _cli_saved_dis_user="$DIS_SSH_USER"
+[[ "$_cli_overrides" == *" VMWARE "* ]]   && _cli_saved_vmware="$VMWARE_CONF"
 
 if [ -f "$_RUNNER_DIR/pools.conf" ]; then
 	while IFS= read -r _line; do
@@ -388,6 +479,18 @@ if [ -f "$_RUNNER_DIR/pools.conf" ]; then
 		fi
 	done < "$_RUNNER_DIR/pools.conf"
 fi
+
+# Re-apply CLI overrides that pools.conf may have clobbered
+[[ "$_cli_overrides" == *" OS "* ]]       && export INT_BASTION_RHEL_VER="$_cli_saved_os"
+[[ "$_cli_overrides" == *" CON_USER "* ]] && export CON_SSH_USER="$_cli_saved_con_user"
+[[ "$_cli_overrides" == *" DIS_USER "* ]] && export DIS_SSH_USER="$_cli_saved_dis_user"
+[[ "$_cli_overrides" == *" VMWARE "* ]]   && export VMWARE_CONF="$_cli_saved_vmware"
+
+# Metadata for live dashboard pane titles (written after config.env + CLI overrides are final)
+echo "${INT_BASTION_RHEL_VER:-rhel8}" > /tmp/e2e-suite-os
+_vmconf_display="${VMWARE_CONF:-}"
+[ -z "$_vmconf_display" ] && _vmconf_display="~/.vmware.conf"
+echo "$_vmconf_display" > /tmp/e2e-suite-vmconf
 
 # --- Resolve pool variables ---------------------------------------------------
 
@@ -471,10 +574,42 @@ _cleanup_dis_aba() {
 	# Registry cleanup on conN is handled by _cleanup_con_quay() -- not here.
 	# This function only cleans the disN filesystem and firewall.
 
-	# 1. Clean disN non-mirror filesystem (aba code, CLI tools, caches)
+	# 0. Uninstall any stale registry on disN via aba, for EACH user that may
+	#    have installed one.  A previous suite may have run as a different user
+	#    (e.g. steve when current is root), leaving a rootless registry that the
+	#    current user's podman can't see.
+	echo "  Checking for stale registries on disN (all users) ..."
+	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
+	# Try both root and the default non-root user (the only two users on E2E VMs)
+	local _default_user="${VM_DEFAULT_USER:-steve}"
+	local _try_user
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		# Try aba uninstall if .available exists OR if ~/aba/mirror dir exists
+		# (covers interrupted installs where .available was never created).
+		# Also check /home/root/aba for root's data_dir-redirected paths.
+		_essh "$_uhost" "
+			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ] || \
+			   [ -f /home/root/aba/mirror/.available ] || [ -d /home/root/aba/mirror ]; then
+				_aba_dir=~/aba
+				[ -d /home/root/aba/mirror ] && _aba_dir=/home/root/aba
+				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
+				cd \$_aba_dir && aba -y -d mirror uninstall || true
+			fi
+		" 2>&1 || echo "  [cleanup] WARNING: aba uninstall as $_try_user on disN failed (rc=$?)"
+	done
+
+	# 1. Clean disN filesystem for all users (aba code, CLI tools, caches, mirror data)
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
-	_essh "$dis_host" "rm -rf ~/aba ~/bin" 2>&1
-	_essh "$dis_host" "rm -rf ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/tmp/.??* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+		# Mirror data dirs may contain files owned by container-mapped UIDs
+		# (rootless podman UID remapping), so sudo is needed for cleanup.
+		for _mdir in $_E2E_MIRROR_DATA_DIRS; do
+			_essh "$_uhost" "sudo rm -rf ~/$_mdir /home/root/$_mdir" 2>&1
+		done
+	done
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 
@@ -509,13 +644,35 @@ _cleanup_dis_aba() {
 			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
 	fi
 
-	# 6. Verify clean state
-	if _essh "$dis_host" "[ ! -d ~/aba ] && ! podman ps -q | grep -q ."; then
-		echo "  disN cleanup verified: clean state"
-	else
-		echo "  WARNING: disN cleanup may be incomplete -- check manually"
+	# 6. Verify port 8443 is free (registry fully uninstalled).
+	#    Cross-user scenarios (steve->root) are handled by snapshot revert in run.sh.
+	#    This catches same-user partial installs where aba uninstall couldn't fully
+	#    tear down orphaned containers.
+	if _essh "$dis_host" "ss -tlnp | grep -q ':8443 '"; then
+		echo "  WARNING: port 8443 still occupied after cleanup -- retrying aba uninstall"
+		for _try_user in root "$_default_user"; do
+			local _uhost="${_try_user}@${_dis_fqdn}"
+			# Crash-recovery fallback: aba uninstall already ran but couldn't stop
+			# orphaned containers (partial install, no config left).  podman stop
+			# is the only option when aba state is gone.
+			_essh "$_uhost" "
+				cd /tmp
+				if podman ps -q 2>/dev/null | grep -q .; then
+					echo '  [cleanup] Stopping $_try_user containers on disN'
+					podman stop -a -t 5 || true
+					podman rm -af || true
+				fi
+			" 2>&1 || true
+		done
+		# Final check
+		if _essh "$dis_host" "ss -tlnp | grep -q ':8443 '"; then
+			echo "  FATAL: port 8443 STILL occupied on disN after all cleanup attempts"
+			return 1
+		fi
+		echo "  disN port 8443 freed after retry"
 	fi
 
+	echo "  disN cleanup verified: clean state"
 	echo "  disN cleanup complete."
 }
 
@@ -553,6 +710,9 @@ printf '##  %-74s##\n' ""
 printf '##  %-74s##\n' "SUITE START: $SUITE"
 printf '##  %-74s##\n' "Pool $POOL_NUM  ($(hostname))    $(date '+%Y-%m-%d %H:%M:%S')"
 printf '##  %-74s##\n' ""
+printf '##  %-74s##\n' "CON_USER=${CON_SSH_USER:-steve}  DIS_USER=${DIS_SSH_USER:-steve}  OS=${INT_BASTION_RHEL_VER:-rhel8}"
+printf '##  %-74s##\n' "VMWARE_CONF=${VMWARE_CONF:-~/.vmware.conf}"
+printf '##  %-74s##\n' ""
 printf '%0.s#' {1..80}; echo
 printf '%0.s#' {1..80}; echo
 echo ""
@@ -570,8 +730,9 @@ _pre_suite_cleanup() {
 		sleep 2
 	fi
 
-	# Purge all oc-mirror caches (can grow to many GB across nested dirs)
-	sudo find ~/ -type d -name .oc-mirror | xargs sudo rm -rf
+	# Purge all oc-mirror caches (can grow to many GB across nested dirs).
+	# Search both /root/ and /home/ so --user root cleans steve leftovers and vice versa.
+	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
 	echo "  Purged oc-mirror caches"
 
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
@@ -935,10 +1096,20 @@ if [ -n "${DIS_VM:-}" ]; then
 fi
 
 echo ""
-echo "========================================"
-echo "  Pool $POOL_NUM Result: $SUITE"
-echo "  Exit code: $_rc  Time: ${_mins}m ${_secs}s"
-echo "========================================"
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
+if [ $_rc -eq 0 ]; then
+	echo "  SUITE FINISHED: $SUITE -- PASS (${_mins}m ${_secs}s)"
+elif [ $_rc -eq 3 ]; then
+	echo "  SUITE FINISHED: $SUITE -- SKIPPED (${_mins}m ${_secs}s)"
+else
+	echo "  SUITE FINISHED: $SUITE -- FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+fi
+echo "  Pool $POOL_NUM | $(hostname) | $(date '+%Y-%m-%d %H:%M:%S')"
+echo "  Log: ${E2E_LOG_FILE:-$E2E_LOG_DIR/${SUITE}-latest.log}"
+echo "  Waiting for next suite dispatch ..."
+printf '%0.s#' {1..80}; echo
+printf '%0.s#' {1..80}; echo
 echo ""
 
 # Write exit code for run.sh to read

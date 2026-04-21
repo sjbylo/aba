@@ -1,0 +1,24 @@
+# VMware ESXi configuration file used by the govc CLI.
+# Use this template when connecting directly to an ESXi host (not vCenter).
+# Please go through all values carefully and adjust to your environment!
+# See https://github.com/vmware/govmomi/blob/main/govc/README.md#usage for more.
+
+GOVC_URL=esxi-host.lan				# ESXi host FQDN or IP address.
+GOVC_USERNAME=root				# ESXi credentials (typically 'root').
+GOVC_PASSWORD='<my password here>'
+
+GOVC_DATASTORE=Datastore1			# VMs will be provisioned using this datastore and network.
+GOVC_NETWORK='VM Network'			# Remember to place the control-plane VMs on the fastest storage
+						# available, e.g. local ssd storage.
+
+#ISO_DATASTORE=Datastore2			# Optional: A boot ISO will be generated for all VMs to boot from.
+						# The ISO is uploaded to '[Datastore] /images/agent-<cluster-name>.iso'
+						# If the ISO should be stored on a separate datastore, define this here.
+
+# ESXi does not use vCenter concepts -- leave these commented out.
+# ABA automatically detects ESXi and sets VC_FOLDER=/ha-datacenter/vm.
+#GOVC_DATACENTER=				# Not used with ESXi.
+#GOVC_CLUSTER=					# Not used with ESXi.
+#VC_FOLDER=					# Not used with ESXi (auto-set to /ha-datacenter/vm).
+
+GOVC_INSECURE=true				# Disable cert validation.

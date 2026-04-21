@@ -27,16 +27,31 @@ if scripts/kvm-exists.sh; then
 		done
 	fi
 else
-	exit 1
+	aba_info "No VMs found -- nothing to delete"
+	exit 0
 fi
 
 ask "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
+	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $vm"
+	if ! virsh -c "$LIBVIRT_URI" dominfo "$vm" >/dev/null 2>&1; then
+		aba_info "VM $vm does not exist (skipping)"
+		continue
+	fi
 	aba_info "Removing VM $vm"
-	virsh -c "$LIBVIRT_URI" destroy "$vm" 2>/dev/null || true
-	virsh -c "$LIBVIRT_URI" undefine "$vm" --remove-all-storage --nvram 2>/dev/null || true
+	# Power off first -- ignore error if already off
+	exec_cmd="virsh -c $LIBVIRT_URI destroy $vm"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd || true
+	exec_cmd="virsh -c $LIBVIRT_URI undefine $vm --remove-all-storage --nvram"
+	aba_debug "Running: $exec_cmd"
+	$exec_cmd
+	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $vm (verify)"
+	if virsh -c "$LIBVIRT_URI" dominfo "$vm" >/dev/null 2>&1; then
+		aba_abort "VM $vm still exists after undefine"
+	fi
 done
 
 exit 0

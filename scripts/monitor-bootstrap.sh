@@ -28,10 +28,10 @@ if ! ensure_openshift_install >/dev/null; then
 	aba_abort "Failed to install openshift-install:\n$error_msg"
 fi
 
-echo_yellow "[ABA] Running: openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR"
-
-
-openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR $opts
+exec_cmd="openshift-install agent wait-for bootstrap-complete --dir $ASSETS_DIR $opts"
+echo_yellow "[ABA] Running: $exec_cmd"
+aba_debug "Running: $exec_cmd"
+$exec_cmd
 ret=$?
 aba_debug openshift-install returned: $ret 
 

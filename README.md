@@ -302,16 +302,16 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
 # Download and install a stable release (recommended)
-wget https://github.com/sjbylo/aba/archive/refs/tags/v0.9.9.tar.gz
-tar xzf v0.9.9.tar.gz
-cd aba-0.9.9
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.0.0.tar.gz
+tar xzf v1.0.0.tar.gz
+cd aba-1.0.0
 ./install
 aba
 ```
 
 Or clone a specific release tag:
 ```bash
-git clone --branch v0.9.9 https://github.com/sjbylo/aba.git
+git clone --branch v1.0.0 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1142,11 +1142,12 @@ Values are commented out by default; uncomment and edit to override.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `CATALOG_INDEX_DOWNLOAD_TIMEOUT_MINS` | `20` | Timeout (minutes) for downloading operator catalog index files. Increase on slow networks. |
-| `CATALOG_CACHE_TTL_SECS` | `43200` | How long (seconds) to cache downloaded catalog indexes before re-downloading (default 12 hours). |
+| `CATALOG_INDEX_DOWNLOAD_TIMEOUT` | `20m` | Timeout for downloading operator catalog index files. Accepts duration strings (`30s`, `20m`, `1h`, `1d`). Increase on slow networks. |
+| `CATALOG_CACHE_TTL` | `12h` | How long to cache downloaded catalog indexes before re-downloading. Accepts duration strings (`30s`, `20m`, `12h`, `1d`). |
 | `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
+| `OC_MIRROR_SINCE` | `2020-01-01` | Date passed to `oc-mirror --since` during `save` (mirror-to-disk) only. Forces a complete, self-contained archive every time — required for reliable air-gapped `load`. Set to empty to use oc-mirror's differential mode (smaller archives, but each must be loaded in order). |
 | `OC_MIRROR_FLAGS` | *(empty)* | Extra flags appended to every `oc-mirror` invocation (sync, save, load). Normally not needed — sigstore signature handling is managed by the `registries.d` config below. |
 
 Example — increase the image timeout to 60 minutes:

@@ -133,7 +133,26 @@ _vm_install_packages() {
 
 	echo "  [vm] Installing required packages on $host ..."
 
-	_essh "${user}@${host}" -- sudo dnf install -y chrony dnsmasq bind-utils podman rsync < /dev/null
+	cat <<-'PKGEOF' | _essh "${user}@${host}" -- sudo bash
+		set -ex
+		# Refresh entitlement certs -- VMs restored from snapshot may have stale certs
+		subscription-manager refresh || true
+		dnf clean all
+
+		for attempt in 1 2 3; do
+			if dnf install -y chrony dnsmasq bind-utils podman rsync; then
+				echo "package-install exit=0 (attempt $attempt)"
+				break
+			fi
+			if [ "$attempt" -eq 3 ]; then
+				echo "package-install FAILED after 3 attempts" >&2
+				exit 1
+			fi
+			echo "package-install attempt $attempt failed -- retrying in 30s ..."
+			dnf clean all
+			sleep 30
+		done
+	PKGEOF
 }
 
 # --- _vm_setup_time ---------------------------------------------------------
@@ -170,22 +189,69 @@ _vm_setup_time() {
 _vm_dnf_update() {
 	local host="$1"
 	local user="${2:-$VM_DEFAULT_USER}"
+	local poll_timeout=900
+	local poll_interval=20
 
-	echo "  [vm] Running dnf clean + update on $host ..."
+	echo "  [vm] Running dnf clean + update on $host (detached) ..."
 
-	cat <<-'DNFEOF' | _essh "${user}@${host}" -- sudo bash
-		set -ex
+	# Upload a script and run it via nohup so RPM scriptlets that
+	# restart sshd (e.g. grub2-common, openssh-server) don't kill
+	# the transaction mid-way.
+	cat <<-'SCRIPT' | _essh "${user}@${host}" -- "sudo tee /tmp/dnf-update.sh >/dev/null"
+		#!/bin/bash
+		rm -f /tmp/dnf-update.rc
 		for attempt in 1 2 3; do
 			dnf clean all
-			if dnf update -y 2>&1 | tee /tmp/dnf-update.log; then
-				echo "dnf-update exit=0 (attempt $attempt)"
+			if dnf update -y >>/tmp/dnf-update.log 2>&1; then
+				echo 0 > /tmp/dnf-update.rc
 				break
 			fi
-			echo "dnf-update attempt $attempt failed -- retrying in 30s ..."
+			if [ "$attempt" -eq 3 ]; then
+				echo 1 > /tmp/dnf-update.rc
+				exit 1
+			fi
+			echo "dnf-update attempt $attempt failed -- retrying in 30s" >> /tmp/dnf-update.log
 			sleep 30
 		done
-		dnf clean all
-	DNFEOF
+		dnf clean all >>/tmp/dnf-update.log 2>&1
+		[ ! -f /tmp/dnf-update.rc ] && echo 0 > /tmp/dnf-update.rc
+	SCRIPT
+
+	_essh "${user}@${host}" -- \
+		"sudo bash -c 'rm -f /tmp/dnf-update.rc /tmp/dnf-update.log; nohup bash /tmp/dnf-update.sh </dev/null >>/tmp/dnf-update.log 2>&1 &'"
+
+	# Poll for the marker file.  SSH may be briefly unreachable while
+	# sshd is restarted by an RPM scriptlet -- that is expected.
+	local elapsed=0
+	echo "  [vm] Polling for dnf update completion (timeout: ${poll_timeout}s) ..."
+	while [ $elapsed -lt $poll_timeout ]; do
+		sleep "$poll_interval"
+		elapsed=$(( elapsed + poll_interval ))
+
+		local rc
+		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc 2>/dev/null" 2>/dev/null) || true
+
+		if [ -n "$rc" ]; then
+			if [ "$rc" = "0" ]; then
+				echo "  [vm] dnf update succeeded after ~${elapsed}s"
+			else
+				echo "  [vm] dnf update FAILED (rc=$rc) after ~${elapsed}s" >&2
+				_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+				return 1
+			fi
+			break
+		fi
+
+		if [ $(( elapsed % 60 )) -eq 0 ]; then
+			echo "  [vm] dnf update still running (~${elapsed}s) ..."
+		fi
+	done
+
+	if [ $elapsed -ge $poll_timeout ]; then
+		echo "  [vm] ERROR: dnf update did not complete within ${poll_timeout}s" >&2
+		_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+		return 1
+	fi
 
 	echo "  [vm] Rebooting $host ..."
 	_essh "${user}@${host}" -- "sudo reboot" || true
@@ -593,6 +659,100 @@ _vm_remove_pull_secret() {
 	_essh "${user}@${host}" -- "rm -fv ~/.pull-secret.json"
 }
 
+# --- _vm_deploy_tmux_conf ---------------------------------------------------
+# Deploys bastion's ~/.tmux.conf to both the default user and root on the
+# golden VM.  This ensures tmux sessions (suite runners, live dashboard)
+# use Ctrl-a prefix, vi mode, and a large history-limit on all clones.
+#
+_vm_deploy_tmux_conf() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [vm] Deploying .tmux.conf to $host ..."
+
+	local src="$HOME/.tmux.conf"
+	if [ ! -f "$src" ]; then
+		echo "    WARNING: $src not found on bastion -- skipping tmux config"
+		return 0
+	fi
+
+	# Default user
+	_escp "$src" "${user}@${host}:~/.tmux.conf"
+	echo "    .tmux.conf -> ~${user}/"
+
+	# Root user (via sudo)
+	_escp "$src" "${user}@${host}:/tmp/.tmux-root.conf"
+	_essh "${user}@${host}" -- "sudo cp /tmp/.tmux-root.conf /root/.tmux.conf && sudo chown root:root /root/.tmux.conf && rm -f /tmp/.tmux-root.conf"
+	echo "    .tmux.conf -> /root/"
+}
+
+# --- _vm_provision_root_user ------------------------------------------------
+# Provisions /root/ on the golden VM with files that root-user test runs need.
+# Called once during golden VM creation; clones inherit everything.
+#
+# What this provisions:
+#   - pull-secret.json  (from bastion -- needed by mirror/catalog operations)
+#   - vmware.conf       (from bastion -- govc credentials for VMware pools)
+#   - govc binary       (from bastion ~/bin/govc -- used by runner.sh pre-suite checks)
+
+_vm_provision_root_user() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	echo "  [vm] Provisioning root user environment on $host ..."
+
+	# Pull secret -- needed by any suite that mirrors images or downloads catalogs
+	local ps="$HOME/.pull-secret.json"
+	if [ -f "$ps" ]; then
+		_escp "$ps" "${user}@${host}:/tmp/.pull-secret-root.json"
+		_essh "${user}@${host}" -- "sudo cp /tmp/.pull-secret-root.json /root/.pull-secret.json && sudo chmod 600 /root/.pull-secret.json && sudo chown root:root /root/.pull-secret.json && rm -f /tmp/.pull-secret-root.json"
+		echo "    pull-secret.json -> /root/"
+	else
+		echo "    WARNING: $ps not found on bastion -- root test runs needing pull-secret will fail"
+	fi
+
+	# vmware.conf -- govc credentials for VMware operations
+	local vf="${VMWARE_CONF:-$HOME/.vmware.conf}"
+	if [ -f "$vf" ]; then
+		_escp "$vf" "${user}@${host}:/tmp/.vmware-root.conf"
+		_essh "${user}@${host}" -- "sudo cp /tmp/.vmware-root.conf /root/.vmware.conf && sudo chmod 600 /root/.vmware.conf && sudo chown root:root /root/.vmware.conf && rm -f /tmp/.vmware-root.conf"
+		echo "    vmware.conf -> /root/"
+	fi
+
+	# govc binary -- runner.sh needs it for orphan VM checks before ABA is installed
+	local govc_bin="$HOME/bin/govc"
+	if [ -x "$govc_bin" ]; then
+		_escp "$govc_bin" "${user}@${host}:/tmp/govc-root"
+		_essh "${user}@${host}" -- "sudo mkdir -p /root/bin && sudo cp /tmp/govc-root /root/bin/govc && sudo chmod 755 /root/bin/govc && rm -f /tmp/govc-root"
+		echo "    govc -> /root/bin/"
+	else
+		echo "    WARNING: $govc_bin not found on bastion -- govc will be bootstrapped at runtime"
+	fi
+
+	# Proxy env scripts -- needed by connected-public and proxy-mode tests
+	_essh "${user}@${host}" -- "sudo bash -c '
+		for f in .proxy-set.sh .proxy-unset.sh; do
+			[ -f /home/${user}/\$f ] && [ ! -f /root/\$f ] && cp /home/${user}/\$f /root/\$f
+		done
+	'"
+	echo "    proxy scripts -> /root/"
+
+	# Symlinks to redirect root's heavy data to /home (larger partition).
+	# ~/aba and ~/tmp on conN are never deleted outright by E2E code --
+	# only their contents are cleaned -- so these symlinks are stable.
+	_essh "${user}@${host}" -- "sudo bash -c '
+		mkdir -p /home/root/aba /home/root/tmp
+		chown root:root /home/root /home/root/aba /home/root/tmp
+		chmod 700 /home/root /home/root/aba /home/root/tmp
+		rm -rf /root/aba /root/tmp
+		ln -sfn /home/root/aba /root/aba
+		ln -sfn /home/root/tmp /root/tmp
+	'"
+	echo "    symlinks: /root/aba -> /home/root/aba, /root/tmp -> /home/root/tmp"
+
+	echo "  [vm] Root user provisioning complete on $host"
+}
+
 # --- _vm_fix_proxy_noproxy ---------------------------------------------------
 
 _vm_fix_proxy_noproxy() {
@@ -702,6 +862,54 @@ _vm_create_test_user_and_key_on_host() {
 		return 1
 	fi
 	echo "  [vm] testy key created and SSH to $test_user_name@localhost verified on $host"
+
+	# Generate cross-host keypairs for root and the default user.
+	# Both conN and disN are cloned from this golden image, so both
+	# inherit the same keys.  This enables root@conN -> root@disN
+	# and steve@conN -> steve@disN (needed for --user root / --user steve).
+	echo "  [vm] Setting up cross-host SSH keys for root and $def_user ..."
+
+	cat <<-CROSSEOF | _essh "${def_user}@${host}" -- sudo bash
+		set -ex
+		# root keypair
+		if [ ! -f /root/.ssh/id_rsa ]; then
+			ssh-keygen -t rsa -f /root/.ssh/id_rsa -N '' -C 'root@golden'
+		fi
+		ROOT_PUB=\$(cat /root/.ssh/id_rsa.pub)
+
+		# default user keypair
+		if [ ! -f /home/${def_user}/.ssh/id_rsa ]; then
+			su - ${def_user} -c "ssh-keygen -t rsa -f ~/.ssh/id_rsa -N '' -C '${def_user}@golden'"
+		fi
+		USER_PUB=\$(cat /home/${def_user}/.ssh/id_rsa.pub)
+
+		# Authorize root's key on root and user accounts
+		grep -qF "\$ROOT_PUB" /root/.ssh/authorized_keys || echo "\$ROOT_PUB" >> /root/.ssh/authorized_keys
+		grep -qF "\$ROOT_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$ROOT_PUB" >> /home/${def_user}/.ssh/authorized_keys
+
+		# Authorize user's key on root and user accounts
+		grep -qF "\$USER_PUB" /root/.ssh/authorized_keys || echo "\$USER_PUB" >> /root/.ssh/authorized_keys
+		grep -qF "\$USER_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$USER_PUB" >> /home/${def_user}/.ssh/authorized_keys
+
+		# Fix permissions
+		chmod 600 /root/.ssh/authorized_keys /root/.ssh/id_rsa
+		chmod 600 /home/${def_user}/.ssh/authorized_keys
+		chown -R ${def_user}:${def_user} /home/${def_user}/.ssh
+
+		# Copy SSH config to root if not already there
+		[ -f /home/${def_user}/.ssh/config ] && [ ! -f /root/.ssh/config ] && cp /home/${def_user}/.ssh/config /root/.ssh/config
+
+		# Copy testy_rsa key to root so --user root suites can SSH as testy
+		if [ -f /home/${def_user}/.ssh/testy_rsa ] && [ ! -f /root/.ssh/testy_rsa ]; then
+			cp /home/${def_user}/.ssh/testy_rsa /root/.ssh/testy_rsa
+			cp /home/${def_user}/.ssh/testy_rsa.pub /root/.ssh/testy_rsa.pub
+			chmod 600 /root/.ssh/testy_rsa
+		fi
+
+		echo "Cross-host SSH keys configured."
+	CROSSEOF
+
+	echo "  [vm] Cross-host SSH keys set up for root and $def_user on $host"
 }
 
 # --- _vm_create_test_user ---------------------------------------------------
@@ -766,13 +974,17 @@ _vm_set_aba_testing() {
 
 		for home_dir in /root "/home/$SUDO_USER" /home/testy; do
 		    [ -d "$home_dir" ] || continue
-		    rc="$home_dir/.bashrc"
-		    touch "$rc"
-		    sed -i '/^export ABA_TESTING=/d' "$rc"
-		    echo 'export ABA_TESTING=1' >> "$rc"
 		    user_name=$(basename "$home_dir")
 		    [ "$home_dir" = "/root" ] && user_name=root
-		    chown "$user_name":"$user_name" "$rc"
+
+		    # Set in both .bashrc (interactive) and .bash_profile (login/SSH)
+		    for rcfile in .bashrc .bash_profile; do
+		        rc="$home_dir/$rcfile"
+		        touch "$rc"
+		        sed -i '/^export ABA_TESTING=/d' "$rc"
+		        echo 'export ABA_TESTING=1' >> "$rc"
+		        chown "$user_name":"$user_name" "$rc"
+		    done
 		done
 	TESTEOF
 }
@@ -790,7 +1002,7 @@ _vm_install_aba() {
 	echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 
 	_essh "${user}@${host}" -- "
-		rm -rf ~/aba
+		rm -rf ~/aba/* ~/aba/.??*
 		git clone --depth 1 --branch $branch $repo_url ~/aba
 		cd ~/aba && ./install
 	"

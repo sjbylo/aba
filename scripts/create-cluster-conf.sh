@@ -55,9 +55,10 @@ if [ ! "$ntp_servers" ]; then
 	[ "$ntp_servers" ] && { aba_info "Auto-detected ntp_servers=$ntp_servers"; _filled=$((_filled+1)); }
 fi
 if [ $_filled -gt 0 ]; then
-	aba_abort \
+	aba_warning \
 		"$_filled network value(s) were auto-detected and written to aba.conf." \
 		"Please review aba.conf and re-run the command."
+	exit 1
 fi
 # If auto-detection failed for any values, tell the user which ones
 _missing=0
@@ -78,10 +79,10 @@ _missing=0
 [ ! "$port0" ]			&& export port0=ens160
 [ ! "$port1" ]			&& export port1=
 [ ! "$vlan" ]			&& export vlan=
-[ ! "$master_cpu_count" ]	&& export master_cpu_count=8
-[ ! "$master_mem" ]		&& export master_mem=16
-[ ! "$worker_cpu_count" ]	&& export worker_cpu_count=4
-[ ! "$worker_mem" ]		&& export worker_mem=8
+[ ! "$master_cpu_count" ]	&& export master_cpu_count=10
+[ ! "$master_mem" ]		&& export master_mem=20
+[ ! "$worker_cpu_count" ]	&& export worker_cpu_count=5
+[ ! "$worker_mem" ]		&& export worker_mem=10
 [ ! "$int_connection" ]		&& export int_connection=
 [ ! "$data_disk" ]		&& export data_disk=500
 
