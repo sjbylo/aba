@@ -90,8 +90,10 @@ framework bug, not a suite bug.**
    `--user steve`. Fix: snapshot revert on user-switch is the primary mechanism;
    `sudo rm` for shared `/tmp` files.
 
-7. **Dashboard hardcoded user**: `live` and `dash` SSHes as `steve@` to read
-   `/tmp/e2e-suite-user`. Fix: use current user or sudo.
+7. ~~**Dashboard hardcoded user**: `live` and `dash` SSHes as `steve@` to read
+   `/tmp/e2e-suite-user`.~~ **FIXED:** `live-pane.sh` reads `/tmp/e2e-suite-user`
+   and dynamically switches SSH user. `dash` SSHes as the suite user. `status`
+   and `stop` use `sudo` for root-owned tmux sessions and log files.
 
 ---
 
@@ -898,11 +900,17 @@ for _p in $CLI_POOL_LIST; do
 done
 ```
 
+`--pool N` sets `_POOL_START=N` and `_POOLS=N` inside `setup-infra.sh`, so all
+Phase 1/2/3 loops iterate only that single pool. This is critical for
+non-contiguous pool sets -- without it, `--pool 3` would iterate pools 1..3
+instead of just pool 3.
+
 **Golden VM lifecycle:**
 1. Clone from vCenter template -> golden VM
-2. Install packages, configure networking, SSH keys, ABA
-3. Snapshot as `golden-ready`
-4. All pool VMs are cloned from `golden-ready` snapshot
+2. Fix MTU to 1500 on all NICs (`_vm_fix_mtu` -- ESXi DHCP hands out MTU 9000)
+3. Install packages, configure networking, SSH keys, ABA
+4. Snapshot as `golden-ready`
+5. All pool VMs are cloned from `golden-ready` snapshot
 
 **Multi-user SSH invariant:** All test users (root, steve, testy) share the
 SAME SSH key pair, which is baked into the VMware template. The golden VM
@@ -921,10 +929,10 @@ switches. No per-user key generation is needed. Handled by
 
 **Pool VM lifecycle:**
 1. `clone_vm()` from golden -> conN + disN (sets MACs, powers on -- see `vm-ops.sh`)
-2. Configure: `_configure_con_vm` (wait SSH -> setup keys -> network -> firewall ->
-   packages -> dnsmasq -> dnf update -> cleanup -> vmware.conf -> test user -> aba)
-   and `_configure_dis_vm` (wait SSH -> network -> wait NAT -> dnf update -> cleanup ->
-   vmware.conf -> disconnect internet)
+2. Configure: `_configure_con_vm` (wait SSH -> setup keys -> network [incl. MTU 1500] ->
+   firewall -> packages -> dnsmasq -> dnf update -> cleanup -> vmware.conf -> test user ->
+   aba) and `_configure_dis_vm` (wait SSH -> network [incl. MTU 1500] -> wait NAT ->
+   dnf update -> cleanup -> vmware.conf -> disconnect internet)
 3. Snapshot as `pool-ready`
 4. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
 
@@ -952,6 +960,10 @@ A tmux session on bastion with one pane per pool. Each pane:
    `/tmp/e2e-last-suites`); on change, kills tail and restarts with fresh content
 5. When pool is idle, shows "waiting for suite to start"
 
+**Cross-user:** Each pane detects the suite user from `/tmp/e2e-suite-user` on
+conN and SSHes as that user. A `steve`-initiated `run.sh dash` correctly
+displays `root`-owned suite output without needing `--user root`.
+
 **Layout:**
 - 1-2 pools: vertical stack
 - 3-4 pools: 2x2 grid
@@ -971,6 +983,13 @@ A tmux session on bastion with one pane per pool. Each pane:
    - Polls for next suite without clearing the screen
    - Detects user-switch (new suite as different user)
 4. Same grid layout as `dash` (up to 6 pools)
+
+**Cross-user:** `live-pane.sh` dynamically detects the suite user by reading
+`/tmp/e2e-suite-user` on conN (SSHes as `_DEFAULT_USER` for the initial read,
+then switches to the actual suite user for tmux attach). When a new suite
+starts as a different user, the pane detects the user-switch and reconnects.
+This means `run.sh live` shows output for both `steve` and `root` suites
+without any user flags.
 
 **Pane title format:** `live | Pool N | user | suite-name | OS | vmware.conf`
 
@@ -1268,6 +1287,16 @@ This ensures freshly cloned VMs get the correct DHCP IP (matching DNS) before
 - `vm_exists()` -- `govc vm.info "$vm" | grep -q "Name:"`
 - `destroy_vm()` -- power off + destroy (safe if VM doesn't exist)
 - `_get_nic_network()` -- resolves port group name (dvSwitch portgroupKey or standard vSwitch Summary)
+- `_vm_fix_mtu()` -- forces MTU 1500 on all Ethernet/VLAN connections via `nmcli`.
+  Called during golden image creation (Phase 0) so clones inherit it.
+- `_vm_setup_network_connected()` / `_vm_setup_network_disconnected()` -- configure
+  NIC roles (ens192=lab, ens224=VLAN, ens256=internet/disabled), VLAN sub-interface,
+  hostname. Both enforce MTU 1500 as a safety net for clones from older golden images.
+
+**MTU note:** The ESXi DHCP server hands out `interface_mtu=9000` (jumbo frames
+from the vSwitch). Without the MTU fix, ens192 gets MTU 9000, which breaks
+networking expectations. The fix is applied at three layers: golden image
+(`_vm_fix_mtu`), connected network setup, and disconnected network setup.
 
 ### Suite duplication [current: ~100-200 lines repeated per integration suite -- DONE]
 
