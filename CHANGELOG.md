@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+---
+
+## [1.0.0] - 2026-04-21
+
+Stability, reliability and UX improvements
+
+
 Stability and reliability improvements.
 
 ### Improvements
@@ -410,7 +417,8 @@ First release
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
 
-[Unreleased]: https://github.com/sjbylo/aba/compare/v0.9.9...HEAD
+[Unreleased]: https://github.com/sjbylo/aba/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sjbylo/aba/releases/tag/v1.0.0
 [0.9.9]: https://github.com/sjbylo/aba/releases/tag/v0.9.9
 [0.9.8]: https://github.com/sjbylo/aba/releases/tag/v0.9.8
 [0.9.7]: https://github.com/sjbylo/aba/releases/tag/v0.9.7
