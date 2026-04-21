@@ -37,7 +37,9 @@ cmd_stop() {
 		target=$(_con_target "$p")
 		printf "  con${p}: "
 		if _essh "$target" "
-			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
+			_suite_user=\$(cat /tmp/e2e-suite-user 2>/dev/null) || _suite_user=\"\"
+			_sudo=\"\"; [ \"\$_suite_user\" = root ] && _sudo=sudo
+			\$_sudo tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
 			sudo rm -f $_rc_glob
 			echo stopped
 		"; then
@@ -102,14 +104,17 @@ cmd_status() {
 		target=$(_con_target "$p")
 		local _info=""
 		_info=$(_essh "$target" "
-			_slog=~/.e2e-harness/logs/summary.log
-			[ -f \"\$_slog\" ] || _slog=\$(ls -t ~/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
+			_suite_user=\$(cat /tmp/e2e-suite-user 2>/dev/null) || _suite_user=\"\"
+			_sudo=\"\"; [ \"\$_suite_user\" = root ] && _sudo=sudo
+			_uhome=~; [ \"\$_suite_user\" = root ] && _uhome=/root
+			_slog=\"\${_uhome}/.e2e-harness/logs/summary.log\"
+			\$_sudo test -f \"\$_slog\" 2>/dev/null || _slog=\$(\$_sudo ls -t \${_uhome}/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
 			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null) || suite=\"\"
 			_ts() { stat -c %Y \"\$1\" 2>/dev/null | xargs -I{} date -d @{} +%H:%M 2>/dev/null; }
-			if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
+			if \$_sudo tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
-				last=\$(tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+				last=\$(\$_sudo tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
 					rc=\$(cat \"\$rc_file\" 2>/dev/null)
 					_since=\$(_ts \"\$rc_file\")
@@ -136,7 +141,7 @@ cmd_status() {
 				fi
 			fi
 			echo '|||TABLE|||'
-			tac \"\$_slog\" 2>/dev/null \\
+			\$_sudo tac \"\$_slog\" 2>/dev/null \\
 				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \\
 				| tac \\
 				| sed 's/\x1b\[[0-9;]*m//g' \\

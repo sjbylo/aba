@@ -440,6 +440,9 @@ When stopping a subset of pools (e.g. `-p 2,3`), only the runners on those
 pools are killed -- the dispatcher continues serving the remaining pools.
 The dispatcher is only killed when stopping ALL configured pools.
 
+**Cross-user:** Uses `sudo tmux kill-session` when the suite user is root
+(detected via `/tmp/e2e-suite-user`), since the tmux session is owned by root.
+
 Applicable options: `-p`, `--clean`, `-y`
 
 #### `start` -- Power on pool VMs
@@ -457,6 +460,12 @@ Applicable options: `-p`
 Reads state files from `/tmp/e2e-*` and displays per-pool status: current
 suite, test progress, pass/fail counts, timing. Does not require the
 dispatcher to be running.
+
+**Cross-user awareness:** Status SSHes as the deploy user (steve) but suites
+may run as root. The status command reads `/tmp/e2e-suite-user` and uses
+`sudo` for tmux session checks, log reads, and file existence tests when the
+suite user is root. This ensures `run.sh status` works correctly regardless
+of which user the suite is running as.
 
 ```
 run.sh status                            # All pools
@@ -865,6 +874,20 @@ and OUT OF SCOPE for v2 refactoring.** The v2 infrastructure contract is
 identical to the existing working version -- no changes. It works correctly for
 the standard use case and handles golden VM creation, pool cloning, and
 snapshotting.
+
+**`run.sh` is the sole entry point for all E2E operations.** Never call
+`setup-infra.sh`, `runner.sh`, or any `lib/*.sh` module directly. All
+infrastructure management (clone, revert, verify, destroy) is available via
+`run.sh` subcommands and flags:
+- `run.sh run --recreate-vms -p N` -- reclone pool VMs from golden
+- `run.sh run --recreate-golden` -- rebuild golden VM from template
+- `run.sh run --revert -p N` -- revert pool VMs to pool-ready snapshot
+- `run.sh verify -p N` -- verify pool VM health
+- `run.sh start -p N` -- power on pool VMs
+- `run.sh destroy -p N` -- destroy pool VMs
+
+If a workflow cannot be accomplished via `run.sh`, that is a missing feature
+in `run.sh` -- fix `run.sh`, don't bypass it.
 
 **Invocation from `run.sh`:** `run.sh` calls `setup-infra.sh` once per pool
 using `--pool N` (not `--pools COUNT`). For non-contiguous pool selections
