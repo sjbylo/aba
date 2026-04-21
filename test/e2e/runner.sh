@@ -98,6 +98,12 @@ echo "$$ $(date +%s)" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 rm -f "$RC_FILE"
 
+# SIGINT (Ctrl-C) must NOT kill the runner -- it should only kill the child
+# command so framework.sh sees exit 130 and opens the interactive menu.
+# Using a no-op handler (not 'trap "" INT' which would propagate SIG_IGN to
+# children and make them un-interruptible too).
+trap ':' INT
+
 # After framework.sh is sourced (below), the trap is upgraded to also
 # clean up clusters/mirrors in the cleanup lists.  This ensures VMs are deleted
 # even when the suite aborts, is killed, or hits an unhandled exit path.
