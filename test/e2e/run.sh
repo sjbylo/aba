@@ -340,14 +340,65 @@ done
 # Selective reclone: destroy only pools that changed OS (not global --recreate-vms)
 if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; then
 	for _p in "${_pools_needing_reclone[@]}"; do
-		for prefix in con dis; do
-			vm="${prefix}${_p}"
-			if govc vm.info "$vm" &>/dev/null; then
-				echo "  Destroying $vm (OS mismatch) ..."
-				govc vm.power -off "$vm" 2>/dev/null || true
-				govc vm.destroy "$vm" 2>/dev/null || true
-			fi
+		_pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
+
+		# Process cleanup files first (delete clusters/mirrors via aba)
+		for _try_user in "${CON_SSH_USER:-steve}" root steve; do
+			_try_host="${_try_user}@con${_p}.${VM_BASE_DOMAIN}"
+			_essh "$_try_host" "true" 2>/dev/null || continue
+			_has_cleanup=""
+			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
+			[ -z "$_has_cleanup" ] && continue
+			echo "  Pool $_p: processing cleanup files for $_try_user before OS reclone ..."
+			_essh "$_try_host" "
+				_logs=\"\$HOME/.e2e-harness/logs\"
+				_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
+				for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
+					[ -f \"\$f\" ] || continue
+					echo \"    Processing \$(basename \"\$f\") ...\"
+					while IFS=' ' read -r target abs_path; do
+						[ -z \"\$abs_path\" ] && continue
+						if echo \"\$f\" | grep -q '\.cleanup\$'; then
+							echo \"      \$target: delete \$abs_path\"
+							ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; }\" < /dev/null 2>&1 || true
+						else
+							echo \"      \$target: uninstall \$abs_path\"
+							ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; }\" < /dev/null 2>&1 || true
+						fi
+					done < \"\$f\"
+					rm -f \"\$f\"
+				done
+			" 2>&1 || true
+			break
 		done
+
+		# Destroy ALL VMs in the pool folder (clusters, conN, disN, etc.)
+		echo "  Destroying all VMs in pool $_p folder ..."
+		while IFS= read -r _vm_path; do
+			[ -z "$_vm_path" ] && continue
+			_vm_name="${_vm_path##*/}"
+			echo "  Destroying $_vm_name (OS mismatch) ..."
+			govc vm.power -off "$_vm_path" 2>/dev/null || true
+			govc vm.destroy "$_vm_path" 2>/dev/null || true
+		done < <(govc find "$_pool_folder" -type m 2>/dev/null)
+	done
+fi
+
+# When recreating VMs, destroy orphaned cluster VMs in pool folders first
+if [ -n "${CLI_RECREATE_VMS:-}" ]; then
+	for _p in $CLI_POOL_LIST; do
+		_pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
+		_orphans=$(govc find "$_pool_folder" -type m 2>/dev/null | grep -v "/con${_p}$" | grep -v "/dis${_p}$") || true
+		if [ -n "$_orphans" ]; then
+			echo "  Pool $_p: destroying orphaned VMs before recreate ..."
+			while IFS= read -r _vm_path; do
+				[ -z "$_vm_path" ] && continue
+				_vm_name="${_vm_path##*/}"
+				echo "    Destroying $_vm_name ..."
+				govc vm.power -off "$_vm_path" 2>/dev/null || true
+				govc vm.destroy "$_vm_path" 2>/dev/null || true
+			done <<< "$_orphans"
+		fi
 	done
 fi
 
