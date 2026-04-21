@@ -284,7 +284,12 @@ fi
 
 _ensure_govc
 _vmconf="$HOME/.vmware.conf"
+# Save E2E-specific vars that vmware.conf might clobber (vmware.conf has its
+# own VC_FOLDER for ABA production use -- we need the E2E one from config.env).
+_saved_vc_folder="${VC_FOLDER:-}"
 [ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
+[ -n "$_saved_vc_folder" ] && VC_FOLDER="$_saved_vc_folder"
+unset _saved_vc_folder
 
 echo ""
 echo "=== E2E Test Run ==="
