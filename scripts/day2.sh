@@ -123,8 +123,8 @@ if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 			oc get imagestream -n openshift oauth-proxy >/dev/null 2>&1
 		}
 
-		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 270 _day2_oauth_proxy_recreated; then
-			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (4.5 min)"
+		if ! aba_wait_show "Waiting for oauth-proxy imagestream recreation" 10 360 _day2_oauth_proxy_recreated; then
+			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (6 min)"
 		fi
 	else
 		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
