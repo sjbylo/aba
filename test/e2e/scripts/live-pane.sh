@@ -5,7 +5,7 @@
 # restarting run.sh live.
 #
 # Required env vars (set by the wrapper):
-#   _POOL_NUM       Pool number (1-4)
+#   _POOL_NUM       Pool number (1-6)
 #   _DOMAIN         VM base domain (e.g. example.com)
 #   _SSH_OPTS       SSH options string
 #   _DEFAULT_USER   Fallback SSH user

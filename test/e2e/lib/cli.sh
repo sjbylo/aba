@@ -56,7 +56,7 @@ _usage() {
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
 	  run.sh list                              List available suites
 	  run.sh destroy [-p all] [--clean]        Destroy pool VMs (--clean: delete clusters first)
-	  run.sh attach [conN]                     Attach to dispatcher (no args) or conN session
+	  run.sh attach conN                       Attach to runner tmux session on conN
 	  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
 	  run.sh dash [-p all] [log]               Read-only summary dashboard
 

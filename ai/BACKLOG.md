@@ -1277,6 +1277,23 @@ This makes the command feel clunky and unpolished, especially for new users.
 
 ---
 
+## Enhancement: day2 NTP output should tell user to hit Ctrl-C
+
+**Priority:** Low
+**Added:** 2026-04-15
+
+The `aba day2` NTP verification currently outputs:
+
+```
+[ABA] Verifying NTP on all nodes - (hit Ctrl-C to stop)
+```
+
+This is good, but the message should also appear during the ongoing check loop (not just once at the start). If the NTP check takes a long time, the user has no reminder that Ctrl-C is an option.
+
+Also: **remove the `[ABA] Ensuring CLI binaries are installed` output** from day2 scripts. This is internal noise that doesn't help the user. CLI binary bootstrapping should be silent (already guarded by `run_once`).
+
+---
+
 ## `_shutdown_all_node_vms_off()` should check `$platform`, not file existence
 
 **Priority:** Medium

@@ -20,12 +20,136 @@
 _E2E_LIB_DIR_VMOPS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type remote_wait_ssh &>/dev/null; then
+if ! type _wait_for_ssh &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMOPS/remote.sh"
 fi
 if ! type pool_domain &>/dev/null; then
 	source "$_E2E_LIB_DIR_VMOPS/config-helpers.sh"
 fi
+
+# --- govc VM primitives (used by setup-infra.sh and pool-ops.sh) -------------
+
+vm_exists() {
+	local vm_name="$1"
+	govc vm.info "$vm_name" | grep -q "Name:"
+}
+
+# Get the VMware port group name for a NIC (standard or dvSwitch).
+_get_nic_network() {
+	local vm="$1"
+	local device="$2"
+
+	local pg_key
+	pg_key=$(govc device.info -vm "$vm" -json "$device" \
+		| jq -r '.devices[0].backing.port.portgroupKey // empty')
+
+	if [ -n "$pg_key" ]; then
+		govc object.collect -s "$pg_key" name
+	else
+		govc device.info -vm "$vm" "$device" \
+			| awk '/Summary:/{$1=""; print substr($0,2)}'
+	fi
+}
+
+# Clone a VM from a source, set MAC addresses, expand disk, and power on.
+# After cloning (powered off), MAC addresses from VM_CLONE_MACS are applied
+# so DHCP assigns the correct IP. Then the clone is powered on.
+clone_vm() {
+	local source_vm="$1"
+	local clone_name="$2"
+	local folder="${3:-${VC_FOLDER:-/Datacenter/vm/aba-e2e}}"
+	local snapshot="${4:-${VM_SNAPSHOT:-aba-test}}"
+
+	echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder, snapshot: $snapshot) ..."
+
+	if vm_exists "$clone_name"; then
+		echo "  Destroying previous clone '$clone_name' ..."
+		govc vm.power -off "$clone_name" || true
+		govc vm.destroy "$clone_name" || true
+	fi
+
+	local ds_flag=""
+	[ -n "${VM_DATASTORE:-}" ] && ds_flag="-ds=$VM_DATASTORE"
+
+	local snap_flag=""
+	if govc snapshot.tree -vm "$source_vm" 2>&1 | grep -v "^govc:" | grep -q .; then
+		snap_flag="-snapshot=$snapshot"
+	fi
+
+	govc vm.clone -vm "$source_vm" $snap_flag \
+		-folder "$folder" $ds_flag -on=false "$clone_name" || return 1
+
+	# Set MAC addresses on each NIC (before power-on) to avoid IP conflicts
+	local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
+	local -a macs=()
+	if [ -n "$mac_entry" ]; then
+		macs=($mac_entry)
+	fi
+
+	local i=0
+	while true; do
+		local device="ethernet-${i}"
+		if ! govc device.info -vm "$clone_name" "$device" &>/dev/null; then
+			break
+		fi
+		local nic_net
+		nic_net=$(_get_nic_network "$clone_name" "$device")
+		if [ -z "$nic_net" ]; then
+			[ $i -eq 0 ] && echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
+			nic_net="${GOVC_NETWORK:-VM Network}"
+		fi
+
+		if [ $i -lt ${#macs[@]} ] && [ -n "${macs[$i]}" ]; then
+			echo "  Setting $device MAC -> ${macs[$i]} (network: $nic_net)"
+			govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+				-net.address "${macs[$i]}" "$device" || return 1
+		else
+			echo "  Setting $device MAC -> auto (network: $nic_net)"
+			govc vm.network.change -vm "$clone_name" -net "$nic_net" \
+				-net.address - "$device" || return 1
+		fi
+		i=$(( i + 1 ))
+	done
+
+	if [ $i -eq 0 ]; then
+		echo "  WARNING: No NICs found on clone '$clone_name', skipping MAC setup."
+	fi
+
+	# Expand disk if VM_DISK_EXTRA_GB is set
+	if [ "${VM_DISK_EXTRA_GB:-0}" -gt 0 ] 2>/dev/null; then
+		local _cur_kb _new_gb
+		_cur_kb=$(govc device.info -vm "$clone_name" -json disk-1000-0 \
+			| python3 -c "import sys,json; print(json.load(sys.stdin)['devices'][0]['capacityInKB'])") || true
+		if [ -n "$_cur_kb" ] && [ "$_cur_kb" -gt 0 ] 2>/dev/null; then
+			_new_gb=$(( (_cur_kb / 1048576) + VM_DISK_EXTRA_GB ))
+			echo "  Expanding disk by ${VM_DISK_EXTRA_GB}GB (total: ${_new_gb}GB) ..."
+			govc vm.disk.change -vm "$clone_name" -disk.label "Hard disk 1" -size "${_new_gb}G" || \
+				echo "  WARNING: disk expansion failed (non-fatal)"
+		else
+			echo "  WARNING: could not read disk size -- skipping expansion"
+		fi
+	fi
+
+	echo "  Powering on clone '$clone_name' ..."
+	govc vm.power -on "$clone_name" || true
+
+	sleep "${VM_BOOT_DELAY:-8}"
+
+	echo "  Clone '$clone_name' is booting."
+}
+
+# Power off and destroy a cloned VM. Safe to call on non-existent VMs.
+destroy_vm() {
+	local vm_name="$1"
+
+	if vm_exists "$vm_name"; then
+		echo "  Destroying VM '$vm_name' ..."
+		govc vm.power -off "$vm_name" || true
+		govc vm.destroy "$vm_name" || true
+	else
+		echo "  VM '$vm_name' does not exist, nothing to destroy."
+	fi
+}
 
 # --- VM Template Configuration ----------------------------------------------
 
@@ -47,22 +171,9 @@ fi
 
 VM_DEFAULT_USER="${VM_DEFAULT_USER:-steve}"
 
-# --- SSH wrappers -----------------------------------------------------------
-# All SSH/SCP calls in _vm_* functions go through these wrappers to ensure
-# consistent options: no host-key prompts, connection timeouts, clean logs.
-
-_essh() {
-	ssh -o ConnectTimeout=10 -o BatchMode=yes \
-		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
-}
-
-_escp() {
-	scp -o ConnectTimeout=10 -o BatchMode=yes \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
-}
+# SSH wrappers: use _essh/_escp from remote.sh (sourced above).
+# vm-ops.sh no longer defines its own -- remote.sh is canonical for bastion-side.
+# framework.sh defines a separate runner-side _essh with different options.
 
 # --- _vm_wait_ssh -----------------------------------------------------------
 # Wait for a VM to become reachable via SSH after power-on.
@@ -901,7 +1012,7 @@ _vm_create_test_user_and_key_on_host() {
 
 	echo "  [vm] Verifying testy SSH locally on $host ..."
 	local who
-	who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${test_user_name}@localhost whoami 2>&1")
+	who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ${test_user_name}@localhost whoami")
 	if [ "$who" != "$test_user_name" ]; then
 		echo "  [vm] ERROR: local SSH as $test_user_name failed (got: '$who')" >&2
 		return 1
@@ -985,7 +1096,7 @@ _vm_create_test_user() {
 
 	echo "  [vm] Verifying testy SSH locally on $host ..."
 	local who
-	who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${test_user_name}@localhost whoami 2>&1")
+	who=$(_essh "${def_user}@${host}" -- "ssh -i ~/.ssh/testy_rsa -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR ${test_user_name}@localhost whoami")
 	if [ "$who" != "$test_user_name" ]; then
 		echo "  [vm] ERROR: local SSH as $test_user_name failed (got: '$who')" >&2
 		return 1
