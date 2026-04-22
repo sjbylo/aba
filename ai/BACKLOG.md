@@ -1294,27 +1294,64 @@ Also: **remove the `[ABA] Ensuring CLI binaries are installed` output** from day
 
 ---
 
-## PR #25 (vSphere preflight): Fix command injection and fail-open before merge
+## Command injection audit: fix all `bash -c` / `eval` / `/dev/tcp` with unsanitized variables
 
-**Priority:** High (must fix before merging PR #25)
+**Priority:** High (security)
 **Added:** 2026-04-22
-**PR:** [#25 feat(vmware): add vSphere preflight validation](https://github.com/sjbylo/aba/pull/25)
 
-### CI-01 (HIGH): Command injection in TCP probe
+Full codebase scan for injection patterns similar to CI-01 (PR #25). Input sources: `vmware.conf`, `mirror.conf`, `cluster.conf`, `kvm.conf`, CLI args (`$*`), `aba.conf`. While these are all local config files (not network-supplied), defense-in-depth requires treating them as untrusted.
 
-`scripts/preflight-check-vsphere.sh` uses:
+### Findings
 
-```bash
-timeout 3 bash -c "echo >/dev/tcp/$host/$port 2>/dev/null"
-```
+#### HIGH -- Command injection via `bash -c` with interpolated variables
 
-`$host` is expanded in the parent shell into the `bash -c` string. A crafted `GOVC_URL` containing `;`, `$(...)`, or pipe characters could inject arbitrary commands.
+| ID | File | Line | Pattern | Input source | Risk |
+|----|------|------|---------|------|------|
+| CI-01 | `scripts/preflight-check-vsphere.sh` (PR #25) | TCP probe | `bash -c "echo >/dev/tcp/$host/$port"` | `GOVC_URL` → `vmware.conf` | `;`, `$(...)` in host breaks out of `/dev/tcp` into arbitrary exec |
+| CI-02 | `scripts/preflight-check.sh` | 75 | `bash -c "echo >/dev/udp/$host/123"` | NTP server from `cluster.conf` | Same pattern as CI-01, UDP variant |
+| CI-03 | `scripts/aba.sh` | 76 | `target_dir=$(eval echo "$target_dir")` | `-d` CLI arg | `eval echo` on user-supplied path: `$(cmd)` or backticks in the path execute arbitrary code. The intent is tilde expansion; safe alternatives: `${target_dir/#\~/$HOME}` |
+| CI-04 | `scripts/oc-command.sh` | 22 | `eval oc $cmd` | `aba run --cmd "..."` CLI arg | User controls the entire `$cmd` string passed to `eval`. While the user is local, `eval` allows shell metacharacters to break out of the `oc` invocation. Use `oc $cmd` (without eval) or an array. |
+| CI-05 | `scripts/reg-common.sh` | 365 | `eval cp "$ca_source" ...` | `--ca-cert` CLI arg | `eval` on file path for tilde expansion. Same risk as CI-03. |
+| CI-06 | `scripts/reg-save.sh` / `reg-load.sh` / `reg-sync.sh` | 97-109 | `eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR` | `data_dir` from `mirror.conf` | `eval` on config-file value; semicolons or `$(...)` in `data_dir` execute. Use `export TMPDIR="$data_dir/.tmp"; mkdir -p "$TMPDIR"`. |
+| CI-07 | `scripts/reg-install-quay.sh` | 73 | `eval $cmd --initPassword $reg_pw` | `$reg_pw` from `mirror.conf` | Password with shell metacharacters in it would execute. Use an array or proper quoting. |
 
-**Fix:** Validate `$host` against `[a-zA-Z0-9._-]` before use, or avoid the nested `bash -c` entirely (use `/dev/tcp` from the current shell, or `nc`/`timeout`-based probe).
+#### MEDIUM -- Config-file eval patterns (injection requires local config edit)
 
-### UP-02 (MEDIUM): Fail-open on network-on-cluster check
+| ID | File | Pattern | Input source | Risk |
+|----|------|---------|------|------|
+| CI-08 | `scripts/include_all.sh` normalize-vmware-conf() | `eval "$vars"` where `$vars` = lines from `vmware.conf` prepended with `export` | `vmware.conf` | A line like `FOO=bar; rm -rf /` in vmware.conf would execute. Mitigated by the sed that strips comments but doesn't validate values. |
+| CI-09 | `scripts/include_all.sh` normalize-kvm-conf() | Same `eval "$vars"` pattern | `kvm.conf` | Same risk as CI-08. |
+| CI-10 | `scripts/vmw-stop.sh`, `vmw-start.sh`, `kvm-stop.sh`, `kvm-start.sh` | `. <(echo $* | tr " " "\n")` | Make/CLI args | Converts space-separated `key=value` pairs into sourced shell. The `process_args()` regex guard (`^([a-zA-Z_]\w*=?[^ ]*)...`) partially validates but the `.` (source) call AFTER `process_args` bypasses it -- the `.` line sources raw `$*` without the regex check. |
+| CI-11 | `scripts/add-operators-to-imageset.sh` | 278 | `list=$(eval echo '${'"$catalog"'[@]}')` | Loop variable from hardcoded array names | Low practical risk (loop variable is hardcoded), but `eval` on constructed variable name is a code smell. |
+| CI-12 | `scripts/vmw-create.sh` | 117, 125 | `eval $cmd` where `$cmd` contains govc with `'$sub_mac'` | MAC address from config | Single-quoted MAC in the command string; `eval` is used to handle the quotes. If MAC contained `'; cmd; '` it would break out. Mitigated by MAC format validation elsewhere. |
+| CI-13 | `scripts/vmw-upload.sh` | 36, 43 | `eval $cmd` where `$cmd` is govc import command | File paths from config | Paths with metacharacters could inject. |
 
-`_vsphere_probe_resources_network_on_cluster`: on `govc` errors, `aba_debug` and `return 0` -- attachment mismatch may be silently skipped (fail-open). Should fail-closed (return non-zero) so the user sees the misconfiguration.
+#### LOW -- `eval make $BUILD_COMMAND` in aba.sh
+
+| ID | File | Lines | Risk |
+|----|------|-------|------|
+| CI-14 | `scripts/aba.sh` | 1010, 1024, 1042, 1051, 1081, 1137, 1143 | `$BUILD_COMMAND` is assembled from CLI args by `aba.sh` itself (not raw user input). Each flag handler adds specific `key=value` pairs. Risk is theoretical -- a crafted `aba` invocation with shell metacharacters in flag values could inject into `eval make`. Mitigated by the fact that all flag values go through `replace-value-conf` or fixed format strings. |
+
+#### INFO -- `bash -c "$(curl ...)"` install pattern
+
+| ID | Files | Risk |
+|----|-------|------|
+| CI-15 | `test/basic-test-using-bundle.sh`, `bundles/v2/scripts/01-install-aba-from-git.sh`, `bundles/bundle-create-test.sh`, `test/ex/test-container.sh` | `bash -c "$(curl -fsSL ...install)"` -- standard remote install bootstrap. URL is hardcoded to `github.com/sjbylo/aba`. Risk is supply chain (GitHub account compromise), not code injection. Acceptable for install scripts; not a production codepath. |
+
+### UP-02 (MEDIUM): Fail-open on network-on-cluster check (PR #25)
+
+`_vsphere_probe_resources_network_on_cluster` in PR #25: on `govc` errors, `aba_debug` and `return 0` -- attachment mismatch may be silently skipped (fail-open). Should fail-closed.
+
+### Recommended fixes (priority order)
+
+1. **CI-01, CI-02**: Replace `bash -c "echo >/dev/tcp/$host/$port"` with a validated-host probe: `[[ "$host" =~ ^[a-zA-Z0-9._-]+$ ]] || aba_abort "Invalid host"` before the probe.
+2. **CI-03, CI-05**: Replace `eval echo "$target_dir"` with `${target_dir/#\~/$HOME}` for tilde expansion without eval.
+3. **CI-06**: Replace `eval export TMPDIR=...` with `export TMPDIR="$data_dir/.tmp"; mkdir -p "$TMPDIR"` (no eval needed).
+4. **CI-04**: Replace `eval oc $cmd` with `oc $cmd` (eval not needed for simple args; if pipes/redirects are intended, document the risk).
+5. **CI-07**: Use array passing for `mirror-registry` command instead of `eval $cmd --initPassword $reg_pw`.
+6. **CI-08, CI-09**: Add value validation to `normalize-vmware-conf()` / `normalize-kvm-conf()` -- reject lines containing `;`, `$(`, backticks.
+7. **CI-10**: Remove the `. <(echo $* | tr " " "\n")` line that bypasses the `process_args()` guard.
+8. **CI-14**: Consider replacing `eval make $BUILD_COMMAND` with `make` + array args (lower priority -- BUILD_COMMAND is internally assembled).
 
 ---
 

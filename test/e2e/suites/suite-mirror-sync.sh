@@ -86,7 +86,6 @@ e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_diag "Show aba.conf" "grep -E '^\w' aba.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 

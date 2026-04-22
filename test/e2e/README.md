@@ -106,8 +106,8 @@ your local source tree is pushed to `~/aba` on conN via rsync.
 VM_DISK_EXTRA_GB=20     # Add 20GB to each cloned VM disk
 ```
 
-The golden template includes an `expand-home.service` that automatically
-grows `/home` on first boot when the disk is larger than expected.
+The golden template includes an `expand-root.service` that automatically
+grows `/` on first boot when the disk is larger than expected.
 Per-pool override is possible in `pools.conf`: `VM_DISK_EXTRA_GB=30`.
 
 **Other config.env settings**:

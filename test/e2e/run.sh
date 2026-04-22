@@ -407,6 +407,9 @@ if [ -n "${CLI_RECREATE_VMS:-}" ]; then
 	done
 fi
 
+# Recreating golden implies recreating pool VMs (the whole point is to pick up golden changes)
+[ -n "${CLI_RECREATE_GOLDEN:-}" ] && CLI_RECREATE_VMS=1
+
 if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_RECREATE_VMS:-}" ]; then
 	echo ""
 	echo "  Running setup-infra.sh for pools: $CLI_POOL_LIST ..."
