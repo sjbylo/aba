@@ -13,6 +13,7 @@
 CLI_COMMAND=""
 CLI_SUITE=""
 CLI_ALL=""
+CLI_WITH_DUMMY=""
 CLI_POOLS=""               # Raw pool spec from -p/--pools (parsed later)
 CLI_RECREATE_GOLDEN=""
 CLI_RECREATE_VMS=""
@@ -43,40 +44,42 @@ _usage() {
 	E2E Test Framework v2 -- Coordinator
 
 	Commands:
-	  run.sh run [--suite X] [-p 1,2,3]       Run suites (starts dispatcher, returns to prompt)
+	  run.sh run [-s X] [-p 1,2,3]             Run suites (blocks until completion)
 	  run.sh run -p all                        Run all suites across all pools
-	  run.sh run --suite X -p 2 --force        Force dispatch onto pool 2
-	  run.sh run -p all --dev                  Push local source to ~/aba, then run
-	  run.sh reschedule [--suite X]            Re-queue suites to running dispatcher
+	  run.sh run -s X -p 2 -f                 Force dispatch onto pool 2
+	  run.sh run -p all -d                     Push local source to ~/aba, then run
+	  run.sh run -a -D -p all                  Include dummy framework test suites
+	  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
-	  run.sh restart [-p 2] [--resume]         Stop + deploy + re-run last suite
-	  run.sh stop [-p 2,3] [--clean]           Kill runners (--clean: delete clusters/mirrors)
+	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
+	  run.sh stop [-p 2,3] [-c]               Kill runners (-c: delete clusters/mirrors)
 	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
-	  run.sh list                              List available suites
-	  run.sh destroy [-p all] [--clean]        Destroy pool VMs (--clean: delete clusters first)
+	  run.sh list                              List available suites (dummy suites shown separately)
+	  run.sh destroy [-p all] [-c]             Destroy pool VMs (-c: delete clusters first)
 	  run.sh attach conN                       Attach to runner tmux session on conN
 	  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
 	  run.sh dash [-p all] [log]               Read-only summary dashboard
 
 	Options:
-	  --suite X,Y            Select specific suite(s) (comma-separated)
-	  --all                  Select all suites (default for run/reschedule)
+	  -s, --suite X,Y        Select specific suite(s) (comma-separated)
+	  -a, --all              Select all suites (default for run/reschedule)
+	  -D, --with-dummy       Include dummy-* suites (excluded from --all by default)
 	  -p, --pools SPEC       Pool selection: N, N-M, N,M,O, or "all"
-	  --force                Override safety checks (dispatch to busy pool, hot-deploy)
-	  --dev                  Push local source to ~/aba on conN (instead of git clone)
-	  --resume               Skip previously-passed tests (checkpointed)
-	  --dry-run              Show dispatch plan, don't execute
-	  --clean                Delete clusters/mirrors before stopping/destroying
-	  --revert               Revert pool VMs to pool-ready snapshot before running
-	  --recreate-golden      Force rebuild golden VM from template
-	  --recreate-vms         Force reclone conN/disN from golden (scoped to -p)
+	  -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
+	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
+	  -r, --resume           Skip previously-passed tests (checkpointed)
+	  -n, --dry-run          Show dispatch plan, don't execute
+	  -c, --clean            Delete clusters/mirrors before stopping/destroying
+	  -V, --revert           Revert pool VMs to pool-ready snapshot before running
+	  -G, --recreate-golden  Force rebuild golden VM from template
+	  -R, --recreate-vms     Force reclone conN/disN from golden (scoped to -p)
 	  -y, --yes              Auto-accept prompts
 	  -q, --quiet            CI mode (implies -y)
-	  --os rhel8|rhel9|rhel10  RHEL version for pool VMs
-	  --vmware-conf F        Path to vmware.conf (e.g. ~/.vmware-esxi.conf)
-	  --user USER            SSH user for both conN and disN
+	  -o, --os RHEL          RHEL version for pool VMs (rhel8|rhel9|rhel10)
+	  -v, --vmware-conf F    Path to vmware.conf (e.g. ~/.vmware-esxi.conf)
+	  -u, --user USER        SSH user for both conN and disN
 	  --con-user USER        SSH user for conN only
 	  --dis-user USER        SSH user for disN only
 
@@ -207,32 +210,33 @@ _parse_args() {
 	# Step 3: Parse flags
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			--suite|--suites)       CLI_SUITE="$2"; shift 2 ;;
-			--all)                  CLI_ALL=1; shift ;;
+			-s|--suite|--suites)    CLI_SUITE="$2"; shift 2 ;;
+			-a|--all)               CLI_ALL=1; shift ;;
+			-D|--with-dummy)        CLI_WITH_DUMMY=1; shift ;;
 			-p|--pools)             CLI_POOLS="$2"; shift 2 ;;
 			-G|--recreate-golden)   CLI_RECREATE_GOLDEN=1; shift ;;
 			-R|--recreate-vms)      CLI_RECREATE_VMS=1; shift ;;
 			-V|--revert)            CLI_REVERT=1; shift ;;
 			-y|--yes)               CLI_YES=1; shift ;;
 			-q|--quiet)             CLI_QUIET=1; CLI_YES=1; shift ;;
-			--clean)                CLI_CLEAN=1; shift ;;
-			--dry-run)              CLI_DRY_RUN=1; shift ;;
+			-c|--clean)             CLI_CLEAN=1; shift ;;
+			-n|--dry-run)           CLI_DRY_RUN=1; shift ;;
 			-f|--force)             CLI_FORCE=1; shift ;;
-			--dev)                  CLI_DEV=1; shift ;;
-			--resume)               CLI_RESUME=1; shift ;;
-			--os)                   CLI_OS="$2"; shift 2 ;;
-			--vmware-conf)          CLI_VMWARE_CONF="$2"; shift 2 ;;
-			--user)                 CLI_CON_USER="$2"; CLI_DIS_USER="$2"; shift 2 ;;
+			-d|--dev)               CLI_DEV=1; shift ;;
+			-r|--resume)            CLI_RESUME=1; shift ;;
+			-o|--os)                CLI_OS="$2"; shift 2 ;;
+			-v|--vmware-conf)       CLI_VMWARE_CONF="$2"; shift 2 ;;
+			-u|--user)              CLI_CON_USER="$2"; CLI_DIS_USER="$2"; shift 2 ;;
 			--con-user)             CLI_CON_USER="$2"; shift 2 ;;
 			--dis-user)             CLI_DIS_USER="$2"; shift 2 ;;
-			--help|-h)              _usage; exit 0 ;;
+			-h|--help)              _usage; exit 0 ;;
 			*) echo "Unknown option: $1" >&2; _usage; exit 1 ;;
 		esac
 	done
 
-	# Step 4: Infer "run" when --all/--suite/--resume used without a subcommand
+	# Step 4: Infer "run" when --all/--suite/--resume/--with-dummy used without a subcommand
 	if [ -z "$CLI_COMMAND" ]; then
-		if [ -n "$CLI_ALL" ] || [ -n "$CLI_SUITE" ] || [ -n "$CLI_RESUME" ]; then
+		if [ -n "$CLI_ALL" ] || [ -n "$CLI_SUITE" ] || [ -n "$CLI_RESUME" ] || [ -n "$CLI_WITH_DUMMY" ]; then
 			CLI_COMMAND="run"
 		fi
 	fi

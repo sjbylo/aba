@@ -168,6 +168,10 @@ prepare_golden_vm() {
 	sleep 10
 	govc vm.power -off "$golden_name" || true
 	govc snapshot.create -vm "$golden_name" "$snapshot_name" || return 1
+	govc vm.change -vm "$golden_name" \
+		-annotation "Status: ready ($snapshot_name snapshot created)
+Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Created by: E2E test framework of ABA (setup-infra.sh)" || true
 	date +%s > "$stamp_file"
 
 	echo "  Golden VM created and snapshotted."

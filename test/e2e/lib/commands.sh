@@ -298,20 +298,34 @@ cmd_verify() {
 
 cmd_list() {
 	local run_dir="$1"
-	echo "Available suites:"
-	echo ""
-	local f
+	local _real=() _dummy=()
+	local f name desc
+
 	for f in "${run_dir}/suites/"suite-*.sh; do
 		[ -f "$f" ] || continue
-		local name desc
 		name="$(basename "$f" .sh)"
 		name="${name#suite-}"
 		desc="$(grep -m1 '^# Suite:' "$f" | sed 's/^# Suite: *//')"
-		printf "  %-35s %s\n" "$name" "$desc"
+		if [[ "$name" == dummy-* ]]; then
+			_dummy+=("$(printf "  %-35s %s" "$name" "$desc")")
+		else
+			_real+=("$(printf "  %-35s %s" "$name" "$desc")")
+		fi
 	done
+
+	echo "Test suites:"
+	echo ""
+	printf '%s\n' "${_real[@]}"
+	if [ ${#_dummy[@]} -gt 0 ]; then
+		echo ""
+		echo "Framework test suites (excluded from --all by default, use -D/--with-dummy):"
+		echo ""
+		printf '%s\n' "${_dummy[@]}"
+	fi
 	echo ""
 	echo "Run:  run.sh run --suite <name>"
-	echo "      run.sh run -p all"
+	echo "      run.sh run -a -p all"
+	echo "      run.sh run -a -D -p all    (include dummy suites)"
 }
 
 # --- destroy -----------------------------------------------------------------
@@ -535,6 +549,8 @@ _sweep_orphan_vms() {
 # --- Suite selection helpers -------------------------------------------------
 
 # List all available suite names (short form, no prefix/suffix).
+# By default, dummy-* suites are excluded (framework test scaffolding).
+# Set CLI_WITH_DUMMY=1 (--with-dummy / -D) to include them.
 all_suite_names() {
 	local run_dir="$1"
 	local suites=()
@@ -544,6 +560,10 @@ all_suite_names() {
 		local name
 		name="$(basename "$f" .sh)"
 		name="${name#suite-}"
+		# Skip dummy-* suites unless --with-dummy / -D was passed
+		if [ -z "${CLI_WITH_DUMMY:-}" ] && [[ "$name" == dummy-* ]]; then
+			continue
+		fi
 		suites+=("$name")
 	done
 	echo "${suites[*]}"

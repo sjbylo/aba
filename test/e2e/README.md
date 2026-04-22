@@ -22,7 +22,7 @@ INT_BASTION_RHEL_VER=rhel8
 pool1  con1  dis1  aba-e2e-template-rhel9  INT_BASTION_RHEL_VER=rhel9  POOL_NUM=1  ...
 
 # Or via CLI (overrides everything):
-./run.sh run --all --pools 4 --os rhel9
+./run.sh run -a -p 1-4 -o rhel9
 ```
 
 **vCenter vs ESXi API**:
@@ -33,7 +33,7 @@ an ESXi host (e.g. `GOVC_URL=esxi4.lan`, no `VC_FOLDER`, no `GOVC_DATACENTER`).
 
 ```bash
 # Via CLI (applies to all pools):
-./run.sh run --all --pools 4 --vmware-conf ~/.vmware-esxi.conf
+./run.sh run -a -p 1-4 -v ~/.vmware-esxi.conf
 
 # Or in config.env:
 VMWARE_CONF=~/.vmware-esxi.conf
@@ -45,10 +45,10 @@ pool1  con1  dis1  aba-e2e-template-rhel8  VMWARE_CONF=~/.vmware-esxi.conf  POOL
 **Number of pools** (1 to 4):
 
 ```bash
-# Always pass --pools to tell run.sh how many pools are active
-./run.sh run --all --pools 4
-./run.sh status --pools 4
-./run.sh stop --pools 4
+# Always pass -p to tell run.sh which pools are active
+./run.sh run -a -p 1-4
+./run.sh status -p 1-4
+./run.sh stop -p 1-4
 ```
 
 Enable/disable pools by commenting lines in `pools.conf`:
@@ -72,10 +72,10 @@ OCP_VERSION=p           # p = previous minor, l = latest minor, or explicit e.g.
 
 ```bash
 # Quick switch: same user for both conN and disN:
-./run.sh run --all --pools 4 --user root
+./run.sh run -a -p 1-4 -u root
 
 # Or separately:
-./run.sh run --all --pools 4 --con-user steve --dis-user root
+./run.sh run -a -p 1-4 --con-user steve --dis-user root
 
 # In config.env (default: steve):
 CON_SSH_USER=steve
@@ -92,11 +92,11 @@ pool1  con1  dis1  aba-e2e-template-rhel8  CON_SSH_USER=root  DIS_SSH_USER=root 
 E2E_GIT_BRANCH=main
 E2E_GIT_REPO=https://github.com/sjbylo/aba.git
 
-# Or use --dev mode to push your local working tree directly:
-./run.sh run --all --pools 4 --dev
+# Or use -d/--dev mode to push your local working tree directly:
+./run.sh run -a -p 1-4 -d
 ```
 
-Without `--dev`, suites clone ABA from git on the conN host. With `--dev`,
+Without `-d`, suites clone ABA from git on the conN host. With `-d`,
 your local source tree is pushed to `~/aba` on conN via rsync.
 
 **Extra disk space on conN/disN**:
@@ -127,103 +127,113 @@ NOTIFY_RELAY_HOST=bastion     # SSH relay for notifications from air-gapped conN
 
 ```bash
 # Destroy all pool VMs (deletes conN + disN clones from vSphere):
-./run.sh destroy --pools 4
+./run.sh destroy -p 1-4
 
 # Destroy and also clean up any clusters/mirrors left on them:
-./run.sh destroy --clean --pools 4
+./run.sh destroy -p 1-4 -c
 
 # Force rebuild golden VM from template, then reclone all pools:
-./run.sh run --all --pools 4 --recreate-golden --recreate-vms
+./run.sh run -a -p 1-4 -G -R
 
 # Reclone pool VMs without rebuilding the golden:
-./run.sh run --all --pools 4 --recreate-vms
+./run.sh run -a -p 1-4 -R
 
 # Revert pool VMs to snapshot before running:
-./run.sh run --all --pools 4 --revert
+./run.sh run -a -p 1-4 -V
 ```
 
 ## run.sh Command Reference
 
 ```
 Commands:
-  run.sh run [--suite X] [--pools N]   Run suites (default: --all)
-  run.sh run --pools 3                 Run all suites across 3 pools
-  run.sh run --suite X --pool 2        Run suite on a specific pool
-  run.sh run --suite X --pool 2 --force -y  Force onto pool (works with running dispatcher)
-  run.sh run --pool 3 --resume         Re-run last suite, skip passed tests
-  run.sh run --all --pools 3 --dev     Push local source to ~/aba, then run
-  run.sh reschedule [--suite X] [--pools N]  Re-queue completed suites
-  run.sh deploy [--pool N] [--force]   Push source code + harness to conN
-  run.sh restart [--pool N] [--resume] Stop + harness deploy + re-run last suite
-  run.sh restart --pool N --dev        Stop + source deploy + harness + re-run
-  run.sh restart --suite X --pool N    Stop + deploy + run suite X on pool N
-  run.sh stop [--pool N] [--clean]     Kill runner(s) (--clean: delete clusters/mirrors)
-  run.sh start [--pool N]              Power on pool VMs (conN + disN)
-  run.sh status [--pool N]             Show what's running
-  run.sh verify [--pools N|--pool N]   Verify pool VMs (no dispatch)
-  run.sh list                          List available suites
-  run.sh destroy [--clean]             Destroy pool VMs (--clean: delete clusters first)
+  run.sh run [-s X] [-p 1,2,3]        Run suites (default: -a/--all)
+  run.sh run -p all                    Run all suites across all pools
+  run.sh run -s X -p 2 -f -y          Force dispatch onto pool 2
+  run.sh run -p 1 -r                   Re-run last suite, skip passed tests
+  run.sh run -p all -d                 Push local source to ~/aba, then run
+  run.sh run -a -D -p all              Include dummy framework test suites
+  run.sh reschedule [-s X]             Re-queue completed suites
+  run.sh deploy [-p 2,3]               Push source code + harness to conN
+  run.sh restart [-p 2] [-r]           Stop + harness deploy + re-run last suite
+  run.sh restart -p 2 -d               Stop + source deploy + harness + re-run
+  run.sh restart -s X -p 2             Stop + deploy + run suite X on pool 2
+  run.sh stop [-p 2,3] [-c]            Kill runner(s) (-c: delete clusters/mirrors)
+  run.sh start [-p 1-4]                Power on pool VMs (conN + disN)
+  run.sh status [-p 3]                 Show what's running
+  run.sh verify [-p all]               Verify pool VMs (no dispatch)
+  run.sh list                          List available suites (shows dummy suites separately)
+  run.sh destroy [-p all] [-c]         Destroy pool VMs (-c: delete clusters first)
   run.sh attach conN                   Attach to conN's tmux session
-  run.sh live [N]                      Interactive multi-pane dashboard
-  run.sh dash [N] [log]                Read-only summary dashboard
+  run.sh live [-p 1-3]                 Interactive multi-pane dashboard
+  run.sh dash [-p all] [log]           Read-only summary dashboard
 
 Options:
-  --suite X,Y          Select specific suite(s)
-  --all                Select all suites (default for run/reschedule)
-  --pools N            Number of pools (default: 1)
-  --pool N             Target a specific pool
-  --force              Wipe suite state before dispatching / hot-deploy
-  --dev                Push local source to ~/aba on conN (developer mode)
-  --resume             Skip previously-passed tests (run, restart)
-  --dry-run            Show dispatch plan, don't execute
-  --clean              Clear checkpoints before running
-  --revert             Revert pool VMs to pool-ready snapshot before running
-  --recreate-golden    Force rebuild golden VM from template
-  --recreate-vms       Force reclone all conN/disN from golden
-  -y, --yes            Auto-accept prompts
-  -q, --quiet          CI mode: no interactive prompts (implies -y)
-  --os rhel8|rhel9     RHEL version for pool VMs (overrides config.env)
-  --pools-file F       Custom pools.conf path
+  -s, --suite X,Y        Select specific suite(s) (comma-separated)
+  -a, --all              Select all suites (default for run/reschedule)
+  -D, --with-dummy       Include dummy-* framework test suites (excluded from --all)
+  -p, --pools SPEC       Pool selection: N, N-M, N,M,O, or "all"
+  -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
+  -d, --dev              Push local source to ~/aba on conN (developer mode)
+  -r, --resume           Skip previously-passed tests (run, restart)
+  -n, --dry-run          Show dispatch plan, don't execute
+  -c, --clean            Delete clusters/mirrors before stopping/destroying
+  -V, --revert           Revert pool VMs to pool-ready snapshot before running
+  -G, --recreate-golden  Force rebuild golden VM from template
+  -R, --recreate-vms     Force reclone all conN/disN from golden (scoped to -p)
+  -y, --yes              Auto-accept prompts
+  -q, --quiet            CI mode: no interactive prompts (implies -y)
+  -o, --os RHEL          RHEL version for pool VMs (rhel8|rhel9|rhel10)
+  -v, --vmware-conf F    Path to vmware.conf (e.g. ~/.vmware-esxi.conf)
+  -u, --user USER        SSH user for both conN and disN
+  --con-user USER        SSH user for conN only
+  --dis-user USER        SSH user for disN only
+  -h, --help             Show usage help
 ```
 
 ### Common Workflows
 
 ```bash
 # Full test run across all 4 pools:
-./run.sh run --all --pools 4
+./run.sh run -a -p 1-4
 
 # Run a single suite on pool 2:
-./run.sh run --suite cluster-ops --pool 2
+./run.sh run -s cluster-ops -p 2
 
 # Check status of all pools:
-./run.sh status --pools 4
+./run.sh status
 
 # Attach to pool 1's tmux session (see live output):
 ./run.sh attach con1
 
 # Live multi-pane dashboard:
-./run.sh live 4
+./run.sh live
 
 # Stop all pools:
-./run.sh stop --pools 4
+./run.sh stop -p all
 
 # Stop pool 3 and clean up its clusters/mirrors:
-./run.sh stop --pool 3 --clean
+./run.sh stop -p 3 -c
 
 # Re-run the last suite on pool 2, skipping passed tests:
-./run.sh restart --pool 2 --resume
+./run.sh restart -p 2 -r
 
 # Deploy local code changes to all pools (no suite run):
-./run.sh deploy --pools 4
+./run.sh deploy -p 1-4
 
 # Deploy + run with local source (developer mode):
-./run.sh run --all --pools 4 --dev
+./run.sh run -a -p 1-4 -d
 
 # List available suites:
 ./run.sh list
 
 # Verify pool VMs are healthy (SSH, networking, etc.):
-./run.sh verify --pools 4
+./run.sh verify -p 1-4
+
+# Run only dummy framework test suites:
+./run.sh run -D -p 1
+
+# Include dummy suites alongside real suites:
+./run.sh run -a -D -p 1-4
 ```
 
 ### Test Profiles
@@ -232,19 +242,19 @@ Switch the test environment with CLI flags. Combine them freely:
 
 ```bash
 # Default: vCenter API, RHEL 8, non-root user
-./run.sh run --all --pools 4
+./run.sh run -a -p 1-4
 
 # ESXi-direct API (bypass vCenter):
-./run.sh run --all --pools 4 --vmware-conf ~/.vmware-esxi.conf
+./run.sh run -a -p 1-4 -v ~/.vmware-esxi.conf
 
 # RHEL 9 pool VMs:
-./run.sh run --all --pools 4 --os rhel9
+./run.sh run -a -p 1-4 -o rhel9
 
 # Run as root on all bastions:
-./run.sh run --all --pools 4 --user root
+./run.sh run -a -p 1-4 -u root
 
 # Full matrix example: ESXi + RHEL 9 + root
-./run.sh run --all --pools 4 --vmware-conf ~/.vmware-esxi.conf --os rhel9 --user root
+./run.sh run -a -p 1-4 -v ~/.vmware-esxi.conf -o rhel9 -u root
 
 # Per-pool profiles in pools.conf (e.g. pool1=vCenter, pool2=ESXi):
 #   pool1  con1  dis1  aba-e2e-template-rhel8  POOL_NUM=1  ...
@@ -417,6 +427,6 @@ test/e2e/
 
 Settings can be defined at three levels (highest precedence wins):
 
-1. **CLI flags** (`--os rhel9`, `--pools 4`, etc.)
+1. **CLI flags** (`-o rhel9`, `-p 1-4`, etc.)
 2. **Per-pool overrides** in `pools.conf` (`CON_SSH_USER=root`, `VM_DATASTORE=...`)
 3. **Defaults** in `config.env`
