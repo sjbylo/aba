@@ -130,7 +130,7 @@ Key behaviors:
 - **[c]leanup**: run cluster+mirror cleanup without stopping (diagnostic)
 - **[a]bort**: clean up and exit
 - **[p]ause**: stop the 24h auto-abort timer (clock stopped)
-- **[!cmd]**: run an arbitrary bash command for debugging (if exit 0, treat as pass)
+- **[!cmd]**: run an arbitrary bash command for debugging, then re-prompt
 - 24h auto-abort timeout prevents abandoned suites from blocking pools
 
 ### Cleanup file registration and removal
@@ -883,8 +883,7 @@ presents a menu. **This must be preserved exactly in v2.**
 - 24h auto-abort if no input (for unattended runs where someone forgot to detach)
 - Writes `/tmp/e2e-paused-{suite}` so `run.sh status` shows "PAUSED" state
 - Cleanup runs `e2e_cleanup_clusters` + `e2e_cleanup_mirrors` (registered resources)
-- `!cmd` runs in a subshell, output is teed to the log file
-- If `!cmd` succeeds, offers to retry the original failed command
+- `!cmd` runs in a subshell, output is teed to the log file, then re-prompts regardless of exit code
 
 ---
 
@@ -1390,7 +1389,7 @@ For each test run, verify these framework behaviors:
 - [ ] `[a]bort` runs cleanup then exits with failure
 - [ ] `[p]ause` stops the 24h auto-abort timer
 - [ ] `[R]etry` / Enter restarts the retry cycle for the failed command
-- [ ] `[!cmd]` runs an arbitrary command; exit 0 = treat as pass
+- [ ] `[!cmd]` runs an arbitrary command, then re-prompts (does NOT auto-pass)
 
 ### Test Matrix Parameter verification
 

@@ -123,17 +123,9 @@ source "$_E2E_LIB_DIR/constants.sh"
 trap ':' INT
 
 # --- SSH wrapper ------------------------------------------------------------
-# Cleanup functions (e2e_cleanup_clusters, e2e_cleanup_mirrors) need _essh().
-# Suites run as child bash processes (runner.sh line 588: bash "$suite_file"),
-# so functions sourced by the runner are NOT inherited.  Suites that source
-# pool-lifecycle.sh or vm-helpers.sh get _essh() from there; suites that only
-# source framework.sh (e.g. negative-paths, create-bundle-to-disk) need it here.
-_essh() {
-	ssh -o ConnectTimeout=10 -o BatchMode=yes \
-		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
-}
+# Suites run as child bash processes, so functions sourced by the runner are
+# NOT inherited.  Source the canonical SSH wrapper from remote.sh.
+source "$_E2E_LIB_DIR/remote.sh"
 
 # --- Globals ----------------------------------------------------------------
 
@@ -929,14 +921,8 @@ _interactive_prompt() {
                 echo "Running: $user_cmd"
                 ( trap - INT; eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                 local new_rc=${PIPESTATUS[0]}
-                if [ $new_rc -eq 0 ]; then
-                    _e2e_log "User command succeeded"
-                    rm -f "$_paused_file"
-                    return 0
-                else
-                    _e2e_log "User command failed (exit=$new_rc)"
-                    echo "Command failed with exit code $new_rc"
-                fi
+                _e2e_log "User command exited $new_rc"
+                [ $new_rc -ne 0 ] && echo "Command failed with exit code $new_rc"
                 ;;
             *)
                 echo "Unknown option '$ans'. Prefix with ! to run a command (e.g. !ls -la)"

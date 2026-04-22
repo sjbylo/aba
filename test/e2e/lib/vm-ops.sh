@@ -1191,11 +1191,20 @@ _vm_install_aba() {
 
 	echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 
-	_essh "${user}@${host}" -- "
-		rm -rf ~/aba/* ~/aba/.??*
-		git clone --depth 1 --branch $branch $repo_url ~/aba
-		cd ~/aba && ./install
-	"
+	local attempt
+	for attempt in 1 2 3; do
+		if _essh "${user}@${host}" -- "
+			rm -rf ~/aba
+			git clone --depth 1 --branch $branch $repo_url ~/aba
+			cd ~/aba && ./install
+		"; then
+			return 0
+		fi
+		echo "  [vm] git clone attempt $attempt failed on ${host}, retrying in 10s ..."
+		sleep 10
+	done
+	echo "  [vm] FATAL: git clone failed after 3 attempts on ${host}" >&2
+	return 1
 }
 
 # --- _vm_verify_golden ------------------------------------------------------
