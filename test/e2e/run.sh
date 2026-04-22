@@ -414,9 +414,20 @@ if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_REC
 	[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _base_infra_flags+=" --recreate-golden"
 	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
 	[ -n "${CLI_YES:-}" ]             && _base_infra_flags+=" --yes"
+
+	# Find the highest pool number so setup-infra.sh can run all pools in
+	# parallel (its internal loop parallelizes configure jobs).  Pools that
+	# are already ready (pool-ready snapshot present) are skipped inside
+	# setup-infra.sh, so passing a range wider than needed is safe.
+	_max_pool=0
+	_min_pool=999
 	for _p in $CLI_POOL_LIST; do
-		"$BASH" "$_RUN_DIR/setup-infra.sh" --pool "$_p" $_base_infra_flags || { echo "FATAL: Infrastructure setup failed for pool $_p" >&2; exit 1; }
+		[ "$_p" -gt "$_max_pool" ] && _max_pool="$_p"
+		[ "$_p" -lt "$_min_pool" ] && _min_pool="$_p"
 	done
+	"$BASH" "$_RUN_DIR/setup-infra.sh" -p "$_max_pool" $_base_infra_flags \
+		|| { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+
 	for _p in $CLI_POOL_LIST; do
 		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${_p}"
 	done

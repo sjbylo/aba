@@ -1582,7 +1582,7 @@ yaml_normalize() {
         python3 -c "
 import yaml, sys
 d = yaml.safe_load(open('$file'))
-for k in ('additionalTrustBundle', 'pullSecret'):
+for k in ('additionalTrustBundle', 'pullSecret', 'sshKey'):
     d.pop(k, None)
 vs = d.get('platform', {}).get('vsphere', {})
 for vc in vs.get('vcenters', []):

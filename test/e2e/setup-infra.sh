@@ -705,6 +705,10 @@ _prepare_golden() {
 	# Tolerate exit 1: VM may already be powered off (no redirect to avoid /dev/null permission issues)
 	govc vm.power -off "$_GOLDEN_NAME" || true
 	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
+	govc vm.change -vm "$_GOLDEN_NAME" \
+		-annotation "Status: ready (golden-ready snapshot created)
+Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Created by: E2E test framework of ABA (setup-infra.sh)" || true
 
 	echo "  Golden VM created and snapshotted."
 	echo "=== Phase 0 complete ==="
@@ -944,6 +948,10 @@ if [ ${#_snapshot_vms[@]} -gt 0 ]; then
 	for vm_name in "${_snapshot_vms[@]}"; do
 		echo "  Creating snapshot '$_SNAPSHOT_NAME' on $vm_name ..."
 		govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
+		govc vm.change -vm "$vm_name" \
+			-annotation "Status: ready (pool-ready snapshot created)
+Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Created by: E2E test framework of ABA (setup-infra.sh)" || true
 		echo "  Powering on $vm_name ..."
 		govc vm.power -on "$vm_name" &
 	done

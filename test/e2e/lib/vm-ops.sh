@@ -1071,22 +1071,25 @@ _vm_create_test_user_and_key_on_host() {
 
 	cat <<-CROSSEOF | _essh "${def_user}@${host}" -- sudo bash
 		set -ex
-		if [ ! -f /root/.ssh/id_rsa ]; then
-			ssh-keygen -t rsa -f /root/.ssh/id_rsa -N '' -C 'root@golden'
-		fi
-		ROOT_PUB=\$(cat /root/.ssh/id_rsa.pub)
 
+		# Ensure the default user has a keypair
 		if [ ! -f /home/${def_user}/.ssh/id_rsa ]; then
 			su - ${def_user} -c "ssh-keygen -t rsa -f ~/.ssh/id_rsa -N '' -C '${def_user}@golden'"
 		fi
+
+		# Root shares the SAME keypair as the default user (per SPEC:
+		# "all users share the same SSH key from the VMware template").
+		cp /home/${def_user}/.ssh/id_rsa /root/.ssh/id_rsa
+		cp /home/${def_user}/.ssh/id_rsa.pub /root/.ssh/id_rsa.pub
+		chmod 600 /root/.ssh/id_rsa
+
 		USER_PUB=\$(cat /home/${def_user}/.ssh/id_rsa.pub)
 
-		grep -qF "\$ROOT_PUB" /root/.ssh/authorized_keys || echo "\$ROOT_PUB" >> /root/.ssh/authorized_keys
-		grep -qF "\$ROOT_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$ROOT_PUB" >> /home/${def_user}/.ssh/authorized_keys
-		grep -qF "\$USER_PUB" /root/.ssh/authorized_keys || echo "\$USER_PUB" >> /root/.ssh/authorized_keys
-		grep -qF "\$USER_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$USER_PUB" >> /home/${def_user}/.ssh/authorized_keys
+		# Authorize the shared key for both users
+		grep -qF "\$USER_PUB" /root/.ssh/authorized_keys 2>/dev/null || echo "\$USER_PUB" >> /root/.ssh/authorized_keys
+		grep -qF "\$USER_PUB" /home/${def_user}/.ssh/authorized_keys 2>/dev/null || echo "\$USER_PUB" >> /home/${def_user}/.ssh/authorized_keys
 
-		chmod 600 /root/.ssh/authorized_keys /root/.ssh/id_rsa
+		chmod 600 /root/.ssh/authorized_keys
 		chmod 600 /home/${def_user}/.ssh/authorized_keys
 		chown -R ${def_user}:${def_user} /home/${def_user}/.ssh
 
@@ -1098,7 +1101,7 @@ _vm_create_test_user_and_key_on_host() {
 			chmod 600 /root/.ssh/testy_rsa
 		fi
 
-		echo "Cross-host SSH keys configured."
+		echo "Cross-host SSH keys configured (shared keypair)."
 	CROSSEOF
 
 	echo "  [vm] Cross-host SSH keys set up for root and $def_user on $host"
@@ -1194,7 +1197,11 @@ _vm_install_aba() {
 	local attempt
 	for attempt in 1 2 3; do
 		if _essh "${user}@${host}" -- "
-			rm -rf ~/aba
+			if [ -L ~/aba ]; then
+				rm -rf ~/aba/*  ~/aba/.??*
+			else
+				rm -rf ~/aba
+			fi
 			git clone --depth 1 --branch $branch $repo_url ~/aba
 			cd ~/aba && ./install
 		"; then
