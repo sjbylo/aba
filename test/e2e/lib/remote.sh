@@ -8,8 +8,8 @@
 # Dependencies: constants.sh (for VM_BASE_DOMAIN fallback)
 # =============================================================================
 
-# SSH options: suppress host-key noise, fail fast, non-interactive.
-_E2E_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+# SSH options: suppress host-key noise, fail fast, non-interactive, keepalive.
+_E2E_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
 
 # Canonical SSH wrapper -- the ONLY SSH function in the framework.
 # Usage:

@@ -122,6 +122,18 @@ alwaysApply: true
 - Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism -- `aba reset` is a "distclean" that returns the repo to its original unpacked state. Only use it when a 100% fresh clean repo is genuinely required (e.g. `setup_aba_from_scratch`, or dedicated reset regression tests). For mid-process cleanup use `aba clean`, `aba uninstall`, or `aba delete`.
 - Every suite that creates clusters or mirrors MUST have an explicit `test_begin "Cleanup: ..."` block at the end that runs `aba delete` / `aba uninstall` / `aba unregister` for every resource created. The EXIT trap and `_pre_suite_cleanup` are safety nets for crashes -- NOT the primary cleanup path. Explicit cleanup also tests `aba delete`, `aba uninstall`, and `aba unregister`.
 
+## E2E framework code hygiene (anti-spaghetti)
+
+**ENFORCEMENT: Before completing ANY edit under `test/e2e/`, check these limits. If a violation is found -- even if the code works -- STOP and tell the user: "CODE HYGIENE VIOLATION: [which rule] -- [file] is [N] lines (limit [M])" and propose a refactoring before proceeding. Do NOT silently exceed limits.**
+
+- **No file under `test/e2e/` should exceed 1,300 lines** (exception: `framework.sh` up to 1,900 as the core test harness). Check with `wc -l` after editing.
+- **No function should exceed 80 lines** -- if it does, extract helpers into `lib/`
+- **All SSH calls must use `_essh()` from `lib/remote.sh`** -- never raw `ssh -o ...` in framework code. Narrow exceptions: notification relay (`_e2e_notify`), quick connectivity probes (`require_ssh`), and `live-pane.sh` which uses `$_SSH_OPTS` injected from the same `_E2E_SSH_OPTS`.
+- **New coordinator features go in `lib/`**, not inline in `run.sh` -- `run.sh` is the thin CLI dispatcher
+- **`run.sh` must stay under 900 lines** -- it was 2,643 in v1 and is 844 in v2; don't let it grow back
+- **One source of truth per concern**: SSH options in `remote.sh`, CLI parsing in `cli.sh`, tmux UI in `tmux-ui.sh`, VM ops in `vm-ops.sh`
+- **No copy-paste duplication** -- if the same logic exists in two places, extract it into a shared function in `lib/`
+
 ## E2E resource lifecycle
 
 - A suite ALWAYS cleans up resources it created before suite_end

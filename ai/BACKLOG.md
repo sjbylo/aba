@@ -1294,6 +1294,30 @@ Also: **remove the `[ABA] Ensuring CLI binaries are installed` output** from day
 
 ---
 
+## PR #25 (vSphere preflight): Fix command injection and fail-open before merge
+
+**Priority:** High (must fix before merging PR #25)
+**Added:** 2026-04-22
+**PR:** [#25 feat(vmware): add vSphere preflight validation](https://github.com/sjbylo/aba/pull/25)
+
+### CI-01 (HIGH): Command injection in TCP probe
+
+`scripts/preflight-check-vsphere.sh` uses:
+
+```bash
+timeout 3 bash -c "echo >/dev/tcp/$host/$port 2>/dev/null"
+```
+
+`$host` is expanded in the parent shell into the `bash -c` string. A crafted `GOVC_URL` containing `;`, `$(...)`, or pipe characters could inject arbitrary commands.
+
+**Fix:** Validate `$host` against `[a-zA-Z0-9._-]` before use, or avoid the nested `bash -c` entirely (use `/dev/tcp` from the current shell, or `nc`/`timeout`-based probe).
+
+### UP-02 (MEDIUM): Fail-open on network-on-cluster check
+
+`_vsphere_probe_resources_network_on_cluster`: on `govc` errors, `aba_debug` and `return 0` -- attachment mismatch may be silently skipped (fail-open). Should fail-closed (return non-zero) so the user sees the misconfiguration.
+
+---
+
 ## `_shutdown_all_node_vms_off()` should check `$platform`, not file existence
 
 **Priority:** Medium

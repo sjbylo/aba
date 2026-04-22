@@ -19,11 +19,13 @@ _sess="${_E2E_TMUX_SESSION:-e2e-suite}"
 _suite_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
 _user="${_suite_user:-$_DEFAULT_USER}"
 
-# Check if another live dashboard took over this pool
+# Check if another live dashboard took over this pool.
+# exit 0 (not return) to kill the pane shell -- return just goes back to the
+# wrapper's while-loop and re-sources us, creating infinite spam.
 _owner=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)
 if [ -n "$_owner" ] && [ "$_owner" != "$_LIVE_ID" ]; then
-	echo "Another live dashboard took over pool ${_POOL_NUM}. Exiting."
-	return 0 2>/dev/null || exit 0
+	echo "Another live dashboard took over pool ${_POOL_NUM}."
+	exit 0
 fi
 
 # Read suite metadata for pane title
