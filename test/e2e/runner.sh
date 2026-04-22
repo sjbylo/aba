@@ -23,32 +23,6 @@ _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$HOME/aba"
 export _ABA_ROOT
 
-# For root, redirect large directories to /home to avoid filling the small /
-# filesystem. Symlinks are set up during golden VM creation but may be missing
-# if the golden predates the provisioning code, so enforce them here too.
-if [ "$(id -u)" = "0" ]; then
-	export E2E_DATA_DIR="/home/root"
-	_root_home="/home/root"
-	mkdir -p "$_root_home"
-	for _dir in aba tmp .oc-mirror .aba .cache; do
-		_src="/root/$_dir"
-		_dst="$_root_home/$_dir"
-		if [ -d "$_src" ] && [ ! -L "$_src" ]; then
-			mkdir -p "$_dst"
-			# Move existing content to /home then replace with symlink
-			rsync -a "$_src/" "$_dst/" 2>/dev/null && rm -rf "$_src"
-			ln -sfn "$_dst" "$_src"
-			echo "  [root] Relocated $_src -> $_dst"
-		elif [ ! -e "$_src" ]; then
-			mkdir -p "$_dst"
-			ln -sfn "$_dst" "$_src"
-		fi
-	done
-	unset _root_home _dir _src _dst
-else
-	export E2E_DATA_DIR=""
-fi
-
 source "$_RUNNER_DIR/lib/constants.sh"
 
 # --- Parse arguments ----------------------------------------------------------
@@ -149,12 +123,8 @@ _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 80/tcp"
 _cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
-	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
 	rm -rf ~/.oc-mirror ~/.cache/agent
-	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
 	rm -rf ~/tmp/*
-	# When root uses data_dir=/home/root, caches land there instead of /root
-	[ -d /home/root ] && sudo rm -rf /home/root/.oc-mirror /home/root/.cache/agent /home/root/.tmp /home/root/tmp/*
 
 	# When switching between --user root and --user steve (or any user), the
 	# OTHER user's home may still contain large artifacts from a previous run.
@@ -627,14 +597,10 @@ _cleanup_dis_aba() {
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		# Try aba uninstall if .available exists OR if ~/aba/mirror dir exists
 		# (covers interrupted installs where .available was never created).
-		# Also check /home/root/aba for root's data_dir-redirected paths.
 		_essh "$_uhost" "
-			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ] || \
-			   [ -f /home/root/aba/mirror/.available ] || [ -d /home/root/aba/mirror ]; then
-				_aba_dir=~/aba
-				[ -d /home/root/aba/mirror ] && _aba_dir=/home/root/aba
+			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
 				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
-				cd \$_aba_dir && aba -y -d mirror uninstall || true
+				cd ~/aba && aba -y -d mirror uninstall || true
 			fi
 		" 2>&1 || echo "  [cleanup] WARNING: aba uninstall as $_try_user on disN failed (rc=$?)"
 	done
@@ -643,11 +609,11 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/tmp/.??* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
 		# Mirror data dirs may contain files owned by container-mapped UIDs
 		# (rootless podman UID remapping), so sudo is needed for cleanup.
 		for _mdir in $_E2E_MIRROR_DATA_DIRS; do
-			_essh "$_uhost" "sudo rm -rf ~/$_mdir /home/root/$_mdir" 2>&1
+			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
 		done
 	done
 	# Remove stale CA trust anchors from previous registry installs

@@ -917,17 +917,6 @@ _vm_provision_root_user() {
 	'"
 	echo "    proxy scripts -> /root/"
 
-	_essh "${user}@${host}" -- "sudo bash -c '
-		for d in aba tmp .oc-mirror .aba .cache; do
-			mkdir -p /home/root/\$d
-			rm -rf /root/\$d
-			ln -sfn /home/root/\$d /root/\$d
-		done
-		chown -R root:root /home/root
-		chmod 700 /home/root
-	'"
-	echo "    symlinks: /root/{aba,tmp,.oc-mirror,.aba,.cache} -> /home/root/"
-
 	echo "  [vm] Root user provisioning complete on $host"
 }
 
@@ -1197,11 +1186,7 @@ _vm_install_aba() {
 	local attempt
 	for attempt in 1 2 3; do
 		if _essh "${user}@${host}" -- "
-			if [ -L ~/aba ]; then
-				rm -rf ~/aba/*  ~/aba/.??*
-			else
-				rm -rf ~/aba
-			fi
+			rm -rf ~/aba
 			git clone --depth 1 --branch $branch $repo_url ~/aba
 			cd ~/aba && ./install
 		"; then

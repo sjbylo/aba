@@ -64,6 +64,19 @@ must NEVER use absolute paths like `/root/aba` or `/home/steve/aba`.
 **If a suite works for `--user steve` but not `--user root`, that is a
 framework bug, not a suite bug.**
 
+**`data_dir` in `mirror.conf` is ALWAYS left empty (the default).** The E2E
+framework never sets `data_dir` explicitly.  When `data_dir` is empty, ABA
+resolves it to `~` at runtime, which correctly maps to `/root` (for root) or
+`/home/steve` (for steve).  Suites must NEVER set `data_dir` explicitly
+unless they are specifically testing the `--data-dir` CLI flag (e.g.
+`suite-mirror-sync`).
+
+**Disk layout:** All VMs use a single `/` partition (no separate `/home`).
+The `expand-root.service` (systemd oneshot) auto-grows `/` on boot when the
+virtual disk is larger than the LV (e.g. when `VM_DISK_EXTRA_GB > 0` adds
+space during cloning).  This eliminates cross-filesystem issues and the need
+for `/home/root` symlink redirection.
+
 ### Known v1 framework bugs (to be fixed in v2)
 
 1. **File ownership conflicts**: RC files, lock files, cleanup files created by
@@ -75,13 +88,17 @@ framework bug, not a suite bug.**
    everywhere. Golden VM provisioning copies the key to each user's `~/.ssh/`
    and adds it to `authorized_keys` for all users (`_vm_create_test_user_and_key_on_host`).
    No user should ever need a separate key.
-   **Status: FIXED in code.** `_vm_setup_ssh_keys` in `vm-ops.sh` now uses
-   `grep -qF ... || echo ... >>` (idempotent append) instead of `>` (overwrite).
-   This preserves cross-host keys from `_vm_create_test_user_and_key_on_host`.
-   **Remaining:** Pool-ready snapshots still contain the old broken state.
-   Rebuild golden VM + pool snapshots to pick up the fix permanently.
-3. **Hardcoded paths**: References to `/home/root/`, `/home/steve/` in runner.sh
-  and cleanup code. Fix: use `~` or `$HOME` consistently.
+   **Status: FIXED in code (two fixes).**
+   (a) `_vm_setup_ssh_keys` in `vm-ops.sh` uses `grep -qF ... || echo ... >>`
+   (idempotent append) instead of `>` (overwrite), preserving cross-host keys.
+   (b) `_vm_create_test_user_and_key_on_host` now **copies** the default user's
+   (`steve`) `id_rsa`/`id_rsa.pub` to `/root/.ssh/` instead of generating a
+   separate keypair for root. This ensures root and steve use the identical key.
+   **Remaining:** Pool-ready snapshots built before these fixes contain the old
+   broken state. Rebuild golden VM + pool snapshots to pick up the fixes.
+3. ~~**Hardcoded paths**: References to `/home/root/`, `/home/steve/` in runner.sh
+  and cleanup code.~~ **FIXED:** All VMs use a single `/` partition (no
+  `/home/root` symlink redirection).  Code uses `~` / `$HOME` consistently.
 4. **OS-change cascading**: An OS change on pool 1 forces all pools to reclone.
   Fix: per-pool tracking with `_pools_needing_reclone` (already fixed in v1).
 5. **tmux session ownership**: Sessions created by one user are inaccessible to
@@ -587,7 +604,7 @@ Applicable options: `-p`
 | `--dry-run`            | `-n`  |          | Show dispatch plan, don't execute                                                                                                | `run`                               |
 | `--clean`              | `-c`  |          | Delete clusters/mirrors before stopping/destroying                                                                               | `stop`, `destroy`                   |
 | `--revert`             | `-V`  |          | Revert pool VMs to pool-ready snapshot before running                                                                            | `run`                               |
-| `--recreate-golden`    | `-G`  |          | Force rebuild golden VM from template                                                                                            | `run`                               |
+| `--recreate-golden`    | `-G`  |          | Force rebuild golden VM from template (implies `-R`)                                                                             | `run`                               |
 | `--recreate-vms`       | `-R`  |          | Force reclone conN/disN from golden (scoped to `-p`)                                                                             | `run`                               |
 | `--yes`                | `-y`  |          | Auto-accept prompts                                                                                                              | `run`, `restart`, `stop`, `destroy` |
 | `--quiet`              | `-q`  |          | CI mode: no interactive prompts (implies `-y`)                                                                                   | `run`, `restart`                    |
@@ -610,7 +627,7 @@ Applicable options: `-p`
 - `--clean` / `-c` with `destroy`: runs cleanup before destroying VMs
 - `--revert` / `-V` reverts to `pool-ready` snapshot; `--recreate-vms` / `-R` does a full
 reclone from golden (both scoped to the pools selected by `-p`);
-`--recreate-golden` / `-G` rebuilds golden from template first
+`--recreate-golden` / `-G` rebuilds golden from template first (implies `-R`)
 - `--os` / `-o` change triggers per-pool reclone (only affected pools, not all)
 - `--dev` / `-d` replaces the normal `git clone` flow with `scp` of local source
 - `--all` / `-a` excludes `dummy-*` suites by default; add `-D` / `--with-dummy` to include them.
@@ -936,20 +953,21 @@ infrastructure management (clone, revert, verify, destroy) is available via
 If a workflow cannot be accomplished via `run.sh`, that is a missing feature
 in `run.sh` -- fix `run.sh`, don't bypass it.
 
-**Invocation from `run.sh`:** `run.sh` calls `setup-infra.sh` once per pool
-using `--pool N` (not `--pools COUNT`). For non-contiguous pool selections
-(e.g. `-p 1,3,5`), each pool is set up individually:
+**Invocation from `run.sh`:** `run.sh` calls `setup-infra.sh` **once** with
+`-p <max_pool>` to leverage its internal parallelism. `setup-infra.sh` iterates
+pools 1..<max_pool>, but pools that already have a `pool-ready` snapshot are
+skipped automatically, so passing a wider range than strictly needed is safe.
+This restores the v1 behavior of parallel VM cloning and configuration:
 
 ```bash
-for _p in $CLI_POOL_LIST; do
-    setup-infra.sh --pool "$_p" --pools-file pools.conf [flags...]
-done
+_max_pool=<highest pool in CLI_POOL_LIST>
+setup-infra.sh -p "$_max_pool" --pools-file pools.conf [flags...]
 ```
 
-`--pool N` sets `_POOL_START=N` and `_POOLS=N` inside `setup-infra.sh`, so all
-Phase 1/2/3 loops iterate only that single pool. This is critical for
-non-contiguous pool sets -- without it, `--pool 3` would iterate pools 1..3
-instead of just pool 3.
+Inside `setup-infra.sh`, VM cloning is sequential (one `govc vm.clone` at a
+time to avoid vCenter contention), but configuration jobs (`_configure_con_vm`,
+`_configure_dis_vm`) run in **parallel background processes**, with a final
+`wait` gate before snapshotting.
 
 **Golden VM lifecycle:**
 
@@ -983,7 +1001,28 @@ switches. No per-user key generation is needed. Handled by
    aba) and `_configure_dis_vm` (wait SSH -> network [incl. MTU 1500] -> wait NAT ->
    dnf update -> cleanup -> vmware.conf -> disconnect internet)
 3. Snapshot as `pool-ready`
-4. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
+4. VM annotation added via `govc vm.change -annotation` recording creation
+   date/time, "ready" status, and creator ("E2E test framework of ABA").
+   Same annotation is set on the golden VM after `golden-ready` snapshot.
+5. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
+
+**ABA installation on VMs (`_vm_install_aba`):**
+
+- **Symlink preservation:** When running as root, `~/aba` may be a symlink to
+  `/home/root/aba` (to keep the small `/root` partition from filling). The
+  install function cleans and re-clones `~/aba` before each suite.
+- **Git clone retry:** `git clone` has a 3-attempt retry loop with 10-second
+  backoff to handle transient network failures or filesystem issues during
+  initial VM provisioning.
+
+**`yaml_normalize` and `--strip-secrets`:**
+
+The `yaml_normalize()` helper in `lib/framework.sh` (used by `yaml_diff`)
+strips sensitive fields before comparison. With `--strip-secrets`, the following
+YAML keys are removed: `additionalTrustBundle`, `pullSecret`, and `sshKey`.
+The `sshKey` strip is critical because root and steve may have different key
+comments (e.g. `root@golden` vs `sbylo@ovpn-...`) even when sharing the same
+keypair, and the example files use a different key entirely.
 
 **Naming and addressing conventions:** The domain names, cluster names, and
 IP/MAC address formats used in v1 all work well and are carried forward
@@ -1391,7 +1430,7 @@ wiring, pool registry configuration, operator wait, and cache cleanup blocks.
 - `suite_setup_operator_set()` -- write operator-set template + apply
 - `suite_reapply_config()` -- full re-apply after reset or interactive test
 - `suite_cleanup_oc_mirror_cache()` -- find + rm -rf pattern (optional --remote)
-- `suite_create_mirror_workdir()` -- mirror.conf + optional data_dir
+- `suite_create_mirror_workdir()` -- mirror.conf (data_dir always left empty/default)
 - `suite_point_mirror_to_pool_registry()` -- reg_host + clear SSH fields
 - `suite_ensure_pool_registry()` -- version resolution + setup-pool-registry.sh
 - `suite_generate_pool_reg_pull_secret()` -- init:p4ssw0rd JSON for pool registry

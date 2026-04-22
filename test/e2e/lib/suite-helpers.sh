@@ -86,12 +86,10 @@ suite_cleanup_oc_mirror_cache() {
 }
 
 # --- suite_create_mirror_workdir ---------------------------------------------
-# Create mirror.conf and optionally set data_dir.
+# Create mirror.conf.  data_dir is left at the default (empty = ~) so that
+# each user's home directory is used and configs transfer cleanly across users.
 suite_create_mirror_workdir() {
 	e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-	if [ -n "${E2E_DATA_DIR:-}" ]; then
-		e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
-	fi
 	e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 }
 
@@ -140,9 +138,10 @@ EOPS"
 
 # --- suite_verify_disk_usage [mount] [max_gb] --------------------------------
 # Assert disk usage is below threshold after reset/cleanup.
+# Default: check / < 50GB (single-partition layout; all data on /).
 suite_verify_disk_usage() {
-	local mount="${1:-/home}"
-	local max_gb="${2:-12}"
+	local mount="${1:-/}"
+	local max_gb="${2:-50}"
 	e2e_run "Verify $mount disk usage < ${max_gb}GB" \
 		"used_gb=\$(df $mount --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] $mount used: \${used_gb}GB\"; [ \$used_gb -lt $max_gb ]"
 }

@@ -100,7 +100,6 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set mirror hostname in mirror.conf" \
     "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"

@@ -84,8 +84,8 @@ e2e_run "Reset aba to clean state" \
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify /home disk usage < 10GB after reset" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
+e2e_run "Verify / disk usage < 50GB after reset" \
+    "used_gb=\$(df / --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] / used: \${used_gb}GB\"; [ \$used_gb -lt 50 ]"
 
 e2e_run "Install aba" "./install"
 
@@ -112,7 +112,6 @@ test_end
 test_begin "Setup: configure mirror for local registry"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"

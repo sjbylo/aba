@@ -78,6 +78,8 @@ _verify_con_vm() {
 
 	local pool_num="${vm#con}"
 	local _con_vlan="${VM_CLONE_VLAN_IPS[$vm]%%/*}"
+	local _dis_vm="dis${pool_num}"
+	local _dis_vlan="${VM_CLONE_VLAN_IPS[$_dis_vm]%%/*}"
 	local _domain
 	_domain="$(pool_domain "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
@@ -102,11 +104,11 @@ _verify_con_vm() {
 		ip route | grep -q "^default.*ens256" || _fail "default route not via ens256"
 		echo "  PASS: default route via ens256"
 
-		for _iface in ens192 ens224 ens224.10; do
+		for _iface in ens192 ens224 ens224.10 ens256; do
 			_mtu=\$(ip link show \$_iface | grep -o 'mtu [0-9]*' | awk '{print \$2}')
 			[ "\$_mtu" = "1500" ] || _fail "\$_iface MTU is \$_mtu (expected 1500)"
 		done
-		echo "  PASS: MTU 1500 on all interfaces"
+		echo "  PASS: MTU 1500 on all interfaces (incl. ens256)"
 
 		nmcli -g ipv4.ignore-auto-dns connection show ens256 | grep -q yes || _fail "ens256 ignore-auto-dns"
 		echo "  PASS: ens256 ignore-auto-dns"
@@ -156,12 +158,32 @@ _verify_con_vm() {
 		done
 		echo "  PASS: NTP server ${_ntp} reachable"
 
-		# --- SSH ---
+		# --- SSH keys ---
 		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || _fail "sshd ClientAliveInterval"
 		echo "  PASS: sshd ClientAliveInterval"
 
-		test -f /home/${user}/.ssh/authorized_keys || _fail "steve authorized_keys missing"
-		echo "  PASS: steve authorized_keys exists"
+		test -f /home/${user}/.ssh/id_rsa || _fail "${user} SSH private key missing"
+		test -f /home/${user}/.ssh/id_rsa.pub || _fail "${user} SSH public key missing"
+		test -f /home/${user}/.ssh/authorized_keys || _fail "${user} authorized_keys missing"
+		echo "  PASS: ${user} SSH keypair + authorized_keys"
+
+		test -f /root/.ssh/id_rsa || _fail "root SSH private key missing"
+		test -f /root/.ssh/id_rsa.pub || _fail "root SSH public key missing"
+		test -f /root/.ssh/authorized_keys || _fail "root authorized_keys missing"
+		echo "  PASS: root SSH keypair + authorized_keys"
+
+		# Root and user must share the same keypair
+		_root_fp=\$(ssh-keygen -l -f /root/.ssh/id_rsa.pub | awk '{print \$2}')
+		_user_fp=\$(ssh-keygen -l -f /home/${user}/.ssh/id_rsa.pub | awk '{print \$2}')
+		[ "\$_root_fp" = "\$_user_fp" ] || _fail "root and ${user} have different SSH keys (root=\$_root_fp ${user}=\$_user_fp)"
+		echo "  PASS: root and ${user} share same SSH key"
+
+		# Verify self-SSH works for both users
+		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>&1 | grep -q ${user} || _fail "${user} self-SSH failed"
+		echo "  PASS: ${user} self-SSH"
+
+		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>&1 | grep -q root || _fail "root self-SSH failed"
+		echo "  PASS: root self-SSH"
 
 		# --- Users / environment ---
 		id testy > /dev/null 2>&1 || _fail "testy user missing"
@@ -179,7 +201,7 @@ _verify_con_vm() {
 		grep -q "ABA_TESTING=1" /etc/environment || _fail "ABA_TESTING not set"
 		echo "  PASS: ABA_TESTING=1"
 
-		# --- Installed software (check as the owning user, not root) ---
+		# --- Installed software ---
 		test -x /home/${user}/bin/aba || _fail "aba not installed"
 		echo "  PASS: aba installed"
 
@@ -200,6 +222,23 @@ _verify_con_vm() {
 		else
 			echo "  SKIP: kvm.conf (not deployed)"
 		fi
+
+		test -f /home/${user}/.pull-secret.json || _fail "pull-secret missing (${user})"
+		echo "  PASS: pull-secret (${user})"
+		test -f /root/.pull-secret.json || _fail "pull-secret missing (root)"
+		echo "  PASS: pull-secret (root)"
+
+		test -f /home/${user}/.proxy-set.sh || _fail "proxy-set.sh missing (${user})"
+		test -f /home/${user}/.proxy-unset.sh || _fail "proxy-unset.sh missing (${user})"
+		echo "  PASS: proxy scripts (${user})"
+		test -f /root/.proxy-set.sh || _fail "proxy-set.sh missing (root)"
+		test -f /root/.proxy-unset.sh || _fail "proxy-unset.sh missing (root)"
+		echo "  PASS: proxy scripts (root)"
+
+		# --- Disk space ---
+		_root_pct=\$(df / --output=pcent | tail -1 | tr -d ' %')
+		[ "\$_root_pct" -lt 80 ] || _fail "/ is \${_root_pct}% full (>80% threshold)"
+		echo "  PASS: / disk usage \${_root_pct}%"
 
 		# --- Podman clean ---
 		# Pool registry runs as ${user} with images, containers, and port 8443
@@ -332,14 +371,11 @@ _verify_dis_vm() {
 		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || _fail "internet still reachable (should be air-gapped)"
 		echo "  PASS: no internet (disconnected)"
 
-		for _iface in ens192 ens224 ens224.10; do
+		for _iface in ens192 ens224 ens224.10 ens256; do
 			_mtu=\$(ip link show \$_iface | grep -o 'mtu [0-9]*' | awk '{print \$2}')
 			[ "\$_mtu" = "1500" ] || _fail "\$_iface MTU is \$_mtu (expected 1500)"
 		done
-		echo "  PASS: MTU 1500 on all interfaces"
-
-		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || _fail "internet still reachable"
-		echo "  PASS: no internet (disconnected)"
+		echo "  PASS: MTU 1500 on all interfaces (incl. ens256)"
 
 		# --- VLAN connectivity ---
 		_vlan_ok=0
@@ -398,9 +434,39 @@ _verify_dis_vm() {
 		systemctl is-active --quiet chronyd || _fail "chronyd not active"
 		echo "  PASS: chronyd active"
 
-		# --- SSH ---
+		# --- SSH keys ---
 		grep -q "^ClientAliveInterval" /etc/ssh/sshd_config || _fail "sshd ClientAliveInterval"
 		echo "  PASS: sshd ClientAliveInterval"
+
+		test -f /home/${user}/.ssh/id_rsa || _fail "${user} SSH private key missing"
+		test -f /home/${user}/.ssh/id_rsa.pub || _fail "${user} SSH public key missing"
+		test -f /home/${user}/.ssh/authorized_keys || _fail "${user} authorized_keys missing"
+		echo "  PASS: ${user} SSH keypair + authorized_keys"
+
+		test -f /root/.ssh/id_rsa || _fail "root SSH private key missing"
+		test -f /root/.ssh/id_rsa.pub || _fail "root SSH public key missing"
+		test -f /root/.ssh/authorized_keys || _fail "root authorized_keys missing"
+		echo "  PASS: root SSH keypair + authorized_keys"
+
+		# Root and user must share the same keypair
+		_root_fp=\$(ssh-keygen -l -f /root/.ssh/id_rsa.pub | awk '{print \$2}')
+		_user_fp=\$(ssh-keygen -l -f /home/${user}/.ssh/id_rsa.pub | awk '{print \$2}')
+		[ "\$_root_fp" = "\$_user_fp" ] || _fail "root and ${user} have different SSH keys (root=\$_root_fp ${user}=\$_user_fp)"
+		echo "  PASS: root and ${user} share same SSH key"
+
+		# Verify self-SSH works for both users
+		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>&1 | grep -q ${user} || _fail "${user} self-SSH failed"
+		echo "  PASS: ${user} self-SSH"
+
+		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>&1 | grep -q root || _fail "root self-SSH failed"
+		echo "  PASS: root self-SSH"
+
+		# --- VLAN SSH connectivity (dis -> con, proves cross-VM SSH works) ---
+		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@${_con_vlan} hostname < /dev/null 2>&1 | grep -q "${con_vm}" || _fail "${user}@${vm} -> ${user}@${con_vm} SSH via VLAN failed"
+		echo "  PASS: ${user}@${vm} -> ${user}@${con_vm} SSH via VLAN"
+
+		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${_con_vlan} hostname < /dev/null 2>&1 | grep -q "${con_vm}" || _fail "root@${vm} -> root@${con_vm} SSH via VLAN failed"
+		echo "  PASS: root@${vm} -> root@${con_vm} SSH via VLAN"
 
 		# --- Users / environment ---
 		id testy > /dev/null 2>&1 || _fail "testy user missing"
@@ -430,14 +496,23 @@ _verify_dis_vm() {
 			echo "  SKIP: kvm.conf (not deployed)"
 		fi
 
-		! test -f /home/${user}/.pull-secret.json || _fail "pull-secret still exists"
+		! test -f /home/${user}/.pull-secret.json || _fail "pull-secret still exists on disN"
 		echo "  PASS: pull-secret removed"
 
 		! grep -q "^source.*proxy-set" /home/${user}/.bashrc || _fail "proxy still in .bashrc"
 		echo "  PASS: proxy disabled"
 
+		# disN should NOT have ABA pre-installed (suites transfer it)
+		! test -d /home/${user}/aba/.git || _fail "~/aba repo exists on disN (should be clean)"
+		echo "  PASS: no pre-installed ABA repo"
+
 		command -v rsync > /dev/null || _fail "rsync not installed"
 		echo "  PASS: rsync installed"
+
+		# --- Disk space ---
+		_root_pct=\$(df / --output=pcent | tail -1 | tr -d ' %')
+		[ "\$_root_pct" -lt 80 ] || _fail "/ is \${_root_pct}% full (>80% threshold)"
+		echo "  PASS: / disk usage \${_root_pct}%"
 
 		# --- No running containers ---
 		! podman ps -q | grep -q . || _fail "running containers (root)"
