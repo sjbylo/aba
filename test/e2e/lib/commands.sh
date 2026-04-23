@@ -28,6 +28,14 @@ cmd_stop() {
 		fi
 	fi
 
+	# Kill orphaned setup-infra.sh processes on bastion
+	local _orphan_pids
+	_orphan_pids=$(pgrep -f "setup-infra.sh" 2>/dev/null) || true
+	if [ -n "$_orphan_pids" ]; then
+		echo "Killing orphaned setup-infra.sh processes: $_orphan_pids"
+		kill $_orphan_pids 2>/dev/null || true
+	fi
+
 	local _rc_glob="${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*"
 
 	echo "Stopping runners on pool(s) ${pool_list} ..."
@@ -281,7 +289,7 @@ cmd_verify() {
 	echo "=== Verifying pool VMs (pools ${pool_list}) ==="
 	local _p _any_failed=0
 	for _p in $pool_list; do
-		"$BASH" "${run_dir}/setup-infra.sh" --verify --pool "$_p" --pools-file "$pools_file" || {
+		"$BASH" "${run_dir}/setup-infra.sh" --verify --pool-list "$_p" --pools-file "$pools_file" || {
 			echo "FAILED: Verification of pool $_p failed" >&2
 			_any_failed=1
 		}

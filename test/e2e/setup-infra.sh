@@ -15,15 +15,16 @@
 # Reuse-first: only destroys/recreates when explicitly told to.
 #
 # Usage:
-#   setup-infra.sh -p N [-G] [-R]
-#   setup-infra.sh --pools N [--recreate-golden] [--recreate-vms]
+#   setup-infra.sh --pool-list 1,2,3 [-G] [-R]
+#   setup-infra.sh --pool-list 2 [--recreate-golden] [--recreate-vms]
 #
-# All commands are visible (set -x for infra operations).
+# Xtrace output goes to logs/setup-infra-trace.log for debugging.
+# Terminal shows progress-only stdout.
 # =============================================================================
 
 set -u
-# Trace is enabled below (after --verify early-exit) for infra operations.
-# Show file:line before each traced command (no [ ] so trace is never parsed as a command)
+# Xtrace is enabled below (after --verify early-exit) and redirected to a log
+# file via BASH_XTRACEFD so the terminal only sees progress output.
 PS4='+ ${BASH_SOURCE##*/}:${LINENO} '
 
 _INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -264,10 +265,15 @@ _configure_con_vm() {
 	_vm_setup_ssh_keys "$vm" "$user"
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
-	_vm_install_packages "$vm" "$user"
+	# Packages already installed on golden -- skip _vm_install_packages.
 	_vm_setup_dnsmasq "$vm" "$user" "$vm"
-	_vm_dnf_update "$vm" "$user"
-	_vm_wait_ssh "$vm" "$user"
+	# Pool-optimized update: refreshes certs, checks for updates, only
+	# reboots if packages were actually updated.
+	# Returns: 0 = rebooted, 2 = no updates (skip reboot), 1 = error.
+	local _update_rc=0
+	_vm_dnf_update_pool "$vm" "$user" || _update_rc=$?
+	[ "$_update_rc" -eq 1 ] && return 1
+	[ "$_update_rc" -eq 0 ] && _vm_wait_ssh "$vm" "$user"
 	_vm_cleanup_caches "$vm" "$user"
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
@@ -286,9 +292,21 @@ _configure_dis_vm() {
 	local vm="$1" user="$2" con_vm="$3"
 
 	_vm_wait_ssh "$vm" "$user"
+
+	# Phase A: update using dis's own internet (ens256 still up).
+	# Packages already installed on golden -- skip _vm_install_packages.
+	# Runs truly in parallel with con's configure -- no waiting for con's NAT.
+	# Returns: 0 = rebooted, 2 = no updates (skip reboot), 1 = error.
+	local _update_rc=0
+	_vm_dnf_update_pool "$vm" "$user" || _update_rc=$?
+	[ "$_update_rc" -eq 1 ] && return 1
+	[ "$_update_rc" -eq 0 ] && _vm_wait_ssh "$vm" "$user"
+
+	# Phase B: network setup disables ens256 and sets up VLAN to con.
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
 
+	# Verify VLAN connectivity to con's NAT (dis's own internet is gone now).
 	echo "  [$vm] Waiting for internet via $con_vm NAT ..."
 	local waited=0
 	while ! _essh "${user}@${vm}" -- "ping -c1 -W3 8.8.8.8" &>/dev/null; do
@@ -300,10 +318,6 @@ _configure_dis_vm() {
 		fi
 	done
 	[ "$waited" -gt 0 ] && echo "  [$vm] Internet reachable (waited ${waited}s)"
-
-	_vm_install_packages "$vm" "$user"
-	_vm_dnf_update "$vm" "$user"
-	_vm_wait_ssh "$vm" "$user"
 
 	_vm_cleanup_caches "$vm" "$user"
 	_vm_cleanup_podman "$vm" "$user"
@@ -532,8 +546,7 @@ _verify_dis_vm() {
 # Normal flow: parse arguments
 # =============================================================================
 
-_POOLS=1
-_POOL_SINGLE=""
+_POOL_LIST_CSV=""
 _RECREATE_GOLDEN=""
 _RECREATE_VMS=""
 _VERIFY_ONLY=""
@@ -542,8 +555,7 @@ _POOLS_FILE="$_INFRA_DIR/pools.conf"
 
 while [ $# -gt 0 ]; do
 	case "$1" in
-		-p|--pools)           _POOLS="$2"; shift 2 ;;
-		--pool)               _POOL_SINGLE="$2"; shift 2 ;;
+		--pool-list)          _POOL_LIST_CSV="$2"; shift 2 ;;
 		-G|--recreate-golden) _RECREATE_GOLDEN=1; shift ;;
 		-R|--recreate-vms)    _RECREATE_VMS=1; shift ;;
 		--verify)             _VERIFY_ONLY=1; shift ;;
@@ -552,6 +564,13 @@ while [ $# -gt 0 ]; do
 		*) echo "setup-infra.sh: unknown flag: $1" >&2; exit 1 ;;
 	esac
 done
+
+# Build pool array from --pool-list (comma-separated, e.g. "1,3,4" or "2")
+if [ -n "$_POOL_LIST_CSV" ]; then
+	IFS=',' read -ra _POOL_ARRAY <<< "$_POOL_LIST_CSV"
+else
+	_POOL_ARRAY=(1)
+fi
 
 _confirm() {
 	local msg="$1"
@@ -604,32 +623,29 @@ _LOG_DIR="$_INFRA_DIR/logs"
 
 mkdir -p "$_LOG_DIR"
 
-# --pool N targets a single pool; translate to loop range
-_POOL_START=1
-if [ -n "$_POOL_SINGLE" ]; then
-	_POOL_START=$_POOL_SINGLE
-	_POOLS=$_POOL_SINGLE
-fi
+# Kill all background children on exit/signal (prevents orphan setup-infra.sh
+# subshells and their SSH sessions from running after run.sh is killed).
+_cleanup_children() {
+	local _pids
+	_pids=$(jobs -p 2>/dev/null) || true
+	if [ -n "$_pids" ]; then
+		kill $_pids 2>/dev/null || true
+		wait 2>/dev/null || true
+	fi
+}
+trap '_cleanup_children' EXIT INT TERM HUP
 
 # =============================================================================
 # --verify: run post-config checks on all pools, skip infra setup
 # =============================================================================
 
 if [ -n "$_VERIFY_ONLY" ]; then
-	# --pool N verifies a single pool; --pools N verifies 1..N
-	_ver_start=1
-	_ver_end=$_POOLS
-	if [ -n "$_POOL_SINGLE" ]; then
-		_ver_start=$_POOL_SINGLE
-		_ver_end=$_POOL_SINGLE
-	fi
-
 	echo ""
-	echo "=== Verifying pool(s) ${_ver_start}..${_ver_end} ==="
+	echo "=== Verifying pool(s) ${_POOL_ARRAY[*]} ==="
 	declare -a _ver_pids=() _ver_labels=() _ver_logs=()
 	_ver_failed=0
 
-	for (( i=_ver_start; i<=_ver_end; i++ )); do
+	for i in "${_POOL_ARRAY[@]}"; do
 		user="$VM_DEFAULT_USER"
 		con_vm="con${i}"
 		dis_vm="dis${i}"
@@ -691,12 +707,16 @@ if [ -n "$_VERIFY_ONLY" ]; then
 	exit 0
 fi
 
-# Enable trace for the full infra setup flow (not verify)
+# Redirect xtrace to a log file for debugging (terminal shows progress only).
+# BASH_XTRACEFD sends only xtrace to fd 3; stderr stays on terminal for errors.
+_TRACE_LOG="$_LOG_DIR/setup-infra-trace.log"
+exec 3>>"$_TRACE_LOG"
+BASH_XTRACEFD=3
 set -x
 
 echo ""
 echo "=== E2E Infrastructure Setup ==="
-echo "  Pools: ${_POOL_START}..${_POOLS}"
+echo "  Pools: ${_POOL_ARRAY[*]}"
 echo "  RHEL: $_RHEL_VER"
 echo "  Golden: $_GOLDEN_NAME"
 echo "  Template: $_VM_TEMPLATE"
@@ -776,9 +796,22 @@ _prepare_golden() {
 	_vm_verify_golden "$ip" "$user"       || return 1
 
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
-	sleep 10
-	# Tolerate exit 1: VM may already be powered off (no redirect to avoid /dev/null permission issues)
-	govc vm.power -off "$_GOLDEN_NAME" || true
+
+	# Poll power state instead of blind sleep -- more correct and often faster.
+	echo "  Waiting for golden VM to power off ..."
+	local _pw_tries=0
+	while [ "$_pw_tries" -lt 30 ]; do
+		local _pw_state
+		_pw_state=$(govc vm.info "$_GOLDEN_NAME" 2>/dev/null | awk '/Power state:/{print $NF}') || true
+		[ "$_pw_state" = "poweredOff" ] && break
+		sleep 2
+		_pw_tries=$(( _pw_tries + 1 ))
+	done
+	# Force off if guest shutdown didn't complete within 60s
+	if [ "$_pw_state" != "poweredOff" ]; then
+		echo "  Golden VM not off after 60s -- forcing power off"
+		govc vm.power -off "$_GOLDEN_NAME" || true
+	fi
 	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
 	govc vm.change -vm "$_GOLDEN_NAME" \
 		-annotation "Status: ready (golden-ready snapshot created)
@@ -789,17 +822,22 @@ Created by: E2E test framework of ABA (setup-infra.sh)" || true
 	echo "=== Phase 0 complete ==="
 }
 
-# Golden phase: output to terminal only (no separate log file)
-_prepare_golden 2>&1
-_r=$?
-[ "$_r" -eq 0 ] || { echo "FATAL: Golden VM preparation failed" >&2; exit 1; }
+_golden_log="$_LOG_DIR/create-golden.log"
+echo "  Preparing golden VM ... (log: $_golden_log)"
+if _prepare_golden >> "$_golden_log" 2>&1; then
+	echo "  Golden VM ready."
+else
+	echo "  FAILED -- see $_golden_log" >&2
+	tail -20 "$_golden_log" >&2
+	exit 1
+fi
 
 # =============================================================================
 # Phase 1: Clone conN and disN
 # =============================================================================
 
 echo ""
-echo "=== Phase 1: Ensure conN/disN VMs (pools ${_POOL_START}..$_POOLS) ==="
+echo "=== Phase 1: Ensure conN/disN VMs (pools ${_POOL_ARRAY[*]}) ==="
 
 if ! govc snapshot.tree -vm "$_GOLDEN_NAME" | grep "golden-ready"; then
 	echo "FATAL: golden VM '$_GOLDEN_NAME' has no 'golden-ready' snapshot -- cannot clone pool VMs" >&2
@@ -831,64 +869,73 @@ _vm_needs_clone() {
 
 _clone_failed=0
 
-# Stagger clones: all conN first, then all disN, to reduce concurrent vCenter I/O.
-for prefix in con dis; do
-	declare -a _clone_pids=()
-	declare -a _clone_labels=()
+# Clone con + dis for each pool in a single interleaved wave.  All clone
+# jobs run concurrently (backgrounded) so con and dis VMs for every pool
+# are cloned in parallel, saving one full clone cycle compared to the
+# previous two-pass approach (all conN first, then all disN).
+declare -a _clone_pids=()
+declare -a _clone_labels=()
 
-	echo "  --- Cloning ${prefix}1..${prefix}${_POOLS} ---"
+echo "  --- Cloning pool VMs (pools ${_POOL_ARRAY[*]}) ---"
 
-	for (( i=_POOL_START; i<=_POOLS; i++ )); do
-		pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
-		pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
-		pool_log="$_LOG_DIR/create-pool${i}.log"
-		> "$pool_log"
+for i in "${_POOL_ARRAY[@]}"; do
+	pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
+	pool_ds="${_pool_datastores[$i]:-$VM_DATASTORE}"
+	pool_log="$_LOG_DIR/create-pool${i}.log"
+	> "$pool_log"
 
-		govc folder.create "$pool_folder" || true
+	govc folder.create "$pool_folder" || true
 
+	for prefix in con dis; do
 		vm_name="${prefix}${i}"
+		# _vm_needs_clone returns one of:
+		#   ok       -- VM exists and SSH works, reuse as-is
+		#   revert   -- VM exists, SSH down, but pool-ready snapshot exists
+		#   broken   -- VM exists, SSH down, no pool-ready snapshot
+		#   missing  -- VM does not exist in vCenter
+		#   recreate -- --recreate-vms flag forces a fresh clone
 		status=$(_vm_needs_clone "$vm_name")
 
 		case "$status" in
 			ok)
 				echo "  $vm_name: exists + SSH OK -- reusing"
 				;;
-		revert)
-			echo "  $vm_name: exists but SSH failed -- reverting to $_SNAPSHOT_NAME"
-			govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
-			govc vm.power -on "$vm_name" || true
-			# After revert, re-add the bastion's SSH key to the user account.
-			# The pool-ready snapshot only has root's authorized_keys; the user
-			# key was added later.  Wait for SSH then fix user keys.
-			_revert_host="${vm_name}.${VM_BASE_DOMAIN:-example.com}"
-			_revert_user="$VM_DEFAULT_USER"
-			echo "  $vm_name: waiting for SSH after revert ..."
-			if _vm_wait_ssh "$_revert_host" "$_revert_user" \
-				|| _vm_wait_ssh "$_revert_host" "root"; then
-				_vm_setup_ssh_keys "$_revert_host" "$_revert_user" \
-					|| echo "  $vm_name: WARNING: could not set up SSH keys after revert"
-				# Remove stale firewall ports that may have been baked into the snapshot
-				_vm_setup_firewall "$_revert_host" "$_revert_user" \
-					|| echo "  $vm_name: WARNING: firewall reset failed after revert"
-				# Kill stale oc-mirror (holds port 55000)
-				_essh "${_revert_user}@${_revert_host}" "pkill -f 'oc-mirror' || true"
-			else
-				echo "  $vm_name: WARNING: SSH still down after revert"
-			fi
-			;;
-	broken)
-			echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot)"
-			if _confirm "  Replace $vm_name? (Y/n)"; then
-				govc vm.power -off "$vm_name" || true
-				govc vm.destroy "$vm_name" || true
-				VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
-				_clone_pids+=($!)
-				_clone_labels+=("clone $vm_name (was broken)")
-			else
-				echo "  Skipping $vm_name."
-				_clone_failed=1
-			fi
-			;;
+			revert)
+				echo "  $vm_name: exists but SSH failed -- reverting to $_SNAPSHOT_NAME"
+				govc snapshot.revert -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: revert $vm_name failed" >&2; _clone_failed=1; continue; }
+				govc vm.power -on "$vm_name" || true
+				# After revert, re-add the bastion's SSH key to the user account.
+				# The pool-ready snapshot only has root's authorized_keys; the user
+				# key was added later.  Wait for SSH then fix user keys.
+				_revert_host="${vm_name}.${VM_BASE_DOMAIN:-example.com}"
+				_revert_user="$VM_DEFAULT_USER"
+				echo "  $vm_name: waiting for SSH after revert ..."
+				if _vm_wait_ssh "$_revert_host" "$_revert_user" \
+					|| _vm_wait_ssh "$_revert_host" "root"; then
+					_vm_setup_ssh_keys "$_revert_host" "$_revert_user" \
+						|| echo "  $vm_name: WARNING: could not set up SSH keys after revert"
+					# Remove stale firewall ports that may have been baked into the snapshot
+					_vm_setup_firewall "$_revert_host" "$_revert_user" \
+						|| echo "  $vm_name: WARNING: firewall reset failed after revert"
+					# Kill stale oc-mirror (holds port 55000)
+					_essh "${_revert_user}@${_revert_host}" "pkill -f 'oc-mirror' || true"
+				else
+					echo "  $vm_name: WARNING: SSH still down after revert"
+				fi
+				;;
+			broken)
+				echo "  $vm_name: broken (SSH down, no '$_SNAPSHOT_NAME' snapshot)"
+				if _confirm "  Replace $vm_name? (Y/n)"; then
+					govc vm.power -off "$vm_name" || true
+					govc vm.destroy "$vm_name" || true
+					VM_DATASTORE="$pool_ds" clone_vm "$_GOLDEN_NAME" "$vm_name" "$pool_folder" "golden-ready" >> "$pool_log" 2>&1 &
+					_clone_pids+=($!)
+					_clone_labels+=("clone $vm_name (was broken)")
+				else
+					echo "  Skipping $vm_name."
+					_clone_failed=1
+				fi
+				;;
 			missing|recreate)
 				echo "  $vm_name: $status -- cloning from $_GOLDEN_NAME ..."
 				if vm_exists "$vm_name"; then
@@ -901,18 +948,18 @@ for prefix in con dis; do
 				;;
 		esac
 	done
-
-	for idx in "${!_clone_pids[@]}"; do
-		if wait "${_clone_pids[$idx]}"; then
-			echo "  OK: ${_clone_labels[$idx]}"
-		else
-			echo "  FAILED: ${_clone_labels[$idx]} (exit=$?)" >&2
-			_clone_failed=1
-		fi
-	done
-
-	unset _clone_pids _clone_labels
 done
+
+# Wait for ALL clones (con + dis across all pools)
+for idx in "${!_clone_pids[@]}"; do
+	if wait "${_clone_pids[$idx]}"; then
+		echo "  OK: ${_clone_labels[$idx]}"
+	else
+		echo "  FAILED: ${_clone_labels[$idx]} (exit=$?)" >&2
+		_clone_failed=1
+	fi
+done
+unset _clone_pids _clone_labels
 
 if [ "$_clone_failed" -ne 0 ]; then
 	echo "FATAL: Some VM clones failed" >&2
@@ -933,7 +980,14 @@ declare -a _cfg_labels=()
 declare -a _cfg_logs=()
 _cfg_failed=0
 
-for (( i=_POOL_START; i<=_POOLS; i++ )); do
+_stagger=""
+for i in "${_POOL_ARRAY[@]}"; do
+	# Stagger pool configuration starts by 5s to avoid triggering Red Hat CDN
+	# rate limiting -- multiple pools running subscription-manager refresh and
+	# dnf update simultaneously caused HTTP 429 responses from the CDN.
+	[ -n "$_stagger" ] && sleep 5
+	_stagger=1
+
 	pool_folder="${_pool_folders[$i]:-${_BASE_FOLDER}/pool${i}}"
 	con_log="$_LOG_DIR/create-pool${i}-con.log"
 	dis_log="$_LOG_DIR/create-pool${i}-dis.log"
@@ -952,28 +1006,28 @@ for (( i=_POOL_START; i<=_POOLS; i++ )); do
 	echo "  Configuring pool $i ($con_vm + $dis_vm) ..."
 	echo "    Logs: $con_log  |  $dis_log"
 
-	# con then dis sequentially within each pool (dis needs con's dnsmasq),
-	# but pools run in parallel with each other.
+	# con and dis configure in parallel within each pool.  dis has a built-in
+	# retry loop ("Waiting for internet via con NAT") that blocks until con's
+	# dnsmasq/firewall is up, so no explicit serialization is needed.
+	# Pools also run in parallel with each other.
+	# Xtrace stays on fd 3 (trace log); per-command redirects capture
+	# stdout/stderr to per-pool logs.
 	(
-		set -e
+		set -ex
 		export VC_FOLDER="$pool_folder"
-		_configure_con_vm "$con_vm" "$user" >> "$con_log" 2>&1
-		_configure_dis_vm "$dis_vm" "$user" "$con_vm" >> "$dis_log" 2>&1
+		_configure_con_vm "$con_vm" "$user" >> "$con_log" 2>&1 &
+		_con_pid=$!
+		_configure_dis_vm "$dis_vm" "$user" "$con_vm" >> "$dis_log" 2>&1 &
+		_dis_pid=$!
+		_rc=0
+		wait "$_con_pid" || _rc=$?
+		wait "$_dis_pid" || _rc=$?
+		exit "$_rc"
 	) &
 	_cfg_pids+=($!)
 	_cfg_labels+=("configure pool $i ($con_vm + $dis_vm)")
 	_cfg_logs+=("$con_log" "$dis_log")
-
-	# Stagger pool launches to avoid CDN thundering-herd
-	[ $i -lt $_POOLS ] && sleep 5
 done
-
-# While background config jobs run, tail their logs so the user sees progress
-_tail_pid=""
-if [ ${#_cfg_pids[@]} -gt 0 ] && [ ${#_cfg_logs[@]} -gt 0 ] && [ -t 1 ]; then
-	tail -f "${_cfg_logs[@]}" &
-	_tail_pid=$!
-fi
 
 for idx in "${!_cfg_pids[@]}"; do
 	if wait "${_cfg_pids[$idx]}"; then
@@ -983,8 +1037,6 @@ for idx in "${!_cfg_pids[@]}"; do
 		_cfg_failed=1
 	fi
 done
-
-[ -n "$_tail_pid" ] && kill "$_tail_pid" 2>/dev/null || true
 
 if [ "$_cfg_failed" -ne 0 ]; then
 	echo "FATAL: VM configuration failed" >&2
@@ -1001,7 +1053,7 @@ echo ""
 echo "=== Phase 3: Create pool-ready snapshots ==="
 
 _snapshot_vms=()
-for (( i=_POOL_START; i<=_POOLS; i++ )); do
+for i in "${_POOL_ARRAY[@]}"; do
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
 		if govc snapshot.tree -vm "$vm_name" 2>&1 | grep -q "$_SNAPSHOT_NAME"; then
@@ -1018,23 +1070,62 @@ done
 
 if [ ${#_snapshot_vms[@]} -gt 0 ]; then
 	wait
-	sleep 15
+
+	# Poll each VM until it reaches poweredOff state (replaces blind sleep 15).
+	echo "  Waiting for VMs to power off ..."
+	_pw_state=""
+	for vm_name in "${_snapshot_vms[@]}"; do
+		_pw_tries=0
+		while [ "$_pw_tries" -lt 30 ]; do
+			_pw_state=$(govc vm.info "$vm_name" 2>/dev/null | awk '/Power state:/{print $NF}') || true
+			[ "$_pw_state" = "poweredOff" ] && break
+			sleep 2
+			_pw_tries=$(( _pw_tries + 1 ))
+		done
+		if [ "$_pw_state" != "poweredOff" ]; then
+			echo "  WARNING: $vm_name not powered off after 60s -- forcing off" >&2
+			govc vm.power -off "$vm_name" || true
+		fi
+	done
+
+	# Snapshot VMs in parallel with 5s stagger to avoid overwhelming
+	# vCenter/storage I/O with concurrent snapshot operations.
+	declare -a _snap_pids=()
+	declare -a _snap_labels=()
+	_snap_failed=0
 
 	for vm_name in "${_snapshot_vms[@]}"; do
 		echo "  Creating snapshot '$_SNAPSHOT_NAME' on $vm_name ..."
-		govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" || { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
-		govc vm.change -vm "$vm_name" \
-			-annotation "Status: ready (pool-ready snapshot created)
+		(
+			govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" \
+				|| { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
+			govc vm.change -vm "$vm_name" \
+				-annotation "Status: ready (pool-ready snapshot created)
 Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
 Created by: E2E test framework of ABA (setup-infra.sh)" || true
-		echo "  Powering on $vm_name ..."
-		govc vm.power -on "$vm_name" &
+			echo "  Powering on $vm_name ..."
+			govc vm.power -on "$vm_name"
+		) &
+		_snap_pids+=($!)
+		_snap_labels+=("$vm_name")
+		sleep 5
 	done
-	wait
+
+	for idx in "${!_snap_pids[@]}"; do
+		if ! wait "${_snap_pids[$idx]}"; then
+			echo "  FAILED: snapshot ${_snap_labels[$idx]}" >&2
+			_snap_failed=1
+		fi
+	done
+
+	if [ "$_snap_failed" -ne 0 ]; then
+		echo "FATAL: Some snapshots failed" >&2
+		exit 1
+	fi
 fi
 
 echo "=== Phase 3 complete ==="
 
 echo ""
-echo "=== Infrastructure ready: $_POOLS pool(s) ==="
+echo "=== Infrastructure ready: ${#_POOL_ARRAY[@]} pool(s) (${_POOL_ARRAY[*]}) ==="
 echo ""

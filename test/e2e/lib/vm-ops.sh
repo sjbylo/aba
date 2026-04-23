@@ -245,6 +245,8 @@ _vm_setup_ssh_keys() {
 # --- _vm_install_packages ---------------------------------------------------
 # Install all packages needed by conN and disN. Retry loop handles transient
 # dnf failures (network glitches, mirror issues).
+# Used on the GOLDEN VM only -- pool VMs inherit packages from the golden
+# snapshot and skip this step (see _vm_dnf_update_pool for pool updates).
 
 _vm_install_packages() {
 	local host="$1"
@@ -310,6 +312,8 @@ _vm_setup_time() {
 # --- _vm_dnf_update ---------------------------------------------------------
 # Run dnf update via nohup so RPM scriptlets that restart sshd don't kill
 # the transaction. Polls for completion marker file.
+# Used on the GOLDEN VM: full dnf clean + update + unconditional reboot.
+# For pool VMs (cloned from golden), use _vm_dnf_update_pool instead.
 
 _vm_dnf_update() {
 	local host="$1"
@@ -375,7 +379,110 @@ _vm_dnf_update() {
 
 	echo "  [vm] Rebooting $host ..."
 	_essh "${user}@${host}" -- "sudo reboot" || true
+	# Stagger post-reboot CDN activity across parallel VMs and ensure the VM
+	# has started shutting down before the caller polls SSH.
 	sleep 20
+}
+
+# --- _vm_dnf_update_pool ---------------------------------------------------
+# Lightweight dnf update for POOL VMs (cloned from golden).
+# Skips dnf clean all and dnf install (packages already on golden).
+# Refreshes entitlement certs (golden snapshot may be old), checks for
+# available updates, and only reboots if packages were actually updated.
+# Returns 0 if reboot happened (caller must _vm_wait_ssh).
+# Returns 2 if no updates were needed (caller can skip _vm_wait_ssh).
+
+_vm_dnf_update_pool() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+	local poll_timeout=900
+	local poll_interval=20
+
+	echo "  [vm] Checking for OS updates on $host (pool VM) ..."
+
+	cat <<-'SCRIPT' | _essh "${user}@${host}" -- "sudo tee /tmp/dnf-update.sh >/dev/null"
+		#!/bin/bash
+		rm -f /tmp/dnf-update.rc /tmp/dnf-update.log
+
+		# Refresh entitlement certs -- golden snapshot may be weeks/months old
+		# and clones inherit those potentially stale certs.
+		subscription-manager refresh || true
+
+		# Probe for available updates before running a full dnf update.
+		# Exit 0 = no updates; exit 100 = updates available; other = error.
+		dnf check-update >>/tmp/dnf-update.log 2>&1
+		rc=$?
+		if [ "$rc" -eq 0 ]; then
+			echo "no-updates" > /tmp/dnf-update.rc
+			exit 0
+		fi
+		if [ "$rc" -ne 100 ]; then
+			echo "error-$rc" > /tmp/dnf-update.rc
+			exit "$rc"
+		fi
+
+		# Updates available -- apply them
+		for attempt in 1 2 3; do
+			if dnf update -y >>/tmp/dnf-update.log 2>&1; then
+				echo "updated" > /tmp/dnf-update.rc
+				exit 0
+			fi
+			if [ "$attempt" -eq 3 ]; then
+				echo "failed" > /tmp/dnf-update.rc
+				exit 1
+			fi
+			echo "dnf-update attempt $attempt failed -- retrying in 30s" >> /tmp/dnf-update.log
+			sleep 30
+		done
+	SCRIPT
+
+	_essh "${user}@${host}" -- \
+		"sudo bash -c 'rm -f /tmp/dnf-update.rc /tmp/dnf-update.log; nohup bash /tmp/dnf-update.sh </dev/null >>/tmp/dnf-update.log 2>&1 &'"
+
+	local elapsed=0
+	echo "  [vm] Polling for update check/apply on $host (timeout: ${poll_timeout}s) ..."
+	while [ $elapsed -lt $poll_timeout ]; do
+		sleep "$poll_interval"
+		elapsed=$(( elapsed + poll_interval ))
+
+		local rc
+		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc 2>/dev/null" 2>/dev/null) || true
+
+		if [ -n "$rc" ]; then
+			case "$rc" in
+				no-updates)
+					echo "  [vm] No updates available on $host -- skipping reboot"
+					return 2
+					;;
+				updated)
+					echo "  [vm] Updates applied on $host after ~${elapsed}s -- rebooting ..."
+					_essh "${user}@${host}" -- "sudo reboot" || true
+					# Stagger post-reboot CDN activity across parallel VMs and
+					# ensure the VM has started shutting down before caller polls SSH.
+					sleep 20
+					return 0
+					;;
+				failed)
+					echo "  [vm] dnf update FAILED on $host after ~${elapsed}s" >&2
+					_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+					return 1
+					;;
+				*)
+					echo "  [vm] dnf update ERROR on $host (rc=$rc) after ~${elapsed}s" >&2
+					_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+					return 1
+					;;
+			esac
+		fi
+
+		if [ $(( elapsed % 60 )) -eq 0 ]; then
+			echo "  [vm] Update check still running on $host (~${elapsed}s) ..."
+		fi
+	done
+
+	echo "  [vm] ERROR: dnf update did not complete on $host within ${poll_timeout}s" >&2
+	_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+	return 1
 }
 
 # --- _vm_setup_default_route ------------------------------------------------
