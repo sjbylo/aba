@@ -32,6 +32,11 @@ networking:
 platform:
   {%- if num_workers == '0' and num_masters == '1' %}
   none: {}
+  {%- elif ARCH in ('s390x', 'ppc64le') %}
+  none: {}
+# {{ ARCH }} requires user-provisioned infrastructure (UPI).
+# You must configure an external load balancer for the API ({{ api_vip }})
+# and ingress ({{ ingress_vip }}) endpoints.
   {%- elif platform == 'vmw' and VC == '1' %}
   vsphere:
     apiVIP: {{ api_vip }}

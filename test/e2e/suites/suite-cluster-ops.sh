@@ -17,7 +17,7 @@ _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
@@ -80,8 +80,8 @@ e2e_run "Reset aba to clean state" \
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify /home disk usage < 10GB after reset" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
+e2e_run "Verify / disk usage < 50GB after reset" \
+    "used_gb=\$(df / --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] / used: \${used_gb}GB\"; [ \$used_gb -lt 50 ]"
 
 # Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
 # || true: some packages may not be installed -- dnf returns non-zero if any are missing
@@ -136,7 +136,6 @@ test_begin "Setup: configure mirror for local registry"
 
 # Create mirror.conf pointing to conN's local pool registry (not disN)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
@@ -218,10 +217,19 @@ test_begin "ABI config: diff against known-good examples"
 
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
-    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/install-config.yaml.example"
+
+    # vCenter generates "platform: vsphere:", ESXi/BM generates "platform: baremetal:"
+    # SNO always uses "platform: none" regardless of hypervisor
+    if [ "$ctype" != "sno" ] && ! grep -q 'vsphere:' "$cname/install-config.yaml"; then
+        ic_example="test/e2e/examples/$ctype/install-config-esxi.yaml.example"
+    else
+        ic_example="test/e2e/examples/$ctype/install-config.yaml.example"
+    fi
+
+    e2e_snapshot_file "${ctype}-example" "$ic_example"
     e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/agent-config.yaml.example"
     e2e_run "Diff $cname install-config.yaml against example" \
-        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/install-config.yaml.example) --strip-secrets"
+        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool $ic_example) --strip-secrets"
 
     e2e_run "Diff $cname agent-config.yaml against example" \
         "yaml_diff $cname/agent-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/agent-config.yaml.example)"

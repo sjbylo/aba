@@ -23,14 +23,6 @@ _RUNNER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _ABA_ROOT="$HOME/aba"
 export _ABA_ROOT
 
-# For root, redirect mirror data (oc-mirror cache, registry, TMPDIR) to /home
-# via ABA's existing data_dir mechanism. Suites use E2E_DATA_DIR with --data-dir.
-if [ "$(id -u)" = "0" ]; then
-	export E2E_DATA_DIR="/home/root"
-else
-	export E2E_DATA_DIR=""
-fi
-
 source "$_RUNNER_DIR/lib/constants.sh"
 
 # --- Parse arguments ----------------------------------------------------------
@@ -80,12 +72,19 @@ echo "$$ $(date +%s)" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 rm -f "$RC_FILE"
 
+# SIGINT (Ctrl-C) must NOT kill the runner -- it should only kill the child
+# command so framework.sh sees exit 130 and opens the interactive menu.
+# Using a no-op handler (not 'trap "" INT' which would propagate SIG_IGN to
+# children and make them un-interruptible too).
+trap ':' INT
+
 # After framework.sh is sourced (below), the trap is upgraded to also
 # clean up clusters/mirrors in the cleanup lists.  This ensures VMs are deleted
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
+# Use sudo to remove previous user's files (cross-user switch)
+sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
 echo "$SUITE" > /tmp/e2e-last-suites
-sudo rm -f /tmp/e2e-suite-user
 whoami > /tmp/e2e-suite-user
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
@@ -103,7 +102,7 @@ echo ""
 
 source "$_RUNNER_DIR/lib/framework.sh"
 source "$_RUNNER_DIR/lib/config-helpers.sh"
-source "$_RUNNER_DIR/lib/vm-helpers.sh"
+source "$_RUNNER_DIR/lib/vm-ops.sh"
 source "$_RUNNER_DIR/lib/setup.sh"
 
 # Framework's own bin directory -- never deleted by suite cleanup.
@@ -124,12 +123,8 @@ _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 80/tcp"
 _cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
-	# oc-mirror cache and stale mirror state (same cleanup as disN gets)
 	rm -rf ~/.oc-mirror ~/.cache/agent
-	# Stale bundle tarballs from create-bundle-to-disk suite (can be ~10 GB)
 	rm -rf ~/tmp/*
-	# When root uses data_dir=/home/root, caches land there instead of /root
-	[ -d /home/root ] && sudo rm -rf /home/root/.oc-mirror /home/root/.cache/agent /home/root/.tmp /home/root/tmp/*
 
 	# When switching between --user root and --user steve (or any user), the
 	# OTHER user's home may still contain large artifacts from a previous run.
@@ -405,6 +400,19 @@ e2e_setup
 # Interactive mode always on
 export _E2E_INTERACTIVE=1
 
+# --- Ensure current user can self-SSH (needed by _pre_suite_cleanup) ----------
+# Pool-ready snapshots may predate the idempotent-append fix in _vm_setup_ssh_keys.
+# Without this, root-as-runner can't SSH to root@conN to clean up stale resources.
+_my_pub="$(cat "$HOME/.ssh/id_rsa.pub" 2>/dev/null || true)"
+if [ -n "$_my_pub" ] && [ -f "$HOME/.ssh/authorized_keys" ]; then
+	if ! grep -qF "$_my_pub" "$HOME/.ssh/authorized_keys" 2>/dev/null; then
+		echo "$_my_pub" >> "$HOME/.ssh/authorized_keys"
+		chmod 600 "$HOME/.ssh/authorized_keys"
+		echo "  Fixed: added own public key to authorized_keys (self-SSH)"
+	fi
+fi
+unset _my_pub
+
 # --- Bootstrap: ensure govc is available -------------------------------------
 # Set E2E_SKIP_SNAPSHOT_REVERT=1 for lightweight suites (e.g. dummy-pass/fail)
 # that don't need VMware infrastructure.
@@ -423,15 +431,17 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			export PATH="$HOME/bin:$PATH"
 		elif [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
 			echo "  Bootstrapping govc ..."
-			make -sC "$_ABA_ROOT/cli" govc || {
-				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
-				exit 1
-			}
-			export PATH="$HOME/bin:$PATH"
-			command -v govc &>/dev/null || {
-				echo "  ERROR: govc not found in PATH after bootstrap." >&2
-				exit 1
-			}
+		make -sC "$_ABA_ROOT/cli" govc || {
+			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+			echo "99" > "$RC_FILE"
+			exit 1
+		}
+		export PATH="$HOME/bin:$PATH"
+		command -v govc &>/dev/null || {
+			echo "  ERROR: govc not found in PATH after bootstrap." >&2
+			echo "99" > "$RC_FILE"
+			exit 1
+		}
 		else
 			echo "  WARNING: ABA not fully initialized (missing cli/Makefile or aba.conf)."
 			echo "           Suite will install/configure ABA before using govc."
@@ -587,14 +597,10 @@ _cleanup_dis_aba() {
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		# Try aba uninstall if .available exists OR if ~/aba/mirror dir exists
 		# (covers interrupted installs where .available was never created).
-		# Also check /home/root/aba for root's data_dir-redirected paths.
 		_essh "$_uhost" "
-			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ] || \
-			   [ -f /home/root/aba/mirror/.available ] || [ -d /home/root/aba/mirror ]; then
-				_aba_dir=~/aba
-				[ -d /home/root/aba/mirror ] && _aba_dir=/home/root/aba
+			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
 				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
-				cd \$_aba_dir && aba -y -d mirror uninstall || true
+				cd ~/aba && aba -y -d mirror uninstall || true
 			fi
 		" 2>&1 || echo "  [cleanup] WARNING: aba uninstall as $_try_user on disN failed (rc=$?)"
 	done
@@ -603,11 +609,11 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/tmp/.??* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
 		# Mirror data dirs may contain files owned by container-mapped UIDs
 		# (rootless podman UID remapping), so sudo is needed for cleanup.
 		for _mdir in $_E2E_MIRROR_DATA_DIRS; do
-			_essh "$_uhost" "sudo rm -rf ~/$_mdir /home/root/$_mdir" 2>&1
+			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
 		done
 	done
 	# Remove stale CA trust anchors from previous registry installs
@@ -682,9 +688,9 @@ _start_time=$(date +%s)
 
 suite_file="$_RUNNER_DIR/suites/suite-${SUITE}.sh"
 if [ ! -f "$suite_file" ]; then
-	echo "  ERROR: Suite file not found: $suite_file"
-	echo "1" > "$RC_FILE"
-	exit 1
+	echo "  ERROR: Suite file not found: $suite_file (harness incomplete?)"
+	echo "99" > "$RC_FILE"
+	exit 99
 fi
 
 # Resume mode: point E2E_RESUME_FILE at the previous run's state file
@@ -747,14 +753,14 @@ _pre_suite_cleanup() {
 			# Note: _verify_no_orphan_vms has already run and passed before we get here,
 			# so a missing cluster dir means the cluster was never created or already cleaned
 			# (not silently rm -rf'd with orphan VMs left behind).
-			if ! ( _essh "$target" \
-				"if [ -d '$abs_path' ]; then
-					aba -y -d '$abs_path' delete
-				else
-					echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
-					echo '  (orphan VM check already passed -- no dangling VMs)'
-				fi" \
-				< /dev/null 2>&1 ); then
+		if ! ( _essh "$target" \
+			"if [ -d '$abs_path' ]; then
+				command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete
+			else
+				echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
+				echo '  (orphan VM check already passed -- no dangling VMs)'
+			fi" \
+			< /dev/null 2>&1 ); then
 				echo "  WARNING: cleanup failed for $target:$abs_path"
 				_cleanup_ok=""
 			fi
@@ -778,9 +784,9 @@ _pre_suite_cleanup() {
 			echo "    $target: aba -y -d $abs_path uninstall"
 			_mirror_rc=0
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
-			_essh "$target" \
-				"if [ -d '$abs_path' ]; then aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
-				< /dev/null 2>&1 || _mirror_rc=$?
+		_essh "$target" \
+			"if [ -d '$abs_path' ]; then command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' uninstall || make -C '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+			< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
 				_mirror_ok=""
@@ -815,13 +821,13 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 				echo "  Installed govc to $_FRAMEWORK_BIN/govc"
 			fi
 		fi
-		if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
-			echo ""
-			echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
-			echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
-			echo "1" > "$RC_FILE"
-			exit 1
-		fi
+	if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
+		echo ""
+		echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
+		echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
+		echo "99" > "$RC_FILE"
+		exit 99
+	fi
 	fi
 
 	# Check for orphan VMs FIRST, before any cleanup runs.
@@ -835,8 +841,8 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		echo "  FATAL: pre-suite cleanup failed. Stale clusters/mirrors could not be deleted."
 		echo "  Investigate the failure above, fix it manually, then re-run the suite."
 		echo ""
-		echo "1" > "$RC_FILE"
-		exit 1
+		echo "99" > "$RC_FILE"
+		exit 99
 	fi
 	if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 		# Legacy path: VMware snapshot revert (opt-in via E2E_USE_SNAPSHOT_REVERT=1)
@@ -846,8 +852,8 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			echo "  $DIS_VM must have a 'pool-ready' snapshot. Create it by running"
 			echo "  clone-and-check (or setup-infra Phase 3) for this pool."
 			echo ""
-			echo "1" > "$RC_FILE"
-			exit 1
+			echo "99" > "$RC_FILE"
+			exit 99
 		}
 	else
 		# Default: clean disN using ABA's own commands (exercises product code paths)
@@ -856,8 +862,8 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			echo "  ERROR: disN cleanup failed -- cannot proceed with a dirty disN."
 			echo "  Check SSH connectivity and disk state on ${DIS_VM}.${VM_BASE_DOMAIN}"
 			echo ""
-			echo "1" > "$RC_FILE"
-			exit 1
+			echo "99" > "$RC_FILE"
+			exit 99
 		fi
 	fi
 
@@ -947,21 +953,21 @@ while true; do
 		# Cleanup clusters BEFORE disN reset -- aba delete needs cluster dir
 		if ! _pre_suite_cleanup; then
 			echo "  FATAL: pre-suite cleanup failed during restart. Cannot proceed."
-			echo "1" > "$RC_FILE"
-			exit 1
+			echo "99" > "$RC_FILE"
+			exit 99
 		fi
 		if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			if [ "${E2E_USE_SNAPSHOT_REVERT:-}" = "1" ]; then
 				_revert_dis_snapshot "pool-ready" || {
 					echo "  ERROR: disN revert failed -- cannot restart. Fix snapshot then re-run."
-					echo "1" > "$RC_FILE"
-					exit 1
+					echo "99" > "$RC_FILE"
+					exit 99
 				}
 			else
 				if ! _cleanup_dis_aba; then
 					echo "  ERROR: disN cleanup failed during restart -- cannot proceed."
-					echo "1" > "$RC_FILE"
-					exit 1
+					echo "99" > "$RC_FILE"
+					exit 99
 				fi
 			fi
 			_cleanup_con_quay
