@@ -1355,6 +1355,165 @@ Full codebase scan for injection patterns similar to CI-01 (PR #25). Input sourc
 
 ---
 
+## Documentation: `aba register` / `aba unregister` gaps (code vs docs vs tests)
+
+**Added**: 2026-04-23
+**Priority**: Medium
+**Affects**: `scripts/aba.sh`, `others/help-mirror.txt`, `others/help-aba.txt`, `README.md`, `scripts/reg-common.sh`, `scripts/setup-mirror.sh`, E2E test suites
+
+### Background
+
+A three-way audit of the `aba register` feature (code, docs/help, tests) revealed 9 gaps where the three sources are inconsistent or incomplete. The `register` command registers an externally-managed mirror registry with ABA by copying the pull secret and CA cert into the regcreds dir, trusting the CA, and writing `state.sh` with `REG_VENDOR=existing`.
+
+### How `aba register` works (from the code)
+
+Two valid invocation forms:
+
+**Form 1 -- Explicit `register` keyword:**
+```
+aba -d mirror register --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+**Form 2 -- Auto-injected (no `register` keyword needed):**
+```
+aba -d mirror --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+When both `--pull-secret-mirror` and `--ca-cert` are passed without an explicit Make target, `aba.sh` auto-injects `register` into `BUILD_COMMAND` (lines 1110-1115).
+
+Both forms support `--reg-host` to set `reg_host` in `mirror.conf`:
+```
+aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+Implementation chain: `aba.sh` → `make -s register pull_secret_mirror='...' ca_cert='...'` → `Makefile.mirror` register target → `scripts/reg-register.sh` → copies creds, trusts CA, writes `state.sh`, touches `.available`.
+
+`reg-register.sh` requires both `reg_host` and `reg_port` in `mirror.conf` (aborts if missing).
+
+### Gap 1 (HIGH): `aba register -h` shows WRONG help text
+
+**File**: `scripts/aba.sh` lines 262-274
+
+The help routing only matches `mirror|save|load|sync` for `help-mirror.txt`. Since `register` doesn't match any of these, `aba register -h` falls through to the generic `help-aba.txt` which has **zero** information about registration. Same for `aba unregister -h`.
+
+**Fix**: Add `register` and `unregister` to the help routing condition:
+```bash
+elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" ]; then
+    cat $ABA_ROOT/others/help-mirror.txt
+```
+
+### Gap 2 (MEDIUM): `register`/`unregister` missing from "Related commands" in help-mirror.txt
+
+**File**: `others/help-mirror.txt` lines 24-35
+
+The "Related commands" quick-reference lists `sync`, `save`, `load`, `verify`, `password` -- but NOT `register` or `unregister`. They only appear buried in the "Examples" section at the bottom. A user scanning the help won't see them as first-class commands.
+
+**Fix**: Add to "Related commands" section:
+```
+  aba [-d mirror] register [--reg-host H] --pull-secret-mirror <file> --ca-cert <file>
+                                       # Register an existing (external) mirror registry.
+
+  aba [-d mirror] unregister           # Deregister an existing registry (removes creds only).
+```
+
+### Gap 3 (MEDIUM): help-mirror.txt register examples omit the `register` keyword
+
+**File**: `others/help-mirror.txt` lines 57-63
+
+The help examples rely on auto-inject (no `register` keyword):
+```
+aba -d mirror --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+```
+
+But the README uses the explicit form:
+```
+aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+```
+
+The explicit form is clearer. Auto-inject is a convenience shortcut, not the canonical invocation.
+
+**Fix**: Add the explicit `register` keyword to help-mirror.txt examples so they match the README.
+
+### Gap 4 (LOW): Error messages in `reg-common.sh` omit `register` keyword
+
+**File**: `scripts/reg-common.sh` lines 112-129
+
+When ABA detects an existing registry and aborts, the error message says:
+```
+"register it with: aba -d mirror --pull-secret-mirror <file> --ca-cert <file>"
+```
+
+This relies on auto-inject and doesn't teach the user the `register` command.
+
+**Fix**: Change to `"register it with: aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>"`.
+
+### Gap 5 (LOW): `setup-mirror.sh` post-creation hint omits `register` keyword
+
+**File**: `scripts/setup-mirror.sh` lines 53-58
+
+After creating a named mirror directory, it prints:
+```
+Register existing: aba -d $name --pull-secret-mirror <file> --ca-cert <file>
+```
+
+**Fix**: Change to `"aba -d $name register --pull-secret-mirror <file> --ca-cert <file>"`.
+
+### Gap 6 (MEDIUM): `--reg-port` not mentioned in any register example
+
+`reg-register.sh` **requires** both `reg_host` and `reg_port` in `mirror.conf`. The default port is 8443, so it works for Quay registries. But if an existing registry runs on a different port, none of the register examples in README, help, or error messages mention `--reg-port`.
+
+**Fix**: Add `--reg-port` to at least one register example in help-mirror.txt and README, e.g.:
+```
+aba -d mirror register --reg-host registry.example.com --reg-port 5000 --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+### Gap 7 (LOW): Tests use two different argument styles
+
+| Suite | Invocation |
+|-------|-----------|
+| `suite-airgapped-existing-reg.sh` | `aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>` (CLI flags) |
+| `suite-cluster-ops.sh` | `aba -d mirror register pull_secret_mirror=<file> ca_cert=<file>` (Make-style args) |
+
+Both work (Make variables pass through), but the Make-style form (`pull_secret_mirror=...`) is an internal implementation detail, not documented for users. Tests should use the documented CLI form.
+
+**Fix**: Change `suite-cluster-ops.sh`, `suite-kvm-lifecycle.sh`, and `suite-vmw-lifecycle.sh` to use `--pull-secret-mirror` / `--ca-cert` CLI flags instead of Make-style args.
+
+### Gap 8 (LOW): CHANGELOG uses bare `aba unregister` (incomplete)
+
+**File**: `CHANGELOG.md` line 147
+
+CHANGELOG 0.9.7 says: "Deregister with `aba unregister`". This only works if CWD is already a mirror directory. The correct portable form is `aba -d mirror unregister`.
+
+**Fix**: Update CHANGELOG to `aba -d mirror unregister`.
+
+### Gap 9 (MEDIUM): `help-aba.txt` has zero mention of register/unregister
+
+**File**: `others/help-aba.txt`
+
+The main `aba --help` output doesn't reference `register` or `unregister` at all. A user who hasn't read the README has no way to discover the feature from the CLI.
+
+**Fix**: Add a brief mention in the mirror section of help-aba.txt, e.g.:
+```
+  aba -d mirror register ...           # Register an existing mirror registry
+  aba -d mirror unregister             # Deregister (removes local creds only)
+```
+
+### Summary table
+
+| Gap | Severity | Where | What |
+|-----|----------|-------|------|
+| 1 | High | `aba.sh` help routing | `aba register -h` shows wrong help |
+| 2 | Medium | `help-mirror.txt` | Not in "Related commands" |
+| 3 | Medium | `help-mirror.txt` | Examples omit `register` keyword |
+| 4 | Low | `reg-common.sh` | Error msgs omit `register` keyword |
+| 5 | Low | `setup-mirror.sh` | Post-creation hint omits keyword |
+| 6 | Medium | README + help | `--reg-port` undocumented for register |
+| 7 | Low | Test suites | Make-style args instead of CLI flags |
+| 8 | Low | CHANGELOG | Bare `aba unregister` (no `-d mirror`) |
+| 9 | Medium | `help-aba.txt` | No mention of register/unregister |
+
+---
+
 ## `_shutdown_all_node_vms_off()` should check `$platform`, not file existence
 
 **Priority:** Medium

@@ -248,13 +248,19 @@ The per-pool addressing scheme in `config.env` is clean and collision-free:
 - Only one cluster type per pool at a time, so all types share IPs
 - This scheme carries forward unchanged into v2 (up to 6 pools)
 
-### Concurrent run protection (lock files)
+### Concurrent run protection
 
-Runner uses a PID + timestamp lock file with 24h auto-expiry:
+Two levels of locking prevent race conditions:
 
-- Prevents two runners from executing the same suite simultaneously
-- Stale locks (dead PID) are cleaned automatically
-- Lock is removed on EXIT trap
+- **Coordinator lock (bastion):** `run.sh` acquires an exclusive `flock` on
+  `/tmp/e2e-run.lock` before any mutating command (run, restart, deploy,
+  destroy, verify). Read-only commands (stop, status, attach, list, live,
+  dash) skip the lock so they work while a run is active. The lock
+  auto-releases when `run.sh` exits (fd closes) -- no stale lock files.
+- **Runner lock (conN):** Runner uses a PID + timestamp lock file with 24h
+  auto-expiry to prevent two runners from executing the same suite
+  simultaneously. Stale locks (dead PID) are cleaned automatically.
+  Lock is removed on EXIT trap.
 
 ### Golden rules and test hygiene comments
 
@@ -932,42 +938,59 @@ all pool operations.
 
 ## Infrastructure Contract
 
-`setup-infra.sh` and `vm-ops.sh` manage the VM layer. **This code is STABLE
-and OUT OF SCOPE for v2 refactoring.** The v2 infrastructure contract is
-identical to the existing working version -- no changes. It works correctly for
-the standard use case and handles golden VM creation, pool cloning, and
-snapshotting.
+`setup-infra.sh` and `vm-ops.sh` manage the VM layer. Key changes from v1:
+disk layout switched to a single `/` partition with `expand-root.service`
+(symlink workarounds removed), pool scoping uses `--pool-list` (exact CSV
+instead of max-pool range), xtrace is redirected to log files (terminal
+shows progress only), and a `flock`-based global lock prevents concurrent
+`run.sh` instances.
 
 `**run.sh` is the sole entry point for all E2E operations.** Never call
 `setup-infra.sh`, `runner.sh`, or any `lib/*.sh` module directly. All
 infrastructure management (clone, revert, verify, destroy) is available via
 `run.sh` subcommands and flags:
 
-- `run.sh run --recreate-vms -p N` -- reclone pool VMs from golden
-- `run.sh run --recreate-golden` -- rebuild golden VM from template
-- `run.sh run --revert -p N` -- revert pool VMs to pool-ready snapshot
-- `run.sh verify -p N` -- verify pool VM health
-- `run.sh start -p N` -- power on pool VMs
-- `run.sh destroy -p N` -- destroy pool VMs
+- `run.sh run --recreate-vms -p 1,2` -- reclone pool VMs from golden
+- `run.sh run --recreate-golden -p 1` -- rebuild golden VM from template
+- `run.sh run --revert -p 2` -- revert pool VMs to pool-ready snapshot
+- `run.sh verify -p 1,2,3` -- verify pool VM health
+- `run.sh start -p 2` -- power on pool VMs
+- `run.sh destroy -p 1` -- destroy pool VMs
 
 If a workflow cannot be accomplished via `run.sh`, that is a missing feature
 in `run.sh` -- fix `run.sh`, don't bypass it.
 
 **Invocation from `run.sh`:** `run.sh` calls `setup-infra.sh` **once** with
-`-p <max_pool>` to leverage its internal parallelism. `setup-infra.sh` iterates
-pools 1..<max_pool>, but pools that already have a `pool-ready` snapshot are
-skipped automatically, so passing a wider range than strictly needed is safe.
-This restores the v1 behavior of parallel VM cloning and configuration:
+`--pool-list <csv>` passing the exact pool numbers requested. Only the listed
+pools are processed -- no range expansion, no scope creep. Pools that already
+have a `pool-ready` snapshot are skipped automatically unless `--recreate-vms`
+is passed:
 
 ```bash
-_max_pool=<highest pool in CLI_POOL_LIST>
-setup-infra.sh -p "$_max_pool" --pools-file pools.conf [flags...]
+_pool_csv="${CLI_POOL_LIST// /,}"
+setup-infra.sh --pool-list "$_pool_csv" --pools-file pools.conf [flags...]
 ```
 
-Inside `setup-infra.sh`, VM cloning is sequential (one `govc vm.clone` at a
-time to avoid vCenter contention), but configuration jobs (`_configure_con_vm`,
-`_configure_dis_vm`) run in **parallel background processes**, with a final
-`wait` gate before snapshotting.
+Inside `setup-infra.sh`, VM cloning runs in a **single interleaved wave** --
+con and dis VMs for all pools are cloned concurrently (backgrounded), with
+one `wait` gate at the end. Configuration jobs (`_configure_con_vm`,
+`_configure_dis_vm`) also run in **parallel background processes**, with a
+5-second stagger between pools (to avoid Red Hat CDN rate limiting on
+`subscription-manager refresh` and `dnf update`). Pool-ready snapshots are
+created in parallel with a 5-second stagger.
+
+**Output and logging:** `setup-infra.sh` uses `BASH_XTRACEFD` to redirect
+all xtrace (`set -x`) output to `logs/setup-infra-trace.log`. The terminal
+shows only progress-line stdout. Phase 0 (golden VM) output goes to
+`logs/create-golden.log`, and Phase 2 (configure) output goes to per-pool
+log files (`logs/create-poolN-con.log`, `logs/create-poolN-dis.log`). On
+failure, the last 20 lines of the relevant log are printed to the terminal.
+Full debug trace is always available in the log files.
+
+**Signal traps:** `setup-infra.sh` registers an EXIT/INT/TERM/HUP trap that
+kills all background children (`jobs -p`), preventing orphaned subshells
+and SSH sessions after `run.sh` is killed. Additionally, `run.sh stop`
+kills any orphaned `setup-infra.sh` processes on bastion via `pgrep`.
 
 **Golden VM lifecycle:**
 
@@ -995,22 +1018,47 @@ switches. No per-user key generation is needed. Handled by
 
 **Pool VM lifecycle:**
 
-1. `clone_vm()` from golden -> conN + disN (sets MACs, powers on -- see `vm-ops.sh`)
-2. Configure: `_configure_con_vm` (wait SSH -> setup keys -> network [incl. MTU 1500] ->
-  firewall -> packages -> dnsmasq -> dnf update -> cleanup -> vmware.conf -> test user ->
-   aba) and `_configure_dis_vm` (wait SSH -> network [incl. MTU 1500] -> wait NAT ->
-   dnf update -> cleanup -> vmware.conf -> disconnect internet)
-3. Snapshot as `pool-ready`
-4. VM annotation added via `govc vm.change -annotation` recording creation
+1. `clone_vm()` from golden -> conN + disN in a **single interleaved wave**
+   (con + dis for all pools cloned concurrently; sets MACs, powers on -- see
+   `vm-ops.sh`).
+2. Configure: con and dis run **in parallel** within each pool, with a 5-second
+   stagger between pools to avoid Red Hat CDN rate limiting (HTTP 429).
+   `_configure_con_vm` (wait SSH -> setup keys -> network [incl. MTU 1500] ->
+   firewall -> dnsmasq -> **conditional dnf update** -> cleanup -> vmware.conf ->
+   test user -> aba). Packages are NOT installed on pool VMs -- they are
+   inherited from the golden snapshot. `_vm_dnf_update_pool` refreshes
+   entitlement certs, probes `dnf check-update`, and only applies updates +
+   reboots if packages are actually available. When the golden is fresh,
+   this short-circuits immediately (no update, no reboot).
+   `_configure_dis_vm` (wait SSH -> **conditional dnf update using dis's own
+   internet (ens256)** -> network setup [disables ens256, sets up VLAN to con] ->
+   firewall -> wait for internet via con NAT [validation] -> cleanup ->
+   vmware.conf -> disconnect internet).
+   Dis does its update check in parallel with con's full setup.
+   After dis disables its own internet and switches to the VLAN, it validates
+   con's NAT is working before proceeding.
+3. Verify: `_verify_con_vm` / `_verify_dis_vm` run comprehensive post-config
+   assertions: hostname, timezone, VLAN IPs, MTU 1500 on all NICs, default route,
+   firewall (masquerade, dns, no stale ports), dnsmasq, DNS resolution,
+   NTP (chronyd + server reachable), SSH keys (root + default user share same
+   fingerprint), self-SSH (BatchMode), test user (testy), ABA_TESTING env var,
+   ABA installed (conN only), vmware.conf, pull-secret (conN only),
+   disk usage < 80%, no running containers, port 8443 free.
+   Verification runs at the end of configure and also via `run.sh verify`.
+4. Snapshot as `pool-ready` -- VMs are shut down, power state is polled via
+   `govc vm.info` (replaces blind sleep), then snapshots are created **in
+   parallel with a 5-second stagger** to avoid overwhelming vCenter/storage.
+5. VM annotation added via `govc vm.change -annotation` recording creation
    date/time, "ready" status, and creator ("E2E test framework of ABA").
    Same annotation is set on the golden VM after `golden-ready` snapshot.
-5. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
+6. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
 
 **ABA installation on VMs (`_vm_install_aba`):**
 
-- **Symlink preservation:** When running as root, `~/aba` may be a symlink to
-  `/home/root/aba` (to keep the small `/root` partition from filling). The
-  install function cleans and re-clones `~/aba` before each suite.
+- **Single-partition layout:** All VMs use a single `/` partition (expanded
+  by `expand-root.service` on first boot). Root's `~/aba` is simply
+  `/root/aba` -- no symlinks or cross-partition workarounds needed.
+  The install function runs `rm -rf ~/aba && git clone` before each suite.
 - **Git clone retry:** `git clone` has a 3-attempt retry loop with 10-second
   backoff to handle transient network failures or filesystem issues during
   initial VM provisioning.
@@ -1379,7 +1427,7 @@ behavior.
 
 | Module            | Responsibility                                                                                                                                                                                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lib/vm-ops.sh`   | Pure VM operations: clone, destroy, power, snapshot, SSH, network, firewall, packages. Provides `vm_exists()`, `clone_vm()` (full: clone + MAC assignment + disk expand + power-on), and `destroy_vm()` -- used by `setup-infra.sh` and `pool-ops.sh`. |
+| `lib/vm-ops.sh`   | Pure VM operations: clone, destroy, power, snapshot, SSH, network, firewall, packages. Provides `vm_exists()`, `clone_vm()` (full: clone + MAC assignment + disk expand + power-on), `destroy_vm()`, `_vm_dnf_update()` (golden: full clean + update + unconditional reboot), and `_vm_dnf_update_pool()` (pool VMs: cert refresh + check-update + conditional reboot) -- used by `setup-infra.sh` and `pool-ops.sh`. |
 | `lib/pool-ops.sh` | Pool-level orchestration: golden VM prep, pool creation, bastion configuration                                                                                                                                                                         |
 
 
@@ -1434,7 +1482,7 @@ wiring, pool registry configuration, operator wait, and cache cleanup blocks.
 - `suite_point_mirror_to_pool_registry()` -- reg_host + clear SSH fields
 - `suite_ensure_pool_registry()` -- version resolution + setup-pool-registry.sh
 - `suite_generate_pool_reg_pull_secret()` -- init:p4ssw0rd JSON for pool registry
-- `suite_verify_disk_usage()` -- df threshold assertion
+- `suite_verify_disk_usage()` -- df threshold assertion (default: `/` mount, 50GB)
 - `suite_reset_and_install()` -- reset + install + cache cleanup
 - `suite_full_setup()` -- complete setup sequence (install, configure, vmware, NTP, ops)
 

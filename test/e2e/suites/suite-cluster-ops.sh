@@ -217,10 +217,19 @@ test_begin "ABI config: diff against known-good examples"
 
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
-    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/install-config.yaml.example"
+
+    # vCenter generates "platform: vsphere:", ESXi/BM generates "platform: baremetal:"
+    # SNO always uses "platform: none" regardless of hypervisor
+    if [ "$ctype" != "sno" ] && ! grep -q 'vsphere:' "$cname/install-config.yaml"; then
+        ic_example="test/e2e/examples/$ctype/install-config-esxi.yaml.example"
+    else
+        ic_example="test/e2e/examples/$ctype/install-config.yaml.example"
+    fi
+
+    e2e_snapshot_file "${ctype}-example" "$ic_example"
     e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/agent-config.yaml.example"
     e2e_run "Diff $cname install-config.yaml against example" \
-        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/install-config.yaml.example) --strip-secrets"
+        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool $ic_example) --strip-secrets"
 
     e2e_run "Diff $cname agent-config.yaml against example" \
         "yaml_diff $cname/agent-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/agent-config.yaml.example)"

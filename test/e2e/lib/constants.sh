@@ -8,5 +8,6 @@ E2E_DISPATCHER_PID="/tmp/e2e-dispatcher.pid"
 E2E_DISPATCH_STATE="/tmp/e2e-dispatch-state.txt"
 E2E_INJECT_QUEUE="/tmp/e2e-inject-queue.txt"
 E2E_FORCED_DISPATCH="/tmp/e2e-forced-dispatch.txt"  # one-shot dispatch signals for running dispatcher
+E2E_GLOBAL_LOCK="/tmp/e2e-run.lock"                # flock guard -- prevents concurrent run.sh instances
 
 POOL_REG_DIR="/opt/pool-reg"                      # Docker pool registry data dir (certs, auth, data)
