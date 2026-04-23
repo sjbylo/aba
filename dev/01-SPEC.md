@@ -115,6 +115,30 @@ take effect.
 
 ---
 
+## install-config.yaml Platform Selection
+
+The install-config.yaml template (`templates/install-config.yaml.j2`) selects
+the `platform:` section based on cluster type, architecture, and hypervisor:
+
+| Priority | Condition | platform: value |
+|----------|-----------|-----------------|
+| 1 | SNO (1 master, 0 workers) | `none: {}` |
+| 2 | ARCH is s390x or ppc64le | `none: {}` |
+| 3 | VMware + vCenter (platform=vmw, VC=1) | `vsphere:` (full vCenter block) |
+| 4 | Everything else (BM, KVM, ESXi-direct) | `baremetal:` (apiVIPs/ingressVIPs) |
+
+s390x and ppc64le only support `platform: none` because the OpenShift installer
+on these architectures does not support the baremetal platform type. Multi-node
+clusters on these architectures rely on external load balancing for VIPs (UPI).
+The generated install-config.yaml includes a comment reminding the user to
+configure an external load balancer for the API and ingress endpoints.
+
+ESXi-direct (`VC` empty) uses the baremetal platform block, same as bare-metal
+and KVM. Only vCenter deployments get the full vsphere block with
+failureDomains/vcenters.
+
+---
+
 ## Key Abstractions
 
 ### run_once()
