@@ -1277,6 +1277,243 @@ This makes the command feel clunky and unpolished, especially for new users.
 
 ---
 
+## Enhancement: day2 NTP output should tell user to hit Ctrl-C
+
+**Priority:** Low
+**Added:** 2026-04-15
+
+The `aba day2` NTP verification currently outputs:
+
+```
+[ABA] Verifying NTP on all nodes - (hit Ctrl-C to stop)
+```
+
+This is good, but the message should also appear during the ongoing check loop (not just once at the start). If the NTP check takes a long time, the user has no reminder that Ctrl-C is an option.
+
+Also: **remove the `[ABA] Ensuring CLI binaries are installed` output** from day2 scripts. This is internal noise that doesn't help the user. CLI binary bootstrapping should be silent (already guarded by `run_once`).
+
+---
+
+## Command injection audit: fix all `bash -c` / `eval` / `/dev/tcp` with unsanitized variables
+
+**Priority:** High (security)
+**Added:** 2026-04-22
+
+Full codebase scan for injection patterns similar to CI-01 (PR #25). Input sources: `vmware.conf`, `mirror.conf`, `cluster.conf`, `kvm.conf`, CLI args (`$*`), `aba.conf`. While these are all local config files (not network-supplied), defense-in-depth requires treating them as untrusted.
+
+### Findings
+
+#### HIGH -- Command injection via `bash -c` with interpolated variables
+
+| ID | File | Line | Pattern | Input source | Risk |
+|----|------|------|---------|------|------|
+| CI-01 | `scripts/preflight-check-vsphere.sh` (PR #25) | TCP probe | `bash -c "echo >/dev/tcp/$host/$port"` | `GOVC_URL` → `vmware.conf` | `;`, `$(...)` in host breaks out of `/dev/tcp` into arbitrary exec |
+| CI-02 | `scripts/preflight-check.sh` | 75 | `bash -c "echo >/dev/udp/$host/123"` | NTP server from `cluster.conf` | Same pattern as CI-01, UDP variant |
+| CI-03 | `scripts/aba.sh` | 76 | `target_dir=$(eval echo "$target_dir")` | `-d` CLI arg | `eval echo` on user-supplied path: `$(cmd)` or backticks in the path execute arbitrary code. The intent is tilde expansion; safe alternatives: `${target_dir/#\~/$HOME}` |
+| CI-04 | `scripts/oc-command.sh` | 22 | `eval oc $cmd` | `aba run --cmd "..."` CLI arg | User controls the entire `$cmd` string passed to `eval`. While the user is local, `eval` allows shell metacharacters to break out of the `oc` invocation. Use `oc $cmd` (without eval) or an array. |
+| CI-05 | `scripts/reg-common.sh` | 365 | `eval cp "$ca_source" ...` | `--ca-cert` CLI arg | `eval` on file path for tilde expansion. Same risk as CI-03. |
+| CI-06 | `scripts/reg-save.sh` / `reg-load.sh` / `reg-sync.sh` | 97-109 | `eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR` | `data_dir` from `mirror.conf` | `eval` on config-file value; semicolons or `$(...)` in `data_dir` execute. Use `export TMPDIR="$data_dir/.tmp"; mkdir -p "$TMPDIR"`. |
+| CI-07 | `scripts/reg-install-quay.sh` | 73 | `eval $cmd --initPassword $reg_pw` | `$reg_pw` from `mirror.conf` | Password with shell metacharacters in it would execute. Use an array or proper quoting. |
+
+#### MEDIUM -- Config-file eval patterns (injection requires local config edit)
+
+| ID | File | Pattern | Input source | Risk |
+|----|------|---------|------|------|
+| CI-08 | `scripts/include_all.sh` normalize-vmware-conf() | `eval "$vars"` where `$vars` = lines from `vmware.conf` prepended with `export` | `vmware.conf` | A line like `FOO=bar; rm -rf /` in vmware.conf would execute. Mitigated by the sed that strips comments but doesn't validate values. |
+| CI-09 | `scripts/include_all.sh` normalize-kvm-conf() | Same `eval "$vars"` pattern | `kvm.conf` | Same risk as CI-08. |
+| CI-10 | `scripts/vmw-stop.sh`, `vmw-start.sh`, `kvm-stop.sh`, `kvm-start.sh` | `. <(echo $* | tr " " "\n")` | Make/CLI args | Converts space-separated `key=value` pairs into sourced shell. The `process_args()` regex guard (`^([a-zA-Z_]\w*=?[^ ]*)...`) partially validates but the `.` (source) call AFTER `process_args` bypasses it -- the `.` line sources raw `$*` without the regex check. |
+| CI-11 | `scripts/add-operators-to-imageset.sh` | 278 | `list=$(eval echo '${'"$catalog"'[@]}')` | Loop variable from hardcoded array names | Low practical risk (loop variable is hardcoded), but `eval` on constructed variable name is a code smell. |
+| CI-12 | `scripts/vmw-create.sh` | 117, 125 | `eval $cmd` where `$cmd` contains govc with `'$sub_mac'` | MAC address from config | Single-quoted MAC in the command string; `eval` is used to handle the quotes. If MAC contained `'; cmd; '` it would break out. Mitigated by MAC format validation elsewhere. |
+| CI-13 | `scripts/vmw-upload.sh` | 36, 43 | `eval $cmd` where `$cmd` is govc import command | File paths from config | Paths with metacharacters could inject. |
+
+#### LOW -- `eval make $BUILD_COMMAND` in aba.sh
+
+| ID | File | Lines | Risk |
+|----|------|-------|------|
+| CI-14 | `scripts/aba.sh` | 1010, 1024, 1042, 1051, 1081, 1137, 1143 | `$BUILD_COMMAND` is assembled from CLI args by `aba.sh` itself (not raw user input). Each flag handler adds specific `key=value` pairs. Risk is theoretical -- a crafted `aba` invocation with shell metacharacters in flag values could inject into `eval make`. Mitigated by the fact that all flag values go through `replace-value-conf` or fixed format strings. |
+
+#### INFO -- `bash -c "$(curl ...)"` install pattern
+
+| ID | Files | Risk |
+|----|-------|------|
+| CI-15 | `test/basic-test-using-bundle.sh`, `bundles/v2/scripts/01-install-aba-from-git.sh`, `bundles/bundle-create-test.sh`, `test/ex/test-container.sh` | `bash -c "$(curl -fsSL ...install)"` -- standard remote install bootstrap. URL is hardcoded to `github.com/sjbylo/aba`. Risk is supply chain (GitHub account compromise), not code injection. Acceptable for install scripts; not a production codepath. |
+
+### UP-02 (MEDIUM): Fail-open on network-on-cluster check (PR #25)
+
+`_vsphere_probe_resources_network_on_cluster` in PR #25: on `govc` errors, `aba_debug` and `return 0` -- attachment mismatch may be silently skipped (fail-open). Should fail-closed.
+
+### Recommended fixes (priority order)
+
+1. **CI-01, CI-02**: Replace `bash -c "echo >/dev/tcp/$host/$port"` with a validated-host probe: `[[ "$host" =~ ^[a-zA-Z0-9._-]+$ ]] || aba_abort "Invalid host"` before the probe.
+2. **CI-03, CI-05**: Replace `eval echo "$target_dir"` with `${target_dir/#\~/$HOME}` for tilde expansion without eval.
+3. **CI-06**: Replace `eval export TMPDIR=...` with `export TMPDIR="$data_dir/.tmp"; mkdir -p "$TMPDIR"` (no eval needed).
+4. **CI-04**: Replace `eval oc $cmd` with `oc $cmd` (eval not needed for simple args; if pipes/redirects are intended, document the risk).
+5. **CI-07**: Use array passing for `mirror-registry` command instead of `eval $cmd --initPassword $reg_pw`.
+6. **CI-08, CI-09**: Add value validation to `normalize-vmware-conf()` / `normalize-kvm-conf()` -- reject lines containing `;`, `$(`, backticks.
+7. **CI-10**: Remove the `. <(echo $* | tr " " "\n")` line that bypasses the `process_args()` guard.
+8. **CI-14**: Consider replacing `eval make $BUILD_COMMAND` with `make` + array args (lower priority -- BUILD_COMMAND is internally assembled).
+
+---
+
+## Documentation: `aba register` / `aba unregister` gaps (code vs docs vs tests)
+
+**Added**: 2026-04-23
+**Priority**: Medium
+**Affects**: `scripts/aba.sh`, `others/help-mirror.txt`, `others/help-aba.txt`, `README.md`, `scripts/reg-common.sh`, `scripts/setup-mirror.sh`, E2E test suites
+
+### Background
+
+A three-way audit of the `aba register` feature (code, docs/help, tests) revealed 9 gaps where the three sources are inconsistent or incomplete. The `register` command registers an externally-managed mirror registry with ABA by copying the pull secret and CA cert into the regcreds dir, trusting the CA, and writing `state.sh` with `REG_VENDOR=existing`.
+
+### How `aba register` works (from the code)
+
+Two valid invocation forms:
+
+**Form 1 -- Explicit `register` keyword:**
+```
+aba -d mirror register --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+**Form 2 -- Auto-injected (no `register` keyword needed):**
+```
+aba -d mirror --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+When both `--pull-secret-mirror` and `--ca-cert` are passed without an explicit Make target, `aba.sh` auto-injects `register` into `BUILD_COMMAND` (lines 1110-1115).
+
+Both forms support `--reg-host` to set `reg_host` in `mirror.conf`:
+```
+aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+Implementation chain: `aba.sh` → `make -s register pull_secret_mirror='...' ca_cert='...'` → `Makefile.mirror` register target → `scripts/reg-register.sh` → copies creds, trusts CA, writes `state.sh`, touches `.available`.
+
+`reg-register.sh` requires both `reg_host` and `reg_port` in `mirror.conf` (aborts if missing).
+
+### Gap 1 (HIGH): `aba register -h` shows WRONG help text
+
+**File**: `scripts/aba.sh` lines 262-274
+
+The help routing only matches `mirror|save|load|sync` for `help-mirror.txt`. Since `register` doesn't match any of these, `aba register -h` falls through to the generic `help-aba.txt` which has **zero** information about registration. Same for `aba unregister -h`.
+
+**Fix**: Add `register` and `unregister` to the help routing condition:
+```bash
+elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" ]; then
+    cat $ABA_ROOT/others/help-mirror.txt
+```
+
+### Gap 2 (MEDIUM): `register`/`unregister` missing from "Related commands" in help-mirror.txt
+
+**File**: `others/help-mirror.txt` lines 24-35
+
+The "Related commands" quick-reference lists `sync`, `save`, `load`, `verify`, `password` -- but NOT `register` or `unregister`. They only appear buried in the "Examples" section at the bottom. A user scanning the help won't see them as first-class commands.
+
+**Fix**: Add to "Related commands" section:
+```
+  aba [-d mirror] register [--reg-host H] --pull-secret-mirror <file> --ca-cert <file>
+                                       # Register an existing (external) mirror registry.
+
+  aba [-d mirror] unregister           # Deregister an existing registry (removes creds only).
+```
+
+### Gap 3 (MEDIUM): help-mirror.txt register examples omit the `register` keyword
+
+**File**: `others/help-mirror.txt` lines 57-63
+
+The help examples rely on auto-inject (no `register` keyword):
+```
+aba -d mirror --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+```
+
+But the README uses the explicit form:
+```
+aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+```
+
+The explicit form is clearer. Auto-inject is a convenience shortcut, not the canonical invocation.
+
+**Fix**: Add the explicit `register` keyword to help-mirror.txt examples so they match the README.
+
+### Gap 4 (LOW): Error messages in `reg-common.sh` omit `register` keyword
+
+**File**: `scripts/reg-common.sh` lines 112-129
+
+When ABA detects an existing registry and aborts, the error message says:
+```
+"register it with: aba -d mirror --pull-secret-mirror <file> --ca-cert <file>"
+```
+
+This relies on auto-inject and doesn't teach the user the `register` command.
+
+**Fix**: Change to `"register it with: aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>"`.
+
+### Gap 5 (LOW): `setup-mirror.sh` post-creation hint omits `register` keyword
+
+**File**: `scripts/setup-mirror.sh` lines 53-58
+
+After creating a named mirror directory, it prints:
+```
+Register existing: aba -d $name --pull-secret-mirror <file> --ca-cert <file>
+```
+
+**Fix**: Change to `"aba -d $name register --pull-secret-mirror <file> --ca-cert <file>"`.
+
+### Gap 6 (MEDIUM): `--reg-port` not mentioned in any register example
+
+`reg-register.sh` **requires** both `reg_host` and `reg_port` in `mirror.conf`. The default port is 8443, so it works for Quay registries. But if an existing registry runs on a different port, none of the register examples in README, help, or error messages mention `--reg-port`.
+
+**Fix**: Add `--reg-port` to at least one register example in help-mirror.txt and README, e.g.:
+```
+aba -d mirror register --reg-host registry.example.com --reg-port 5000 --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+```
+
+### Gap 7 (LOW): Tests use two different argument styles
+
+| Suite | Invocation |
+|-------|-----------|
+| `suite-airgapped-existing-reg.sh` | `aba -d mirror register --pull-secret-mirror <file> --ca-cert <file>` (CLI flags) |
+| `suite-cluster-ops.sh` | `aba -d mirror register pull_secret_mirror=<file> ca_cert=<file>` (Make-style args) |
+
+Both work (Make variables pass through), but the Make-style form (`pull_secret_mirror=...`) is an internal implementation detail, not documented for users. Tests should use the documented CLI form.
+
+**Fix**: Change `suite-cluster-ops.sh`, `suite-kvm-lifecycle.sh`, and `suite-vmw-lifecycle.sh` to use `--pull-secret-mirror` / `--ca-cert` CLI flags instead of Make-style args.
+
+### Gap 8 (LOW): CHANGELOG uses bare `aba unregister` (incomplete)
+
+**File**: `CHANGELOG.md` line 147
+
+CHANGELOG 0.9.7 says: "Deregister with `aba unregister`". This only works if CWD is already a mirror directory. The correct portable form is `aba -d mirror unregister`.
+
+**Fix**: Update CHANGELOG to `aba -d mirror unregister`.
+
+### Gap 9 (MEDIUM): `help-aba.txt` has zero mention of register/unregister
+
+**File**: `others/help-aba.txt`
+
+The main `aba --help` output doesn't reference `register` or `unregister` at all. A user who hasn't read the README has no way to discover the feature from the CLI.
+
+**Fix**: Add a brief mention in the mirror section of help-aba.txt, e.g.:
+```
+  aba -d mirror register ...           # Register an existing mirror registry
+  aba -d mirror unregister             # Deregister (removes local creds only)
+```
+
+### Summary table
+
+| Gap | Severity | Where | What |
+|-----|----------|-------|------|
+| 1 | High | `aba.sh` help routing | `aba register -h` shows wrong help |
+| 2 | Medium | `help-mirror.txt` | Not in "Related commands" |
+| 3 | Medium | `help-mirror.txt` | Examples omit `register` keyword |
+| 4 | Low | `reg-common.sh` | Error msgs omit `register` keyword |
+| 5 | Low | `setup-mirror.sh` | Post-creation hint omits keyword |
+| 6 | Medium | README + help | `--reg-port` undocumented for register |
+| 7 | Low | Test suites | Make-style args instead of CLI flags |
+| 8 | Low | CHANGELOG | Bare `aba unregister` (no `-d mirror`) |
+| 9 | Medium | `help-aba.txt` | No mention of register/unregister |
+
+---
+
 ## `_shutdown_all_node_vms_off()` should check `$platform`, not file existence
 
 **Priority:** Medium
