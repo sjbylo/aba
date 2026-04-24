@@ -612,7 +612,23 @@ Evidence from Pool 2 logs:
 
 This appears to be an **oc-mirror v2 limitation**: delta archives created with `--since` don't embed sufficient catalog index data for standalone `diskToMirror` resolution.
 
-### Possible workarounds
+### Workaround IMPLEMENTED: catalog digest pinning (2026-04-24)
+
+ABA now pins operator catalog references by **digest** (`@sha256:...`) instead of tag (`:vX.Y`) at
+oc-mirror invocation time. When oc-mirror sees a digest it skips upstream tag resolution entirely.
+
+**How it works:**
+- `download-catalog-index.sh`: captures digest via `podman image inspect` after pulling the catalog image
+- Digest saved to `.index/.{catalog}-index-v{ver}.digest`
+- `_run_oc_mirror_with_retry()`: before invoking oc-mirror, calls `_oc_mirror_pin_catalogs_by_digest()`
+  which does a single-pass `sed` to produce `data/imageset-config-digest.yaml` with tags replaced by digests
+- User's `imageset-config.yaml` is **never modified** -- the digest file sits alongside for debugging
+
+**To disable** (once oc-mirror fixes upstream tag resolution):
+- Set `OC_MIRROR_PIN_CATALOGS=0` in `~/.aba/config` or environment
+- Or remove the pinning code entirely (grep for `OC_MIRROR_PIN_CATALOGS` and `_oc_mirror_pin_catalogs_by_digest`)
+
+### Other workarounds (still available)
 
 1. **Force full save**: Use `--since 2020-01-01` for incremental saves to force a complete archive (large but self-contained). Already available via `OC_MIRROR_SINCE` config.
 2. **Clear oc-mirror state before save**: Remove `.oc-mirror/` working dir before the incremental save so oc-mirror treats it as a fresh save (downloads everything).

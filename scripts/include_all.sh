@@ -2238,6 +2238,47 @@ wait_for_all_catalogs() {
 # -----------------------------------------------------------------------------
 
 # Probe HTTP/HTTPS endpoint with sensible timeouts
+
+# --- Catalog digest pinning (oc-mirror upstream-contact workaround) ----------
+#
+# oc-mirror v2 resolves catalog tags at runtime, contacting registry.redhat.io
+# even during diskToMirror (load) on disconnected hosts. Pinning catalogs by
+# digest in the ISC prevents this. The user's ISC is never modified -- we
+# produce a separate imageset-config-digest.yaml for oc-mirror to consume.
+#
+# Disable with: OC_MIRROR_PIN_CATALOGS=0 in ~/.aba/config (or env)
+# Remove entirely once oc-mirror fixes upstream tag resolution in air-gap.
+#
+# Usage: _oc_mirror_pin_catalogs_by_digest <isc_file> <ocp_ver_major>
+#   isc_file:       basename of ISC relative to data/ (e.g. "imageset-config.yaml")
+#   ocp_ver_major:  e.g. "4.20"
+# Returns: filename to use (original or "imageset-config-digest.yaml") on stdout.
+
+_oc_mirror_pin_catalogs_by_digest() {
+	local isc_file="$1"
+	local ocp_ver_major="$2"
+	local digest_isc="imageset-config-digest.yaml"
+	local sed_args=()
+
+	for catalog_name in redhat-operator certified-operator community-operator; do
+		local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
+		[ -s "$digest_file" ] || continue
+		local digest
+		digest=$(cat "$digest_file")
+		sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}|g")
+		aba_debug "Will pin $catalog_name catalog: :v${ocp_ver_major} -> @${digest}"
+	done
+
+	if [ ${#sed_args[@]} -gt 0 ]; then
+		sed "${sed_args[@]}" "$isc_file" > "$digest_isc"
+		aba_info "Catalog references pinned by digest in $digest_isc (prevents upstream registry contact)"
+		echo "$digest_isc"
+	else
+		aba_debug "No catalog digests found -- using original ISC"
+		echo "$isc_file"
+	fi
+}
+
 # --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
 #
 # Usage: _run_oc_mirror_with_retry <action> <try_tot> <oc_mirror_cmd>
@@ -2267,6 +2308,17 @@ _run_oc_mirror_with_retry() {
 	local action="$1"
 	local try_tot="$2"
 	local base_cmd="$3"
+
+	# Pin catalog tags to digests unless disabled (OC_MIRROR_PIN_CATALOGS=0)
+	if [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
+		local _ocp_ver_major
+		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+		local _config_file
+		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" )
+		if [ "$_config_file" != "imageset-config.yaml" ]; then
+			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"
+		fi
+	fi
 
 	local parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
 	local retry_delay=2
