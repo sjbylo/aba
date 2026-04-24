@@ -2271,7 +2271,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 	if [ ${#sed_args[@]} -gt 0 ]; then
 		sed "${sed_args[@]}" "$isc_file" > "$digest_isc"
-		aba_info "Catalog references pinned by digest in $digest_isc (prevents upstream registry contact)"
+		aba_info "Catalog references pinned by digest in $digest_isc (prevents upstream registry contact)" >&2
 		echo "$digest_isc"
 	else
 		aba_debug "No catalog digests found -- using original ISC"
