@@ -116,7 +116,7 @@ elif [ "$int_connection" = "proxy" ]; then
 		use_mirror=
 	else
 		aba_warning \
-			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set." \
+			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set or available." \
 			"If you want to configure the cluster wide proxy, set 'int_connection=proxy' or override by" \
 			"setting the '*_proxy' values directly in 'cluster.conf'." 
 
