@@ -34,6 +34,15 @@ vm_exists() {
 	govc vm.info "$vm_name" | grep -q "Name:"
 }
 
+# Set VM annotation (vCenter "Notes" field) to show current lifecycle stage.
+_vm_annotate() {
+	local vm="$1"
+	local status="$2"
+	govc vm.change -vm "$vm" -annotation "Status: $status
+Updated: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Managed by: E2E framework (setup-infra.sh)" 2>/dev/null || true
+}
+
 # Get the VMware port group name for a NIC (standard or dvSwitch).
 _get_nic_network() {
 	local vm="$1"
@@ -78,6 +87,7 @@ clone_vm() {
 
 	govc vm.clone -vm "$source_vm" $snap_flag \
 		-folder "$folder" $ds_flag -on=false "$clone_name" || return 1
+	_vm_annotate "$clone_name" "Cloned from $source_vm -- configuring"
 
 	# Set MAC addresses on each NIC (before power-on) to avoid IP conflicts
 	local mac_entry="${VM_CLONE_MACS[$clone_name]:-}"
@@ -115,19 +125,11 @@ clone_vm() {
 		echo "  WARNING: No NICs found on clone '$clone_name', skipping MAC setup."
 	fi
 
-	# Expand disk if VM_DISK_EXTRA_GB is set
-	if [ "${VM_DISK_EXTRA_GB:-0}" -gt 0 ] 2>/dev/null; then
-		local _cur_kb _new_gb
-		_cur_kb=$(govc device.info -vm "$clone_name" -json disk-1000-0 \
-			| python3 -c "import sys,json; print(json.load(sys.stdin)['devices'][0]['capacityInKB'])") || true
-		if [ -n "$_cur_kb" ] && [ "$_cur_kb" -gt 0 ] 2>/dev/null; then
-			_new_gb=$(( (_cur_kb / 1048576) + VM_DISK_EXTRA_GB ))
-			echo "  Expanding disk by ${VM_DISK_EXTRA_GB}GB (total: ${_new_gb}GB) ..."
-			govc vm.disk.change -vm "$clone_name" -disk.label "Hard disk 1" -size "${_new_gb}G" || \
-				echo "  WARNING: disk expansion failed (non-fatal)"
-		else
-			echo "  WARNING: could not read disk size -- skipping expansion"
-		fi
+	# Expand disk to target size
+	if [ "${VM_DISK_SIZE:-0}" -gt 0 ] 2>/dev/null; then
+		echo "  Setting disk size to ${VM_DISK_SIZE}GB ..."
+		govc vm.disk.change -vm "$clone_name" -disk.label "Hard disk 1" -size "${VM_DISK_SIZE}G" || \
+			echo "  WARNING: disk resize failed (non-fatal)"
 	fi
 
 	echo "  Powering on clone '$clone_name' ..."
@@ -148,6 +150,40 @@ destroy_vm() {
 		govc vm.destroy "$vm_name" || true
 	else
 		echo "  VM '$vm_name' does not exist, nothing to destroy."
+	fi
+}
+
+# --- Ensure 3 NICs on a VM --------------------------------------------------
+# Templates are built with 1 NIC (VM Network). The E2E framework needs 3:
+#   ethernet-0 / ens192 = VM Network       (lab, DHCP)
+#   ethernet-1 / ens224 = Private Network  (VLAN trunk)
+#   ethernet-2 / ens256 = External Network (internet)
+# Adds any missing NICs. Safe to call on VMs that already have 3 NICs.
+
+_vm_ensure_3nics() {
+	local vm_name="$1"
+	local nic2_net="${VM_NIC2_NETWORK:-Private Network}"
+	local nic3_net="${VM_NIC3_NETWORK:-External Network}"
+
+	local nic_count=0
+	while govc device.info -vm "$vm_name" "ethernet-${nic_count}" &>/dev/null; do
+		nic_count=$(( nic_count + 1 ))
+	done
+
+	if [ "$nic_count" -ge 3 ]; then
+		echo "  [vm] $vm_name already has $nic_count NICs -- skipping"
+		return 0
+	fi
+
+	echo "  [vm] $vm_name has $nic_count NIC(s) -- adding $(( 3 - nic_count )) more ..."
+
+	if [ "$nic_count" -lt 2 ]; then
+		govc vm.network.add -vm "$vm_name" -net "$nic2_net" -net.adapter vmxnet3 || return 1
+		echo "  [vm]   ethernet-1 -> $nic2_net"
+	fi
+	if [ "$nic_count" -lt 3 ]; then
+		govc vm.network.add -vm "$vm_name" -net "$nic3_net" -net.adapter vmxnet3 || return 1
+		echo "  [vm]   ethernet-2 -> $nic3_net"
 	fi
 }
 

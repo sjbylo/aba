@@ -82,8 +82,12 @@ trap ':' INT
 # clean up clusters/mirrors in the cleanup lists.  This ensures VMs are deleted
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
-# Use sudo to remove previous user's files (cross-user switch)
-sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
+# Use sudo to remove previous user's files (cross-user switch).
+# Keep e2e-suite-os and e2e-suite-vmconf alive -- they're overwritten once
+# config.env + CLI overrides are final (~line 500).  Deleting them here
+# creates a race where the live UI reads an empty OS before the runner
+# reaches the write.
+sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user
 echo "$SUITE" > /tmp/e2e-last-suites
 whoami > /tmp/e2e-suite-user
 

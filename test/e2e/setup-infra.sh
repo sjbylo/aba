@@ -261,19 +261,18 @@ _verify_con_vm() {
 _configure_con_vm() {
 	local vm="$1" user="$2"
 
+	_vm_annotate "$vm" "Configuring: network and firewall"
 	_vm_wait_ssh "$vm" "$user"
 	_vm_setup_ssh_keys "$vm" "$user"
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
-	# Packages already installed on golden -- skip _vm_install_packages.
 	_vm_setup_dnsmasq "$vm" "$user" "$vm"
-	# Pool-optimized update: refreshes certs, checks for updates, only
-	# reboots if packages were actually updated.
-	# Returns: 0 = rebooted, 2 = no updates (skip reboot), 1 = error.
+	_vm_annotate "$vm" "Configuring: dnf update"
 	local _update_rc=0
 	_vm_dnf_update_pool "$vm" "$user" || _update_rc=$?
 	[ "$_update_rc" -eq 1 ] && return 1
 	[ "$_update_rc" -eq 0 ] && _vm_wait_ssh "$vm" "$user"
+	_vm_annotate "$vm" "Configuring: cleanup and ABA install"
 	_vm_cleanup_caches "$vm" "$user"
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
@@ -283,30 +282,28 @@ _configure_con_vm() {
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_install_aba "$vm" "$user"
 
+	_vm_annotate "$vm" "Verifying"
 	_verify_con_vm "$vm" "$user"
 
+	_vm_annotate "$vm" "Configured -- awaiting pool-ready snapshot"
 	echo "  $vm configured."
 }
 
 _configure_dis_vm() {
 	local vm="$1" user="$2" con_vm="$3"
 
+	_vm_annotate "$vm" "Configuring: dnf update (direct internet)"
 	_vm_wait_ssh "$vm" "$user"
 
-	# Phase A: update using dis's own internet (ens256 still up).
-	# Packages already installed on golden -- skip _vm_install_packages.
-	# Runs truly in parallel with con's configure -- no waiting for con's NAT.
-	# Returns: 0 = rebooted, 2 = no updates (skip reboot), 1 = error.
 	local _update_rc=0
 	_vm_dnf_update_pool "$vm" "$user" || _update_rc=$?
 	[ "$_update_rc" -eq 1 ] && return 1
 	[ "$_update_rc" -eq 0 ] && _vm_wait_ssh "$vm" "$user"
 
-	# Phase B: network setup disables ens256 and sets up VLAN to con.
+	_vm_annotate "$vm" "Configuring: network (switching to VLAN)"
 	_vm_setup_network "$vm" "$user" "$vm"
 	_vm_setup_firewall "$vm" "$user"
 
-	# Verify VLAN connectivity to con's NAT (dis's own internet is gone now).
 	echo "  [$vm] Waiting for internet via $con_vm NAT ..."
 	local waited=0
 	while ! _essh "${user}@${vm}" -- "ping -c1 -W3 8.8.8.8" &>/dev/null; do
@@ -319,6 +316,7 @@ _configure_dis_vm() {
 	done
 	[ "$waited" -gt 0 ] && echo "  [$vm] Internet reachable (waited ${waited}s)"
 
+	_vm_annotate "$vm" "Configuring: cleanup and air-gap setup"
 	_vm_cleanup_caches "$vm" "$user"
 	_vm_cleanup_podman "$vm" "$user"
 	_vm_cleanup_home "$vm" "$user"
@@ -330,6 +328,7 @@ _configure_dis_vm() {
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_disconnect_internet "$vm" "$user"
 
+	_vm_annotate "$vm" "Verifying: NTP sync"
 	echo "  [$vm] Verifying NTP sync (server: ${NTP_SERVER:-10.0.1.8}) ..."
 	local _ntp_synced=0
 	for ((_ntp=0; _ntp<20; _ntp++)); do
@@ -345,8 +344,10 @@ _configure_dis_vm() {
 		return 1
 	fi
 
+	_vm_annotate "$vm" "Verifying"
 	_verify_dis_vm "$vm" "$user" "$con_vm"
 
+	_vm_annotate "$vm" "Configured -- awaiting pool-ready snapshot"
 	echo "  $vm configured."
 }
 
@@ -767,6 +768,8 @@ _prepare_golden() {
 	govc folder.create "${_VC_PARENT}/aba-e2e" || true
 	govc folder.create "$_GOLDEN_FOLDER" || true
 	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" || return 1
+	_vm_ensure_3nics "$_GOLDEN_NAME" || return 1
+	_vm_annotate "$_GOLDEN_NAME" "Cloned from $_VM_TEMPLATE -- booting"
 
 	local ip
 	ip=$(govc vm.ip -wait 5m "$_GOLDEN_NAME") || return 1
@@ -774,6 +777,7 @@ _prepare_golden() {
 
 	local user="$VM_DEFAULT_USER"
 	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_annotate "$_GOLDEN_NAME" "Configuring: SSH keys and network"
 	_vm_setup_ssh_keys "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
 	_vm_fix_mtu "$ip" "$user"             || return 1
@@ -782,10 +786,13 @@ _prepare_golden() {
 	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
 	_vm_setup_firewall "$ip" "$user"      || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_annotate "$_GOLDEN_NAME" "Configuring: installing packages"
 	_vm_install_packages "$ip" "$user"    || return 1
 	_vm_setup_time "$ip" "$user"          || return 1
+	_vm_annotate "$_GOLDEN_NAME" "Configuring: dnf update (may reboot)"
 	_vm_dnf_update "$ip" "$user"          || return 1
 	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_annotate "$_GOLDEN_NAME" "Configuring: cleanup and user provisioning"
 	_vm_cleanup_caches "$ip" "$user"      || return 1
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
@@ -793,8 +800,10 @@ _prepare_golden() {
 	_vm_deploy_tmux_conf "$ip" "$user"   || return 1
 	_vm_provision_root_user "$ip" "$user" || return 1
 	_vm_set_aba_testing "$ip" "$user"     || return 1
+	_vm_annotate "$_GOLDEN_NAME" "Verifying golden VM"
 	_vm_verify_golden "$ip" "$user"       || return 1
 
+	_vm_annotate "$_GOLDEN_NAME" "Shutting down for snapshot"
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 
 	# Poll power state instead of blind sleep -- more correct and often faster.
@@ -813,10 +822,7 @@ _prepare_golden() {
 		govc vm.power -off "$_GOLDEN_NAME" || true
 	fi
 	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
-	govc vm.change -vm "$_GOLDEN_NAME" \
-		-annotation "Status: ready (golden-ready snapshot created)
-Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
-Created by: E2E test framework of ABA (setup-infra.sh)" || true
+	_vm_annotate "$_GOLDEN_NAME" "Ready (golden-ready snapshot created)"
 
 	echo "  Golden VM created and snapshotted."
 	echo "=== Phase 0 complete ==="
@@ -1099,10 +1105,7 @@ if [ ${#_snapshot_vms[@]} -gt 0 ]; then
 		(
 			govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" \
 				|| { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
-			govc vm.change -vm "$vm_name" \
-				-annotation "Status: ready (pool-ready snapshot created)
-Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
-Created by: E2E test framework of ABA (setup-infra.sh)" || true
+			_vm_annotate "$vm_name" "Ready (pool-ready snapshot created)"
 			echo "  Powering on $vm_name ..."
 			govc vm.power -on "$vm_name"
 		) &

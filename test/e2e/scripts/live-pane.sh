@@ -101,7 +101,12 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 			fi
 		done
 	else
-		# Pane alive -- attach to live session
+		# Pane alive -- re-read metadata right before attach (runner may have
+		# written e2e-suite-os since our initial read at the top of the script)
+		_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)
+		_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)
+		_vmtag=""
+		[ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"
 		_set_title "$_suite" "${_user}" "${_os:+ | $_os}" "$_vmtag"
 		_IDLE_MSG_SHOWN=
 		clear
@@ -111,7 +116,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 	fi
 else
 	# No session at all -- idle pool. No clear: preserve banner/scrollback.
-	_set_title "(idle)" "${_user}" "" ""
+	_set_title "(idle)" "${_user}" "${_os:+ | $_os}" "$_vmtag"
 	if [ "${_IDLE_MSG_SHOWN:-}" != "1" ]; then
 		echo "No e2e session on pool ${_POOL_NUM}. Waiting for suite to start..."
 		_IDLE_MSG_SHOWN=1
