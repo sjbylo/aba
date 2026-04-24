@@ -99,16 +99,16 @@ E2E_GIT_REPO=https://github.com/sjbylo/aba.git
 Without `-d`, suites clone ABA from git on the conN host. With `-d`,
 your local source tree is pushed to `~/aba` on conN via rsync.
 
-**Extra disk space on conN/disN**:
+**Disk size on conN/disN**:
 
 ```bash
-# In config.env (default: 0 = no expansion):
-VM_DISK_EXTRA_GB=20     # Add 20GB to each cloned VM disk
+# In config.env (default: 400GB):
+VM_DISK_SIZE=400     # Target disk size in GB for all cloned VMs
 ```
 
-The golden template includes an `expand-root.service` that automatically
-grows `/` on first boot when the disk is larger than expected.
-Per-pool override is possible in `pools.conf`: `VM_DISK_EXTRA_GB=30`.
+After cloning, each VM's disk is grown to this size. The golden template
+includes an `expand-root.service` that auto-grows `/` on boot.
+Per-pool override is possible in `pools.conf`: `VM_DISK_SIZE=500`.
 
 **Other config.env settings**:
 

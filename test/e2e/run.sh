@@ -343,22 +343,27 @@ _vms_ready() {
 	fi
 }
 
-for _p in $CLI_POOL_LIST; do
-	_pool_os_file="$_POOL_OS_DIR/pool-${_p}"
-	if [ -n "${CLI_RECREATE_VMS:-}" ]; then
-		echo "  Pool $_p: will be recreated (--recreate-vms)"
-		_need_infra=1
-	elif [ -f "$_pool_os_file" ] && [ "$(cat "$_pool_os_file")" != "$_cur_os" ]; then
-		echo "  Pool $_p: OS changed ($(cat "$_pool_os_file") -> $_cur_os) -- VMs will be recloned"
-		_pools_needing_reclone+=("$_p")
-		_need_infra=1
-	elif _vms_ready "$_p"; then
-		echo "  Pool $_p: ready"
-		echo "$_cur_os" > "$_pool_os_file"
-	else
-		_need_infra=1
-	fi
-done
+if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
+	echo "  --recreate-golden: all VMs will be rebuilt from new golden"
+	_need_infra=1
+else
+	for _p in $CLI_POOL_LIST; do
+		_pool_os_file="$_POOL_OS_DIR/pool-${_p}"
+		if [ -n "${CLI_RECREATE_VMS:-}" ]; then
+			echo "  Pool $_p: will be recreated (--recreate-vms)"
+			_need_infra=1
+		elif [ -f "$_pool_os_file" ] && [ "$(cat "$_pool_os_file")" != "$_cur_os" ]; then
+			echo "  Pool $_p: OS changed ($(cat "$_pool_os_file") -> $_cur_os) -- VMs will be recloned"
+			_pools_needing_reclone+=("$_p")
+			_need_infra=1
+		elif _vms_ready "$_p"; then
+			echo "  Pool $_p: ready"
+			echo "$_cur_os" > "$_pool_os_file"
+		else
+			_need_infra=1
+		fi
+	done
+fi
 
 # Selective reclone: destroy only pools that changed OS (not global --recreate-vms)
 if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; then

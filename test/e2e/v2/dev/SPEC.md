@@ -73,8 +73,8 @@ unless they are specifically testing the `--data-dir` CLI flag (e.g.
 
 **Disk layout:** All VMs use a single `/` partition (no separate `/home`).
 The `expand-root.service` (systemd oneshot) auto-grows `/` on boot when the
-virtual disk is larger than the LV (e.g. when `VM_DISK_EXTRA_GB > 0` adds
-space during cloning).  This eliminates cross-filesystem issues and the need
+virtual disk is larger than the LV (e.g. when `VM_DISK_SIZE` sets the disk
+to 400G after cloning).  This eliminates cross-filesystem issues and the need
 for `/home/root` symlink redirection.
 
 ### Known v1 framework bugs (to be fixed in v2)
@@ -225,7 +225,7 @@ The configuration layering works well:
 
 - `config.env`: baseline defaults (channel, OCP version, SSH users, timeouts,
 VMware settings, notifications, VM provisioning: `VM_DEFAULT_USER`,
-`TIMEZONE`, `VM_CLONE_MACS`, `VM_BOOT_DELAY`, `VM_DISK_EXTRA_GB`)
+`TIMEZONE`, `VM_CLONE_MACS`, `VM_BOOT_DELAY`, `VM_DISK_SIZE`)
 - `pools.conf`: per-pool overrides (host, datastore, vCenter folder, POOL_NUM)
 - CLI flags override both
 - Precedence: CLI flags > pool overrides > config.env defaults
@@ -1442,7 +1442,7 @@ detached dnf-update, registry DNS entry, cross-host SSH keys.
 2. `govc vm.clone -vm SOURCE -on=false CLONE` (linked clone via `-snapshot` when available)
 3. Set MAC addresses on each NIC from `VM_CLONE_MACS[$clone_name]` via `govc vm.network.change`
   (port group auto-detected per NIC via `_get_nic_network` -- works with dvSwitch and standard vSwitch)
-4. Optionally expand disk when `VM_DISK_EXTRA_GB > 0`
+4. Expand disk to `VM_DISK_SIZE` (default 400G) when set
 5. `govc vm.power -on` + `sleep VM_BOOT_DELAY`
 
 This ensures freshly cloned VMs get the correct DHCP IP (matching DNS) before

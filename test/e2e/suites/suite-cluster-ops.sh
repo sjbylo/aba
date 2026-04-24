@@ -80,8 +80,8 @@ e2e_run "Reset aba to clean state" \
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify / disk usage < 50GB after reset" \
-    "used_gb=\$(df / --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] / used: \${used_gb}GB\"; [ \$used_gb -lt 50 ]"
+e2e_run "Verify / available space > 200GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
 
 # Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
 # || true: some packages may not be installed -- dnf returns non-zero if any are missing

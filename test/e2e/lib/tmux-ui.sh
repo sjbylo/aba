@@ -104,7 +104,11 @@ _live_create_pane_script() {
 		echo '    source "$_PANE_SCRIPT"'
 		echo '  else'
 		echo "    _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
-		printf "    printf '\\\\033]2;live | Pool %d | ${_default_user}%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\"\n" "$p"
+		echo "    _os=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)"
+		echo "    _vmconf=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)"
+		echo '    _vmtag=""'
+		echo '    [ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"'
+		printf "    printf '\\\\033]2;live | Pool %d | ${_default_user}%%s%%s%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\" \"\${_os:+ | \$_os}\" \"\$_vmtag\"\n" "$p"
 		echo '    clear'
 		echo "    ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '${E2E_TMUX_SESSION}' 2>/dev/null && exec tmux attach -d -t '${E2E_TMUX_SESSION}'\" 2>/dev/null || {"
 		echo "      echo 'No e2e session on pool ${p}. Waiting for suite to start...'"
@@ -175,7 +179,7 @@ _create_tmux_dashboard() {
 "   done;"\
 "   wait \$_tpid 2>/dev/null;"\
 " else"\
-"   printf '\\033]2;dashboard | Pool ${_p} | %s | (idle)\\033\\\\' \"\${_u}\";"\
+"   printf '\\033]2;dashboard | Pool ${_p} | %s | (idle)%s%s\\033\\\\' \"\${_u}\" \"\${_os:+ | \$_os}\" \"\$_vt\";"\
 "   clear;"\
 "   echo 'No e2e session on pool ${_p}. Waiting for suite to start...';"\
 "   sleep 5;"\
