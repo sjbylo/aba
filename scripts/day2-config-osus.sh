@@ -58,10 +58,12 @@ _osus_log() {
 	} >> "$_OSUS_LOG" 2>&1
 }
 
-# Deletes the OSUS subscription and any failed OLM unpack jobs so we can start fresh.
+# Deletes the OSUS subscription, CSV, and any failed OLM unpack jobs so we can start fresh.
 # OLM does not auto-retry after a failed unpack job -- the job must be deleted first.
+# A stale CSV (non-Succeeded) can block OLM from reconciling a fresh subscription.
 _osus_cleanup_sub() {
 	oc delete sub update-service-subscription -n $NAMESPACE 2>&1 || true
+	oc delete csv --all -n $NAMESPACE 2>&1 || true
 	oc delete jobs --field-selector=status.successful=0 -n openshift-marketplace 2>&1 || true
 }
 
