@@ -49,6 +49,7 @@ _usage() {
 	  run.sh run -s X -p 2 -f                 Force dispatch onto pool 2
 	  run.sh run -p all -d                     Push local source to ~/aba, then run
 	  run.sh run -a -D -p all                  Include dummy framework test suites
+	  run.sh daemon [-a] [-p 1-4]              Auto-restarting dispatcher (crash-resilient)
 	  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
 	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
@@ -190,7 +191,7 @@ _parse_args() {
 	# Step 1: Detect subcommand (first non-flag argument)
 	if [ $# -gt 0 ]; then
 		case "$1" in
-			run|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash)
+			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash)
 				CLI_COMMAND="$1"; shift ;;
 		esac
 	fi
