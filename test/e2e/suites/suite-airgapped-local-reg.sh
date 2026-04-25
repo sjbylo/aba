@@ -691,3 +691,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-airgapped-local-reg.sh"
+
+exit 0

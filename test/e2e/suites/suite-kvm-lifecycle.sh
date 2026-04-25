@@ -254,3 +254,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-kvm-lifecycle.sh"
+
+exit 0

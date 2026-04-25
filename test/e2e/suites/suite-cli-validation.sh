@@ -219,3 +219,5 @@ test_end 0
 suite_end
 
 echo "SUCCESS: suite-cli-validation.sh"
+
+exit 0

@@ -513,12 +513,12 @@ suite_end() {
 test_begin() {
     local test_name="$1"
     _E2E_CURRENT_TEST="$test_name"
-    (( _E2E_TEST_COUNT++ ))
+    _E2E_TEST_COUNT=$(( _E2E_TEST_COUNT + 1 ))
 
     # If suite was skipped via interactive prompt, mark remaining tests SKIP
     if [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _E2E_SKIP_BLOCK=1
-        (( _E2E_SKIP_COUNT++ ))
+        _E2E_SKIP_COUNT=$(( _E2E_SKIP_COUNT + 1 ))
         _update_plan "$test_name" "SKIP"
         _e2e_log_and_print "$(_e2e_yellow "  SKIP (suite skipped): $test_name")"
         _e2e_summary "$(_e2e_Yellow "  SKIP (suite skipped): $test_name")"
@@ -562,7 +562,7 @@ test_end() {
     # If user picked [s]kip from interactive menu, record as SKIP
     if [ -n "$_E2E_USER_SKIPPED" ]; then
         _E2E_USER_SKIPPED=""
-        (( _E2E_SKIP_COUNT++ ))
+        _E2E_SKIP_COUNT=$(( _E2E_SKIP_COUNT + 1 ))
         _update_plan "$test_name" "SKIP"
         _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
         _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
@@ -572,12 +572,12 @@ test_end() {
     fi
 
     if [ "$result" -eq 0 ]; then
-        (( _E2E_PASS_COUNT++ ))
+        _E2E_PASS_COUNT=$(( _E2E_PASS_COUNT + 1 ))
         _update_plan "$test_name" "PASS"
         _e2e_log_and_print "$(_e2e_green "  PASS: $test_name")"
         _e2e_summary "$(_e2e_Green "  PASS: $test_name")"
     else
-        (( _E2E_FAIL_COUNT++ ))
+        _E2E_FAIL_COUNT=$(( _E2E_FAIL_COUNT + 1 ))
         _update_plan "$test_name" "FAIL"
         _e2e_log_and_print "$(_e2e_red "  FAIL: $test_name")"
         _e2e_summary "$(_e2e_Red "  FAIL: $test_name")"
@@ -589,7 +589,7 @@ test_end() {
 
 test_skip() {
     local test_name="${1:-$_E2E_CURRENT_TEST}"
-    (( _E2E_SKIP_COUNT++ ))
+    _E2E_SKIP_COUNT=$(( _E2E_SKIP_COUNT + 1 ))
     _update_plan "$test_name" "SKIP"
     _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
     _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
@@ -603,7 +603,7 @@ run_test() {
 
     # Check checkpoint/resume -- skip if already passed
     if should_skip_checkpoint "$test_name"; then
-        (( _E2E_TEST_COUNT++ ))
+        _E2E_TEST_COUNT=$(( _E2E_TEST_COUNT + 1 ))
         _checkpoint_write "$test_name" "0"
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"

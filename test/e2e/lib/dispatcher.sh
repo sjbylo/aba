@@ -28,23 +28,43 @@ declare -A _hung_notified=()
 # --- Process cleanup files on a remote host -----------------------------------
 # Shared function: SSHes to target, iterates .cleanup and .mirror-cleanup files,
 # runs aba delete/uninstall for each entry, removes processed files.
-# Usage: _run_cleanup_on_host <user@host> [indent]
-#   indent: prefix for log lines (default "    ")
+# Usage: _run_cleanup_on_host <user@host> [indent] [allowed_hosts]
+#   indent:        prefix for log lines (default "    ")
+#   allowed_hosts: space-separated hostnames that entries may target.
+#                  If set, entries targeting other hosts are skipped with a
+#                  warning and the cleanup file is kept for the correct pool.
 
 _run_cleanup_on_host() {
 	local target="$1"
 	local indent="${2:-    }"
-	_essh "$target" bash -s -- "$indent" <<-'CLEANUP_HEREDOC'
+	local allowed_hosts="${3:-}"
+	_essh "$target" bash -s -- "$indent" "$allowed_hosts" <<-'CLEANUP_HEREDOC'
 		_indent="$1"
+		_allowed="$2"
 		_logs="$HOME/.e2e-harness/logs"
 		_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 		_all_ok=1
 		for f in "$_logs"/*.cleanup "$_logs"/*.mirror-cleanup; do
 			[ -f "$f" ] || continue
 			echo "${_indent}Processing $(basename "$f") ..."
+			echo "${_indent}  Contents: $(cat "$f" | tr '\n' ' ')"
 			_file_ok=1
+			_has_foreign=
 			while IFS=' ' read -r tgt abs_path; do
 				[ -z "$abs_path" ] && continue
+				# Pool-scope guard: reject entries targeting hosts outside this pool
+				if [ -n "$_allowed" ]; then
+					_tgt_host="${tgt#*@}"
+					_match=
+					for _ah in $_allowed; do
+						[ "$_tgt_host" = "$_ah" ] && _match=1 && break
+					done
+					if [ -z "$_match" ]; then
+						echo "${_indent}  WARNING: cross-pool target $tgt skipped (allowed: $_allowed)"
+						_has_foreign=1
+						continue
+					fi
+				fi
 				if echo "$f" | grep -q '\.cleanup$'; then
 					echo "${_indent}  $tgt: delete $abs_path"
 					if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete; }" < /dev/null 2>&1; then
@@ -59,7 +79,9 @@ _run_cleanup_on_host() {
 					fi
 				fi
 			done < "$f"
-			if [ -n "$_file_ok" ]; then
+			if [ -n "$_has_foreign" ]; then
+				echo "${_indent}  Keeping $(basename "$f") -- contains cross-pool entries"
+			elif [ -n "$_file_ok" ]; then
 				rm -f "$f"
 			else
 				echo "${_indent}  ERROR: cleanup FAILED -- keeping $(basename "$f") for investigation"
@@ -71,11 +93,14 @@ _run_cleanup_on_host() {
 }
 
 # Convenience wrapper: process cleanup files on a pool's conN host.
+# Passes pool-scoped allowed hosts so cross-pool entries are rejected.
 _process_pool_cleanup_files() {
 	local pool_num="$1"
 	local target
 	target=$(_con_target "$pool_num")
-	_run_cleanup_on_host "$target"
+	local domain="${VM_BASE_DOMAIN:-example.com}"
+	local allowed="con${pool_num}.${domain} dis${pool_num}.${domain}"
+	_run_cleanup_on_host "$target" "    " "$allowed"
 }
 
 # --- Dispatch a single suite to a pool ----------------------------------------
@@ -103,7 +128,8 @@ _dispatch_suite() {
 		echo "    User changed ($_prev_user -> $_cur_user)"
 		echo "    Processing $_prev_user's cleanup files before revert ..."
 		local _old_host="${_prev_user}@con${pool_num}.${VM_BASE_DOMAIN}"
-		_run_cleanup_on_host "$_old_host" "      " 2>&1 || echo "    WARNING: old user cleanup had errors (continuing with revert)"
+		local _old_allowed="con${pool_num}.${VM_BASE_DOMAIN} dis${pool_num}.${VM_BASE_DOMAIN}"
+		_run_cleanup_on_host "$_old_host" "      " "$_old_allowed" 2>&1 || echo "    WARNING: old user cleanup had errors (continuing with revert)"
 	fi
 
 	# Process current user's leftover cleanup files

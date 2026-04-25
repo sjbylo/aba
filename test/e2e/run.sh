@@ -434,7 +434,7 @@ if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; th
 			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
 			[ -z "$_has_cleanup" ] && continue
 			echo "  Pool $_p: processing cleanup files for $_try_user before OS reclone ..."
-			_run_cleanup_on_host "$_try_host" "    " 2>&1 || true
+			_run_cleanup_on_host "$_try_host" "    " "con${_p}.${VM_BASE_DOMAIN} dis${_p}.${VM_BASE_DOMAIN}" 2>&1 || true
 			break
 		done
 
@@ -508,7 +508,7 @@ if [ -n "${CLI_REVERT:-}" ]; then
 			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
 			[ -z "$_has_cleanup" ] && continue
 			echo "    Pool $_p: found cleanup files for $_try_user -- running aba delete/uninstall ..."
-			_run_cleanup_on_host "$_try_host" "      " 2>&1 || echo "    WARNING: cleanup for pool $_p user $_try_user had errors (continuing)"
+			_run_cleanup_on_host "$_try_host" "      " "con${_p}.${VM_BASE_DOMAIN} dis${_p}.${VM_BASE_DOMAIN}" 2>&1 || echo "    WARNING: cleanup for pool $_p user $_try_user had errors (continuing)"
 		done
 	done
 
