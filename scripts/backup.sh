@@ -84,6 +84,8 @@ file_list=$(find		\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
 	! -path "${repo_dir}/mirror/data/working-dir*"  		\
+	! -path "${repo_dir}/mirror/sync*"				\
+	! -path "${repo_dir}/mirror/save*"				\
 	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
 	! -path "${repo_dir}/test/output.log" 				\
 	! -path "${repo_dir}/bundles*"	 				\
