@@ -65,8 +65,12 @@ _vmw_stop_all_powered_off() {
 if [ "$wait" ]; then
 	_wait_mins=40
 	_wait_timeout=$(( 60 * _wait_mins ))
-	if ! aba_wait_show "Waiting for VMs to power off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
-		_vmw_stop_all_powered_off; then
+	_wait_rc=0
+	aba_wait_show "Waiting for VMs to power off (Ctrl-C to abort)" 10 "$_wait_timeout" \
+		_vmw_stop_all_powered_off || _wait_rc=$?
+	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+		aba_info "Aborted. VMs may still be shutting down in the background."
+	elif [ "$_wait_rc" -ne 0 ]; then
 		aba_abort "Timed out after ${_wait_timeout}s waiting for VMs to power off"
 	fi
 fi

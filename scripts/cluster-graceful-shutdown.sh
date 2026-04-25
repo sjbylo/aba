@@ -22,7 +22,7 @@ source <(normalize-cluster-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
-aba_info "Ensuring CLI binaries are installed"
+#aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
 server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
@@ -107,6 +107,7 @@ else
 	echo_red "Unable to discover cluster's certificate expiration date." >&2
 fi
 
+echo_info "Never power down a cluster for an extended period without taking a fresh etcd snapshot first!"
 echo
 ask "Gracefully shut down the cluster" || exit 1
 
@@ -232,15 +233,21 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	_wait_timeout=$(( 60 * _wait_mins ))
 	# Log start; do not pipe aba_wait_show to tee — keeps a real TTY so spinner works when interactive.
 	echo "[ABA] Waiting up to ${_wait_mins} min for VMs to power off (started $(date -Iseconds))" >> $logfile
-	if ! aba_wait_show "Waiting for VMs to power off (ctrl-c to stop waiting)" 10 "$_wait_timeout" \
-		_shutdown_all_node_vms_off; then
+	_wait_rc=0
+	aba_wait_show "Waiting for VMs to power off (Ctrl-C to abort)" 10 "$_wait_timeout" \
+		_shutdown_all_node_vms_off || _wait_rc=$?
+	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+		echo "" | tee -a $logfile
+		aba_info "Aborted. VMs may still be shutting down in the background."
+	elif [ "$_wait_rc" -ne 0 ]; then
 		echo "" | tee -a $logfile
 		aba ls 2>/dev/null | tee -a $logfile
 		aba_abort "Timed out after ${_wait_timeout}s waiting for all node VMs to power off"
+	else
+		echo "" | tee -a $logfile
+		echo "[ABA] VM power-off wait finished ($(date -Iseconds))" >> $logfile
+		aba_info_ok "All VMs powered off." | tee -a $logfile
 	fi
-	echo "" | tee -a $logfile
-	echo "[ABA] VM power-off wait finished ($(date -Iseconds))" >> $logfile
-	aba_info_ok "All VMs powered off." | tee -a $logfile
 fi
 
 exit 0
