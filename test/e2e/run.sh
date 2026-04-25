@@ -43,21 +43,38 @@ _generate_deploy_config "$_RUN_DIR"
 
 _DEPLOY_CONFIG_ENV="$_RUN_DIR/.config.env.deploy"
 
-# --- Acquire global lock for mutating commands --------------------------------
-# Prevents concurrent run.sh instances from causing race conditions (competing
-# dispatchers, duplicate setup-infra.sh, git clone corruption).
-# Read-only / UI commands skip the lock so they work while a run is active.
+# --- Acquire per-pool locks for mutating commands -----------------------------
+# Per-pool locks allow concurrent run.sh instances targeting different pools.
+# Global lock is only taken for --recreate-golden (shared golden VM resource).
+# Read-only / UI commands skip locks entirely.
+
+_acquire_pool_locks() {
+	local _fd=10
+	for _p in $CLI_POOL_LIST; do
+		local _lockfile="${E2E_POOL_LOCK_PREFIX}-${_p}.lock"
+		eval "exec ${_fd}>\"$_lockfile\""
+		if ! flock -n "$_fd"; then
+			echo "FATAL: Pool $_p is locked by another run.sh instance" >&2
+			exit 1
+		fi
+		echo $$ >&$_fd
+		_fd=$(( _fd + 1 ))
+	done
+}
 
 case "$CLI_COMMAND" in
 	stop|status|attach|list|live|dash)
 		;;
 	*)
-		exec 9>"$E2E_GLOBAL_LOCK"
-		if ! flock -n 9; then
-			echo "FATAL: Another run.sh instance is already running" >&2
-			exit 1
+		if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
+			exec 9>"$E2E_GLOBAL_LOCK"
+			if ! flock -n 9; then
+				echo "FATAL: Another run.sh instance is rebuilding the golden VM" >&2
+				exit 1
+			fi
+			echo $$ >&9
 		fi
-		echo $$ >&9
+		_acquire_pool_locks
 		;;
 esac
 
@@ -185,39 +202,8 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 	echo ""
 	echo "  [2/4] Cleaning up resources in cleanup lists ..."
 	for p in $CLI_POOL_LIST; do
-		target=$(_con_target "$p")
 		printf "    con${p}: "
-		_essh "$target" 'set -f
-			_found=""
-			_log_dir="$HOME/.e2e-harness/logs"
-			_ssh="ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-
-			for f in "$_log_dir"/*.cleanup; do
-				[ -f "$f" ] || continue
-				_found=1
-				_file_ok=1
-				while IFS=" " read -r tgt path; do
-					[ -z "$path" ] && continue
-					echo "  cluster: $tgt $path"
-					$_ssh "$tgt" "[ -d '\''$path'\'' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\''$path'\'' delete || make -C '\''$path'\'' delete; } || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
-				done < "$f"
-				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
-			done
-
-			for f in "$_log_dir"/*.mirror-cleanup; do
-				[ -f "$f" ] || continue
-				_found=1
-				_file_ok=1
-				while IFS=" " read -r tgt path; do
-					[ -z "$path" ] && continue
-					echo "  mirror: $tgt $path"
-					$_ssh "$tgt" "[ -d '\''$path'\'' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\''$path'\'' uninstall || make -C '\''$path'\'' uninstall; } || echo '\''  (dir not found)'\''" < /dev/null 2>&1 || { echo "  WARNING: cleanup failed: $tgt $path"; _file_ok=""; }
-				done < "$f"
-				[ -n "$_file_ok" ] && rm -f "$f" || echo "  WARNING: keeping $(basename $f) -- some entries failed"
-			done
-
-			[ -n "$_found" ] && echo "done" || echo "nothing to clean"
-		' 2>/dev/null || echo "unreachable"
+		_process_pool_cleanup_files "$p" 2>/dev/null && echo "done" || echo "unreachable"
 	done
 
 	# 3) Deploy harness + source
@@ -378,25 +364,7 @@ if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; th
 			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
 			[ -z "$_has_cleanup" ] && continue
 			echo "  Pool $_p: processing cleanup files for $_try_user before OS reclone ..."
-			_essh "$_try_host" bash -s <<-'CLEANUP_EOF' 2>&1 || true
-			_logs="$HOME/.e2e-harness/logs"
-			_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
-			for f in "$_logs"/*.cleanup "$_logs"/*.mirror-cleanup; do
-				[ -f "$f" ] || continue
-				echo "    Processing $(basename "$f") ..."
-				while IFS=' ' read -r target abs_path; do
-					[ -z "$abs_path" ] && continue
-					if echo "$f" | grep -q '\.cleanup$'; then
-						echo "      $target: delete $abs_path"
-						ssh $_ssh_opts "$target" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete; }" < /dev/null 2>&1 || true
-					else
-						echo "      $target: uninstall $abs_path"
-						ssh $_ssh_opts "$target" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' uninstall || make -C '$abs_path' uninstall; }" < /dev/null 2>&1 || true
-					fi
-				done < "$f"
-				rm -f "$f"
-			done
-			CLEANUP_EOF
+			_run_cleanup_on_host "$_try_host" "    " 2>&1 || true
 			break
 		done
 
@@ -463,25 +431,7 @@ if [ -n "${CLI_REVERT:-}" ]; then
 			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
 			[ -z "$_has_cleanup" ] && continue
 			echo "    Pool $_p: found cleanup files for $_try_user -- running aba delete/uninstall ..."
-			_essh "$_try_host" bash -s <<-'CLEANUP_EOF' 2>&1 || echo "    WARNING: cleanup for pool $_p user $_try_user had errors (continuing)"
-			_logs="$HOME/.e2e-harness/logs"
-			_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
-			for f in "$_logs"/*.cleanup "$_logs"/*.mirror-cleanup; do
-				[ -f "$f" ] || continue
-				echo "      Processing $(basename "$f") ..."
-				while IFS=' ' read -r target abs_path; do
-					[ -z "$abs_path" ] && continue
-					if echo "$f" | grep -q '\.cleanup$'; then
-						echo "        $target: delete $abs_path"
-						ssh $_ssh_opts "$target" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete; }" < /dev/null 2>&1 || true
-					else
-						echo "        $target: uninstall $abs_path"
-						ssh $_ssh_opts "$target" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' uninstall || make -C '$abs_path' uninstall; }" < /dev/null 2>&1 || true
-					fi
-				done < "$f"
-				rm -f "$f"
-			done
-			CLEANUP_EOF
+			_run_cleanup_on_host "$_try_host" "      " 2>&1 || echo "    WARNING: cleanup for pool $_p user $_try_user had errors (continuing)"
 		done
 	done
 
@@ -569,6 +519,7 @@ declare -A _busy_pools=()
 declare -a _work_queue=()
 declare -A _results=()
 declare -A _result_pool=()
+declare -A _bad_pools_map=()
 
 # Apply --force scoping
 if [ -n "${CLI_FORCE:-}" ]; then
@@ -742,6 +693,9 @@ trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2
 declare -A _retried=()
 _MAX_RETRIES=2
 _queue_idx=0
+_POLL_MIN=5
+_POLL_MAX=30
+_poll_interval=$_POLL_MIN
 
 if [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; then
 	echo "  Dispatching ... (Ctrl-C safe: restart run.sh to reconnect)"
@@ -753,6 +707,7 @@ fi
 
 while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 
+	_state_changed=""
 	for _p in "${!_busy_pools[@]}"; do
 		local_suite="${_busy_pools[$_p]}"
 		rc=$(_check_pool "$_p" "$local_suite")
@@ -762,11 +717,15 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
 			_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 			unset '_busy_pools[$_p]'
+			_state_changed=1
 		fi
 	done
 
-	# Inject queue (from reschedule)
+	# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
 	if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+		mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" 2>/dev/null || true
+	fi
+	if [ -f "${E2E_INJECT_QUEUE}.processing" ]; then
 		_inj_count=0
 		while IFS= read -r _inj_suite; do
 			[ -z "$_inj_suite" ] && continue
@@ -783,8 +742,8 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			_work_queue+=("$_inj_suite"); suites_to_run+=("$_inj_suite")
 			_inj_count=$(( _inj_count + 1 ))
 			printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
-		done < "$E2E_INJECT_QUEUE"
-		> "$E2E_INJECT_QUEUE"
+		done < "${E2E_INJECT_QUEUE}.processing"
+		rm -f "${E2E_INJECT_QUEUE}.processing"
 		if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 			$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected" < /dev/null >/dev/null
 		fi
@@ -814,10 +773,20 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		fi
 		_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
 		_queue_idx=$(( _queue_idx + 1 ))
+		_state_changed=1
 	done
 
-	# Inline retry
-	if [ $_queue_idx -ge ${#_work_queue[@]} ] && _find_free_pool >/dev/null; then
+	# Inline retry -- only check for free pools if there are failed suites to retry
+	_has_retryable=""
+	if [ $_queue_idx -ge ${#_work_queue[@]} ]; then
+		for _rs in "${!_results[@]}"; do
+			_rrc="${_results[$_rs]}"
+			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+				_has_retryable=1; break
+			fi
+		done
+	fi
+	if [ -n "$_has_retryable" ] && _find_free_pool >/dev/null; then
 		_retry_added=0
 		for _rs in "${!_results[@]}"; do
 			_rrc="${_results[$_rs]}"
@@ -859,7 +828,15 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			echo ""; _prev_status="$_status_line"
 		fi
 	fi
-	sleep 30
+
+	# Adaptive polling: short interval after state changes, back off when idle
+	if [ -n "$_state_changed" ]; then
+		_poll_interval=$_POLL_MIN
+	else
+		_poll_interval=$(( _poll_interval * 2 ))
+		[ "$_poll_interval" -gt "$_POLL_MAX" ] && _poll_interval=$_POLL_MAX
+	fi
+	sleep "$_poll_interval"
 done
 
 # --- Final summary (from lib/dispatcher.sh) -----------------------------------

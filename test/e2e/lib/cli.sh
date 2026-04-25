@@ -66,7 +66,8 @@ _usage() {
 	  -s, --suite X,Y        Select specific suite(s) (comma-separated)
 	  -a, --all              Select all suites (default for run/reschedule)
 	  -D, --with-dummy       Include dummy-* suites (excluded from --all by default)
-	  -p, --pools SPEC       Pool selection: N, N-M, N,M,O, or "all"
+	  -p, --pool SPEC        Pool selection: N, N-M, N,M,O, or "all"
+	                         (aliases: --pools, --pool-list)
 	  -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
@@ -213,7 +214,7 @@ _parse_args() {
 			-s|--suite|--suites)    CLI_SUITE="$2"; shift 2 ;;
 			-a|--all)               CLI_ALL=1; shift ;;
 			-D|--with-dummy)        CLI_WITH_DUMMY=1; shift ;;
-			-p|--pools)             CLI_POOLS="$2"; shift 2 ;;
+			-p|--pool|--pools|--pool-list)  CLI_POOLS="$2"; shift 2 ;;
 			-G|--recreate-golden)   CLI_RECREATE_GOLDEN=1; shift ;;
 			-R|--recreate-vms)      CLI_RECREATE_VMS=1; shift ;;
 			-V|--revert)            CLI_REVERT=1; shift ;;

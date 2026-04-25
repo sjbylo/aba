@@ -171,7 +171,8 @@ Options:
   -s, --suite X,Y        Select specific suite(s) (comma-separated)
   -a, --all              Select all suites (default for run/reschedule)
   -D, --with-dummy       Include dummy-* framework test suites (excluded from --all)
-  -p, --pools SPEC       Pool selection: N, N-M, N,M,O, or "all"
+  -p, --pool SPEC        Pool selection: N, N-M, N,M,O, or "all"
+                         (aliases: --pools, --pool-list)
   -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
   -d, --dev              Push local source to ~/aba on conN (developer mode)
   -r, --resume           Skip previously-passed tests (run, restart)

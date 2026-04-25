@@ -453,52 +453,13 @@ _ensure_govc() {
 # Process .cleanup and .mirror-cleanup files across selected pools.
 _process_cleanup_on_pools() {
 	local pool_list="$1"
-	local _e2e_logs=".e2e-harness/logs"
 
 	echo ""
 	echo "=== Cleaning up test clusters and mirrors ==="
 	local p
 	for p in $pool_list; do
-		local target
-		target=$(_con_target "$p")
-
-		local _has_files=""
-		_has_files=$(_essh "$target" "ls ~/$_e2e_logs/*.cleanup ~/$_e2e_logs/*.mirror-cleanup 2>/dev/null | head -1" 2>/dev/null) || continue
-		[ -z "$_has_files" ] && { echo "  con${p}: no cleanup files"; continue; }
-
 		echo "  con${p}: processing cleanup files ..."
-		_essh "$target" bash <<-REMOTE
-			_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-			_logs="\$HOME/$_e2e_logs"
-
-			for f in "\$_logs"/*.cleanup; do
-				[ -f "\$f" ] || continue
-				echo "    Processing \$(basename "\$f") ..."
-				_ok=1
-				while IFS=' ' read -r target abs_path; do
-					[ -z "\$abs_path" ] && continue
-					echo "      \$target: delete \$abs_path"
-					ssh \$_ssh_opts "\$target" \
-						"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; } || echo '      (dir not found)'" \
-						< /dev/null 2>&1 || { echo "      WARNING: cleanup failed"; _ok=; }
-				done < "\$f"
-				[ -n "\$_ok" ] && rm -f "\$f"
-			done
-
-			for f in "\$_logs"/*.mirror-cleanup; do
-				[ -f "\$f" ] || continue
-				echo "    Processing \$(basename "\$f") ..."
-				_ok=1
-				while IFS=' ' read -r target abs_path; do
-					[ -z "\$abs_path" ] && continue
-					echo "      \$target: uninstall \$abs_path"
-					ssh \$_ssh_opts "\$target" \
-						"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; } || echo '      (dir not found)'" \
-						< /dev/null 2>&1 || { echo "      WARNING: cleanup failed"; _ok=; }
-				done < "\$f"
-				[ -n "\$_ok" ] && rm -f "\$f"
-			done
-		REMOTE
+		_process_pool_cleanup_files "$p" 2>&1 || true
 		echo "  con${p}: cleanup done."
 	done
 	echo "=== Cleanup complete ==="
