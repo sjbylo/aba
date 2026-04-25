@@ -25,7 +25,8 @@ export PLAIN_OUTPUT=1
 # CRITICAL: Wait for tarball downloads to complete before starting extractions.
 # Without this, 'make -sC cli <tool>' sees a partially downloaded tarball (curl still
 # writing) and starts 'tar' on it, producing a truncated/corrupt binary (segfault).
-if [ "$ro_opt" != "-r" ]; then
+# In bundle mode, tarballs are already in the archive -- no downloads to wait for.
+if [ "$ro_opt" != "-r" ] && ! is_bundle_mode; then
 	aba_debug "Waiting for CLI downloads to complete before extracting"
 	scripts/cli-download-all.sh --wait "${tool_filter[@]}"
 	aba_debug "CLI downloads complete"
