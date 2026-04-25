@@ -192,7 +192,13 @@ _ntp_config_applied() {
 	return 0
 }
 
-if ! aba_wait_show "Waiting for NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to abort)" 10 900 _ntp_config_applied; then
+_wait_rc=0
+aba_wait_show "Waiting for NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to abort)" 10 900 _ntp_config_applied || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
 	echo
 	for host in $nodesIPs; do
 		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1)
@@ -224,7 +230,13 @@ _ntp_source_synced() {
 	return 0
 }
 
-if ! aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to abort)" 5 60 _ntp_source_synced; then
+_wait_rc=0
+aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to abort)" 5 60 _ntp_source_synced || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
 	echo
 	for host in $nodesIPs; do
 		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
