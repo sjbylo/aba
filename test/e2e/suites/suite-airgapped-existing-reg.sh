@@ -494,3 +494,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-airgapped-existing-reg.sh"
+
+exit 0

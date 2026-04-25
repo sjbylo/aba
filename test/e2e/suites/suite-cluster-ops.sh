@@ -367,3 +367,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-cluster-ops.sh"
+
+exit 0

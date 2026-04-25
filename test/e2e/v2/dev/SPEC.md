@@ -200,6 +200,32 @@ Before each suite, the runner:
 
 This crash-recovery mechanism is essential and works well.
 
+### Pool-scope cleanup guard
+
+Cleanup files contain `user@host abs_path` entries where `host` identifies
+which machine installed the resource. When multiple pools run concurrently,
+a stale or misplaced cleanup file on conN could reference a host belonging
+to a different pool (e.g. `dis1.example.com` on con2). Processing such an
+entry would destroy another pool's active resources.
+
+**Invariant:** Before executing any cleanup entry, the target hostname is
+validated against the current pool's allowed hosts (`conN.domain` and
+`disN.domain`). Entries targeting foreign hosts are skipped with a warning
+and the cleanup file is kept for the correct pool to process later.
+
+**Implementation:** Three code paths enforce this guard:
+
+1. `_run_cleanup_on_host()` in `lib/dispatcher.sh` -- accepts an
+   `allowed_hosts` parameter; the heredoc validates each entry's target
+2. `_process_pool_cleanup_files()` in `lib/dispatcher.sh` -- derives
+   allowed hosts from `POOL_NUM` and `VM_BASE_DOMAIN`, passes to above
+3. `_pre_suite_cleanup()` in `runner.sh` -- inline validation using
+   `POOL_NUM` and `VM_BASE_DOMAIN` before each SSH
+
+All callers of `_run_cleanup_on_host` (dispatcher, reclone, revert) must
+pass the pool-scoped allowed hosts. Calls without `allowed_hosts` still
+work (backward compat) but skip the guard -- avoid this in production paths.
+
 ### Notification relay via bastion
 
 Framework runs on conN which may be air-gapped (no internet). Notifications

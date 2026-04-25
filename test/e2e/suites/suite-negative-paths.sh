@@ -384,3 +384,5 @@ test_end 0
 suite_end
 
 echo "SUCCESS: suite-negative-paths.sh"
+
+exit 0

@@ -211,3 +211,5 @@ test_end 0
 suite_end
 
 echo "SUCCESS: suite-config-validation.sh"
+
+exit 0

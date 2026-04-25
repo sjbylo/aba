@@ -764,6 +764,10 @@ echo ""
 _pre_suite_cleanup() {
 	local found=""
 
+	# Pool-scope guard: only process cleanup entries targeting this pool's hosts
+	local _allowed_con="con${POOL_NUM}.${VM_BASE_DOMAIN}"
+	local _allowed_dis="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
+
 	# Kill stale oc-mirror processes from previous suite (they hold port 55000)
 	if pkill -f 'oc-mirror'; then
 		echo "  Killed stale oc-mirror process(es)"
@@ -779,9 +783,16 @@ _pre_suite_cleanup() {
 		[ -f "$cleanup_file" ] || continue
 		found=1
 		echo "  Found leftover: $(basename "$cleanup_file") -- deleting clusters from cleanup list ..."
-		local target abs_path _cleanup_ok=1
+		echo "    Contents: $(cat "$cleanup_file" | tr '\n' ' ')"
+		local target abs_path _cleanup_ok=1 _has_foreign=""
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
+			local _tgt_host="${target#*@}"
+			if [ "$_tgt_host" != "$_allowed_con" ] && [ "$_tgt_host" != "$_allowed_dis" ]; then
+				echo "    WARNING: cross-pool target $target skipped (allowed: $_allowed_con $_allowed_dis)"
+				_has_foreign=1
+				continue
+			fi
 			echo "    $target: aba -y -d $abs_path delete"
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
 			# Note: _verify_no_orphan_vms has already run and passed before we get here,
@@ -799,7 +810,9 @@ _pre_suite_cleanup() {
 				_cleanup_ok=""
 			fi
 		done < "$cleanup_file"
-		if [ -n "$_cleanup_ok" ]; then
+		if [ -n "$_has_foreign" ]; then
+			echo "  Keeping $(basename "$cleanup_file") -- contains cross-pool entries"
+		elif [ -n "$_cleanup_ok" ]; then
 			rm -f "$cleanup_file"
 		else
 			echo "  ERROR: cluster cleanup FAILED for $(basename "$cleanup_file") -- cannot proceed"
@@ -812,9 +825,16 @@ _pre_suite_cleanup() {
 		[ -f "$cleanup_file" ] || continue
 		found=1
 		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling mirrors from cleanup list ..."
-		local target abs_path _mirror_ok=1
+		echo "    Contents: $(cat "$cleanup_file" | tr '\n' ' ')"
+		local target abs_path _mirror_ok=1 _has_foreign=""
 		while IFS=' ' read -r target abs_path; do
 			[ -z "$abs_path" ] && continue
+			local _tgt_host="${target#*@}"
+			if [ "$_tgt_host" != "$_allowed_con" ] && [ "$_tgt_host" != "$_allowed_dis" ]; then
+				echo "    WARNING: cross-pool target $target skipped (allowed: $_allowed_con $_allowed_dis)"
+				_has_foreign=1
+				continue
+			fi
 			echo "    $target: aba -y -d $abs_path uninstall"
 			_mirror_rc=0
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
@@ -826,7 +846,9 @@ _pre_suite_cleanup() {
 				_mirror_ok=""
 			fi
 		done < "$cleanup_file"
-		if [ -n "$_mirror_ok" ]; then
+		if [ -n "$_has_foreign" ]; then
+			echo "  Keeping $(basename "$cleanup_file") -- contains cross-pool entries"
+		elif [ -n "$_mirror_ok" ]; then
 			rm -f "$cleanup_file"
 		else
 			echo "  ERROR: mirror cleanup FAILED for $(basename "$cleanup_file") -- cannot proceed"

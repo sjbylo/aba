@@ -339,3 +339,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-create-bundle-to-disk.sh"
+
+exit 0

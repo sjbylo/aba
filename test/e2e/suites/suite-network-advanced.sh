@@ -346,3 +346,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-network-advanced.sh"
+
+exit 0

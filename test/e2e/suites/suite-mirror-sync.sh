@@ -391,3 +391,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-mirror-sync.sh"
+
+exit 0

@@ -48,9 +48,9 @@ sync_harness() {
 
 	_essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" || return 1
 
-	# Clean stale regular-file summary.log left by manual rsync deploys.
-	# suite_start creates it as a symlink; a regular file blocks tail -F updates.
-	_essh "$target" "f=~/.e2e-harness/logs/summary.log; [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"" || true
+	# Clean stale regular-file *-summary.log and summary.log left by old rsync deploys.
+	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
+	_essh "$target" "cd ~/.e2e-harness/logs 2>/dev/null && for f in *-summary.log summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
 
 	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh" &&
 	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env" &&
