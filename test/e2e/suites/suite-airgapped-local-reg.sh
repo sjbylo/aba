@@ -152,6 +152,10 @@ e2e_run_remote "Remove stale dnf log" \
     "cd ~/aba && rm -f .dnf-install.log"
 e2e_run_remote "Run aba install on internal bastion" \
     "cd ~/aba && ./install"
+e2e_run_remote "Check bundle mode is active" \
+    "cd ~/aba && test -f .bundle"
+e2e_run_remote "See install bundle banner and help on internal bastion" \
+    "cd ~/aba && aba"
 e2e_run_remote "Verify dialog was reinstalled" \
     "rpm -q dialog"
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
