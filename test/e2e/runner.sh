@@ -83,11 +83,11 @@ trap ':' INT
 # even when the suite aborts, is killed, or hits an unhandled exit path.
 
 # Use sudo to remove previous user's files (cross-user switch).
-# Keep e2e-suite-os and e2e-suite-vmconf alive -- they're overwritten once
-# config.env + CLI overrides are final (~line 500).  Deleting them here
-# creates a race where the live UI reads an empty OS before the runner
-# reaches the write.
-sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user
+# e2e-suite-os and e2e-suite-vmconf must also be removed here -- if the
+# previous run was as root, steve can't overwrite them (Permission denied
+# under set -e kills the runner).  Brief stale/empty value in the live
+# dashboard title is acceptable vs. a hard crash.
+sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
 echo "$SUITE" > /tmp/e2e-last-suites
 whoami > /tmp/e2e-suite-user
 

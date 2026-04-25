@@ -2265,7 +2265,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 		[ -s "$digest_file" ] || continue
 		local digest
 		digest=$(cat "$digest_file")
-		sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}|g")
+		sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}  # was :v${ocp_ver_major}|g")
 		aba_debug "Will pin $catalog_name catalog: :v${ocp_ver_major} -> @${digest}"
 	done
 
