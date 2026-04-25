@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260425110927
+ABA_BUILD=20260425120852
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -132,20 +132,20 @@ else
 	# Give an error to change to the top level dir. Text must be coded here.
 	(
 		echo "  __   ____   __  "
-		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the ABA utility!"
 		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
 		echo "\_/\_/(____/\_/\_/"
 		echo
-		echo "Run Aba from the top of its repository."
+		echo "Run ABA from the top of its repository."
 		echo
 		echo "For example:                          cd aba"
 		echo "                                      aba"
 		echo "                                      aba -h"
 		echo
-		echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-		echo "Change to the Aba repo directory:     cd aba"
-		echo "Install latest Aba:                   ./install"
-		echo "Run Aba:                              aba" 
+		echo "Otherwise, clone ABA from GitHub:     git clone https://github.com/sjbylo/aba.git"
+		echo "Change to the ABA repo directory:     cd aba"
+		echo "Install latest ABA:                   ./install"
+		echo "Run ABA:                              aba" 
 		echo "                                      aba -h" 
 	) >&2
 
@@ -1180,7 +1180,7 @@ if [ -f .bundle ]; then
 	scripts/cli-install-all.sh                                    # Start CLI extractions (background)
 	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start mirror-registry extraction (background)
 
-	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
+	echo_yellow "ABA install bundle detected for OpenShift v$ocp_version."
 
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
@@ -1216,8 +1216,8 @@ if [ -f .bundle ]; then
 	echo
 	echo_white "Next steps:"
 	echo_white "Set up a mirror registry and load it with the required container images from this install bundle."
-	echo_white "Aba can deploy the 'Mirror Registry for Red Hat OpenShift' (Quay) or use an existing container registry."
-	echo_white "As an alternative, Aba can also install a Docker registry. See the README.md FAQ for instructions."
+	echo_white "ABA can deploy the 'Mirror Registry for Red Hat OpenShift' (Quay) or use an existing container registry."
+	echo_white "As an alternative, ABA can also install a Docker registry. See the README.md FAQ for instructions."
 
 	[ ! "$domain" ] && domain=example.com  # Just in case
 	echo
@@ -1225,8 +1225,8 @@ if [ -f .bundle ]; then
 	echo_white "To install the registry on the local machine, accessible via $(hostname -s).$domain, run:"
 	echo_white "  aba -d mirror load -H $(hostname -s).$domain --retry 8"
 	echo
-	echo_white "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo_white "  aba -d mirror load -H remote-registry.$domain -k '~/.ssh/id_rsa' -U user --retry"
+	echo_white "To install the (docker) registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
+	echo_white "  aba -d mirror load -H remote-registry.$domain --vendor docker -k '~/.ssh/id_rsa' -U user --retry"
 	echo
 	echo_white "If unsure, run:"
 	echo_white "  aba -d mirror install                 # to configure and/or install Quay."
@@ -1240,7 +1240,7 @@ if [ -f .bundle ]; then
 fi
 
 
-# Fresh GitHub clone of Aba repo detected!
+# Fresh GitHub clone of ABA repo detected!
 
 ##############################################################################################################################
 # Determine OpenShift channel
@@ -1275,7 +1275,7 @@ fi
 			"  $ERROR_DETAILS" \
 			"" \
 			"Ensure you have Internet access to download the required images." \
-			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
+			"To get started with ABA run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
 			"" \
 			"Required sites:                                Other sites:" \
 			"   mirror.openshift.com                           docker.io" \
@@ -1515,7 +1515,7 @@ if [ ! "$editor" ]; then
 	echo
 	def_editor="${EDITOR:-${VISUAL:-vi}}"
 
-	echo    "Aba uses an editor to aid in the workflow."
+	echo    "ABA uses an editor to aid in the workflow."
 	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to edit manually! ('vi', 'emacs', 'nano' etc or 'none')? [$def_editor]: "
 	read new_editor
 
@@ -1585,7 +1585,7 @@ fi
 
 echo
 echo       "Fully Disconnected (air-gapped)"
-echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
+echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, ABA can download all required components—including"
 echo_white "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
 echo_white "transfer into your disconnected environment."
 
@@ -1617,7 +1617,7 @@ if ask "Install OpenShift from a mirror registry that is synchonized directly fr
 	echo 
 	echo_yellow "Instructions for synchronizing images directly from the Internet to a mirror registry"
 	echo_white "Set up the mirror registry and sync it with the necessary container images."
-	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+	echo_white "To store container images, ABA can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo_white "Run:"
 	echo_white "  aba -d mirror install                # to configure an existing registry or install Quay."

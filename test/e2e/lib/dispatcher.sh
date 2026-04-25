@@ -183,7 +183,8 @@ _check_pool() {
 		local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
 		if [ "$_elapsed" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
 			local _log_age=""
-			_log_age=$(_ssh_con "$pool_num" "stat -c %Y ~/.e2e-harness/logs/summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
+			# -L: dereference symlink (summary.log is a symlink to the timestamped log)
+			_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
 			if [ -n "$_log_age" ]; then
 				local _now_epoch
 				_now_epoch=$(date +%s)
