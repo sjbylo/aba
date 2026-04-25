@@ -141,9 +141,11 @@ failureDomains/vcenters.
 
 ## Catalog Digest Pinning (oc-mirror workaround)
 
+Upstream bug: [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)
+
 oc-mirror v2 resolves operator catalog tags (e.g. `redhat-operator-index:v4.20`)
 at runtime by contacting the upstream registry (`registry.redhat.io`). This
-happens even during `diskToMirror` (load) on disconnected hosts, causing
+happens even during disk2mirror (load) on disconnected hosts, causing
 `no route to host` failures. Pinning catalogs by digest (`@sha256:...`) prevents
 this because oc-mirror skips upstream tag resolution for digest references.
 
@@ -166,14 +168,16 @@ this because oc-mirror skips upstream tag resolution for digest references.
 - The user's `imageset-config.yaml` is NEVER modified by the pinning mechanism.
 - If no digest files exist (old install, capture failed), the original ISC is
   used as-is -- graceful fallback.
-- Works for all three mirror workflows: save, sync, load.
+- Works for all three mirror workflows: save (mirror2disk), sync (mirror2mirror), load (disk2mirror).
 - User-edited ISCs also benefit (tag substitution is content-based, not
   generation-based).
 
 ### Disabling / reverting
 
 Set `OC_MIRROR_PIN_CATALOGS=0` in `~/.aba/config` or environment. Remove the
-workaround entirely once oc-mirror fixes upstream tag resolution in air-gap
+workaround entirely once oc-mirror fixes upstream tag resolution in air-gap --
+track [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712) and
+[openshift/oc-mirror#1390](https://github.com/openshift/oc-mirror/pull/1390)
 (grep for `OC_MIRROR_PIN_CATALOGS` and `_oc_mirror_pin_catalogs_by_digest`).
 
 ---
