@@ -199,9 +199,9 @@ fi
 # If the subscription exists but is not healthy/complete (previous failed attempt, stuck,
 # etc.), clean up so we can start fresh. This makes the script safely re-runnable.
 _osus_installed=
-_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' 2>&1 || true)
+_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' || true)
 if [ "$_existing_csv" ]; then
-	_csv_phase=$(oc get csv "$_existing_csv" -n $NAMESPACE -o jsonpath='{.status.phase}' 2>&1 || true)
+	_csv_phase=$(oc get csv "$_existing_csv" -n $NAMESPACE -o jsonpath='{.status.phase}' || true)
 	if [ "$_csv_phase" = "Succeeded" ]; then
 		aba_info "OSUS operator already installed ($_existing_csv) -- skipping to deployment"
 		_osus_installed=1

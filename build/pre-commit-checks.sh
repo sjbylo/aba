@@ -66,6 +66,15 @@ else
     echo -e "${YELLOW}[1/5] Skipping BUILD timestamp update${NC}\n"
 fi
 
+# Guard: ABA_VERSION must be semver (e.g. 1.0.0, 2.1.3-rc1) -- catches merge corruption
+_aba_ver=$(grep '^ABA_VERSION=' scripts/aba.sh | head -1 | cut -d= -f2)
+if ! echo "$_aba_ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+    echo -e "${RED}      ✗ ABA_VERSION is not semver: '$_aba_ver'${NC}"
+    echo -e "${RED}        This usually means a merge overwrote the version.${NC}"
+    echo -e "${RED}        Fix: set ABA_VERSION=X.Y.Z in scripts/aba.sh${NC}\n"
+    exit 1
+fi
+
 # =============================================================================
 # Step 2a: Sync external RPM list
 # =============================================================================

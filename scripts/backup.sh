@@ -50,22 +50,25 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 
 
 # All 'find expr' below are by default "and"
-file_list=$(find		\
-	"${repo_dir}/install"		\
+file_list=$(find				\
+	"${repo_dir}/install"			\
 	"${repo_dir}/aba"			\
-	"${repo_dir}/aba.conf"		\
-	"${repo_dir}/.bundle"		\
+	"${repo_dir}/aba.conf"			\
+	"${repo_dir}/.bundle"			\
 	"${repo_dir}/cli"			\
-	"${repo_dir}/rpms"		\
-	"${repo_dir}/others"		\
-	"${repo_dir}/scripts"		\
-	"${repo_dir}/templates"		\
-	"${repo_dir}/Makefile"		\
-	"${repo_dir}/README.md"		\
+	"${repo_dir}/rpms"			\
+	"${repo_dir}/others"			\
+	"${repo_dir}/scripts"			\
+	"${repo_dir}/templates"			\
+	"${repo_dir}/Makefile"			\
+	"${repo_dir}/README.md"			\
+	"${repo_dir}/VERSION"			\
+	"${repo_dir}/CHANGELOG.md"		\
+	"${repo_dir}/LICENSE"			\
 	"${repo_dir}/Troubleshooting.md"	\
-	"${repo_dir}/mirror"		\
-	"${repo_dir}/.index"		\
-								\
+	"${repo_dir}/mirror"			\
+	"${repo_dir}/.index"			\
+									\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
 	! -path "${repo_dir}/cli/.??*"	  				\
