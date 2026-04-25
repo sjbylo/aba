@@ -38,9 +38,11 @@ _run_cleanup_on_host() {
 	local target="$1"
 	local indent="${2:-    }"
 	local allowed_hosts="${3:-}"
-	_essh "$target" bash -s -- "$indent" "$allowed_hosts" <<-'CLEANUP_HEREDOC'
-		_indent="$1"
-		_allowed="$2"
+	# Pass allowed_hosts as comma-separated $1 (SSH mangles space-separated args)
+	local allowed_csv="${allowed_hosts// /,}"
+	_essh "$target" bash -s -- "$allowed_csv" <<-'CLEANUP_HEREDOC'
+		_allowed_csv="$1"
+		_indent="    "
 		_logs="$HOME/.e2e-harness/logs"
 		_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 		_all_ok=1
@@ -53,14 +55,15 @@ _run_cleanup_on_host() {
 			while IFS=' ' read -r tgt abs_path; do
 				[ -z "$abs_path" ] && continue
 				# Pool-scope guard: reject entries targeting hosts outside this pool
-				if [ -n "$_allowed" ]; then
+				if [ -n "$_allowed_csv" ]; then
 					_tgt_host="${tgt#*@}"
 					_match=
-					for _ah in $_allowed; do
+					IFS=',' read -ra _ah_arr <<< "$_allowed_csv"
+					for _ah in "${_ah_arr[@]}"; do
 						[ "$_tgt_host" = "$_ah" ] && _match=1 && break
 					done
 					if [ -z "$_match" ]; then
-						echo "${_indent}  WARNING: cross-pool target $tgt skipped (allowed: $_allowed)"
+						echo "${_indent}  WARNING: cross-pool target $tgt skipped (allowed: $_allowed_csv)"
 						_has_foreign=1
 						continue
 					fi
