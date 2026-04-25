@@ -592,22 +592,52 @@ _cleanup_dis_aba() {
 	#    have installed one.  A previous suite may have run as a different user
 	#    (e.g. steve when current is root), leaving a rootless registry that the
 	#    current user's podman can't see.
+	#    If aba uninstall FAILS, we must stop -- proceeding with stale podman
+	#    state (secrets, systemd units) will break the next install.
 	echo "  Checking for stale registries on disN (all users) ..."
 	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
-	# Try both root and the default non-root user (the only two users on E2E VMs)
 	local _default_user="${VM_DEFAULT_USER:-steve}"
 	local _try_user
+	local _uninstall_failed=""
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
-		# Try aba uninstall if .available exists OR if ~/aba/mirror dir exists
-		# (covers interrupted installs where .available was never created).
 		_essh "$_uhost" "
 			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
 				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
-				cd ~/aba && aba -y -d mirror uninstall || true
+				cd ~/aba && aba -y -d mirror uninstall
 			fi
-		" 2>&1 || echo "  [cleanup] WARNING: aba uninstall as $_try_user on disN failed (rc=$?)"
+		" 2>&1 || {
+			echo "  ERROR: aba uninstall as $_try_user on disN failed (rc=$?)"
+			echo "  Stale podman state (secrets, systemd units) will break the next install."
+			_uninstall_failed=1
+		}
 	done
+	if [ -n "$_uninstall_failed" ]; then
+		echo "  FATAL: aba uninstall failed on disN. Cannot proceed with dirty host."
+		echo "  Investigate why 'aba -d mirror uninstall' failed on disN, fix, and re-run."
+		return 1
+	fi
+
+	# Post-uninstall assertion: verify no stale podman state on disN.
+	# Catches the exact failure mode where mirror-registry uninstall silently
+	# skips cleanup, leaving redis_pass secrets and systemd units behind.
+	local _podman_stale=""
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		_essh "$_uhost" "podman secret ls --format '{{.Name}}' | grep -q redis_pass" \
+			&& _podman_stale+="  $_try_user: redis_pass podman secret exists"$'\n'
+		_essh "$_uhost" "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" \
+			&& _podman_stale+="  $_try_user: quay containers still present"$'\n'
+		_essh "$_uhost" "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null | grep -q ." \
+			&& _podman_stale+="  $_try_user: quay systemd user units still active"$'\n'
+	done
+	if [ -n "$_podman_stale" ]; then
+		echo "  FATAL: Stale podman state found on disN after aba uninstall:"
+		echo "$_podman_stale"
+		echo "  This will cause WRONGPASS / PermissionError on the next install."
+		echo "  Investigate why 'aba uninstall' did not clean up podman state."
+		return 1
+	fi
 
 	# 1. Clean disN filesystem for all users (aba code, CLI tools, caches, mirror data)
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
@@ -623,10 +653,10 @@ _cleanup_dis_aba() {
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 
-	# 3. Restore baseline system state (firewalld on, as created by setup-infra)
+	# 2. Restore baseline system state (firewalld on, as created by setup-infra)
 	_essh "$dis_host" "sudo systemctl enable firewalld; sudo systemctl start firewalld" 2>&1
 
-	# 4. Remove stale firewall ports from permanent config (survive restart)
+	# 3. Remove stale firewall ports from permanent config (survive restart)
 	echo "  Resetting firewall ports on disN ..."
 	for _port in $_E2E_STALE_FW_PORTS; do
 		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
@@ -642,7 +672,7 @@ _cleanup_dis_aba() {
 		echo "  disN firewall verified: no test ports"
 	fi
 
-	# 5. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
+	# 4. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
 	if [ -n "${VC_FOLDER:-}" ]; then
 		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" \
 			&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
@@ -654,7 +684,7 @@ _cleanup_dis_aba() {
 			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
 	fi
 
-	# 6. Verify port 8443 is free (registry fully uninstalled).
+	# 5. Verify port 8443 is free (registry fully uninstalled).
 	#    Cross-user scenarios (steve->root) are handled by snapshot revert in run.sh.
 	#    This catches same-user partial installs where aba uninstall couldn't fully
 	#    tear down orphaned containers.

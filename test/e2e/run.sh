@@ -788,6 +788,8 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	for _p in "${!_busy_pools[@]}"; do
 		local_suite="${_busy_pools[$_p]}"
 		rc=$(_check_pool "$_p" "$local_suite")
+		# Hung detection runs in parent shell so _hung_notified persists
+		[ -z "$rc" ] && _check_hung "$_p" "$local_suite"
 		if [ -n "$rc" ]; then
 			_record_result "$local_suite" "$rc"
 			_collect_pool_logs "$_p"

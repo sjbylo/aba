@@ -178,26 +178,39 @@ _check_pool() {
 		return
 	fi
 
-	# No-output watchdog: alert if summary log hasn't changed in E2E_HUNG_TIMEOUT
-	if [ -z "${_hung_notified[$pool_num]:-}" ] && [ -n "${_dispatch_time[$pool_num]:-}" ]; then
-		local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
-		if [ "$_elapsed" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
-			local _log_age=""
-			# -L: dereference symlink (summary.log is a symlink to the timestamped log)
-			_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
-			if [ -n "$_log_age" ]; then
-				local _now_epoch
-				_now_epoch=$(date +%s)
-				local _idle_secs=$(( _now_epoch - _log_age ))
-				if [ "$_idle_secs" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
-					_hung_notified[$pool_num]=1
-					local _idle_min=$(( _idle_secs / 60 ))
-					printf "  \033[1;35mWARNING:\033[0m %s on pool %s may be hung (no output for %d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
-					if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-						$NOTIFY_CMD "[e2e] HUNG? ${suite} on pool ${pool_num} -- no output for ${_idle_min} min" < /dev/null >/dev/null &
-					fi
-				fi
-			fi
+}
+
+# No-output watchdog: alert if summary log hasn't changed in E2E_HUNG_TIMEOUT.
+# MUST be called from the parent shell (not inside $()) so _hung_notified persists.
+_check_hung() {
+	local pool_num="$1"
+	local suite="$2"
+
+	[ -n "${_hung_notified[$pool_num]:-}" ] && return
+	[ -z "${_dispatch_time[$pool_num]:-}" ] && return
+
+	local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
+	[ "$_elapsed" -lt "${E2E_HUNG_TIMEOUT:-3600}" ] && return
+
+	# Check per-suite summary log (symlink to timestamped file, created by suite_start).
+	# Falls back to tmux pane activity if the summary log doesn't exist yet.
+	local _log_age=""
+	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
+	if [ -z "$_log_age" ]; then
+		# No suite summary log yet -- check tmux pane activity instead
+		_log_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{pane_last_activity}' 2>/dev/null" 2>/dev/null) || _log_age=""
+	fi
+	[ -z "$_log_age" ] && return
+
+	local _now_epoch
+	_now_epoch=$(date +%s)
+	local _idle_secs=$(( _now_epoch - _log_age ))
+	if [ "$_idle_secs" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
+		_hung_notified[$pool_num]=1
+		local _idle_min=$(( _idle_secs / 60 ))
+		printf "  \033[1;35mWARNING:\033[0m %s on pool %s may be hung (no output for %d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
+		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+			$NOTIFY_CMD "[e2e] HUNG? ${suite} on pool ${pool_num} -- no output for ${_idle_min} min" < /dev/null >/dev/null &
 		fi
 	fi
 }
