@@ -151,59 +151,106 @@ aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be re
 echo
 
 #######################
-# Check config in cluster!
-# 1. PRE-PROCESS TARGETS (Resolve DNS once & Deduplicate)
+# Verify NTP configuration on cluster nodes.
+#
+# Phase 1 (long timeout, up to 15 min):
+#   chrony.conf contains all configured "server X iburst" lines.
+#   Proves MachineConfig was applied by MCO.  MCO may reboot nodes, hence
+#   the long timeout.
+#
+# Phase 2 (short timeout, up to 60s):
+#   At least one NTP source is synced (^* or ^+ in chronyc sources).
+#   Once chrony.conf is applied, sync should happen within seconds.
+#   Unreachable sources (^?) are warned but don't fail -- pool servers
+#   may be unreachable from air-gapped networks.
+#
+# We check the config file directly instead of resolving hostnames on bastion,
+# because pool hostnames (e.g. 2.rhel.pool.ntp.org) rotate IPs and chrony on
+# the node will resolve to a different address than bastion's getent.
+
 raw_targets=($ntp_servers)
-ntp_targets=()
 
-# Temporary array to hold all resolved IPs
-temp_ips=()
-
-for t in "${raw_targets[@]}"; do
-	# Simple regex to check if it's already an IP
-	if [[ $t =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-		temp_ips+=("$t")
-	else
-		# Resolve hostname to IP
-		resolved_ip=$(getent hosts "$t" | awk '{print $1}' | head -n 1)
-		if [ -n "$resolved_ip" ]; then
-			temp_ips+=("$resolved_ip")
-			aba_debug "Resolved $t to $resolved_ip"
-		else
-			echo_red "Warning: Could not resolve NTP target $t"
-		fi
-	fi
-done
-
-# Deduplicate the array (sort unique)
-IFS=$'\n' ntp_targets=($(sort -u <<<"${temp_ips[*]}"))
-unset IFS
-
-# 2. Get list of Node IPs
+# Get list of Node IPs
 aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
-# 3. Check function: returns 0 when all nodes have all NTP targets configured
-_ntp_all_nodes_compliant() {
+# Phase 1: verify chrony.conf has all configured server lines on every node.
+_ntp_config_applied() {
 	for host in $nodesIPs; do
-		aba_debug "Checking NTP config in host: $host"
-		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources -n' 2>&1)
-		aba_debug "Node: $host config:"
-		aba_debug "\n$node_sources"
+		aba_debug "Checking chrony.conf on node: $host"
+		node_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1)
+		aba_debug "Node $host chrony.conf:"
+		aba_debug "\n$node_conf"
 
-		for target_ip in "${ntp_targets[@]}"; do
-			aba_debug "Checking IP $target_ip in chrony config"
-			if ! echo "$node_sources" | grep -Fq " $target_ip "; then
+		for svr in "${raw_targets[@]}"; do
+			if ! echo "$node_conf" | grep -qF "server $svr iburst"; then
+				aba_debug "Server '$svr' not yet in chrony.conf on $host"
 				return 1
 			fi
-			aba_debug "target_ip $target_ip found!"
 		done
 	done
 	return 0
 }
 
-if ! aba_wait_show "Verifying NTP on all nodes (${ntp_targets[*]})" 10 900 _ntp_all_nodes_compliant; then
-	aba_abort "Timed out after 15 min waiting for NTP configuration on all nodes."
+if ! aba_wait_show "Waiting for NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to abort)" 10 900 _ntp_config_applied; then
+	echo
+	for host in $nodesIPs; do
+		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1)
+		echo "  Node $host chrony.conf servers:"
+		echo "$_conf" | grep '^server ' | sed 's/^/    /'
+	done
+	echo
+	aba_abort \
+		"Timed out after 15 min waiting for chrony.conf on all nodes." \
+		"MCO may still be rolling out the MachineConfig (node reboots in progress)." \
+		"Check 'oc get mcp' and 'oc get nodes' for status."
 fi
 
-aba_info_ok "All nodes are synchronized!"
+aba_info_ok "chrony.conf applied on all nodes."
+
+# Phase 2: at least one NTP source synced on every node.
+_ntp_source_synced() {
+	for host in $nodesIPs; do
+		aba_debug "Checking NTP sources on node: $host"
+		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
+		aba_debug "Node $host chronyc sources:"
+		aba_debug "\n$node_sources"
+
+		if ! echo "$node_sources" | grep -qE '^\^[*+]'; then
+			aba_debug "No synced NTP source on $host yet"
+			return 1
+		fi
+	done
+	return 0
+}
+
+if ! aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to abort)" 5 60 _ntp_source_synced; then
+	echo
+	for host in $nodesIPs; do
+		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
+		echo "  Node $host chronyc sources:"
+		echo "$_src" | grep '^\^' | sed 's/^/    /'
+	done
+	echo
+	aba_abort \
+		"Timed out after 60s waiting for at least one synced NTP source on all nodes." \
+		"chrony.conf is correctly applied, but no NTP source responded (^* or ^+)." \
+		"Verify the configured NTP servers (${raw_targets[*]}) are reachable from the cluster network."
+fi
+
+# Final report: warn about unreachable sources (don't fail -- at least one is synced).
+_has_warnings=""
+for host in $nodesIPs; do
+	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
+	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}') || true
+	if [ -n "$_unreachable" ]; then
+		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
+		_has_warnings=1
+	fi
+done
+
+if [ -n "$_has_warnings" ]; then
+	aba_info_ok "NTP configured (at least one source synced, some unreachable)."
+else
+	aba_info_ok "NTP configured and all sources synced on all nodes."
+fi

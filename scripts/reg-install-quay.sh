@@ -48,6 +48,21 @@ if [ -s $temp_aba_key ]; then
 	fi
 fi
 
+# Pre-install assertion: detect stale state from a previous install that
+# was not fully uninstalled. Stale redis_pass secrets cause WRONGPASS on
+# the new install; stale containers hold ports and conflict with Ansible.
+_stale=""
+ss -tlnp | grep -q ":${reg_port} " && _stale+="  Port $reg_port still listening"$'\n'
+podman secret ls --format '{{.Name}}' | grep -q redis_pass && _stale+="  redis_pass podman secret exists"$'\n'
+podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres' && _stale+="  Quay containers still present"$'\n'
+if [ -n "$_stale" ]; then
+	aba_abort \
+		"Stale registry state detected on localhost before install:" \
+		"$_stale" \
+		"A previous install was not fully cleaned up." \
+		"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+fi
+
 ask "Install Quay mirror registry on localhost ($(hostname -s)), accessible via $reg_hostport" || exit 1
 
 aba_info "Installing Quay registry on localhost ..."
