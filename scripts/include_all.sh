@@ -912,7 +912,7 @@ aba_wait_show() (
 			_s=0
 			while true; do
 				_e=$(( $(date +%s) - start_ts ))
-				printf '\r[ABA] %s  %s  %s/%s\033[K' "$msg" "${_frames[$(( _s % 4 ))]}" "$(_aba_format_elapsed "$_e")" "$max_fmt"
+				printf '\r[ABA] %s  %s  %s (max %s)\033[K' "$msg" "${_frames[$(( _s % 4 ))]}" "$(_aba_format_elapsed "$_e")" "$max_fmt"
 				_s=$(( _s + 1 ))
 				sleep 0.2
 			done
@@ -934,7 +934,7 @@ aba_wait_show() (
 		_stop_spinner
 		if [ "$use_tty" -eq 1 ]; then
 			_final=$(( $(date +%s) - start_ts ))
-			printf '\r[ABA] %s     %s/%s\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")" "$max_fmt"
+			printf '\r[ABA] %s     %s (max %s)\033[K\n' "$msg" "$(_aba_format_elapsed "$_final")" "$max_fmt"
 		elif [ -n "$hdr_done" ]; then
 			printf '\n'
 		fi
@@ -2242,12 +2242,12 @@ wait_for_all_catalogs() {
 # --- Catalog digest pinning (oc-mirror upstream-contact workaround) ----------
 #
 # oc-mirror v2 resolves catalog tags at runtime, contacting registry.redhat.io
-# even during diskToMirror (load) on disconnected hosts. Pinning catalogs by
-# digest in the ISC prevents this. The user's ISC is never modified -- we
-# produce a separate imageset-config-digest.yaml for oc-mirror to consume.
+# even during disk2mirror (load) on disconnected hosts (OCPBUGS-81712).
+# Pinning catalogs by digest in the ISC prevents this. The user's ISC is never
+# modified -- we produce a separate imageset-config-digest.yaml for oc-mirror.
 #
 # Disable with: OC_MIRROR_PIN_CATALOGS=0 in ~/.aba/config (or env)
-# Remove entirely once oc-mirror fixes upstream tag resolution in air-gap.
+# Remove once oc-mirror fixes upstream tag resolution in air-gap (OCPBUGS-81712).
 #
 # Usage: _oc_mirror_pin_catalogs_by_digest <isc_file> <ocp_ver_major>
 #   isc_file:       basename of ISC relative to data/ (e.g. "imageset-config.yaml")

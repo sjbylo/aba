@@ -34,6 +34,20 @@ if ask "Uninstall Quay mirror registry on localhost, installed at $REG_HOST:$REG
 	aba_info "Running command: $cmd"
 	eval $cmd || exit 1
 
+	# Post-uninstall assertions: verify Quay is fully gone on localhost.
+	# mirror-registry uninstall uses Ansible which can silently skip steps.
+	_stale=""
+	[ -d "$REG_ROOT" ] && _stale+="  REG_ROOT ($REG_ROOT) still exists"$'\n'
+	ss -tlnp | grep -q ":${REG_PORT:-8443} " && _stale+="  Port ${REG_PORT:-8443} still listening"$'\n'
+	podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres' && _stale+="  Quay containers still present"$'\n'
+	podman secret ls --format '{{.Name}}' | grep -q redis_pass && _stale+="  redis_pass podman secret still exists"$'\n'
+	if [ -n "$_stale" ]; then
+		aba_abort \
+			"mirror-registry uninstall reported success but left stale state:" \
+			"$_stale" \
+			"Investigate why mirror-registry's Ansible playbook did not fully clean up."
+	fi
+
 	rm -rf "${regcreds_dir:?}/"*
 
 	aba_info_ok "Quay registry uninstall successful"
