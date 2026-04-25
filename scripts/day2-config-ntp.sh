@@ -178,7 +178,7 @@ nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 _ntp_config_applied() {
 	for host in $nodesIPs; do
 		aba_debug "Checking chrony.conf on node: $host"
-		node_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1)
+		node_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1) || return 1
 		aba_debug "Node $host chrony.conf:"
 		aba_debug "\n$node_conf"
 
@@ -201,7 +201,7 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 elif [ "$_wait_rc" -ne 0 ]; then
 	echo
 	for host in $nodesIPs; do
-		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1)
+		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1) || true
 		echo "  Node $host chrony.conf servers:"
 		echo "$_conf" | grep '^server ' | sed 's/^/    /'
 	done
@@ -218,7 +218,7 @@ aba_info_ok "chrony.conf applied on all nodes."
 _ntp_source_synced() {
 	for host in $nodesIPs; do
 		aba_debug "Checking NTP sources on node: $host"
-		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
+		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || return 1
 		aba_debug "Node $host chronyc sources:"
 		aba_debug "\n$node_sources"
 
@@ -231,7 +231,7 @@ _ntp_source_synced() {
 }
 
 _wait_rc=0
-aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to abort)" 5 60 _ntp_source_synced || _wait_rc=$?
+aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to abort)" 5 600 _ntp_source_synced || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
@@ -239,13 +239,13 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 elif [ "$_wait_rc" -ne 0 ]; then
 	echo
 	for host in $nodesIPs; do
-		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
+		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || true
 		echo "  Node $host chronyc sources:"
-		echo "$_src" | grep '^\^' | sed 's/^/    /'
+		echo "$_src" | grep '^\^' | sed 's/^/    /' || true
 	done
 	echo
 	aba_abort \
-		"Timed out after 60s waiting for at least one synced NTP source on all nodes." \
+		"Timed out after 10 min waiting for at least one synced NTP source on all nodes." \
 		"chrony.conf is correctly applied, but no NTP source responded (^* or ^+)." \
 		"Verify the configured NTP servers (${raw_targets[*]}) are reachable from the cluster network."
 fi
@@ -253,7 +253,7 @@ fi
 # Final report: warn about unreachable sources (don't fail -- at least one is synced).
 _has_warnings=""
 for host in $nodesIPs; do
-	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1)
+	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || true
 	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}') || true
 	if [ -n "$_unreachable" ]; then
 		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
