@@ -22,40 +22,60 @@ _RC_PREFIX="$E2E_RC_PREFIX"
 _NOTIFY_STATUS_INTERVAL=3600
 _last_status_notify_s=${SECONDS:-0}
 
-# --- Process cleanup files on a pool before wiping state ----------------------
+declare -A _dispatch_time=()
+declare -A _hung_notified=()
 
-_process_pool_cleanup_files() {
-	local pool_num="$1"
-	_ssh_con "$pool_num" "
-		_logs=\"\$HOME/.e2e-harness/logs\"
-		_ok=1
-		for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
-			[ -f \"\$f\" ] || continue
-			echo \"    Processing \$(basename \"\$f\") ...\"
-			_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
-			while IFS=' ' read -r target abs_path; do
-				[ -z \"\$abs_path\" ] && continue
-				if echo \"\$f\" | grep -q '\.cleanup\$'; then
-					echo \"      \$target: delete \$abs_path\"
-					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; }\" < /dev/null 2>&1; then
-						echo \"      ERROR: delete failed for \$abs_path on \$target\"
-						_ok=
+# --- Process cleanup files on a remote host -----------------------------------
+# Shared function: SSHes to target, iterates .cleanup and .mirror-cleanup files,
+# runs aba delete/uninstall for each entry, removes processed files.
+# Usage: _run_cleanup_on_host <user@host> [indent]
+#   indent: prefix for log lines (default "    ")
+
+_run_cleanup_on_host() {
+	local target="$1"
+	local indent="${2:-    }"
+	_essh "$target" bash -s -- "$indent" <<-'CLEANUP_HEREDOC'
+		_indent="$1"
+		_logs="$HOME/.e2e-harness/logs"
+		_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+		_all_ok=1
+		for f in "$_logs"/*.cleanup "$_logs"/*.mirror-cleanup; do
+			[ -f "$f" ] || continue
+			echo "${_indent}Processing $(basename "$f") ..."
+			_file_ok=1
+			while IFS=' ' read -r tgt abs_path; do
+				[ -z "$abs_path" ] && continue
+				if echo "$f" | grep -q '\.cleanup$'; then
+					echo "${_indent}  $tgt: delete $abs_path"
+					if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete; }" < /dev/null 2>&1; then
+						echo "${_indent}  ERROR: delete failed for $abs_path on $tgt"
+						_file_ok=""
 					fi
 				else
-					echo \"      \$target: uninstall \$abs_path\"
-					if ! ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; }\" < /dev/null 2>&1; then
-						echo \"      ERROR: uninstall failed for \$abs_path on \$target\"
-						_ok=
+					echo "${_indent}  $tgt: uninstall $abs_path"
+					if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' uninstall || make -C '$abs_path' uninstall; }" < /dev/null 2>&1; then
+						echo "${_indent}  ERROR: uninstall failed for $abs_path on $tgt"
+						_file_ok=""
 					fi
 				fi
-			done < \"\$f\"
-			if [ -n \"\$_ok\" ]; then
-				rm -f \"\$f\"
+			done < "$f"
+			if [ -n "$_file_ok" ]; then
+				rm -f "$f"
 			else
-				echo \"    ERROR: cleanup FAILED -- keeping \$(basename \"\$f\") for investigation\"
+				echo "${_indent}  ERROR: cleanup FAILED -- keeping $(basename "$f") for investigation"
+				_all_ok=""
 			fi
 		done
-	"
+		[ -n "$_all_ok" ]
+	CLEANUP_HEREDOC
+}
+
+# Convenience wrapper: process cleanup files on a pool's conN host.
+_process_pool_cleanup_files() {
+	local pool_num="$1"
+	local target
+	target=$(_con_target "$pool_num")
+	_run_cleanup_on_host "$target"
 }
 
 # --- Dispatch a single suite to a pool ----------------------------------------
@@ -83,25 +103,7 @@ _dispatch_suite() {
 		echo "    User changed ($_prev_user -> $_cur_user)"
 		echo "    Processing $_prev_user's cleanup files before revert ..."
 		local _old_host="${_prev_user}@con${pool_num}.${VM_BASE_DOMAIN}"
-		_essh "$_old_host" "
-			_logs=\"\$HOME/.e2e-harness/logs\"
-			for f in \"\$_logs\"/*.cleanup \"\$_logs\"/*.mirror-cleanup; do
-				[ -f \"\$f\" ] || continue
-				echo \"      Processing \$(basename \"\$f\") ...\"
-				_ssh_opts='-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
-				while IFS=' ' read -r target abs_path; do
-					[ -z \"\$abs_path\" ] && continue
-					if echo \"\$f\" | grep -q '\.cleanup\$'; then
-						echo \"        \$target: delete \$abs_path\"
-						ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' delete || make -C '\$abs_path' delete; }\" < /dev/null 2>&1 || true
-					else
-						echo \"        \$target: uninstall \$abs_path\"
-						ssh \$_ssh_opts \"\$target\" \"[ -d '\$abs_path' ] && { command -v aba >/dev/null 2>&1 && aba -y -d '\$abs_path' uninstall || make -C '\$abs_path' uninstall; }\" < /dev/null 2>&1 || true
-					fi
-				done < \"\$f\"
-				rm -f \"\$f\"
-			done
-		" 2>&1 || echo "    WARNING: old user cleanup had errors (continuing with revert)"
+		_run_cleanup_on_host "$_old_host" "      " 2>&1 || echo "    WARNING: old user cleanup had errors (continuing with revert)"
 	fi
 
 	# Process current user's leftover cleanup files
@@ -144,6 +146,8 @@ _dispatch_suite() {
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
+	_dispatch_time[$pool_num]=$SECONDS
+	unset '_hung_notified[$pool_num]'
 	echo "    tmux session '$_TMUX_SESSION' started on con${pool_num}"
 }
 
@@ -171,6 +175,29 @@ _check_pool() {
 		fi
 		echo "  WARNING: Suite '$suite' on con${pool_num} died without writing .rc (killed/crashed)" >&2
 		echo "255"
+		return
+	fi
+
+	# No-output watchdog: alert if summary log hasn't changed in E2E_HUNG_TIMEOUT
+	if [ -z "${_hung_notified[$pool_num]:-}" ] && [ -n "${_dispatch_time[$pool_num]:-}" ]; then
+		local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
+		if [ "$_elapsed" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
+			local _log_age=""
+			_log_age=$(_ssh_con "$pool_num" "stat -c %Y ~/.e2e-harness/logs/summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
+			if [ -n "$_log_age" ]; then
+				local _now_epoch
+				_now_epoch=$(date +%s)
+				local _idle_secs=$(( _now_epoch - _log_age ))
+				if [ "$_idle_secs" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
+					_hung_notified[$pool_num]=1
+					local _idle_min=$(( _idle_secs / 60 ))
+					printf "  \033[1;35mWARNING:\033[0m %s on pool %s may be hung (no output for %d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
+					if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+						$NOTIFY_CMD "[e2e] HUNG? ${suite} on pool ${pool_num} -- no output for ${_idle_min} min" < /dev/null >/dev/null &
+					fi
+				fi
+			fi
+		fi
 	fi
 }
 
@@ -200,9 +227,7 @@ _record_result() {
 
 	if [ "$rc" -eq 99 ]; then
 		# Framework/infrastructure failure -- re-queue to a different pool.
-		# Track which pools have failed for this suite.
-		local _bad_key="_bad_pools_${suite//[^a-zA-Z0-9_]/_}"
-		eval "${_bad_key}=\"\${${_bad_key}:-} ${pool_num}\""
+		_bad_pools_map[$suite]="${_bad_pools_map[$suite]:-} ${pool_num}"
 		printf "  FRAMEWORK: %-35s pool %-2s  \033[1;35mINFRA FAIL\033[0m (re-queuing)\n" "$suite" "$pool_num"
 		# Don't record in _results; append to _work_queue for re-dispatch.
 		# Caller handles _busy_pools unset and log collection.
@@ -470,11 +495,8 @@ _print_final_summary() {
 
 		if [ -z "$rc" ]; then
 			# No result at all -- check if it was an unresolved infra failure
-			local _bad_key="_bad_pools_${suite//[^a-zA-Z0-9_]/_}"
-			local _bad_val=""
-			eval "_bad_val=\"\${${_bad_key}:-}\""
-			if [ -n "$_bad_val" ]; then
-				printf "  \033[1;35mINFRA\033[0m %-35s (failed on pools:%s)\n" "$suite" "$_bad_val"
+			if [ -n "${_bad_pools_map[$suite]:-}" ]; then
+				printf "  \033[1;35mINFRA\033[0m %-35s (failed on pools:%s)\n" "$suite" "${_bad_pools_map[$suite]}"
 				_infra=$(( _infra + 1 ))
 			else
 				printf "  \033[1;33m????\033[0m  %-35s pool %-2s (no result)\n" "$suite" "$pool"

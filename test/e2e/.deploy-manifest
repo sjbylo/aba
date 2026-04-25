@@ -1,0 +1,12 @@
+# Files/directories to include in developer source deploys to conN.
+# One path per line (relative to ABA root). Globs not supported.
+# Blank lines and #-comments are ignored.
+
+scripts/
+templates/
+tools/
+test/lib.sh
+Makefile
+cli/Makefile
+aba
+install

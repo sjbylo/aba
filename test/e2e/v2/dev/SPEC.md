@@ -250,17 +250,44 @@ The per-pool addressing scheme in `config.env` is clean and collision-free:
 
 ### Concurrent run protection
 
-Two levels of locking prevent race conditions:
+Three levels of locking prevent race conditions:
 
-- **Coordinator lock (bastion):** `run.sh` acquires an exclusive `flock` on
-  `/tmp/e2e-run.lock` before any mutating command (run, restart, deploy,
-  destroy, verify). Read-only commands (stop, status, attach, list, live,
-  dash) skip the lock so they work while a run is active. The lock
-  auto-releases when `run.sh` exits (fd closes) -- no stale lock files.
+- **Per-pool locks (bastion):** `run.sh` acquires an exclusive `flock` on
+  `/tmp/e2e-pool-N.lock` for each pool in the `-p` selection before any
+  mutating command (run, restart, deploy, destroy, verify). This allows
+  concurrent `run.sh` instances targeting different pools -- e.g.
+  `run.sh run -s X -p 2` and `run.sh run -s Y -p 3` can run simultaneously.
+  Locks auto-release when `run.sh` exits (fd closes) -- no stale lock files.
+- **Global lock (bastion):** Only acquired for `--recreate-golden` (`-G`),
+  since the golden VM is a shared resource across all pools. Uses
+  `/tmp/e2e-run.lock`.
 - **Runner lock (conN):** Runner uses a PID + timestamp lock file with 24h
   auto-expiry to prevent two runners from executing the same suite
   simultaneously. Stale locks (dead PID) are cleaned automatically.
   Lock is removed on EXIT trap.
+
+### Hung-suite detection
+
+The dispatcher monitors each running suite's summary log for activity.
+If a suite produces no new output for `E2E_HUNG_TIMEOUT` seconds (default
+3600 = 60 minutes), the dispatcher sends a notification via `NOTIFY_CMD`
+and marks the pool as potentially hung. It does NOT kill the suite -- the
+intent is to alert the operator so they can investigate via `run.sh attach`.
+
+This catches genuinely stuck processes (e.g., password prompts, SSH hangs)
+while allowing normal long operations (cluster installs up to 40 min,
+oc-mirror operations up to 60 min, ACM/MCH waits up to 30 min) to complete
+without false alarms. Override via `E2E_HUNG_TIMEOUT` in `config.env`.
+
+### Adaptive polling
+
+The dispatcher poll interval adapts to activity:
+- Starts at 5 seconds
+- Doubles each cycle with no state change (5s -> 10s -> 20s -> 30s)
+- Caps at 30 seconds
+- Resets to 5 seconds whenever a suite completes or a new suite is dispatched
+This reduces latency for quick suite transitions while avoiding excessive
+SSH polling when all pools are busy with long-running suites.
 
 ### Golden rules and test hygiene comments
 
@@ -603,7 +630,7 @@ Applicable options: `-p`
 | `--suite` / `--suites` | `-s`  | `X,Y`    | Select specific suite(s), comma-separated                                                                                        | `run`, `reschedule`, `restart`      |
 | `--all`                | `-a`  |          | Select all suites (default for `run`/`reschedule`). Excludes `dummy-*` suites unless `-D` is also passed.                        | `run`, `reschedule`                 |
 | `--with-dummy`         | `-D`  |          | Include `dummy-*` framework test suites (excluded from `--all` by default)                                                       | `run`, `reschedule`                 |
-| `--pools`              | `-p`  | `SPEC`   | Pool selection (see syntax below)                                                                                                | All commands except `list`          |
+| `--pool`               | `-p`  | `SPEC`   | Pool selection (see syntax below). Aliases: `--pools`, `--pool-list`.                                                            | All commands except `list`          |
 | `--force`              | `-f`  |          | Override safety checks (dispatch to busy pool, hot-deploy)                                                                       | `run`, `deploy`                     |
 | `--dev`                | `-d`  |          | Push local source to `~/aba` on conN instead of git clone                                                                        | `run`, `deploy`, `restart`          |
 | `--resume`             | `-r`  |          | Skip previously-passed tests (checkpointed). Rarely needed -- the interactive mini-menu (`[R]etry`, `[s]kip`) is usually easier. | `run`, `restart`                    |
@@ -643,7 +670,7 @@ reclone from golden (both scoped to the pools selected by `-p`);
 
 ### Pool selection syntax
 
-`-p` and `--pools` are interchangeable. The argument SPEC accepts three forms:
+`-p`, `--pool`, `--pools`, and `--pool-list` are all interchangeable. The argument SPEC accepts three forms:
 
 
 | Form                 | Example  | Expands to                                  |
@@ -927,6 +954,8 @@ All test users have sudo, so ownership is not a barrier.
 | `/tmp/e2e-dispatch-state.txt`  | Current dispatcher state (suites, progress) | run.sh               |
 | `/tmp/e2e-inject-queue.txt`    | Inject queue for reschedule/force-dispatch  | run.sh / commands.sh |
 | `/tmp/e2e-forced-dispatch.txt` | Force-dispatch tracking                     | run.sh               |
+| `/tmp/e2e-pool-N.lock`         | Per-pool flock (allows concurrent dispatchers) | run.sh            |
+| `/tmp/e2e-run.lock`            | Global flock (golden VM rebuild only)       | run.sh               |
 | `/tmp/e2e-live-owner`          | Live dashboard ownership marker             | tmux-ui.sh           |
 
 
@@ -942,8 +971,8 @@ all pool operations.
 disk layout switched to a single `/` partition with `expand-root.service`
 (symlink workarounds removed), pool scoping uses `--pool-list` (exact CSV
 instead of max-pool range), xtrace is redirected to log files (terminal
-shows progress only), and a `flock`-based global lock prevents concurrent
-`run.sh` instances.
+shows progress only), and per-pool `flock` locks allow concurrent `run.sh`
+instances targeting different pools.
 
 `**run.sh` is the sole entry point for all E2E operations.** Never call
 `setup-infra.sh`, `runner.sh`, or any `lib/*.sh` module directly. All

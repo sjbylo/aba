@@ -18,17 +18,23 @@
 # Writes path to temp tarball on stdout.
 _make_source_tar() {
 	local aba_root="$1"
-	local _tar
+	local _tar _manifest _paths=()
 	_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
-	tar czf "$_tar" -C "$aba_root" \
-		--exclude='*/.*' \
-		scripts/ \
-		templates/ \
-		test/lib.sh \
-		Makefile \
-		cli/Makefile \
-		aba \
-		install
+	_manifest="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.deploy-manifest"
+
+	if [ -f "$_manifest" ]; then
+		while IFS= read -r _line; do
+			_line="${_line%%#*}"
+			_line="${_line## }"
+			_line="${_line%% }"
+			[ -z "$_line" ] && continue
+			_paths+=("$_line")
+		done < "$_manifest"
+	else
+		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
+	fi
+
+	tar czf "$_tar" -C "$aba_root" --exclude='*/.*' "${_paths[@]}"
 	echo "$_tar"
 }
 

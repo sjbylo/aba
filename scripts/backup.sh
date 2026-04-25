@@ -84,8 +84,8 @@ file_list=$(find		\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
 	! -path "${repo_dir}/mirror/data/working-dir*"  		\
-	! -path "${repo_dir}/mirror/sync*"				\
-	! -path "${repo_dir}/mirror/save*"				\
+	! -path "${repo_dir}/mirror/sync/*"				\
+	! -path "${repo_dir}/mirror/save/*"				\
 	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
 	! -path "${repo_dir}/test/output.log" 				\
 	! -path "${repo_dir}/bundles*"	 				\
@@ -191,11 +191,11 @@ rm -f "${repo_dir}/.bundle"  # We don't want this repo to be labeled as 'bundle'
 if [ $ret -ne 0 ]; then
 	echo >&2
 	echo_red "Error: The tar command failed with return code $ret!" >&2
-	echo_red "       The archive is very likely incomplete!  Fix the problem and try again!" >&2
+	echo_red "       The archive is very unlikely to be complete!  Fix the problem and try again!" >&2
 	echo  >&2
 	#aba_abort \
 	#	"The tar command failed with return code $ret!" \
-	#	"The archive is very likely incomplete!  Fix the problem and try again!" 
+	#	"The archive is very unlikely to be complete!  Fix the problem and try again!" 
 
 	exit $ret
 fi
