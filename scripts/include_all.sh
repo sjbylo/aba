@@ -2735,6 +2735,13 @@ get_task_error() {
 	run_once -e -i "$task_id"
 }
 
+# Check if running from an ABA bundle (disconnected/DISCO environment).
+# The .bundle flag file is created by backup.sh when building the archive.
+# Returns: 0 if in bundle mode, 1 otherwise.
+is_bundle_mode() {
+	[ -f "${ABA_ROOT:-.}/.bundle" ]
+}
+
 # Check internet connectivity to required sites
 # Usage: check_internet_connectivity <prefix> [quiet]
 #   prefix: Task ID prefix (e.g., "cli" or "tui")
