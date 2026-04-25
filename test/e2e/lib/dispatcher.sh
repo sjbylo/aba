@@ -228,7 +228,12 @@ _record_result() {
 	if [ "$rc" -eq 99 ]; then
 		# Framework/infrastructure failure -- re-queue to a different pool.
 		_bad_pools_map[$suite]="${_bad_pools_map[$suite]:-} ${pool_num}"
-		printf "  FRAMEWORK: %-35s pool %-2s  \033[1;35mINFRA FAIL\033[0m (re-queuing)\n" "$suite" "$pool_num"
+		local _bar99
+		_bar99=$(printf '%0.s━' {1..60})
+		printf "\n  \033[1;45;97m %s \033[0m\n" "$_bar99"
+		printf "  \033[1;45;97m  ⚠  INFRA FAIL  %-29s  pool %-2s     \033[0m\n" "$suite" "$pool_num"
+		printf "  \033[1;45;97m  ⚠  Re-queuing to another pool ...                          \033[0m\n"
+		printf "  \033[1;45;97m %s \033[0m\n\n" "$_bar99"
 		# Don't record in _results; append to _work_queue for re-dispatch.
 		# Caller handles _busy_pools unset and log collection.
 		_work_queue+=("$suite")
@@ -240,12 +245,20 @@ _record_result() {
 
 	_results[$suite]="$rc"
 
+	local _bar
+	_bar=$(printf '%0.s━' {1..60})
 	if [ "$rc" -eq 0 ]; then
-		printf "  COMPLETED: %-35s pool %-2s  \033[1;32mPASS\033[0m\n" "$suite" "$pool_num"
+		printf "\n  \033[1;42;97m %s \033[0m\n" "$_bar"
+		printf "  \033[1;42;97m  ✔  PASS  %-36s  pool %-2s     \033[0m\n" "$suite" "$pool_num"
+		printf "  \033[1;42;97m %s \033[0m\n\n" "$_bar"
 	elif [ "$rc" -eq 3 ]; then
-		printf "  COMPLETED: %-35s pool %-2s  \033[1;33mSKIP\033[0m\n" "$suite" "$pool_num"
+		printf "\n  \033[1;43;30m %s \033[0m\n" "$_bar"
+		printf "  \033[1;43;30m  ⊘  SKIP  %-36s  pool %-2s     \033[0m\n" "$suite" "$pool_num"
+		printf "  \033[1;43;30m %s \033[0m\n\n" "$_bar"
 	else
-		printf "  COMPLETED: %-35s pool %-2s  \033[1;31mFAIL\033[0m (exit=%s)\n" "$suite" "$pool_num" "$rc"
+		printf "\n  \033[1;41;97m %s \033[0m\n" "$_bar"
+		printf "  \033[1;41;97m  ✘  FAIL  %-36s  pool %-2s  rc=%-3s \033[0m\n" "$suite" "$pool_num" "$rc"
+		printf "  \033[1;41;97m %s \033[0m\n\n" "$_bar"
 	fi
 
 	if [ "$rc" -ne 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
@@ -482,9 +495,11 @@ _print_final_summary() {
 	done
 
 	echo ""
-	echo "========================================"
-	echo "  Final Summary"
-	echo "========================================"
+	local _sum_bar
+	_sum_bar=$(printf '%0.s━' {1..60})
+	printf "  \033[1;44;97m %s \033[0m\n" "$_sum_bar"
+	printf "  \033[1;44;97m  ■  FINAL SUMMARY                                            \033[0m\n"
+	printf "  \033[1;44;97m %s \033[0m\n" "$_sum_bar"
 
 	local _total=0 _passed=0 _failed=0 _skipped=0 _infra=0
 
@@ -520,7 +535,7 @@ _print_final_summary() {
 	[ "$_infra" -gt 0 ] && _summary+="  Infra: $_infra"
 	echo "$_summary"
 	echo "  Logs: $_RUN_DIR/logs/"
-	echo "========================================"
+	printf "  \033[1;44;97m %s \033[0m\n" "$_sum_bar"
 
 	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 		local _done_detail=""

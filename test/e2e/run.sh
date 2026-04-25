@@ -36,6 +36,7 @@ source "$_RUN_DIR/lib/dispatcher.sh"
 
 # --- Parse args + load config ------------------------------------------------
 
+_ORIGINAL_ARGS=("$@")
 _parse_args "$_RUN_DIR" "$@"
 _load_config "$_RUN_DIR"
 _detect_git_metadata "$_ABA_ROOT"
@@ -63,7 +64,7 @@ _acquire_pool_locks() {
 }
 
 case "$CLI_COMMAND" in
-	stop|status|attach|list|live|dash)
+	stop|status|attach|list|live|dash|daemon)
 		;;
 	*)
 		if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
@@ -125,6 +126,71 @@ case "$CLI_COMMAND" in
 		validate_suites "$_RUN_DIR" "${local_suites[@]}" || exit 1
 		cmd_reschedule "$_RUN_DIR" "${local_suites[@]}"
 		exit 0
+		;;
+	daemon)
+		_DAEMON_LOG="$_RUN_DIR/logs/daemon.log"
+		_DAEMON_MAX_CRASHES=5
+		_DAEMON_BACKOFF=30
+		_DAEMON_BACKOFF_MAX=300
+		_daemon_crashes=0
+		_daemon_backoff=$_DAEMON_BACKOFF
+
+		mkdir -p "$_RUN_DIR/logs"
+
+		_daemon_log() { printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$_DAEMON_LOG"; }
+
+		# Rebuild the original args, replacing "daemon" with "run"
+		_daemon_args=()
+		for _a in "${_ORIGINAL_ARGS[@]}"; do
+			[ "$_a" = "daemon" ] && _a="run"
+			_daemon_args+=("$_a")
+		done
+		# Ensure --force is present (stale state from previous crash)
+		_has_force=""
+		for _a in "${_daemon_args[@]}"; do
+			[[ "$_a" =~ ^(-f|--force)$ ]] && _has_force=1
+		done
+		[ -z "$_has_force" ] && _daemon_args+=("--force")
+
+		_daemon_log "Daemon started (max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
+		_daemon_log "Args: ${_daemon_args[*]}"
+
+		while true; do
+			_daemon_log "Launching dispatcher ..."
+			_drc=0
+			"$BASH" "$_RUN_DIR/run.sh" "${_daemon_args[@]}" || _drc=$?
+
+			if [ "$_drc" -eq 0 ]; then
+				_daemon_log "Dispatcher exited cleanly (all suites completed). Restarting full cycle ..."
+				_daemon_crashes=0
+				_daemon_backoff=$_DAEMON_BACKOFF
+				if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+					$NOTIFY_CMD "[e2e-daemon] All suites done. Restarting cycle." < /dev/null >/dev/null &
+				fi
+				sleep 5
+				continue
+			fi
+
+			_daemon_crashes=$(( _daemon_crashes + 1 ))
+			_daemon_log "Dispatcher CRASHED (exit=$_drc, crash #${_daemon_crashes}/${_DAEMON_MAX_CRASHES})"
+
+			if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+				$NOTIFY_CMD "[e2e-daemon] Dispatcher crashed (exit=$_drc, #${_daemon_crashes}). Restarting in ${_daemon_backoff}s ..." < /dev/null >/dev/null &
+			fi
+
+			if [ "$_daemon_crashes" -ge "$_DAEMON_MAX_CRASHES" ]; then
+				_daemon_log "FATAL: $_DAEMON_MAX_CRASHES consecutive crashes. Giving up."
+				if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+					$NOTIFY_CMD "[e2e-daemon] FATAL: ${_DAEMON_MAX_CRASHES} consecutive crashes. Daemon stopped." < /dev/null >/dev/null &
+				fi
+				exit 1
+			fi
+
+			_daemon_log "Sleeping ${_daemon_backoff}s before restart ..."
+			sleep "$_daemon_backoff"
+			_daemon_backoff=$(( _daemon_backoff * 2 ))
+			[ "$_daemon_backoff" -gt "$_DAEMON_BACKOFF_MAX" ] && _daemon_backoff=$_DAEMON_BACKOFF_MAX
+		done
 		;;
 esac
 
@@ -353,6 +419,10 @@ fi
 
 # Selective reclone: destroy only pools that changed OS (not global --recreate-vms)
 if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; then
+	_reclone_bar=$(printf '%0.s━' {1..60})
+	printf "\n  \033[1;43;30m %s \033[0m\n" "$_reclone_bar"
+	printf "  \033[1;43;30m  ⟳  OS RECLONE: Rebuilding pools %-25s \033[0m\n" "${_pools_needing_reclone[*]}"
+	printf "  \033[1;43;30m %s \033[0m\n\n" "$_reclone_bar"
 	for _p in "${_pools_needing_reclone[@]}"; do
 		_pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
 
@@ -403,7 +473,10 @@ fi
 
 if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_RECREATE_VMS:-}" ]; then
 	echo ""
-	echo "  Running setup-infra.sh for pools: $CLI_POOL_LIST ..."
+	_infra_bar=$(printf '%0.s━' {1..60})
+	printf "  \033[1;46;30m %s \033[0m\n" "$_infra_bar"
+	printf "  \033[1;46;30m  ⟳  INFRA: Provisioning pool VMs %-26s \033[0m\n" "(pools: $CLI_POOL_LIST)"
+	printf "  \033[1;46;30m %s \033[0m\n\n" "$_infra_bar"
 	_base_infra_flags="--pools-file ${_RUN_DIR}/pools.conf"
 	[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _base_infra_flags+=" --recreate-golden"
 	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
@@ -416,6 +489,10 @@ if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_REC
 	for _p in $CLI_POOL_LIST; do
 		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${_p}"
 	done
+
+	printf "\n  \033[1;46;30m %s \033[0m\n" "$_infra_bar"
+	printf "  \033[1;46;30m  ✔  INFRA: Pool VMs ready %-33s \033[0m\n" "(pools: $CLI_POOL_LIST)"
+	printf "  \033[1;46;30m %s \033[0m\n\n" "$_infra_bar"
 fi
 
 # --- Optional revert to pool-ready snapshot -----------------------------------

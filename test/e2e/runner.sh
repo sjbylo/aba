@@ -1037,6 +1037,11 @@ _elapsed=$(( $(date +%s) - _start_time ))
 _mins=$(( _elapsed / 60 ))
 _secs=$(( _elapsed % 60 ))
 
+# Write the suite's exit code to the RC file immediately, so it survives
+# even if runner.sh is killed before the final write at the bottom.
+# Post-suite integrity checks below may upgrade this to a failure.
+echo "$_rc" > "$RC_FILE"
+
 if [ $_rc -eq 0 ]; then
 	echo ""
 	echo "  Suite $SUITE: PASS (${_mins}m ${_secs}s)"
