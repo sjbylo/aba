@@ -628,7 +628,7 @@ _cleanup_dis_aba() {
 			&& _podman_stale+="  $_try_user: redis_pass podman secret exists"$'\n'
 		_essh "$_uhost" "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" \
 			&& _podman_stale+="  $_try_user: quay containers still present"$'\n'
-		_essh "$_uhost" "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null | grep -q ." \
+		_essh "$_uhost" "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null | grep -v 'not-found' | grep -q ." \
 			&& _podman_stale+="  $_try_user: quay systemd user units still active"$'\n'
 	done
 	if [ -n "$_podman_stale" ]; then

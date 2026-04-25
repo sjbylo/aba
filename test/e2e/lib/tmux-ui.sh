@@ -52,6 +52,18 @@ cmd_live() {
 		_pools+=("$_p")
 	done
 
+	# Reuse existing live session if it has the right number of panes
+	local _existing_panes=0
+	_existing_panes=$(tmux list-panes -t "$_sess" 2>/dev/null | wc -l) || _existing_panes=0
+	if [ "$_existing_panes" -eq "$_np" ]; then
+		echo "Live session already running with $_np panes -- reattaching."
+		if [ -n "${TMUX:-}" ]; then
+			exec tmux switch-client -t "$_sess"
+		else
+			exec tmux attach -t "$_sess"
+		fi
+	fi
+
 	tmux kill-session -t "$_sess" 2>/dev/null
 	tmux set-option -g history-limit 50000
 
@@ -186,6 +198,13 @@ _create_tmux_dashboard() {
 " fi;"\
 " done"
 	}
+
+	# Reuse existing dashboard if it has the right number of panes
+	local _existing_panes=0
+	_existing_panes=$(tmux list-panes -t "$_sess" 2>/dev/null | wc -l) || _existing_panes=0
+	if [ "$_existing_panes" -eq "$_np" ]; then
+		return 0
+	fi
 
 	tmux kill-session -t "$_sess" 2>/dev/null
 
