@@ -599,6 +599,8 @@ The second attempt also fails because `virsh undefine` removed the ISO volume, s
 
 **Found**: 2026-04-16 (Pool 2, airgapped-local-reg suite, "Incremental: mesh operators")
 **Severity**: High -- blocks incremental operator loads on disconnected hosts
+**Upstream bug**: [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712) -- oc-mirror v2 attempts to retrieve images from registry.redhat.io in disk2mirror mode
+**Upstream PR**: [openshift/oc-mirror#1390](https://github.com/openshift/oc-mirror/pull/1390)
 **Related**: catalog clobber fix (`0281f6d`), `--since` delta behavior
 
 ### Root cause

@@ -1,15 +1,41 @@
-## [Unreleased]
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.0...HEAD)
+
+### Bug Fixes
+
+- **oc-mirror catalog digest pinning** - Workaround for oc-mirror v2 bug ([OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)) where disk2mirror (load) tries to contact upstream registries for catalog tags even in air-gapped environments. ABA now captures image digests during `podman pull` and substitutes them into a temporary `imageset-config-digest.yaml` for all oc-mirror operations (mirror2disk/save, mirror2mirror/sync, disk2mirror/load). The bug only manifests on load, but pinning is applied uniformly for consistency. Transparent to the user; disable with `OC_MIRROR_PIN_CATALOGS=0`.
+- **OSUS CSV cleanup** - `day2-config-osus.sh` now deletes stale ClusterServiceVersions during cleanup, preventing `ConstraintsNotSatisfiable` errors on retry.
+- **s390x/ppc64le platform selection** - `install-config.yaml` template now forces `platform: none` for System Z and Power architectures (non-SNO), which only support user-provisioned infrastructure.
+- **OSUS pre-flight check** - Removed `2>&1` from `oc get` command substitutions in pre-flight checks so stderr messages are visible for debugging and not captured into variables (causing false positives).
+- **Bundle archive contents** - `VERSION`, `CHANGELOG.md`, and `LICENSE` now included in bundle archives.
+- **`ABA_VERSION` corruption guard** - `pre-commit-checks.sh` now validates that `ABA_VERSION` is a semver string, catching merge conflicts that could overwrite it with a timestamp.
+
+### Improvements
+
+- **`is_bundle_mode()` helper** - New function in `include_all.sh` for clean bundle/DISCO environment detection. `cli-install-all.sh` now skips download waits in bundle mode.
+- **Hardened `cli-download-all.sh`** - Added contract header, proper option parsing, `make` error handling, and tool name validation.
+
+### E2E Testing
+
+- **Dispatcher daemon mode** - New `run.sh daemon` auto-restarts the dispatcher on crash with exponential backoff (30s-300s), max 5 consecutive crashes, and Telegram notifications.
+- **Early RC write** - `runner.sh` writes the suite exit code immediately after the suite exits, preventing lost PASS results if the runner is killed before final write.
+- **Colored banners** - Prominent PASS/FAIL/SKIP/INFRA banners in dispatcher output for suite completion and infrastructure rebuild phases.
+- **Per-pool locks** - Replaced global `flock` with per-pool locks, allowing concurrent `run.sh` operations on different pools.
+- **Hung-suite detection** - No-output watchdog (default 60 min) notifies operators about potentially hung suites. Fixed false positives caused by `stat` not dereferencing `summary.log` symlinks.
+- **Adaptive polling** - Replaced fixed 30-second sleep with adaptive interval (5-30s) that resets on state changes.
+- **Cleanup deduplication** - Consolidated 5 duplicated cleanup code blocks into shared `_run_cleanup_on_host()`.
+- **Deploy manifest** - Explicit `.deploy-manifest` file lists paths for source deployments.
+- **Bundle mode verification** - Airgapped suites now verify `.bundle` flag file and bundle banner after install.
 
 ---
 
-## [1.0.0] - 2026-04-21
+## [1.0.0](https://github.com/sjbylo/aba/releases/tag/v1.0.0) - 2026-04-21
 
 Stability, reliability and UX improvements
-
 
 Stability and reliability improvements.
 
 ### Improvements
+
 - **Unified spinner/progress UI (`aba_wait_show`)** - All long-running polling loops (cluster startup, VM power-on/off, OSUS install, day2 operations) now use a consistent background spinner with timeout display, replacing inconsistent dot-printing and silent waits. Includes `parse_duration()` for human-readable time config values.
 - **Improved VM annotations** - VMware VM annotations now show richer metadata (cluster name, role, network, install date, console/API URLs). Added `virsh desc` annotations for KVM VMs. Condensed to 5 lines for readability; KVM descriptions persisted to XML.
 - **Reliable `aba delete`** - Verified VM destruction with config regeneration. `aba delete` now exits 0 on no-op (already deleted), deregisters deleted clusters properly, and ensures symlinks via `make init` after a clean.
@@ -22,6 +48,7 @@ Stability and reliability improvements.
 - **Removed generated mirror scripts** - Eliminated `*-mirror.sh` wrapper scripts; oc-mirror execution is now inlined, reducing confusion about which script actually runs.
 
 ### Bug Fixes
+
 - **`reg-save.sh` missing `normalize-mirror-conf`** - `reg-save.sh` did not source `normalize-mirror-conf`, silently ignoring `data_dir` from `mirror.conf`. This caused oc-mirror caches and `TMPDIR` to default to `$HOME` instead of the configured larger partition. Fixed by adding the missing `source`.
 - **Bundle builds forced full archives** - `OC_MIRROR_SINCE` was being applied to bundle builds, causing oc-mirror to create full archives on every run instead of reusing cached data across bundle types of the same OCP version. Disabled for bundle workflows.
 - **`aba delete` after `aba clean`** - Ensure symlinks are recreated via `make init` so `aba delete` works even after a `make clean`.
@@ -30,6 +57,7 @@ Stability and reliability improvements.
 - **Typo in warning messages** - Fixed "IMPORANT" to "IMPORTANT" across warning messages.
 
 ### E2E Testing
+
 - **Symlink-safe ABA installation** - New `e2e_install_aba` helper function replaces 12 duplicate inline install blocks across suite files. Uses `rm -rf ~/aba/* ~/aba/.??*` pattern to preserve symlinks for root user disk redirection.
 - **Root disk space via symlinks** - Golden VM now creates `/root/aba -> /home/root/aba` and `/root/tmp -> /home/root/tmp` symlinks during provisioning, redirecting disk-heavy directories to the larger `/home` partition. `data_dir` mechanism handles oc-mirror cache redirection.
 - **Robust `dnf update` in golden VM** - Uses `nohup` + polling instead of inline execution, preventing SSH timeout during long OS updates.
@@ -42,12 +70,12 @@ Stability and reliability improvements.
 
 ---
 
-## [0.9.9] - 2026-04-01
+## [0.9.9](https://github.com/sjbylo/aba/releases/tag/v0.9.9) - 2026-04-01
 
 Hardening, stability and bug fixes
 
-
 ### Improvements
+
 - **Graceful shutdown resilience** - Debug pod warmup timeout increased to 90s (from 30s) for slow image pulls. Warmup failure now warns and attempts shutdown via SSH fallback instead of aborting. Shutdown `oc debug` timeout increased to 60s. Compact single-line wait progress output.
 - **Day2 cluster health checks** - `day2`, `day2-osus`, and `day2-ntp` now show a one-liner warning when cluster operators or MCP are degraded/updating, replacing the blocking 30-minute MCO wait.
 - **Updated `operator-set-ai`** - Replaced `serverless-operator` with `gpu-operator-certified` and `nfd`. Updated mesh from v2 to v3 (`servicemeshoperator3`). Added `rhcl-operator` (Red Hat Connectivity Link).
@@ -55,6 +83,7 @@ Hardening, stability and bug fixes
 - **Consistent SSH config** - All `ssh`/`scp` calls in ABA scripts now use `-F ~/.aba/ssh.conf`, eliminating noisy host-key warnings and ensuring uniform connection settings (`cluster-rescue.sh`, `kvm-upload.sh`).
 
 ### Bug Fixes
+
 - **False oc-mirror failure from stale error files** - Save, load, and sync share `data/working-dir/logs/`. A leftover `mirroring_errors_*.txt` from a previous operation caused the next run to report failure even when oc-mirror succeeded. Stale error files are now cleared before each oc-mirror attempt with a warning logged.
 - **Pasta hairpin fix for rootless Podman 5.x** - `int_down()` now unconditionally adds a device-only default route so `pasta` networking can handle hairpin connections (host connecting to its own FQDN/IP). Fixes "Connection reset by peer" during mirror-registry install on RHEL 9 with rootless Podman.
 - **CLI download retry in bundle creation** - `scripts/make-bundle.sh` now retries CLI binary downloads (3 attempts, 30s backoff) to handle transient network failures during `aba bundle`.
@@ -64,6 +93,7 @@ Hardening, stability and bug fixes
 - **v2 bundle pipeline TEMPLATES_DIR** - Fixed path that incorrectly pointed to old v1 templates. v2 templates (README, VERIFY, UNPACK) are now self-contained under `bundles/v2/templates/`.
 
 ### E2E Testing
+
 - **Periodic Telegram notifications** - Dispatcher now sends status updates every 10 minutes from its own in-memory state, replacing the unreliable external monitor script.
 - **Pool registry purge** - `setup-pool-registry.sh` now purges extraneous repositories from the pool registry, preventing disk exhaustion on conN hosts.
 - **Bundle suite /tmp fix** - Changed bundle tests to use `~/tmp/delete-me` instead of `/tmp/delete-me` to avoid "No space left on device" on small `/tmp` partitions.
@@ -77,13 +107,12 @@ Hardening, stability and bug fixes
 
 ---
 
-## [0.9.8] - 2026-03-29
+## [0.9.8](https://github.com/sjbylo/aba/releases/tag/v0.9.8) - 2026-03-29
 
 KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4.21 compatibility, bug fixes and improvements
 
-<!-- Before release: git shortlog -sne <prev-tag>..HEAD | grep -v sjbylo — credit ALL external contributors -->
-
 ### New Features
+
 - **KVM/libvirt platform support** - Full KVM hypervisor support as a new platform alongside VMware and bare-metal. Includes 11 `kvm-*.sh` lifecycle scripts (create, delete, start, stop, kill, ls, exists, on, refresh, upload, create-folder), `kvm.conf` template, and `ensure_virsh()` helpers. Supports non-root SSH to the KVM host.
 - **Externalized Makefile targets** - 19 targets (info, login, shell, day2, shutdown, startup, create, delete, ls, start, stop, kill, etc.) moved from `Makefile.cluster` into `aba.sh` case handlers, enabling three-way platform dispatch (vmw/kvm/bm) via `_ensure_hv_ready()`.
 - **Bundle v2 pipeline** - New idempotent `bundles/v2/` pipeline with numbered phase scripts, per-step log files, and combined log in `work/`. Replaces monolithic `bundle-create-test.sh`. Supports stale work-dir cleanup and retry.
@@ -94,9 +123,10 @@ KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4
 - **Pre-flight validation** - DNS, NTP reachability and IP conflict detection before ISO generation, integrated as a Make dependency ([#22](https://github.com/sjbylo/aba/pull/22), [@mateuszslugocki](https://github.com/mateuszslugocki)).
 - **Configurable preflight strictness** - `verify_conf=all/conf/off` controls validation: `all` (default) runs full network checks, `conf` validates config files only, `off` skips all. Use `aba --verify conf` when the bastion is on a different network than cluster nodes.
 - **Sigstore-aware mirroring** - Per-registry sigstore signature control via `~/.config/containers/registries.d/aba-sigstore.yaml`. Preserves cosign signatures for OCP release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), required for OCP 4.21+ `ClusterImagePolicy` verification, while allowing unsigned certified/community operator images to mirror without errors. Optional `OC_MIRROR_FLAGS` in `~/.aba/config` for additional oc-mirror flags.
-- **Auto-detect network values** - When domain, machine\_network, dns\_servers, next\_hop\_address, or ntp\_servers are empty in `aba.conf` at cluster creation time, they are auto-detected and written back so the user can review before proceeding.
+- **Auto-detect network values** - When domain, machinenetwork, dnsservers, nexthopaddress, or ntpservers are empty in `aba.conf` at cluster creation time, they are auto-detected and written back so the user can review before proceeding.
 
 ### Changed
+
 - **Consolidated mirror data directories** - `mirror/save/` and `mirror/sync/` merged into single `mirror/data/` directory. Imageset config template renamed to `imageset-config.yaml.j2`.
 - `aba reset` now cleans up `.index/` directory (cached catalog indexes).
 - Catalog download dialog shows OCP version.
@@ -113,6 +143,7 @@ KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4
 - Suppress `cd` stderr in `run_once()` to avoid noise in TUI output.
 
 ### Bug Fixes
+
 - **SNO install failure with `verify_conf=conf`** - `verify-release-image.sh` was skipping `openshift-install` binary extraction from the mirror when `--verify conf` was used. The fallback generic binary embeds quay.io URLs, causing `SignatureValidationFailed` in OCP 4.21+. Fix: `--verify conf` now only skips the skopeo connectivity check, not binary extraction. Extracted binary filename simplified to `openshift-install-mirror-$reg_host`.
 - **`vmware.conf`/`kvm.conf` symlink regression** - Externalization removed auto-symlink creation. `_ensure_hv_ready()` now conditionally creates symlinks if missing.
 - **Arping IP conflict detection on multi-homed hosts** - Fixed `arping -I` interface selection.
@@ -125,6 +156,7 @@ KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4
 - **Bundle Makefile** - Error when `OP_SETS` missing for non-release bundles.
 
 ### E2E Testing
+
 - **`--revert` flag** - `run.sh run --revert` reverts all pool VMs (conN+disN) to their `pool-ready` snapshots before starting tests, giving a clean baseline and reclaiming VMware thin-disk bloat.
 - **Suite banner** - Banner now reads `SUITE START:` for clearer log boundaries.
 - **Live view scrollback** - Removed `tmux clear-history` so scrolling up in the live view shows previous suite output.
@@ -140,16 +172,17 @@ KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4
 - **Regression test** - `verify_conf=conf` mirror binary extraction test added to prevent SNO install regression.
 
 ### Community
+
 - [@mateuszslugocki](https://github.com/mateuszslugocki) - Pre-flight validation for DNS, NTP and IP conflicts ([#22](https://github.com/sjbylo/aba/pull/22))
 
 ---
 
-## [0.9.7] - 2026-03-15
+## [0.9.7](https://github.com/sjbylo/aba/releases/tag/v0.9.7) - 2026-03-15
 
 Quay/Docker now first-class, improved abatui, easier existing registry support and many fixes
 
-
 ### New Features
+
 - **Named mirrors** - `aba mirror --name mymirror` creates an isolated mirror directory (like named clusters). Multiple enclaves each get their own credentials and config.
 - **Existing-registry registration** - Register an external registry with `--pull-secret-mirror` and `--ca-cert` flags. ABA stores credentials locally and never touches the registry. Deregister with `aba unregister`.
 - **Docker registry as first-class citizen** - New `reg_vendor` setting in `mirror.conf` (values: `auto`, `quay`, `docker`). `auto` selects Quay on x86_64/s390x/ppc64le, Docker on arm64. All install/uninstall commands now work through a unified dispatcher (`reg-install.sh`) that handles vendor selection, local/remote deployment, and the full lifecycle. Both Quay and Docker registries support remote installation via SSH.
@@ -162,6 +195,7 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **Release hotfix mode** - `release.sh --hotfix` for quick patch releases.
 
 ### Changed
+
 - **Registry credentials moved to persistent location** - `mirror/regcreds/` contents (pull secret, root CA) now stored in `~/.aba/mirror/<mirror-name>/`, surviving `aba clean` and `aba reset`. A convenience symlink `mirror/regcreds -> ~/.aba/mirror/mirror/` is created for browsing.
 - **Multi-mirror support foundation** - New `mirror_name` setting in `cluster.conf` (default: `mirror`) binds a cluster to a specific mirror directory. Credentials scoped per mirror name.
 - **Registry script architecture** - Monolithic `reg-install.sh` refactored into thin dispatcher + shared library (`reg-common.sh`) + vendor-specific scripts (`reg-install-quay.sh`, `reg-install-docker.sh`) + generic SSH orchestrator (`reg-install-remote.sh`). Same pattern for uninstall. Shared functions extracted and improved (getent fallback for DNS, unified firewall handling).
@@ -170,12 +204,14 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **Vendor-neutral messages** - Registry log and error messages no longer assume Quay.
 
 ### TUI
+
 - **Settings persist** - Registry type (Quay/Docker) and "ask before big steps" saved to and reloaded from config files, including values with inline comments.
 - **Exit button on Pull Secret dialog** - Escape is no longer the only way out.
 - **ISC race condition fixed** - Background ISC generation no longer deletes save-dir ISC prematurely; System Z timestamp equality handled.
 - **Basket works on fresh install** - Empty basket no longer appears when no operators are selected on first run.
 
 ### Bug Fixes
+
 - **Quay resource check warns, not aborts** - Pre-flight CPU/memory check logs a warning instead of blocking install.
 - **Docker `--network host`** - Docker registry and pool registries use host networking, fixing pasta/hairpin issues.
 - **CLI download race fixed** - `oc-mirror` and other CLI downloads complete before catalog fetches start.
@@ -203,12 +239,12 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 
 ---
 
-## [0.9.6] - 2026-02-25
+## [0.9.6](https://github.com/sjbylo/aba/releases/tag/v0.9.6) - 2026-02-25
 
 Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 
-
 ### New Features
+
 - **Custom manifest support (agent-based installer)** - Place `.yaml`/`.yml` files in `openshift/` or `manifests/` directories in a cluster folder to embed custom Kubernetes manifests (MachineConfig, networking, storage) into the agent-based ISO at bootstrap time ([#18](https://github.com/sjbylo/aba/pull/18), [@mateuszslugocki](https://github.com/mateuszslugocki))
 - **Custom manifest support (day2)** - Place `.yaml`/`.yml` files in `day2-custom-manifests/` to have them automatically applied during `aba day2`, after oc-mirror resources and signatures ([#19](https://github.com/sjbylo/aba/pull/19), [@mateuszslugocki](https://github.com/mateuszslugocki))
 - **oc-mirror parallel images setting** - New `OC_MIRROR_PARALLEL_IMAGES` in `~/.aba/config` (default 8) controls `--parallel-images` for save/load/sync, useful for reducing concurrency on slow or unreliable networks
@@ -217,16 +253,19 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 - **Makefile bootstrap target** - New `aba bootstrap` follows the install dependency chain up to `agents-up`, then monitors bootstrap progress
 
 ### Improvements
+
 - **`aba ls` auto-installs govc** - Running `aba ls` now installs `govc` automatically if it is missing
 - **Release script `--ref` support** - Release from a specific older commit on dev, useful when dev has moved ahead of what was tested
 
 ### Bug Fixes
+
 - **CA cert permissions** - Use `install -m 644` instead of `sudo cp` so CA certs are readable by non-root users; fixes "certificate signed by unknown authority" TLS failures
 - **`cluster.conf` override by `aba.conf`** - Fixed source order in `vmw-create.sh` so per-cluster `machine_network` is no longer clobbered by `aba.conf`, fixing IP validation failures for VLAN clusters
 - **Congratulations box colors** - Green borders with distinct white, cyan, and yellow text instead of uniform color
 - **`ASK_OVERRIDE` unbound variable** - Guarded with `${ASK_OVERRIDE:-}` in four places so scripts are safe under `set -u`
 
 ### E2E Test Framework
+
 - **`e2e_poll` / `e2e_poll_remote` helper** - New wall-clock-bounded polling functions replace count-based retries for condition checks (e.g. `e2e_poll 600 30 "desc" "cmd"` = poll every 30s, timeout after 10 minutes)
 - **`-q` (quiet) flag for `e2e_run`** - Suppress command output to log file only; used for background wait steps
 - **Failure prompt: flush TTY buffer** - Stale keystrokes no longer cause accidental command execution at the interactive `[R]etry` prompt
@@ -254,26 +293,29 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 - **Remove `2>&1` from testy SSH verification** - SSH warnings no longer merged into stdout, preventing string comparison failures
 
 ### Documentation
+
 - **`2>&1` rule in Rules of Engagement** - Added: only use `2>/dev/null` or `2>&1` when there is an explicit reason
 
 ---
 
-## [0.9.4] - 2026-02-18
+## [0.9.4](https://github.com/sjbylo/aba/releases/tag/v0.9.4) - 2026-02-18
 
 Catalog download fixes, TUI improvements, and reliability bug fixes
 
-
 ### New Features
+
 - **Catalog download throttling** - New `CATALOG_MAX_PARALLEL` setting (default 3) controls parallel operator catalog downloads, preventing 401 authentication errors and timeouts with registry.redhat.io
 - **TUI pull-secret-first wizard** - Pull secret moved to the first wizard step, enabling operator catalog prefetch to begin as early as possible
 
 ### Improvements
+
 - **First-install congratulations banner** - Improved visual presentation with colored box on successful first install
 - **TUI settings display** - Current settings shown inline on the Settings menu item
 - **Network configuration display** - Show network configuration during cluster setup
 - **Image load retries** - Increased retry count for image loading reliability
 
 ### Bug Fixes
+
 - **Catalog download crash** - Fixed arithmetic evaluation (`running++` with `set -e`) that silently aborted catalog downloads after the first catalog, causing "ImageSet configuration file not found" errors
 - **Catalog prefetch visibility** - Removed silent `2>/dev/null` suppression from catalog prefetch; errors now visible for debugging
 - **Bundle/save without registry** - `aba bundle` and `aba save` no longer fail when the registry binary download is unavailable; the download is attempted but non-fatal
@@ -291,12 +333,12 @@ Catalog download fixes, TUI improvements, and reliability bug fixes
 
 ---
 
-## [0.9.3] - 2026-02-13
+## [0.9.3](https://github.com/sjbylo/aba/releases/tag/v0.9.3) - 2026-02-13
 
 Multi-architecture fix, improved release process and docs
 
-
 ### Improvements
+
 - **Release script `--dry-run` flag** - Preview releases safely without making any changes
 - **Release post-tag verification** - Automated checks that VERSION, ABA_VERSION, CHANGELOG, and README are correct in the tagged commit
 - **Release workflow docs rewritten** - Documents both HEAD and ref-based flows, dry-run usage, common pitfalls, and quick reference
@@ -304,6 +346,7 @@ Multi-architecture fix, improved release process and docs
 - **README cleanup** - Removed stale content, fixed inconsistencies, broadened architecture references, improved install description
 
 ### Bug Fixes
+
 - **s390x/ppc64le architecture support** - Fixed architecture mapping that caused x86 or arm64 binaries to be downloaded on s390x (System Z) and ppc64le (Power) systems
 - **Install update detection** - Uses `diff` to compare file contents instead of timestamp comparison, fixing false "up-to-date" when switching between dev and release builds
 - **Test SSH scripts** - Added `exit 0` to prevent spurious failures when final informational SSH call times out
@@ -311,12 +354,12 @@ Multi-architecture fix, improved release process and docs
 
 ---
 
-## [0.9.2] - 2026-02-13
+## [0.9.2](https://github.com/sjbylo/aba/releases/tag/v0.9.2) - 2026-02-13
 
 TUI polish, new E2E test framework, reliability and UX fixes
 
-
 ### New Features
+
 - **TUI promoted to stable** - Removed "Experimental" label, renamed to `abatui.sh`, added root symlink `./abatui`
 - **Older version option** - TUI version selection now offers Latest, Previous, and Older (N-2 minor release)
 - **Version display** - `aba --aba-version` now shows the semantic version (e.g. v0.9.2)
@@ -324,6 +367,7 @@ TUI polish, new E2E test framework, reliability and UX fixes
 - **TUI automated tests** - New test suites for basic flow, full wizard, and early-exit cleanup
 
 ### Bug Fixes
+
 - Fixed `run_once` race condition (TOCTOU) in validation and guarded unbound variables
 - Fixed `run_once` "Error: Task not started" message suppressed in quiet wait mode
 - Fixed download-before-install sequencing so `ensure_*()` functions wait for downloads
@@ -334,6 +378,7 @@ TUI polish, new E2E test framework, reliability and UX fixes
 - Fixed misleading "Downloading CLI" message when CLIs already installed
 
 ### Improvements
+
 - TUI exit shows consistent summary with modified files, log path, and help hints
 - TUI Settings and action dialogs now have inline Help buttons
 - TUI help text clarifies Save/Bundle (mirror-to-disk) vs Sync (mirror-to-mirror) operations
@@ -345,16 +390,17 @@ TUI polish, new E2E test framework, reliability and UX fixes
 - E2E suites use pool-aware helpers instead of hardcoded IPs
 
 ### Community
+
 - [@sylviyayy](https://github.com/sylviyayy) - Added FAQ section and Day 2 documentation to README
 
 ---
 
-## [0.9.1] - 2026-02-08
+## [0.9.1](https://github.com/sjbylo/aba/releases/tag/v0.9.1) - 2026-02-08
 
 Bug fixes and improvements
 
-
 ### Bug Fixes
+
 - Fixed TUI hang: use dynamic version in catalog peek checks
 - Fixed segfault caused by tar extracting incomplete tarball during download
 - Fixed bundle creation with non-standard directory names ([#13](https://github.com/sjbylo/aba/pull/13), [@mateuszslugocki](https://github.com/mateuszslugocki))
@@ -366,6 +412,7 @@ Bug fixes and improvements
 - Fixed `oc-mirror list operators` requiring `--v1` flag ([#11](https://github.com/sjbylo/aba/pull/11), [@KamilBlaz](https://github.com/KamilBlaz))
 
 ### Improvements
+
 - Added log rotation and history file to run_once()
 - Always install all RPM packages for both connected and disconnected environments
 - Removed oc-mirror v1 mirroring code and oc_mirror_version variable
@@ -373,15 +420,17 @@ Bug fixes and improvements
 - Removed redhat-marketplace catalog references
 
 ### Community
+
 - [@KamilBlaz](https://github.com/KamilBlaz) - Fixed oc-mirror operator listing ([#11](https://github.com/sjbylo/aba/pull/11))
 
 ---
 
-## [0.9.0] - 2026-01-26
+## [0.9.0](https://github.com/sjbylo/aba/releases/tag/v0.9.0) - 2026-01-26
 
 First release
 
 ### Core Features
+
 - Air-gapped OpenShift installation and management
 - Agent-based installer support (SNO, compact, standard clusters)
 - Mirror registry setup (mirror-registry and docker-registry)
@@ -391,16 +440,19 @@ First release
 - Operator catalog management
 
 ### New Features
+
 - **TUI** - Interactive wizard for guided disconnected installation setup (`./abatui`)
 - **Versioning** - Check your ABA version with `aba --aba-version`
 
 ### Improvements
+
 - **Faster bundle creation** - CLI tools now download in parallel
 - **Better validation** - Real-time OpenShift version checking with clear error messages
 - **Improved feedback** - Progress indicators for long-running tasks, scrollable command output
 - **Enhanced UX** - Cleaner screen handling, helpful waiting messages
 
 ### Bug Fixes
+
 - Fixed "Task not started and no command provided" error when running `aba -d mirror load` directly
 - Fixed `oc-mirror list operators` incorrectly reporting success (exit code 0) when catalog download fails
 - Fixed catalog download error detection and reporting
@@ -416,15 +468,3 @@ First release
 - **MAJOR**: Breaking changes (CLI changes, workflow changes)
 - **MINOR**: New features (backward compatible)  
 - **PATCH**: Bug fixes
-
-[Unreleased]: https://github.com/sjbylo/aba/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/sjbylo/aba/releases/tag/v1.0.0
-[0.9.9]: https://github.com/sjbylo/aba/releases/tag/v0.9.9
-[0.9.8]: https://github.com/sjbylo/aba/releases/tag/v0.9.8
-[0.9.7]: https://github.com/sjbylo/aba/releases/tag/v0.9.7
-[0.9.6]: https://github.com/sjbylo/aba/releases/tag/v0.9.6
-[0.9.4]: https://github.com/sjbylo/aba/releases/tag/v0.9.4
-[0.9.3]: https://github.com/sjbylo/aba/releases/tag/v0.9.3
-[0.9.2]: https://github.com/sjbylo/aba/releases/tag/v0.9.2
-[0.9.1]: https://github.com/sjbylo/aba/releases/tag/v0.9.1
-[0.9.0]: https://github.com/sjbylo/aba/releases/tag/v0.9.0
