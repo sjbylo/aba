@@ -55,21 +55,8 @@ _acquire_pool_locks() {
 		local _lockfile="${E2E_POOL_LOCK_PREFIX}-${_p}.lock"
 		eval "exec ${_fd}>\"$_lockfile\""
 		if ! flock -n "$_fd"; then
-			# Check for stale lock (holder PID dead)
-			local _holder
-			_holder=$(cat "$_lockfile" 2>/dev/null | head -1)
-			if [ -n "$_holder" ] && ! kill -0 "$_holder" 2>/dev/null; then
-				echo "  Pool $_p: stale lock (pid $_holder dead) -- reclaiming"
-				rm -f "$_lockfile"
-				eval "exec ${_fd}>\"$_lockfile\""
-				if ! flock -n "$_fd"; then
-					echo "FATAL: Pool $_p is locked by another run.sh instance" >&2
-					exit 1
-				fi
-			else
-				echo "FATAL: Pool $_p is locked by another run.sh instance (pid ${_holder:-unknown})" >&2
-				exit 1
-			fi
+			echo "FATAL: Pool $_p is locked by another run.sh instance" >&2
+			exit 1
 		fi
 		echo $$ >&$_fd
 		_fd=$(( _fd + 1 ))
