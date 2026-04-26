@@ -265,8 +265,8 @@ e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
 e2e_run_remote "Verify chronyc sources show IP" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep $NTP_IP"
 
-e2e_run_remote "Verify chronyc sources show ntp.example.com" \
-    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep ntp.example.com"
+e2e_run_remote "Verify chrony.conf contains ntp.example.com" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.example.com iburst'"
 
 e2e_run_remote "Verify chrony.conf contains ntp.lan" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.lan iburst'"
