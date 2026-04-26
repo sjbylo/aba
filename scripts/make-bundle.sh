@@ -176,8 +176,8 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "Stdout mode: streaming tar bundle to stdout"
 	aba_info "Downloading binary data." >&2  # Must use stderr channel here
 
-	aba_debug "Calling: make -s -C mirror save retry=7"
-	make -s -C mirror save retry=7 >&2 	|| exit 1
+	aba_debug "Calling: make -s -C mirror save retry=2"
+	make -s -C mirror save retry=2 >&2 	|| exit 1
 	aba_debug "Mirror save completed successfully"
 
 	aba_info "Ensuring all CLI installation files are downloaded..." >&2
@@ -218,8 +218,8 @@ if [ "$light_bundle" ]; then
 
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
-	aba_debug "Calling: make -C mirror save retry=7"
-	make -C mirror save retry=7				# Pull required release (and possibly operator) images.  Retry on failure. 
+	aba_debug "Calling: make -C mirror save retry=2"
+	make -C mirror save retry=2				# Pull required release (and possibly operator) images.  Retry on failure. 
 	aba_debug "Mirror save completed"
 	
 	aba_info "Ensuring all CLI installation files are downloaded..."
@@ -260,8 +260,8 @@ else
 
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
-	aba_debug "Calling: make -C mirror save retry=7"
-	make -C mirror save retry=7		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
+	aba_debug "Calling: make -C mirror save retry=2"
+	make -C mirror save retry=2		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
 	
 	aba_info "Ensuring all CLI installation files are downloaded..."
