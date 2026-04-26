@@ -717,7 +717,7 @@ e2e_cleanup_clusters() {
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' delete || make -C '$abs_path' delete
+				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete
 			else
 				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
 			fi" \
@@ -815,7 +815,7 @@ e2e_cleanup_mirrors() {
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				command -v aba >/dev/null 2>&1 && aba -y -d '$abs_path' uninstall || make -C '$abs_path' uninstall
+				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
 			else
 				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
 			fi" \

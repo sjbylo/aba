@@ -7,6 +7,7 @@
 #
 # Functions:
 #   sync_harness     -- push test harness to ~/.e2e-harness/ on a conN target
+#   sync_infra_aba   -- push infra-owned aba binary to conN + disN
 #   sync_source      -- push ABA source tarball to ~/aba on a conN target
 #   sync_extras      -- push notify.sh, vmware.conf, root essentials
 #   deploy_pool      -- full deploy to one pool (source + harness + extras)
@@ -60,16 +61,17 @@ sync_harness() {
 	_escp "${aba_root}/test/e2e/scripts/"*.sh        "${target}:~/.e2e-harness/scripts/"
 }
 
-# Deploy infra-owned aba binary to ~/.e2e-harness/bin/aba on disN.
+# Deploy infra-owned aba binary to ~/.e2e-harness/bin/aba on both conN and disN.
 # Uses the committed scripts/aba.sh from $E2E_GIT_BRANCH (not local working copy).
-# Deploys for both root and $VM_DEFAULT_USER so _cleanup_dis_aba can SSH as either.
-# Usage: sync_dis_aba <pool_num> <aba_root>
-sync_dis_aba() {
+# Deploys for both root and $VM_DEFAULT_USER so cleanup functions can SSH as either.
+# Usage: sync_infra_aba <pool_num> <aba_root>
+sync_infra_aba() {
 	local pool_num="$1"
 	local aba_root="$2"
 	local branch="${E2E_GIT_BRANCH:-dev}"
 	local default_user="${VM_DEFAULT_USER:-steve}"
 	local domain="${VM_BASE_DOMAIN:-example.com}"
+	local con_fqdn="con${pool_num}.${domain}"
 	local dis_fqdn="dis${pool_num}.${domain}"
 
 	local _tmp
@@ -80,19 +82,23 @@ sync_dis_aba() {
 		return 1
 	}
 
-	local _user
-	for _user in root "$default_user"; do
-		local _target="${_user}@${dis_fqdn}"
-		_essh "$_target" "mkdir -p ~/.e2e-harness/bin" &&
-		_escp "$_tmp" "${_target}:~/.e2e-harness/bin/aba" &&
-		_essh "$_target" "chmod +x ~/.e2e-harness/bin/aba" || {
-			echo "    WARNING: failed to deploy infra aba to $_target" >&2
-			rm -f "$_tmp"
-			return 1
-		}
+	local _host _user _target
+	for _host in "$con_fqdn" "$dis_fqdn"; do
+		for _user in root "$default_user"; do
+			_target="${_user}@${_host}"
+			_essh "$_target" "mkdir -p ~/.e2e-harness/bin" &&
+			_escp "$_tmp" "${_target}:~/.e2e-harness/bin/aba" &&
+			_essh "$_target" "chmod +x ~/.e2e-harness/bin/aba" || {
+				echo "    WARNING: failed to deploy infra aba to $_target" >&2
+				rm -f "$_tmp"
+				return 1
+			}
+		done
 	done
 	rm -f "$_tmp"
 }
+# Backward-compat alias
+sync_dis_aba() { sync_infra_aba "$@"; }
 
 # Push ABA source tarball to ~/aba on conN (for --dev mode).
 # Overlays on existing ~/aba (never wipes).
@@ -187,7 +193,7 @@ deploy_pool() {
 
 	# Harness deploy
 	if sync_harness "$target" "$aba_root" "$deploy_config"; then
-		sync_dis_aba "$pool_num" "$aba_root" || echo "WARNING: infra aba deploy to dis${pool_num} failed"
+		sync_infra_aba "$pool_num" "$aba_root" || echo "WARNING: infra aba deploy to pool ${pool_num} failed"
 		sync_extras "$target" "$user"
 		echo "+ harness done"
 	else

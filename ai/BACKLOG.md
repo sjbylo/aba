@@ -1638,3 +1638,42 @@ esac
 - Search for other functions that use `[ -s vmware.conf ]` / `[ -s kvm.conf ]` as branching logic and fix them too
 - Ensure `$platform` is available in the calling context (sourced from `aba.conf` or passed as env var)
 
+---
+
+## E2E: Parallelize deploy loops in `run.sh`
+
+**Priority:** Medium
+**Added:** 2026-04-26
+
+### Problem
+
+`run.sh` deploys the test harness and source code to conN hosts sequentially:
+
+```
+Deploying test harness to con1 ...
+Deploying test harness to con2 ...
+Deploying test harness to con3 ...
+Deploying test harness to con4 ...
+```
+
+Same for `--dev` source deploys. With 4+ pools, the sequential loop adds unnecessary startup latency (each deploy involves SSH + scp + tar extract).
+
+### Proposed fix
+
+Run the per-pool deploy operations in parallel (background each, then `wait`):
+
+```bash
+for _p in $CLI_POOL_LIST; do
+	deploy_pool "$_p" &
+done
+wait
+```
+
+Same treatment for the `--dev` source deploy loop and `sync_dis_aba` calls.
+
+### Considerations
+
+- Output interleaving: redirect each pool's output to a temp file or prefix with `[conN]` to keep logs readable
+- Error handling: capture each background job's exit code via `wait $pid; rc=$?` and report failures
+- SSH connection limits: unlikely to be an issue with 4-6 pools, but monitor
+
