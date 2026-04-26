@@ -9,9 +9,14 @@
 - **Bundle archive contents** - `VERSION`, `CHANGELOG.md`, and `LICENSE` now included in bundle archives.
 - **`ABA_VERSION` corruption guard** - `pre-commit-checks.sh` now validates that `ABA_VERSION` is a semver string, catching merge conflicts that could overwrite it with a timestamp.
 - **`day2-ntp` API unavailable after NTP config** - `day2-config-ntp.sh` now waits for all MachineConfigPools to finish updating (node reboots) before verifying chrony.conf and NTP sources. Previously, the script could exit while the MCO was still rebooting nodes, leaving the API server unreachable for the next command.
+- **CLI flag loss via `aba cluster -n`** - When using `-n` (name-based) instead of `-d` (directory-based), 5 CLI flags (`num_workers`, `num_masters`, `vlan`, `ssh_key_file`, `mirror_name`) were silently lost because they weren't forwarded through the Makefile -> `setup-cluster.sh` -> `create-cluster-conf.sh` chain. Additionally, re-running `aba cluster -n` on an existing `cluster.conf` ignored all 13 cluster flags. Fixed by adding a `replace-value-conf` override block in `setup-cluster.sh` that applies CLI-passed values after initial generation.
 
 ### Improvements
 
+- **`--mirror-name` flag** - New CLI flag (`aba cluster -n mycluster --mirror-name mymirror`) for named mirror (enclave) workflows. Writes `mirror_name=` to `cluster.conf`.
+- **Removed `--proxy`/`--no-proxy` flags** - Dead flags replaced by `--int-connection` (`-I proxy`/`-I direct`/`-I disconnected`).
+- **`register`/`unregister` help and docs** - `aba register -h` and `aba unregister -h` now show mirror help (was falling through to generic help). Added `register`/`unregister` to main command list in `aba -h`, added `--reg-port` example to README, fixed error messages to include `register` keyword. Added `OC_MIRROR_PIN_CATALOGS` to `~/.aba/config` template.
+- **Graceful Ctrl-C handling** - `aba_wait_show` callers (shutdown, startup, NTP waits) now detect SIGINT/SIGTERM and print "Aborted" instead of "Timed out". Startup messages show actionable errors.
 - **`is_bundle_mode()` helper** - New function in `include_all.sh` for clean bundle/DISCO environment detection. `cli-install-all.sh` now skips download waits in bundle mode.
 - **Hardened `cli-download-all.sh`** - Added contract header, proper option parsing, `make` error handling, and tool name validation.
 - **Reduced default retry counts** - Bundle save and example `--retry` values reduced from 7-8 to 2, matching typical network reliability.

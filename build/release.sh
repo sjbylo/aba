@@ -428,14 +428,16 @@ echo -e "${YELLOW}[5/$TOTAL] Updating CHANGELOG.md...${NC}"
 
 TODAY=$(date +%Y-%m-%d)
 
-NEW_RELEASE_SECTION="## [$NEW_VERSION] - $TODAY
+REPO_URL="https://github.com/sjbylo/aba"
+
+NEW_RELEASE_SECTION="## [$NEW_VERSION]($REPO_URL/releases/tag/v$NEW_VERSION) - $TODAY
 
 $RELEASE_DESC
 
 $UNRELEASED_CONTENT"
 
 {
-    echo "## [Unreleased]"
+    echo "## [Unreleased]($REPO_URL/compare/v$NEW_VERSION...HEAD)"
     echo ""
     echo "---"
     echo ""
@@ -446,11 +448,6 @@ $UNRELEASED_CONTENT"
     # (i.e. all previous release sections).
     sed -n '/^---$/,$p' CHANGELOG.md | tail -n +2
 } > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
-
-# Point [Unreleased] comparison link at HEAD vs the new tag
-sed -i "s|\[Unreleased\]:.*|[Unreleased]: https://github.com/sjbylo/aba/compare/v$NEW_VERSION...HEAD|" CHANGELOG.md
-# Add a release link for the new version right after the [Unreleased] link
-sed -i "/^\[Unreleased\]:/a [$NEW_VERSION]: https://github.com/sjbylo/aba/releases/tag/v$NEW_VERSION" CHANGELOG.md
 
 echo -e "${GREEN}       ✓ CHANGELOG.md updated${NC}\n"
 
