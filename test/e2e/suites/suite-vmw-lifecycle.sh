@@ -127,7 +127,7 @@ e2e_run "Generate pool-registry pull secret" \
 EOPS"
 
 e2e_run "Register pool registry" \
-    "aba -d mirror register pull_secret_mirror=/tmp/pool-reg-pull-secret.json ca_cert=$POOL_REG_DIR/certs/ca.crt"
+    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 

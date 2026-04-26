@@ -45,6 +45,8 @@ plan_tests \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
+    "Register: --reg-host and --reg-port CLI flags" \
+    "Register: named mirror (enclave workflow)" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -160,7 +162,7 @@ EOPS"
 # This creates state.sh (REG_VENDOR=existing) so reg-install.sh's fast-path
 # skips installation and just verifies, allowing 'aba mirror sync' to work.
 e2e_run "Register pool registry" \
-    "aba -d mirror register pull_secret_mirror=/tmp/pool-reg-pull-secret.json ca_cert=$POOL_REG_DIR/certs/ca.crt"
+    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
@@ -347,6 +349,53 @@ e2e_run "Assert mirror binary re-extracted despite verify_conf=conf" \
 
 e2e_run "Restore verify_conf=all" \
 	"aba --verify all"
+
+test_end
+
+# ============================================================================
+# Register/unregister CLI flag coverage
+# ============================================================================
+test_begin "Register: --reg-host and --reg-port CLI flags"
+
+e2e_run "Unregister pool registry for re-registration test" \
+    "aba -d mirror unregister"
+
+e2e_run "Register with explicit --reg-host and --reg-port" \
+    "aba -d mirror register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+e2e_run "Verify registry access after --reg-host/--reg-port register" \
+    "aba -d mirror verify"
+
+e2e_run "Assert reg_host in mirror.conf matches CLI flag" \
+    "grep -q 'reg_host=${CON_HOST}' mirror/mirror.conf"
+
+e2e_run "Assert reg_port in mirror.conf matches CLI flag" \
+    "grep -q 'reg_port=8443' mirror/mirror.conf"
+
+test_end
+
+# ============================================================================
+# Named mirror + register (enclave workflow)
+# ============================================================================
+test_begin "Register: named mirror (enclave workflow)"
+
+e2e_run "Create named mirror directory" \
+    "aba mirror --name test-enclave || true"  # make exits non-zero with editor=none after creating dir
+
+e2e_run "Assert test-enclave directory exists" \
+    "test -d test-enclave && test -f test-enclave/mirror.conf"
+
+e2e_run "Register pool registry to named mirror" \
+    "aba -d test-enclave register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+e2e_run "Verify named mirror registry access" \
+    "aba -d test-enclave verify"
+
+e2e_run "Unregister named mirror" \
+    "aba -d test-enclave unregister"
+
+e2e_run "Remove named mirror directory" \
+    "rm -rf test-enclave"
 
 test_end
 

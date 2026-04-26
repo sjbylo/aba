@@ -262,7 +262,7 @@ do
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
 			cat $ABA_ROOT/others/help-aba.txt
-		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" ]; then
+		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
 		elif [ "$cur_target" = "cluster" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
