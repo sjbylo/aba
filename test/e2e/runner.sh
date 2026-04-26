@@ -617,12 +617,18 @@ _cleanup_dis_aba() {
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "
+			_aba=\$HOME/.e2e-harness/bin/aba
 			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
-				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
-				cd ~/aba && ~/.e2e-harness/bin/aba -y -d mirror uninstall
+				echo '  [cleanup] Found mirror dir for $_try_user -- trying aba uninstall'
+				if cd ~/aba && \$_aba -y -d mirror uninstall 2>&1; then
+					echo '  [cleanup] uninstall OK'
+				else
+					echo '  [cleanup] uninstall failed -- trying aba unregister (external registry)'
+					cd ~/aba && \$_aba -y -d mirror unregister 2>&1 || exit 1
+				fi
 			fi
 		" 2>&1 || {
-			echo "  ERROR: aba uninstall as $_try_user on disN failed (rc=$?)"
+			echo "  ERROR: aba uninstall/unregister as $_try_user on disN failed (rc=$?)"
 			echo "  Stale podman state (secrets, systemd units) will break the next install."
 			_uninstall_failed=1
 		}
