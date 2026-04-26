@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260425120852
+ABA_BUILD=20260426102428
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1223,7 +1223,7 @@ if [ -f .bundle ]; then
 	echo
 	echo_white "Examples:"
 	echo_white "To install the registry on the local machine, accessible via $(hostname -s).$domain, run:"
-	echo_white "  aba -d mirror load -H $(hostname -s).$domain --retry 8"
+	echo_white "  aba -d mirror load -H $(hostname -s).$domain --retry 2"
 	echo
 	echo_white "To install the (docker) registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
 	echo_white "  aba -d mirror load -H remote-registry.$domain --vendor docker -k '~/.ssh/id_rsa' -U user --retry"

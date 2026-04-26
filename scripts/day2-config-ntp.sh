@@ -153,13 +153,15 @@ echo
 #######################
 # Verify NTP configuration on cluster nodes.
 #
-# Phase 1 (long timeout, up to 15 min):
-#   chrony.conf contains all configured "server X iburst" lines.
-#   Proves MachineConfig was applied by MCO.  MCO may reboot nodes, hence
-#   the long timeout.
+# Phase 1: Wait for all MachineConfigPools to finish updating.
+#   MCO renders the new MachineConfig, drains and reboots nodes.
+#   On SNO the master pool reboot takes the API offline temporarily.
+#   We must wait for MCP stability before checking anything on nodes.
 #
-# Phase 2 (short timeout, up to 60s):
-#   At least one NTP source is synced (^* or ^+ in chronyc sources).
+# Phase 2: chrony.conf contains all configured "server X iburst" lines.
+#   Quick sanity check that the MachineConfig content is correct.
+#
+# Phase 3: At least one NTP source is synced (^* or ^+ in chronyc sources).
 #   Once chrony.conf is applied, sync should happen within seconds.
 #   Unreachable sources (^?) are warned but don't fail -- pool servers
 #   may be unreachable from air-gapped networks.
@@ -168,13 +170,42 @@ echo
 # because pool hostnames (e.g. 2.rhel.pool.ntp.org) rotate IPs and chrony on
 # the node will resolve to a different address than bastion's getent.
 
+# Phase 1: wait for all MachineConfigPools to finish rolling out.
+_all_mcp_updated() {
+	local updating
+	updating=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null) || return 1
+	# If any pool is still Updating, not done yet
+	echo "$updating" | grep -q True && return 1
+	local degraded
+	degraded=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null) || return 1
+	echo "$degraded" | grep -q True && return 1
+	return 0
+}
+
+_wait_rc=0
+aba_wait_show "Waiting for NTP MachineConfig to roll out on all nodes (Ctrl-C to skip)" 15 900 _all_mcp_updated || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	echo
+	oc get mcp 2>/dev/null || true
+	echo
+	aba_abort \
+		"Timed out after 15 min waiting for NTP MachineConfig rollout." \
+		"Check 'oc get mcp' and 'oc get nodes' for status."
+fi
+
+aba_info_ok "NTP MachineConfig rolled out on all nodes."
+
 raw_targets=($ntp_servers)
 
-# Get list of Node IPs
+# Get list of Node IPs (after MCP rollout, so API is stable)
 aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
-# Phase 1: verify chrony.conf has all configured server lines on every node.
+# Phase 2: verify chrony.conf has all configured server lines on every node.
 _ntp_config_applied() {
 	for host in $nodesIPs; do
 		aba_debug "Checking chrony.conf on node: $host"
@@ -193,7 +224,7 @@ _ntp_config_applied() {
 }
 
 _wait_rc=0
-aba_wait_show "Waiting for NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to abort)" 10 900 _ntp_config_applied || _wait_rc=$?
+aba_wait_show "Verifying NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to skip)" 10 300 _ntp_config_applied || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
@@ -207,14 +238,14 @@ elif [ "$_wait_rc" -ne 0 ]; then
 	done
 	echo
 	aba_abort \
-		"Timed out after 15 min waiting for chrony.conf on all nodes." \
-		"MCO may still be rolling out the MachineConfig (node reboots in progress)." \
+		"Timed out after 5 min waiting for chrony.conf on all nodes." \
+		"MachineConfigPools are updated but chrony.conf content doesn't match." \
 		"Check 'oc get mcp' and 'oc get nodes' for status."
 fi
 
 aba_info_ok "chrony.conf applied on all nodes."
 
-# Phase 2: at least one NTP source synced on every node.
+# Phase 3: at least one NTP source synced on every node.
 _ntp_source_synced() {
 	for host in $nodesIPs; do
 		aba_debug "Checking NTP sources on node: $host"
@@ -231,7 +262,7 @@ _ntp_source_synced() {
 }
 
 _wait_rc=0
-aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to abort)" 5 600 _ntp_source_synced || _wait_rc=$?
+aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to skip)" 5 600 _ntp_source_synced || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
