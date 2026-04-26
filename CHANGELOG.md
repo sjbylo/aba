@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.1...HEAD)
+
+---
+
+## [1.0.1](https://github.com/sjbylo/aba/releases/tag/v1.0.1) - 2026-04-26
+
+Bug fixes and reliability improvements
+
 
 ### Bug Fixes
 
