@@ -77,7 +77,7 @@ _release_pool_locks() {
 trap _release_pool_locks EXIT
 
 case "$CLI_COMMAND" in
-	stop|status|attach|list|live|dash|daemon)
+	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy)
 		;;
 	*)
 		if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
