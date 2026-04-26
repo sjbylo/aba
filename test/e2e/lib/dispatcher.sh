@@ -25,6 +25,13 @@ _last_status_notify_s=${SECONDS:-0}
 declare -A _dispatch_time=()
 declare -A _hung_notified=()
 
+# Per-pool INFRA FAIL cooldown: after 3 consecutive failures on a pool,
+# blacklist it for 5 minutes to prevent re-dispatch death spirals.
+declare -A _pool_infra_fail_count=()
+declare -A _pool_cooldown_until=()
+_POOL_INFRA_FAIL_THRESHOLD=3
+_POOL_COOLDOWN_SECONDS=300
+
 # --- Process cleanup files on a remote host -----------------------------------
 # Shared function: SSHes to target, iterates .cleanup and .mirror-cleanup files,
 # runs aba delete/uninstall for each entry, removes processed files.
@@ -159,13 +166,14 @@ _dispatch_suite() {
 		echo "    con${pool_num}: SSH ready"
 	fi
 
-	# Sync latest harness
+	# Sync latest harness to conN + infra-owned aba to disN
 	local target
 	target=$(_con_target "$pool_num")
 	if ! sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 		echo "    ERROR: harness sync to con${pool_num} failed -- skipping dispatch"
 		return 1
 	fi
+	sync_dis_aba "$pool_num" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${pool_num} failed"
 	sync_extras "$target" "${CON_SSH_USER:-steve}"
 
 	local _retry_arg=""
@@ -247,8 +255,15 @@ _check_hung() {
 # --- Find a free pool ---------------------------------------------------------
 
 _find_free_pool() {
+	local _now=${SECONDS:-0}
 	for _p in $CLI_POOL_LIST; do
 		if [ -z "${_busy_pools[$_p]:-}" ]; then
+			# Skip pools in INFRA FAIL cooldown
+			if [ -n "${_pool_cooldown_until[$_p]:-}" ] && [ "$_now" -lt "${_pool_cooldown_until[$_p]}" ]; then
+				continue
+			fi
+			# Cooldown expired -- clear it
+			unset '_pool_cooldown_until[$_p]' 2>/dev/null
 			if _essh "$(_con_target "$_p")" "true" 2>/dev/null; then
 				local _has_sess=""
 				_has_sess=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _has_sess=""
@@ -271,20 +286,36 @@ _record_result() {
 	if [ "$rc" -eq 99 ]; then
 		# Framework/infrastructure failure -- re-queue to a different pool.
 		_bad_pools_map[$suite]="${_bad_pools_map[$suite]:-} ${pool_num}"
+
+		# Track consecutive INFRA FAIL count per pool and apply cooldown
+		_pool_infra_fail_count[$pool_num]=$(( ${_pool_infra_fail_count[$pool_num]:-0} + 1 ))
+		local _pfc=${_pool_infra_fail_count[$pool_num]}
+
 		local _bar99
 		_bar99=$(printf '%0.s━' {1..60})
 		printf "\n  \033[1;45;97m %s \033[0m\n" "$_bar99"
 		printf "  \033[1;45;97m  ⚠  INFRA FAIL  %-29s  pool %-2s     \033[0m\n" "$suite" "$pool_num"
-		printf "  \033[1;45;97m  ⚠  Re-queuing to another pool ...                          \033[0m\n"
+		if [ "$_pfc" -ge "$_POOL_INFRA_FAIL_THRESHOLD" ]; then
+			_pool_cooldown_until[$pool_num]=$(( ${SECONDS:-0} + _POOL_COOLDOWN_SECONDS ))
+			printf "  \033[1;45;97m  ⚠  Pool %s: %d consecutive fails -- cooldown %dm     \033[0m\n" \
+				"$pool_num" "$_pfc" "$(( _POOL_COOLDOWN_SECONDS / 60 ))"
+		else
+			printf "  \033[1;45;97m  ⚠  Re-queuing to another pool ...                          \033[0m\n"
+		fi
 		printf "  \033[1;45;97m %s \033[0m\n\n" "$_bar99"
 		# Don't record in _results; append to _work_queue for re-dispatch.
 		# Caller handles _busy_pools unset and log collection.
 		_work_queue+=("$suite")
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-			$NOTIFY_CMD "[e2e] INFRA FAIL: ${suite} on pool ${pool_num} (re-queued)" < /dev/null >/dev/null &
+			local _cd_msg=""
+			[ "$_pfc" -ge "$_POOL_INFRA_FAIL_THRESHOLD" ] && _cd_msg=" (pool $pool_num cooldown ${_POOL_COOLDOWN_SECONDS}s)"
+			$NOTIFY_CMD "[e2e] INFRA FAIL: ${suite} on pool ${pool_num}${_cd_msg}" < /dev/null >/dev/null &
 		fi
 		return
 	fi
+
+	# Successful dispatch (not rc=99) resets pool's INFRA FAIL counter
+	_pool_infra_fail_count[$pool_num]=0
 
 	_results[$suite]="$rc"
 
@@ -373,7 +404,7 @@ _detect_running_and_completed() {
 	done
 }
 
-# --- Force-clean helpers ------------------------------------------------------
+# --- Force-clean helpers (--fresh / --force) -----------------------------------
 
 _force_clean_all() {
 	echo "  --force: wiping all suite state on all pools ..."

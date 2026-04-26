@@ -50,6 +50,7 @@ plan_tests \
     "Registry: Docker install and load" \
     "SNO: install cluster" \
     "SNO: day2 configuration" \
+    "SNO: day2-ntp from scratch" \
     "Incremental: UBI image load" \
     "Incremental: vote-app image load" \
     "Deploy: vote-app with IDMS" \
@@ -95,7 +96,8 @@ e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Clear NTP (install without NTP, day2-ntp will add it later)" \
+    "sed -i 's/^ntp_servers=.*/ntp_servers=/' aba.conf"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -243,6 +245,28 @@ test_begin "SNO: day2 configuration"
 
 e2e_run_remote "Apply day2 config" \
     "cd ~/aba && aba --dir $SNO day2"
+
+test_end
+
+# ============================================================================
+# 9b. SNO: day2-ntp from scratch (cluster was installed WITHOUT NTP)
+# ============================================================================
+# Cluster was installed with ntp_servers empty.  Now apply both the IP and
+# hostname as day2 NTP config, forcing a fresh MachineConfig creation and
+# MCO reboot.  This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
+test_begin "SNO: day2-ntp from scratch"
+
+e2e_run_remote "Set NTP servers (IP + hostname)" \
+    "cd ~/aba && aba --ntp $NTP_IP ntp.example.com"
+
+e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
+    "cd ~/aba && aba --dir $SNO day2-ntp"
+
+e2e_run_remote "Verify chronyc sources show IP" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep $NTP_IP"
+
+e2e_run_remote "Verify chronyc sources show hostname" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep ntp"
 
 test_end
 

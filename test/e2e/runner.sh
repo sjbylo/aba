@@ -594,17 +594,32 @@ _cleanup_dis_aba() {
 	#    current user's podman can't see.
 	#    If aba uninstall FAILS, we must stop -- proceeding with stale podman
 	#    state (secrets, systemd units) will break the next install.
-	echo "  Checking for stale registries on disN (all users) ..."
 	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
 	local _default_user="${VM_DEFAULT_USER:-steve}"
+
+	# Verify infra-owned aba binary exists on disN for both users
+	local _aba_missing=""
 	local _try_user
+	for _try_user in root "$_default_user"; do
+		if ! _essh "${_try_user}@${_dis_fqdn}" "test -x ~/.e2e-harness/bin/aba" 2>&1; then
+			echo "  FATAL: ~/.e2e-harness/bin/aba missing for $_try_user on disN"
+			_aba_missing=1
+		fi
+	done
+	if [ -n "$_aba_missing" ]; then
+		echo "  Infra-owned aba binary was not deployed to disN."
+		echo "  Run 'run.sh deploy' to push the harness, or check sync_dis_aba."
+		return 1
+	fi
+
+	echo "  Checking for stale registries on disN (all users) ..."
 	local _uninstall_failed=""
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "
 			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
 				echo '  [cleanup] Found mirror dir for $_try_user -- running aba uninstall'
-				cd ~/aba && aba -y -d mirror uninstall
+				cd ~/aba && ~/.e2e-harness/bin/aba -y -d mirror uninstall
 			fi
 		" 2>&1 || {
 			echo "  ERROR: aba uninstall as $_try_user on disN failed (rc=$?)"
@@ -643,7 +658,7 @@ _cleanup_dis_aba() {
 	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/bin ~/tmp/* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror" 2>&1
+		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/tmp/* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror && rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane}" 2>&1
 		# Mirror data dirs may contain files owned by container-mapped UIDs
 		# (rootless podman UID remapping), so sudo is needed for cleanup.
 		for _mdir in $_E2E_MIRROR_DATA_DIRS; do

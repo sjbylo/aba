@@ -84,7 +84,7 @@ e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Set NTP servers (IP only for install)" "aba --ntp $NTP_IP"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -101,7 +101,7 @@ e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Set NTP servers (re-apply, IP only)" "aba --ntp $NTP_IP"
 e2e_run "Set operator sets (re-apply)" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -457,12 +457,22 @@ test_end
 # ============================================================================
 # 14. NTP: day2 configuration and chronyc verify
 # ============================================================================
+# Install used IP-only NTP ($NTP_IP).  Now switch to hostname-only
+# (ntp.example.com) to force a real MachineConfig change → MCO reboot.
+# This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
 test_begin "NTP: day2 and chronyc verify"
+
+e2e_run_remote "Change NTP to hostname only (forces MachineConfig change)" \
+    "cd ~/aba && aba --ntp ntp.example.com"
 
 e2e_run_remote "Apply day2 NTP config" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
-e2e_run_remote -r 3 2 "Verify chronyc sources" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
+
+e2e_run_remote "Verify chronyc sources show ntp.example.com" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep ntp.example.com"
+
+e2e_run_remote "Verify old NTP IP no longer in chrony.conf" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep -v '$NTP_IP'"
 
 test_end
 
