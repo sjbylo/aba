@@ -13,7 +13,7 @@ export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
-aba_info "Ensuring CLI binaries are installed"
+#aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc openshift-install
 
 if [ ! -x ~/bin/openshift-install ]; then

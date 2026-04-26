@@ -253,6 +253,31 @@ if [ -n "$PREV_TAG" ]; then
 	fi
 fi
 
+# Test-merge dev into main to catch conflicts before we start modifying files.
+# Uses --no-commit so nothing is written; aborts immediately after the check.
+if ! $HOTFIX && [ -z "$REF_COMMIT" ]; then
+    echo -e "${YELLOW}Checking for merge conflicts with main...${NC}"
+    _current=$(git branch --show-current)
+    if git stash -q 2>/dev/null; then _had_stash=1; else _had_stash=0; fi
+    git checkout main -q 2>/dev/null || git checkout -b main origin/main -q
+    git pull --rebase -q origin main 2>/dev/null || true
+    if git merge --no-commit --no-ff dev >/dev/null 2>&1; then
+        echo -e "${GREEN}Merge into main will be clean${NC}\n"
+    else
+        CONFLICT_FILES=$(git diff --name-only --diff-filter=U 2>/dev/null)
+        echo -e "${RED}Error: Merging dev into main has conflicts:${NC}"
+        echo "$CONFLICT_FILES" | while read -r f; do echo -e "  ${RED}$f${NC}"; done
+        echo -e "${YELLOW}Fix these on dev first (merge main into dev, resolve, push).${NC}"
+        git merge --abort 2>/dev/null || true
+        git checkout "$_current" -q
+        [ "$_had_stash" = "1" ] && git stash pop -q 2>/dev/null || true
+        exit 1
+    fi
+    git merge --abort 2>/dev/null || true
+    git checkout "$_current" -q
+    [ "$_had_stash" = "1" ] && git stash pop -q 2>/dev/null || true
+fi
+
 # =============================================================================
 # Dry-run: show a summary then exit — nothing is written to disk or git.
 # =============================================================================
@@ -403,14 +428,16 @@ echo -e "${YELLOW}[5/$TOTAL] Updating CHANGELOG.md...${NC}"
 
 TODAY=$(date +%Y-%m-%d)
 
-NEW_RELEASE_SECTION="## [$NEW_VERSION] - $TODAY
+REPO_URL="https://github.com/sjbylo/aba"
+
+NEW_RELEASE_SECTION="## [$NEW_VERSION]($REPO_URL/releases/tag/v$NEW_VERSION) - $TODAY
 
 $RELEASE_DESC
 
 $UNRELEASED_CONTENT"
 
 {
-    echo "## [Unreleased]"
+    echo "## [Unreleased]($REPO_URL/compare/v$NEW_VERSION...HEAD)"
     echo ""
     echo "---"
     echo ""
@@ -421,11 +448,6 @@ $UNRELEASED_CONTENT"
     # (i.e. all previous release sections).
     sed -n '/^---$/,$p' CHANGELOG.md | tail -n +2
 } > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
-
-# Point [Unreleased] comparison link at HEAD vs the new tag
-sed -i "s|\[Unreleased\]:.*|[Unreleased]: https://github.com/sjbylo/aba/compare/v$NEW_VERSION...HEAD|" CHANGELOG.md
-# Add a release link for the new version right after the [Unreleased] link
-sed -i "/^\[Unreleased\]:/a [$NEW_VERSION]: https://github.com/sjbylo/aba/releases/tag/v$NEW_VERSION" CHANGELOG.md
 
 echo -e "${GREEN}       ✓ CHANGELOG.md updated${NC}\n"
 

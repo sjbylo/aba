@@ -85,6 +85,21 @@ case "$vendor" in
 	quay)
 		reg_check_quay_resources "$_ssh"
 
+		# Pre-install assertion: detect stale state from a previous install that
+		# was not fully uninstalled. Stale redis_pass secrets cause WRONGPASS on
+		# the new install; stale containers hold ports and conflict with Ansible.
+		_stale=""
+		$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
+		$_ssh "podman secret ls --format '{{.Name}}' | grep -q redis_pass" && _stale+="  redis_pass podman secret exists"$'\n'
+		$_ssh "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" && _stale+="  Quay containers still present"$'\n'
+		if [ -n "$_stale" ]; then
+			aba_abort \
+				"Stale registry state detected on $reg_host before install:" \
+				"$_stale" \
+				"A previous install was not fully cleaned up." \
+				"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+		fi
+
 		ask "Install Quay mirror registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
 		aba_info "Installing Quay registry on remote host $reg_host ..."
@@ -110,6 +125,18 @@ case "$vendor" in
 		;;
 
 	docker)
+		# Pre-install assertion: detect stale Docker registry state.
+		_stale=""
+		$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
+		$_ssh "podman ps -a --format '{{.Names}}' | grep -q '^registry$'" && _stale+="  registry container still present"$'\n'
+		if [ -n "$_stale" ]; then
+			aba_abort \
+				"Stale registry state detected on $reg_host before install:" \
+				"$_stale" \
+				"A previous install was not fully cleaned up." \
+				"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+		fi
+
 		ask "Install Docker registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
 
 		aba_info "Installing Docker registry on remote host $reg_host ..."

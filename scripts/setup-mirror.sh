@@ -54,6 +54,6 @@ echo
 aba_info "Mirror directory created: $name"
 aba_info "Next steps:"
 aba_info "  Install registry:  aba -d $name install"
-aba_info "  Register existing: aba -d $name --pull-secret-mirror <file> --ca-cert <file>"
+aba_info "  Register existing: aba -d $name register --pull-secret-mirror <file> --ca-cert <file>"
 
 exit 0

@@ -175,6 +175,10 @@ These configurations ensure that each network zone meets OpenShift’s requireme
      ```
      aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
      ```
+     If the registry uses a non-default port (e.g. 5000):
+     ```
+     aba -d mirror register --reg-host registry.example.com --reg-port 5000 --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+     ```
      This copies the credentials into `~/.aba/mirror/mirror/`, trusts the CA system-wide, and marks the registry as ready.
    - Verify the connection to your existing mirror registry:
      ```
@@ -302,16 +306,16 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
 # Download and install a stable release (recommended)
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.0.0.tar.gz
-tar xzf v1.0.0.tar.gz
-cd aba-1.0.0
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.0.1.tar.gz
+tar xzf v1.0.1.tar.gz
+cd aba-1.0.1
 ./install
 aba
 ```
 
 Or clone a specific release tag:
 ```bash
-git clone --branch v1.0.0 https://github.com/sjbylo/aba.git
+git clone --branch v1.0.1 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1147,8 +1151,9 @@ Values are commented out by default; uncomment and edit to override.
 | `CATALOG_MAX_PARALLEL` | `3` | Number of catalog indexes to download concurrently (max 3: redhat, certified, community). Set to `1` for sequential downloads on constrained systems. |
 | `OC_MIRROR_IMAGE_TIMEOUT` | `30m` | Per-image timeout passed to `oc-mirror --image-timeout`. Increase for large operator images or slow connections (e.g. `60m`). |
 | `OC_MIRROR_PARALLEL_IMAGES` | `8` | Number of images to mirror concurrently via `oc-mirror --parallel-images`. Reduce on slow or unreliable networks. |
-| `OC_MIRROR_SINCE` | `2020-01-01` | Date passed to `oc-mirror --since` during `save` (mirror-to-disk) only. Forces a complete, self-contained archive every time — required for reliable air-gapped `load`. Set to empty to use oc-mirror's differential mode (smaller archives, but each must be loaded in order). |
-| `OC_MIRROR_FLAGS` | *(empty)* | Extra flags appended to every `oc-mirror` invocation (sync, save, load). Normally not needed — sigstore signature handling is managed by the `registries.d` config below. |
+| `OC_MIRROR_SINCE` | `2020-01-01` | Date passed to `oc-mirror --since` during save (mirror2disk) only. Forces a complete, self-contained archive every time — required for reliable air-gapped load (disk2mirror). Set to empty to use oc-mirror's differential mode (smaller archives, but each must be loaded in order). |
+| `OC_MIRROR_FLAGS` | *(empty)* | Extra flags appended to every `oc-mirror` invocation — save (mirror2disk), sync (mirror2mirror), and load (disk2mirror). Normally not needed — sigstore signature handling is managed by the `registries.d` config below. |
+| `OC_MIRROR_PIN_CATALOGS` | `1` | When enabled, ABA pins operator catalog images by digest (sha256) instead of tag for all oc-mirror operations (mirror2disk/save, mirror2mirror/sync, disk2mirror/load). This works around [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712) where oc-mirror v2 `diskToMirror` tries to contact upstream registries for catalog tags even in air-gapped environments. Set to `0` to disable if the bug is fixed upstream. |
 
 Example — increase the image timeout to 60 minutes:
 
@@ -1215,6 +1220,22 @@ aba -d mymirror verify      # Verify registry access
 aba -d mymirror uninstall   # Uninstall the registry
 ```
 
+**Register an existing external registry as a named mirror:**
+
+```bash
+aba mirror --name enclave1
+aba -d enclave1 register --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+aba -d enclave1 verify
+```
+
+**Create a cluster that uses the named mirror:**
+
+```bash
+aba cluster -n mycluster --type sno --mirror-name enclave1 --starting-ip 10.0.1.50
+```
+
+The `--mirror-name` flag sets `mirror_name=enclave1` in `cluster.conf`, so the cluster pulls images and credentials from `~/.aba/mirror/enclave1/` instead of the default `~/.aba/mirror/mirror/`.
+
 Each named mirror has its own `mirror.conf` and credentials stored in `~/.aba/mirror/mymirror/`.
 
 You can also override `ops` and `op_sets` in each mirror's `mirror.conf` to use different operators per mirror (see the [configuration files table](#about-the-aba-configuration-files)).
@@ -1229,6 +1250,11 @@ ABA supports the following architectures, automatically detecting the host and d
 | ARM | `aarch64` | Tested (see notes below) |
 | IBM Z (System Z) | `s390x` | Mirror sync and ISO creation, tested! |
 | IBM Power | `ppc64le` | Supported - should work |
+
+### Notes on s390x and ppc64le
+
+  - These architectures only support `platform: none` in the OpenShift installer (no vSphere or bare-metal IPI integration). ABA automatically selects this platform for non-SNO deployments.
+  - For compact and standard clusters, you must provide your own external load balancer for the API and Ingress VIPs (user-provisioned infrastructure).
 
 ### Notes on arm64
 
@@ -1530,7 +1556,7 @@ Boot your servers using the Red Hat CoreOS live DVD and check the output of the 
 
 ## Q: Does ABA support ARM, s390x, or ppc64le?
 
-**Yes.** ABA supports x86_64, aarch64 (ARM), s390x (IBM Z), and ppc64le (IBM Power) architectures. ABA automatically detects the host architecture and downloads the correct OpenShift binaries. For ARM, since there is no official Quay installer, use an existing registry or the Docker registry instead (see the FAQ for how to use the docker registry instead of Quay).
+**Yes.** ABA supports x86_64, aarch64 (ARM), s390x (IBM Z), and ppc64le (IBM Power) architectures. ABA automatically detects the host architecture and downloads the correct OpenShift binaries. For ARM, since there is no official Quay installer, use an existing registry or the Docker registry instead (see the FAQ for how to use the docker registry instead of Quay). For s390x and ppc64le, ABA automatically uses `platform: none` for non-SNO clusters — you will need an external load balancer for the API and Ingress VIPs.
 
 ---
 

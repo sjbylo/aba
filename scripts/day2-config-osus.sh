@@ -58,10 +58,12 @@ _osus_log() {
 	} >> "$_OSUS_LOG" 2>&1
 }
 
-# Deletes the OSUS subscription and any failed OLM unpack jobs so we can start fresh.
+# Deletes the OSUS subscription, CSV, and any failed OLM unpack jobs so we can start fresh.
 # OLM does not auto-retry after a failed unpack job -- the job must be deleted first.
+# A stale CSV (non-Succeeded) can block OLM from reconciling a fresh subscription.
 _osus_cleanup_sub() {
 	oc delete sub update-service-subscription -n $NAMESPACE 2>&1 || true
+	oc delete csv --all -n $NAMESPACE 2>&1 || true
 	oc delete jobs --field-selector=status.successful=0 -n openshift-marketplace 2>&1 || true
 }
 
@@ -197,9 +199,9 @@ fi
 # If the subscription exists but is not healthy/complete (previous failed attempt, stuck,
 # etc.), clean up so we can start fresh. This makes the script safely re-runnable.
 _osus_installed=
-_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' 2>&1 || true)
+_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' || true)
 if [ "$_existing_csv" ]; then
-	_csv_phase=$(oc get csv "$_existing_csv" -n $NAMESPACE -o jsonpath='{.status.phase}' 2>&1 || true)
+	_csv_phase=$(oc get csv "$_existing_csv" -n $NAMESPACE -o jsonpath='{.status.phase}' || true)
 	if [ "$_csv_phase" = "Succeeded" ]; then
 		aba_info "OSUS operator already installed ($_existing_csv) -- skipping to deployment"
 		_osus_installed=1

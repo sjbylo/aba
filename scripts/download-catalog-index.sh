@@ -1,18 +1,44 @@
 #!/bin/bash
-# Download operator catalog index by extracting it from the container image using podman.
+# download-catalog-index.sh -- Extract operator catalog index from a container image
 #
-# Usage: download-catalog-index.sh <catalog_name> <version_short>
-# Example: download-catalog-index.sh redhat-operator 4.21
+# INTENT:    Pull an operator catalog image from registry.redhat.io, extract its
+#            File-Based Catalog (FBC) metadata, and produce a sorted index of all
+#            operators with their default channels. Also captures the catalog image
+#            digest for runtime catalog pinning (see dev/01-SPEC.md "Catalog Digest
+#            Pinning").
+# CALLED BY: download-catalogs-start.sh via run_once (never directly by user)
+# CWD:       ABA repo root (resolved from script location via symlink-safe pwd -P)
+# REQUIRES:  podman, jq, curl; container auth (via create-containers-auth.sh);
+#            internet access to registry.redhat.io
+# ARGS:      <catalog_name> <version_short>
+#            catalog_name:   redhat-operator | certified-operator | community-operator
+#            version_short:  e.g. "4.21" (major.minor only)
+# PRODUCES:
+#   .index/{catalog}-index-v{ver}                 Sorted operator index (3-column TSV)
+#   .index/.{catalog}-index-v{ver}.done           Completion marker (empty file)
+#   .index/.{catalog}-index-v{ver}.expected-count Expected operator count
+#   .index/.{catalog}-index-v{ver}.digest         Manifest digest (sha256:...) for pinning
+#   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml  Helper YAML for reference
+# IDEMPOTENT: Yes (skips if index + done marker already exist)
 #
-# Output format (3 columns, whitespace-separated):
+# INDEX FORMAT (3 columns, whitespace-separated):
 #   <package_name>  <display_name_or_dash>  <default_channel>
 #
 # Backward compatible with existing consumers that use:
 #   awk '{print $1, $NF}'  => gets name (first) and channel (last)
 #   grep "^$op "           => matches by operator name prefix
 #
-# Both parameters are required. The caller is responsible for determining
-# the version (e.g. from aba.conf or from the release graph for prefetch).
+# STEPS:
+#   1. Check if index already exists (idempotent early exit)
+#   2. Verify connectivity to registry.redhat.io
+#   3. Pull catalog image (permissive signature policy for unsigned catalogs)
+#   4. Capture manifest digest via podman image inspect (for catalog pinning)
+#   5. Run container, extract /configs directory
+#   6. Parse FBC data: JSON (package.json/catalog.json/index.json) or YAML
+#   7. Sort and write index file
+#   8. Record expected operator count, validate extraction
+#   9. Generate helper YAML for reference
+#  10. Mark completion (.done file)
 
 # Derive aba root from script location (this script is in scripts/)
 # Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
@@ -108,6 +134,18 @@ aba_info "Pulling operator catalog image: $catalog_url"
 if ! podman pull --signature-policy="$_sig_policy" -q "$catalog_url" >/dev/null 2>&1; then
 	rm -rf "$tmp_dir"
 	aba_abort "Failed to pull catalog image: $catalog_url"
+fi
+
+# Capture manifest digest for runtime catalog pinning.
+# When oc-mirror sees a digest ref it skips upstream tag resolution -- critical for air-gap.
+digest_file=".index/.${catalog_name}-index-v${ocp_ver_major}.digest"
+catalog_digest=$(podman image inspect --format '{{.Digest}}' "$catalog_url" 2>/dev/null) || catalog_digest=""
+if [ "$catalog_digest" ]; then
+	echo "$catalog_digest" > "$digest_file"
+	aba_debug "Captured catalog digest: $catalog_digest"
+else
+	rm -f "$digest_file"
+	aba_debug "Could not capture digest for $catalog_url -- tag will be used"
 fi
 
 # Run container and extract /configs

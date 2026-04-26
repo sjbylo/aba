@@ -116,18 +116,16 @@ _E2E_DIR="$(cd "$_E2E_LIB_DIR/.." && pwd)"
 
 source "$_E2E_LIB_DIR/constants.sh"
 
+# SIGINT (Ctrl-C) must NOT kill the suite process.  Instead, the child command
+# dies with exit 130, and e2e_run() catches it and opens the interactive menu.
+# Uses a no-op handler (':') rather than ignore ('') so that child subshells
+# can restore default SIGINT behavior with 'trap - INT'.
+trap ':' INT
+
 # --- SSH wrapper ------------------------------------------------------------
-# Cleanup functions (e2e_cleanup_clusters, e2e_cleanup_mirrors) need _essh().
-# Suites run as child bash processes (runner.sh line 588: bash "$suite_file"),
-# so functions sourced by the runner are NOT inherited.  Suites that source
-# pool-lifecycle.sh or vm-helpers.sh get _essh() from there; suites that only
-# source framework.sh (e.g. negative-paths, create-bundle-to-disk) need it here.
-_essh() {
-	ssh -o ConnectTimeout=10 -o BatchMode=yes \
-		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@"
-}
+# Suites run as child bash processes, so functions sourced by the runner are
+# NOT inherited.  Source the canonical SSH wrapper from remote.sh.
+source "$_E2E_LIB_DIR/remote.sh"
 
 # --- Globals ----------------------------------------------------------------
 
@@ -515,12 +513,12 @@ suite_end() {
 test_begin() {
     local test_name="$1"
     _E2E_CURRENT_TEST="$test_name"
-    (( _E2E_TEST_COUNT++ ))
+    _E2E_TEST_COUNT=$(( _E2E_TEST_COUNT + 1 ))
 
     # If suite was skipped via interactive prompt, mark remaining tests SKIP
     if [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _E2E_SKIP_BLOCK=1
-        (( _E2E_SKIP_COUNT++ ))
+        _E2E_SKIP_COUNT=$(( _E2E_SKIP_COUNT + 1 ))
         _update_plan "$test_name" "SKIP"
         _e2e_log_and_print "$(_e2e_yellow "  SKIP (suite skipped): $test_name")"
         _e2e_summary "$(_e2e_Yellow "  SKIP (suite skipped): $test_name")"
@@ -564,7 +562,7 @@ test_end() {
     # If user picked [s]kip from interactive menu, record as SKIP
     if [ -n "$_E2E_USER_SKIPPED" ]; then
         _E2E_USER_SKIPPED=""
-        (( _E2E_SKIP_COUNT++ ))
+        _E2E_SKIP_COUNT=$(( _E2E_SKIP_COUNT + 1 ))
         _update_plan "$test_name" "SKIP"
         _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
         _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
@@ -574,12 +572,12 @@ test_end() {
     fi
 
     if [ "$result" -eq 0 ]; then
-        (( _E2E_PASS_COUNT++ ))
+        _E2E_PASS_COUNT=$(( _E2E_PASS_COUNT + 1 ))
         _update_plan "$test_name" "PASS"
         _e2e_log_and_print "$(_e2e_green "  PASS: $test_name")"
         _e2e_summary "$(_e2e_Green "  PASS: $test_name")"
     else
-        (( _E2E_FAIL_COUNT++ ))
+        _E2E_FAIL_COUNT=$(( _E2E_FAIL_COUNT + 1 ))
         _update_plan "$test_name" "FAIL"
         _e2e_log_and_print "$(_e2e_red "  FAIL: $test_name")"
         _e2e_summary "$(_e2e_Red "  FAIL: $test_name")"
@@ -591,7 +589,7 @@ test_end() {
 
 test_skip() {
     local test_name="${1:-$_E2E_CURRENT_TEST}"
-    (( _E2E_SKIP_COUNT++ ))
+    _E2E_SKIP_COUNT=$(( _E2E_SKIP_COUNT + 1 ))
     _update_plan "$test_name" "SKIP"
     _e2e_log_and_print "$(_e2e_yellow "  SKIP: $test_name")"
     _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
@@ -605,7 +603,7 @@ run_test() {
 
     # Check checkpoint/resume -- skip if already passed
     if should_skip_checkpoint "$test_name"; then
-        (( _E2E_TEST_COUNT++ ))
+        _E2E_TEST_COUNT=$(( _E2E_TEST_COUNT + 1 ))
         _checkpoint_write "$test_name" "0"
         _update_plan "$test_name" "DONE"
         _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
@@ -719,7 +717,7 @@ e2e_cleanup_clusters() {
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				aba -y -d '$abs_path' delete
+				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete
 			else
 				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
 			fi" \
@@ -778,6 +776,30 @@ e2e_add_to_mirror_cleanup() {
 	_e2e_log "  Added mirror to cleanup list: $entry"
 }
 
+# Remove a mirror from the cleanup list after successful uninstall.
+#   e2e_remove_from_mirror_cleanup "$PWD/mirror"              # local
+#   e2e_remove_from_mirror_cleanup "$PWD/mirror" remote       # remote
+e2e_remove_from_mirror_cleanup() {
+	local abs_path="$1"
+	local location="${2:-local}"
+	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
+	[ -f "$cleanup_file" ] || return 0
+
+	local target
+	if [ "$location" = "remote" ]; then
+		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	else
+		target="$(whoami)@$(hostname -f)"
+	fi
+
+	local entry="$target $abs_path"
+	local tmp="${cleanup_file}.tmp"
+	grep -vxF "$entry" "$cleanup_file" > "$tmp" 2>/dev/null || true
+	mv "$tmp" "$cleanup_file"
+	[ -s "$cleanup_file" ] || rm -f "$cleanup_file"
+	_e2e_log "  Removed mirror from cleanup list: $entry"
+}
+
 # Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
 # Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
 e2e_cleanup_mirrors() {
@@ -793,7 +815,7 @@ e2e_cleanup_mirrors() {
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				aba -y -d '$abs_path' uninstall
+				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
 			else
 				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
 			fi" \
@@ -864,9 +886,7 @@ _interactive_prompt() {
                 ;;
             s)
                 rm -f "$_paused_file"
-                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test -- cleaning up ...")"
-                e2e_cleanup_clusters
-                e2e_cleanup_mirrors
+                _e2e_log_and_print "  >> $(_e2e_yellow "Skipping test -- continuing to next test")"
                 return 0
                 ;;
             S)
@@ -899,16 +919,10 @@ _interactive_prompt() {
                 local user_cmd="${ans#!}"
                 _e2e_log "User entered command: $user_cmd"
                 echo "Running: $user_cmd"
-                ( eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+                ( trap - INT; eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                 local new_rc=${PIPESTATUS[0]}
-                if [ $new_rc -eq 0 ]; then
-                    _e2e_log "User command succeeded"
-                    rm -f "$_paused_file"
-                    return 0
-                else
-                    _e2e_log "User command failed (exit=$new_rc)"
-                    echo "Command failed with exit code $new_rc"
-                fi
+                _e2e_log "User command exited $new_rc"
+                [ $new_rc -ne 0 ] && echo "Command failed with exit code $new_rc"
                 ;;
             *)
                 echo "Unknown option '$ans'. Prefix with ! to run a command (e.g. !ls -la)"
@@ -1042,9 +1056,9 @@ e2e_run() {
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ( eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
+                    ( trap - INT; eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
+                    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
@@ -1301,7 +1315,7 @@ e2e_diag() {
         ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
             2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     else
-        ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+        ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     fi
 
     if [ $ret -ne 0 ]; then
@@ -1389,7 +1403,7 @@ e2e_run_must_fail() {
     _e2e_summary "  $(_e2e_Dim "$cmd")"
 
     local ret=0
-    ( eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
@@ -1568,7 +1582,7 @@ yaml_normalize() {
         python3 -c "
 import yaml, sys
 d = yaml.safe_load(open('$file'))
-for k in ('additionalTrustBundle', 'pullSecret'):
+for k in ('additionalTrustBundle', 'pullSecret', 'sshKey'):
     d.pop(k, None)
 vs = d.get('platform', {}).get('vsphere', {})
 for vc in vs.get('vcenters', []):

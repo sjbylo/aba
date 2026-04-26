@@ -5,7 +5,7 @@
 # restarting run.sh live.
 #
 # Required env vars (set by the wrapper):
-#   _POOL_NUM       Pool number (1-4)
+#   _POOL_NUM       Pool number (1-6)
 #   _DOMAIN         VM base domain (e.g. example.com)
 #   _SSH_OPTS       SSH options string
 #   _DEFAULT_USER   Fallback SSH user
@@ -16,14 +16,16 @@ _h="con${_POOL_NUM}.${_DOMAIN}"
 _sess="${_E2E_TMUX_SESSION:-e2e-suite}"
 
 # Detect which user owns the tmux session on this pool
-_suite_user=$(ssh $_SSH_OPTS steve@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
+_suite_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
 _user="${_suite_user:-$_DEFAULT_USER}"
 
-# Check if another live dashboard took over this pool
+# Check if another live dashboard took over this pool.
+# exit 0 (not return) to kill the pane shell -- return just goes back to the
+# wrapper's while-loop and re-sources us, creating infinite spam.
 _owner=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)
 if [ -n "$_owner" ] && [ "$_owner" != "$_LIVE_ID" ]; then
-	echo "Another live dashboard took over pool ${_POOL_NUM}. Exiting."
-	return 0 2>/dev/null || exit 0
+	echo "Another live dashboard took over pool ${_POOL_NUM}."
+	exit 0
 fi
 
 # Read suite metadata for pane title
@@ -90,7 +92,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 			_gone_count=0
 
 			# Re-check user in case a new suite started as a different user
-			_new_user=$(ssh $_SSH_OPTS steve@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
+			_new_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
 			_new_user="${_new_user:-$_DEFAULT_USER}"
 			if [ "$_new_user" != "$_user" ]; then
 				if ssh $_SSH_OPTS ${_new_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/dev/null; then
@@ -99,7 +101,12 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 			fi
 		done
 	else
-		# Pane alive -- attach to live session
+		# Pane alive -- re-read metadata right before attach (runner may have
+		# written e2e-suite-os since our initial read at the top of the script)
+		_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)
+		_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)
+		_vmtag=""
+		[ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"
 		_set_title "$_suite" "${_user}" "${_os:+ | $_os}" "$_vmtag"
 		_IDLE_MSG_SHOWN=
 		clear
@@ -109,7 +116,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 	fi
 else
 	# No session at all -- idle pool. No clear: preserve banner/scrollback.
-	_set_title "(idle)" "${_user}" "" ""
+	_set_title "(idle)" "${_user}" "${_os:+ | $_os}" "$_vmtag"
 	if [ "${_IDLE_MSG_SHOWN:-}" != "1" ]; then
 		echo "No e2e session on pool ${_POOL_NUM}. Waiting for suite to start..."
 		_IDLE_MSG_SHOWN=1

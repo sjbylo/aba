@@ -17,7 +17,7 @@ _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
@@ -84,7 +84,7 @@ e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Set NTP servers (IP only for install)" "aba --ntp $NTP_IP"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -101,7 +101,7 @@ e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Set NTP servers (re-apply, IP only)" "aba --ntp $NTP_IP"
 e2e_run "Set operator sets (re-apply)" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -121,7 +121,6 @@ e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
     "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
@@ -206,7 +205,7 @@ e2e_run "Stage pool registry creds for transfer" \
 
 # Now do the real tar-pipe transfer
 e2e_run -r 3 2 "Pipe tar to internal bastion" \
-    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf -'"
+    "aba -d mirror tar --out - | ssh ${INTERNAL_BASTION} 'tar xvf - -C ~'"
 e2e_run -q "Remove saved archives after transfer" "rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Remove dialog RPM to force dnf install path" \
@@ -215,6 +214,10 @@ e2e_run_remote "Remove stale dnf log" \
     "cd ~/aba && rm -f .dnf-install.log"
 e2e_run_remote "Install aba on internal bastion" \
     "cd ~/aba && ./install"
+e2e_run_remote "Check bundle mode is active" \
+    "cd ~/aba && test -f .bundle"
+e2e_run_remote "See install bundle banner and help on internal bastion" \
+    "cd ~/aba && aba"
 e2e_run_remote "Verify dialog was reinstalled" \
     "rpm -q dialog"
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
@@ -454,12 +457,25 @@ test_end
 # ============================================================================
 # 14. NTP: day2 configuration and chronyc verify
 # ============================================================================
+# Install used IP-only NTP ($NTP_IP).  Now switch to hostname-only
+# (ntp.example.com) to force a real MachineConfig change → MCO reboot.
+# This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
 test_begin "NTP: day2 and chronyc verify"
+
+e2e_run_remote "Change NTP in cluster.conf to hostnames only (forces MachineConfig change)" \
+    "cd ~/aba && aba -d $SNO --ntp ntp.example.com ntp.lan"
 
 e2e_run_remote "Apply day2 NTP config" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
-e2e_run_remote -r 3 2 "Verify chronyc sources" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc debug node/\$(oc get nodes -o name | head -1 | cut -d/ -f2) -- chroot /host chronyc sources' | grep $NTP_IP"
+
+e2e_run_remote "Verify chrony.conf contains ntp.example.com" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.example.com iburst'"
+
+e2e_run_remote "Verify chrony.conf contains ntp.lan" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.lan iburst'"
+
+e2e_run_remote "Verify old NTP IP no longer in chrony.conf" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep -v '$NTP_IP'"
 
 test_end
 
@@ -491,3 +507,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-airgapped-existing-reg.sh"
+
+exit 0

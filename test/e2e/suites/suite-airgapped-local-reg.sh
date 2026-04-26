@@ -23,7 +23,7 @@ _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
@@ -50,6 +50,7 @@ plan_tests \
     "Registry: Docker install and load" \
     "SNO: install cluster" \
     "SNO: day2 configuration" \
+    "SNO: day2-ntp from scratch" \
     "Incremental: UBI image load" \
     "Incremental: vote-app image load" \
     "Deploy: vote-app with IDMS" \
@@ -95,12 +96,12 @@ e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Clear NTP (install without NTP, day2-ntp will add it later)" \
+    "sed -i 's/^ntp_servers=.*/ntp_servers=/' aba.conf"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set mirror hostname in mirror.conf" \
     "sed -i 's/registry.$(pool_domain)/${DIS_HOST} /g' ./mirror/mirror.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
@@ -153,6 +154,10 @@ e2e_run_remote "Remove stale dnf log" \
     "cd ~/aba && rm -f .dnf-install.log"
 e2e_run_remote "Run aba install on internal bastion" \
     "cd ~/aba && ./install"
+e2e_run_remote "Check bundle mode is active" \
+    "cd ~/aba && test -f .bundle"
+e2e_run_remote "See install bundle banner and help on internal bastion" \
+    "cd ~/aba && aba"
 e2e_run_remote "Verify dialog was reinstalled" \
     "rpm -q dialog"
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
@@ -240,6 +245,31 @@ test_begin "SNO: day2 configuration"
 
 e2e_run_remote "Apply day2 config" \
     "cd ~/aba && aba --dir $SNO day2"
+
+test_end
+
+# ============================================================================
+# 9b. SNO: day2-ntp from scratch (cluster was installed WITHOUT NTP)
+# ============================================================================
+# Cluster was installed with ntp_servers empty.  Now apply both the IP and
+# hostname as day2 NTP config, forcing a fresh MachineConfig creation and
+# MCO reboot.  This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
+test_begin "SNO: day2-ntp from scratch"
+
+e2e_run_remote "Set NTP in cluster.conf (IP + hostnames)" \
+    "cd ~/aba && aba -d $SNO --ntp $NTP_IP ntp.example.com ntp.lan"
+
+e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
+    "cd ~/aba && aba --dir $SNO day2-ntp"
+
+e2e_run_remote "Verify chronyc sources show IP" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep $NTP_IP"
+
+e2e_run_remote "Verify chrony.conf contains ntp.example.com" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.example.com iburst'"
+
+e2e_run_remote "Verify chrony.conf contains ntp.lan" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.lan iburst'"
 
 test_end
 
@@ -688,3 +718,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-airgapped-local-reg.sh"
+
+exit 0

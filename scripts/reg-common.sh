@@ -114,7 +114,7 @@ reg_detect_existing() {
 	if probe_host "$reg_url/health/instance" "Quay registry health endpoint" 2>/dev/null; then
 		aba_abort \
 			"Existing Quay registry found at $reg_url/health/instance" \
-			"If this is your registry, register it with: aba -d $(basename "$PWD") --pull-secret-mirror <file> --ca-cert <file>" \
+			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
 			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
 			"See the README.md for further information."
 	fi
@@ -124,7 +124,7 @@ reg_detect_existing() {
 	if probe_host "$reg_url/" "registry root endpoint" 2>/dev/null; then
 		aba_abort \
 			"Endpoint found at $reg_url/" \
-			"If this is your registry, register it with: aba -d $(basename "$PWD") --pull-secret-mirror <file> --ca-cert <file>" \
+			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
 			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
 			"See the README.md for further information."
 	fi

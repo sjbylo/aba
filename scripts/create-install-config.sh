@@ -1,5 +1,39 @@
-#!/bin/bash 
-# Script to generate the install-config.yaml 
+#!/bin/bash
+# create-install-config.sh -- Generate install-config.yaml from cluster/mirror config
+#
+# INTENT:    Assemble all inputs (configs, credentials, SSH keys, CA certs),
+#            validate them, resolve the pull secret and connectivity mode,
+#            then render templates/install-config.yaml.j2 into install-config.yaml.
+# CALLED BY: Makefile.cluster 'install-config.yaml' target (never directly)
+# CWD:       cluster directory (set by Makefile -C)
+# REQUIRES:  aba.conf, cluster.conf, mirror.conf (sourced via include_all.sh);
+#            vmware.conf when platform=vmw; kvm.conf when platform=kvm;
+#            pull secret (mirror, full, or public); scripts/j2 renderer
+# PRODUCES:  install-config.yaml in CWD (backs up existing to .backup)
+# IDEMPOTENT: Yes (re-running overwrites install-config.yaml)
+#
+# STEPS:
+#   1. Source and normalize all config files (aba.conf, cluster.conf,
+#      mirror.conf, vmware.conf/kvm.conf as needed)
+#   2. Validate configs (verify-aba-conf, verify-cluster-conf, verify-mirror-conf)
+#   3. Display cluster.conf summary table to stdout
+#   4. Set rendezvous_ip = starting_ip (first master IP)
+#   5. Adjust hostPrefix 23->22 for bare-metal platforms
+#   6. Resolve connectivity mode (int_connection: direct / proxy / mirror):
+#      - direct: use public pull secret, no mirror
+#      - proxy:  use public pull secret + cluster-wide proxy settings
+#      - mirror (default): use mirror pull secret + rootCA + imageContentSources
+#   7. Fall back to public pull secret if no mirror credentials found
+#   8. Generate or load SSH key pair
+#   9. Validate registry host + verify release image in private registry
+#  10. Render install-config.yaml via j2 template
+#
+# PLATFORM SELECTION (in template):
+#   1. SNO (1 master, 0 workers) -> platform: none
+#   2. s390x / ppc64le -> platform: none (baremetal unsupported on these arches)
+#   3. VMware + vCenter (platform=vmw, VC=1) -> platform: vsphere
+#   4. Everything else (BM, KVM, ESXi-direct) -> platform: baremetal
+#   See dev/01-SPEC.md "install-config.yaml Platform Selection"
 
 source scripts/include_all.sh
 
@@ -82,7 +116,7 @@ elif [ "$int_connection" = "proxy" ]; then
 		use_mirror=
 	else
 		aba_warning \
-			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set." \
+			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set or available." \
 			"If you want to configure the cluster wide proxy, set 'int_connection=proxy' or override by" \
 			"setting the '*_proxy' values directly in 'cluster.conf'." 
 

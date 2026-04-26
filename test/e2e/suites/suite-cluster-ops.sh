@@ -17,7 +17,7 @@ _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
@@ -45,6 +45,8 @@ plan_tests \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
+    "Register: --reg-host and --reg-port CLI flags" \
+    "Register: named mirror (enclave workflow)" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -80,8 +82,8 @@ e2e_run "Reset aba to clean state" \
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify /home disk usage < 10GB after reset" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
+e2e_run "Verify / available space > 200GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
 
 # Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
 # || true: some packages may not be installed -- dnf returns non-zero if any are missing
@@ -136,7 +138,6 @@ test_begin "Setup: configure mirror for local registry"
 
 # Create mirror.conf pointing to conN's local pool registry (not disN)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
@@ -161,7 +162,7 @@ EOPS"
 # This creates state.sh (REG_VENDOR=existing) so reg-install.sh's fast-path
 # skips installation and just verifies, allowing 'aba mirror sync' to work.
 e2e_run "Register pool registry" \
-    "aba -d mirror register pull_secret_mirror=/tmp/pool-reg-pull-secret.json ca_cert=$POOL_REG_DIR/certs/ca.crt"
+    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
@@ -218,10 +219,19 @@ test_begin "ABI config: diff against known-good examples"
 
 for ctype in sno compact standard; do
     cname="$(pool_cluster_name $ctype)"
-    e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/install-config.yaml.example"
+
+    # vCenter generates "platform: vsphere:", ESXi/BM generates "platform: baremetal:"
+    # SNO always uses "platform: none" regardless of hypervisor
+    if [ "$ctype" != "sno" ] && ! grep -q 'vsphere:' "$cname/install-config.yaml"; then
+        ic_example="test/e2e/examples/$ctype/install-config-esxi.yaml.example"
+    else
+        ic_example="test/e2e/examples/$ctype/install-config.yaml.example"
+    fi
+
+    e2e_snapshot_file "${ctype}-example" "$ic_example"
     e2e_snapshot_file "${ctype}-example" "test/e2e/examples/$ctype/agent-config.yaml.example"
     e2e_run "Diff $cname install-config.yaml against example" \
-        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/install-config.yaml.example) --strip-secrets"
+        "yaml_diff $cname/install-config.yaml <(adapt_example_for_pool $ic_example) --strip-secrets"
 
     e2e_run "Diff $cname agent-config.yaml against example" \
         "yaml_diff $cname/agent-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/agent-config.yaml.example)"
@@ -343,6 +353,53 @@ e2e_run "Restore verify_conf=all" \
 test_end
 
 # ============================================================================
+# Register/unregister CLI flag coverage
+# ============================================================================
+test_begin "Register: --reg-host and --reg-port CLI flags"
+
+e2e_run "Unregister pool registry for re-registration test" \
+    "aba -d mirror unregister"
+
+e2e_run "Register with explicit --reg-host and --reg-port" \
+    "aba -d mirror register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+e2e_run "Verify registry access after --reg-host/--reg-port register" \
+    "aba -d mirror verify"
+
+e2e_run "Assert reg_host in mirror.conf matches CLI flag" \
+    "grep -q 'reg_host=${CON_HOST}' mirror/mirror.conf"
+
+e2e_run "Assert reg_port in mirror.conf matches CLI flag" \
+    "grep -q 'reg_port=8443' mirror/mirror.conf"
+
+test_end
+
+# ============================================================================
+# Named mirror + register (enclave workflow)
+# ============================================================================
+test_begin "Register: named mirror (enclave workflow)"
+
+e2e_run "Create named mirror directory" \
+    "aba mirror --name test-enclave || true"  # make exits non-zero with editor=none after creating dir
+
+e2e_run "Assert test-enclave directory exists" \
+    "test -d test-enclave && test -f test-enclave/mirror.conf"
+
+e2e_run "Register pool registry to named mirror" \
+    "aba -d test-enclave register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+e2e_run "Verify named mirror registry access" \
+    "aba -d test-enclave verify"
+
+e2e_run "Unregister named mirror" \
+    "aba -d test-enclave unregister"
+
+e2e_run "Remove named mirror directory" \
+    "rm -rf test-enclave"
+
+test_end
+
+# ============================================================================
 # End-of-suite cleanup: delete cluster and unregister mirror
 # ============================================================================
 test_begin "Cleanup: delete cluster and unregister mirror"
@@ -359,3 +416,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-cluster-ops.sh"
+
+exit 0

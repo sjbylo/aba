@@ -69,8 +69,8 @@ e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify /home disk usage < 10GB after reset" \
-    "used_gb=\$(df /home --output=used -BG | tail -1 | tr -d ' G'); echo \"[setup] /home used: \${used_gb}GB\"; [ \$used_gb -lt 12 ]"
+e2e_run "Verify / available space > 200GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
 
 test_end 0
 
@@ -116,7 +116,6 @@ e2e_run "Set operator sets in aba.conf" "aba --op-sets abatest"
 
 # Create mirror directory and mirror.conf (needed by the bundle command)
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 
 # Read ocp_version/ocp_channel directly from aba.conf (no internal functions needed).
 ocp_version=$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
@@ -340,3 +339,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-create-bundle-to-disk.sh"
+
+exit 0

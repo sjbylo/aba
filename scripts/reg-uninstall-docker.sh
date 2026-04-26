@@ -36,6 +36,18 @@ if ask "Uninstall Docker registry on localhost at $REG_HOST:$REG_PORT (data: $RE
 		$SUDO rm -rf "$REG_ROOT"
 	fi
 
+	# Post-uninstall assertions: verify Docker registry is fully gone.
+	_stale=""
+	[ -d "$REG_ROOT" ] && _stale+="  REG_ROOT ($REG_ROOT) still exists"$'\n'
+	ss -tlnp | grep -q ":${REG_PORT:-8443} " && _stale+="  Port ${REG_PORT:-8443} still listening"$'\n'
+	podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$" && _stale+="  registry container still present"$'\n'
+	if [ -n "$_stale" ]; then
+		aba_abort \
+			"Docker registry uninstall left stale state:" \
+			"$_stale" \
+			"Investigate and clean up manually before retrying."
+	fi
+
 	rm -rf "${regcreds_dir:?}/"*
 
 	aba_info_ok "Docker registry uninstall successful"

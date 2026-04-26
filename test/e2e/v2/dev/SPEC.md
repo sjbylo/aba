@@ -4,9 +4,8 @@ Developer-facing blueprint for the ABA E2E test framework.
 This is the authoritative reference for architecture, responsibilities, and invariants.
 For the ABA core spec, see `dev/01-SPEC.md`.
 
-This spec describes the **target state** (v2). The current codebase (v1) is being
-incrementally refactored toward this design. Sections marked `[current]` describe
-what exists today; sections marked `[target]` describe where we're going.
+This spec describes the **implemented state** (v2). All phases are complete.
+Sections marked `[current]` describe what the code actually does today.
 
 This spec is the **authority** for v2 development. If a design issue is found
 during implementation, STOP coding, update this spec with the user's approval,
@@ -19,6 +18,7 @@ then resume. Never silently change the architecture.
 This is the single most important architectural rule in the framework.
 
 **Suites must never know or care about:**
+
 - Which user is running them (root, steve, testy)
 - Which OS the VMs are running (rhel8, rhel9, rhel10)
 - Which platform is in use (vmw, kvm, bm)
@@ -28,15 +28,17 @@ This is the single most important architectural rule in the framework.
 **The framework owns all parameterization.** Context flows through environment
 variables set by the dispatcher and runner, never hardcoded in suites:
 
-| Variable | Set by | Used by |
-|----------|--------|---------|
-| `CON_SSH_USER` | dispatcher -> config.env -> runner | `e2e_run` (who runs commands on conN) |
-| `DIS_SSH_USER` | dispatcher -> config.env -> runner | `e2e_run_remote` (who SSHes to disN) |
-| `INT_BASTION_RHEL_VER` | dispatcher -> config.env -> runner | infra setup (golden VM selection) |
-| `VMWARE_CONF` | dispatcher -> config.env -> runner | suite helpers (VMware credentials) |
-| `POOL_NUM` | dispatcher -> runner (positional arg) | `pool_*()` functions (IPs, domains, VIPs) |
-| `INTERNAL_BASTION` | runner (computed from POOL_NUM) | `e2e_run_remote` target host |
-| `CON_HOST` / `DIS_HOST` | runner (computed) | framework SSH targets |
+
+| Variable                | Set by                                | Used by                                   |
+| ----------------------- | ------------------------------------- | ----------------------------------------- |
+| `CON_SSH_USER`          | dispatcher -> config.env -> runner    | `e2e_run` (who runs commands on conN)     |
+| `DIS_SSH_USER`          | dispatcher -> config.env -> runner    | `e2e_run_remote` (who SSHes to disN)      |
+| `INT_BASTION_RHEL_VER`  | dispatcher -> config.env -> runner    | infra setup (golden VM selection)         |
+| `VMWARE_CONF`           | dispatcher -> config.env -> runner    | suite helpers (VMware credentials)        |
+| `POOL_NUM`              | dispatcher -> runner (positional arg) | `pool_*()` functions (IPs, domains, VIPs) |
+| `INTERNAL_BASTION`      | runner (computed from POOL_NUM)       | `e2e_run_remote` target host              |
+| `CON_HOST` / `DIS_HOST` | runner (computed)                     | framework SSH targets                     |
+
 
 Suites use `~/aba` (tilde-relative), `e2e_run`, `e2e_run_remote`, and `pool_*()`
 functions. These abstractions resolve to the correct user, host, and paths at
@@ -46,11 +48,13 @@ runtime.
 Regular users live under `/home/<user>`. Code must NEVER hardcode home
 directory paths -- always use `~` or `$HOME`:
 
-| User | `$HOME` | ABA location | Data/caches |
-|------|---------|-------------|-------------|
-| root | `/root` | `/root/aba` | `/root/.aba/`, `/root/.cache/`, `/root/bin/` |
+
+| User  | `$HOME`       | ABA location      | Data/caches                                                    |
+| ----- | ------------- | ----------------- | -------------------------------------------------------------- |
+| root  | `/root`       | `/root/aba`       | `/root/.aba/`, `/root/.cache/`, `/root/bin/`                   |
 | steve | `/home/steve` | `/home/steve/aba` | `/home/steve/.aba/`, `/home/steve/.cache/`, `/home/steve/bin/` |
 | testy | `/home/testy` | `/home/testy/aba` | `/home/testy/.aba/`, `/home/testy/.cache/`, `/home/testy/bin/` |
+
 
 The runner uses `$HOME/aba` (line 23 of `runner.sh`) which resolves correctly
 for any user. Cleanup code that references `~/aba`, `~/bin`, `~/tmp`, `~/.aba`
@@ -60,34 +64,52 @@ must NEVER use absolute paths like `/root/aba` or `/home/steve/aba`.
 **If a suite works for `--user steve` but not `--user root`, that is a
 framework bug, not a suite bug.**
 
+**`data_dir` in `mirror.conf` is ALWAYS left empty (the default).** The E2E
+framework never sets `data_dir` explicitly.  When `data_dir` is empty, ABA
+resolves it to `~` at runtime, which correctly maps to `/root` (for root) or
+`/home/steve` (for steve).  Suites must NEVER set `data_dir` explicitly
+unless they are specifically testing the `--data-dir` CLI flag (e.g.
+`suite-mirror-sync`).
+
+**Disk layout:** All VMs use a single `/` partition (no separate `/home`).
+The `expand-root.service` (systemd oneshot) auto-grows `/` on boot when the
+virtual disk is larger than the LV (e.g. when `VM_DISK_SIZE` sets the disk
+to 400G after cloning).  This eliminates cross-filesystem issues and the need
+for `/home/root` symlink redirection.
+
 ### Known v1 framework bugs (to be fixed in v2)
 
 1. **File ownership conflicts**: RC files, lock files, cleanup files created by
-   one user are unreadable/unwritable by another. Fix: all users have sudo;
+  one user are unreadable/unwritable by another. Fix: all users have sudo;
    use `sudo` consistently when accessing shared state files.
-
 2. **SSH key assumptions**: Root may not have its own pubkey in authorized_keys
-   (self-SSH for cleanup). Fix: ALL users (root, steve, testy) share the SAME
+  (self-SSH for cleanup). Fix: ALL users (root, steve, testy) share the SAME
    SSH key pair -- the key is baked into the VMware template and must be used
    everywhere. Golden VM provisioning copies the key to each user's `~/.ssh/`
-   and adds it to `authorized_keys` for all users (`_vm_setup_cross_host_ssh`).
+   and adds it to `authorized_keys` for all users (`_vm_create_test_user_and_key_on_host`).
    No user should ever need a separate key.
-
-3. **Hardcoded paths**: References to `/home/root/`, `/home/steve/` in runner.sh
-   and cleanup code. Fix: use `~` or `$HOME` consistently.
-
+   **Status: FIXED in code (two fixes).**
+   (a) `_vm_setup_ssh_keys` in `vm-ops.sh` uses `grep -qF ... || echo ... >>`
+   (idempotent append) instead of `>` (overwrite), preserving cross-host keys.
+   (b) `_vm_create_test_user_and_key_on_host` now **copies** the default user's
+   (`steve`) `id_rsa`/`id_rsa.pub` to `/root/.ssh/` instead of generating a
+   separate keypair for root. This ensures root and steve use the identical key.
+   **Remaining:** Pool-ready snapshots built before these fixes contain the old
+   broken state. Rebuild golden VM + pool snapshots to pick up the fixes.
+3. ~~**Hardcoded paths**: References to `/home/root/`, `/home/steve/` in runner.sh
+  and cleanup code.~~ **FIXED:** All VMs use a single `/` partition (no
+  `/home/root` symlink redirection).  Code uses `~` / `$HOME` consistently.
 4. **OS-change cascading**: An OS change on pool 1 forces all pools to reclone.
-   Fix: per-pool tracking with `_pools_needing_reclone` (already fixed in v1).
-
+  Fix: per-pool tracking with `_pools_needing_reclone` (already fixed in v1).
 5. **tmux session ownership**: Sessions created by one user are inaccessible to
-   another. Fix: dispatcher handles session cleanup regardless of creator.
-
+  another. Fix: dispatcher handles session cleanup regardless of creator.
 6. **Stale cross-user state**: Cleanup files from `--user root` block
-   `--user steve`. Fix: snapshot revert on user-switch is the primary mechanism;
+  `--user steve`. Fix: snapshot revert on user-switch is the primary mechanism;
    `sudo rm` for shared `/tmp` files.
-
-7. **Dashboard hardcoded user**: `live` and `dash` SSHes as `steve@` to read
-   `/tmp/e2e-suite-user`. Fix: use current user or sudo.
+7. ~~**Dashboard hardcoded user**: `live` and `dash` SSHes as `steve@` to read
+  `/tmp/e2e-suite-user`.~~ **FIXED:** `live-pane.sh` reads `/tmp/e2e-suite-user`
+   and dynamically switches SSH user. `dash` SSHes as the suite user. `status`
+   and `stop` use `sudo` for root-owned tmux sessions and log files.
 
 ---
 
@@ -101,6 +123,7 @@ This section is the explicit "do not break" list.
 The structured lifecycle works well: suites declare their test plan up front
 with `plan_tests`, each phase is wrapped in `test_begin`/`test_end`, and the
 suite finishes with `suite_end`. This gives:
+
 - A **progress table** printed at every state change (shows PENDING/RUNNING/PASS/FAIL/SKIP)
 - **Checkpoint/resume** via state files (skip already-passed tests on `--resume`)
 - Clean separation between test declaration and execution
@@ -108,9 +131,10 @@ suite finishes with `suite_end`. This gives:
 ### `e2e_run` / `e2e_run_remote` / `e2e_run_must_fail`
 
 The command execution wrappers work well:
+
 - **Automatic retry** with exponential backoff (configurable: `-r`, `-d`, `-m`)
 - **Color-coded output**: local steps in bright white, remote steps in bold
-  yellow, commands in dim gray, OK in green, FAIL in red
+yellow, commands in dim gray, OK in green, FAIL in red
 - **Ring buffer** of last N commands for failure notifications
 - **Per-command output capture** for diagnostic context in notifications
 - **Ctrl-C handling**: interrupt goes to interactive prompt, not crash
@@ -123,12 +147,15 @@ The interactive menu on failure is critical and must be preserved exactly:
 `[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd]`
 
 Key behaviors:
+
 - **[R]etry / Enter**: restart the full retry cycle for the failed command
-- **[s]kip**: skip current test, run cleanup, continue to next test
-- **[S]kip-suite**: skip all remaining tests, run cleanup
-- **[0]restart-suite**: clean up and re-run the entire suite from scratch
-- **[c]leanup**: run cluster+mirror cleanup without stopping (diagnostic)
-- **[a]bort**: clean up and exit
+- **[s]kip**: skip current test, continue to next test in the same suite (NO cleanup -- resources stay for subsequent tests)
+- **[S]kip-suite**: abandon the entire suite -- run cleanup (delete clusters, uninstall mirrors), then exit
+- **[0]restart-suite**: run cleanup, then re-run the entire suite from test 1
+- **[c]leanup**: run cluster+mirror cleanup without stopping (diagnostic, stays in menu)
+- **[a]bort**: run cleanup and exit with failure
+- **[p]ause**: stop the clock, stay in menu (useful for manual investigation)
+- **[!cmd]**: run an arbitrary shell command (e.g. `!oc get co`) without leaving the menu
 - **[p]ause**: stop the 24h auto-abort timer (clock stopped)
 - **[!cmd]**: run an arbitrary bash command for debugging (if exit 0, treat as pass)
 - 24h auto-abort timeout prevents abandoned suites from blocking pools
@@ -138,14 +165,22 @@ Key behaviors:
 The add-to-cleanup and remove-cleanup functions must be preserved in v2:
 
 **Registration (call immediately BEFORE install):**
+
 - `e2e_add_to_cluster_cleanup PATH [remote]` -- register a cluster for cleanup
 - `e2e_add_to_mirror_cleanup PATH [remote]` -- register a mirror for cleanup
 
-**Removal (called by explicit cleanup or crash recovery):**
+**De-registration (call after successful explicit cleanup in suite code):**
+
+- `e2e_remove_from_cluster_cleanup PATH` -- remove a cluster entry from `.cleanup`
+- `e2e_remove_from_mirror_cleanup PATH` -- remove a mirror entry from `.mirror-cleanup`
+
+**Bulk cleanup (called by explicit cleanup, crash recovery, or interactive menu):**
+
 - `e2e_cleanup_clusters` -- iterate `.cleanup` file, run `aba delete` on each
 - `e2e_cleanup_mirrors` -- iterate `.mirror-cleanup` file, run `aba uninstall` on each
 
 How it works:
+
 - Each entry is `user@fqdn /abs/path` -- enables correct host and user targeting
 - `local` (default) = cleanup on conN; `remote` = cleanup on disN via SSH
 - The interactive failure menu's `[c]leanup` option uses these same functions
@@ -156,6 +191,7 @@ How it works:
 ### Pre-suite cleanup in the runner (`_pre_suite_cleanup`)
 
 Before each suite, the runner:
+
 1. Processes leftover `.cleanup` / `.mirror-cleanup` files from crashed suites
 2. Verifies no orphan VMs in the pool's vCenter folder (`_verify_no_orphan_vms`)
 3. Resets firewall ports to a clean state (`_reset_con_firewall`)
@@ -163,6 +199,32 @@ Before each suite, the runner:
 5. Cleans stale ABA artifacts from all users' home directories
 
 This crash-recovery mechanism is essential and works well.
+
+### Pool-scope cleanup guard
+
+Cleanup files contain `user@host abs_path` entries where `host` identifies
+which machine installed the resource. When multiple pools run concurrently,
+a stale or misplaced cleanup file on conN could reference a host belonging
+to a different pool (e.g. `dis1.example.com` on con2). Processing such an
+entry would destroy another pool's active resources.
+
+**Invariant:** Before executing any cleanup entry, the target hostname is
+validated against the current pool's allowed hosts (`conN.domain` and
+`disN.domain`). Entries targeting foreign hosts are skipped with a warning
+and the cleanup file is kept for the correct pool to process later.
+
+**Implementation:** Three code paths enforce this guard:
+
+1. `_run_cleanup_on_host()` in `lib/dispatcher.sh` -- accepts an
+   `allowed_hosts` parameter; the heredoc validates each entry's target
+2. `_process_pool_cleanup_files()` in `lib/dispatcher.sh` -- derives
+   allowed hosts from `POOL_NUM` and `VM_BASE_DOMAIN`, passes to above
+3. `_pre_suite_cleanup()` in `runner.sh` -- inline validation using
+   `POOL_NUM` and `VM_BASE_DOMAIN` before each SSH
+
+All callers of `_run_cleanup_on_host` (dispatcher, reclone, revert) must
+pass the pool-scoped allowed hosts. Calls without `allowed_hosts` still
+work (backward compat) but skip the guard -- avoid this in production paths.
 
 ### Notification relay via bastion
 
@@ -175,18 +237,21 @@ output for context.
 ### Log file structure
 
 The log architecture works well:
+
 - **Full log**: `<suite>-<timestamp>.log` with all output
 - **Summary log**: `<suite>-<timestamp>-summary.log` with only test names,
-  commands, PASS/FAIL, and timing (ANSI colors forced on for `tail -f`)
+commands, PASS/FAIL, and timing (ANSI colors forced on for `tail -f`)
 - **Symlinks**: `<suite>-latest.log`, `<suite>-summary.log`, `latest.log`,
-  `summary.log` always point to the active suite
+`summary.log` always point to the active suite
 - Dashboards (`dash`/`live`) tail the summary log
 
 ### `config.env` + `pools.conf` configuration
 
 The configuration layering works well:
+
 - `config.env`: baseline defaults (channel, OCP version, SSH users, timeouts,
-  VMware settings, notifications)
+VMware settings, notifications, VM provisioning: `VM_DEFAULT_USER`,
+`TIMEZONE`, `VM_CLONE_MACS`, `VM_BOOT_DELAY`, `VM_DISK_SIZE`)
 - `pools.conf`: per-pool overrides (host, datastore, vCenter folder, POOL_NUM)
 - CLI flags override both
 - Precedence: CLI flags > pool overrides > config.env defaults
@@ -201,6 +266,7 @@ unchanged. Setting `OCP_VERSION=p` is a good default for testing stability
 ### IP addressing / MAC / domain naming scheme
 
 The per-pool addressing scheme in `config.env` is clean and collision-free:
+
 - Pool N uses IP decade `10.0.2.(N*10)` through `10.0.2.(N*10+9)`
 - MAC addresses follow `00:50:56:ac:NN:XX` (NN=pool, XX=nic)
 - Domain names use `pN.example.com` subdomains per pool
@@ -208,12 +274,46 @@ The per-pool addressing scheme in `config.env` is clean and collision-free:
 - Only one cluster type per pool at a time, so all types share IPs
 - This scheme carries forward unchanged into v2 (up to 6 pools)
 
-### Concurrent run protection (lock files)
+### Concurrent run protection
 
-Runner uses a PID + timestamp lock file with 24h auto-expiry:
-- Prevents two runners from executing the same suite simultaneously
-- Stale locks (dead PID) are cleaned automatically
-- Lock is removed on EXIT trap
+Three levels of locking prevent race conditions:
+
+- **Per-pool locks (bastion):** `run.sh` acquires an exclusive `flock` on
+  `/tmp/e2e-pool-N.lock` for each pool in the `-p` selection before any
+  mutating command (run, restart, deploy, destroy, verify). This allows
+  concurrent `run.sh` instances targeting different pools -- e.g.
+  `run.sh run -s X -p 2` and `run.sh run -s Y -p 3` can run simultaneously.
+  Locks auto-release when `run.sh` exits (fd closes) -- no stale lock files.
+- **Global lock (bastion):** Only acquired for `--recreate-golden` (`-G`),
+  since the golden VM is a shared resource across all pools. Uses
+  `/tmp/e2e-run.lock`.
+- **Runner lock (conN):** Runner uses a PID + timestamp lock file with 24h
+  auto-expiry to prevent two runners from executing the same suite
+  simultaneously. Stale locks (dead PID) are cleaned automatically.
+  Lock is removed on EXIT trap.
+
+### Hung-suite detection
+
+The dispatcher monitors each running suite's summary log for activity.
+If a suite produces no new output for `E2E_HUNG_TIMEOUT` seconds (default
+3600 = 60 minutes), the dispatcher sends a notification via `NOTIFY_CMD`
+and marks the pool as potentially hung. It does NOT kill the suite -- the
+intent is to alert the operator so they can investigate via `run.sh attach`.
+
+This catches genuinely stuck processes (e.g., password prompts, SSH hangs)
+while allowing normal long operations (cluster installs up to 40 min,
+oc-mirror operations up to 60 min, ACM/MCH waits up to 30 min) to complete
+without false alarms. Override via `E2E_HUNG_TIMEOUT` in `config.env`.
+
+### Adaptive polling
+
+The dispatcher poll interval adapts to activity:
+- Starts at 5 seconds
+- Doubles each cycle with no state change (5s -> 10s -> 20s -> 30s)
+- Caps at 30 seconds
+- Resets to 5 seconds whenever a suite completes or a new suite is dispatched
+This reduces latency for quick suite transitions while avoiding excessive
+SSH polling when all pools are busy with long-running suites.
 
 ### Golden rules and test hygiene comments
 
@@ -229,13 +329,14 @@ commands whose failure is not a test failure (e.g. `oc get nodes` for context).
 ### Color scheme
 
 The color assignments are color-blind safe and well-tested:
-- Bright white (0;97): local test step descriptions
+
+- Bright white (0;97): local test step descriptions, test names in plan table
 - Bold blue (1;34): remote test step descriptions + `[user@host:path]` (whole line same color)
-- Green (0;32): OK / PASS
-- Red (0;31): FAIL
+- Green (0;32): OK / PASS (live), local `[user@host:path]` tag; bold green (1;32) in summary
+- Red (0;31): FAIL (live); bold red (1;31) in summary
 - Yellow (0;33): warnings, SKIP, diagnostic tags
-- Cyan (0;36): test names, commands, RUNNING, retry messages
-- Dim gray (0;90): command text (muted)
+- Cyan (0;36): RUNNING status, retry/restart messages
+- Dim gray (0;90): command text (muted, in `e2e_run` output)
 - Bold (1): Suite header
 
 ### Pool-registry persistence (`_ensure_pool_registry`)
@@ -254,13 +355,13 @@ flowchart TD
     Dev["Developer (bastion)"] --> RunSh["run.sh -- CLI + orchestrator"]
     RunSh --> InfraSh["setup-infra.sh -- VM provisioning"]
     RunSh --> Deploy["sync_harness -- push harness to conN"]
-    RunSh --> TmuxDisp["Dispatcher (tmux session on bastion)"]
+    RunSh --> DispLoop["Dispatcher loop (inline in run.sh)"]
     RunSh --> UI["Dashboards -- live / dash / status"]
 
     InfraSh --> VMOps["vm-ops -- clone / snapshot / network"]
     InfraSh --> PoolOps["pool-ops -- golden VM / pool lifecycle"]
 
-    TmuxDisp --> Runner["runner.sh (on conN in tmux)"]
+    DispLoop -->|"SSH + tmux"| Runner["runner.sh (on conN in tmux)"]
     Runner --> Framework["framework.sh -- e2e_run / lifecycle / assertions"]
     Runner --> Suite["suite-*.sh -- test scenarios"]
     Suite --> Framework
@@ -268,25 +369,23 @@ flowchart TD
     Suite --> ABA["ABA CLI (under test)"]
 ```
 
+
+
 ### Components
 
-- **`run.sh`**: Bastion-side CLI. Parses arguments, delegates to subcommands.
-  For `run`, starts the dispatcher in a tmux session and returns to the prompt.
-
-- **`setup-infra.sh`**: Standalone infrastructure provisioner. Manages the golden
-  VM, clones conN/disN VMs, configures networking/DNS/firewall/users, creates
-  pool-ready snapshots. **Stable code -- out of scope for v2 refactoring.**
-
-- **`runner.sh`**: Runs on conN inside tmux. Acquires locks, runs pre-suite
-  cleanup, executes one suite, writes RC files for the dispatcher.
-
-- **`lib/framework.sh`**: Core test harness. Provides `e2e_run`, `e2e_run_remote`,
-  `e2e_poll`, lifecycle management (suite/test begin/end), resume/checkpoints,
-  cleanup registration, assertions, notifications, interactive failure menu.
-
+- `**run.sh**`: Bastion-side CLI. Parses arguments, delegates to subcommands.
+For `run`, enters the dispatcher loop inline (blocking until completion).
+- `**setup-infra.sh**`: Standalone infrastructure provisioner. Manages the golden
+VM, clones conN/disN VMs, configures networking/DNS/firewall/users, creates
+pool-ready snapshots. **Stable code -- out of scope for v2 refactoring.**
+- `**runner.sh`**: Runs on conN inside tmux. Acquires locks, runs pre-suite
+cleanup, executes one suite, writes RC files for the dispatcher.
+- `**lib/framework.sh`**: Core test harness. Provides `e2e_run`, `e2e_run_remote`,
+`e2e_poll`, lifecycle management (suite/test begin/end), resume/checkpoints,
+cleanup registration, assertions, notifications, interactive failure menu.
 - **Suite files** (`suites/suite-*.sh`): Each file is one test scenario.
-  Sources framework + helpers, declares a test plan, executes phases.
-  **Suites do not change between v1 and v2.**
+Sources framework + helpers, declares a test plan, executes phases.
+**Suites do not change between v1 and v2.**
 
 ---
 
@@ -295,27 +394,27 @@ flowchart TD
 The framework runs the same suites across a matrix of parameters. Suites are
 unaware of these -- the framework handles everything.
 
-| Parameter | CLI flag | Variable | Values | Effect on VMs |
-|-----------|----------|----------|--------|---------------|
-| User (conN) | `--user` / `--con-user` | `CON_SSH_USER` | `steve`, `root` | Snapshot revert + harness redeploy |
-| User (disN) | `--user` / `--dis-user` | `DIS_SSH_USER` | `steve`, `root` | Snapshot revert + harness redeploy |
-| OS | `--os` | `INT_BASTION_RHEL_VER` | `rhel8`, `rhel9`, `rhel10` | Destroy + reclone from matching golden VM |
-| VMware config | `--vmware-conf` | `VMWARE_CONF` | Path to vmware.conf | Pushed to conN/disN on deploy |
+
+| Parameter     | CLI flag                | Variable               | Values                     | Effect on VMs                             |
+| ------------- | ----------------------- | ---------------------- | -------------------------- | ----------------------------------------- |
+| User (conN)   | `--user` / `--con-user` | `CON_SSH_USER`         | `steve`, `root`            | Snapshot revert + harness redeploy        |
+| User (disN)   | `--user` / `--dis-user` | `DIS_SSH_USER`         | `steve`, `root`            | Snapshot revert + harness redeploy        |
+| OS            | `--os`                  | `INT_BASTION_RHEL_VER` | `rhel8`, `rhel9`, `rhel10` | Destroy + reclone from matching golden VM |
+| VMware config | `--vmware-conf`         | `VMWARE_CONF`          | Path to vmware.conf        | Pushed to conN/disN on deploy             |
+
 
 ### Parameter lifecycle
 
 - **User change** (e.g. `steve` -> `root`): The dispatcher detects the change
-  via `/tmp/e2e-suite-user` on conN, runs cleanup as the PREVIOUS user, then
-  reverts both conN and disN to the `pool-ready` snapshot and redeploys the
-  harness as the NEW user. This is a clean break -- no leftover state.
-
+via `/tmp/e2e-suite-user` on conN, runs cleanup as the PREVIOUS user, then
+reverts both conN and disN to the `pool-ready` snapshot and redeploys the
+harness as the NEW user. This is a clean break -- no leftover state.
 - **OS change** (e.g. `rhel8` -> `rhel9`): Per-pool tracking in
-  `.pool-os/pool-N`. Only the affected pool's VMs are destroyed and recloned
-  from the matching golden VM (e.g. `aba-e2e-golden-rhel9`). If the golden VM
-  for that OS doesn't exist, it is built automatically.
-
+`.pool-os/pool-N`. Only the affected pool's VMs are destroyed and recloned
+from the matching golden VM (e.g. `aba-e2e-golden-rhel9`). If the golden VM
+for that OS doesn't exist, it is built automatically.
 - **VMware config change**: The vmware.conf file is pushed fresh to conN/disN
-  on every harness deploy. No VM revert needed.
+on every harness deploy. No VM revert needed.
 
 ---
 
@@ -324,21 +423,22 @@ unaware of these -- the framework handles everything.
 ### Commands (quick reference)
 
 ```
-run.sh run [--suite X] [-p 1,2,3]       Run suites (starts dispatcher in tmux, returns to prompt)
+run.sh run [-s X] [-p 1,2,3]            Run suites (blocks until completion)
 run.sh run -p all                        Run all suites across all pools
-run.sh run --suite X -p 2 --force        Force dispatch onto pool 2 (even if dispatcher running)
-run.sh run -p 1 --resume                 Re-run last suite, skip passed tests (mini-menu usually easier)
-run.sh run -p all --dev                  Push local source to ~/aba, then run
-run.sh reschedule [--suite X]            Re-queue suites to running dispatcher
+run.sh run -s X -p 2 -f                 Force dispatch onto pool 2 (even if dispatcher running)
+run.sh run -p 1 -r                       Re-run last suite, skip passed tests (mini-menu usually easier)
+run.sh run -p all -d                     Push local source to ~/aba, then run
+run.sh run -a -D -p all                  Include dummy framework test suites
+run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 run.sh deploy [-p 2,3]                   Push source code + harness to conN
-run.sh restart [-p 2] [--resume]         Stop + harness deploy + re-run last suite
-run.sh stop [-p 2,3] [--clean]           Kill runners (--clean: delete clusters/mirrors)
+run.sh restart [-p 2] [-r]               Stop + harness deploy + re-run last suite
+run.sh stop [-p 2,3] [-c]               Kill runners (-c: delete clusters/mirrors)
 run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 run.sh status [-p 3]                     Show what's running
 run.sh verify [-p all]                   Verify pool VMs (no dispatch)
-run.sh list                              List available suites
-run.sh destroy [-p all] [--clean]        Destroy pool VMs (--clean: delete clusters first)
-run.sh attach [conN]                     Attach to dispatcher (no args) or conN suite session
+run.sh list                              List available suites (shows dummy suites separately)
+run.sh destroy [-p all] [-c]             Destroy pool VMs (-c: delete clusters first)
+run.sh attach conN                       Attach to conN's runner tmux session
 run.sh live [-p 1-3]                     Interactive multi-pane dashboard
 run.sh dash [-p all] [log]              Read-only summary dashboard
 ```
@@ -347,23 +447,30 @@ run.sh dash [-p all] [log]              Read-only summary dashboard
 
 #### `run` -- Start suites
 
-Starts the dispatcher in a detached tmux session on bastion and returns to the
-prompt immediately (fire-and-forget). The dispatcher assigns suites from the
-work queue to free pools. If a dispatcher is already running, appends new
-suites to the queue (unless `--force` is used, which wipes queue state first).
+Runs the dispatcher loop inline (blocking) in the current terminal. The
+dispatcher assigns suites from the work queue to free pools and blocks until
+all suites complete. If a dispatcher is already running (from another
+terminal), appends new suites to the queue (unless `--force` is used, which
+wipes queue state first). To survive SSH disconnects, run inside tmux/screen.
+
+**One-shot force dispatch:** When `-f`/`--force` targets a single pool (`-p N`),
+only the first suite in `-s X,Y,Z` is dispatched immediately; remaining
+suites are injected into the running dispatcher's queue for later dispatch.
 
 ```
 run.sh run                               # Run all suites on all pools (default)
-run.sh run --suite X,Y -p 1,2            # Run specific suites on specific pools
-run.sh run -p all --dev                  # Push local source, then run
-run.sh run --suite X -p 2 --force -y     # Force onto pool 2 (even if busy)
-run.sh run -p 1 --resume                 # Re-run, skip already-passed tests
-run.sh run --dry-run                     # Show plan, don't execute
+run.sh run -s X,Y -p 1,2                # Run specific suites on specific pools
+run.sh run -p all -d                     # Push local source, then run
+run.sh run -s X -p 2 -f -y              # Force onto pool 2 (even if busy)
+run.sh run -p 1 -r                       # Re-run, skip already-passed tests
+run.sh run -n                            # Show plan, don't execute
+run.sh run -a -D -p 1-4                  # Include dummy suites in the run
 ```
 
-Applicable options: `--suite`, `--all`, `-p`, `--force`, `--dev`, `--resume`,
-`--dry-run`, `--revert`, `--recreate-golden`, `--recreate-vms`, `-y`, `-q`,
-`--os`, `--vmware-conf`, `--user`, `--con-user`, `--dis-user`
+Applicable options: `-s`/`--suite`, `-a`/`--all`, `-D`/`--with-dummy`, `-p`,
+`-f`/`--force`, `-d`/`--dev`, `-r`/`--resume`, `-n`/`--dry-run`,
+`-V`/`--revert`, `-G`/`--recreate-golden`, `-R`/`--recreate-vms`, `-y`, `-q`,
+`-o`/`--os`, `-v`/`--vmware-conf`, `-u`/`--user`, `--con-user`, `--dis-user`
 
 Auto-detection: VMs are powered on if off, golden VM is built if missing, pool
 VMs are cloned if absent. No explicit `--setup` flag needed.
@@ -375,10 +482,10 @@ for re-running failed suites or adding new ones to an active run.
 
 ```
 run.sh reschedule                        # Re-queue all suites
-run.sh reschedule --suite X              # Re-queue specific suite(s)
+run.sh reschedule -s X                   # Re-queue specific suite(s)
 ```
 
-Applicable options: `--suite`, `--all`
+Applicable options: `-s`/`--suite`, `-a`/`--all`, `-D`/`--with-dummy`
 
 #### `deploy` -- Push source code + harness to conN
 
@@ -391,7 +498,7 @@ run.sh deploy -p 2,3                     # Deploy to pools 2 and 3
 run.sh deploy -p all --force             # Force deploy (hot-deploy even if running)
 ```
 
-Applicable options: `-p`, `--force`, `--dev`
+Applicable options: `-p`, `-f`/`--force`, `-d`/`--dev`
 
 #### `restart` -- Stop + deploy + re-run
 
@@ -401,26 +508,34 @@ re-runs the last suite (or a specified suite). Combines `stop` + `deploy` +
 
 ```
 run.sh restart -p 2                      # Restart last suite on pool 2
-run.sh restart -p 2 --resume             # Restart, skip passed tests
-run.sh restart --suite X -p 1            # Stop + deploy + run suite X
-run.sh restart -p 2 --dev                # Stop + push source + deploy + re-run
+run.sh restart -p 2 -r                   # Restart, skip passed tests
+run.sh restart -s X -p 1                 # Stop + deploy + run suite X
+run.sh restart -p 2 -d                   # Stop + push source + deploy + re-run
 ```
 
-Applicable options: `-p`, `--suite`, `--resume`, `--dev`, `--force`, `-y`,
-`--os`, `--vmware-conf`, `--user`, `--con-user`, `--dis-user`
+Applicable options: `-p`, `-s`/`--suite`, `-r`/`--resume`, `-d`/`--dev`,
+`-f`/`--force`, `-y`, `-o`/`--os`, `-v`/`--vmware-conf`, `-u`/`--user`,
+`--con-user`, `--dis-user`
 
 #### `stop` -- Kill runners
 
-Stops the runner process on the target pool(s). With `--clean`, deletes
+Stops the runner process on the target pool(s). With `-c`/`--clean`, deletes
 clusters and mirrors on the pool before stopping (tests `aba delete` /
 `aba uninstall`).
 
 ```
-run.sh stop -p 2,3                       # Stop pools 2 and 3
-run.sh stop -p all --clean               # Clean up clusters/mirrors, then stop
+run.sh stop -p 2,3                       # Stop pools 2 and 3 (dispatcher stays alive)
+run.sh stop -p all -c                    # Clean up clusters/mirrors, then stop (kills dispatcher)
 ```
 
-Applicable options: `-p`, `--clean`, `-y`
+When stopping a subset of pools (e.g. `-p 2,3`), only the runners on those
+pools are killed -- the dispatcher continues serving the remaining pools.
+The dispatcher is only killed when stopping ALL configured pools.
+
+**Cross-user:** Uses `sudo tmux kill-session` when the suite user is root
+(detected via `/tmp/e2e-suite-user`), since the tmux session is owned by root.
+
+Applicable options: `-p`, `-c`/`--clean`, `-y`
 
 #### `start` -- Power on pool VMs
 
@@ -437,6 +552,12 @@ Applicable options: `-p`
 Reads state files from `/tmp/e2e-*` and displays per-pool status: current
 suite, test progress, pass/fail counts, timing. Does not require the
 dispatcher to be running.
+
+**Cross-user awareness:** Status SSHes as the deploy user (steve) but suites
+may run as root. The status command reads `/tmp/e2e-suite-user` and uses
+`sudo` for tmux session checks, log reads, and file existence tests when the
+suite user is root. This ensures `run.sh status` works correctly regardless
+of which user the suite is running as.
 
 ```
 run.sh status                            # All pools
@@ -458,6 +579,9 @@ run.sh verify -p all                     # Verify all pools
 run.sh verify -p 1                       # Verify pool 1
 ```
 
+Verifies all requested pools -- does NOT stop on the first failure. Reports
+all results and returns non-zero only after all pools have been checked.
+
 Applicable options: `-p`
 
 #### `list` -- List available suites
@@ -471,28 +595,31 @@ run.sh list
 
 #### `destroy` -- Destroy pool VMs
 
-Destroys conN + disN VMs for the specified pools. With `--clean`, runs
+Destroys conN + disN VMs for the specified pools. With `-c`/`--clean`, runs
 `aba delete` / `aba uninstall` on each pool first to clean up clusters
 and mirrors before destroying the VMs.
 
 ```
 run.sh destroy -p all                    # Destroy all pool VMs
-run.sh destroy -p 2 --clean              # Clean clusters, then destroy pool 2
+run.sh destroy -p 2 -c                   # Clean clusters, then destroy pool 2
 ```
 
-Applicable options: `-p`, `--clean`, `-y`
+Applicable options: `-p`, `-c`/`--clean`, `-y`
 
-#### `attach` -- Attach to tmux session
+#### `attach` -- Attach to runner tmux session
 
-Attaches to the dispatcher's tmux session (no args) or to a specific conN's
-runner tmux session. Detach with `Ctrl-b d`. Works from inside an existing
-tmux session (uses `tmux switch-client`) or from a bare terminal (uses
-`tmux attach-session`).
+Attaches to a specific conN's runner tmux session (`e2e-suite`). SSHes to
+the target host and attaches interactively. Detach with `Ctrl-b d`. Requires
+a host argument.
 
 ```
-run.sh attach                            # Attach to dispatcher
 run.sh attach con2                       # Attach to pool 2's runner session
+run.sh attach con1                       # Attach to pool 1's runner session
 ```
+
+Note: There is no dispatcher tmux session to attach to (the dispatcher runs
+inline). To monitor the dispatcher, use `run.sh status` or run the dispatcher
+inside a tmux session manually.
 
 #### `live` -- Interactive multi-pane dashboard
 
@@ -523,59 +650,72 @@ Applicable options: `-p`
 
 ### Options (full reference)
 
-| Flag | Short | Argument | Description | Applies to |
-|------|-------|----------|-------------|------------|
-| `--suite` | | `X,Y` | Select specific suite(s), comma-separated | `run`, `reschedule`, `restart` |
-| `--all` | | | Select all suites (default for `run`/`reschedule`) | `run`, `reschedule` |
-| `--pools` | `-p` | `SPEC` | Pool selection (see syntax below) | All commands except `list` |
-| `--force` | | | Override safety checks (dispatch to busy pool, hot-deploy) | `run`, `deploy`, `restart` |
-| `--dev` | | | Push local source to `~/aba` on conN instead of git clone | `run`, `deploy`, `restart` |
-| `--resume` | | | Skip previously-passed tests (checkpointed). Rarely needed -- the interactive mini-menu (`[R]etry`, `[s]kip`) is usually easier. | `run`, `restart` |
-| `--dry-run` | | | Show dispatch plan, don't execute | `run` |
-| `--clean` | | | Delete clusters/mirrors before stopping/destroying | `stop`, `destroy` |
-| `--revert` | | | Revert pool VMs to pool-ready snapshot before running | `run` |
-| `--recreate-golden` | | | Force rebuild golden VM from template | `run` |
-| `--recreate-vms` | | | Force reclone conN/disN from golden (scoped to `-p`) | `run` |
-| `--yes` | `-y` | | Auto-accept prompts | `run`, `restart`, `stop`, `destroy` |
-| `--quiet` | `-q` | | CI mode: no interactive prompts (implies `-y`) | `run`, `restart` |
-| `--os` | | `rhel8\|rhel9\|rhel10` | RHEL version for pool VMs | `run`, `restart` |
-| `--vmware-conf` | | `FILE` | Path to vmware.conf | `run`, `restart` |
-| `--user` | | `USER` | SSH user for both conN and disN | `run`, `restart` |
-| `--con-user` | | `USER` | SSH user for conN only | `run`, `restart` |
-| `--dis-user` | | `USER` | SSH user for disN only | `run`, `restart` |
+
+| Flag                   | Short | Argument | Description                                                                                                                      | Applies to                          |
+| ---------------------- | ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `--suite` / `--suites` | `-s`  | `X,Y`    | Select specific suite(s), comma-separated                                                                                        | `run`, `reschedule`, `restart`      |
+| `--all`                | `-a`  |          | Select all suites (default for `run`/`reschedule`). Excludes `dummy-*` suites unless `-D` is also passed.                        | `run`, `reschedule`                 |
+| `--with-dummy`         | `-D`  |          | Include `dummy-*` framework test suites (excluded from `--all` by default)                                                       | `run`, `reschedule`                 |
+| `--pool`               | `-p`  | `SPEC`   | Pool selection (see syntax below). Aliases: `--pools`, `--pool-list`.                                                            | All commands except `list`          |
+| `--force`              | `-f`  |          | Override safety checks (dispatch to busy pool, hot-deploy)                                                                       | `run`, `deploy`                     |
+| `--dev`                | `-d`  |          | Push local source to `~/aba` on conN instead of git clone                                                                        | `run`, `deploy`, `restart`          |
+| `--resume`             | `-r`  |          | Skip previously-passed tests (checkpointed). Rarely needed -- the interactive mini-menu (`[R]etry`, `[s]kip`) is usually easier. | `run`, `restart`                    |
+| `--dry-run`            | `-n`  |          | Show dispatch plan, don't execute                                                                                                | `run`                               |
+| `--clean`              | `-c`  |          | Delete clusters/mirrors before stopping/destroying                                                                               | `stop`, `destroy`                   |
+| `--revert`             | `-V`  |          | Revert pool VMs to pool-ready snapshot before running                                                                            | `run`                               |
+| `--recreate-golden`    | `-G`  |          | Force rebuild golden VM from template (implies `-R`)                                                                             | `run`                               |
+| `--recreate-vms`       | `-R`  |          | Force reclone conN/disN from golden (scoped to `-p`)                                                                             | `run`                               |
+| `--yes`                | `-y`  |          | Auto-accept prompts                                                                                                              | `run`, `restart`, `stop`, `destroy` |
+| `--quiet`              | `-q`  |          | CI mode: no interactive prompts (implies `-y`)                                                                                   | `run`, `restart`                    |
+| `--os`                 | `-o`  | `RHEL`   | RHEL version for pool VMs (`rhel8`, `rhel9`, `rhel10`)                                                                           | `run`, `restart`                    |
+| `--vmware-conf`        | `-v`  | `FILE`   | Path to vmware.conf                                                                                                              | `run`, `restart`                    |
+| `--user`               | `-u`  | `USER`   | SSH user for both conN and disN                                                                                                  | `run`, `restart`                    |
+| `--con-user`           |       | `USER`   | SSH user for conN only                                                                                                           | `run`, `restart`                    |
+| `--dis-user`           |       | `USER`   | SSH user for disN only                                                                                                           | `run`, `restart`                    |
+| `--help`               | `-h`  |          | Show usage help                                                                                                                  | All                                 |
+
 
 **Option interaction rules:**
-- `--user USER` is shorthand for `--con-user USER --dis-user USER`
+
+- `--user` / `-u` is shorthand for `--con-user USER --dis-user USER`
 - `--con-user` and `--dis-user` override `--user` if both are specified
 - `-q` implies `-y` (quiet mode auto-accepts all prompts)
-- `--force` with `run`: wipes queue state and dispatches even to busy pools
-- `--force` with `deploy`: hot-deploys to conN even if a suite is running
-- `--clean` with `stop`: runs `aba delete`/`aba uninstall` before killing runner
-- `--clean` with `destroy`: runs cleanup before destroying VMs
-- `--revert` reverts to `pool-ready` snapshot; `--recreate-vms` does a full
-  reclone from golden (both scoped to the pools selected by `-p`);
-  `--recreate-golden` rebuilds golden from template first
-- `--os` change triggers per-pool reclone (only affected pools, not all)
-- `--dev` replaces the normal `git clone` flow with `scp` of local source
+- `--force` / `-f` with `run`: wipes queue state and dispatches even to busy pools
+- `--force` / `-f` with `deploy`: hot-deploys to conN even if a suite is running
+- `--clean` / `-c` with `stop`: runs `aba delete`/`aba uninstall` before killing runner
+- `--clean` / `-c` with `destroy`: runs cleanup before destroying VMs
+- `--revert` / `-V` reverts to `pool-ready` snapshot; `--recreate-vms` / `-R` does a full
+reclone from golden (both scoped to the pools selected by `-p`);
+`--recreate-golden` / `-G` rebuilds golden from template first (implies `-R`)
+- `--os` / `-o` change triggers per-pool reclone (only affected pools, not all)
+- `--dev` / `-d` replaces the normal `git clone` flow with `scp` of local source
+- `--all` / `-a` excludes `dummy-*` suites by default; add `-D` / `--with-dummy` to include them.
+  Dummy suites can always be run explicitly with `--suite dummy-cleanup-happy,...`
+- **Implicit `run`**: if no subcommand is specified but `--all`, `--suite`,
+`--resume`, or `--with-dummy` is present, the `run` command is implied
 
 ### Pool selection syntax
 
-`-p` and `--pools` are interchangeable. The argument SPEC accepts three forms:
+`-p`, `--pool`, `--pools`, and `--pool-list` are all interchangeable. The argument SPEC accepts three forms:
 
-| Form | Example | Expands to |
-|------|---------|------------|
-| Single pool | `-p 3` | `3` |
-| Comma-separated list | `-p 1,4` | `1, 4` |
-| Range (inclusive) | `-p 1-4` | `1, 2, 3, 4` |
-| Keyword | `-p all` | All pools defined in `pools.conf` (up to 6) |
+
+| Form                 | Example  | Expands to                                  |
+| -------------------- | -------- | ------------------------------------------- |
+| Single pool          | `-p 3`   | `3`                                         |
+| Comma-separated list | `-p 1,4` | `1, 4`                                      |
+| Range (inclusive)    | `-p 1-4` | `1, 2, 3, 4`                                |
+| Keyword              | `-p all` | All pools defined in `pools.conf` (up to 6) |
+
 
 Ranges and lists can be combined in natural ways:
+
 - `-p 1-3` = pools 1, 2, 3
 - `-p 3-6` = pools 3, 4, 5, 6
 - `-p 1,4` = pools 1 and 4
 - `-p all` = every pool in `pools.conf`
 
 **Parsing contract (pseudocode):**
+
 ```bash
 # Input: SPEC string from -p / --pools
 # Output: space-separated list of pool numbers (e.g. "1 2 3")
@@ -605,10 +745,51 @@ _parse_pools() {
 ```
 
 **Validation:**
+
 - Pool numbers must be 1-6
 - Ranges must be ascending (e.g. `4-2` is an error)
 - Duplicate pool numbers are deduplicated silently
-- Pool numbers not present in `pools.conf` produce an error
+- Non-numeric tokens produce an error
+- Note: `_parse_pools` validates syntax only (numeric, 1-6, ascending range).
+It does NOT validate that pool numbers exist in `pools.conf` -- that
+responsibility falls to the calling code (e.g. infrastructure checks fail
+when a pool's `conN` VM doesn't exist).
+
+### Auto-detection when `-p` is omitted
+
+When `-p` / `--pools` is not given, the framework auto-detects which pools
+(and user/OS) to use. The behavior depends on the command type:
+
+**Read-only commands** (`status`, `live`, `dash`, `attach`, `verify`, `stop`,
+`start`, `deploy`, `reschedule`):
+
+1. Default to **all pools from `pools.conf`** (not last-run pools). This
+  ensures `run.sh status` shows every pool with an active suite, even when
+   multiple dispatchers target different pool subsets.
+2. Load `.e2e-last-run` for **user/OS/vmware.conf context** only (not pools).
+3. Unreachable pools are silently skipped in the output.
+
+This means `run.sh status` and `run.sh live` always show the complete
+picture without needing `-p`.
+
+**Write commands** (`run`, `restart`):
+
+1. If `-p` is not given, default to all pools in `pools.conf`
+2. Save the resolved pools + user/OS/vmware.conf to `.e2e-last-run`
+
+**What `.e2e-last-run` stores:**
+
+```
+_SAVED_POOLS="1 2 3 4"
+_SAVED_OS="rhel8"
+_SAVED_CON_USER="steve"
+_SAVED_DIS_USER="steve"
+_SAVED_VMWARE_CONF="/home/steve/.vmware.conf"
+```
+
+**Note:** `_SAVED_POOLS` is retained in the file for backward compatibility
+and for `run`/`restart` to know which pools were last used, but read-only
+commands no longer use it for pool selection.
 
 ### Changes from v1
 
@@ -616,41 +797,52 @@ _parse_pools() {
 - `-p` added as short form of `--pools` (easier to type)
 - `--pools` / `-p` accepts ranges (`1-4`), lists (`1,4`), and `all`
 - `--pools` is never a count -- `--pools 2` means "pool 2", not "2 pools"
-- `--pools-file` removed -- `pools.conf` is the only source
+- `--pools-file` removed from public CLI -- `pools.conf` is the only source
+(still used internally when calling `setup-infra.sh`)
 - Deprecated flag forms (`--destroy`, `--verify`, `--list`) removed -- subcommand only
-- `attach` (no args) attaches to the dispatcher tmux session on bastion
-- `run` starts dispatcher in tmux and returns to prompt (fire-and-forget)
+- `attach conN` attaches to pool N's runner tmux session on conN
+- `run` blocks in the foreground until all suites complete (run inside
+tmux/screen for SSH disconnect resilience)
 - Up to 6 pools supported
 
 ---
 
 ## Dispatcher Contract
 
-**[target] The dispatcher runs in its own tmux session on bastion** -- not tied
-to the user's terminal. `run.sh run` starts it and returns to the prompt.
+**[current] The dispatcher runs inline in the `run.sh` process** on bastion.
+`run.sh run` blocks until all suites complete (or the user aborts with Ctrl-C).
+The dispatcher is NOT in a separate tmux session -- it runs in the foreground
+shell that invoked `run.sh`.
 
 ```mermaid
 flowchart TD
-    User["Developer terminal"] -->|"run.sh run --all"| StartDisp["Start dispatcher in tmux"]
-    StartDisp --> TmuxSess["tmux: e2e-dispatcher (bastion)"]
-    TmuxSess --> Dispatch["Dispatcher loop"]
-    Dispatch -->|"SSH + tmux"| ConN["conN tmux: runner.sh"]
+    User["Developer terminal"] -->|"run.sh run --all"| DispLoop["Dispatcher loop (inline, blocks)"]
+    DispLoop -->|"SSH + tmux"| ConN["conN tmux: runner.sh"]
+    DispLoop -->|"poll RC files"| StateFiles["Read /tmp/e2e-* state files"]
 
-    User -->|"run.sh status"| StateFiles["Read /tmp/e2e-* state files"]
-    User -->|"run.sh attach"| TmuxSess
-    User -->|"run.sh stop"| KillSess["Kill tmux session"]
-    User -->|"SSH disconnect"| Nothing["Dispatcher keeps running"]
+    User -->|"run.sh status"| StateFiles
+    User -->|"run.sh attach conN"| ConNTmux["conN tmux: e2e-suite session"]
+    User -->|"run.sh stop"| KillDisp["Kill dispatcher PID"]
+    User -->|"SSH disconnect"| Dead["Dispatcher dies (not in tmux)"]
 ```
 
+
+
 **Behavior:**
-- `run.sh run --all -p all` starts the dispatcher tmux session, prints
-  initial status, and returns to the prompt
-- The dispatcher streams output to the tmux pane (reattach with `run.sh attach`)
-- `run.sh status` reads state files -- does not require the tmux session
-- SSH disconnect = dispatcher survives, suites keep dispatching
-- `run.sh stop` kills the dispatcher tmux session (and optionally running suites)
+
+- `run.sh run --all -p all` enters the dispatcher loop and **blocks** until
+all suites complete, then prints a final summary and exits
+- The dispatcher streams output to the terminal (visible if run in tmux
+manually, e.g. `tmux new-session 'run.sh run --all'`)
+- `run.sh status` reads state files -- works independently of the dispatcher
+- SSH disconnect **kills the dispatcher** (it is a foreground process, not a
+tmux session). To survive disconnects, run `run.sh run` inside a tmux or
+screen session.
+- `run.sh stop` stops runners on the specified pools; the dispatcher is
+only killed when stopping ALL configured pools
 
 **Dispatcher loop:**
+
 1. Poll each pool for suite completion (RC files via SSH)
 2. Assign the next suite from the work queue to a free pool
 3. On user-switch: cleanup as previous user, revert snapshot, redeploy harness
@@ -667,27 +859,36 @@ correctly detected a product defect. A **framework failure** means the test
 infrastructure itself broke (SSH timeout to conN, VM crash, harness deploy
 error, pre-suite cleanup FATAL, framework bug). These MUST be distinguished:
 
-| Exit code | Meaning | Dispatcher action |
-|-----------|---------|-------------------|
-| 0 | Suite PASSED | Mark pass, dispatch next |
-| 1-98 | Suite FAILED (product bug) | Mark fail, collect logs |
-| 99 | Framework failure | Re-queue suite, try a different pool |
-| 130 | Ctrl-C / interrupted | Re-queue suite |
-| 4 | Restart requested (user) | Re-dispatch same suite to same pool |
+
+| Exit code | Meaning                           | Dispatcher action                                                          |
+| --------- | --------------------------------- | -------------------------------------------------------------------------- |
+| 0         | Suite PASSED                      | Mark pass, dispatch next                                                   |
+| 1-2, 5-98 | Suite FAILED (product bug)        | Mark fail, retry up to `_MAX_RETRIES` times, collect logs                  |
+| 3         | Suite SKIPPED                     | Mark skip (not counted as pass or fail)                                    |
+| 4         | Restart requested (user via menu) | Handled inside `runner.sh` loop -- re-runs suite, never reaches dispatcher |
+| 99        | Framework failure                 | Re-queue suite to a different pool (tracks bad pools per suite)            |
+| 130       | Ctrl-C / interrupted              | Treated as failure, eligible for retry (same as 1-98)                      |
+
 
 **Framework failure contract:**
+
 - Exit code **99** is reserved for framework/infrastructure failures -- suites
-  must never `exit 99`
+must never `exit 99`
 - The runner sets exit 99 when: pre-suite cleanup FAILs, lock acquisition
-  fails, harness files are missing, SSH to conN is unreachable
+fails, harness files are missing, SSH to conN is unreachable, govc
+bootstrap fails
+- **RC file guarantee:** All early-exit paths in `runner.sh` write the exit
+code to `$RC_FILE` before exiting. The dispatcher relies on this file to
+detect completion -- a missing RC file means the runner is still running.
 - The dispatcher re-queues the suite to the back of the work queue so it can
-  be dispatched to a **different pool** (the failing pool may be broken)
+be dispatched to a **different pool** (the failing pool may be broken)
 - If the same suite fails with exit 99 on **all available pools**, mark it as
-  a framework failure (not a suite failure) in the final report
+a framework failure (not a suite failure) in the final report
 - Framework failures do NOT count toward suite pass/fail statistics --
-  they are reported separately as infrastructure issues
+they are reported separately as infrastructure issues
 
 **Invariants:**
+
 - Only one dispatcher per bastion (PID file + trap)
 - Dispatcher never modifies suite code or ABA code on conN
 - Suite assignment is FIFO from the work queue
@@ -701,19 +902,21 @@ error, pre-suite cleanup FATAL, framework bug). These MUST be distinguished:
 ### What lives in the snapshot (infra layer -- do not change)
 
 The golden VM and pool-ready snapshot contain everything needed for a clean
-starting state. Managed by `setup-infra.sh` and `vm-helpers.sh`. **Out of scope
+starting state. Managed by `setup-infra.sh` and `vm-ops.sh`. **Out of scope
 for v2 refactoring.**
 
 Baked into `golden-ready`:
+
 - All three test users: **root, steve, testy** (all created at golden time)
 - SSH keys for all three users -- all share the SAME key pair from the
-  VMware template (any user can SSH to any user on any host, including localhost)
+VMware template (any user can SSH to any user on any host, including localhost)
 - `ABA_TESTING=1` for all users in `.bashrc` and `.bash_profile`
 - OS packages (make, git, podman, nmcli, dnsmasq, etc.)
 - tmux config
 - root's pull-secret, vmware.conf, govc (from bastion at golden build time)
 
 Added at `pool-ready` (on top of golden):
+
 - Pool-specific networking (IPs, DNS, firewall, NAT)
 - vmware.conf / kvm.conf for the pool
 - `git clone` of ABA repo (`~/aba` on conN)
@@ -725,19 +928,22 @@ The test harness is pushed from bastion to conN on EVERY suite dispatch via
 a single `sync_harness()` function. This ensures the latest code is always
 running regardless of what is in the snapshot.
 
-| Files | Destination on conN | Source on bastion |
-|-------|---------------------|-------------------|
-| runner.sh, lib/*.sh, suites/*.sh, scripts/*.sh | `~/.e2e-harness/` | `test/e2e/` |
-| config.env (generated, with user/OS/vmware overrides) | `~/.e2e-harness/config.env` | `test/e2e/.config.env.deploy` |
-| pools.conf | `~/.e2e-harness/pools.conf` | `test/e2e/pools.conf` |
-| govc binary | `~/.e2e-harness/bin/govc` + `~/bin/govc` | `~/bin/govc` |
-| pull-secret (root only) | `~/.pull-secret.json` | `~/.pull-secret.json` |
-| vmware.conf (root only) | `~/.vmware.conf` | `~/.vmware.conf` or `--vmware-conf` path |
-| notify.sh (if configured) | `~/bin/notify.sh` | `~/bin/notify.sh` |
 
-**[target]** All these `scp` operations are consolidated into ONE function:
-`sync_harness()` in `lib/deploy.sh`. Currently duplicated in 4 places in
-`run.sh` (deploy, restart, main run, `_dispatch_suite`).
+| Files                                                 | Destination on conN                      | Source on bastion                        |
+| ----------------------------------------------------- | ---------------------------------------- | ---------------------------------------- |
+| runner.sh, lib/*.sh, suites/*.sh, scripts/*.sh        | `~/.e2e-harness/`                        | `test/e2e/`                              |
+| config.env (generated, with user/OS/vmware overrides) | `~/.e2e-harness/config.env`              | `test/e2e/.config.env.deploy`            |
+| pools.conf                                            | `~/.e2e-harness/pools.conf`              | `test/e2e/pools.conf`                    |
+| govc binary                                           | `~/.e2e-harness/bin/govc` + `~/bin/govc` | `~/bin/govc`                             |
+| aba binary (infra-owned, on conN + disN)              | `~/.e2e-harness/bin/aba`                 | `scripts/aba.sh` from `$E2E_GIT_BRANCH` |
+| pull-secret (root only)                               | `~/.pull-secret.json`                    | `~/.pull-secret.json`                    |
+| vmware.conf (root only)                               | `~/.vmware.conf`                         | `~/.vmware.conf` or `--vmware-conf` path |
+| notify.sh (if configured)                             | `~/bin/notify.sh`                        | `~/bin/notify.sh`                        |
+
+
+All these `scp` operations are consolidated into `sync_harness()` and
+`sync_infra_aba()` in `lib/deploy.sh`. Called from `_dispatch_suite`
+(dispatcher), `cmd_deploy`, and `cmd_restart`.
 
 ### What is NOT pushed (expected from snapshot)
 
@@ -746,39 +952,174 @@ running regardless of what is in the snapshot.
 - SSH keys -- from `golden-ready` snapshot
 - Exception: `--dev` mode overwrites `~/aba` with a tarball from bastion
 
+### Infra space vs user space
+
+The test framework enforces a strict separation between infrastructure-owned
+files and suite-owned (user-space) files. This prevents suites from
+accidentally breaking infra cleanup, and infra from depending on binaries
+that suites may legitimately delete.
+
+```
+Infra space:  ~/.e2e-harness/          (owned by infra, suites never touch)
+User space:   ~/, ~/bin/, ~/aba/       (owned by suites, infra must not depend on)
+```
+
+**Infra space** (`~/.e2e-harness/`): Deployed by `sync_harness` and
+`sync_infra_aba` from bastion on every dispatch. Contains runner scripts,
+harness libraries, and infra-owned tools (`govc`, `aba`). The infra-owned
+`aba` binary is deployed to both conN and disN (all users). Suites must
+never modify this directory.
+
+**User space** (`~/`, `~/bin/`, `~/aba/`): Owned by suites. Suites install
+`aba`, create mirrors/clusters, and clean up here. The infra layer must not
+depend on user-space binaries for its own operations.
+
+**Crash recovery** is the infra's responsibility: processing `.cleanup` /
+`.mirror-cleanup` files from crashed suites via `_pre_suite_cleanup` and
+`_cleanup_dis_aba`. These use `~/.e2e-harness/bin/aba` -- never
+user-space `~/bin/aba`.
+
+**Normal cleanup** is the suite's responsibility. Each suite's final test
+block runs `aba delete` / `aba uninstall` (using the user-space `aba`).
+The infra's `_cleanup_dis_aba` is a belt-and-suspenders reset between
+suites, using the infra-owned binary.
+
+**Why this matters:** User-space `~/bin/aba` may not exist (the suite's
+own cleanup or `_cleanup_dis_aba` step 1 removes CLI tools). It may also
+not be in PATH for non-interactive SSH sessions (`.bash_profile` is not
+sourced). The infra-owned copy at `~/.e2e-harness/bin/aba` is always
+available and referenced by absolute path.
+
+**Manual podman/systemctl cleanup is forbidden.** If `aba uninstall` fails
+or `aba` is missing, the correct response is to fix the deployment -- never
+work around it with `podman stop -a`, `podman rm -af`, `podman secret rm -a`,
+or `systemctl --user stop quay-*`. Manual cleanup has caused broken OS state
+in the past.
+
+### SSH login methods and PATH
+
+`e2e_run` (framework.sh) sources `.bash_profile` before every remote command,
+simulating a console/interactive login. This means `~/bin` is always in PATH
+during suite execution, and `aba install` always installs to `~/bin/aba`.
+
+However, a real user doing `ssh host "cd ~/aba && ./install"` (non-interactive)
+would NOT have `~/bin` in PATH. In that case, `aba install` correctly falls
+through to `/usr/local/bin/aba` (always in system PATH). Both paths work in
+the real product, but **the tests only exercise the console-login path**
+(install to `~/bin`).
+
+The infra's `_essh` does NOT source `.bash_profile`, so `~/bin` is not in
+PATH for infra operations. This is why infra cleanup must use the absolute
+path `~/.e2e-harness/bin/aba` rather than relying on PATH resolution.
+
+This is a known testing gap documented in the backlog (`ai/BACKLOG.md`):
+the `--user root` test runs are particularly affected -- root's
+`.bash_profile` adds `~/bin` to PATH, but non-interactive SSH to root
+does not.
+
 ### Shared state files on conN
 
 All E2E state files live in `/tmp` and are accessed with `sudo` where needed.
 All test users have sudo, so ownership is not a barrier.
 
-| File | Purpose | Created by |
-|------|---------|------------|
-| `/tmp/e2e-suite-{name}.rc` | Suite exit code | runner.sh |
-| `/tmp/e2e-suite-{name}.lock` | Single-runner lock | runner.sh |
-| `/tmp/e2e-suite-user` | Current suite user (user-change detection) | runner.sh |
-| `/tmp/e2e-suite-os` | Current OS | runner.sh |
-| `/tmp/e2e-suite-vmconf` | Current vmware.conf path | runner.sh |
-| `/tmp/e2e-last-suites` | Last dispatched suite name | runner.sh |
-| `/tmp/e2e-paused-{name}` | Interactive pause marker | framework.sh |
+**On conN (per-pool):**
 
-On user-switch, the snapshot revert wipes the VM entirely. These files only
-matter within a single user's run.
+
+| File                         | Purpose                                    | Created by             |
+| ---------------------------- | ------------------------------------------ | ---------------------- |
+| `/tmp/e2e-suite-{name}.rc`   | Suite exit code                            | runner.sh              |
+| `/tmp/e2e-suite-{name}.lock` | Single-runner lock                         | runner.sh              |
+| `/tmp/e2e-suite-user`        | Current suite user (user-change detection) | runner.sh              |
+| `/tmp/e2e-suite-os`          | Current OS                                 | runner.sh              |
+| `/tmp/e2e-suite-vmconf`      | Current vmware.conf path                   | runner.sh              |
+| `/tmp/e2e-last-suites`       | Last dispatched suite name                 | runner.sh              |
+| `/tmp/e2e-paused-{name}`     | Interactive pause marker                   | framework.sh           |
+| `/tmp/e2e-cmd-output.$$.tmp` | Per-command output capture                 | framework.sh (e2e_run) |
+
+
+**On bastion (global):**
+
+
+| File                           | Purpose                                     | Created by           |
+| ------------------------------ | ------------------------------------------- | -------------------- |
+| `/tmp/e2e-dispatcher.pid`      | Dispatcher process PID                      | run.sh               |
+| `/tmp/e2e-dispatch-state.txt`  | Current dispatcher state (suites, progress) | run.sh               |
+| `/tmp/e2e-inject-queue.txt`    | Inject queue for reschedule/force-dispatch  | run.sh / commands.sh |
+| `/tmp/e2e-forced-dispatch.txt` | Force-dispatch tracking                     | run.sh               |
+| `/tmp/e2e-pool-N.lock`         | Per-pool flock (allows concurrent dispatchers) | run.sh            |
+| `/tmp/e2e-run.lock`            | Global flock (golden VM rebuild only)       | run.sh               |
+| `/tmp/e2e-live-owner`          | Live dashboard ownership marker             | tmux-ui.sh           |
+
+
+On user-switch, the snapshot revert wipes the conN VM entirely. Per-pool
+files only matter within a single user's run. Bastion files persist across
+all pool operations.
 
 ---
 
 ## Infrastructure Contract
 
-`setup-infra.sh` and `vm-helpers.sh` manage the VM layer. **This code is STABLE
-and OUT OF SCOPE for v2 refactoring.** The v2 infrastructure contract is
-identical to the existing working version -- no changes. It works correctly for
-the standard use case and handles golden VM creation, pool cloning, and
-snapshotting.
+`setup-infra.sh` and `vm-ops.sh` manage the VM layer. Key changes from v1:
+disk layout switched to a single `/` partition with `expand-root.service`
+(symlink workarounds removed), pool scoping uses `--pool-list` (exact CSV
+instead of max-pool range), xtrace is redirected to log files (terminal
+shows progress only), and per-pool `flock` locks allow concurrent `run.sh`
+instances targeting different pools.
+
+`**run.sh` is the sole entry point for all E2E operations.** Never call
+`setup-infra.sh`, `runner.sh`, or any `lib/*.sh` module directly. All
+infrastructure management (clone, revert, verify, destroy) is available via
+`run.sh` subcommands and flags:
+
+- `run.sh run --recreate-vms -p 1,2` -- reclone pool VMs from golden
+- `run.sh run --recreate-golden -p 1` -- rebuild golden VM from template
+- `run.sh run --revert -p 2` -- revert pool VMs to pool-ready snapshot
+- `run.sh verify -p 1,2,3` -- verify pool VM health
+- `run.sh start -p 2` -- power on pool VMs
+- `run.sh destroy -p 1` -- destroy pool VMs
+
+If a workflow cannot be accomplished via `run.sh`, that is a missing feature
+in `run.sh` -- fix `run.sh`, don't bypass it.
+
+**Invocation from `run.sh`:** `run.sh` calls `setup-infra.sh` **once** with
+`--pool-list <csv>` passing the exact pool numbers requested. Only the listed
+pools are processed -- no range expansion, no scope creep. Pools that already
+have a `pool-ready` snapshot are skipped automatically unless `--recreate-vms`
+is passed:
+
+```bash
+_pool_csv="${CLI_POOL_LIST// /,}"
+setup-infra.sh --pool-list "$_pool_csv" --pools-file pools.conf [flags...]
+```
+
+Inside `setup-infra.sh`, VM cloning runs in a **single interleaved wave** --
+con and dis VMs for all pools are cloned concurrently (backgrounded), with
+one `wait` gate at the end. Configuration jobs (`_configure_con_vm`,
+`_configure_dis_vm`) also run in **parallel background processes**, with a
+5-second stagger between pools (to avoid Red Hat CDN rate limiting on
+`subscription-manager refresh` and `dnf update`). Pool-ready snapshots are
+created in parallel with a 5-second stagger.
+
+**Output and logging:** `setup-infra.sh` uses `BASH_XTRACEFD` to redirect
+all xtrace (`set -x`) output to `logs/setup-infra-trace.log`. The terminal
+shows only progress-line stdout. Phase 0 (golden VM) output goes to
+`logs/create-golden.log`, and Phase 2 (configure) output goes to per-pool
+log files (`logs/create-poolN-con.log`, `logs/create-poolN-dis.log`). On
+failure, the last 20 lines of the relevant log are printed to the terminal.
+Full debug trace is always available in the log files.
+
+**Signal traps:** `setup-infra.sh` registers an EXIT/INT/TERM/HUP trap that
+kills all background children (`jobs -p`), preventing orphaned subshells
+and SSH sessions after `run.sh` is killed. Additionally, `run.sh stop`
+kills any orphaned `setup-infra.sh` processes on bastion via `pgrep`.
 
 **Golden VM lifecycle:**
+
 1. Clone from vCenter template -> golden VM
-2. Install packages, configure networking, SSH keys, ABA
-3. Snapshot as `golden-ready`
-4. All pool VMs are cloned from `golden-ready` snapshot
+2. Fix MTU to 1500 on all NICs (`_vm_fix_mtu` -- ESXi DHCP hands out MTU 9000)
+3. Install packages, configure networking, SSH keys, ABA
+4. Snapshot as `golden-ready`
+5. All pool VMs are cloned from `golden-ready` snapshot
 
 **Multi-user SSH invariant:** All test users (root, steve, testy) share the
 SAME SSH key pair, which is baked into the VMware template. The golden VM
@@ -786,6 +1127,7 @@ provisioning copies this key to each user's `~/.ssh/` and adds it to every
 user's `authorized_keys`. Because the private key and all `authorized_keys`
 files are identical, ANY user can SSH to ANY user on ANY host -- including
 localhost:
+
 - `ssh root@localhost` works from steve (and vice versa)
 - `ssh steve@conN` works from root on conN (self-SSH for pre-suite cleanup)
 - `ssh testy@disN` works from any user on conN (cross-host, cross-user)
@@ -793,21 +1135,76 @@ localhost:
 
 This eliminates all "Permission denied (publickey)" issues across user
 switches. No per-user key generation is needed. Handled by
-`_vm_setup_cross_host_ssh` in `vm-helpers.sh`.
+`_vm_create_test_user_and_key_on_host` in `vm-ops.sh`.
 
 **Pool VM lifecycle:**
-1. Clone from golden -> conN + disN
-2. Configure pool-specific networking (IPs, DNS, firewall)
-3. Snapshot as `pool-ready`
-4. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
+
+1. `clone_vm()` from golden -> conN + disN in a **single interleaved wave**
+   (con + dis for all pools cloned concurrently; sets MACs, powers on -- see
+   `vm-ops.sh`).
+2. Configure: con and dis run **in parallel** within each pool, with a 5-second
+   stagger between pools to avoid Red Hat CDN rate limiting (HTTP 429).
+   `_configure_con_vm` (wait SSH -> setup keys -> network [incl. MTU 1500] ->
+   firewall -> dnsmasq -> **conditional dnf update** -> cleanup -> vmware.conf ->
+   test user -> aba). Packages are NOT installed on pool VMs -- they are
+   inherited from the golden snapshot. `_vm_dnf_update_pool` refreshes
+   entitlement certs, probes `dnf check-update`, and only applies updates +
+   reboots if packages are actually available. When the golden is fresh,
+   this short-circuits immediately (no update, no reboot).
+   `_configure_dis_vm` (wait SSH -> **conditional dnf update using dis's own
+   internet (ens256)** -> network setup [disables ens256, sets up VLAN to con] ->
+   firewall -> wait for internet via con NAT [validation] -> cleanup ->
+   vmware.conf -> disconnect internet).
+   Dis does its update check in parallel with con's full setup.
+   After dis disables its own internet and switches to the VLAN, it validates
+   con's NAT is working before proceeding.
+3. Verify: `_verify_con_vm` / `_verify_dis_vm` run comprehensive post-config
+   assertions: hostname, timezone, VLAN IPs, MTU 1500 on all NICs, default route,
+   firewall (masquerade, dns, no stale ports), dnsmasq, DNS resolution,
+   NTP (chronyd + server reachable), SSH keys (root + default user share same
+   fingerprint), self-SSH (BatchMode), test user (testy), ABA_TESTING env var,
+   ABA installed (conN only), vmware.conf, pull-secret (conN only),
+   disk usage < 80%, no running containers, port 8443 free.
+   Verification runs at the end of configure and also via `run.sh verify`.
+4. Snapshot as `pool-ready` -- VMs are shut down, power state is polled via
+   `govc vm.info` (replaces blind sleep), then snapshots are created **in
+   parallel with a 5-second stagger** to avoid overwhelming vCenter/storage.
+5. VM annotation added via `govc vm.change -annotation` recording creation
+   date/time, "ready" status, and creator ("E2E test framework of ABA").
+   Same annotation is set on the golden VM after `golden-ready` snapshot.
+6. Between suites: revert to `pool-ready` (fast) or reclone (OS change)
+
+**ABA installation on VMs (`_vm_install_aba`):**
+
+- **Single-partition layout:** All VMs use a single `/` partition (expanded
+  by `expand-root.service` on first boot). Root's `~/aba` is simply
+  `/root/aba` -- no symlinks or cross-partition workarounds needed.
+  The install function runs `rm -rf ~/aba && git clone` before each suite.
+- **Git clone retry:** `git clone` has a 3-attempt retry loop with 10-second
+  backoff to handle transient network failures or filesystem issues during
+  initial VM provisioning.
+
+**`yaml_normalize` and `--strip-secrets`:**
+
+The `yaml_normalize()` helper in `lib/framework.sh` (used by `yaml_diff`)
+strips sensitive fields before comparison. With `--strip-secrets`, the following
+YAML keys are removed: `additionalTrustBundle`, `pullSecret`, and `sshKey`.
+The `sshKey` strip is critical because root and steve may have different key
+comments (e.g. `root@golden` vs `sbylo@ovpn-...`) even when sharing the same
+keypair, and the example files use a different key entirely.
 
 **Naming and addressing conventions:** The domain names, cluster names, and
 IP/MAC address formats used in v1 all work well and are carried forward
 unchanged into v2. No changes to the naming or addressing scheme.
 
 **OS change handling:**
+
 - Per-pool OS tracking in `.pool-os/pool-N` files on bastion
-- When OS changes for a pool, only that pool's VMs are destroyed and recloned
+- When OS changes for a pool, ALL VMs in the pool folder are destroyed and
+recloned (not just conN/disN -- also cluster VMs like `e2e-sno2`)
+- Before destroying VMs, cleanup files are processed via SSH to properly
+`aba delete` clusters and `aba uninstall` mirrors (if conN is reachable)
+- `--recreate-vms` also destroys orphaned cluster VMs in pool folders
 - `--recreate-vms` flag is scoped to the pools selected by `-p` (not global)
 - OS change on pool N must NOT cascade to pool M
 
@@ -818,14 +1215,20 @@ unchanged into v2. No changes to the naming or addressing scheme.
 ### `dash` -- Read-only monitoring dashboard
 
 A tmux session on bastion with one pane per pool. Each pane:
+
 1. SSHes to conN (as the current suite user, detected from `/tmp/e2e-suite-user`)
 2. Runs `tail -F` on the summary log (or full log with `dash -p N log`)
 3. Sets pane title: `dashboard | Pool N | user | suite-name | OS | vmware.conf`
 4. Background monitor checks every 10s if the suite changed (via
-   `/tmp/e2e-last-suites`); on change, kills tail and restarts with fresh content
+  `/tmp/e2e-last-suites`); on change, kills tail and restarts with fresh content
 5. When pool is idle, shows "waiting for suite to start"
 
+**Cross-user:** Each pane detects the suite user from `/tmp/e2e-suite-user` on
+conN and SSHes as that user. A `steve`-initiated `run.sh dash` correctly
+displays `root`-owned suite output without needing `--user root`.
+
 **Layout:**
+
 - 1-2 pools: vertical stack
 - 3-4 pools: 2x2 grid
 - 5-6 pools: 3x2 grid
@@ -833,25 +1236,34 @@ A tmux session on bastion with one pane per pool. Each pane:
 ### `live` -- Interactive dashboard
 
 A tmux session on bastion with one pane per pool. Each pane:
+
 1. SSHes to conN and **attaches to the suite's tmux session** -- fully interactive
-   (you can type, scroll, Ctrl-C)
+  (you can type, scroll, Ctrl-C)
 2. Ownership tracking via `/tmp/e2e-live-owner` prevents two live dashboards
-   from fighting over the same suite session
+  from fighting over the same suite session
 3. Uses `scripts/live-pane.sh` for rich pane behavior:
-   - Detects suite user, OS, vmware.conf for pane title
-   - When suite finishes (pane dead), shows completion banner with PASS/FAIL
-     and preserves scrollback
-   - Polls for next suite without clearing the screen
-   - Detects user-switch (new suite as different user)
+  - Detects suite user, OS, vmware.conf for pane title
+  - When suite finishes (pane dead), shows completion banner with PASS/FAIL
+  and preserves scrollback
+  - Polls for next suite without clearing the screen
+  - Detects user-switch (new suite as different user)
 4. Same grid layout as `dash` (up to 6 pools)
+
+**Cross-user:** `live-pane.sh` dynamically detects the suite user by reading
+`/tmp/e2e-suite-user` on conN (SSHes as `_DEFAULT_USER` for the initial read,
+then switches to the actual suite user for tmux attach). When a new suite
+starts as a different user, the pane detects the user-switch and reconnects.
+This means `run.sh live` shows output for both `steve` and `root` suites
+without any user flags.
 
 **Pane title format:** `live | Pool N | user | suite-name | OS | vmware.conf`
 
 ### `status` -- Non-interactive status table
 
 Not a dashboard -- a single command that prints a table and exits:
+
 - Per-pool: state (IDLE/RUNNING/DONE/PAUSED), suite name, since timestamp,
-  last output line, test plan progress (per-test PASS/FAIL/RUNNING)
+last output line, test plan progress (per-test PASS/FAIL/RUNNING)
 - Dispatcher state: running/not running, PID, active/pending/done suites
 - Reads state files only -- no SSH required for the table itself
 
@@ -862,24 +1274,35 @@ Not a dashboard -- a single command that prints a table and exits:
 When a test step fails and interactive mode is on (not `--quiet`), the framework
 presents a menu. **This must be preserved exactly in v2.**
 
+Normal prompt (24h auto-abort timeout):
+
 ```
 [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (24h timeout):
 ```
 
-| Key | Action |
-|-----|--------|
-| **R** / Enter | Retry the failed command |
-| **s** | Skip this test, clean up registered resources, continue to next test |
-| **S** | Skip the entire suite, clean up, exit suite |
-| **0** | Restart the suite from the beginning, clean up first |
-| **c** | Run cleanup now (without skipping/aborting), then re-prompt |
-| **a** | Abort the suite, clean up, exit with error |
-| **p** | Pause -- stop the 24h timeout clock, re-prompt with `PAUSED` prefix |
-| **!cmd** | Run arbitrary shell command (for debugging), then re-prompt |
+After `[p]ause` (clock stopped, no timeout):
+
+```
+PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]:
+```
+
+
+| Key           | Action                                                                   |
+| ------------- | ------------------------------------------------------------------------ |
+| **R** / Enter | Retry the failed command                                                 |
+| **s**         | Skip this test, continue to the next test in the same suite (NO cleanup) |
+| **S**         | Skip the entire suite, clean up, exit suite                              |
+| **0**         | Restart the suite from the beginning, clean up first                     |
+| **c**         | Run cleanup now (without skipping/aborting), then re-prompt              |
+| **a**         | Abort the suite, clean up, exit with error                               |
+| **p**         | Pause -- stop the 24h timeout clock, re-prompt with `PAUSED` prefix      |
+| **!cmd**      | Run arbitrary shell command (for debugging), then re-prompt              |
+
 
 **Behavior details:**
+
 - Ctrl-C during a running command sends SIGINT (exit 130), skips retries,
-  goes straight to the menu
+goes straight to the menu
 - 24h auto-abort if no input (for unattended runs where someone forgot to detach)
 - Writes `/tmp/e2e-paused-{suite}` so `run.sh status` shows "PAUSED" state
 - Cleanup runs `e2e_cleanup_clusters` + `e2e_cleanup_mirrors` (registered resources)
@@ -923,21 +1346,22 @@ echo "SUCCESS: suite-name.sh"
 ```
 
 **Rules:**
+
 - **Suites are context-agnostic** -- never hardcode usernames, home dirs, OS
-  versions, or pool numbers. Use `~/aba`, `e2e_run`, `e2e_run_remote`, and
-  `pool_*()` functions.
+versions, or pool numbers. Use `~/aba`, `e2e_run`, `e2e_run_remote`, and
+`pool_*()` functions.
 - **Prefer `lib/suite-helpers.sh` over long inline commands** -- common
-  multi-step operations (e.g. install mirror + verify, create cluster + day2,
-  load images + deploy app) should be wrapped in helper functions. Suite files
-  should read like a high-level test plan, not a wall of bash. If a test step
-  requires more than 2-3 lines of commands, it belongs in a suite helper.
+multi-step operations (e.g. install mirror + verify, create cluster + day2,
+load images + deploy app) should be wrapped in helper functions. Suite files
+should read like a high-level test plan, not a wall of bash. If a test step
+requires more than 2-3 lines of commands, it belongs in a suite helper.
 - **Only `aba` commands may delete clusters and mirrors** -- NEVER delete
-  resources directly with `govc vm.destroy`, `virsh destroy`, `rm -rf`,
-  `podman rm`, or any other low-level tool. Always use `aba delete` for
-  clusters and `aba uninstall` for mirrors. Direct deletion bypasses ABA's
-  cleanup logic (marker files, DNS entries, firewall rules, certificates) and
-  leaves the system in an inconsistent state. If `aba delete` or
-  `aba uninstall` fails, that IS the bug -- fix ABA, don't work around it.
+resources directly with `govc vm.destroy`, `virsh destroy`, `rm -rf`,
+`podman rm`, or any other low-level tool. Always use `aba delete` for
+clusters and `aba uninstall` for mirrors. Direct deletion bypasses ABA's
+cleanup logic (marker files, DNS entries, firewall rules, certificates) and
+leaves the system in an inconsistent state. If `aba delete` or
+`aba uninstall` fails, that IS the bug -- fix ABA, don't work around it.
 - Every suite that creates clusters or mirrors MUST have explicit cleanup at the end
 - `plan_tests` names must match `test_begin` descriptions exactly
 - Suites must never call ABA-internal functions directly -- use `aba` CLI or `make`
@@ -954,30 +1378,58 @@ echo "SUCCESS: suite-name.sh"
 `runner.sh` runs on conN, invoked by the dispatcher via tmux.
 
 **Lifecycle:**
+
 1. Acquire lock (prevent concurrent suites on same pool)
-2. Run `_pre_suite_cleanup` -- process leftover `.cleanup` / `.mirror-cleanup` files
-3. Execute `bash suites/suite-${SUITE}.sh`
-4. Write exit code to RC file for dispatcher polling
-5. Release lock
+2. Clear previous RC file, write state files (`/tmp/e2e-suite-user`, etc.)
+3. Source libs, run `e2e_setup`, load config.env and pools.conf
+4. Bootstrap govc (install if missing, verify VMware connectivity)
+5. Verify no orphan VMs in pool's vCenter folder (`_verify_no_orphan_vms`)
+6. Run `_pre_suite_cleanup` -- process leftover `.cleanup` / `.mirror-cleanup` files
+7. Revert disN to `pool-ready` snapshot (or clean disN ABA state)
+8. Ensure pool-registry container is running
+9. Reset conN firewall to clean state
+10. Execute `bash suites/suite-${SUITE}.sh` (in a while loop for restart support)
+11. Write exit code to RC file for dispatcher polling
+12. Release lock (EXIT trap)
 
 **Exit code convention:**
+
 - **0**: suite passed
-- **1-98**: suite failed (product bug detected by the test)
+- **1-2, 5-98**: suite failed (product bug detected by the test). Dispatcher
+retries up to `_MAX_RETRIES` times before marking as final FAIL.
+- **3**: suite skipped (dispatcher marks as SKIP, not counted as pass or fail)
+- **4**: restart requested by user via interactive menu. Handled entirely
+inside `runner.sh`'s while loop -- the suite re-runs without exiting
+the runner, so this exit code never reaches the dispatcher.
 - **99**: framework/infrastructure failure (NOT a suite failure) -- the runner
-  sets this when pre-suite cleanup FAILs, lock cannot be acquired, harness
-  files are missing, or SSH is unreachable. The dispatcher re-queues the suite
-  to a different pool. See "Framework failure vs suite failure" in the
-  Dispatcher Contract.
-- **130**: interrupted (Ctrl-C)
-- **4**: restart requested by user via interactive menu
+sets this when pre-suite cleanup FAILs, lock cannot be acquired, harness
+files are missing, govc bootstrap fails, or disN revert fails. The
+dispatcher re-queues the suite to a different pool. See "Framework failure
+vs suite failure" in the Dispatcher Contract.
+- **130**: interrupted (Ctrl-C). Treated as failure by the dispatcher (same
+retry behavior as 1-98).
 
 **Pre-suite cleanup rules:**
-- If cleanup files exist from a previous suite, attempt `aba uninstall` / `aba delete`
+
+- If cleanup files exist from a previous suite, attempt cleanup via
+`$HOME/.e2e-harness/bin/aba -y -d PATH delete` (and similarly `uninstall`
+for mirrors). The infra-owned `aba` binary is deployed to both conN and disN
+by `sync_infra_aba()`, ensuring it is always available regardless of PATH
+or user-space state.
 - If cleanup fails, exit with **99** (framework failure) -- do not proceed to the suite
-- Cleanup SSHes to the host that installed the resource (may be self)
+- Cleanup SSHes to the host that installed the resource (may be self) via `_essh`
 - Use `sudo` when accessing files that may be owned by a different user
 
+**In-suite cleanup (framework.sh):**
+
+- `e2e_cleanup_clusters()` and `e2e_cleanup_mirrors()` (used by the
+interactive menu `[c]`, `[a]`, `[S]`, `[0]` and EXIT trap) also use
+the infra-owned `$HOME/.e2e-harness/bin/aba` for consistency with the
+pre-suite cleanup.
+
 **Invariant:** Root must be able to SSH to itself on conN (pubkey in authorized_keys).
+The runner has a startup guard that appends `~/.ssh/id_rsa.pub` to `authorized_keys`
+if missing -- handles stale pool-ready snapshots that predate the `_vm_setup_ssh_keys` fix.
 
 ---
 
@@ -991,6 +1443,7 @@ lightweight **fake resources** -- directories with minimal Makefiles that suppor
 without needing actual OpenShift clusters or mirror registries.
 
 **Fake resource pattern:**
+
 ```bash
 mkdir -p ~/aba/e2e-fake-sno
 cat > ~/aba/e2e-fake-sno/Makefile <<'EOF'
@@ -1001,14 +1454,26 @@ EOF
 e2e_add_to_cluster_cleanup "e2e-fake-sno"
 ```
 
-**Dummy cleanup suites:**
+**Dummy cleanup suites (implemented):**
 
-| Suite | What it tests |
-|-------|--------------|
-| `suite-dummy-cleanup-happy.sh` | Register fake clusters + mirrors, clean up in suite's own cleanup phase. Verify dirs are gone. |
-| `suite-dummy-cleanup-crash.sh` | Register fake clusters + mirrors, then `exit 1`. Next suite's `_pre_suite_cleanup` must process the orphans. |
-| `suite-dummy-cleanup-remote.sh` | Register fake mirror on disN. Cleanup SSHes to disN and removes it. |
-| `suite-dummy-cleanup-stale.sh` | Create cleanup file referencing a directory that no longer exists. Pre-suite cleanup must handle gracefully. |
+
+| Suite                                 | What it tests                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `suites/suite-dummy-cleanup-happy.sh` | Register fake clusters + mirrors, clean up in suite's own cleanup phase. Verify dirs are gone.               |
+| `suites/suite-dummy-cleanup-crash.sh` | Register fake clusters + mirrors, then `exit 1`. Next suite's `_pre_suite_cleanup` must process the orphans. |
+| `suites/suite-dummy-cleanup-stale.sh` | Create cleanup file referencing non-existent directories. Pre-suite cleanup must handle gracefully.          |
+
+
+Additional framework test suites:
+
+
+| Suite                                    | What it tests                                                                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `suites/suite-dummy-interactive-menu.sh` | Interactive menu: deliberate failure triggers menu, tests `[s]kip`, `[S]kip-suite`, `[0]restart`, `[R]etry`, `[a]bort` options |
+
+
+**Not yet implemented:** `suite-dummy-cleanup-remote.sh` (register fake mirror on
+disN, cleanup SSHes to disN). Can be added when cross-host cleanup is tested.
 
 **Test sequences (dispatcher handles ordering naturally):**
 
@@ -1047,52 +1512,104 @@ run.sh run --suite dummy-cleanup-happy,dummy-cleanup-crash -p 1,2
 
 ## Architecture: Current vs Target
 
-### `run.sh` [current: 2,643 lines, 1 file]
+### `run.sh` [was: 2,643 lines, 1 file -- DONE]
 
 **Problem**: Single file doing 8+ jobs -- CLI parsing, infra management, harness
 deploy, tmux UI, one-shot commands, suite selection, dispatcher loop, post-run
 summary.
 
-**[target] Split into:**
+**Split into (implemented):**
 
-| Module | Responsibility |
-|--------|---------------|
-| `run.sh` | ~400 lines of orchestration glue: source libs, route subcommands |
-| `lib/cli.sh` | Argument parsing, defaults, last-run reload, config.env generation |
-| `lib/deploy.sh` | SSH helpers, govc bootstrap, `sync_harness()`, source tarball |
-| `lib/tmux-ui.sh` | Dashboard builder (`dash`), `live` (+ `live-pane.sh`), `attach` |
-| `lib/commands.sh` | One-shot commands: stop, start, restart, status, destroy, verify, list |
-| `lib/dispatcher.sh` | Dispatcher in tmux: state machine, main loop, completion, post-run |
 
-### VM helpers [current: 2,654 lines across 2 files with overlap]
+| Module              | Lines | Responsibility                                                              |
+| ------------------- | ----- | --------------------------------------------------------------------------- |
+| `run.sh`            | ~786  | Orchestrator: source libs, route subcommands, infra checks, dispatcher loop |
+| `lib/cli.sh`        | ~401  | Argument parsing, `_parse_pools()`, defaults, config.env generation         |
+| `lib/deploy.sh`     | ~152  | `sync_harness()`, `sync_source()`, `sync_extras()`, source tarball          |
+| `lib/tmux-ui.sh`    | ~256  | Dashboard builder (`dash`), `live` (+ `live-pane.sh`), `attach`             |
+| `lib/commands.sh`   | ~574  | One-shot commands: stop, start, status, verify, list, destroy, reschedule   |
+| `lib/dispatcher.sh` | ~528  | Dispatcher helpers: dispatch, check, record, cleanup, force-clean, summary  |
+
+
+**Note:** `run.sh` is ~786 lines (not the ~400 target) because the dispatcher
+main loop, state arrays, force-dispatch, and takeover logic remain inline --
+they manage top-level flow control (PID file, EXIT trap, `while` loop) that
+can't be encapsulated in a single function. The helper functions (14 total)
+live in `lib/dispatcher.sh`.
+
+### VM helpers [current: 2,654 lines across 2 files with overlap -- DEFERRED]
 
 **Problem**: `vm-helpers.sh` (1,096 lines) and `pool-lifecycle.sh` (1,558 lines)
-have overlapping `_vm_*` functions and duplicate implementations of
+have overlapping `_vm_`* functions and duplicate implementations of
 `configure_connected_bastion` / `configure_internal_bastion`. "Last sourced wins"
 behavior.
 
-**[target] Merge into:**
+**Merged into:**
 
-| Module | Responsibility |
-|--------|---------------|
-| `lib/vm-ops.sh` | Pure VM operations: clone, destroy, power, snapshot, SSH, network, firewall, packages |
-| `lib/pool-ops.sh` | Pool-level orchestration: golden VM prep, pool creation, bastion configuration |
 
-### Suite duplication [current: ~100-200 lines repeated per integration suite]
+| Module            | Responsibility                                                                                                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lib/vm-ops.sh`   | Pure VM operations: clone, destroy, power, snapshot, SSH, network, firewall, packages. Provides `vm_exists()`, `clone_vm()` (full: clone + MAC assignment + disk expand + power-on), `destroy_vm()`, `_vm_dnf_update()` (golden: full clean + update + unconditional reboot), and `_vm_dnf_update_pool()` (pool VMs: cert refresh + check-update + conditional reboot) -- used by `setup-infra.sh` and `pool-ops.sh`. |
+| `lib/pool-ops.sh` | Pool-level orchestration: golden VM prep, pool creation, bastion configuration                                                                                                                                                                         |
+
+
+**Status: COMPLETE.** Merged best versions of all shared functions into
+`vm-ops.sh` and `pool-ops.sh`. Key merges:
+retry logic from vm-helpers + fuller package list from pool-lifecycle,
+detached dnf-update, registry DNS entry, cross-host SSH keys.
+
+`**clone_vm()` contract** (ported from v1 `remote.sh`):
+
+1. Destroy existing clone if present (clones are disposable)
+2. `govc vm.clone -vm SOURCE -on=false CLONE` (linked clone via `-snapshot` when available)
+3. Set MAC addresses on each NIC from `VM_CLONE_MACS[$clone_name]` via `govc vm.network.change`
+  (port group auto-detected per NIC via `_get_nic_network` -- works with dvSwitch and standard vSwitch)
+4. Expand disk to `VM_DISK_SIZE` (default 400G) when set
+5. `govc vm.power -on` + `sleep VM_BOOT_DELAY`
+
+This ensures freshly cloned VMs get the correct DHCP IP (matching DNS) before
+`_configure_con_vm` / `_configure_dis_vm` attempt SSH by hostname.
+
+**Other `vm-ops.sh` primitives:**
+
+- `vm_exists()` -- `govc vm.info "$vm" | grep -q "Name:"`
+- `destroy_vm()` -- power off + destroy (safe if VM doesn't exist)
+- `_get_nic_network()` -- resolves port group name (dvSwitch portgroupKey or standard vSwitch Summary)
+- `_vm_fix_mtu()` -- forces MTU 1500 on all Ethernet/VLAN connections via `nmcli`.
+Called during golden image creation (Phase 0) so clones inherit it.
+- `_vm_setup_network_connected()` / `_vm_setup_network_disconnected()` -- configure
+NIC roles (ens192=lab, ens224=VLAN, ens256=internet/disabled), VLAN sub-interface,
+hostname. Both enforce MTU 1500 as a safety net for clones from older golden images.
+
+**MTU note:** The ESXi DHCP server hands out `interface_mtu=9000` (jumbo frames
+from the vSwitch). Without the MTU fix, ens192 gets MTU 9000, which breaks
+networking expectations. The fix is applied at three layers: golden image
+(`_vm_fix_mtu`), connected network setup, and disconnected network setup.
+
+### Suite duplication [current: ~100-200 lines repeated per integration suite -- DONE]
 
 **Problem**: 7+ integration suites copy-paste the same VMware setup, mirror
 wiring, pool registry configuration, operator wait, and cache cleanup blocks.
 
-**[target] Extract into `lib/suite-helpers.sh`:**
+**Extracted into `lib/suite-helpers.sh` (~181 lines, 14 functions):**
 
-- `suite_setup_vmware_env()` -- vmware.conf, VC_FOLDER, NTP, operator-set
-- `suite_setup_pool_registry()` -- temp aba configure, version resolution, setup-pool-registry.sh
-- `suite_setup_local_mirror()` -- mirror.conf, reg_host, register + verify
-- `suite_sync_to_local_registry()` -- sync with retries
-- `suite_wait_operators()` -- poll operator availability
-- `suite_cleanup_oc_mirror_cache()` -- find + rm -rf pattern
+- `suite_configure_aba()` -- non-interactive aba.conf + dns_servers
+- `suite_verify_aba_conf()` -- 4-grep verification (ask/platform/channel/version)
+- `suite_setup_vmware_env()` -- vmware.conf, VC_FOLDER, verify GOVC_URL
+- `suite_setup_ntp()` -- NTP servers via aba CLI
+- `suite_setup_operator_set()` -- write operator-set template + apply
+- `suite_reapply_config()` -- full re-apply after reset or interactive test
+- `suite_cleanup_oc_mirror_cache()` -- find + rm -rf pattern (optional --remote)
+- `suite_create_mirror_workdir()` -- mirror.conf (data_dir always left empty/default)
+- `suite_point_mirror_to_pool_registry()` -- reg_host + clear SSH fields
+- `suite_ensure_pool_registry()` -- version resolution + setup-pool-registry.sh
+- `suite_generate_pool_reg_pull_secret()` -- init:p4ssw0rd JSON for pool registry
+- `suite_verify_disk_usage()` -- df threshold assertion (default: `/` mount, 50GB)
+- `suite_reset_and_install()` -- reset + install + cache cleanup
+- `suite_full_setup()` -- complete setup sequence (install, configure, vmware, NTP, ops)
 
-Suites call these explicitly -- no automagic.
+Suites call these explicitly -- no automagic. Existing suites continue to work
+as-is; gradual adoption when suites are next edited.
 
 ---
 
@@ -1108,71 +1625,100 @@ flowchart TD
     poolops["pool-ops.sh"]
     setup["setup.sh"]
     suitehelp["suite-helpers.sh"]
+    cli["cli.sh"]
+    deploy["deploy.sh"]
+    commands["commands.sh"]
+    tmuxui["tmux-ui.sh"]
+    dispatcher["dispatcher.sh"]
 
     fw --> constants
     vmops --> remote
     vmops --> config
-    poolops --> vmops
     poolops --> remote
     setup --> remote
     setup --> poolops
     suitehelp --> fw
     suitehelp --> config
+    cli --> constants
+    deploy --> remote
+    commands --> remote
+    commands --> deploy
+    tmuxui --> remote
+    dispatcher --> remote
+    dispatcher --> deploy
 ```
 
+
+
+**Current state:** Phase 4 complete. `vm-ops.sh` and `pool-ops.sh` are the
+canonical modules. `vm-helpers.sh` and `pool-lifecycle.sh` are thin compatibility
+wrappers (source-forward only) kept for any remaining callers.
+
 **Invariants:**
+
 - No circular dependencies between lib files
-- `_essh` defined once in `remote.sh` -- no duplicates in other files
+- `_essh` defined in `remote.sh` (bastion-side, ConnectTimeout=30) -- the canonical version
+for all bastion code. `framework.sh` defines a separate runner-side `_essh` with
+ConnectTimeout=15 (for conN-to-conN/disN SSH). `vm-ops.sh` does NOT define its own.
 - `config-helpers.sh` must not crash if `framework.sh` is not loaded
-  (guard: `type _e2e_log &>/dev/null || _e2e_log() { :; }`)
+(guard: `type _e2e_log &>/dev/null || _e2e_log() { :; }`)
 - Source order within a consumer is explicit and documented in that file's header
 
 ---
 
 ## Color Scheme (terminal output)
 
-| Element | Color | Code |
-|---------|-------|------|
-| Local test descriptions | Bright white | `0;97m` |
-| Remote test descriptions | Bold blue | `1;34m` |
-| OK / PASS status | Green | `0;32m` / `1;32m` |
-| FAIL status | Red | `0;31m` / `1;31m` |
-| Warnings, SKIP, EXPECT-FAIL | Yellow | `0;33m` / `1;33m` |
-| Test names (plan table + header) | Cyan | `0;36m` / `1;36m` |
-| Commands | Cyan | `0;36m` |
-| Suite header | Bold default | `1m` |
-| Retry messages | Cyan | `0;36m` |
+
+| Element                                | Color        | Code              |
+| -------------------------------------- | ------------ | ----------------- |
+| Local test descriptions                | Bright white | `0;97m`           |
+| Remote test descriptions               | Bold blue    | `1;34m`           |
+| Local `[user@host:path]` tag           | Green        | `0;32m`           |
+| OK / PASS status (live)                | Green        | `0;32m`           |
+| OK / PASS status (summary)             | Bold green   | `1;32m`           |
+| FAIL status (live)                     | Red          | `0;31m`           |
+| FAIL status (summary)                  | Bold red     | `1;31m`           |
+| Warnings, SKIP, EXPECT-FAIL            | Yellow       | `0;33m` / `1;33m` |
+| Test names (plan table + `test_begin`) | Bright white | `0;97m`           |
+| RUNNING status                         | Cyan         | `0;36m` / `1;36m` |
+| Commands (in `e2e_run` output)         | Dim gray     | `0;90m`           |
+| Suite header                           | Bold default | `1m`              |
+| Retry / restart messages               | Cyan         | `0;36m`           |
+
 
 ---
 
-## File Layout [target]
+## File Layout [actual as of Phase 6]
 
 ```
 test/e2e/
-  run.sh                    # Slim orchestrator (~400 lines)
-  runner.sh                 # On-conN suite executor
+  run.sh                    # Orchestrator (~786 lines, sources lib/ modules)
+  runner.sh                 # On-conN suite executor (exit 99 for framework failures)
   setup-infra.sh            # VM provisioning (stable, do not change)
   config.env                # Deployable runtime config
   pools.conf                # Pool definitions (up to 6)
   lib/
-    constants.sh            # Shared paths, session names
-    cli.sh                  # [new] Argument parsing, defaults
-    deploy.sh               # [new] SSH helpers, sync_harness()
-    tmux-ui.sh              # [new] Dashboard, live, dash, attach
-    commands.sh             # [new] One-shot subcommands
-    dispatcher.sh           # [new] Dispatch loop in tmux + post-run
-    remote.sh               # SSH wrappers, govc VM ops, _essh
-    vm-ops.sh               # [new] Merged VM operations
-    pool-ops.sh             # [new] Merged pool orchestration
+    constants.sh            # Shared paths, session names, dispatcher file paths (~12 lines)
+    cli.sh                  # [new] Argument parsing, defaults (~401 lines)
+    deploy.sh               # [new] sync_harness(), sync_source(), sync_extras() (~152 lines)
+    tmux-ui.sh              # [new] Dashboard, live, dash, attach (~256 lines)
+    commands.sh             # [new] One-shot subcommands (~574 lines)
+    dispatcher.sh           # [new] Dispatcher helpers: dispatch, check, cleanup (~528 lines)
+    remote.sh               # SSH wrappers, _essh, _escp (~73 lines)
+    vm-ops.sh               # [new] VM operations: all _vm_* helpers (~1075 lines)
+    pool-ops.sh             # [new] Pool orchestration: bastion config, create/destroy (~496 lines)
+    vm-helpers.sh           # Compat wrapper -> vm-ops.sh
+    pool-lifecycle.sh       # Compat wrapper -> pool-ops.sh
     framework.sh            # Core harness (e2e_run, lifecycle, interactive menu)
     config-helpers.sh       # Pool address/config generators
     setup.sh                # Runner-side pool setup bridges
-    suite-helpers.sh        # [new] Shared suite setup patterns
+    suite-helpers.sh        # [new] Shared suite setup patterns (~181 lines)
   suites/
     suite-*.sh              # Test scenarios (shared between v1 and v2)
-    dummy/                  # Smoke + cleanup test suites
+    suite-dummy-cleanup-*.sh  # [new] Framework test suites (happy/crash/stale)
+    dummy/                  # Quick dev-testing suites (not in standard rotation)
   scripts/
-    live-pane.sh            # Live dashboard pane behavior
+    live-pane.sh            # Live dashboard pane behavior (hardcoded user fixed)
     setup-pool-registry.sh  # Pool Quay registry setup
   logs/                     # Runtime logs (gitignored)
   v2/
@@ -1186,13 +1732,13 @@ test/e2e/
 
 - **The framework is not a general-purpose test runner.** It tests ABA specifically.
 - **Suites are not unit tests.** They are end-to-end integration tests that
-  install real clusters on real VMs. Expect 10-60 minute runtimes.
+install real clusters on real VMs. Expect 10-60 minute runtimes.
 - **The framework does not manage vCenter/ESXi.** It uses `govc` to manipulate
-  VMs but does not configure the hypervisor itself.
+VMs but does not configure the hypervisor itself.
 - **No parallel suites on the same pool.** One suite per conN at a time.
 - **No cross-pool suite dependencies.** Each suite is self-contained.
-- **Infrastructure code (`setup-infra.sh`, `vm-helpers.sh`) is out of scope.**
-  It works correctly and does not need refactoring.
+- **Infrastructure code (`setup-infra.sh`, `vm-ops.sh`) is out of scope.**
+It works correctly and does not need refactoring.
 
 ---
 
@@ -1208,7 +1754,7 @@ framework is stable. Suites always work at every step.
 
 ### Git branch strategy
 
-All v2 work happens on the **`e2e-v2`** branch, created from `dev` before
+All v2 work happens on the `**e2e-v2`** branch, created from `dev` before
 any changes begin:
 
 ```
@@ -1228,48 +1774,64 @@ rolling back to any earlier phase.
 
 Each phase produces a testable state -- real suites run after every phase.
 
-**Phase 1: New foundation modules (written clean from spec)**
-Write new modules from scratch based on this spec -- NOT by extracting
-from the old `run.sh`. The old `run.sh` is reference material only.
-The goal is clean code, not reorganized spaghetti.
+**Phase 1: New foundation modules (written clean from spec) -- DONE**
+Wrote new modules from scratch based on this spec -- NOT by extracting
+from the old `run.sh`. The old `run.sh` was reference material only.
+
 - `lib/remote.sh` (canonical `_essh`, written clean)
 - `lib/cli.sh` (argument parsing, `_parse_pools()` with `-p`/`--pools`)
-- `lib/deploy.sh` (SSH helpers, `sync_harness()`)
-- `lib/commands.sh` (stop, start, status, verify, list, destroy)
+- `lib/deploy.sh` (`sync_harness()`, `sync_source()`, `sync_extras()`)
+- `lib/commands.sh` (stop, start, status, verify, list, destroy, reschedule)
 - `lib/tmux-ui.sh` (dash, live, attach)
-- `run.sh` rewritten as ~400-line slim orchestrator that sources the above
+- `run.sh` rewritten as orchestrator sourcing the above (~778 lines, not ~400
+because dispatcher loop and infra management stayed inline)
 
-**Phase 2: Dispatcher in tmux**
-- `lib/dispatcher.sh` -- dispatch loop in its own tmux session on bastion,
-  written clean from the Dispatcher Contract in this spec
-- Exit 99 framework-failure detection + re-queue logic
+**Phase 2: Dispatcher extraction -- DONE**
 
-**Phase 3: Fix cross-user and runner issues (targeted fixes to existing code)**
-- `runner.sh` -- exit 99 for framework failures, `sudo` for shared `/tmp` files
-- `scripts/live-pane.sh` -- remove hardcoded `steve@`
+- `lib/dispatcher.sh` -- 14 helper functions extracted from run.sh:
+`_dispatch_suite`, `_check_pool`, `_find_free_pool`, `_record_result`,
+`_collect_pool_logs`, `_detect_running_and_completed`, `_force_clean_*`,
+`_build_work_queue`, `_write_dispatch_state`, `_notify_periodic_status`,
+`_print_final_summary`, `_process_pool_cleanup_files`
+- Main dispatch loop stays in run.sh (manages PID file, EXIT trap, while loop)
+- Exit 99 re-queue: `_record_result` appends to `_work_queue`, tracks bad pools
+per suite, final summary reports infra failures separately
 
-**Phase 4: Merge vm-helpers.sh + pool-lifecycle.sh**
-- `lib/vm-ops.sh` -- pure VM operations (deduplicated, written clean)
-- `lib/pool-ops.sh` -- pool-level orchestration (deduplicated, written clean)
+**Phase 3: Fix cross-user and runner issues -- DONE**
 
-**Phase 5: Suite helpers (gradual suite updates)**
-- `lib/suite-helpers.sh` -- common multi-step patterns
-- Update suites one at a time, test each before moving on
+- `runner.sh` -- framework failures now exit 99 (pre-suite cleanup, govc
+bootstrap, disN revert/cleanup, missing suite file)
+- `runner.sh` -- all `/tmp/e2e-*` files cleaned with `sudo rm -f` before write
+- `scripts/live-pane.sh` -- replaced hardcoded `steve@` with `${_DEFAULT_USER}@`
 
-**Phase 6: Dummy cleanup suites (framework test plan)**
-- `suites/dummy/suite-dummy-cleanup-happy.sh`
-- `suites/dummy/suite-dummy-cleanup-crash.sh`
-- Validate cleanup across user switches and OS switches
+**Phase 4: Merge vm-helpers.sh + pool-lifecycle.sh -- COMPLETE**
+Created `vm-ops.sh` (~~830 lines, all `_vm_*` helpers) and `pool-ops.sh`
+(~~370 lines, composition + pool lifecycle). Updated 10 consumers. Old files
+kept as thin compatibility wrappers. Tested on pool 2: PASS.
+Needs human review of divergence table before proceeding.
+
+**Phase 5: Suite helpers -- DONE**
+
+- `lib/suite-helpers.sh` -- 14 helper functions extracted from repeated patterns
+across 7+ integration suites (see "Suite duplication" section above)
+- Existing suites continue to work as-is; gradual adoption when next edited
+
+**Phase 6: Dummy cleanup suites -- DONE**
+
+- `suites/suite-dummy-cleanup-happy.sh` -- happy path: create/cleanup/verify
+- `suites/suite-dummy-cleanup-crash.sh` -- crash path: exit 1, orphan recovery
+- `suites/suite-dummy-cleanup-stale.sh` -- stale references: non-existent dirs
+- Suites live flat in `suites/` (not in subdirectory) for runner.sh compatibility
 
 ### Spec-driven workflow
 
 1. **Spec is authority.** This file defines the architecture, contracts, and
-   invariants. Code implements the spec.
+  invariants. Code implements the spec.
 2. **Design issues come back to the user.** If an implementation conflict is
-   found, STOP coding, propose a spec change, get approval, update the spec,
+  found, STOP coding, propose a spec change, get approval, update the spec,
    then resume.
 3. **Never silently change architecture.** The user must be in the loop for
-   all design decisions.
+  all design decisions.
 
 ### One module per chat
 
@@ -1281,6 +1843,7 @@ context window exhaustion:
 - Chat does NOT need the full 15k lines of v1 -- the spec is the context
 
 **Module order (respects dependency DAG):**
+
 1. `lib/constants.sh` (trivial, mostly unchanged)
 2. `lib/remote.sh` (SSH wrappers, canonical `_essh`)
 3. `lib/config-helpers.sh` (pool address generators)
@@ -1313,25 +1876,26 @@ All ABA core coding conventions apply to E2E code. See `.cursor/rules/rules-of-e
 - **Tabs** for indentation, never spaces
 - Empty lines must be truly empty (no trailing whitespace)
 - **Never use `(( var++ ))` or `(( var-- ))`** -- `(( 0 ))` returns exit code 1
-  under `set -e` or ERR trap. Use `var=$(( var + 1 ))` instead.
+under `set -e` or ERR trap. Use `var=$(( var + 1 ))` instead.
 - Comments explain non-obvious intent (WHY), not what the code does (WHAT)
 - Format bash scripts with proper indentation (pretty print)
 - **Prefer `sudo` over running as root** -- SSH as normal user, `sudo` for
-  privileged operations. Never SSH as root just to avoid typing `sudo`.
+privileged operations. Never SSH as root just to avoid typing `sudo`.
 - **Config files are the single source of truth** -- never infer settings from
-  file existence (e.g. `[ -s vmware.conf ]`). Check `$platform` instead.
+file existence (e.g. `[ -s vmware.conf ]`). Check `$platform` instead.
 
 ### E2E-specific conventions
 
 - Never suppress stderr in test code (`2>/dev/null` is forbidden)
 - Never use `|| true` on cleanup commands in suite code
 - No hardcoded usernames or home directory paths -- use `~`, `$HOME`, or
-  variables from config
+variables from config
 - Function naming:
-  - `_e2e_*` -- framework internals (private)
-  - `e2e_*` -- framework public API (used by suites)
+  - `_e2e_`* -- framework internals (private)
+  - `e2e_`* -- framework public API (used by suites)
   - `_vm_*` -- VM operations
   - `suite_*` -- suite helpers
   - `pool_*` -- pool address/config functions
 - Only `aba delete` / `aba uninstall` may remove clusters and mirrors --
-  never `govc vm.destroy`, `virsh destroy`, `rm -rf`, or `podman rm`
+never `govc vm.destroy`, `virsh destroy`, `rm -rf`, or `podman rm`
+

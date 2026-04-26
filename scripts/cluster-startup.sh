@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 [ ! -d iso-agent-based ] && aba_abort "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!"
 
-aba_info "Ensuring CLI binaries are installed"
+#aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
 unset KUBECONFIG
@@ -30,8 +30,13 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	# Quick check to see if servers are up?
 	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
-		if ! aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up; then
-			aba_abort "Giving up waiting for the cluster endpoint to become available.  Once the servers start up, please try again!"
+		_wait_rc=0
+		aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 300 _cluster_startup_api_up || _wait_rc=$?
+		if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+			aba_info "Aborted. Power on the servers and try again."
+			exit 0
+		elif [ "$_wait_rc" -ne 0 ]; then
+			aba_abort "Cluster API not available at $server_url after 5 min. Power on all servers and try again."
 		fi
 	fi
 else
@@ -42,9 +47,14 @@ fi
 # Have quick check if endpoint is available (cluster may already be running)
 if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 	aba_info Waiting for cluster API endpoint to become alive at $server_url ...
-	if ! aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up; then
-		aba_info "Giving up waiting for the cluster endpoint to become available!"
-		exit 1
+	_wait_rc=0
+	aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 300 _cluster_startup_api_up || _wait_rc=$?
+	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+		aba_info "Aborted. Cluster may still be starting up."
+		exit 0
+	elif [ "$_wait_rc" -ne 0 ]; then
+		aba_abort "Cluster API not available at $server_url after 5 min." \
+			"Check that VMs are powered on ('aba ls') and the cluster is healthy."
 	fi
 fi
 
@@ -60,7 +70,7 @@ _cluster_startup_oc_get_nodes() {
 aba_debug "Running: $OC get nodes"
 if ! $OC get nodes; then
 	if ! aba_wait_show "Waiting for oc get nodes" 3 120 _cluster_startup_oc_get_nodes; then
-		aba_abort "Giving up waiting!"
+		aba_abort "Cluster API not responding after 2 min. Check 'aba ls' and cluster health."
 	fi
 fi
 
@@ -151,27 +161,39 @@ _cluster_startup_cos_ready() {
 	$OC get co --no-headers | awk '{print $3,$5}' | grep -v '^True False$' | wc -l | grep -q '^0$'
 }
 
+_console_ok=""
 if ! curl -skL "$console" | grep -q 'Red Hat OpenShift'; then
 	aba_info_ok "The cluster will complete startup and become fully available shortly!"
 	aba_info "Waiting for the console to become available at $console"
 	if ! aba_wait_show "Waiting for OpenShift console" 5 300 _cluster_startup_console_ready; then
-		aba_info "Giving up waiting for the console!"
+		aba_info "Console not ready yet, continuing ..."
 	else
 		aba_info_ok "Cluster console is accessible at $console"
+		_console_ok=1
 	fi
 else
 	aba_info_ok "Cluster console is accessible at $console"
+	_console_ok=1
 fi
 
 if ! _cluster_startup_cos_ready; then
 	aba_info "Waiting for all cluster operators ..."
 	if ! aba_wait_show "Waiting for all cluster operators" 5 300 _cluster_startup_cos_ready; then
-		aba_info "Giving up waiting for the operators!"
+		aba_info "Not all cluster operators are available yet. The cluster may still be settling."
 		exit 0
 	fi
 fi
 
 aba_info_ok "All cluster operators are fully available!"
+
+# Re-check console if it wasn't ready earlier (may have come up during operator wait)
+if [ -z "$_console_ok" ]; then
+	if _cluster_startup_console_ready 2>/dev/null; then
+		aba_info_ok "Cluster console is accessible at $console"
+	else
+		aba_info "Console not accessible yet at $console -- it should appear shortly."
+	fi
+fi
 
 exit 0
 

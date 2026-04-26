@@ -109,9 +109,76 @@ read `platform=` from `aba.conf`. The `platform` variable drives conditional
 loading of `vmware.conf` / `kvm.conf`.
 
 **`~/.aba/config`**: User-level overrides (e.g. `OC_MIRROR_SINCE`,
-`OC_MIRROR_FLAGS`, `ABA_CACHE_TTL`). Sourced by `include_all.sh` at startup.
-Re-sourced on each retry iteration during long mirror operations so live edits
-take effect.
+`OC_MIRROR_FLAGS`, `OC_MIRROR_PIN_CATALOGS`, `ABA_CACHE_TTL`). Sourced by
+`include_all.sh` at startup. Re-sourced on each retry iteration during long
+mirror operations so live edits take effect.
+
+---
+
+## install-config.yaml Platform Selection
+
+The install-config.yaml template (`templates/install-config.yaml.j2`) selects
+the `platform:` section based on cluster type, architecture, and hypervisor:
+
+| Priority | Condition | platform: value |
+|----------|-----------|-----------------|
+| 1 | SNO (1 master, 0 workers) | `none: {}` |
+| 2 | ARCH is s390x or ppc64le | `none: {}` |
+| 3 | VMware + vCenter (platform=vmw, VC=1) | `vsphere:` (full vCenter block) |
+| 4 | Everything else (BM, KVM, ESXi-direct) | `baremetal:` (apiVIPs/ingressVIPs) |
+
+s390x and ppc64le only support `platform: none` because the OpenShift installer
+on these architectures does not support the baremetal platform type. Multi-node
+clusters on these architectures rely on external load balancing for VIPs (UPI).
+The generated install-config.yaml includes a comment reminding the user to
+configure an external load balancer for the API and ingress endpoints.
+
+ESXi-direct (`VC` empty) uses the baremetal platform block, same as bare-metal
+and KVM. Only vCenter deployments get the full vsphere block with
+failureDomains/vcenters.
+
+---
+
+## Catalog Digest Pinning (oc-mirror workaround)
+
+Upstream bug: [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)
+
+oc-mirror v2 resolves operator catalog tags (e.g. `redhat-operator-index:v4.20`)
+at runtime by contacting the upstream registry (`registry.redhat.io`). This
+happens even during disk2mirror (load) on disconnected hosts, causing
+`no route to host` failures. Pinning catalogs by digest (`@sha256:...`) prevents
+this because oc-mirror skips upstream tag resolution for digest references.
+
+### How it works
+
+1. **Capture**: `download-catalog-index.sh` captures the manifest digest via
+   `podman image inspect` after pulling each catalog image. Stored in
+   `.index/.{catalog}-index-v{ver}.digest`.
+
+2. **Pin at runtime**: `_run_oc_mirror_with_retry()` calls
+   `_oc_mirror_pin_catalogs_by_digest()` before invoking oc-mirror. This does a
+   single-pass `sed` producing `data/imageset-config-digest.yaml` with tags
+   replaced by digests. The user's `imageset-config.yaml` is never modified.
+
+3. **oc-mirror receives**: `--config imageset-config-digest.yaml` instead of the
+   original. The digest file persists alongside the original for debugging.
+
+### Invariants
+
+- The user's `imageset-config.yaml` is NEVER modified by the pinning mechanism.
+- If no digest files exist (old install, capture failed), the original ISC is
+  used as-is -- graceful fallback.
+- Works for all three mirror workflows: save (mirror2disk), sync (mirror2mirror), load (disk2mirror).
+- User-edited ISCs also benefit (tag substitution is content-based, not
+  generation-based).
+
+### Disabling / reverting
+
+Set `OC_MIRROR_PIN_CATALOGS=0` in `~/.aba/config` or environment. Remove the
+workaround entirely once oc-mirror fixes upstream tag resolution in air-gap --
+track [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712) and
+[openshift/oc-mirror#1390](https://github.com/openshift/oc-mirror/pull/1390)
+(grep for `OC_MIRROR_PIN_CATALOGS` and `_oc_mirror_pin_catalogs_by_digest`).
 
 ---
 

@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# =============================================================================
+# E2E Test Framework v2 -- Deploy / Harness Sync
+# =============================================================================
+# Consolidates ALL scp operations into a single module.
+# The old run.sh had 4 copies of the same scp block -- this eliminates that.
+#
+# Functions:
+#   sync_harness     -- push test harness to ~/.e2e-harness/ on a conN target
+#   sync_infra_aba   -- push infra-owned aba binary to conN + disN
+#   sync_source      -- push ABA source tarball to ~/aba on a conN target
+#   sync_extras      -- push notify.sh, vmware.conf, root essentials
+#   deploy_pool      -- full deploy to one pool (source + harness + extras)
+#
+# Dependencies: remote.sh (for _essh, _escp, _con_target)
+# =============================================================================
+
+# Build an ABA source tarball from the developer's checkout.
+# Writes path to temp tarball on stdout.
+_make_source_tar() {
+	local aba_root="$1"
+	local _tar _manifest _paths=()
+	_tar=$(mktemp /tmp/aba-deploy.XXXXXX.tar.gz)
+	_manifest="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.deploy-manifest"
+
+	if [ -f "$_manifest" ]; then
+		while IFS= read -r _line; do
+			_line="${_line%%#*}"
+			_line="${_line## }"
+			_line="${_line%% }"
+			[ -z "$_line" ] && continue
+			_paths+=("$_line")
+		done < "$_manifest"
+	else
+		_paths=(scripts/ templates/ tools/ test/lib.sh Makefile cli/Makefile aba install)
+	fi
+
+	tar czf "$_tar" -C "$aba_root" --exclude='*/.*' "${_paths[@]}"
+	echo "$_tar"
+}
+
+# Push test harness to ~/.e2e-harness/ on conN.
+# Preserves logs/ directory (only code is replaced).
+# Usage: sync_harness <user@host> <aba_root> <deploy_config_env>
+sync_harness() {
+	local target="$1"
+	local aba_root="$2"
+	local deploy_config="$3"
+
+	_essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" || return 1
+
+	# Clean stale regular-file *-summary.log and summary.log left by old rsync deploys.
+	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
+	_essh "$target" "cd ~/.e2e-harness/logs 2>/dev/null && for f in *-summary.log summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
+
+	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh" &&
+	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env" &&
+	_escp "${aba_root}/test/e2e/pools.conf"          "${target}:~/.e2e-harness/pools.conf" &&
+	_escp "${aba_root}/test/e2e/lib/"*.sh            "${target}:~/.e2e-harness/lib/" &&
+	_escp "${aba_root}/test/e2e/suites/"suite-*.sh   "${target}:~/.e2e-harness/suites/" &&
+	_escp "${aba_root}/test/e2e/scripts/"*.sh        "${target}:~/.e2e-harness/scripts/"
+}
+
+# Deploy infra-owned aba binary to ~/.e2e-harness/bin/aba on both conN and disN.
+# Uses the committed scripts/aba.sh from $E2E_GIT_BRANCH (not local working copy).
+# Deploys for both root and $VM_DEFAULT_USER so cleanup functions can SSH as either.
+# Usage: sync_infra_aba <pool_num> <aba_root>
+sync_infra_aba() {
+	local pool_num="$1"
+	local aba_root="$2"
+	local branch="${E2E_GIT_BRANCH:-dev}"
+	local default_user="${VM_DEFAULT_USER:-steve}"
+	local domain="${VM_BASE_DOMAIN:-example.com}"
+	local con_fqdn="con${pool_num}.${domain}"
+	local dis_fqdn="dis${pool_num}.${domain}"
+
+	local _tmp
+	_tmp=$(mktemp /tmp/aba-infra.XXXXXX.sh)
+	git -C "$aba_root" show "${branch}:scripts/aba.sh" > "$_tmp" || {
+		echo "    WARNING: could not extract aba.sh from branch $branch" >&2
+		rm -f "$_tmp"
+		return 1
+	}
+
+	local _host _user _target
+	for _host in "$con_fqdn" "$dis_fqdn"; do
+		for _user in root "$default_user"; do
+			_target="${_user}@${_host}"
+			_essh "$_target" "mkdir -p ~/.e2e-harness/bin" &&
+			_escp "$_tmp" "${_target}:~/.e2e-harness/bin/aba" &&
+			_essh "$_target" "chmod +x ~/.e2e-harness/bin/aba" || {
+				echo "    WARNING: failed to deploy infra aba to $_target" >&2
+				rm -f "$_tmp"
+				return 1
+			}
+		done
+	done
+	rm -f "$_tmp"
+}
+# Backward-compat alias
+sync_dis_aba() { sync_infra_aba "$@"; }
+
+# Push ABA source tarball to ~/aba on conN (for --dev mode).
+# Overlays on existing ~/aba (never wipes).
+# Usage: sync_source <user@host> <tarball_path>
+sync_source() {
+	local target="$1"
+	local tarball="$2"
+
+	_essh "$target" "mkdir -p ~/aba" &&
+	_escp "$tarball" "${target}:/tmp/aba-deploy.tar.gz" &&
+	_essh "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"
+}
+
+# Push optional extras: notify.sh, vmware.conf, root essentials.
+# Usage: sync_extras <user@host> <user>
+sync_extras() {
+	local target="$1"
+	local user="$2"
+
+	# notify.sh
+	if [ -x ~/bin/notify.sh ]; then
+		_essh "$target" "mkdir -p ~/bin" &&
+		_escp ~/bin/notify.sh "${target}:~/bin/notify.sh" &&
+		_essh "$target" "chmod +x ~/bin/notify.sh"
+	fi
+
+	# Custom vmware.conf
+	if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
+		_escp "$CLI_VMWARE_CONF" "${target}:${CLI_VMWARE_CONF}"
+	fi
+
+	# Root essentials (govc, pull-secret, vmware.conf)
+	_deploy_root_essentials "$target" "$user"
+}
+
+# Deploy govc, pull-secret, and vmware.conf so that root users (or freshly
+# reverted VMs) have the essentials before runner.sh's pre-suite checks.
+_deploy_root_essentials() {
+	local target="$1"
+	local user="$2"
+
+	_essh "$target" "mkdir -p ~/.e2e-harness/bin ~/bin"
+
+	local _govc_src="${HOME}/bin/govc"
+	if [ -x "$_govc_src" ]; then
+		_escp "$_govc_src" "${target}:~/.e2e-harness/bin/govc"
+		_essh "$target" "cp ~/.e2e-harness/bin/govc ~/bin/govc && chmod 755 ~/bin/govc"
+	fi
+
+	if [ "$user" = "root" ]; then
+		local _ps="$HOME/.pull-secret.json"
+		[ -f "$_ps" ] && _escp "$_ps" "${target}:~/.pull-secret.json"
+		local _vf="$HOME/.vmware.conf"
+		[ -f "$_vf" ] && _escp "$_vf" "${target}:~/.vmware.conf"
+	fi
+}
+
+# Full deploy to one pool: source (if --dev) + harness + extras.
+# Usage: deploy_pool <pool_num> <aba_root> <deploy_config> [source_tarball]
+deploy_pool() {
+	local pool_num="$1"
+	local aba_root="$2"
+	local deploy_config="$3"
+	local source_tar="${4:-}"
+
+	local user="${CON_SSH_USER:-steve}"
+	local target
+	target=$(_con_target "$pool_num" "$user")
+
+	echo -n "    con${pool_num}: "
+
+	# Check for running suite (skip unless --force)
+	local _running_sess=""
+	_running_sess=$(_essh "$target" "tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _running_sess=""
+	if [ "$_running_sess" = "yes" ]; then
+		if [ -z "${CLI_FORCE:-}" ]; then
+			echo "RUNNING (skipped -- use --force to deploy anyway)"
+			return 0
+		fi
+		echo -n "RUNNING (hot-deploy) "
+	fi
+
+	# Source deploy (--dev mode)
+	if [ -n "$source_tar" ]; then
+		if sync_source "$target" "$source_tar"; then
+			echo -n "source "
+		else
+			echo "FAILED (source deploy)"
+			return 1
+		fi
+	fi
+
+	# Harness deploy
+	if sync_harness "$target" "$aba_root" "$deploy_config"; then
+		sync_infra_aba "$pool_num" "$aba_root" || echo "WARNING: infra aba deploy to pool ${pool_num} failed"
+		sync_extras "$target" "$user"
+		echo "+ harness done"
+	else
+		echo "+ harness FAILED"
+		return 1
+	fi
+}
