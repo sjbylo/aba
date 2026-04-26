@@ -175,6 +175,10 @@ These configurations ensure that each network zone meets OpenShift’s requireme
      ```
      aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
      ```
+     If the registry uses a non-default port (e.g. 5000):
+     ```
+     aba -d mirror register --reg-host registry.example.com --reg-port 5000 --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+     ```
      This copies the credentials into `~/.aba/mirror/mirror/`, trusts the CA system-wide, and marks the registry as ready.
    - Verify the connection to your existing mirror registry:
      ```
