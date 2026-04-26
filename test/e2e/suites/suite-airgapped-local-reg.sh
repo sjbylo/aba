@@ -256,8 +256,8 @@ test_end
 # MCO reboot.  This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
 test_begin "SNO: day2-ntp from scratch"
 
-e2e_run_remote "Set NTP in cluster.conf (IP + hostname)" \
-    "cd ~/aba && aba -d $SNO --ntp $NTP_IP ntp.example.com"
+e2e_run_remote "Set NTP in cluster.conf (IP + hostnames)" \
+    "cd ~/aba && aba -d $SNO --ntp $NTP_IP ntp.example.com ntp.lan"
 
 e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
@@ -265,8 +265,11 @@ e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
 e2e_run_remote "Verify chronyc sources show IP" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep $NTP_IP"
 
-e2e_run_remote "Verify chronyc sources show hostname" \
-    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep ntp"
+e2e_run_remote "Verify chronyc sources show ntp.example.com" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep ntp.example.com"
+
+e2e_run_remote "Verify chrony.conf contains ntp.lan" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.lan iburst'"
 
 test_end
 

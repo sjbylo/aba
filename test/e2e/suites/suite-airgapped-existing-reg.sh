@@ -462,14 +462,17 @@ test_end
 # This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
 test_begin "NTP: day2 and chronyc verify"
 
-e2e_run_remote "Change NTP in cluster.conf to hostname only (forces MachineConfig change)" \
-    "cd ~/aba && aba -d $SNO --ntp ntp.example.com"
+e2e_run_remote "Change NTP in cluster.conf to hostnames only (forces MachineConfig change)" \
+    "cd ~/aba && aba -d $SNO --ntp ntp.example.com ntp.lan"
 
 e2e_run_remote "Apply day2 NTP config" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
 
 e2e_run_remote "Verify chronyc sources show ntp.example.com" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep ntp.example.com"
+
+e2e_run_remote "Verify chrony.conf contains ntp.lan" \
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.lan iburst'"
 
 e2e_run_remote "Verify old NTP IP no longer in chrony.conf" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep -v '$NTP_IP'"
