@@ -31,7 +31,8 @@ plan_tests \
 	"Auto-detect network values" \
 	"cluster.conf validation" \
 	"mirror.conf validation" \
-	"mirror.conf ops/op_sets override"
+	"mirror.conf ops/op_sets override" \
+	"cluster.conf CLI flag override"
 
 suite_begin "config-validation"
 
@@ -203,6 +204,35 @@ e2e_run "Restore aba.conf and mirror.conf" \
 
 e2e_run "Clean up generated ISC" \
 	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
+
+test_end 0
+
+# ============================================================================
+# 6. cluster.conf CLI flag override (re-run aba cluster -n with different flags)
+# ============================================================================
+test_begin "cluster.conf CLI flag override"
+
+_OVERRIDE_DIR="e2e-override-test"
+
+e2e_run "Create cluster with initial flags" \
+	"rm -rf $_OVERRIDE_DIR && aba cluster -n $_OVERRIDE_DIR -t sno --starting-ip $(pool_sno_ip) -I proxy --step cluster.conf"
+
+e2e_run "Verify initial int_connection=proxy" \
+	"grep '^int_connection=proxy' $_OVERRIDE_DIR/cluster.conf"
+
+e2e_run "Override int_connection to direct" \
+	"aba cluster -n $_OVERRIDE_DIR -I direct --step cluster.conf"
+
+e2e_run "Verify overridden int_connection=direct" \
+	"grep '^int_connection=direct' $_OVERRIDE_DIR/cluster.conf"
+
+e2e_run "Verify num_masters unchanged (still 1 = SNO)" \
+	"grep '^num_masters=1' $_OVERRIDE_DIR/cluster.conf"
+
+e2e_run "Verify starting_ip unchanged" \
+	"grep '^starting_ip=$(pool_sno_ip)' $_OVERRIDE_DIR/cluster.conf"
+
+e2e_run "Clean up override test dir" "rm -rf $_OVERRIDE_DIR"
 
 test_end 0
 
