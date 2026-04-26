@@ -153,7 +153,13 @@ echo
 #######################
 # Verify NTP configuration on cluster nodes.
 #
-# Phase 1: Wait for all MachineConfigPools to finish updating.
+# Phase 1a: Wait for MCO to START processing the new MachineConfig.
+#   Right after oc apply, the MCO hasn't noticed yet -- MCP still shows
+#   Updated=True from the previous state.  We must wait for Updating=True
+#   before we can meaningfully wait for it to finish.
+#   If it never starts (60s), the MC content is likely identical (no reboot).
+#
+# Phase 1b: Wait for all MachineConfigPools to finish updating.
 #   MCO renders the new MachineConfig, drains and reboots nodes.
 #   On SNO the master pool reboot takes the API offline temporarily.
 #   We must wait for MCP stability before checking anything on nodes.
@@ -166,15 +172,36 @@ echo
 #   Unreachable sources (^?) are warned but don't fail -- pool servers
 #   may be unreachable from air-gapped networks.
 #
+# Phase 4: Wait for API server to be available after MCO reboot.
+#   On SNO the API goes down during the reboot -- callers expect it back.
+#
 # We check the config file directly instead of resolving hostnames on bastion,
 # because pool hostnames (e.g. 2.rhel.pool.ntp.org) rotate IPs and chrony on
 # the node will resolve to a different address than bastion's getent.
 
-# Phase 1: wait for all MachineConfigPools to finish rolling out.
+# Phase 1a: wait for MCO to start processing (Updating=True on any pool).
+_any_mcp_updating() {
+	local updating
+	updating=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null) || return 1
+	echo "$updating" | grep -q True
+}
+
+_mco_started=1
+_wait_rc=0
+aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 60 _any_mcp_updating || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	_mco_started=0
+	aba_info "MCO did not start updating -- MachineConfig may match current config (no reboot needed)."
+fi
+
+# Phase 1b: wait for all MachineConfigPools to finish rolling out.
 _all_mcp_updated() {
 	local updating
 	updating=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null) || return 1
-	# If any pool is still Updating, not done yet
 	echo "$updating" | grep -q True && return 1
 	local degraded
 	degraded=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null) || return 1
@@ -182,19 +209,21 @@ _all_mcp_updated() {
 	return 0
 }
 
-_wait_rc=0
-aba_wait_show "Waiting for NTP MachineConfig to roll out on all nodes (Ctrl-C to skip)" 15 900 _all_mcp_updated || _wait_rc=$?
-if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
-	echo
-	aba_info "Aborted by user."
-	exit 0
-elif [ "$_wait_rc" -ne 0 ]; then
-	echo
-	oc get mcp 2>/dev/null || true
-	echo
-	aba_abort \
-		"Timed out after 15 min waiting for NTP MachineConfig rollout." \
-		"Check 'oc get mcp' and 'oc get nodes' for status."
+if [ "$_mco_started" -eq 1 ]; then
+	_wait_rc=0
+	aba_wait_show "Waiting for NTP MachineConfig to roll out on all nodes (Ctrl-C to skip)" 15 900 _all_mcp_updated || _wait_rc=$?
+	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+		echo
+		aba_info "Aborted by user."
+		exit 0
+	elif [ "$_wait_rc" -ne 0 ]; then
+		echo
+		oc get mcp 2>/dev/null || true
+		echo
+		aba_abort \
+			"Timed out after 15 min waiting for NTP MachineConfig rollout." \
+			"Check 'oc get mcp' and 'oc get nodes' for status."
+	fi
 fi
 
 aba_info_ok "NTP MachineConfig rolled out on all nodes."
@@ -297,3 +326,23 @@ if [ -n "$_has_warnings" ]; then
 else
 	aba_info_ok "NTP configured and all sources synced on all nodes."
 fi
+
+# Phase 4: ensure API server is available before returning.
+# On SNO the MCO reboot takes the API offline; SSH-based checks (Phases 2-3)
+# can pass while the API server pod is still starting.  Callers expect the
+# cluster to be usable when this script exits.
+_api_available() {
+	oc get nodes --no-headers >/dev/null 2>&1
+}
+
+_wait_rc=0
+aba_wait_show "Waiting for API server to be available (Ctrl-C to skip)" 5 300 _api_available || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	aba_warning "API server not available after 5 min. Cluster may still be recovering."
+fi
+
+aba_info_ok "API server available."
