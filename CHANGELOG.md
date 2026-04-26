@@ -8,14 +8,19 @@
 - **OSUS pre-flight check** - Removed `2>&1` from `oc get` command substitutions in pre-flight checks so stderr messages are visible for debugging and not captured into variables (causing false positives).
 - **Bundle archive contents** - `VERSION`, `CHANGELOG.md`, and `LICENSE` now included in bundle archives.
 - **`ABA_VERSION` corruption guard** - `pre-commit-checks.sh` now validates that `ABA_VERSION` is a semver string, catching merge conflicts that could overwrite it with a timestamp.
+- **`day2-ntp` API unavailable after NTP config** - `day2-config-ntp.sh` now waits for all MachineConfigPools to finish updating (node reboots) before verifying chrony.conf and NTP sources. Previously, the script could exit while the MCO was still rebooting nodes, leaving the API server unreachable for the next command.
 
 ### Improvements
 
 - **`is_bundle_mode()` helper** - New function in `include_all.sh` for clean bundle/DISCO environment detection. `cli-install-all.sh` now skips download waits in bundle mode.
 - **Hardened `cli-download-all.sh`** - Added contract header, proper option parsing, `make` error handling, and tool name validation.
+- **Reduced default retry counts** - Bundle save and example `--retry` values reduced from 7-8 to 2, matching typical network reliability.
 
 ### E2E Testing
 
+- **Infra-owned `aba` binary on disN** - Deployed to `~/.e2e-harness/bin/aba` via `sync_dis_aba()`, ensuring cleanup always has access to `aba uninstall` regardless of user-space state. Fixes INFRA FAIL death spiral when `aba` was missing from PATH on non-interactive SSH.
+- **`--fresh` flag** - New `--fresh` (`-F`) alias for `--force` (`-f`) to re-run all suites from scratch with a friendlier name.
+- **NTP chronyc verification** - Airgapped suite NTP test switched from `oc debug` to `aba ssh --cmd 'chronyc sources'` with `e2e_poll_remote` for reliable polling.
 - **Dispatcher daemon mode** - New `run.sh daemon` auto-restarts the dispatcher on crash with exponential backoff (30s-300s), max 5 consecutive crashes, and Telegram notifications.
 - **Early RC write** - `runner.sh` writes the suite exit code immediately after the suite exits, preventing lost PASS results if the runner is killed before final write.
 - **Colored banners** - Prominent PASS/FAIL/SKIP/INFRA banners in dispatcher output for suite completion and infrastructure rebuild phases.

@@ -1,5 +1,12 @@
 # ABA Backlog
 
+## E2E: Investigate SSH PATH behavior for --user root
+
+**Priority**: Low
+**Context**: `e2e_run` sources `.bash_profile` before every remote command, simulating console login. This means `~/bin` is always in PATH and `aba install` always installs to `~/bin/aba`. However, a real user doing `ssh root@host "cd ~/aba && ./install"` (non-interactive) would NOT have `~/bin` in PATH -- `aba install` would correctly fall through to `/usr/local/bin/aba`. Both paths work, but tests only exercise the console-login path. Consider whether `--user root` runs should test both login methods, or whether the `.bash_profile` sourcing in `e2e_run` should be optional/configurable.
+
+---
+
 ## IMPORTANT (post code-freeze): Audit and fix exit code handling in ABA scripts
 
 **Plan**: `~/.cursor/plans/audit-exit-codes.plan.md`
@@ -1529,6 +1536,23 @@ The main `aba --help` output doesn't reference `register` or `unregister` at all
 | 7 | Low | Test suites | Make-style args instead of CLI flags |
 | 8 | Low | CHANGELOG | Bare `aba unregister` (no `-d mirror`) |
 | 9 | Medium | `help-aba.txt` | No mention of register/unregister |
+
+---
+
+## TUI: `RETRY_COUNT` setting not persisted across TUI restarts
+
+**Priority:** Low
+**Added:** 2026-04-26
+
+### Problem
+
+`RETRY_COUNT` is initialized to `"2"` at the top of `tui/abatui.sh` (line 257) and can be toggled via the Settings menu (off → 2 → 8 → off). However, the value is never saved to `aba.conf` or any TUI state file. Every time the TUI restarts, `RETRY_COUNT` resets to `"2"`.
+
+Other settings like `ABA_AUTO_ANSWER` and `ABA_REGISTRY_TYPE` appear to have similar persistence gaps.
+
+### Proposed fix
+
+Persist TUI settings to a state file (e.g. `~/.aba/tui-settings.sh` or into `aba.conf`) on change, and load them on TUI startup. Alternatively, tie `RETRY_COUNT` to the existing `aba.conf` `oc_mirror_retry` variable if one exists.
 
 ---
 
