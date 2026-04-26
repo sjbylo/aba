@@ -11,17 +11,28 @@
 # SSH options: suppress host-key noise, fail fast, non-interactive, keepalive.
 _E2E_SSH_OPTS="-o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
 
+# Close pool-lock fds so child processes don't inherit (and hold) the flocks.
+# _LOCK_FDS is set by run.sh's _acquire_pool_locks(); empty when not running
+# under the dispatcher (e.g. runner.sh sources remote.sh directly).
+_close_lock_fds() {
+	[ ${#_LOCK_FDS[@]} -eq 0 ] && return
+	for _lfd in "${_LOCK_FDS[@]}"; do
+		eval "exec ${_lfd}>&-" 2>/dev/null
+	done
+}
+if ! declare -p _LOCK_FDS &>/dev/null; then _LOCK_FDS=(); fi
+
 # Canonical SSH wrapper -- the ONLY SSH function in the framework.
 # Usage:
 #   _essh user@host "command"
 #   _essh user@host "command" < /dev/null   (inside while-read loops)
 _essh() {
-	ssh $_E2E_SSH_OPTS "$@"
+	( _close_lock_fds; exec ssh $_E2E_SSH_OPTS "$@" )
 }
 
 # SCP with the same options as _essh.
 _escp() {
-	scp -q $_E2E_SSH_OPTS "$@"
+	( _close_lock_fds; exec scp -q $_E2E_SSH_OPTS "$@" )
 }
 
 # Resolve conN pool number to user@fqdn.

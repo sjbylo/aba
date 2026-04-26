@@ -935,14 +935,14 @@ running regardless of what is in the snapshot.
 | config.env (generated, with user/OS/vmware overrides) | `~/.e2e-harness/config.env`              | `test/e2e/.config.env.deploy`            |
 | pools.conf                                            | `~/.e2e-harness/pools.conf`              | `test/e2e/pools.conf`                    |
 | govc binary                                           | `~/.e2e-harness/bin/govc` + `~/bin/govc` | `~/bin/govc`                             |
-| aba binary (infra-owned, on disN)                     | `~/.e2e-harness/bin/aba` on disN         | `scripts/aba.sh` from `$E2E_GIT_BRANCH` |
+| aba binary (infra-owned, on conN + disN)              | `~/.e2e-harness/bin/aba`                 | `scripts/aba.sh` from `$E2E_GIT_BRANCH` |
 | pull-secret (root only)                               | `~/.pull-secret.json`                    | `~/.pull-secret.json`                    |
 | vmware.conf (root only)                               | `~/.vmware.conf`                         | `~/.vmware.conf` or `--vmware-conf` path |
 | notify.sh (if configured)                             | `~/bin/notify.sh`                        | `~/bin/notify.sh`                        |
 
 
 All these `scp` operations are consolidated into `sync_harness()` and
-`sync_dis_aba()` in `lib/deploy.sh`. Called from `_dispatch_suite`
+`sync_infra_aba()` in `lib/deploy.sh`. Called from `_dispatch_suite`
 (dispatcher), `cmd_deploy`, and `cmd_restart`.
 
 ### What is NOT pushed (expected from snapshot)
@@ -965,9 +965,10 @@ User space:   ~/, ~/bin/, ~/aba/       (owned by suites, infra must not depend o
 ```
 
 **Infra space** (`~/.e2e-harness/`): Deployed by `sync_harness` and
-`sync_dis_aba` from bastion on every dispatch. Contains runner scripts,
-harness libraries, and infra-owned tools (`govc`, `aba`). Suites must never
-modify this directory.
+`sync_infra_aba` from bastion on every dispatch. Contains runner scripts,
+harness libraries, and infra-owned tools (`govc`, `aba`). The infra-owned
+`aba` binary is deployed to both conN and disN (all users). Suites must
+never modify this directory.
 
 **User space** (`~/`, `~/bin/`, `~/aba/`): Owned by suites. Suites install
 `aba`, create mirrors/clusters, and clean up here. The infra layer must not
@@ -1411,9 +1412,10 @@ retry behavior as 1-98).
 **Pre-suite cleanup rules:**
 
 - If cleanup files exist from a previous suite, attempt cleanup via
-`command -v aba && aba -y -d PATH delete || make -C PATH delete` (and
-similarly `uninstall` for mirrors). The `make -C` fallback supports
-dummy/fake resources that have Makefiles but no `aba` CLI in PATH.
+`$HOME/.e2e-harness/bin/aba -y -d PATH delete` (and similarly `uninstall`
+for mirrors). The infra-owned `aba` binary is deployed to both conN and disN
+by `sync_infra_aba()`, ensuring it is always available regardless of PATH
+or user-space state.
 - If cleanup fails, exit with **99** (framework failure) -- do not proceed to the suite
 - Cleanup SSHes to the host that installed the resource (may be self) via `_essh`
 - Use `sudo` when accessing files that may be owned by a different user
@@ -1422,8 +1424,8 @@ dummy/fake resources that have Makefiles but no `aba` CLI in PATH.
 
 - `e2e_cleanup_clusters()` and `e2e_cleanup_mirrors()` (used by the
 interactive menu `[c]`, `[a]`, `[S]`, `[0]` and EXIT trap) also use
-the same `command -v aba || make -C` fallback pattern for consistency
-with the pre-suite cleanup.
+the infra-owned `$HOME/.e2e-harness/bin/aba` for consistency with the
+pre-suite cleanup.
 
 **Invariant:** Root must be able to SSH to itself on conN (pubkey in authorized_keys).
 The runner has a startup guard that appends `~/.ssh/id_rsa.pub` to `authorized_keys`

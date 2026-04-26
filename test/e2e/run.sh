@@ -49,6 +49,10 @@ _DEPLOY_CONFIG_ENV="$_RUN_DIR/.config.env.deploy"
 # Global lock is only taken for --recreate-golden (shared golden VM resource).
 # Read-only / UI commands skip locks entirely.
 
+# Lock fds tracked globally so _essh/_escp can close them before exec,
+# preventing child processes from inheriting (and holding) the flocks.
+_LOCK_FDS=()
+
 _acquire_pool_locks() {
 	local _fd=10
 	for _p in $CLI_POOL_LIST; do
@@ -59,9 +63,18 @@ _acquire_pool_locks() {
 			exit 1
 		fi
 		echo $$ >&$_fd
+		_LOCK_FDS+=("$_fd")
 		_fd=$(( _fd + 1 ))
 	done
 }
+
+_release_pool_locks() {
+	for _fd in "${_LOCK_FDS[@]}"; do
+		eval "exec ${_fd}>&-" 2>/dev/null
+	done
+	_LOCK_FDS=()
+}
+trap _release_pool_locks EXIT
 
 case "$CLI_COMMAND" in
 	stop|status|attach|list|live|dash|daemon)
@@ -74,6 +87,7 @@ case "$CLI_COMMAND" in
 				exit 1
 			fi
 			echo $$ >&9
+			_LOCK_FDS+=(9)
 		fi
 		_acquire_pool_locks
 		;;
