@@ -326,6 +326,8 @@ _vm_setup_time() {
 
 	echo "  [vm] Configuring time/NTP on $host ..."
 
+	local allow_net="${NTP_ALLOW_NETWORK:-10.0.0.0/20}"
+
 	cat <<-TIMEEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
 		cat > /etc/chrony.conf <<-CHRONYEOF
@@ -333,12 +335,15 @@ _vm_setup_time() {
 		driftfile /var/lib/chrony/drift
 		makestep 1.0 3
 		rtcsync
+		allow ${allow_net}
 		logdir /var/log/chrony
 		CHRONYEOF
 
 		systemctl restart chronyd
 		timedatectl set-timezone $timezone
 		chronyc -a makestep
+		firewall-cmd --permanent --add-service=ntp
+		firewall-cmd --reload
 		sleep 3
 		chronyc sources -v
 		timedatectl

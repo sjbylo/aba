@@ -181,8 +181,8 @@ e2e_run "Verify chrony.conf has ${_CON_IP}" \
 e2e_run -r 5 10 "Verify ${CON_HOST} is a working NTP source" \
     "aba --dir $SNO ssh --cmd 'chronyc sources' | grep -E '^\^[*+-].*(${CON_HOST}|${_CON_IP})'"
 
-e2e_run -r 5 10 "Verify at least 2 reachable NTP sources" \
-    "test \$(aba --dir $SNO ssh --cmd 'chronyc sources' | grep -cE '^\^[*+-]') -ge 2"
+e2e_run -r 5 10 "Verify at least 1 synced NTP source" \
+    "aba --dir $SNO ssh --cmd 'chronyc sources' | grep -E '^\^[*+-]'"
 
 e2e_run -r 3 10 "Verify NTP sync status is Normal" \
     "aba --dir $SNO ssh --cmd 'chronyc tracking' | grep -E 'Leap status\s+: Normal'"

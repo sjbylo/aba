@@ -148,9 +148,15 @@ _verify_con_vm() {
 		test -f /etc/NetworkManager/conf.d/no-dns.conf || _fail "NM dns=none missing"
 		echo "  PASS: NM dns=none"
 
-		# --- Time ---
+		# --- Time / NTP server ---
 		systemctl is-active --quiet chronyd || _fail "chronyd not active"
 		echo "  PASS: chronyd active"
+
+		grep -q "^allow 10.0.0.0/20" /etc/chrony.conf || _fail "chrony.conf missing allow 10.0.0.0/20"
+		echo "  PASS: chrony.conf allows 10.0.0.0/20"
+
+		firewall-cmd --query-service=ntp > /dev/null || _fail "NTP service not in firewall"
+		echo "  PASS: firewall NTP service open"
 
 		for _try in 1 2 3 4 5; do
 			ping -c 1 -W 3 ${_ntp} > /dev/null && break

@@ -1,26 +1,23 @@
 # Session State
 
 ## Current goal
-Fix E2E cleanup and flock infrastructure issues. Release 1.0.1 still pending.
+Validate NTP test (connected-public on con1) and flag-fix (functional test passed 10/10).
 
 ## Done this session
-- Diagnosed pool 2 death spiral: `command -v aba` fails in non-interactive SSH, `make delete` fallback fails (externalized target)
-- Fixed `_run_cleanup_on_host` (dispatcher.sh), `e2e_cleanup_clusters`/`e2e_cleanup_mirrors` (framework.sh), and runner.sh to use `~/.e2e-harness/bin/aba` instead of `command -v aba || make` fallback
-- Renamed `sync_dis_aba` to `sync_infra_aba` -- now deploys infra-owned `aba` to both conN AND disN (all users)
-- Fixed flock fd inheritance: `_LOCK_FDS` array + EXIT trap in run.sh, `_close_lock_fds()` + subshell wrappers in remote.sh
-- Reverted band-aid stale lock detection (git revert of `a126b6d5`)
-- Manually cleaned up orphan e2e-sno2 on con2, unblocked pool 2
-- Added "E2E: Parallelize deploy loops" to backlog
-- Updated SPEC.md documentation
+- Added `allow 10.0.0.0/20` + firewall NTP service to existing `_vm_setup_time()` in `lib/vm-ops.sh`
+- Added verification in `_verify_con_vm()` in `setup-infra.sh`
+- Applied NTP firewall fix live on all 4 conN hosts
+- Flag-fix functional test: 10/10 passed on bastion
+- cli-validation and config-validation suites PASSED (re-run on dev branch)
+- 11/12 suites PASS; connected-public re-running with new NTP test code on con1
 
 ## Next steps
-1. Commit and push these fixes (pending user approval)
-2. Deploy to test hosts (`run.sh deploy`) and verify cleanup works
-3. Release 1.0.1 (`build/release.sh 1.0.1`)
-4. Monitor E2E suites -- 2 running, 9 pending, mirror-sync failed (unrelated to these fixes)
+- Monitor connected-public NTP test on con1 (cluster installing, ~20min)
+- Once NTP test passes: merge feature/cluster-flag-fix into dev (needs user approval)
+- Commit infra NTP changes on dev (needs user approval)
+- Remaining: top 5 E2E fixes from code review, backlog items
 
 ## Decisions / notes
-- All cleanup code now uses `$HOME/.e2e-harness/bin/aba` (infra-owned) -- no PATH dependency
-- `sync_infra_aba` deploys to conN+disN for root + default user
-- flock fd fix: subshell in `_essh`/`_escp` closes lock fds before exec (verified with test)
-- `sync_dis_aba` kept as backward-compat alias
+- Flag-fix can't be E2E tested until merged to dev (suites clone from GitHub)
+- `.bashrc` on bastion runs `git pull` on every shell invocation
+- NTP config in `_vm_setup_time()` (golden VM), not a separate function
