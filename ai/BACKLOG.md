@@ -1,5 +1,30 @@
 # ABA Backlog
 
+## Config precedence: comment out cluster.conf values copied from aba.conf
+
+**Priority:** Medium
+**Added:** 2026-04-26
+
+### Problem
+
+When `cluster.conf` is created, values like `ntp_servers` are copied from `aba.conf`. At runtime, `cluster.conf` has precedence (sourced last). This means `aba --ntp new-server` (changes `aba.conf`) followed by `aba day2-ntp` silently does nothing because `cluster.conf` still has the old value. The user must know to use `aba -d <cluster> --ntp` instead.
+
+### Proposed fix (Option 4)
+
+When generating `cluster.conf` from `aba.conf`, write "inherited" values as comments (prefixed with `#`). This way:
+- `aba.conf` value takes effect by default (commented line doesn't override)
+- `cluster.conf` documents what was used at install time
+- User can uncomment to pin a per-cluster value (cluster.conf then wins)
+- `aba -d <cluster> --ntp <value>` uncomments and sets the value
+
+Applies to: `ntp_servers`, potentially `dns_servers`, `next_hop_address`, and other values that are global defaults but might need per-cluster overrides.
+
+### Alternative considered
+
+Remove `ntp_servers` from `cluster.conf` entirely (keep only in `aba.conf`). Rejected because it breaks the principle that `cluster.conf` is self-contained.
+
+---
+
 ## E2E: Investigate SSH PATH behavior for --user root
 
 **Priority**: Low
