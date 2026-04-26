@@ -1220,6 +1220,22 @@ aba -d mymirror verify      # Verify registry access
 aba -d mymirror uninstall   # Uninstall the registry
 ```
 
+**Register an existing external registry as a named mirror:**
+
+```bash
+aba mirror --name enclave1
+aba -d enclave1 register --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+aba -d enclave1 verify
+```
+
+**Create a cluster that uses the named mirror:**
+
+```bash
+aba cluster -n mycluster --type sno --mirror-name enclave1 --starting-ip 10.0.1.50
+```
+
+The `--mirror-name` flag sets `mirror_name=enclave1` in `cluster.conf`, so the cluster pulls images and credentials from `~/.aba/mirror/enclave1/` instead of the default `~/.aba/mirror/mirror/`.
+
 Each named mirror has its own `mirror.conf` and credentials stored in `~/.aba/mirror/mymirror/`.
 
 You can also override `ops` and `op_sets` in each mirror's `mirror.conf` to use different operators per mirror (see the [configuration files table](#about-the-aba-configuration-files)).
