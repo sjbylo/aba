@@ -112,7 +112,7 @@ mirror: aba.conf  ## Create a named mirror directory, e.g. aba mirror --name mym
 
 .PHONY: cluster
 cluster:  aba.conf  ## Initialize install dir and install OpenShift with your optional choice of topology (type), e.g. aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>] [--int-connection <proxy|direct>]
-	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip)
+	$(SCRIPTS)/setup-cluster.sh name=$(name) type=$(type) target=$(target) starting_ip=$(starting_ip) ports=$(ports) ingress_vip=$(ingress_vip) int_connection=$(int_connection) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) num_workers=$(num_workers) num_masters=$(num_masters) vlan=$(vlan) ssh_key_file=$(ssh_key_file) mirror_name=$(mirror_name)
 
 #FIXME: Remove? Use -a
 .PHONY: ask
