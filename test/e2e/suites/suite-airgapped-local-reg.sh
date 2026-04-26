@@ -256,8 +256,8 @@ test_end
 # MCO reboot.  This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
 test_begin "SNO: day2-ntp from scratch"
 
-e2e_run_remote "Set NTP servers (IP + hostname)" \
-    "cd ~/aba && aba --ntp $NTP_IP ntp.example.com"
+e2e_run_remote "Set NTP in cluster.conf (IP + hostname)" \
+    "cd ~/aba && aba -d $SNO --ntp $NTP_IP ntp.example.com"
 
 e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
     "cd ~/aba && aba --dir $SNO day2-ntp"

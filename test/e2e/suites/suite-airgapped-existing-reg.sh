@@ -462,8 +462,8 @@ test_end
 # This exercises the Phase 1 MCP wait in day2-config-ntp.sh.
 test_begin "NTP: day2 and chronyc verify"
 
-e2e_run_remote "Change NTP to hostname only (forces MachineConfig change)" \
-    "cd ~/aba && aba --ntp ntp.example.com"
+e2e_run_remote "Change NTP in cluster.conf to hostname only (forces MachineConfig change)" \
+    "cd ~/aba && aba -d $SNO --ntp ntp.example.com"
 
 e2e_run_remote "Apply day2 NTP config" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
