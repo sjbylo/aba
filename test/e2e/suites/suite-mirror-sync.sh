@@ -16,7 +16,7 @@ _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
-source "$_SUITE_DIR/../lib/pool-lifecycle.sh"
+source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
@@ -86,7 +86,6 @@ e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_diag "Show aba.conf" "grep -E '^\w' aba.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
@@ -392,3 +391,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-mirror-sync.sh"
+
+exit 0

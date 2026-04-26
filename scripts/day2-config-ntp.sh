@@ -151,59 +151,198 @@ aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be re
 echo
 
 #######################
-# Check config in cluster!
-# 1. PRE-PROCESS TARGETS (Resolve DNS once & Deduplicate)
-raw_targets=($ntp_servers)
-ntp_targets=()
+# Verify NTP configuration on cluster nodes.
+#
+# Phase 1a: Wait for MCO to START processing the new MachineConfig.
+#   Right after oc apply, the MCO hasn't noticed yet -- MCP still shows
+#   Updated=True from the previous state.  We must wait for Updating=True
+#   before we can meaningfully wait for it to finish.
+#   If it never starts (60s), the MC content is likely identical (no reboot).
+#
+# Phase 1b: Wait for all MachineConfigPools to finish updating.
+#   MCO renders the new MachineConfig, drains and reboots nodes.
+#   On SNO the master pool reboot takes the API offline temporarily.
+#   We must wait for MCP stability before checking anything on nodes.
+#
+# Phase 2: chrony.conf contains all configured "server X iburst" lines.
+#   Quick sanity check that the MachineConfig content is correct.
+#
+# Phase 3: At least one NTP source is synced (^* or ^+ in chronyc sources).
+#   Once chrony.conf is applied, sync should happen within seconds.
+#   Unreachable sources (^?) are warned but don't fail -- pool servers
+#   may be unreachable from air-gapped networks.
+#
+# Phase 4: Wait for API server to be available after MCO reboot.
+#   On SNO the API goes down during the reboot -- callers expect it back.
+#
+# We check the config file directly instead of resolving hostnames on bastion,
+# because pool hostnames (e.g. 2.rhel.pool.ntp.org) rotate IPs and chrony on
+# the node will resolve to a different address than bastion's getent.
 
-# Temporary array to hold all resolved IPs
-temp_ips=()
+# Phase 1a: wait for MCO to start processing (Updating=True on any pool).
+_any_mcp_updating() {
+	local updating
+	updating=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null) || return 1
+	echo "$updating" | grep -q True
+}
 
-for t in "${raw_targets[@]}"; do
-	# Simple regex to check if it's already an IP
-	if [[ $t =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-		temp_ips+=("$t")
-	else
-		# Resolve hostname to IP
-		resolved_ip=$(getent hosts "$t" | awk '{print $1}' | head -n 1)
-		if [ -n "$resolved_ip" ]; then
-			temp_ips+=("$resolved_ip")
-			aba_debug "Resolved $t to $resolved_ip"
-		else
-			echo_red "Warning: Could not resolve NTP target $t"
-		fi
+_mco_started=1
+_wait_rc=0
+aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 60 _any_mcp_updating || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	_mco_started=0
+	aba_info "MCO did not start updating -- MachineConfig may match current config (no reboot needed)."
+fi
+
+# Phase 1b: wait for all MachineConfigPools to finish rolling out.
+_all_mcp_updated() {
+	local updating
+	updating=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null) || return 1
+	echo "$updating" | grep -q True && return 1
+	local degraded
+	degraded=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null) || return 1
+	echo "$degraded" | grep -q True && return 1
+	return 0
+}
+
+if [ "$_mco_started" -eq 1 ]; then
+	_wait_rc=0
+	aba_wait_show "Waiting for NTP MachineConfig to roll out on all nodes (Ctrl-C to skip)" 15 900 _all_mcp_updated || _wait_rc=$?
+	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+		echo
+		aba_info "Aborted by user."
+		exit 0
+	elif [ "$_wait_rc" -ne 0 ]; then
+		echo
+		oc get mcp 2>/dev/null || true
+		echo
+		aba_abort \
+			"Timed out after 15 min waiting for NTP MachineConfig rollout." \
+			"Check 'oc get mcp' and 'oc get nodes' for status."
 	fi
-done
+fi
 
-# Deduplicate the array (sort unique)
-IFS=$'\n' ntp_targets=($(sort -u <<<"${temp_ips[*]}"))
-unset IFS
+aba_info_ok "NTP MachineConfig rolled out on all nodes."
 
-# 2. Get list of Node IPs
+raw_targets=($ntp_servers)
+
+# Get list of Node IPs (after MCP rollout, so API is stable)
 aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
-# 3. Check function: returns 0 when all nodes have all NTP targets configured
-_ntp_all_nodes_compliant() {
+# Phase 2: verify chrony.conf has all configured server lines on every node.
+_ntp_config_applied() {
 	for host in $nodesIPs; do
-		aba_debug "Checking NTP config in host: $host"
-		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources -n' 2>&1)
-		aba_debug "Node: $host config:"
-		aba_debug "\n$node_sources"
+		aba_debug "Checking chrony.conf on node: $host"
+		node_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1) || return 1
+		aba_debug "Node $host chrony.conf:"
+		aba_debug "\n$node_conf"
 
-		for target_ip in "${ntp_targets[@]}"; do
-			aba_debug "Checking IP $target_ip in chrony config"
-			if ! echo "$node_sources" | grep -Fq " $target_ip "; then
+		for svr in "${raw_targets[@]}"; do
+			if ! echo "$node_conf" | grep -qF "server $svr iburst"; then
+				aba_debug "Server '$svr' not yet in chrony.conf on $host"
 				return 1
 			fi
-			aba_debug "target_ip $target_ip found!"
 		done
 	done
 	return 0
 }
 
-if ! aba_wait_show "Verifying NTP on all nodes (${ntp_targets[*]})" 10 900 _ntp_all_nodes_compliant; then
-	aba_abort "Timed out after 15 min waiting for NTP configuration on all nodes."
+_wait_rc=0
+aba_wait_show "Verifying NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to skip)" 10 300 _ntp_config_applied || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	echo
+	for host in $nodesIPs; do
+		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1) || true
+		echo "  Node $host chrony.conf servers:"
+		echo "$_conf" | grep '^server ' | sed 's/^/    /'
+	done
+	echo
+	aba_abort \
+		"Timed out after 5 min waiting for chrony.conf on all nodes." \
+		"MachineConfigPools are updated but chrony.conf content doesn't match." \
+		"Check 'oc get mcp' and 'oc get nodes' for status."
 fi
 
-aba_info_ok "All nodes are synchronized!"
+aba_info_ok "chrony.conf applied on all nodes."
+
+# Phase 3: at least one NTP source synced on every node.
+_ntp_source_synced() {
+	for host in $nodesIPs; do
+		aba_debug "Checking NTP sources on node: $host"
+		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || return 1
+		aba_debug "Node $host chronyc sources:"
+		aba_debug "\n$node_sources"
+
+		if ! echo "$node_sources" | grep -qE '^\^[*+]'; then
+			aba_debug "No synced NTP source on $host yet"
+			return 1
+		fi
+	done
+	return 0
+}
+
+_wait_rc=0
+aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to skip)" 5 600 _ntp_source_synced || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	echo
+	for host in $nodesIPs; do
+		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || true
+		echo "  Node $host chronyc sources:"
+		echo "$_src" | grep '^\^' | sed 's/^/    /' || true
+	done
+	echo
+	aba_abort \
+		"Timed out after 10 min waiting for at least one synced NTP source on all nodes." \
+		"chrony.conf is correctly applied, but no NTP source responded (^* or ^+)." \
+		"Verify the configured NTP servers (${raw_targets[*]}) are reachable from the cluster network."
+fi
+
+# Final report: warn about unreachable sources (don't fail -- at least one is synced).
+_has_warnings=""
+for host in $nodesIPs; do
+	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || true
+	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}') || true
+	if [ -n "$_unreachable" ]; then
+		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
+		_has_warnings=1
+	fi
+done
+
+if [ -n "$_has_warnings" ]; then
+	aba_info_ok "NTP configured (at least one source synced, some unreachable)."
+else
+	aba_info_ok "NTP configured and all sources synced on all nodes."
+fi
+
+# Phase 4: ensure API server is available before returning.
+# On SNO the MCO reboot takes the API offline; SSH-based checks (Phases 2-3)
+# can pass while the API server pod is still starting.  Callers expect the
+# cluster to be usable when this script exits.
+_api_available() {
+	oc get nodes --no-headers >/dev/null 2>&1
+}
+
+_wait_rc=0
+aba_wait_show "Waiting for API server to be available (Ctrl-C to skip)" 5 300 _api_available || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	echo
+	aba_info "Aborted by user."
+	exit 0
+elif [ "$_wait_rc" -ne 0 ]; then
+	aba_warning "API server not available after 5 min. Cluster may still be recovering."
+fi
+
+aba_info_ok "API server available."

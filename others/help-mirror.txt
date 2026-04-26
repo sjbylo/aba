@@ -31,6 +31,11 @@ Related commands:
 
   aba [-d mirror] password             # Optional: Create pull secret file for existing mirror registry, if needed.
 
+  aba [-d mirror] register --pull-secret-mirror <file> --ca-cert <file>
+                                       # Register an existing (external) mirror registry.
+
+  aba [-d mirror] unregister           # Deregister an existing registry (removes local creds only).
+
 Examples of fully disconnected mode (air-gapped):
 
   Configure mirror registry on the local bastion (the -H flag sets the registry FQDN):
@@ -54,13 +59,17 @@ Examples of fully disconnected mode (air-gapped):
 Examples of registering an existing (externally-managed) mirror registry:
 
   Register credentials for existing registry in the default mirror dir:
-    aba -d mirror --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+    aba -d mirror register --reg-host registry.example.com --pull-secret-mirror /path/to/pull-secret.json --ca-cert /path/to/rootCA.pem
+
+  Register a registry running on a non-default port:
+    aba -d mirror register --reg-host registry.example.com --reg-port 5000 --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
 
   Create a named mirror directory for an enclave and register it:
-    aba mirror --name enclave1 --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+    aba mirror --name enclave1
+    aba -d enclave1 register --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
 
   Deregister (only removes local credentials, never modifies the external registry):
-    aba -d enclave1 unregister
+    aba -d mirror unregister
 
 The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
 The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 

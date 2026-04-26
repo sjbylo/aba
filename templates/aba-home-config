@@ -39,6 +39,13 @@ OC_MIRROR_SINCE=2020-01-01
 # Number of images to mirror concurrently. Reduce on slow or unreliable networks.
 # OC_MIRROR_PARALLEL_IMAGES=8
 
+# Pin operator catalog references by digest (@sha256:...) instead of tag (:vX.Y)
+# for all oc-mirror operations (save, sync, load). This prevents oc-mirror from
+# contacting upstream registries for tag resolution during diskToMirror (load) on
+# disconnected hosts. Workaround for OCPBUGS-81712. Set to 0 to disable once
+# oc-mirror fixes upstream tag resolution in air-gapped environments.
+OC_MIRROR_PIN_CATALOGS=1
+
 # Extra flags appended to every oc-mirror invocation (sync, save, load).
 # Sigstore signature handling is managed by
 # $HOME/.config/containers/registries.d/aba-sigstore.yaml

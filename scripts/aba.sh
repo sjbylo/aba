@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.0.0
+ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260421223550
+ABA_BUILD=20260426220357
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -132,20 +132,20 @@ else
 	# Give an error to change to the top level dir. Text must be coded here.
 	(
 		echo "  __   ____   __  "
-		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the Aba utility!"
+		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the ABA utility!"
 		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
 		echo "\_/\_/(____/\_/\_/"
 		echo
-		echo "Run Aba from the top of its repository."
+		echo "Run ABA from the top of its repository."
 		echo
 		echo "For example:                          cd aba"
 		echo "                                      aba"
 		echo "                                      aba -h"
 		echo
-		echo "Otherwise, clone Aba from GitHub:     git clone https://github.com/sjbylo/aba.git"
-		echo "Change to the Aba repo directory:     cd aba"
-		echo "Install latest Aba:                   ./install"
-		echo "Run Aba:                              aba" 
+		echo "Otherwise, clone ABA from GitHub:     git clone https://github.com/sjbylo/aba.git"
+		echo "Change to the ABA repo directory:     cd aba"
+		echo "Install latest ABA:                   ./install"
+		echo "Run ABA:                              aba" 
 		echo "                                      aba -h" 
 	) >&2
 
@@ -262,7 +262,7 @@ do
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
 			cat $ABA_ROOT/others/help-aba.txt
-		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" ]; then
+		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
 		elif [ "$cur_target" = "cluster" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
@@ -874,31 +874,14 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND ssh_key_file=$ssh_key_val"
 		fi
 		shift
-	elif [ "$1" = "--proxy" ]; then
-		proxy_val=
-		if [[ -n $2 && $2 != -* ]]; then
-			proxy_val=$2
-			shift
-		fi
+	elif [ "$1" = "--mirror-name" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
 		if [ -f cluster.conf ]; then
-			replace-value-conf -n http_proxy -v "$proxy_val" -f cluster.conf
-			replace-value-conf -n https_proxy -v "$proxy_val" -f cluster.conf
+			replace-value-conf -n mirror_name -v "$2" -f cluster.conf
 		else
-			BUILD_COMMAND="$BUILD_COMMAND http_proxy=$proxy_val https_proxy=$proxy_val"
+			BUILD_COMMAND="$BUILD_COMMAND mirror_name=$2"
 		fi
-		shift
-	elif [ "$1" = "--no-proxy" ]; then
-		no_proxy_val=
-		if [[ -n $2 && $2 != -* ]]; then
-			no_proxy_val=$2
-			shift
-		fi
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n no_proxy -v "$no_proxy_val" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND no_proxy=$no_proxy_val"
-		fi
-		shift
+		shift 2
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
 		shift
@@ -1180,7 +1163,7 @@ if [ -f .bundle ]; then
 	scripts/cli-install-all.sh                                    # Start CLI extractions (background)
 	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start mirror-registry extraction (background)
 
-	echo_yellow "Aba install bundle detected for OpenShift v$ocp_version."
+	echo_yellow "ABA install bundle detected for OpenShift v$ocp_version."
 
 	# Check if tar files are already in place
 	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
@@ -1216,17 +1199,17 @@ if [ -f .bundle ]; then
 	echo
 	echo_white "Next steps:"
 	echo_white "Set up a mirror registry and load it with the required container images from this install bundle."
-	echo_white "Aba can deploy the 'Mirror Registry for Red Hat OpenShift' (Quay) or use an existing container registry."
-	echo_white "As an alternative, Aba can also install a Docker registry. See the README.md FAQ for instructions."
+	echo_white "ABA can deploy the 'Mirror Registry for Red Hat OpenShift' (Quay) or use an existing container registry."
+	echo_white "As an alternative, ABA can also install a Docker registry. See the README.md FAQ for instructions."
 
 	[ ! "$domain" ] && domain=example.com  # Just in case
 	echo
 	echo_white "Examples:"
 	echo_white "To install the registry on the local machine, accessible via $(hostname -s).$domain, run:"
-	echo_white "  aba -d mirror load -H $(hostname -s).$domain --retry 8"
+	echo_white "  aba -d mirror load -H $(hostname -s).$domain --retry 2"
 	echo
-	echo_white "To install the registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
-	echo_white "  aba -d mirror load -H remote-registry.$domain -k '~/.ssh/id_rsa' -U user --retry"
+	echo_white "To install the (docker) registry on a remote host, specify the SSH key (and optionally the remote user) to access the host, run:"
+	echo_white "  aba -d mirror load -H remote-registry.$domain --vendor docker -k '~/.ssh/id_rsa' -U user --retry"
 	echo
 	echo_white "If unsure, run:"
 	echo_white "  aba -d mirror install                 # to configure and/or install Quay."
@@ -1240,7 +1223,7 @@ if [ -f .bundle ]; then
 fi
 
 
-# Fresh GitHub clone of Aba repo detected!
+# Fresh GitHub clone of ABA repo detected!
 
 ##############################################################################################################################
 # Determine OpenShift channel
@@ -1275,7 +1258,7 @@ fi
 			"  $ERROR_DETAILS" \
 			"" \
 			"Ensure you have Internet access to download the required images." \
-			"To get started with Aba run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
+			"To get started with ABA run it on a connected workstation/laptop with Fedora, RHEL or Centos Stream and try again." \
 			"" \
 			"Required sites:                                Other sites:" \
 			"   mirror.openshift.com                           docker.io" \
@@ -1515,7 +1498,7 @@ if [ ! "$editor" ]; then
 	echo
 	def_editor="${EDITOR:-${VISUAL:-vi}}"
 
-	echo    "Aba uses an editor to aid in the workflow."
+	echo    "ABA uses an editor to aid in the workflow."
 	echo_yellow -n "Enter your preferred editor or set to 'none' if you prefer to edit manually! ('vi', 'emacs', 'nano' etc or 'none')? [$def_editor]: "
 	read new_editor
 
@@ -1585,7 +1568,7 @@ fi
 
 echo
 echo       "Fully Disconnected (air-gapped)"
-echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, Aba can download all required components—including"
+echo_white "If you plan to install OpenShift in a fully disconnected (air-gapped) environment, ABA can download all required components—including"
 echo_white "the Quay mirror registry install file, container images, and CLI install files—and package them into an install bundle that you can"
 echo_white "transfer into your disconnected environment."
 
@@ -1617,7 +1600,7 @@ if ask "Install OpenShift from a mirror registry that is synchonized directly fr
 	echo 
 	echo_yellow "Instructions for synchronizing images directly from the Internet to a mirror registry"
 	echo_white "Set up the mirror registry and sync it with the necessary container images."
-	echo_white "To store container images, Aba can install the Quay mirror appliance or you can use an existing container registry."
+	echo_white "To store container images, ABA can install the Quay mirror appliance or you can use an existing container registry."
 	echo
 	echo_white "Run:"
 	echo_white "  aba -d mirror install                # to configure an existing registry or install Quay."

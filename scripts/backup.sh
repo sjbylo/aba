@@ -50,22 +50,25 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 
 
 # All 'find expr' below are by default "and"
-file_list=$(find		\
-	"${repo_dir}/install"		\
+file_list=$(find				\
+	"${repo_dir}/install"			\
 	"${repo_dir}/aba"			\
-	"${repo_dir}/aba.conf"		\
-	"${repo_dir}/.bundle"		\
+	"${repo_dir}/aba.conf"			\
+	"${repo_dir}/.bundle"			\
 	"${repo_dir}/cli"			\
-	"${repo_dir}/rpms"		\
-	"${repo_dir}/others"		\
-	"${repo_dir}/scripts"		\
-	"${repo_dir}/templates"		\
-	"${repo_dir}/Makefile"		\
-	"${repo_dir}/README.md"		\
+	"${repo_dir}/rpms"			\
+	"${repo_dir}/others"			\
+	"${repo_dir}/scripts"			\
+	"${repo_dir}/templates"			\
+	"${repo_dir}/Makefile"			\
+	"${repo_dir}/README.md"			\
+	"${repo_dir}/VERSION"			\
+	"${repo_dir}/CHANGELOG.md"		\
+	"${repo_dir}/LICENSE"			\
 	"${repo_dir}/Troubleshooting.md"	\
-	"${repo_dir}/mirror"		\
-	"${repo_dir}/.index"		\
-								\
+	"${repo_dir}/mirror"			\
+	"${repo_dir}/.index"			\
+									\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
 	! -path "${repo_dir}/cli/.??*"	  				\
@@ -84,6 +87,8 @@ file_list=$(find		\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
 	! -path "${repo_dir}/mirror/data/working-dir*"  		\
+	! -path "${repo_dir}/mirror/sync/*"				\
+	! -path "${repo_dir}/mirror/save/*"				\
 	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
 	! -path "${repo_dir}/test/output.log" 				\
 	! -path "${repo_dir}/bundles*"	 				\
@@ -189,11 +194,11 @@ rm -f "${repo_dir}/.bundle"  # We don't want this repo to be labeled as 'bundle'
 if [ $ret -ne 0 ]; then
 	echo >&2
 	echo_red "Error: The tar command failed with return code $ret!" >&2
-	echo_red "       The archive is very likely incomplete!  Fix the problem and try again!" >&2
+	echo_red "       The archive is very unlikely to be complete!  Fix the problem and try again!" >&2
 	echo  >&2
 	#aba_abort \
 	#	"The tar command failed with return code $ret!" \
-	#	"The archive is very likely incomplete!  Fix the problem and try again!" 
+	#	"The archive is very unlikely to be complete!  Fix the problem and try again!" 
 
 	exit $ret
 fi

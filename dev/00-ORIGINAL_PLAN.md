@@ -1,5 +1,3 @@
-
-
 # Spec-Driven Development for ABA
 
 ## The Problem

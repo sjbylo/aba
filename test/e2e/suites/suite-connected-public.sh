@@ -33,6 +33,7 @@ plan_tests \
     "Proxy mode: create SNO config" \
     "Proxy mode: verify install-config.yaml" \
     "Proxy mode: install SNO cluster" \
+    "Day2 NTP: change to con host (hostname + IP)" \
     "Proxy mode: verify and delete" \
     "Direct+mirror mode: config verification" \
     "Proxy-only mode: verify without direct internet" \
@@ -157,6 +158,38 @@ e2e_run -r 2 10 "Install SNO from public registry (proxy mode)" \
 test_end
 
 # ============================================================================
+# 6b. Day2 NTP: change NTP to con host + NAS (two different sources)
+# ============================================================================
+test_begin "Day2 NTP: change to con host (hostname + IP)"
+
+# Change from initial 10.0.1.8+ntp.example.com to pool's con host.
+# Tests both hostname and IP-based NTP. con hosts serve NTP (allow 10.0.0.0/20).
+_CON_IP=$(pool_con_ip)
+
+e2e_run "Set NTP to ${CON_HOST} + ${_CON_IP} in cluster.conf" \
+    "aba -d $SNO --ntp ${CON_HOST} ${_CON_IP}"
+
+e2e_run -r 2 10 "Apply day2 NTP config" \
+    "aba --dir $SNO day2-ntp"
+
+e2e_run "Verify chrony.conf has ${CON_HOST}" \
+    "aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ${CON_HOST} iburst'"
+
+e2e_run "Verify chrony.conf has ${_CON_IP}" \
+    "aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ${_CON_IP} iburst'"
+
+e2e_run -r 5 10 "Verify ${CON_HOST} is a working NTP source" \
+    "aba --dir $SNO ssh --cmd 'chronyc sources' | grep -E '^\^[*+-].*(${CON_HOST}|${_CON_IP})'"
+
+e2e_run -r 5 10 "Verify at least 1 synced NTP source" \
+    "aba --dir $SNO ssh --cmd 'chronyc sources' | grep -E '^\^[*+-]'"
+
+e2e_run -r 3 10 "Verify NTP sync status is Normal" \
+    "aba --dir $SNO ssh --cmd 'chronyc tracking' | grep -E 'Leap status\s+: Normal'"
+
+test_end
+
+# ============================================================================
 # 7. Proxy mode: verify and delete
 # ============================================================================
 test_begin "Proxy mode: verify and delete"
@@ -195,7 +228,6 @@ e2e_run "Delete any leftover $SNO_MIRROR cluster" \
 # Default int_connection (empty) = mirror mode.
 # Create mirror.conf pointing at the pool registry on conN.
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-[ -n "${E2E_DATA_DIR:-}" ] && e2e_run "Set data_dir for disk space" "aba --data-dir '$E2E_DATA_DIR' -d mirror"
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \
@@ -332,3 +364,5 @@ test_end
 suite_end
 
 echo "SUCCESS: suite-connected-public.sh"
+
+exit 0
