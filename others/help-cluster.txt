@@ -39,8 +39,8 @@ Options:
         --num-masters <count>             # Set number of master/control-plane nodes.
         --vlan [<tag>]                    # Set VLAN tag or empty to clear.
         --ssh-key [<path>]                # Path to SSH public key or empty to clear.
-        --proxy [<url>]                   # Set http/https proxy URL or empty to clear.
-        --no-proxy [<list>]               # Set no_proxy list or empty to clear.
+        --mirror-name <name>              # Mirror directory this cluster uses (default: mirror).
+                                          # Set to match a named mirror dir (e.g. enclave1).
 
 Usage (from a cluster directory):
   aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.

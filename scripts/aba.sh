@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260426102428
+ABA_BUILD=20260426155614
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -874,31 +874,14 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND ssh_key_file=$ssh_key_val"
 		fi
 		shift
-	elif [ "$1" = "--proxy" ]; then
-		proxy_val=
-		if [[ -n $2 && $2 != -* ]]; then
-			proxy_val=$2
-			shift
-		fi
+	elif [ "$1" = "--mirror-name" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
 		if [ -f cluster.conf ]; then
-			replace-value-conf -n http_proxy -v "$proxy_val" -f cluster.conf
-			replace-value-conf -n https_proxy -v "$proxy_val" -f cluster.conf
+			replace-value-conf -n mirror_name -v "$2" -f cluster.conf
 		else
-			BUILD_COMMAND="$BUILD_COMMAND http_proxy=$proxy_val https_proxy=$proxy_val"
+			BUILD_COMMAND="$BUILD_COMMAND mirror_name=$2"
 		fi
-		shift
-	elif [ "$1" = "--no-proxy" ]; then
-		no_proxy_val=
-		if [[ -n $2 && $2 != -* ]]; then
-			no_proxy_val=$2
-			shift
-		fi
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n no_proxy -v "$no_proxy_val" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND no_proxy=$no_proxy_val"
-		fi
-		shift
+		shift 2
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
 		shift
