@@ -935,14 +935,15 @@ running regardless of what is in the snapshot.
 | config.env (generated, with user/OS/vmware overrides) | `~/.e2e-harness/config.env`              | `test/e2e/.config.env.deploy`            |
 | pools.conf                                            | `~/.e2e-harness/pools.conf`              | `test/e2e/pools.conf`                    |
 | govc binary                                           | `~/.e2e-harness/bin/govc` + `~/bin/govc` | `~/bin/govc`                             |
+| aba binary (infra-owned, on disN)                     | `~/.e2e-harness/bin/aba` on disN         | `scripts/aba.sh` from `$E2E_GIT_BRANCH` |
 | pull-secret (root only)                               | `~/.pull-secret.json`                    | `~/.pull-secret.json`                    |
 | vmware.conf (root only)                               | `~/.vmware.conf`                         | `~/.vmware.conf` or `--vmware-conf` path |
 | notify.sh (if configured)                             | `~/bin/notify.sh`                        | `~/bin/notify.sh`                        |
 
 
-All these `scp` operations are consolidated into `sync_harness()` in
-`lib/deploy.sh`. Called from `_dispatch_suite` (dispatcher), `cmd_deploy`,
-and `cmd_restart`.
+All these `scp` operations are consolidated into `sync_harness()` and
+`sync_dis_aba()` in `lib/deploy.sh`. Called from `_dispatch_suite`
+(dispatcher), `cmd_deploy`, and `cmd_restart`.
 
 ### What is NOT pushed (expected from snapshot)
 
@@ -950,6 +951,70 @@ and `cmd_restart`.
 - OS-level config (network, DNS, firewall) -- from `pool-ready` snapshot
 - SSH keys -- from `golden-ready` snapshot
 - Exception: `--dev` mode overwrites `~/aba` with a tarball from bastion
+
+### Infra space vs user space
+
+The test framework enforces a strict separation between infrastructure-owned
+files and suite-owned (user-space) files. This prevents suites from
+accidentally breaking infra cleanup, and infra from depending on binaries
+that suites may legitimately delete.
+
+```
+Infra space:  ~/.e2e-harness/          (owned by infra, suites never touch)
+User space:   ~/, ~/bin/, ~/aba/       (owned by suites, infra must not depend on)
+```
+
+**Infra space** (`~/.e2e-harness/`): Deployed by `sync_harness` and
+`sync_dis_aba` from bastion on every dispatch. Contains runner scripts,
+harness libraries, and infra-owned tools (`govc`, `aba`). Suites must never
+modify this directory.
+
+**User space** (`~/`, `~/bin/`, `~/aba/`): Owned by suites. Suites install
+`aba`, create mirrors/clusters, and clean up here. The infra layer must not
+depend on user-space binaries for its own operations.
+
+**Crash recovery** is the infra's responsibility: processing `.cleanup` /
+`.mirror-cleanup` files from crashed suites via `_pre_suite_cleanup` and
+`_cleanup_dis_aba`. These use `~/.e2e-harness/bin/aba` -- never
+user-space `~/bin/aba`.
+
+**Normal cleanup** is the suite's responsibility. Each suite's final test
+block runs `aba delete` / `aba uninstall` (using the user-space `aba`).
+The infra's `_cleanup_dis_aba` is a belt-and-suspenders reset between
+suites, using the infra-owned binary.
+
+**Why this matters:** User-space `~/bin/aba` may not exist (the suite's
+own cleanup or `_cleanup_dis_aba` step 1 removes CLI tools). It may also
+not be in PATH for non-interactive SSH sessions (`.bash_profile` is not
+sourced). The infra-owned copy at `~/.e2e-harness/bin/aba` is always
+available and referenced by absolute path.
+
+**Manual podman/systemctl cleanup is forbidden.** If `aba uninstall` fails
+or `aba` is missing, the correct response is to fix the deployment -- never
+work around it with `podman stop -a`, `podman rm -af`, `podman secret rm -a`,
+or `systemctl --user stop quay-*`. Manual cleanup has caused broken OS state
+in the past.
+
+### SSH login methods and PATH
+
+`e2e_run` (framework.sh) sources `.bash_profile` before every remote command,
+simulating a console/interactive login. This means `~/bin` is always in PATH
+during suite execution, and `aba install` always installs to `~/bin/aba`.
+
+However, a real user doing `ssh host "cd ~/aba && ./install"` (non-interactive)
+would NOT have `~/bin` in PATH. In that case, `aba install` correctly falls
+through to `/usr/local/bin/aba` (always in system PATH). Both paths work in
+the real product, but **the tests only exercise the console-login path**
+(install to `~/bin`).
+
+The infra's `_essh` does NOT source `.bash_profile`, so `~/bin` is not in
+PATH for infra operations. This is why infra cleanup must use the absolute
+path `~/.e2e-harness/bin/aba` rather than relying on PATH resolution.
+
+This is a known testing gap documented in the backlog (`ai/BACKLOG.md`):
+the `--user root` test runs are particularly affected -- root's
+`.bash_profile` adds `~/bin` to PATH, but non-interactive SSH to root
+does not.
 
 ### Shared state files on conN
 

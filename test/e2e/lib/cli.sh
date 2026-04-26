@@ -69,7 +69,7 @@ _usage() {
 	  -D, --with-dummy       Include dummy-* suites (excluded from --all by default)
 	  -p, --pool SPEC        Pool selection: N, N-M, N,M,O, or "all"
 	                         (aliases: --pools, --pool-list)
-	  -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
+	  -F, --fresh            Clear old results and run all suites from scratch (aliases: -f, --force)
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
 	  -n, --dry-run          Show dispatch plan, don't execute
@@ -223,7 +223,7 @@ _parse_args() {
 			-q|--quiet)             CLI_QUIET=1; CLI_YES=1; shift ;;
 			-c|--clean)             CLI_CLEAN=1; shift ;;
 			-n|--dry-run)           CLI_DRY_RUN=1; shift ;;
-			-f|--force)             CLI_FORCE=1; shift ;;
+			-F|--fresh|-f|--force)  CLI_FORCE=1; shift ;;
 			-d|--dev)               CLI_DEV=1; shift ;;
 			-r|--resume)            CLI_RESUME=1; shift ;;
 			-o|--os)                CLI_OS="$2"; shift 2 ;;

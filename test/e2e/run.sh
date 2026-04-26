@@ -556,6 +556,7 @@ for _p in $CLI_POOL_LIST; do
 	target=$(_con_target "$_p")
 
 	if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
+		sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
 		sync_extras "$target" "${CON_SSH_USER:-steve}"
 		# Ensure rootless podman's pause process survives between SSH sessions
 		_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
@@ -598,7 +599,7 @@ declare -A _results=()
 declare -A _result_pool=()
 declare -A _bad_pools_map=()
 
-# Apply --force scoping
+# Apply --fresh / --force scoping
 if [ -n "${CLI_FORCE:-}" ]; then
 	_pool_count=0
 	for _p in $CLI_POOL_LIST; do _pool_count=$(( _pool_count + 1 )); done
