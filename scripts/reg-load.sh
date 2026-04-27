@@ -94,14 +94,17 @@ if [ -s ./reg-uninstall.sh ]; then
 fi
 echo
 
-# Now using data_dir so reg_root=$data_dir/quay-install 
-# If not already set, set the cache and tmp dirs to where there should be more disk space
-[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR && aba_debug "TMPDIR=$TMPDIR"
+# Now using data_dir so reg_root=$data_dir/quay-install
+# Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
+[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir.
-[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
+[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
 base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path"
+
+[ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
+[ "$OC_MIRROR_CACHE" ] && eval mkdir -p "$OC_MIRROR_CACHE"
 
 if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
 	exit 1

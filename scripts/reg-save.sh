@@ -92,18 +92,21 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 # reg_root now switched to data-dir. Instead of using reg_root, have data_vol=/mnt/large-disk and put all data in there? reg_root can be = $data_vol/quay-install
 
-## If not already set, set the cache and tmp dirs to where there should be more disk space
+## Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
-[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR && aba_debug "TMPDIR=$TMPDIR"
+[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir, if it's defined
-[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && eval mkdir -p $OC_MIRROR_CACHE && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
+[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
 # Build the base oc-mirror command. --since is only relevant for save (mirror-to-disk).
 # When OC_MIRROR_SINCE is set (e.g. "2020-01-01"), archives include all content since that
 # date -- use a far-back date to force a complete archive every time. When unset (default),
 # oc-mirror creates differential archives (only new blobs since the last save).
 base_cmd="oc-mirror --v2 --config imageset-config.yaml file://. ${OC_MIRROR_SINCE:+--since $OC_MIRROR_SINCE}"
+
+[ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
+[ "$OC_MIRROR_CACHE" ] && eval mkdir -p "$OC_MIRROR_CACHE"
 
 if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1

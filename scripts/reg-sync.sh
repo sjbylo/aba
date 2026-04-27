@@ -105,10 +105,12 @@ fi
 echo
 
 # NOTE: that the cache is always used *except* for mirror-to-mirror (sync) workflows, where it is not used! See reg-save.sh and reg-load.sh.
-# If not already set, set the cache and tmp dirs to where there should be more disk space
-[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && eval mkdir -p $TMPDIR
+# Set TMPDIR path (defer mkdir to just before oc-mirror needs it)
+[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
 
 base_cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path"
+
+[ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
 
 if ! _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd"; then
 	exit 1
