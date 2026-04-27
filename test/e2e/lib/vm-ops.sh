@@ -1470,8 +1470,8 @@ _vm_verify_golden() {
 		grep "ABA_TESTING=1" /etc/environment
 		test -f /etc/systemd/system/expand-root.service || { echo "ERROR: expand-root.service missing"; exit 1; }
 		test -f /usr/local/bin/expand-root.sh || { echo "ERROR: expand-root.sh script missing"; exit 1; }
-		grep -q 'proxy_hostname = .' /etc/rhsm/rhsm.conf || { echo "ERROR: RHSM proxy not configured"; exit 1; }
-		grep -q '^proxy=' /etc/dnf/dnf.conf || { echo "ERROR: dnf proxy not configured"; exit 1; }
+		grep -q 'proxy_hostname *=.*[0-9]' /etc/rhsm/rhsm.conf || { echo "ERROR: RHSM proxy not configured"; exit 1; }
+		grep -q '^proxy=.*[0-9]' /etc/dnf/dnf.conf || { echo "ERROR: dnf proxy not configured"; exit 1; }
 
 		echo "All golden VM checks passed."
 	VERIFYEOF
