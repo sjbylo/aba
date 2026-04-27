@@ -198,49 +198,18 @@ elif [ "$_wait_rc" -ne 0 ]; then
 	aba_info "MCO did not start updating -- MachineConfig may match current config (no reboot needed)."
 fi
 
-# Phase 1b: wait for all MachineConfigPools to finish rolling out.
-_all_mcp_updated() {
-	local updating
-	updating=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null) || return 1
-	echo "$updating" | grep -q True && return 1
-	local degraded
-	degraded=$(oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null) || return 1
-	echo "$degraded" | grep -q True && return 1
-	return 0
-}
-
-if [ "$_mco_started" -eq 1 ]; then
-	_wait_rc=0
-	aba_wait_show "Waiting for NTP MachineConfig to roll out on all nodes (Ctrl-C to skip)" 15 900 _all_mcp_updated || _wait_rc=$?
-	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
-		echo
-		aba_info "Aborted by user."
-		exit 0
-	elif [ "$_wait_rc" -ne 0 ]; then
-		echo
-		oc get mcp 2>/dev/null || true
-		echo
-		aba_abort \
-			"Timed out after 15 min waiting for NTP MachineConfig rollout." \
-			"Check 'oc get mcp' and 'oc get nodes' for status."
-	fi
-fi
-
-aba_info_ok "NTP MachineConfig rolled out on all nodes."
-
 raw_targets=($ntp_servers)
 
-# Get list of Node IPs (after MCP rollout, so API is stable)
+# Get list of Node IPs before potential reboot.
 aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
 # Phase 2: verify chrony.conf has all configured server lines on every node.
+# Polls through the MCO reboot -- no need to wait for MCP to finish first.
 _ntp_config_applied() {
 	for host in $nodesIPs; do
 		aba_debug "Checking chrony.conf on node: $host"
-		node_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1) || return 1
-		aba_debug "Node $host chrony.conf:"
-		aba_debug "\n$node_conf"
+		node_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>/dev/null) || return 1
 
 		for svr in "${raw_targets[@]}"; do
 			if ! echo "$node_conf" | grep -qF "server $svr iburst"; then
@@ -253,7 +222,7 @@ _ntp_config_applied() {
 }
 
 _wait_rc=0
-aba_wait_show "Verifying NTP config on all nodes (${raw_targets[*]}) (Ctrl-C to skip)" 10 300 _ntp_config_applied || _wait_rc=$?
+aba_wait_show "Waiting for chrony.conf update on all nodes (${raw_targets[*]}) (Ctrl-C to skip)" 10 900 _ntp_config_applied || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
@@ -261,26 +230,25 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 elif [ "$_wait_rc" -ne 0 ]; then
 	echo
 	for host in $nodesIPs; do
-		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>&1) || true
+		_conf=$(ssh -F ~/.aba/ssh.conf -q core@$host 'cat /etc/chrony.conf' 2>/dev/null) || true
 		echo "  Node $host chrony.conf servers:"
 		echo "$_conf" | grep '^server ' | sed 's/^/    /'
 	done
 	echo
 	aba_abort \
-		"Timed out after 5 min waiting for chrony.conf on all nodes." \
-		"MachineConfigPools are updated but chrony.conf content doesn't match." \
+		"Timed out after 15 min waiting for chrony.conf on all nodes." \
 		"Check 'oc get mcp' and 'oc get nodes' for status."
 fi
 
 aba_info_ok "chrony.conf applied on all nodes."
 
 # Phase 3: at least one NTP source synced on every node.
+# Uses chronyc -N to show original configured names (avoids hostname resolution issues
+# when both a hostname and its IP are configured as separate NTP sources).
 _ntp_source_synced() {
 	for host in $nodesIPs; do
 		aba_debug "Checking NTP sources on node: $host"
-		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || return 1
-		aba_debug "Node $host chronyc sources:"
-		aba_debug "\n$node_sources"
+		node_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc -N sources' 2>/dev/null) || return 1
 
 		if ! echo "$node_sources" | grep -qE '^\^[*+]'; then
 			aba_debug "No synced NTP source on $host yet"
@@ -291,7 +259,7 @@ _ntp_source_synced() {
 }
 
 _wait_rc=0
-aba_wait_show "Verifying NTP source sync on all nodes (Ctrl-C to skip)" 5 600 _ntp_source_synced || _wait_rc=$?
+aba_wait_show "Waiting for NTP source sync on all nodes (Ctrl-C to skip)" 5 300 _ntp_source_synced || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
@@ -299,13 +267,13 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 elif [ "$_wait_rc" -ne 0 ]; then
 	echo
 	for host in $nodesIPs; do
-		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || true
+		_src=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc -N sources' 2>/dev/null) || true
 		echo "  Node $host chronyc sources:"
 		echo "$_src" | grep '^\^' | sed 's/^/    /' || true
 	done
 	echo
 	aba_abort \
-		"Timed out after 10 min waiting for at least one synced NTP source on all nodes." \
+		"Timed out after 5 min waiting for at least one synced NTP source on all nodes." \
 		"chrony.conf is correctly applied, but no NTP source responded (^* or ^+)." \
 		"Verify the configured NTP servers (${raw_targets[*]}) are reachable from the cluster network."
 fi
@@ -313,7 +281,7 @@ fi
 # Final report: warn about unreachable sources (don't fail -- at least one is synced).
 _has_warnings=""
 for host in $nodesIPs; do
-	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc sources' 2>&1) || true
+	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc -N sources' 2>/dev/null) || true
 	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}') || true
 	if [ -n "$_unreachable" ]; then
 		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
@@ -328,9 +296,7 @@ else
 fi
 
 # Phase 4: ensure API server is available before returning.
-# On SNO the MCO reboot takes the API offline; SSH-based checks (Phases 2-3)
-# can pass while the API server pod is still starting.  Callers expect the
-# cluster to be usable when this script exits.
+# On SNO the MCO reboot takes the API offline; callers expect it back.
 _api_available() {
 	oc get nodes --no-headers >/dev/null 2>&1
 }

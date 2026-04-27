@@ -1677,3 +1677,46 @@ Same treatment for the `--dev` source deploy loop and `sync_dis_aba` calls.
 - Error handling: capture each background job's exit code via `wait $pid; rc=$?` and report failures
 - SSH connection limits: unlikely to be an issue with 4-6 pools, but monitor
 
+---
+
+## VM Notes: add newlines to vCenter annotation
+
+**Priority:** Low
+**Added:** 2026-04-27
+
+### Problem
+
+The `_vm_annotation()` function in `scripts/include_all.sh` (line 287) generates a multi-line heredoc for VM notes, but the result renders as a single paragraph in vCenter (no line breaks). The vCenter Notes field DOES support newlines (confirmed visually in the vCenter UI).
+
+### Current code
+
+```bash
+cat <<-EOF
+OpenShift ${role_label} Node (${cluster_type}), initial version v${ocp_version}
+Installed by ABA v${aba_ver} (github.com/sjbylo/aba) on $(date)
+Console: https://console-openshift-console.apps.${CLUSTER_NAME}.${base_domain}
+API: https://api.${CLUSTER_NAME}.${base_domain}:6443
+Manage from $(hostname):${PWD} — aba -d ${CLUSTER_NAME} [info|startup|shutdown|delete]
+EOF
+```
+
+### Proposed fix
+
+Investigate whether `govc vm.create -annotation=` strips newlines. If so, try:
+1. Using `govc vm.change -annotation=` after creation (may preserve newlines better)
+2. Embedding literal `\n` and letting govc interpret them
+3. Passing annotation via stdin or a temp file
+
+The annotation is also used by `kvm-create.sh` via `virsh desc --new-desc` -- verify newlines work there too.
+
+### Desired output in vCenter Notes
+
+```
+OpenShift Control Node (sno), initial version v4.20.18
+Installed by ABA v1.0.1 (github.com/sjbylo/aba) on Mon Apr 27 01:32:47 PM +08 2026
+
+Console: https://console-openshift-console.apps.e2e-sno4.p4.example.com
+API: https://api.e2e-sno4.p4.example.com:6443
+Manage from con4:/home/steve/aba/e2e-sno4 — aba -d e2e-sno4 [info|startup|shutdown|delete]
+```
+

@@ -257,7 +257,7 @@ _net_test() {
         "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
 
     e2e_run "Verify NTP on $cname" \
-        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
+        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc -N sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
     e2e_run "Delete $cname VMs" "aba --dir $cname delete"
     e2e_remove_from_cluster_cleanup "$PWD/$cname"

@@ -484,10 +484,7 @@ fi
 
 # Selective reclone: destroy only pools that changed OS (not global --recreate-vms)
 if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; then
-	_reclone_bar=$(printf '%0.s━' {1..60})
-	printf "\n  \033[1;43;30m %s \033[0m\n" "$_reclone_bar"
-	printf "  \033[1;43;30m  ⟳  OS RECLONE: Rebuilding pools %-25s \033[0m\n" "${_pools_needing_reclone[*]}"
-	printf "  \033[1;43;30m %s \033[0m\n\n" "$_reclone_bar"
+	_print_box "1;43;30" "⟳  OS RECLONE: Rebuilding pools ${_pools_needing_reclone[*]}"
 	for _p in "${_pools_needing_reclone[@]}"; do
 		_pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
 
@@ -538,10 +535,7 @@ fi
 
 if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_RECREATE_VMS:-}" ]; then
 	echo ""
-	_infra_bar=$(printf '%0.s━' {1..60})
-	printf "  \033[1;46;30m %s \033[0m\n" "$_infra_bar"
-	printf "  \033[1;46;30m  ⟳  INFRA: Provisioning pool VMs %-26s \033[0m\n" "(pools: $CLI_POOL_LIST)"
-	printf "  \033[1;46;30m %s \033[0m\n\n" "$_infra_bar"
+	_print_box "1;46;30" "⟳  INFRA: Provisioning pool VMs (pools: $CLI_POOL_LIST)"
 	_base_infra_flags="--pools-file ${_RUN_DIR}/pools.conf"
 	[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _base_infra_flags+=" --recreate-golden"
 	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
@@ -555,9 +549,7 @@ if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_REC
 		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${_p}"
 	done
 
-	printf "\n  \033[1;46;30m %s \033[0m\n" "$_infra_bar"
-	printf "  \033[1;46;30m  ✔  INFRA: Pool VMs ready %-33s \033[0m\n" "(pools: $CLI_POOL_LIST)"
-	printf "  \033[1;46;30m %s \033[0m\n\n" "$_infra_bar"
+	_print_box "1;46;30" "✔  INFRA: Pool VMs ready (pools: $CLI_POOL_LIST)"
 fi
 
 # --- Optional revert to pool-ready snapshot -----------------------------------
