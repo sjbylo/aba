@@ -131,10 +131,10 @@ _sig_policy="$tmp_dir/policy.json"
 echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
 
 aba_info "Pulling operator catalog image: $catalog_url"
-if ! podman pull --signature-policy="$_sig_policy" -q "$catalog_url" >/dev/null 2>&1; then
+_pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || {
 	rm -rf "$tmp_dir"
-	aba_abort "Failed to pull catalog image: $catalog_url"
-fi
+	aba_abort "Failed to pull catalog image: $catalog_url" "$_pull_err"
+}
 
 # Capture manifest digest for runtime catalog pinning.
 # When oc-mirror sees a digest ref it skips upstream tag resolution -- critical for air-gap.
@@ -150,16 +150,16 @@ fi
 
 # Run container and extract /configs
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
-if ! podman run -q -d --name "$container_name" "$catalog_url" >/dev/null 2>&1; then
+_run_err=$(podman run -q -d --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
 	rm -rf "$tmp_dir"
-	aba_abort "Failed to start catalog container"
-fi
+	aba_abort "Failed to start catalog container" "$_run_err"
+}
 
-if ! podman cp "$container_name:/configs" "$tmp_dir/configs" 2>/dev/null; then
+_cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
 	podman rm -f "$container_name" >/dev/null 2>&1
 	rm -rf "$tmp_dir"
-	aba_abort "Failed to extract /configs from catalog container"
-fi
+	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
+}
 
 # Container no longer needed
 podman rm -f "$container_name" >/dev/null 2>&1
