@@ -20,8 +20,8 @@ _TMUX_SESSION="$E2E_TMUX_SESSION"
 _RC_PREFIX="$E2E_RC_PREFIX"
 
 # Draw a colored box around one or more text lines.
-# Uses space-padded colored background (no box-drawing chars that may render
-# at double-width in some terminals/fonts).
+# Uses space-padded colored background.  Compensates for printf %-Ns counting
+# bytes (not characters) by adding the multibyte overhead to the pad width.
 # Usage: _print_box <ansi-color-code> "line1" ["line2" ...]
 _print_box() {
 	local _color="$1"; shift
@@ -32,7 +32,10 @@ _print_box() {
 	local _w=$(( _maxw + 4 ))
 	printf "\n  \033[${_color}m%-${_w}s\033[0m\n" ""
 	for _line in "$@"; do
-		printf "  \033[${_color}m  %-$(( _maxw + 2 ))s\033[0m\n" "$_line"
+		local _bytes
+		_bytes=$(printf '%s' "$_line" | wc -c)
+		local _pad=$(( _maxw + 2 + _bytes - ${#_line} ))
+		printf "  \033[${_color}m  %-${_pad}s\033[0m\n" "$_line"
 	done
 	printf "  \033[${_color}m%-${_w}s\033[0m\n\n" ""
 }
