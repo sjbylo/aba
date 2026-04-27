@@ -102,7 +102,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 		done
 	else
 		# Pane alive -- re-read metadata right before attach (runner may not
-		# have written the files yet when the dispatcher just launched it)
+		# have written the files yet when the live pane first connected)
 		local _retries=0
 		while [ -z "$_suite" ] && [ "$_retries" -lt 5 ]; do
 			sleep 2
