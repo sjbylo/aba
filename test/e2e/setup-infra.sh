@@ -186,10 +186,10 @@ _verify_con_vm() {
 		echo "  PASS: root and ${user} share same SSH key"
 
 		# Verify self-SSH works for both users
-		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>&1 | grep -q ${user} || _fail "${user} self-SSH failed"
+		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
 		echo "  PASS: ${user} self-SSH"
 
-		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>&1 | grep -q root || _fail "root self-SSH failed"
+		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
 		echo "  PASS: root self-SSH"
 
 		# --- Users / environment ---
@@ -284,6 +284,7 @@ _configure_con_vm() {
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
 	_vm_setup_kvm_conf "$vm" "$user"
+	_vm_deploy_pull_secret "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_install_aba "$vm" "$user"
@@ -476,10 +477,10 @@ _verify_dis_vm() {
 		echo "  PASS: root and ${user} share same SSH key"
 
 		# Verify self-SSH works for both users
-		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>&1 | grep -q ${user} || _fail "${user} self-SSH failed"
+		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
 		echo "  PASS: ${user} self-SSH"
 
-		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>&1 | grep -q root || _fail "root self-SSH failed"
+		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
 		echo "  PASS: root self-SSH"
 
 		# --- VLAN SSH connectivity (dis -> con, proves cross-VM SSH works) ---
@@ -585,7 +586,8 @@ _confirm() {
 		echo "$msg Y (auto)"
 		return 0
 	fi
-	read -r -p "$msg " answer
+	echo -n "$msg " > /dev/tty
+	read -r answer < /dev/tty
 	case "${answer:-Y}" in
 		[Yy]*) return 0 ;;
 		*) return 1 ;;
@@ -773,8 +775,11 @@ _prepare_golden() {
 
 	govc folder.create "${_VC_PARENT}/aba-e2e" || true
 	govc folder.create "$_GOLDEN_FOLDER" || true
-	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" || return 1
+	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" "" "no" || return 1
 	_vm_ensure_3nics "$_GOLDEN_NAME" || return 1
+	echo "  Powering on clone '$_GOLDEN_NAME' ..."
+	govc vm.power -on "$_GOLDEN_NAME" || true
+	sleep "${VM_BOOT_DELAY:-8}"
 	_vm_annotate "$_GOLDEN_NAME" "Cloned from $_VM_TEMPLATE -- booting"
 
 	local ip
@@ -802,6 +807,8 @@ _prepare_golden() {
 	_vm_cleanup_caches "$ip" "$user"      || return 1
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
+	_vm_deploy_pull_secret "$ip" "$user" || return 1
+	_vm_deploy_proxy_scripts "$ip" "$user" || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
 	_vm_deploy_tmux_conf "$ip" "$user"   || return 1
 	_vm_provision_root_user "$ip" "$user" || return 1
@@ -810,6 +817,7 @@ _prepare_golden() {
 	_vm_verify_golden "$ip" "$user"       || return 1
 
 	_vm_annotate "$_GOLDEN_NAME" "Shutting down for snapshot"
+	_essh "${user}@${ip}" -- "sudo rm -f /var/lib/expand-root.done" || true
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 
 	# Poll power state instead of blind sleep -- more correct and often faster.

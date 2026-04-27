@@ -244,9 +244,9 @@ test_end 0
 # ============================================================================
 test_begin "Docker registry install and recovery"
 
-_DOCKER_MIRROR="e2e-docker-test"
+_DOCKER_MIRROR="e2e-mirror-docker-test"
 _DOCKER_PORT=5005
-_DOCKER_NEG_MIRROR="e2e-docker-neg"
+_DOCKER_NEG_MIRROR="e2e-mirror-docker-neg"
 _DOCKER_NEG_PORT=5002
 _DOCKER_FQDN="$DIS_HOST"
 

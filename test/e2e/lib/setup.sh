@@ -121,7 +121,7 @@ reset_internal_bastion() {
     echo "=== reset_internal_bastion complete ==="
 }
 
-# --- _cleanup_con_quay ------------------------------------------------------
+# --- _cleanup_con_registry ---------------------------------------------------
 #
 # Pre-suite cleanup of registry state on conN. Called by runner.sh
 # before each suite to prevent stale state from a previous crashed or
@@ -137,7 +137,7 @@ reset_internal_bastion() {
 # Guard: The pool registry container ("pool-registry") is always excluded
 #        from brute-force cleanup.
 #
-_cleanup_con_quay() {
+_cleanup_con_registry() {
     local _aba_root="${_ABA_ROOT:-$HOME/aba}"
 
     local _did_uninstall=""
@@ -188,7 +188,7 @@ _cleanup_con_quay() {
 
     # Always clean cached registry credentials on conN.
     # Pool registry is unaffected (uses ~/.e2e-pool-registry/, not ~/.aba/mirror/).
-    # This matches what _cleanup_dis_aba already does on disN (runner.sh).
+    # This matches what _cleanup_dis already does on disN (runner.sh).
     if [ -d "$HOME/.aba/mirror" ]; then
         echo "  [cleanup] Removing stale registry credentials (~/.aba/mirror/)"
         rm -rf "$HOME/.aba/mirror"

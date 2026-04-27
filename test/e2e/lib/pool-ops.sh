@@ -157,6 +157,8 @@ prepare_golden_vm() {
 	_vm_cleanup_caches "$ip" "$user"      || return 1
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
+	_vm_deploy_pull_secret "$ip" "$user" || return 1
+	_vm_deploy_proxy_scripts "$ip" "$user" || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
 	_vm_provision_root_user "$ip" "$user" || return 1
 	_vm_deploy_tmux_conf "$ip" "$user"    || return 1
@@ -164,6 +166,7 @@ prepare_golden_vm() {
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 
+	_essh "${user}@${ip}" -- "sudo rm -f /var/lib/expand-root.done" || true
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 	sleep 10
 	govc vm.power -off "$golden_name" || true
