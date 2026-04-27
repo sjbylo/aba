@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260427135833
+ABA_BUILD=20260428001712
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -253,6 +253,20 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
+
+# Write a cluster-conf variable. If cluster.conf exists, write directly.
+# If the target is 'cluster' (creating a new cluster), forward via BUILD_COMMAND.
+# Otherwise abort -- the flag has no valid target.
+_set_cluster_conf() {
+	local var="$1" val="$2" flag="$3"
+	if [ -f cluster.conf ]; then
+		replace-value-conf -n "$var" -v "$val" -f cluster.conf
+	elif [ "$cur_target" = "cluster" ]; then
+		BUILD_COMMAND="$BUILD_COMMAND ${var}=${val}"
+	else
+		aba_abort "Flag $flag sets cluster config but no cluster.conf found. Use 'aba -d <cluster> $flag' or 'aba cluster -n <name> $flag'."
+	fi
+}
 
 while [ "$*" ] 
 do
@@ -520,10 +534,8 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
-		# If arg ip addr then replace value in cluster.conf
-		# If arg missing remove from cluster.conf
+		_flag="$1"
 		api_vip=
-		# If arg is available and not an opt
 		if [[ -n $2 && $2 != -* ]]; then
 			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 				IFS=. read -r o1 o2 o3 o4 <<< "$2"
@@ -533,26 +545,16 @@ elif [ "$1" = "--light" ]; then
 					aba_abort "invalid IPv4 address [$2]" 
 				fi
 			else
-				aba_abort "argument invalid [$2] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $_flag" 
 			fi
 			shift
 		fi
-
-		# If conf file is available, edit the value
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n api_vip -v "$api_vip" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
-		fi
+		_set_cluster_conf api_vip "$api_vip" "$_flag"
 		shift
 	elif [ "$1" = "--ingress-vip" -o "$1" = "-G" ]; then
-		# If arg ip addr replace value in cluster.conf
-		# If arg missing remove from cluster.conf
+		_flag="$1"
 		ingress_vip=
-		# If arg is available and not an opt
-		##if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 		if [[ -n $2 && $2 != -* ]]; then
-			# If arg is an ip addr
 			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 				IFS=. read -r o1 o2 o3 o4 <<< "$2"
 				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
@@ -561,29 +563,21 @@ elif [ "$1" = "--light" ]; then
 					aba_abort "invalid IPv4 address [$2]" 
 				fi
 			else
-				aba_abort "argument invalid [$2] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $_flag" 
 			fi
 			shift
 		fi
-		# If conf file is available, edit the value
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n ingress_vip -v "$ingress_vip" -f cluster.conf
-			##echo done $*
-		else
-			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
-		fi
+		_set_cluster_conf ingress_vip "$ingress_vip" "$_flag"
 		shift
 	elif [ "$1" = "--ports" ]; then
-		# If arg missing remove from aba.conf
-		# Check arg after --ports, if "empty" then remove value from cluster.conf
+		_flag="$1"
 		ports_vals=""
-		# While there is a valid arg...
 		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
 		do
 			[ "$ports_vals" ] && ports_vals="$ports_vals,$2" || ports_vals="$2"
 			shift	
 		done
-		BUILD_COMMAND="$BUILD_COMMAND ports='$ports_vals'"
+		_set_cluster_conf ports "$ports_vals" "$_flag"
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -675,50 +669,34 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
 		export ask=
 		shift 
-	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
+	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n master_cpu -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND master_cpu_count=$2"
-			fi
+			_set_cluster_conf master_cpu_count "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then  # FIXME opt.
+	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n master_mem -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND master_mem=$2"
-			fi
+			_set_cluster_conf master_mem "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then  # FIXME opt.
+	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n worker_cpu -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND worker_cpu_count=$2"
-			fi
+			_set_cluster_conf worker_cpu_count "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then  # FIXME opt.
+	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n worker_mem -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND worker_mem=$2"
-			fi
+			_set_cluster_conf worker_mem "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
@@ -726,11 +704,7 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n starting_ip -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'" # FIXME: Still needed?
-			fi
+			_set_cluster_conf starting_ip "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
@@ -738,42 +712,26 @@ elif [ "$1" = "--light" ]; then
 
 	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n data_disk -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND data_disk=$2"
-			fi
+			_set_cluster_conf data_disk "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
-		# If arg ip addr replace value in cluster.conf
-		# If arg missing remove from cluster.conf
+		_flag="$1"
 		int_connection=
-		# If arg is available and not an opt
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			# If arg is an ip addr
 			if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
 				int_connection=$2
 				[ "$2" = "p" ] && int_connection=proxy
 				[ "$2" = "d" ] && int_connection=direct
 			else
-				aba_abort "argument invalid [$int_connection] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $_flag" 
 				exit 1
 			fi
 			shift
-		else
-			# Do nothing, remove value in cluster.conf?
-			:
 		fi
-		# If conf file is available, edit the value
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n int_connection -v "$int_connection" -f cluster.conf
-			##echo done $*
-		else
-			BUILD_COMMAND="$BUILD_COMMAND int_connection=$int_connection"
-		fi
+		_set_cluster_conf int_connection "$int_connection" "$_flag"
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -830,57 +788,39 @@ elif [ "$1" = "--light" ]; then
 		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n num_workers -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND num_workers=$2"
-			fi
+			_set_cluster_conf num_workers "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1"
 		fi
 		shift 2
 	elif [ "$1" = "--num-masters" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n num_masters -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND num_masters=$2"
-			fi
+			_set_cluster_conf num_masters "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1"
 		fi
 		shift 2
 	elif [ "$1" = "--vlan" ]; then
+		_flag="$1"
 		vlan_val=
 		if [[ -n $2 && $2 != -* ]]; then
 			vlan_val=$2
 			shift
 		fi
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n vlan -v "$vlan_val" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND vlan=$vlan_val"
-		fi
+		_set_cluster_conf vlan "$vlan_val" "$_flag"
 		shift
 	elif [ "$1" = "--ssh-key" ]; then
+		_flag="$1"
 		ssh_key_val=
 		if [[ -n $2 && $2 != -* ]]; then
 			ssh_key_val=$2
 			shift
 		fi
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n ssh_key_file -v "$ssh_key_val" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND ssh_key_file=$ssh_key_val"
-		fi
+		_set_cluster_conf ssh_key_file "$ssh_key_val" "$_flag"
 		shift
 	elif [ "$1" = "--mirror-name" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n mirror_name -v "$2" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND mirror_name=$2"
-		fi
+		_set_cluster_conf mirror_name "$2" "$1"
 		shift 2
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
