@@ -639,3 +639,4 @@ else
 fi
 
 echo -e "${GREEN}=== Release v$NEW_VERSION Complete! ===${NC}"
+echo -e "${CYAN}Release: https://github.com/sjbylo/aba/releases/tag/v$NEW_VERSION${NC}"

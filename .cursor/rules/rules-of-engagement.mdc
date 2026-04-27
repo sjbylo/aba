@@ -135,6 +135,11 @@ alwaysApply: true
 - **One source of truth per concern**: SSH options in `remote.sh`, CLI parsing in `cli.sh`, tmux UI in `tmux-ui.sh`, VM ops in `vm-ops.sh`
 - **No copy-paste duplication** -- if the same logic exists in two places, extract it into a shared function in `lib/`
 
+## E2E directory naming convention
+
+- All test-created directories under `~` must use a prefix: `e2e-mirror-*` for dirs hosting real registries (need `aba uninstall`, FATAL if leftover), `e2e-test-*` for test artifacts (safe to `rm -rf`). Pre-suite cleanup uses globs on these prefixes -- no hardcoded list to maintain. No overlap between prefixes.
+- **Pre-suite verification catches real bugs -- keep it strict.** The `_verify_no_registry_data_dirs` FATAL check must remain strict. Example: leftover `~/my-quay-mirror-test1` (2026-04-27) exposed that `reg-save.sh`/`reg-sync.sh`/`reg-load.sh` create `$data_dir/.tmp` too early, before oc-mirror runs. Strict verification -> real bug found -> ABA core fix.
+
 ## E2E resource lifecycle
 
 - A suite ALWAYS cleans up resources it created before suite_end

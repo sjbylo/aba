@@ -111,9 +111,9 @@ echo
 
 # Confirm
 if [ ! "$DRAFT_FLAG" ]; then
-    echo -e "${YELLOW}This will create a PUBLISHED release. Continue? [y/N]:${NC} "
+    echo -en "${YELLOW}This will create a PUBLISHED release. Continue? [Y/n]:${NC} "
     read -r confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    if [[ "$confirm" =~ ^[Nn]$ ]]; then
         echo -e "${YELLOW}Cancelled${NC}"
         exit 0
     fi

@@ -976,16 +976,16 @@ depend on user-space binaries for its own operations.
 
 **Crash recovery** is the infra's responsibility: processing `.cleanup` /
 `.mirror-cleanup` files from crashed suites via `_pre_suite_cleanup` and
-`_cleanup_dis_aba`. These use `~/.e2e-harness/bin/aba` -- never
+`_cleanup_dis`. These use `~/.e2e-harness/bin/aba` -- never
 user-space `~/bin/aba`.
 
 **Normal cleanup** is the suite's responsibility. Each suite's final test
 block runs `aba delete` / `aba uninstall` (using the user-space `aba`).
-The infra's `_cleanup_dis_aba` is a belt-and-suspenders reset between
+The infra's `_cleanup_dis` is a belt-and-suspenders reset between
 suites, using the infra-owned binary.
 
 **Why this matters:** User-space `~/bin/aba` may not exist (the suite's
-own cleanup or `_cleanup_dis_aba` step 1 removes CLI tools). It may also
+own cleanup or `_cleanup_dis` step 1 removes CLI tools). It may also
 not be in PATH for non-interactive SSH sessions (`.bash_profile` is not
 sourced). The infra-owned copy at `~/.e2e-harness/bin/aba` is always
 available and referenced by absolute path.

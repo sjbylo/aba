@@ -169,6 +169,8 @@ case "$CLI_COMMAND" in
 		_daemon_log "Daemon started (max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
 		_daemon_log "Args: ${_daemon_args[*]}"
 
+		export _E2E_DAEMONIZED=1
+
 		while true; do
 			_daemon_log "Launching dispatcher ..."
 			_drc=0
@@ -211,6 +213,55 @@ esac
 # =============================================================================
 # From here on: only "run" and "restart" reach this code.
 # =============================================================================
+
+# --- Auto-daemonize "run" command ---------------------------------------------
+# When invoked interactively (not already inside the daemon wrapper), re-launch
+# as "daemon" inside a detached tmux session on the bastion so the dispatcher
+# survives terminal disconnects and Ctrl-C.  The user sees startup output and
+# gets instructions on how to reattach.
+
+_E2E_DISPATCHER_TMUX="e2e-dispatcher"
+
+if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
+	# Kill any existing dispatcher tmux session (stale from previous run)
+	tmux kill-session -t "$_E2E_DISPATCHER_TMUX" 2>/dev/null || true
+
+	# Build the daemon command with the original args (replacing "run" with "daemon").
+	# Export the full current environment so GOVC_*, SUB_*, proxy vars etc. are
+	# available inside the tmux session (tmux server may have started with a
+	# different environment).
+	_env_file=$(mktemp /tmp/e2e-daemon-env.XXXXXX)
+	env -0 > "$_env_file"
+
+	_daemon_cmd="while IFS= read -r -d '' _line; do export \"\$_line\"; done < $(printf '%q' "$_env_file"); rm -f $(printf '%q' "$_env_file"); "
+	_daemon_cmd+="cd $(printf '%q' "$_RUN_DIR") && _E2E_DAEMONIZED=1 exec $BASH $(printf '%q' "$_RUN_DIR/run.sh")"
+	for _a in "${_ORIGINAL_ARGS[@]}"; do
+		[ "$_a" = "run" ] && _a="daemon"
+		_daemon_cmd+=" $(printf '%q' "$_a")"
+	done
+
+	tmux new-session -d -s "$_E2E_DISPATCHER_TMUX" "$_daemon_cmd" 2>/dev/null || {
+		echo "ERROR: Failed to create tmux session '$_E2E_DISPATCHER_TMUX'" >&2
+		echo "  Falling back to foreground mode." >&2
+		rm -f "$_env_file"
+		_E2E_DAEMONIZED=1
+	}
+
+	if [ -z "${_E2E_DAEMONIZED:-}" ]; then
+		echo ""
+		echo "  Dispatcher launched in background tmux session: $_E2E_DISPATCHER_TMUX"
+		echo ""
+		echo "  Monitor with:"
+		echo "    ./run.sh status                  # quick status of all pools"
+		echo "    ./run.sh live                    # tail all pool logs"
+		echo "    ./run.sh attach conN             # attach to a pool's tmux"
+		echo "    tmux attach -t $_E2E_DISPATCHER_TMUX   # attach to dispatcher"
+		echo ""
+		echo "  Logs: $_RUN_DIR/logs/daemon.log"
+		echo ""
+		exit 0
+	fi
+fi
 
 # --- Determine suites to run -------------------------------------------------
 
