@@ -166,6 +166,7 @@ prepare_golden_vm() {
 	_vm_set_aba_testing "$ip" "$user"     || return 1
 	_vm_verify_golden "$ip" "$user"       || return 1
 
+	_essh "${user}@${ip}" -- "sudo systemctl enable expand-root.service" || true
 	_essh "${user}@${ip}" -- "sudo rm -f /var/lib/expand-root.done" || true
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 	sleep 10

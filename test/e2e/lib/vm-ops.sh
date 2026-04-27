@@ -300,6 +300,23 @@ _vm_install_packages() {
 
 	echo "  [vm] Installing required packages on $host ..."
 
+	# Configure dnf + RHSM proxy (required for disN VMs behind a firewall)
+	local _proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
+	if [ -z "$_proxy_url" ] && [ -f "$HOME/.proxy-set.sh" ]; then
+		_proxy_url=$(grep -i '^export HTTPS_PROXY=' "$HOME/.proxy-set.sh" 2>/dev/null | head -1 | sed 's/.*=//;s/"//g')
+	fi
+	if [ -n "$_proxy_url" ]; then
+		local _proxy_host _proxy_port
+		_proxy_host=$(echo "$_proxy_url" | sed 's|https\?://||;s|:.*||')
+		_proxy_port=$(echo "$_proxy_url" | sed 's|.*:||;s|/.*||')
+		echo "  [vm] Configuring dnf + RHSM proxy (${_proxy_host}:${_proxy_port}) on $host ..."
+		_essh "${user}@${host}" -- "sudo subscription-manager config \
+			--server.proxy_hostname='${_proxy_host}' \
+			--server.proxy_port='${_proxy_port}'" || true
+		_essh "${user}@${host}" -- "grep -q '^proxy=' /etc/dnf/dnf.conf 2>/dev/null \
+			|| echo 'proxy=${_proxy_url}' | sudo tee -a /etc/dnf/dnf.conf >/dev/null" || true
+	fi
+
 	# Re-register if consumer identity is missing and credentials are available
 	if [ -n "${SUB_USERNAME:-}" ] && [ -n "${SUB_PASSWORD:-}" ]; then
 		local _su="$SUB_USERNAME" _sp="$SUB_PASSWORD"
@@ -1451,6 +1468,10 @@ _vm_verify_golden() {
 		[ -z "$(ls ~$SUDO_USER)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
 		grep "ABA_TESTING=1" /etc/environment
+		test -f /etc/systemd/system/expand-root.service || { echo "ERROR: expand-root.service missing"; exit 1; }
+		test -f /usr/local/bin/expand-root.sh || { echo "ERROR: expand-root.sh script missing"; exit 1; }
+		grep -q 'proxy_hostname = .' /etc/rhsm/rhsm.conf || { echo "ERROR: RHSM proxy not configured"; exit 1; }
+		grep -q '^proxy=' /etc/dnf/dnf.conf || { echo "ERROR: dnf proxy not configured"; exit 1; }
 
 		echo "All golden VM checks passed."
 	VERIFYEOF
