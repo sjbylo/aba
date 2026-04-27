@@ -759,7 +759,12 @@ verify_template() {
 	fi
 
 	if _rssh "test -f /etc/systemd/system/expand-root.service" >/dev/null 2>&1; then
-		echo "  OK  expand-root.service installed (enabled in finalize)"
+		if _rssh "systemctl is-enabled expand-root.service" >/dev/null 2>&1; then
+			echo "  OK  expand-root.service installed and enabled"
+		else
+			echo "  FAIL  expand-root.service installed but NOT enabled" >&2
+			failures=$((failures + 1))
+		fi
 	else
 		echo "  FAIL  expand-root.service not installed" >&2
 		failures=$((failures + 1))

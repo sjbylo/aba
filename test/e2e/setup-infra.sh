@@ -817,6 +817,7 @@ _prepare_golden() {
 	_vm_verify_golden "$ip" "$user"       || return 1
 
 	_vm_annotate "$_GOLDEN_NAME" "Shutting down for snapshot"
+	_essh "${user}@${ip}" -- "sudo systemctl enable expand-root.service" || true
 	_essh "${user}@${ip}" -- "sudo rm -f /var/lib/expand-root.done" || true
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 
