@@ -1679,6 +1679,359 @@ Same treatment for the `--dev` source deploy loop and `sync_dis_aba` calls.
 
 ---
 
+## E2E: Add remote command execution to interactive `!cmd` prompt
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The E2E framework's interactive failure prompt (`[R]etry [s]kip ... [!cmd]`) only runs commands locally on the conN host. Sometimes during debugging, the user needs to run a command on a **different** host (bastion, disN, another conN, etc.) -- for example `!aba --dir e2e-sno3 kill` may need to run on bastion where govc/vCenter credentials are available, not on conN where the VM isn't visible.
+
+### Proposed feature
+
+Add a `!host:cmd` syntax to the interactive prompt:
+
+```
+[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] [!host:cmd] (24h timeout):
+```
+
+Examples:
+- `!bastion:aba --dir e2e-sno3 kill` -- run on bastion via SSH
+- `!dis2:ls ~/aba/mirror/` -- run on dis2
+- `!aba --dir e2e-sno3 kill` -- existing behavior, run locally on conN
+
+### Implementation sketch
+
+In `lib/framework.sh` (or wherever the interactive prompt is handled), detect the `host:` prefix:
+
+```bash
+if [[ "$user_input" == !*:* ]]; then
+    _host="${user_input#!}"
+    _host="${_host%%:*}"
+    _cmd="${user_input#*:}"
+    ssh -F ~/.aba/ssh.conf "$_host" "$_cmd"
+elif [[ "$user_input" == !* ]]; then
+    eval "${user_input#!}"
+fi
+```
+
+### Considerations
+
+- SSH config (`~/.aba/ssh.conf`) must be available on conN hosts (it is -- deployed by harness)
+- The remote host must be reachable from conN (bastion always is; disN may vary)
+- Output should be displayed inline so the user can see the result before choosing next action
+- Tab-completion of hostnames would be nice but not required
+
+---
+
+## Enhancement: Run preflight checks in the background
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+`scripts/preflight-check.sh` runs synchronously before ISO generation (`Makefile.cluster` lines 116/119). It performs DNS reachability, NTP reachability, IP conflict detection, and vSphere resource checks -- all network probes that can take 10-30+ seconds (especially with unreachable servers timing out). This blocks the entire ISO build pipeline while waiting.
+
+### Proposed fix
+
+Run preflight checks in the background while the ISO generation proceeds in parallel:
+
+1. Launch `preflight-check.sh` as a background job, capturing its PID
+2. Continue with ISO generation (`openshift-install agent create image ...`)
+3. Before the ISO is used (e.g. before VM creation or upload), `wait $pid` and check the exit code
+4. If preflight failed, abort before the point of no return (VM creation)
+
+```bash
+# In Makefile.cluster or the calling script:
+scripts/preflight-check.sh &
+_preflight_pid=$!
+
+# ... ISO generation proceeds ...
+
+# Before VM creation:
+if ! wait $_preflight_pid; then
+    aba_abort "Pre-flight checks failed -- see output above"
+fi
+```
+
+### Considerations
+
+- Output interleaving: preflight messages will mix with ISO generation output. Options:
+  - Redirect preflight output to a temp file, display on failure or at the wait point
+  - Use `[PREFLIGHT]` prefix on all preflight messages for clarity
+  - Accept interleaving (preflight messages are `[ABA]`-prefixed already)
+- The vSphere checks (`preflight-check-vsphere.sh`) are the slowest (govc API calls). These benefit most from parallelization
+- If preflight finishes before ISO generation, the user sees results early -- no downside
+- `verify_conf=conf` or `verify_conf=off` already skips network checks; background mode would only apply when checks are enabled
+- The Makefile target structure may need adjustment since Make doesn't natively support "start A, run B, wait for A"
+
+### References
+
+- `scripts/preflight-check.sh`: all checks (DNS, NTP, IP conflicts, vSphere)
+- `templates/Makefile.cluster` lines 116, 119: synchronous invocation before ISO targets
+- `scripts/preflight-check-vsphere.sh`: vSphere-specific checks (govc calls)
+
+---
+
+## Enhancement: TUI does not support KVM platform
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The TUI "Platform & Network" screen only offers `vmw` (VMware) as a platform option. There is no way to select `kvm` (libvirt/KVM) through the TUI. Users who want to deploy on KVM must manually edit `aba.conf` to set `platform=kvm` and create `kvm.conf` outside the TUI.
+
+### What's needed
+
+1. **Platform selection**: The TUI platform picker should offer `vmw`, `kvm`, and `bm` (bare-metal) as options
+2. **KVM config screen**: When `kvm` is selected, present a `kvm.conf` editor (similar to the `vmware.conf` editor for VMware) with fields for:
+   - `KVM_HOST` (libvirt host)
+   - `KVM_USER` (SSH user)
+   - `KVM_SSH_KEY` (SSH key path)
+   - `KVM_STORAGE_POOL` (storage pool name)
+   - `KVM_NETWORK` (libvirt network name)
+   - Other KVM-specific settings from `templates/kvm.conf`
+3. **Bare-metal path**: When `bm` is selected, skip hypervisor config entirely (ISO-only workflow)
+
+### References
+
+- TUI screenshot: Platform & Network screen shows only `vmw`
+- `tui/abatui.sh`: platform selection logic
+- `templates/kvm.conf`: KVM config template
+- `templates/vmware.conf`: VMware config template (model for KVM screen)
+
+---
+
+## UX: Uninstall command not clearly displayed (Quay and Docker)
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Problem
+
+When running `aba uninstall -d mirror`, the actual command being executed is not prominently displayed before the operation begins. For Quay, the `mirror-registry uninstall` tool prints a massive ASCII art banner and verbose Ansible output that immediately drowns out ABA's `[ABA] Running command: ./mirror-registry uninstall ...` message (line 34 of `reg-uninstall-quay.sh`). The user sees a wall of Ansible logs but can't easily identify what command was run.
+
+The TUI does show `aba uninstall -d mirror` at the top, but the underlying registry-specific command is buried.
+
+### Also check
+
+- `reg-uninstall-docker.sh` -- does it clearly show what's being removed?
+- `reg-uninstall-remote.sh` -- same issue for remote uninstalls (SSH + ansible output)
+- `reg-install-quay.sh` -- same Quay ASCII art issue during install
+
+### Proposed fix
+
+Add a prominent, visually distinct banner before the registry command runs:
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+aba_info "Running: $cmd"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+```
+
+Alternatively, suppress the Quay ASCII banner by piping through `grep -v` or redirecting the first N lines of `mirror-registry` output.
+
+### References
+
+- `scripts/reg-uninstall-quay.sh` line 34: `aba_info "Running command: $cmd"`
+- `scripts/reg-uninstall-remote.sh` line 75: `aba_info "Running: mirror-registry uninstall on $REG_HOST ..."`
+- `scripts/reg-uninstall-docker.sh` lines 28-31: shows stop/remove but no command echo
+
+---
+
+## Enhancement: Configurable GPG signature verification for catalog pulls
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Background
+
+ABA's `scripts/download-catalog-index.sh` bypasses GPG signature verification when pulling operator catalog images from `registry.redhat.io`, using `--signature-policy` with `insecureAcceptAnything`. This matches oc-mirror's own default behavior (PR [openshift/oc-mirror#852](https://github.com/openshift/oc-mirror/pull/852) -- catalogs mirrored without signature verification by default since OCP 4.16).
+
+The bypass was added because signature infrastructure is fragile -- missing GPG keys (Fedora/minimal systems), broken `lookaside` URLs in `registries.d`, or Red Hat signing changes can all break pulls. Performance impact of signature checking is negligible (<0.3s on a ~500MB image).
+
+### Proposed change
+
+Add a config variable in `~/.aba/config` to control signature verification:
+
+```bash
+# Verify GPG signatures when pulling operator catalog images from registry.redhat.io.
+# Default: off (matches oc-mirror behavior). Set to 1 to enable verification.
+# Requires: /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release and correct registries.d lookaside config.
+# VERIFY_CATALOG_SIGNATURES=0
+```
+
+In `scripts/download-catalog-index.sh`:
+
+```bash
+if [ "${VERIFY_CATALOG_SIGNATURES:-0}" = "1" ]; then
+    _pull_err=$(podman pull -q "$catalog_url" 2>&1 >/dev/null) || { ... }
+else
+    echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
+    _pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || { ... }
+fi
+```
+
+### Related fix (already applied)
+
+`templates/aba-sigstore-config.yaml` now includes `lookaside` URLs for `registry.redhat.io` and `registry.access.redhat.com`, preventing ABA's user-level `registries.d` config from overriding the system-level signature lookup URLs. This was required because ABA's `docker: registry.redhat.io:` entry (with only `use-sigstore-attachments`) was shadowing the system-level entry that contained the `lookaside` URL, causing manual `podman pull` to fail with "A signature was required, but no signature exists".
+
+### References
+
+- `scripts/download-catalog-index.sh` lines 128-134: current `insecureAcceptAnything` bypass
+- [openshift/oc-mirror#852](https://github.com/openshift/oc-mirror/pull/852): oc-mirror disables catalog sig verification by default
+- `templates/aba-sigstore-config.yaml`: ABA's registries.d config (now includes lookaside URLs)
+
+---
+
+## Bug: Bundle carries stale mirror.conf from source host
+
+**Priority:** High
+**Added:** 2026-04-28
+
+### Problem
+
+When creating a bundle (`aba bundle`), the current `mirror.conf` is included in the tarball. If the source host had `mirror.conf` configured for a **remote** registry install (e.g. `reg_ssh_key` set, `reg_host` pointing to a remote host), the bundle carries that config. When the bundle is extracted on the disconnected/internal host and the user runs `aba -d mirror load`, ABA detects that `reg_ssh_key` is defined but the registry is actually local, and aborts:
+
+```
+[ABA] Error: Registry configured for *remote* install (reg_ssh_key is defined).
+[ABA]        But registry.example.com (10.0.1.2) reaches this localhost (rhel-baseline) instead!
+```
+
+The user must manually `vi mirror/mirror.conf` to fix it.
+
+### Expected behavior
+
+A bundle should arrive at the disconnected host with a clean/default `mirror.conf` that works for a local registry install out of the box, since the most common bundle workflow is: connected host builds bundle -> sneakernet -> disconnected host installs mirror locally.
+
+### Options
+
+1. **Reset `mirror.conf` during bundle creation** -- strip remote-specific settings (`reg_ssh_key`, `reg_ssh_user`) from the copy included in the bundle, leaving `reg_host`, `reg_port`, `reg_root` at defaults. The source host's `mirror.conf` is unchanged.
+
+2. **Exclude `mirror.conf` from the bundle entirely** -- force the disconnected host to generate a fresh one on first use (via `aba -d mirror install` or the TUI). This ensures no stale config leaks, but the user loses any intentional customizations (e.g. `reg_port`, operator selections).
+
+3. **Reset only remote-specific fields** -- keep operator selections, `reg_port`, `reg_path` etc. but clear `reg_ssh_key` and `reg_ssh_user`. Most surgical approach.
+
+### Recommendation
+
+Option 3 (reset only remote-specific fields). During bundle creation, sanitize the `mirror.conf` copy:
+
+```bash
+# In the bundle creation script, before adding mirror.conf to the tarball:
+sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror.conf.bundle
+sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/' mirror.conf.bundle
+```
+
+Or add a warning at `aba -d mirror load` / `aba -d mirror install` time if `reg_ssh_key` is set but the host is local.
+
+### References
+
+- User error: `aba -d mirror load -H registry.example.com --retry 2` on `rhel-baseline` after extracting a bundle built on a host with remote registry config
+- The check that catches this: `scripts/reg-common.sh` or `reg-install.sh` (the "reg_ssh_key is defined but registry resolves to localhost" check)
+
+---
+
+## Enhancement: TUI option to install mirror without syncing
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The TUI currently combines mirror installation and image syncing into a single workflow. There is no option to just install the mirror registry (Quay or Docker) without immediately syncing images to it. Users may want to:
+
+- Install the registry first, then sync later (e.g. after reviewing the imageset config)
+- Install the registry on a remote host and verify connectivity before starting a long sync
+- Set up the registry for a bundle-based (save/load) workflow where `sync` is never used
+- Register an existing external registry without syncing
+
+### Proposed change
+
+Add a separate menu option in the TUI mirror workflow, e.g.:
+
+```
+Mirror Registry
+  1. Install & Sync (current behavior)
+  2. Install Only (set up registry, skip image sync)
+  3. Register Existing (for pre-existing registries)
+```
+
+"Install Only" would run `aba -d mirror install` and stop. The user can later run sync from the TUI or CLI.
+
+### References
+
+- `tui/abatui.sh`: mirror workflow screens
+- `aba -d mirror install`: installs registry only
+- `aba -d mirror sync`: syncs images to installed registry
+
+---
+
+## Enhancement: TUI mirror install screen should allow port configuration
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The "Remote Quay Registry (SSH)" TUI screen shows fields for Remote Host, SSH Username, SSH Key Path, Registry Username, Registry Password, Registry Path, and Data Directory -- but there is no field for **Registry Port**. The port defaults to 8443 (Quay) or 5000 (Docker), but users running registries on non-standard ports have no way to change it from the TUI. They must manually edit `mirror.conf` after the fact.
+
+The same issue applies to the local Quay/Docker install screens.
+
+### Proposed change
+
+Add a "Registry Port" field to all mirror registry TUI screens (local Quay, remote Quay, local Docker, remote Docker), defaulting to 8443 for Quay and 5000 for Docker. The value maps to `reg_port` in `mirror.conf`.
+
+### References
+
+- Screenshot: "Remote Quay Registry (SSH)" screen -- no port field visible
+- `mirror.conf`: `reg_port` variable
+- `tui/abatui.sh`: mirror configuration screens
+
+---
+
+## E2E: Add thorough remote registry install tests (Docker and Quay)
+
+**Priority:** High
+**Added:** 2026-04-28
+
+### Problem
+
+E2E test coverage for remote registry installations is thin. The current suites mostly test local registry installs. Remote installs (via SSH) have different failure modes -- firewall rules, TLS cert trust propagation, connectivity checks from the source host, SSH key handling, and the `reg_ssh_key`/`reg_ssh_user` config flow -- that are not well exercised.
+
+A user hit a post-install connectivity check failure when installing Docker remotely via the TUI (`bastion.example.com:8443 is not reachable from this host`), suggesting the remote install path needs more testing.
+
+### What to test
+
+**Both Docker and Quay, installed remotely via SSH:**
+
+1. **Install**: `aba -d mirror install --vendor docker -H <remote> -k <key>` and same for `--vendor quay`
+2. **Post-install connectivity**: verify the registry is reachable from the source host after install
+3. **TLS cert trust**: verify the CA cert is fetched and trusted on the source host
+4. **Firewall**: verify the port is opened on the remote host
+5. **Sync/Load**: verify images can be synced/loaded to the remote registry
+6. **Uninstall**: verify remote uninstall cleans up properly (containers, data, certs)
+7. **Re-install**: verify a second install on the same remote host works (idempotent)
+8. **Wrong SSH key / unreachable host**: verify clean error messages
+9. **Port configuration**: non-default port (e.g. 5000 instead of 8443)
+10. **Rootless vs root**: test with both `reg_ssh_user=root` and a non-root user
+
+### Where
+
+Add a dedicated suite `suite-remote-registry.sh` or extend `suite-mirror-sync.sh` with a remote-install section. Requires a test host pair where one conN can SSH to another (or to a disN) to install the registry remotely.
+
+### References
+
+- `scripts/reg-install-remote.sh`: remote install logic
+- `scripts/reg-uninstall-remote.sh`: remote uninstall logic
+- User-reported failure: Docker remote install via TUI, post-install curl check failing
+
+---
+
 ## VM Notes: add newlines to vCenter annotation
 
 **Priority:** Low
@@ -1719,4 +2072,32 @@ Console: https://console-openshift-console.apps.e2e-sno4.p4.example.com
 API: https://api.e2e-sno4.p4.example.com:6443
 Manage from con4:/home/steve/aba/e2e-sno4 — aba -d e2e-sno4 [info|startup|shutdown|delete]
 ```
+
+---
+
+## Bug: Remote Docker install post-install check fails on timing race
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+When installing a Docker registry on a remote host via `reg-install-remote.sh`, the post-install curl check (line 231) can fail with a transient 401 "invalid authorization credential" if the Docker registry container hasn't fully loaded the htpasswd volume yet. The check runs immediately after `reg_post_install` returns. Quay doesn't have this issue because its Ansible installer does its own readiness verification.
+
+Additionally, the check has two code quality issues:
+1. **`>/dev/null 2>&1` suppresses stderr** -- violates project rules; hides whether the real failure is auth, TLS, or connectivity
+2. **Error message says "not reachable"** regardless of failure type -- misleading when the actual problem is a 401 auth error
+
+### Evidence
+
+Registry log from the failure:
+- `12:23:02` -- container started
+- `12:24:10` -- `GET /v2/ HTTP/2.0` returns 401 "invalid authorization credential" (from bundle host)
+- Immediately after: `aba verify` succeeds from the same host with the same credentials
+
+### Proposed fix
+
+1. **Add a retry loop** (e.g. 3 attempts, 3-5 second sleep) to the Docker curl check -- gives the container time to load auth
+2. **Remove `2>&1`** from the curl invocation -- let the actual error be visible
+3. **Capture and display the curl error** in the `aba_abort` message so the user sees the real reason (auth/connectivity/TLS)
 
