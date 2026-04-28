@@ -225,14 +225,22 @@ esac
 # --- Fetch CA and run local post-install ---
 reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 
-# Verify remote Docker registry is reachable from this host.
-# Quay's mirror-registry handles its own post-install verification.
+# Verify remote Docker registry is reachable and authenticated from this host.
+# Quay's mirror-registry handles its own post-install verification via Ansible.
+# Docker needs an explicit check because 'podman run -d' returns immediately
+# before the registry has fully loaded its auth config (htpasswd volume).
 if [ "$vendor" = "docker" ]; then
-	if ! curl -k -fsSL --connect-timeout 10 "https://${reg_host}:${reg_port}/v2/" \
-		-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+	_curl_ok=
+	for _attempt in 1 2 3; do
+		_curl_err=$(curl -k -fsSL --connect-timeout 10 "https://${reg_host}:${reg_port}/v2/" \
+			-u "$reg_user:$reg_pw" 2>&1 >/dev/null) && { _curl_ok=1; break; }
+		[ "$_attempt" -lt 3 ] && aba_info "Registry not yet ready (attempt $_attempt/3), retrying in 5s ..." && sleep 5
+	done
+	if [ -z "$_curl_ok" ]; then
 		aba_abort \
-			"Registry container started on $reg_host but ${reg_host}:${reg_port} is not reachable from this host." \
-			"Check firewall rules on the remote host (port $reg_port must be open)." \
+			"Registry started on $reg_host but verification of ${reg_host}:${reg_port} failed after 3 attempts." \
+			"curl error: $_curl_err" \
+			"Check firewall rules (port $reg_port), TLS certificates, and registry credentials." \
 			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 	fi
 fi
