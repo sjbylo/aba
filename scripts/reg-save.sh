@@ -103,6 +103,7 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 # When OC_MIRROR_SINCE is set (e.g. "2020-01-01"), archives include all content since that
 # date -- use a far-back date to force a complete archive every time. When unset (default),
 # oc-mirror creates differential archives (only new blobs since the last save).
+# --v2 is an oc-mirror CLI flag (not related to OCP version). May become default in future releases.
 base_cmd="oc-mirror --v2 --config imageset-config.yaml file://. ${OC_MIRROR_SINCE:+--since $OC_MIRROR_SINCE}"
 
 [ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"

@@ -101,6 +101,7 @@ echo
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir.
 [[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
+# --v2 is an oc-mirror CLI flag (not related to OCP version). May become default in future releases.
 base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path"
 
 [ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
