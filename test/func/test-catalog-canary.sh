@@ -32,12 +32,13 @@ results=()
 
 _detect_versions() {
 	local versions=()
+	# Probe from 4.16 upward; when OCP 5.x catalog tags exist, add a second loop for major 5
 	local minor=16
 	while true; do
 		local ver="4.${minor}"
 		if skopeo inspect --raw "docker://registry.redhat.io/redhat/redhat-operator-index:v${ver}" >/dev/null 2>&1; then
 			versions+=("$ver")
-			((minor++))
+			minor=$(( minor + 1 ))
 		else
 			break
 		fi
