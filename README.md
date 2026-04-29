@@ -61,10 +61,13 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Q: How to configure passwordless sudo?](#q-how-to-configure-passwordless-sudo)
   - [Q: Can I use ABA to install OpenShift on User Provisioned Infrastructure (UPI)?](#q-can-i-use-aba-to-install-openshift-on-user-provisioned-infrastructure-upi)
   - [Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do)
+  - [Q: `aba load` fails with "network is unreachable" in an air-gapped environment](#q-aba-load-fails-with-network-is-unreachable-in-an-air-gapped-environment)
+  - [Q: My bastion is on a different network than the cluster nodes. Pre-flight checks fail — what can I do?](#q-my-bastion-is-on-a-different-network-than-the-cluster-nodes-pre-flight-checks-fail--what-can-i-do)
   - [Q: Is there a discussion forum?](#q-is-there-a-discussion-forum)
   - [Q: I accidentally uninstalled my mirror registry, how can I recover?](#q-i-accidentally-uninstalled-my-mirror-registry-how-can-i-recover)
   - [Q: I see the error _load pubkey "/home/joe/.ssh/quay\_installer": Invalid key length_ when installing Quay/loading images, what can I do?](#q-i-see-the-error-load-pubkey-homejoesshquay_installer-invalid-key-length-when-installing-quayloading-images-what-can-i-do)
   - [Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?](#q-can-aba-be-used-to-manage-the-full-lifecycle-of-the-oc-mirror-image-configuration-image-configyaml)
+  - [Q: Why does `aba day2` need the working-dir?](#q-why-does-aba-day2-need-the-working-dir)
 - [License](#license)
 
 
@@ -150,9 +153,13 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 ## Common Prerequisites for Both Environments
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
+#### Root Access
+   - ABA requires root access, either directly or via passwordless sudo. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
+
 #### Registry Storage
    - Registry images are stored by default under your home directory. Use the `data_dir=` value in `aba/mirror/mirror.conf` to change this. 
    - A minimum of 30 GB is required for OpenShift platform release images alone. Additional Operators will require significantly more space — 500 GB or more is recommended.
+   - The bastion host running `oc-mirror` needs additional disk space for its cache and working directory (`mirror/data/`). For save-to-disk workflows, allow at least as much space as the registry storage estimate above.
 
 #### Network Configuration
    - **DNS**: Configure the following DNS A records which match the intended cluster name and base domain ('ocp1' and 'example.com' in the below example):
@@ -160,6 +167,8 @@ These configurations ensure that each network zone meets OpenShift’s requireme
       - **OpenShift Ingress**: `*.apps.ocp1.example.com` (wildcard A record) pointing to a free IP address in the internal subnet.
          - *Note*: For Single Node OpenShift (SNO), configure both OpenShift API and Ingress records to point to the *same IP address*.
       - **Mirror Registry**: `registry.example.com` pointing to the IP address of your _internal mirror registry_ (or where ABA should install it).
+
+   - **Registry Connectivity**: Cluster nodes must have network access to the mirror registry on its configured port (default 8443). Ensure firewalls allow this traffic.
 
    - **NTP**: An NTP server is required to ensure time synchronization across all nodes, as OpenShift requires synchronized clocks for installation and proper operation.
 
@@ -199,7 +208,7 @@ To install OpenShift in a fully disconnected (air-gapped) environment, one works
 
 #### Connected Workstation Prerequisites
    - A RHEL 8 or 9 or Fedora system (VM or physical) with Internet access. See [Supported Architectures](#supported-architectures) for supported platforms.
-   - ABA requires root access, either directly or via passwordless sudo.
+   - Root access or passwordless sudo (see [Common Prerequisites](#common-prerequisites-for-both-environments)).
    - To install ABA refer to these [instructions](#install-aba).
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json`.
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret.
@@ -211,7 +220,7 @@ To install OpenShift in a fully disconnected (air-gapped) environment, one works
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
    - A RHEL 8 or 9 VM or host within your fully disconnected environment.
-   - ABA requires root access, either directly or via passwordless sudo.
+   - Root access or passwordless sudo (see [Common Prerequisites](#common-prerequisites-for-both-environments)).
    - Install required RPMs as listed in the file `aba/templates/rpms-internal.txt`.  **Note:** This file lists the package names to be installed on the _internal bastion_ and is different from the file mentioned above for the _connected workstation_.
    - Optionally, run `sudo dnf update` to ensure all packages are up to date.
    - If you intend to install the Quay mirror registry onto the Internal Bastion, the installer requires password-less ssh working locally, i.e. from the bastion to the bastion!
@@ -226,7 +235,7 @@ In a _partially disconnected environment_, the _connected bastion_ has limited (
 
 #### Connected Bastion Prerequisites
    - A single RHEL 8 or 9 VM configured with access to both the Internet and the disconnected environment.
-   - ABA requires root access, either directly or via passwordless sudo.
+   - Root access or passwordless sudo (see [Common Prerequisites](#common-prerequisites-for-both-environments)).
    - To install ABA refer to these [instructions](#install-aba).
    - Download and store the Red Hat registry pull secret to `~/.pull-secret.json`.
       - A pull secret can be downloaded from https://console.redhat.com/openshift/install/pull-secret.
@@ -283,9 +292,15 @@ If you run `aba` (interactive mode), you will make use of this workflow.
 
 # Install ABA
 
->> Note that ABA requires root access, either directly or via passwordless sudo. 
+>> Note that ABA requires root access, either directly or via passwordless sudo. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
 
 > **Upgrading:** When upgrading ABA to a new version, backward compatibility is not guaranteed. It is recommended to start with a fresh clone of the repository rather than updating an existing installation in-place.
+
+### Prerequisites
+- RHEL 8/9, CentOS Stream 8/9, or Fedora (see [Supported Architectures](#supported-architectures))
+- Root access or passwordless sudo (see [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo))
+- Internet access (for download)
+- Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret))
 
 ## Method 1: Single command
 
@@ -359,6 +374,11 @@ In this scenario, the connected bastion has access to both the Internet and the 
 
 <img src="images/make-sync.jpg" alt="Disconnected and Air-gapped Scenario" title="Disconnected and Air-gapped scenario" width="80%">
 
+### Prerequisites
+- ABA installed (see [Install ABA](#install-aba))
+- Connected bastion prerequisites met (see [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites))
+- `aba.conf` configured (OpenShift version, base domain, machine network etc)
+- For an existing registry: registered with `aba -d mirror register` (see [Existing Registry Prerequisites](#existing-registry-prerequisites))
 
 Copy images from the Red Hat registry to your _internal mirror registry_:
 ```
@@ -470,6 +490,11 @@ Now continue with [Installing OpenShift](#installing-openshift) below.
 
 <img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
 
+### Prerequisites
+- Mirror registry installed and images loaded (`aba -d mirror sync` or `aba -d mirror load` completed successfully)
+- Or, for connected mode: Internet/proxy access configured (`int_connection` in `cluster.conf`)
+- DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) -- see [Network Configuration](#network-configuration)
+- `aba.conf` reviewed and configured
 
 ```
 cd aba
@@ -655,6 +680,12 @@ cd aba
 ```
 
 **Tip:** You can also use the TUI wizard to configure and create an install bundle interactively: `./abatui`
+
+### Prerequisites
+- ABA installed on a connected RHEL 8/9 or Fedora host (see [Install ABA](#install-aba))
+- Red Hat pull secret saved to `~/.pull-secret.json`
+- Sufficient disk space (500 GB+ recommended for operators) -- see [disk space FAQ](#q-how-much-disk-space-do-i-need-when-using-aba)
+- Portable storage device mounted (USB drive, external disk, etc.)
 
 Connect a large USB media stick (or other device) to your VM and write the `install bundle` to it:
 
@@ -881,6 +912,12 @@ Run 'aba -h' or 'aba help' for more.
 # Day 2 Operations
 <!-- this is a perma-link from ABA blog, Oct 2025 --> 
 
+### Prerequisites
+- OpenShift cluster installed and running
+- Cluster access available (`aba login` or `aba shell` working)
+- Mirror registry accessible from the cluster network (for `day2`, `day2-osus`)
+- `aba day2` must be run from the host that has `oc-mirror`'s output directory (`mirror/data/working-dir/`) -- see [FAQ: Why does aba day2 need the working-dir?](#q-why-does-aba-day2-need-the-working-dir)
+
 Once your OpenShift cluster is installed using ABA, there are several recommended "Day 2" tasks to finalize configuration and ensure cluster health.
 
 Start with:
@@ -1057,12 +1094,14 @@ aba day2-ntp
 
 ## Enable OpenShift Update Service (OSUS)
 
+#### Prerequisites
+- `cincinnati-operator` included in the mirror (`ops=` or `op_sets=` in `aba.conf`)
+- `aba day2` already run (OperatorHub connected to mirror)
+
 ```
 aba day2-osus
 ```
 - Configures OpenShift to receive updates via your _internal mirror_. Useful for enabling controlled cluster upgrades from the OpenShift Console in disconnected environments.
-
-**NOTE:** The `cincinnati-operator` must be available in the mirror for OSUS to work!
 
 
 
@@ -1203,6 +1242,10 @@ vi ~/.config/containers/registries.d/aba-sigstore.yaml
 
 ABA supports named mirror directories for managing multiple independent registries — useful for serving different enclaves, teams, or use-cases from a single bastion host.
 
+#### Prerequisites
+- ABA installed and `aba.conf` configured
+- Familiarity with the standard single-mirror workflow
+
 **Create a named mirror:**
 
 ```bash
@@ -1294,6 +1337,10 @@ ABA supports the following architectures, automatically detecting the host and d
 In some environments — such as cloud instances or restricted laptops — it may **not** be possible to write directly to a portable storage device.
 In such cases, the bundle and image archives can be created and transferred separately.
 
+#### Prerequisites
+- Same prerequisites as [Creating a Custom Install Bundle](#creating-a-custom-install-bundle), **except** portable storage is unavailable or disk space is constrained
+- Sufficient temporary space on local disk to hold the light bundle and/or image-set archives before transfer (see `aba bundle --light` to minimize space needed)
+
 ### Using `aba bundle --light` (recommended)
 
 Use `aba bundle --light` to create a _light install bundle_ that contains the repository, CLIs, and configuration but **excludes** the large image-set archive file(s). This avoids duplicating ~20GB of image data on disk.
@@ -1336,7 +1383,7 @@ cd aba
 aba
 ```
 
-Then proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped) section.
+Then proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped-scenario) section.
 
 
 ## To install aba from the dev branch run the following:
@@ -1750,6 +1797,15 @@ ABA helps you jumpstart OpenShift installations by quickly generating day-zero i
 While ABA handles initial mirroring well, other tools are better suited for long-term maintenance. For ongoing updates and full lifecycle management of your image-set-config.yaml, try the oc-mirror Web App.
 
 👉 https://github.com/yakovbeder/oc-mirror-web-app/
+
+
+## Q: Why does `aba day2` need the working-dir?
+
+`aba day2` applies IDMS/ITMS, CatalogSources, and signatures generated by `oc-mirror` during `sync`, `save`, or `load`. These artifacts live in `mirror/data/working-dir/`.
+
+In the standard workflows (partially disconnected, fully disconnected, bundle), the host that runs `oc-mirror` is the same host that runs `aba day2`, so the directory is already present.
+
+If the mirror was set up from a different host (e.g. one admin manages the mirror, another manages clusters from a separate bastion), copy the `mirror/data/working-dir/` directory to the host running `aba day2`.
 
 
 [Back to top](#who-should-use-aba)
