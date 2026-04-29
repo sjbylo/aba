@@ -23,6 +23,9 @@ ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 #[ ! -s .99-master-chrony-conf-override.bu ] && cat > .99-master-chrony-conf-override.bu <<END
+# Butane spec version 4.12.0 is the MCO/Ignition spec version, NOT the OCP version.
+# It's backward-compatible and works on any OCP 4.12+ cluster.
+# Revisit when Butane publishes a 5.x spec for OCP 5.
 cat > .99-master-chrony-conf-override.bu <<END
 variant: openshift
 version: 4.12.0
@@ -116,6 +119,7 @@ make -s ~/bin/butane
 if ! which butane >/dev/null 2>&1; then
 	# No rpm available for RHEL8
 	if ! $SUDO dnf install butane -y; then
+		# Butane binary is architecture-independent; hosted under openshift-v4/clients/ regardless of OCP major version
 		if curl --connect-timeout 10 --retry 8 -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
 			$SUDO mv butane /usr/local/bin
 		else

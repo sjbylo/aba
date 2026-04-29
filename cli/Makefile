@@ -87,6 +87,9 @@ govc_tar_file := govc_Linux_$(govc_arch).tar.gz
 ocp_version := $(strip $(shell echo $(ocp_version)))
 platform := $(strip $(shell echo $(platform)))
 
+# OCP major version (e.g. "4" from "4.21.10") for CDN paths (openshift-v4/, openshift-v5/, etc.)
+ocp_major := $(firstword $(subst ., ,$(ocp_version)))
+
 # govc is only needed for VMware (not KVM or bare-metal)
 ifeq ($(platform),vmw)
 	govc_bin := govc
@@ -153,7 +156,7 @@ help: ## Help
 
 # The preference to download the oc CLI tar files is: rhel9, then rhel8 
 
-# See: https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/4.18.9/ 
+# See: https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/4.18.9/ 
 # Example x86:    openshift-client-linux-amd64-rhel9-4.18.9.tar.gz
 # Example ARM:    openshift-client-linux-arm64-rhel9-4.18.9.tar.gz
 # Example s390x:  openshift-client-linux-s390x-rhel9-4.18.9.tar.gz
@@ -161,16 +164,16 @@ help: ## Help
 
 # This is the tarball that matches this localhost's OS and arch.
 local_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).tar.gz
-#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(local_oc_tar_file)
+#full_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$(local_oc_tar_file)
 
 local_oc_mirror_tar	:= $(if $(filter rhel9,$(rhel_ver)),oc-mirror.rhel9.tar.gz,oc-mirror.tar.gz)
 
 
 rhel9_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel9-$(ocp_version).tar.gz
-rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
 
 rhel8_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel8-$(ocp_version).tar.gz
-rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
 
 
 openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
@@ -215,7 +218,7 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo [ABA] Error: Failed to extract $(local_oc_tar_file); exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
-openshift_install_url := https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)
+openshift_install_url := https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)
 
 # Ensure all possible tarballs are downloaded
 $(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
@@ -250,7 +253,7 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 
 $(openshift_install_file):  ## Download openshift-install tarball
 	@echo [ABA] Downloading $(openshift_install_url)/$@
-	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/$(ocp_version)/$@
+	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$@
 	@echo -n "[ABA] Verifying checksum for $(@): "
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
 	echo "valid!"
@@ -268,9 +271,11 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 	chmod +x ~/bin/oc-mirror
 #	~/bin/oc-mirror --help >/tmp/.oc-mirror-exec.log 2>&1 || { echo [ABA] "Error: ~/bin/oc-mirror failed to execute"; cp -p ~/bin/oc-mirror /tmp; exit 1; }
 
-# Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
+# Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v$(ocp_major)/amd64/clients/ocp/ 
 
-oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.21
+# oc-mirror pin: stable-4.21 is intentional -- new oc-mirror versions must be tested before adoption.
+# Only the CDN path (openshift-v4 → openshift-v$(ocp_major)) is parameterized here.
+oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/stable-4.21
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
@@ -316,6 +321,7 @@ butane: ~/bin/butane ## Install butane to ~/bin/butane
 	chmod +x $@
 	$@ --help >/dev/null 2>&1 || { echo [ABA] "Error: $@ binary invalid"; exit 1; }  # Be sure it's valid
 
+# Butane binary is a shared client tool, hosted under openshift-v4/clients/ regardless of OCP major version
 butane_binary_url = https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest
 butane_binary_file_url = $(butane_binary_url)/$(butane_binary_file)
 butane_binary_url_sha256sum = $(butane_binary_url)/sha256sum.txt

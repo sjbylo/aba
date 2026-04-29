@@ -68,6 +68,8 @@ for v in $vers_track
 do
 	ver=
 	echo Checking for version stable-4.$v ...
+	# Bundles are GA-only, currently OCP 4 only. When OCP 5 bundles are needed,
+	# add a separate loop for major 5 with openshift-v5/ CDN path.
 	ver=$(curl -f --retry 8 -sSL https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable-4.$v/release.txt | grep ^Name: | awk '{print $NF}')
 	[ ! "$ver" ] && echo "Cannot find release for $v at https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable-4.$v/release.txt" >&2 && continue
 	versions+=("$ver")

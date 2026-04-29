@@ -108,6 +108,7 @@ echo
 # Set TMPDIR path (defer mkdir to just before oc-mirror needs it)
 [[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
 
+# --v2 is an oc-mirror CLI flag (not related to OCP version). May become default in future releases.
 base_cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path"
 
 [ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"

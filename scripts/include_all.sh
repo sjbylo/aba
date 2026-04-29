@@ -341,6 +341,10 @@ normalize-aba-conf() {
 
 	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
+
+	# Derived variable: OCP major version number (e.g. "4" from "4.21.10", "5" from "5.0.3").
+	# Used for CDN paths (openshift-v4/, openshift-v5/), art-dev repos, registry paths, etc.
+	echo 'export ocp_major=${ocp_version%%.*}'
 }
 
 warn_if_cluster_unstable() {
@@ -1028,7 +1032,8 @@ files_on_same_device() {
 }
 
 
-# Cincinnati API endpoint
+# Cincinnati API endpoint -- same URL for OCP 4.x and 5.x (confirmed Apr 2026).
+# Channel names follow the pattern: stable-X.Y, fast-X.Y, candidate-X.Y
 ABA_GRAPH_API="https://api.openshift.com/api/upgrades_info/v1/graph"
 
 # Architecture: default is amd64
@@ -1133,7 +1138,8 @@ _is_prerelease() {
 ############################################
 fetch_latest_minor_version() {
 	local channel="${1:-stable}"
-	local url="https://mirror.openshift.com/pub/openshift-v4/${ARCH}/clients/ocp/${channel}/release.txt"
+	# CDN uses per-major layout: openshift-v4/, openshift-v5/, etc.
+	local url="https://mirror.openshift.com/pub/openshift-v${ocp_major:-4}/${ARCH}/clients/ocp/${channel}/release.txt"
 	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
 	local latest_ver minor prev
 
