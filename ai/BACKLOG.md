@@ -2101,3 +2101,96 @@ Registry log from the failure:
 2. **Remove `2>&1`** from the curl invocation -- let the actual error be visible
 3. **Capture and display the curl error** in the `aba_abort` message so the user sees the real reason (auth/connectivity/TLS)
 
+---
+
+## Enhancement: Display actual port numbers in cluster configuration summary
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Problem
+
+The "Cluster configuration" summary table shows `PORTS_PER_NODE` (e.g. 2) but does not display the actual port numbers (e.g. 6443, 443 or whatever is configured). The user can see how many ports each node has but not which ports they are.
+
+### Proposed fix
+
+Add a row (e.g. `CP_PORTS`, `WKR_PORTS`) showing the actual port values alongside the existing `PORTS_PER_NODE` count, or replace `PORTS_PER_NODE` with the explicit port list if that's more useful.
+
+---
+
+## Bug: "Power down VMs?" prompt shown even when VMs don't exist
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+During cluster creation (after ISO build, before VM creation), ABA lists the VM paths and asks "Immediately power down the above virtual machine(s)? (Y/n):" -- but the VMs may not exist yet (all return `govc: vm 'xxx' not found`). The prompt is pointless and confusing when VMs haven't been created, and equally pointless if they're already powered off.
+
+### Proposed fix
+
+Before prompting, check whether any of the listed VMs actually exist AND are powered on. Skip the prompt entirely if:
+- None of the VMs exist (first install -- nothing to power down)
+- All existing VMs are already powered off
+
+Only prompt when at least one VM exists and is powered on.
+
+---
+
+## Review: Stale debug pod cleanup during cluster startup may be unnecessary
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Question
+
+`cluster-startup.sh` force-deletes stale `oc debug` pods from the `default` namespace on every startup, citing an "infinite shutdown loop" risk. However, `oc debug --preserve-pod` creates pods with `restartPolicy: Never`, so kubelet should not re-run them after a reboot -- completed pods stay `Succeeded`, interrupted pods go to `Failed`.
+
+### Current code
+
+```bash
+for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	aba_info "Removing stale debug pod: $pod"
+	_try $OC delete pod -n default "$pod" --grace-period=0 --force || true
+done
+```
+
+### Proposed investigation
+
+- Verify `restartPolicy: Never` is always set on `oc debug` pods across supported OCP versions.
+- Test: shut down a cluster with `--preserve-pod` debug pods present, restart, confirm no re-execution.
+- If confirmed safe, either remove the cleanup entirely or downgrade to a simple `$OC delete pod` (no `--force --grace-period=0`).
+
+---
+
+## Enhancement: Fix stderr suppression with TUI compatibility
+
+**Priority:** High
+**Added:** 2026-04-28
+**Branch:** `feature/try-helper`
+**Plan:** `fix_stderr_suppression_8d273729`
+
+### Problem
+
+ABA suppresses stderr (`2>/dev/null`) in many places, hiding actual error messages from users when commands fail. The `_try()` helper and `aba_wait_show()` enhancement were developed to fix this, but the changes are **not TUI-safe**: removing `2>/dev/null` causes raw stderr to leak into the TUI display, corrupting the screen layout.
+
+### What exists (on `feature/try-helper`)
+
+- `_try()` helper: captures stderr into `$_LAST_ERR`, auto-logs "Running:" in debug mode
+- Enhanced `aba_wait_show()`: shows "Last output:" on timeout, per-iteration log + full history
+- 34 functional tests (all pass)
+- One-shot fixes across 7 scripts
+
+### What needs investigation
+
+1. **TUI compatibility**: Scripts called by the TUI must never emit raw stderr. All "unsuppress" changes (`day2.sh`, `aba.sh`, `download-catalog-index.sh`) need to use `_try` + structured output (`aba_warning`/`aba_abort`) instead of just removing `2>/dev/null`.
+2. **TUI should adopt `_try()`**: The TUI itself should use `_try` for command execution to capture and display errors cleanly.
+3. **Dual-mode scripts**: Scripts called by both CLI and TUI must work in both contexts.
+
+### Key constraints discovered
+
+- `_try` must NOT be used inside `aba_wait_show` polling callbacks (intercepts stderr from `_wait_log`)
+- `_try` must NOT be used on stderr-visible commands unless the error is re-displayed via `aba_warning`/`aba_abort`
+- `_try curl` must always use `-sS` to avoid progress meter in `_LAST_ERR`
+- Probes (`probe_host`) must stay silent -- failures are expected
+
