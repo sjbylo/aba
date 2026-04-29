@@ -87,7 +87,7 @@ ABA helps you with the following and more:
 - SNO (1-node), Compact (3-nodes), Standard (3 masters + workers)
 - Generates ImageSetConfiguration and Agent-based Installer config from your settings
 - [Bonds, VLANs](README.md#q-can-bonds-andor-vlan-be-configured-on-my-nodes), static IPs, and proxy support
-- Optional VM creation on [VMware vSphere](README.md#govc-is-used-to-create-and-manage-vms-on-esxi-or-vsphere) or KVM/libvirt (bare-metal is the default)
+- Optional VM creation on [VMware vSphere](#common-prerequisites-for-both-environments) or KVM/libvirt (bare-metal is the default)
 - Installation monitoring
 - ["Install bundle"](README.md#creating-a-custom-install-bundle) for fully disconnected transfers
 - Runs pre-flight validation before ISO generation — checks DNS/NTP reachability and detects IP conflicts using arping (Layer 2) with ping fallback.
@@ -358,7 +358,7 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 - Show available OpenShift versions: `aba ocp-versions` (displays a table of latest versions per channel)
 - The install script downloads (Method 1) or sets up (Method 2) the ABA repository and installs the `aba` command. Running `aba` guides you through configuring high-level settings such as OpenShift version, base domain, and machine network CIDR.
 - If needed, add any required operators to the `aba.conf` file by setting the `op_sets=` and/or `ops=` values.
-- The tool helps you decide the method of deployment and how you should proceed. For more, see the [ABA OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram). 
+- The tool helps you decide the method of deployment and how you should proceed. For more, see the [ABA Workflow Diagram](#aba-workflow-diagram). 
 
 Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators.
 
@@ -1426,7 +1426,7 @@ cd aba
 aba
 ```
 
-Then proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped-scenario) section.
+Then continue from the [Load the images from disk into the mirror registry](#load-the-images-from-disk-into-the-mirror-registry-on-the-local-bastion) step in the Fully Disconnected (Air-Gapped) Scenario section.
 
 
 ## Installing from the Dev Branch
