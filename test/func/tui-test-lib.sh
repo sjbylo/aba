@@ -341,7 +341,7 @@ parse_basket_operator_names() {
 # Output: first match of 4.x.y, or empty.
 # Usage: parse_version_from_capture "$capture"
 parse_version_from_capture() {
-	echo "$1" | grep -oE '4\.[0-9]+\.[0-9]+' | head -1
+	echo "$1" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
 }
 
 # ============================================================
