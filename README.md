@@ -1180,6 +1180,12 @@ ABA installs a per-user [`registries.d`](https://github.com/containers/image/blo
 By default, sigstore is **enabled** for OpenShift release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), and **disabled** for everything else (to avoid failures from unsigned certified/community operator images).
 This ensures that signatures required for OCP 4.21+ `ClusterImagePolicy` verification are preserved while allowing all operator images to mirror without errors.
 
+> **Note:** Starting with OpenShift 4.21, image signatures are verified for Red Hat images pulled to cluster nodes via `ClusterImagePolicy`.
+> ABA ensures that Red Hat image signatures are mirrored alongside the images so that signature verification works in disconnected environments.
+> While it is not practical to verify signatures for all container images, those shipped by Red Hat are verified.
+> See [RFE-336](https://redhat.atlassian.net/browse/RFE-336) for background.
+> If you need to disable signature verification, see [How to disable container image signature verification in OpenShift](https://access.redhat.com/solutions/7047477).
+
 To customise, edit `~/.config/containers/registries.d/aba-sigstore.yaml` — see the comments in that file for examples.
 For full details on the configuration format, see [`containers-registries.d(5)`](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) and the [Red Hat container signing documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/building_running_and_managing_containers/assembly_signing-container-images_building-running-and-managing-containers).
 
@@ -1247,9 +1253,9 @@ ABA supports the following architectures, automatically detecting the host and d
 | Architecture | `uname -m` | Status |
 |---|---|---|
 | Intel/AMD | `x86_64` | Fully tested |
-| ARM | `aarch64` | Tested (see notes below) |
+| ARM | `aarch64` | Mirror sync, ISO creation and SNO install on Mac M1 (see notes below) |
 | IBM Z (System Z) | `s390x` | Mirror sync and ISO creation, tested! |
-| IBM Power | `ppc64le` | Supported - should work |
+| IBM Power | `ppc64le` | Supported - we hear it works too! |
 
 ### Notes on s390x and ppc64le
 

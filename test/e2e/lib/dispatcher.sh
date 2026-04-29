@@ -614,7 +614,6 @@ _print_final_summary() {
 	[ "$_infra" -gt 0 ] && _summary+="  Infra: $_infra"
 	echo "$_summary"
 	echo "  Logs: $_RUN_DIR/logs/"
-	printf "  \033[1;44;97m %s \033[0m\n" "$_sum_bar"
 
 	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 		local _done_detail=""
