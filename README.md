@@ -24,15 +24,14 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
   - [Fully Connected Prerequisites](#fully-connected-prerequisites)
 - [Downloading an Install Bundle](#downloading-an-install-bundle)
-- [ABA OpenShift Installation Workflow Diagram](#aba-openshift-installation-workflow-diagram)
 - [Install ABA](#install-aba)
   - [Method 1: Single command](#method-1-single-command)
   - [Method 2: Git clone](#method-2-git-clone)
 - [Partially Disconnected Scenario](#partially-disconnected-scenario)
 - [Fully disconnected (air-gapped) Scenario](#fully-disconnected-air-gapped-scenario)
 - [Installing OpenShift](#installing-openshift)
+  - [How to Customize the Agent-based Configuration Files](#how-to-customize-the-agent-based-configuration-files)
 - [Creating a Custom Install Bundle](#creating-a-custom-install-bundle)
-- [How to Customize the Agent-based Configuration Files](#how-to-customize-the-agent-based-configuration-files)
 - [Day 2 Operations](#day-2-operations)
   - [Login and Verify Cluster State](#login-and-verify-cluster-state)
   - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
@@ -40,36 +39,22 @@ Use ABA to quickly set up OpenShift in a disconnected environment while letting 
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
   - [Enable OpenShift Update Service (OSUS)](#enable-openshift-update-service-osus)
 - [Advanced Use](#advanced-use)
+  - [How Make Drives ABA](#how-make-drives-aba)
   - [User Configuration (\`~/.aba/config\`)](#user-configuration-abaconfig)
   - [Prompt Control](#prompt-control)
   - [Named Mirror Directories (Enclaves)](#named-mirror-directories-enclaves)
   - [Supported Architectures](#supported-architectures)
   - [Running ABA in a container](#running-aba-in-a-container)
   - [Creating an Install bundle on a restricted VM or Laptop](#creating-an-install-bundle-on-a-restricted-vm-or-laptop)
-  - [To install aba from the dev branch run the following:](#to-install-aba-from-the-dev-branch-run-the-following)
+  - [Installing from the Dev Branch](#installing-from-the-dev-branch)
+  - [Operator Dependencies](#operator-dependencies)
+  - [Uninstalling ABA](#uninstalling-aba)
   - [Installing RPMS](#installing-rpms)
 - [Feature Backlog and Ideas](#feature-backlog-and-ideas)
-- [Miscellaneous](#miscellaneous)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
-  - [Q: Does ABA know what RPM packages to install?](#q-does-aba-know-what-rpm-packages-to-install)
-  - [Q: Can bonds and/or vlan be configured on my nodes?](#q-can-bonds-andor-vlan-be-configured-on-my-nodes)
-  - [Q: How can I determine the network interface names of my bare-metal servers?](#q-how-can-i-determine-the-network-interface-names-of-my-bare-metal-servers)
-  - [Q: Can ABA run inside a container?](#q-can-aba-run-inside-a-container)
-  - [Q: Does ABA support ARM, s390x, or ppc64le?](#q-does-aba-support-arm-s390x-or-ppc64le)
-  - [Q: How do I run ABA on LinuxONE Community Cloud?](#q-how-do-i-run-aba-on-linuxone-community-cloud)
-  - [Q: How much disk space do I need when using ABA?](#q-how-much-disk-space-do-i-need-when-using-aba)
-  - [Q: Can I install Operators from community catalogs?](#q-can-i-install-operators-from-community-catalogs)
-  - [Q: Where are cluster types (SNO, compact, standard) configured?](#q-where-are-cluster-types-sno-compact-standard-configured)
-  - [Q: How to configure passwordless sudo?](#q-how-to-configure-passwordless-sudo)
-  - [Q: Can I use ABA to install OpenShift on User Provisioned Infrastructure (UPI)?](#q-can-i-use-aba-to-install-openshift-on-user-provisioned-infrastructure-upi)
-  - [Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?](#q-pushing-images-to-the-quay-mirror-eg-aba-loadsync-often-fails-even-after-re-trying-several-times-what-can-i-do)
-  - [Q: `aba load` fails with "network is unreachable" in an air-gapped environment](#q-aba-load-fails-with-network-is-unreachable-in-an-air-gapped-environment)
-  - [Q: My bastion is on a different network than the cluster nodes. Pre-flight checks fail — what can I do?](#q-my-bastion-is-on-a-different-network-than-the-cluster-nodes-pre-flight-checks-fail--what-can-i-do)
-  - [Q: Is there a discussion forum?](#q-is-there-a-discussion-forum)
-  - [Q: I accidentally uninstalled my mirror registry, how can I recover?](#q-i-accidentally-uninstalled-my-mirror-registry-how-can-i-recover)
-  - [Q: I see the error _load pubkey "/home/joe/.ssh/quay\_installer": Invalid key length_ when installing Quay/loading images, what can I do?](#q-i-see-the-error-load-pubkey-homejoesshquay_installer-invalid-key-length-when-installing-quayloading-images-what-can-i-do)
-  - [Q: Can ABA be used to manage the full lifecycle of the oc-mirror image configuration (image-config.yaml)?](#q-can-aba-be-used-to-manage-the-full-lifecycle-of-the-oc-mirror-image-configuration-image-configyaml)
-  - [Q: Why does `aba day2` need the working-dir?](#q-why-does-aba-day2-need-the-working-dir)
+  - [Setup and Platform](#setup-and-platform)
+  - [Configuration](#configuration)
+  - [Troubleshooting](#troubleshooting)
 - [License](#license)
 
 
@@ -147,6 +132,18 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 
 
+### ABA Workflow Diagram
+
+This chart explains the flow of ABA and how ABA works, showing the main choices:
+- Fully disconnected (air-gapped)
+- Partially disconnected
+- Connected installation (without a mirror registry) and
+- Installation on VMware, KVM, or bare-metal.
+
+If you run `aba` (interactive mode), you will make use of this workflow.
+
+<img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="80%">
+
 [Back to top](#who-should-use-aba)
 
 
@@ -176,7 +173,7 @@ These configurations ensure that each network zone meets OpenShift’s requireme
 
 #### Target Platform 
    - For bare-metal installations, you will set `platform=bm` in `aba.conf` and manually boot the nodes using the generated ISO file.
-   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+   - **VMware vCenter or ESXi API Access (optional)**: Ensure sufficient privileges for OpenShift installation. Refer to [vCenter account privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs) for specific permissions, in the [OpenShift documentation](https://docs.openshift.com/container-platform/latest). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs — set the correct values in `vmware.conf`.
    - **KVM/libvirt API Access (optional)**: Passwordless SSH from the bastion to the KVM hypervisor host is required. Configure the connection URI, storage pool, and bridge network in `kvm.conf`.
 
 #### Existing Registry Prerequisites
@@ -203,7 +200,26 @@ These configurations ensure that each network zone meets OpenShift’s requireme
    - To regenerate the pull secret file for an existing mirror registry: `aba -d mirror password`
    - To clean up stale metadata from a previous mirroring run: `aba -d mirror tidy`
 
-For more, see the [Example Credentials](#example-credentials-for-an-existing-mirror-registry).
+#### Example Credentials for an Existing Mirror Registry
+   - `~/.aba/mirror/mirror/pull-secret-mirror.json`
+      ```
+      {
+        "auths": {
+          "registry.example.com:8443": { 
+            "auth": "aW5pdDpwNHNzdzByZA=="    # Value generated by running: echo init:p4ssw0rd | base64
+          }
+        }
+      }
+      ```
+
+   - `~/.aba/mirror/mirror/rootCA.pem`
+      ```
+      -----BEGIN CERTIFICATE-----
+      MIID5TCCAs2gAwIBAgIUH2G9oqba4oaGXagGL+nNe9mukyIwDQYJKoZIhvcNAQEL
+      ...
+      y8ohEyYwjm1acZDwgezz88bku+c4RHp7HOgb6r6zsvrYfuH3tKykDak=
+      -----END CERTIFICATE-----
+      ```
 
 
 ## Fully Disconnected (Air-Gapped) Prerequisites
@@ -281,21 +297,6 @@ You can also create your own bundle.  See [Creating a Custom Install Bundle](#cr
 <!-- this is a perma-link from the bundle maker README_FIRST.md file --> 
 
 [Back to top](#who-should-use-aba)
-
-# ABA OpenShift Installation Workflow Diagram
-
-This chart explains the flow of ABA and how ABA works, showing the main choices:
-- Fully disconnected (air-gapped)
-- Partially disconnected
-- Connected installation (without a mirror registry) and
-- Installation on VMware, KVM, or bare-metal. 
-
-If you run `aba` (interactive mode), you will make use of this workflow. 
-
-<img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="80%">
-
-[Back to top](#who-should-use-aba)
-
 
 # Install ABA
 
@@ -672,6 +673,7 @@ Cleanup commands (run from any ABA directory):
 | `aba clean`       | Remove generated files (ISO, configs, markers) while preserving configuration. Re-run `aba` to regenerate. |
 | `aba reset --force` | Full reset — returns the directory to its original unpacked state. **Destructive**: removes all configuration and generated files. |
 
+> **Tip (VMware):** If you want to configure nodes with different CPU or memory sizes — for example, to run Operators such as Ceph, ODF, or ACM on infrastructure nodes — you can adjust the VM resources after OpenShift is installed. Restart the cluster using `aba shutdown --wait` followed by `aba startup` to apply the updated VM configurations.
 
 [Back to top](#who-should-use-aba)
 
@@ -768,7 +770,7 @@ Run: `aba cluster --help` or see the [Installing OpenShift](#installing-openshif
 
 
 
-# How to Customize the Agent-based Configuration Files
+## How to Customize the Agent-based Configuration Files
 
 ### About the ABA configuration files
 
@@ -1186,6 +1188,12 @@ In a partially disconnected environment, the following workflow can be used:
 
 # Advanced Use
 
+## How Make Drives ABA
+
+ABA uses `make` to define and process all dependencies. Because of this, ABA usually knows what to do next — just run `aba` again after making changes to configuration files or fixing issues.
+
+`make` tracks file dependencies and only re-runs steps when inputs change, which is a natural fit for ABA's multi-stage workflow (configure, mirror, install).
+
 ## User Configuration (`~/.aba/config`)
 
 ABA creates a user-level configuration file at `~/.aba/config` during installation.
@@ -1210,6 +1218,10 @@ The following environment variables can also be exported (e.g. in `~/.bashrc`) t
 | `ABA_CACHE_TTL` | `100m` | How long to cache OpenShift release and Cincinnati graph data before re-fetching. Accepts duration strings (`30s`, `20m`, `2h`). Reduce if you need to see newly released versions sooner. |
 | `ABA_INSTALL_IFACE` | *(auto-detected)* | Override which network interface ABA uses when auto-detecting `machine_network`, `dns_servers`, `next_hop_address`, etc. Useful when the bastion has multiple interfaces. |
 | `PLAIN_OUTPUT` | *(unset)* | Set to any value to disable color output and use quiet `curl` progress. Useful for CI/CD pipelines or log capture. |
+| `OC_MIRROR_CACHE` | *(derived from `data_dir`)* | Override the oc-mirror cache location. By default, ABA sets this under the `data_dir` path in `mirror.conf` (e.g. `data_dir=/mnt/large/disk` puts cache at `/mnt/large/disk/.oc-mirror/.cache`). |
+| `TMPDIR` | *(derived from `data_dir`)* | Override the temporary directory for oc-mirror. Defaults to `<data_dir>/.oc-mirror/.tmp`. |
+
+To change both the cache and temp directories, set `data_dir` in `aba/mirror/mirror.conf`. To override them independently, export `OC_MIRROR_CACHE` and/or `TMPDIR`.
 
 Example — increase the image timeout to 60 minutes:
 
@@ -1417,13 +1429,42 @@ aba
 Then proceed with loading the images into your registry using `aba -d mirror load`.  Continue to follow the instructions in the [Fully Disconnected (Air-Gapped) Scenario](#fully-disconnected-air-gapped-scenario) section.
 
 
-## To install aba from the dev branch run the following:
+## Installing from the Dev Branch
 
 ```
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 ```
 
 [Back to top](#who-should-use-aba)
+
+
+## Operator Dependencies
+
+You can list an operator's dependencies (other operators it requires) using:
+```
+scripts/listopdeps.sh 4.18 odf-operator
+```
+
+## Uninstalling ABA
+
+Run on the disconnected bastion:
+```
+cd aba
+aba -d mirror uninstall    # uninstall the registry if it was installed by ABA
+aba -d mirror unregister   # or, deregister an existing registry (removes creds only)
+cd ..
+rm -rf aba
+sudo rm $(which aba)
+```
+
+Run on the workstation or laptop:
+
+```
+rm -rf aba
+sudo rm $(which aba)
+```
+
+To re-install ABA, see [Install ABA](#install-aba).
 
 
 ## Installing RPMS
@@ -1497,114 +1538,11 @@ We need help!  Here are some ideas for new features and enhancements.
 
 
 
-# Miscellaneous
-
-### oc-mirror v2 is now the only version supported by aba. 
-
-### oc-mirror cache location
-
-By default, aba sets the oc-mirror cache location (OC_MIRROR_CACHE) and temporary directory (TMPDIR) under the path defined by `data_dir` in the configuration file `aba/mirror/mirror.conf` (default value is $HOME). You can explicitly override these locations by changing `data_dir` or exporting the above environment variables. 
-
-- To change oc-mirror's default cache location (~/.oc-mirror/.cache), change the value `data_dir` in `aba/mirror/mirror.conf`. 
-  - Example: Set `data_dir=/mnt/large/disk` and the cache will be located at `/mnt/large/disk/.oc-mirror/.cache` and the temporary directory at `/mnt/large/disk/.oc-mirror/.tmp`.
-
-- To change only oc-mirror's default cache location (~/.oc-mirror/.cache), export the `OC_MIRROR_CACHE` environment variable to a path with sufficient disk space, such as:
-```
-export OC_MIRROR_CACHE=/path/to/large-drive   # Optionally override the cache location, used by oc-mirror
-export TMPDIR=/tmp                            # Optionally override the temp directory
-```
-
-### Operator Dependencies 
-
-- You can list the operators dependencies (other operators) using this script, for example: `scripts/listopdeps.sh 4.18 odf-operator`
-
-### VM Infra nodes
-
-- If you are using `platform=vmw` and want to configure nodes with different CPU or memory sizes — for example, to run Operators such as Ceph, ODF, or ACM on infrastructure nodes — you can adjust the VM resources after OpenShift is installed.  After making the changes, restart the cluster using `aba shutdown --wait` followed by `aba startup` to apply the updated VM configurations.
-
-
-### Govc is used to create and manage VMs on ESXi or vSphere.
-  - https://github.com/vmware/govmomi/tree/main/govc
-
-Be sure to set the correct (govc) values to access vCenter in the `vmware.conf` file.  Note that ESXi is also supported.
-
-### Use of Make
-
-ABA uses `make` to define and process all dependencies. Because of this, ABA usually knows what to do next — just run `aba` again after making changes to configuration files or fixing issues. 
-
-Why was `make` chosen to build ABA?
-
-`make` tracks file dependencies and only re-runs steps when inputs change, which is a natural fit for ABA's multi-stage workflow (configure, mirror, install).
-
-
-### Example Credentials for an Existing Mirror Registry
-   - `~/.aba/mirror/mirror/pull-secret-mirror.json`
-      ```
-      {
-        "auths": {
-          "registry.example.com:8443": { 
-            "auth": "aW5pdDpwNHNzdzByZA=="    # Value generated by running: echo init:p4ssw0rd | base64
-          }
-        }
-      }
-      ```
-
-   - `~/.aba/mirror/mirror/rootCA.pem`
-      ```
-      -----BEGIN CERTIFICATE-----
-      MIID5TCCAs2gAwIBAgIUH2G9oqba4oaGXagGL+nNe9mukyIwDQYJKoZIhvcNAQEL
-      BQAwbzELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAlZBMREwDwYDVQQHDAhOZXcgWW9y
-      azENMAsGA1UECgwEUXVheTERMA8GA1UECwwIRGl2aXNpb24xHjAcBgNVBAMMFXJl
-      Z2lzdHJ5NC5leGFtcGxlLmNvbTAeFw0yNTEwMDEwNzAzMzRaFw0yODA3MjEwNzAz
-      MzRaMG8xCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJWQTERMA8GA1UEBwwITmV3IFlv
-      cmsxDTALBgNVBAoMBFF1YXkxETAPBgNVBAsMCERpdmlzaW9uMR4wHAYDVQQDDBVy
-      ZWdpc3RyeTQuZXhhbXBsZS5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
-      AoIBAQC/AN6G5rIAbabBABABAbBAABbBABABbABtk7vt9w/HFV7NSI3UKZuHc2QG
-      /gTGUVF2i/AZT0biUKEof86yHl21bQsdDMbIadZq20SlzMR1jHYeOg9Ig39FsYtr
-      vRj3wJSxk+bfZwkHTiPJtaqJpUFN1tM6XffLnqFSsUm+esZ4rznKEl+JYSMtStvN
-      9MpoGvy8mcV80qX8vgq0CL9oYrg1fqkrULsu7e0BAUGfy1sc1q30/eRJrC8qYVBi
-      3vuwBXtcJu/eYD7ERi7v9DagJ34M4swiWYvYmhcGTFj9joMEjC9+mYHIukayr3w0
-      b1UFR2RhkLtiND8HQ/QeH3KFxaZfAgMBAAGjeTB3MAsGA1UdDwQEAwIC5DATBgNV
-      HSUEDDAKBggrBgEFBQcDATAgBgNVHREEGTAXghVyZWdpc3RyeTQuZXhhbXBsZS5j
-      b20wEgYDVR0TAQH/AbABABABA/wIBATAdABABABABgQUqsHBE65hgRTUPT20wH5W
-      aXc7NpQwDQYJKoZIhvcNAQELBQADggEBACkxD4LDaySA1GYGU+wnYoVMcRdlkID5
-      uyU3JrA5QWpzwHsm9wBOiG1S9rh9Tt0k6CDjgsihFVbxLgECrA4YnaKIHD8kASmL
-      f8YxAsm8vrajCPKyd158i/m7AE8QnfkiWNJ3WTb/l+7w3K4Kd7SZWHnIWz1NJGXR
-      d9cHT0ixjk0Hq47PnsJr0OG1EDNGpkxptkcvOZQHYDtiVzoXG7fOdqRUJvI2qQ07
-      BHuNrcW50PzaxmdEXEi6DRa17u8yO8TyiDcKEKn7iflU+uWqrs2bEVtmHrUxVRIt
-      y8ohEyYwjm1acZDwgezz88bku+c4RHp7HOgb6r6zsvrYfuH3tKykDak=
-      -----END CERTIFICATE-----
-      ```
-
-
-### How to clean up and remove aba
-
-Run on the disconnected bastion:
-```
-cd aba
-aba -d mirror uninstall    # uninstall the registry if it was installed by ABA
-aba -d mirror unregister   # or, deregister an existing registry (removes creds only)
-cd ..
-rm -rf aba
-sudo rm $(which aba)
-```
-
-Run on the workstation or laptop:
-
-```
-rm -rf aba
-sudo rm $(which aba)
-# re-install aba
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
-cd aba
-aba
-```
-
-[Back to top](#who-should-use-aba)
-
 
 
 # Frequently Asked Questions (FAQ)
+
+### Setup and Platform
 
 ## Q: Does ABA know what RPM packages to install?
 
@@ -1615,6 +1553,8 @@ aba
 You can let ABA install them automatically (if `dnf` is configured) or install them manually.
 
 ---
+
+### Configuration
 
 ## Q: Can bonds and/or vlan be configured on my nodes?
 
@@ -1715,6 +1655,8 @@ echo "username ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/username
 **Partially, yes.** ABA can set up the registry and generate the `install-config.yaml` file for use with UPI. With some additional configuration, the Day-2 operations (OperatorHub, OSUS, Shutdown, Startup, and NTP) can also be used for UPI.
 
 ---
+
+### Troubleshooting
 
 ## Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?
 
