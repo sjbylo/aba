@@ -143,7 +143,7 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 > | **B** | **[Partially Disconnected](#partially-disconnected-installation)** | Bastion can reach both the Internet (or proxy) and the private network. | Sync images directly to the mirror registry |
 > | **C** | **[Connected (no mirror)](#connected-prerequisites)** | Cluster nodes can pull images from the Internet directly or via a proxy. | Set `int_connection=direct` or `proxy` in `cluster.conf` |
 >
-> **Not sure?** Run `aba` — the interactive workflow guides you through the decision.
+> **Not sure?** Run `aba` (CLI) or `./abatui` (guided wizard) — both walk you through the decision.
 >
 > Already have a ready-made bundle? Start at **[Install Bundles](#install-bundles)**.
 
