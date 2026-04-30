@@ -239,11 +239,19 @@ _extract_from_yaml() {
 	' "$yaml_file" 2>/dev/null)
 	[ -z "$pkg" ] || [ -z "$def_ch" ] && return 1
 
-	# Display name from CSV annotation in bundle documents
-	local display_name="-"
-	local dn
+	# Display name from CSV annotation in bundle documents.
+	# Search the given file first, then sibling YAML/JSON files in the same directory.
+	local display_name="" dn="" dir_path
+	dir_path="$(dirname "$yaml_file")"
 	dn=$(grep '^ *displayName:' "$yaml_file" 2>/dev/null | grep -v 'x-descriptors' | tail -1 | sed 's/.*displayName: *//' | sed "s/^['\"]//;s/['\"]$//")
-	[ -n "$dn" ] && display_name="$dn"
+	if [ -z "$dn" ]; then
+		while IFS= read -r -d '' _sf; do
+			[ "$_sf" = "$yaml_file" ] && continue
+			dn=$(grep '^ *displayName:' "$_sf" 2>/dev/null | grep -v 'x-descriptors' | tail -1 | sed 's/.*displayName: *//' | sed "s/^['\"]//;s/['\"]$//")
+			[ -n "$dn" ] && break
+		done < <(find "$dir_path" \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) -print0 2>/dev/null)
+	fi
+	display_name="${dn:--}"
 
 	printf "%-55s %-60s %s\n" "$pkg" "$display_name" "$def_ch"
 }
