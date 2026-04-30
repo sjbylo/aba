@@ -931,10 +931,7 @@ In a connected environment, cluster nodes pull images directly from the Internet
 1. Create the cluster directory:
 ```
 cd aba
-aba cluster \
-    --name mycluster \
-    [--type sno|compact|standard] \
-    [--starting-ip <ip>]
+aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
 ```
 
 2. Edit `mycluster/cluster.conf` and set the connection type:
@@ -1055,10 +1052,7 @@ This creates a `mymirror/` directory with a fresh `mirror.conf`. Edit it to set 
 
 **One-liner with options:**
 ```bash
-aba mirror \
-    --name mymirror \
-    --vendor docker \
-    --reg-port 5000
+aba mirror --name mymirror --vendor docker --reg-port 5000
 ```
 
 **Use the named mirror:**
