@@ -8,7 +8,7 @@ Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 > **Download ready-made ABA install bundles from: https://red.ht/disco-easy (requires Google account)**
 
-![Demo](./images/aba-bundle-demo.gif)
+![Demo](../images/aba-bundle-demo.gif)
 
 <!-- [Download Demo Video](./images/aba-bundle-demo-v5-low.mp4) -->
 [Download Demo Video](https://github.com/sjbylo/aba/raw/refs/heads/main/images/aba-bundle-demo-v5-low.mp4)
@@ -118,7 +118,7 @@ All ABA commands are designed to be idempotent. If something goes wrong, fix it 
 ## How It Works
 
 <div align="center">
-<img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="75%">
+<img src="../images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="75%">
 </div>
 
 Two scenarios for installing OpenShift in a disconnected environment:
@@ -152,7 +152,7 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 This chart shows the complete flow — fully disconnected, partially disconnected, connected, and platform choices (VMware, KVM, bare-metal). Running `aba` (interactive mode) follows this workflow.
 
 <div align="center">
-<img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="75%">
+<img src="../images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="75%">
 </div>
 
 [Back to top](#quick-start)
@@ -243,7 +243,7 @@ Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI w
 > **TUI scope:** The TUI covers environment preparation (version, operators, mirror configuration, bundle creation, and image save/sync). Cluster installation, Day-2 operations, and KVM platform configuration are handled via the CLI only.
 
 <div align="center">
-<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="44%">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="44%">
+<img src="../images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="44%">&nbsp;&nbsp;<img src="../images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="44%">
 </div>
 
 
@@ -259,7 +259,7 @@ Now, continue with either [Partially Disconnected Installation](#partially-disco
 In this scenario, the connected bastion has access to both the Internet and the internal subnet (but not necessarily at the same time).
 
 <div align="center">
-<img src="images/make-sync.jpg" alt="Partially Disconnected Scenario" title="Partially Disconnected Scenario" width="75%">
+<img src="../images/make-sync.jpg" alt="Partially Disconnected Scenario" title="Partially Disconnected Scenario" width="75%">
 </div>
 
 > **Before you begin:** Ensure you have met the [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites) and the [Common Requirements](#common-requirements). If using an existing registry, [register it first](#using-an-existing-registry).
@@ -344,7 +344,7 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
 Now continue with [Installing a Cluster](#installing-a-cluster) below.
 
 <div align="center">
-<img src="images/make-install.jpg" alt="Loading Images to Mirror Registry" title="Loading Images to Mirror Registry" width="50%">
+<img src="../images/make-install.jpg" alt="Loading Images to Mirror Registry" title="Loading Images to Mirror Registry" width="50%">
 </div>
 
 [Back to top](#quick-start)
@@ -488,7 +488,7 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 # Installing a Cluster
 
 <div align="center">
-<img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
+<img src="../images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
 </div>
 
 > **Before you begin:** Mirror registry installed and images loaded (`aba -d mirror sync` or `aba -d mirror load` completed). Or, for connected mode: Internet/proxy access configured (`int_connection` in `cluster.conf`). DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) — see [Network Configuration](#network-configuration).
