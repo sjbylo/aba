@@ -555,8 +555,6 @@ Before generating the ISO, ABA automatically runs pre-flight checks:
 | **NTP** | Verifies each NTP server in `ntp_servers` is reachable |
 | **IP conflicts** | Checks that planned node IPs and VIPs are not already in use |
 
-IP conflict detection uses `arping` (ARP, Layer 2) when available — this cannot be blocked by firewalls. Falls back to `ping` if `arping` is unavailable.
-
 - **Warnings** (e.g. one DNS server down) are reported but do not block installation.
 - **Errors** (e.g. all DNS servers down, or IP conflicts) abort before ISO generation.
 
