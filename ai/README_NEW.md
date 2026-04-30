@@ -117,7 +117,9 @@ All ABA commands are designed to be idempotent. If something goes wrong, fix it 
 
 ## How It Works
 
-<img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="80%">
+<div align="center">
+<img src="images/air-gapped.jpg" alt="Air-gapped data transfer" title="Air-gapped data transfer" width="75%">
+</div>
 
 Two scenarios for installing OpenShift in a disconnected environment:
 
@@ -130,11 +132,28 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 - **Workstation**: RHEL 8 or 9, CentOS Stream 8 or 9, or Fedora.
 - **Bastion**: RHEL 8 or 9 for disconnected OpenShift installation.
 
+
+## Choose Your Path
+
+> **Which scenario matches your environment?**
+>
+> | | Scenario | Your environment | Next step |
+> |---|---|---|---|
+> | **A** | **[Air-Gapped Installation](#air-gapped-installation)** | No network between connected and disconnected sides. Data moves via USB, S3, or physical media. | Save images to disk, create a bundle, transfer it |
+> | **B** | **[Partially Disconnected](#partially-disconnected-installation)** | Bastion can reach both the Internet (or proxy) and the private network. | Sync images directly to the mirror registry |
+> | **C** | **[Connected (no mirror)](#connected-prerequisites)** | Cluster nodes can pull images from the Internet directly or via a proxy. | Set `int_connection=direct` or `proxy` in `cluster.conf` |
+>
+> **Not sure?** Run `aba` — the interactive workflow guides you through the decision.
+>
+> Already have a ready-made bundle? Start at **[Install Bundles](#install-bundles)**.
+
 ### ABA Workflow Diagram
 
-This chart shows the main choices: fully disconnected, partially disconnected, connected, and installation on VMware, KVM, or bare-metal. Running `aba` (interactive mode) follows this workflow.
+This chart shows the complete flow — fully disconnected, partially disconnected, connected, and platform choices (VMware, KVM, bare-metal). Running `aba` (interactive mode) follows this workflow.
 
-<img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="80%">
+<div align="center">
+<img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="75%">
+</div>
 
 [Back to top](#quick-start)
 
@@ -223,7 +242,9 @@ Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI w
 
 > **TUI scope:** The TUI covers environment preparation (version, operators, mirror configuration, bundle creation, and image save/sync). Cluster installation, Day-2 operations, and KVM platform configuration are handled via the CLI only.
 
-<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="45%"> <img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="45%">
+<div align="center">
+<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="44%">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="44%">
+</div>
 
 
 Now, continue with either [Partially Disconnected Installation](#partially-disconnected-installation) or [Air-Gapped Installation](#air-gapped-installation) below.
@@ -237,7 +258,9 @@ Now, continue with either [Partially Disconnected Installation](#partially-disco
 
 In this scenario, the connected bastion has access to both the Internet and the internal subnet (but not necessarily at the same time).
 
-<img src="images/make-sync.jpg" alt="Partially Disconnected Scenario" title="Partially Disconnected Scenario" width="80%">
+<div align="center">
+<img src="images/make-sync.jpg" alt="Partially Disconnected Scenario" title="Partially Disconnected Scenario" width="75%">
+</div>
 
 > **Before you begin:** Ensure you have met the [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites) and the [Common Requirements](#common-requirements). If using an existing registry, [register it first](#using-an-existing-registry).
 
@@ -320,7 +343,9 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
 
 Now continue with [Installing a Cluster](#installing-a-cluster) below.
 
+<div align="center">
 <img src="images/make-install.jpg" alt="Loading Images to Mirror Registry" title="Loading Images to Mirror Registry" width="50%">
+</div>
 
 [Back to top](#quick-start)
 
@@ -462,7 +487,9 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 # Installing a Cluster
 
+<div align="center">
 <img src="images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
+</div>
 
 > **Before you begin:** Mirror registry installed and images loaded (`aba -d mirror sync` or `aba -d mirror load` completed). Or, for connected mode: Internet/proxy access configured (`int_connection` in `cluster.conf`). DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) — see [Network Configuration](#network-configuration).
 
