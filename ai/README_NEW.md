@@ -428,7 +428,12 @@ aba -d mirror -H registry.example.com load --retry 3
 To install OpenShift:
 
 ```
-aba cluster --name mycluster --type compact [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
+aba cluster \
+    --name mycluster \
+    --type compact \
+    [--starting-ip <ip>] \
+    [--api-vip <ip>] \
+    [--ingress-vip <ip>]
 ```
 
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
@@ -495,7 +500,13 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 ```
 cd aba
-aba cluster --name mycluster [--type sno|compact|standard] [--step <step>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]
+aba cluster \
+    --name mycluster \
+    [--type sno|compact|standard] \
+    [--step <step>] \
+    [--starting-ip <ip>] \
+    [--api-vip <ip>] \
+    [--ingress-vip <ip>]
 ```
 - Creates a directory `mycluster` and prompts you to run `aba` inside it.
 - Useful `--step` values: `agentconf`, `iso`, `mon`.
@@ -588,7 +599,11 @@ If you modify `install-config.yaml` or `agent-config.yaml`, ABA detects and pres
 
 Typical workflow:
 ```
-aba cluster --name mycluster --type compact --starting-ip 10.0.1.100 --step agentconf
+aba cluster \
+    --name mycluster \
+    --type compact \
+    --starting-ip 10.0.1.100 \
+    --step agentconf
 cd mycluster
 # Edit install-config.yaml and/or agent-config.yaml as needed
 aba install
@@ -994,7 +1009,10 @@ This creates a `mymirror/` directory with a fresh `mirror.conf`. Edit it to set 
 
 **One-liner with options:**
 ```bash
-aba mirror --name mymirror --vendor docker --reg-port 5000
+aba mirror \
+    --name mymirror \
+    --vendor docker \
+    --reg-port 5000
 ```
 
 **Use the named mirror:**
@@ -1008,13 +1026,20 @@ aba -d mymirror uninstall   # Uninstall the registry
 **Register an existing external registry as a named mirror:**
 ```bash
 aba mirror --name enclave1
-aba -d enclave1 register --reg-host registry.enc1.in --pull-secret-mirror /path/to/ps.json --ca-cert /path/to/ca.pem
+aba -d enclave1 register \
+    --reg-host registry.enc1.in \
+    --pull-secret-mirror /path/to/ps.json \
+    --ca-cert /path/to/ca.pem
 aba -d enclave1 verify
 ```
 
 **Create a cluster that uses the named mirror:**
 ```bash
-aba cluster -n mycluster --type sno --mirror-name enclave1 --starting-ip 10.0.1.50
+aba cluster \
+    -n mycluster \
+    --type sno \
+    --mirror-name enclave1 \
+    --starting-ip 10.0.1.50
 ```
 
 The `--mirror-name` flag sets `mirror_name=enclave1` in `cluster.conf`. Each named mirror has its own `mirror.conf` and credentials stored in `~/.aba/mirror/mymirror/`.
