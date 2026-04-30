@@ -53,7 +53,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Common Requirements](#common-requirements)
   - [Air-Gapped Prerequisites](#air-gapped-prerequisites)
   - [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
-  - [Connected Prerequisites](#connected-prerequisites)
+  - [Connected Installation (No Mirror)](#connected-installation-no-mirror)
 - [Command Reference](#command-reference)
 - [Advanced Topics](#advanced-topics)
   - [Named Mirror Directories (Enclaves)](#named-mirror-directories-enclaves)
@@ -141,7 +141,7 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 > |---|---|---|---|
 > | **A** | **[Air-Gapped Installation](#air-gapped-installation)** | No network between connected and disconnected sides. Data moves via USB, S3, or physical media. | Save images to disk, create a bundle, transfer it |
 > | **B** | **[Partially Disconnected](#partially-disconnected-installation)** | Bastion can reach both the Internet (or proxy) and the private network. | Sync images directly to the mirror registry |
-> | **C** | **[Connected (no mirror)](#connected-prerequisites)** | Cluster nodes can pull images from the Internet directly or via a proxy. | Set `int_connection=direct` or `proxy` in `cluster.conf` |
+> | **C** | **[Connected (no mirror)](#connected-installation-no-mirror)** | Cluster nodes can pull images from the Internet directly or via a proxy. | Set `int_connection=direct` or `proxy` in `cluster.conf` |
 >
 > **Not sure?** Run `aba` (CLI) or `./abatui` (guided wizard) — both walk you through the decision.
 >
@@ -492,11 +492,15 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 # Installing a Cluster
 
+> **Before you begin** (choose one):
+> - **Disconnected / partially disconnected:** Mirror registry installed and images loaded (`aba -d mirror sync` or `aba -d mirror load` completed).
+> - **Connected (no mirror):** See [Connected Installation](#connected-installation-no-mirror) for the streamlined path.
+>
+> **All modes:** DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) — see [Network Configuration](#network-configuration).
+
 <div align="center">
 <img src="../images/make-cluster.jpg" alt="Installing OpenShift" title="Installing OpenShift" width="50%">
 </div>
-
-> **Before you begin:** Mirror registry installed and images loaded (`aba -d mirror sync` or `aba -d mirror load` completed). Or, for connected mode: Internet/proxy access configured (`int_connection` in `cluster.conf`). DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) — see [Network Configuration](#network-configuration).
 
 ```
 cd aba
@@ -912,9 +916,51 @@ In a _partially disconnected environment_, the _connected bastion_ has limited (
 After configuring these prerequisites, run `aba` to start the workflow.
 
 
-## Connected Prerequisites
+## Connected Installation (No Mirror)
 
-ABA also works in connected environments without a _mirror registry_, e.g. by accessing public registries via a proxy or directly. Configure `int_connection` in `cluster.conf` after creating the cluster directory (see [Installing a Cluster](#installing-a-cluster)).
+In a connected environment, cluster nodes pull images directly from the Internet (or via an HTTP proxy). No mirror registry is needed.
+
+#### Prerequisites
+- ABA [installed](#install-aba) and `aba.conf` configured (OpenShift version, base domain, machine network, etc.)
+- Cluster nodes can reach the Internet directly or via a proxy
+- DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) -- see [Network Configuration](#network-configuration)
+- See [Common Requirements](#common-requirements)
+
+#### Steps
+
+1. Create the cluster directory:
+```
+cd aba
+aba cluster \
+    --name mycluster \
+    [--type sno|compact|standard] \
+    [--starting-ip <ip>]
+```
+
+2. Edit `mycluster/cluster.conf` and set the connection type:
+```
+int_connection=direct      # Nodes pull from the Internet directly
+```
+or:
+```
+int_connection=proxy       # Nodes pull via your HTTP proxy
+```
+
+3. Install the cluster:
+```
+cd mycluster
+aba install
+```
+
+For VMware/KVM, installation is fully automated. For bare-metal, ABA generates the ISO for you to boot your servers.
+
+4. Access the cluster:
+```
+. <(aba shell)
+oc whoami
+```
+
+See [Installing a Cluster](#installing-a-cluster) for the full list of flags, customization options, and Day 2 operations.
 
 [Back to top](#quick-start)
 
