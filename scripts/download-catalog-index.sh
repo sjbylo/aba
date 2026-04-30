@@ -260,11 +260,12 @@ for dir in "$tmp_dir/configs"/*/; do
 		_extract_from_json "$dir" "$dir/catalog.json"
 	elif [ -f "$dir/index.json" ]; then
 		_extract_from_json "$dir" "$dir/index.json"
+	elif [ -f "$dir/package.yaml" ]; then
+		_extract_from_yaml "$dir/package.yaml"
 	elif compgen -G "$dir"'*.yaml' >/dev/null 2>&1 || compgen -G "$dir"'*.yml' >/dev/null 2>&1; then
 		for yf in "$dir"/*.yaml "$dir"/*.yml; do
 			[ -f "$yf" ] || continue
-			_extract_from_yaml "$yf"
-			break
+			_extract_from_yaml "$yf" && break
 		done
 	else
 		# Generic fallback: scan all JSON files for olm.package entries
