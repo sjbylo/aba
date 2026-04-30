@@ -192,7 +192,7 @@ _any_mcp_updating() {
 
 _mco_started=1
 _wait_rc=0
-aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 60 _any_mcp_updating || _wait_rc=$?
+aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 20 _any_mcp_updating || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
