@@ -2187,10 +2187,51 @@ ABA suppresses stderr (`2>/dev/null`) in many places, hiding actual error messag
 2. **TUI should adopt `_try()`**: The TUI itself should use `_try` for command execution to capture and display errors cleanly.
 3. **Dual-mode scripts**: Scripts called by both CLI and TUI must work in both contexts.
 
+### Remove `aba getco` command
+
+Remove the `getco` verb from `scripts/aba.sh`. It's redundant — `aba run` (which defaults to `--cmd "get co"`) does the same thing. No need for a separate command.
+
 ### Key constraints discovered
 
 - `_try` must NOT be used inside `aba_wait_show` polling callbacks (intercepts stderr from `_wait_log`)
 - `_try` must NOT be used on stderr-visible commands unless the error is re-displayed via `aba_warning`/`aba_abort`
 - `_try curl` must always use `-sS` to avoid progress meter in `_LAST_ERR`
 - Probes (`probe_host`) must stay silent -- failures are expected
+
+---
+
+## E2E: Fix --dev flag so uncommitted changes are actually tested
+
+**Priority**: High
+**Added:** 2026-04-30
+
+### Problem
+
+The `--dev` flag in `run.sh` is intended to let a developer push their local (uncommitted) working copy to all pool VMs so it gets tested by every suite. Today it pushes a tarball to `~/aba` on conN, but **every suite calls `e2e_install_aba()` as its first step**, which does `rm -rf ~/aba/* && git clone ...` -- wiping the dev tarball and replacing it with the committed code from git. The developer's changes are never actually tested.
+
+### Root cause
+
+`e2e_install_aba()` in `lib/framework.sh` unconditionally does a fresh `git clone`. It has no awareness of dev-mode code already being present.
+
+### Proposed fix
+
+See plan: `fix_--dev_flag_2b507f6b.plan.md`
+
+1. **Keep the dev tarball on conN** at `/tmp/aba-dev-source.tar.gz` (don't delete after extraction).
+2. **Modify `e2e_install_aba`** to check for `/tmp/aba-dev-source.tar.gz` -- if present, wipe and re-extract from tarball instead of `git clone`. Each suite still gets a clean `~/aba` but from the dev tarball.
+3. **Clean up stale tarball** on non-`--dev` runs so normal runs revert to `git clone`.
+4. **Expand `.deploy-manifest`** to include all paths needed for a complete ABA install (currently missing `build/`, full `cli/`, etc.).
+5. **Fix `sync_infra_aba`** to use local `scripts/aba.sh` in dev mode instead of `git show` from the committed branch.
+
+### Files involved
+
+- `test/e2e/lib/framework.sh` -- `e2e_install_aba` dev-tarball check
+- `test/e2e/lib/deploy.sh` -- `sync_source` keep tarball; `sync_infra_aba` dev-mode path
+- `test/e2e/run.sh` -- cleanup stale tarball on non-dev runs
+- `test/e2e/.deploy-manifest` -- expand to include all required paths
+
+## Test and fix: `scripts/listopdeps.sh`
+
+- Test `scripts/listopdeps.sh` and fix any issues found.
+- This script lists operator dependencies (e.g. `scripts/listopdeps.sh 4.18 odf-operator`) and is referenced in the README under "Operator Dependencies".
 
