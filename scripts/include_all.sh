@@ -147,14 +147,9 @@ _aba_debug_last=
 aba_debug() {
     local newline=1
 
-    [ ! "${DEBUG_ABA:-}" ] && return 0
-
     # Suppress consecutive duplicate messages (e.g. polling loops)
     [ "$*" = "$_aba_debug_last" ] && return 0
     _aba_debug_last="$*"
-
-    # Erase to col1 and return
-    [ "$TERM" ] && { tput el1 && tput cr; } >&2
 
     # Detect and consume "-n" if it's the first argument
     if [[ "$1" == "-n" ]]; then
@@ -165,10 +160,22 @@ aba_debug() {
     local timestamp
     timestamp="$(date +%H:%M:%S)"
 
-    if (( newline )); then
-        echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
-    else
-        echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
+    if [ "${DEBUG_ABA:-}" ]; then
+        # Debug mode: write to terminal (stderr). The exec tee in aba.sh
+        # will also capture this into the trace file -- no direct write needed.
+        [ "$TERM" ] && { tput el1 && tput cr; } >&2
+        if (( newline )); then
+            echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
+        else
+            echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
+        fi
+    elif [ -n "${ABA_TRACE_FILE:-}" ] && [ -w "${ABA_TRACE_FILE:-}" ]; then
+        # Non-debug mode: write directly to trace file only (not visible on terminal)
+        if (( newline )); then
+            echo "[ABA_DEBUG] ${timestamp}: $*" >> "$ABA_TRACE_FILE"
+        else
+            echo -n "[ABA_DEBUG] ${timestamp}: $*" >> "$ABA_TRACE_FILE"
+        fi
     fi
 }
 

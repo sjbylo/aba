@@ -22,6 +22,10 @@ aba:  ## Run aba in interactive mode, to set up 'aba.conf'
 aba.conf:
 	aba
 
+.PHONY: version
+version: ## Show ABA version
+	@aba --aba-version
+
 ##@ Help-related tasks
 .PHONY: help
 help: ## Help

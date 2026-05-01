@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260430094725
+ABA_BUILD=20260501231728
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -37,7 +37,7 @@ ARCH=$(uname -m)
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # Handle --aba-version early (before sudo check)
-if [ "$1" = "--aba-version" ]; then
+if [ "$1" = "--aba-version" -o "$1" = "version" ]; then
 	ver=$(cat "$(dirname "$(readlink -f "$0")")/../VERSION" 2>/dev/null)
 	echo "aba${ver:+ v$ver} version $ABA_VERSION (build $ABA_BUILD)"
 	git_branch=$(git branch --show-current 2>/dev/null)
@@ -166,6 +166,28 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 fi
 
 source $ABA_ROOT/scripts/include_all.sh
+
+# --- Trace logging setup ---
+# Always capture full output + debug to a trace file for post-mortem debugging.
+# The file is truncated on each top-level invocation (contains only the last run).
+export ABA_TRACE_DIR="$HOME/.aba/logs"
+export ABA_TRACE_FILE="$ABA_TRACE_DIR/trace.log"
+mkdir -p "$ABA_TRACE_DIR"
+chmod 700 "$ABA_TRACE_DIR"
+: > "$ABA_TRACE_FILE"
+chmod 600 "$ABA_TRACE_FILE"
+{
+	echo "=== ABA Trace ==="
+	echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+	echo "Command:   aba $*"
+	echo "Version:   $ABA_VERSION (build $ABA_BUILD)"
+	echo "CWD:       $PWD"
+	echo "ABA_ROOT:  $ABA_ROOT"
+	echo "==="
+} >> "$ABA_TRACE_FILE"
+# Duplicate stdout+stderr to the trace file. Terminal output is unchanged.
+exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
 [ ! "$RUN_ONCE_CLEANED" ] && run_once -F # Clean out only the previously failed tasks
@@ -237,7 +259,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -946,7 +968,7 @@ if [ "$cur_target" ]; then
 		create)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
-			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start
+			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start || exit $?
 			# Sync Make stamp files: VMs exist, so all prior steps (poweroff, upload,
 			# refresh) are logically complete. Without these, a subsequent 'aba bootstrap'
 			# or 'aba install' would re-run the entire chain and destroy the running VMs.
@@ -995,7 +1017,7 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init agentconf"
 			aba_debug "Running: $exec_cmd (delete)"
 			$exec_cmd || true
-			$ABA_ROOT/scripts/${HV}-delete.sh
+			$ABA_ROOT/scripts/${HV}-delete.sh || exit $?
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
 			exit
@@ -1006,7 +1028,7 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (refresh)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
+			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters || exit $?
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
 			touch .autopoweroff .autoupload .autorefresh
@@ -1017,7 +1039,11 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (upload)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-upload.sh
+			if scripts/${HV}-exists.sh 2>/dev/null; then
+				ask "VMs exist and must be powered off before uploading the ISO. Power off" || exit 1
+				$ABA_ROOT/scripts/${HV}-kill.sh || true
+			fi
+			$ABA_ROOT/scripts/${HV}-upload.sh || exit $?
 			# Sync Make stamp files: upload implies poweroff already happened.
 			touch .autopoweroff .autoupload
 			exit
@@ -1053,8 +1079,8 @@ if [ ! "$interactive_mode" ]; then
 		if [ "$DEBUG_ABA" ]; then
 			aba_debug ask=$ask DEBUG_ABA=$DEBUG_ABA INFO_ABA=$INFO_ABA
 			aba_debug "Running: \"make $BUILD_COMMAND\" from directory: $PWD" 
-			aba_debug -n "Pausing 5s ... [Return to continue]:"
-			read -t 5 || echo
+			#aba_debug -n "Pausing 5s ... [Return to continue]:"
+			#read -t 5 || echo  # Need to remove since we now write to a trace file
 
 			# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 			eval make $BUILD_COMMAND
