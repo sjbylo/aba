@@ -271,11 +271,13 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 	chmod +x ~/bin/oc-mirror
 #	~/bin/oc-mirror --help >/tmp/.oc-mirror-exec.log 2>&1 || { echo [ABA] "Error: ~/bin/oc-mirror failed to execute"; cp -p ~/bin/oc-mirror /tmp; exit 1; }
 
-# Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v$(ocp_major)/amd64/clients/ocp/ 
+# Check here for any updated versions: https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/ 
 
 # oc-mirror pin: stable-4.21 is intentional -- new oc-mirror versions must be tested before adoption.
-# Only the CDN path (openshift-v4 → openshift-v$(ocp_major)) is parameterized here.
-oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/stable-4.21
+# Hardcoded to openshift-v4 (NOT parameterized) because oc-mirror is version-independent
+# and must be well-tested before any upgrade. The --no-version download path also requires
+# this URL to work without ocp_version being set.
+oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.21
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
