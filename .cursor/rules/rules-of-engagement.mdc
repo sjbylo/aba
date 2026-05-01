@@ -107,6 +107,7 @@ alwaysApply: true
   - If a file might not exist, use `rm -f` (already ignores missing) NOT `rm 2>/dev/null`
   - If a precondition is uncertain, use an explicit check: `if [ -f X ]; then ...; fi`
   - **Narrow exceptions** (must have a comment explaining why): `command -v foo >/dev/null` (existence check), `type foo &>/dev/null` / `declare -p VAR &>/dev/null` (guard checks where "not found" is expected), `kill -0 $pid 2>/dev/null` (process probe), `. ~/.bash_profile 2>/dev/null` (file may not exist), `tmux ... 2>/dev/null` (session may not exist), `[ "$x" -gt 0 ] 2>/dev/null` (arithmetic guard)
+- **When ANY test or suite fails, the FIRST action is ALWAYS to investigate the root cause.** Gather evidence: read logs, check process state, inspect leftover files, trace the sequence of events. NEVER clean up, delete, restart, or work around a failure before understanding WHY it happened. Cleaning up destroys evidence and is a band-aid -- the same failure will recur. Only after the root cause is understood and documented (or fixed) should cleanup proceed.
 - When a test fails, check if the fix belongs in ABA code FIRST -- never "fix" a test just to make it pass!
 - No safety nets in framework code -- if a suite doesn't clean up, fix the suite, don't paper over it
 - NEVER use band-aid fixes (e.g. raw `rm -rf` to work around cleanup failures) -- fix the root cause
