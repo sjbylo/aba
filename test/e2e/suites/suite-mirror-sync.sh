@@ -55,7 +55,6 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
@@ -199,7 +198,7 @@ e2e_run -q "Ensure OC_MIRROR_FLAGS is unset in ~/.aba/config" \
 
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
-e2e_add_to_mirror_cleanup "$PWD/mirror" remote
+e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
 
 # Verify --remove-signatures is NOT active in OC_MIRROR_FLAGS
@@ -284,7 +283,7 @@ e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:s
 
 e2e_run "Clean mirror working state" "aba -d mirror clean"
 e2e_diag "Markers: before sync" "_marker_snap"
-e2e_add_to_mirror_cleanup "$PWD/mirror" remote
+e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
 e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"

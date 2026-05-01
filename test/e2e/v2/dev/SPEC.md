@@ -952,6 +952,24 @@ All these `scp` operations are consolidated into `sync_harness()` and
 - SSH keys -- from `golden-ready` snapshot
 - Exception: `--dev` mode overwrites `~/aba` with a tarball from bastion
 
+### `--dev` mode invariant: `~/aba` must never be wiped
+
+When `--dev` is active, the developer's source from bastion is deployed to
+`~/aba` on each conN via `sync_source()`. This code **must survive the entire
+suite lifecycle** -- no operation may wipe or overwrite `~/aba`:
+
+- `e2e_install_aba` runs `./install && aba reset -f` **inside** `~/aba` (never
+  `rm -rf ~/aba` or `git clone`). Both commands preserve the file tree.
+- `e2e_install_aba --curl` normally wipes `~/aba` and re-clones from git. In
+  `--dev` mode (`E2E_DEV_MODE=1`), this is **skipped** and falls through to the
+  non-curl path (`./install && aba reset -f`), preserving the dev code.
+- `E2E_DEV_MODE=1` is propagated from the `--dev` CLI flag through
+  `_generate_deploy_config()` into `config.env`, making it available to all
+  suites and framework code on conN.
+- No suite, framework function, or runner step may `rm -rf ~/aba`, `git clone`
+  into `~/aba`, or otherwise replace the contents of `~/aba` when
+  `E2E_DEV_MODE=1` is set.
+
 ### Infra space vs user space
 
 The test framework enforces a strict separation between infrastructure-owned

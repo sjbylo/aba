@@ -16,7 +16,7 @@ cmd_stop() {
 	local all_pools="${2:-$pool_list}"
 	local do_clean="${CLI_CLEAN:-}"
 
-	# Kill the dispatcher only when stopping ALL configured pools.
+	# Kill the dispatcher + daemon only when stopping ALL configured pools.
 	if [ "$pool_list" = "$all_pools" ]; then
 		if [ -f "$E2E_DISPATCHER_PID" ]; then
 			local _dpid
@@ -25,6 +25,14 @@ cmd_stop() {
 				kill "$_dpid" && echo "Dispatcher (pid $_dpid) stopped."
 			fi
 			rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
+		fi
+		if [ -f "$E2E_DAEMON_PID" ]; then
+			local _dmpid
+			_dmpid=$(cat "$E2E_DAEMON_PID")
+			if [ -n "$_dmpid" ] && kill -0 "$_dmpid" 2>/dev/null; then
+				kill "$_dmpid" && echo "Daemon (pid $_dmpid) stopped."
+			fi
+			rm -f "$E2E_DAEMON_PID"
 		fi
 	fi
 
@@ -274,6 +282,10 @@ _show_dispatcher_status() {
 		fi
 	else
 		printf "  Dispatcher: \033[90mnot running\033[0m\n"
+	fi
+
+	if [ -f "$E2E_DAEMON_PID" ] && kill -0 "$(cat "$E2E_DAEMON_PID" 2>/dev/null)" 2>/dev/null; then
+		printf "  Daemon:     \033[1;32mRUNNING\033[0m (pid %s)\n" "$(cat "$E2E_DAEMON_PID")"
 	fi
 }
 

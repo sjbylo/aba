@@ -1778,20 +1778,19 @@ _e2e_fix_ssh_config_ownership() {
 }
 
 # --- ABA Install Helper -----------------------------------------------------
-# Symlink-safe ABA install: removes ~/aba contents (preserving symlinks)
-# then installs via git clone or curl.
+# Reuse existing ~/aba code (from infra git clone or --dev tarball) and reset
+# state. The --curl variant tests the curl-based install path but ONLY when
+# not in --dev mode; in --dev mode ~/aba must never be wiped.
 # Usage: e2e_install_aba [--curl]
 
 e2e_install_aba() {
-	local mode="git"
-	[ "${1:-}" = "--curl" ] && mode="curl"
-
-	if [ "$mode" = "curl" ]; then
+	if [ "${1:-}" = "--curl" ] && [ -z "${E2E_DEV_MODE:-}" ]; then
 		e2e_run "Install ABA via curl" \
 			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
 	else
-		e2e_run "Install ABA from git" \
-			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+		[ "${1:-}" = "--curl" ] && echo "  [dev-mode] Skipping curl wipe -- preserving ~/aba"
+		e2e_run "Refresh ABA install and reset" \
+			"cd ~/aba && ./install && aba reset -f"
 	fi
 	cd ~/aba
 }
