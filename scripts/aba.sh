@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260501231728
+ABA_BUILD=20260501231904
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -169,11 +169,16 @@ source $ABA_ROOT/scripts/include_all.sh
 
 # --- Trace logging setup ---
 # Always capture full output + debug to a trace file for post-mortem debugging.
-# The file is truncated on each top-level invocation (contains only the last run).
+# Keeps the last 5 trace files (trace.log, trace.log.1, ... trace.log.4).
 export ABA_TRACE_DIR="$HOME/.aba/logs"
 export ABA_TRACE_FILE="$ABA_TRACE_DIR/trace.log"
 mkdir -p "$ABA_TRACE_DIR"
 chmod 700 "$ABA_TRACE_DIR"
+# Rotate: keep last 5 logs
+for i in 3 2 1 0; do
+	[ -f "$ABA_TRACE_FILE.$i" ] && mv -f "$ABA_TRACE_FILE.$i" "$ABA_TRACE_FILE.$((i+1))"
+done
+[ -f "$ABA_TRACE_FILE" ] && mv -f "$ABA_TRACE_FILE" "$ABA_TRACE_FILE.0"
 : > "$ABA_TRACE_FILE"
 chmod 600 "$ABA_TRACE_FILE"
 {
