@@ -77,7 +77,24 @@ _release_pool_locks() {
 trap _release_pool_locks EXIT
 
 case "$CLI_COMMAND" in
-	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy)
+	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy|logs)
+		;;
+	run)
+		# Skip locks when not daemonized: the foreground process will either
+		# inject suites into a running daemon or launch a new one (which acquires
+		# locks itself via the inner "run" child).
+		if [ -n "${_E2E_DAEMONIZED:-}" ]; then
+			if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
+				exec 9>"$E2E_GLOBAL_LOCK"
+				if ! flock -n 9; then
+					echo "FATAL: Another run.sh instance is rebuilding the golden VM" >&2
+					exit 1
+				fi
+				echo $$ >&9
+				_LOCK_FDS+=(9)
+			fi
+			_acquire_pool_locks
+		fi
 		;;
 	*)
 		if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
@@ -104,6 +121,14 @@ case "$CLI_COMMAND" in
 		;;
 	dash)
 		cmd_dash "$CLI_POOL_LIST"
+		;;
+	logs)
+		_log="$_RUN_DIR/logs/daemon.log"
+		if [ ! -f "$_log" ]; then
+			echo "No daemon log found at: $_log"
+			exit 1
+		fi
+		exec tail -F "$_log"
 		;;
 	list)
 		cmd_list "$_RUN_DIR"
@@ -144,14 +169,14 @@ case "$CLI_COMMAND" in
 	daemon)
 		_DAEMON_LOG="$_RUN_DIR/logs/daemon.log"
 		_DAEMON_MAX_CRASHES=5
-		_DAEMON_BACKOFF=30
-		_DAEMON_BACKOFF_MAX=300
+		_DAEMON_BACKOFF=5
+		_DAEMON_BACKOFF_MAX=60
 		_daemon_crashes=0
 		_daemon_backoff=$_DAEMON_BACKOFF
 
 		mkdir -p "$_RUN_DIR/logs"
 
-		_daemon_log() { printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$_DAEMON_LOG"; }
+		_daemon_log() { printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$_DAEMON_LOG"; }
 
 		# Rebuild the original args, replacing "daemon" with "run"
 		_daemon_args=()
@@ -166,7 +191,10 @@ case "$CLI_COMMAND" in
 		done
 		[ -z "$_has_force" ] && _daemon_args+=("--force")
 
-		_daemon_log "Daemon started (max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
+		echo $$ > "$E2E_DAEMON_PID"
+		trap 'rm -f "$E2E_DAEMON_PID"' EXIT
+
+		_daemon_log "Daemon started (PID=$$, max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
 		_daemon_log "Args: ${_daemon_args[*]}"
 
 		export _E2E_DAEMONIZED=1
@@ -215,52 +243,115 @@ esac
 # =============================================================================
 
 # --- Auto-daemonize "run" command ---------------------------------------------
-# When invoked interactively (not already inside the daemon wrapper), re-launch
-# as "daemon" inside a detached tmux session on the bastion so the dispatcher
-# survives terminal disconnects and Ctrl-C.  The user sees startup output and
-# gets instructions on how to reattach.
+# When invoked interactively (not already inside the daemon wrapper):
+#  1. If a daemon is already running, inject the requested suites and exit.
+#  2. Otherwise, launch a background daemon process (nohup + disown) and exit.
+# The daemon process handles crash recovery and restarts.
 
-_E2E_DISPATCHER_TMUX="e2e-dispatcher"
+_is_daemon_alive() {
+	[ -f "$E2E_DAEMON_PID" ] || return 1
+	local _pid
+	_pid=$(cat "$E2E_DAEMON_PID" 2>/dev/null) || return 1
+	[ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
+}
 
 if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
-	# Kill any existing dispatcher tmux session (stale from previous run)
-	tmux kill-session -t "$_E2E_DISPATCHER_TMUX" 2>/dev/null || true
 
-	# Build the daemon command with the original args (replacing "run" with "daemon").
-	# Export the full current environment so GOVC_*, SUB_*, proxy vars etc. are
-	# available inside the tmux session (tmux server may have started with a
-	# different environment).
-	_env_file=$(mktemp /tmp/e2e-daemon-env.XXXXXX)
-	env -0 > "$_env_file"
-
-	_daemon_cmd="while IFS= read -r -d '' _line; do export \"\$_line\"; done < $(printf '%q' "$_env_file"); rm -f $(printf '%q' "$_env_file"); "
-	_daemon_cmd+="cd $(printf '%q' "$_RUN_DIR") && _E2E_DAEMONIZED=1 exec $BASH $(printf '%q' "$_RUN_DIR/run.sh")"
-	for _a in "${_ORIGINAL_ARGS[@]}"; do
-		[ "$_a" = "run" ] && _a="daemon"
-		_daemon_cmd+=" $(printf '%q' "$_a")"
-	done
-
-	tmux new-session -d -s "$_E2E_DISPATCHER_TMUX" "$_daemon_cmd" 2>/dev/null || {
-		echo "ERROR: Failed to create tmux session '$_E2E_DISPATCHER_TMUX'" >&2
-		echo "  Falling back to foreground mode." >&2
-		rm -f "$_env_file"
-		_E2E_DAEMONIZED=1
-	}
-
-	if [ -z "${_E2E_DAEMONIZED:-}" ]; then
+	# --- If a daemon is already running, inject suites into its queue ---------
+	if _is_daemon_alive; then
+		_daemon_pid=$(cat "$E2E_DAEMON_PID")
 		echo ""
-		echo "  Dispatcher launched in background tmux session: $_E2E_DISPATCHER_TMUX"
+		echo "  Daemon already running (PID $_daemon_pid). Injecting suites ..."
 		echo ""
-		echo "  Monitor with:"
-		echo "    ./run.sh status                  # quick status of all pools"
-		echo "    ./run.sh live                    # tail all pool logs"
-		echo "    ./run.sh attach conN             # attach to a pool's tmux"
-		echo "    tmux attach -t $_E2E_DISPATCHER_TMUX   # attach to dispatcher"
+
+		_inject_suites=()
+		if [ -n "${CLI_ALL:-}" ]; then
+			read -ra _inject_suites <<< "$(all_suite_names "$_RUN_DIR")"
+		elif [ -n "${CLI_SUITE:-}" ]; then
+			IFS=',' read -ra _inject_suites <<< "$CLI_SUITE"
+		fi
+
+		if [ ${#_inject_suites[@]} -eq 0 ]; then
+			echo "  No suites specified. Use -s SUITE or -a/--all."
+			echo "  (daemon is still running)"
+			exit 0
+		fi
+
+		validate_suites "$_RUN_DIR" "${_inject_suites[@]}" || exit 1
+
+		for _s in "${_inject_suites[@]}"; do
+			if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+				_existing=$(cat "$E2E_INJECT_QUEUE")
+				printf '%s\n%s\n' "$_s" "$_existing" > "$E2E_INJECT_QUEUE"
+			else
+				echo "$_s" > "$E2E_INJECT_QUEUE"
+			fi
+			printf "  Queued: \033[1;36m%s\033[0m\n" "$_s"
+		done
+
 		echo ""
-		echo "  Logs: $_RUN_DIR/logs/daemon.log"
+		echo "  ${#_inject_suites[@]} suite(s) injected. Dispatcher will pick them up shortly."
 		echo ""
 		exit 0
 	fi
+
+	# --- No daemon running: launch one in the background ----------------------
+	mkdir -p "$_RUN_DIR/logs"
+	_DAEMON_LOG="$_RUN_DIR/logs/daemon.log"
+
+	# Build daemon args (replacing "run" with "daemon")
+	_bg_args=()
+	for _a in "${_ORIGINAL_ARGS[@]}"; do
+		[ "$_a" = "run" ] && _a="daemon"
+		_bg_args+=("$_a")
+	done
+
+	# Export environment to a temp file so the daemon inherits GOVC_*, proxy, etc.
+	_env_file=$(mktemp /tmp/e2e-daemon-env.XXXXXX)
+	env -0 > "$_env_file"
+
+	# Launch: import env, then exec into the daemon
+	(
+		while IFS= read -r -d '' _line; do
+			[[ "$_line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]] && export "$_line" 2>/dev/null
+		done < "$_env_file"
+		rm -f "$_env_file"
+		cd "$_RUN_DIR"
+		export _E2E_DAEMONIZED=1
+		exec "$BASH" "$_RUN_DIR/run.sh" "${_bg_args[@]}"
+	) >> "$_DAEMON_LOG" 2>&1 &
+	_bg_pid=$!
+	disown "$_bg_pid" 2>/dev/null
+
+	# Brief wait to confirm the daemon started and wrote its PID
+	sleep 1
+	if kill -0 "$_bg_pid" 2>/dev/null; then
+		echo ""
+		echo "  Dispatcher launched in background (PID: $_bg_pid)"
+		echo ""
+		echo "  Monitor with:"
+		echo "    ./run.sh status                  # quick status of all pools"
+		echo "    ./run.sh logs                    # tail dispatcher log"
+		echo "    ./run.sh live                    # attach to pool sessions"
+		echo "    ./run.sh attach conN             # attach to a single pool"
+		echo ""
+		echo "  Add more suites:"
+		echo "    ./run.sh run -s suite-name       # inject into running daemon"
+		echo "    ./run.sh run -a                  # inject all suites"
+		echo "    ./run.sh reschedule -s suite-name"
+		echo ""
+		echo "  Stop:"
+		echo "    ./run.sh stop                    # stop all pools + daemon"
+		echo ""
+		echo "  Logs: $_DAEMON_LOG"
+		echo ""
+	else
+		echo "ERROR: Daemon process failed to start. Check: $_DAEMON_LOG" >&2
+		rm -f "$_env_file"
+		exit 1
+	fi
+
+	exit 0
 fi
 
 # --- Determine suites to run -------------------------------------------------

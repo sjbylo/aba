@@ -75,9 +75,6 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba, configure for VMware"
 
-e2e_run "Reset aba to clean state" \
-    "./install && aba reset -f"
-
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for VMware" \

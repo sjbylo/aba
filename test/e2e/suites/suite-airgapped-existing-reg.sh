@@ -66,7 +66,6 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches (conN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \

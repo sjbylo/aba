@@ -265,6 +265,12 @@ test_begin "Proxy-only mode: verify without direct internet"
 # Restore proxy
 [ -f ~/.proxy-set.sh ] && source ~/.proxy-set.sh
 
+# Clean up any leftover proxy-only cluster dir before blocking internet,
+# since aba delete needs vCenter access.
+SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
+e2e_run "Delete any leftover $SNO_PROXY_ONLY cluster" \
+    "if [ -d $SNO_PROXY_ONLY ]; then aba -y --dir $SNO_PROXY_ONLY delete; fi"
+
 # Block direct outbound HTTP/HTTPS (ports 80,443) while allowing proxy traffic.
 # This simulates an enterprise bastion that can ONLY reach internet via proxy.
 PROXY_IP="${http_proxy#http://}"
@@ -282,9 +288,6 @@ e2e_run "Verify proxy curl works" \
     "curl --connect-timeout 10 -sk https://quay.io/v2/"
 
 # Create a proxy-mode cluster config and verify it generates correctly
-SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
-e2e_run "Delete any leftover $SNO_PROXY_ONLY cluster" \
-    "if [ -d $SNO_PROXY_ONLY ]; then aba -y --dir $SNO_PROXY_ONLY delete; fi"
 e2e_run "Create SNO config with -I proxy (proxy-only bastion)" \
     "aba cluster -n $SNO_PROXY_ONLY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 

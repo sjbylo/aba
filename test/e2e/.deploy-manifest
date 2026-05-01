@@ -5,6 +5,7 @@
 scripts/
 templates/
 tools/
+others/
 test/lib.sh
 Makefile
 cli/Makefile

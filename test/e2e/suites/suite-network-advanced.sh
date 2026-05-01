@@ -78,9 +78,6 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Reset aba to clean state" \
-    "./install && aba reset -f"
-
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 

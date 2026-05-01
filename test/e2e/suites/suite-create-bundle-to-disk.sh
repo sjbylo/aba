@@ -64,8 +64,6 @@ e2e_run -q "Remove old files" \
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
-
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 

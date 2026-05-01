@@ -24,7 +24,9 @@ set -u
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 INTERNAL_BASTION="$(pool_internal_bastion)"
 
@@ -40,7 +42,8 @@ plan_tests \
 	"Bundle errors" \
 	"Registry errors" \
 	"Docker registry install and recovery" \
-	"Cluster config errors"
+	"Cluster config errors" \
+	"Register negative paths"
 
 suite_begin "negative-paths"
 
@@ -50,8 +53,6 @@ suite_begin "negative-paths"
 test_begin "Setup: install and configure"
 
 e2e_install_aba
-
-e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
 	"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
@@ -376,6 +377,57 @@ e2e_run_must_fail "Cluster with bad ingress-vip" \
 	"aba cluster --ingress-vip 999.999.999.999"
 
 e2e_run "Restore aba.conf" "cp aba.conf.good aba.conf"
+
+test_end 0
+
+# ============================================================================
+# 9. Register negative paths
+# ============================================================================
+test_begin "Register negative paths"
+
+suite_ensure_pool_registry "${CON_HOST}"
+
+e2e_run "Ensure mirror dir initialised for register tests" "make -sC mirror init"
+
+# Missing --ca-cert: Makefile requires ca_cert= to be non-empty
+e2e_run_must_fail "Register without --ca-cert must fail" \
+	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json"
+
+# Missing --pull-secret-mirror: Makefile requires pull_secret_mirror= to be non-empty
+e2e_run_must_fail "Register without --pull-secret-mirror must fail" \
+	"aba -d mirror register --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+# Non-existent pull secret file: aba.sh validates file existence
+e2e_run_must_fail "Register with non-existent pull secret must fail" \
+	"aba -d mirror register --pull-secret-mirror /tmp/no-such-file.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+# Non-existent CA cert file: aba.sh validates file existence
+e2e_run_must_fail "Register with non-existent CA cert must fail" \
+	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert /tmp/no-such-cert.pem"
+
+# Both args missing: Makefile rejects when both pull_secret_mirror and ca_cert are empty
+e2e_run_must_fail "Register with no args at all must fail" \
+	"aba -d mirror register"
+
+# Register without reg_host set: reg-register.sh aborts when reg_host is empty
+e2e_run "Clear reg_host in mirror.conf" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+e2e_run_must_fail "Register without reg_host must fail" \
+	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Restore reg_host" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+
+# Auto-inject: --pull-secret-mirror + --ca-cert without explicit target auto-injects 'register'
+e2e_run "Set reg_host for auto-inject test" \
+	"aba -d mirror -H ${DIS_HOST}"
+e2e_run "Auto-inject register (no explicit target)" \
+	"aba -d mirror --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Verify state.sh created by auto-inject" \
+	"test -f ~/.aba/mirror/mirror/state.sh && grep REG_VENDOR=existing ~/.aba/mirror/mirror/state.sh"
+e2e_run "Unregister after auto-inject test" \
+	"aba -d mirror unregister"
+e2e_run "Restore mirror.conf after auto-inject test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
 test_end 0
 

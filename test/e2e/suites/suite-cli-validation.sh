@@ -215,6 +215,27 @@ e2e_run "Non-debug mode: no ABA_DEBUG in output" \
 test_end 0
 
 # ============================================================================
+# Installer validation: test both git and curl install methods into /tmp
+# ============================================================================
+test_begin "ABA installer: git and curl"
+
+e2e_run "Install ABA via git into /tmp" \
+    "rm -rf /tmp/aba-install-test && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO /tmp/aba-install-test && cd /tmp/aba-install-test && ./install"
+
+e2e_run "Verify git install" \
+    "cd /tmp/aba-install-test && test -x scripts/aba.sh && aba --aba-version"
+
+e2e_run "Install ABA via curl into /tmp" \
+    "rm -rf /tmp/aba-install-test && mkdir -p /tmp/aba-install-test && cd /tmp/aba-install-test && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
+
+e2e_run "Verify curl install" \
+    "cd /tmp/aba-install-test/aba && test -x scripts/aba.sh && aba --aba-version"
+
+e2e_run "Cleanup" "rm -rf /tmp/aba-install-test"
+
+test_end 0
+
+# ============================================================================
 
 suite_end
 

@@ -904,7 +904,7 @@ _pre_suite_cleanup() {
 			_mirror_rc=0
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+			"if [ -d '$abs_path' ]; then \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall && rm -rf '$abs_path'; else echo '  (dir not found -- already cleaned)'; fi" \
 			< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"

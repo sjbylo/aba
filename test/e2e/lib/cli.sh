@@ -60,6 +60,7 @@ _usage() {
 	  run.sh list                              List available suites (dummy suites shown separately)
 	  run.sh destroy [-p all] [-c]             Destroy pool VMs (-c: delete clusters first)
 	  run.sh attach conN                       Attach to runner tmux session on conN
+	  run.sh logs                              Tail the daemon log
 	  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
 	  run.sh dash [-p all] [log]               Read-only summary dashboard
 
@@ -191,7 +192,7 @@ _parse_args() {
 	# Step 1: Detect subcommand (first non-flag argument)
 	if [ $# -gt 0 ]; then
 		case "$1" in
-			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash)
+			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs)
 				CLI_COMMAND="$1"; shift ;;
 		esac
 	fi
@@ -310,7 +311,7 @@ _resolve_pools() {
 # Readonly commands inherit state from last run.
 _is_readonly_cmd() {
 	case "${CLI_COMMAND:-}" in
-		status|live|dash|stop|attach|verify|start|deploy|reschedule) return 0 ;;
+		status|live|dash|stop|attach|verify|start|deploy|reschedule|logs) return 0 ;;
 		*) return 1 ;;
 	esac
 }
@@ -351,7 +352,7 @@ _generate_deploy_config() {
 	local deploy_file="${run_dir}/.config.env.deploy"
 
 	case "${CLI_COMMAND:-}" in
-		run|deploy|restart|reschedule) ;;
+		run|daemon|deploy|restart|reschedule) ;;
 		*) return 0 ;;
 	esac
 
@@ -361,6 +362,8 @@ _generate_deploy_config() {
 		printf 'E2E_GIT_BRANCH=%s\n' "$E2E_GIT_BRANCH"
 		printf 'E2E_GIT_REPO=%s\n' "$E2E_GIT_REPO"
 		printf 'E2E_GIT_REPO_SLUG=%s\n' "$E2E_GIT_REPO_SLUG"
+
+		[ -n "$CLI_DEV" ] && printf 'E2E_DEV_MODE=1\n'
 
 		local _cli_flags=""
 		if [ -n "$CLI_OS" ]; then
