@@ -56,7 +56,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
 - [Partially Disconnected Installation](#partially-disconnected-installation)
 - [Air-Gapped Installation](#air-gapped-installation)
   - [Custom Bundles](#custom-bundles)
-  - [Light Bundles (Restricted VM or Laptop)](#light-bundles-restricted-vm-or-laptop)
+  - [Light Bundles](#light-bundles-when-disk-space-or-portable-media-is-limited)
 - [Installing a Cluster](#installing-a-cluster)
   - [Pre-flight Validation](#pre-flight-validation)
   - [Customizing Install Configuration](#customizing-install-configuration)
@@ -255,6 +255,7 @@ aba
 - See all available releases at: [https://github.com/sjbylo/aba/releases](https://github.com/sjbylo/aba/releases)
 - Check your installed version: `aba version`
 - Show available OpenShift versions: `aba ocp-versions`
+- Show available operator sets: `aba show-op-sets`
 
 Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
 
@@ -429,7 +430,7 @@ aba bundle \
 
 - This generates several 10 GB archive files named `ocp_mycluster_4.17.16_aa|ab|ac...` etc.
 - The OpenShift version can be set to the most recent previous point version (`--version p`) or to the latest (`--version l`).
-- `--op-sets` refers to predefined sets of operators in `aba/templates/operator-set-*`. Create your own operator set file if needed.
+- `--op-sets` refers to predefined sets of operators (run `aba show-op-sets` to list them). Create your own operator set file in `aba/templates/` if needed.
 - `--ops` adds individual operators.
 - *If known*, set `--base-domain`, `--machine-network`, `--dns` and `--ntp` (otherwise, set them in `aba.conf` after unpacking the bundle).
 - Set `--platform`: `bm` (bare-metal), `vmw` (vSphere/ESXi), or `kvm` (KVM/libvirt).
@@ -1117,6 +1118,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | --------------------- | ------------------------------------------------------------------ |
 | `aba`                 | Interactive mode — guides you through the workflow                 |
 | `aba ocp-versions`    | Show a table of latest OpenShift versions per channel              |
+| `aba show-op-sets`    | List available operator sets and their descriptions                |
 | `aba -d cli download` | Download all required CLI tools                                    |
 | `aba -d cli install`  | Download and install CLI binaries to `~/bin`                       |
 | `aba clean`           | Remove generated files, preserving configuration                   |
