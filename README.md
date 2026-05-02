@@ -29,9 +29,10 @@ Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 > **Download ready-made ABA install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
 
-![Demo](images/aba-bundle-demo.gif)
-
-[Download Demo Video](https://github.com/sjbylo/aba/raw/refs/heads/main/images/aba-bundle-demo-v5-low.mp4)
+<div align="center">
+<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="300">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="300">
+<br><sub>The ABA TUI — a guided wizard for environment setup, operator selection, and bundle creation (<code>./abatui</code>)</sub>
+</div>
 
 # Quick Start
 
@@ -178,6 +179,12 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 <img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="75%">
 </div>
 
+#### Demo: Air-Gapped Bundle Workflow
+
+![Demo](images/aba-bundle-demo.gif)
+
+[Download Demo Video](https://github.com/sjbylo/aba/raw/refs/heads/main/images/aba-bundle-demo-v5-low.mp4)
+
 [Back to top](#quick-start)
 
 <a id="downloading-an-install-bundle"></a>
@@ -268,12 +275,6 @@ Running `aba` creates the `aba.conf` file. Review and update values such as your
 Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, registry type (Auto/Quay/Docker), and creating install bundles or syncing to registries.
 
 > **TUI scope:** The TUI covers environment preparation (version, operators, mirror configuration, bundle creation, and image save/sync). Cluster installation, Day-2 operations, and KVM platform configuration are handled via the CLI only.
-
-<div align="center">
-<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" width="44%">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" width="44%">
-</div>
-
-
 
 Now, continue with [Partially Disconnected Installation](#partially-disconnected-installation), [Air-Gapped Installation](#air-gapped-installation), or [Connected Installation (No Mirror)](#connected-installation-no-mirror) below.
 
