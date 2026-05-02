@@ -364,13 +364,13 @@ if [ -n "$REF_COMMIT" ]; then
     cp "$_tmp/CHANGELOG.md" CHANGELOG.md
     cp "$_tmp/pre-commit-checks.sh" build/pre-commit-checks.sh
     rm -rf "$_tmp"
-    build/pre-commit-checks.sh --release-branch
+    build/pre-commit-checks.sh --release-branch --update-build
 elif $HOTFIX; then
     echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks (hotfix on main)...${NC}"
-    build/pre-commit-checks.sh --release-branch
+    build/pre-commit-checks.sh --release-branch --update-build
 else
     echo -e "${YELLOW}[1/$TOTAL] Running pre-commit checks...${NC}"
-    build/pre-commit-checks.sh
+    build/pre-commit-checks.sh --update-build
 fi
 echo
 
