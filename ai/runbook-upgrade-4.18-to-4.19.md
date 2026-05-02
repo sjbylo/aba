@@ -23,7 +23,7 @@ Upgrade from 4.18.2 to 4.19.x while migrating the mirroring workflow from `oc ad
 | A4  | oc-mirror (via ABA) will write to a SEPARATE path: `registry:5000/ocp/openshift`. Old images are never touched. (See Appendix A.)                                                                   |
 | A5  | The cluster has existing ICSP rules from the original install-config.yaml. ABA adds IDMS rules alongside them — both coexist. (See Appendix B.)                                                     |
 | A6  | Two-host workflow: a connected workstation (internet access) downloads images; the existing disconnected internal bastion (s390x / LinuxONE) hosts the registry and cluster.                        |
-| A7  | You have the registry self-signed CA certificate file and the htpasswd credentials.                                                                                                                  |
+| A7  | You have the registry self-signed CA certificate file and the htpasswd credentials.                                                                                                                 |
 | A8  | You have a Red Hat pull secret (console.redhat.com) saved as `~/.pull-secret.json` on the connected workstation.                                                                                    |
 | A9  | You have kubeadmin access to the running cluster (password or kubeconfig file).                                                                                                                     |
 | A10 | The upgrade path from 4.18.2 → 4.19.x is valid. Verify at [https://access.redhat.com/labs/ocpupgradegraph/update_path](https://access.redhat.com/labs/ocpupgradegraph/update_path) before starting. |
