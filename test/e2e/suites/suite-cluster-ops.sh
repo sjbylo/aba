@@ -45,6 +45,7 @@ plan_tests \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
+    "Upgrade: sync target and aba upgrade" \
     "Register: --reg-host and --reg-port CLI flags" \
     "Register: named mirror (enclave workflow)" \
     "Enclave: SNO install via named mirror" \
@@ -314,9 +315,6 @@ e2e_run "Restore verify_conf=all" \
     "aba --verify all"
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
 
-e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
-e2e_remove_from_cluster_cleanup "$PWD/$SNO"
-
 test_end
 
 # ============================================================================
@@ -347,6 +345,46 @@ e2e_run "Assert mirror binary re-extracted despite verify_conf=conf" \
 
 e2e_run "Restore verify_conf=all" \
 	"aba --verify all"
+
+test_end
+
+# ============================================================================
+# 12. Upgrade: sync target version and aba upgrade
+# ============================================================================
+# The SNO from test 7 is running the "previous" version.  Sync the "latest"
+# images into the same mirror and upgrade the cluster using 'aba upgrade'.
+test_begin "Upgrade: sync target and aba upgrade"
+
+e2e_run "Resolve latest version for upgrade target" "
+    aba --channel $TEST_CHANNEL --version l
+    upgrade_target=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
+    echo \$upgrade_target > /tmp/e2e-upgrade-target
+    echo \"Upgrade target: \$upgrade_target\"
+"
+
+e2e_run "Set --target-version and regenerate ISC" "
+    cd ~/aba
+    target=\$(cat /tmp/e2e-upgrade-target)
+    aba -d mirror --target-version \$target
+    rm -f mirror/data/imageset-config.yaml
+    aba -d mirror imagesetconf
+"
+
+e2e_run -r 3 2 "Sync upgrade images" "aba -d mirror sync --retry"
+
+e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
+
+e2e_run "Dry-run upgrade" \
+    "aba -d $SNO upgrade --to \$(cat /tmp/e2e-upgrade-target) --dry-run"
+
+e2e_run "Trigger upgrade (no wait)" \
+    "aba -d $SNO run --cmd 'oc adm upgrade --to=\$(cat /tmp/e2e-upgrade-target) --allow-not-recommended --force'"
+
+e2e_poll 300 30 "Verify upgrade in progress" \
+    "aba -d $SNO run --cmd 'oc adm upgrade' | grep -i 'working towards\|Progressing=True\|upgrade is in progress'"
+
+e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 test_end
 
