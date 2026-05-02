@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260501231904
+ABA_BUILD=20260502090728
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -264,7 +264,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -351,6 +351,21 @@ elif [ "$1" = "--light" ]; then
 			echo && \
 			echo_white  "openshift-install:  $os_inst"
 
+		exit 0
+	elif [ "$1" = "show-op-sets" -o "$1" = "op-sets" ]; then
+		shift
+		echo_yellow "Available operator sets:"
+		echo
+		printf "  %-12s %s\n" "SET" "DESCRIPTION"
+		printf "  %-12s %s\n" "---" "-----------"
+		for f in "$ABA_ROOT"/templates/operator-set-*; do
+			[ -f "$f" ] || continue
+			set_name="${f##*operator-set-}"
+			# Skip auto-generated custom sets
+			echo "$set_name" | grep -q "^custom-" && continue
+			desc=$(grep "^# Name:" "$f" | head -1 | sed 's/^# Name: *//')
+			printf "  %-12s %s\n" "$set_name" "$desc"
+		done
 		exit 0
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
