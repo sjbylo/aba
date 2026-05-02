@@ -420,6 +420,16 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 		fi
 	done
 
+	# 1b) Reserve pools in dispatcher so it doesn't reclaim them during deploy
+	_restart_suites="${CLI_SUITE:-}"
+	if [ -n "$_restart_suites" ]; then
+		for p in $CLI_POOL_LIST; do
+			for _rs in $_restart_suites; do
+				echo "$p $_rs" >> "$E2E_FORCED_DISPATCH"
+			done
+		done
+	fi
+
 	# 2) Cleanup
 	echo ""
 	echo "  [2/4] Cleaning up resources in cleanup lists ..."

@@ -52,6 +52,7 @@ unit_tests=(
 	test/func/test-wait-show.sh
 	test/func/test-resource-pool-resolution.sh
 	test/func/test-cluster-flag-forwarding.sh
+	test/func/test-replace-value-conf.sh
 )
 
 # Integration tests (slow, may download)

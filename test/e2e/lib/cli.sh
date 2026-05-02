@@ -20,6 +20,7 @@ CLI_RECREATE_VMS=""
 CLI_YES=""
 CLI_QUIET=""
 CLI_CLEAN=""
+CLI_NO_CLEAN=""
 CLI_DRY_RUN=""
 CLI_FORCE=""
 CLI_RESUME=""
@@ -53,12 +54,12 @@ _usage() {
 	  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
 	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
-	  run.sh stop [-p 2,3] [-c]               Kill runners (-c: delete clusters/mirrors)
+	  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
 	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
 	  run.sh list                              List available suites (dummy suites shown separately)
-	  run.sh destroy [-p all] [-c]             Destroy pool VMs (-c: delete clusters first)
+	  run.sh destroy [-p all] [--no-clean]     Destroy pool VMs (cleans clusters/mirrors by default)
 	  run.sh attach conN                       Attach to runner tmux session on conN
 	  run.sh logs                              Tail the daemon log
 	  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
@@ -74,7 +75,8 @@ _usage() {
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
 	  -n, --dry-run          Show dispatch plan, don't execute
-	  -c, --clean            Delete clusters/mirrors before stopping/destroying
+	  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
+	  --no-clean             Skip cluster/mirror cleanup on stop/destroy
 	  -V, --revert           Revert pool VMs to pool-ready snapshot before running
 	  -G, --recreate-golden  Force rebuild golden VM from template
 	  -R, --recreate-vms     Force reclone conN/disN from golden (scoped to -p)
@@ -223,6 +225,7 @@ _parse_args() {
 			-y|--yes)               CLI_YES=1; shift ;;
 			-q|--quiet)             CLI_QUIET=1; CLI_YES=1; shift ;;
 			-c|--clean)             CLI_CLEAN=1; shift ;;
+			--no-clean)             CLI_NO_CLEAN=1; shift ;;
 			-n|--dry-run)           CLI_DRY_RUN=1; shift ;;
 			-F|--fresh|-f|--force)  CLI_FORCE=1; shift ;;
 			-d|--dev)               CLI_DEV=1; shift ;;
@@ -257,14 +260,21 @@ _parse_args() {
 			_usage; exit 1 ;;
 	esac
 
-	# Step 6: For "run" and "reschedule", default to --all when no suite selector
+	# Step 6: For "stop" and "destroy", default --clean unless --no-clean
+	if [ "$CLI_COMMAND" = "stop" ] || [ "$CLI_COMMAND" = "destroy" ]; then
+		if [ -z "$CLI_NO_CLEAN" ]; then
+			CLI_CLEAN=1
+		fi
+	fi
+
+	# Step 7: For "run" and "reschedule", default to --all when no suite selector
 	if [ "$CLI_COMMAND" = "run" ] || [ "$CLI_COMMAND" = "reschedule" ]; then
 		if [ -z "$CLI_ALL" ] && [ -z "$CLI_SUITE" ] && [ -z "$CLI_RESUME" ]; then
 			CLI_ALL=1
 		fi
 	fi
 
-	# Step 7: Resolve pool list from -p/--pools spec
+	# Step 8: Resolve pool list from -p/--pools spec
 	_resolve_pools "$pools_file"
 }
 

@@ -860,10 +860,10 @@ _interactive_prompt() {
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
         read -t 0 -n 10000 </dev/tty 2>/dev/null
         if [ "$_clock_stopped" ]; then
-            printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
+            printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd] [!!cmd-on-disN]: ")"
             read -r ans </dev/tty
         else
-            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (24h timeout): ")"
+            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] [!!cmd-on-disN] (24h timeout): ")"
             if ! read -t 86400 -r ans </dev/tty; then
                 rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_red "No input for 24 hours -- auto-aborting suite")"
@@ -915,17 +915,31 @@ _interactive_prompt() {
                 e2e_cleanup_mirrors
                 exit 1
                 ;;
+            "!!"*)
+                local user_cmd="${ans#!!}"
+                if [ -z "${INTERNAL_BASTION:-}" ]; then
+                    echo "INTERNAL_BASTION not set -- cannot run on disN"
+                else
+                    _e2e_log "User entered command (disN=$INTERNAL_BASTION): $user_cmd"
+                    echo "Running on disN ($INTERNAL_BASTION): $user_cmd"
+                    ssh -o LogLevel=ERROR -o ConnectTimeout=30 "$INTERNAL_BASTION" -- ". \$HOME/.bash_profile 2>/dev/null; $user_cmd" \
+                        2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+                    local new_rc=${PIPESTATUS[0]}
+                    _e2e_log "User command (disN) exited $new_rc"
+                    [ $new_rc -ne 0 ] && echo "Command failed with exit code $new_rc"
+                fi
+                ;;
             !*)
                 local user_cmd="${ans#!}"
-                _e2e_log "User entered command: $user_cmd"
-                echo "Running: $user_cmd"
+                _e2e_log "User entered command (conN): $user_cmd"
+                echo "Running on conN: $user_cmd"
                 ( trap - INT; eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                 local new_rc=${PIPESTATUS[0]}
                 _e2e_log "User command exited $new_rc"
                 [ $new_rc -ne 0 ] && echo "Command failed with exit code $new_rc"
                 ;;
             *)
-                echo "Unknown option '$ans'. Prefix with ! to run a command (e.g. !ls -la)"
+                echo "Unknown option '$ans'. Prefix with ! for conN, !! for disN (e.g. !ls -la  !!podman ps)"
                 ;;
         esac
     done
