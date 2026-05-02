@@ -356,6 +356,7 @@ aba          # Let ABA guide you through the OpenShift installation workflow (in
 - See all available releases at: https://github.com/sjbylo/aba/releases
 - Check your installed version: `aba --aba-version`
 - Show available OpenShift versions: `aba ocp-versions` (displays a table of latest versions per channel)
+- Show available operator sets: `aba show-op-sets`
 - The install script downloads (Method 1) or sets up (Method 2) the ABA repository and installs the `aba` command. Running `aba` guides you through configuring high-level settings such as OpenShift version, base domain, and machine network CIDR.
 - If needed, add any required operators to the `aba.conf` file by setting the `op_sets=` and/or `ops=` values.
 - The tool helps you decide the method of deployment and how you should proceed. For more, see the [ABA Workflow Diagram](#aba-workflow-diagram). 
@@ -722,7 +723,7 @@ aba bundle \
 
 - This will generate several 10GB archive files named ocp_mycluster_4.17.16_aa|ab|ac... etc.
 - The OpenShift version can be automatically set to the most recent previous point version (using `--version p`) or to the latest (using `--version l`).
-- If needed, --op-sets refers to predefined sets of operators, as defined in the files `aba/templates/operator-set-*`. Create your own operator set file, if needed.
+- If needed, --op-sets refers to predefined sets of operators (run `aba show-op-sets` to list them). Create your own operator set file, if needed.
 - If needed, add individual operators after "--ops".
 - *If known*, set values --base-domain, --machine-network, --dns and --ntp (otherwise, these must be set in `aba.conf` after unpacking the bundle in the air-gapped env.).
 - Set the target --platform: `bm` (bare-metal), `vmw` (vSphere or ESXi), or `kvm` (KVM/libvirt).
