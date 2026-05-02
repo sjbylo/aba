@@ -14,8 +14,11 @@
 #   5. Pulls latest changes from the remote
 #
 # Options:
-#   --skip-version     Skip the ABA_BUILD timestamp update (useful for
-#                      re-running checks without changing the build stamp)
+#   --update-build     Stamp ABA_BUILD timestamp into scripts/aba.sh.
+#                      Without this flag, the build stamp is NOT modified
+#                      (safe for standalone validation runs).
+#   --skip-version     Legacy alias: opposite sense -- skips stamp (no-op
+#                      now that stamp is opt-in, kept for compatibility).
 #   --release-branch   Skip the branch check (step 4) and git pull (step 5).
 #                      Used by release.sh --ref when running on a temporary
 #                      release branch that isn't dev and has no remote.
@@ -40,30 +43,29 @@ ABA_ROOT="$(pwd)"
 echo -e "${YELLOW}=== Pre-Commit Checks ===${NC}\n"
 
 # --- Parse options -----------------------------------------------------------
-SKIP_VERSION=false
+UPDATE_BUILD=false
 RELEASE_BRANCH=false
 for arg in "$@"; do
     case "$arg" in
-        --skip-version)   SKIP_VERSION=true ;;
+        --update-build)   UPDATE_BUILD=true ;;
+        --skip-version)   ;;  # Legacy no-op (stamp is now opt-in)
         --release-branch) RELEASE_BRANCH=true ;;
     esac
 done
-if $SKIP_VERSION; then
-    echo -e "${YELLOW}(Skipping VERSION update)${NC}\n"
-fi
 
 # =============================================================================
 # Step 1: Update ABA_BUILD timestamp
 # =============================================================================
 # ABA_BUILD is a YYYYMMDDHHMMSS timestamp embedded in scripts/aba.sh.
 # It lets users (and support) see exactly when the installed binary was built.
-if [[ "$SKIP_VERSION" == false ]]; then
+# Only updated with --update-build (called by release.sh or explicit commit flow).
+if $UPDATE_BUILD; then
     echo -e "${YELLOW}[1/5] Updating ABA_BUILD timestamp...${NC}"
     new_build=$(date +%Y%m%d%H%M%S)
     sed -i "s/^ABA_BUILD=.*/ABA_BUILD=$new_build/g" scripts/aba.sh
     echo -e "${GREEN}      ✓ ABA_BUILD = $new_build${NC}\n"
 else
-    echo -e "${YELLOW}[1/5] Skipping BUILD timestamp update${NC}\n"
+    echo -e "${YELLOW}[1/5] Skipping BUILD timestamp (use --update-build to stamp)${NC}\n"
 fi
 
 # Guard: ABA_VERSION must be semver (e.g. 1.0.0, 2.1.3-rc1) -- catches merge corruption
