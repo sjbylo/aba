@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260502090728
+ABA_BUILD=20260502223153
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -441,6 +441,35 @@ elif [ "$1" = "--light" ]; then
 
 		shift 2
 		ocp_version=$ver
+	elif [ "$1" = "--target-version" ]; then
+		opt=$1
+		[ ! -f "$WORK_DIR/mirror.conf" ] && \
+			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
+		arg=$2
+		tgt_ver=$arg
+		[ ! "$chan" ] && chan=$ocp_channel
+		tgt_tmp_out=
+		case "$arg" in
+			latest | l)
+				tgt_tmp_out="latest "
+				tgt_ver=$(fetch_latest_version "$chan")
+			;;
+			previous | p)
+				tgt_tmp_out="previous "
+				tgt_ver=$(fetch_previous_version "$chan")
+			;;
+		esac
+		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver")
+		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
+		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		# Ensure the placeholder exists in mirror.conf (older templates may lack it)
+		if ! grep -q "^[# ]*ocp_version_target=" "$WORK_DIR/mirror.conf"; then
+			echo "#ocp_version_target=" >> "$WORK_DIR/mirror.conf"
+		fi
+		replace-value-conf -n ocp_version_target -v $tgt_ver -f $WORK_DIR/mirror.conf
+		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -867,6 +896,21 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
 		shift
+	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
+	elif [ "$1" = "--to" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		upgrade_to="$2"
+		shift 2
+	elif [ "$1" = "--dry-run" ]; then
+		upgrade_dry_run="--dry-run"
+		shift
+	elif [ "$1" = "--monitor-timeout" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		upgrade_monitor_timeout="$2"
+		shift 2
+	elif [ "$1" = "--skip-day2" ]; then
+		upgrade_skip_day2="--skip-day2"
+		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
 		cmd=
@@ -880,7 +924,7 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -919,7 +963,7 @@ if [ "$cur_target" ]; then
 
 	# Externalized targets require a cluster directory (cluster.conf present)
 	case $cur_target in
-		info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 			[ -f cluster.conf ] || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
 			;;
 	esac
@@ -969,6 +1013,17 @@ if [ "$cur_target" ]; then
 		;;
 		day2-osus)
 			$ABA_ROOT/scripts/day2-config-osus.sh
+			exit
+		;;
+		upgrade)
+			trap - ERR
+			upgrade_args=()
+			[ "$upgrade_to" ] && upgrade_args+=(--to "$upgrade_to")
+			[ "$opt_force" ] && upgrade_args+=(--force)
+			[ "$upgrade_dry_run" ] && upgrade_args+=($upgrade_dry_run)
+			[ "$upgrade_monitor_timeout" ] && upgrade_args+=(--monitor-timeout "$upgrade_monitor_timeout")
+			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
+			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
 			exit
 		;;
 		shutdown)

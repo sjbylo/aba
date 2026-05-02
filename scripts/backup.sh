@@ -76,6 +76,7 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/.rpms"  				\
 	! -path "${repo_dir}/mirror/.available"  			\
 	! -path "${repo_dir}/mirror/.loaded" 				\
+	! -path "${repo_dir}/mirror/mirror.conf"  			\
 	! -path "${repo_dir}/mirror/mirror-registry"  			\
 	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
 	! -path "${repo_dir}/mirror/image-archive.tar"  		\
