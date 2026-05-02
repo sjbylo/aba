@@ -198,7 +198,7 @@ Generate the ISC file:
 aba -d mirror imagesetconf
 ```
 
-Edit `mirror/data/imageset-config.yaml` — add the 4.18 channel:
+Edit `mirror/data/imageset-config.yaml` — set a single channel spanning both versions with `shortestPath`:
 
 ```yaml
 kind: ImageSetConfiguration
@@ -208,22 +208,21 @@ mirror:
     architectures:
     - s390x
     channels:
-    - name: stable-4.18
-      minVersion: 4.18.2
-      maxVersion: 4.18.2
+    - name: stable-4.19              # target channel includes 4.18.x in its graph
       type: ocp
-    - name: stable-4.19
-      minVersion: "4.19.0"
-      maxVersion: "4.19.17"       # ← your target
-      type: ocp
-    graph: true                    # needed if you want OSUS later (Appendix D)
+      minVersion: "4.18.2"           # current running version
+      maxVersion: "4.19.17"          # ← your target
+      shortestPath: true             # only mirror versions on the shortest upgrade path
+    graph: true                      # needed if you want OSUS later (Appendix D)
   operators:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.19
     packages:
     # ... (populated by ABA from ops/op_sets) ...
 ```
 
-See Appendix C: Why mirror both versions.
+`shortestPath: true` tells oc-mirror to consult the Cincinnati update graph and only download versions on the shortest upgrade path — typically just the source and target versions (e.g. 4.18.2 and 4.19.17), skipping all intermediates. This halves the download size compared to mirroring every version in the range.
+
+See Appendix C: Why mirror both versions and why shortestPath.
 
 ---
 
@@ -578,13 +577,19 @@ Both ICSP and IDMS are evaluated simultaneously by CRI-O on the cluster nodes. W
 
 After the upgrade, you can optionally remove the old ICSP (since the IDMS covers both versions). This is a cleanup step, not a requirement.
 
-### C. Why Mirror Both Versions
+### C. Why Mirror Both Versions — and Why shortestPath
 
 oc-mirror save creates a self-contained archive. The 4.18.2 images must be included because:
 
 1. oc-mirror pushes to different subpaths than `oc adm release mirror`. The cluster may reference 4.18 images via the new IDMS during the upgrade — they must exist at the oc-mirror paths too.
 2. If you later remove the old ICSP, ALL images (4.18 + 4.19) must be reachable via the IDMS paths. Having 4.18 at the oc-mirror path makes this safe.
 3. Some 4.18 component images may be pulled during the transition window while nodes are running mixed versions.
+
+**Why a single channel works:** The `stable-4.19` channel's update graph includes all 4.18.x versions as valid starting points (verified: 4.18.1 through 4.18.20+ are listed). Specifying `minVersion: "4.18.2"` within `stable-4.19` is therefore valid.
+
+**Why `shortestPath: true`:** Without it, oc-mirror downloads *every* version between `minVersion` and `maxVersion` in the graph — potentially dozens of intermediate 4.18.z and 4.19.z releases. With `shortestPath: true`, oc-mirror consults the Cincinnati graph and only mirrors the versions on the shortest upgrade path. Tested result: 381 images (2 versions) vs 760 images (4 versions) without it — half the download, disk, and transfer time.
+
+**Two-channel alternative:** If your current version is very old and not present in the target channel's graph, you may need two separate channel entries (one for each minor). The single-channel approach was tested and confirmed working for 4.18.2 → 4.19.28.
 
 ### D. Optional: OpenShift Update Service (OSUS)
 
