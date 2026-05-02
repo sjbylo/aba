@@ -51,6 +51,21 @@ if [ ! -s data/imageset-config.yaml -o ! data/imageset-config.yaml -nt data/.cre
 	touch data/.created  # In case next line fails!
 
 	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" data/imageset-config.yaml && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
+
+	# Upgrade mode: when ocp_version_target is set and differs from ocp_version,
+	# rewrite the channel to span both versions with shortestPath.
+	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+		tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
+		tgt_channel="${ocp_channel}-${tgt_major}"
+		aba_info "Upgrade mode: rewriting ISC channel to $tgt_channel ($ocp_version → $ocp_version_target, shortestPath)"
+		sed -i \
+			-e "s/^    - name: ${ocp_channel}-${ocp_ver_major}/    - name: ${tgt_channel}/" \
+			-e "s/^      maxVersion: ${ocp_version}/      maxVersion: ${ocp_version_target}/" \
+			-e "s/^#      shortestPath: true/      shortestPath: true/" \
+			data/imageset-config.yaml
+		aba_info_ok "ISC configured for upgrade: $tgt_channel, minVersion=$ocp_version, maxVersion=$ocp_version_target, shortestPath=true"
+	fi
+
 	touch data/.created
 
 	aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
