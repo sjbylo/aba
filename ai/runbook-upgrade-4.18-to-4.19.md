@@ -2,7 +2,7 @@
 
 **Air-Gapped | s390x / LinuxONE**
 
-Upgrade from 4.18.2 to 4.19.x while migrating the mirroring workflow from `oc adm release mirror` to ABA (oc-mirror v2), against an existing Docker v2 registry on port 5000.
+Upgrade from 4.18.2 to 4.19.x while migrating the mirroring workflow from `oc adm release mirror` to ABA (oc-mirror v2), against an existing Docker v2 registry.
 
 
 | Current Version | Target Version | Architecture | Workflow                      |
@@ -56,26 +56,25 @@ Measured values from x86_64 test (May 2026). s390x sizes will differ — use the
 >
 > **(3) Registry host** — must have free disk for the loaded images.
 >
-> Budget at least 100 GB free on each if using the ocp operator set.
+> Budget at least 300-500 GB free on each if using the ocp operator set.
 
 ---
 
 ## Environment Values
 
-These values are used throughout the runbook. Substitute your own where different.
+Set these shell variables before starting. They are referenced as `$var` throughout the runbook commands. Substitute your own values.
 
-```
-cluster_name=<cluster-name>      # Must match your existing OCP cluster name
-domain=example.com
-machine_network=<cidr>               # e.g. 10.0.0.0/24
-dns_servers=<dns-ip>
-next_hop_address=<gateway-ip>
-ntp_servers=<ntp-ip-or-hostname>
-reg_host=registry.example.com    # FQDN of your existing Docker registry
-reg_port=5000
-reg_path=/ocp/openshift          # Separate from old /ocp4/openshift4
-ocp_current=4.18.2
-ocp_target=4.19.x               # Replace x with actual point release
+```bash
+export cluster_name=mycluster            # Must match your existing OCP cluster name
+export domain=example.com
+export machine_network=10.100.3.0/24     # Your cluster's machine network CIDR
+export dns_servers=1.2.3.4
+export next_hop_address=10.100.3.2
+export ntp_servers=198.71.50.75
+export reg_host=registry.example.com     # FQDN of your existing Docker registry
+export reg_port=5000
+export reg_path=/ocp/openshift           # Separate from old /ocp4/openshift4
+export ocp_target=4.19.17               # Target version (exact z-release)
 ```
 
 ---
@@ -83,8 +82,8 @@ ocp_target=4.19.x               # Replace x with actual point release
 ## Network Topology
 
 ```
-CONNECTED ENVIRONMENT
-======================
+CONNECTED ENVIRONMENT (s390x)
+=============================
 
   +----------------------------+          +---------------------+
   | Connected Workstation      |          | Red Hat Registries  |
@@ -101,7 +100,7 @@ DISCONNECTED ENVIRONMENT
 ========================
 
   +----------------------------+          +-------------------------+
-  | Internal Bastion (s390x)   |          | OCP 4.18.2 Cluster      |
+  | Internal Bastion           |          | OCP 4.18.2 Cluster      |
   | Bundle extracted (steps 7+)|          | platform: none, s390x   |
   |                            |          |                         |
   | +------------------------+ |          |  master01   master02    |
@@ -144,22 +143,22 @@ aba --aba-version
 
 **Prerequisites:** Step 1 complete. Working directory is `~/aba`.
 
-```
-aba --channel stable --version 4.19 --platform bm
+```bash
+aba --channel stable --version ${ocp_target%.*} --platform bm
 ```
 
 Set network values to match the existing cluster environment:
 
-```
-aba --base-domain example.com \
-    --machine-network <cidr> \
-    --dns <dns-ip> \
-    --ntp <ntp-ip-or-hostname>
+```bash
+aba --base-domain $domain \
+    --machine-network $machine_network \
+    --dns $dns_servers \
+    --ntp $ntp_servers
 ```
 
 Validate:
 
-```
+```bash
 grep -E 'ocp_version|domain|machine_network' aba.conf
 ```
 
@@ -169,22 +168,20 @@ grep -E 'ocp_version|domain|machine_network' aba.conf
 
 **Prerequisites:** Step 2 complete. `aba.conf` exists.
 
-Minimal:
+Example (substitute your own operators):
 
-```
+```bash
 # Edit aba.conf:
-ops=web-terminal,devworkspace-operator
+ops=web-terminal,devworkspace-operator,cincinnati-operator
 ```
 
 Or use a predefined set:
 
-```
+```bash
 aba --op-sets ocp
 ```
 
-View available sets: `ls templates/operator-set-*`. Dependencies are NOT auto-resolved — include them explicitly (e.g. web-terminal requires devworkspace-operator).
-
-Optional: add `cincinnati-operator` for OSUS (see Appendix D).
+View available sets: `aba --show-op-sets` or `ls templates/operator-set-*`. Dependencies are NOT auto-resolved — include them explicitly (e.g. web-terminal requires devworkspace-operator). The `cincinnati-operator` enables OSUS (see Appendix D).
 
 ---
 
@@ -194,7 +191,7 @@ Optional: add `cincinnati-operator` for OSUS (see Appendix D).
 
 Generate the ISC file:
 
-```
+```bash
 aba -d mirror imagesetconf
 ```
 
@@ -233,7 +230,7 @@ See Appendix C: Why mirror both versions and why shortestPath.
 - Step 4 complete. `imageset-config.yaml` has both versions.
 - Disk: see estimates above (35-85 GB depending on operators).
 
-```
+```bash
 aba -d mirror save
 ```
 
@@ -241,7 +238,7 @@ Takes 2-8+ hours depending on network and operator count. Images are cached in `
 
 Validate:
 
-```
+```bash
 ls -lh mirror/data/mirror_*.tar
 ```
 
@@ -295,24 +292,18 @@ aba --aba-version
 - You have: registry CA cert file + htpasswd credentials.
 - Registry is running and reachable on port 5000.
 
-```
+```bash
 aba -d mirror register \
-    --reg-host registry.example.com \
-    --reg-port 5000 \
+    --reg-host $reg_host \
+    --reg-port $reg_port \
+    --reg-path $reg_path \
     --pull-secret-mirror /path/to/pull-secret-mirror.json \
     --ca-cert /mnt/mirror-registry/certs/mirror-registry.crt
 ```
 
-Set the separate `reg_path` in `mirror/mirror.conf`:
-
-```
-# Edit mirror/mirror.conf:
-reg_path=/ocp/openshift
-```
-
 Validate:
 
-```
+```bash
 aba -d mirror verify
 ```
 
@@ -329,17 +320,17 @@ See Appendix A: Path separation strategy.
 - Step 8 complete. `aba -d mirror verify` succeeds.
 - Registry host has sufficient free disk (see estimates).
 
-```
+```bash
 aba -d mirror load
 ```
 
-Pushes all images to `registry:5000/ocp/openshift/...` Old images at `/ocp4/openshift4` are untouched.
+Pushes all images to `$reg_host:$reg_port$reg_path/...` Old images at `/ocp4/openshift4` are untouched.
 
 Validate:
 
-```
+```bash
 skopeo list-tags \
-  docker://registry.example.com:5000/ocp/openshift/openshift/release-images
+  docker://$reg_host:$reg_port$reg_path/openshift/release-images
 ```
 
 ---
@@ -348,8 +339,8 @@ skopeo list-tags \
 
 **Prerequisites:** Step 9 complete. Images loaded into registry.
 
-```
-aba cluster --name <cluster-name> --type compact \
+```bash
+aba cluster --name $cluster_name --type compact \
     --starting-ip <first-node-ip> \
     --step cluster.conf
 ```
@@ -358,12 +349,10 @@ All parameters (name, type, starting IP, domain, DNS, NTP) must match your runni
 
 Place your existing kubeconfig so ABA finds it automatically:
 
+```bash
+mkdir -p $cluster_name/iso-agent-based/auth
+cp /path/to/kubeconfig $cluster_name/iso-agent-based/auth/kubeconfig
 ```
-mkdir -p <cluster-name>/iso-agent-based/auth
-cp /path/to/kubeconfig <cluster-name>/iso-agent-based/auth/kubeconfig
-```
-
-> **Note:** Future ABA versions may auto-create the `iso-agent-based/auth/` directory during `aba cluster --step cluster.conf`, eliminating the `mkdir -p` step.
 
 ---
 
@@ -374,23 +363,21 @@ cp /path/to/kubeconfig <cluster-name>/iso-agent-based/auth/kubeconfig
 - Step 10 complete. Cluster directory exists.
 - You have kubeadmin credentials or kubeconfig.
 
-```
-cd <cluster-name>
+```bash
+cd $cluster_name
 cp /path/to/kubeconfig iso-agent-based/auth/kubeconfig
 . <(aba shell)
-# or: . <(aba login)
 ```
 
 Validate:
 
-```
-aba run --cmd "oc get clusterversion"
+```bash
+oc get clusterversion
 ```
 
 Backup current state (for rollback):
 
-```
-. <(aba shell)
+```bash
 oc get imagecontentsourcepolicy -o yaml > /tmp/icsp-backup.yaml
 oc get imagedigestmirrorset -o yaml > /tmp/idms-backup.yaml
 oc get catalogsource -A -o yaml > /tmp/cs-backup.yaml
@@ -409,8 +396,8 @@ oc debug node/<master-node> -- chroot /host \
 
 **Prerequisites:** Step 11 complete. `oc whoami` succeeds (via `. <(aba shell)`). Backups taken.
 
-```
-cd <cluster-name>
+```bash
+cd $cluster_name
 aba day2
 ```
 
@@ -418,7 +405,7 @@ Adds mirror CA to cluster trust, applies IDMS/ITMS, disables default catalog sou
 
 Validate:
 
-```
+```bash
 . <(aba shell)
 oc get imagecontentsourcepolicy   # old ICSP still present
 oc get imagedigestmirrorset       # new IDMS added
@@ -428,10 +415,9 @@ oc get packagemanifest | head -20
 
 See Appendix B: ICSP + IDMS coexistence.
 
-> **Rollback:**
+> **Rollback** (assumes `. <(aba shell)` is active):
 >
-> ```
-> . <(aba shell)
+> ```bash
 > oc patch OperatorHub cluster --type json \
 >   -p '[{"op":"replace","path":"/spec/disableAllDefaultSources","value":false}]'
 > oc get idms -o name | xargs oc delete
@@ -452,26 +438,28 @@ See Appendix B: ICSP + IDMS coexistence.
 
 Get the release image digest from the local mirror:
 
-```
-aba run --cmd "oc adm release info \
-  registry.example.com:5000/ocp/openshift/openshift/release-images:<target>-s390x" \
-  | grep Digest
+```bash
+. <(aba shell)
+ARCH=$(uname -m)   # Release images use raw kernel arch: x86_64, s390x, aarch64, ppc64le
+release_digest=$(oc adm release info \
+  $reg_host:$reg_port$reg_path/openshift/release-images:$ocp_target-$ARCH \
+  -o jsonpath='{.digest}')
+echo "Digest: $release_digest"
 ```
 
 Trigger the upgrade using the digest (disconnected clusters cannot reach the update graph):
 
-```
-aba run --cmd "oc adm upgrade \
-  --to-image=registry.example.com:5000/ocp/openshift/openshift/release-images@sha256:<digest> \
-  --allow-explicit-upgrade --force"
+```bash
+oc adm upgrade \
+  --to-image=$reg_host:$reg_port$reg_path/openshift/release-images@$release_digest \
+  --allow-explicit-upgrade --force
 ```
 
-Replace `<target>` with the exact version mirrored (e.g. 4.19.17) and `<digest>` with the sha256 value from the previous command. `--force` is required because the disconnected cluster has no update graph to validate against.
+`--force` is required because the disconnected cluster has no update graph to validate against.
 
 Monitor:
 
-```
-. <(aba shell)
+```bash
 watch oc get clusterversion
 oc adm upgrade
 oc get co
@@ -486,14 +474,16 @@ Upgrade takes 30-90 minutes. All cluster operators should reach Available=True, 
 ## Post-Upgrade Verification
 
 
-| Check             | Command                                           | Expected                     |
-| ----------------- | ------------------------------------------------- | ---------------------------- |
-| Cluster version   | `aba run --cmd "oc get clusterversion"`           | 4.19.x, Available=True       |
-| Cluster operators | `aba run --cmd "oc get co"`                       | All Available, none Degraded |
-| Nodes             | `aba run --cmd "oc get nodes"`                    | All Ready                    |
-| OperatorHub       | `aba run --cmd "oc get catalogsource -A"`         | READY state                  |
-| ICSP (old)        | `aba run --cmd "oc get imagecontentsourcepolicy"` | Still present                |
-| IDMS (new)        | `aba run --cmd "oc get imagedigestmirrorset"`     | Present                      |
+All commands below assume `. <(aba shell)` is active.
+
+| Check             | Command                              | Expected                     |
+| ----------------- | ------------------------------------ | ---------------------------- |
+| Cluster version   | `oc get clusterversion`              | 4.19.x, Available=True       |
+| Cluster operators | `oc get co`                          | All Available, none Degraded |
+| Nodes             | `oc get nodes`                       | All Ready                    |
+| OperatorHub       | `oc get catalogsource -A`            | READY state                  |
+| ICSP (old)        | `oc get imagecontentsourcepolicy`    | Still present                |
+| IDMS (new)        | `oc get imagedigestmirrorset`        | Present                      |
 
 
 ---
@@ -502,16 +492,17 @@ Upgrade takes 30-90 minutes. All cluster operators should reach Available=True, 
 
 ### Remove old ICSP rules
 
-After the upgrade is stable, you can remove the old ICSP. The IDMS now covers both 4.18.2 and 4.19.x at `/ocp/openshift`. Old images at `/ocp4/openshift4` become unused.
+After the upgrade is stable, you can remove the old ICSP. The IDMS now covers both 4.18.2 and 4.19.x at `$reg_path`. Old images at `/ocp4/openshift4` become unused.
 
-```
-. <(aba shell)
+All commands below assume `. <(aba shell)` is active.
+
+```bash
 oc get imagecontentsourcepolicy
 oc delete imagecontentsourcepolicy <name>
 oc get events --field-selector reason=Failed -A | grep -i image
 ```
 
-If pulls fail after removal: `oc apply -f /tmp/icsp-backup.yaml` (with `. <(aba shell)` active)
+If pulls fail after removal: `oc apply -f /tmp/icsp-backup.yaml`
 
 ### Purge old images from the registry (optional)
 
@@ -521,28 +512,31 @@ Once the old ICSP is removed and the cluster is confirmed healthy on the new IDM
 
 The Docker v2 registry stores blobs on disk. To remove the old repository path:
 
-```
+```bash
 # 1. Find the registry storage root from the container's volume mount
-podman inspect <registry-container> --format '{{range .Mounts}}{{.Source}}{{end}}'
+REG_CONTAINER=$(podman ps --format '{{.Names}}' | grep -i registry | head -1)
+podman inspect $REG_CONTAINER --format '{{range .Mounts}}{{.Source}} {{end}}'
 #    e.g. /mnt/mirror-registry/data
 
 REPO_ROOT=/mnt/mirror-registry/data/docker/registry/v2/repositories
 
 # 2. Verify the old path exists
+du -sh $REPO_ROOT/ocp4
 ls $REPO_ROOT/ocp4/openshift4
 
 # 3. Remove the old repository metadata
 rm -rf $REPO_ROOT/ocp4
 
-# 4. Run garbage collection to reclaim blob storage
-podman exec <registry-container> registry garbage-collect \
-  /etc/docker/registry/config.yml
+# 4. Find the config file inside the container and run garbage collection
+podman exec $REG_CONTAINER find /etc -name 'config.yml' 2>/dev/null
+#    Typically: /etc/distribution/config.yml or /etc/docker/registry/config.yml
+podman exec $REG_CONTAINER registry garbage-collect /etc/distribution/config.yml
 
 # 5. Verify disk space reclaimed
 df -h
 ```
 
-Step 4 is critical — deleting the repository directory only removes metadata (manifests, tags). The actual image layers (blobs) are shared and only freed by garbage collection.
+Step 4 is critical — deleting the repository directory only removes metadata (manifests, tags). The actual image layers (blobs) are shared and only freed by garbage collection. The config file path varies by container image; use the `find` command above to locate it.
 
 ---
 
@@ -604,15 +598,14 @@ OSUS provides an in-cluster update graph so upgrade paths appear in the web cons
 
 **Procedure:**
 
-```
-cd <cluster-name>
+```bash
+cd $cluster_name
 aba day2-osus
 ```
 
-> **Rollback:**
+> **Rollback** (assumes `. <(aba shell)` is active):
 >
-> ```
-> . <(aba shell)
+> ```bash
 > oc delete updateservice -n openshift-update-service --all
 > oc delete subscription cincinnati-operator -n openshift-update-service
 > oc delete csv -n openshift-update-service --all
@@ -627,10 +620,10 @@ aba day2-osus
 | Problem                                  | Fix                                                                                                                                     |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | oc-mirror save times out                 | Set `OC_MIRROR_IMAGE_TIMEOUT=120m` and `OC_MIRROR_PARALLEL_IMAGES=4` in `~/.aba/config`                                                 |
-| aba day2 cannot access the cluster       | Run `. <(aba shell)` or `. <(aba login)` first. Or place kubeconfig at `<cluster-name>/iso-agent-based/auth/kubeconfig`.                |
+| aba day2 cannot access the cluster       | Run `. <(aba shell)` or `. <(aba login)` first. Or place kubeconfig at `$cluster_name/iso-agent-based/auth/kubeconfig`.                 |
 | aba load fails: network unreachable      | `aba -d mirror clean`, then retry `aba -d mirror load`                                                                                  |
-| CatalogSource stuck in TRANSIENT_FAILURE | Usually resolves in minutes. Check: `aba run --cmd "oc get pods -n openshift-marketplace"`. Ensure port 5000 accessible from all nodes. |
-| Image pulls fail after ICSP removal      | Restore: `aba run --cmd "oc apply -f /tmp/icsp-backup.yaml"`                                                                            |
+| CatalogSource stuck in TRANSIENT_FAILURE | Usually resolves in minutes. Check: `. <(aba shell)` then `oc get pods -n openshift-marketplace`. Ensure port $reg_port accessible from all nodes. |
+| Image pulls fail after ICSP removal      | Restore: `. <(aba shell)` then `oc apply -f /tmp/icsp-backup.yaml`                                                                      |
 
 
 ### F. Alternative: New Quay Registry

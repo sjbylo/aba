@@ -30,7 +30,7 @@ Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/bl
 > **Download ready-made ABA install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
 
 <div align="center">
-<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="250">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="250">
+<img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="300">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="300">
 <br><sub>The ABA TUI — a guided wizard for environment setup, operator selection, and bundle creation (<code>./abatui</code>)</sub>
 </div>
 
