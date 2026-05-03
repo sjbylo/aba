@@ -102,7 +102,6 @@ e2e_run "Auto-update: verify installed binary has new build stamp" \
     "grep ^ABA_BUILD=\$(cat /tmp/e2e-aba-build-stamp) \$(which aba)"
 
 e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
@@ -377,11 +376,13 @@ e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
 e2e_run "Dry-run upgrade" \
     "aba -d $SNO upgrade --to \$(cat /tmp/e2e-upgrade-target) --dry-run"
 
-e2e_run "Trigger upgrade (no wait)" \
-    "aba -d $SNO run --cmd 'oc adm upgrade --to=\$(cat /tmp/e2e-upgrade-target) --allow-not-recommended --force'"
-
-e2e_poll 300 30 "Verify upgrade in progress" \
-    "aba -d $SNO run --cmd 'oc adm upgrade' | grep -i 'working towards\|Progressing=True\|upgrade is in progress'"
+e2e_run -r 3 2 "Trigger and verify upgrade" "
+    target=\$(cat /tmp/e2e-upgrade-target)
+    aba -d $SNO upgrade --to \$target --monitor-timeout 5 --skip-day2 --force || true
+    desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}')
+    echo \"Desired version: \$desired  (target: \$target)\"
+    [ \"\$desired\" = \"\$target\" ]
+"
 
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"

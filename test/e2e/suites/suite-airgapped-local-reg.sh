@@ -82,10 +82,6 @@ e2e_run_remote -q "Remove oc-mirror caches (disN)" \
 e2e_run "Configure aba.conf with previous version" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version p --base-domain $(pool_domain)"
 
-# Simulate manual edit: set dns_servers to pool dnsmasq host
-e2e_run "Set dns_servers manually" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
-
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
@@ -168,6 +164,12 @@ test_end
 # 6. Registry: Quay install -> uninstall (then switch to Docker)
 # ============================================================================
 test_begin "Registry: Quay install and uninstall"
+
+e2e_run_remote "Create mirror.conf on bastion" \
+    "cd ~/aba && aba -d mirror mirror.conf"
+e2e_run_remote "Set reg_host to local hostname" \
+    "sed -i 's/^reg_host=.*/reg_host=${DIS_HOST}/g' ~/aba/mirror/mirror.conf"
+e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote "Install Quay registry" \

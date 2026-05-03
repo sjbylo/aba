@@ -52,8 +52,6 @@ e2e_install_aba --curl
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 test_end 0
 
@@ -72,8 +70,6 @@ e2e_run "Verify / available space > 200GB after reset" \
 
 e2e_run "Reconfigure after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Start save, Ctrl-C after 20s" \
     'timeout 20 bash -c "aba -d mirror save"; rc=$?; [ "$rc" -eq 124 ] || exit $rc'

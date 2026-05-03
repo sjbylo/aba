@@ -73,7 +73,6 @@ e2e_run_remote -q "Remove oc-mirror caches (disN)" \
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
@@ -96,7 +95,6 @@ e2e_run "Reset aba" "aba reset -f"
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
@@ -221,6 +219,13 @@ e2e_run_remote "Verify dialog was reinstalled" \
     "rpm -q dialog"
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
     "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
+
+# mirror.conf is no longer in the bundle; create and configure it on disN
+e2e_run_remote "Create mirror.conf on bastion" \
+    "cd ~/aba && aba -d mirror mirror.conf"
+e2e_run_remote "Set reg_host to pool registry on conN" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' ~/aba/mirror/mirror.conf"
+e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 # Register the pool registry on disN using the staged creds
 # Paths are relative to mirror/ because aba -d mirror changes CWD there

@@ -62,7 +62,7 @@ POLL_INTERVAL=60
 
 while [[ "${1:-}" == -* ]]; do
     case "$1" in
-        -p|--pools)     POOL_SPEC="$2"; shift 2 ;;
+        -p|--pool)      POOL_SPEC="$2"; shift 2 ;;
         --no-dev)       USE_DEV=""; shift ;;
         --dry-run|-n)   DRY_RUN=1; shift ;;
         --poll)         POLL_INTERVAL="$2"; shift 2 ;;

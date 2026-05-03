@@ -63,8 +63,6 @@ e2e_run "Verify / available space > 200GB after reset" \
 e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers" \
-	"sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 e2e_run "Backup good aba.conf" "cp aba.conf aba.conf.good"
 e2e_run "Ensure mirror dir initialised" "make -sC mirror init"
 
@@ -127,8 +125,6 @@ e2e_run "Verify aba.conf.seen cleaned" "test ! -f .aba.conf.seen"
 e2e_run "Re-install after clean" "./install"
 e2e_run "Reconfigure after clean" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers" \
-	"sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 e2e_run "Re-init mirror dir" "make -sC mirror init"
 
 test_end 0

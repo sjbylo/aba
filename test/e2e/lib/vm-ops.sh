@@ -810,6 +810,7 @@ _vm_setup_dnsmasq() {
 
 	local pool_num="${clone_name#con}"
 	local upstream="${DNS_UPSTREAM:-10.0.1.8}"
+	local con_ip="${POOL_SUBNET:-10.0.2}.$((pool_num * 10))"
 
 	local domain
 	domain="${POOL_DOMAIN[$pool_num]:-p${pool_num}.example.com}"
@@ -876,9 +877,16 @@ dns=none
 NMEOF
 		systemctl reload NetworkManager
 
-		cat > /etc/resolv.conf << 'RESOLVEOF'
+		# Tell NM that ens192's DNS is conN's own IP (not DHCP-provided upstream).
+		# ABA's get_dns_servers() queries nmcli first, so this must be correct.
+		nmcli connection modify ens192 \
+		    ipv4.ignore-auto-dns yes \
+		    ipv4.dns "${con_ip}"
+		nmcli connection up ens192
+
+		cat > /etc/resolv.conf << RESOLVEOF
 search example.com
-nameserver 127.0.0.1
+nameserver ${con_ip}
 RESOLVEOF
 
 		systemctl enable dnsmasq

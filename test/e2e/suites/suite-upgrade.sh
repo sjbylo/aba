@@ -47,12 +47,23 @@ test_begin "Setup: install aba and configure"
 e2e_run "Install aba" "cd ~/aba && ./install"
 e2e_run "Configure aba" "cd ~/aba && aba --channel fast --version previous --platform bm -Y"
 
-e2e_run "Read version for testing" "
+e2e_run "Save older (previous) version" "
     cd ~/aba
     ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
-    echo \$ocp_version > /tmp/e2e-ocp-version-desired
-    echo \"Version: \$ocp_version\"
+    echo \$ocp_version > /tmp/e2e-ocp-version-older
+    echo \"Older version: \$ocp_version\"
 "
+
+e2e_run "Resolve latest version as upgrade target" "
+    cd ~/aba
+    aba --channel fast --version latest
+    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
+    echo \$ocp_version > /tmp/e2e-ocp-version-desired
+    echo \"Desired version: \$ocp_version\"
+"
+
+e2e_run "Create mirror directory and mirror.conf" \
+    "cd ~/aba && aba -d mirror mirror.conf"
 
 test_end
 
