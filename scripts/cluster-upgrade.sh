@@ -14,7 +14,6 @@ aba_debug "Starting: $0 $* from $PWD"
 target_ver=
 opt_force=
 opt_dry_run=
-opt_monitor_timeout=120
 opt_skip_day2=
 
 while [ $# -gt 0 ]; do
@@ -31,11 +30,6 @@ while [ $# -gt 0 ]; do
 		--dry-run)
 			opt_dry_run=1
 			shift
-			;;
-		--monitor-timeout)
-			[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-			opt_monitor_timeout="$2"
-			shift 2
 			;;
 		--skip-day2)
 			opt_skip_day2=1
@@ -74,11 +68,13 @@ fi
 
 # Preflight: cluster access
 aba_info "Checking cluster access ..."
+aba_debug "Running: oc whoami --request-timeout='20s'"
 if ! oc whoami --request-timeout='20s' >/dev/null; then
 	aba_abort "Cannot access the cluster. Check KUBECONFIG=$KUBECONFIG"
 fi
 
 # Preflight: get current version from live cluster
+aba_debug "Running: oc get clusterversion version -o jsonpath='{.status.desired.version}'"
 current_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}') || current_ver=""
 [ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version"
 aba_info "Current cluster version: $current_ver"
@@ -103,22 +99,22 @@ aba_info "Mirror release image: $mirror_image"
 
 # Preflight: verify image exists in mirror
 aba_info "Verifying release image exists in mirror ..."
+aba_debug "Running: skopeo inspect --tls-verify=false docker://$mirror_image"
 if ! skopeo inspect --tls-verify=false "docker://$mirror_image" >/dev/null; then
 	aba_abort "Release image not found in mirror: $mirror_image\nRun 'aba -d mirror load' first to load the target version images."
 fi
 
-# Preflight: check IDMS
-aba_info "Checking for ImageDigestMirrorSet ..."
-idms_count=$(oc get imagedigestmirrorset --no-headers --ignore-not-found 2>&1 | wc -l)
-if [ "$idms_count" -eq 0 ] && [ ! "$opt_skip_day2" ]; then
-	aba_info "No IDMS found. Running 'aba day2' to configure mirror resources ..."
+# Run day2 to ensure IDMS, signatures, and catalog sources are current.
+if [ ! "$opt_skip_day2" ]; then
+	aba_info "Running 'aba day2' to apply mirror resources, signatures, and catalog sources ..."
 	scripts/day2.sh
-elif [ "$idms_count" -eq 0 ] && [ "$opt_skip_day2" ]; then
-	aba_warning "No IDMS found and --skip-day2 specified. Upgrade may fail without mirror configuration."
+else
+	aba_warning "--skip-day2 specified. Skipping day2 configuration — upgrade may fail without signatures or mirror configuration."
 fi
 
 # Get release digest from mirror
 aba_info "Resolving release image digest ..."
+aba_debug "Running: oc adm release info $mirror_image"
 release_info=$(oc adm release info "$mirror_image") || aba_abort "Failed to query release info for $mirror_image"
 digest=$(echo "$release_info" | grep "^Digest:" | awk '{print $2}')
 [ ! "$digest" ] && aba_abort "Failed to extract digest from release info for $mirror_image"
@@ -143,6 +139,7 @@ fi
 
 # Execute upgrade
 aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
+aba_debug "Running: oc adm upgrade --to-image=$mirror_image_by_digest --allow-explicit-upgrade $opt_force"
 oc adm upgrade \
 	--to-image="$mirror_image_by_digest" \
 	--allow-explicit-upgrade \
@@ -150,31 +147,64 @@ oc adm upgrade \
 
 aba_info_ok "Upgrade command accepted by cluster"
 
-# Monitor upgrade progress
-aba_info "Monitoring upgrade progress (timeout: ${opt_monitor_timeout}m) ..."
-aba_info "Press Ctrl-C to stop monitoring (upgrade continues in background)"
-echo
+# Wait for the upgrade to actually start (Progressing=True).
+# The cluster may take a while before it begins (e.g. signature
+# verification, scheduling); give it up to 5 minutes.
+_upgrade_progressing() {
+	local p
+	p=$(oc get clusterversion version \
+		-o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null) || return 1
+	aba_debug "Upgrade start check: Progressing=$p"
+	[ "$p" = "True" ]
+}
 
-end_time=$(( $(date +%s) + opt_monitor_timeout * 60 ))
-while [ "$(date +%s)" -lt "$end_time" ]; do
-	cv_version=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null || echo "unknown")
-	cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "unknown")
-	cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null || echo "unknown")
-	cv_message=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].message}' 2>/dev/null || echo "")
+_wait_rc=0
+aba_wait_show "Waiting for upgrade to begin (Ctrl-C to skip)" 10 300 _upgrade_progressing || _wait_rc=$?
+if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+	aba_info "Monitoring skipped. The upgrade continues in background."
+	aba_info "Check with: aba -d $(basename "$PWD") run --cmd 'oc adm upgrade status'"
+	exit 0
+fi
 
-	if [ "$cv_version" = "$target_ver" ] && [ "$cv_available" = "True" ] && [ "$cv_progressing" = "False" ]; then
-		echo
-		aba_info_ok "Upgrade complete! Cluster is now at version $target_ver"
-		aba_info "Run 'aba run --cmd \"oc get co\"' to verify all cluster operators are healthy."
-		exit 0
+if [ "$_wait_rc" -ne 0 ]; then
+	aba_warning "Upgrade has not started progressing after 5 minutes."
+	aba_warning "Check with: aba -d $(basename "$PWD") run --cmd 'oc get clusterversion'"
+	exit 1
+fi
+
+# Wait for useful status data (Est. Time Remaining) or completion,
+# whichever comes first.  Up to 5 minutes.
+_upgrade_status_ready() {
+	local ver avail prog
+	ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || return 1
+	avail=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null) || return 1
+	prog=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null) || return 1
+	# Already finished?
+	if [ "$ver" = "$target_ver" ] && [ "$avail" = "True" ] && [ "$prog" = "False" ]; then
+		return 0
 	fi
+	# Does 'oc adm upgrade status' have an ETA yet?
+	oc adm upgrade status 2>/dev/null | grep -q "Est\. Time Remaining"
+}
 
-	printf "\r[ABA] Upgrading: version=%s available=%s progressing=%s  " "$cv_version" "$cv_available" "$cv_progressing"
-	[ "$cv_message" ] && aba_debug "Progress: $cv_message"
-	sleep 60
-done
+_wait_rc=0
+aba_wait_show "Upgrading $current_ver → $target_ver (Ctrl-C to skip)" 15 300 _upgrade_status_ready || _wait_rc=$?
+
+# Check if the upgrade finished during the wait
+cv_prog=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null) || true
+cv_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || true
 
 echo
-aba_warning "Monitoring timed out after ${opt_monitor_timeout} minutes."
-aba_warning "The upgrade is still in progress. Check with: aba run --cmd 'oc get clusterversion'"
-exit 1
+if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
+	aba_info_ok "Upgrade complete! Cluster is now at version $target_ver"
+	oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
+	exit 0
+fi
+
+aba_info_ok "Upgrade $current_ver → $target_ver is in progress!"
+echo
+oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
+echo
+aba_info "To monitor the upgrade, run:"
+aba_info "  aba -d $(basename "$PWD") run --cmd 'oc adm upgrade status'"
+aba_info "  aba -d $(basename "$PWD") run --cmd 'oc get clusterversion'"

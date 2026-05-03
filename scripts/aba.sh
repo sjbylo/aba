@@ -23,7 +23,7 @@
 ABA_VERSION=1.0.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260502223153
+ABA_BUILD=20260502223622
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -904,10 +904,6 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--dry-run" ]; then
 		upgrade_dry_run="--dry-run"
 		shift
-	elif [ "$1" = "--monitor-timeout" ]; then
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		upgrade_monitor_timeout="$2"
-		shift 2
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift
@@ -946,10 +942,12 @@ _ensure_hv_ready() {
 		vmw)
 			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
 			[ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first."
+			ensure_govc
 			;;
 		kvm)
 			[ ! -s kvm.conf ] && [ -f ../kvm.conf ] && ln -s ../kvm.conf
 			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
+			ensure_virsh
 			;;
 		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
@@ -1021,7 +1019,6 @@ if [ "$cur_target" ]; then
 			[ "$upgrade_to" ] && upgrade_args+=(--to "$upgrade_to")
 			[ "$opt_force" ] && upgrade_args+=(--force)
 			[ "$upgrade_dry_run" ] && upgrade_args+=($upgrade_dry_run)
-			[ "$upgrade_monitor_timeout" ] && upgrade_args+=(--monitor-timeout "$upgrade_monitor_timeout")
 			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
 			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
 			exit
@@ -1086,12 +1083,9 @@ if [ "$cur_target" ]; then
 		;;
 		delete)
 			_ensure_hv_ready
-			# Config regeneration may fail (e.g. missing pull secret on a
-			# disconnected host after registry deregistration). Still attempt
-			# delete -- the HV delete script exits 0 when no VMs exist.
-			exec_cmd="make -s init agentconf"
+			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (delete)"
-			$exec_cmd || true
+			$exec_cmd
 			$ABA_ROOT/scripts/${HV}-delete.sh || exit $?
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
