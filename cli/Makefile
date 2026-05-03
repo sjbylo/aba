@@ -1,5 +1,9 @@
 # Makefile to download and install oc, openshift-install, oc-mirror and govc 
 
+# Delete target files when a recipe fails (prevents partial/corrupt downloads
+# from being considered "up to date" on the next run)
+.DELETE_ON_ERROR:
+
 ifndef DEBUG_ABA
 .SILENT:
 MAKEFLAGS += --no-print-directory

@@ -1,5 +1,8 @@
 # Mirror Makefile  # DO NOT remove this line!
 
+# Delete target files when a recipe fails (prevents partial/corrupt downloads)
+.DELETE_ON_ERROR:
+
 ifndef DEBUG_ABA
 .SILENT:
 MAKEFLAGS += --no-print-directory
