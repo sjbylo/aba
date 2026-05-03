@@ -12,6 +12,10 @@ else
 fi
 
 if [ ! "$CLUSTER_NAME" ]; then
+	if [ ! -s install-config.yaml ] || [ ! -s agent-config.yaml ]; then
+		aba_info "Cluster config files missing -- nothing to delete"
+		exit 0
+	fi
 	scripts/cluster-config-check.sh
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
