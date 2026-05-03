@@ -1821,15 +1821,28 @@ run_once() {
 
 	# --- GLOBAL FAILED-ONLY CLEAN ---
 	if [[ "$global_failed_clean" == true ]]; then
-		local d id exitf rc
+		local d id exitf lockf rc
 		shopt -s nullglob
 		for d in "$WORK_DIR"/*/; do
 			id="$(basename "$d")"
 			exitf="$d/exit"
+			lockf="$d/lock"
 			if [[ -f "$exitf" ]]; then
-			rc="$(cat "$exitf" 2>/dev/null || echo 1)"
-			if [[ "$rc" -ne 0 ]]; then
-				_kill_id "$id"
+				rc="$(cat "$exitf" 2>/dev/null || echo 1)"
+				if [[ "$rc" -ne 0 ]]; then
+					aba_debug "Cleaning failed task: $id (exit code: $rc)"
+					_kill_id "$id"
+				fi
+			elif [[ -e "$d" ]]; then
+				# Zombie task: directory exists but no exit file.
+				# Caused by SIGKILL, OOM, or machine crash killing the
+				# subshell before it could write the exit file.
+				# Only clean if the lock is free (process is definitely dead).
+				if ( exec 9>>"$lockf" && flock -n 9 ); then
+					aba_debug "Cleaning zombie task: $id (no exit file, lock free)"
+					_kill_id "$id"
+				else
+					aba_debug "Skipping task: $id (no exit file, lock held — still running)"
 				fi
 			fi
 		done
@@ -1955,12 +1968,15 @@ run_once() {
 		(
 			# Keep FD 9 open in this subshell so lock remains held until it exits.
 			# Use setsid to create a new session/process group (PGID==PID we capture).
+			# Disable set -e: callers may have it on, and we must always write the
+			# exit file even when the command fails (wait returns non-zero).
+			set +e
 			local rc=0
 
 			if [[ "$is_fg" == "true" ]]; then
 				# Foreground-ish: stream + log
 				# Capture stderr separately, combined to stdout for display
-				setsid "${command[@]}" 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
+				setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
 				_log_history "COMPLETE rc=$rc"
@@ -1971,7 +1987,10 @@ run_once() {
 			# Close inherited stdout/stderr first so this background subshell
 			# doesn't hold a parent pipeline (e.g. `cmd | tee`) open.
 			exec >/dev/null 2>&1
-			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
+			# 9>&- closes the lock FD in the child so only this subshell holds
+			# the lock. If this subshell is killed, the lock releases immediately
+			# instead of being held by the orphaned child until it finishes.
+			setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
 			echo $! >"$pid_file"
 		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
 			wait $!
@@ -2141,6 +2160,15 @@ run_once() {
 			exec 9>&-
 			aba_debug "Task $work_id is currently running, skipping validation"
 		fi
+	fi
+
+	# Show error context and recovery guidance on failure
+	if [[ $exit_code -ne 0 && "$quiet_wait" != true ]]; then
+		if [[ -s "$log_err_file" ]]; then
+			tail -5 "$log_err_file" >&2
+		fi
+		echo_yellow "[ABA] If this problem persists, re-run './install' from the ABA directory to clear the task cache."
+		aba_debug "Failed task ID: $work_id (exit code: $exit_code)"
 	fi
 
 	if [[ "$purge" == true ]]; then

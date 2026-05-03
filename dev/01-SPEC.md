@@ -223,10 +223,18 @@ Task deduplication and coordination. State in `~/.aba/runner/<id>/`.
   large catalog index downloads that kick off early and are waited on later.
 - **Cached results**: Exit code and stderr are preserved; `run_once -e` retrieves
   errors. Failed tasks cleaned globally on each `aba` start via `run_once -F`.
+- **Failed-task cleanup**: `run_once -F` (called at every `aba` start) removes
+  tasks with non-zero exit codes. Also cleans zombie tasks: directories with no
+  exit file and no running process (caused by SIGKILL, OOM, or machine crash).
+- **Error guidance**: When `run_once -w` returns a non-zero exit code (and not
+  in quiet mode), it shows the last lines of stderr and a recovery hint:
+  "If this problem persists, re-run './install' from the ABA directory to clear the task cache."
 - **Not a replacement for Make**: Make tracks file dependencies; `run_once` tracks
   non-file task completion. They are complementary.
 - **Cleanup**: `run_once -r <id>` removes state for one task. `aba reset` wipes
   all runner state. No automatic cleanup on Ctrl-C.
+- **Testing**: `test/func/test-run-once-failed-cleanup.sh` covers failed-task
+  cleanup, zombie cleanup, error messaging, and quiet-mode suppression.
 
 ### normalize*()
 
@@ -284,6 +292,14 @@ remove these -- only Makefiles may.
 | `cli/Makefile` | `cli/` | CLI tool downloads and installation |
 | `rpms/Makefile` | `rpms/` | RPM tarball download/install |
 | `bundles/v2/Makefile` | `bundles/v2/` | Curated bundle creation pipeline |
+
+### Download safety
+
+All Makefiles that download files via `curl` use `.DELETE_ON_ERROR` to ensure
+partial/corrupt files are removed when a recipe fails. Without this, Make
+considers a partial file "up to date" on the next run and silently skips the
+re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
+`test/Makefile`.
 
 ---
 
