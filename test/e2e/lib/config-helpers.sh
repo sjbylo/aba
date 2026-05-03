@@ -191,7 +191,7 @@ gen_aba_conf() {
     local ntp_servers="${NTP_SERVERS:-10.0.1.8,2.rhel.pool.ntp.org}"
     local domain="${DOMAIN:-$(pool_domain)}"
     local machine_network="${MACHINE_NETWORK:-$(pool_machine_network)}"
-    local dns_servers="${DNS_SERVERS:-$(pool_dns_server)}"
+    local dns_servers="${DNS_SERVERS:-}"
     local next_hop="${NEXT_HOP:-${DEFAULT_GATEWAY:-10.0.1.1}}"
 
     while [ $# -gt 0 ]; do

@@ -83,6 +83,8 @@ _verify_con_vm() {
 	local _dis_vlan="${VM_CLONE_VLAN_IPS[$_dis_vm]%%/*}"
 	local _domain
 	_domain="$(pool_domain "$pool_num")"
+	local _con_ip
+	_con_ip="$(pool_con_ip "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
 	local _tz="${TIMEZONE:-Asia/Singapore}"
 
@@ -139,11 +141,21 @@ _verify_con_vm() {
 		dig +short google.com @127.0.0.1 | head -1 | grep -q . || _fail "DNS @127.0.0.1 -> google.com"
 		echo "  PASS: DNS @127.0.0.1 -> google.com"
 
+		dig +short google.com @${_con_ip} | head -1 | grep -q . || _fail "DNS @${_con_ip} -> google.com"
+		echo "  PASS: DNS @${_con_ip} -> google.com (lab IP)"
+
 		dig +short google.com @${_con_vlan} | head -1 | grep -q . || _fail "DNS @${_con_vlan} -> google.com"
 		echo "  PASS: DNS @${_con_vlan} -> google.com (disN path)"
 
-		grep -q "nameserver 127.0.0.1" /etc/resolv.conf || _fail "resolv.conf not 127.0.0.1"
-		echo "  PASS: resolv.conf -> 127.0.0.1"
+		grep -q "nameserver ${_con_ip}" /etc/resolv.conf || _fail "resolv.conf not ${_con_ip}"
+		echo "  PASS: resolv.conf -> ${_con_ip}"
+
+		nmcli -g ipv4.ignore-auto-dns connection show ens192 | grep -q yes || _fail "ens192 ignore-auto-dns not set"
+		echo "  PASS: ens192 ignore-auto-dns"
+
+		_nm_dns=\$(nmcli -g ipv4.dns connection show ens192)
+		echo "\${_nm_dns}" | grep -q "${_con_ip}" || _fail "ens192 ipv4.dns is \${_nm_dns}, expected ${_con_ip}"
+		echo "  PASS: ens192 ipv4.dns -> ${_con_ip}"
 
 		test -f /etc/NetworkManager/conf.d/no-dns.conf || _fail "NM dns=none missing"
 		echo "  PASS: NM dns=none"

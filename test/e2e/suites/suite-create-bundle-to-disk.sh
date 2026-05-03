@@ -82,10 +82,6 @@ e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
-# Simulate manual edit: set dns_servers to pool dnsmasq host
-e2e_run "Set dns_servers manually" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
-
 e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
