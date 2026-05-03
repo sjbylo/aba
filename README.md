@@ -663,6 +663,17 @@ Use `aba -D iso` for debug output.
 | `aba/kvm.conf`               | Optional KVM/libvirt hypervisor configuration (connection URI, storage pool, bridge)          |
 
 
+> **ABA treats config files as the single source of truth.** Values like base domain, machine network, DNS servers, and registry host are properties of your *environment* — they rarely change once set. Config files are the natural home for these stable settings: set them once, and every subsequent `aba` command reads them automatically.
+>
+> Most CLI flags (e.g. `--base-domain`, `--dns`, `--platform`, `--reg-host`) simply **write their values into the appropriate config file**. You can always achieve the same result by editing the file directly. This design also means:
+> - **Bundle portability** — config files travel inside the install bundle, so the disconnected bastion gets the exact settings without re-typing flags.
+> - **Idempotency** — re-run any command without remembering which flags you used last time. Instead of `aba --channel stable --version 4.19 --platform bm --base-domain example.com --dns 10.0.1.1 --op-sets ocp mirror sync`, you run that once to set up, then every subsequent invocation is just `aba -d mirror sync` or `aba sync`.
+> - **Multiple entry points** — both `aba` CLI and raw `make` targets read the same config files.
+> - **Auditability** — `cat aba.conf` shows the main settings at a glance. Some runtime state (credentials, markers, `~/.aba/config` overrides) lives elsewhere, but the core environment configuration is always in these files.
+>
+> A few flags are **runtime-only** (per-invocation choices that do not modify any config file):
+> `-d` (directory), `-D` (debug), `-y` (suppress prompts for this run), `--light`, `--retry`, `--force`, `--out`, `--step`, `--cmd`, `--help`, and the upgrade flags (`--to`, `--dry-run`, `--monitor-timeout`, `--skip-day2`).
+
 > **Tip — Per-mirror operator override:** Set `op_sets=` and/or `ops=` in `mirror.conf` to override global values for that specific mirror. Useful for different operators per team or enclave.
 
 ### Modifying Agent-based Configuration
@@ -830,6 +841,8 @@ Run `aba day2` as normal — manifests are applied after oc-mirror resources (ID
 - The `day2-custom-manifests/` directory is optional
 - Files are discovered recursively and applied in alphabetical order by full path
 - Use directory naming prefixes (e.g. `00-namespaces/`, `01-app/`) to control order
+- Empty files are skipped with a warning
+- If a manifest fails to apply, day2 continues with the remaining files
 - Manifests are applied **after** the mirror registry is configured, so they can reference mirrored images
 
 ## Synchronize NTP Across Cluster Nodes
