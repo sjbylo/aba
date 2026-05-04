@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Project context for AI coding agents (Cursor, Copilot, Codex, Claude Code, etc.).
-For the full system spec, read `dev/01-SPEC.md`.
+For the full system spec, read `devel/01-SPEC.md`.
 
 ## What ABA is
 
@@ -32,7 +32,7 @@ build/pre-commit-checks.sh --skip-version
 - **Key abstractions**: `run_once()` (task dedup), `normalize*()` (config defaults), `ensure_*()` (tool install), marker files (lifecycle state)
 - **State**: `~/.aba/` (external state), marker files (in-tree state), `~/.aba/runner/` (run_once only)
 
-Read `dev/01-SPEC.md` for the full architecture. Read `dev/adr/` for design decisions.
+Read `devel/01-SPEC.md` for the full architecture. Read `devel/adr/` for design decisions.
 
 ## Key invariants
 

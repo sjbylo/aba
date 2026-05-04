@@ -29,6 +29,8 @@ Upgrade from 4.18.2 to 4.19.x while migrating the mirroring workflow from `oc ad
 | A10 | The upgrade path from 4.18.2 → 4.19.x is valid. Verify at [https://access.redhat.com/labs/ocpupgradegraph/update_path](https://access.redhat.com/labs/ocpupgradegraph/update_path) before starting. |
 
 
+> **Note (s390x boot support):** "Currently, ISO boot support on IBM Z® (s390x) is available only for Red Hat Enterprise Linux (RHEL) KVM, which provides the flexibility to choose either PXE or ISO-based installation. For installations with z/VM and Logical Partition (LPAR), only PXE boot is supported." — [Red Hat documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html-single/installing_an_on-premise_cluster_with_the_agent-based_installer/index#understanding-agent-install_preparing-to-install-with-agent-based-installer)
+
 ---
 
 ## Disk Space Requirements

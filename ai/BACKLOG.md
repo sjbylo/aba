@@ -1,5 +1,52 @@
 # ABA Backlog
 
+## Support UPI (User Provisioned Infrastructure) installation method
+
+**Priority:** Medium
+**Added:** 2026-05-04
+
+### Description
+
+Add support for UPI (User Provisioned Infrastructure) as an installation method alongside the existing ABI (Agent-Based Installer) flow. UPI is the traditional OpenShift installation method where the user provisions their own infrastructure (VMs, bare metal, cloud instances) and provides ignition configs to each node.
+
+### Why
+
+- Some environments cannot use ABI (e.g. restricted platforms, specific hardware requirements, cloud providers without ABI support)
+- UPI is the most widely documented and understood installation method
+- Expands ABA's reach to more deployment scenarios
+
+### Scope (TBD)
+
+- Generate ignition configs via `openshift-install create ignition-configs`
+- Provide helper scripts for common UPI platforms (bare metal PXE, VMware, cloud)
+- Integrate with existing mirror/registry workflow (airgapped UPI)
+- Consider `aba cluster -t sno --method upi` or similar CLI flag
+
+---
+
+## URGENT: Test golden VM recreation from templates
+
+**Priority:** Urgent
+**Added:** 2026-05-03
+
+### Problem
+
+The rhel9 golden VM was never rebuilt (`"Golden VM exists with 'golden-ready' snapshot -- reusing"`). Its snapshot had `/var/lib/expand-root.done` baked in, causing all cloned VMs to skip partition expansion (95GB partition on a 300GB vDisk). The `pool-ops.sh` golden creation path (lines 169-170) correctly removes the marker before snapshotting, but we have never validated this end-to-end since switching to rhel9.
+
+### Action required
+
+1. Run `setup-infra.sh --recreate-golden --pools 1` (or `run.sh run --recreate-golden ...`) to force a full golden rebuild from the RHEL9 template.
+2. Verify the resulting golden snapshot does NOT contain `/var/lib/expand-root.done`.
+3. Clone a VM from the rebuilt golden, expand its vDisk, boot it, and confirm `expand-root.service` runs and grows the partition to full size.
+4. If successful, rebuild all pools from the new golden (`--recreate-vms`).
+
+### Mitigation already applied
+
+- `setup-infra.sh` Phase 3 now removes the marker before pool-ready snapshot (commit pending).
+- Manual expansion was done on all 8 VMs (con1-4, dis1-4) to unblock current E2E run.
+
+---
+
 ## Config precedence: comment out cluster.conf values copied from aba.conf
 
 **Priority:** Medium

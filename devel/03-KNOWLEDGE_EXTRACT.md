@@ -1,7 +1,7 @@
 # Knowledge Extract
 
 Extracted from ~1,180 Cursor plans, ai/*.md docs, and .cursor/rules/ on 2026-04-20.
-One-time distillation for input to dev/01-SPEC.md and dev/adr/.
+One-time distillation for input to devel/01-SPEC.md and devel/adr/.
 This file is a working artifact -- once knowledge flows into SPEC.md, ADRs, and
 script contracts, this file becomes historical reference.
 

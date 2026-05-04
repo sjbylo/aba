@@ -33,7 +33,7 @@
 #   2. s390x / ppc64le -> platform: none (baremetal unsupported on these arches)
 #   3. VMware + vCenter (platform=vmw, VC=1) -> platform: vsphere
 #   4. Everything else (BM, KVM, ESXi-direct) -> platform: baremetal
-#   See dev/01-SPEC.md "install-config.yaml Platform Selection"
+#   See devel/01-SPEC.md "install-config.yaml Platform Selection"
 
 source scripts/include_all.sh
 

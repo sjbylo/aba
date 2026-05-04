@@ -4,26 +4,30 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
 
 ## What to do
 
+- **Always test the latest code on bastion** — ensure `dev` branch is checked out and
+  up-to-date. Deploy latest code to pools via `run.sh deploy` or `--dev` flag.
+- **Keep ALL pools busy at all times** — unless actively investigating a failure on that pool.
+  Queue additional suites on idle pools, even if already tested.
 - **Monitor and investigate** in a loop:
   - Run E2E tests (`test/e2e/run.sh`), monitor status and logs
-  - Do not wait more that 10 mins between checking the status, otherwise you may miss a failed suite!
-  - When a suite fails, enter 'p' to pause (if needed), investigate the root cause: read logs, trace the error, identify the fix
+  - Do not wait more than 10 mins between checking the status, otherwise you may miss a failed suite!
+  - When a suite fails, investigate the root cause: read logs, trace the error, identify the fix
   - **Add proposed fixes to a plan** — do NOT edit any code directly
 - **Always ensure the dispatcher is running** — check at every monitoring cycle.
   If not running, start it: `run.sh run --all --force` (queues all suites, dispatches to idle pools).
   Never rely solely on manual SSH launches; the dispatcher handles queuing and pool allocation.
 - **Do NOT stop to ask questions** — the user is away
-- **Core ABA file changes** — prefer NOT to change core ABA files. However, if a test
-  failure is clearly caused by a core ABA bug (not a test bug), and the fix is surgical
-  and obvious (e.g. missing variable, wrong path, broken conditional), you MAY fix core
-  code. Log every core change in `ai/SESSION_STATE.md` and notify the user via
-  `~/bin/notify.sh`. If the fix is risky, large, or ambiguous, add it to a plan and move on.
-- **Test code** — you MAY fix test framework/suite code to correct bugs, but do NOT change
-  the actual test logic (what is being tested). Log all changes.
+- **No ABA core code changes** — do NOT change core ABA files unless the user gives
+  explicit permission. If a test failure is caused by a core ABA bug, log it and notify
+  the user via `~/bin/notify.sh`. Add proposed fixes to a plan and move on.
+- **Test code** — you MAY fix test framework/suite code (`test/` and `ai/` only) to correct
+  bugs, but do NOT change the actual test logic (what is being tested). Log all changes.
 - Files you may always write to: `ai/SESSION_STATE.md`, plan files, `ai/*.md`.
-- **Keep ALL pools busy** — queue additional suites on idle pools, even if already tested
 - **Don't wait for pools to free up** — if a pool just finished (pass or fail), force-dispatch
   the suite you need onto it immediately: `run.sh run --suite <name> --pool N --force`
+- **Keep the user updated** — send notifications via `~/bin/notify.sh` at least every 10 mins
+  with status updates (suites passed/failed, issues found, fixes applied).
+  Only use it during gotest (not when the user is present in the chat).
 - **Report a summary** when the user returns, including:
   - Which suites passed / failed
   - Root cause analysis for each failure
@@ -34,8 +38,6 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous monito
   Transient failures (e.g. laptop restart, IDE reconnect) are expected; the dispatcher keeps
   running independently. Retry with exponential backoff and resume polling as soon as the shell
   recovers.
-- **Use `~/bin/notify.sh`** to send Telegram notifications at least every 10 mins
-  Only use it during gotest (not when the user is present in the chat).
 
 ## Root cause investigation rules
 
