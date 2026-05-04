@@ -62,7 +62,7 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
+    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
         tput sgr0
@@ -765,7 +765,7 @@ install_rpms() {
 			aba_warning \
 				"an error occurred during rpm installation. See the logs at .dnf-install.log." \
 				"If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" 
-			aba_info $rpms_to_install
+			aba_info $rpms_to_install >&2
 
 			return 1
 		fi
@@ -902,7 +902,7 @@ aba_wait_show() (
 	trap - ERR
 
 	use_tty=0
-	[ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
+	[ -t "${ABA_TTY_FD:-1}" ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
 
 	# Check command output goes to a debug log (not /dev/null) so failures
 	# are diagnosable.  Truncated on each aba_wait_show invocation.
@@ -2167,7 +2167,7 @@ run_once() {
 		if [[ -s "$log_err_file" ]]; then
 			tail -5 "$log_err_file" >&2
 		fi
-		echo_yellow "[ABA] If this problem persists, re-run './install' from the ABA directory to clear the task cache."
+		echo_yellow "[ABA] If this problem persists, re-run './install' from the ABA directory to clear the task cache." >&2
 		aba_debug "Failed task ID: $work_id (exit code: $exit_code)"
 	fi
 

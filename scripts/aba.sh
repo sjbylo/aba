@@ -190,6 +190,11 @@ chmod 600 "$ABA_TRACE_FILE"
 	echo "ABA_ROOT:  $ABA_ROOT"
 	echo "==="
 } >> "$ABA_TRACE_FILE"
+# Preserve original TTY fd for color/spinner detection (exec tee replaces fd 1 with a pipe)
+if [ -t 1 ]; then
+	exec {ABA_TTY_FD}>&1
+	export ABA_TTY_FD
+fi
 # Duplicate stdout+stderr to the trace file. Terminal output is unchanged.
 exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
 
@@ -1089,6 +1094,13 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/${HV}-delete.sh || exit $?
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
+			# --force: remove the entire cluster directory (for clean re-creation)
+			if [ "$opt_force" ]; then
+				_cdir="$PWD"
+				cd ..
+				rm -rf "$_cdir"
+				aba_info "Cluster directory removed: $_cdir"
+			fi
 			exit
 		;;
 		refresh)

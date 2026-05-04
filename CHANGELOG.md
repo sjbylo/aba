@@ -1,5 +1,43 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.1...HEAD)
 
+New `aba upgrade` command, trace logging, improved error recovery, and OCP 5 readiness.
+
+### New Features
+
+- **`aba upgrade` command** — Upgrade air-gapped OpenShift clusters via the local mirror registry. Idempotent (exit 0 when already at target), OSUS-aware (uses `oc adm upgrade --to` when a local update graph is detected), resumes monitoring if an upgrade is already in progress. Enriched `--dry-run` queries the mirror registry for available versions higher than current. Flags: `--to <version>`, `--skip-day2`, `--force`, `--dry-run`.
+- **`aba show-op-sets` command** — List all available operator sets with their descriptions (parsed from `templates/operator-set-*`). Also available as `aba op-sets`.
+- **Trace logging** — Every `aba` invocation captures full stdout+stderr to `~/.aba/logs/trace.log` for post-mortem debugging. Last 5 invocations are rotated (`trace.log.0` through `trace.log.4`).
+- **OCP 5 CDN path support** — Derive `ocp_major` from `ocp_version` and use it for CDN download URLs, registry paths, and CLI Makefile targets. Hardcoded `openshift-v4/` paths replaced with parameterized `openshift-v${ocp_major}/` across scripts, templates, and Makefiles.
+
+### Bug Fixes
+
+- **`run_once` error recovery** — Add `.DELETE_ON_ERROR` to Makefiles that download files so partial/corrupt downloads are removed on recipe failure. Detect and clean zombie tasks (no exit file, lock free) caused by SIGKILL/OOM/crash. Close lock FD in `setsid` children (`9>&-`) so lock releases immediately. Show stderr tail + yellow recovery hint on failure: *"If this problem persists, re-run './install' from the ABA directory to clear the task cache."*
+- **Upgrade flow hardening** — Always run `day2` before upgrade (signatures, IDMS, catalogs). Fix arch mismatch: use `uname -m` (`x86_64`) not Go-style (`amd64`) for release image tags. Add upgrade-already-in-progress preflight check.
+- **VM delete guards** — `kvm-delete.sh` and `vmw-delete.sh` exit 0 early if config files are missing (nothing to delete). `kvm-delete.sh` only removes disk volumes, not cdrom ISO.
+- **Remote Docker post-install race** — Add 3-attempt retry loop to handle timing race where registry hasn't loaded htpasswd yet. Display actual curl error instead of suppressing with `2>&1`.
+- **Sigstore lookaside URLs** — Add `registry.redhat.io` and `registry.access.redhat.com` lookaside URLs so podman signature verification works when ABA's user-level `registries.d` config overrides system defaults.
+- **Premature `data_dir` mkdir** — Env var is set early but the directory is only created immediately before oc-mirror runs, preventing empty trees on early abort.
+- **Podman catalog error visibility** — Remove `2>/dev/null` from `podman pull/run/cp` commands; capture stderr and pass it to `aba_abort` so the root cause is visible.
+- **`oc-command.sh` stdout pollution** — `grep` leaked matched lines to stdout and `aba_info` printed to stdout, corrupting captured command output (e.g. `aba run --cmd 'oc get ...'`). Fixed with `grep -q` and `>&2`.
+- **Spinner and color loss after trace logging** — The `exec > >(tee ...)` for trace logging replaced stdout with a pipe, causing `[ -t 1 ]` to return false and disabling the spinner and all colored output. Fixed by saving the original TTY file descriptor before `exec tee` and using it for terminal detection.
+- **`ABA_BUILD` stamp opt-in** — `pre-commit-checks.sh` only updates the build timestamp with `--update-build`, avoiding noisy diffs on every commit.
+
+### Improvements
+
+- **`aba delete --force`** — New `--force` flag removes the entire cluster directory after deleting VMs and stamp files, enabling clean re-creation without manual `rm -rf`.
+- **CLI flag refactoring** — Extracted repeated `if cluster.conf else BUILD_COMMAND` pattern into shared `_set_cluster_conf()` helper, reducing ~120 lines of duplication across 15+ flag handlers.
+- **`ensure_govc` / `ensure_virsh` in `_ensure_hv_ready`** — Hypervisor CLI tools are automatically ensured before VM operations.
+- **Ctrl-C skip hints** — `cluster-startup` adds "(Ctrl-C to skip)" to nodes Ready, console, and cluster operators waits. NTP MCO wait reduced from 60s to 20s.
+- **vmw-upload validation** — Validate ISO exists before upload, verify remote size after transfer.
+- **README restructure** — New README layout with TUI screenshots, decision tree, dedicated Connected Installation section, operator-set documentation.
+
+### E2E Testing
+
+- **Golden VM SSH key deployment** — Copy bastion's `id_rsa` keypair to golden VM instead of generating a new key, so VMs can SSH back to bastion for notification relay. Fail hard if bastion keypair is missing.
+- **Upgrade test suites** — New `suite-upgrade` and `cluster-ops` upgrade tests exercise the full `aba upgrade` lifecycle including dry-run, OSUS, and monitoring.
+- **DNS auto-detection** — Deploy manifest and pool infra improvements for DNS resolution on conN/disN hosts.
+- **Framework improvements** — Adaptive polling, per-pool locks, hung-suite detection, colored banners, deploy manifest updates.
+
 ---
 
 ## [1.0.1](https://github.com/sjbylo/aba/releases/tag/v1.0.1) - 2026-04-26
