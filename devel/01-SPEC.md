@@ -2,10 +2,10 @@
 
 Developer-facing blueprint for ABA.
 This is the authoritative reference for architecture, data flow, and invariants.
-For user-facing docs, see README.md. For the change process, see dev/02-WORKFLOW.md.
+For user-facing docs, see README.md. For the change process, see devel/02-WORKFLOW.md.
 
 This spec is intentionally concise (~200 lines). It is the map, not the territory.
-Detailed "why" lives in ADRs (`dev/adr/`). Per-script detail lives in script
+Detailed "why" lives in ADRs (`devel/adr/`). Per-script detail lives in script
 header contracts. If this file grows past ~300 lines, something belongs in one
 of those two places instead.
 

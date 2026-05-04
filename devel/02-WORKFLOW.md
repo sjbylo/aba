@@ -9,7 +9,7 @@ This is the canonical reference for the change process.
 
 Every code change follows this path:
 
-1. **Check the spec** -- Read `dev/01-SPEC.md`. Does it cover this area?
+1. **Check the spec** -- Read `devel/01-SPEC.md`. Does it cover this area?
 2. **Update the spec if needed** -- If the spec is silent or wrong, propose a
    spec update first. Show the diff. Get human approval. Write it.
 3. **Check the script contract** -- Read the target script's header block.
@@ -25,12 +25,12 @@ contract already says shouldn't happen), skip steps 2 and 4.
 
 ```mermaid
 flowchart LR
-    Request["Change request"] --> CheckSpec["Read dev/01-SPEC.md"]
+    Request["Change request"] --> CheckSpec["Read devel/01-SPEC.md"]
     CheckSpec --> SpecGap{"Spec covers this?"}
     SpecGap -->|No| ProposeSpec["Propose spec update"]
     SpecGap -->|Yes| CheckContract["Read script contract"]
     ProposeSpec --> HumanReview["Human reviews + approves"]
-    HumanReview --> WriteSpec["Write dev/01-SPEC.md"]
+    HumanReview --> WriteSpec["Write devel/01-SPEC.md"]
     WriteSpec --> CheckContract
     CheckContract --> ContractGap{"Contract covers this?"}
     ContractGap -->|No| UpdateContract["Update script header"]
@@ -43,7 +43,7 @@ flowchart LR
 
 When a change introduces a new design decision (why X over Y), create an ADR:
 
-1. Write `dev/adr/NNN-short-slug.md` with Context, Decision, Consequences
+1. Write `devel/adr/NNN-short-slug.md` with Context, Decision, Consequences
 2. Get human approval (all `dev/` files require it)
 3. Reference the ADR number in the relevant script contract or spec section
 
@@ -56,7 +56,7 @@ These files require explicit human approval before any write or modification:
 
 - Everything under `dev/` (spec, ADRs, workflow, knowledge extract)
 - `AGENTS.md` at repo root
-- `dev/00-ORIGINAL_PLAN.md` is permanently read-only -- never modified
+- `devel/00-ORIGINAL_PLAN.md` is permanently read-only -- never modified
 
 "Show me" = display only. "Yes" / "approved" / "looks good" = write it.
 
@@ -68,12 +68,12 @@ This walks through the full flow for a real feature request.
 
 ### Step 1: Check the spec
 
-AI reads `dev/01-SPEC.md`. Looks for an Observability or Debug Logging section.
+AI reads `devel/01-SPEC.md`. Looks for an Observability or Debug Logging section.
 Finds nothing -- that's a gap.
 
 ### Step 2: Propose a spec update
 
-AI drafts a new section for `dev/01-SPEC.md`:
+AI drafts a new section for `devel/01-SPEC.md`:
 
 ```markdown
 ## Observability

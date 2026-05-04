@@ -4,7 +4,7 @@
 # INTENT:    Pull an operator catalog image from registry.redhat.io, extract its
 #            File-Based Catalog (FBC) metadata, and produce a sorted index of all
 #            operators with their default channels. Also captures the catalog image
-#            digest for runtime catalog pinning (see dev/01-SPEC.md "Catalog Digest
+#            digest for runtime catalog pinning (see devel/01-SPEC.md "Catalog Digest
 #            Pinning").
 # CALLED BY: download-catalogs-start.sh via run_once (never directly by user)
 # CWD:       ABA repo root (resolved from script location via symlink-safe pwd -P)

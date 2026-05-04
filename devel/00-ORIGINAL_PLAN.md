@@ -32,7 +32,7 @@ All spec artifacts live under `dev/` (new directory). This separates developer-f
 - `dev/SPEC.md` -- the authoritative system spec, including Non-goals section (Phase 1)
 - `dev/WORKFLOW.md` -- how changes flow through the spec-driven process (with worked example)
 - `dev/KNOWLEDGE_EXTRACT.md` -- extracted knowledge from plans mining (Phase 0, input to SPEC.md)
-- `dev/adr/` -- Architecture Decision Records (numbered, one per decision)
+- `devel/adr/` -- Architecture Decision Records (numbered, one per decision)
 - `AGENTS.md` -- cross-tool AI agent context file (repo root, points to dev/SPEC.md and key rules)
 - `dev/ORIGINAL_PLAN.md` -- read-only snapshot of this plan as it was when approved. Never modified.
 - Script header contracts live **in the scripts themselves** (not in `dev/`)
@@ -91,9 +91,9 @@ Source material: `dev/KNOWLEDGE_EXTRACT.md` (Phase 0), existing `ai/ARCHITECTURE
 - ABA does not manage DNS or DHCP (it configures them as prerequisites)
 - ABA is not a general-purpose container management tool
 
-## Phase 1b: Architecture Decision Records (`dev/adr/`)
+## Phase 1b: Architecture Decision Records (`devel/adr/`)
 
-Replace the flat `ai/DECISIONS.md` with numbered ADR files under `dev/adr/`. Each ADR captures ONE architectural decision in a standard format:
+Replace the flat `ai/DECISIONS.md` with numbered ADR files under `devel/adr/`. Each ADR captures ONE architectural decision in a standard format:
 
 ```markdown
 # ADR-001: Config files as single source of truth
@@ -120,7 +120,7 @@ File presence (e.g. vmware.conf existing) must NEVER be used to infer settings.
 
 **Rules:**
 
-- One file per decision: `dev/adr/NNN-short-slug.md`
+- One file per decision: `devel/adr/NNN-short-slug.md`
 - ADRs are **append-only** -- never edit an accepted ADR. To reverse a decision, create a new ADR that supersedes it (link back to the old one)
 - Status values: `Proposed`, `Accepted`, `Superseded by ADR-NNN`, `Deprecated`
 - Keep each ADR to one page (~30-60 lines)
