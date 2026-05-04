@@ -19,6 +19,12 @@
 _TMUX_SESSION="$E2E_TMUX_SESSION"
 _RC_PREFIX="$E2E_RC_PREFIX"
 
+# Expand tilde in NOTIFY_CMD so [ -x ] and direct invocation work correctly.
+# config.env single-quotes the value to prevent premature expansion, but that
+# means ~ is literal inside the variable.  Expand it once here.
+NOTIFY_CMD="${NOTIFY_CMD:-}"
+NOTIFY_CMD="${NOTIFY_CMD/#\~/$HOME}"
+
 # Draw a colored box around one or more text lines.
 # Uses space-padded colored background.  Compensates for printf %-Ns counting
 # bytes (not characters) by adding the multibyte overhead to the pad width.

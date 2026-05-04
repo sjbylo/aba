@@ -87,9 +87,9 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; fi"
 e2e_run "Delete any leftover $COMPACT cluster" \
-    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete; fi"
+    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete --force; fi"
 e2e_run "Reset aba" "aba reset -f"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs

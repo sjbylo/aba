@@ -364,7 +364,7 @@ test_end
 test_begin "Cleanup: delete clusters and uninstall mirrors"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; else echo '[cleanup] $SNO already removed'; fi"
 # $STANDARD was created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry and remove dir" \

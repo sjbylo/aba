@@ -191,7 +191,7 @@ for ctype in sno compact standard; do
     _extra_args=""
     [ "$ctype" = "standard" ] && _extra_args="-W 2"
     e2e_run "Delete any leftover $cname cluster" \
-        "if [ -d $cname ]; then aba -y --dir $cname delete; fi"
+        "if [ -d $cname ]; then aba -y --dir $cname delete --force; fi"
     e2e_run "Create cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
@@ -247,7 +247,7 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
@@ -378,8 +378,8 @@ e2e_run "Dry-run upgrade" \
 
 e2e_run -r 3 2 "Trigger and verify upgrade" "
     target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --monitor-timeout 5 --skip-day2 --force || true
-    desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}')
+    aba -d $SNO upgrade --to \$target --skip-day2 --force || true
+    desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
     echo \"Desired version: \$desired  (target: \$target)\"
     [ \"\$desired\" = \"\$target\" ]
 "
@@ -486,9 +486,9 @@ test_end
 test_begin "Cleanup: delete cluster and unregister mirror"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; else echo '[cleanup] $SNO already removed'; fi"
 e2e_run "Delete enclave SNO if leftover" \
-    "if [ -d $ENCLAVE_SNO ]; then aba --dir $ENCLAVE_SNO delete && rm -rf $ENCLAVE_SNO; else echo '[cleanup] enclave SNO already removed'; fi"
+    "if [ -d $ENCLAVE_SNO ]; then aba -y --dir $ENCLAVE_SNO delete --force; else echo '[cleanup] enclave SNO already removed'; fi"
 e2e_run "Unregister enclave mirror if leftover" \
     "if [ -d $ENCLAVE_MIRROR ]; then aba -d $ENCLAVE_MIRROR unregister && rm -rf $ENCLAVE_MIRROR; else echo '[cleanup] enclave mirror already removed'; fi"
 e2e_run "Unregister pool registry" \
