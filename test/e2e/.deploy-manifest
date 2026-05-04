@@ -1,14 +1,41 @@
 # Files/directories to include in developer source deploys to conN.
 # One path per line (relative to ABA root). Globs not supported.
 # Blank lines and #-comments are ignored.
+#
+# This must be complete enough for a FRESH host (no prior git clone).
+# aba commands need: scripts/, templates/, tools/, cli/, mirror/Makefile, Makefile
+# E2E suites need: test/{lib,e2e,Makefile,*.sh,*.yaml}
 
 scripts/
 templates/
 tools/
 others/
-test/lib.sh
-test/e2e/examples/
-Makefile
 cli/Makefile
+tui/
+
+# mirror/ skeleton (Makefile + templates only; data is generated at runtime)
+mirror/Makefile
+mirror/templates/
+
+# test files referenced by suites (NOT test/e2e/logs/ which is 18GB+)
+test/lib.sh
+test/Makefile
+test/basic-interactive-test.sh
+test/acm-subs.yaml
+test/acm-mch.yaml
+test/e2e/scripts/
+test/e2e/examples/
+test/e2e/lib/
+
+Makefile
 aba
+abatui
 install
+
+# Files referenced by backup.sh (aba tar / aba bundle)
+rpms/
+README.md
+VERSION
+CHANGELOG.md
+LICENSE
+Troubleshooting.md

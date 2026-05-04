@@ -697,7 +697,7 @@ fi
 # --- Deploy harness to conN ---------------------------------------------------
 
 # Pre-flight: verify notify.sh exists if NOTIFY_CMD is configured
-_notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+_notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2- | sed "s/[[:space:]]*#.*//; s/^['\"]//; s/['\"]$//")
 _notify_cmd="${_notify_cmd/#\~/$HOME}"
 if [ -n "$_notify_cmd" ] && ! [ -x "$_notify_cmd" ]; then
 	echo "FATAL: config.env sets NOTIFY_CMD=$_notify_cmd but the file does not exist." >&2
@@ -742,6 +742,32 @@ if [ -n "${CLI_DEV:-}" ]; then
 		fi
 	done
 	rm -f "$_deploy_tar"
+else
+	# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
+	# Suites expect ~/aba to exist; this one-time install ensures it does.
+	_need_install=""
+	for _p in $CLI_POOL_LIST; do
+		target=$(_con_target "$_p")
+		if ! _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+			_need_install=1
+			break
+		fi
+	done
+	if [ -n "$_need_install" ]; then
+		echo ""
+		echo "  Installing ABA from git ($E2E_GIT_BRANCH) on conN hosts ..."
+		for _p in $CLI_POOL_LIST; do
+			target=$(_con_target "$_p")
+			echo -n "    con${_p}: "
+			if _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+				echo "already installed"
+			elif _essh "$target" "cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$E2E_GIT_REPO_SLUG/refs/heads/$E2E_GIT_BRANCH/install)\" -- $E2E_GIT_BRANCH $E2E_GIT_REPO_SLUG" 2>&1; then
+				echo "done"
+			else
+				echo "FAILED"
+			fi
+		done
+	fi
 fi
 
 # =============================================================================

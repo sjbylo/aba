@@ -87,6 +87,8 @@ _verify_con_vm() {
 	_con_ip="$(pool_con_ip "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
 	local _tz="${TIMEZONE:-Asia/Singapore}"
+	local _bastion_fp
+	_bastion_fp="$(ssh-keygen -l -f ~/.ssh/id_rsa.pub | awk '{print $2}')"
 
 	echo "  [$vm] Verifying ..."
 	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
@@ -196,6 +198,10 @@ _verify_con_vm() {
 		_user_fp=\$(ssh-keygen -l -f /home/${user}/.ssh/id_rsa.pub | awk '{print \$2}')
 		[ "\$_root_fp" = "\$_user_fp" ] || _fail "root and ${user} have different SSH keys (root=\$_root_fp ${user}=\$_user_fp)"
 		echo "  PASS: root and ${user} share same SSH key"
+
+		# Keys must originate from bastion (not a self-generated golden VM key)
+		[ "\$_root_fp" = "${_bastion_fp}" ] || _fail "VM key (\$_root_fp) != bastion key (${_bastion_fp})"
+		echo "  PASS: SSH key matches bastion"
 
 		# Verify self-SSH works for both users
 		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
@@ -385,6 +391,8 @@ _verify_dis_vm() {
 	local _tz="${TIMEZONE:-Asia/Singapore}"
 	local _dis_lab_ip
 	_dis_lab_ip="$(pool_dis_ip "$pool_num")"
+	local _bastion_fp
+	_bastion_fp="$(ssh-keygen -l -f ~/.ssh/id_rsa.pub | awk '{print $2}')"
 
 	echo "  [$vm] Verifying ..."
 	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
@@ -487,6 +495,10 @@ _verify_dis_vm() {
 		_user_fp=\$(ssh-keygen -l -f /home/${user}/.ssh/id_rsa.pub | awk '{print \$2}')
 		[ "\$_root_fp" = "\$_user_fp" ] || _fail "root and ${user} have different SSH keys (root=\$_root_fp ${user}=\$_user_fp)"
 		echo "  PASS: root and ${user} share same SSH key"
+
+		# Keys must originate from bastion (not a self-generated golden VM key)
+		[ "\$_root_fp" = "${_bastion_fp}" ] || _fail "VM key (\$_root_fp) != bastion key (${_bastion_fp})"
+		echo "  PASS: SSH key matches bastion"
 
 		# Verify self-SSH works for both users
 		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
@@ -1095,6 +1107,11 @@ for i in "${_POOL_ARRAY[@]}"; do
 				continue
 			fi
 		fi
+		# Remove expand-root marker so the service re-runs after revert
+		# (govc vm.disk.change resizes the vDisk but the partition stays
+		# at the golden's original size until expand-root grows it)
+		_essh "${VM_DEFAULT_USER}@${vm_name}.${VM_BASE_DOMAIN}" \
+			"sudo rm -f /var/lib/expand-root.done" 2>/dev/null || true
 		echo "  Shutting down $vm_name ..."
 		govc vm.power -s -force "$vm_name" &
 		_snapshot_vms+=("$vm_name")

@@ -2,7 +2,7 @@
 
 Developer-facing blueprint for the ABA E2E test framework.
 This is the authoritative reference for architecture, responsibilities, and invariants.
-For the ABA core spec, see `dev/01-SPEC.md`.
+For the ABA core spec, see `devel/01-SPEC.md`.
 
 This spec describes the **implemented state** (v2). All phases are complete.
 Sections marked `[current]` describe what the code actually does today.

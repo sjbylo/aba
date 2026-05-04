@@ -300,10 +300,13 @@ _e2e_notify() {
     [ -n "$NOTIFY_CMD" ] || return 0
     local _msg="[e2e] $* $(_e2e_notify_suffix)"
     if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
+        # Relay: pass NOTIFY_CMD as-is — tilde expands on the remote host's shell
         ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
             "$NOTIFY_CMD '$_msg'" < /dev/null >/dev/null 2>&1 &
     else
-        $NOTIFY_CMD "$_msg" < /dev/null >/dev/null &
+        # Local: expand tilde manually (variable expansion doesn't trigger tilde expansion)
+        local _cmd="${NOTIFY_CMD/#\~/$HOME}"
+        $_cmd "$_msg" < /dev/null >/dev/null &
     fi
 }
 

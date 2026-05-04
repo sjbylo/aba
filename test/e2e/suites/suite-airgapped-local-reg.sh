@@ -670,7 +670,7 @@ e2e_run_remote "Clean sno cluster dir" \
 
 # Build standard cluster -- delete any leftover VMs before removing the dir
 e2e_run_remote "Delete any leftover $STANDARD cluster" \
-    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
+    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete --force; fi"
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \

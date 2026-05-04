@@ -865,7 +865,7 @@ _pre_suite_cleanup() {
 			# (not silently rm -rf'd with orphan VMs left behind).
 		if ! ( _essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete
+				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete --force
 			else
 				echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
 				echo '  (orphan VM check already passed -- no dangling VMs)'
