@@ -143,30 +143,27 @@ $exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFI
 
 warn_if_cluster_unstable
 
-# Check if MachineConfig would change anything before applying
+# Check if MachineConfig would change anything before applying.
+# oc diff: exit 0=no change, exit 1=diff found, exit >1=error.
 _mc_changed=0
-_diff_rc=0
-oc diff -f 99-master-chrony-conf-override.yaml -f 99-worker-chrony-conf-override.yaml >/dev/null 2>&1 || _diff_rc=$?
+_diff_rc1=0
+_diff_rc2=0
+oc diff -f 99-master-chrony-conf-override.yaml >/dev/null 2>&1 || _diff_rc1=$?
+oc diff -f 99-worker-chrony-conf-override.yaml >/dev/null 2>&1 || _diff_rc2=$?
+aba_debug "oc diff exit codes: master=$_diff_rc1 worker=$_diff_rc2"
 
-if [ "$_diff_rc" -eq 0 ]; then
+if [ "$_diff_rc1" -eq 0 ] && [ "$_diff_rc2" -eq 0 ]; then
 	aba_info "NTP MachineConfig already applied (unchanged). Verifying config on nodes."
-	echo
-elif [ "$_diff_rc" -eq 1 ]; then
-	_mc_changed=1
-	oc apply -f 99-master-chrony-conf-override.yaml
-	oc apply -f 99-worker-chrony-conf-override.yaml
-	echo
-	aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
-	echo
 else
-	aba_warning "oc diff failed (rc=$_diff_rc). Applying anyway."
+	[ "$_diff_rc1" -gt 1 ] || [ "$_diff_rc2" -gt 1 ] && \
+		aba_warning "oc diff failed (master rc=$_diff_rc1, worker rc=$_diff_rc2). Applying anyway."
 	_mc_changed=1
 	oc apply -f 99-master-chrony-conf-override.yaml
 	oc apply -f 99-worker-chrony-conf-override.yaml
 	echo
 	aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
-	echo
 fi
+echo
 
 #######################
 # Verify NTP configuration on cluster nodes.

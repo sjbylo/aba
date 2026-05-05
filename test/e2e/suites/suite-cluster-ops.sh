@@ -145,16 +145,8 @@ e2e_run "Clear reg_ssh_user (local registry)" \
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 # Generate the pull secret for the pool registry
-e2e_run "Generate pool-registry pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
-{
-  \"auths\": {
-    \"${CON_HOST}:8443\": {
-      \"auth\": \"\$enc_pw\"
-    }
-  }
-}
-EOPS"
+e2e_run "Generate pool-registry pull secret via aba" \
+    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
 # Register the pool registry as an existing external registry via ABA.
 # This creates state.sh (REG_VENDOR=existing) so reg-install.sh's fast-path

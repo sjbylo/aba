@@ -344,7 +344,10 @@ rootpw --lock
 user --name=${SSH_USER} --groups=wheel --shell=/bin/bash
 sshkey --username=${SSH_USER} "${pubkey}"
 
-bootloader --append="console=tty0 console=ttyS0,115200n8" --location=mbr
+# ttyS0 is often not a real serial device on VMware GUI-only VMs; systemd then
+# runs serial-getty@ttyS0 and agetty can crash in a loop (seen on RHEL 10).
+# console=tty0 fits RHEL 8/9/10; use vSphere web console or SSH (add a vSphere serial device if you need SOL).
+bootloader --append="console=tty0" --location=mbr
 
 ignoredisk --only-use=sda
 clearpart --all --initlabel --drives=sda
@@ -759,12 +762,7 @@ verify_template() {
 	fi
 
 	if _rssh "test -f /etc/systemd/system/expand-root.service" >/dev/null 2>&1; then
-		if _rssh "systemctl is-enabled expand-root.service" >/dev/null 2>&1; then
-			echo "  OK  expand-root.service installed and enabled"
-		else
-			echo "  FAIL  expand-root.service installed but NOT enabled" >&2
-			failures=$((failures + 1))
-		fi
+		echo "  OK  expand-root.service installed (enabled in finalize)"
 	else
 		echo "  FAIL  expand-root.service not installed" >&2
 		failures=$((failures + 1))
@@ -805,6 +803,10 @@ finalize() {
 	# template itself where the disk is already the right size).
 	echo "  Enabling expand-root.service for clones ..."
 	_rssh "sudo systemctl enable expand-root.service" || true
+
+	# Remove the done marker so clones will run the service on first boot.
+	# (The service may have already fired on this template since we just enabled it.)
+	_rssh "sudo rm -f /var/lib/expand-root.done" || true
 
 	echo "  Shutting down VM ..."
 	_rssh "sudo shutdown -h now" 2>/dev/null || true
