@@ -107,16 +107,8 @@ e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
-e2e_run "Generate pool-registry pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
-{
-  \"auths\": {
-    \"${CON_HOST}:8443\": {
-      \"auth\": \"\$enc_pw\"
-    }
-  }
-}
-EOPS"
+e2e_run "Generate pool-registry pull secret via aba" \
+    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
 e2e_run "Register pool registry" \
     "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"

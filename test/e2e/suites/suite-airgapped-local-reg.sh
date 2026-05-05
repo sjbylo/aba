@@ -548,24 +548,11 @@ test_end
 # ============================================================================
 test_begin "Upgrade: OSUS and cluster upgrade"
 
-# Save the target (newer) version images.
-# Must match the old test approach: minVersion=older, maxVersion=desired,
-# channel=fast (for upgrade graph), shortestPath enabled.
-e2e_run "Set version to desired (upgrade target)" \
-    "aba -v \$(cat /tmp/e2e-ocp-version-desired)"
-
-# Regenerate imageset config (incremental tests overwrote it with minimal config)
-e2e_run "Regenerate full imageset config for upgrade" \
-    "rm -f mirror/data/imageset-config.yaml && aba -d mirror imagesetconf"
-
-# Modify config for upgrade: fast channel, minVersion=older, enable shortestPath
-e2e_run "Configure imageset for upgrade path" \
-    "_older=\$(cat /tmp/e2e-ocp-version-older) && \
-     _desired=\$(cat /tmp/e2e-ocp-version-desired) && \
-     _major=\$(echo \$_desired | cut -d. -f1-2) && \
-     sed -i \"s/^    - name: stable-\${_major}/    - name: fast-\${_major}/\" mirror/data/imageset-config.yaml && \
-     sed -i \"s/^      minVersion: \${_desired}/      minVersion: \${_older}/\" mirror/data/imageset-config.yaml && \
-     sed -i 's/^#      shortestPath: true.*/      shortestPath: true/' mirror/data/imageset-config.yaml"
+# Save the target (newer) version images using --target-version (auto-generates
+# ISC with shortestPath, minVersion=current, maxVersion=target).
+e2e_run "Set --target-version for upgrade" \
+    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && \
+     aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) imagesetconf"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
 # The catalog YAML should already exist from the earlier catalogs-wait; verify it.

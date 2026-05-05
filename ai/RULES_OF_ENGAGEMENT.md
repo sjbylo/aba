@@ -1545,8 +1545,19 @@ make -C mirror clean       # Mirror state
 - Resets configuration to known-good state
 - Idempotent - safe to run multiple times
 
+## Release Notes Files (`ai/RELEASE_BULLETS_<version>.md`)
+
+When creating `ai/RELEASE_BULLETS_<version>.md` for a new release:
+
+- **Only include the most important USER-FACING changes** — features users will notice and care about
+- Keep it short and scannable — bullet points, not essays
+- Skip internal refactoring, E2E-only changes, and code-level details
+- Include brief usage examples for new commands
+- This file is a starting point for the user to edit — not a comprehensive changelog (that's `CHANGELOG.md`)
+- The user will polish it for blog posts, GitHub releases, etc.
+
 ---
 
-**Last Updated**: March 1, 2026  
+**Last Updated**: May 5, 2026  
 **Purpose**: Keep this document updated as rules evolve
 

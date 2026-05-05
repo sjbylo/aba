@@ -1037,8 +1037,8 @@ e2e_run() {
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_magenta "$description") $(_e2e_magenta "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Magenta "$description") $(_e2e_Magenta "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_green "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Green "[$_display_host:$PWD]")"
     else
         _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
         _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"

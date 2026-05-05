@@ -23,12 +23,14 @@ source "$_SUITE_DIR/../lib/setup.sh"
 # --- Configuration ----------------------------------------------------------
 
 SNO="$(pool_cluster_name sno)"
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 
 # --- Suite ------------------------------------------------------------------
 
 e2e_setup
 
 plan_tests \
+    "Setup: ensure pre-populated registry" \
     "Setup: install aba and configure" \
     "ISC: normal mode (no ocp_version_target)" \
     "Flag: --target-version resolution and mirror.conf write" \
@@ -40,7 +42,24 @@ plan_tests \
 suite_begin "upgrade"
 
 # ============================================================================
-# 1. Setup: install aba and configure
+# 1. Ensure pre-populated registry on conN
+# ============================================================================
+test_begin "Setup: ensure pre-populated registry"
+
+e2e_install_aba
+e2e_run "Configure aba.conf (temporary, for version resolution)" \
+    "aba --noask --platform bm --channel fast --version previous --base-domain $(pool_domain) -Y"
+
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
+test_end
+
+# ============================================================================
+# 2. Setup: install aba and configure
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
@@ -64,6 +83,21 @@ e2e_run "Resolve latest version as upgrade target" "
 
 e2e_run "Create mirror directory and mirror.conf" \
     "cd ~/aba && aba -d mirror mirror.conf"
+
+e2e_run "Set reg_host to local pool registry" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_key (local registry)" \
+    "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
+e2e_run "Clear reg_ssh_user (local registry)" \
+    "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
+
+e2e_run "Generate pool-registry pull secret via aba" \
+    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
+
+e2e_run "Register pool registry" \
+    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+
+e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
 test_end
 

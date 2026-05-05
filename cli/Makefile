@@ -40,7 +40,10 @@ ifeq ($(os_ver),)
 	os_ver := 9.5
 endif
 
-ifeq ($(shell echo "$(os_ver)" | grep -o -E "^8\."),8.)
+# Map OS major version to the RHEL binary flavour available on the OCP mirror.
+# RHEL 10+/Fedora: use rhel9 binaries (no rhel10-specific tarballs published yet).
+os_major := $(firstword $(subst ., ,$(os_ver)))
+ifeq ($(os_major),8)
 	rhel_ver := rhel8
 else
 	rhel_ver := rhel9
@@ -99,6 +102,17 @@ ifeq ($(platform),vmw)
 	govc_bin := govc
 	govc_tar_target := $(govc_tar_file)
 endif
+
+# Verify SHA256 checksum of a downloaded file.
+# Usage: $(call verify-sha256,FILE,SHA256SUM_URL)
+# On failure: removes the file so Make retries from scratch next time.
+define verify-sha256
+	@echo -n "[ABA] Verifying checksum for $(1): "
+	@curl -f --retry 8 -sL -o $(1).sha256 $(2) && \
+		grep "  $(notdir $(1))$$" $(1).sha256 | sha256sum --check --status && \
+		echo "valid!" || \
+		{ echo "INVALID or checksum unavailable! Removing $(1)."; rm -f $(1) $(1).sha256; exit 1; }
+endef
 
 # Targets
 
@@ -229,18 +243,14 @@ $(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
 	curl -sfkLI $(rhel9_oc_url) >/dev/null # Check connection only
 	echo [ABA] Downloading $(rhel9_oc_url)
 	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(@) failed download; > $(@); }
-	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
-	echo "valid!"
+	$(call verify-sha256,$@,$(openshift_install_url)/sha256sum.txt)
 
 # Ensure all possible tarballs are downloaded
 $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 	curl -sfkLI $(rhel8_oc_url) >/dev/null # Check connection only
 	echo [ABA] Downloading $(rhel8_oc_url)
 	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(@) failed download; > $(@); }
-	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
-	echo "valid!"
+	$(call verify-sha256,$@,$(openshift_install_url)/sha256sum.txt)
 
 #	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel8-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=$$(sha256sum $@) && grep -q "$$cs" openshift-client-rhel8-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 #	echo [ABA] "File $(rhel8_oc_tar_file) checksum valid!"  # Be sure it's valid
@@ -258,9 +268,7 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 $(openshift_install_file):  ## Download openshift-install tarball
 	@echo [ABA] Downloading $(openshift_install_url)/$@
 	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$@
-	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
-	echo "valid!"
+	$(call verify-sha256,$@,$(openshift_install_url)/sha256sum.txt)
 
 #	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-install-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-install-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 #	echo [ABA] "File $@ checksum valid!"
@@ -287,16 +295,12 @@ oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 oc-mirror.tar.gz: ## Download oc-mirror tarball
 	echo [ABA] Downloading $(oc_mirror_base_url)/$@
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/$@
-	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
-	echo "valid!"
+	$(call verify-sha256,$@,$(oc_mirror_sha256sum))
 
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
 	echo [ABA] Downloading $(oc_mirror_base_url)/$@
 	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/$@
-	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(@)-sha256sum.txt $(oc_mirror_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(@)-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
-	echo "valid!"
+	$(call verify-sha256,$@,$(oc_mirror_sha256sum))
 
 
 ########################################
@@ -309,13 +313,10 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 	~/bin/govc --help >/dev/null 2>&1
 
 govc_url = https://github.com/vmware/govmomi/releases/latest/download
-govc_tar_url_sha256sum = $(govc_url)/checksums.txt
-govc_tar_file_sha256sum = $(govc_tar_file)-sha256sum.txt
 $(govc_tar_file):   ## Download govc tarball
 	echo [ABA] Downloading $(govc_url)/$@
 	curl -f --retry 8 -sL $(CURL_PROGRESS) -O "$(govc_url)/$@"
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o $(govc_tar_file_sha256sum) $(govc_tar_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(govc_tar_file_sha256sum) || { echo [ABA] "Error: file $@ checksum invalid!"; mv $(govc_tar_file) .$(govc_tar_file); exit 1; }
-	echo [ABA] "File $@ checksum valid!"
+	$(call verify-sha256,$@,$(govc_url)/checksums.txt)
 
 # Use either amd64 or aarch64 
 .PHONY: butane
@@ -336,15 +337,14 @@ $(butane_binary_file): ## Download butane binary
 	echo [ABA] Downloading $(butane_binary_file_url)
 	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $@ --connect-timeout 30 $(butane_binary_file_url)
 	chmod +x $@
-	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $(butane_binary_file)-sha256sum.txt $(butane_binary_url_sha256sum) && cs=`sha256sum $@` && grep -q "$$cs" $(butane_binary_file)-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
-	echo [ABA] "File $@ checksum valid!"
+	$(call verify-sha256,$@,$(butane_binary_url_sha256sum))
 
 
 ########################################
 .PHONY: clean 
 clean: ## Clean up installed binaries
 	@../scripts/cli-install-all.sh --reset
-	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt
+	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt *.sha256
 #	This should be just: run_once -r -i "cli:install" # to reset all downloads in cli dir
 
 .PHONY: reset

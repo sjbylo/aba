@@ -819,7 +819,11 @@ edit_file() {
 			return 1
 		else
 			ask "$msg" || return 1
-			$editor $conf_file
+			if [ -n "${ABA_TTY_FD:-}" ]; then
+				$editor $conf_file >&${ABA_TTY_FD} 2>&1
+			else
+				$editor $conf_file
+			fi
 		fi
 	else
 		echo_yellow "'$conf_file' has been created for you (skipping edit since ask=false in aba.conf)."
