@@ -858,10 +858,10 @@ DNSEOF
 
 	cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		# Remove listen-address, bind-interfaces, and interface= from the
-		# default config. RHEL 9 ships with bind-interfaces and interface=lo
-		# which conflict with bind-dynamic and restrict dnsmasq to loopback.
-		sed -i '/^listen-address/d; /^bind-interfaces/d; /^interface=/d' /etc/dnsmasq.conf
+		# Remove options that conflict with bind-dynamic from the default config.
+		# RHEL 9 ships with bind-interfaces and interface=lo; RHEL 10 ships with
+		# local-service=host (implies bind-interfaces in dnsmasq 2.90+).
+		sed -i '/^listen-address/d; /^bind-interfaces/d; /^interface=/d; /^local-service/d' /etc/dnsmasq.conf
 
 		cat > /etc/dnsmasq.d/e2e-pool.conf << 'CONFEOF'
 ${dnsmasq_conf}
