@@ -143,16 +143,30 @@ $exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFI
 
 warn_if_cluster_unstable
 
-exec_cmd="oc apply -f 99-master-chrony-conf-override.yaml"
-aba_debug "Running: $exec_cmd"
-$exec_cmd
-exec_cmd="oc apply -f 99-worker-chrony-conf-override.yaml"
-aba_debug "Running: $exec_cmd"
-$exec_cmd
+# Check if MachineConfig would change anything before applying
+_mc_changed=0
+_diff_rc=0
+oc diff -f 99-master-chrony-conf-override.yaml -f 99-worker-chrony-conf-override.yaml >/dev/null 2>&1 || _diff_rc=$?
 
-echo
-aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
-echo
+if [ "$_diff_rc" -eq 0 ]; then
+	aba_info "NTP MachineConfig already applied (unchanged). Verifying config on nodes."
+	echo
+elif [ "$_diff_rc" -eq 1 ]; then
+	_mc_changed=1
+	oc apply -f 99-master-chrony-conf-override.yaml
+	oc apply -f 99-worker-chrony-conf-override.yaml
+	echo
+	aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
+	echo
+else
+	aba_warning "oc diff failed (rc=$_diff_rc). Applying anyway."
+	_mc_changed=1
+	oc apply -f 99-master-chrony-conf-override.yaml
+	oc apply -f 99-worker-chrony-conf-override.yaml
+	echo
+	aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
+	echo
+fi
 
 #######################
 # Verify NTP configuration on cluster nodes.
@@ -190,16 +204,19 @@ _any_mcp_updating() {
 	echo "$updating" | grep -q True
 }
 
-_mco_started=1
-_wait_rc=0
-aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 20 _any_mcp_updating || _wait_rc=$?
-if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
-	echo
-	aba_info "Aborted by user."
-	exit 0
-elif [ "$_wait_rc" -ne 0 ]; then
-	_mco_started=0
-	aba_info "MCO did not start updating -- MachineConfig may match current config (no reboot needed)."
+_mco_started=0
+if [ "$_mc_changed" -eq 1 ]; then
+	_mco_started=1
+	_wait_rc=0
+	aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 40 _any_mcp_updating || _wait_rc=$?
+	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
+		echo
+		aba_info "Aborted by user."
+		exit 0
+	elif [ "$_wait_rc" -ne 0 ]; then
+		_mco_started=0
+		aba_info "MCO did not start updating -- MachineConfig may match current config (no reboot needed)."
+	fi
 fi
 
 raw_targets=($ntp_servers)
@@ -209,7 +226,7 @@ aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
 # Phase 2: verify chrony.conf has all configured server lines on every node.
-# Polls through the MCO reboot -- no need to wait for MCP to finish first.
+# Polls through the MCO reboot -- SSH retries until node is back.
 _ntp_config_applied() {
 	for host in $nodesIPs; do
 		aba_debug "Checking chrony.conf on node: $host"
@@ -263,7 +280,7 @@ _ntp_source_synced() {
 }
 
 _wait_rc=0
-aba_wait_show "Waiting for NTP source sync on all nodes (Ctrl-C to skip)" 5 300 _ntp_source_synced || _wait_rc=$?
+aba_wait_show "Waiting for NTP source sync on all nodes (Ctrl-C to skip)" 5 600 _ntp_source_synced || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	echo
 	aba_info "Aborted by user."
