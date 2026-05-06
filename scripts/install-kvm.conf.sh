@@ -41,6 +41,13 @@ else
 	else
 		aba_info "Copying 'kvm.conf' from 'templates/kvm.conf'"
 		cp templates/kvm.conf .
+
+		# Set arch-appropriate defaults for boot and graphics
+		if [ "$ARCH" = "s390x" ]; then
+			sed -i 's/^KVM_BOOT_ARGS=.*/KVM_BOOT_ARGS=hd,cdrom/' kvm.conf
+			sed -i 's/^KVM_GRAPHICS_ARGS=.*/KVM_GRAPHICS_ARGS=none/' kvm.conf
+			aba_info "Detected s390x: set KVM_BOOT_ARGS=hd,cdrom and KVM_GRAPHICS_ARGS=none"
+		fi
 	fi
 
 	trap - ERR
