@@ -11,6 +11,7 @@ New `aba upgrade` command, trace logging, bug fixes and reliability improvements
 
 ## Improvements
 
+- `macs.conf` for bare-metal -- Assign specific MAC addresses to nodes via a file in the cluster directory.
 - Smarter `day2-ntp` -- Skips MCO reboot when NTP config is already applied.
 - Ctrl-C skip hints on long waits (startup, NTP, upgrade monitoring).
 - Spinner and `[ABA]` colored output restored (trace logging regression).

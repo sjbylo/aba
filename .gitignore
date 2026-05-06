@@ -6,6 +6,7 @@ cli/*-download
 *.bak
 .backup/
 mirror/aba.conf
+mirror/*.sha256
 mirror.conf
 mirror/.dnf-install.log
 mirror/execution-environment.tar
@@ -93,3 +94,4 @@ ai/aba-installations-chart.html
 e2e-parallel.log.*
 ai/OPP*docx
 ai/OPP*pdf
+ai/RELEASE_BULLETS_*.md

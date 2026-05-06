@@ -191,4 +191,12 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
   2. In a `### Community` section at the end of the release block
 - Check ALL PRs in the range, not just the latest -- contributors may have multiple PRs
 
+## Release bullets (`ai/RELEASE_BULLETS_*.md`)
+
+- **User-facing & brief** -- Only things a user would notice or care about. No internal refactors, no test framework changes, no developer tooling.
+- **Significant only** -- Only the most useful/interesting/significant new features, improvements, or fixes. Not exhaustive.
+- **State the fact, not documentation** -- One-liner stating the new capability. No usage examples, no flags list, no "how to use" instructions. That belongs in README/CHANGELOG.
+- Example good: "`macs.conf` for bare-metal -- Assign specific MAC addresses to nodes via a file in the cluster directory."
+- Example bad: "`macs.conf` for bare-metal -- Place a `macs.conf` file in the cluster directory to assign specific MAC addresses to nodes (matching DHCP reservations or physical NICs). One MAC per node per port, grouped by host."
+
 ## For full details see `ai/RULES_OF_ENGAGEMENT.md`
