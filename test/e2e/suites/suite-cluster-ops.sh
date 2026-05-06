@@ -228,8 +228,8 @@ for ctype in sno compact standard; do
 done
 
 # Clean up compact/standard dirs -- only needed for config validation, not cluster install
-e2e_run "Clean compact cluster dir (config-only)" "aba --dir $COMPACT clean"
-e2e_run "Clean standard cluster dir (config-only)" "aba --dir $STANDARD clean"
+e2e_run "Reset compact cluster dir" "aba --dir $COMPACT reset --force"
+e2e_run "Remove standard cluster dir" "rm -rf $STANDARD"
 
 test_end
 

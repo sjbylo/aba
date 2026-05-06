@@ -27,13 +27,14 @@ aba_debug "Configuration validated"
 mkdir -p data
 
 # ISC regeneration guard:
-#   Regenerate if: ISC doesn't exist/empty OR ISC is NOT strictly newer than .created.
+#   Regenerate if: ISC doesn't exist/empty, OR .created is missing, OR ISC is NOT strictly newer than .created.
 #   Skip if: user edited the ISC after generation (ISC is strictly newer than .created).
+#   To force regeneration: rm data/.created (if .created is missing, ISC is always regenerated).
 #   Using "! ISC -nt .created" instead of ".created -nt ISC" so that equal timestamps
 #   also trigger regeneration (needed on platforms like System Z/s390x).
 #   The .created file is touched at the end of each generation cycle.
 #   This allows users to customize the ISC and run 'aba save' or 'aba sync' again without losing edits.
-if [ ! -s data/imageset-config.yaml -o ! data/imageset-config.yaml -nt data/.created ]; then
+if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imageset-config.yaml -nt data/.created ]; then
 	aba_debug "Generating new imageset-config.yaml"
 	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
@@ -74,5 +75,6 @@ if [ ! -s data/imageset-config.yaml -o ! data/imageset-config.yaml -nt data/.cre
 	aba_info "For advanced customization, edit mirror/data/imageset-config.yaml directly (your edits will be preserved)."
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"
-	aba_info "Using existing image set config file (data/imageset-config.yaml)"
+	aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
+		"To force regeneration: rm mirror/data/.created && aba -d mirror imagesetconf"
 fi

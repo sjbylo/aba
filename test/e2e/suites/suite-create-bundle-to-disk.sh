@@ -112,8 +112,7 @@ e2e_run "Set operator sets in aba.conf" "aba --op-sets abatest"
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 
 # Read ocp_version/ocp_channel directly from aba.conf (no internal functions needed).
-ocp_version=$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
-ocp_channel=$(grep ^ocp_channel= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
+. aba.conf
 _e2e_log "Resolved: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 echo "  ocp_version=$ocp_version  ocp_channel=$ocp_channel"
 

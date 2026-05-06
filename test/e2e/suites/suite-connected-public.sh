@@ -249,7 +249,7 @@ e2e_run "Verify no httpProxy in mirror+direct mode" \
 e2e_run "Verify additionalTrustBundle present for mirror CA" \
     "grep additionalTrustBundle $SNO_MIRROR/install-config.yaml"
 
-e2e_run "Clean up sno-mirror cluster dir" "aba --dir $SNO_MIRROR clean"
+e2e_run "Reset sno-mirror cluster dir" "aba --dir $SNO_MIRROR reset --force"
 
 test_end
 
@@ -339,7 +339,7 @@ e2e_run "Verify install-config noProxy includes node subnet or domain" \
     "grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -E '10\\.' || \
      grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep example.com"
 
-e2e_run "Clean up sno-noproxy cluster dir" "aba --dir $SNO_NOPROXY clean"
+e2e_run "Remove sno-noproxy cluster dir" "rm -rf $SNO_NOPROXY"
 
 test_end
 

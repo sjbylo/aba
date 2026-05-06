@@ -214,7 +214,7 @@ test_end
 # ============================================================================
 test_begin "SNO: bootstrap after save/load"
 
-e2e_run "Clean sno cluster directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean sno cluster directory" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 # CIDR variation tests (ported from old test1 lines 353-360)
 e2e_run "Test /29 small CIDR (cluster.conf)" \
@@ -223,20 +223,20 @@ e2e_run "Verify /29 CIDR in cluster.conf" \
     "grep 'machine_network=.*/' $SNO/cluster.conf"
 e2e_run "Test /29 small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
-e2e_run "Clean for /30 CIDR test" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean for /30 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /30 CIDR (cluster.conf)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_sno_ip)/30' --step cluster.conf"
 e2e_run "Verify /30 CIDR in cluster.conf" \
     "grep 'machine_network=.*/30' $SNO/cluster.conf"
-e2e_run "Clean for /20 CIDR test" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean for /20 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /20 large CIDR (cluster.conf + ISO)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.0.0/20' --step iso"
 e2e_run "Verify /20 CIDR in cluster.conf" \
     "grep 'machine_network=10.0.0.0/20' $SNO/cluster.conf"
 
-e2e_run "Clean and recreate with pool CIDR for install" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean and recreate with pool CIDR for install" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
@@ -285,7 +285,7 @@ e2e_diag "Markers: before sync" "_marker_snap"
 e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
-e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
@@ -367,8 +367,8 @@ e2e_run "Delete SNO cluster" \
     "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; else echo '[cleanup] $SNO already removed'; fi"
 # $STANDARD was created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
-e2e_run "Uninstall e2e-mirror-docker1 registry and remove dir" \
-    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall && rm -rf e2e-mirror-docker1; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
+e2e_run "Uninstall e2e-mirror-docker1 registry" \
+    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \

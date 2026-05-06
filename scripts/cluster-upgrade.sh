@@ -235,8 +235,8 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 fi
 
 if [ "$_wait_rc" -ne 0 ]; then
-	aba_warning "Upgrade has not started progressing after 5 minutes."
-	aba_warning "Check with: aba -d $(basename "$PWD") run --cmd 'oc get clusterversion'"
+	aba_warning "Upgrade has not started progressing after 5 minutes." \
+		"Check with: aba -d $(basename "$PWD") run --cmd 'oc get clusterversion'"
 	exit 1
 fi
 

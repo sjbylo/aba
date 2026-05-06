@@ -816,11 +816,16 @@ e2e_cleanup_mirrors() {
 		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
+		# Only uninstall the registry (stop containers, remove creds). Leave the
+		# directory in place — the pre-suite check uses .available to detect stale
+		# registries, not directory existence.
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then
+			"if [ -d '$abs_path' ] && [ -f '$abs_path/.available' ]; then
 				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
+			elif [ -d '$abs_path' ]; then
+				echo '  (mirror $abs_path already uninstalled -- skipping)'
 			else
-				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
+				echo '  (mirror dir $abs_path does not exist -- skipping)'
 			fi" \
 			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
 		_cleanup_rc=${PIPESTATUS[0]}
@@ -1064,18 +1069,18 @@ e2e_run() {
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
-                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
                         2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ( trap - INT; eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
+                    ( trap - INT; set -e; eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
+                    ( trap - INT; set -e; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
@@ -1420,7 +1425,7 @@ e2e_run_must_fail() {
     _e2e_summary "  $(_e2e_Dim "$cmd")"
 
     local ret=0
-    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    ( trap - INT; set -e; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"

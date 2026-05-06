@@ -109,7 +109,7 @@ test_end
 test_begin "Setup: calculate older version for upgrade"
 
 e2e_run "Read aba.conf and compute older version" "
-    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
+    . aba.conf
     echo ocp_version=\$ocp_version
     ocp_version_major=\$(echo \$ocp_version | cut -d. -f1-2)
     ocp_version_point=\$(echo \$ocp_version | cut -d. -f3)
@@ -605,8 +605,8 @@ e2e_wait_operators_available $SNO remote
 
 e2e_wait_operators_ready $SNO remote
 
-e2e_run_remote "Trigger cluster upgrade (max 10m)" \
-    "cd ~/aba && timeout 10m bash -c 'until aba --dir $SNO run --cmd \"oc adm upgrade --to-latest=true --allow-not-recommended\"; do sleep 30; done'"
+e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
+    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
@@ -652,8 +652,8 @@ test_begin "Standard: cluster with macs.conf"
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
-e2e_run_remote "Clean sno cluster dir" \
-    "cd ~/aba && aba --dir $SNO clean"
+e2e_run_remote "Remove sno cluster dir" \
+    "cd ~/aba && rm -rf $SNO"
 
 # Build standard cluster -- delete any leftover VMs before removing the dir
 e2e_run_remote "Delete any leftover $STANDARD cluster" \

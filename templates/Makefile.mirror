@@ -3,6 +3,11 @@
 # Delete target files when a recipe fails (prevents partial/corrupt downloads)
 .DELETE_ON_ERROR:
 
+# mirror.conf is created-then-reviewed: the recipe exits non-zero when editor=none
+# so the user can edit and re-run.  Without .PRECIOUS, .DELETE_ON_ERROR removes
+# the file before the user ever sees it.
+.PRECIOUS: mirror.conf
+
 ifndef DEBUG_ABA
 .SILENT:
 MAKEFLAGS += --no-print-directory

@@ -102,19 +102,19 @@ _run_cleanup_on_host() {
 						continue
 					fi
 				fi
-			if echo "$f" | grep -q '\.cleanup$'; then
-				echo "${_indent}  $tgt: delete $abs_path"
-				if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete" < /dev/null 2>&1; then
-					echo "${_indent}  ERROR: delete failed for $abs_path on $tgt"
-					_file_ok=""
-				fi
-			else
-				echo "${_indent}  $tgt: uninstall $abs_path"
-				if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall" < /dev/null 2>&1; then
-					echo "${_indent}  ERROR: uninstall failed for $abs_path on $tgt"
-					_file_ok=""
-				fi
+		if echo "$f" | grep -q '\.cleanup$'; then
+			echo "${_indent}  $tgt: delete $abs_path"
+			if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete --force" < /dev/null 2>&1; then
+				echo "${_indent}  ERROR: delete failed for $abs_path on $tgt"
+				_file_ok=""
 			fi
+		else
+			echo "${_indent}  $tgt: uninstall $abs_path"
+			if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall" < /dev/null 2>&1; then
+				echo "${_indent}  ERROR: uninstall failed for $abs_path on $tgt"
+				_file_ok=""
+			fi
+		fi
 			done < "$f"
 			if [ -n "$_has_foreign" ]; then
 				echo "${_indent}  Keeping $(basename "$f") -- contains cross-pool entries"

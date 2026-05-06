@@ -11,6 +11,8 @@ New `aba upgrade` command, trace logging, improved error recovery, and OCP 5 rea
 
 ### Bug Fixes
 
+- **ISC regeneration guard** — `rm mirror/data/.created && aba -d mirror imagesetconf` failed to regenerate because bash `-nt` returns true when the right-hand file is missing. Fixed to explicitly check for `.created` absence.
+- **`aba_warning` for user-edited ISC** — When the ISC was manually edited, ABA now warns and preserves edits instead of silently skipping regeneration.
 - **`run_once` error recovery** — Add `.DELETE_ON_ERROR` to Makefiles that download files so partial/corrupt downloads are removed on recipe failure. Detect and clean zombie tasks (no exit file, lock free) caused by SIGKILL/OOM/crash. Close lock FD in `setsid` children (`9>&-`) so lock releases immediately. Show stderr tail + yellow recovery hint on failure: *"If this problem persists, re-run './install' from the ABA directory to clear the task cache."*
 - **Upgrade flow hardening** — Always run `day2` before upgrade (signatures, IDMS, catalogs). Fix arch mismatch: use `uname -m` (`x86_64`) not Go-style (`amd64`) for release image tags. Add upgrade-already-in-progress preflight check.
 - **VM delete guards** — `kvm-delete.sh` and `vmw-delete.sh` exit 0 early if config files are missing (nothing to delete). `kvm-delete.sh` only removes disk volumes, not cdrom ISO.
@@ -24,15 +26,24 @@ New `aba upgrade` command, trace logging, improved error recovery, and OCP 5 rea
 
 ### Improvements
 
+- **`--domain` CLI alias** — `--domain` is now accepted as a synonym for `--base-domain` / `-b`.
+- **`.PRECIOUS: mirror.conf`** — Prevents `make` from deleting `mirror.conf` on recipe failure (`.DELETE_ON_ERROR` interaction).
+- **`polkit` added to internal RPMs** — Required for Quay rootless registry install (`loginctl enable-linger`).
 - **`aba delete --force`** — New `--force` flag removes the entire cluster directory after deleting VMs and stamp files, enabling clean re-creation without manual `rm -rf`.
 - **CLI flag refactoring** — Extracted repeated `if cluster.conf else BUILD_COMMAND` pattern into shared `_set_cluster_conf()` helper, reducing ~120 lines of duplication across 15+ flag handlers.
 - **`ensure_govc` / `ensure_virsh` in `_ensure_hv_ready`** — Hypervisor CLI tools are automatically ensured before VM operations.
 - **Ctrl-C skip hints** — `cluster-startup` adds "(Ctrl-C to skip)" to nodes Ready, console, and cluster operators waits. NTP MCO wait reduced from 60s to 20s.
 - **vmw-upload validation** — Validate ISO exists before upload, verify remote size after transfer.
 - **README restructure** — New README layout with TUI screenshots, decision tree, dedicated Connected Installation section, operator-set documentation.
+- **`macs.conf` documentation** — Added bare-metal MAC address assignment documentation to README (create `macs.conf` in cluster directory with one MAC per node per port).
+- **Consecutive `aba_warning` lint** — New pre-commit check detects consecutive `aba_warning`/`aba_abort` calls that should be combined into multi-arg form.
 
 ### E2E Testing
 
+- **`set -e` in e2e_run subshells** — Multi-command blocks now fail immediately on first error instead of silently continuing. Exposed and fixed multiple latent test bugs.
+- **Cleanup safety** — Dispatcher and framework never `rm -rf` mirror directories; only check `.available` marker to detect stale registries.
+- **Mixed cleanup strategies** — Suites exercise `aba reset --force`, `rm -rf`, and `aba clean` to simulate real user behavior.
+- **ISC preservation tests** — New tests for back-to-back upgrades and user-edited ISC preservation.
 - **Golden VM SSH key deployment** — Copy bastion's `id_rsa` keypair to golden VM instead of generating a new key, so VMs can SSH back to bastion for notification relay. Fail hard if bastion keypair is missing.
 - **Upgrade test suites** — New `suite-upgrade` and `cluster-ops` upgrade tests exercise the full `aba upgrade` lifecycle including dry-run, OSUS, and monitoring.
 - **DNS auto-detection** — Deploy manifest and pool infra improvements for DNS resolution on conN/disN hosts.

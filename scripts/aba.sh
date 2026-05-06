@@ -555,7 +555,7 @@ elif [ "$1" = "--light" ]; then
 		[ ! -f "$2" ] && aba_abort "file not found: $2"
 		BUILD_COMMAND="$BUILD_COMMAND ca_cert='$2'"
 		shift 2
-	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
+	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep

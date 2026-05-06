@@ -961,6 +961,19 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 #### Target Platform
 
 - **Bare-metal**: Set `platform=bm` in `aba.conf` and manually boot nodes using the generated ISO.
+  To assign specific MAC addresses to nodes (matching your DHCP reservations or physical NICs), create a `macs.conf` file in the cluster directory:
+  ```
+  cat > mycluster/macs.conf <<EOF
+  00:50:56:20:ab:01
+  00:50:56:20:ab:02
+  00:50:56:20:ab:03
+  EOF
+  ```
+  ABA extracts MAC addresses from this file and writes them into `agent-config.yaml`.
+  Provide one MAC per node per network port (e.g., 3 masters × 1 port = 3 MACs; with port bonding, 3 masters × 2 ports = 6 MACs).
+  MACs are assigned top-to-bottom, grouped by host — for example, with 2 bonded ports per node, the first 2 MACs go to host 1, the next 2 to host 2, and so on.
+  The file format is flexible — MACs can appear anywhere on each line (surrounding text is ignored).
+  Without `macs.conf` (the default), MACs are generated from the `mac_prefix` template in `cluster.conf`.
 - **VMware**: Ensure sufficient [vCenter privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs — set values in `vmware.conf`. See the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 - **KVM/libvirt**: Passwordless SSH from the bastion to the KVM host is required. Configure connection URI, storage pool, and bridge network in `kvm.conf`.
 
