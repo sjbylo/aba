@@ -1,5 +1,60 @@
 # ABA Backlog
 
+## Verify httpd serves ISO/ignition for bare-metal installs
+
+**Priority:** Medium
+**Added:** 2026-05-06
+
+### Description
+
+Verify that the `httpd` RPM (in `rpms-internal.txt`) is actually being used by ABA to serve ISO/ignition files for bare-metal installs. If it's not needed (e.g. agent-based installer doesn't use httpd), remove it from the list. If it IS needed, ensure there's a test covering this path.
+
+---
+
+## Add comments to RPM list files (`templates/rpms-*.txt`)
+
+**Priority:** Low
+**Added:** 2026-05-06
+
+### Description
+
+Add `#` comments to `templates/rpms-external.txt` and `templates/rpms-internal.txt` explaining WHY each package is needed — specifically showing the actual ABA commands/scripts that use them (not generic descriptions).
+
+Example format:
+```
+coreos-installer      # Used by: scripts/create-iso.sh (coreos-installer iso customize ...)
+nmstate               # Used by: agent-config.yaml generation (networkConfig)
+bind-utils            # Used by: scripts/verify-dns.sh (dig api.$cluster ...)
+net-tools             # Used by: scripts/check-nic.sh (route -n, netstat)
+```
+
+Requires filtering comments when reading: `sed 's/#.*//' FILE | tr -s '[:space:]' ' '`
+~10 files consume these lists and need the filter added.
+
+---
+
+## Rename `aba_warning()` to `aba_warn()`
+
+**Priority:** Low
+**Added:** 2026-05-06
+
+### Description
+
+Rename `aba_warning()` to `aba_warn()` across all scripts. Shorter, more consistent with `aba_abort`, `aba_info`, `aba_debug`. Update the pre-commit lint in `build/pre-commit-checks.sh` accordingly.
+
+---
+
+## Preflight checks: run but don't block when no issues detected
+
+**Priority:** Medium
+**Added:** 2026-05-05
+
+### Description
+
+When there are no preflight check failures, the checks should still run (to provide visibility) but should NOT block the user or require interaction. Currently preflight checks may pause even when everything passes. The ideal UX: checks run, output results, and if all pass, continue automatically without stopping.
+
+---
+
 ## Support UPI (User Provisioned Infrastructure) installation method
 
 **Priority:** Medium

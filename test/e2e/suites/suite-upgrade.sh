@@ -35,6 +35,8 @@ plan_tests \
     "ISC: normal mode (no ocp_version_target)" \
     "Flag: --target-version resolution and mirror.conf write" \
     "ISC: upgrade mode (single-channel + shortestPath)" \
+    "ISC: back-to-back upgrades (sequential target changes)" \
+    "ISC: user-edited ISC is preserved (not overwritten)" \
     "Flag: --target-version from cluster dir via symlink" \
     "Upgrade: --dry-run output" \
     "Upgrade: preflight rejects same version"
@@ -67,17 +69,16 @@ e2e_run "Install aba" "cd ~/aba && ./install"
 e2e_run "Configure aba" "cd ~/aba && aba --channel fast --version previous --platform bm -Y"
 
 e2e_run "Save older (previous) version" "
-    cd ~/aba
-    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
-    echo \$ocp_version > /tmp/e2e-ocp-version-older
+    cd ~/aba && . aba.conf &&
+    echo \$ocp_version > /tmp/e2e-ocp-version-older &&
     echo \"Older version: \$ocp_version\"
 "
 
 e2e_run "Resolve latest version as upgrade target" "
-    cd ~/aba
-    aba --channel fast --version latest
-    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
-    echo \$ocp_version > /tmp/e2e-ocp-version-desired
+    cd ~/aba &&
+    aba --channel fast --version latest &&
+    . aba.conf &&
+    echo \$ocp_version > /tmp/e2e-ocp-version-desired &&
     echo \"Desired version: \$ocp_version\"
 "
 
@@ -113,12 +114,13 @@ e2e_run "Generate ISC without upgrade target" \
     "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && aba -d mirror imagesetconf"
 
 e2e_run "Verify ISC has single version (minVersion == maxVersion)" "
-    cd ~/aba
-    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
-    grep -q \"minVersion: \$ocp_version\" mirror/data/imageset-config.yaml
-    grep -q \"maxVersion: \$ocp_version\" mirror/data/imageset-config.yaml
-    ! grep -q 'shortestPath: true' mirror/data/imageset-config.yaml
-    echo 'ISC normal mode: OK'
+    cd ~/aba && . aba.conf &&
+    grep -q \"minVersion: \$ocp_version\" mirror/data/imageset-config.yaml &&
+    grep -q \"maxVersion: \$ocp_version\" mirror/data/imageset-config.yaml &&
+    ! grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
+    echo 'ISC normal mode: OK' &&
+    echo '--- ISC content (normal mode) ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
 "
 
 test_end
@@ -129,10 +131,10 @@ test_end
 test_begin "Flag: --target-version resolution and mirror.conf write"
 
 e2e_run "Set --target-version with explicit x.y.z" "
-    cd ~/aba
-    desired=\$(cat /tmp/e2e-ocp-version-desired)
-    aba -d mirror --target-version \$desired
-    grep -q \"^ocp_version_target=\$desired\" mirror/mirror.conf
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    aba -d mirror --target-version \$desired &&
+    grep -q \"^ocp_version_target=\$desired\" mirror/mirror.conf &&
     echo \"mirror.conf ocp_version_target=\$desired: OK\"
 "
 
@@ -147,11 +149,11 @@ test_end
 test_begin "ISC: upgrade mode (single-channel + shortestPath)"
 
 e2e_run "Set older version as base, desired as target" "
-    cd ~/aba
-    older=\$(cat /tmp/e2e-ocp-version-older)
-    desired=\$(cat /tmp/e2e-ocp-version-desired)
-    aba -v \$older
-    aba -d mirror --target-version \$desired
+    cd ~/aba &&
+    older=\$(cat /tmp/e2e-ocp-version-older) &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    aba -v \$older &&
+    aba -d mirror --target-version \$desired &&
     echo \"Base: \$older  Target: \$desired\"
 "
 
@@ -159,14 +161,15 @@ e2e_run "Regenerate ISC in upgrade mode" \
     "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && aba -d mirror imagesetconf"
 
 e2e_run "Verify ISC has upgrade channel config" "
-    cd ~/aba
-    older=\$(cat /tmp/e2e-ocp-version-older)
-    desired=\$(cat /tmp/e2e-ocp-version-desired)
-    desired_major=\$(echo \$desired | cut -d. -f1-2)
-    grep -q \"minVersion: \$older\" mirror/data/imageset-config.yaml
-    grep -q \"maxVersion: \$desired\" mirror/data/imageset-config.yaml
-    grep -q 'shortestPath: true' mirror/data/imageset-config.yaml
-    echo 'ISC upgrade mode: OK'
+    cd ~/aba &&
+    older=\$(cat /tmp/e2e-ocp-version-older) &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    grep -q \"minVersion: \$older\" mirror/data/imageset-config.yaml &&
+    grep -q \"maxVersion: \$desired\" mirror/data/imageset-config.yaml &&
+    grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
+    echo 'ISC upgrade mode: OK' &&
+    echo '--- ISC content (upgrade mode) ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
 "
 
 e2e_snapshot_file "upgrade-isc" "mirror/data/imageset-config.yaml"
@@ -174,29 +177,152 @@ e2e_snapshot_file "upgrade-isc" "mirror/data/imageset-config.yaml"
 test_end
 
 # ============================================================================
-# 5. Flag: --target-version from cluster dir via symlink
+# 5. ISC: back-to-back upgrades (sequential target changes)
+# ============================================================================
+# Simulates: upgrade A->B completed, now upgrade B->C.
+# Verifies ISC regeneration uses the correct minVersion/maxVersion each time.
+test_begin "ISC: back-to-back upgrades (sequential target changes)"
+
+e2e_run "Simulate first upgrade completed (set ocp_version to desired)" "
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    aba -v \$desired &&
+    echo \"Simulated post-upgrade state: ocp_version=\$desired\"
+"
+
+e2e_run "Clear previous target" \
+    "cd ~/aba && sed -i '/^ocp_version_target=/d' mirror/mirror.conf"
+
+e2e_run "Verify ISC normal mode after first upgrade" "
+    cd ~/aba &&
+    rm -f mirror/data/imageset-config.yaml mirror/data/.created &&
+    aba -d mirror imagesetconf &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    grep -q \"minVersion: \$desired\" mirror/data/imageset-config.yaml &&
+    grep -q \"maxVersion: \$desired\" mirror/data/imageset-config.yaml &&
+    ! grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
+    echo \"ISC after first upgrade (normal mode): OK\" &&
+    echo '--- ISC content (reverted to normal after upgrade A->B) ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
+"
+
+e2e_run "Set second upgrade target (desired + simulated next patch)" "
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    major_minor=\$(echo \$desired | cut -d. -f1-2) &&
+    patch=\$(echo \$desired | cut -d. -f3) &&
+    next_patch=\$(( patch + 1 )) &&
+    second_target=\"\${major_minor}.\${next_patch}\" &&
+    echo \$second_target > /tmp/e2e-ocp-version-second-target &&
+    aba -d mirror --target-version \$second_target &&
+    grep -q \"^ocp_version_target=\$second_target\" mirror/mirror.conf &&
+    echo \"Second upgrade target: \$second_target\"
+"
+
+e2e_run "Regenerate ISC for second upgrade" \
+    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && aba -d mirror imagesetconf"
+
+e2e_run "Verify ISC for second upgrade has correct min/max" "
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    second_target=\$(cat /tmp/e2e-ocp-version-second-target) &&
+    grep -q \"minVersion: \$desired\" mirror/data/imageset-config.yaml &&
+    grep -q \"maxVersion: \$second_target\" mirror/data/imageset-config.yaml &&
+    grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
+    echo \"ISC second upgrade (min=\$desired max=\$second_target shortestPath=true): OK\" &&
+    echo '--- ISC content (second upgrade B->C) ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
+"
+
+e2e_snapshot_file "upgrade-isc-second" "mirror/data/imageset-config.yaml"
+
+e2e_run "Restore older version for remaining tests" "
+    cd ~/aba &&
+    older=\$(cat /tmp/e2e-ocp-version-older) &&
+    aba -v \$older
+"
+
+test_end
+
+# ============================================================================
+# 6. ISC: user-edited ISC is preserved (not overwritten)
+# ============================================================================
+# When the user manually edits the ISC file (making it newer than .created),
+# subsequent imagesetconf calls must NOT overwrite it.
+test_begin "ISC: user-edited ISC is preserved (not overwritten)"
+
+e2e_run "Generate a fresh ISC as baseline" \
+    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && \
+     sed -i '/^ocp_version_target=/d' mirror/mirror.conf && \
+     aba -d mirror imagesetconf"
+
+e2e_run "Simulate user editing the ISC" "
+    cd ~/aba &&
+    sleep 1 &&
+    echo '# USER EDIT: custom addition' >> mirror/data/imageset-config.yaml &&
+    echo 'User edit marker added to ISC' &&
+    echo '--- ISC after user edit ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
+"
+
+e2e_run "Set --target-version (writes to mirror.conf only)" "
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    aba -d mirror --target-version \$desired &&
+    echo \"Set ocp_version_target=\$desired in mirror.conf\"
+"
+
+e2e_run "Run imagesetconf -- must NOT overwrite user-edited ISC" "
+    cd ~/aba &&
+    aba -d mirror imagesetconf 2>&1 | tee /tmp/e2e-isc-skip-output &&
+    grep -q '# USER EDIT: custom addition' mirror/data/imageset-config.yaml &&
+    echo 'User edit preserved: OK' &&
+    echo '--- ISC content (should still have user edit) ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
+"
+
+e2e_run "Verify warning was emitted about preserving user edits" \
+    "grep -q 'modified by user' /tmp/e2e-isc-skip-output"
+
+e2e_run "Force regeneration by removing .created" "
+    cd ~/aba &&
+    rm -f mirror/data/.created &&
+    aba -d mirror imagesetconf &&
+    ! grep -q '# USER EDIT: custom addition' mirror/data/imageset-config.yaml &&
+    grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
+    echo 'After removing .created: ISC regenerated with upgrade config' &&
+    echo '--- ISC content (force-regenerated) ---' &&
+    grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
+"
+
+e2e_run "Clean up target for remaining tests" \
+    "cd ~/aba && sed -i '/^ocp_version_target=/d' mirror/mirror.conf"
+
+test_end
+
+# ============================================================================
+# 8. Flag: --target-version from cluster dir via symlink
 # ============================================================================
 test_begin "Flag: --target-version from cluster dir via symlink"
 
 e2e_run "Create a test cluster directory" "
-    cd ~/aba
-    desired=\$(cat /tmp/e2e-ocp-version-desired)
+    cd ~/aba &&
     aba cluster --name ${SNO} --type sno --step cluster.conf
 "
 
 e2e_run "Set --target-version from cluster dir" "
-    cd ~/aba
-    desired=\$(cat /tmp/e2e-ocp-version-desired)
-    sed -i '/^ocp_version_target=/d' mirror/mirror.conf
-    aba -d ${SNO} --target-version \$desired
-    grep -q \"^ocp_version_target=\$desired\" mirror/mirror.conf
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    sed -i '/^ocp_version_target=/d' mirror/mirror.conf &&
+    aba -d ${SNO} --target-version \$desired &&
+    grep -q \"^ocp_version_target=\$desired\" mirror/mirror.conf &&
     echo 'Symlink write-through: OK'
 "
 
 test_end
 
 # ============================================================================
-# 6. Upgrade: --dry-run output
+# 9. Upgrade: --dry-run output
 # ============================================================================
 test_begin "Upgrade: --dry-run output"
 
@@ -208,7 +334,7 @@ e2e_run_must_fail "Dry-run without kubeconfig fails gracefully" \
 test_end
 
 # ============================================================================
-# 7. Upgrade: preflight rejects same version
+# 10. Upgrade: preflight rejects same version
 # ============================================================================
 test_begin "Upgrade: preflight rejects same version"
 

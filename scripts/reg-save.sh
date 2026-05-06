@@ -73,8 +73,8 @@ fi
 
 # Warning for operators (if less than 50GB available)
 if [ $avail -lt 51250 ]; then
-	aba_warning "Less than 50GB of space available under $PWD/data (only $avail MB)" >&2
-	aba_warning "Operator images require between ~40 to ~400GB of disk space!" >&2
+	aba_warning "Less than 50GB of space available under $PWD/data (only $avail MB)" \
+		"Operator images require between ~40 to ~400GB of disk space!"
 	echo >&2
 fi
 

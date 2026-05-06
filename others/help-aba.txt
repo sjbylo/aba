@@ -34,7 +34,7 @@ Options:
   -v, --version <version>               # Set (x.y.z) or (x.y) OpenShift version, e.g. 4.19.20 or 4.19 or 'latest' or 'l' or 'previous' or 'p'
       --target-version <version>        # Set upgrade target version in mirror.conf (use from mirror or cluster dir)
   -p, --platform <vmw|bm|kvm>           # Set target platform: vmw (vCenter/ESXi), bm (bare metal) or kvm (KVM/libvirt)
-  -b, --base-domain <domain>            # Set the OpenShift base domain, e.g. company.com
+  -b, --base-domain, --domain <domain>  # Set the OpenShift base domain, e.g. company.com
   -M, --machine-network <cidr>          # Set the OpenShift cluster's host/machine network address, e.g. 10.0.0.0/24
   -N, --dns <ip address(es)>            # Set one or more DNS IP addresses
   -g, --gateway-ip <next hop ip>        # Set the default route / gateway IP of the disconnected network

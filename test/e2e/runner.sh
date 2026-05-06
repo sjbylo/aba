@@ -173,36 +173,35 @@ _verify_no_registry_data_dirs() {
 		_dis_fqdn=$(echo "$remote_target" | sed 's/.*@//')
 		local _default_user="${VM_DEFAULT_USER:-steve}"
 		for _check_user in root "$_default_user"; do
-			# Glob: e2e-mirror-* dirs in home and under ~/aba/
+			# Glob: e2e-mirror-* dirs — only flag if registry still installed (.available)
 			local _found
-			_found=$(_essh "${_check_user}@${_dis_fqdn}" "ls -d ~/e2e-mirror-* ~/aba/e2e-mirror-* 2>/dev/null" || true)
+			_found=$(_essh "${_check_user}@${_dis_fqdn}" "for d in ~/e2e-mirror-* ~/aba/e2e-mirror-*; do [ -f \"\$d/.available\" ] && echo \"\$d\"; done" || true)
 			[ -n "$_found" ] && _leftovers+="$(echo "$_found" | sed "s/^/  ~${_check_user}: /")"$'\n'
-			# ABA-internal dirs
+			# ABA-internal dirs — only flag if registry still installed
 			for _dir in $_E2E_ABA_INTERNAL_DIRS; do
-				_essh "${_check_user}@${_dis_fqdn}" "test -d ~/$_dir" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
+				_essh "${_check_user}@${_dis_fqdn}" "test -f ~/$_dir/.available" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
 			done
 		done
 	else
-		# Glob: e2e-mirror-* dirs in home and under ~/aba/
+		# Glob: e2e-mirror-* dirs in home and under ~/aba/ — only flag if registry is still installed (.available)
 		local _d
 		for _d in "$HOME"/e2e-mirror-* "$HOME"/aba/e2e-mirror-*; do
-			[ -d "$_d" ] && _leftovers+="  $_d"$'\n'
+			[ -d "$_d" ] && [ -f "$_d/.available" ] && _leftovers+="  $_d"$'\n'
 		done
-		# ABA-internal dirs
+		# ABA-internal dirs — only flag if registry is still installed
 		for _dir in $_E2E_ABA_INTERNAL_DIRS; do
-			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n'
+			[ -d "$HOME/$_dir" ] && [ -f "$HOME/$_dir/.available" ] && _leftovers+="  ~/$_dir"$'\n'
 		done
 	fi
 
 	if [ -n "$_leftovers" ]; then
 		echo ""
-		echo "  FATAL: Registry data dir(s) still exist on $label after cleanup:"
+		echo "  FATAL: Registry still installed (.available) on $label after cleanup:"
 		echo "$_leftovers"
-		echo "  These should have been removed by 'aba uninstall'."
-		echo "  Investigate and fix the uninstall bug before re-running."
+		echo "  Run 'aba -d <dir> uninstall' to stop the registry before re-running."
 		return 1
 	fi
-	echo "  $label: no leftover registry data dirs"
+	echo "  $label: no running registries"
 	return 0
 }
 

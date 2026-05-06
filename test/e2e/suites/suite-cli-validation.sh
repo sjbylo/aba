@@ -72,7 +72,7 @@ e2e_run "Reconfigure after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 e2e_run "Start save, Ctrl-C after 20s" \
-    'timeout 20 bash -c "aba -d mirror save"; rc=$?; [ "$rc" -eq 124 ] || exit $rc'
+    'rc=0; timeout 20 bash -c "aba -d mirror save" || rc=$?; [ "$rc" -eq 124 ]'
 
 e2e_run "Verify catalog task not failed" \
     'ocp_short=$(source aba.conf && echo "${ocp_version%.*}"); task_dir=~/.aba/runner/catalog:${ocp_short}:redhat-operator; if [ -f "$task_dir/exit" ]; then rc=$(cat "$task_dir/exit"); [ "$rc" -eq 0 ] || { echo "Task failed (exit=$rc):"; cat "$task_dir/log.err"; exit 1; }; echo "Task completed successfully"; else echo "Task still running (oc-mirror found, download in progress)"; fi'
