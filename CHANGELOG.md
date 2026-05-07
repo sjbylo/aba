@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.2...HEAD)
+
+---
+
+## [1.0.2](https://github.com/sjbylo/aba/releases/tag/v1.0.2) - 2026-05-07
+
+New aba upgrade command, trace logging, bug fixes and reliability improvements
+
 
 New `aba upgrade` command, trace logging, improved error recovery, and future OCP readiness.
 
