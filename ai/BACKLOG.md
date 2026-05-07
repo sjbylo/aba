@@ -1,5 +1,38 @@
 # ABA Backlog
 
+## Make `aba delete` idempotent (no-op when nothing to delete)
+
+**Priority:** Urgent
+**Added:** 2026-05-07
+
+### Problem
+
+`aba --dir <cluster> delete` fails with "Not in a cluster directory" when the directory exists but has no `cluster.conf` (e.g. leftover scaffold from an interrupted `aba cluster` or from `aba reset`). The guard in `scripts/aba.sh` line 970 requires `cluster.conf` and aborts before the actual delete script runs, even though `vmw-delete.sh`/`kvm-delete.sh` already handle missing configs gracefully (exit 0 with "nothing to delete").
+
+This caused a real E2E failure on pool4: `cluster-ops` left behind an `e2e-compact4` skeleton (symlinks only, no `cluster.conf`), and the subsequent `airgapped-existing-reg` suite failed trying to clean it up.
+
+### Proposed fix
+
+Make `aba delete` idempotent, following the same convention as `aba shutdown` (already off → exit 0), `aba startup` (already running → exit 0), and `aba upgrade` (already at version → exit 0):
+
+1. Remove `delete` from the `cluster.conf` guard in `aba.sh` line 969
+2. In the `delete)` handler, if `cluster.conf` is missing, print "nothing to delete" and exit 0
+3. With `--force`, also remove the directory itself (the empty scaffold)
+4. `vmw-delete.sh`/`kvm-delete.sh` already have the right no-op logic -- the guard is the only blocker
+
+### Why this is safe
+
+- No VMs can exist without `cluster.conf` (config is required before VM creation)
+- `vmw-delete.sh` already checks for VMs and exits 0 if none found
+- `--force` already does `rm -rf` of the directory after delete -- adding the no-config case is natural
+- Aligns with user expectation: "delete this cluster" when there's nothing → success
+
+### Related
+
+- "Externalize installed-cluster state" backlog item (Urgent) — would make this even more robust by allowing delete to find VMs even without `cluster.conf`
+
+---
+
 ## Verify httpd serves ISO/ignition for bare-metal installs
 
 **Priority:** Medium
@@ -787,7 +820,7 @@ Added `_vm_annotation()` helper in `include_all.sh`. VMware: rich multiline govc
 ## Enhancement: Externalize installed-cluster state for robust `aba delete`
 
 **Added**: 2026-04-15
-**Priority**: Medium
+**Priority**: Urgent
 **Related**: reliable VM delete fix (`e5c310b`)
 
 ### Problem
@@ -1991,51 +2024,6 @@ fi
 
 ---
 
-## Bug: Bundle carries stale mirror.conf from source host
-
-**Priority:** High
-**Added:** 2026-04-28
-
-### Problem
-
-When creating a bundle (`aba bundle`), the current `mirror.conf` is included in the tarball. If the source host had `mirror.conf` configured for a **remote** registry install (e.g. `reg_ssh_key` set, `reg_host` pointing to a remote host), the bundle carries that config. When the bundle is extracted on the disconnected/internal host and the user runs `aba -d mirror load`, ABA detects that `reg_ssh_key` is defined but the registry is actually local, and aborts:
-
-```
-[ABA] Error: Registry configured for *remote* install (reg_ssh_key is defined).
-[ABA]        But registry.example.com (10.0.1.2) reaches this localhost (rhel-baseline) instead!
-```
-
-The user must manually `vi mirror/mirror.conf` to fix it.
-
-### Expected behavior
-
-A bundle should arrive at the disconnected host with a clean/default `mirror.conf` that works for a local registry install out of the box, since the most common bundle workflow is: connected host builds bundle -> sneakernet -> disconnected host installs mirror locally.
-
-### Options
-
-1. **Reset `mirror.conf` during bundle creation** -- strip remote-specific settings (`reg_ssh_key`, `reg_ssh_user`) from the copy included in the bundle, leaving `reg_host`, `reg_port`, `reg_root` at defaults. The source host's `mirror.conf` is unchanged.
-
-2. **Exclude `mirror.conf` from the bundle entirely** -- force the disconnected host to generate a fresh one on first use (via `aba -d mirror install` or the TUI). This ensures no stale config leaks, but the user loses any intentional customizations (e.g. `reg_port`, operator selections).
-
-3. **Reset only remote-specific fields** -- keep operator selections, `reg_port`, `reg_path` etc. but clear `reg_ssh_key` and `reg_ssh_user`. Most surgical approach.
-
-### Recommendation
-
-Option 3 (reset only remote-specific fields). During bundle creation, sanitize the `mirror.conf` copy:
-
-```bash
-# In the bundle creation script, before adding mirror.conf to the tarball:
-sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror.conf.bundle
-sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/' mirror.conf.bundle
-```
-
-Or add a warning at `aba -d mirror load` / `aba -d mirror install` time if `reg_ssh_key` is set but the host is local.
-
-### References
-
-- User error: `aba -d mirror load -H registry.example.com --retry 2` on `rhel-baseline` after extracting a bundle built on a host with remote registry config
-- The check that catches this: `scripts/reg-common.sh` or `reg-install.sh` (the "reg_ssh_key is defined but registry resolves to localhost" check)
-
 ---
 
 ## Enhancement: TUI option to install mirror without syncing
@@ -2331,6 +2319,20 @@ See plan: `fix_--dev_flag_2b507f6b.plan.md`
 - `test/e2e/lib/deploy.sh` -- `sync_source` keep tarball; `sync_infra_aba` dev-mode path
 - `test/e2e/run.sh` -- cleanup stale tarball on non-dev runs
 - `test/e2e/.deploy-manifest` -- expand to include all required paths
+
+## Store platform type in installed cluster state
+
+When a cluster is installed, the platform type (`vmw`, `kvm`, `bm`) must be persisted in the cluster directory state (e.g. in `cluster.conf` or a marker). Currently `aba startup` assumes bare-metal and prints "Please power on all bare-metal servers" even for VMware/KVM clusters, where it should auto-start VMs via `govc`/`virsh`.
+
+Example failure: running `aba startup -y` on a VMware-based cluster shows the bare-metal message and waits 5 min for API that will never come up (because VMs were never started).
+
+### Expected behavior
+
+- `aba startup` should check the platform type and:
+  - `vmw` → power on VMs via govc
+  - `kvm` → start VMs via virsh
+  - `bm` → print "power on servers" message and wait
+- The platform must be stored at cluster creation time (it's in `aba.conf` globally but needs to be in the cluster dir for portability).
 
 ## Test and fix: `scripts/listopdeps.sh`
 
