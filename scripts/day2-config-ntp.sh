@@ -205,7 +205,7 @@ _mco_started=0
 if [ "$_mc_changed" -eq 1 ]; then
 	_mco_started=1
 	_wait_rc=0
-	aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 40 _any_mcp_updating || _wait_rc=$?
+	aba_wait_show "Waiting for MCO to start processing NTP MachineConfig (Ctrl-C to skip)" 2 60 _any_mcp_updating || _wait_rc=$?
 	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 		echo
 		aba_info "Aborted by user."
@@ -223,7 +223,7 @@ aba_debug "Running: oc get nodes -owide --no-headers"
 nodesIPs=$(oc get nodes -owide --no-headers | awk '{print $6}')
 
 # Phase 2: verify chrony.conf has all configured server lines on every node.
-# Polls through the MCO reboot -- SSH retries until node is back.
+# Polls through the MCO reboot -- no need to wait for MCP to finish first.
 _ntp_config_applied() {
 	for host in $nodesIPs; do
 		aba_debug "Checking chrony.conf on node: $host"
