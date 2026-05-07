@@ -87,9 +87,9 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_run "Delete any leftover $COMPACT cluster" \
-    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete --force; fi"
+    "_e2e_delete_leftover_cluster $COMPACT"
 e2e_run "Reset aba" "aba reset -f"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
@@ -329,7 +329,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
