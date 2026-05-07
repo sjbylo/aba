@@ -226,13 +226,12 @@ All callers of `_run_cleanup_on_host` (dispatcher, reclone, revert) must
 pass the pool-scoped allowed hosts. Calls without `allowed_hosts` still
 work (backward compat) but skip the guard -- avoid this in production paths.
 
-### Notification relay via bastion
+### Notifications
 
-Framework runs on conN which may be air-gapped (no internet). Notifications
-are relayed via SSH to `NOTIFY_RELAY_HOST` (bastion) which always has internet.
-The relay pattern, the `[e2e]` prefix, and the pool/hostname suffix all work
-well. First-failure notifications include the last 3 commands and 20 lines of
-output for context.
+`notify.sh` is deployed to conN via `sync_extras()` and calls the Telegram API
+directly (conN has internet access). The `[e2e]` prefix and pool/hostname suffix
+make messages easy to filter. First-failure notifications include the last 3
+commands and 20 lines of output for context.
 
 ### Log file structure
 

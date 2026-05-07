@@ -4,43 +4,43 @@ New `aba upgrade` command, trace logging, improved error recovery, and OCP 5 rea
 
 ### New Features
 
-- **`aba upgrade` command** — Upgrade air-gapped OpenShift clusters via the local mirror registry. Idempotent (exit 0 when already at target), OSUS-aware (uses `oc adm upgrade --to` when a local update graph is detected), resumes monitoring if an upgrade is already in progress. Enriched `--dry-run` queries the mirror registry for available versions higher than current. Flags: `--to <version>`, `--skip-day2`, `--force`, `--dry-run`.
-- **`aba show-op-sets` command** — List all available operator sets with their descriptions (parsed from `templates/operator-set-*`). Also available as `aba op-sets`.
+- `**aba upgrade` command** — Upgrade air-gapped OpenShift clusters via the local mirror registry. Idempotent (exit 0 when already at target), OSUS-aware (uses `oc adm upgrade --to` when a local update graph is detected), resumes monitoring if an upgrade is already in progress. Enriched `--dry-run` queries the mirror registry for available versions higher than current. Flags: `--to <version>`, `--skip-day2`, `--force`, `--dry-run`.
+- `**aba show-op-sets` command** — List all available operator sets with their descriptions (parsed from `templates/operator-set-*`). Also available as `aba op-sets`.
 - **Trace logging** — Every `aba` invocation captures full stdout+stderr to `~/.aba/logs/trace.log` for post-mortem debugging. Last 5 invocations are rotated (`trace.log.0` through `trace.log.4`).
 - **OCP 5 CDN path support** — Derive `ocp_major` from `ocp_version` and use it for CDN download URLs, registry paths, and CLI Makefile targets. Hardcoded `openshift-v4/` paths replaced with parameterized `openshift-v${ocp_major}/` across scripts, templates, and Makefiles.
 
 ### Bug Fixes
 
 - **ISC regeneration guard** — `rm mirror/data/.created && aba -d mirror imagesetconf` failed to regenerate because bash `-nt` returns true when the right-hand file is missing. Fixed to explicitly check for `.created` absence.
-- **`aba_warning` for user-edited ISC** — When the ISC was manually edited, ABA now warns and preserves edits instead of silently skipping regeneration.
-- **`run_once` error recovery** — Add `.DELETE_ON_ERROR` to Makefiles that download files so partial/corrupt downloads are removed on recipe failure. Detect and clean zombie tasks (no exit file, lock free) caused by SIGKILL/OOM/crash. Close lock FD in `setsid` children (`9>&-`) so lock releases immediately. Show stderr tail + yellow recovery hint on failure: *"If this problem persists, re-run './install' from the ABA directory to clear the task cache."*
+- `**aba_warning` for user-edited ISC** — When the ISC was manually edited, ABA now warns and preserves edits instead of silently skipping regeneration.
+- `**run_once` error recovery** — Add `.DELETE_ON_ERROR` to Makefiles that download files so partial/corrupt downloads are removed on recipe failure. Detect and clean zombie tasks (no exit file, lock free) caused by SIGKILL/OOM/crash. Close lock FD in `setsid` children (`9>&-`) so lock releases immediately. Show stderr tail + yellow recovery hint on failure: *"If this problem persists, re-run './install' from the ABA directory to clear the task cache."*
 - **Upgrade flow hardening** — Always run `day2` before upgrade (signatures, IDMS, catalogs). Fix arch mismatch: use `uname -m` (`x86_64`) not Go-style (`amd64`) for release image tags. Add upgrade-already-in-progress preflight check.
 - **VM delete guards** — `kvm-delete.sh` and `vmw-delete.sh` exit 0 early if config files are missing (nothing to delete). `kvm-delete.sh` only removes disk volumes, not cdrom ISO.
 - **Remote Docker post-install race** — Add 3-attempt retry loop to handle timing race where registry hasn't loaded htpasswd yet. Display actual curl error instead of suppressing with `2>&1`.
 - **Sigstore lookaside URLs** — Add `registry.redhat.io` and `registry.access.redhat.com` lookaside URLs so podman signature verification works when ABA's user-level `registries.d` config overrides system defaults.
 - **Premature `data_dir` mkdir** — Env var is set early but the directory is only created immediately before oc-mirror runs, preventing empty trees on early abort.
 - **Podman catalog error visibility** — Remove `2>/dev/null` from `podman pull/run/cp` commands; capture stderr and pass it to `aba_abort` so the root cause is visible.
-- **`oc-command.sh` stdout pollution** — `grep` leaked matched lines to stdout and `aba_info` printed to stdout, corrupting captured command output (e.g. `aba run --cmd 'oc get ...'`). Fixed with `grep -q` and `>&2`.
+- `**oc-command.sh` stdout pollution** — `grep` leaked matched lines to stdout and `aba_info` printed to stdout, corrupting captured command output (e.g. `aba run --cmd 'oc get ...'`). Fixed with `grep -q` and `>&2`.
 - **Spinner and color loss after trace logging** — The `exec > >(tee ...)` for trace logging replaced stdout with a pipe, causing `[ -t 1 ]` to return false and disabling the spinner and all colored output. Fixed by saving the original TTY file descriptor before `exec tee` and using it for terminal detection.
-- **`ABA_BUILD` stamp opt-in** — `pre-commit-checks.sh` only updates the build timestamp with `--update-build`, avoiding noisy diffs on every commit.
+- `**ABA_BUILD` stamp opt-in** — `pre-commit-checks.sh` only updates the build timestamp with `--update-build`, avoiding noisy diffs on every commit.
 
 ### Improvements
 
-- **`--domain` CLI alias** — `--domain` is now accepted as a synonym for `--base-domain` / `-b`.
-- **`.PRECIOUS: mirror.conf`** — Prevents `make` from deleting `mirror.conf` on recipe failure (`.DELETE_ON_ERROR` interaction).
-- **`polkit` added to internal RPMs** — Required for Quay rootless registry install (`loginctl enable-linger`).
-- **`aba delete --force`** — New `--force` flag removes the entire cluster directory after deleting VMs and stamp files, enabling clean re-creation without manual `rm -rf`.
+- `**--domain` CLI alias** — `--domain` is now accepted as a synonym for `--base-domain` / `-b`.
+- `**.PRECIOUS: mirror.conf`** — Prevents `make` from deleting `mirror.conf` on recipe failure (`.DELETE_ON_ERROR` interaction).
+- `**polkit` added to internal RPMs** — Required for Quay rootless registry install (`loginctl enable-linger`).
+- `**aba delete --force`** — New `--force` flag removes the entire cluster directory after deleting VMs and stamp files, enabling clean re-creation without manual `rm -rf`.
 - **CLI flag refactoring** — Extracted repeated `if cluster.conf else BUILD_COMMAND` pattern into shared `_set_cluster_conf()` helper, reducing ~120 lines of duplication across 15+ flag handlers.
-- **`ensure_govc` / `ensure_virsh` in `_ensure_hv_ready`** — Hypervisor CLI tools are automatically ensured before VM operations.
+- `**ensure_govc` / `ensure_virsh` in `_ensure_hv_ready`** — Hypervisor CLI tools are automatically ensured before VM operations.
 - **Ctrl-C skip hints** — `cluster-startup` adds "(Ctrl-C to skip)" to nodes Ready, console, and cluster operators waits. NTP MCO wait reduced from 60s to 20s.
 - **vmw-upload validation** — Validate ISO exists before upload, verify remote size after transfer.
 - **README restructure** — New README layout with TUI screenshots, decision tree, dedicated Connected Installation section, operator-set documentation.
-- **`macs.conf` documentation** — Added bare-metal MAC address assignment documentation to README (create `macs.conf` in cluster directory with one MAC per node per port).
+- `**macs.conf` documentation** — Added bare-metal MAC address assignment documentation to README (create `macs.conf` in cluster directory with one MAC per node per port).
 - **Consecutive `aba_warning` lint** — New pre-commit check detects consecutive `aba_warning`/`aba_abort` calls that should be combined into multi-arg form.
 
 ### E2E Testing
 
-- **`set -e` in e2e_run subshells** — Multi-command blocks now fail immediately on first error instead of silently continuing. Exposed and fixed multiple latent test bugs.
+- `**set -e` in e2e_run subshells** — Multi-command blocks now fail immediately on first error instead of silently continuing. Exposed and fixed multiple latent test bugs.
 - **Cleanup safety** — Dispatcher and framework never `rm -rf` mirror directories; only check `.available` marker to detect stale registries.
 - **Mixed cleanup strategies** — Suites exercise `aba reset --force`, `rm -rf`, and `aba clean` to simulate real user behavior.
 - **ISC preservation tests** — New tests for back-to-back upgrades and user-edited ISC preservation.
@@ -55,7 +55,6 @@ New `aba upgrade` command, trace logging, improved error recovery, and OCP 5 rea
 
 Bug fixes and reliability improvements
 
-
 ### Bug Fixes
 
 - **oc-mirror catalog digest pinning** - Workaround for oc-mirror v2 bug ([OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)) where disk2mirror (load) tries to contact upstream registries for catalog tags even in air-gapped environments. ABA now captures image digests during `podman pull` and substitutes them into a temporary `imageset-config-digest.yaml` for all oc-mirror operations (mirror2disk/save, mirror2mirror/sync, disk2mirror/load). The bug only manifests on load, but pinning is applied uniformly for consistency. Transparent to the user; disable with `OC_MIRROR_PIN_CATALOGS=0`.
@@ -63,24 +62,24 @@ Bug fixes and reliability improvements
 - **s390x/ppc64le platform selection** - `install-config.yaml` template now forces `platform: none` for System Z and Power architectures (non-SNO), which only support user-provisioned infrastructure.
 - **OSUS pre-flight check** - Removed `2>&1` from `oc get` command substitutions in pre-flight checks so stderr messages are visible for debugging and not captured into variables (causing false positives).
 - **Bundle archive contents** - `VERSION`, `CHANGELOG.md`, and `LICENSE` now included in bundle archives.
-- **`ABA_VERSION` corruption guard** - `pre-commit-checks.sh` now validates that `ABA_VERSION` is a semver string, catching merge conflicts that could overwrite it with a timestamp.
-- **`day2-ntp` API unavailable after NTP config** - `day2-config-ntp.sh` now waits for all MachineConfigPools to finish updating (node reboots) before verifying chrony.conf and NTP sources. Previously, the script could exit while the MCO was still rebooting nodes, leaving the API server unreachable for the next command.
+- `**ABA_VERSION` corruption guard** - `pre-commit-checks.sh` now validates that `ABA_VERSION` is a semver string, catching merge conflicts that could overwrite it with a timestamp.
+- `**day2-ntp` API unavailable after NTP config** - `day2-config-ntp.sh` now waits for all MachineConfigPools to finish updating (node reboots) before verifying chrony.conf and NTP sources. Previously, the script could exit while the MCO was still rebooting nodes, leaving the API server unreachable for the next command.
 - **CLI flag loss via `aba cluster -n`** - When using `-n` (name-based) instead of `-d` (directory-based), 5 CLI flags (`num_workers`, `num_masters`, `vlan`, `ssh_key_file`, `mirror_name`) were silently lost because they weren't forwarded through the Makefile -> `setup-cluster.sh` -> `create-cluster-conf.sh` chain. Additionally, re-running `aba cluster -n` on an existing `cluster.conf` ignored all 13 cluster flags. Fixed by adding a `replace-value-conf` override block in `setup-cluster.sh` that applies CLI-passed values after initial generation.
 
 ### Improvements
 
-- **`--mirror-name` flag** - New CLI flag (`aba cluster -n mycluster --mirror-name mymirror`) for named mirror (enclave) workflows. Writes `mirror_name=` to `cluster.conf`.
+- `**--mirror-name` flag** - New CLI flag (`aba cluster -n mycluster --mirror-name mymirror`) for named mirror (enclave) workflows. Writes `mirror_name=` to `cluster.conf`.
 - **Removed `--proxy`/`--no-proxy` flags** - Dead flags replaced by `--int-connection` (`-I proxy`/`-I direct`/`-I disconnected`).
-- **`register`/`unregister` help and docs** - `aba register -h` and `aba unregister -h` now show mirror help (was falling through to generic help). Added `register`/`unregister` to main command list in `aba -h`, added `--reg-port` example to README, fixed error messages to include `register` keyword. Added `OC_MIRROR_PIN_CATALOGS` to `~/.aba/config` template.
+- `**register`/`unregister` help and docs** - `aba register -h` and `aba unregister -h` now show mirror help (was falling through to generic help). Added `register`/`unregister` to main command list in `aba -h`, added `--reg-port` example to README, fixed error messages to include `register` keyword. Added `OC_MIRROR_PIN_CATALOGS` to `~/.aba/config` template.
 - **Graceful Ctrl-C handling** - `aba_wait_show` callers (shutdown, startup, NTP waits) now detect SIGINT/SIGTERM and print "Aborted" instead of "Timed out". Startup messages show actionable errors.
-- **`is_bundle_mode()` helper** - New function in `include_all.sh` for clean bundle/DISCO environment detection. `cli-install-all.sh` now skips download waits in bundle mode.
+- `**is_bundle_mode()` helper** - New function in `include_all.sh` for clean bundle/DISCO environment detection. `cli-install-all.sh` now skips download waits in bundle mode.
 - **Hardened `cli-download-all.sh`** - Added contract header, proper option parsing, `make` error handling, and tool name validation.
 - **Reduced default retry counts** - Bundle save and example `--retry` values reduced from 7-8 to 2, matching typical network reliability.
 
 ### E2E Testing
 
 - **Infra-owned `aba` binary on disN** - Deployed to `~/.e2e-harness/bin/aba` via `sync_dis_aba()`, ensuring cleanup always has access to `aba uninstall` regardless of user-space state. Fixes INFRA FAIL death spiral when `aba` was missing from PATH on non-interactive SSH.
-- **`--fresh` flag** - New `--fresh` (`-F`) alias for `--force` (`-f`) to re-run all suites from scratch with a friendlier name.
+- `**--fresh` flag** - New `--fresh` (`-F`) alias for `--force` (`-f`) to re-run all suites from scratch with a friendlier name.
 - **NTP chronyc verification** - Airgapped suite NTP test switched from `oc debug` to `aba ssh --cmd 'chronyc sources'` with `e2e_poll_remote` for reliable polling.
 - **Dispatcher daemon mode** - New `run.sh daemon` auto-restarts the dispatcher on crash with exponential backoff (30s-300s), max 5 consecutive crashes, and Telegram notifications.
 - **Early RC write** - `runner.sh` writes the suite exit code immediately after the suite exits, preventing lost PASS results if the runner is killed before final write.
@@ -110,15 +109,15 @@ Stability and reliability improvements.
 - **Better install failure messages** - Actionable recovery hint shown when `./install` fails, guiding the user to check prerequisites.
 - **Cleaner output** - Day2 operations show condensed progress; spinner displays max timeout; startup curl noise suppressed.
 - **ESXi compatibility** - `normalize-vmware-conf` adds `VC_FOLDER` fallback for standalone ESXi hosts (no vCenter). Proper ESXi detection for non-VC environments.
-- **`GOVC_RESOURCE_POOL` fix** - Removed hardcoded `resourcePool` from example install-configs; simplified placeholder resolution to avoid path duplication.
+- `**GOVC_RESOURCE_POOL` fix** - Removed hardcoded `resourcePool` from example install-configs; simplified placeholder resolution to avoid path duplication.
 - **Removed generated mirror scripts** - Eliminated `*-mirror.sh` wrapper scripts; oc-mirror execution is now inlined, reducing confusion about which script actually runs.
 
 ### Bug Fixes
 
-- **`reg-save.sh` missing `normalize-mirror-conf`** - `reg-save.sh` did not source `normalize-mirror-conf`, silently ignoring `data_dir` from `mirror.conf`. This caused oc-mirror caches and `TMPDIR` to default to `$HOME` instead of the configured larger partition. Fixed by adding the missing `source`.
+- `**reg-save.sh` missing `normalize-mirror-conf`** - `reg-save.sh` did not source `normalize-mirror-conf`, silently ignoring `data_dir` from `mirror.conf`. This caused oc-mirror caches and `TMPDIR` to default to `$HOME` instead of the configured larger partition. Fixed by adding the missing `source`.
 - **Bundle builds forced full archives** - `OC_MIRROR_SINCE` was being applied to bundle builds, causing oc-mirror to create full archives on every run instead of reusing cached data across bundle types of the same OCP version. Disabled for bundle workflows.
-- **`aba delete` after `aba clean`** - Ensure symlinks are recreated via `make init` so `aba delete` works even after a `make clean`.
-- **`sudo` vs `$SUDO` consistency** - Fixed hardcoded `sudo` calls to use `$SUDO` variable, and enabled `loginctl linger` for Docker registry (rootless Podman user session persistence).
+- `**aba delete` after `aba clean`** - Ensure symlinks are recreated via `make init` so `aba delete` works even after a `make clean`.
+- `**sudo` vs `$SUDO` consistency** - Fixed hardcoded `sudo` calls to use `$SUDO` variable, and enabled `loginctl linger` for Docker registry (rootless Podman user session persistence).
 - **Grep noise on missing cleanup files** - Silenced harmless grep errors when cleanup state files don't exist yet.
 - **Typo in warning messages** - Fixed "IMPORANT" to "IMPORTANT" across warning messages.
 
@@ -211,19 +210,19 @@ KVM platform support, more flexible preflight checks, sigstore-aware oc-mirror 4
 ### Bug Fixes
 
 - **SNO install failure with `verify_conf=conf`** - `verify-release-image.sh` was skipping `openshift-install` binary extraction from the mirror when `--verify conf` was used. The fallback generic binary embeds quay.io URLs, causing `SignatureValidationFailed` in OCP 4.21+. Fix: `--verify conf` now only skips the skopeo connectivity check, not binary extraction. Extracted binary filename simplified to `openshift-install-mirror-$reg_host`.
-- **`vmware.conf`/`kvm.conf` symlink regression** - Externalization removed auto-symlink creation. `_ensure_hv_ready()` now conditionally creates symlinks if missing.
+- `**vmware.conf`/`kvm.conf` symlink regression** - Externalization removed auto-symlink creation. `_ensure_hv_ready()` now conditionally creates symlinks if missing.
 - **Arping IP conflict detection on multi-homed hosts** - Fixed `arping -I` interface selection.
 - **Podman state corruption** - Enable systemd lingering on conN hosts; removed destructive `rm -rf containers/storage` and `systemctl --user stop --all`.
-- **`int_down` failing when interface already disconnected** - Graceful handling of already-down interfaces.
+- `**int_down` failing when interface already disconnected** - Graceful handling of already-down interfaces.
 - **KVM lifecycle fixes** - Fixed QXL video error on headless hosts, `virsh start` on already-active domains, `on_reboot=restart` alongside `on_poweroff=restart`, SNO VM naming via `vm_name()` helper, and graceful shutdown in disconnected/KVM environments.
 - **Cluster startup infinite loops** - Fixed VIP DNS resolution and `int_down` idempotency during startup.
-- **`oc debug` in disconnected environments** - Fixed cluster lifecycle commands that failed because `oc debug` tried to pull images from the internet.
+- `**oc debug` in disconnected environments** - Fixed cluster lifecycle commands that failed because `oc debug` tried to pull images from the internet.
 - **Bundle pipeline fixes** - Tightened idempotency check in `00-setup-connectivity.sh` (requires `README.txt`), added `exit 1` on make failure in `go.sh`, fixed `oc-mirror v2 --help` requiring `--v2` flag, updated default `GIT_BRANCH`.
 - **Bundle Makefile** - Error when `OP_SETS` missing for non-release bundles.
 
 ### E2E Testing
 
-- **`--revert` flag** - `run.sh run --revert` reverts all pool VMs (conN+disN) to their `pool-ready` snapshots before starting tests, giving a clean baseline and reclaiming VMware thin-disk bloat.
+- `**--revert` flag** - `run.sh run --revert` reverts all pool VMs (conN+disN) to their `pool-ready` snapshots before starting tests, giving a clean baseline and reclaiming VMware thin-disk bloat.
 - **Suite banner** - Banner now reads `SUITE START:` for clearer log boundaries.
 - **Live view scrollback** - Removed `tmux clear-history` so scrolling up in the live view shows previous suite output.
 - **Dashboard fix** - Fixed stale dashboard content caused by `tail -F` not detecting symlink target changes; background monitor restarts the stream on suite change without screen flicker.
@@ -282,8 +281,8 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **Docker `--network host`** - Docker registry and pool registries use host networking, fixing pasta/hairpin issues.
 - **CLI download race fixed** - `oc-mirror` and other CLI downloads complete before catalog fetches start.
 - **Stale credential detection** - Fresh installs no longer blocked by leftover credentials from previous runs.
-- **`aba reset` guarded** - Won't reset if registry is still installed; `aba clean` removes working-dir properly.
-- **`grep -q` removed everywhere** - Eliminates SIGPIPE killing bash in pipelines.
+- `**aba reset` guarded** - Won't reset if registry is still installed; `aba clean` removes working-dir properly.
+- `**grep -q` removed everywhere** - Eliminates SIGPIPE killing bash in pipelines.
 - **Shutdown respects `-y`** - Cluster shutdown prompt honors `-y` flag and `ask=false`.
 - **Retry on cluster shutdown** - Retry logic and failure reporting added.
 - **Tarball extraction hardened** - Removed `|| true` masks; added gzip integrity guards.
@@ -296,10 +295,10 @@ Quay/Docker now first-class, improved abatui, easier existing registry support a
 - **OSUS error improved** - Mentions CatalogSource sync delay.
 - **Registry UX** - Breadcrumb navigation, reinstall warnings, load save-dir guard.
 - **Version mismatch check** - No longer skips `save/` when `sync/` is auto-generated.
-- **`run_once` validation** - Uses saved command+CWD pair for accurate state tracking.
+- `**run_once` validation** - Uses saved command+CWD pair for accurate state tracking.
 - **CLI downloads skipped for housekeeping** - `aba clean`, `aba reset`, and similar commands no longer trigger downloads.
 - **Catalog YAML always regenerated** - Fresh index download triggers ISC regeneration.
-- **`reg_detect_existing()` fixed** - No longer blocks fresh installs due to stale credentials.
+- `**reg_detect_existing()` fixed** - No longer blocks fresh installs due to stale credentials.
 - **Docker remote install** - Ensures `docker-reg-image.tgz` exists before scp.
 - **Nested directories in custom manifests** - Day2 custom manifest support now handles nested directory structures ([#20](https://github.com/sjbylo/aba/pull/20), [@mateuszslugocki](https://github.com/mateuszslugocki))
 
@@ -320,20 +319,20 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 
 ### Improvements
 
-- **`aba ls` auto-installs govc** - Running `aba ls` now installs `govc` automatically if it is missing
+- `**aba ls` auto-installs govc** - Running `aba ls` now installs `govc` automatically if it is missing
 - **Release script `--ref` support** - Release from a specific older commit on dev, useful when dev has moved ahead of what was tested
 
 ### Bug Fixes
 
 - **CA cert permissions** - Use `install -m 644` instead of `sudo cp` so CA certs are readable by non-root users; fixes "certificate signed by unknown authority" TLS failures
-- **`cluster.conf` override by `aba.conf`** - Fixed source order in `vmw-create.sh` so per-cluster `machine_network` is no longer clobbered by `aba.conf`, fixing IP validation failures for VLAN clusters
+- `**cluster.conf` override by `aba.conf`** - Fixed source order in `vmw-create.sh` so per-cluster `machine_network` is no longer clobbered by `aba.conf`, fixing IP validation failures for VLAN clusters
 - **Congratulations box colors** - Green borders with distinct white, cyan, and yellow text instead of uniform color
-- **`ASK_OVERRIDE` unbound variable** - Guarded with `${ASK_OVERRIDE:-}` in four places so scripts are safe under `set -u`
+- `**ASK_OVERRIDE` unbound variable** - Guarded with `${ASK_OVERRIDE:-}` in four places so scripts are safe under `set -u`
 
 ### E2E Test Framework
 
-- **`e2e_poll` / `e2e_poll_remote` helper** - New wall-clock-bounded polling functions replace count-based retries for condition checks (e.g. `e2e_poll 600 30 "desc" "cmd"` = poll every 30s, timeout after 10 minutes)
-- **`-q` (quiet) flag for `e2e_run`** - Suppress command output to log file only; used for background wait steps
+- `**e2e_poll` / `e2e_poll_remote` helper** - New wall-clock-bounded polling functions replace count-based retries for condition checks (e.g. `e2e_poll 600 30 "desc" "cmd"` = poll every 30s, timeout after 10 minutes)
+- `**-q` (quiet) flag for `e2e_run`** - Suppress command output to log file only; used for background wait steps
 - **Failure prompt: flush TTY buffer** - Stale keystrokes no longer cause accidental command execution at the interactive `[R]etry` prompt
 - **Failure prompt: `!` prefix for commands** - Custom commands now require `!` prefix (e.g. `!ls -la`); unrecognized input shows a hint instead of executing as a shell command
 - **Failure prompt: default indicator** - Prompt shows `[R]etry` (uppercase) to indicate Enter defaults to retry
@@ -346,7 +345,7 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 - **Improve test descriptions across all suites** - Clarified 30+ ambiguous descriptions: "bastion" → "internal bastion", "dir" → "cluster dir", "Verify cluster operators" → "Show cluster operator status", "via sed" → "manually", and other accuracy fixes
 - **Rename vCenter folder `abatesting` → `aba-e2e`** - Renamed `VC_FOLDER` default path across all E2E files (13 files, 24 occurrences) for clearer naming
 - **Add missing DNS records for SNO variants** - Added dnsmasq entries for `sno-mirror`, `sno-proxyonly`, and `sno-noproxy` cluster types in pool-lifecycle.sh
-- **`run.sh dash` command** - New `run.sh dash [N] [log]` opens a multi-pane tmux window tailing test logs on remote conN hosts; auto-detects pool count from `pools.conf`, adapts layout (horizontal for 1-3, grid for 4+)
+- `**run.sh dash` command** - New `run.sh dash [N] [log]` opens a multi-pane tmux window tailing test logs on remote conN hosts; auto-detects pool count from `pools.conf`, adapts layout (horizontal for 1-3, grid for 4+)
 - **Fix `DIS_HOST` → `CON_HOST` in connected test** - Test [8] in `suite-connected-public.sh` was pointing the mirror at `dis1.example.com` (unreachable) instead of `con1.example.com`; now uses real pool registry credentials instead of dummies
 - **Golden VM stays connected** - Removed `_vm_disconnect_internet` from golden VM prep; only disN pool VMs get disconnected after cloning, matching the working v1 approach
 - **Snapshot guard before cloning** - Refuse to clone pool VMs if `golden-ready` snapshot doesn't exist, preventing broken pool VMs from incomplete golden prep
@@ -360,7 +359,7 @@ Custom manifests, oc-mirror tuning, IP validation, and bug fixes
 
 ### Documentation
 
-- **`2>&1` rule in Rules of Engagement** - Added: only use `2>/dev/null` or `2>&1` when there is an explicit reason
+- `**2>&1` rule in Rules of Engagement** - Added: only use `2>/dev/null` or `2>&1` when there is an explicit reason
 
 ---
 
