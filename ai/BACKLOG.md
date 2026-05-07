@@ -1,5 +1,140 @@
 # ABA Backlog
 
+## Make `aba delete` idempotent (no-op when nothing to delete)
+
+**Priority:** Urgent
+**Added:** 2026-05-07
+
+### Problem
+
+`aba --dir <cluster> delete` fails with "Not in a cluster directory" when the directory exists but has no `cluster.conf` (e.g. leftover scaffold from an interrupted `aba cluster` or from `aba reset`). The guard in `scripts/aba.sh` line 970 requires `cluster.conf` and aborts before the actual delete script runs, even though `vmw-delete.sh`/`kvm-delete.sh` already handle missing configs gracefully (exit 0 with "nothing to delete").
+
+This caused a real E2E failure on pool4: `cluster-ops` left behind an `e2e-compact4` skeleton (symlinks only, no `cluster.conf`), and the subsequent `airgapped-existing-reg` suite failed trying to clean it up.
+
+### Proposed fix
+
+Make `aba delete` idempotent, following the same convention as `aba shutdown` (already off → exit 0), `aba startup` (already running → exit 0), and `aba upgrade` (already at version → exit 0):
+
+1. Remove `delete` from the `cluster.conf` guard in `aba.sh` line 969
+2. In the `delete)` handler, if `cluster.conf` is missing, print "nothing to delete" and exit 0
+3. With `--force`, also remove the directory itself (the empty scaffold)
+4. `vmw-delete.sh`/`kvm-delete.sh` already have the right no-op logic -- the guard is the only blocker
+
+### Why this is safe
+
+- No VMs can exist without `cluster.conf` (config is required before VM creation)
+- `vmw-delete.sh` already checks for VMs and exits 0 if none found
+- `--force` already does `rm -rf` of the directory after delete -- adding the no-config case is natural
+- Aligns with user expectation: "delete this cluster" when there's nothing → success
+
+### Related
+
+- "Externalize installed-cluster state" backlog item (Urgent) — would make this even more robust by allowing delete to find VMs even without `cluster.conf`
+
+---
+
+## Verify httpd serves ISO/ignition for bare-metal installs
+
+**Priority:** Medium
+**Added:** 2026-05-06
+
+### Description
+
+Verify that the `httpd` RPM (in `rpms-internal.txt`) is actually being used by ABA to serve ISO/ignition files for bare-metal installs. If it's not needed (e.g. agent-based installer doesn't use httpd), remove it from the list. If it IS needed, ensure there's a test covering this path.
+
+---
+
+## Add comments to RPM list files (`templates/rpms-*.txt`)
+
+**Priority:** Low
+**Added:** 2026-05-06
+
+### Description
+
+Add `#` comments to `templates/rpms-external.txt` and `templates/rpms-internal.txt` explaining WHY each package is needed — specifically showing the actual ABA commands/scripts that use them (not generic descriptions).
+
+Example format:
+```
+coreos-installer      # Used by: scripts/create-iso.sh (coreos-installer iso customize ...)
+nmstate               # Used by: agent-config.yaml generation (networkConfig)
+bind-utils            # Used by: scripts/verify-dns.sh (dig api.$cluster ...)
+net-tools             # Used by: scripts/check-nic.sh (route -n, netstat)
+```
+
+Requires filtering comments when reading: `sed 's/#.*//' FILE | tr -s '[:space:]' ' '`
+~10 files consume these lists and need the filter added.
+
+---
+
+## Rename `aba_warning()` to `aba_warn()`
+
+**Priority:** Low
+**Added:** 2026-05-06
+
+### Description
+
+Rename `aba_warning()` to `aba_warn()` across all scripts. Shorter, more consistent with `aba_abort`, `aba_info`, `aba_debug`. Update the pre-commit lint in `build/pre-commit-checks.sh` accordingly.
+
+---
+
+## Preflight checks: run but don't block when no issues detected
+
+**Priority:** Medium
+**Added:** 2026-05-05
+
+### Description
+
+When there are no preflight check failures, the checks should still run (to provide visibility) but should NOT block the user or require interaction. Currently preflight checks may pause even when everything passes. The ideal UX: checks run, output results, and if all pass, continue automatically without stopping.
+
+---
+
+## Support UPI (User Provisioned Infrastructure) installation method
+
+**Priority:** Medium
+**Added:** 2026-05-04
+
+### Description
+
+Add support for UPI (User Provisioned Infrastructure) as an installation method alongside the existing ABI (Agent-Based Installer) flow. UPI is the traditional OpenShift installation method where the user provisions their own infrastructure (VMs, bare metal, cloud instances) and provides ignition configs to each node.
+
+### Why
+
+- Some environments cannot use ABI (e.g. restricted platforms, specific hardware requirements, cloud providers without ABI support)
+- UPI is the most widely documented and understood installation method
+- Expands ABA's reach to more deployment scenarios
+
+### Scope (TBD)
+
+- Generate ignition configs via `openshift-install create ignition-configs`
+- Provide helper scripts for common UPI platforms (bare metal PXE, VMware, cloud)
+- Integrate with existing mirror/registry workflow (airgapped UPI)
+- Consider `aba cluster -t sno --method upi` or similar CLI flag
+
+---
+
+## URGENT: Test golden VM recreation from templates
+
+**Priority:** Urgent
+**Added:** 2026-05-03
+
+### Problem
+
+The rhel9 golden VM was never rebuilt (`"Golden VM exists with 'golden-ready' snapshot -- reusing"`). Its snapshot had `/var/lib/expand-root.done` baked in, causing all cloned VMs to skip partition expansion (95GB partition on a 300GB vDisk). The `pool-ops.sh` golden creation path (lines 169-170) correctly removes the marker before snapshotting, but we have never validated this end-to-end since switching to rhel9.
+
+### Action required
+
+1. Run `setup-infra.sh --recreate-golden --pools 1` (or `run.sh run --recreate-golden ...`) to force a full golden rebuild from the RHEL9 template.
+2. Verify the resulting golden snapshot does NOT contain `/var/lib/expand-root.done`.
+3. Clone a VM from the rebuilt golden, expand its vDisk, boot it, and confirm `expand-root.service` runs and grows the partition to full size.
+4. If successful, rebuild all pools from the new golden (`--recreate-vms`).
+
+### Mitigation already applied
+
+- `setup-infra.sh` Phase 3 now removes the marker before pool-ready snapshot (commit pending).
+- Manual expansion was done on all 8 VMs (con1-4, dis1-4) to unblock current E2E run.
+
+---
+
 ## Config precedence: comment out cluster.conf values copied from aba.conf
 
 **Priority:** Medium
@@ -685,7 +820,7 @@ Added `_vm_annotation()` helper in `include_all.sh`. VMware: rich multiline govc
 ## Enhancement: Externalize installed-cluster state for robust `aba delete`
 
 **Added**: 2026-04-15
-**Priority**: Medium
+**Priority**: Urgent
 **Related**: reliable VM delete fix (`e5c310b`)
 
 ### Problem
@@ -1676,4 +1811,531 @@ Same treatment for the `--dev` source deploy loop and `sync_dis_aba` calls.
 - Output interleaving: redirect each pool's output to a temp file or prefix with `[conN]` to keep logs readable
 - Error handling: capture each background job's exit code via `wait $pid; rc=$?` and report failures
 - SSH connection limits: unlikely to be an issue with 4-6 pools, but monitor
+
+---
+
+## E2E: Add remote command execution to interactive `!cmd` prompt
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The E2E framework's interactive failure prompt (`[R]etry [s]kip ... [!cmd]`) only runs commands locally on the conN host. Sometimes during debugging, the user needs to run a command on a **different** host (bastion, disN, another conN, etc.) -- for example `!aba --dir e2e-sno3 kill` may need to run on bastion where govc/vCenter credentials are available, not on conN where the VM isn't visible.
+
+### Proposed feature
+
+Add a `!host:cmd` syntax to the interactive prompt:
+
+```
+[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] [!host:cmd] (24h timeout):
+```
+
+Examples:
+- `!bastion:aba --dir e2e-sno3 kill` -- run on bastion via SSH
+- `!dis2:ls ~/aba/mirror/` -- run on dis2
+- `!aba --dir e2e-sno3 kill` -- existing behavior, run locally on conN
+
+### Implementation sketch
+
+In `lib/framework.sh` (or wherever the interactive prompt is handled), detect the `host:` prefix:
+
+```bash
+if [[ "$user_input" == !*:* ]]; then
+    _host="${user_input#!}"
+    _host="${_host%%:*}"
+    _cmd="${user_input#*:}"
+    ssh -F ~/.aba/ssh.conf "$_host" "$_cmd"
+elif [[ "$user_input" == !* ]]; then
+    eval "${user_input#!}"
+fi
+```
+
+### Considerations
+
+- SSH config (`~/.aba/ssh.conf`) must be available on conN hosts (it is -- deployed by harness)
+- The remote host must be reachable from conN (bastion always is; disN may vary)
+- Output should be displayed inline so the user can see the result before choosing next action
+- Tab-completion of hostnames would be nice but not required
+
+---
+
+## Enhancement: Run preflight checks in the background
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+`scripts/preflight-check.sh` runs synchronously before ISO generation (`Makefile.cluster` lines 116/119). It performs DNS reachability, NTP reachability, IP conflict detection, and vSphere resource checks -- all network probes that can take 10-30+ seconds (especially with unreachable servers timing out). This blocks the entire ISO build pipeline while waiting.
+
+### Proposed fix
+
+Run preflight checks in the background while the ISO generation proceeds in parallel:
+
+1. Launch `preflight-check.sh` as a background job, capturing its PID
+2. Continue with ISO generation (`openshift-install agent create image ...`)
+3. Before the ISO is used (e.g. before VM creation or upload), `wait $pid` and check the exit code
+4. If preflight failed, abort before the point of no return (VM creation)
+
+```bash
+# In Makefile.cluster or the calling script:
+scripts/preflight-check.sh &
+_preflight_pid=$!
+
+# ... ISO generation proceeds ...
+
+# Before VM creation:
+if ! wait $_preflight_pid; then
+    aba_abort "Pre-flight checks failed -- see output above"
+fi
+```
+
+### Considerations
+
+- Output interleaving: preflight messages will mix with ISO generation output. Options:
+  - Redirect preflight output to a temp file, display on failure or at the wait point
+  - Use `[PREFLIGHT]` prefix on all preflight messages for clarity
+  - Accept interleaving (preflight messages are `[ABA]`-prefixed already)
+- The vSphere checks (`preflight-check-vsphere.sh`) are the slowest (govc API calls). These benefit most from parallelization
+- If preflight finishes before ISO generation, the user sees results early -- no downside
+- `verify_conf=conf` or `verify_conf=off` already skips network checks; background mode would only apply when checks are enabled
+- The Makefile target structure may need adjustment since Make doesn't natively support "start A, run B, wait for A"
+
+### References
+
+- `scripts/preflight-check.sh`: all checks (DNS, NTP, IP conflicts, vSphere)
+- `templates/Makefile.cluster` lines 116, 119: synchronous invocation before ISO targets
+- `scripts/preflight-check-vsphere.sh`: vSphere-specific checks (govc calls)
+
+---
+
+## Enhancement: TUI does not support KVM platform
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The TUI "Platform & Network" screen only offers `vmw` (VMware) as a platform option. There is no way to select `kvm` (libvirt/KVM) through the TUI. Users who want to deploy on KVM must manually edit `aba.conf` to set `platform=kvm` and create `kvm.conf` outside the TUI.
+
+### What's needed
+
+1. **Platform selection**: The TUI platform picker should offer `vmw`, `kvm`, and `bm` (bare-metal) as options
+2. **KVM config screen**: When `kvm` is selected, present a `kvm.conf` editor (similar to the `vmware.conf` editor for VMware) with fields for:
+   - `KVM_HOST` (libvirt host)
+   - `KVM_USER` (SSH user)
+   - `KVM_SSH_KEY` (SSH key path)
+   - `KVM_STORAGE_POOL` (storage pool name)
+   - `KVM_NETWORK` (libvirt network name)
+   - Other KVM-specific settings from `templates/kvm.conf`
+3. **Bare-metal path**: When `bm` is selected, skip hypervisor config entirely (ISO-only workflow)
+
+### References
+
+- TUI screenshot: Platform & Network screen shows only `vmw`
+- `tui/abatui.sh`: platform selection logic
+- `templates/kvm.conf`: KVM config template
+- `templates/vmware.conf`: VMware config template (model for KVM screen)
+
+---
+
+## UX: Uninstall command not clearly displayed (Quay and Docker)
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Problem
+
+When running `aba uninstall -d mirror`, the actual command being executed is not prominently displayed before the operation begins. For Quay, the `mirror-registry uninstall` tool prints a massive ASCII art banner and verbose Ansible output that immediately drowns out ABA's `[ABA] Running command: ./mirror-registry uninstall ...` message (line 34 of `reg-uninstall-quay.sh`). The user sees a wall of Ansible logs but can't easily identify what command was run.
+
+The TUI does show `aba uninstall -d mirror` at the top, but the underlying registry-specific command is buried.
+
+### Also check
+
+- `reg-uninstall-docker.sh` -- does it clearly show what's being removed?
+- `reg-uninstall-remote.sh` -- same issue for remote uninstalls (SSH + ansible output)
+- `reg-install-quay.sh` -- same Quay ASCII art issue during install
+
+### Proposed fix
+
+Add a prominent, visually distinct banner before the registry command runs:
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+aba_info "Running: $cmd"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+```
+
+Alternatively, suppress the Quay ASCII banner by piping through `grep -v` or redirecting the first N lines of `mirror-registry` output.
+
+### References
+
+- `scripts/reg-uninstall-quay.sh` line 34: `aba_info "Running command: $cmd"`
+- `scripts/reg-uninstall-remote.sh` line 75: `aba_info "Running: mirror-registry uninstall on $REG_HOST ..."`
+- `scripts/reg-uninstall-docker.sh` lines 28-31: shows stop/remove but no command echo
+
+---
+
+## Enhancement: Configurable GPG signature verification for catalog pulls
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Background
+
+ABA's `scripts/download-catalog-index.sh` bypasses GPG signature verification when pulling operator catalog images from `registry.redhat.io`, using `--signature-policy` with `insecureAcceptAnything`. This matches oc-mirror's own default behavior (PR [openshift/oc-mirror#852](https://github.com/openshift/oc-mirror/pull/852) -- catalogs mirrored without signature verification by default since OCP 4.16).
+
+The bypass was added because signature infrastructure is fragile -- missing GPG keys (Fedora/minimal systems), broken `lookaside` URLs in `registries.d`, or Red Hat signing changes can all break pulls. Performance impact of signature checking is negligible (<0.3s on a ~500MB image).
+
+### Proposed change
+
+Add a config variable in `~/.aba/config` to control signature verification:
+
+```bash
+# Verify GPG signatures when pulling operator catalog images from registry.redhat.io.
+# Default: off (matches oc-mirror behavior). Set to 1 to enable verification.
+# Requires: /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release and correct registries.d lookaside config.
+# VERIFY_CATALOG_SIGNATURES=0
+```
+
+In `scripts/download-catalog-index.sh`:
+
+```bash
+if [ "${VERIFY_CATALOG_SIGNATURES:-0}" = "1" ]; then
+    _pull_err=$(podman pull -q "$catalog_url" 2>&1 >/dev/null) || { ... }
+else
+    echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
+    _pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || { ... }
+fi
+```
+
+### Related fix (already applied)
+
+`templates/aba-sigstore-config.yaml` now includes `lookaside` URLs for `registry.redhat.io` and `registry.access.redhat.com`, preventing ABA's user-level `registries.d` config from overriding the system-level signature lookup URLs. This was required because ABA's `docker: registry.redhat.io:` entry (with only `use-sigstore-attachments`) was shadowing the system-level entry that contained the `lookaside` URL, causing manual `podman pull` to fail with "A signature was required, but no signature exists".
+
+### References
+
+- `scripts/download-catalog-index.sh` lines 128-134: current `insecureAcceptAnything` bypass
+- [openshift/oc-mirror#852](https://github.com/openshift/oc-mirror/pull/852): oc-mirror disables catalog sig verification by default
+- `templates/aba-sigstore-config.yaml`: ABA's registries.d config (now includes lookaside URLs)
+
+---
+
+---
+
+## Enhancement: TUI option to install mirror without syncing
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The TUI currently combines mirror installation and image syncing into a single workflow. There is no option to just install the mirror registry (Quay or Docker) without immediately syncing images to it. Users may want to:
+
+- Install the registry first, then sync later (e.g. after reviewing the imageset config)
+- Install the registry on a remote host and verify connectivity before starting a long sync
+- Set up the registry for a bundle-based (save/load) workflow where `sync` is never used
+- Register an existing external registry without syncing
+
+### Proposed change
+
+Add a separate menu option in the TUI mirror workflow, e.g.:
+
+```
+Mirror Registry
+  1. Install & Sync (current behavior)
+  2. Install Only (set up registry, skip image sync)
+  3. Register Existing (for pre-existing registries)
+```
+
+"Install Only" would run `aba -d mirror install` and stop. The user can later run sync from the TUI or CLI.
+
+### References
+
+- `tui/abatui.sh`: mirror workflow screens
+- `aba -d mirror install`: installs registry only
+- `aba -d mirror sync`: syncs images to installed registry
+
+---
+
+## Enhancement: TUI mirror install screen should allow port configuration
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+The "Remote Quay Registry (SSH)" TUI screen shows fields for Remote Host, SSH Username, SSH Key Path, Registry Username, Registry Password, Registry Path, and Data Directory -- but there is no field for **Registry Port**. The port defaults to 8443 (Quay) or 5000 (Docker), but users running registries on non-standard ports have no way to change it from the TUI. They must manually edit `mirror.conf` after the fact.
+
+The same issue applies to the local Quay/Docker install screens.
+
+### Proposed change
+
+Add a "Registry Port" field to all mirror registry TUI screens (local Quay, remote Quay, local Docker, remote Docker), defaulting to 8443 for Quay and 5000 for Docker. The value maps to `reg_port` in `mirror.conf`.
+
+### References
+
+- Screenshot: "Remote Quay Registry (SSH)" screen -- no port field visible
+- `mirror.conf`: `reg_port` variable
+- `tui/abatui.sh`: mirror configuration screens
+
+---
+
+## E2E: Add thorough remote registry install tests (Docker and Quay)
+
+**Priority:** High
+**Added:** 2026-04-28
+
+### Problem
+
+E2E test coverage for remote registry installations is thin. The current suites mostly test local registry installs. Remote installs (via SSH) have different failure modes -- firewall rules, TLS cert trust propagation, connectivity checks from the source host, SSH key handling, and the `reg_ssh_key`/`reg_ssh_user` config flow -- that are not well exercised.
+
+A user hit a post-install connectivity check failure when installing Docker remotely via the TUI (`bastion.example.com:8443 is not reachable from this host`), suggesting the remote install path needs more testing.
+
+### What to test
+
+**Both Docker and Quay, installed remotely via SSH:**
+
+1. **Install**: `aba -d mirror install --vendor docker -H <remote> -k <key>` and same for `--vendor quay`
+2. **Post-install connectivity**: verify the registry is reachable from the source host after install
+3. **TLS cert trust**: verify the CA cert is fetched and trusted on the source host
+4. **Firewall**: verify the port is opened on the remote host
+5. **Sync/Load**: verify images can be synced/loaded to the remote registry
+6. **Uninstall**: verify remote uninstall cleans up properly (containers, data, certs)
+7. **Re-install**: verify a second install on the same remote host works (idempotent)
+8. **Wrong SSH key / unreachable host**: verify clean error messages
+9. **Port configuration**: non-default port (e.g. 5000 instead of 8443)
+10. **Rootless vs root**: test with both `reg_ssh_user=root` and a non-root user
+
+### Where
+
+Add a dedicated suite `suite-remote-registry.sh` or extend `suite-mirror-sync.sh` with a remote-install section. Requires a test host pair where one conN can SSH to another (or to a disN) to install the registry remotely.
+
+### References
+
+- `scripts/reg-install-remote.sh`: remote install logic
+- `scripts/reg-uninstall-remote.sh`: remote uninstall logic
+- User-reported failure: Docker remote install via TUI, post-install curl check failing
+
+---
+
+## VM Notes: add newlines to vCenter annotation
+
+**Priority:** Low
+**Added:** 2026-04-27
+
+### Problem
+
+The `_vm_annotation()` function in `scripts/include_all.sh` (line 287) generates a multi-line heredoc for VM notes, but the result renders as a single paragraph in vCenter (no line breaks). The vCenter Notes field DOES support newlines (confirmed visually in the vCenter UI).
+
+### Current code
+
+```bash
+cat <<-EOF
+OpenShift ${role_label} Node (${cluster_type}), initial version v${ocp_version}
+Installed by ABA v${aba_ver} (github.com/sjbylo/aba) on $(date)
+Console: https://console-openshift-console.apps.${CLUSTER_NAME}.${base_domain}
+API: https://api.${CLUSTER_NAME}.${base_domain}:6443
+Manage from $(hostname):${PWD} — aba -d ${CLUSTER_NAME} [info|startup|shutdown|delete]
+EOF
+```
+
+### Proposed fix
+
+Investigate whether `govc vm.create -annotation=` strips newlines. If so, try:
+1. Using `govc vm.change -annotation=` after creation (may preserve newlines better)
+2. Embedding literal `\n` and letting govc interpret them
+3. Passing annotation via stdin or a temp file
+
+The annotation is also used by `kvm-create.sh` via `virsh desc --new-desc` -- verify newlines work there too.
+
+### Desired output in vCenter Notes
+
+```
+OpenShift Control Node (sno), initial version v4.20.18
+Installed by ABA v1.0.1 (github.com/sjbylo/aba) on Mon Apr 27 01:32:47 PM +08 2026
+
+Console: https://console-openshift-console.apps.e2e-sno4.p4.example.com
+API: https://api.e2e-sno4.p4.example.com:6443
+Manage from con4:/home/steve/aba/e2e-sno4 — aba -d e2e-sno4 [info|startup|shutdown|delete]
+```
+
+---
+
+## Bug: Remote Docker install post-install check fails on timing race
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+When installing a Docker registry on a remote host via `reg-install-remote.sh`, the post-install curl check (line 231) can fail with a transient 401 "invalid authorization credential" if the Docker registry container hasn't fully loaded the htpasswd volume yet. The check runs immediately after `reg_post_install` returns. Quay doesn't have this issue because its Ansible installer does its own readiness verification.
+
+Additionally, the check has two code quality issues:
+1. **`>/dev/null 2>&1` suppresses stderr** -- violates project rules; hides whether the real failure is auth, TLS, or connectivity
+2. **Error message says "not reachable"** regardless of failure type -- misleading when the actual problem is a 401 auth error
+
+### Evidence
+
+Registry log from the failure:
+- `12:23:02` -- container started
+- `12:24:10` -- `GET /v2/ HTTP/2.0` returns 401 "invalid authorization credential" (from bundle host)
+- Immediately after: `aba verify` succeeds from the same host with the same credentials
+
+### Proposed fix
+
+1. **Add a retry loop** (e.g. 3 attempts, 3-5 second sleep) to the Docker curl check -- gives the container time to load auth
+2. **Remove `2>&1`** from the curl invocation -- let the actual error be visible
+3. **Capture and display the curl error** in the `aba_abort` message so the user sees the real reason (auth/connectivity/TLS)
+
+---
+
+## Enhancement: Display actual port numbers in cluster configuration summary
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Problem
+
+The "Cluster configuration" summary table shows `PORTS_PER_NODE` (e.g. 2) but does not display the actual port numbers (e.g. 6443, 443 or whatever is configured). The user can see how many ports each node has but not which ports they are.
+
+### Proposed fix
+
+Add a row (e.g. `CP_PORTS`, `WKR_PORTS`) showing the actual port values alongside the existing `PORTS_PER_NODE` count, or replace `PORTS_PER_NODE` with the explicit port list if that's more useful.
+
+---
+
+## Bug: "Power down VMs?" prompt shown even when VMs don't exist
+
+**Priority:** Medium
+**Added:** 2026-04-28
+
+### Problem
+
+During cluster creation (after ISO build, before VM creation), ABA lists the VM paths and asks "Immediately power down the above virtual machine(s)? (Y/n):" -- but the VMs may not exist yet (all return `govc: vm 'xxx' not found`). The prompt is pointless and confusing when VMs haven't been created, and equally pointless if they're already powered off.
+
+### Proposed fix
+
+Before prompting, check whether any of the listed VMs actually exist AND are powered on. Skip the prompt entirely if:
+- None of the VMs exist (first install -- nothing to power down)
+- All existing VMs are already powered off
+
+Only prompt when at least one VM exists and is powered on.
+
+---
+
+## Review: Stale debug pod cleanup during cluster startup may be unnecessary
+
+**Priority:** Low
+**Added:** 2026-04-28
+
+### Question
+
+`cluster-startup.sh` force-deletes stale `oc debug` pods from the `default` namespace on every startup, citing an "infinite shutdown loop" risk. However, `oc debug --preserve-pod` creates pods with `restartPolicy: Never`, so kubelet should not re-run them after a reboot -- completed pods stay `Succeeded`, interrupted pods go to `Failed`.
+
+### Current code
+
+```bash
+for pod in $($OC get pods -n default --no-headers 2>/dev/null | grep "\-debug-" | awk '{print $1}'); do
+	aba_info "Removing stale debug pod: $pod"
+	_try $OC delete pod -n default "$pod" --grace-period=0 --force || true
+done
+```
+
+### Proposed investigation
+
+- Verify `restartPolicy: Never` is always set on `oc debug` pods across supported OCP versions.
+- Test: shut down a cluster with `--preserve-pod` debug pods present, restart, confirm no re-execution.
+- If confirmed safe, either remove the cleanup entirely or downgrade to a simple `$OC delete pod` (no `--force --grace-period=0`).
+
+---
+
+## Enhancement: Fix stderr suppression with TUI compatibility
+
+**Priority:** High
+**Added:** 2026-04-28
+**Branch:** `feature/try-helper`
+**Plan:** `fix_stderr_suppression_8d273729`
+
+### Problem
+
+ABA suppresses stderr (`2>/dev/null`) in many places, hiding actual error messages from users when commands fail. The `_try()` helper and `aba_wait_show()` enhancement were developed to fix this, but the changes are **not TUI-safe**: removing `2>/dev/null` causes raw stderr to leak into the TUI display, corrupting the screen layout.
+
+### What exists (on `feature/try-helper`)
+
+- `_try()` helper: captures stderr into `$_LAST_ERR`, auto-logs "Running:" in debug mode
+- Enhanced `aba_wait_show()`: shows "Last output:" on timeout, per-iteration log + full history
+- 34 functional tests (all pass)
+- One-shot fixes across 7 scripts
+
+### What needs investigation
+
+1. **TUI compatibility**: Scripts called by the TUI must never emit raw stderr. All "unsuppress" changes (`day2.sh`, `aba.sh`, `download-catalog-index.sh`) need to use `_try` + structured output (`aba_warning`/`aba_abort`) instead of just removing `2>/dev/null`.
+2. **TUI should adopt `_try()`**: The TUI itself should use `_try` for command execution to capture and display errors cleanly.
+3. **Dual-mode scripts**: Scripts called by both CLI and TUI must work in both contexts.
+
+### Remove `aba getco` command
+
+Remove the `getco` verb from `scripts/aba.sh`. It's redundant — `aba run` (which defaults to `--cmd "get co"`) does the same thing. No need for a separate command.
+
+### Key constraints discovered
+
+- `_try` must NOT be used inside `aba_wait_show` polling callbacks (intercepts stderr from `_wait_log`)
+- `_try` must NOT be used on stderr-visible commands unless the error is re-displayed via `aba_warning`/`aba_abort`
+- `_try curl` must always use `-sS` to avoid progress meter in `_LAST_ERR`
+- Probes (`probe_host`) must stay silent -- failures are expected
+
+---
+
+## E2E: Fix --dev flag so uncommitted changes are actually tested
+
+**Priority**: High
+**Added:** 2026-04-30
+
+### Problem
+
+The `--dev` flag in `run.sh` is intended to let a developer push their local (uncommitted) working copy to all pool VMs so it gets tested by every suite. Today it pushes a tarball to `~/aba` on conN, but **every suite calls `e2e_install_aba()` as its first step**, which does `rm -rf ~/aba/* && git clone ...` -- wiping the dev tarball and replacing it with the committed code from git. The developer's changes are never actually tested.
+
+### Root cause
+
+`e2e_install_aba()` in `lib/framework.sh` unconditionally does a fresh `git clone`. It has no awareness of dev-mode code already being present.
+
+### Proposed fix
+
+See plan: `fix_--dev_flag_2b507f6b.plan.md`
+
+1. **Keep the dev tarball on conN** at `/tmp/aba-dev-source.tar.gz` (don't delete after extraction).
+2. **Modify `e2e_install_aba`** to check for `/tmp/aba-dev-source.tar.gz` -- if present, wipe and re-extract from tarball instead of `git clone`. Each suite still gets a clean `~/aba` but from the dev tarball.
+3. **Clean up stale tarball** on non-`--dev` runs so normal runs revert to `git clone`.
+4. **Expand `.deploy-manifest`** to include all paths needed for a complete ABA install (currently missing `build/`, full `cli/`, etc.).
+5. **Fix `sync_infra_aba`** to use local `scripts/aba.sh` in dev mode instead of `git show` from the committed branch.
+
+### Files involved
+
+- `test/e2e/lib/framework.sh` -- `e2e_install_aba` dev-tarball check
+- `test/e2e/lib/deploy.sh` -- `sync_source` keep tarball; `sync_infra_aba` dev-mode path
+- `test/e2e/run.sh` -- cleanup stale tarball on non-dev runs
+- `test/e2e/.deploy-manifest` -- expand to include all required paths
+
+## Store platform type in installed cluster state
+
+When a cluster is installed, the platform type (`vmw`, `kvm`, `bm`) must be persisted in the cluster directory state (e.g. in `cluster.conf` or a marker). Currently `aba startup` assumes bare-metal and prints "Please power on all bare-metal servers" even for VMware/KVM clusters, where it should auto-start VMs via `govc`/`virsh`.
+
+Example failure: running `aba startup -y` on a VMware-based cluster shows the bare-metal message and waits 5 min for API that will never come up (because VMs were never started).
+
+### Expected behavior
+
+- `aba startup` should check the platform type and:
+  - `vmw` → power on VMs via govc
+  - `kvm` → start VMs via virsh
+  - `bm` → print "power on servers" message and wait
+- The platform must be stored at cluster creation time (it's in `aba.conf` globally but needs to be in the cluster dir for portability).
+
+## Test and fix: `scripts/listopdeps.sh`
+
+- Test `scripts/listopdeps.sh` and fix any issues found.
+- This script lists operator dependencies (e.g. `scripts/listopdeps.sh 4.18 odf-operator`) and is referenced in the README under "Operator Dependencies".
 

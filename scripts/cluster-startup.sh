@@ -133,7 +133,7 @@ trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_r
 
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
-	if ! aba_wait_show "Waiting for all nodes Ready" 10 600 all_nodes_ready; then
+	if ! aba_wait_show "Waiting for all nodes Ready (Ctrl-C to skip)" 10 600 all_nodes_ready; then
 		aba_warning "Not all nodes are 'Ready' yet, but continuing ..."
 	fi
 fi
@@ -165,7 +165,7 @@ _console_ok=""
 if ! curl -skL "$console" | grep -q 'Red Hat OpenShift'; then
 	aba_info_ok "The cluster will complete startup and become fully available shortly!"
 	aba_info "Waiting for the console to become available at $console"
-	if ! aba_wait_show "Waiting for OpenShift console" 5 300 _cluster_startup_console_ready; then
+	if ! aba_wait_show "Waiting for OpenShift console (Ctrl-C to skip)" 5 300 _cluster_startup_console_ready; then
 		aba_info "Console not ready yet, continuing ..."
 	else
 		aba_info_ok "Cluster console is accessible at $console"
@@ -178,7 +178,7 @@ fi
 
 if ! _cluster_startup_cos_ready; then
 	aba_info "Waiting for all cluster operators ..."
-	if ! aba_wait_show "Waiting for all cluster operators" 5 300 _cluster_startup_cos_ready; then
+	if ! aba_wait_show "Waiting for all cluster operators (Ctrl-C to skip)" 5 300 _cluster_startup_cos_ready; then
 		aba_info "Not all cluster operators are available yet. The cluster may still be settling."
 		exit 0
 	fi

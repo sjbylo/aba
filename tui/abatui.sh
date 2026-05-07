@@ -1712,7 +1712,7 @@ where OpenShift will be deployed (the bastion network).
 • Machine Network: CIDR for cluster nodes (e.g., 10.0.0.0/24)
 • DNS Servers: IPs separated by spaces (e.g., 8.8.8.8 1.1.1.1)
 • Default Route: Gateway IP for cluster network
-• NTP Servers: IPs or hostnames separated by spaces (e.g., pool.ntp.org 10.0.1.8)
+• NTP Servers: IPs or hostnames separated by spaces (e.g., 192.168.2.1 10.0.1.8)
 
 Leave blank to auto-detect on the disconnected bastion." 0 0 || true
 				continue
@@ -1852,7 +1852,7 @@ Leave blank to auto-detect on the disconnected bastion." 0 0 || true
 					
 					# Allow empty (auto-detect) or valid NTP server list
 					if [[ -n "$input" ]] && ! validate_ntp_servers "$input"; then
-						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter IPs or hostnames separated by spaces or commas (e.g., pool.ntp.org time.google.com 192.168.1.1)" 0 0
+						dialog --backtitle "$(ui_backtitle)" --msgbox "Invalid NTP server format. Please enter IPs or hostnames separated by spaces or commas (e.g., ntp.example.com 192.168.1.1)" 0 0
 						continue
 					fi
 					NTP_SERVERS="$input"

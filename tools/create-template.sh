@@ -344,7 +344,10 @@ rootpw --lock
 user --name=${SSH_USER} --groups=wheel --shell=/bin/bash
 sshkey --username=${SSH_USER} "${pubkey}"
 
-bootloader --append="console=tty0 console=ttyS0,115200n8" --location=mbr
+# ttyS0 is often not a real serial device on VMware GUI-only VMs; systemd then
+# runs serial-getty@ttyS0 and agetty can crash in a loop (seen on RHEL 10).
+# console=tty0 fits RHEL 8/9/10; use vSphere web console or SSH (add a vSphere serial device if you need SOL).
+bootloader --append="console=tty0" --location=mbr
 
 ignoredisk --only-use=sda
 clearpart --all --initlabel --drives=sda
@@ -404,7 +407,8 @@ lvextend -l +100%FREE /dev/rhel/root || true
 xfs_growfs / || true
 SHEOF
 chmod 755 /usr/local/bin/expand-root.sh
-systemctl enable expand-root.service
+# Service is enabled in finalize(), not here -- avoids running on the template
+# itself (where the disk is already the right size).
 
 # ── Chrony / NTP ──
 cat > /etc/chrony.conf <<'NTPEOF'
@@ -446,8 +450,12 @@ create_oemdrv_iso() {
 	mkdir -p "$isodir/EFI/BOOT" "$isodir/EFI/redhat" "$isodir/images"
 	cp "$_TMPDIR/ks.cfg" "$isodir/"
 
+	# RHEL 8: plain OEMDRV -- the DVD boots its own GRUB and Anaconda
+	# auto-discovers ks.cfg from the OEMDRV label.  EFI-bootable OEMDRV
+	# causes a reboot loop on RHEL 8 because the NVRAM entry persists.
+	# RHEL 9+: EFI-bootable OEMDRV -- custom GRUB skips the media check.
 	local _grubx64="/boot/efi/EFI/redhat/grubx64.efi"
-	if sudo test -f "$_grubx64" && command -v mmd >/dev/null 2>&1; then
+	if [ "$RHEL_VER" -ge 9 ] && sudo test -f "$_grubx64" && command -v mmd >/dev/null 2>&1; then
 		echo "  Building EFI-bootable OEMDRV (skips DVD media check) ..."
 		sudo cp "$_grubx64" "$isodir/EFI/BOOT/BOOTX64.EFI"
 		sudo chown "$USER" "$isodir/EFI/BOOT/BOOTX64.EFI"
@@ -475,8 +483,12 @@ GRUBEOF
 			-eltorito-alt-boot -e images/efiboot.img -no-emul-boot \
 			-o "$_TMPDIR/ks.iso" "$isodir"
 	else
-		echo "  WARNING: EFI boot files or mtools not available; using plain OEMDRV ISO"
-		echo "           (media check may run -- install grub2-efi-x64 + mtools to skip it)"
+		if [ "$RHEL_VER" -le 8 ]; then
+			echo "  Building plain OEMDRV (RHEL ${RHEL_VER} DVD handles EFI boot)"
+		else
+			echo "  WARNING: EFI boot files or mtools not available; using plain OEMDRV ISO"
+			echo "           (media check may run -- install grub2-efi-x64 + mtools to skip it)"
+		fi
 		"$mkiso" -V OEMDRV -R -J -quiet -o "$_TMPDIR/ks.iso" "$isodir/ks.cfg"
 	fi
 
@@ -519,21 +531,35 @@ create_vm() {
 		"$VM_NAME"
 	echo "  Created: ${VM_NAME} (${CPU} vCPU, ${MEM_MB} MB, ${DISK_GB} GB, EFI, pvscsi)"
 
-	# Attach OEMDRV (bootable) ISO first -- EFI boots from first CDROM.
-	# Its embedded GRUB chains to the RHEL DVD without media check.
+	# Boot order: disk first, CDROM second.  On the first boot the disk is
+	# empty so EFI falls through to the CDROM installer.  After the OS is
+	# installed the disk is bootable and the CDROMs are never reached --
+	# no ejection or reboot detection needed.
+	govc device.boot -vm "$VM_NAME" -order disk,cdrom
+
 	_CDROM1=$(govc device.cdrom.add -vm "$VM_NAME")
 	govc device.cdrom.insert -vm "$VM_NAME" -device "$_CDROM1" \
 		-ds "$VM_DATASTORE" "$_KS_DS_PATH"
-	echo "  OEMDRV:    [${VM_DATASTORE}] ${_KS_DS_PATH} -> ${_CDROM1} (boot)"
+	echo "  OEMDRV:    [${VM_DATASTORE}] ${_KS_DS_PATH} -> ${_CDROM1}"
 
-	# Attach RHEL DVD ISO as second CDROM
 	_CDROM2=$(govc device.cdrom.add -vm "$VM_NAME")
 	govc device.cdrom.insert -vm "$VM_NAME" -device "$_CDROM2" \
 		-ds "$ISO_DATASTORE" "$ISO_PATH"
 	echo "  RHEL ISO:  [${ISO_DATASTORE}] ${ISO_PATH} -> ${_CDROM2}"
 
 	govc vm.power -on "$VM_NAME"
-	echo "  Powered on -- unattended install starting"
+	echo "  Powered on -- boot order: disk > cdrom (unattended install starting)"
+
+	# RHEL 8 plain OEMDRV: DVD GRUB defaults to "Test this media & install".
+	# Send Up+Enter to select "Install" (no media check) once the menu appears.
+	if [ "$RHEL_VER" -le 8 ]; then
+		echo "  Waiting for DVD GRUB menu ..."
+		sleep 15
+		echo "  Selecting 'Install' (skipping media check) ..."
+		govc vm.keystrokes -vm "$VM_NAME" -c KEY_UP
+		sleep 1
+		govc vm.keystrokes -vm "$VM_NAME" -c KEY_ENTER
+	fi
 }
 
 # ── Step 5: Wait for install to finish ────────────────────────────────────────
@@ -584,6 +610,20 @@ post_install() {
 
 	# Red Hat subscription
 	if [ -n "${SUB_USERNAME:-}" ] && [ -n "${SUB_PASSWORD:-}" ]; then
+		# Detect proxy from environment for RHSM
+		local _proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
+		if [ -z "$_proxy_url" ] && [ -f "$HOME/.proxy-set.sh" ]; then
+			_proxy_url=$(grep -i '^export HTTPS_PROXY=' "$HOME/.proxy-set.sh" 2>/dev/null | head -1 | sed 's/.*=//;s/"//g')
+		fi
+		if [ -n "$_proxy_url" ]; then
+			local _proxy_host _proxy_port
+			_proxy_host=$(echo "$_proxy_url" | sed 's|https\?://||;s|:.*||')
+			_proxy_port=$(echo "$_proxy_url" | sed 's|.*:||;s|/.*||')
+			echo "  Configuring RHSM proxy (${_proxy_host}:${_proxy_port}) ..."
+			_rssh "sudo subscription-manager config \
+				--server.proxy_hostname='${_proxy_host}' \
+				--server.proxy_port='${_proxy_port}'" || true
+		fi
 		echo "  Registering with Red Hat (${SUB_USERNAME}) ..."
 		_rssh "sudo subscription-manager register \
 			--username='${SUB_USERNAME}' --password='${SUB_PASSWORD}'" || \
@@ -721,10 +761,10 @@ verify_template() {
 		failures=$((failures + 1))
 	fi
 
-	if _rssh "systemctl is-enabled expand-root.service" >/dev/null 2>&1; then
-		echo "  OK  expand-root.service enabled"
+	if _rssh "test -f /etc/systemd/system/expand-root.service" >/dev/null 2>&1; then
+		echo "  OK  expand-root.service installed (enabled in finalize)"
 	else
-		echo "  FAIL  expand-root.service not enabled" >&2
+		echo "  FAIL  expand-root.service not installed" >&2
 		failures=$((failures + 1))
 	fi
 
@@ -759,6 +799,15 @@ verify_template() {
 finalize() {
 	echo "Step 8/8: Finalizing ..."
 
+	# Enable expand-root.service now (not in kickstart, to avoid running on the
+	# template itself where the disk is already the right size).
+	echo "  Enabling expand-root.service for clones ..."
+	_rssh "sudo systemctl enable expand-root.service" || true
+
+	# Remove the done marker so clones will run the service on first boot.
+	# (The service may have already fired on this template since we just enabled it.)
+	_rssh "sudo rm -f /var/lib/expand-root.done" || true
+
 	echo "  Shutting down VM ..."
 	_rssh "sudo shutdown -h now" 2>/dev/null || true
 
@@ -785,10 +834,9 @@ finalize() {
 			echo "  WARNING: failed to add 2nd NIC"
 	fi
 
-	# Eject ISOs and remove CDROM devices
+	# Eject ISOs and remove ALL CDROM devices
 	echo "  Removing CD-ROMs ..."
-	for _dev in "$_CDROM1" "$_CDROM2"; do
-		[ -z "$_dev" ] && continue
+	for _dev in $(govc device.ls -vm "$VM_NAME" | awk '/cdrom/{print $1}'); do
 		govc device.cdrom.eject -vm "$VM_NAME" -device "$_dev" 2>/dev/null || true
 		govc device.remove -vm "$VM_NAME" -device "$_dev" 2>/dev/null || true
 	done

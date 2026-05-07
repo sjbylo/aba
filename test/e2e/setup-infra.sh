@@ -83,8 +83,12 @@ _verify_con_vm() {
 	local _dis_vlan="${VM_CLONE_VLAN_IPS[$_dis_vm]%%/*}"
 	local _domain
 	_domain="$(pool_domain "$pool_num")"
+	local _con_ip
+	_con_ip="$(pool_con_ip "$pool_num")"
 	local _ntp="${NTP_SERVER:-10.0.1.8}"
 	local _tz="${TIMEZONE:-Asia/Singapore}"
+	local _bastion_fp
+	_bastion_fp="$(ssh-keygen -l -f ~/.ssh/id_rsa.pub | awk '{print $2}')"
 
 	echo "  [$vm] Verifying ..."
 	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
@@ -139,11 +143,21 @@ _verify_con_vm() {
 		dig +short google.com @127.0.0.1 | head -1 | grep -q . || _fail "DNS @127.0.0.1 -> google.com"
 		echo "  PASS: DNS @127.0.0.1 -> google.com"
 
+		dig +short google.com @${_con_ip} | head -1 | grep -q . || _fail "DNS @${_con_ip} -> google.com"
+		echo "  PASS: DNS @${_con_ip} -> google.com (lab IP)"
+
 		dig +short google.com @${_con_vlan} | head -1 | grep -q . || _fail "DNS @${_con_vlan} -> google.com"
 		echo "  PASS: DNS @${_con_vlan} -> google.com (disN path)"
 
-		grep -q "nameserver 127.0.0.1" /etc/resolv.conf || _fail "resolv.conf not 127.0.0.1"
-		echo "  PASS: resolv.conf -> 127.0.0.1"
+		grep -q "nameserver ${_con_ip}" /etc/resolv.conf || _fail "resolv.conf not ${_con_ip}"
+		echo "  PASS: resolv.conf -> ${_con_ip}"
+
+		nmcli -g ipv4.ignore-auto-dns connection show ens192 | grep -q yes || _fail "ens192 ignore-auto-dns not set"
+		echo "  PASS: ens192 ignore-auto-dns"
+
+		_nm_dns=\$(nmcli -g ipv4.dns connection show ens192)
+		echo "\${_nm_dns}" | grep -q "${_con_ip}" || _fail "ens192 ipv4.dns is \${_nm_dns}, expected ${_con_ip}"
+		echo "  PASS: ens192 ipv4.dns -> ${_con_ip}"
 
 		test -f /etc/NetworkManager/conf.d/no-dns.conf || _fail "NM dns=none missing"
 		echo "  PASS: NM dns=none"
@@ -185,11 +199,15 @@ _verify_con_vm() {
 		[ "\$_root_fp" = "\$_user_fp" ] || _fail "root and ${user} have different SSH keys (root=\$_root_fp ${user}=\$_user_fp)"
 		echo "  PASS: root and ${user} share same SSH key"
 
+		# Keys must originate from bastion (not a self-generated golden VM key)
+		[ "\$_root_fp" = "${_bastion_fp}" ] || _fail "VM key (\$_root_fp) != bastion key (${_bastion_fp})"
+		echo "  PASS: SSH key matches bastion"
+
 		# Verify self-SSH works for both users
-		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>&1 | grep -q ${user} || _fail "${user} self-SSH failed"
+		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
 		echo "  PASS: ${user} self-SSH"
 
-		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>&1 | grep -q root || _fail "root self-SSH failed"
+		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
 		echo "  PASS: root self-SSH"
 
 		# --- Users / environment ---
@@ -284,6 +302,7 @@ _configure_con_vm() {
 	_vm_cleanup_home "$vm" "$user"
 	_vm_setup_vmware_conf "$vm" "$user"
 	_vm_setup_kvm_conf "$vm" "$user"
+	_vm_deploy_pull_secret "$vm" "$user"
 	_vm_create_test_user "$vm" "$user"
 	_vm_set_aba_testing "$vm" "$user"
 	_vm_install_aba "$vm" "$user"
@@ -372,6 +391,8 @@ _verify_dis_vm() {
 	local _tz="${TIMEZONE:-Asia/Singapore}"
 	local _dis_lab_ip
 	_dis_lab_ip="$(pool_dis_ip "$pool_num")"
+	local _bastion_fp
+	_bastion_fp="$(ssh-keygen -l -f ~/.ssh/id_rsa.pub | awk '{print $2}')"
 
 	echo "  [$vm] Verifying ..."
 	cat <<-VERIFY | _essh "${user}@${vm}" -- sudo bash
@@ -475,11 +496,15 @@ _verify_dis_vm() {
 		[ "\$_root_fp" = "\$_user_fp" ] || _fail "root and ${user} have different SSH keys (root=\$_root_fp ${user}=\$_user_fp)"
 		echo "  PASS: root and ${user} share same SSH key"
 
+		# Keys must originate from bastion (not a self-generated golden VM key)
+		[ "\$_root_fp" = "${_bastion_fp}" ] || _fail "VM key (\$_root_fp) != bastion key (${_bastion_fp})"
+		echo "  PASS: SSH key matches bastion"
+
 		# Verify self-SSH works for both users
-		sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>&1 | grep -q ${user} || _fail "${user} self-SSH failed"
+		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
 		echo "  PASS: ${user} self-SSH"
 
-		ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>&1 | grep -q root || _fail "root self-SSH failed"
+		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
 		echo "  PASS: root self-SSH"
 
 		# --- VLAN SSH connectivity (dis -> con, proves cross-VM SSH works) ---
@@ -585,7 +610,8 @@ _confirm() {
 		echo "$msg Y (auto)"
 		return 0
 	fi
-	read -r -p "$msg " answer
+	echo -n "$msg " > /dev/tty
+	read -r answer < /dev/tty
 	case "${answer:-Y}" in
 		[Yy]*) return 0 ;;
 		*) return 1 ;;
@@ -773,8 +799,11 @@ _prepare_golden() {
 
 	govc folder.create "${_VC_PARENT}/aba-e2e" || true
 	govc folder.create "$_GOLDEN_FOLDER" || true
-	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" || return 1
+	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" "" "no" || return 1
 	_vm_ensure_3nics "$_GOLDEN_NAME" || return 1
+	echo "  Powering on clone '$_GOLDEN_NAME' ..."
+	govc vm.power -on "$_GOLDEN_NAME" || true
+	sleep "${VM_BOOT_DELAY:-8}"
 	_vm_annotate "$_GOLDEN_NAME" "Cloned from $_VM_TEMPLATE -- booting"
 
 	local ip
@@ -802,6 +831,8 @@ _prepare_golden() {
 	_vm_cleanup_caches "$ip" "$user"      || return 1
 	_vm_cleanup_podman "$ip" "$user"      || return 1
 	_vm_cleanup_home "$ip" "$user"        || return 1
+	_vm_deploy_pull_secret "$ip" "$user" || return 1
+	_vm_deploy_proxy_scripts "$ip" "$user" || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
 	_vm_deploy_tmux_conf "$ip" "$user"   || return 1
 	_vm_provision_root_user "$ip" "$user" || return 1
@@ -810,6 +841,8 @@ _prepare_golden() {
 	_vm_verify_golden "$ip" "$user"       || return 1
 
 	_vm_annotate "$_GOLDEN_NAME" "Shutting down for snapshot"
+	_essh "${user}@${ip}" -- "sudo systemctl enable expand-root.service" || true
+	_essh "${user}@${ip}" -- "sudo rm -f /var/lib/expand-root.done" || true
 	_essh "${user}@${ip}" -- "sudo poweroff" || true
 
 	# Poll power state instead of blind sleep -- more correct and often faster.
@@ -1074,6 +1107,11 @@ for i in "${_POOL_ARRAY[@]}"; do
 				continue
 			fi
 		fi
+		# Remove expand-root marker so the service re-runs after revert
+		# (govc vm.disk.change resizes the vDisk but the partition stays
+		# at the golden's original size until expand-root grows it)
+		_essh "${VM_DEFAULT_USER}@${vm_name}.${VM_BASE_DOMAIN}" \
+			"sudo rm -f /var/lib/expand-root.done" 2>/dev/null || true
 		echo "  Shutting down $vm_name ..."
 		govc vm.power -s -force "$vm_name" &
 		_snapshot_vms+=("$vm_name")

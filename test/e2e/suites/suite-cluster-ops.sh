@@ -45,8 +45,10 @@ plan_tests \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
+    "Upgrade: sync target and aba upgrade" \
     "Register: --reg-host and --reg-port CLI flags" \
     "Register: named mirror (enclave workflow)" \
+    "Enclave: SNO install via named mirror" \
     "Cleanup: delete cluster and unregister mirror"
 
 suite_begin "cluster-ops"
@@ -76,9 +78,6 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Reset aba to clean state" \
-    "./install && aba reset -f"
-
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
@@ -103,7 +102,6 @@ e2e_run "Auto-update: verify installed binary has new build stamp" \
     "grep ^ABA_BUILD=\$(cat /tmp/e2e-aba-build-stamp) \$(which aba)"
 
 e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
@@ -147,16 +145,8 @@ e2e_run "Clear reg_ssh_user (local registry)" \
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
 # Generate the pull secret for the pool registry
-e2e_run "Generate pool-registry pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
-{
-  \"auths\": {
-    \"${CON_HOST}:8443\": {
-      \"auth\": \"\$enc_pw\"
-    }
-  }
-}
-EOPS"
+e2e_run "Generate pool-registry pull secret via aba" \
+    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
 # Register the pool registry as an existing external registry via ABA.
 # This creates state.sh (REG_VENDOR=existing) so reg-install.sh's fast-path
@@ -193,7 +183,7 @@ for ctype in sno compact standard; do
     _extra_args=""
     [ "$ctype" = "standard" ] && _extra_args="-W 2"
     e2e_run "Delete any leftover $cname cluster" \
-        "if [ -d $cname ]; then aba -y --dir $cname delete; fi"
+        "_e2e_delete_leftover_cluster $cname"
     e2e_run "Create cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
@@ -237,9 +227,9 @@ for ctype in sno compact standard; do
         "yaml_diff $cname/agent-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/agent-config.yaml.example)"
 done
 
-# Clean up compact/standard dirs -- only needed for config validation, not cluster install
-e2e_run "Clean compact cluster dir (config-only)" "aba --dir $COMPACT clean"
-e2e_run "Clean standard cluster dir (config-only)" "aba --dir $STANDARD clean"
+# Clean up config-only dirs -- no VMs were created, safe to remove entirely
+e2e_run "Remove compact cluster dir" "rm -rf $COMPACT"
+e2e_run "Remove standard cluster dir" "rm -rf $STANDARD"
 
 test_end
 
@@ -249,13 +239,13 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 
 # Apply day2 (CatalogSources, IDMS/ITMS, trust CA)
@@ -316,9 +306,6 @@ e2e_run "Restore verify_conf=all" \
     "aba --verify all"
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
 
-e2e_run "Delete original SNO cluster" "aba --dir $SNO delete"
-e2e_remove_from_cluster_cleanup "$PWD/$SNO"
-
 test_end
 
 # ============================================================================
@@ -353,6 +340,48 @@ e2e_run "Restore verify_conf=all" \
 test_end
 
 # ============================================================================
+# 12. Upgrade: sync target version and aba upgrade
+# ============================================================================
+# The SNO from test 7 is running the "previous" version.  Sync the "latest"
+# images into the same mirror and upgrade the cluster using 'aba upgrade'.
+test_begin "Upgrade: sync target and aba upgrade"
+
+e2e_run "Resolve latest version for upgrade target" "
+    aba --channel $TEST_CHANNEL --version l
+    upgrade_target=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
+    echo \$upgrade_target > /tmp/e2e-upgrade-target
+    echo \"Upgrade target: \$upgrade_target\"
+"
+
+e2e_run "Set --target-version and regenerate ISC" "
+    cd ~/aba
+    target=\$(cat /tmp/e2e-upgrade-target)
+    aba -d mirror --target-version \$target
+    rm -f mirror/data/imageset-config.yaml
+    aba -d mirror imagesetconf
+"
+
+e2e_run -r 3 2 "Sync upgrade images" "aba -d mirror sync --retry"
+
+e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
+
+e2e_run "Dry-run upgrade" \
+    "aba -d $SNO upgrade --to \$(cat /tmp/e2e-upgrade-target) --dry-run"
+
+e2e_run -r 3 2 "Trigger and verify upgrade" "
+    target=\$(cat /tmp/e2e-upgrade-target)
+    aba -d $SNO upgrade --to \$target --skip-day2 --force || true  # may exit non-zero if already at target; desired-version assertion validates outcome
+    desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
+    echo \"Desired version: \$desired  (target: \$target)\"
+    [ \"\$desired\" = \"\$target\" ]
+"
+
+e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO"
+
+test_end
+
+# ============================================================================
 # Register/unregister CLI flag coverage
 # ============================================================================
 test_begin "Register: --reg-host and --reg-port CLI flags"
@@ -379,23 +408,67 @@ test_end
 # ============================================================================
 test_begin "Register: named mirror (enclave workflow)"
 
-e2e_run "Create named mirror directory" \
-    "aba mirror --name test-enclave || true"  # make exits non-zero with editor=none after creating dir
+ENCLAVE_MIRROR="e2e-test-enclave"
 
-e2e_run "Assert test-enclave directory exists" \
-    "test -d test-enclave && test -f test-enclave/mirror.conf"
+e2e_run "Create named mirror directory" \
+    "aba mirror --name $ENCLAVE_MIRROR || true"  # make exits non-zero with editor=none after creating dir
+
+e2e_run "Assert enclave mirror directory exists" \
+    "test -d $ENCLAVE_MIRROR && test -f $ENCLAVE_MIRROR/mirror.conf"
 
 e2e_run "Register pool registry to named mirror" \
-    "aba -d test-enclave register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+    "aba -d $ENCLAVE_MIRROR register --reg-host ${CON_HOST} --reg-port 8443 --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify named mirror registry access" \
-    "aba -d test-enclave verify"
+    "aba -d $ENCLAVE_MIRROR verify"
 
-e2e_run "Unregister named mirror" \
-    "aba -d test-enclave unregister"
+e2e_run "Verify state.sh has REG_VENDOR=existing" \
+    "grep REG_VENDOR=existing ~/.aba/mirror/$ENCLAVE_MIRROR/state.sh"
 
-e2e_run "Remove named mirror directory" \
-    "rm -rf test-enclave"
+test_end
+
+# ============================================================================
+# Enclave: SNO install via named mirror (boot + SSH only)
+# ============================================================================
+# Creates a SNO cluster that references the named enclave mirror instead of
+# the default 'mirror/' directory.  Validates the full register -> cluster
+# workflow.  We only wait for node boot + SSH -- no full install-complete.
+test_begin "Enclave: SNO install via named mirror"
+
+ENCLAVE_SNO="$(pool_cluster_name sno-enc)"
+
+e2e_run "Sync OCP images through enclave mirror" \
+    "aba -d $ENCLAVE_MIRROR sync --retry"
+
+e2e_run "Create SNO cluster config via enclave mirror" \
+    "aba cluster -n $ENCLAVE_SNO -t sno --starting-ip $(pool_sno_ip) --mirror-name $ENCLAVE_MIRROR --step cluster.conf"
+
+e2e_run "Fix mac_prefix for enclave SNO" \
+    "sed -i 's#mac_prefix=.*#mac_prefix=88:88:88:88:88:#g' $ENCLAVE_SNO/cluster.conf"
+
+e2e_diag "Show enclave SNO cluster.conf" "grep -E '^\w' $ENCLAVE_SNO/cluster.conf"
+
+e2e_run "Verify cluster.conf references enclave mirror" \
+    "grep -q 'mirror_name=$ENCLAVE_MIRROR' $ENCLAVE_SNO/cluster.conf"
+
+e2e_run "Generate ISO for enclave SNO" "aba --dir $ENCLAVE_SNO iso"
+e2e_run "Upload ISO for enclave SNO" "aba --dir $ENCLAVE_SNO upload"
+e2e_add_to_cluster_cleanup "$PWD/$ENCLAVE_SNO"
+e2e_run "Boot enclave SNO VM" "aba --dir $ENCLAVE_SNO refresh"
+
+e2e_run -r 1 1 "Wait for enclave SNO node SSH" \
+    "timeout 8m bash -c 'until aba --dir $ENCLAVE_SNO ssh --cmd hostname; do sleep 10; done'"
+
+e2e_diag "Show enclave SNO node IP info" \
+    "aba --dir $ENCLAVE_SNO ssh --cmd 'ip a'"
+
+e2e_run "Delete enclave SNO VMs" "aba --dir $ENCLAVE_SNO delete"
+e2e_remove_from_cluster_cleanup "$PWD/$ENCLAVE_SNO"
+e2e_run "Remove enclave SNO cluster dir" "rm -rf $ENCLAVE_SNO"
+
+e2e_run "Unregister enclave mirror" \
+    "aba -d $ENCLAVE_MIRROR unregister"
+e2e_run "Remove enclave mirror directory" "rm -rf $ENCLAVE_MIRROR"
 
 test_end
 
@@ -405,7 +478,11 @@ test_end
 test_begin "Cleanup: delete cluster and unregister mirror"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
+e2e_run "Delete enclave SNO if leftover" \
+    "_e2e_delete_leftover_cluster $ENCLAVE_SNO"
+e2e_run "Unregister enclave mirror if leftover" \
+    "if [ -d $ENCLAVE_MIRROR ]; then aba -d $ENCLAVE_MIRROR unregister && rm -rf $ENCLAVE_MIRROR; else echo '[cleanup] enclave mirror already removed'; fi"
 e2e_run "Unregister pool registry" \
     "aba -d mirror unregister"
 

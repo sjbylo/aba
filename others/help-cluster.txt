@@ -44,8 +44,17 @@ Options:
 
 Usage (from a cluster directory):
   aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.
+  aba upgrade --to <version>              # Upgrade cluster to target OCP version (disconnected).
   aba shutdown                            # Gracefully shut down the cluster (any platform).
   aba startup                             # Gracefully start up the cluster (any platform).
+
+Upgrade options:
+  aba [-d <cluster>] upgrade
+      --to <version>                      # Target OCP version (e.g. 4.19.28). Falls back to mirror.conf:ocp_version_target.
+      --force                             # Pass --force to oc adm upgrade
+      --dry-run                           # Show what would happen without executing
+      --monitor-timeout <min>             # Polling timeout in minutes (default: 120)
+      --skip-day2                         # Don't auto-run day2 even if IDMS is missing
 
 Usage for platform=vmw:
   aba ls                                  # List all cluster node VMs

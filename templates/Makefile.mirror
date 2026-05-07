@@ -1,5 +1,13 @@
 # Mirror Makefile  # DO NOT remove this line!
 
+# Delete target files when a recipe fails (prevents partial/corrupt downloads)
+.DELETE_ON_ERROR:
+
+# mirror.conf is created-then-reviewed: the recipe exits non-zero when editor=none
+# so the user can edit and re-run.  Without .PRECIOUS, .DELETE_ON_ERROR removes
+# the file before the user ever sees it.
+.PRECIOUS: mirror.conf
+
 ifndef DEBUG_ABA
 .SILENT:
 MAKEFLAGS += --no-print-directory
@@ -51,6 +59,17 @@ else
   CURL_PROGRESS := "-s"
 endif
 ##########################
+
+# Verify SHA256 checksum of a downloaded file.
+# Usage: $(call verify-sha256,FILE,SHA256SUM_URL)
+# On failure: removes the file so Make retries from scratch next time.
+define verify-sha256
+	@echo -n "[ABA] Verifying checksum for $(1): "
+	@curl -f --retry 8 -sL -o $(1).sha256 $(2) && \
+		grep "  $(notdir $(1))$$" $(1).sha256 | sha256sum --check --status && \
+		echo "valid!" || \
+		{ echo "INVALID or checksum unavailable! Removing $(1)."; rm -f $(1) $(1).sha256; exit 1; }
+endef
 
 all: install
 
@@ -193,9 +212,7 @@ else
 	curl -f $(CURL_PROGRESS) -OL $(mirror_registry_url)/$(MR_TARBALL)
 endif
 	file $(MR_TARBALL) | grep -q "gzip compressed data"
-	@echo -n "[ABA] Verifying checksum for $(@): "
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -o mirror-registry-sha256sum.txt $(mirror_registry_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" mirror-registry-sha256sum.txt || { echo [ABA] "invalid!!"; exit 1; }
-	echo "valid!"
+	$(call verify-sha256,$@,$(mirror_registry_url)/sha256sum.txt)
 
 # Docker registry image for air-gapped environments.
 # This file MUST be created on the connected workstation (during 'aba bundle' / 'aba save')
@@ -356,5 +373,5 @@ reset:                # Clean up all files. Only use if you know what you're doi
 	rm -f .ssh.conf
 	rm -f .redhat-operator-index* 
 	rm -f .init
-	rm -f *sha256sum.txt
+	rm -f *sha256sum.txt *.sha256
 

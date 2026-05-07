@@ -1,5 +1,8 @@
 ##@ Help-related tasks
 
+# Delete target files when a recipe fails (prevents partial/corrupt downloads)
+.DELETE_ON_ERROR:
+
 .SILENT:
 
 .PHONY: help

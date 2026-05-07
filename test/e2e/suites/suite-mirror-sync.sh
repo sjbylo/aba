@@ -35,7 +35,7 @@ e2e_setup
 
 plan_tests \
     "Setup: install aba and configure" \
-    "Docker mymirror: install and verify" \
+    "Docker e2e-mirror-docker1: install and verify" \
     "Firewalld: port persistence" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
@@ -55,14 +55,12 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
 e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
@@ -92,37 +90,39 @@ e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 test_end
 
 # ============================================================================
-# 2. Docker mymirror: install and verify (firewalld stays UP)
+# 2. Docker e2e-mirror-docker1: install and verify (firewalld stays UP)
 # ============================================================================
-test_begin "Docker mymirror: install and verify"
+test_begin "Docker e2e-mirror-docker1: install and verify"
 
 # Negative path: sync without pull secret should fail
 e2e_run -q "Hide pull secret for must-fail test" \
     "mv ~/.pull-secret.json ~/.pull-secret.json.bak"
 e2e_run_must_fail "Sync without pull secret should fail" \
-    "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+    "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-test-neg-datadir'"
+e2e_run -q "Clean up data-dir side effect from must-fail test" \
+    "rm -rf ~/e2e-test-neg-datadir"
 e2e_run -q "Restore pull secret" \
     "mv ~/.pull-secret.json.bak ~/.pull-secret.json"
 
-# Create mymirror and install Docker registry on disN (port 5000).
+# Create e2e-mirror-docker1 and install Docker registry on disN (port 5000).
 # Full image sync is skipped here: rootless podman 4.x on RHEL 8 has a lock
 # corruption bug under high concurrent I/O that crashes the container.
 # Image sync is already covered by the Quay registry tests (save/load).
-e2e_run "Create mymirror dir" "aba mirror --name mymirror"
-e2e_add_to_mirror_cleanup "$PWD/mymirror"
+e2e_run "Create e2e-mirror-docker1 dir" "aba mirror --name e2e-mirror-docker1"
+e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-docker1"
 e2e_run "Install Docker registry on remote host" \
-    "aba -d mymirror install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass --data-dir '~/mymirror-data' -H $DIS_HOST -k ~/.ssh/id_rsa"
-e2e_run "Verify mymirror registry access" "aba -d mymirror verify"
+    "aba -d e2e-mirror-docker1 install --vendor docker --reg-port 5000 --reg-user e2euser --reg-password e2epass --data-dir '~/e2e-mirror-datadir2' -H $DIS_HOST -k ~/.ssh/id_rsa"
+e2e_run "Verify e2e-mirror-docker1 registry access" "aba -d e2e-mirror-docker1 verify"
 
 # Idempotent install: re-running install on a healthy registry must succeed
 e2e_run "Idempotent install (registry already running)" \
-    "aba -d mymirror install"
+    "aba -d e2e-mirror-docker1 install"
 e2e_run "Edit mirror.conf while registry is running" \
-    "aba -d mymirror --reg-path my/new/path"
+    "aba -d e2e-mirror-docker1 --reg-path my/new/path"
 e2e_run "Install after mirror.conf edit must succeed" \
-    "aba -d mymirror install"
+    "aba -d e2e-mirror-docker1 install"
 e2e_run "Verify registry still accessible after idempotent install" \
-    "aba -d mymirror verify"
+    "aba -d e2e-mirror-docker1 verify"
 
 test_end
 
@@ -162,16 +162,16 @@ test_end
 # ============================================================================
 test_begin "Save/Load: roundtrip"
 
-e2e_run "Uninstall mymirror registry" "aba --dir mymirror uninstall"
+e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
 e2e_run_remote "Verify registry removed" \
     "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
 
-e2e_run "Run mymirror reset" "aba --dir mymirror reset --force"
+e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"
 
 # Mirror reset regression: verify reset clears binary and re-extraction works
 e2e_run "Run mirror reset" "aba --dir mirror reset --force"
 # No need to manually clear ~/.aba/mirror/mirror/ — pre-suite cleanup
-# (_cleanup_con_quay) already removed it.
+# (_cleanup_con_registry) already removed it.
 e2e_run "Verify mirror-registry binary removed by reset" \
     "test ! -f mirror/mirror-registry"
 e2e_run "Re-extract mirror-registry after reset" "make -C mirror mirror-registry"
@@ -180,7 +180,7 @@ e2e_run "Verify mirror-registry exists after re-extract" \
 # mirror.conf is destroyed by reset; re-create and reconfigure for remote registry
 e2e_run "Re-create mirror.conf after reset" "make -C mirror mirror.conf"
 e2e_run "Reconfigure remote registry after reset" \
-    "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/my-quay-mirror-test1'"
+    "aba -d mirror -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-mirror-datadir1'"
 e2e_diag "Show mirror.conf after reset+reconfigure" "grep -E '^\w' mirror/mirror.conf"
 
 # Registries.d sigstore config test: verify the config file is deployed
@@ -197,7 +197,7 @@ e2e_run -q "Ensure OC_MIRROR_FLAGS is unset in ~/.aba/config" \
 
 # Save/load reinstall regression: verify save+load auto-reinstalls the
 # registry when it was uninstalled (ported from old test1 lines 376-380).
-e2e_add_to_mirror_cleanup "$PWD/mirror" remote
+e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Save and load (should reinstall registry)" "aba --dir mirror save load --retry"
 
 # Verify --remove-signatures is NOT active in OC_MIRROR_FLAGS
@@ -214,7 +214,7 @@ test_end
 # ============================================================================
 test_begin "SNO: bootstrap after save/load"
 
-e2e_run "Clean sno cluster directory" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean sno cluster directory" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 # CIDR variation tests (ported from old test1 lines 353-360)
 e2e_run "Test /29 small CIDR (cluster.conf)" \
@@ -223,26 +223,26 @@ e2e_run "Verify /29 CIDR in cluster.conf" \
     "grep 'machine_network=.*/' $SNO/cluster.conf"
 e2e_run "Test /29 small CIDR (ISO creation)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_small_cidr)' --step iso"
-e2e_run "Clean for /30 CIDR test" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean for /30 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /30 CIDR (cluster.conf)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '$(pool_sno_ip)/30' --step cluster.conf"
 e2e_run "Verify /30 CIDR in cluster.conf" \
     "grep 'machine_network=.*/30' $SNO/cluster.conf"
-e2e_run "Clean for /20 CIDR test" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean for /20 CIDR test" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 
 e2e_run "Test /20 large CIDR (cluster.conf + ISO)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --machine-network '10.0.0.0/20' --step iso"
 e2e_run "Verify /20 CIDR in cluster.conf" \
     "grep 'machine_network=10.0.0.0/20' $SNO/cluster.conf"
 
-e2e_run "Clean and recreate with pool CIDR for install" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean and recreate with pool CIDR for install" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
@@ -272,7 +272,7 @@ e2e_diag "Markers: before uninstall-2" "_marker_snap"
 e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
-e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/my-quay-mirror-test1'"
+e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/e2e-mirror-datadir1'"
 e2e_run "Set empty reg_pw" "aba -d mirror --reg-password"
 e2e_run "Set reg_path=my/path" "aba -d mirror --reg-path my/path"
 e2e_run "Set reg_user=myuser" "aba -d mirror --reg-user myuser"
@@ -282,15 +282,15 @@ e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:s
 
 e2e_run "Clean mirror working state" "aba -d mirror clean"
 e2e_diag "Markers: before sync" "_marker_snap"
-e2e_add_to_mirror_cleanup "$PWD/mirror" remote
+e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
-e2e_run "Clean sno cluster dir" "aba --dir $SNO clean; rm -f $SNO/cluster.conf"
+e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
@@ -364,25 +364,25 @@ test_end
 test_begin "Cleanup: delete clusters and uninstall mirrors"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 # $STANDARD was created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
-e2e_run "Uninstall mymirror registry and remove dir" \
-    "if [ -d mymirror ]; then aba --dir mymirror uninstall && rm -rf mymirror; else echo '[cleanup] mymirror already removed'; fi"
-e2e_run_remote "Remove mymirror-data on disN" \
-    "sudo rm -rf ~/mymirror-data"
+e2e_run "Uninstall e2e-mirror-docker1 registry" \
+    "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
+e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
+    "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
     "aba --dir mirror uninstall"
-e2e_run_remote "Remove my-quay-mirror-test1 on disN" \
-    "sudo rm -rf ~/my-quay-mirror-test1"
-e2e_run "Remove my-quay-mirror-test1 on conN" \
-    "sudo rm -rf ~/my-quay-mirror-test1"
+e2e_run_remote "Remove e2e-mirror-datadir1 on disN" \
+    "sudo rm -rf ~/e2e-mirror-datadir1"
+e2e_run "Remove e2e-mirror-datadir1 on conN" \
+    "sudo rm -rf ~/e2e-mirror-datadir1"
 e2e_run_remote "Verify no registry containers on disN" \
     "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run_remote "Verify no leftover mirror data dirs on disN" \
-    "test ! -d ~/mymirror-data && test ! -d ~/my-quay-mirror-test1"
+    "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1"
 e2e_run "Verify no leftover mirror data dirs on conN" \
-    "test ! -d ~/mymirror-data && test ! -d ~/my-quay-mirror-test1"
+    "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1"
 
 test_end
 

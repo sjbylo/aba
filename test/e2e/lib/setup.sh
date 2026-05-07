@@ -8,6 +8,30 @@
 
 _E2E_LIB_DIR_SU="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Safe cleanup of a leftover cluster directory from a previous run.
+# If cluster.conf exists, uses 'aba delete --force' (proper VM cleanup).
+# If the dir exists but has no cluster.conf (interrupted before config),
+# no VMs could have been created -- just remove the empty scaffold.
+_e2e_delete_leftover_cluster() {
+	local dir="$1"
+	[ ! -d "$dir" ] && return 0
+	if [ -f "$dir/cluster.conf" ]; then
+		aba -y --dir "$dir" delete --force
+	else
+		rm -rf "$dir"
+		echo "[cleanup] Removed unconfigured leftover dir: $dir"
+	fi
+}
+export -f _e2e_delete_leftover_cluster
+
+# Remote variant for disN (SSH). The local helper function is not available
+# over SSH, so this wraps the same logic into an e2e_run_remote call.
+_e2e_delete_leftover_cluster_remote() {
+	local dir="$1"
+	e2e_run_remote "Delete any leftover $dir cluster" \
+		"cd ~/aba && if [ -d $dir ] && [ -f $dir/cluster.conf ]; then aba -y --dir $dir delete --force; elif [ -d $dir ]; then rm -rf $dir && echo '[cleanup] Removed unconfigured leftover dir: $dir'; fi"
+}
+
 # Source other libs if not already loaded
 if ! type remote_exec &>/dev/null; then
     source "$_E2E_LIB_DIR_SU/remote.sh"
@@ -121,7 +145,7 @@ reset_internal_bastion() {
     echo "=== reset_internal_bastion complete ==="
 }
 
-# --- _cleanup_con_quay ------------------------------------------------------
+# --- _cleanup_con_registry ---------------------------------------------------
 #
 # Pre-suite cleanup of registry state on conN. Called by runner.sh
 # before each suite to prevent stale state from a previous crashed or
@@ -137,7 +161,7 @@ reset_internal_bastion() {
 # Guard: The pool registry container ("pool-registry") is always excluded
 #        from brute-force cleanup.
 #
-_cleanup_con_quay() {
+_cleanup_con_registry() {
     local _aba_root="${_ABA_ROOT:-$HOME/aba}"
 
     local _did_uninstall=""
@@ -188,7 +212,7 @@ _cleanup_con_quay() {
 
     # Always clean cached registry credentials on conN.
     # Pool registry is unaffected (uses ~/.e2e-pool-registry/, not ~/.aba/mirror/).
-    # This matches what _cleanup_dis_aba already does on disN (runner.sh).
+    # This matches what _cleanup_dis already does on disN (runner.sh).
     if [ -d "$HOME/.aba/mirror" ]; then
         echo "  [cleanup] Removing stale registry credentials (~/.aba/mirror/)"
         rm -rf "$HOME/.aba/mirror"

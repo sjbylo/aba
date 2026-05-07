@@ -15,6 +15,7 @@ mkdir -p "$WORK_BUNDLE_DIR_BUILD"
 OP=
 [ "$OP_SETS" ] && OP="--op-sets $OP_SETS"
 
+# Bundles are GA-only by design. --channel stable is intentional (no RC/EC versions in bundles).
 aba --pull-secret $PS_FILE --platform bm --channel stable --version $VER $OP --base-domain $BASE_DOM
 
 aba -d cli oc-mirror

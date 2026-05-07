@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.0.1
+ABA_VERSION=1.0.2
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260426220357
+ABA_BUILD=20260507183815
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -37,7 +37,7 @@ ARCH=$(uname -m)
 uname -o | grep -q "^Darwin$" && echo "Run aba on RHEL, Fedora or even in a Centos-Stream container. Most tested is RHEL 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
 # Handle --aba-version early (before sudo check)
-if [ "$1" = "--aba-version" ]; then
+if [ "$1" = "--aba-version" -o "$1" = "version" ]; then
 	ver=$(cat "$(dirname "$(readlink -f "$0")")/../VERSION" 2>/dev/null)
 	echo "aba${ver:+ v$ver} version $ABA_VERSION (build $ABA_BUILD)"
 	git_branch=$(git branch --show-current 2>/dev/null)
@@ -166,6 +166,38 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 fi
 
 source $ABA_ROOT/scripts/include_all.sh
+
+# --- Trace logging setup ---
+# Always capture full output + debug to a trace file for post-mortem debugging.
+# Keeps the last 5 trace files (trace.log, trace.log.1, ... trace.log.4).
+export ABA_TRACE_DIR="$HOME/.aba/logs"
+export ABA_TRACE_FILE="$ABA_TRACE_DIR/trace.log"
+mkdir -p "$ABA_TRACE_DIR"
+chmod 700 "$ABA_TRACE_DIR"
+# Rotate: keep last 5 logs
+for i in 3 2 1 0; do
+	[ -f "$ABA_TRACE_FILE.$i" ] && mv -f "$ABA_TRACE_FILE.$i" "$ABA_TRACE_FILE.$((i+1))"
+done
+[ -f "$ABA_TRACE_FILE" ] && mv -f "$ABA_TRACE_FILE" "$ABA_TRACE_FILE.0"
+: > "$ABA_TRACE_FILE"
+chmod 600 "$ABA_TRACE_FILE"
+{
+	echo "=== ABA Trace ==="
+	echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+	echo "Command:   aba $*"
+	echo "Version:   $ABA_VERSION (build $ABA_BUILD)"
+	echo "CWD:       $PWD"
+	echo "ABA_ROOT:  $ABA_ROOT"
+	echo "==="
+} >> "$ABA_TRACE_FILE"
+# Preserve original TTY fd for color/spinner detection (exec tee replaces fd 1 with a pipe)
+if [ -t 1 ]; then
+	exec {ABA_TTY_FD}>&1
+	export ABA_TTY_FD
+fi
+# Duplicate stdout+stderr to the trace file. Terminal output is unchanged.
+exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
 [ ! "$RUN_ONCE_CLEANED" ] && run_once -F # Clean out only the previously failed tasks
@@ -237,7 +269,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -253,6 +285,20 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
+
+# Write a cluster-conf variable. If cluster.conf exists, write directly.
+# If the target is 'cluster' (creating a new cluster), forward via BUILD_COMMAND.
+# Otherwise abort -- the flag has no valid target.
+_set_cluster_conf() {
+	local var="$1" val="$2" flag="$3"
+	if [ -f cluster.conf ]; then
+		replace-value-conf -n "$var" -v "$val" -f cluster.conf
+	elif [ "$cur_target" = "cluster" ]; then
+		BUILD_COMMAND="$BUILD_COMMAND ${var}=${val}"
+	else
+		aba_abort "Flag $flag sets cluster config but no cluster.conf found. Use 'aba -d <cluster> $flag' or 'aba cluster -n <name> $flag'."
+	fi
+}
 
 while [ "$*" ] 
 do
@@ -310,6 +356,21 @@ elif [ "$1" = "--light" ]; then
 			echo && \
 			echo_white  "openshift-install:  $os_inst"
 
+		exit 0
+	elif [ "$1" = "show-op-sets" -o "$1" = "op-sets" ]; then
+		shift
+		echo_yellow "Available operator sets:"
+		echo
+		printf "  %-12s %s\n" "SET" "DESCRIPTION"
+		printf "  %-12s %s\n" "---" "-----------"
+		for f in "$ABA_ROOT"/templates/operator-set-*; do
+			[ -f "$f" ] || continue
+			set_name="${f##*operator-set-}"
+			# Skip auto-generated custom sets
+			echo "$set_name" | grep -q "^custom-" && continue
+			desc=$(grep "^# Name:" "$f" | head -1 | sed 's/^# Name: *//')
+			printf "  %-12s %s\n" "$set_name" "$desc"
+		done
 		exit 0
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
@@ -385,6 +446,35 @@ elif [ "$1" = "--light" ]; then
 
 		shift 2
 		ocp_version=$ver
+	elif [ "$1" = "--target-version" ]; then
+		opt=$1
+		[ ! -f "$WORK_DIR/mirror.conf" ] && \
+			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
+		arg=$2
+		tgt_ver=$arg
+		[ ! "$chan" ] && chan=$ocp_channel
+		tgt_tmp_out=
+		case "$arg" in
+			latest | l)
+				tgt_tmp_out="latest "
+				tgt_ver=$(fetch_latest_version "$chan")
+			;;
+			previous | p)
+				tgt_tmp_out="previous "
+				tgt_ver=$(fetch_previous_version "$chan")
+			;;
+		esac
+		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver")
+		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
+		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		# Ensure the placeholder exists in mirror.conf (older templates may lack it)
+		if ! grep -q "^[# ]*ocp_version_target=" "$WORK_DIR/mirror.conf"; then
+			echo "#ocp_version_target=" >> "$WORK_DIR/mirror.conf"
+		fi
+		replace-value-conf -n ocp_version_target -v $tgt_ver -f $WORK_DIR/mirror.conf
+		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -465,7 +555,7 @@ elif [ "$1" = "--light" ]; then
 		[ ! -f "$2" ] && aba_abort "file not found: $2"
 		BUILD_COMMAND="$BUILD_COMMAND ca_cert='$2'"
 		shift 2
-	elif [ "$1" = "--base-domain" -o "$1" = "-b" ]; then
+	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
@@ -507,7 +597,7 @@ elif [ "$1" = "--light" ]; then
 		done
 		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
-	elif [ "$1" = "--gateway-ip" -o "$1" = "-g" ]; then
+	elif [ "$1" = "--gateway-ip" -o "$1" = "--gateway" -o "$1" = "-g" ]; then
 		# If arg missing remove from aba.conf
 		shift 
 		gw_ip=
@@ -520,10 +610,8 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
-		# If arg ip addr then replace value in cluster.conf
-		# If arg missing remove from cluster.conf
+		_flag="$1"
 		api_vip=
-		# If arg is available and not an opt
 		if [[ -n $2 && $2 != -* ]]; then
 			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 				IFS=. read -r o1 o2 o3 o4 <<< "$2"
@@ -533,26 +621,16 @@ elif [ "$1" = "--light" ]; then
 					aba_abort "invalid IPv4 address [$2]" 
 				fi
 			else
-				aba_abort "argument invalid [$2] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $_flag" 
 			fi
 			shift
 		fi
-
-		# If conf file is available, edit the value
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n api_vip -v "$api_vip" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND api_vip=$api_vip"
-		fi
+		_set_cluster_conf api_vip "$api_vip" "$_flag"
 		shift
 	elif [ "$1" = "--ingress-vip" -o "$1" = "-G" ]; then
-		# If arg ip addr replace value in cluster.conf
-		# If arg missing remove from cluster.conf
+		_flag="$1"
 		ingress_vip=
-		# If arg is available and not an opt
-		##if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 		if [[ -n $2 && $2 != -* ]]; then
-			# If arg is an ip addr
 			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 				IFS=. read -r o1 o2 o3 o4 <<< "$2"
 				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
@@ -561,29 +639,21 @@ elif [ "$1" = "--light" ]; then
 					aba_abort "invalid IPv4 address [$2]" 
 				fi
 			else
-				aba_abort "argument invalid [$2] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $_flag" 
 			fi
 			shift
 		fi
-		# If conf file is available, edit the value
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n ingress_vip -v "$ingress_vip" -f cluster.conf
-			##echo done $*
-		else
-			BUILD_COMMAND="$BUILD_COMMAND ingress_vip=$ingress_vip"
-		fi
+		_set_cluster_conf ingress_vip "$ingress_vip" "$_flag"
 		shift
 	elif [ "$1" = "--ports" ]; then
-		# If arg missing remove from aba.conf
-		# Check arg after --ports, if "empty" then remove value from cluster.conf
+		_flag="$1"
 		ports_vals=""
-		# While there is a valid arg...
 		while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
 		do
 			[ "$ports_vals" ] && ports_vals="$ports_vals,$2" || ports_vals="$2"
 			shift	
 		done
-		BUILD_COMMAND="$BUILD_COMMAND ports='$ports_vals'"
+		_set_cluster_conf ports "$ports_vals" "$_flag"
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -675,50 +745,34 @@ elif [ "$1" = "--light" ]; then
 		replace-value-conf -n ask -v false -f $ABA_ROOT/aba.conf
 		export ask=
 		shift 
-	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then  # FIXME opt.
+	elif [ "$1" = "--mcpu" -o "$1" = "--master-cpu" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n master_cpu -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND master_cpu_count=$2"
-			fi
+			_set_cluster_conf master_cpu_count "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then  # FIXME opt.
+	elif [ "$1" = "--mmem" -o "$1" = "--master-memory" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n master_mem -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND master_mem=$2"
-			fi
+			_set_cluster_conf master_mem "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then  # FIXME opt.
+	elif [ "$1" = "--wcpu" -o "$1" = "--worker-cpu" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n worker_cpu -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND worker_cpu_count=$2"
-			fi
+			_set_cluster_conf worker_cpu_count "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
-	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then  # FIXME opt.
+	elif [ "$1" = "--wmem" -o "$1" = "--worker-memory" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n worker_mem -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND worker_mem=$2"
-			fi
+			_set_cluster_conf worker_mem "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
@@ -726,11 +780,7 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n starting_ip -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND starting_ip='$2'" # FIXME: Still needed?
-			fi
+			_set_cluster_conf starting_ip "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
@@ -738,42 +788,26 @@ elif [ "$1" = "--light" ]; then
 
 	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n data_disk -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND data_disk=$2"
-			fi
+			_set_cluster_conf data_disk "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
-		# If arg ip addr replace value in cluster.conf
-		# If arg missing remove from cluster.conf
+		_flag="$1"
 		int_connection=
-		# If arg is available and not an opt
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
-			# If arg is an ip addr
 			if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
 				int_connection=$2
 				[ "$2" = "p" ] && int_connection=proxy
 				[ "$2" = "d" ] && int_connection=direct
 			else
-				aba_abort "argument invalid [$int_connection] after option: $1" 
+				aba_abort "argument invalid [$2] after option: $_flag" 
 				exit 1
 			fi
 			shift
-		else
-			# Do nothing, remove value in cluster.conf?
-			:
 		fi
-		# If conf file is available, edit the value
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n int_connection -v "$int_connection" -f cluster.conf
-			##echo done $*
-		else
-			BUILD_COMMAND="$BUILD_COMMAND int_connection=$int_connection"
-		fi
+		_set_cluster_conf int_connection "$int_connection" "$_flag"
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -830,60 +864,53 @@ elif [ "$1" = "--light" ]; then
 		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n num_workers -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND num_workers=$2"
-			fi
+			_set_cluster_conf num_workers "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1"
 		fi
 		shift 2
 	elif [ "$1" = "--num-masters" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
-			if [ -f cluster.conf ]; then
-				replace-value-conf -n num_masters -v $2 -f cluster.conf
-			else
-				BUILD_COMMAND="$BUILD_COMMAND num_masters=$2"
-			fi
+			_set_cluster_conf num_masters "$2" "$1"
 		else
 			aba_abort "argument invalid [$2] after option $1"
 		fi
 		shift 2
 	elif [ "$1" = "--vlan" ]; then
+		_flag="$1"
 		vlan_val=
 		if [[ -n $2 && $2 != -* ]]; then
 			vlan_val=$2
 			shift
 		fi
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n vlan -v "$vlan_val" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND vlan=$vlan_val"
-		fi
+		_set_cluster_conf vlan "$vlan_val" "$_flag"
 		shift
 	elif [ "$1" = "--ssh-key" ]; then
+		_flag="$1"
 		ssh_key_val=
 		if [[ -n $2 && $2 != -* ]]; then
 			ssh_key_val=$2
 			shift
 		fi
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n ssh_key_file -v "$ssh_key_val" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND ssh_key_file=$ssh_key_val"
-		fi
+		_set_cluster_conf ssh_key_file "$ssh_key_val" "$_flag"
 		shift
 	elif [ "$1" = "--mirror-name" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
-		if [ -f cluster.conf ]; then
-			replace-value-conf -n mirror_name -v "$2" -f cluster.conf
-		else
-			BUILD_COMMAND="$BUILD_COMMAND mirror_name=$2"
-		fi
+		_set_cluster_conf mirror_name "$2" "$1"
 		shift 2
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
+		shift
+	# Upgrade-specific flags (prefixed with upgrade_ to avoid future collisions)
+	elif [ "$1" = "--to" ]; then
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		upgrade_to="$2"
+		shift 2
+	elif [ "$1" = "--dry-run" ]; then
+		upgrade_dry_run="--dry-run"
+		shift
+	elif [ "$1" = "--skip-day2" ]; then
+		upgrade_skip_day2="--skip-day2"
 		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
@@ -898,7 +925,7 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -920,10 +947,12 @@ _ensure_hv_ready() {
 		vmw)
 			[ ! -s vmware.conf ] && [ -f ../vmware.conf ] && ln -s ../vmware.conf
 			[ -s vmware.conf ] || aba_abort "vmware.conf not found. Run 'aba vmw' first."
+			ensure_govc
 			;;
 		kvm)
 			[ ! -s kvm.conf ] && [ -f ../kvm.conf ] && ln -s ../kvm.conf
 			[ -s kvm.conf ] || aba_abort "kvm.conf not found. Run 'aba kvm' first."
+			ensure_virsh
 			;;
 		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
@@ -937,7 +966,7 @@ if [ "$cur_target" ]; then
 
 	# Externalized targets require a cluster directory (cluster.conf present)
 	case $cur_target in
-		info|login|shell|getco|day2|day2-ntp|day2-osus|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 			[ -f cluster.conf ] || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
 			;;
 	esac
@@ -989,6 +1018,16 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/day2-config-osus.sh
 			exit
 		;;
+		upgrade)
+			trap - ERR
+			upgrade_args=()
+			[ "$upgrade_to" ] && upgrade_args+=(--to "$upgrade_to")
+			[ "$opt_force" ] && upgrade_args+=(--force)
+			[ "$upgrade_dry_run" ] && upgrade_args+=($upgrade_dry_run)
+			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
+			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
+			exit
+		;;
 		shutdown)
 			eval $BUILD_COMMAND
 			$ABA_ROOT/scripts/cluster-graceful-shutdown.sh wait=$wait
@@ -1006,7 +1045,7 @@ if [ "$cur_target" ]; then
 		create)
 			eval $BUILD_COMMAND
 			_ensure_hv_ready
-			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start
+			$ABA_ROOT/scripts/${HV}-exists.sh || $ABA_ROOT/scripts/${HV}-create.sh $start || exit $?
 			# Sync Make stamp files: VMs exist, so all prior steps (poweroff, upload,
 			# refresh) are logically complete. Without these, a subsequent 'aba bootstrap'
 			# or 'aba install' would re-run the entire chain and destroy the running VMs.
@@ -1049,15 +1088,19 @@ if [ "$cur_target" ]; then
 		;;
 		delete)
 			_ensure_hv_ready
-			# Config regeneration may fail (e.g. missing pull secret on a
-			# disconnected host after registry deregistration). Still attempt
-			# delete -- the HV delete script exits 0 when no VMs exist.
-			exec_cmd="make -s init agentconf"
+			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (delete)"
-			$exec_cmd || true
-			$ABA_ROOT/scripts/${HV}-delete.sh
+			$exec_cmd
+			$ABA_ROOT/scripts/${HV}-delete.sh || exit $?
 			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
 			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
+			# --force: remove the entire cluster directory (for clean re-creation)
+			if [ "$opt_force" ]; then
+				_cdir="$PWD"
+				cd ..
+				rm -rf "$_cdir"
+				aba_info "Cluster directory removed: $_cdir"
+			fi
 			exit
 		;;
 		refresh)
@@ -1066,7 +1109,7 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (refresh)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters
+			$ABA_ROOT/scripts/${HV}-refresh.sh workers=$workers masters=$masters || exit $?
 			# Sync Make stamp files: refresh = delete + create, so all VM-related steps
 			# are logically complete.
 			touch .autopoweroff .autoupload .autorefresh
@@ -1077,7 +1120,11 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (upload)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-upload.sh
+			if scripts/${HV}-exists.sh 2>/dev/null; then
+				ask "VMs exist and must be powered off before uploading the ISO. Power off" || exit 1
+				$ABA_ROOT/scripts/${HV}-kill.sh || true
+			fi
+			$ABA_ROOT/scripts/${HV}-upload.sh || exit $?
 			# Sync Make stamp files: upload implies poweroff already happened.
 			touch .autopoweroff .autoupload
 			exit
@@ -1113,8 +1160,8 @@ if [ ! "$interactive_mode" ]; then
 		if [ "$DEBUG_ABA" ]; then
 			aba_debug ask=$ask DEBUG_ABA=$DEBUG_ABA INFO_ABA=$INFO_ABA
 			aba_debug "Running: \"make $BUILD_COMMAND\" from directory: $PWD" 
-			aba_debug -n "Pausing 5s ... [Return to continue]:"
-			read -t 5 || echo
+			#aba_debug -n "Pausing 5s ... [Return to continue]:"
+			#read -t 5 || echo  # Need to remove since we now write to a trace file
 
 			# eval is needed here since $BUILD_COMMAND should not be evaluated/processed (it may have ' or " in it)
 			eval make $BUILD_COMMAND

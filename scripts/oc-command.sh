@@ -10,14 +10,14 @@ aba_debug "Starting: $0 $* from $PWD"
 
 [ ! "$1" ] && cmd="get co" || cmd="$*"
 
-echo "$cmd" | grep "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command if needed
+echo "$cmd" | grep -q "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command if needed
 
 #aba_info "Downloading CLI installation binaries"
 #scripts/cli-install-all.sh --wait oc
 
 export KUBECONFIG=iso-agent-based/auth/kubeconfig
 
-aba_info "Running command: oc $cmd"
+aba_info "Running command: oc $cmd" >&2
 aba_debug "Running: oc $cmd"
 eval oc $cmd
 

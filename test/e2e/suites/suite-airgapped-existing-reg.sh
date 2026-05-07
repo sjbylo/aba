@@ -66,7 +66,6 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches (conN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
@@ -74,7 +73,6 @@ e2e_run_remote -q "Remove oc-mirror caches (disN)" \
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
@@ -89,15 +87,14 @@ e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_run "Delete any leftover $COMPACT cluster" \
-    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete; fi"
+    "_e2e_delete_leftover_cluster $COMPACT"
 e2e_run "Reset aba" "aba reset -f"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
 e2e_run "Re-apply config after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Re-set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
@@ -223,6 +220,13 @@ e2e_run_remote "Verify dialog was reinstalled" \
 e2e_run_remote "Verify single dnf batch (no duplicate install)" \
     "cd ~/aba && test \$(grep -c 'Transaction Summary' .dnf-install.log) -eq 1"
 
+# mirror.conf is no longer in the bundle; create and configure it on disN
+e2e_run_remote "Create mirror.conf on bastion" \
+    "cd ~/aba && aba -d mirror mirror.conf"
+e2e_run_remote "Set reg_host to pool registry on conN" \
+    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' ~/aba/mirror/mirror.conf"
+e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
+
 # Register the pool registry on disN using the staged creds
 # Paths are relative to mirror/ because aba -d mirror changes CWD there
 e2e_run_remote "Register pool registry on disN" \
@@ -325,7 +329,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 

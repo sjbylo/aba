@@ -288,9 +288,8 @@ _e2e_summary() {
 #   - Include pool number and hostname (never "localhost")
 #   - Failure notifications include last ~20 lines of suite log for context
 #
-# Framework runs on conN where internet may be down (air-gapped tests).
-# Notifications are relayed via SSH to NOTIFY_RELAY_HOST (bastion) which
-# always has internet access.
+# notify.sh is deployed to conN via sync_extras() and calls the Telegram API
+# directly (conN has internet access).
 
 _e2e_notify_suffix() {
     echo "(pool${POOL_NUM:-?}/$(hostname -s))"
@@ -299,24 +298,14 @@ _e2e_notify_suffix() {
 _e2e_notify() {
     [ -n "$NOTIFY_CMD" ] || return 0
     local _msg="[e2e] $* $(_e2e_notify_suffix)"
-    if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
-        ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
-            "$NOTIFY_CMD '$_msg'" < /dev/null >/dev/null 2>&1 &
-    else
-        $NOTIFY_CMD "$_msg" < /dev/null >/dev/null &
-    fi
+    $NOTIFY_CMD "$_msg" < /dev/null >/dev/null 2>&1 &
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
         local _msg="[e2e] $subject $(_e2e_notify_suffix)"
-        if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
-            ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
-                "$NOTIFY_CMD '$_msg'" >/dev/null 2>&1
-        else
-            $NOTIFY_CMD "$_msg" >/dev/null
-        fi
+        $NOTIFY_CMD "$_msg" >/dev/null 2>&1
     else
         cat > /dev/null  # drain stdin
     fi
@@ -813,11 +802,16 @@ e2e_cleanup_mirrors() {
 		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
+		# Only uninstall the registry (stop containers, remove creds). Leave the
+		# directory in place — the pre-suite check uses .available to detect stale
+		# registries, not directory existence.
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then
+			"if [ -d '$abs_path' ] && [ -f '$abs_path/.available' ]; then
 				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
+			elif [ -d '$abs_path' ]; then
+				echo '  (mirror $abs_path already uninstalled -- skipping)'
 			else
-				echo '  (mirror dir $abs_path already removed -- nothing to uninstall)'
+				echo '  (mirror dir $abs_path does not exist -- skipping)'
 			fi" \
 			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
 		_cleanup_rc=${PIPESTATUS[0]}
@@ -860,10 +854,10 @@ _interactive_prompt() {
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
         read -t 0 -n 10000 </dev/tty 2>/dev/null
         if [ "$_clock_stopped" ]; then
-            printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd]: ")"
+            printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd] [!!cmd-on-disN]: ")"
             read -r ans </dev/tty
         else
-            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] (24h timeout): ")"
+            printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] [!!cmd-on-disN] (24h timeout): ")"
             if ! read -t 86400 -r ans </dev/tty; then
                 rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_red "No input for 24 hours -- auto-aborting suite")"
@@ -915,17 +909,31 @@ _interactive_prompt() {
                 e2e_cleanup_mirrors
                 exit 1
                 ;;
+            "!!"*)
+                local user_cmd="${ans#!!}"
+                if [ -z "${INTERNAL_BASTION:-}" ]; then
+                    echo "INTERNAL_BASTION not set -- cannot run on disN"
+                else
+                    _e2e_log "User entered command (disN=$INTERNAL_BASTION): $user_cmd"
+                    echo "Running on disN ($INTERNAL_BASTION): $user_cmd"
+                    ssh -o LogLevel=ERROR -o ConnectTimeout=30 "$INTERNAL_BASTION" -- ". \$HOME/.bash_profile 2>/dev/null; $user_cmd" \
+                        2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+                    local new_rc=${PIPESTATUS[0]}
+                    _e2e_log "User command (disN) exited $new_rc"
+                    [ $new_rc -ne 0 ] && echo "Command failed with exit code $new_rc"
+                fi
+                ;;
             !*)
                 local user_cmd="${ans#!}"
-                _e2e_log "User entered command: $user_cmd"
-                echo "Running: $user_cmd"
+                _e2e_log "User entered command (conN): $user_cmd"
+                echo "Running on conN: $user_cmd"
                 ( trap - INT; eval "$user_cmd" ) 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                 local new_rc=${PIPESTATUS[0]}
                 _e2e_log "User command exited $new_rc"
                 [ $new_rc -ne 0 ] && echo "Command failed with exit code $new_rc"
                 ;;
             *)
-                echo "Unknown option '$ans'. Prefix with ! to run a command (e.g. !ls -la)"
+                echo "Unknown option '$ans'. Prefix with ! for conN, !! for disN (e.g. !ls -la  !!podman ps)"
                 ;;
         esac
     done
@@ -1020,8 +1028,8 @@ e2e_run() {
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_magenta "$description") $(_e2e_magenta "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Magenta "$description") $(_e2e_Magenta "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_green "[$_display_host:$PWD]")"
+        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Green "[$_display_host:$PWD]")"
     else
         _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
         _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"
@@ -1047,18 +1055,18 @@ e2e_run() {
             if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
-                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
                         2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             else
                 _e2e_log "  Running locally (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ( trap - INT; eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
+                    ( trap - INT; set -e; eval "$cmd" ) < /dev/null >> "$_lf" 2>&1 || ret=$?
                 else
-                    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
+                    ( trap - INT; set -e; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             fi
 
@@ -1403,7 +1411,7 @@ e2e_run_must_fail() {
     _e2e_summary "  $(_e2e_Dim "$cmd")"
 
     local ret=0
-    ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
+    ( trap - INT; set -e; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
         _e2e_log "  OK: command failed as expected ($(_e2e_exit_info $ret))"
@@ -1778,20 +1786,19 @@ _e2e_fix_ssh_config_ownership() {
 }
 
 # --- ABA Install Helper -----------------------------------------------------
-# Symlink-safe ABA install: removes ~/aba contents (preserving symlinks)
-# then installs via git clone or curl.
+# Reuse existing ~/aba code (from infra git clone or --dev tarball) and reset
+# state. The --curl variant tests the curl-based install path but ONLY when
+# not in --dev mode; in --dev mode ~/aba must never be wiped.
 # Usage: e2e_install_aba [--curl]
 
 e2e_install_aba() {
-	local mode="git"
-	[ "${1:-}" = "--curl" ] && mode="curl"
-
-	if [ "$mode" = "curl" ]; then
+	if [ "${1:-}" = "--curl" ] && [ -z "${E2E_DEV_MODE:-}" ]; then
 		e2e_run "Install ABA via curl" \
 			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
 	else
-		e2e_run "Install ABA from git" \
-			"cd ~ && rm -rf ~/aba/* ~/aba/.??* && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO ~/aba && cd ~/aba && ./install"
+		[ "${1:-}" = "--curl" ] && echo "  [dev-mode] Skipping curl wipe -- preserving ~/aba"
+		e2e_run "Refresh ABA install and reset" \
+			"cd ~/aba && ./install && aba reset -f"
 	fi
 	cd ~/aba
 }

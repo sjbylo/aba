@@ -68,6 +68,7 @@ clone_vm() {
 	local clone_name="$2"
 	local folder="${3:-${VC_FOLDER:-/Datacenter/vm/aba-e2e}}"
 	local snapshot="${4:-${VM_SNAPSHOT:-aba-test}}"
+	local power_on="${5:-yes}"
 
 	echo "  Cloning VM: $source_vm -> $clone_name (folder: $folder, snapshot: $snapshot) ..."
 
@@ -132,12 +133,14 @@ clone_vm() {
 			echo "  WARNING: disk resize failed (non-fatal)"
 	fi
 
-	echo "  Powering on clone '$clone_name' ..."
-	govc vm.power -on "$clone_name" || true
-
-	sleep "${VM_BOOT_DELAY:-8}"
-
-	echo "  Clone '$clone_name' is booting."
+	if [ "$power_on" = "no" ]; then
+		echo "  Clone '$clone_name' ready (power-on deferred)."
+	else
+		echo "  Powering on clone '$clone_name' ..."
+		govc vm.power -on "$clone_name" || true
+		sleep "${VM_BOOT_DELAY:-8}"
+		echo "  Clone '$clone_name' is booting."
+	fi
 }
 
 # Power off and destroy a cloned VM. Safe to call on non-existent VMs.
@@ -268,13 +271,20 @@ _vm_setup_ssh_keys() {
 		chmod 600 /home/${user}/.ssh/authorized_keys
 		chown -R ${user}:${user} /home/${user}/.ssh
 
-		[ -f /home/${user}/.ssh/config ] && [ ! -f /root/.ssh/config ] && cp /home/${user}/.ssh/config /root/.ssh/config
+		if [ ! -f /home/${user}/.ssh/config ]; then
+			printf '%s\n' 'StrictHostKeyChecking no' 'UserKnownHostsFile=/dev/null' 'ConnectTimeout=15' 'LogLevel=ERROR' > /home/${user}/.ssh/config
+			chmod 600 /home/${user}/.ssh/config
+			chown ${user}:${user} /home/${user}/.ssh/config
+		fi
+		[ ! -f /root/.ssh/config ] && cp /home/${user}/.ssh/config /root/.ssh/config
 
 		sed -i '/^ClientAliveInterval/d; /^ClientAliveCountMax/d' /etc/ssh/sshd_config
 		echo "ClientAliveInterval 60"  >> /etc/ssh/sshd_config
 		echo "ClientAliveCountMax 5"   >> /etc/ssh/sshd_config
+
+		sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 		systemctl restart sshd
-		echo "SSH setup complete."
+		echo "SSH setup complete (PermitRootLogin=prohibit-password)."
 	SSHEOF
 }
 
@@ -290,10 +300,39 @@ _vm_install_packages() {
 
 	echo "  [vm] Installing required packages on $host ..."
 
+	# Configure dnf + RHSM proxy (required for disN VMs behind a firewall)
+	local _proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
+	if [ -z "$_proxy_url" ] && [ -f "$HOME/.proxy-set.sh" ]; then
+		_proxy_url=$(grep -i '^export HTTPS_PROXY=' "$HOME/.proxy-set.sh" 2>/dev/null | head -1 | sed 's/.*=//;s/"//g')
+	fi
+	if [ -n "$_proxy_url" ]; then
+		local _proxy_host _proxy_port
+		_proxy_host=$(echo "$_proxy_url" | sed 's|https\?://||;s|:.*||')
+		_proxy_port=$(echo "$_proxy_url" | sed 's|.*:||;s|/.*||')
+		echo "  [vm] Configuring dnf + RHSM proxy (${_proxy_host}:${_proxy_port}) on $host ..."
+		_essh "${user}@${host}" -- "sudo subscription-manager config \
+			--server.proxy_hostname='${_proxy_host}' \
+			--server.proxy_port='${_proxy_port}'" || true
+		_essh "${user}@${host}" -- "grep -q '^proxy=' /etc/dnf/dnf.conf 2>/dev/null \
+			|| echo 'proxy=${_proxy_url}' | sudo tee -a /etc/dnf/dnf.conf >/dev/null" || true
+	fi
+
+	# Re-register if consumer identity is missing and credentials are available
+	if [ -n "${SUB_USERNAME:-}" ] && [ -n "${SUB_PASSWORD:-}" ]; then
+		local _su="$SUB_USERNAME" _sp="$SUB_PASSWORD"
+		cat <<-REGEOF | _essh "${user}@${host}" -- sudo bash
+			if ! subscription-manager identity &>/dev/null; then
+				echo "  [vm] Not registered -- registering as ${_su} ..."
+				subscription-manager register --username='${_su}' --password='${_sp}' 2>&1 || echo "  WARNING: registration failed"
+			else
+				subscription-manager refresh || true
+			fi
+		REGEOF
+	fi
+
 	cat <<-'PKGEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		# Refresh entitlement certs -- VMs restored from snapshot may have stale certs
-		subscription-manager refresh || true
+		subscription-manager refresh 2>/dev/null || true
 		dnf clean all
 
 		for attempt in 1 2 3; do
@@ -771,6 +810,7 @@ _vm_setup_dnsmasq() {
 
 	local pool_num="${clone_name#con}"
 	local upstream="${DNS_UPSTREAM:-10.0.1.8}"
+	local con_ip="${POOL_SUBNET:-10.0.2}.$((pool_num * 10))"
 
 	local domain
 	domain="${POOL_DOMAIN[$pool_num]:-p${pool_num}.example.com}"
@@ -818,10 +858,10 @@ DNSEOF
 
 	cat <<-SETUPEOF | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		# Remove listen-address, bind-interfaces, and interface= from the
-		# default config. RHEL 9 ships with bind-interfaces and interface=lo
-		# which conflict with bind-dynamic and restrict dnsmasq to loopback.
-		sed -i '/^listen-address/d; /^bind-interfaces/d; /^interface=/d' /etc/dnsmasq.conf
+		# Remove options that conflict with bind-dynamic from the default config.
+		# RHEL 9 ships with bind-interfaces and interface=lo; RHEL 10 ships with
+		# local-service=host (implies bind-interfaces in dnsmasq 2.90+).
+		sed -i '/^listen-address/d; /^bind-interfaces/d; /^interface=/d; /^local-service/d' /etc/dnsmasq.conf
 
 		cat > /etc/dnsmasq.d/e2e-pool.conf << 'CONFEOF'
 ${dnsmasq_conf}
@@ -837,9 +877,16 @@ dns=none
 NMEOF
 		systemctl reload NetworkManager
 
-		cat > /etc/resolv.conf << 'RESOLVEOF'
+		# Tell NM that ens192's DNS is conN's own IP (not DHCP-provided upstream).
+		# ABA's get_dns_servers() queries nmcli first, so this must be correct.
+		nmcli connection modify ens192 \
+		    ipv4.ignore-auto-dns yes \
+		    ipv4.dns "${con_ip}"
+		nmcli connection up ens192
+
+		cat > /etc/resolv.conf << RESOLVEOF
 search example.com
-nameserver 127.0.0.1
+nameserver ${con_ip}
 RESOLVEOF
 
 		systemctl enable dnsmasq
@@ -847,6 +894,14 @@ RESOLVEOF
 
 		firewall-cmd --permanent --add-service=dns
 		firewall-cmd --reload
+
+		# Restart dnsmasq when the VLAN interface comes up so the UDP
+		# socket binds to the correct address (bind-dynamic race fix).
+		cat > /etc/NetworkManager/dispatcher.d/99-dnsmasq-rebind <<-'DISPEOF'
+			#!/bin/bash
+			[ "\$2" = "up" ] && [[ "\$1" == ens224* ]] && systemctl restart dnsmasq
+		DISPEOF
+		chmod 755 /etc/NetworkManager/dispatcher.d/99-dnsmasq-rebind
 
 		echo "=== dnsmasq configured for pool ${pool_num} ==="
 		dnsmasq --test
@@ -990,6 +1045,50 @@ _vm_authorize_root_on_kvm_host() {
 	fi
 }
 
+# --- _vm_deploy_pull_secret -------------------------------------------------
+# Copies bastion's pull-secret to both the default user and root on the VM.
+
+_vm_deploy_pull_secret() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	local ps="$HOME/.pull-secret.json"
+	if [ -f "$ps" ]; then
+		echo "  [vm] Deploying pull-secret on $host ..."
+		_escp "$ps" "${user}@${host}:~/.pull-secret.json"
+		_essh "${user}@${host}" -- "chmod 600 ~/.pull-secret.json"
+		_escp "$ps" "${user}@${host}:/tmp/.pull-secret-root.json"
+		_essh "${user}@${host}" -- "sudo cp /tmp/.pull-secret-root.json /root/.pull-secret.json && sudo chmod 600 /root/.pull-secret.json && sudo chown root:root /root/.pull-secret.json && rm -f /tmp/.pull-secret-root.json"
+	else
+		echo "  [vm] WARNING: $ps not found on bastion -- pull-secret not deployed"
+	fi
+}
+
+# --- _vm_deploy_proxy_scripts -----------------------------------------------
+# Copies bastion's .proxy-set.sh and .proxy-unset.sh to both the default user
+# and root on the VM.  Called on the golden VM so all clones inherit them.
+
+_vm_deploy_proxy_scripts() {
+	local host="$1"
+	local user="${2:-$VM_DEFAULT_USER}"
+
+	local ps="$HOME/.proxy-set.sh"
+	local pu="$HOME/.proxy-unset.sh"
+	if [ -f "$ps" ] && [ -f "$pu" ]; then
+		echo "  [vm] Deploying proxy scripts on $host ..."
+		_escp "$ps" "${user}@${host}:~/.proxy-set.sh"
+		_escp "$pu" "${user}@${host}:~/.proxy-unset.sh"
+		_essh "${user}@${host}" -- "chmod 600 ~/.proxy-set.sh ~/.proxy-unset.sh"
+		_essh "${user}@${host}" -- "sudo bash -c '
+			cp /home/${user}/.proxy-set.sh /root/.proxy-set.sh
+			cp /home/${user}/.proxy-unset.sh /root/.proxy-unset.sh
+			chmod 600 /root/.proxy-set.sh /root/.proxy-unset.sh
+		'"
+	else
+		echo "  [vm] WARNING: proxy scripts not found on bastion -- not deployed"
+	fi
+}
+
 # --- _vm_remove_pull_secret -------------------------------------------------
 
 _vm_remove_pull_secret() {
@@ -1081,22 +1180,24 @@ _vm_fix_mtu() {
 	echo "  [vm] Fixing MTU to 1500 on all NICs on $host ..."
 
 	cat <<-'MTUEOF' | _essh "${user}@${host}" -- sudo bash
-		set -e
-		for conn in $(nmcli -g NAME connection show); do
-			type=$(nmcli -g connection.type connection show "$conn" 2>/dev/null)
+		nmcli -g NAME connection show | while IFS= read -r conn; do
+			[ -z "$conn" ] && continue
+			type=$(nmcli -g connection.type connection show "$conn" 2>/dev/null) || continue
 			case "$type" in
 				802-3-ethernet|vlan)
-					cur=$(nmcli -g 802-3-ethernet.mtu connection show "$conn" 2>/dev/null)
+					cur=$(nmcli -g 802-3-ethernet.mtu connection show "$conn" 2>/dev/null) || true
 					if [ "$cur" != "1500" ]; then
-						nmcli connection modify "$conn" 802-3-ethernet.mtu 1500
+						nmcli connection modify "$conn" 802-3-ethernet.mtu 1500 2>/dev/null || true
 						echo "    $conn: MTU set to 1500 (was: ${cur:-auto})"
 					fi
 					;;
 			esac
 		done
-		# Apply immediately on active connections
-		for conn in $(nmcli -g NAME connection show --active); do
-			nmcli connection up "$conn" 2>/dev/null || true
+		# Apply MTU immediately without bouncing connections (would kill SSH)
+		nmcli -g DEVICE device status | while IFS= read -r dev; do
+			[ "$dev" = "lo" ] && continue
+			[ -z "$dev" ] && continue
+			ip link set "$dev" mtu 1500 2>/dev/null || true
 		done
 	MTUEOF
 }
@@ -1204,18 +1305,24 @@ _vm_create_test_user_and_key_on_host() {
 
 	# Cross-host keypairs: both conN and disN are cloned from this golden image,
 	# so both inherit the same keys for root@conN -> root@disN etc.
+	# Use the bastion's key so VMs can SSH back (e.g. notification relay).
+	if [ ! -f "$HOME/.ssh/id_rsa" ] || [ ! -f "$HOME/.ssh/id_rsa.pub" ]; then
+		echo "  [vm] FATAL: bastion SSH keypair missing (~/.ssh/id_rsa)" >&2
+		echo "  [vm] Generate one with: ssh-keygen -t rsa -f ~/.ssh/id_rsa" >&2
+		return 1
+	fi
+
+	echo "  [vm] Deploying bastion SSH keypair to $host ..."
+	_escp "$HOME/.ssh/id_rsa" "${def_user}@${host}:~/.ssh/id_rsa"
+	_escp "$HOME/.ssh/id_rsa.pub" "${def_user}@${host}:~/.ssh/id_rsa.pub"
+	_essh "${def_user}@${host}" -- "chmod 600 ~/.ssh/id_rsa"
+
 	echo "  [vm] Setting up cross-host SSH keys for root and $def_user ..."
 
 	cat <<-CROSSEOF | _essh "${def_user}@${host}" -- sudo bash
 		set -ex
 
-		# Ensure the default user has a keypair
-		if [ ! -f /home/${def_user}/.ssh/id_rsa ]; then
-			su - ${def_user} -c "ssh-keygen -t rsa -f ~/.ssh/id_rsa -N '' -C '${def_user}@golden'"
-		fi
-
-		# Root shares the SAME keypair as the default user (per SPEC:
-		# "all users share the same SSH key from the VMware template").
+		# Root shares the SAME keypair as the default user
 		cp /home/${def_user}/.ssh/id_rsa /root/.ssh/id_rsa
 		cp /home/${def_user}/.ssh/id_rsa.pub /root/.ssh/id_rsa.pub
 		chmod 600 /root/.ssh/id_rsa
@@ -1369,6 +1476,10 @@ _vm_verify_golden() {
 		[ -z "$(ls ~$SUDO_USER)" ] || { echo "ERROR: stale files in ~$SUDO_USER"; exit 1; }
 		id testy
 		grep "ABA_TESTING=1" /etc/environment
+		test -f /etc/systemd/system/expand-root.service || { echo "ERROR: expand-root.service missing"; exit 1; }
+		test -f /usr/local/bin/expand-root.sh || { echo "ERROR: expand-root.sh script missing"; exit 1; }
+		grep -q 'proxy_hostname *=.*[0-9]' /etc/rhsm/rhsm.conf || { echo "ERROR: RHSM proxy not configured"; exit 1; }
+		grep -q '^proxy=.*[0-9]' /etc/dnf/dnf.conf || { echo "ERROR: dnf proxy not configured"; exit 1; }
 
 		echo "All golden VM checks passed."
 	VERIFYEOF

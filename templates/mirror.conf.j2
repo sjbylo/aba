@@ -12,7 +12,7 @@ reg_host=registry.{{ domain }}		# FQDN of the registry host (no IP address). Can
 reg_port=8443				# Port of the existing or target mirror registry.
 					# Quay registry appliance always uses 8443.
 
-reg_path=/ocp4/openshift4		# Path where mirrored images are stored,
+reg_path=/ocp{{ ocp_major }}/openshift{{ ocp_major }}		# Path where mirrored images are stored,
 					# e.g. https://registry.example.com:8443/ocp4/openshift4/...
 
 reg_user=init				# Username for the registry. 
@@ -43,3 +43,9 @@ data_dir=				# Optional: Absolute path to storage for images and temporary files
 
 #op_sets=				# Override aba.conf op_sets for this mirror only (e.g. op_sets=acm,odf)
 #ops=					# Override aba.conf ops for this mirror only (e.g. ops=web-terminal)
+
+#ocp_version_target=			# Target OCP version for upgrade mirroring (e.g. 4.19.28).
+					# Set via 'aba -d mirror --target-version <version>' or manually.
+					# When set, 'aba imagesetconf' generates a single-channel ISC with
+					# shortestPath from aba.conf:ocp_version to this target version.
+					# Leave commented out for normal (non-upgrade) mirroring.

@@ -20,6 +20,7 @@ CLI_RECREATE_VMS=""
 CLI_YES=""
 CLI_QUIET=""
 CLI_CLEAN=""
+CLI_NO_CLEAN=""
 CLI_DRY_RUN=""
 CLI_FORCE=""
 CLI_RESUME=""
@@ -53,13 +54,14 @@ _usage() {
 	  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
 	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
-	  run.sh stop [-p 2,3] [-c]               Kill runners (-c: delete clusters/mirrors)
+	  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
 	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
 	  run.sh list                              List available suites (dummy suites shown separately)
-	  run.sh destroy [-p all] [-c]             Destroy pool VMs (-c: delete clusters first)
+	  run.sh destroy [-p all] [--no-clean]     Destroy pool VMs (cleans clusters/mirrors by default)
 	  run.sh attach conN                       Attach to runner tmux session on conN
+	  run.sh logs                              Tail the daemon log
 	  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
 	  run.sh dash [-p all] [log]               Read-only summary dashboard
 
@@ -73,7 +75,8 @@ _usage() {
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
 	  -n, --dry-run          Show dispatch plan, don't execute
-	  -c, --clean            Delete clusters/mirrors before stopping/destroying
+	  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
+	  --no-clean             Skip cluster/mirror cleanup on stop/destroy
 	  -V, --revert           Revert pool VMs to pool-ready snapshot before running
 	  -G, --recreate-golden  Force rebuild golden VM from template
 	  -R, --recreate-vms     Force reclone conN/disN from golden (scoped to -p)
@@ -191,7 +194,7 @@ _parse_args() {
 	# Step 1: Detect subcommand (first non-flag argument)
 	if [ $# -gt 0 ]; then
 		case "$1" in
-			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash)
+			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs)
 				CLI_COMMAND="$1"; shift ;;
 		esac
 	fi
@@ -222,6 +225,7 @@ _parse_args() {
 			-y|--yes)               CLI_YES=1; shift ;;
 			-q|--quiet)             CLI_QUIET=1; CLI_YES=1; shift ;;
 			-c|--clean)             CLI_CLEAN=1; shift ;;
+			--no-clean)             CLI_NO_CLEAN=1; shift ;;
 			-n|--dry-run)           CLI_DRY_RUN=1; shift ;;
 			-F|--fresh|-f|--force)  CLI_FORCE=1; shift ;;
 			-d|--dev)               CLI_DEV=1; shift ;;
@@ -256,14 +260,21 @@ _parse_args() {
 			_usage; exit 1 ;;
 	esac
 
-	# Step 6: For "run" and "reschedule", default to --all when no suite selector
+	# Step 6: For "stop" and "destroy", default --clean unless --no-clean
+	if [ "$CLI_COMMAND" = "stop" ] || [ "$CLI_COMMAND" = "destroy" ]; then
+		if [ -z "$CLI_NO_CLEAN" ]; then
+			CLI_CLEAN=1
+		fi
+	fi
+
+	# Step 7: For "run" and "reschedule", default to --all when no suite selector
 	if [ "$CLI_COMMAND" = "run" ] || [ "$CLI_COMMAND" = "reschedule" ]; then
 		if [ -z "$CLI_ALL" ] && [ -z "$CLI_SUITE" ] && [ -z "$CLI_RESUME" ]; then
 			CLI_ALL=1
 		fi
 	fi
 
-	# Step 7: Resolve pool list from -p/--pools spec
+	# Step 8: Resolve pool list from -p/--pools spec
 	_resolve_pools "$pools_file"
 }
 
@@ -310,7 +321,7 @@ _resolve_pools() {
 # Readonly commands inherit state from last run.
 _is_readonly_cmd() {
 	case "${CLI_COMMAND:-}" in
-		status|live|dash|stop|attach|verify|start|deploy|reschedule) return 0 ;;
+		status|live|dash|stop|attach|verify|start|deploy|reschedule|logs) return 0 ;;
 		*) return 1 ;;
 	esac
 }
@@ -351,7 +362,7 @@ _generate_deploy_config() {
 	local deploy_file="${run_dir}/.config.env.deploy"
 
 	case "${CLI_COMMAND:-}" in
-		run|deploy|restart|reschedule) ;;
+		run|daemon|deploy|restart|reschedule) ;;
 		*) return 0 ;;
 	esac
 
@@ -361,6 +372,8 @@ _generate_deploy_config() {
 		printf 'E2E_GIT_BRANCH=%s\n' "$E2E_GIT_BRANCH"
 		printf 'E2E_GIT_REPO=%s\n' "$E2E_GIT_REPO"
 		printf 'E2E_GIT_REPO_SLUG=%s\n' "$E2E_GIT_REPO_SLUG"
+
+		[ -n "$CLI_DEV" ] && printf 'E2E_DEV_MODE=1\n'
 
 		local _cli_flags=""
 		if [ -n "$CLI_OS" ]; then

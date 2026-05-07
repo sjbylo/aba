@@ -62,7 +62,7 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
+    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
         tput sgr0
@@ -147,14 +147,9 @@ _aba_debug_last=
 aba_debug() {
     local newline=1
 
-    [ ! "${DEBUG_ABA:-}" ] && return 0
-
     # Suppress consecutive duplicate messages (e.g. polling loops)
     [ "$*" = "$_aba_debug_last" ] && return 0
     _aba_debug_last="$*"
-
-    # Erase to col1 and return
-    [ "$TERM" ] && { tput el1 && tput cr; } >&2
 
     # Detect and consume "-n" if it's the first argument
     if [[ "$1" == "-n" ]]; then
@@ -165,10 +160,22 @@ aba_debug() {
     local timestamp
     timestamp="$(date +%H:%M:%S)"
 
-    if (( newline )); then
-        echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
-    else
-        echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
+    if [ "${DEBUG_ABA:-}" ]; then
+        # Debug mode: write to terminal (stderr). The exec tee in aba.sh
+        # will also capture this into the trace file -- no direct write needed.
+        [ "$TERM" ] && { tput el1 && tput cr; } >&2
+        if (( newline )); then
+            echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
+        else
+            echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
+        fi
+    elif [ -n "${ABA_TRACE_FILE:-}" ] && [ -w "${ABA_TRACE_FILE:-}" ]; then
+        # Non-debug mode: write directly to trace file only (not visible on terminal)
+        if (( newline )); then
+            echo "[ABA_DEBUG] ${timestamp}: $*" >> "$ABA_TRACE_FILE"
+        else
+            echo -n "[ABA_DEBUG] ${timestamp}: $*" >> "$ABA_TRACE_FILE"
+        fi
     fi
 }
 
@@ -341,6 +348,10 @@ normalize-aba-conf() {
 
 	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
+
+	# Derived variable: OCP major version number (e.g. "4" from "4.21.10", "5" from "5.0.3").
+	# Used for CDN paths (openshift-v4/, openshift-v5/), art-dev repos, registry paths, etc.
+	echo 'export ocp_major=${ocp_version%%.*}'
 }
 
 warn_if_cluster_unstable() {
@@ -754,7 +765,7 @@ install_rpms() {
 			aba_warning \
 				"an error occurred during rpm installation. See the logs at .dnf-install.log." \
 				"If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" 
-			aba_info $rpms_to_install
+			aba_info $rpms_to_install >&2
 
 			return 1
 		fi
@@ -808,7 +819,11 @@ edit_file() {
 			return 1
 		else
 			ask "$msg" || return 1
-			$editor $conf_file
+			if [ -n "${ABA_TTY_FD:-}" ]; then
+				$editor $conf_file >&${ABA_TTY_FD} 2>&1
+			else
+				$editor $conf_file
+			fi
 		fi
 	else
 		echo_yellow "'$conf_file' has been created for you (skipping edit since ask=false in aba.conf)."
@@ -891,7 +906,7 @@ aba_wait_show() (
 	trap - ERR
 
 	use_tty=0
-	[ -t 1 ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
+	[ -t "${ABA_TTY_FD:-1}" ] && [ -z "${PLAIN_OUTPUT:-}" ] && use_tty=1
 
 	# Check command output goes to a debug log (not /dev/null) so failures
 	# are diagnosable.  Truncated on each aba_wait_show invocation.
@@ -1028,7 +1043,8 @@ files_on_same_device() {
 }
 
 
-# Cincinnati API endpoint
+# Cincinnati API endpoint -- same URL for OCP 4.x and 5.x (confirmed Apr 2026).
+# Channel names follow the pattern: stable-X.Y, fast-X.Y, candidate-X.Y
 ABA_GRAPH_API="https://api.openshift.com/api/upgrades_info/v1/graph"
 
 # Architecture: default is amd64
@@ -1133,7 +1149,8 @@ _is_prerelease() {
 ############################################
 fetch_latest_minor_version() {
 	local channel="${1:-stable}"
-	local url="https://mirror.openshift.com/pub/openshift-v4/${ARCH}/clients/ocp/${channel}/release.txt"
+	# CDN uses per-major layout: openshift-v4/, openshift-v5/, etc.
+	local url="https://mirror.openshift.com/pub/openshift-v${ocp_major:-4}/${ARCH}/clients/ocp/${channel}/release.txt"
 	local cache_file="${ABA_CACHE_DIR}/release_${channel}_${ARCH}.txt"
 	local latest_ver minor prev
 
@@ -1345,27 +1362,29 @@ replace-value-conf() {
 		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
 		# ... change nothing!
 		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
-			#if [ ! "$quiet" ]; then
-				#[ "$value" ] && aba_info_ok "Value ${name}=${value} already exists in file $f" >&2 || aba_info_ok "Value ${name} is already undefined in file $f" >&2
 			[ "$value" ] && aba_debug "Value ${name}=${value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
-			# Only need to send to debug output 
-			#fi
-
-			return 0
-		else
-			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
-
-			if [ ! "$quiet" ]; then
-				[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
-			else
-				[ "$value" ] && aba_debug "Added value ${name}=${value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
-			fi
 
 			return 0
 		fi
+
+		# Key must exist in file (active or commented out) for sed to work
+		if ! grep -q -E "^[# ]*${name}=" $f; then
+			aba_debug "Key [$name] not found in file $f — skipping" >&2
+			continue
+		fi
+
+		sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+
+		if [ ! "$quiet" ]; then
+			[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+		else
+			[ "$value" ] && aba_debug "Added value ${name}=${value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
+		fi
+
+		return 0
 	done
 
-	return 1 # Files do not exist!
+	return 1 # Key not found in any file (or files do not exist)
 }
 
 output_table() {
@@ -1806,15 +1825,28 @@ run_once() {
 
 	# --- GLOBAL FAILED-ONLY CLEAN ---
 	if [[ "$global_failed_clean" == true ]]; then
-		local d id exitf rc
+		local d id exitf lockf rc
 		shopt -s nullglob
 		for d in "$WORK_DIR"/*/; do
 			id="$(basename "$d")"
 			exitf="$d/exit"
+			lockf="$d/lock"
 			if [[ -f "$exitf" ]]; then
-			rc="$(cat "$exitf" 2>/dev/null || echo 1)"
-			if [[ "$rc" -ne 0 ]]; then
-				_kill_id "$id"
+				rc="$(cat "$exitf" 2>/dev/null || echo 1)"
+				if [[ "$rc" -ne 0 ]]; then
+					aba_debug "Cleaning failed task: $id (exit code: $rc)"
+					_kill_id "$id"
+				fi
+			elif [[ -e "$d" ]]; then
+				# Zombie task: directory exists but no exit file.
+				# Caused by SIGKILL, OOM, or machine crash killing the
+				# subshell before it could write the exit file.
+				# Only clean if the lock is free (process is definitely dead).
+				if ( exec 9>>"$lockf" && flock -n 9 ); then
+					aba_debug "Cleaning zombie task: $id (no exit file, lock free)"
+					_kill_id "$id"
+				else
+					aba_debug "Skipping task: $id (no exit file, lock held — still running)"
 				fi
 			fi
 		done
@@ -1940,12 +1972,15 @@ run_once() {
 		(
 			# Keep FD 9 open in this subshell so lock remains held until it exits.
 			# Use setsid to create a new session/process group (PGID==PID we capture).
+			# Disable set -e: callers may have it on, and we must always write the
+			# exit file even when the command fails (wait returns non-zero).
+			set +e
 			local rc=0
 
 			if [[ "$is_fg" == "true" ]]; then
 				# Foreground-ish: stream + log
 				# Capture stderr separately, combined to stdout for display
-				setsid "${command[@]}" 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
+				setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >&2) | tee -a "$log_out_file"
 				rc="${PIPESTATUS[0]}"
 				echo "$rc" >"$exit_file"
 				_log_history "COMPLETE rc=$rc"
@@ -1956,7 +1991,10 @@ run_once() {
 			# Close inherited stdout/stderr first so this background subshell
 			# doesn't hold a parent pipeline (e.g. `cmd | tee`) open.
 			exec >/dev/null 2>&1
-			setsid "${command[@]}" 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
+			# 9>&- closes the lock FD in the child so only this subshell holds
+			# the lock. If this subshell is killed, the lock releases immediately
+			# instead of being held by the orphaned child until it finishes.
+			setsid "${command[@]}" 9>&- 2> >(tee -a "$log_err_file" >> "$log_out_file") >> "$log_out_file" &
 			echo $! >"$pid_file"
 		chmod 644 "$pid_file"  # Make PID file readable so run_once -w can display it
 			wait $!
@@ -2126,6 +2164,15 @@ run_once() {
 			exec 9>&-
 			aba_debug "Task $work_id is currently running, skipping validation"
 		fi
+	fi
+
+	# Show error context and recovery guidance on failure
+	if [[ $exit_code -ne 0 && "$quiet_wait" != true ]]; then
+		if [[ -s "$log_err_file" ]]; then
+			tail -5 "$log_err_file" >&2
+		fi
+		echo_yellow "[ABA] If this problem persists, re-run './install' from the ABA directory to clear the task cache." >&2
+		aba_debug "Failed task ID: $work_id (exit code: $exit_code)"
 	fi
 
 	if [[ "$purge" == true ]]; then

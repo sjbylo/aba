@@ -287,7 +287,7 @@ _osus_check_graph_available() {
 	test "$http_code" -eq 200
 }
 
-if ! aba_wait_show "Checking graph endpoint" 10 900 _osus_check_graph_available; then
+if ! aba_wait_show "Checking graph endpoint (Ctrl-C to skip)" 10 900 _osus_check_graph_available; then
 	aba_abort "Timed out waiting for graph endpoint (15 min): ${POLICY_ENGINE_GRAPH_URI}?channel=$CH"
 fi
 aba_info_ok "Graph endpoint available"

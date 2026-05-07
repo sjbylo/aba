@@ -2,7 +2,7 @@
 
 Developer-facing blueprint for the ABA E2E test framework.
 This is the authoritative reference for architecture, responsibilities, and invariants.
-For the ABA core spec, see `dev/01-SPEC.md`.
+For the ABA core spec, see `devel/01-SPEC.md`.
 
 This spec describes the **implemented state** (v2). All phases are complete.
 Sections marked `[current]` describe what the code actually does today.
@@ -226,13 +226,12 @@ All callers of `_run_cleanup_on_host` (dispatcher, reclone, revert) must
 pass the pool-scoped allowed hosts. Calls without `allowed_hosts` still
 work (backward compat) but skip the guard -- avoid this in production paths.
 
-### Notification relay via bastion
+### Notifications
 
-Framework runs on conN which may be air-gapped (no internet). Notifications
-are relayed via SSH to `NOTIFY_RELAY_HOST` (bastion) which always has internet.
-The relay pattern, the `[e2e]` prefix, and the pool/hostname suffix all work
-well. First-failure notifications include the last 3 commands and 20 lines of
-output for context.
+`notify.sh` is deployed to conN via `sync_extras()` and calls the Telegram API
+directly (conN has internet access). The `[e2e]` prefix and pool/hostname suffix
+make messages easy to filter. First-failure notifications include the last 3
+commands and 20 lines of output for context.
 
 ### Log file structure
 
@@ -952,6 +951,24 @@ All these `scp` operations are consolidated into `sync_harness()` and
 - SSH keys -- from `golden-ready` snapshot
 - Exception: `--dev` mode overwrites `~/aba` with a tarball from bastion
 
+### `--dev` mode invariant: `~/aba` must never be wiped
+
+When `--dev` is active, the developer's source from bastion is deployed to
+`~/aba` on each conN via `sync_source()`. This code **must survive the entire
+suite lifecycle** -- no operation may wipe or overwrite `~/aba`:
+
+- `e2e_install_aba` runs `./install && aba reset -f` **inside** `~/aba` (never
+  `rm -rf ~/aba` or `git clone`). Both commands preserve the file tree.
+- `e2e_install_aba --curl` normally wipes `~/aba` and re-clones from git. In
+  `--dev` mode (`E2E_DEV_MODE=1`), this is **skipped** and falls through to the
+  non-curl path (`./install && aba reset -f`), preserving the dev code.
+- `E2E_DEV_MODE=1` is propagated from the `--dev` CLI flag through
+  `_generate_deploy_config()` into `config.env`, making it available to all
+  suites and framework code on conN.
+- No suite, framework function, or runner step may `rm -rf ~/aba`, `git clone`
+  into `~/aba`, or otherwise replace the contents of `~/aba` when
+  `E2E_DEV_MODE=1` is set.
+
 ### Infra space vs user space
 
 The test framework enforces a strict separation between infrastructure-owned
@@ -976,16 +993,16 @@ depend on user-space binaries for its own operations.
 
 **Crash recovery** is the infra's responsibility: processing `.cleanup` /
 `.mirror-cleanup` files from crashed suites via `_pre_suite_cleanup` and
-`_cleanup_dis_aba`. These use `~/.e2e-harness/bin/aba` -- never
+`_cleanup_dis`. These use `~/.e2e-harness/bin/aba` -- never
 user-space `~/bin/aba`.
 
 **Normal cleanup** is the suite's responsibility. Each suite's final test
 block runs `aba delete` / `aba uninstall` (using the user-space `aba`).
-The infra's `_cleanup_dis_aba` is a belt-and-suspenders reset between
+The infra's `_cleanup_dis` is a belt-and-suspenders reset between
 suites, using the infra-owned binary.
 
 **Why this matters:** User-space `~/bin/aba` may not exist (the suite's
-own cleanup or `_cleanup_dis_aba` step 1 removes CLI tools). It may also
+own cleanup or `_cleanup_dis` step 1 removes CLI tools). It may also
 not be in PATH for non-interactive SSH sessions (`.bash_profile` is not
 sourced). The infra-owned copy at `~/.e2e-harness/bin/aba` is always
 available and referenced by absolute path.

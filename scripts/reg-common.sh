@@ -273,10 +273,10 @@ reg_open_firewall() {
 			$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
 			aba_info "firewalld not active on $reg_host, opened port $reg_port via iptables."
 		else
-			aba_warning "Could not auto-open firewall port $reg_port on $reg_host."
-			aba_warning "If the registry is unreachable, open the port manually on $reg_host, e.g.:"
-			aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
-			aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
+			aba_warning "Could not auto-open firewall port $reg_port on $reg_host." \
+				"If the registry is unreachable, open the port manually on $reg_host, e.g.:" \
+				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
+				"  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 		fi
 	else
 		# Local: run firewall commands directly
@@ -289,10 +289,10 @@ reg_open_firewall() {
 			$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
 			aba_info "firewalld not active, opened port $reg_port via iptables."
 		else
-			aba_warning "Could not auto-open firewall port $reg_port."
-			aba_warning "If the registry is unreachable, open the port manually, e.g.:"
-			aba_warning "  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept"
-			aba_warning "  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
+			aba_warning "Could not auto-open firewall port $reg_port." \
+				"If the registry is unreachable, open the port manually, e.g.:" \
+				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
+				"  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
 		fi
 	fi
 }

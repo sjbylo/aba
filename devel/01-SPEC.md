@@ -2,10 +2,10 @@
 
 Developer-facing blueprint for ABA.
 This is the authoritative reference for architecture, data flow, and invariants.
-For user-facing docs, see README.md. For the change process, see dev/02-WORKFLOW.md.
+For user-facing docs, see README.md. For the change process, see devel/02-WORKFLOW.md.
 
 This spec is intentionally concise (~200 lines). It is the map, not the territory.
-Detailed "why" lives in ADRs (`dev/adr/`). Per-script detail lives in script
+Detailed "why" lives in ADRs (`devel/adr/`). Per-script detail lives in script
 header contracts. If this file grows past ~300 lines, something belongs in one
 of those two places instead.
 
@@ -42,8 +42,8 @@ flowchart TD
 Most commands go through Make (`aba sync` -> `make -s sync` in the mirror dir).
 A few bypass Make and call scripts directly: `bundle`, `ssh`, `run`, `info`,
 `login`, `shell`, `day2`, `day2-ntp`, `day2-osus`, `shutdown`, `startup`,
-`rescue`, and VM lifecycle commands (`create`, `ls`, `start`, `stop`, `kill`,
-`delete`, `refresh`, `upload`).
+`rescue`, `upgrade`, and VM lifecycle commands (`create`, `ls`, `start`, `stop`,
+`kill`, `delete`, `refresh`, `upload`).
 
 ---
 
@@ -89,6 +89,35 @@ cluster install flow -- fresh installs are configured correctly at install time.
 **Invariant**: After every `mirror load` or `mirror sync` on a cluster that is
 already running, run `aba day2`.
 
+### Cluster upgrade (disconnected)
+
+`aba upgrade` upgrades an already-installed cluster to a target OCP version
+using images from the local mirror registry. The workflow:
+
+1. **Connected side**: `aba --target-version <ver>` writes `ocp_version_target`
+   to `mirror.conf`. `aba imagesetconf` generates a single-channel ISC with
+   `shortestPath: true` spanning `ocp_version` → `ocp_version_target`.
+   `aba save` pulls the upgrade images.
+2. **Transfer**: Archive + ISC transferred to disconnected side.
+3. **Disconnected side**: `aba load` pushes upgrade images into the mirror.
+   `aba upgrade --to <ver>` resolves the release digest from the local mirror,
+   auto-runs `day2` if IDMS is missing, and triggers `oc adm upgrade --to-image`.
+
+**Invariants**:
+- Current cluster version is always queried live (`oc get clusterversion`),
+  never cached.
+- Target must be strictly higher than current version.
+- Release image must exist in the local mirror (verified via `skopeo inspect`).
+- The `--force` flag is passed through to `oc adm upgrade` when specified.
+
+### Bundle content rules
+
+`backup.sh` controls what goes into bundles (`aba tar`, `aba bundle`).
+`mirror.conf` is excluded from bundles -- each side (connected/disconnected)
+maintains its own `mirror.conf` with site-specific registry settings
+(`reg_host`, `reg_port`, credentials). Transferring the connected side's
+`mirror.conf` would overwrite the disconnected side's registry configuration.
+
 ---
 
 ## Config as Single Source of Truth
@@ -99,7 +128,7 @@ FROM config.
 | File | Scope | Key values |
 |------|-------|------------|
 | `aba.conf` | Global | `ocp_version`, `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
-| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user` |
+| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_version_target` (upgrade) |
 | `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
 
 **Read the config variable, not the file existence.** Config files created by ABA
@@ -194,10 +223,18 @@ Task deduplication and coordination. State in `~/.aba/runner/<id>/`.
   large catalog index downloads that kick off early and are waited on later.
 - **Cached results**: Exit code and stderr are preserved; `run_once -e` retrieves
   errors. Failed tasks cleaned globally on each `aba` start via `run_once -F`.
+- **Failed-task cleanup**: `run_once -F` (called at every `aba` start) removes
+  tasks with non-zero exit codes. Also cleans zombie tasks: directories with no
+  exit file and no running process (caused by SIGKILL, OOM, or machine crash).
+- **Error guidance**: When `run_once -w` returns a non-zero exit code (and not
+  in quiet mode), it shows the last lines of stderr and a recovery hint:
+  "If this problem persists, re-run './install' from the ABA directory to clear the task cache."
 - **Not a replacement for Make**: Make tracks file dependencies; `run_once` tracks
   non-file task completion. They are complementary.
 - **Cleanup**: `run_once -r <id>` removes state for one task. `aba reset` wipes
   all runner state. No automatic cleanup on Ctrl-C.
+- **Testing**: `test/func/test-run-once-failed-cleanup.sh` covers failed-task
+  cleanup, zombie cleanup, error messaging, and quiet-mode suppression.
 
 ### normalize*()
 
@@ -255,6 +292,14 @@ remove these -- only Makefiles may.
 | `cli/Makefile` | `cli/` | CLI tool downloads and installation |
 | `rpms/Makefile` | `rpms/` | RPM tarball download/install |
 | `bundles/v2/Makefile` | `bundles/v2/` | Curated bundle creation pipeline |
+
+### Download safety
+
+All Makefiles that download files via `curl` use `.DELETE_ON_ERROR` to ensure
+partial/corrupt files are removed when a recipe fails. Without this, Make
+considers a partial file "up to date" on the next run and silently skips the
+re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
+`test/Makefile`.
 
 ---
 
