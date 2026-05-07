@@ -597,7 +597,7 @@ elif [ "$1" = "--light" ]; then
 		done
 		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
 		shift 
-	elif [ "$1" = "--gateway-ip" -o "$1" = "-g" ]; then
+	elif [ "$1" = "--gateway-ip" -o "$1" = "--gateway" -o "$1" = "-g" ]; then
 		# If arg missing remove from aba.conf
 		shift 
 		gw_ip=
