@@ -1,13 +1,12 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.1...HEAD)
 
-New `aba upgrade` command, trace logging, improved error recovery, and OCP 5 readiness.
+New `aba upgrade` command, trace logging, improved error recovery, and future OCP readiness.
 
 ### New Features
 
 - `**aba upgrade` command** — Upgrade air-gapped OpenShift clusters via the local mirror registry. Idempotent (exit 0 when already at target), OSUS-aware (uses `oc adm upgrade --to` when a local update graph is detected), resumes monitoring if an upgrade is already in progress. Enriched `--dry-run` queries the mirror registry for available versions higher than current. Flags: `--to <version>`, `--skip-day2`, `--force`, `--dry-run`.
 - `**aba show-op-sets` command** — List all available operator sets with their descriptions (parsed from `templates/operator-set-*`). Also available as `aba op-sets`.
 - **Trace logging** — Every `aba` invocation captures full stdout+stderr to `~/.aba/logs/trace.log` for post-mortem debugging. Last 5 invocations are rotated (`trace.log.0` through `trace.log.4`).
-- **OCP 5 CDN path support** — Derive `ocp_major` from `ocp_version` and use it for CDN download URLs, registry paths, and CLI Makefile targets. Hardcoded `openshift-v4/` paths replaced with parameterized `openshift-v${ocp_major}/` across scripts, templates, and Makefiles.
 
 ### Bug Fixes
 

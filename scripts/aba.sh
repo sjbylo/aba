@@ -20,7 +20,7 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.0.1
+ABA_VERSION=20260507183237
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
 ABA_BUILD=20260502223622
