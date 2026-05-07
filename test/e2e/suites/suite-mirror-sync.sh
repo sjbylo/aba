@@ -242,7 +242,7 @@ e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
@@ -290,7 +290,7 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
@@ -364,7 +364,7 @@ test_end
 test_begin "Cleanup: delete clusters and uninstall mirrors"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 # $STANDARD was created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \

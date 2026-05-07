@@ -138,7 +138,7 @@ test_end
 test_begin "Compact: multi-node VM creation and agent bootstrap"
 
 e2e_run "Delete any leftover $COMPACT cluster" \
-    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete --force; fi"
+    "_e2e_delete_leftover_cluster $COMPACT"
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
 
 e2e_run "Create compact cluster.conf" \
@@ -181,7 +181,7 @@ test_end
 test_begin "SNO: install cluster on VMware"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
 e2e_run -r 2 10 "Create VMs and start install" \
@@ -294,10 +294,10 @@ test_end
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes VMware VMs)" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 e2e_run "Delete compact cluster if leftover" \
-    "if [ -d $COMPACT ]; then aba -y --dir $COMPACT delete --force; else echo '[cleanup] $COMPACT already removed'; fi"
+    "_e2e_delete_leftover_cluster $COMPACT"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
 e2e_run "Unregister pool registry" \

@@ -183,7 +183,7 @@ for ctype in sno compact standard; do
     _extra_args=""
     [ "$ctype" = "standard" ] && _extra_args="-W 2"
     e2e_run "Delete any leftover $cname cluster" \
-        "if [ -d $cname ]; then aba -y --dir $cname delete --force; fi"
+        "_e2e_delete_leftover_cluster $cname"
     e2e_run "Create cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype -i $local_starting_ip $_extra_args --step cluster.conf"
     e2e_run "Fix mac_prefix for $cname" \
@@ -227,8 +227,8 @@ for ctype in sno compact standard; do
         "yaml_diff $cname/agent-config.yaml <(adapt_example_for_pool test/e2e/examples/$ctype/agent-config.yaml.example)"
 done
 
-# Clean up compact/standard dirs -- only needed for config validation, not cluster install
-e2e_run "Reset compact cluster dir" "aba --dir $COMPACT reset --force"
+# Clean up config-only dirs -- no VMs were created, safe to remove entirely
+e2e_run "Remove compact cluster dir" "rm -rf $COMPACT"
 e2e_run "Remove standard cluster dir" "rm -rf $STANDARD"
 
 test_end
@@ -239,13 +239,13 @@ test_end
 test_begin "SNO: install cluster"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 
 # Apply day2 (CatalogSources, IDMS/ITMS, trust CA)
@@ -370,7 +370,7 @@ e2e_run "Dry-run upgrade" \
 
 e2e_run -r 3 2 "Trigger and verify upgrade" "
     target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --skip-day2 --force || true
+    aba -d $SNO upgrade --to \$target --skip-day2 --force || true  # may exit non-zero if already at target; desired-version assertion validates outcome
     desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
     echo \"Desired version: \$desired  (target: \$target)\"
     [ \"\$desired\" = \"\$target\" ]
@@ -478,9 +478,9 @@ test_end
 test_begin "Cleanup: delete cluster and unregister mirror"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete --force; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_run "Delete enclave SNO if leftover" \
-    "if [ -d $ENCLAVE_SNO ]; then aba -y --dir $ENCLAVE_SNO delete --force; else echo '[cleanup] enclave SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $ENCLAVE_SNO"
 e2e_run "Unregister enclave mirror if leftover" \
     "if [ -d $ENCLAVE_MIRROR ]; then aba -d $ENCLAVE_MIRROR unregister && rm -rf $ENCLAVE_MIRROR; else echo '[cleanup] enclave mirror already removed'; fi"
 e2e_run "Unregister pool registry" \

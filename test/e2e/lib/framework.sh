@@ -288,9 +288,8 @@ _e2e_summary() {
 #   - Include pool number and hostname (never "localhost")
 #   - Failure notifications include last ~20 lines of suite log for context
 #
-# Framework runs on conN where internet may be down (air-gapped tests).
-# Notifications are relayed via SSH to NOTIFY_RELAY_HOST (bastion) which
-# always has internet access.
+# notify.sh is deployed to conN via sync_extras() and calls the Telegram API
+# directly (conN has internet access).
 
 _e2e_notify_suffix() {
     echo "(pool${POOL_NUM:-?}/$(hostname -s))"
@@ -299,27 +298,14 @@ _e2e_notify_suffix() {
 _e2e_notify() {
     [ -n "$NOTIFY_CMD" ] || return 0
     local _msg="[e2e] $* $(_e2e_notify_suffix)"
-    if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
-        # Relay: pass NOTIFY_CMD as-is — tilde expands on the remote host's shell
-        ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
-            "$NOTIFY_CMD '$_msg'" < /dev/null >/dev/null 2>&1 &
-    else
-        # Local: expand tilde manually (variable expansion doesn't trigger tilde expansion)
-        local _cmd="${NOTIFY_CMD/#\~/$HOME}"
-        $_cmd "$_msg" < /dev/null >/dev/null &
-    fi
+    $NOTIFY_CMD "$_msg" < /dev/null >/dev/null 2>&1 &
 }
 
 _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
         local _msg="[e2e] $subject $(_e2e_notify_suffix)"
-        if [ -n "${NOTIFY_RELAY_HOST:-}" ]; then
-            ssh -o ConnectTimeout=5 -o BatchMode=yes "$NOTIFY_RELAY_HOST" \
-                "$NOTIFY_CMD '$_msg'" >/dev/null 2>&1
-        else
-            $NOTIFY_CMD "$_msg" >/dev/null
-        fi
+        $NOTIFY_CMD "$_msg" >/dev/null 2>&1
     else
         cat > /dev/null  # drain stdin
     fi

@@ -233,7 +233,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
@@ -656,8 +656,7 @@ e2e_run_remote "Remove sno cluster dir" \
     "cd ~/aba && rm -rf $SNO"
 
 # Build standard cluster -- delete any leftover VMs before removing the dir
-e2e_run_remote "Delete any leftover $STANDARD cluster" \
-    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete --force; fi"
+_e2e_delete_leftover_cluster_remote "$STANDARD"
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \
