@@ -894,6 +894,7 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 #### Manual method
 
+
 1. Edit `aba/aba.conf` on the *connected workstation* to add operators/operator sets, then run `aba -d mirror save`.
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
 2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
