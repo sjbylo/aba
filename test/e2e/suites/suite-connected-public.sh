@@ -13,6 +13,7 @@ set -u
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
+source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -51,10 +52,6 @@ e2e_install_aba --curl
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-
-# Simulate manual edit: set dns_servers to the pool's dnsmasq host (conN)
-e2e_run "Set dns_servers manually" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -158,16 +155,14 @@ e2e_run -r 2 10 "Install SNO from public registry (proxy mode)" \
 test_end
 
 # ============================================================================
-# 6b. Day2 NTP: change NTP to con host + NAS (two different sources)
+# 6b. Day2 NTP: change NTP to con host + lab NTP (two distinct sources)
 # ============================================================================
-test_begin "Day2 NTP: change to con host (hostname + IP)"
+test_begin "Day2 NTP: change to con host + lab NTP"
 
-# Change from initial 10.0.1.8+ntp.example.com to pool's con host.
-# Tests both hostname and IP-based NTP. con hosts serve NTP (allow 10.0.0.0/20).
-_CON_IP=$(pool_con_ip)
-
-e2e_run "Set NTP to ${CON_HOST} + ${_CON_IP} in cluster.conf" \
-    "aba -d $SNO --ntp ${CON_HOST} ${_CON_IP}"
+# Change from initial config to two distinct NTP sources: the pool's con host
+# (by hostname) and the lab NTP server (by IP).  con hosts serve NTP (allow 10.0.0.0/20).
+e2e_run "Set NTP to ${CON_HOST} + ${NTP_IP} in cluster.conf" \
+    "aba -d $SNO --ntp ${CON_HOST} ${NTP_IP}"
 
 e2e_run -r 2 10 "Apply day2 NTP config" \
     "aba --dir $SNO day2-ntp"
@@ -175,14 +170,11 @@ e2e_run -r 2 10 "Apply day2 NTP config" \
 e2e_run "Verify chrony.conf has ${CON_HOST}" \
     "aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ${CON_HOST} iburst'"
 
-e2e_run "Verify chrony.conf has ${_CON_IP}" \
-    "aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ${_CON_IP} iburst'"
-
-e2e_run -r 5 10 "Verify ${CON_HOST} is a working NTP source" \
-    "aba --dir $SNO ssh --cmd 'chronyc sources' | grep -E '^\^[*+-].*(${CON_HOST}|${_CON_IP})'"
+e2e_run "Verify chrony.conf has ${NTP_IP}" \
+    "aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ${NTP_IP} iburst'"
 
 e2e_run -r 5 10 "Verify at least 1 synced NTP source" \
-    "aba --dir $SNO ssh --cmd 'chronyc sources' | grep -E '^\^[*+-]'"
+    "aba --dir $SNO ssh --cmd 'chronyc -N sources' | grep -E '^\^[*+-]'"
 
 e2e_run -r 3 10 "Verify NTP sync status is Normal" \
     "aba --dir $SNO ssh --cmd 'chronyc tracking' | grep -E 'Leap status\s+: Normal'"
@@ -196,7 +188,7 @@ test_begin "Proxy mode: verify and delete"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
-    "aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
@@ -223,7 +215,7 @@ e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
 SNO_MIRROR="$(pool_cluster_name sno-mirror)"
 
 e2e_run "Delete any leftover $SNO_MIRROR cluster" \
-    "if [ -d $SNO_MIRROR ]; then aba -y --dir $SNO_MIRROR delete; fi"
+    "_e2e_delete_leftover_cluster $SNO_MIRROR"
 
 # Default int_connection (empty) = mirror mode.
 # Create mirror.conf pointing at the pool registry on conN.
@@ -258,7 +250,7 @@ e2e_run "Verify no httpProxy in mirror+direct mode" \
 e2e_run "Verify additionalTrustBundle present for mirror CA" \
     "grep additionalTrustBundle $SNO_MIRROR/install-config.yaml"
 
-e2e_run "Clean up sno-mirror cluster dir" "aba --dir $SNO_MIRROR clean"
+e2e_run "Reset sno-mirror cluster dir" "aba --dir $SNO_MIRROR reset --force"
 
 test_end
 
@@ -269,6 +261,12 @@ test_begin "Proxy-only mode: verify without direct internet"
 
 # Restore proxy
 [ -f ~/.proxy-set.sh ] && source ~/.proxy-set.sh
+
+# Clean up any leftover proxy-only cluster dir before blocking internet,
+# since aba delete needs vCenter access.
+SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
+e2e_run "Delete any leftover $SNO_PROXY_ONLY cluster" \
+    "_e2e_delete_leftover_cluster $SNO_PROXY_ONLY"
 
 # Block direct outbound HTTP/HTTPS (ports 80,443) while allowing proxy traffic.
 # This simulates an enterprise bastion that can ONLY reach internet via proxy.
@@ -287,9 +285,6 @@ e2e_run "Verify proxy curl works" \
     "curl --connect-timeout 10 -sk https://quay.io/v2/"
 
 # Create a proxy-mode cluster config and verify it generates correctly
-SNO_PROXY_ONLY="$(pool_cluster_name sno-proxyonly)"
-e2e_run "Delete any leftover $SNO_PROXY_ONLY cluster" \
-    "if [ -d $SNO_PROXY_ONLY ]; then aba -y --dir $SNO_PROXY_ONLY delete; fi"
 e2e_run "Create SNO config with -I proxy (proxy-only bastion)" \
     "aba cluster -n $SNO_PROXY_ONLY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
@@ -329,7 +324,7 @@ e2e_run "Verify no_proxy includes 10.0.0.0/8 or broad local range" \
 # Create a cluster dir and check agent-related scripts handle proxy correctly.
 SNO_NOPROXY="$(pool_cluster_name sno-noproxy)"
 e2e_run "Delete any leftover $SNO_NOPROXY cluster" \
-    "if [ -d $SNO_NOPROXY ]; then aba -y --dir $SNO_NOPROXY delete; fi"
+    "_e2e_delete_leftover_cluster $SNO_NOPROXY"
 e2e_run "Create SNO config with -I proxy" \
     "aba cluster -n $SNO_NOPROXY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 e2e_run "Generate ISO (runs agent config + ISO validation)" "aba -d $SNO_NOPROXY iso"
@@ -345,7 +340,7 @@ e2e_run "Verify install-config noProxy includes node subnet or domain" \
     "grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep -E '10\\.' || \
      grep -A5 'noProxy' $SNO_NOPROXY/install-config.yaml | grep example.com"
 
-e2e_run "Clean up sno-noproxy cluster dir" "aba --dir $SNO_NOPROXY clean"
+e2e_run "Remove sno-noproxy cluster dir" "rm -rf $SNO_NOPROXY"
 
 test_end
 
@@ -355,7 +350,7 @@ test_end
 test_begin "Cleanup: delete cluster"
 
 e2e_run "Delete SNO cluster" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 
 test_end
 

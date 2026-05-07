@@ -4,7 +4,7 @@
 # INTENT:    Pull an operator catalog image from registry.redhat.io, extract its
 #            File-Based Catalog (FBC) metadata, and produce a sorted index of all
 #            operators with their default channels. Also captures the catalog image
-#            digest for runtime catalog pinning (see dev/01-SPEC.md "Catalog Digest
+#            digest for runtime catalog pinning (see devel/01-SPEC.md "Catalog Digest
 #            Pinning").
 # CALLED BY: download-catalogs-start.sh via run_once (never directly by user)
 # CWD:       ABA repo root (resolved from script location via symlink-safe pwd -P)
@@ -131,10 +131,10 @@ _sig_policy="$tmp_dir/policy.json"
 echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
 
 aba_info "Pulling operator catalog image: $catalog_url"
-if ! podman pull --signature-policy="$_sig_policy" -q "$catalog_url" >/dev/null 2>&1; then
+_pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || {
 	rm -rf "$tmp_dir"
-	aba_abort "Failed to pull catalog image: $catalog_url"
-fi
+	aba_abort "Failed to pull catalog image: $catalog_url" "$_pull_err"
+}
 
 # Capture manifest digest for runtime catalog pinning.
 # When oc-mirror sees a digest ref it skips upstream tag resolution -- critical for air-gap.
@@ -150,16 +150,16 @@ fi
 
 # Run container and extract /configs
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
-if ! podman run -q -d --name "$container_name" "$catalog_url" >/dev/null 2>&1; then
+_run_err=$(podman run -q -d --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
 	rm -rf "$tmp_dir"
-	aba_abort "Failed to start catalog container"
-fi
+	aba_abort "Failed to start catalog container" "$_run_err"
+}
 
-if ! podman cp "$container_name:/configs" "$tmp_dir/configs" 2>/dev/null; then
+_cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
 	podman rm -f "$container_name" >/dev/null 2>&1
 	rm -rf "$tmp_dir"
-	aba_abort "Failed to extract /configs from catalog container"
-fi
+	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
+}
 
 # Container no longer needed
 podman rm -f "$container_name" >/dev/null 2>&1
@@ -239,11 +239,19 @@ _extract_from_yaml() {
 	' "$yaml_file" 2>/dev/null)
 	[ -z "$pkg" ] || [ -z "$def_ch" ] && return 1
 
-	# Display name from CSV annotation in bundle documents
-	local display_name="-"
-	local dn
+	# Display name from CSV annotation in bundle documents.
+	# Search the given file first, then sibling YAML/JSON files in the same directory.
+	local display_name="" dn="" dir_path
+	dir_path="$(dirname "$yaml_file")"
 	dn=$(grep '^ *displayName:' "$yaml_file" 2>/dev/null | grep -v 'x-descriptors' | tail -1 | sed 's/.*displayName: *//' | sed "s/^['\"]//;s/['\"]$//")
-	[ -n "$dn" ] && display_name="$dn"
+	if [ -z "$dn" ]; then
+		while IFS= read -r -d '' _sf; do
+			[ "$_sf" = "$yaml_file" ] && continue
+			dn=$(grep '^ *displayName:' "$_sf" 2>/dev/null | grep -v 'x-descriptors' | tail -1 | sed 's/.*displayName: *//' | sed "s/^['\"]//;s/['\"]$//")
+			[ -n "$dn" ] && break
+		done < <(find "$dir_path" \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) -print0 2>/dev/null)
+	fi
+	display_name="${dn:--}"
 
 	printf "%-55s %-60s %s\n" "$pkg" "$display_name" "$def_ch"
 }
@@ -260,11 +268,12 @@ for dir in "$tmp_dir/configs"/*/; do
 		_extract_from_json "$dir" "$dir/catalog.json"
 	elif [ -f "$dir/index.json" ]; then
 		_extract_from_json "$dir" "$dir/index.json"
+	elif [ -f "$dir/package.yaml" ]; then
+		_extract_from_yaml "$dir/package.yaml"
 	elif compgen -G "$dir"'*.yaml' >/dev/null 2>&1 || compgen -G "$dir"'*.yml' >/dev/null 2>&1; then
 		for yf in "$dir"/*.yaml "$dir"/*.yml; do
 			[ -f "$yf" ] || continue
-			_extract_from_yaml "$yf"
-			break
+			_extract_from_yaml "$yf" && break
 		done
 	else
 		# Generic fallback: scan all JSON files for olm.package entries

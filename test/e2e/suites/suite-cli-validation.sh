@@ -52,8 +52,6 @@ e2e_install_aba --curl
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 test_end 0
 
@@ -72,11 +70,9 @@ e2e_run "Verify / available space > 200GB after reset" \
 
 e2e_run "Reconfigure after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Set dns_servers" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Start save, Ctrl-C after 20s" \
-    'timeout 20 bash -c "aba -d mirror save"; rc=$?; [ "$rc" -eq 124 ] || exit $rc'
+    'rc=0; timeout 20 bash -c "aba -d mirror save" || rc=$?; [ "$rc" -eq 124 ]'
 
 e2e_run "Verify catalog task not failed" \
     'ocp_short=$(source aba.conf && echo "${ocp_version%.*}"); task_dir=~/.aba/runner/catalog:${ocp_short}:redhat-operator; if [ -f "$task_dir/exit" ]; then rc=$(cat "$task_dir/exit"); [ "$rc" -eq 0 ] || { echo "Task failed (exit=$rc):"; cat "$task_dir/log.err"; exit 1; }; echo "Task completed successfully"; else echo "Task still running (oc-mirror found, download in progress)"; fi'
@@ -211,6 +207,27 @@ e2e_run "Debug mode with make target produces ABA_DEBUG" \
 # Same target without debug: no ABA_DEBUG in output
 e2e_run "Non-debug mode: no ABA_DEBUG in output" \
     "unset DEBUG_ABA; aba -d mirror init 2>&1 | { ! grep -q ABA_DEBUG; }"
+
+test_end 0
+
+# ============================================================================
+# Installer validation: test both git and curl install methods into /tmp
+# ============================================================================
+test_begin "ABA installer: git and curl"
+
+e2e_run "Install ABA via git into /tmp" \
+    "rm -rf /tmp/aba-install-test && git clone --depth 1 -b \$E2E_GIT_BRANCH \$E2E_GIT_REPO /tmp/aba-install-test && cd /tmp/aba-install-test && ./install"
+
+e2e_run "Verify git install" \
+    "cd /tmp/aba-install-test && test -x scripts/aba.sh && aba --aba-version"
+
+e2e_run "Install ABA via curl into /tmp" \
+    "rm -rf /tmp/aba-install-test && mkdir -p /tmp/aba-install-test && cd /tmp/aba-install-test && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/\$E2E_GIT_REPO_SLUG/refs/heads/\$E2E_GIT_BRANCH/install)\" -- \$E2E_GIT_BRANCH \$E2E_GIT_REPO_SLUG"
+
+e2e_run "Verify curl install" \
+    "cd /tmp/aba-install-test/aba && test -x scripts/aba.sh && aba --aba-version"
+
+e2e_run "Cleanup" "rm -rf /tmp/aba-install-test"
 
 test_end 0
 

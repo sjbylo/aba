@@ -1,3 +1,5 @@
+ai/
+tui/v2
 cli/.init
 cli/*tar.gz
 cli/butane-binary
@@ -6,6 +8,7 @@ cli/*-download
 *.bak
 .backup/
 mirror/aba.conf
+mirror/*.sha256
 mirror.conf
 mirror/.dnf-install.log
 mirror/execution-environment.tar
@@ -67,6 +70,7 @@ templates/operator-set-custom-[0-9]*
 mirror/docker-reg-image.tgz
 mirror/cli
 cli/butane-amd64
+cli/*.sha256
 */*sha256sum.txt
 cli/scripts
 bundles/work
@@ -92,3 +96,4 @@ ai/aba-installations-chart.html
 e2e-parallel.log.*
 ai/OPP*docx
 ai/OPP*pdf
+ai/RELEASE_BULLETS_*.md

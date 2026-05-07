@@ -119,8 +119,7 @@ KVM_CONF=~/.kvm.conf          # Path to KVM/libvirt configuration file
 VM_SNAPSHOT=aba-test           # Snapshot name to revert VMs to before cloning
 VM_DATASTORE=Datastore4-1     # Target datastore for clones (per-pool in pools.conf)
 VC_FOLDER=/Datacenter/vm/aba-e2e  # vCenter folder for test VMs (per-pool in pools.conf)
-NOTIFY_CMD=~/bin/notify.sh    # Notification command (e.g. Telegram alerts)
-NOTIFY_RELAY_HOST=bastion     # SSH relay for notifications from air-gapped conN
+NOTIFY_CMD=~/bin/notify.sh    # Notification command (e.g. Telegram alerts); deployed to conN via sync_extras()
 ```
 
 ### Destroying and Recreating Pool VMs

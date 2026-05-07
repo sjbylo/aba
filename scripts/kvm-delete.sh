@@ -12,6 +12,10 @@ else
 fi
 
 if [ ! "$CLUSTER_NAME" ]; then
+	if [ ! -s install-config.yaml ] || [ ! -s agent-config.yaml ]; then
+		aba_info "Cluster config files missing -- nothing to delete"
+		exit 0
+	fi
 	scripts/cluster-config-check.sh
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
@@ -45,7 +49,15 @@ for name in $CP_NAMES $WORKER_NAMES; do
 	exec_cmd="virsh -c $LIBVIRT_URI destroy $vm"
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd || true
-	exec_cmd="virsh -c $LIBVIRT_URI undefine $vm --remove-all-storage --nvram"
+	# Remove only disk volumes, NOT cdrom (ISO). --remove-all-storage deletes
+	# the cdrom ISO too, which breaks refresh: upload ISO -> delete VM (ISO
+	# removed) -> create VM (ISO missing).
+	disk_vols=$(virsh -c "$LIBVIRT_URI" domblklist "$vm" --details | awk '$2 == "disk" {print $4}' | paste -sd,)
+	storage_flag=
+	if [ -n "$disk_vols" ]; then
+		storage_flag="--storage $disk_vols"
+	fi
+	exec_cmd="virsh -c $LIBVIRT_URI undefine $vm $storage_flag --nvram"
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd
 	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $vm (verify)"

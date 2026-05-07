@@ -12,6 +12,9 @@ else
 fi
 
 if [ ! "$CLUSTER_NAME" ]; then
+	if [ ! -s install-config.yaml ] || [ ! -s agent-config.yaml ]; then
+		exit 1
+	fi
 	scripts/cluster-config-check.sh
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi

@@ -17,13 +17,12 @@
 
 # --- suite_configure_aba [opts...] -------------------------------------------
 # Non-interactive ABA configuration: platform, channel, version, base-domain.
-# Also sets dns_servers. Accepts optional extra --flag arguments.
+# dns_servers is auto-detected from conN's resolv.conf (pointing at local dnsmasq).
 #
 # Usage: suite_configure_aba [--extra-flag value ...]
 suite_configure_aba() {
 	e2e_run "Configure aba.conf" \
 		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) $*"
-	e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 }
 
 # --- suite_verify_aba_conf ---------------------------------------------------

@@ -1,13 +1,15 @@
 #!/bin/bash
-# Canary test: verify operator catalog extraction works for the latest OCP versions.
+# Canary test: verify operator catalog extraction works for recent OCP versions.
 #
 # Calls the production entry point (download-catalog-index.sh) to test the full
 # code path including wrapper logic, caching, and fallback. Auto-detects available
 # OCP catalog versions (4.16+).
 #
 # Usage:
-#   test-catalog-canary.sh                    # auto-detect all available versions
-#   test-catalog-canary.sh 4.21 4.22          # test specific versions only
+#   test-catalog-canary.sh                    # test the 3 most recent versions
+#   test-catalog-canary.sh --recent 5         # test the 5 most recent versions
+#   test-catalog-canary.sh --all              # test all available versions (4.16+)
+#   test-catalog-canary.sh 4.20 4.21          # test specific versions only
 #
 # Exit code: 0 if all pass, 1 if any fail.
 
@@ -17,12 +19,14 @@ cd "$(dirname "$0")/../.."
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
+YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
 CATALOGS="redhat-operator certified-operator community-operator"
 MIN_OPERATORS=5
 INDEX_DIR=".index"
+RECENT=3
 
 passed=0
 failed=0
@@ -37,7 +41,7 @@ _detect_versions() {
 		local ver="4.${minor}"
 		if skopeo inspect --raw "docker://registry.redhat.io/redhat/redhat-operator-index:v${ver}" >/dev/null 2>&1; then
 			versions+=("$ver")
-			((minor++))
+			minor=$(( minor + 1 ))
 		else
 			break
 		fi
@@ -45,18 +49,38 @@ _detect_versions() {
 	echo "${versions[*]}"
 }
 
-if [[ $# -gt 0 ]]; then
-	VERSIONS="$*"
+# --- Argument parsing ---
+
+EXPLICIT_VERSIONS=()
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--recent|-r)  RECENT="$2"; shift 2 ;;
+		--all|-a)     RECENT=0; shift ;;
+		-*)           echo "Unknown option: $1"; exit 1 ;;
+		*)            EXPLICIT_VERSIONS+=("$1"); shift ;;
+	esac
+done
+
+if [[ ${#EXPLICIT_VERSIONS[@]} -gt 0 ]]; then
+	VERSIONS="${EXPLICIT_VERSIONS[*]}"
 	echo -e "${CYAN}=== Testing specified versions: ${VERSIONS} ===${NC}"
 else
-	echo -e "${CYAN}=== Detecting available catalog versions (this may take a moment)... ===${NC}"
-	VERSIONS=$(_detect_versions)
-	if [[ -z "$VERSIONS" ]]; then
+	echo -e "${CYAN}=== Detecting available catalog versions ... ===${NC}"
+	ALL_VERSIONS=$(_detect_versions)
+	if [[ -z "$ALL_VERSIONS" ]]; then
 		echo -e "${RED}ERROR: Could not detect any catalog versions${NC}"
 		exit 1
 	fi
-	echo -e "${CYAN}=== Auto-detected versions: ${VERSIONS} ===${NC}"
+	read -ra _ver_arr <<< "$ALL_VERSIONS"
+	if (( RECENT > 0 && ${#_ver_arr[@]} > RECENT )); then
+		_ver_arr=("${_ver_arr[@]: -$RECENT}")
+		echo -e "${CYAN}=== Testing ${RECENT} most recent of: ${ALL_VERSIONS} ===${NC}"
+	else
+		echo -e "${CYAN}=== Testing all detected versions: ${ALL_VERSIONS} ===${NC}"
+	fi
+	VERSIONS="${_ver_arr[*]}"
 fi
+echo -e "${CYAN}=== Versions under test: ${VERSIONS} ===${NC}"
 echo
 
 # --- Per-combo test ---
@@ -116,10 +140,16 @@ _test_combo() {
 		fi
 	fi
 
-	# Display name coverage (informational)
+	# Display name coverage
 	local with_display=0
 	if [[ -s "$index_file" ]]; then
 		with_display=$(awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); if ($0 != "" && $0 != "-") count++} END {print count+0}' "$index_file")
+	fi
+	local missing_display=$(( count - with_display ))
+	if (( missing_display > 0 )); then
+		errors+=("${missing_display} operators missing display names")
+		echo -e "  ${YELLOW}Missing display names:${NC}"
+		awk '{dn=$0; sub(/^[^ ]+ +/,"",dn); sub(/ +[^ ]+$/,"",dn); gsub(/^ +| +$/,"",dn); if (dn == "" || dn == "-") print "    "$1}' "$index_file"
 	fi
 
 	# Clean up test artifacts and cached image

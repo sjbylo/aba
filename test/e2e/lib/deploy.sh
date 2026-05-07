@@ -62,7 +62,8 @@ sync_harness() {
 }
 
 # Deploy infra-owned aba binary to ~/.e2e-harness/bin/aba on both conN and disN.
-# Uses the committed scripts/aba.sh from $E2E_GIT_BRANCH (not local working copy).
+# In dev mode (local file present), uses the working-copy scripts/aba.sh so
+# uncommitted changes are picked up. Otherwise falls back to git show.
 # Deploys for both root and $VM_DEFAULT_USER so cleanup functions can SSH as either.
 # Usage: sync_infra_aba <pool_num> <aba_root>
 sync_infra_aba() {
@@ -76,11 +77,15 @@ sync_infra_aba() {
 
 	local _tmp
 	_tmp=$(mktemp /tmp/aba-infra.XXXXXX.sh)
-	git -C "$aba_root" show "${branch}:scripts/aba.sh" > "$_tmp" || {
-		echo "    WARNING: could not extract aba.sh from branch $branch" >&2
-		rm -f "$_tmp"
-		return 1
-	}
+	if [ -f "$aba_root/scripts/aba.sh" ]; then
+		cp "$aba_root/scripts/aba.sh" "$_tmp"
+	else
+		git -C "$aba_root" show "${branch}:scripts/aba.sh" > "$_tmp" || {
+			echo "    WARNING: could not extract aba.sh from branch $branch" >&2
+			rm -f "$_tmp"
+			return 1
+		}
+	fi
 
 	local _host _user _target
 	for _host in "$con_fqdn" "$dis_fqdn"; do

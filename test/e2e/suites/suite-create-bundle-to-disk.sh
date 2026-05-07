@@ -64,8 +64,6 @@ e2e_run -q "Remove old files" \
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
-
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
@@ -83,10 +81,6 @@ e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-
-# Simulate manual edit: set dns_servers to pool dnsmasq host
-e2e_run "Set dns_servers manually" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
@@ -118,8 +112,7 @@ e2e_run "Set operator sets in aba.conf" "aba --op-sets abatest"
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 
 # Read ocp_version/ocp_channel directly from aba.conf (no internal functions needed).
-ocp_version=$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
-ocp_channel=$(grep ^ocp_channel= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
+. aba.conf
 _e2e_log "Resolved: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 echo "  ocp_version=$ocp_version  ocp_channel=$ocp_channel"
 

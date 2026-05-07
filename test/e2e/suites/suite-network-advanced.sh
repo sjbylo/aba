@@ -78,9 +78,6 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba and configure"
 
-e2e_run "Reset aba to clean state" \
-    "./install && aba reset -f"
-
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
@@ -91,10 +88,6 @@ e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-
-# Simulate manual edit: override dns_servers to point to pool dnsmasq
-e2e_run "Set dns_servers manually" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -121,20 +114,11 @@ e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
-e2e_run "Create regcreds directory" "mkdir -p ~/.aba/mirror/mirror/"
-e2e_run "Copy Quay root CA to regcreds" \
-    "cp -v $POOL_REG_DIR/certs/ca.crt ~/.aba/mirror/mirror/rootCA.pem"
+e2e_run "Generate pool-registry pull secret via aba" \
+    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
-e2e_run "Generate mirror pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > ~/.aba/mirror/mirror/pull-secret-mirror.json <<EOPS
-{
-  \"auths\": {
-    \"${CON_HOST}:8443\": {
-      \"auth\": \"\$enc_pw\"
-    }
-  }
-}
-EOPS"
+e2e_run "Register pool registry" \
+    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
@@ -202,7 +186,7 @@ _net_test() {
     fi
 
     e2e_run "Delete any leftover $cname cluster" \
-        "if [ -d $cname ]; then aba -y --dir $cname delete; fi"
+        "_e2e_delete_leftover_cluster $cname"
 
     e2e_run "Generate cluster.conf for $cname" \
         "aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
@@ -257,7 +241,7 @@ _net_test() {
         "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
 
     e2e_run "Verify NTP on $cname" \
-        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc sources\" | grep ${NTP_IP}; do sleep 10; done'"
+        "timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc -N sources\" | grep ${NTP_IP}; do sleep 10; done'"
 
     e2e_run "Delete $cname VMs" "aba --dir $cname delete"
     e2e_remove_from_cluster_cleanup "$PWD/$cname"
@@ -336,7 +320,7 @@ e2e_diag "Show remaining cluster dirs" "ls -d e2e-sno* e2e-compact* e2e-standard
 # so only call 'aba delete' when the config still exists (VMs might still be up).
 for _cdir in $_SNO_VLAN $_COMPACT_VLAN $_STANDARD_VLAN $_SNO $_COMPACT $_STANDARD; do
 	e2e_run "Cleanup $_cdir" \
-	    "if [ -d $_cdir ]; then aba --dir $_cdir delete && rm -rf $_cdir; else echo '[cleanup] $_cdir already removed'; fi"
+	    "_e2e_delete_leftover_cluster $_cdir"
 done
 
 test_end

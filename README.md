@@ -234,9 +234,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.0.1.tar.gz
-tar xzf v1.0.1.tar.gz
-cd aba-1.0.1
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.0.2.tar.gz
+tar xzf v1.0.2.tar.gz
+cd aba-1.0.2
 ./install
 aba
 ```
@@ -244,7 +244,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.0.1 https://github.com/sjbylo/aba.git
+git clone --branch v1.0.2 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -870,6 +870,31 @@ aba day2-osus
 
 ### Updating a cluster in a fully disconnected environment
 
+#### Using `--target-version`
+
+1. On the *connected workstation*, set the target version and save the upgrade images:
+
+```bash
+aba -d mirror --target-version 4.21.11 save
+```
+
+This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images.
+
+2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
+3. On the bastion: `aba -d mirror load`
+4. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
+5. Upgrade the cluster:
+
+```bash
+aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
+aba -d <cluster name> upgrade --to 4.21.11     # Perform the upgrade
+```
+
+Or upgrade OpenShift via the Console or CLI in the usual way.
+
+#### Manual method
+
+
 1. Edit `aba/aba.conf` on the *connected workstation* to add operators/operator sets, then run `aba -d mirror save`.
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
 2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
@@ -878,6 +903,26 @@ aba day2-osus
 5. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
 
 ### Updating a cluster in a partially disconnected environment
+
+#### Using `--target-version`
+
+1. On the *connected bastion*, set the target version and sync directly to the registry:
+
+```bash
+aba -d mirror --target-version 4.21.11 sync
+```
+
+2. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
+3. Upgrade the cluster:
+
+```bash
+aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
+aba -d <cluster name> upgrade --to 4.21.11     # Perform the upgrade
+```
+
+Or upgrade OpenShift via the Console or CLI in the usual way.
+
+#### Manual method
 
 1. Edit `aba/mirror/data/imageset-config.yaml` on the *connected bastion*.
 2. Run: `aba -d mirror sync`
@@ -917,6 +962,19 @@ aba day2-osus
 #### Target Platform
 
 - **Bare-metal**: Set `platform=bm` in `aba.conf` and manually boot nodes using the generated ISO.
+  To assign specific MAC addresses to nodes (matching your DHCP reservations or physical NICs), create a `macs.conf` file in the cluster directory:
+  ```
+  cat > mycluster/macs.conf <<EOF
+  00:50:56:20:ab:01
+  00:50:56:20:ab:02
+  00:50:56:20:ab:03
+  EOF
+  ```
+  ABA extracts MAC addresses from this file and writes them into `agent-config.yaml`.
+  Provide one MAC per node per network port (e.g., 3 masters × 1 port = 3 MACs; with port bonding, 3 masters × 2 ports = 6 MACs).
+  MACs are assigned top-to-bottom, grouped by host — for example, with 2 bonded ports per node, the first 2 MACs go to host 1, the next 2 to host 2, and so on.
+  The file format is flexible — MACs can appear anywhere on each line (surrounding text is ignored).
+  Without `macs.conf` (the default), MACs are generated from the `mac_prefix` template in `cluster.conf`.
 - **VMware**: Ensure sufficient [vCenter privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs — set values in `vmware.conf`. See the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 - **KVM/libvirt**: Passwordless SSH from the bastion to the KVM host is required. Configure connection URI, storage pool, and bridge network in `kvm.conf`.
 
@@ -1090,6 +1148,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
 | `aba day2-ntp`                  | Configure cluster NTP                                         |
 | `aba day2-osus`                 | Configure OpenShift Update Service                            |
+| `aba upgrade --to <ver>`        | Upgrade cluster via local mirror. `--dry-run` lists versions. |
 | `aba shutdown`                  | Gracefully shut down a cluster. `--wait` waits for power-off. |
 | `aba startup`                   | Gracefully start up a cluster                                 |
 | `aba rescue`                    | Recover a cluster (uncordon nodes, approve pending CSRs)      |
@@ -1547,6 +1606,16 @@ rm -f $HOME/.ssh/quay_installer*
 ssh-keygen -t ed25519 -f $HOME/.ssh/quay_installer -N ''
 cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
 ```
+
+[Back to top](#quick-start)
+
+---
+
+## Q: How do I get a trace log for debugging?
+
+Every `aba` invocation logs full output to `~/.aba/logs/trace.log` (last 5 rotated as `trace.log.0` … `trace.log.4`). When requesting help, attach the relevant trace file — but **review and redact sensitive data first** (kubeadmin passwords, registry credentials).
+
+---
 
 [Back to top](#quick-start)
 

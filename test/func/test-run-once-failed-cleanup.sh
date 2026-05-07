@@ -193,6 +193,316 @@ fi
 echo ""
 
 ##############################################################
+echo "Test 6: Zombie task cleanup (no exit file, lock free)"
+echo "----------------------------------------------"
+
+# Create a zombie: task directory with files but no exit file and no running process
+mkdir -p "$RUN_ONCE_DIR/test:zombie"
+echo "sleep 999" > "$RUN_ONCE_DIR/test:zombie/cmd"
+touch "$RUN_ONCE_DIR/test:zombie/lock"
+touch "$RUN_ONCE_DIR/test:zombie/log.out"
+touch "$RUN_ONCE_DIR/test:zombie/log.err"
+echo "99999" > "$RUN_ONCE_DIR/test:zombie/pid"
+
+# Verify zombie state: no exit file
+if [[ ! -f "$RUN_ONCE_DIR/test:zombie/exit" ]]; then
+	echo "✓ Zombie created (no exit file)"
+else
+	echo "✗ FAIL: Exit file should not exist"
+	exit 1
+fi
+
+# Run -F (should clean the zombie)
+if run_once -F; then
+	echo "✓ run_once -F succeeded"
+else
+	echo "✗ FAIL: run_once -F returned non-zero"
+	exit 1
+fi
+
+# Verify zombie was cleaned
+if [[ ! -d "$RUN_ONCE_DIR/test:zombie" ]]; then
+	echo "✓ Zombie task cleaned up by -F"
+else
+	echo "✗ FAIL: Zombie task still exists after -F"
+	ls "$RUN_ONCE_DIR/test:zombie/"
+	exit 1
+fi
+
+echo ""
+
+##############################################################
+echo "Test 7: Zombie cleanup does not affect tasks with held lock"
+echo "----------------------------------------------"
+
+# Create a task directory with no exit file but simulate a held lock
+mkdir -p "$RUN_ONCE_DIR/test:locked-zombie"
+touch "$RUN_ONCE_DIR/test:locked-zombie/cmd"
+touch "$RUN_ONCE_DIR/test:locked-zombie/lock"
+touch "$RUN_ONCE_DIR/test:locked-zombie/log.out"
+touch "$RUN_ONCE_DIR/test:locked-zombie/log.err"
+
+# Hold the lock in a background process (close FD 9 in sleep so kill releases the lock)
+(
+	exec 9>>"$RUN_ONCE_DIR/test:locked-zombie/lock"
+	flock -x 9
+	read -t 5 <> <(:) 9>&-
+) &
+LOCK_PID=$!
+sleep 0.3  # Give it time to acquire the lock
+
+# Run -F (should NOT clean this one — lock is held)
+run_once -F
+
+if [[ -d "$RUN_ONCE_DIR/test:locked-zombie" ]]; then
+	echo "✓ Task with held lock preserved by -F (not a zombie)"
+else
+	echo "✗ FAIL: Task with held lock was incorrectly cleaned"
+	kill $LOCK_PID 2>/dev/null
+	exit 1
+fi
+
+# Release the lock by killing the holder
+kill $LOCK_PID 2>/dev/null
+wait $LOCK_PID 2>/dev/null || true
+sleep 0.3
+
+# Now -F should clean it (lock is free, no exit file)
+run_once -F
+
+if [[ ! -d "$RUN_ONCE_DIR/test:locked-zombie" ]]; then
+	echo "✓ Task cleaned after lock released"
+else
+	echo "✗ FAIL: Task should have been cleaned after lock release"
+	exit 1
+fi
+
+echo ""
+
+##############################################################
+echo "Test 8: Error message shown on task failure (non-quiet mode)"
+echo "----------------------------------------------"
+
+set +e
+output=$(run_once -w -i "test:errmsg" -- bash -c 'echo "curl: (22) 503 error" >&2; exit 1' 2>&1)
+rc=$?
+set -e
+
+if [[ $rc -ne 0 ]]; then
+	echo "✓ Task failed as expected (exit $rc)"
+else
+	echo "✗ FAIL: Task should have failed"
+	exit 1
+fi
+
+if echo "$output" | grep -q "re-run.*install.*task cache"; then
+	echo "✓ Recovery hint shown in output"
+else
+	echo "✗ FAIL: Recovery hint not found in output"
+	echo "  Got: $output"
+	exit 1
+fi
+
+if echo "$output" | grep -q "503 error"; then
+	echo "✓ Stderr content shown in output"
+else
+	echo "✗ FAIL: Stderr content not found in output"
+	echo "  Got: $output"
+	exit 1
+fi
+
+run_once -r -i "test:errmsg" 2>/dev/null
+
+echo ""
+
+##############################################################
+echo "Test 9: Error message suppressed in quiet mode"
+echo "----------------------------------------------"
+
+set +e
+output=$(run_once -q -w -i "test:errmsg-quiet" -- bash -c 'echo "quiet error" >&2; exit 1' 2>&1)
+rc=$?
+set -e
+
+if [[ $rc -ne 0 ]]; then
+	echo "✓ Task failed as expected (exit $rc)"
+else
+	echo "✗ FAIL: Task should have failed"
+	exit 1
+fi
+
+if echo "$output" | grep -q "re-run.*install.*task cache"; then
+	echo "✗ FAIL: Recovery hint should be suppressed in quiet mode"
+	exit 1
+else
+	echo "✓ Recovery hint correctly suppressed in quiet mode"
+fi
+
+run_once -r -i "test:errmsg-quiet" 2>/dev/null
+
+echo ""
+
+##############################################################
+echo "Test 10: Child-only kill — outer subshell handles it"
+echo "----------------------------------------------"
+
+# Start a real task
+run_once -i "test:child-kill" -- sleep 300
+sleep 0.5
+
+INNER_PID=$(cat "$RUN_ONCE_DIR/test:child-kill/pid")
+echo "  Inner PID: $INNER_PID"
+
+# Kill only the child; allow time for outer subshell to process wait + write exit file
+kill -9 "$INNER_PID" 2>/dev/null
+sleep 2
+
+# Outer subshell should have written exit file with signal code
+if [[ -f "$RUN_ONCE_DIR/test:child-kill/exit" ]]; then
+	exit_code=$(cat "$RUN_ONCE_DIR/test:child-kill/exit")
+	echo "✓ Exit file written by outer subshell (exit code: $exit_code)"
+else
+	echo "✗ FAIL: No exit file — outer subshell didn't catch child death"
+	exit 1
+fi
+
+# Lock should be free (outer subshell exited)
+if ( exec 9>>"$RUN_ONCE_DIR/test:child-kill/lock" && flock -n 9 ); then
+	echo "✓ Lock released (outer subshell exited cleanly)"
+else
+	echo "✗ FAIL: Lock still held"
+	exit 1
+fi
+
+# -F should clean it (non-zero exit)
+run_once -F
+if [[ ! -d "$RUN_ONCE_DIR/test:child-kill" ]]; then
+	echo "✓ Task cleaned by -F"
+else
+	echo "✗ FAIL: Task not cleaned"
+	exit 1
+fi
+
+echo ""
+
+##############################################################
+echo "Test 11: Outer-only kill — lock releases immediately"
+echo "----------------------------------------------"
+
+# Start a real task
+run_once -i "test:outer-kill" -- sleep 300
+sleep 0.5
+
+INNER_PID=$(cat "$RUN_ONCE_DIR/test:outer-kill/pid")
+OUTER_PID=$(ps -o ppid= -p "$INNER_PID" 2>/dev/null | tr -d ' ')
+echo "  Inner PID: $INNER_PID, Outer PID: $OUTER_PID"
+
+# Kill ONLY the outer subshell
+kill -9 "$OUTER_PID" 2>/dev/null
+sleep 1
+
+# The inner process should still be running (setsid)
+if kill -0 "$INNER_PID" 2>/dev/null; then
+	echo "✓ Inner process still running (setsid)"
+else
+	echo "  Info: Inner process already exited"
+fi
+
+# KEY TEST: Is the lock free? (Should be free if child doesn't hold it)
+if ( exec 9>>"$RUN_ONCE_DIR/test:outer-kill/lock" && flock -n 9 ); then
+	echo "✓ Lock is FREE — zombie detected immediately"
+	lock_free=true
+else
+	echo "✗ Lock is HELD — orphaned child holds the lock (delayed zombie)"
+	lock_free=false
+fi
+
+# No exit file should exist (outer was killed before writing it)
+if [[ ! -f "$RUN_ONCE_DIR/test:outer-kill/exit" ]]; then
+	echo "✓ No exit file (outer killed before writing)"
+else
+	echo "  Info: Exit file exists (outer may have written before dying)"
+fi
+
+# -F should clean zombie if lock is free
+run_once -F
+if [[ ! -d "$RUN_ONCE_DIR/test:outer-kill" ]]; then
+	echo "✓ Zombie cleaned by -F"
+else
+	if [[ "$lock_free" == true ]]; then
+		echo "✗ FAIL: Lock was free but -F didn't clean it"
+		exit 1
+	else
+		echo "✗ FAIL: Lock held by orphan — zombie persists until child finishes"
+		# Clean up manually
+		kill -9 "$INNER_PID" 2>/dev/null
+		sleep 0.5
+		run_once -F
+		exit 1
+	fi
+fi
+
+# Kill orphaned inner if still running
+kill -9 "$INNER_PID" 2>/dev/null || true
+
+echo ""
+
+##############################################################
+echo "Test 12: Both killed — zombie cleaned on next -F"
+echo "----------------------------------------------"
+
+# Start a real task
+run_once -i "test:both-kill" -- sleep 300
+sleep 0.5
+
+INNER_PID=$(cat "$RUN_ONCE_DIR/test:both-kill/pid")
+OUTER_PID=$(ps -o ppid= -p "$INNER_PID" 2>/dev/null | tr -d ' ')
+echo "  Inner PID: $INNER_PID, Outer PID: $OUTER_PID"
+
+# Kill both (simulating machine crash)
+kill -9 "$OUTER_PID" 2>/dev/null
+sleep 0.3
+kill -9 "$INNER_PID" 2>/dev/null
+sleep 0.5
+
+# Should be zombie state
+if [[ ! -f "$RUN_ONCE_DIR/test:both-kill/exit" ]]; then
+	echo "✓ No exit file (zombie state)"
+else
+	echo "  Info: Exit file exists"
+fi
+
+if ( exec 9>>"$RUN_ONCE_DIR/test:both-kill/lock" && flock -n 9 ); then
+	echo "✓ Lock is free"
+else
+	echo "✗ FAIL: Lock still held after both killed"
+	exit 1
+fi
+
+# -F should clean it
+run_once -F
+if [[ ! -d "$RUN_ONCE_DIR/test:both-kill" ]]; then
+	echo "✓ Zombie cleaned by -F"
+else
+	echo "✗ FAIL: Zombie not cleaned"
+	exit 1
+fi
+
+# Verify task can be re-run
+set +e
+run_once -w -i "test:both-kill" -- echo "recovered after crash"
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+	echo "✓ Task re-runs successfully after cleanup"
+else
+	echo "✗ FAIL: Task failed to re-run (rc=$rc)"
+	exit 1
+fi
+
+echo ""
+
+##############################################################
 echo "=== All Tests Complete ==="
 echo ""
 echo "✓ Failed task cleanup tests passed!"
@@ -202,3 +512,10 @@ echo "  - run_once -F deletes only failed tasks"
 echo "  - Successful tasks are preserved"
 echo "  - Cleanup is idempotent (safe to run multiple times)"
 echo "  - Running tasks are not affected"
+echo "  - Zombie tasks (no exit file, lock free) are cleaned"
+echo "  - Tasks with held locks are not touched (not zombies)"
+echo "  - Error messages show stderr + recovery hint on failure"
+echo "  - Quiet mode suppresses recovery hint"
+echo "  - Child-only kill: outer subshell catches it and writes exit file"
+echo "  - Outer-only kill: lock releases immediately, zombie detected"
+echo "  - Both killed: zombie cleaned on next -F, task re-runs"

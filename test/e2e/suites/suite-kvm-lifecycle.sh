@@ -72,15 +72,10 @@ test_end
 # ============================================================================
 test_begin "Setup: install aba, configure for KVM"
 
-e2e_run "Reset aba to clean state" \
-    "./install && aba reset -f"
-
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for KVM" \
     "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-
-e2e_run "Set dns_servers via CLI" "aba --dns $(pool_dns_server)"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=kvm" "grep ^platform=kvm aba.conf"
@@ -112,16 +107,8 @@ e2e_run "Clear reg_ssh_user (local registry)" \
     "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
-e2e_run "Generate pool-registry pull secret" \
-    "enc_pw=\$(echo -n 'init:p4ssw0rd' | base64 -w0) && cat > /tmp/pool-reg-pull-secret.json <<EOPS
-{
-  \"auths\": {
-    \"${CON_HOST}:8443\": {
-      \"auth\": \"\$enc_pw\"
-    }
-  }
-}
-EOPS"
+e2e_run "Generate pool-registry pull secret via aba" \
+    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
 e2e_run "Register pool registry" \
     "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
@@ -145,7 +132,7 @@ test_end
 test_begin "SNO: install cluster on KVM"
 
 e2e_run "Delete any leftover $SNO cluster" \
-    "if [ -d $SNO ]; then aba -y --dir $SNO delete; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
 e2e_run -r 2 10 "Create VMs and start install" \
@@ -241,7 +228,7 @@ test_end
 test_begin "Cleanup: delete clusters and unregister mirror"
 
 e2e_run "Delete SNO cluster (removes KVM VMs + storage)" \
-    "if [ -d $SNO ]; then aba --dir $SNO delete && rm -rf $SNO; else echo '[cleanup] $SNO already removed'; fi"
+    "_e2e_delete_leftover_cluster $SNO"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
 e2e_run "Unregister pool registry" \

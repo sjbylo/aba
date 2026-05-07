@@ -73,7 +73,6 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches (conN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
@@ -82,10 +81,6 @@ e2e_run_remote -q "Remove oc-mirror caches (disN)" \
 # Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
 e2e_run "Configure aba.conf with previous version" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version p --base-domain $(pool_domain)"
-
-# Simulate manual edit: set dns_servers to pool dnsmasq host
-e2e_run "Set dns_servers manually" \
-    "sed -i 's/^dns_servers=.*/dns_servers=$(pool_dns_server)/' aba.conf"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
@@ -114,7 +109,7 @@ test_end
 test_begin "Setup: calculate older version for upgrade"
 
 e2e_run "Read aba.conf and compute older version" "
-    ocp_version=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | cut -d'#' -f1 | tr -d ' ')
+    . aba.conf
     echo ocp_version=\$ocp_version
     ocp_version_major=\$(echo \$ocp_version | cut -d. -f1-2)
     ocp_version_point=\$(echo \$ocp_version | cut -d. -f3)
@@ -169,6 +164,12 @@ test_end
 # 6. Registry: Quay install -> uninstall (then switch to Docker)
 # ============================================================================
 test_begin "Registry: Quay install and uninstall"
+
+e2e_run_remote "Create mirror.conf on bastion" \
+    "cd ~/aba && aba -d mirror mirror.conf"
+e2e_run_remote "Set reg_host to local hostname" \
+    "sed -i 's/^reg_host=.*/reg_host=${DIS_HOST}/g' ~/aba/mirror/mirror.conf"
+e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote "Install Quay registry" \
@@ -232,7 +233,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
+    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
@@ -263,7 +264,7 @@ e2e_run_remote "Apply day2 NTP config (no prior NTP)" \
     "cd ~/aba && aba --dir $SNO day2-ntp"
 
 e2e_run_remote "Verify chronyc sources show IP" \
-    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc sources' | grep $NTP_IP"
+    "cd ~/aba && aba --dir $SNO ssh --cmd 'chronyc -N sources' | grep $NTP_IP"
 
 e2e_run_remote "Verify chrony.conf contains ntp.example.com" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep 'server ntp.example.com iburst'"
@@ -547,24 +548,11 @@ test_end
 # ============================================================================
 test_begin "Upgrade: OSUS and cluster upgrade"
 
-# Save the target (newer) version images.
-# Must match the old test approach: minVersion=older, maxVersion=desired,
-# channel=fast (for upgrade graph), shortestPath enabled.
-e2e_run "Set version to desired (upgrade target)" \
-    "aba -v \$(cat /tmp/e2e-ocp-version-desired)"
-
-# Regenerate imageset config (incremental tests overwrote it with minimal config)
-e2e_run "Regenerate full imageset config for upgrade" \
-    "rm -f mirror/data/imageset-config.yaml && aba -d mirror imagesetconf"
-
-# Modify config for upgrade: fast channel, minVersion=older, enable shortestPath
-e2e_run "Configure imageset for upgrade path" \
-    "_older=\$(cat /tmp/e2e-ocp-version-older) && \
-     _desired=\$(cat /tmp/e2e-ocp-version-desired) && \
-     _major=\$(echo \$_desired | cut -d. -f1-2) && \
-     sed -i \"s/^    - name: stable-\${_major}/    - name: fast-\${_major}/\" mirror/data/imageset-config.yaml && \
-     sed -i \"s/^      minVersion: \${_desired}/      minVersion: \${_older}/\" mirror/data/imageset-config.yaml && \
-     sed -i 's/^#      shortestPath: true.*/      shortestPath: true/' mirror/data/imageset-config.yaml"
+# Save the target (newer) version images using --target-version (auto-generates
+# ISC with shortestPath, minVersion=current, maxVersion=target).
+e2e_run "Set --target-version for upgrade" \
+    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && \
+     aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) imagesetconf"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
 # The catalog YAML should already exist from the earlier catalogs-wait; verify it.
@@ -617,8 +605,8 @@ e2e_wait_operators_available $SNO remote
 
 e2e_wait_operators_ready $SNO remote
 
-e2e_run_remote "Trigger cluster upgrade (max 10m)" \
-    "cd ~/aba && timeout 10m bash -c 'until aba --dir $SNO run --cmd \"oc adm upgrade --to-latest=true --allow-not-recommended\"; do sleep 30; done'"
+e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
+    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
@@ -664,12 +652,11 @@ test_begin "Standard: cluster with macs.conf"
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
-e2e_run_remote "Clean sno cluster dir" \
-    "cd ~/aba && aba --dir $SNO clean"
+e2e_run_remote "Remove sno cluster dir" \
+    "cd ~/aba && rm -rf $SNO"
 
 # Build standard cluster -- delete any leftover VMs before removing the dir
-e2e_run_remote "Delete any leftover $STANDARD cluster" \
-    "cd ~/aba && if [ -d $STANDARD ]; then aba -y --dir $STANDARD delete; fi"
+_e2e_delete_leftover_cluster_remote "$STANDARD"
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
 e2e_run_remote "Assert $STANDARD/cluster.conf exists" \

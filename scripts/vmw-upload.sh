@@ -24,6 +24,9 @@ fi
 
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE
 
+[ -s "$ASSETS_DIR/agent.$ARCH.iso" ] || aba_abort "Local ISO not found: $ASSETS_DIR/agent.$ARCH.iso" \
+	"Run 'aba iso' first to generate it."
+
 echo Uploading image $ASSETS_DIR/agent.$ARCH.iso to [$ISO_DATASTORE] images/agent-${CLUSTER_NAME}.iso
 
 #if ! govc datastore.upload -ds $ISO_DATASTORE $ASSETS_DIR/agent.$ARCH.iso images/agent-${CLUSTER_NAME}.iso | tee /dev/stderr | grep -qi "Uploading.*OK"; then
@@ -45,14 +48,17 @@ else
 	#! grep -qi "Uploading.*OK" $log_file && ret=1
 fi
 if [ $ret -ne 0 ]; then
-	# Since govc does not return non-zero on error we need to parse the output for non-success!  #FIXME: true?
-	#rm -f $log_file
-	echo_red "ISO file failed to upload!"
-	echo_red "The ISO may be attached to a running VM and cannot be overwritten.  Stop the VM first with 'aba stop' and try again."
-	exit 1
+	aba_abort "ISO file failed to upload!" \
+		"The ISO may be attached to a running VM and cannot be overwritten." \
+		"Stop the VM first with 'aba stop' and try again."
 fi
 
-#rm -f $log_file
+# Post-upload verification: ensure the ISO on the datastore is not 0 bytes
+remote_size=$(govc datastore.ls -ds $ISO_DATASTORE -l images/agent-${CLUSTER_NAME}.iso 2>/dev/null | awk '{print $1}')
+if [ "$remote_size" = "0B" ] || [ -z "$remote_size" ]; then
+	aba_abort "Upload verification failed: ISO on datastore is 0 bytes or missing!" \
+		"Check datastore connectivity and disk space."
+fi
 
 exit 0
 

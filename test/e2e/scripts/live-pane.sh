@@ -101,13 +101,20 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 			fi
 		done
 	else
-		# Pane alive -- re-read metadata right before attach (runner may have
-		# written e2e-suite-os since our initial read at the top of the script)
+		# Pane alive -- always re-read metadata right before attach (suite may
+		# have changed since the top of the loop, especially during rapid cycling)
+		_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
+		local _retries=0
+		while [ -z "$_suite" ] && [ "$_retries" -lt 5 ]; do
+			sleep 2
+			_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
+			_retries=$(( _retries + 1 ))
+		done
 		_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)
 		_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)
 		_vmtag=""
 		[ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"
-		_set_title "$_suite" "${_user}" "${_os:+ | $_os}" "$_vmtag"
+		_set_title "${_suite:-(starting...)}" "${_user}" "${_os:+ | $_os}" "$_vmtag"
 		_IDLE_MSG_SHOWN=
 		clear
 		ssh -t $_SSH_OPTS ${_user}@${_h} "exec tmux attach -d -t '$_sess'" 2>/dev/null

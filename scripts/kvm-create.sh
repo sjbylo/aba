@@ -95,6 +95,10 @@ create_node() {
 			aba_info "Adding network interface [$((cnt + 1))/${num_ports_per_node}] with mac address: $sub_mac"
 		done
 
+		# Build arch-aware --boot and --graphics from kvm.conf (with sensible fallbacks)
+		local boot_args="${KVM_BOOT_ARGS:-uefi,hd,cdrom}"
+		local graphics_args="${KVM_GRAPHICS_ARGS:-vnc,listen=0.0.0.0 --video virtio}"
+
 		# --disk device=cdrom (not --cdrom) so --events on_reboot=restart is honoured.
 		# --cdrom silently forces on_reboot=destroy on QEMU 9.1+/libvirt 10.10+.
 		virt-install \
@@ -107,10 +111,10 @@ create_node() {
 			--disk "$iso_path",device=cdrom \
 			$net_args \
 			--os-variant rhel9-unknown \
-			--boot uefi,hd,cdrom \
+			--boot $boot_args \
 			--events on_reboot=restart \
 			--check disk_size=off \
-			--graphics vnc,listen=0.0.0.0 --video virtio \
+			--graphics $graphics_args \
 			$extra_cpu_args \
 			--noautoconsole
 

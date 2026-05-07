@@ -114,10 +114,9 @@ source "$_RUNNER_DIR/lib/setup.sh"
 _FRAMEWORK_BIN="${_RUNNER_DIR}/bin"
 mkdir -p "$_FRAMEWORK_BIN"
 
-# Mirror data dirs that ABA manages (created by --data-dir or as default registry roots).
-# These must ONLY be cleaned up by 'aba uninstall', never by brute-force rm -rf.
-# If any survive after cleanup, that's a bug in aba uninstall that must be investigated.
-_E2E_MIRROR_DATA_DIRS="quay-install my-quay-mirror-test1 mymirror-data docker-reg aba/e2e-docker-test aba/e2e-docker-neg"
+# ABA-internal registry root dirs (cannot be renamed to e2e-mirror-* convention).
+# These are always in the "real registry" category for verification purposes.
+_E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
@@ -149,51 +148,93 @@ _cleanup_non_mirror_local() {
 	done
 }
 
-# Verify no mirror data dirs survive on a host after cleanup.
+# Verify no registry data dirs survive on a host after cleanup.
+# Uses glob-based discovery: e2e-mirror-* + ABA-internal dirs (quay-install, docker-reg).
 # If any exist, aba uninstall has a bug -- stop the suite so it can be investigated.
-# Usage: _verify_no_mirror_data_dirs "disN" "$dis_host"   (remote via _essh)
-#        _verify_no_mirror_data_dirs "conN"                (local)
-_verify_no_mirror_data_dirs() {
+# Usage: _verify_no_registry_data_dirs "disN" "$dis_host"   (remote via _essh)
+#        _verify_no_registry_data_dirs "conN"                (local)
+_verify_no_registry_data_dirs() {
 	local label="$1"
 	local remote_target="${2:-}"
 	local _leftovers=""
 
 	# First verify we can reach the remote host (if checking remotely).
-	# Without this, every "test -d" would fail silently and we'd report "all clean".
+	# Without this, every glob/test would fail silently and we'd report "all clean".
 	if [ -n "$remote_target" ]; then
 		if ! _essh "$remote_target" "true" 2>&1; then
 			echo ""
-			echo "  FATAL: Cannot SSH to $remote_target -- cannot verify mirror data dirs on $label"
+			echo "  FATAL: Cannot SSH to $remote_target -- cannot verify registry data dirs on $label"
 			return 1
 		fi
 	fi
 
 	if [ -n "$remote_target" ]; then
-		# Check ALL users on the remote host (cross-user leftovers are the common case)
 		local _dis_fqdn
 		_dis_fqdn=$(echo "$remote_target" | sed 's/.*@//')
 		local _default_user="${VM_DEFAULT_USER:-steve}"
 		for _check_user in root "$_default_user"; do
-			for _dir in $_E2E_MIRROR_DATA_DIRS; do
-				_essh "${_check_user}@${_dis_fqdn}" "test -d ~/$_dir" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
+			# Glob: e2e-mirror-* dirs — only flag if registry still installed (.available)
+			local _found
+			_found=$(_essh "${_check_user}@${_dis_fqdn}" "for d in ~/e2e-mirror-* ~/aba/e2e-mirror-*; do [ -f \"\$d/.available\" ] && echo \"\$d\"; done" || true)
+			[ -n "$_found" ] && _leftovers+="$(echo "$_found" | sed "s/^/  ~${_check_user}: /")"$'\n'
+			# ABA-internal dirs — only flag if registry still installed
+			for _dir in $_E2E_ABA_INTERNAL_DIRS; do
+				_essh "${_check_user}@${_dis_fqdn}" "test -f ~/$_dir/.available" && _leftovers+="  ~${_check_user}/$_dir"$'\n'
 			done
 		done
 	else
-		for _dir in $_E2E_MIRROR_DATA_DIRS; do
-			[ -d "$HOME/$_dir" ] && _leftovers+="  ~/$_dir"$'\n'
+		# Glob: e2e-mirror-* dirs in home and under ~/aba/ — only flag if registry is still installed (.available)
+		local _d
+		for _d in "$HOME"/e2e-mirror-* "$HOME"/aba/e2e-mirror-*; do
+			[ -d "$_d" ] && [ -f "$_d/.available" ] && _leftovers+="  $_d"$'\n'
+		done
+		# ABA-internal dirs — only flag if registry is still installed
+		for _dir in $_E2E_ABA_INTERNAL_DIRS; do
+			[ -d "$HOME/$_dir" ] && [ -f "$HOME/$_dir/.available" ] && _leftovers+="  ~/$_dir"$'\n'
 		done
 	fi
 
 	if [ -n "$_leftovers" ]; then
 		echo ""
-		echo "  FATAL: Mirror data dir(s) still exist on $label after cleanup:"
+		echo "  FATAL: Registry still installed (.available) on $label after cleanup:"
 		echo "$_leftovers"
-		echo "  These should have been removed by 'aba uninstall'."
-		echo "  Investigate and fix the uninstall bug before re-running."
+		echo "  Run 'aba -d <dir> uninstall' to stop the registry before re-running."
 		return 1
 	fi
-	echo "  $label: no leftover mirror data dirs"
+	echo "  $label: no running registries"
 	return 0
+}
+
+# Remove test artifact dirs (e2e-test-*) that may be left over from a crashed suite.
+# These contain no registry state and are safe to rm -rf.
+# Usage: _cleanup_test_artifact_dirs "disN" "$dis_host"   (remote via _essh)
+#        _cleanup_test_artifact_dirs "conN"                (local, no second arg)
+_cleanup_test_artifact_dirs() {
+	local label="$1"
+	local remote_target="${2:-}"
+
+	if [ -n "$remote_target" ]; then
+		local _dis_fqdn
+		_dis_fqdn=$(echo "$remote_target" | sed 's/.*@//')
+		local _default_user="${VM_DEFAULT_USER:-steve}"
+		for _check_user in root "$_default_user"; do
+			local _found
+			_found=$(_essh "${_check_user}@${_dis_fqdn}" "ls -d ~/e2e-test-* 2>/dev/null" || true)
+			if [ -n "$_found" ]; then
+				echo "  WARNING: test artifact dirs found on $label ($_check_user): $_found"
+				_essh "${_check_user}@${_dis_fqdn}" "rm -rf ~/e2e-test-*" 2>&1
+			fi
+		done
+	else
+		local _found=""
+		for _d in "$HOME"/e2e-test-*; do
+			[ -d "$_d" ] && _found+=" $_d"
+		done
+		if [ -n "$_found" ]; then
+			echo "  WARNING: test artifact dirs found on $label:$_found"
+			rm -rf "$HOME"/e2e-test-*
+		fi
+	fi
 }
 
 # Verify no orphan cluster VMs exist in this pool's vCenter folder.
@@ -580,12 +621,12 @@ _revert_dis_snapshot() {
 # Prerequisite: _pre_suite_cleanup has already run (deletes clusters/mirrors
 #               via .cleanup/.mirror-cleanup files).
 
-_cleanup_dis_aba() {
+_cleanup_dis() {
 	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-	# Registry cleanup on conN is handled by _cleanup_con_quay() -- not here.
+	# Registry cleanup on conN is handled by _cleanup_con_registry() -- not here.
 	# This function only cleans the disN filesystem and firewall.
 
 	# 0. Uninstall any stale registry on disN via aba, for EACH user that may
@@ -665,9 +706,11 @@ _cleanup_dis_aba() {
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/tmp/* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror && rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane}" 2>&1
-		# Mirror data dirs may contain files owned by container-mapped UIDs
+		# Registry/test data dirs may contain files owned by container-mapped UIDs
 		# (rootless podman UID remapping), so sudo is needed for cleanup.
-		for _mdir in $_E2E_MIRROR_DATA_DIRS; do
+		# Uses globs (e2e-mirror-*, e2e-test-*) + ABA-internal dirs.
+		_essh "$_uhost" "sudo rm -rf ~/e2e-mirror-* ~/e2e-test-*" 2>&1
+		for _mdir in $_E2E_ABA_INTERNAL_DIRS; do
 			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
 		done
 	done
@@ -821,7 +864,7 @@ _pre_suite_cleanup() {
 			# (not silently rm -rf'd with orphan VMs left behind).
 		if ! ( _essh "$target" \
 			"if [ -d '$abs_path' ]; then
-				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete
+				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete --force
 			else
 				echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
 				echo '  (orphan VM check already passed -- no dangling VMs)'
@@ -860,7 +903,7 @@ _pre_suite_cleanup() {
 			_mirror_rc=0
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall; else echo '  (dir not found -- already cleaned)'; fi" \
+			"if [ -d '$abs_path' ]; then \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall && rm -rf '$abs_path'; else echo '  (dir not found -- already cleaned)'; fi" \
 			< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
@@ -934,7 +977,7 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		}
 	else
 		# Default: clean disN using ABA's own commands (exercises product code paths)
-		if ! _cleanup_dis_aba; then
+		if ! _cleanup_dis; then
 			echo ""
 			echo "  ERROR: disN cleanup failed -- cannot proceed with a dirty disN."
 			echo "  Check SSH connectivity and disk state on ${DIS_VM}.${VM_BASE_DOMAIN}"
@@ -945,18 +988,22 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 	fi
 
 	# Clean up any stale Quay/registry state on conN from previous suite
-	_cleanup_con_quay
+	_cleanup_con_registry
 	_cleanup_non_mirror_local
 	_reset_con_firewall
 
-	# Verify no mirror data dirs survived cleanup on either host.
-	# If any exist, aba uninstall has a bug -- stop before starting the suite.
+	# Remove test artifact dirs (e2e-test-*) before verification
 	_dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-	if ! _verify_no_mirror_data_dirs "disN" "$_dis_host"; then
+	_cleanup_test_artifact_dirs "disN" "$_dis_host"
+	_cleanup_test_artifact_dirs "conN"
+
+	# Verify no registry data dirs survived cleanup on either host.
+	# If any exist, aba uninstall has a bug -- stop before starting the suite.
+	if ! _verify_no_registry_data_dirs "disN" "$_dis_host"; then
 		echo "1" > "$RC_FILE"
 		exit 1
 	fi
-	if ! _verify_no_mirror_data_dirs "conN"; then
+	if ! _verify_no_registry_data_dirs "conN"; then
 		echo "1" > "$RC_FILE"
 		exit 1
 	fi
@@ -1041,23 +1088,25 @@ while true; do
 					exit 99
 				}
 			else
-				if ! _cleanup_dis_aba; then
+				if ! _cleanup_dis; then
 					echo "  ERROR: disN cleanup failed during restart -- cannot proceed."
 					echo "99" > "$RC_FILE"
 					exit 99
 				fi
 			fi
-			_cleanup_con_quay
+			_cleanup_con_registry
 			_cleanup_non_mirror_local
 			_reset_con_firewall
 
-			# Verify no mirror data dirs survived cleanup
+			# Remove test artifact dirs, then verify no registry data dirs survived
 			_dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-			if ! _verify_no_mirror_data_dirs "disN" "$_dis_host"; then
+			_cleanup_test_artifact_dirs "disN" "$_dis_host"
+			_cleanup_test_artifact_dirs "conN"
+			if ! _verify_no_registry_data_dirs "disN" "$_dis_host"; then
 				echo "1" > "$RC_FILE"
 				exit 1
 			fi
-			if ! _verify_no_mirror_data_dirs "conN"; then
+			if ! _verify_no_registry_data_dirs "conN"; then
 				echo "1" > "$RC_FILE"
 				exit 1
 			fi
