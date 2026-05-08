@@ -31,6 +31,33 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 # =============================================================================
+# Persistent cluster wizard state (survives Back → re-entry)
+# =============================================================================
+_CL_STATE_INIT=false
+_cl_name=""
+_cl_domain=""
+_cl_type=""
+_cl_workers=""
+_cl_network=""
+_cl_starting_ip=""
+_cl_api_vip=""
+_cl_ingress_vip=""
+_cl_dns=""
+_cl_gateway=""
+_cl_ntp=""
+_cl_ports=""
+_cl_vlan=""
+_cl_connection=""
+_cl_macs=""
+_cl_master_cpu=""
+_cl_master_mem=""
+_cl_worker_cpu=""
+_cl_worker_mem=""
+_cl_disk=""
+_cl_mac_template=""
+_cl_platform=""
+
+# =============================================================================
 # Cluster config persistence helpers
 # =============================================================================
 
@@ -280,31 +307,62 @@ _configure_platform_file() {
 cluster_install_flow() {
 	tui_log "Action: Install Cluster (unified configure + install)"
 
-	# State variables for the form (defaults)
-	local cl_name="ocp"
-	local cl_domain="${domain:-}"
-	local cl_type="sno"
-	local cl_workers="2"
-	local cl_network="" cl_starting_ip="" cl_api_vip="" cl_ingress_vip=""
-	local cl_dns="" cl_gateway="" cl_ntp=""
-	local cl_ports="" cl_vlan="" cl_connection="mirror" cl_macs=""
-	local cl_master_cpu="8" cl_master_mem="32"
-	local cl_worker_cpu="4" cl_worker_mem="16"
-	local cl_disk="" cl_mac_template=""
+	# Initialize state once per session; subsequent calls reuse previous values
+	if [[ "$_CL_STATE_INIT" != "true" ]]; then
+		_cl_name="ocp"
+		_cl_domain="${domain:-}"
+		_cl_type="sno"
+		_cl_workers="2"
+		_cl_network=""
+		_cl_starting_ip=""
+		_cl_api_vip=""
+		_cl_ingress_vip=""
+		_cl_dns=""
+		_cl_gateway=""
+		_cl_ntp=""
+		_cl_ports=""
+		_cl_vlan=""
+		_cl_connection="mirror"
+		_cl_macs=""
+		_cl_master_cpu="8"
+		_cl_master_mem="32"
+		_cl_worker_cpu="4"
+		_cl_worker_mem="16"
+		_cl_disk=""
+		_cl_mac_template=""
+		_cl_platform="${platform:-bm}"
+		_CL_STATE_INIT=true
+	fi
 
-	# Platform default (from sourced aba.conf)
-	local cl_platform="${platform:-bm}"
+	# Local aliases for readability (reference the globals)
+	local cl_name="$_cl_name"
+	local cl_domain="$_cl_domain"
+	local cl_type="$_cl_type"
+	local cl_workers="$_cl_workers"
+	local cl_network="$_cl_network" cl_starting_ip="$_cl_starting_ip"
+	local cl_api_vip="$_cl_api_vip" cl_ingress_vip="$_cl_ingress_vip"
+	local cl_dns="$_cl_dns" cl_gateway="$_cl_gateway" cl_ntp="$_cl_ntp"
+	local cl_ports="$_cl_ports" cl_vlan="$_cl_vlan"
+	local cl_connection="$_cl_connection" cl_macs="$_cl_macs"
+	local cl_master_cpu="$_cl_master_cpu" cl_master_mem="$_cl_master_mem"
+	local cl_worker_cpu="$_cl_worker_cpu" cl_worker_mem="$_cl_worker_mem"
+	local cl_disk="$_cl_disk" cl_mac_template="$_cl_mac_template"
+	local cl_platform="$_cl_platform"
 
 	# --- Load from existing cluster.conf if present (config = single source of truth) ---
 	local _draft_loaded=false
+	local _is_reentry=false
+	[[ -n "$cl_name" && "$cl_name" != "ocp" ]] && _is_reentry=true
+	[[ -n "$cl_network" || -n "$cl_starting_ip" ]] && _is_reentry=true
+
 	if [[ -n "$cl_name" && -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
 		_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
 		_draft_loaded=true
 		tui_log "Loaded existing cluster.conf for '$cl_name'"
 	fi
 
-	# Only apply auto-detect defaults if no draft was loaded
-	if [[ "$_draft_loaded" == "false" ]]; then
+	# Only apply auto-detect defaults on first entry (not re-entry or draft load)
+	if [[ "$_draft_loaded" == "false" && "$_is_reentry" == "false" ]]; then
 		# Pre-fill from sourced aba.conf variables, fallback to auto-detect
 		cl_network="${machine_network:-}"
 		[[ -z "$cl_network" ]] && cl_network=$(get_machine_network 2>/dev/null) || true
@@ -344,10 +402,25 @@ cluster_install_flow() {
 		esac
 	fi
 
-	# If in DIRECT mode, lock connection
+	# In DIRECT mode, default to "direct" but also allow "proxy" (no "mirror")
 	if [[ "$_TUI_MODE" == "DIRECT" ]]; then
-		cl_connection="direct"
+		[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
 	fi
+
+	# Save locals back to globals (called before every return)
+	_cl_save_state() {
+		_cl_name="$cl_name"; _cl_domain="$cl_domain"
+		_cl_type="$cl_type"; _cl_workers="$cl_workers"
+		_cl_network="$cl_network"; _cl_starting_ip="$cl_starting_ip"
+		_cl_api_vip="$cl_api_vip"; _cl_ingress_vip="$cl_ingress_vip"
+		_cl_dns="$cl_dns"; _cl_gateway="$cl_gateway"; _cl_ntp="$cl_ntp"
+		_cl_ports="$cl_ports"; _cl_vlan="$cl_vlan"
+		_cl_connection="$cl_connection"; _cl_macs="$cl_macs"
+		_cl_master_cpu="$cl_master_cpu"; _cl_master_mem="$cl_master_mem"
+		_cl_worker_cpu="$cl_worker_cpu"; _cl_worker_mem="$cl_worker_mem"
+		_cl_disk="$cl_disk"; _cl_mac_template="$cl_mac_template"
+		_cl_platform="$cl_platform"
+	}
 
 	# Page navigation: each page function returns 0 (advance) or 1 (go back).
 	# Page 1 Back breaks the loop (returns to action menu).
@@ -381,7 +454,7 @@ cluster_install_flow() {
 				;;
 			5)
 				# Review/confirm page — returns 1 if user presses "Back"
-				_cluster_execute && return 0
+				_cluster_execute && { _cl_save_state; return 0; }
 				# Back from review → return to last real page
 				if [[ "$cl_platform" != "bm" ]]; then
 					page=4
@@ -393,6 +466,7 @@ cluster_install_flow() {
 			0)
 				# Cancelled from page 1 — still save draft if user entered anything
 				_persist_cluster_draft
+				_cl_save_state
 				return 1
 				;;
 		esac
@@ -400,6 +474,7 @@ cluster_install_flow() {
 	done
 
 	# If cancelled from page 1, return to action menu
+	_cl_save_state
 	[[ $page -eq 0 ]] && return 1
 }
 
@@ -430,12 +505,12 @@ _cluster_page_basics() {
 				;;
 			*)   _plat_desc="$cl_platform" ;;
 		esac
-		items+=("plat" "Platform:       ${_plat_desc}${_plat_status}")
-		items+=("name" "Cluster name:   $cl_name")
-		items+=("dom" "Base domain:    ${cl_domain:-(not set)}")
-		items+=("type" "Type:           $cl_type")
+		items+=("P" "Platform:       ${_plat_desc}${_plat_status}")
+		items+=("N" "Cluster name:   $cl_name")
+		items+=("D" "Base domain:    ${cl_domain:-(not set)}")
+		items+=("T" "Type:           $cl_type")
 		if [[ "$cl_type" == "standard" ]]; then
-			items+=("work" "Worker count:   $cl_workers")
+			items+=("W" "Worker count:   $cl_workers")
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_BASICS" \
@@ -484,7 +559,7 @@ To change version/channel, exit and re-run the setup wizard."
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-	name)
+	N)
 		while :; do
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NAME" \
 				--inputbox "$TUI2_MSG_CLUSTER_NAME_PROMPT" 0 0 "$cl_name" \
@@ -506,7 +581,7 @@ To change version/channel, exit and re-run the setup wizard."
 			break
 		done
 			;;
-		dom)
+		D)
 			while :; do
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_BASE_DOMAIN" \
 					--inputbox "$TUI2_MSG_BASE_DOMAIN_PROMPT" 0 0 "$cl_domain" \
@@ -523,7 +598,7 @@ To change version/channel, exit and re-run the setup wizard."
 				break
 			done
 			;;
-	type)
+	T)
 		# Toggle: sno → compact → standard → sno
 		case "$cl_type" in
 			sno) cl_type="compact" ;;
@@ -532,7 +607,7 @@ To change version/channel, exit and re-run the setup wizard."
 		esac
 		tui_log "Toggled type to: $cl_type"
 		;;
-	plat)
+	P)
 		# Toggle: bm → vmw → kvm → bm
 		# Only update port default if user hasn't manually edited it
 		local _prev_default=""
@@ -556,7 +631,7 @@ To change version/channel, exit and re-run the setup wizard."
 		fi
 		tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
 		;;
-		work)
+		W)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_COUNT" \
 						--inputbox "$TUI2_MSG_CLUSTER_WORKER_PROMPT" 0 0 "$cl_workers" \
@@ -579,18 +654,18 @@ To change version/channel, exit and re-run the setup wizard."
 
 # --- Page 2: Networking (menu-style) ---
 _cluster_page_network() {
-	local default_item="net"
+	local default_item="M"
 	while :; do
 		local items=()
-		items+=("net"  "Machine network: ${cl_network:-(auto)}")
-		items+=("sip"  "Starting IP:     ${cl_starting_ip:-(auto)}")
+		items+=("M"  "Machine network: ${cl_network:-(auto)}")
+		items+=("S"  "Starting IP:     ${cl_starting_ip:-(auto)}")
 		if [[ "$cl_type" != "sno" ]]; then
-			items+=("api"  "API VIP:         ${cl_api_vip:-(auto: fetch from DNS)}")
-			items+=("ing"  "Ingress VIP:     ${cl_ingress_vip:-(auto: fetch from DNS)}")
+			items+=("A"  "API VIP:         ${cl_api_vip:-(auto: fetch from DNS)}")
+			items+=("I"  "Ingress VIP:     ${cl_ingress_vip:-(auto: fetch from DNS)}")
 		fi
-		items+=("dns"  "DNS servers:     ${cl_dns:-(auto)}")
-		items+=("gw"   "Gateway:         ${cl_gateway:-(auto)}")
-		items+=("ntp"  "NTP servers:     ${cl_ntp:-(none)}")
+		items+=("D"  "DNS servers:     ${cl_dns:-(auto)}")
+		items+=("G"  "Gateway:         ${cl_gateway:-(auto)}")
+		items+=("N"  "NTP servers:     ${cl_ntp:-(none)}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NETWORK" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -629,7 +704,7 @@ _cluster_page_network() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			net)
+			M)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MACHINE_NET" \
 						--inputbox "$TUI2_MSG_NET_CIDR_PROMPT" 0 0 "$cl_network" \
@@ -646,7 +721,7 @@ _cluster_page_network() {
 					break
 				done
 				;;
-			sip)
+			S)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_STARTING_IP" \
 						--inputbox "$TUI2_MSG_NET_STARTING_IP_PROMPT" 0 0 "$cl_starting_ip" \
@@ -663,7 +738,7 @@ _cluster_page_network() {
 					break
 				done
 				;;
-			api)
+			A)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_API_VIP" \
 						--inputbox "$TUI2_MSG_NET_API_VIP_PROMPT" 0 0 "$cl_api_vip" \
@@ -680,7 +755,7 @@ _cluster_page_network() {
 					break
 				done
 				;;
-			ing)
+			I)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INGRESS_VIP" \
 						--inputbox "$TUI2_MSG_NET_INGRESS_VIP_PROMPT" 0 0 "$cl_ingress_vip" \
@@ -697,7 +772,7 @@ _cluster_page_network() {
 					break
 				done
 				;;
-			dns)
+			D)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DNS" \
 						--inputbox "$TUI2_MSG_NET_DNS_PROMPT" 0 0 "$cl_dns" \
@@ -714,7 +789,7 @@ _cluster_page_network() {
 					break
 				done
 				;;
-			gw)
+			G)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_GATEWAY" \
 						--inputbox "$TUI2_MSG_NET_GATEWAY_PROMPT" 0 0 "$cl_gateway" \
@@ -731,7 +806,7 @@ _cluster_page_network() {
 					break
 				done
 				;;
-			ntp)
+			N)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NTP" \
 						--inputbox "$TUI2_MSG_NET_NTP_PROMPT" 0 0 "$cl_ntp" \
@@ -754,28 +829,25 @@ _cluster_page_network() {
 
 # --- Page 3: Interfaces (menu-style with toggle) ---
 _cluster_page_iface() {
-	local default_item="ports"
+	local default_item="P"
 	# Normalize empty connection to "mirror" (ABA default)
 	[[ -z "$cl_connection" ]] && cl_connection="mirror"
 	while :; do
 		local conn_display="$cl_connection"
-		if [[ "$_TUI_MODE" == "DIRECT" ]]; then
-			conn_display="direct (locked)"
-		fi
 
 		# Build items — add MAC row for bare-metal
 		local iface_items=(
-			"ports" "Ports:       $cl_ports"
-			"vlan"  "VLAN:        ${cl_vlan:-(none)}"
-			"conn"  "Connection:  $conn_display"
+			"P" "Ports:       $cl_ports"
+			"V" "VLAN:        ${cl_vlan:-(none)}"
+			"C" "Connection:  $conn_display"
 		)
 		if [[ "$cl_platform" == "bm" ]]; then
 			local mac_count=0
 			[[ -n "$cl_macs" ]] && mac_count=$(echo "$cl_macs" | wc -l)
 			if [[ $mac_count -gt 0 ]]; then
-				iface_items+=("macs" "MACs:        $mac_count entered")
+				iface_items+=("M" "MACs:        $mac_count entered")
 			else
-				iface_items+=("macs" "MACs:        (none — paste to add)")
+				iface_items+=("M" "MACs:        (none — paste to add)")
 			fi
 		fi
 
@@ -815,7 +887,7 @@ _cluster_page_iface() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-		ports)
+		P)
 			while :; do
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_PORT_NAMES" \
 					--inputbox "$TUI2_MSG_IFACE_PORT_PROMPT" 0 0 "$cl_ports" \
@@ -832,7 +904,7 @@ _cluster_page_iface() {
 				break
 			done
 			;;
-		vlan)
+		V)
 			while :; do
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VLAN" \
 					--inputbox "$TUI2_MSG_IFACE_VLAN_PROMPT" 0 0 "$cl_vlan" \
@@ -849,10 +921,13 @@ _cluster_page_iface() {
 				break
 			done
 			;;
-		conn)
+		C)
 			if [[ "$_TUI_MODE" == "DIRECT" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"$TUI2_MSG_DIRECT_CONN_LOCKED" 0 0
+				# Toggle: direct ↔ proxy (no "mirror" in DIRECT mode)
+				case "$cl_connection" in
+					direct) cl_connection="proxy" ;;
+					*) cl_connection="direct" ;;
+				esac
 			else
 				# Toggle: mirror → proxy → direct → mirror
 				case "$cl_connection" in
@@ -860,10 +935,10 @@ _cluster_page_iface() {
 					proxy) cl_connection="direct" ;;
 					direct) cl_connection="mirror" ;;
 				esac
-				tui_log "Toggled connection to: $cl_connection"
 			fi
+			tui_log "Toggled connection to: $cl_connection"
 			;;
-		macs)
+		M)
 			# Paste MAC addresses (one per line, for bare-metal nodes)
 			dlg --backtitle "$(ui_backtitle)" --title "MAC Addresses" \
 				--inputbox "Enter MAC addresses (one per line, or comma-separated).\nFormat: aa:bb:cc:dd:ee:ff\n\nNeeded: 1 per node per port (masters + workers × ports)." \
@@ -882,7 +957,7 @@ _cluster_page_iface() {
 
 # --- Page 4: VM Resources (menu-style, only for vmw/kvm) ---
 _cluster_page_vm() {
-	local default_item="mcpu"
+	local default_item="C"
 	local mac_info=""
 	if [[ -f "$ABA_ROOT/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/macs.conf" 2>/dev/null; then
 		mac_info=" (from macs.conf)"
@@ -890,14 +965,14 @@ _cluster_page_vm() {
 
 	while :; do
 		local items=()
-		items+=("mcpu" "Master CPUs:    ${cl_master_cpu:-8}")
-		items+=("mmem" "Master Memory:  ${cl_master_mem:-32} GB")
+		items+=("C" "Master CPUs:    ${cl_master_cpu:-8}")
+		items+=("R" "Master Memory:  ${cl_master_mem:-32} GB")
 		if [[ "$cl_type" == "standard" ]]; then
-			items+=("wcpu" "Worker CPUs:    ${cl_worker_cpu:-4}")
-			items+=("wmem" "Worker Memory:  ${cl_worker_mem:-16} GB")
+			items+=("W" "Worker CPUs:    ${cl_worker_cpu:-4}")
+			items+=("E" "Worker Memory:  ${cl_worker_mem:-16} GB")
 		fi
-		items+=("disk" "Data disk:      ${cl_disk:-(none)} GB")
-		items+=("mac"  "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
+		items+=("D" "Data disk:      ${cl_disk:-(none)} GB")
+		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VM" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -933,37 +1008,37 @@ _cluster_page_vm() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			mcpu)
+			C)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
 					--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_master_cpu=$(<"$_TUI_TMP")
 				;;
-			mmem)
+			R)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
 					--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_master_mem=$(<"$_TUI_TMP")
 				;;
-			wcpu)
+			W)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
 					--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_worker_cpu=$(<"$_TUI_TMP")
 				;;
-			wmem)
+			E)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
 					--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_worker_mem=$(<"$_TUI_TMP")
 				;;
-			disk)
+			D)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DATA_DISK" \
 					--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 9 55 "$cl_disk" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_disk=$(<"$_TUI_TMP")
 				;;
-			mac)
+			A)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_TEMPLATE" \
 					--inputbox "$TUI2_MSG_VM_MAC_PROMPT" 0 0 "$cl_mac_template" \
 					2>"$_TUI_TMP"
@@ -981,10 +1056,10 @@ _cluster_execute() {
 
 	[[ -n "$cl_starting_ip" ]] && cmd="$cmd --starting-ip $cl_starting_ip"
 	[[ -n "$cl_network" ]] && cmd="$cmd --machine-network $cl_network"
-	[[ -n "$cl_dns" ]] && cmd="$cmd --dns $cl_dns"
+	[[ -n "$cl_dns" ]] && cmd="$cmd --dns ${cl_dns//,/ }"
 	[[ -n "$cl_gateway" ]] && cmd="$cmd --gateway-ip $cl_gateway"
-	[[ -n "$cl_ntp" ]] && cmd="$cmd --ntp $cl_ntp"
-	[[ -n "$cl_ports" ]] && cmd="$cmd --ports $cl_ports"
+	[[ -n "$cl_ntp" ]] && cmd="$cmd --ntp ${cl_ntp//,/ }"
+	[[ -n "$cl_ports" ]] && cmd="$cmd --ports ${cl_ports//,/ }"
 	[[ -n "$cl_vlan" ]] && cmd="$cmd --vlan $cl_vlan"
 	[[ "$cl_connection" == "proxy" || "$cl_connection" == "direct" ]] && cmd="$cmd --int-connection $cl_connection"
 
@@ -1031,9 +1106,13 @@ _cluster_execute() {
 		kvm) _plat_disp="kvm (libvirt/KVM)" ;;
 	esac
 
-	# Mirror registry name
+	# Mirror registry name — source mirror.conf for reg_host/reg_port
 	local _mirror_disp="(none — direct install)"
 	if [[ "$cl_connection" != "direct" && "$_TUI_MODE" != "DIRECT" ]]; then
+		local reg_host="${reg_host:-}" reg_port="${reg_port:-}"
+		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+			source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+		fi
 		_mirror_disp="${reg_host:-}${reg_host:+:}${reg_port:-}"
 		[[ -z "$_mirror_disp" || "$_mirror_disp" == ":" ]] && _mirror_disp="(local mirror)"
 	fi
@@ -1105,11 +1184,17 @@ _cluster_execute() {
 	if [[ "$cl_platform" == "bm" ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "Install Action" \
 			--menu "Choose the install action:" 0 0 0 \
-			"install" "Full Install (create ISO + monitor until complete)" \
-			"iso"     "Create ISO only (download ISO, then boot servers manually)" \
+			"F" "Full Install (create ISO + monitor until complete)" \
+			"I" "Create ISO only (download ISO, then boot servers manually)" \
 			2>"$_TUI_TMP"
 		case $? in
-			0) install_step=$(<"$_TUI_TMP") ;;
+			0)
+				local _action=$(<"$_TUI_TMP")
+				case "$_action" in
+					F) install_step="install" ;;
+					I) install_step="iso" ;;
+				esac
+				;;
 			1|255) return 1 ;;
 		esac
 	fi
@@ -1241,9 +1326,9 @@ cluster_day2_menu() {
 			--help-button \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
-			"full" "Day-2: Full configuration" \
-			"ntp"  "Day-2: NTP only" \
-			"osus" "Day-2: OSUS (Cincinnati upgrade service)" \
+			"F" "Day-2: Full configuration" \
+			"N" "Day-2: NTP only" \
+			"O" "Day-2: OSUS (Cincinnati upgrade service)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -1269,9 +1354,9 @@ cluster_day2_menu() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			full) _day2_run "day2" ;;
-			ntp)  _day2_run "day2-ntp" ;;
-			osus) _day2_run_osus ;;
+			F) _day2_run "day2" ;;
+			N) _day2_run "day2-ntp" ;;
+			O) _day2_run_osus ;;
 		esac
 	done
 }
