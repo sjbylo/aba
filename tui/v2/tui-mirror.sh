@@ -62,24 +62,257 @@ After installation, use 'Save' or 'Sync' to populate it with images."
 
 _mirror_install_local() {
 	tui_log "Installing mirror locally"
+
+	# Ensure mirror.conf exists (creates with defaults if missing)
+	if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		tui_log "Creating mirror.conf with defaults"
+		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+	fi
+
+	# Load current values
+	local m_host="" m_port="" m_user="" m_pw="" m_path="" m_vendor="" m_datadir=""
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+	fi
+	m_host="${reg_host:-$(hostname -f 2>/dev/null || hostname)}"
+	m_port="${reg_port:-8443}"
+	m_user="${reg_user:-init}"
+	m_pw="${reg_pw:-p4ssw0rd}"
+	m_path="${reg_path:-/ocp4/openshift4}"
+	m_vendor="${reg_vendor:-auto}"
+	m_datadir="${data_dir:-~}"
+
+	# Menu-style config page
+	local default_item="H"
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration (local) " \
+			--ok-label "$TUI2_BTN_SELECT" \
+			--extra-button --extra-label "$TUI2_BTN_NEXT" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--help-button \
+			--menu "Configure local mirror registry — select a row to edit:" 18 70 7 \
+			"H"  "Hostname:     $m_host" \
+			"P"  "Port:         $m_port" \
+			"U"  "Username:     $m_user" \
+			"W"  "Password:     $m_pw" \
+			"I"  "Image path:   $m_path" \
+			"V"  "Vendor:       $m_vendor" \
+			"D"  "Data dir:     $m_datadir" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case "$rc" in
+			2)
+				show_help "Mirror Configuration" \
+"Configure settings for the local mirror registry:
+
+  • Hostname — FQDN for the registry (must resolve to this host)
+  • Port — registry listen port (default 8443)
+  • Username — registry login user
+  • Password — registry login password
+  • Image path — namespace path for mirrored images
+  • Vendor — auto (detects arch), quay, or docker
+  • Data dir — storage location for images"
+				continue
+				;;
+			3) break ;;  # Next → proceed to install
+			1|255) return 1 ;;  # Back/Escape
+			0) ;;  # Select → edit the chosen field
+		esac
+
+		local field
+		field=$(<"$_TUI_TMP")
+		[[ -n "$field" ]] && default_item="$field"
+
+		case "$field" in
+			H)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_host=$(<"$_TUI_TMP")
+				;;
+			P)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_port=$(<"$_TUI_TMP")
+				;;
+			U)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_user=$(<"$_TUI_TMP")
+				;;
+			W)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_pw=$(<"$_TUI_TMP")
+				;;
+			I)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_path=$(<"$_TUI_TMP")
+				;;
+			V)
+				# Toggle: auto → quay → docker → auto
+				case "$m_vendor" in
+					auto) m_vendor="quay" ;;
+					quay) m_vendor="docker" ;;
+					docker) m_vendor="auto" ;;
+					*) m_vendor="auto" ;;
+				esac
+				tui_log "Toggled vendor to: $m_vendor"
+				;;
+			D)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory (absolute path):" 0 60 "$m_datadir" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_datadir=$(<"$_TUI_TMP")
+				;;
+		esac
+	done
+
+	# Save to mirror.conf
+	tui_log "Saving mirror config: host=$m_host port=$m_port vendor=$m_vendor"
+	replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_ssh_user -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_ssh_key -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+
 	confirm_and_execute "aba -d mirror install" "Install Local Mirror"
 }
 
 _mirror_install_remote() {
 	tui_log "Installing mirror on remote host"
 
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_INSTALL_MIRROR" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--inputbox "$TUI2_MSG_MIRROR_REMOTE_PROMPT" 0 0 "" \
-		2>"$_TUI_TMP"
-	local rc=$?
-	[[ $rc -ne 0 ]] && return 1
+	# Ensure mirror.conf exists
+	if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		tui_log "Creating mirror.conf with defaults"
+		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+	fi
 
-	local remote_host
-	remote_host=$(<"$_TUI_TMP")
-	[[ -z "$remote_host" ]] && return 1
+	# Load current values
+	local m_host="" m_port="" m_user="" m_pw="" m_path="" m_vendor="" m_datadir=""
+	local m_ssh_user="" m_ssh_key=""
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+	fi
+	m_host="${reg_host:-}"
+	m_port="${reg_port:-8443}"
+	m_user="${reg_user:-init}"
+	m_pw="${reg_pw:-p4ssw0rd}"
+	m_path="${reg_path:-/ocp4/openshift4}"
+	m_vendor="${reg_vendor:-auto}"
+	m_datadir="${data_dir:-~}"
+	m_ssh_user="${reg_ssh_user:-root}"
+	m_ssh_key="${reg_ssh_key:-$HOME/.ssh/id_rsa}"
 
-	confirm_and_execute "aba -d mirror install --host $remote_host" "Install Remote Mirror"
+	# Menu-style config page
+	local default_item="H"
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration (remote) " \
+			--ok-label "$TUI2_BTN_SELECT" \
+			--extra-button --extra-label "$TUI2_BTN_NEXT" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--help-button \
+			--menu "Configure remote mirror registry — select a row to edit:" 20 70 9 \
+			"H"  "Hostname:     ${m_host:-(enter FQDN)}" \
+			"S"  "SSH user:     $m_ssh_user" \
+			"K"  "SSH key:      $m_ssh_key" \
+			"P"  "Port:         $m_port" \
+			"U"  "Username:     $m_user" \
+			"W"  "Password:     $m_pw" \
+			"I"  "Image path:   $m_path" \
+			"V"  "Vendor:       $m_vendor" \
+			"D"  "Data dir:     $m_datadir" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case "$rc" in
+			2)
+				show_help "Mirror Configuration (Remote)" \
+"Configure settings for the remote mirror registry:
+
+  • Hostname — FQDN of the remote registry host
+  • SSH user — SSH login user on the remote host
+  • SSH key — path to SSH private key for remote access
+  • Port — registry listen port (default 8443)
+  • Username — registry login user
+  • Password — registry login password
+  • Image path — namespace path for mirrored images
+  • Vendor — auto (detects arch), quay, or docker
+  • Data dir — storage location on remote host"
+				continue
+				;;
+			3)  # Next → validate and proceed
+				if [[ -z "$m_host" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Hostname is required for remote install." 0 0
+					default_item="H"
+					continue
+				fi
+				break
+				;;
+			1|255) return 1 ;;
+			0) ;;
+		esac
+
+		local field
+		field=$(<"$_TUI_TMP")
+		[[ -n "$field" ]] && default_item="$field"
+
+		case "$field" in
+			H)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Remote registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_host=$(<"$_TUI_TMP")
+				;;
+			S)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH username:" 0 40 "$m_ssh_user" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_ssh_user=$(<"$_TUI_TMP")
+				;;
+			K)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH private key path:" 0 60 "$m_ssh_key" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_ssh_key=$(<"$_TUI_TMP")
+				;;
+			P)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_port=$(<"$_TUI_TMP")
+				;;
+			U)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_user=$(<"$_TUI_TMP")
+				;;
+			W)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_pw=$(<"$_TUI_TMP")
+				;;
+			I)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_path=$(<"$_TUI_TMP")
+				;;
+			V)
+				case "$m_vendor" in
+					auto) m_vendor="quay" ;;
+					quay) m_vendor="docker" ;;
+					docker) m_vendor="auto" ;;
+					*) m_vendor="auto" ;;
+				esac
+				tui_log "Toggled vendor to: $m_vendor"
+				;;
+			D)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory on remote host:" 0 60 "$m_datadir" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_datadir=$(<"$_TUI_TMP")
+				;;
+		esac
+	done
+
+	# Save to mirror.conf
+	tui_log "Saving mirror config: host=$m_host ssh=$m_ssh_user vendor=$m_vendor"
+	replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$ABA_ROOT/mirror/mirror.conf"
+
+	confirm_and_execute "aba -d mirror install" "Install Remote Mirror"
 }
 
 # =============================================================================
@@ -217,13 +450,18 @@ mirror_view_isc() {
 	else
 		# Editable — offer view/edit/reset
 		while :; do
+		# Only show "Reset" if ISC was manually edited (newer than .created flag)
+		local _isc_items=("1" "View (read-only)" "2" "Edit")
+		local _created_flag="$ABA_ROOT/mirror/data/.created"
+		if [[ -f "$_created_flag" && "$isconf_file" -nt "$_created_flag" ]]; then
+			_isc_items+=("3" "Reset to auto-generated")
+		fi
+
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
 			--menu "$TUI2_MSG_ISC_MENU" 0 0 0 \
-				"1" "View (read-only)" \
-				"2" "Edit" \
-				"3" "Reset to auto-generated" \
+				"${_isc_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
 			if [[ $rc -eq 255 ]]; then
@@ -593,10 +831,10 @@ _operator_view_basket() {
 _ensure_offline_prereqs() {
 	tui_log "Ensuring offline prerequisites are downloaded..."
 
-	# Peek: skip entirely if both tasks already completed
+	# Peek using the SAME per-tool IDs that ABA core uses
 	local need_download=false
-	run_once -p -i "aba:cli:download-all" 2>/dev/null || need_download=true
-	run_once -p -i "aba:mirror:download-registries" 2>/dev/null || need_download=true
+	run_once -p -i "cli:download:openshift-install:${ocp_version}" 2>/dev/null || need_download=true
+	run_once -p -i "mirror:reg:download" 2>/dev/null || need_download=true
 
 	if [[ "$need_download" == "false" ]]; then
 		tui_log "Offline prerequisites already ready (peek passed)."
@@ -606,15 +844,15 @@ _ensure_offline_prereqs() {
 	dlg --backtitle "$(ui_backtitle)" --title "Preparing" \
 		--infobox "Downloading offline files (CLI tools + registry installers)...\n\nPlease wait." 7 65
 
-	if ! run_once -q -w -i "aba:cli:download-all" -- \
-		bash -lc "cd '$ABA_ROOT' && aba -d cli/ download-all" >>"$_TUI_LOG_FILE" 2>&1; then
+	# cli-download-all.sh uses per-tool run_once IDs (cli:download:<tool>[:<ver>])
+	if ! bash -lc "cd '$ABA_ROOT' && scripts/cli-download-all.sh --wait" >>"$_TUI_LOG_FILE" 2>&1; then
 		dlg --backtitle "$(ui_backtitle)" --title " Download Failed " \
 			--msgbox "Failed to download CLI tools.\n\nCheck internet connectivity and try again." 0 0
 		return 1
 	fi
 
-	if ! run_once -q -w -i "aba:mirror:download-registries" -- \
-		bash -lc "cd '$ABA_ROOT' && aba -d mirror/ download-registries" >>"$_TUI_LOG_FILE" 2>&1; then
+	if ! run_once -q -w -i "mirror:reg:download" -- \
+		make -sC "$ABA_ROOT/mirror" download-registries >>"$_TUI_LOG_FILE" 2>&1; then
 		dlg --backtitle "$(ui_backtitle)" --title " Download Failed " \
 			--msgbox "Failed to download registry installers.\n\nCheck internet connectivity and try again." 0 0
 		return 1

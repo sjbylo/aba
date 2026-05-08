@@ -339,20 +339,36 @@ _exec_in_tui() {
 	box_width=$((term_width - 2))
 
 	trap : INT
-	ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
+	PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
 		sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 		dlg --backtitle "$(ui_backtitle)" --title "Executing: $tui_cmd" \
 			--progressbox $box_height $box_width
 	local exit_code=${PIPESTATUS[0]}
 	trap - INT
 
+	# Strip ANSI escape codes so dialog textbox can scroll properly
+	sed -i -r 's/\x1B\[[0-9;]*[mK]//g; s/\x1B\(B//g' "$output_file"
+
+	# Prepend last lines to top so user sees the result immediately
+	local review_file
+	review_file=$(mktemp)
+	{
+		echo "═══ Result (last output) ═══════════════════════════════"
+		echo ""
+		tail -20 "$output_file"
+		echo ""
+		echo "═══ Full log (scroll down) ═════════════════════════════"
+		echo ""
+		cat "$output_file"
+	} > "$review_file"
+
 	if [[ $exit_code -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn: $cmd" \
 			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
 			--extra-button --extra-label "$TUI2_BTN_EXIT_TUI" \
-			--textbox "$output_file" 0 0
+			--textbox "$review_file" 0 0
 		local btn=$?
-		rm -f "$output_file"
+		rm -f "$output_file" "$review_file"
 		case $btn in
 			3)
 				clear
@@ -364,9 +380,9 @@ _exec_in_tui() {
 		dlg --backtitle "$(ui_backtitle)" --title "\Z1FAILED (exit $exit_code)\Zn: $cmd" \
 			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
 			--extra-button --extra-label "$TUI2_BTN_RETRY" \
-			--textbox "$output_file" 0 0
+			--textbox "$review_file" 0 0
 		local fail_btn=$?
-		rm -f "$output_file"
+		rm -f "$output_file" "$review_file"
 		# Extra button (3) = Retry
 		[[ $fail_btn -eq 3 ]] && return 2
 		return 1

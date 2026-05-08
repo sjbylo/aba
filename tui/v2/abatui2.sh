@@ -32,6 +32,9 @@ if [[ ! -t 0 ]]; then
 	exit 1
 fi
 
+# Progress tick helper (prints inline tick after each stage)
+_tick() { echo "  [done] $1"; }
+
 # =============================================================================
 # Derive ABA_ROOT
 # =============================================================================
@@ -64,6 +67,8 @@ source "$ABA_ROOT/tui/v2/tui-cluster.sh"
 source "$ABA_ROOT/tui/v2/tui-disco.sh"
 source "$ABA_ROOT/tui/v2/tui-direct.sh"
 
+_tick "Loading modules"
+
 # =============================================================================
 # Startup guard — verify critical functions
 # =============================================================================
@@ -75,14 +80,49 @@ done
 # Auto-install required packages if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
 
-tui_log "=========================================="
-tui_log "ABA TUI v2 started"
-tui_log "ABA_ROOT: $ABA_ROOT"
-tui_log "=========================================="
+_tick "Checking packages"
+
+# =============================================================================
+# CLI flags
+# =============================================================================
+
+_TUI_FORCE_MODE=""
+_TUI_DIRECT_FROM_CONNO=false
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--disco)  _TUI_FORCE_MODE="DISCO" ;;
+		--conno)  _TUI_FORCE_MODE="CONNO" ;;
+		--direct) _TUI_FORCE_MODE="DIRECT" ;;
+		--help|-h)
+			echo "ABA TUI v2 — OpenShift Installer"
+			echo
+			echo "Usage: $(basename "$0") [--disco|--conno|--direct|--help]"
+			echo
+			echo "Modes:"
+			echo "  --disco   Force disconnected mode"
+			echo "  --conno   Force connected-with-mirror mode"
+			echo "  --direct  Force direct-from-internet mode"
+			echo
+			echo "Without flags, mode is auto-detected."
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1 (use --help)"
+			exit 1
+			;;
+	esac
+	shift
+done
 
 # =============================================================================
 # Load existing config (if any)
 # =============================================================================
+
+tui_log "=========================================="
+tui_log "ABA TUI v2 started"
+tui_log "ABA_ROOT: $ABA_ROOT"
+tui_log "=========================================="
 
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
 	# shellcheck disable=SC1091
@@ -142,38 +182,7 @@ unset _ver_short _ops_arr _op _set_arr _s _sf _line
 # Clean up failed run_once tasks from previous sessions
 run_once -F 2>/dev/null || true
 
-# =============================================================================
-# CLI flags
-# =============================================================================
-
-_TUI_FORCE_MODE=""
-_TUI_DIRECT_FROM_CONNO=false
-
-while [[ $# -gt 0 ]]; do
-	case "$1" in
-		--disco)  _TUI_FORCE_MODE="DISCO" ;;
-		--conno)  _TUI_FORCE_MODE="CONNO" ;;
-		--direct) _TUI_FORCE_MODE="DIRECT" ;;
-		--help|-h)
-			echo "ABA TUI v2 — OpenShift Installer"
-			echo
-			echo "Usage: $(basename "$0") [--disco|--conno|--direct|--help]"
-			echo
-			echo "Modes:"
-			echo "  --disco   Force disconnected mode"
-			echo "  --conno   Force connected-with-mirror mode"
-			echo "  --direct  Force direct-from-internet mode"
-			echo
-			echo "Without flags, mode is auto-detected."
-			exit 0
-			;;
-		*)
-			echo "Unknown option: $1 (use --help)"
-			exit 1
-			;;
-	esac
-	shift
-done
+_tick "Loading config"
 
 # =============================================================================
 # Pre-fetch internet check in background
@@ -183,11 +192,26 @@ tui_log "Kicking off background internet check"
 run_once -i "aba:check:internet" -- \
 	bash -lc "source ./scripts/include_all.sh; check_internet_connectivity aba"
 
+# Pre-fetch latest stable version (no pull secret needed, just api.openshift.com)
+tui_log "Kicking off background version fetch (stable)"
+run_once -i "ocp:stable:latest_version" -- \
+	bash -lc "source ./scripts/include_all.sh; fetch_latest_version stable"
+
 # Background mirror health check (if mirror exists)
 if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
 	tui_log "Kicking off background mirror verify"
 	run_once -i "aba:mirror:verify" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror verify" &
 fi
+
+_tick "Checking connectivity"
+
+# Wait for internet check to complete (this is the slow part)
+run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+
+_tick "Ready"
+unset -f _tick
+sleep 0.3
+clear
 
 # =============================================================================
 # Mode Detection
@@ -336,7 +360,7 @@ _mode_select_mirror_or_direct() {
 			--cancel-label "$TUI2_BTN_EXIT" \
 			--help-button \
 			--default-item "M" \
-			--menu "$TUI2_MSG_MODE_SELECT" 16 70 3 \
+			--menu "$TUI2_MSG_MODE_SELECT" 14 70 3 \
 			"M" "$TUI2_MSG_MODE_MIRROR" \
 			"-" "───────────────────────────────────────────────────────" \
 			"D" "$TUI2_MSG_MODE_DIRECT" \
@@ -399,7 +423,7 @@ _conno_main() {
 	# Items that are unavailable get "[reason]" appended to their label
 	# and show a msgbox when selected (greyed-out pattern).
 	# Separators (space tags) visually group mirror ops from cluster ops.
-	local default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"
+	local default_item="$TUI2_CONNO_TAG_OPERATORS"
 	while :; do
 		# Re-check internet status each iteration (handles dynamic connectivity changes)
 		if check_internet_connectivity "aba" quiet 2>/dev/null; then
@@ -482,18 +506,18 @@ _conno_main() {
 		fi
 
 		items+=(
-			" "                              "──── Mirror ────────────────────────"
+			"" "──── Mirror ────────────────────────"
 			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_VIEW_ISC"       "$visc_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
 			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
-			"  "                             "──── Cluster ───────────────────────"
+			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
-			"   "                            "──── Other ─────────────────────────"
+			"" "──── Mode ──────────────────────────"
 			"$TUI2_CONNO_TAG_SWITCH_DIRECT"  "$switch_label"
 			"$TUI2_CONNO_TAG_SWITCH_DISCO"   "$disco_switch_label"
 		)
@@ -545,7 +569,9 @@ Mode switching:
 
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ -n "$choice" && "$choice" != " " && "$choice" != "  " && "$choice" != "   " ]] && default_item="$choice"
+		# Skip separator items (empty tag)
+		[[ -z "$choice" ]] && continue
+		default_item="$choice"
 
 		case "$choice" in
 		"$TUI2_CONNO_TAG_INSTALL_MIRROR")

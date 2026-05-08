@@ -63,6 +63,23 @@ direct_wizard() {
 		case "$step" in
 		pull_secret)
 			if _direct_pull_secret; then
+				# Start redhat-operator catalog ASAP (uses core task IDs)
+				"$ABA_ROOT/scripts/create-containers-auth.sh" >>"$_TUI_LOG_FILE" 2>&1 || true
+				local _ps_ver=""
+				if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+					_ps_ver=$(source <(normalize-aba-conf 2>/dev/null) && echo "${ocp_version:-}")
+				fi
+				if [[ ! "$_ps_ver" == *.*.* ]]; then
+					# Wait for version fetch started at TUI boot (should be done by now)
+					run_once -q -w -i "ocp:stable:latest_version" 2>/dev/null || true
+					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null)
+				fi
+				if [[ "$_ps_ver" == *.*.* ]]; then
+					local _cat_ver="${_ps_ver%.*}"
+					tui_log "Starting redhat-operator catalog for $_cat_ver"
+					run_once -i "catalog:${_cat_ver}:redhat-operator" -- \
+						"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$_cat_ver"
+				fi
 				step="channel"
 			else
 				return 1  # User cancelled
@@ -80,7 +97,13 @@ direct_wizard() {
 			version)
 				_direct_version
 				case "$DIALOG_RC" in
-					next) step="platform" ;;
+					next)
+						local _ver_short="${ocp_version%.*}"
+						tui_log "Starting CLI + catalog downloads for OCP $_ver_short"
+						"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
+						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
+						step="platform"
+						;;
 					back) step="channel" ;;
 					repeat) ;;
 					*) return 1 ;;
@@ -89,8 +112,17 @@ direct_wizard() {
 			platform)
 				_direct_platform
 				case "$DIALOG_RC" in
-					next) break ;;  # Wizard done
+					next) step="operators" ;;
 					back) step="version" ;;
+					repeat) ;;
+					*) return 1 ;;
+				esac
+				;;
+			operators)
+				_direct_operators
+				case "$DIALOG_RC" in
+					next) break ;;  # Wizard done
+					back) step="platform" ;;
 					repeat) ;;
 					*) return 1 ;;
 				esac
@@ -116,14 +148,14 @@ _direct_pull_secret() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--menu "$(printf "$TUI2_MSG_PULL_SECRET_FOUND" "$ps_file")" 0 0 0 \
-			"use"  "Use existing pull secret" \
-			"new"  "Enter a new pull secret" \
+			"U"  "Use existing pull secret" \
+			"N"  "Enter a new pull secret" \
 			2>"$_TUI_TMP"
 		local rc=$?
 		[[ $rc -ne 0 ]] && return 1  # Back
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ "$choice" == "use" ]] && return 0
+		[[ "$choice" == "U" ]] && return 0
 	fi
 
 	# Prompt for pull secret
@@ -132,34 +164,35 @@ _direct_pull_secret() {
 		--cancel-label "$TUI2_BTN_BACK" \
 		--msgbox "$TUI2_MSG_PULL_SECRET_INFO" 0 0
 
-	# Input box for pull secret JSON
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET_PASTE" \
-		--ok-label "$TUI2_BTN_SAVE" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--inputbox "$TUI2_MSG_PULL_SECRET_PASTE" 0 0 "" \
-		2>"$_TUI_TMP"
-	local rc=$?
-	[[ $rc -ne 0 ]] && return 1
+	# Loop until valid JSON entered or user presses Back
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET_PASTE" \
+			--ok-label "$TUI2_BTN_SAVE" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--inputbox "$TUI2_MSG_PULL_SECRET_PASTE" 0 0 "" \
+			2>"$_TUI_TMP"
+		local rc=$?
+		[[ $rc -ne 0 ]] && return 1
 
-	local secret
-	secret=$(<"$_TUI_TMP")
+		local secret
+		secret=$(<"$_TUI_TMP")
 
-	if [[ -z "$secret" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_PULL_SECRET_EMPTY" 0 0
-		return 1
-	fi
+		if [[ -z "$secret" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_PULL_SECRET_EMPTY" 0 0
+			continue
+		fi
 
-	# Validate JSON
-	if ! echo "$secret" | jq . >/dev/null 2>&1; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_PULL_SECRET_INVALID" 0 0
-		return 1
-	fi
+		if ! echo "$secret" | jq . >/dev/null 2>&1; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_PULL_SECRET_INVALID" 0 0
+			continue
+		fi
 
-	# Save
-	echo "$secret" > "$HOME/.pull-secret.json"
-	chmod 600 "$HOME/.pull-secret.json"
-	tui_log "Pull secret saved to ~/.pull-secret.json"
-	return 0
+		# Valid JSON — save and exit loop
+		echo "$secret" > "$HOME/.pull-secret.json"
+		chmod 600 "$HOME/.pull-secret.json"
+		tui_log "Pull secret saved to ~/.pull-secret.json"
+		return 0
+	done
 }
 
 # --- Channel Selection ---
@@ -261,19 +294,24 @@ _direct_version() {
 			DIALOG_RC="next"
 			return
 		fi
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
-			--inputbox "$TUI2_MSG_VERSION_MANUAL_PROMPT" 0 0 "" \
-			2>"$_TUI_TMP"
-		local man_rc=$?
-		if [[ $man_rc -eq 0 ]]; then
+		while :; do
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
+				--inputbox "$TUI2_MSG_VERSION_MANUAL_PROMPT" 0 0 "" \
+				2>"$_TUI_TMP"
+			local man_rc=$?
+			if [[ $man_rc -ne 0 ]]; then
+				DIALOG_RC="back"
+				return
+			fi
 			ocp_version=$(<"$_TUI_TMP")
-			if [[ -n "$ocp_version" ]]; then
+			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
 				return
 			fi
-		fi
-		DIALOG_RC="back"
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Invalid version format.\n\nExpected: x.y.z (e.g. 4.16.3)" 0 0
+		done
 		return
 	fi
 
@@ -302,17 +340,23 @@ _direct_version() {
 				1) ocp_version="$latest" ;;
 				2) ocp_version="$previous" ;;
 				3) ocp_version="$older" ;;
-				4)
+			4)
+				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
 						--inputbox "$TUI2_MSG_VERSION_ENTRY" 0 0 "${ocp_version:-$latest}" \
 						2>"$_TUI_TMP"
-					if [[ $? -eq 0 ]]; then
-						ocp_version=$(<"$_TUI_TMP")
-					else
+					if [[ $? -ne 0 ]]; then
 						DIALOG_RC="repeat"
 						return
 					fi
-					;;
+					ocp_version=$(<"$_TUI_TMP")
+					if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+						break
+					fi
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid version format.\n\nExpected: x.y.z (e.g. 4.16.3)" 0 0
+				done
+				;;
 			esac
 			tui_log "Selected version: $ocp_version"
 			DIALOG_RC="next"
@@ -380,6 +424,47 @@ _direct_platform() {
 		255)
 			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
 			DIALOG_RC="repeat"
+			;;
+	esac
+}
+
+# --- Operator Selection (optional wizard step) ---
+_direct_operators() {
+	DIALOG_RC=""
+	tui_log "DIRECT wizard: operator selection"
+
+	# Save config first so mirror_select_operators can read ocp_version
+	_direct_save_config
+
+	dlg --backtitle "$(ui_backtitle)" --title " Select Operators " \
+		--ok-label "$TUI2_BTN_SELECT" \
+		--cancel-label "$TUI2_BTN_BACK" \
+		--extra-button --extra-label "Skip" \
+		--menu "Select operators to include in the mirror, or skip for now.\n\nYou can always do this later from the action menu." 0 0 0 \
+		"1" "Select Operator Sets (day2, storage, networking...)" \
+		"2" "Search Operator Names" \
+		2>"$_TUI_TMP"
+	local rc=$?
+
+	case "$rc" in
+		0)
+			local choice
+			choice=$(<"$_TUI_TMP")
+			case "$choice" in
+				1) mirror_select_operators ;;
+				2) mirror_select_operators ;;
+			esac
+			DIALOG_RC="next"
+			;;
+		3)
+			# Skip
+			DIALOG_RC="next"
+			;;
+		1)
+			DIALOG_RC="back"
+			;;
+		255)
+			DIALOG_RC="back"
 			;;
 	esac
 }
