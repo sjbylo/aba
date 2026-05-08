@@ -233,7 +233,7 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(local_oc_tar_file) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for oc download" -i "cli:download:oc:$(ocp_version)" -- $(MAKE) --no-print-directory download-oc
 	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
-	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo [ABA] Error: Failed to extract $(local_oc_tar_file); exit 1; }
+	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_tar_file)"; rm -f $(local_oc_tar_file); $(MAKE) --no-print-directory download-oc; tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
 openshift_install_url := https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)
@@ -262,7 +262,7 @@ openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/b
 ~/bin/openshift-install: .init $(openshift_install_file) | ~/bin
 	@$(SCRIPTS)/run-once.sh -w -m "Waiting for openshift-install download" -i "cli:download:openshift-install:$(ocp_version)" -- $(MAKE) --no-print-directory download-openshift-install
 	@echo [ABA] Extracting  $(openshift_install_file) to $@
-	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || { echo [ABA] Error: Failed to extract $(openshift_install_file); exit 1; }
+	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || { echo "[ABA] Error: Corrupt tarball, re-downloading $(openshift_install_file)"; rm -f $(openshift_install_file); $(MAKE) --no-print-directory download-openshift-install; tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || exit 1; }
 	$@ --help >/dev/null || { echo [ABA] "Error: file $@ invalid!"; exit 1; }
 
 $(openshift_install_file):  ## Download openshift-install tarball
