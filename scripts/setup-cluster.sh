@@ -77,8 +77,8 @@ $exec_cmd
 msg="Install the cluster with: aba -d $name install  OR  cd $name; aba install"
 [ "$target" ] && msg="Proceed by running: aba -d $name $target  OR  cd $name; aba $target"
 
-# adding "exit 0" here to give best practise instuctions to cd into the cluster dir!
-if [ "$ask" ]; then
+# Show "how to install" instructions and exit, unless a target step was given
+if [ "$ask" ] && [ -z "$target" ]; then
 	echo
 	aba_info "The cluster directory has been created: $name"
 	aba_info "$msg"

@@ -119,6 +119,16 @@ reg_detect_existing() {
 			"See the README.md for further information."
 	fi
 
+	# Probe for Docker registry V2 API (returns 200 or 401 if a registry exists)
+	aba_info "Probing $reg_url/v2/"
+	if probe_host --any "$reg_url/v2/" "Docker registry API" 2>/dev/null; then
+		aba_abort \
+			"Existing Docker registry found at $reg_url/v2/" \
+			"If this is your registry, register it with: aba -d $(basename "$PWD") register --pull-secret-mirror <file> --ca-cert <file>" \
+			"The pull secret can also be created via 'aba -d $(basename "$PWD") password'" \
+			"See the README.md for further information."
+	fi
+
 	# Probe for any registry at the URL
 	aba_info "Probing $reg_url/"
 	if probe_host "$reg_url/" "registry root endpoint" 2>/dev/null; then
