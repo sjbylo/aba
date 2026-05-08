@@ -165,6 +165,23 @@ create_node() {
 			$cmd
 		fi
 
+		# NFS datastores can cause govc vm.create to silently leave the CD-ROM
+		# disconnected if the ISO isn't immediately accessible after upload.
+		local _cdrom_dev
+		_cdrom_dev=$(govc device.ls -vm "$vm_name" 2>/dev/null | awk '/^cdrom-/{print $1; exit}')
+		if [ -n "$_cdrom_dev" ]; then
+			local _cdrom_ok=""
+			for _try in 1 2 3; do
+				if govc device.info -json -vm "$vm_name" "$_cdrom_dev" 2>/dev/null | grep -q '"startConnected": true'; then
+					_cdrom_ok=1; break
+				fi
+				aba_info "CD-ROM ($_cdrom_dev) not connected (attempt $_try/3) -- reconnecting ISO on $vm_name"
+				govc device.connect -vm "$vm_name" "$_cdrom_dev" 2>/dev/null || true
+				sleep 2
+			done
+			[ -z "$_cdrom_ok" ] && aba_warning "CD-ROM may still be disconnected on $vm_name -- check ISO datastore accessibility"
+		fi
+
 		if [ -n "${START_VM:-}" ]; then
 			cmd="govc vm.power -on $vm_name"
 
