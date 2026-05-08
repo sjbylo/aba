@@ -1,5 +1,98 @@
 # ABA Backlog
 
+## Simplify port naming — auto-generate labels, only ask for port count
+
+**Priority:** Medium
+**Scope:** ABA core + TUI + CLI
+
+### Background
+
+Port names in the OpenShift Agent-Based Installer are **relational labels only** — they are
+placeholder strings that act as foreign keys linking MAC addresses to nmstate YAML config blocks.
+The installer's Go code uses regex to resolve these labels to actual hardware interface names at
+boot time. The port names do NOT need to match real hardware names (e.g. `ens192`, `eno1`).
+
+Only MAC addresses must match the physical hardware.
+
+### What this means for ABA
+
+- ABA does NOT need to ask users for actual port names
+- ABA can auto-generate placeholder names like `port0`, `port1`, etc.
+- The only question needed is: **how many ports?** (for bonding/multi-NIC scenarios)
+- Single port = default (`port0`), no question needed
+- Multiple ports = ask count (for bonds/VLANs), auto-name them `port0`, `port1`, ...
+
+### Changes needed
+
+1. **ABA core** (`scripts/create-cluster-conf.sh`, templates): Replace `ports=ens160` with
+   auto-generated `port0` (or `port0,port1` for bonds). Remove platform-aware port name
+   defaults (they become irrelevant).
+2. **TUI**: Replace the "Ports" text input field with a port count selector (default 1).
+   Only show for multi-NIC/bond scenarios.
+3. **CLI**: `--ports` flag could accept a count instead of names (backward-compat: still
+   accept explicit names for advanced users).
+4. **Agent YAML templates**: Use auto-generated port labels in `install-config.yaml` /
+   `agent-config.yaml` generation.
+
+### IMPORTANT: Test first!
+
+Before making this change, validate the assumption with a real deployment:
+- Create a cluster using made-up port names (e.g. `port0`) instead of real HW names
+- Verify the agent-based installer resolves them correctly via MAC→interface mapping
+- Test on at least one platform (VMware or bare-metal)
+
+### Notes
+
+- Existing clusters with manually-entered port names should continue to work (backward compat)
+- This supersedes the "platform-aware default port names" backlog item below
+- Simplifies UX significantly: one fewer thing for users to get wrong
+
+---
+
+## Consolidate `int_connection` + `mirror_name` into `mirror_conn`
+
+**Priority:** Medium
+**Added:** 2026-05-08
+
+### Problem
+
+`cluster.conf` currently has two related variables:
+- `int_connection` — how the cluster reaches the internet (proxy / direct / empty=use-mirror)
+- `mirror_name` — which mirror directory the cluster uses (default: "mirror")
+
+These are semantically linked and partially redundant. When `int_connection` is empty, the cluster uses the mirror named by `mirror_name`. The two fields cause confusion (e.g. `--int-connection mirror` is invalid today, but users expect it to work).
+
+### Proposed change
+
+Merge both into a single variable `mirror_conn`:
+- `mirror_conn=proxy` — cluster uses cluster-wide proxy for internet
+- `mirror_conn=direct` — cluster uses NAT/direct internet
+- `mirror_conn=mirror` (default) — cluster uses the default mirror directory
+- `mirror_conn=mirror2` — cluster uses a mirror named "mirror2"
+- Empty — same as "mirror" (backwards compat)
+
+Values "proxy" and "direct" are reserved — mirror directories MUST NOT be named "proxy" or "direct".
+
+### Scope
+
+1. Rename `int_connection` to `mirror_conn` in `cluster.conf` template
+2. Add backwards-compat shim in `normalize_cluster_conf()`: read old `int_connection=` and map to new name
+3. Update `aba.sh` CLI flag: rename `--int-connection` to `--mirror-conn` (keep `--int-connection` as deprecated alias)
+4. Remove `mirror_name` from template; derive path from `mirror_conn` value (if not proxy/direct, it's the mirror name)
+5. Update all scripts that use `$mirror_name` to derive it from `$mirror_conn`
+6. Update validation in `include_all.sh`
+7. Update TUI toggle and display
+8. Update docs/comments
+
+### Why
+
+- Single source of truth for "how does this cluster connect"
+- Eliminates the confusing empty-means-mirror semantics
+- Users can specify mirror name and connection mode in one place
+- Simpler mental model
+
+---
+
 ## Make `aba delete` idempotent (no-op when nothing to delete)
 
 **Priority:** Urgent
@@ -2338,4 +2431,400 @@ Example failure: running `aba startup -y` on a VMware-based cluster shows the ba
 
 - Test `scripts/listopdeps.sh` and fix any issues found.
 - This script lists operator dependencies (e.g. `scripts/listopdeps.sh 4.18 odf-operator`) and is referenced in the README under "Operator Dependencies".
+
+## Implement `aba status` command
+
+**Priority:** Medium
+**Added:** 2026-05-07
+
+### Purpose
+
+Provide a single command to report the full state of the ABA repo, usable by humans and scripts (TUI, CI):
+
+```
+aba status            # human-readable text
+aba status --json     # machine-parseable JSON
+```
+
+### Proposed output fields
+
+- **OCP:** version, channel
+- **Mirror:** running (yes/no), verified (yes/no), vendor (quay/docker), remote host (if any), has release image (yes/no)
+- **CLI tools:** present (list of `cli/*.tar.gz` files)
+- **Config:** `aba.conf` complete (yes/no), `mirror.conf` complete (yes/no)
+- **Payload:** equivalent-to-bundle (yes/no) — ISC + archives + CLI all present
+- **Clusters:** list of configured/installed cluster dirs with type and status
+
+### Usage in TUI
+
+The TUI currently performs basic file checks (ISC, archives, CLI files, `aba -d mirror verify`)
+for CONNO-offline mode detection. Once `aba status --json` exists, the TUI will call it
+instead of doing ad-hoc checks, keeping validation logic in one place.
+
+### Notes
+
+- Must work offline (no internet required for status check)
+- `aba -d mirror verify` already exists for the registry check — reuse it
+- Consider caching the result for ~30s via `run_once` to avoid repeated calls in TUI loops
+
+---
+
+## Suppress "All operator catalogs ready" when no operators defined
+
+### Problem
+
+The message `[ABA] All operator catalogs ready for OCP X.Y` is printed during ISC
+generation even when there are NO operators defined in the configuration. This is
+misleading — it implies operator catalogs were processed when nothing was actually needed.
+
+### Proposed fix
+
+In the script that prints this message, guard it with a check: only print if there are
+actually operators configured (e.g. operator entries in the ISC, or operator-set files
+referenced). If no operators are defined, skip the catalog download and suppress the message.
+
+### Scope
+
+- Identify which script prints `All operator catalogs ready` (likely `reg-create-imageset-config.sh` or a catalog download helper)
+- Add a condition: if no operators are in the config, skip catalog work entirely
+- Low risk, cosmetic improvement
+
+---
+
+## TUI: Add operator selection at the end of the wizard
+
+### Problem
+
+In v1, operator selection was part of the setup wizard (channel → version → operators → action menu).
+In v2, operators were moved to a separate action menu item, which means a user can install/save
+a mirror without ever being prompted to select operators. This is unintuitive for first-time users.
+
+### Proposed fix
+
+Add an operator selection step at the end of the wizard flow (after version/platform selection),
+before entering the action menu. Keep the "Select Operators" item in the action menu as well
+so users can change operators later.
+
+### Notes
+
+- The wizard step should be skippable (user can press "Skip" or "Done" to proceed without operators)
+- If catalogs haven't downloaded yet, show a brief wait dialog
+- This matches v1 behaviour where operators were chosen before any mirror action
+- Low risk — additive change, no existing flows broken
+
+---
+
+## TUI: Allow changing channel/version from action menus
+
+### Problem
+
+Once the wizard completes, the channel and version are locked in `aba.conf`. If the user
+wants to change them (e.g. upgrade from 4.21 to 4.22, or switch from stable to candidate),
+they must exit the TUI and manually edit `aba.conf` or re-run from scratch.
+
+### Proposed fix
+
+Add a "Change Version/Channel" option to the action menu (under an "Advanced" or "Settings"
+sub-menu). This would:
+1. Present the channel selection dialog (same as wizard)
+2. Present the version selection dialog (same as wizard)
+3. Save to `aba.conf` via `_direct_save_config()`
+4. Trigger ISC background regeneration
+5. Optionally warn: "Changing version may require re-saving/re-syncing images"
+
+### Notes
+
+- Advanced use case — should not clutter the main menu (put under "Other" or "Settings" section)
+- Must trigger ISC regen (already handled by `_direct_save_config`)
+- Should warn about implications (existing mirror data may not match new version)
+- Consider: should operator basket be re-validated against new version's catalog? (Yes — stale operators should be flagged/removed)
+- Medium complexity — reuses existing wizard dialogs but needs careful UX for the "you already have data" scenario
+
+---
+
+## TUI: Smart bundle creation — reuse existing images or force refresh
+
+### Problem
+
+When creating a bundle, `aba bundle` internally runs `make -C mirror save` which invokes
+`oc-mirror`. If images were already downloaded (from a previous `aba save`, `aba sync`, or
+an earlier bundle), oc-mirror is incremental and reuses what's on disk. However:
+
+1. The core script (`make-bundle.sh`) shows a confusing warning if `mirror/data/` already
+   has files, asking "Continue anyway?" — this is not TUI-friendly
+2. The TUI gives no indication that existing data will be reused (saves time!)
+3. Users might think they need `--force` when they don't
+4. There's no way in the TUI to choose between "reuse" (fast, incremental) vs "clean rebuild"
+   (slower, guarantees fresh images)
+
+### Proposed fix
+
+In the TUI's `mirror_create_bundle()`, before running `aba bundle`:
+1. Check if `mirror/data/mirror_*.tar` already exists
+2. If yes, present a choice dialog:
+   - **"Reuse existing images (fast)"** — runs `aba bundle --out $path` (no `--force`,
+     oc-mirror is incremental)
+   - **"Download fresh (clean rebuild)"** — runs `aba bundle --out $path --force`
+   - Help text explains: "Reuse is faster — only changed/new images are downloaded.
+     Clean rebuild deletes everything and re-downloads from scratch."
+3. If no existing data: skip the dialog, just run without `--force`
+4. Pass `-y` so the core script's "Continue anyway?" prompt is auto-answered
+
+### Notes
+
+- oc-mirror v2 is already incremental by design — "reuse" is the correct default
+- `--force` should only be needed if the ISC changed significantly (e.g. different OCP version)
+  or if previous data is suspected corrupt
+- The TUI should default to "Reuse" (pre-selected) since it's the common fast path
+- Low-medium complexity — detection is simple (`ls mirror/data/mirror_*.tar`), dialog is standard
+
+---
+
+## ABA core: Platform-aware default port names in create-cluster-conf.sh
+
+### Problem
+
+`scripts/create-cluster-conf.sh` hardcodes `ports=ens160` as the default regardless of platform.
+This is only correct for VMware. KVM uses `enp1s0` and bare-metal varies by hardware.
+
+### Proposed fix
+
+In `create-cluster-conf.sh`, replace:
+```bash
+[ ! "$ports" ] && export ports=ens160
+```
+
+With platform-aware logic:
+```bash
+if [ ! "$ports" ]; then
+    case "$platform" in
+        vmw) export ports=ens160 ;;
+        kvm) export ports=enp1s0 ;;
+        *)   export ports=ens1f0 ;;   # bare-metal common default
+    esac
+fi
+```
+
+### Notes
+
+- `$platform` is already available (sourced from aba.conf earlier in the script)
+- The bare-metal default (`ens1f0`) is a reasonable guess but ultimately the user must
+  verify — the MAC address is what truly identifies the NIC, not the port name
+- The TUI already does this (platform-aware defaults in `tui-cluster.sh`) — the core
+  script should match
+- Low risk, one-line change
+
+## Smart `aba reset` in bundle mode — preserve CLI files
+
+**Priority:** Medium
+**Scope:** ABA core (`scripts/aba.sh` or reset logic)
+
+### Problem
+
+`aba reset` is a "distclean" that returns the repo to its unpacked state. However, in
+**bundle mode** (`.bundle` flag present — disconnected install from tarball), the CLI
+binaries and other downloaded artifacts are irreplaceable without internet access. A
+careless `aba reset` wipes them, leaving the user unable to proceed.
+
+### Proposed behaviour
+
+When `.bundle` mode is detected, `aba reset` should:
+
+1. **Skip deletion** of CLI binaries (`~/bin/oc`, `~/bin/oc-mirror`, `~/bin/openshift-install`, etc.)
+2. **Skip deletion** of other costly-to-recreate artifacts (e.g. saved mirror images, catalog indexes)
+3. Still clean generated configs, cluster dirs, marker files, and `run_once` cache as today
+4. Optionally print a notice: "Bundle mode: preserving CLI tools and downloaded images"
+5. Provide a `--force` or `--full` flag to override and truly delete everything
+
+### Why
+
+In disconnected environments, re-downloading CLI tools is impossible. Users who want a
+fresh config without losing their tools currently have no safe way to reset.
+
+## Smarter ISC "user edited" detection — ignore whitespace-only changes
+
+**Priority:** Low
+**Scope:** ABA core (ISC comparison logic)
+
+### Problem
+
+ABA checks whether the user has edited the ImageSet Config (ISC) file by comparing
+timestamps (e.g. is `imageset-config.yaml` newer than the `.created` flag). If a user
+opens the file, adds or removes only whitespace (blank lines, trailing spaces, indentation
+tweaks), and saves — the file is marked as "user-edited" even though the semantic content
+is unchanged. This can trigger unnecessary "Reset to auto-generated" prompts or skip
+auto-regeneration when it would have been safe.
+
+### Proposed behaviour
+
+When checking if the ISC has been meaningfully edited:
+
+1. First check timestamps (fast path — if ISC is older, skip)
+2. If ISC is newer, do a **content comparison with whitespace stripped**:
+   - `diff <(sed 's/[[:space:]]//g' "$isc_file") <(sed 's/[[:space:]]//g' "$generated_copy")` or similar
+   - If no diff after whitespace removal → treat as NOT edited
+   - If there IS a diff → treat as user-edited (current behavior)
+3. Keep a shadow copy of the last auto-generated ISC (e.g. `.imageset-config.yaml.generated`)
+   to compare against
+
+### Why
+
+Users often open YAML files in editors that auto-format or add trailing newlines. These
+cosmetic changes shouldn't trigger "you edited this" logic.
+
+## Smarter operator persistence — eliminate custom set files
+
+**Priority:** Medium
+**Scope:** TUI v2 (`tui/v2/tui-mirror.sh`)
+**Suggested approach:** B (hybrid)
+
+### Problem
+
+Today `_persist_operator_basket()` always collapses the entire basket into a single
+`templates/operator-set-custom-YYYYMMDD-HHMMSS` file and sets `op_sets=custom-...` in
+aba.conf. This is opaque (user sees a timestamp, not "ocp,virt"), creates ephemeral files,
+and loses track of which named sets the user actually chose.
+
+### Proposed: Hybrid persistence
+
+Track which named sets were toggled (`OP_SET_ADDED`) separately from individual operators
+added via search. On persist:
+
+1. **`op_sets=`** gets the list of named sets the user checked (e.g. `ocp,virt`)
+2. **`ops=`** gets any individual operators NOT already covered by the checked sets
+3. **No custom set file** unless truly needed
+
+If a user removes an operator that belongs to a named set (via basket editor), dissolve
+that set: remove it from `OP_SET_ADDED`, move its remaining operators to `ops=`.
+
+### Benefits
+
+- `aba.conf` becomes human-readable: `op_sets=ocp,virt` and `ops=my-extra-op`
+- No more timestamped custom files cluttering `templates/`
+- User can see exactly what they picked and why
+- CLI and TUI stay compatible (both write to same config keys)
+- `add-operators-to-imageset.sh` already handles both `op_sets` and `ops` — no change needed
+
+### See also
+
+Full plan: `~/.cursor/plans/operator_selection_improvement_f1a68d98.plan.md`
+
+---
+
+## Corrupt openshift-install tarball — strengthen download and verify
+
+**Priority:** High
+**Scope:** ABA core (`cli/Makefile`)
+**Discovered:** 2026-05-09
+
+### Problem
+
+If the `openshift-install-linux-*.tar.gz` file is partially downloaded (e.g. interrupted
+curl, killed process, network drop), it persists on disk as a corrupt file. Make sees the
+file exists and considers the download target "up to date" — it never re-downloads or
+re-validates. The `verify-sha256` function only runs inside the download recipe, so if
+Make skips the recipe, verification never happens.
+
+Result: `tar` extraction fails with "gzip: stdin: unexpected end of file" every time,
+and the user must manually `rm` the file to recover.
+
+### Suggested fixes
+
+1. **Re-validate on extract failure**: In the install target (line 265), when `tar` fails,
+   delete the corrupt tarball and re-run the download target:
+   ```make
+   ~/bin/openshift-install: .init $(openshift_install_file) | ~/bin
+       ...
+       tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || \
+           { echo "[ABA] Corrupt tarball, re-downloading..."; rm -f $(openshift_install_file); $(MAKE) $(openshift_install_file); tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || exit 1; }
+   ```
+
+2. **Always verify before extract**: Add a standalone checksum verification step in the
+   install recipe, BEFORE extraction — not just during download:
+   ```make
+       $(call verify-sha256,$(openshift_install_file),$(openshift_install_url)/sha256sum.txt)
+       tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || ...
+   ```
+
+3. **Use atomic download**: Download to a temp file, verify, then `mv` to final name.
+   This prevents partial files from appearing as "complete":
+   ```make
+   $(openshift_install_file):
+       curl -f --retry 8 -o $@.tmp -L $(url)/$@
+       $(call verify-sha256,$@.tmp,$(url)/sha256sum.txt)
+       mv $@.tmp $@
+   ```
+
+4. **Apply same pattern to all CLI tarballs** (oc, oc-mirror, govc, butane).
+
+---
+
+## CRITICAL: ABA doesn't stop when CLI tools are missing/broken
+
+**Priority:** Critical (P0)
+**Scope:** ABA core
+**Discovered:** 2026-05-09
+
+### Problem
+
+Three related bugs that cause ABA to proceed with installation despite missing CLI binaries:
+
+**Bug A: `-s install` skips CLI prerequisite on existing cluster dirs**
+
+When running `aba cluster -n <name> -s install` on a cluster directory where
+`install-config.yaml` already exists, Make skips the recipe that calls
+`cli-install-all.sh --wait` (because the file is "up-to-date"). This means
+`openshift-install` is never checked/downloaded, and the ISO generation
+step fails with `command not found`.
+
+Reproduction:
+```bash
+rm ~/bin/openshift-install cli/openshift-install-linux-4.*
+aba cluster -n sno2 -t sno -i 10.0.1.202 -I proxy -s install
+# Proceeds to ISO generation, fails with "command not found"
+```
+
+**Bug B: `generate-image.sh` doesn't fail on first `command not found`**
+
+Line 33 of `scripts/generate-image.sh` runs `openshift-install` (for version info)
+and gets "command not found" — but the script continues past the error, displays the
+full config table, then fails again at line 103. Should exit immediately at line 33.
+
+**Bug C: `cli-install-all.sh` always exits 0**
+
+The script loops through CLI tools (line 45: `run_once ... make -sC cli $item`) but
+if any individual install fails, the loop continues and line 48 unconditionally runs
+`exit 0`. Errors from individual tools are silently swallowed.
+
+### Expected behavior
+
+1. If `openshift-install` (or any required CLI) is missing, ABA should detect and
+   re-download/install it before proceeding — regardless of which `-s` step is used.
+2. `generate-image.sh` should check that `openshift-install` is in PATH and fail
+   immediately if not (before doing any other work).
+3. `cli-install-all.sh` should track failures and return non-zero if any tool fails.
+
+### Suggested fixes
+
+- Add `openshift-install` as an explicit Makefile prerequisite on the ISO target:
+  ```
+  iso-agent-based/agent.$(arch).iso: ~/bin/openshift-install install-config.yaml ...
+  ```
+- Add early guard in `generate-image.sh`:
+  ```bash
+  command -v openshift-install >/dev/null || { echo "[ABA] Error: openshift-install not found"; exit 1; }
+  ```
+- Fix `cli-install-all.sh` to track and propagate failures:
+  ```bash
+  rc=0
+  for item in ...; do
+      run_once ... || rc=1
+  done
+  exit $rc
+  ```
+
+### Impact
+
+Users lose significant time when the error only surfaces deep into the install flow.
+The actual error message ("command not found" buried in output) is non-obvious.
 
