@@ -342,22 +342,156 @@ The ABA TUI (`./abatui`) is an interactive terminal wizard built with `dialog` t
 
 ---
 
-## Known Limitations / Gaps
+## Known Limitations / Gaps (v1)
 
 1. **KVM platform** not available in TUI (bare-metal and VMware only)
-2. **Cluster installation** not in TUI scope (CLI only)
-3. **Day-2 operations** not in TUI scope (CLI only)
-4. **`handle_action_local_docker`** function exists but is not wired to any menu item (orphaned code)
-5. **Resume dialog** displays `vsphere` for the platform name but the wizard uses `vmw` — minor display inconsistency
-6. **Retry values** in help text say "off/3/8" but implementation cycles "off/2/8"
-7. **`aba load`** is not available as a TUI action (images can be saved but not loaded to a registry from disk via TUI)
-8. **Connected installation** workflow not covered by TUI
+2. **`handle_action_local_docker`** function exists but is not wired to any menu item (orphaned code)
+3. **Resume dialog** displays `vsphere` for the platform name but the wizard uses `vmw` — minor display inconsistency
+4. **Retry values** in help text say "off/3/8" but implementation cycles "off/2/8"
+5. **`aba load`** is not available as a TUI action (images can be saved but not loaded to a registry from disk via TUI)
 
 ---
 
-## Future Use-Cases (Planned)
+## TUI v2 (tui/v2/)
 
-- Connected & disconnected OCP installation from TUI
-- `aba load` as a TUI action (load images from disk to registry)
-- KVM platform support
-- Remote command execution
+TUI v2 is a **complete replacement** for v1, covering the entire ABA workflow:
+
+- **DISCO mode** (disconnected) — registry install, load images, install cluster, Day-2
+- **CONNO mode** (connected with mirror) — full v1 wizard + mirror ops + install cluster + Day-2
+- **DIRECT mode** (connected, no mirror) — minimal wizard + install cluster + Day-2
+
+### Key Design Change: Unified "Install Cluster"
+
+There is NO separate "Configure Cluster" menu item. "Install Cluster" is a **single unified flow**:
+
+1. Multi-page wizard: Basics → Networking → Interfaces → VM Resources
+2. **Review/Confirm page** — shows ALL values including cluster FQDN (`<name>.<base_domain>`)
+3. Buttons: **"Install"** (runs `aba cluster ... -s install`) or **"Back"** (edit values)
+
+The `-s install` flag configures AND installs the cluster in one shot. No intermediate "configure then install" dance.
+
+### Offline DISCO Mode (No Internet, No Bundle — Bundle Equivalent)
+
+When no internet and no `.bundle` exist but `aba.conf` + sufficient payload are present,
+the TUI enters DISCO mode. The minimum "bundle equivalent" is validated before entry.
+
+**How users reach this state:**
+- **Sync path:** `aba sync` (installs mirror + syncs images) → downloads CLI → go offline
+- **Save path:** `aba save` (saves tar + installs mirror + downloads CLI) → go offline
+- **Save+Load path:** `aba save` → `aba load` → go offline (fully ready)
+
+**Required (payload-ready check — "is this a usable bundle?"):**
+1. `mirror/data/imageset-config.yaml` — exists and non-empty
+2. CLI tools present and >1MB each:
+   - `cli/openshift-client-linux*.tar.gz`
+   - `cli/openshift-install-linux*.tar.gz`
+   - `cli/oc-mirror*.tar.gz`
+3. Registry install files (at least one >1MB):
+   - `mirror/mirror-registry*.tar.gz` (Quay) OR
+   - `mirror/docker-reg-image.tgz` (Docker)
+4. Image source (at least one — file presence only, no network calls):
+   - `mirror/.available` exists — sync path (mirror installed, images synced)
+   - OR tar archives `mirror/data/*.tar` (>1MB) — save path (need Load)
+
+**If validation fails:** error dialog listing what's needed. TUI exits.
+
+**If validation passes:** DISCO menu shown:
+- Install Registry — available (or `(installed)` if already running)
+- Load Images — available (for save path: user needs this; for sync path: skip)
+- Install Cluster ✓
+- Day-2, Monitor ✓ (if cluster installed)
+- View ISC ✓ (read-only)
+- Reset to Connected `[no internet]`
+
+**Note:** `mirror/.available` is NOT required for entry — the mirror might not be
+installed yet (save path). "Install Registry" is then the first action.
+
+**Future: `aba status`** — structured command (text + JSON) for programmatic state checks.
+
+### Code Patterns
+
+**dlg() wrapper** — ALL dialog calls go through `dlg()` in `tui-lib.sh`, which automatically:
+- Pads `--title` values with spaces: `"Foo"` → `" Foo "`
+- Prepends `\n` to prompt/message text (empty line below title)
+- Strings stay CLEAN (no manual formatting)
+
+**String centralization** — ALL user-visible strings live in `tui-strings2.sh` (205+ constants).
+Dynamic strings (containing runtime `$variables`) use `printf "$TUI2_MSG_*" "$var"`.
+
+**Single-letter tags** — Menu items use mnemonic capital letters (M, S, V, I, D, N, X) as
+keyboard shortcuts. Displayed on the left. Section separators use whitespace tags.
+
+**Menu-style pages** — ALL cluster configuration pages use `--menu` (select row → edit in
+sub-dialog). Dialog `--form` is NOT used (confusing Tab behavior, see plan A.31).
+
+**Connection toggle** — Page 3 (Interfaces) has a "Connection" field that cycles:
+`mirror → proxy → direct`. These are DISPLAY values in the TUI. When generating the
+`aba cluster` command, "mirror" means "use local mirror" which is ABA's DEFAULT — so
+the `--int-connection` flag is OMITTED entirely. Only `proxy` and `direct` emit the flag.
+The underlying `int_connection` variable in `cluster.conf` uses empty/unset for mirror mode.
+Future: will be consolidated into a single `mirror_conn` variable (see BACKLOG.md).
+
+**DISCO mode filter** — `filter_disco_values()` strips public NTP/DNS from input fields.
+Only active when `_TUI_MODE == "DISCO"`. Does not modify config files.
+
+**MAC addresses (bare-metal)** — Page 3 shows "MACs" row if platform=bm. User enters
+comma-separated MACs in an inputbox. Written to `$cluster_dir/macs.conf` before install.
+VMs use "MAC template" (`mac_prefix`) on Page 4 instead.
+
+**ISO vs Full Install (bare-metal)** — After review confirmation, platform=bm shows a
+choice: "Create ISO only" (`-s iso`) or "Full Install" (`-s install`).
+
+**Per-page cluster.conf persistence** — The cluster wizard saves `cluster.conf` after EVERY
+page (Basics, Networking, Interface, VM Resources). This means:
+- If the user cancels at any point, their entered values survive in `<cluster-dir>/cluster.conf`.
+- If the TUI crashes or SSH drops, values are not lost.
+- On re-entry to "Install Cluster", values are loaded from the existing `cluster.conf`.
+- On cluster name change, if that cluster already has a `cluster.conf`, offer to load it.
+The draft `cluster.conf` is a full valid config file — ABA can use it directly via CLI too.
+On first save, the template (`templates/cluster.conf.j2`) is copied to seed all keys with
+comments. All subsequent writes use `replace-value-conf -q` — NEVER raw heredocs or sed.
+This preserves user comments and ABA's standard config format.
+
+**Platform config gate (VMware/KVM)** — When the user hits NEXT on the Basics page with
+platform=vmw or platform=kvm, the TUI checks if the platform config file exists:
+1. If `vmware.conf`/`kvm.conf` exists in `$ABA_ROOT` → proceed silently.
+2. If a cached config exists in `~/.vmware.conf`/`~/.kvm.conf` → offer to reuse it
+   ("Use Saved" / "Configure New" / "Skip").
+3. If nothing exists → prompt "Configure Now" or "Skip".
+"Configure Now" opens the template in `dialog --editbox`, validates connection
+(`govc about` / `virsh version`), and caches to `~/.<conf>` on success.
+"Skip" proceeds — the user will be caught again at install time (`_check_platform_config`)
+and ultimately by ABA core's hard abort.
+
+**Platform status indicator** — The Basics page shows config status next to the platform:
+- `vmw (VMware/ESXi) ✓` — config found
+- `vmw (VMware/ESXi) ⚠ not configured` — no config file
+
+**ERR trap disabled** — `trap - ERR` immediately after sourcing `include_all.sh`. Dialog
+returns non-zero by design (1=Back, 2=Help, 3=Next).
+
+**Internet check once** — Checked at startup, stored in `_TUI_INET` flag. No per-loop
+re-checking. If network changes, user restarts TUI.
+
+**Mode switching from CONNO** — The CONNO action menu offers two mode switches:
+- "Switch to DIRECT mode" (X) — enters DIRECT action menu; requires internet.
+- "Switch to DISCO mode" (Z) — runs `_ensure_offline_prereqs()` (downloads CLI tools +
+  registry installers if missing), then enters DISCO action menu using the in-place repo
+  as the "bundle equivalent". No tar file is created. Always available (prereq download
+  fails gracefully if internet is unavailable and files are missing).
+- Both return to CONNO when the user exits the sub-mode.
+
+**"Create Bundle" vs "Switch to DISCO"** — These are distinct operations:
+- "Create Bundle" (B) = exports a portable tar file to a USB/thumb drive for transfer
+  to a physically disconnected host.
+- "Switch to DISCO" (Z) = treats the current in-place repo as if it arrived via bundle.
+  The user works offline here, no tar is produced.
+
+### Entry Point
+
+`tui/v2/abatui2.sh` — mode auto-detection, then routes to DISCO/CONNO/DIRECT.
+
+### See Also
+
+- `~/.cursor/plans/tui_v2_consolidated_f466c9ed.plan.md` — full design plan
+- `tui/v2/tui-strings2.sh` — all string constants
