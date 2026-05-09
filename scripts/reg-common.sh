@@ -320,6 +320,7 @@ reg_open_firewall() {
 # --- reg_close_firewall -------------------------------------------------------
 # Close firewall port opened by reg_open_firewall at install time.
 # Only acts if state.sh records reg_fw_opened=1 (i.e. ABA opened the port).
+# Also checks uppercase REG_FW_OPENED for backward compat with pre-ADR-007 state.
 # Usage:
 #   reg_close_firewall           Close $reg_port on this host (local install)
 #   reg_close_firewall --ssh     Close $reg_port via SSH on $reg_host (remote install)
@@ -327,7 +328,7 @@ reg_open_firewall() {
 # Mirrors reg_open_firewall: tries firewalld first, then iptables fallback.
 # Silently succeeds if the port was never opened or the firewall is not active.
 reg_close_firewall() {
-	if [ "${reg_fw_opened:-}" != "1" ]; then
+	if [ "${reg_fw_opened:-${REG_FW_OPENED:-}}" != "1" ]; then
 		aba_info "Firewall port $reg_port was not opened by ABA -- skipping close"
 		return 0
 	fi
