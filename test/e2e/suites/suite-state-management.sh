@@ -342,6 +342,10 @@ e2e_run "Uninstall Docker registry if still tracked" \
 e2e_run "Unregister if still registered" \
 	"if [ -s $_STATE_DIR/state.sh ] && grep -q '^reg_vendor=existing' $_STATE_DIR/state.sh; then cd ~/aba && test -d $_MIRROR_NAME || aba mirror --name $_MIRROR_NAME && aba -d $_MIRROR_NAME unregister; else echo 'Not registered -- skip'; fi"
 
+# Close firewall port on disN (belt+suspenders -- aba uninstall now does this too)
+e2e_run_remote "Close firewall port $_MIRROR_PORT on disN" \
+	"sudo firewall-cmd --query-port=$_MIRROR_PORT/tcp --permanent && sudo firewall-cmd --remove-port=$_MIRROR_PORT/tcp --permanent && sudo firewall-cmd --reload || echo 'Port not open -- skip'"
+
 # Remove local working dir
 e2e_run "Remove mirror working dir" \
 	"cd ~/aba && rm -rf $_MIRROR_NAME"

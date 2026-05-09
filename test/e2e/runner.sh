@@ -121,7 +121,7 @@ _E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
-_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 80/tcp"
+_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
 
 _cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
