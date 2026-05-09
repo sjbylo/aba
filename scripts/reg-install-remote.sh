@@ -112,11 +112,11 @@ case "$vendor" in
 		aba_info "Copying mirror-registry tarball to remote host ..."
 		$_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 
-		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword '\$REG_PW' $reg_root_opts"
+		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword '\$_reg_pw' $reg_root_opts"
 
 		aba_info "Extracting and installing Quay registry on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword *** $reg_root_opts"
-		if ! $_ssh "export REG_PW='$reg_pw' && $cmd"; then
+		if ! $_ssh "export _reg_pw='$reg_pw' && $cmd"; then
 			aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
 				"Check the output above for details."
 		fi
@@ -161,12 +161,12 @@ case "$vendor" in
 		REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
 		# Two-tier cert check (tier 1 runs locally using state.sh).
-		# If state.sh shows a different REG_HOST, force cert regeneration on remote.
+		# If state.sh shows a different reg_host, force cert regeneration on remote.
 		_force_regen=""
 		if [[ -s "$regcreds_dir/state.sh" ]]; then
-			source "$regcreds_dir/state.sh"
-			if [[ -n "$REG_HOST" && "$REG_HOST" != "$reg_host" ]]; then
-				aba_info "Hostname changed ('$REG_HOST' -> '$reg_host') — will regenerate certificate on remote ..."
+			_state_reg_host=$(grep '^reg_host=' "$regcreds_dir/state.sh" | cut -d= -f2)
+			if [[ -n "$_state_reg_host" && "$_state_reg_host" != "$reg_host" ]]; then
+				aba_info "Hostname changed ('$_state_reg_host' -> '$reg_host') — will regenerate certificate on remote ..."
 				_force_regen=true
 			fi
 		fi

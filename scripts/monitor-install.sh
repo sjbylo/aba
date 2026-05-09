@@ -1,5 +1,20 @@
-#!/bin/bash 
-# This will run the 'wait-for' command and output next steps after ocp installation
+#!/bin/bash
+# =============================================================================
+# INTENT:      Monitor agent-based OpenShift install and report completion.
+#              On success, externalize cluster state to ~/.aba/clusters/<name>/
+#              (auth, config backups, state.sh) per ADR-007.
+# CALLED BY:   Makefile.cluster (.install-complete, mon targets)
+# CWD:         Cluster directory (e.g. ~/aba/sno/)
+# REQUIRES:    include_all.sh, cluster-config.sh, openshift-install
+# PRODUCES:    ~/.aba/clusters/<name>/state.sh (cluster identity)
+#              ~/.aba/clusters/<name>/kubeconfig, kubeadmin-password (auth)
+#              ~/.aba/clusters/<name>/backup/ (cluster.conf, YAMLs, macs.conf)
+#              clusterstate symlink in cluster dir (human convenience)
+# SIDE EFFECTS: Trusts nothing. Exits non-zero on install failure.
+# IDEMPOTENT:  Yes (re-running overwrites state dir safely)
+# ENV:         CLUSTER_NAME, BASE_DOMAIN, CP_NAMES, WORKER_NAMES (from cluster-config.sh)
+#              platform (from aba.conf via Makefile)
+# =============================================================================
 
 source scripts/include_all.sh
 
@@ -59,6 +74,63 @@ if [ $ret -ne 0 ]; then
 fi
 
 aba_info_ok "The cluster has been successfully installed!"
+
+# --- Externalize cluster state (ADR-007) ---
+# Source config to get cluster identity fields for state.sh
+source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
+
+# Derive cluster_type from replica counts (already available from cluster-config.sh)
+if [ "${CP_REPLICAS:-3}" = "1" ] && [ "${WORKER_REPLICAS:-0}" = "0" ]; then
+	_cluster_type=sno
+elif [ "${WORKER_REPLICAS:-0}" = "0" ]; then
+	_cluster_type=compact
+else
+	_cluster_type=standard
+fi
+
+_state_dir=$(cluster_state_dir "$CLUSTER_NAME")
+mkdir -p "$_state_dir/backup"
+chmod 700 "$_state_dir"
+chmod 700 "$(dirname "$_state_dir")"
+
+# Write state.sh (lowercase vars, sourceable)
+cat > "$_state_dir/state.sh" <<EOF
+cluster_name=$CLUSTER_NAME
+base_domain=$BASE_DOMAIN
+cluster_type=$_cluster_type
+platform=${platform:-bm}
+starting_ip=${starting_ip:-}
+machine_network=${machine_network:-}
+prefix_length=${prefix_length:-}
+cp_names="$CP_NAMES"
+worker_names="${WORKER_NAMES:-}"
+mirror_name=${mirror_name:-mirror}
+installed_from="$PWD"
+installed_on="$(date -Iseconds)"
+EOF
+
+# Copy auth files to state dir root
+[ -f "$ASSETS_DIR/auth/kubeconfig" ] && cp -p "$ASSETS_DIR/auth/kubeconfig" "$_state_dir/"
+[ -f "$ASSETS_DIR/auth/kubeadmin-password" ] && cp -p "$ASSETS_DIR/auth/kubeadmin-password" "$_state_dir/"
+
+# Backup config files for dir recreation (preserve timestamps for Make)
+[ -f cluster.conf ] && cp -p cluster.conf "$_state_dir/backup/"
+[ -f install-config.yaml ] && cp -p install-config.yaml "$_state_dir/backup/"
+[ -f agent-config.yaml ] && cp -p agent-config.yaml "$_state_dir/backup/"
+[ -f macs.conf ] && cp -p macs.conf "$_state_dir/backup/"
+
+# Backup marker/flag files (timestamps matter for Make dependency tracking)
+# .install-complete is created by the Makefile after this script returns
+for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
+	[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
+done
+
+# Convenience symlink for human browsing (scripts use cluster_state_dir())
+ln -sfn "$_state_dir" clusterstate
+
+aba_info "Cluster state saved to $_state_dir/"
+
 aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
 aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
 [ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
