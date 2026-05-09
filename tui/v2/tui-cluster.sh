@@ -158,7 +158,9 @@ _persist_cluster_draft() {
 	replace-value-conf -q -n ntp_servers     -v "${cl_ntp:-}"          -f "$conf"
 	replace-value-conf -q -n ports           -v "${cl_ports:-}"        -f "$conf"
 	replace-value-conf -q -n vlan            -v "${cl_vlan:-}"         -f "$conf"
-	replace-value-conf -q -n int_connection  -v "${cl_connection:-}"   -f "$conf"
+	local _conn_val="${cl_connection:-}"
+	[[ "$_conn_val" == "mirror" ]] && _conn_val=""
+	replace-value-conf -q -n int_connection  -v "$_conn_val"           -f "$conf"
 	replace-value-conf -q -n mac_prefix      -v "${cl_mac_template:-}" -f "$conf"
 	replace-value-conf -q -n master_cpu_count -v "${cl_master_cpu:-8}" -f "$conf"
 	replace-value-conf -q -n master_mem      -v "${cl_master_mem:-32}" -f "$conf"
@@ -1111,7 +1113,7 @@ _cluster_execute() {
 	if [[ "$cl_connection" != "direct" && "$_TUI_MODE" != "DIRECT" ]]; then
 		local reg_host="${reg_host:-}" reg_port="${reg_port:-}"
 		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-			source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
 		fi
 		_mirror_disp="${reg_host:-}${reg_host:+:}${reg_port:-}"
 		[[ -z "$_mirror_disp" || "$_mirror_disp" == ":" ]] && _mirror_disp="(local mirror)"

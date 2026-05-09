@@ -485,67 +485,80 @@ Each `tui-*.sh` is sourceable AND standalone (`BASH_SOURCE` guard for dev/testin
 
 ## Testing with tmux (on registry4)
 
+### CRITICAL RULES
+
+- **TUI ONLY!** — use ONLY the TUI for all operations. The ONLY allowed CLI exceptions:
+  - `cd ~/aba; aba reset --force` (clean slate)
+  - `aba -p vmw vmw` (set platform=vmw in aba.conf + create vmware.conf)
+  - `aba -d <cluster> delete` (delete cluster VMs after test)
+  - Report any other `aba` CLI commands you were forced to use!
+- **Proxy mode ONLY** (for now) — no DNS records for the External Network
+  - Source `~/.proxy-set.sh` before launching the TUI
+  - Use `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+  - Set `int_connection=proxy` in DIRECT mode, or use mirror modes (CONNO/DISCO)
+- **Success criterion**: "Agent alive" message (VM booted, agent running) — no need to wait for full install
+- **Deep RCA on any errors** — investigate root cause, report, and fix (TUI or test code only)
+
 ### Environment
 
 - **Host**: registry4 (has Internet, can be toggled on/off)
 - **Platform**: `platform=vmw` — VMs are created/deleted automatically via `govc`
 - **VMware config**: `~/.vmware.conf` (vCenter: vcenter.lan, Datastore: Datastore4-4-ATA, ISO Datastore: NFS-Shared, Folder: /Datacenter/vm/demo)
 - **Base domain**: example.com
+- **Starting IPs**: 10.0.1.80 and above (lower range OK)
 
 ### Network Port Groups (critical!)
 
-| Port Group | Internet | Use Case |
-|-----------|----------|----------|
-| **External Network** | YES (direct) | DIRECT mode clusters (`int_connection=direct`) |
-| **VM Network** | NO (proxy only) | CONNO/DISCO clusters (`int_connection=mirror` or `proxy`) |
-| **Private Network** | NO | VLAN testing (supports VLAN tagging) |
+- **External Network** — direct internet (for DIRECT mode with `int_connection=direct`)
+- **VM Network** — no internet (proxy only) — for CONNO/DISCO and proxy-based DIRECT
+- **Private Network** — supports VLAN tagging (need DNS records for this network)
 
-- `GOVC_NETWORK` in `~/.vmware.conf` MUST match the mode being tested
-- **DIRECT mode** → set `GOVC_NETWORK='External Network'`
-- **CONNO/DISCO mode** → set `GOVC_NETWORK='VM Network'` (cluster pulls from mirror, not internet)
-- **VLAN testing** → set `GOVC_NETWORK='Private Network'` (only port group supporting VLAN)
+Key rules:
+- `GOVC_NETWORK` in `~/aba/vmware.conf` MUST match the mode being tested
+- **For now**: always use `GOVC_NETWORK='VM Network'` + proxy settings
 - CANNOT use VLAN on "VM Network" or "External Network"!
+- For VLAN testing: need `GOVC_NETWORK='Private Network'` (not tested yet)
 
-### Proxy config (for clusters on "VM Network" needing internet via proxy)
+### Proxy config (source ~/.proxy-set.sh before TUI launch)
 
 ```bash
-# From ~/.proxy-set.sh
 export no_proxy=.lan,.example.com
 export http_proxy=http://10.0.1.8:3128
 export https_proxy=http://10.0.1.8:3128
 ```
 
-### Cluster DNS (pre-configured)
+### Cluster names and IPs (DNS pre-configured)
 
-| Cluster | Type | Starting IP | API VIP | Ingress VIP |
-|---------|------|-------------|---------|-------------|
-| sno.example.com | sno | 10.0.1.201 | 10.0.1.201 (same) | 10.0.1.201 (same) |
-| compact.example.com | compact | (3 nodes needed) | 10.0.1.216 | 10.0.1.226 |
-| standard.example.com | standard | (3+2 nodes needed) | 10.0.1.217 | 10.0.1.227 |
+- **sno.example.com** — type=sno, starting IP: 10.0.1.80+ (single node)
+- **compact.example.com** — type=compact, starting IP: 10.0.1.85+, needs API VIP + Ingress VIP
+- **standard.example.com** — type=standard, starting IP: 10.0.1.90+, needs API VIP + Ingress VIP + workers
+
+Look up exact IPs via DNS (`dig sno.example.com`). Starting IPs can be lower (10.0.1.80+).
 
 ### Test workflows (Docker mirror first, then Quay)
 
-1. **DIRECT mode** (no mirror, `int_connection=direct`)
-   - `GOVC_NETWORK='External Network'` in `~/.vmware.conf` (VMs need direct internet!)
-   - Internet UP the whole time
-   - Pull secret → channel → version → platform=vmw → cluster wizard
-   - Install sno, compact, standard (one at a time)
-   - Test until `aba -d <cluster> ssh` works (VM is booted)
+1. **DIRECT mode** (no mirror, `int_connection=proxy` on VM Network)
+   - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+   - Internet UP the whole time (proxy provides connectivity)
+   - TUI: Pull secret → channel → version → platform=vmw → cluster wizard
+   - Set connection type to `proxy` (not `direct` — no External Network DNS)
+   - Install sno first, then compact, then standard (one at a time)
+   - Wait for "Agent alive" message
    - Then `aba -d <cluster> delete` and move to next
 
 2. **CONNO mode** (connected + mirror, `int_connection=mirror`)
-   - `GOVC_NETWORK='VM Network'` in `~/.vmware.conf` (VMs pull from mirror only)
-   - Internet UP on bastion for mirror sync
-   - Install mirror (Docker first) → Sync → Install cluster
+   - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+   - Internet UP on registry4 for mirror sync
+   - TUI: Install mirror (Docker first) → Sync → Install cluster
    - Test sno/compact/standard
-   - After cluster boots (`aba ssh` works), delete VMs
-   - Repeat with Quay mirror
+   - Wait for "Agent alive", then delete
+   - Repeat all with Quay mirror
 
 3. **DISCO mode** (disconnected / air-gapped)
-   - `GOVC_NETWORK='VM Network'` in `~/.vmware.conf`
-   - **Via bundle**: Internet UP → `aba bundle` → Internet DOWN → load → install
-   - **Via mode switch**: Start in CONNO → switch to DISCO → load from existing save
-   - Test sno install until `aba ssh` works
+   - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+   - **Via bundle**: Internet UP → TUI creates bundle → Internet DOWN → load → install
+   - **Via mode switch**: Start in CONNO → switch to DISCO in TUI → load from existing save
+   - Test sno install until "Agent alive"
    - `aba -d <cluster> delete` after
 
 ### Test procedure
@@ -553,39 +566,48 @@ export https_proxy=http://10.0.1.8:3128
 ```bash
 # On registry4, in a tmux session:
 cd ~/aba
-aba reset --force          # Clean slate
+aba reset --force                  # Clean slate (allowed CLI)
+aba -p vmw vmw                     # Set platform (allowed CLI)
+# Check/edit ~/aba/vmware.conf — ensure GOVC_NETWORK='VM Network'
+
+# Source proxy before TUI
+source ~/.proxy-set.sh
 
 # Start TUI
-./abatui                   # or: tui/v2/abatui2.sh
+./abatui                           # or: tui/v2/abatui2.sh
 
-# Navigate through chosen workflow...
-# After VM boots and SSH works:
-aba -d <cluster> ssh       # Verify node is reachable
-aba -d <cluster> delete    # Clean up VMs
+# Navigate through chosen workflow via TUI menus...
+# Wait for "Agent alive" message
+
+# Delete cluster (allowed CLI)
+aba -d <cluster> delete
 
 # Toggle internet as needed:
 # UP:   sudo nmcli con up "System eth0"
 # DOWN: sudo nmcli con down "System eth0"
+
+# Between workflow changes (DIRECT → CONNO → DISCO):
+aba reset --force
 ```
 
-### CLI equivalents (for reference)
+### CLI equivalents (for reference only — do NOT use during TUI testing)
 
 ```bash
-# DIRECT mode (GOVC_NETWORK='External Network' in ~/.vmware.conf)
-aba cluster --name sno --type sno --platform vmw --starting-ip 10.0.1.201 --int-connection direct
+# DIRECT+proxy mode (GOVC_NETWORK='VM Network')
+aba cluster --name sno --type sno --platform vmw --starting-ip 10.0.1.80 --int-connection proxy
 
-# CONNO mode (Docker mirror) (GOVC_NETWORK='VM Network' in ~/.vmware.conf)
+# CONNO mode (Docker mirror)
 aba -d mirror install --vendor docker
 aba -d mirror sync
-aba cluster --name sno --type sno --platform vmw --starting-ip 10.0.1.201
+aba cluster --name sno --type sno --platform vmw --starting-ip 10.0.1.80
 
 # Compact (needs VIPs)
 aba cluster --name compact --type compact --platform vmw \
-    --starting-ip 10.0.1.211 --api-vip 10.0.1.216 --ingress-vip 10.0.1.226
+    --starting-ip 10.0.1.85 --api-vip 10.0.1.88 --ingress-vip 10.0.1.89
 
 # Standard (needs VIPs + workers)
 aba cluster --name standard --type standard --platform vmw \
-    --starting-ip 10.0.1.221 --api-vip 10.0.1.217 --ingress-vip 10.0.1.227
+    --starting-ip 10.0.1.90 --api-vip 10.0.1.95 --ingress-vip 10.0.1.96
 ```
 
 ### Important notes
@@ -594,5 +616,6 @@ aba cluster --name standard --type standard --platform vmw \
 - `aba reset --force` between workflow changes (DIRECT → CONNO → DISCO)
 - Docker mirror first (more reliable), Quay mirror second
 - No VLAN on "VM Network" — leave vlan empty
-- Test passes when `aba -d <cluster> ssh` succeeds (node booted, SSH works)
-- No need to wait for full OpenShift install completion at this stage
+- Test passes when "Agent alive" message appears
+- Source `~/.proxy-set.sh` before every TUI launch
+- Report ANY `aba` CLI commands used outside the allowed exceptions

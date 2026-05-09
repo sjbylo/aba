@@ -1,5 +1,28 @@
 # ABA Backlog
 
+## TUI v2: "Advanced" sub-menu
+
+**Priority:** Low
+**Scope:** TUI v2 only
+
+### Summary
+
+Add a single "A  Advanced..." item at the bottom of each mode's action menu. Selecting it opens a sub-menu dialog with lifecycle/recovery operations:
+
+- **Uninstall Mirror** (CONNO/DISCO only): `aba -d mirror uninstall`
+- **Clean Cluster** (all modes): `aba -d <name> clean` — cluster picker, retry install
+- **Delete Cluster VMs** (all modes): `aba -d <name> delete` — destroy VMs
+- **Reset ABA** (all modes): `aba reset --force` — double-confirm, exits TUI
+
+All logic in one shared `_advanced_menu()` function in `tui-lib.sh` (mode-filtered).
+`_pick_cluster()` scans for existing cluster dirs, auto-selects if only one.
+
+### Plan file
+
+Full implementation details: `~/.cursor/plans/advanced_menu_item_2e032710.plan.md`
+
+---
+
 ## Simplify port naming — auto-generate labels, only ask for port count
 
 **Priority:** Medium
@@ -303,17 +326,11 @@ Suites should never call ABA-internal functions directly. Three suites still `so
 
 ---
 
-## Enhancement: Warn when changing mirror registry identity after install
+## ~~Enhancement: Warn when changing mirror registry identity after install~~ SUPERSEDED
 
-When a mirror registry is installed and the user changes an "identity" field in `mirror.conf` (`reg_host`, `reg_port`, `reg_vendor`), display a warning via `ask()`:
+**Superseded by**: Unified State Management plan (`~/.cursor/plans/unified_state_management.plan.md`)
 
-```
-Warning: Registry is installed at old-host:8443 but you're changing reg_host to X ... continue anyway (Y/n):
-```
-
-Default is **yes** so automation (`ask=false`) passes through without blocking. Non-identity fields (`reg_path`, `reg_user`, `reg_password`, operator sets, channels) remain freely editable.
-
-**Implementation:** When processing `--reg-host`, `--reg-port`, or `--reg-vendor` flags in `aba.sh` (or the underlying normalize/config scripts), compare the new value against the installed state in `~/.aba/mirror/<dir>/state.sh`. If `state.sh` exists and the value differs, fire the `ask()` warning.
+The "override + warn via normalize" approach replaces the original `ask()` proposal. Normalize functions now source `state.sh`, override immutable fields, and emit a warning on stderr if config drifts from installed state.
 
 ## Enhancement: TUI early catalog prefetch after pull secret
 
@@ -910,7 +927,9 @@ Added `_vm_annotation()` helper in `include_all.sh`. VMware: rich multiline govc
 
 ---
 
-## Enhancement: Externalize installed-cluster state for robust `aba delete`
+## ~~Enhancement: Externalize installed-cluster state for robust `aba delete`~~ SUPERSEDED
+
+**Superseded by**: Unified State Management plan (`~/.cursor/plans/unified_state_management.plan.md`) — Phase 1 + Phase 2.
 
 **Added**: 2026-04-15
 **Priority**: Urgent
@@ -947,7 +966,9 @@ installed_on="2026-04-15T23:00:00"
 
 ---
 
-## TESTING NEEDED: `aba delete` non-fatal config regen (`make -s init agentconf || true`)
+## ~~TESTING NEEDED: `aba delete` non-fatal config regen (`make -s init agentconf || true`)~~ OBSOLETE
+
+**Obsoleted by**: Unified State Management plan (`~/.cursor/plans/unified_state_management.plan.md`) — Phase 2 eliminates the need to regenerate config for delete; state.sh provides VM names directly.
 
 **Added**: 2026-04-16
 **Priority**: High

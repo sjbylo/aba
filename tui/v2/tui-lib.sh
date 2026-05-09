@@ -465,7 +465,7 @@ cluster_display_name() {
 	(
 		cluster_name="" base_domain=""
 		# shellcheck disable=SC1090
-		source "$ABA_ROOT/$dir/cluster.conf" 2>/dev/null || true
+		source <(cd "$ABA_ROOT/$dir" && normalize-cluster-conf) 2>/dev/null || true
 		if [[ -n "${cluster_name:-}" && -n "${base_domain:-}" ]]; then
 			echo "${cluster_name}.${base_domain}"
 		else
