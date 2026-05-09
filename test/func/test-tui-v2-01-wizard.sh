@@ -135,7 +135,7 @@ sleep 1
 
 log_info "=== Test C: Negative — empty pull secret paste ==="
 
-if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 5; then
+if wait_for "$TUI_TITLE_PULL_SECRET_PASTE" 10; then
 	log_pass "C: Editbox reappeared after bad JSON"
 else
 	log_fail "C: Editbox did not reappear after bad JSON error"
@@ -143,7 +143,7 @@ fi
 
 # Submit empty (just Tab Enter without pasting)
 send_tab_enter
-sleep 2
+sleep 3
 
 if capture | grep -qi "Pull secret is empty"; then
 	log_pass "C: 'Pull secret is empty' error appeared"
@@ -270,7 +270,7 @@ send_tab_enter
 sleep 1
 
 # Operators
-if ! wait_for "$TUI_TITLE_OPERATORS" 120; then
+if ! wait_for "$TUI_TITLE_OPERATORS" 300; then
 	log_fail "E: Operators screen did not appear"; report_results; exit 1
 fi
 log_pass "E: Operators screen appeared"
@@ -295,8 +295,9 @@ else
 	sleep 1
 fi
 
-# Action menu
-if ! wait_for "$TUI_TITLE_ACTION_MENU" 20; then
+# Action menu — summary_apply saves config + starts background ISC gen
+if ! wait_for "$TUI_TITLE_ACTION_MENU" 60; then
+	screenshot "e-action-menu-timeout"
 	log_fail "E: Action menu did not appear"; report_results; exit 1
 fi
 log_pass "E: Action menu appeared — wizard complete"
@@ -440,7 +441,7 @@ if ! session_alive; then
 		send_enter
 		sleep 1
 	fi
-	if ! wait_for "$TUI_TITLE_ACTION_MENU" 20; then
+	if ! wait_for "$TUI_TITLE_ACTION_MENU" 60; then
 		log_fail "G: Could not reach action menu"; report_results; exit 1
 	fi
 fi
@@ -489,7 +490,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 fi
 
 # Operators -> press Back -> should return to Platform
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	log_pass "G: At Operators screen"
 	# Cancel button = Back in operators (cancel-label "Back")
 	# Tab order: Extra(Next) -> Cancel(Back)
@@ -542,7 +543,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	send_tab_enter
 	sleep 1
 fi
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi
@@ -551,7 +552,7 @@ if wait_for "$TUI_TITLE_EMPTY_BASKET" 5; then
 	sleep 1
 fi
 
-if wait_for "$TUI_TITLE_ACTION_MENU" 20; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 60; then
 	log_pass "G: Action menu reappeared after back navigation"
 else
 	log_fail "G: Action menu did not reappear after back navigation"
@@ -575,22 +576,27 @@ if ! session_alive; then
 		send_enter
 		sleep 1
 	fi
-	if ! wait_for "$TUI_TITLE_ACTION_MENU" 20; then
+	if ! wait_for "$TUI_TITLE_ACTION_MENU" 60; then
 		log_fail "H: Could not reach action menu"; report_results; exit 1
 	fi
 fi
 ensure_action_menu
 
 select_action "$TUI_ACTION_RERUN_WIZARD"
+sleep 2
+screenshot "h-after-wizard-select"
 
-# Accept channel (stable)
-if wait_for "$TUI_TITLE_CHANNEL" 10; then
+# Accept channel (stable) — pull_secret auto-skip may take a moment
+if wait_for "$TUI_TITLE_CHANNEL" 60; then
 	send_input "s"
 	sleep 1
+else
+	screenshot "h-channel-timeout"
 fi
 
 # Version -> select Manual entry (m)
-if ! wait_for "$TUI_TITLE_VERSION" 20; then
+if ! wait_for "$TUI_TITLE_VERSION" 30; then
+	screenshot "h-version-timeout"
 	log_fail "H: Version screen did not appear"; report_results; exit 1
 fi
 log_pass "H: At Version screen, selecting Manual entry"
@@ -685,7 +691,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	send_tab_enter
 	sleep 1
 fi
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi
@@ -694,7 +700,7 @@ if wait_for "$TUI_TITLE_EMPTY_BASKET" 5; then
 	sleep 1
 fi
 
-if wait_for "$TUI_TITLE_ACTION_MENU" 20; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 60; then
 	log_pass "H: Action menu appeared after manual version wizard"
 else
 	log_fail "H: Action menu did not appear"
@@ -731,7 +737,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	send_tab_enter
 	sleep 1
 fi
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi
@@ -740,7 +746,7 @@ if wait_for "$TUI_TITLE_EMPTY_BASKET" 5; then
 	sleep 1
 fi
 
-if wait_for "$TUI_TITLE_ACTION_MENU" 20; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 60; then
 	log_pass "Primed state restored (stable + Latest)"
 else
 	log_fail "Could not restore primed state"

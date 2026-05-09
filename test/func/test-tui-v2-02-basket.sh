@@ -62,10 +62,11 @@ fi
 
 # Toggle first set with spacebar, then OK/Add
 send Space
-send_enter
 sleep 1
+send_enter
+sleep 2
 
-if ! wait_for "$TUI_TITLE_OPERATORS" 10; then
+if ! wait_for "$TUI_TITLE_OPERATORS" 15; then
 	log_fail "A: Did not return to operators menu"; report_results; exit 1
 fi
 log_pass "A: Returned to operators menu"

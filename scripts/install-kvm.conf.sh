@@ -6,6 +6,36 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Verify that KVM objects referenced in kvm.conf actually exist on the hypervisor.
+# Called after virsh version succeeds (libvirt connection is valid).
+# Uses SSH to KVM_HOST (derived from LIBVIRT_URI by normalize-kvm-conf).
+_kvm_verify_objects() {
+	local _err=""
+	local _ssh="ssh -F ~/.aba/ssh.conf ${KVM_HOST}"
+
+	if [ "$KVM_STORAGE_POOL" ]; then
+		if $_ssh "test -d '$KVM_STORAGE_POOL'" 2>/dev/null; then
+			aba_info "Storage pool '$KVM_STORAGE_POOL' ... OK"
+		else
+			aba_warning "Storage pool directory '$KVM_STORAGE_POOL' not found on ${KVM_HOST}!"
+			_err=1
+		fi
+	fi
+
+	if [ "$KVM_NETWORK" ]; then
+		if $_ssh "test -d '/sys/class/net/$KVM_NETWORK'" 2>/dev/null; then
+			aba_info "Network bridge '$KVM_NETWORK' ... OK"
+		else
+			aba_warning "Network bridge '$KVM_NETWORK' not found on ${KVM_HOST}!"
+			_err=1
+		fi
+	fi
+
+	[ "$_err" ] && aba_abort "One or more KVM objects in kvm.conf do not exist. Fix kvm.conf and try again."
+
+	return 0
+}
+
 source <(normalize-aba-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -26,6 +56,8 @@ if [ -s kvm.conf ]; then
 	if ! virsh -c "$LIBVIRT_URI" version >/dev/null 2>&1; then
 		aba_abort "Cannot connect to libvirt at $LIBVIRT_URI.  Please edit $PWD/kvm.conf and try again!"
 	fi
+
+	_kvm_verify_objects
 
 	aba_debug KVM config file $PWD/kvm.conf ok
 
@@ -61,6 +93,8 @@ else
 	if ! virsh -c "$LIBVIRT_URI" version; then
 		aba_abort "Cannot connect to libvirt at $LIBVIRT_URI.  Please edit $PWD/kvm.conf and try again!"
 	else
+		_kvm_verify_objects
+
 		aba_info "Saving working version of 'kvm.conf' to '~/.kvm.conf'."
 		[ -s kvm.conf ] && cp kvm.conf ~/.kvm.conf
 	fi
