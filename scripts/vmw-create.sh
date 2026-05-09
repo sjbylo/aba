@@ -31,6 +31,20 @@ WKR_MAC_ADDRS_ARRAY=($WKR_MAC_ADDRS)
 
 aba_info "Provisioning VMs to build the cluster ..."
 
+# Pre-flight: verify datastore and network exist before attempting VM creation
+if ! govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1; then
+	aba_abort \
+		"Datastore '$GOVC_DATASTORE' not found." \
+		"Available datastores: $(govc datastore.ls 2>/dev/null | tr '\n' ', ')" \
+		"Fix GOVC_DATASTORE in vmware.conf and try again."
+fi
+if ! govc network.info "$GOVC_NETWORK" >/dev/null 2>&1; then
+	aba_abort \
+		"Network '$GOVC_NETWORK' not found." \
+		"Available networks: $(govc ls network/ 2>/dev/null | xargs -I{} basename {} | tr '\n' ', ')" \
+		"Fix GOVC_NETWORK in vmware.conf and try again."
+fi
+
 cluster_folder="$VC_FOLDER"
 # If we are accessing vCenter (and not ESXi directly) 
 if [ -n "${VC:-}" ]; then
