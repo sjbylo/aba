@@ -57,7 +57,7 @@ platform:
 {%- else %}
 #        resourcePool: "/{{ GOVC_DATACENTER }}/host/{{ GOVC_CLUSTER }}/Resources/"
 {%- endif %}
-        folder: "{{ VC_FOLDER }}"
+        folder: "{{ VC_FOLDER }}/{{ cluster_name }}"
       zone: zone-{{ cluster_name }}
     vcenters:
     - datacenters:
