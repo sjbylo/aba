@@ -72,7 +72,7 @@ _mirror_install_local() {
 	# Load current values
 	local m_host="" m_port="" m_user="" m_pw="" m_path="" m_vendor="" m_datadir=""
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
 	fi
 	m_host="${reg_host:-$(hostname -f 2>/dev/null || hostname)}"
 	m_port="${reg_port:-8443}"
@@ -190,7 +190,7 @@ _mirror_install_remote() {
 	local m_host="" m_port="" m_user="" m_pw="" m_path="" m_vendor="" m_datadir=""
 	local m_ssh_user="" m_ssh_key=""
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-		source "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null || true
+		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
 	fi
 	m_host="${reg_host:-}"
 	m_port="${reg_port:-8443}"

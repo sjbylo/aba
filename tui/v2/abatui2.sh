@@ -125,8 +125,9 @@ tui_log "ABA_ROOT: $ABA_ROOT"
 tui_log "=========================================="
 
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
-	# shellcheck disable=SC1091
-	source "$ABA_ROOT/aba.conf" || true
+	# Use normalize-aba-conf to strip trailing whitespace, comments, etc.
+	# Raw 'source aba.conf' leaves trailing tabs in values (Make-style comments)
+	source <(cd "$ABA_ROOT" && normalize-aba-conf) || true
 fi
 
 # Global operator basket (for CONNO mode operator selection)
@@ -415,8 +416,8 @@ _conno_main() {
 	if [[ -z "${ocp_channel:-}" || -z "${ocp_version:-}" ]]; then
 		tui_log "CONNO: config incomplete, running wizard"
 		direct_wizard || return 1
-		# Reload config
-		source "$ABA_ROOT/aba.conf" 2>/dev/null || true
+		# Reload config (normalized to avoid trailing whitespace from comments)
+		source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
 	fi
 
 	# CONNO action menu — single-letter tags displayed as keyboard shortcuts.
