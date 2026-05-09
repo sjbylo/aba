@@ -6,6 +6,79 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Verify that vSphere objects referenced in vmware.conf actually exist.
+# Called after govc about succeeds (login is valid).
+_vmw_verify_objects() {
+	local _err=""
+
+	if [ "$GOVC_DATASTORE" ]; then
+		if govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1; then
+			aba_info "Datastore '$GOVC_DATASTORE' ... OK"
+		else
+			aba_warning "Datastore '$GOVC_DATASTORE' not found!"
+			_err=1
+		fi
+	fi
+
+	if [ "${ISO_DATASTORE:-}" ]; then
+		if govc datastore.info "$ISO_DATASTORE" >/dev/null 2>&1; then
+			aba_info "ISO Datastore '$ISO_DATASTORE' ... OK"
+		else
+			aba_warning "ISO Datastore '$ISO_DATASTORE' not found!"
+			_err=1
+		fi
+	fi
+
+	if [ "$GOVC_NETWORK" ]; then
+		if [ "$(govc find / -type Network -name "$GOVC_NETWORK")" ]; then
+			aba_info "Network '$GOVC_NETWORK' ... OK"
+		else
+			aba_warning "Network (port group) '$GOVC_NETWORK' not found!"
+			_err=1
+		fi
+	fi
+
+	if [ "${GOVC_DATACENTER:-}" ]; then
+		if govc datacenter.info "$GOVC_DATACENTER" >/dev/null 2>&1; then
+			aba_info "Datacenter '$GOVC_DATACENTER' ... OK"
+		else
+			aba_warning "Datacenter '$GOVC_DATACENTER' not found!"
+			_err=1
+		fi
+	fi
+
+	# govc cluster.info doesn't exist; use find instead
+	if [ "${GOVC_CLUSTER:-}" ]; then
+		if [ "$(govc find / -type ClusterComputeResource -name "$GOVC_CLUSTER")" ]; then
+			aba_info "Cluster '$GOVC_CLUSTER' ... OK"
+		else
+			aba_warning "Cluster '$GOVC_CLUSTER' not found!"
+			_err=1
+		fi
+	fi
+
+	if [ "${VC_FOLDER:-}" ]; then
+		if govc folder.info "$VC_FOLDER" >/dev/null 2>&1; then
+			aba_info "Folder '$VC_FOLDER' ... OK"
+		else
+			aba_info "Folder '$VC_FOLDER' does not exist yet (will be created at install time)"
+		fi
+	fi
+
+	if [ "${GOVC_RESOURCE_POOL:-}" ]; then
+		if govc pool.info "$GOVC_RESOURCE_POOL" >/dev/null 2>&1; then
+			aba_info "Resource pool '$GOVC_RESOURCE_POOL' ... OK"
+		else
+			aba_warning "Resource pool '$GOVC_RESOURCE_POOL' not found!"
+			_err=1
+		fi
+	fi
+
+	[ "$_err" ] && aba_abort "One or more vSphere objects in vmware.conf do not exist. Fix vmware.conf and try again."
+
+	return 0
+}
+
 # Needed for $editor and $ask
 source <(normalize-aba-conf)
 
@@ -34,6 +107,8 @@ if [ -s vmware.conf ]; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
 	fi
 
+	_vmw_verify_objects
+
 	aba_debug Govc config file $PWD/vmware.conf ok
 
 	[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf && aba_debug "Saved vmware.conf to ~/.vmware.conf"
@@ -60,6 +135,8 @@ else
 	if ! govc about; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
 	else
+		_vmw_verify_objects
+
 		aba_info "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
 		[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
 	fi
