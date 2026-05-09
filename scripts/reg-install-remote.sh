@@ -160,6 +160,17 @@ case "$vendor" in
 		REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 		REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
+		# Two-tier cert check (tier 1 runs locally using state.sh).
+		# If state.sh shows a different REG_HOST, force cert regeneration on remote.
+		_force_regen=""
+		if [[ -s "$regcreds_dir/state.sh" ]]; then
+			source "$regcreds_dir/state.sh"
+			if [[ -n "$REG_HOST" && "$REG_HOST" != "$reg_host" ]]; then
+				aba_info "Hostname changed ('$REG_HOST' -> '$reg_host') — will regenerate certificate on remote ..."
+				_force_regen=true
+			fi
+		fi
+
 		aba_info "Running Docker registry install on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: podman run -d -p ${reg_port}:5000 --name registry docker.io/library/registry:latest"
 		if ! $_ssh "
@@ -173,7 +184,17 @@ case "$vendor" in
 					-sha256 -days 3650 -out '$REGISTRY_CERTS_DIR/ca.crt' -subj '/CN=ABA-RegistryCA'
 			fi
 
-			if [ ! -f '$REGISTRY_CERTS_DIR/registry.crt' ]; then
+			_need_cert=false
+			if [ ! -f '$REGISTRY_CERTS_DIR/registry.crt' ] || [ ! -f '$REGISTRY_CERTS_DIR/registry.key' ]; then
+				_need_cert=true
+			elif [ '${_force_regen}' = true ]; then
+				echo '[ABA] Hostname changed — regenerating certificate ...'
+				_need_cert=true
+			elif ! openssl x509 -noout -ext subjectAltName -in '$REGISTRY_CERTS_DIR/registry.crt' 2>/dev/null | grep -q 'DNS:${reg_host}$'; then
+				echo '[ABA] Existing certificate does not match hostname ${reg_host} — regenerating ...'
+				_need_cert=true
+			fi
+			if [ \"\$_need_cert\" = true ]; then
 				openssl genrsa -out '$REGISTRY_CERTS_DIR/registry.key' 4096
 				openssl req -new -key '$REGISTRY_CERTS_DIR/registry.key' \
 					-out '$REGISTRY_CERTS_DIR/registry.csr' -subj '/CN=$reg_host'

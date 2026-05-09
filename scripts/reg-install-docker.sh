@@ -40,7 +40,24 @@ if [[ ! -f "$REGISTRY_CERTS_DIR/ca.crt" || ! -f "$REGISTRY_CERTS_DIR/ca.key" ]];
 fi
 
 # --- Generate registry certificate signed by CA ---
+# Two-tier check: regenerate if missing OR if hostname changed since last install.
+#   Tier 1: Compare reg_host against REG_HOST in state.sh (fast, authoritative).
+#   Tier 2: If no state.sh, fall back to openssl SAN check on existing cert
+#           (covers failed installs that left stale certs without writing state.sh).
+_need_cert=false
 if [[ ! -f "$REGISTRY_CERTS_DIR/registry.crt" || ! -f "$REGISTRY_CERTS_DIR/registry.key" ]]; then
+	_need_cert=true
+elif [[ -s "$regcreds_dir/state.sh" ]]; then
+	source "$regcreds_dir/state.sh"
+	if [[ -n "$REG_HOST" && "$REG_HOST" != "$reg_host" ]]; then
+		aba_info "Hostname changed ('$REG_HOST' -> '$reg_host') — regenerating certificate ..."
+		_need_cert=true
+	fi
+elif ! openssl x509 -noout -ext subjectAltName -in "$REGISTRY_CERTS_DIR/registry.crt" 2>/dev/null | grep -q "DNS:${reg_host}$"; then
+	aba_info "Existing certificate does not match hostname '$reg_host' — regenerating ..."
+	_need_cert=true
+fi
+if [[ "$_need_cert" == "true" ]]; then
 	aba_info "Generating registry certificate ..."
 	openssl genrsa -out "$REGISTRY_CERTS_DIR/registry.key" 4096
 	openssl req -new -key "$REGISTRY_CERTS_DIR/registry.key" \
