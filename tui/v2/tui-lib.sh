@@ -274,7 +274,8 @@ confirm_and_execute() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
-			--menu "$(printf "$TUI2_MSG_EXEC_MODE" "$cmd")" 0 0 0 \
+			--extra-button --extra-label "Command" \
+			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
 			"1" "Run in TUI (auto-answer, dialog output)" \
 			"2" "Run in Terminal (interactive, full colors)" \
 			2>"$_TUI_TMP"
@@ -295,6 +296,10 @@ confirm_and_execute() {
   - Press ENTER to return to TUI"
 				continue
 				;;
+			3)
+				show_help "Command to execute" "$cmd"
+				continue
+				;;
 			0) ;;  # proceed to choice
 			1)
 				tui_log "User cancelled execution"
@@ -310,8 +315,8 @@ confirm_and_execute() {
 		choice=$(<"$_TUI_TMP")
 
 		case "$choice" in
-			1) _exec_in_tui "$cmd" ;;
-			2) _exec_in_terminal "$cmd" ;;
+			1) _exec_in_tui "$cmd" "$title" ;;
+			2) _exec_in_terminal "$cmd" "$title" ;;
 		esac
 		local exec_rc=$?
 		# rc=2 means "retry" — loop back to confirmation dialog
@@ -323,6 +328,7 @@ confirm_and_execute() {
 # --- Execute in TUI mode (progressbox) ---
 _exec_in_tui() {
 	local cmd="$1"
+	local title="${2:-Executing}"
 	local tui_cmd="$cmd"
 	[[ "$tui_cmd" != *" -y "* && "$tui_cmd" != *" -y" ]] && tui_cmd="$tui_cmd -y"
 
@@ -341,7 +347,7 @@ _exec_in_tui() {
 	trap : INT
 	PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
 		sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
-		dlg --backtitle "$(ui_backtitle)" --title "Executing: $tui_cmd" \
+		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--progressbox $box_height $box_width
 	local exit_code=${PIPESTATUS[0]}
 	trap - INT

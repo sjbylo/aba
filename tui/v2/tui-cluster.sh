@@ -537,7 +537,7 @@ _cluster_page_basics() {
 Toggle 'Type' or 'Platform' to cycle through options.
 Press 'Next' to proceed to networking.
 
-Current OCP version: ${ocp_version:-?} (channel: ${ocp_channel:-?})
+Current OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})
 To change version/channel, exit and re-run the setup wizard."
 				continue
 				;;
@@ -1129,7 +1129,7 @@ _cluster_execute() {
 	summary+="  Cluster:      $fqdn\n"
 	summary+="  Type:         $cl_type ($_nm master, $_nw workers = $total_nodes node$( [[ $total_nodes -ne 1 ]] && echo s))\n"
 	summary+="  Platform:     $_plat_disp\n"
-	summary+="  OCP:          ${ocp_version:-?} (${ocp_channel:-?})\n"
+	summary+="  OpenShift:    ${ocp_version:-?} (${ocp_channel:-?})\n"
 	summary+="  Mode:         $_TUI_MODE\n"
 	summary+="  Mirror:       $_mirror_disp\n"
 	summary+="\n"

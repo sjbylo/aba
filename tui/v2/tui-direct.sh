@@ -99,7 +99,7 @@ direct_wizard() {
 				case "$DIALOG_RC" in
 					next)
 						local _ver_short="${ocp_version%.*}"
-						tui_log "Starting CLI + catalog downloads for OCP $_ver_short"
+						tui_log "Starting CLI + catalog downloads for OpenShift $_ver_short"
 						"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
 						step="platform"
