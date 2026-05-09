@@ -36,6 +36,8 @@ if ask "Uninstall Docker registry on localhost at $REG_HOST:$REG_PORT (data: $RE
 		$SUDO rm -rf "$REG_ROOT"
 	fi
 
+	reg_close_firewall
+
 	# Post-uninstall assertions: verify Docker registry is fully gone.
 	_stale=""
 	[ -d "$REG_ROOT" ] && _stale+="  REG_ROOT ($REG_ROOT) still exists"$'\n'

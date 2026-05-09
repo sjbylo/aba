@@ -115,6 +115,8 @@ if ask "Uninstall $vendor registry on remote host $REG_SSH_USER@$REG_HOST:$REG_R
 			;;
 	esac
 
+	reg_close_firewall --ssh
+
 	rm -rf "${regcreds_dir:?}/"*
 
 	aba_info_ok "Remote $vendor registry uninstall successful"
