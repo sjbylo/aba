@@ -1328,8 +1328,7 @@ cluster_delete() {
 		return 1
 	fi
 
-	local cl_display
-	cl_display=$(cluster_display_name "$SELECTED_CLUSTER")
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
 		--yes-label "Delete" --no-label "Cancel" \

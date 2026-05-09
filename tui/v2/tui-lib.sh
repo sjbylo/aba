@@ -557,15 +557,17 @@ is_bundle_mode() {
 # Cluster selector dialog
 # =============================================================================
 
-# select_cluster "title" "prompt" — sets SELECTED_CLUSTER or returns 1
+# select_cluster "title" "prompt" — sets SELECTED_CLUSTER and SELECTED_CLUSTER_DISPLAY or returns 1
 select_cluster() {
 	local title="${1:-Select Cluster}"
 	local prompt="${2:-Choose a cluster:}"
 	local clusters=()
 	local dir display
+	declare -A _cl_display_map
 
 	for dir in $(list_cluster_dirs); do
 		display=$(cluster_display_name "$dir")
+		_cl_display_map["$dir"]="$display"
 		clusters+=("$dir" "$display")
 	done
 
@@ -586,6 +588,7 @@ select_cluster() {
 	fi
 
 	SELECTED_CLUSTER=$(<"$_TUI_TMP")
+	SELECTED_CLUSTER_DISPLAY="${_cl_display_map[$SELECTED_CLUSTER]:-$SELECTED_CLUSTER}"
 	return 0
 }
 
@@ -595,9 +598,11 @@ select_installed_cluster() {
 	local prompt="${2:-Choose an installed cluster:}"
 	local clusters=()
 	local dir display
+	declare -A _cl_display_map
 
 	for dir in $(list_installed_clusters); do
 		display=$(cluster_display_name "$dir")
+		_cl_display_map["$dir"]="$display"
 		clusters+=("$dir" "$display")
 	done
 
@@ -618,6 +623,7 @@ select_installed_cluster() {
 	fi
 
 	SELECTED_CLUSTER=$(<"$_TUI_TMP")
+	SELECTED_CLUSTER_DISPLAY="${_cl_display_map[$SELECTED_CLUSTER]:-$SELECTED_CLUSTER}"
 	return 0
 }
 
