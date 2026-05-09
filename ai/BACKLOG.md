@@ -1,5 +1,36 @@
 # ABA Backlog
 
+## TUI v2: "Remember my selection" — persistent user preferences
+
+**Priority:** Medium
+**Scope:** TUI v2 only
+
+### Summary
+
+Add a "remember my choice" mechanism so the TUI saves user preferences (e.g. execution mode: TUI vs Terminal) and skips the prompt next time.
+
+### Design ideas
+
+1. **Persistence file**: `~/.aba/tui-preferences.conf` — simple `key=value` format (e.g. `exec_mode=terminal`, `confirm_before_exec=false`).
+2. **Remember checkbox**: On dialogs like execution mode, add a "Remember" checkbox or prompt. When checked, the selection is saved and the dialog is skipped on next invocation.
+3. **Global Settings menu**: Add a "Settings" item to the main TUI menu (all modes) that shows current preferences and allows toggling each one:
+   - Execution mode: TUI / Terminal / Always ask (default)
+   - Confirm before execute: yes (default) / no
+   - (future) Editor preference: nano / vi / dialog
+4. **Implementation approach**:
+   - `tui_pref_get <key> [default]` — reads from preferences file
+   - `tui_pref_set <key> <value>` — writes to preferences file
+   - At each preference-gated dialog, check `tui_pref_get` first; if set, skip dialog and use saved value
+   - Settings menu uses `--checklist` or `--menu` to toggle each preference
+5. **Reset**: Settings menu has "Reset all to defaults" option; also `aba reset` clears the file.
+
+### Open questions
+
+- Should "remember" be per-dialog (a checkbox on the dialog itself) or only configurable from the global Settings menu?
+- Should preferences survive `aba reset --force`? (Probably yes — they're user preferences, not project state.)
+
+---
+
 ## TUI v2: "Advanced" sub-menu
 
 **Priority:** Low

@@ -196,7 +196,7 @@ TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration...\n\nPlease wait."
 TUI2_MSG_ISC_NOT_FOUND="ImageSet configuration file not found.\n\nFile: %s"
 TUI2_MSG_ISC_SAVED="ImageSet configuration saved.\n\nABA will not overwrite your edits.\nUse 'Reset' to revert to auto-generated."
 TUI2_MSG_ISC_RESET="ImageSet configuration reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
-TUI2_MSG_CATALOG_DOWNLOADING="Downloading operator catalogs for OCP %s...\n\nThis may take a few minutes."
+TUI2_MSG_CATALOG_DOWNLOADING="Downloading operator catalogs for OpenShift %s...\n\nThis may take a few minutes."
 TUI2_MSG_CATALOG_FAILED="Failed to download catalog: %s\n\nCheck internet connection and try again."
 
 # =============================================================================
@@ -334,7 +334,7 @@ TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\n
 
 TUI2_MSG_CONFIRM_EXIT="Exit ABA TUI?\n\nUnsaved changes will be lost."
 TUI2_MSG_EXIT_HELP="Exiting the TUI:\n\n• Press ESC at any time to quit (with confirmation)\n• Press ESC again on confirmation to quit immediately\n• Click 'Exit' to confirm and quit\n• Click 'Continue' to return\n\nConfiguration is only saved when you complete actions."
-TUI2_MSG_EXEC_MODE="Ready to execute:\n\n\Zb%s\Zn\n\nChoose execution mode:"
+TUI2_MSG_EXEC_MODE="Choose execution mode:"
 TUI2_MSG_EDITOR_PROMPT="How would you like to edit?\n\n  %s"
 
 # =============================================================================

@@ -916,7 +916,7 @@ mirror_create_bundle() {
 				--yesno "Existing image data found in mirror/data/.\n\n\
 Reuse: only download changed/new images (incremental, fast).\n\
 Clean Rebuild: delete existing data and re-download everything.\n\n\
-Reuse is recommended unless you changed OCP version or suspect corruption." 0 0
+Reuse is recommended unless you changed OpenShift version or suspect corruption." 0 0
 			local choice_rc=$?
 			case $choice_rc in
 				0) tui_log "Bundle: reusing existing image data (incremental)"
@@ -934,7 +934,7 @@ Choose 'Reuse (fast)' to keep existing data and download only deltas.
 Choose 'Clean Rebuild' to delete everything and start fresh.
 
 When to use Clean Rebuild:
-• You changed the OCP version or channel significantly
+• You changed the OpenShift version or channel significantly
 • Previous download was interrupted or data appears corrupt
 • You want a guaranteed clean state
 
