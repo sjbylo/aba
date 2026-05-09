@@ -34,6 +34,8 @@ if ask "Uninstall Quay mirror registry on localhost, installed at $REG_HOST:$REG
 	aba_info "Running command: $cmd"
 	eval $cmd || exit 1
 
+	reg_close_firewall
+
 	# Post-uninstall assertions: verify Quay is fully gone on localhost.
 	# mirror-registry uninstall uses Ansible which can silently skip steps.
 	_stale=""
