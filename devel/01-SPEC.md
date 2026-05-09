@@ -275,10 +275,37 @@ remove these -- only Makefiles may.
 |----------|---------|------------|
 | `~/.aba/config` | User-level config overrides | User / install script |
 | `~/.aba/runner/` | run_once task state | run_once() only |
-| `~/.aba/mirror/<name>/` | Per-mirror credentials (pull secrets, CA cert) | Mirror Makefile + scripts |
+| `~/.aba/mirror/<name>/` | Per-mirror credentials, state, config backups | Mirror Makefile + scripts |
+| `~/.aba/clusters/<name>/` | Per-cluster auth, state, config backups | monitor-install.sh (write), aba.sh (recreate) |
 | `~/.aba/ssh.conf` | SSH config for remote commands | Install script |
 | `~/.aba/cache/`, `~/.aba/tmp/` | Temporary data | Various scripts; wiped by `aba reset` |
 | Marker files (in-tree) | Lifecycle state | Makefiles only |
+
+### Externalized state (ADR-007)
+
+Installed-object state lives outside the working dir in `~/.aba/`:
+
+- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, etc.)
+- **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, platform, etc.)
+
+State files use lowercase vars matching config file names. Normalize functions
+source state.sh after config; immutable fields (locked after install) are
+overridden from state.sh with a stderr warning on drift. Mutable fields
+(ops, op_sets) remain editable in config files.
+
+Auth files (kubeconfig, kubeadmin-password) and config backups (cluster.conf,
+install-config.yaml, agent-config.yaml, macs.conf, mirror.conf) are stored
+alongside state.sh. Backups go in a `backup/` subdir and use `cp -p` to
+preserve timestamps (critical for Make dependency tracking).
+
+If a cluster working dir is deleted, `aba delete` recreates it from the
+state backup (restoring config files, Makefile, symlinks, markers) and
+proceeds normally. All dirs under `~/.aba/clusters/` are mode 700.
+
+Helper functions (`cluster_kubeconfig()`, `cluster_state_dir()`,
+`cluster_is_installed()`) encapsulate lookups — scripts never hard-code
+`~/.aba/` paths. Convenience symlinks (`clusterstate ->`, `regcreds ->`)
+exist for human browsing; scripts use helpers directly.
 
 ---
 
