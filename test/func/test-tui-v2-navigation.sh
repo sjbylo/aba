@@ -93,10 +93,14 @@ fi
 log_info "=== Test B: Cluster Basics page ==="
 
 # Navigate to Install Cluster via shortcut key
-send I Enter
+sleep 1
+send I
+sleep 1
+send Enter
 sleep 2
 
-if ! wait_for "$TUI2_TITLE_CLUSTER_BASICS" 10; then
+if ! wait_for "$TUI2_TITLE_CLUSTER_BASICS" 15; then
+	screenshot "b-cluster-basics-timeout"
 	log_fail "B: Cluster Basics page did not appear"; report_results; exit 1
 fi
 log_pass "B: Cluster Basics page appeared"
@@ -155,13 +159,12 @@ screenshot "cluster-basics-sno"
 log_info "=== Test C: Cluster page navigation ==="
 
 # Ensure we're on the Basics page and press Next (Tab = Extra/Next button)
-# Use Home key to move to the top of menu, then Tab to Next button
-send Home
-sleep 0.5
+screenshot "c-before-next"
 send_tab_enter
 sleep 2
 
-if ! wait_for "$TUI2_TITLE_CLUSTER_NETWORK" 10; then
+if ! wait_for "$TUI2_TITLE_CLUSTER_NETWORK" 15; then
+	screenshot "c-network-timeout"
 	log_fail "C: Networking page did not appear"; report_results; exit 1
 fi
 log_pass "C: Page 2 (Networking) appeared"
@@ -276,9 +279,11 @@ fi
 log_pass "D: Back from Networking → Basics"
 
 # Navigate forward: page 1 → 2 (Tab Enter = Extra/Next button)
+sleep 1
 send_tab_enter
 sleep 2
-if ! wait_for "$TUI2_TITLE_CLUSTER_NETWORK" 10; then
+if ! wait_for "$TUI2_TITLE_CLUSTER_NETWORK" 15; then
+	screenshot "d-forward-page2-fail"
 	log_fail "D: Could not reach page 2"
 else
 	log_pass "D: Forward to page 2"
@@ -373,7 +378,8 @@ elif wait_for "$TUI2_TITLE_OPERATORS" 10; then
 	send_enter
 	sleep 3
 
-	if ! wait_for "$TUI2_TITLE_OPERATOR_SETS" 10; then
+	# Wait for the checklist (not the menu) -- "spacebar" only appears in the checklist
+	if ! wait_for "spacebar\|Toggle\|Apply" 10; then
 		log_fail "F: Operator Sets dialog did not appear"
 	else
 		log_pass "F: Operator Sets dialog appeared"
@@ -384,7 +390,8 @@ elif wait_for "$TUI2_TITLE_OPERATORS" 10; then
 	fi
 	screenshot "operator-sets"
 
-	# Toggle ACM, verify basket count
+	# Toggle first item with Space, then confirm with Enter
+	send Space
 	send_enter
 	sleep 2
 

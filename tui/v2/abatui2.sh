@@ -318,8 +318,7 @@ _detect_mode() {
 				# Switch to connected — remove bundle flag
 				rm -f "$ABA_ROOT/.bundle"
 				tui_log "User chose connected mode, removed .bundle"
-				# Fall through to internet-available path
-				_mode_select_mirror_or_direct
+				_TUI_MODE="CONNO"
 				return
 			fi
 		else
@@ -333,7 +332,8 @@ _detect_mode() {
 	run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
 	if check_internet_connectivity "aba" quiet 2>/dev/null; then
 		_TUI_INET="yes"
-		_mode_select_mirror_or_direct
+		_TUI_MODE="CONNO"
+		tui_log "Mode detected: CONNO (internet available, default to mirror)"
 	else
 		_TUI_INET="no"
 		# No internet, no bundle — check if repo is a "bundle equivalent"
@@ -351,59 +351,8 @@ _detect_mode() {
 	fi
 }
 
-# Ask user: Mirror or Direct?
-_mode_select_mirror_or_direct() {
-	local default_item="M"
-
-	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MODE_SELECT" \
-			--ok-label "$TUI2_BTN_SELECT" \
-			--cancel-label "$TUI2_BTN_EXIT" \
-			--help-button \
-			--default-item "M" \
-			--menu "$TUI2_MSG_MODE_SELECT" 14 70 3 \
-			"M" "$TUI2_MSG_MODE_MIRROR" \
-			"-" "───────────────────────────────────────────────────────" \
-			"D" "$TUI2_MSG_MODE_DIRECT" \
-			2>"$_TUI_TMP"
-		local rc=$?
-
-		case "$rc" in
-			0)
-				local choice
-				choice=$(<"$_TUI_TMP")
-				case "$choice" in
-					M) _TUI_MODE="CONNO"; break ;;
-					D) _TUI_MODE="DIRECT"; break ;;
-					*) continue ;;  # separator or unknown
-				esac
-				;;
-			2)
-				show_help "$TUI2_HELP_TITLE_MODE" \
-"• With mirror registry (recommended)
-  Sets up a local container registry that caches OpenShift images.
-  Required for air-gapped/disconnected installations.
-  Also useful for bandwidth savings and faster re-installs.
-
-• Direct from internet
-  Installs OpenShift directly from Red Hat registries.
-  Simpler setup but requires constant internet access.
-  Not suitable for disconnected environments."
-				continue
-				;;
-			1)
-				clear
-				exit 0
-				;;
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
-		esac
-	done
-
-	tui_log "Mode selected: $_TUI_MODE"
-}
+## _mode_select_mirror_or_direct removed — internet available always enters CONNO.
+## User switches to DIRECT from the CONNO action menu ("Switch to DIRECT mode").
 
 # =============================================================================
 # CONNO Mode Action Menu (full v1 replacement)
@@ -496,6 +445,11 @@ _conno_main() {
 			mon_label="Monitor Cluster $TUI2_GREY_INSTALL_FIRST"
 		fi
 
+		# Dynamic menu title with mirror state
+		local _mstate
+		_mstate="$(mirror_state_label)"
+		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):"
+
 		# Mirror health warning
 		local mirror_warn=""
 		if mirror_available; then
@@ -528,7 +482,7 @@ _conno_main() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "${TUI2_MSG_CONNO_MENU}${mirror_warn}" 0 0 0 \
+			--menu "${conno_menu_msg}${mirror_warn}" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?

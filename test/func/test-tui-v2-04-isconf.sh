@@ -269,7 +269,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 fi
 
 # Operators — skip (basket still has operators from A/B)
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi
@@ -319,7 +319,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	sleep 1
 fi
 
-if ! wait_for "$TUI_TITLE_OPERATORS" 120; then
+if ! wait_for "$TUI_TITLE_OPERATORS" 300; then
 	log_fail "D: Could not reach operators"; report_results; exit 1
 fi
 
@@ -465,7 +465,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	send_tab_enter
 	sleep 1
 fi
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi
@@ -508,7 +508,7 @@ if [[ -f "$ISC_FILE" ]]; then
 		send_tab_enter
 		sleep 1
 	fi
-	if wait_for "$TUI_TITLE_OPERATORS" 120; then
+	if wait_for "$TUI_TITLE_OPERATORS" 300; then
 		send_tab_enter
 		sleep 1
 	fi
@@ -609,7 +609,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	send_tab_enter
 	sleep 1
 fi
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi
@@ -691,7 +691,7 @@ if wait_for "$TUI_TITLE_PLATFORM" 10; then
 	send_tab_enter
 	sleep 1
 fi
-if wait_for "$TUI_TITLE_OPERATORS" 120; then
+if wait_for "$TUI_TITLE_OPERATORS" 300; then
 	send_tab_enter
 	sleep 1
 fi

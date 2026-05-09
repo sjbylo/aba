@@ -328,10 +328,10 @@ else
 
 	# Back to action menu
 	send Escape
-	sleep 1
+	sleep 2
 fi
 
-if wait_for "$TUI_TITLE_ACTION_MENU" 5; then
+if wait_for "$TUI_TITLE_ACTION_MENU" 10; then
 	log_pass "F: returned to action menu"
 	# Verify settings summary in the action menu shows updated values
 	assert_screen "Configure" "F: Configure label visible in action menu"

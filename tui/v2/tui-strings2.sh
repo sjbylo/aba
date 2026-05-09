@@ -240,7 +240,7 @@ TUI2_MSG_MODE_DIRECT="DIRECT FROM INTERNET (no mirror, simpler setup)"
 # Messages — CONNO Action Menu
 # =============================================================================
 
-TUI2_MSG_CONNO_MENU="Connected Mode (with mirror):"
+TUI2_MSG_CONNO_MENU=""  # Dynamic — set at runtime by _conno_menu_msg()
 TUI2_MSG_MIRROR_REINSTALL="Mirror registry is already installed.\n\nReinstall it?"
 TUI2_MSG_MIRROR_FIRST="Mirror registry is not installed.\n\nUse 'Install Mirror' to set up a local or remote registry first."
 TUI2_MSG_CLUSTER_FIRST="No cluster installed yet.\n\nUse 'Install Cluster' to configure and provision a cluster first."

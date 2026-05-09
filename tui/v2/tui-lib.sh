@@ -425,6 +425,69 @@ mirror_available() {
 	[[ -f "$ABA_ROOT/mirror/.available" ]]
 }
 
+# Return human-readable mirror state for the menu title.
+# States: "no mirror" → "mirror installed" → "mirror ready"
+# "mirror ready" means the release image is actually present in the registry.
+mirror_state_label() {
+	if ! mirror_available; then
+		echo "no mirror"
+		return
+	fi
+	# Mirror is installed. Check if the release image exists via skopeo.
+	if _mirror_has_release_image; then
+		echo "mirror ready"
+	else
+		echo "mirror installed"
+	fi
+}
+
+# Check if the current release image exists in the mirror registry.
+# Uses a cached result (valid for 10 minutes) to avoid slow skopeo calls on every menu refresh.
+_mirror_has_release_image() {
+	local cache_file="$HOME/.aba/runner/tui-mirror-ready.cache"
+	local cache_ttl=600  # 10 minutes
+
+	# Use cache if fresh
+	if [[ -f "$cache_file" ]]; then
+		local age
+		age=$(( $(date +%s) - $(stat -c %Y "$cache_file") ))
+		if (( age < cache_ttl )); then
+			[[ "$(cat "$cache_file")" == "1" ]]
+			return
+		fi
+	fi
+
+	# Need openshift-install and mirror config
+	if [[ ! -x "$HOME/bin/openshift-install" ]]; then
+		echo "0" > "$cache_file"
+		return 1
+	fi
+
+	local _out _release_sha _reg_host _reg_port _reg_path _url
+	_out=$(openshift-install version 2>/dev/null) || { echo "0" > "$cache_file"; return 1; }
+	_release_sha=$(echo "$_out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
+
+	# Source mirror.conf values
+	_reg_host=$(grep '^reg_host=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
+	_reg_port=$(grep '^reg_port=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
+	_reg_path=$(grep '^reg_path=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
+	_reg_port="${_reg_port:-8443}"
+	_reg_path="${_reg_path:-/ocp4/openshift4}"
+
+	[[ -z "$_reg_host" || -z "$_release_sha" ]] && { echo "0" > "$cache_file"; return 1; }
+
+	_url="docker://${_reg_host}:${_reg_port}${_reg_path}/openshift/release-images${_release_sha}"
+
+	mkdir -p "$(dirname "$cache_file")"
+	if skopeo inspect "$_url" >/dev/null 2>&1; then
+		echo "1" > "$cache_file"
+		return 0
+	else
+		echo "0" > "$cache_file"
+		return 1
+	fi
+}
+
 # Is a cluster configured? (cluster.conf exists in given dir)
 cluster_configured() {
 	local dir="$1"
