@@ -91,12 +91,12 @@ reg_check_fqdn() {
 # it did not create.
 #
 # Also aborts if ABA already manages a registry at this host (state.sh with
-# matching REG_HOST).  There is no "reinstall" -- user must uninstall first.
+# matching reg_host).  There is no "reinstall" -- user must uninstall first.
 reg_detect_existing() {
 	# Skip install if ABA already has a healthy registry at this host. This is also needed if user edits mirror.conf which triggers a installation
 	if [ -s "$regcreds_dir/state.sh" ]; then
 		local _saved_host
-		_saved_host=$(grep '^REG_HOST=' "$regcreds_dir/state.sh" 2>/dev/null | cut -d= -f2)
+		_saved_host=$(grep '^reg_host=' "$regcreds_dir/state.sh" 2>/dev/null | cut -d= -f2)
 		if [ "$_saved_host" = "$reg_host" ]; then
 			if probe_host --any "$reg_url/v2/" "existing registry"; then
 				aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
@@ -319,7 +319,7 @@ reg_open_firewall() {
 
 # --- reg_close_firewall -------------------------------------------------------
 # Close firewall port opened by reg_open_firewall at install time.
-# Only acts if state.sh records REG_FW_OPENED=1 (i.e. ABA opened the port).
+# Only acts if state.sh records reg_fw_opened=1 (i.e. ABA opened the port).
 # Usage:
 #   reg_close_firewall           Close $reg_port on this host (local install)
 #   reg_close_firewall --ssh     Close $reg_port via SSH on $reg_host (remote install)
@@ -327,7 +327,7 @@ reg_open_firewall() {
 # Mirrors reg_open_firewall: tries firewalld first, then iptables fallback.
 # Silently succeeds if the port was never opened or the firewall is not active.
 reg_close_firewall() {
-	if [ "${REG_FW_OPENED:-}" != "1" ]; then
+	if [ "${reg_fw_opened:-}" != "1" ]; then
 		aba_info "Firewall port $reg_port was not opened by ABA -- skipping close"
 		return 0
 	fi
@@ -441,19 +441,27 @@ reg_post_install() {
 
 	# Write persistent state for uninstall (survives aba clean/reset)
 	cat > "$regcreds_dir/state.sh" <<-EOF
-	REG_VENDOR=$vendor
-	REG_HOST=$reg_host
-	REG_PORT=$reg_port
-	REG_USER=$reg_user
-	REG_PW='$reg_pw'
-	REG_ROOT=$reg_root
-	REG_SSH_KEY=${reg_ssh_key:-}
-	REG_SSH_USER=${reg_ssh_user:-}
-	REG_ROOT_OPTS="${reg_root_opts:-}"
-	REG_FW_OPENED=${_reg_fw_opened:-}
-	REG_INSTALLED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+	reg_vendor=$vendor
+	reg_host=$reg_host
+	reg_port=$reg_port
+	reg_user=$reg_user
+	reg_pw='$reg_pw'
+	reg_root=$reg_root
+	reg_ssh_key=${reg_ssh_key:-}
+	reg_ssh_user=${reg_ssh_user:-}
+	reg_root_opts="${reg_root_opts:-}"
+	reg_fw_opened=${_reg_fw_opened:-}
+	reg_installed_at="$(date '+%Y-%m-%d %H:%M:%S')"
 	EOF
 	aba_info "Saved registry state to $regcreds_dir/state.sh"
+
+	# Backup mirror.conf + marker files for dir recreation (ADR-007)
+	mkdir -p "$regcreds_dir/backup"
+	[ -f mirror.conf ] && cp -p mirror.conf "$regcreds_dir/backup/"
+	# .available is created by the Makefile after this function returns
+	for _flag in .init .rpmsext .rpmsint; do
+		[ -f "$_flag" ] && cp -p "$_flag" "$regcreds_dir/backup/"
+	done
 
 	echo
 	aba_info_ok "Registry installed/configured successfully!"

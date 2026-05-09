@@ -1,4 +1,17 @@
-# Code that all scripts need.  Ensure this script does not create any std output.
+# =============================================================================
+# INTENT:      Shared functions and setup for all ABA scripts.
+#              Provides: color output, config normalize/verify, IP math,
+#              run_once, ensure_* tool installers, cluster state helpers
+#              (ADR-007), HTTP probing, TUI validation, CLI tool management.
+# CALLED BY:   Every script via 'source scripts/include_all.sh'
+# CWD:         Varies (caller's working directory)
+# REQUIRES:    Nothing (self-contained)
+# PRODUCES:    No stdout (only function definitions and variable setup)
+# SIDE EFFECTS: Sets ARCH, SUDO, sources ~/.aba/config if present
+# IDEMPOTENT:  Yes (safe to source multiple times via _INCLUDE_ALL_LOADED guard)
+# ENV:         DEBUG_ABA (optional), ABA_TTY_FD (optional), PLAIN_OUTPUT (optional)
+# =============================================================================
+# Ensure this script does not create any std output.
 # Add any arg1 to turn off the below Error trap
 
 # Strict mode:
@@ -569,6 +582,39 @@ cidr_host_count() {
 	else
 		echo $(( (1 << (32 - prefix)) - 2 ))
 	fi
+}
+
+# -----------------------------------------------------------------------------
+# Cluster State Helpers (ADR-007: unified state management)
+# Scripts use these instead of hard-coding ~/.aba/ paths.
+# Convenience symlinks (clusterstate) exist for humans; scripts use these.
+# -----------------------------------------------------------------------------
+
+# Returns path to the external state dir for a cluster
+cluster_state_dir() {
+	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
+	[ -z "$name" ] && return 1
+	echo "$HOME/.aba/clusters/$name"
+}
+
+# Returns path to kubeconfig (prefers external state, falls back to local)
+cluster_kubeconfig() {
+	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
+	[ -z "$name" ] && return 1
+	local state_path="$HOME/.aba/clusters/$name/kubeconfig"
+	local local_path="iso-agent-based/auth/kubeconfig"
+	if [[ -f "$state_path" ]]; then
+		echo "$state_path"
+	elif [[ -f "$local_path" ]]; then
+		echo "$local_path"
+	fi
+}
+
+# Check if a cluster has externalized state (installed at least once)
+cluster_is_installed() {
+	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
+	[ -z "$name" ] && return 1
+	[[ -s "$HOME/.aba/clusters/$name/state.sh" ]]
 }
 
 verify-cluster-conf() {

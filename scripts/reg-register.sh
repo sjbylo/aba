@@ -1,7 +1,7 @@
 #!/bin/bash
 # Register an existing (externally-managed) mirror registry with ABA.
 # Copies the user-provided pull secret and CA cert into the regcreds dir,
-# trusts the CA system-wide, writes state.sh with REG_VENDOR=existing,
+# trusts the CA system-wide, writes state.sh with reg_vendor=existing,
 # and marks the mirror as .available.
 #
 # Usage (called via mirror/Makefile register target):
@@ -50,10 +50,10 @@ trust_root_ca "$regcreds_dir/rootCA.pem"
 
 # Write state.sh marking this as an externally-managed registry
 cat > "$regcreds_dir/state.sh" <<-EOF
-REG_VENDOR=existing
-REG_HOST=$reg_host
-REG_PORT=$reg_port
-REG_INSTALLED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
+reg_vendor=existing
+reg_host=$reg_host
+reg_port=$reg_port
+reg_installed_at="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
 aba_info "Saved registry state to $regcreds_dir/state.sh"
 
