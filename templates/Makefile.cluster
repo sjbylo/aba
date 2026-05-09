@@ -14,6 +14,7 @@ arch   := $(strip $(shell uname -m))
 
 -include ../aba.conf
 platform := $(strip $(shell echo $(platform)))
+ocp_version := $(strip $(shell echo $(ocp_version)))
 
 # The next section is (unfortunately) needed because making a bare-metal cluster has a different flow, with interruptions!
 # 1. Before iso creation, the Agent-based installer config files need to be changed: mac addresses added, disk hints ... etc.
