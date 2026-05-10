@@ -74,19 +74,13 @@ while [ $i -le $# ]; do
 				# Validate directory argument
 				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
 				target_dir=$(eval echo "$target_dir")  # Expand ~ in path
-				# Phase 4 (ADR-007): if dir is missing, try to recreate from external state
+				# ADR-007: if dir is missing, recreate from external state backup
 				if [ ! -e "$target_dir" ]; then
 					_sdir="$HOME/.aba/clusters/$(basename "$target_dir")"
 					if [ -s "$_sdir/state.sh" ] && [ -s "$_sdir/backup/cluster.conf" ]; then
 						echo "[ABA] Recreating cluster directory '$target_dir' from state backup" >&2
 						mkdir -p "$target_dir"
-						cp -p "$_sdir/backup/cluster.conf" "$target_dir/"
-						for _bf in install-config.yaml agent-config.yaml macs.conf; do
-							[ -f "$_sdir/backup/$_bf" ] && cp -p "$_sdir/backup/$_bf" "$target_dir/"
-						done
-						for _mf in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete; do
-							[ -f "$_sdir/backup/$_mf" ] && cp -p "$_sdir/backup/$_mf" "$target_dir/"
-						done
+						cp -pa "$_sdir/backup/." "$target_dir/"
 						ln -fs ../templates/Makefile.cluster "$target_dir/Makefile"
 						ln -sfn "$_sdir" "$target_dir/clusterstate"
 					else
@@ -983,24 +977,13 @@ if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
 
 	# Externalized targets require a cluster directory (cluster.conf present)
-	# Phase 4 (ADR-007): if cluster.conf is missing, try restoring from state
+	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
 		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
-				_sdir="$HOME/.aba/clusters/$_cn"
-				if [ -s "$_sdir/state.sh" ] && [ -s "$_sdir/backup/cluster.conf" ]; then
-					aba_info "Restoring cluster.conf from state backup for '$_cn'"
-					cp -p "$_sdir/backup/cluster.conf" .
-					[ -f "$_sdir/backup/install-config.yaml" ] && [ ! -f install-config.yaml ] && cp -p "$_sdir/backup/install-config.yaml" .
-					[ -f "$_sdir/backup/agent-config.yaml" ] && [ ! -f agent-config.yaml ] && cp -p "$_sdir/backup/agent-config.yaml" .
-					[ -f "$_sdir/backup/macs.conf" ] && [ ! -f macs.conf ] && cp -p "$_sdir/backup/macs.conf" .
-					[ ! -f Makefile ] && ln -fs ../templates/Makefile.cluster Makefile
-					[ ! -L clusterstate ] && ln -sfn "$_sdir" clusterstate
-					for _mf in .init .install-complete .autopoweroff .autoupload .autorefresh; do
-						[ -f "$_sdir/backup/$_mf" ] && [ ! -f "$_mf" ] && cp -p "$_sdir/backup/$_mf" .
-					done
-					make -s init 2>/dev/null || true
+				if _recreate_cluster_dir "$_cn"; then
+					:
 				else
 					aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
 				fi
