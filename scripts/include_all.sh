@@ -464,6 +464,13 @@ normalize-mirror-conf()
 
 		#echo export tls_verify=true
 	)
+
+	# Phase 3 (ADR-007): override immutable fields from installed state
+	local _mn
+	_mn=$(basename "$PWD")
+	if [ -s "$HOME/.aba/mirror/$_mn/state.sh" ]; then
+		_state_override_mirror "$_mn"
+	fi
 }
 
 				#-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
@@ -535,6 +542,13 @@ normalize-cluster-conf()
 	grep -q ^ports= cluster.conf 		|| echo export ports=$(grep -E "^port[01]=\S" cluster.conf | cut -d= -f2 | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
+
+	# Phase 3 (ADR-007): override immutable fields from installed state
+	local _cn
+	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
+	if [ "$_cn" ] && [ -s "$HOME/.aba/clusters/$_cn/state.sh" ]; then
+		_state_override_cluster "$_cn"
+	fi
 }
 
 # -----------------------------------------------------------------------------
@@ -615,6 +629,76 @@ cluster_is_installed() {
 	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
 	[ -z "$name" ] && return 1
 	[[ -s "$HOME/.aba/clusters/$name/state.sh" ]]
+}
+
+# Emit export lines that override immutable cluster fields from state.sh.
+# Called at the end of normalize-cluster-conf() so state wins over config.
+# Drift (config != state) triggers a stderr warning for user-visible fields.
+_state_override_cluster() {
+	local _name="$1" _state="$HOME/.aba/clusters/$1/state.sh"
+	local _immutable="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
+	local _warn_fields="cluster_name base_domain starting_ip cluster_type platform"
+	local _field _sval _cval
+
+	for _field in $_immutable; do
+		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+		[ -z "$_sval" ] && continue
+		case " $_warn_fields " in
+			*" $_field "*)
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2-)
+				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
+					aba_warning -p "State" "cluster.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value" >&2
+				fi
+				;;
+		esac
+		echo "export ${_field}=${_sval}"
+	done
+}
+
+# Emit export lines that override immutable mirror fields from state.sh.
+# Called at the end of normalize-mirror-conf() so state wins over config.
+_state_override_mirror() {
+	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
+	local _immutable="reg_host reg_port reg_vendor reg_root reg_user reg_pw"
+	local _field _sval _cval
+
+	for _field in $_immutable; do
+		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+		[ -z "$_sval" ] && continue
+		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2-)
+		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
+			aba_warning -p "State" "mirror.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value" >&2
+		fi
+		echo "export ${_field}=${_sval}"
+	done
+}
+
+# Recreate a deleted cluster directory from externalized state backup.
+# Returns 0 if successfully recreated, 1 if no backup exists.
+_recreate_cluster_dir() {
+	local _name="$1" _state_dir="$HOME/.aba/clusters/$_name"
+	local _backup="$_state_dir/backup"
+
+	[ -s "$_state_dir/state.sh" ] || return 1
+	[ -s "$_backup/cluster.conf" ] || return 1
+
+	aba_info "Recreating cluster directory '$_name' from state backup"
+
+	mkdir -p "$_name"
+	cp -p "$_backup/cluster.conf" "$_name/"
+	[ -f "$_backup/install-config.yaml" ] && cp -p "$_backup/install-config.yaml" "$_name/"
+	[ -f "$_backup/agent-config.yaml" ] && cp -p "$_backup/agent-config.yaml" "$_name/"
+	[ -f "$_backup/macs.conf" ] && cp -p "$_backup/macs.conf" "$_name/"
+
+	for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete; do
+		[ -f "$_backup/$_flag" ] && cp -p "$_backup/$_flag" "$_name/"
+	done
+
+	ln -fs ../templates/Makefile.cluster "$_name/Makefile"
+	make -s -C "$_name" init 2>/dev/null || true
+	ln -sfn "$_state_dir" "$_name/clusterstate"
+
+	return 0
 }
 
 verify-cluster-conf() {
