@@ -9,10 +9,10 @@
 #     moves to buttons instead of the next field, causing users to accidentally
 #     advance pages. Menu-style: user selects a row, edits in a focused inputbox,
 #     then returns to the menu. Consistent with Basics and Interfaces pages.
-#   - Button layout: --ok-label "$TUI2_BTN_SELECT" --extra-button --extra-label "$TUI2_BTN_NEXT"
-#     --cancel-label "$TUI2_BTN_BACK" --help-button. Tab order from menu area:
-#     Tab→Extra(Next), Tab Tab→Cancel(Back). Empirically verified on dialog 1.3
-#     (RHEL 9). See plan appendix A.25.
+#   - Button layout: Select | Next | Back | Help (page 1) or Restart (pages 2-4).
+#     Page 1 Help shows comprehensive wizard help. Pages 2-4 Restart jumps to page 1.
+#     Tab order from menu area: Tab→Extra(Next), Tab Tab→Cancel(Back).
+#     Empirically verified on dialog 1.3 (RHEL 9). See plan appendix A.25.
 #   - Fixed menu dimensions (width + menu-height) on pages where items appear/
 #     disappear (e.g. Basics: "Worker count" shows only for standard). Prevents
 #     dialog resize flicker when toggling cluster type.
@@ -404,9 +404,11 @@ cluster_install_flow() {
 		esac
 	fi
 
-	# In DIRECT mode, default to "direct" but also allow "proxy" (no "mirror")
+	# Mode-aware connection default: prevent state leaking between modes
 	if [[ "$_TUI_MODE" == "DIRECT" ]]; then
 		[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
+	else
+		[[ "$cl_connection" == "direct" ]] && cl_connection="mirror"
 	fi
 
 	# Save locals back to globals (called before every return)
@@ -437,16 +439,25 @@ cluster_install_flow() {
 				_persist_cluster_draft
 				;;
 			2)
-				_cluster_page_network || { page=$((page - 1)); continue; }
+				_cluster_page_network
+				local _rc=$?
+				if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue
+				elif [[ $_rc -eq 2 ]]; then page=1; continue; fi
 				_persist_cluster_draft
 				;;
 			3)
-				_cluster_page_iface || { page=$((page - 1)); continue; }
+				_cluster_page_iface
+				local _rc=$?
+				if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue
+				elif [[ $_rc -eq 2 ]]; then page=1; continue; fi
 				_persist_cluster_draft
 				;;
 			4)
 				if [[ "$cl_platform" != "bm" ]]; then
-					_cluster_page_vm || { page=$((page - 1)); continue; }
+					_cluster_page_vm
+					local _rc=$?
+					if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue
+					elif [[ $_rc -eq 2 ]]; then page=1; continue; fi
 					_persist_cluster_draft
 				else
 					# Skip VM page for bare metal, go to review
@@ -528,17 +539,35 @@ _cluster_page_basics() {
 
 		case "$rc" in
 			2)
-				show_help "$TUI2_HELP_TITLE_BASICS" \
-"• Cluster name: short name (lowercase, numbers, hyphens)
-• Type: sno (single node), compact (3 masters), standard (3 masters + workers)
-• Worker count: number of worker nodes (only for standard type)
+				show_help "Cluster Wizard Help" \
+"--- Page 1: Basics ---
+• Cluster name: short name (lowercase, numbers, hyphens)
+• Type: sno (single node), compact (3 masters), standard (3+N)
+• Worker count: number of workers (standard only)
 • Platform: bm (bare metal), vmw (VMware), kvm (KVM/libvirt)
+Toggle 'Type' or 'Platform' to cycle options.
 
-Toggle 'Type' or 'Platform' to cycle through options.
-Press 'Next' to proceed to networking.
+--- Page 2: Network ---
+• Machine network: cluster subnet CIDR (e.g. 10.0.0.0/24)
+• Starting IP: first IP for cluster nodes
+• API VIP / Ingress VIP: virtual IPs (compact/standard)
+• DNS / Gateway / NTP: network services
 
-Current OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})
-To change version/channel, exit and re-run the setup wizard."
+--- Page 3: Interfaces ---
+• Ports: host NIC name(s) (e.g. ens1f0)
+• VLAN: optional VLAN tag
+• Connection: mirror | proxy | direct
+
+--- Page 4: VM Resources (vmw/kvm only) ---
+• CPUs / Memory: per-VM allocation
+• Data disk: additional disk in GB
+• MAC template: prefix for generated MACs
+
+--- Navigation ---
+Select: edit a field   Next: advance page   Back: previous page
+On pages 2-4, press 'Restart' to jump back here.
+
+OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				continue
 				;;
 			3)
@@ -673,7 +702,7 @@ _cluster_page_network() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
-			--help-button \
+			--help-button --help-label "Restart" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_CLUSTER_NETWORK" 16 60 7 \
 			"${items[@]}" \
@@ -681,17 +710,7 @@ _cluster_page_network() {
 		local rc=$?
 
 		case "$rc" in
-			2)
-				show_help "$TUI2_HELP_TITLE_NETWORK" \
-"• Machine network: CIDR of the cluster network (e.g., 10.0.0.0/24)
-• Starting IP: first IP assigned to cluster nodes
-• API VIP: virtual IP for the Kubernetes API (compact/standard only)
-• Ingress VIP: virtual IP for ingress traffic (compact/standard only)
-• DNS: comma-separated DNS server IPs
-• Gateway: default gateway IP
-• NTP: comma-separated NTP servers (optional)"
-				continue
-				;;
+			2) return 2 ;;  # Restart — jump to page 1
 			3) return 0 ;;  # Next
 			1) return 1 ;;  # Back
 			255)
@@ -857,7 +876,7 @@ _cluster_page_iface() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
-			--help-button \
+			--help-button --help-label "Restart" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_CLUSTER_IFACE" 13 55 4 \
 			"${iface_items[@]}" \
@@ -865,16 +884,7 @@ _cluster_page_iface() {
 		local rc=$?
 
 		case "$rc" in
-			2)
-				show_help "$TUI2_HELP_TITLE_IFACE" \
-"• Ports: network interface name(s) on the host (e.g., ens1f0)
-• VLAN: optional VLAN tag
-• Connection: how the cluster reaches container images
-  - mirror: uses the local mirror registry
-  - proxy: uses an HTTP proxy
-  - direct: direct internet access (NAT)"
-				continue
-				;;
+			2) return 2 ;;  # Restart — jump to page 1
 			3) return 0 ;;  # Next (Extra button)
 			1) return 1 ;;  # Back (Cancel button)
 			255)
@@ -980,7 +990,7 @@ _cluster_page_vm() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
-			--help-button \
+			--help-button --help-label "Restart" \
 			--default-item "$default_item" \
 			--menu "$(printf "$TUI2_MSG_CLUSTER_VM" "$cl_platform")" 15 55 6 \
 			"${items[@]}" \
@@ -988,14 +998,7 @@ _cluster_page_vm() {
 		local rc=$?
 
 		case "$rc" in
-			2)
-				show_help "$TUI2_HELP_TITLE_VM" \
-"• CPUs/Memory: resources allocated to each VM
-• Data disk: additional disk size in GB (optional)
-• MAC template: prefix for generated MAC addresses
-  (e.g., 52:54:00 — used when macs.conf is not provided)"
-				continue
-				;;
+			2) return 2 ;;  # Restart — jump to page 1
 			3) return 0 ;;  # Next
 			1) return 1 ;;  # Back
 			255)
