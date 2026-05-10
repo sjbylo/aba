@@ -55,6 +55,8 @@ plan_tests \
 	"Reinstall after uninstall: clean state" \
 	"Register existing: lowercase state.sh" \
 	"Helper functions: cluster state helpers" \
+	"Phase 3: drift detection overrides config with state" \
+	"Phase 4: dir recreation from state backup" \
 	"Cleanup: uninstall mirror"
 
 suite_begin "state-management"
@@ -330,7 +332,104 @@ e2e_run -q "Cleanup fake cluster state" \
 test_end
 
 # ============================================================================
-# 9. Cleanup
+# 9. Phase 3: Drift detection overrides config with state
+# ============================================================================
+test_begin "Phase 3: drift detection overrides config with state"
+
+_P3_NAME="e2e-test-drift"
+_P3_STATE="\$HOME/.aba/mirror/$_P3_NAME"
+
+e2e_run "Create synthetic mirror dir" \
+	"cd ~/aba && mkdir -p $_P3_NAME && cat > $_P3_NAME/mirror.conf <<'CONF'
+reg_host=drift.example.com
+reg_port=8443
+reg_vendor=docker
+CONF"
+
+e2e_run "Create synthetic state.sh" \
+	"mkdir -p $_P3_STATE && cat > $_P3_STATE/state.sh <<'STATE'
+reg_host=original.example.com
+reg_port=5000
+reg_vendor=docker
+STATE"
+
+e2e_run "Drift: state.sh reg_host overrides drifted mirror.conf" \
+	"cd ~/aba/$_P3_NAME && bash -c 'source ../scripts/include_all.sh noerr; eval \"\$(normalize-mirror-conf)\"; test \"\$reg_host\" = \"original.example.com\"'"
+
+e2e_run "Drift: state.sh reg_port overrides drifted mirror.conf" \
+	"cd ~/aba/$_P3_NAME && bash -c 'source ../scripts/include_all.sh noerr; eval \"\$(normalize-mirror-conf)\"; test \"\$reg_port\" = \"5000\"'"
+
+e2e_run "Drift: warning emitted on stderr for reg_host" \
+	"cd ~/aba/$_P3_NAME && bash -c 'source ../scripts/include_all.sh noerr; normalize-mirror-conf 2>/tmp/e2e-drift-stderr.txt >/dev/null; grep -q \"reg_host=drift.example.com differs\" /tmp/e2e-drift-stderr.txt'"
+
+e2e_run "Drift: no warning when config matches state" \
+	"cd ~/aba/$_P3_NAME && cat > mirror.conf <<'CONF'
+reg_host=original.example.com
+reg_port=5000
+reg_vendor=docker
+CONF
+bash -c 'source ../scripts/include_all.sh noerr; normalize-mirror-conf 2>/tmp/e2e-drift-stderr2.txt >/dev/null; test ! -s /tmp/e2e-drift-stderr2.txt'"
+
+e2e_run -q "Cleanup drift test" \
+	"cd ~/aba && rm -rf $_P3_NAME && rm -rf $_P3_STATE && rm -f /tmp/e2e-drift-stderr.txt /tmp/e2e-drift-stderr2.txt"
+
+test_end
+
+# ============================================================================
+# 10. Phase 4: Dir recreation from state backup
+# ============================================================================
+test_begin "Phase 4: dir recreation from state backup"
+
+_P4_NAME="e2e-test-recreate"
+_P4_STATE="\$HOME/.aba/clusters/$_P4_NAME"
+
+e2e_run "Create fake cluster state backup" \
+	"mkdir -p $_P4_STATE/backup && chmod 700 $_P4_STATE && \
+	 cat > $_P4_STATE/state.sh <<'STATE'
+cluster_name=e2e-test-recreate
+base_domain=example.com
+cluster_type=sno
+platform=vmw
+starting_ip=10.0.2.10
+machine_network=10.0.0.0
+prefix_length=20
+STATE
+cat > $_P4_STATE/backup/cluster.conf <<'CONF'
+cluster_name=e2e-test-recreate
+base_domain=example.com
+starting_ip=10.0.2.10
+machine_network=10.0.0.0/20
+CONF
+touch $_P4_STATE/backup/.init $_P4_STATE/backup/.install-complete"
+
+e2e_run "Verify e2e-test-recreate dir does NOT exist yet" \
+	"cd ~/aba && test ! -d $_P4_NAME"
+
+e2e_run "aba --dir triggers recreation from state" \
+	"cd ~/aba && aba --dir $_P4_NAME info 2>&1 || true"
+
+e2e_run "Cluster dir was recreated" \
+	"cd ~/aba && test -d $_P4_NAME"
+
+e2e_run "cluster.conf restored from backup" \
+	"cd ~/aba && test -s $_P4_NAME/cluster.conf && grep -q 'cluster_name=e2e-test-recreate' $_P4_NAME/cluster.conf"
+
+e2e_run "Makefile symlink created" \
+	"cd ~/aba && test -L $_P4_NAME/Makefile"
+
+e2e_run ".install-complete marker restored" \
+	"cd ~/aba && test -f $_P4_NAME/.install-complete"
+
+e2e_run "clusterstate symlink points to state dir" \
+	"cd ~/aba && test -L $_P4_NAME/clusterstate && readlink $_P4_NAME/clusterstate | grep -q '.aba/clusters/$_P4_NAME'"
+
+e2e_run -q "Cleanup recreate test" \
+	"cd ~/aba && rm -rf $_P4_NAME && rm -rf $_P4_STATE"
+
+test_end
+
+# ============================================================================
+# 11. Cleanup
 # ============================================================================
 test_begin "Cleanup: uninstall mirror"
 

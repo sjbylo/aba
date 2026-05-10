@@ -1270,6 +1270,25 @@ The `--mirror-name` flag sets `mirror_name=enclave1` in `cluster.conf`. Each nam
 
 You can also override `ops` and `op_sets` in each mirror's `mirror.conf` to use different operators per mirror.
 
+## Externalized State (`~/.aba/`)
+
+ABA stores the installed state of mirrors and clusters externally in `~/.aba/`, separate from the working directories.
+This means:
+
+- **Clusters survive directory deletion.** If you delete a cluster directory (e.g. `rm -rf sno/`), ABA can recreate it from the saved state and still delete the VMs: `aba --dir sno delete`.
+- **Config drift is detected.** If you edit `cluster.conf` after install (e.g. change `base_domain`), ABA warns you and uses the installed values.
+- **Auth files are safe.** `kubeconfig` and `kubeadmin-password` are stored in `~/.aba/clusters/<name>/` (mode 700).
+
+**What's stored:**
+
+| Location | Contents |
+|---|---|
+| `~/.aba/clusters/<name>/` | `state.sh`, `kubeconfig`, `kubeadmin-password`, `backup/` (config snapshots) |
+| `~/.aba/mirror/<name>/` | `state.sh`, `rootCA.pem`, `pull-secret-mirror.json`, `backup/` (config snapshots) |
+
+**Note:** `aba reset` does **not** delete `~/.aba/` — externalized state is preserved across resets.
+Convenience symlinks (`clusterstate`, `regcreds`) in the working directory point to the external state for easy browsing.
+
 ## Supported Architectures
 
 ABA supports the following architectures, automatically detecting the host and downloading the correct OpenShift binaries:
