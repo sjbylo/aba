@@ -509,15 +509,21 @@ _direct_action_menu() {
 		local inst_label="Install Cluster"
 		local day2_label="Day-2 Operations"
 		local mon_label="Monitor Cluster"
+		local del_label="Delete Cluster"
 
-		local day2_avail=true mon_avail=true
+		local day2_avail=true mon_avail=true del_avail=true
 
 		local has_installed=false
+		local has_any_cluster=false
 		local dir
-		for dir in $(list_installed_clusters); do
-			has_installed=true
-			break
+		for dir in $(list_cluster_dirs); do
+			has_any_cluster=true
+			cluster_installed "$dir" && has_installed=true
 		done
+		if [[ "$has_any_cluster" == "false" ]]; then
+			del_avail=false
+			del_label="Delete Cluster [no clusters]"
+		fi
 		if [[ "$has_installed" == "false" ]]; then
 			day2_avail=false
 			day2_label="Day-2 Operations $TUI2_GREY_INSTALL_FIRST"
@@ -529,6 +535,7 @@ _direct_action_menu() {
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"$TUI2_DIRECT_TAG_MONITOR"        "$mon_label"
+			"$TUI2_DIRECT_TAG_DELETE"         "$del_label"
 			" "                               "──── Other ─────────────────────────"
 			"$TUI2_DIRECT_TAG_SWITCH_MIRROR"  "Switch to MIRROR mode"
 		)
@@ -596,6 +603,13 @@ Workflow:
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
 				else
 					cluster_monitor
+				fi
+				;;
+			"$TUI2_DIRECT_TAG_DELETE")
+				if [[ "$del_avail" == "false" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "No clusters to delete." 0 0
+				else
+					cluster_delete
 				fi
 				;;
 			"$TUI2_DIRECT_TAG_SWITCH_MIRROR")

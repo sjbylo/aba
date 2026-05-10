@@ -2880,3 +2880,32 @@ if any individual install fails, the loop continues and line 48 unconditionally 
 Users lose significant time when the error only surfaces deep into the install flow.
 The actual error message ("command not found" buried in output) is non-obvious.
 
+---
+
+## TUI v2: Mirror "Reinstall" doesn't uninstall existing registry first
+
+**Priority:** Medium
+**Scope:** TUI v2 — `tui-mirror.sh`
+
+### Problem
+
+When clicking "Install Mirror" on an already-installed mirror (shows as "installed"), the TUI asks "Reinstall it?" and the user clicks Yes. But the subsequent `aba -d mirror install` detects `.available` and skips installation — it doesn't uninstall the existing registry first.
+
+### Expected behavior
+
+"Reinstall" should:
+1. Run `aba -d mirror uninstall` first
+2. Then run `aba -d mirror install` with the new config (e.g. changed vendor from docker→quay)
+
+### Observed during testing (2026-05-10)
+
+- Docker registry was running
+- Changed vendor to `quay` in the config page
+- Pressed "Reinstall" → Yes
+- `aba -d mirror install` returned immediately (Docker still running)
+- Result: mirror.conf says `reg_vendor=quay` but Docker is still the actual registry
+
+### Fix
+
+In `_mirror_install_local()` or the reinstall confirmation handler, add an explicit uninstall step when the user confirms reinstall.
+

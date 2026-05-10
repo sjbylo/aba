@@ -29,6 +29,7 @@ disco_main() {
 		local inst_label="Install Cluster"
 		local day2_label="Day-2 Operations"
 		local mon_label="Monitor Cluster"
+		local del_label="Delete Cluster"
 		local isc_label="View ImageSet Config"
 		local reset_label="Reset to Connected Mode"
 
@@ -37,6 +38,7 @@ disco_main() {
 		local load_avail=true
 		local day2_avail=true
 		local mon_avail=true
+		local del_avail=true
 		local reset_avail=true
 
 		if mirror_available; then
@@ -47,17 +49,27 @@ disco_main() {
 			load_label="Load Images $TUI2_GREY_REG_FIRST"
 		fi
 
-		# Check if any cluster is installed
+		# Check if any cluster exists / is installed
 		local has_installed=false
-		for dir in $(list_installed_clusters); do
-			has_installed=true
-			break
+		local has_any_cluster=false
+		for dir in $(list_cluster_dirs); do
+			has_any_cluster=true
+			cluster_installed "$dir" && has_installed=true
 		done
+		if [[ "$has_any_cluster" == "false" ]]; then
+			del_avail=false
+			del_label="Delete Cluster [no clusters]"
+		fi
 		if [[ "$has_installed" == "false" ]]; then
 			day2_avail=false
 			day2_label="Day-2 Operations $TUI2_GREY_INSTALL_FIRST"
 			mon_avail=false
 			mon_label="Monitor Cluster $TUI2_GREY_INSTALL_FIRST"
+		fi
+
+		# Grey out "Install Cluster" if mirror exists but not loaded
+		if mirror_available && ! _mirror_has_release_image; then
+			inst_label="Install Cluster [load mirror first]"
 		fi
 
 		# Internet status set once at startup (_TUI_INET). No per-loop re-check.
@@ -72,6 +84,7 @@ disco_main() {
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"$TUI2_DISCO_TAG_MONITOR"     "$mon_label"
+			"$TUI2_DISCO_TAG_DELETE"      "$del_label"
 			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 			"$TUI2_DISCO_TAG_RESET"       "$reset_label"
 		)
@@ -120,7 +133,10 @@ Typical workflow:
 				if [[ "$reg_avail" == "false" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --yesno \
 						"$TUI2_MSG_MIRROR_REINSTALL" 0 0
-					[[ $? -eq 0 ]] && disco_install_reg
+					if [[ $? -eq 0 ]]; then
+						confirm_and_execute "aba -d mirror uninstall" "Uninstall Existing Registry"
+						disco_install_reg
+					fi
 				else
 					disco_install_reg
 				fi
@@ -134,6 +150,12 @@ Typical workflow:
 				fi
 				;;
 			"$TUI2_DISCO_TAG_INSTALL")
+				if mirror_available && ! _mirror_has_release_image; then
+					dlg --backtitle "$(ui_backtitle)" --title "Mirror Not Synced" \
+						--yes-label "Install Anyway" --no-label "Back" \
+						--yesno "The mirror is installed but has no release images yet.\n\nYou should load the mirror before installing a cluster.\nProceeding without loaded images will likely fail.\n\nContinue anyway?" 0 0
+					[[ $? -ne 0 ]] && continue
+				fi
 				cluster_install_flow
 				;;
 			"$TUI2_DISCO_TAG_DAY2")
@@ -150,6 +172,13 @@ Typical workflow:
 						"$TUI2_MSG_CLUSTER_FIRST" 0 0
 				else
 					cluster_monitor
+				fi
+				;;
+			"$TUI2_DISCO_TAG_DELETE")
+				if [[ "$del_avail" == "false" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "No clusters to delete." 0 0
+				else
+					cluster_delete
 				fi
 				;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
