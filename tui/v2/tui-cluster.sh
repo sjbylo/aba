@@ -1315,6 +1315,29 @@ cluster_monitor() {
 }
 
 # =============================================================================
+# Delete Cluster
+# =============================================================================
+
+cluster_delete() {
+	tui_log "Action: Delete Cluster"
+
+	if ! select_cluster "$TUI2_TITLE_CLUSTER_DELETE" "Select cluster to delete:"; then
+		return 1
+	fi
+
+	local cl_display
+	cl_display=$(cluster_display_name "$SELECTED_CLUSTER")
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
+		--yes-label "Delete" --no-label "Cancel" \
+		--yesno "Delete cluster '$cl_display'?\n\nThis will destroy all VMs and remove cluster resources.\nThis action cannot be undone." 0 0
+	local rc=$?
+	[[ $rc -ne 0 ]] && return 1
+
+	confirm_and_execute "aba -d $SELECTED_CLUSTER delete" "$TUI2_TITLE_CLUSTER_DELETE: $cl_display"
+}
+
+# =============================================================================
 # Day-2 Operations
 # =============================================================================
 

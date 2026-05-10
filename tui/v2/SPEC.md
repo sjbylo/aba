@@ -619,3 +619,48 @@ aba cluster --name standard --type standard --platform vmw \
 - Test passes when "Agent alive" message appears
 - Source `~/.proxy-set.sh` before every TUI launch
 - Report ANY `aba` CLI commands used outside the allowed exceptions
+
+---
+
+## Testing with tmux — Results (2026-05-10, dev branch @ 2574422a)
+
+### Environment
+
+- **Host**: registry4.example.com (RHEL 9)
+- **Branch**: dev (commit 2574422a)
+- **Mirror**: Docker at registry4.example.com:8443
+- **Platform**: vmw (vCenter, govc 0.54.0)
+- **OCP Version**: 4.21.14 (stable)
+- **Network**: 10.0.0.0/20, DNS 10.0.1.8, VM Network port group
+- **Proxy**: sourced from ~/.proxy-set.sh
+
+### Test Results
+
+| # | Workflow | Result | Notes |
+|---|----------|--------|-------|
+| 1 | CONNO + Docker local + compact | **SUCCESS** | Agent alive. vSphere folder fix verified. |
+| 2 | DIRECT + proxy + SNO | **SUCCESS** | Agent alive. Connection=proxy works. |
+| 3 | DISCO (switch from CONNO) + Docker local + SNO | **SUCCESS** | Agent alive. Mode switch works. |
+| 4 | DISCO via .bundle + Docker local + SNO | **PASS (flow)** | Bundle detection, dialog, and DISCO menu all work. Agent timeout due to retained VLAN=233 config (known: VM Network doesn't support VLAN). |
+| 5 | VMware config from scratch | **PASS** | TUI detects missing vmware.conf, shows template editor. |
+| 6 | KVM config from scratch | **PASS** | TUI detects missing kvm.conf, shows template editor. |
+| 7 | Quay mirror (vendor toggle) | **PASS (TUI flow)** | Vendor toggle works. Reinstall flow doesn't properly uninstall existing registry first (UX bug logged). |
+
+### Bugs Found and Fixed
+
+1. **`govc network.info` not available in govc 0.54.0** — The pre-flight network check in `scripts/vmw-create.sh` used `govc network.info` which doesn't exist. Fixed by replacing with `govc ls network/ | ... | grep -qx "$GOVC_NETWORK"`.
+
+2. **Mirror sync incomplete** — Registry was marked "installed" (`.available`) but release image wasn't synced. Required explicit mirror sync via TUI before cluster install.
+
+### Observations
+
+- **Dynamic mirror state title** works correctly: shows "no mirror" → "mirror installed" → "mirror ready" based on actual skopeo check.
+- **Mode switching** (CONNO → DIRECT → CONNO → DISCO) works fluidly via menu items.
+- **Wizard state persistence** carries config across mode switches (useful but can retain stale values like VLAN).
+- **"Run in Terminal" mode** requires manual Y/n answers (no -y). "Run in TUI" mode adds -y automatically.
+- **Review page** accurately reflects all configured values before install.
+
+### CLI Commands Used (exceptions)
+
+- `aba -d compact delete -y` (allowed: cluster cleanup)
+- `aba -d sno delete -y` (allowed: cluster cleanup)

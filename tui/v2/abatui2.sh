@@ -429,20 +429,31 @@ _conno_main() {
 		local inst_label="Install Cluster"
 		local day2_label="Day-2 Operations"
 		local mon_label="Monitor Cluster"
+		local del_label="Delete Cluster"
 
-		local day2_avail=true mon_avail=true
+		local day2_avail=true mon_avail=true del_avail=true
 
 		local has_installed=false
+		local has_any_cluster=false
 		local dir
-		for dir in $(list_installed_clusters); do
-			has_installed=true
-			break
+		for dir in $(list_cluster_dirs); do
+			has_any_cluster=true
+			cluster_installed "$dir" && has_installed=true
 		done
+		if [[ "$has_any_cluster" == "false" ]]; then
+			del_avail=false
+			del_label="Delete Cluster [no clusters]"
+		fi
 		if [[ "$has_installed" == "false" ]]; then
 			day2_avail=false
 			day2_label="Day-2 Operations $TUI2_GREY_INSTALL_FIRST"
 			mon_avail=false
 			mon_label="Monitor Cluster $TUI2_GREY_INSTALL_FIRST"
+		fi
+
+		# Grey out "Install Cluster" if mirror exists but not synced
+		if mirror_available && ! _mirror_has_release_image; then
+			inst_label="Install Cluster [sync mirror first]"
 		fi
 
 		# Dynamic menu title with mirror state
@@ -472,6 +483,7 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
+			"$TUI2_CONNO_TAG_DELETE"         "$del_label"
 			"" "──── Mode ──────────────────────────"
 			"$TUI2_CONNO_TAG_SWITCH_DIRECT"  "$switch_label"
 			"$TUI2_CONNO_TAG_SWITCH_DISCO"   "$disco_switch_label"
@@ -533,7 +545,10 @@ Mode switching:
 			if [[ "$mirr_avail" == "false" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
-				[[ $? -eq 0 ]] && mirror_install
+				if [[ $? -eq 0 ]]; then
+					confirm_and_execute "aba -d mirror uninstall" "Uninstall Existing Mirror"
+					mirror_install
+				fi
 			else
 				mirror_install
 			fi
@@ -570,6 +585,12 @@ Mode switching:
 				fi
 				;;
 			"$TUI2_CONNO_TAG_INSTALL")
+				if mirror_available && ! _mirror_has_release_image; then
+					dlg --backtitle "$(ui_backtitle)" --title "Mirror Not Synced" \
+						--yes-label "Install Anyway" --no-label "Back" \
+						--yesno "The mirror is installed but has no release images yet.\n\nYou should sync/load the mirror before installing a cluster.\nProceeding without synced images will likely fail.\n\nContinue anyway?" 0 0
+					[[ $? -ne 0 ]] && continue
+				fi
 				cluster_install_flow
 				;;
 			"$TUI2_CONNO_TAG_DAY2")
@@ -584,6 +605,13 @@ Mode switching:
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
 				else
 					cluster_monitor
+				fi
+				;;
+			"$TUI2_CONNO_TAG_DELETE")
+				if [[ "$del_avail" == "false" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "No clusters to delete." 0 0
+				else
+					cluster_delete
 				fi
 				;;
 	"$TUI2_CONNO_TAG_SWITCH_DIRECT")
