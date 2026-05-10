@@ -34,7 +34,7 @@ platform:
           datacenter: Datacenter
           networks:
             - VM Network
-          folder: "/Datacenter/vm/aba-e2e/pool1"
+          folder: "/Datacenter/vm/aba-e2e/pool1/e2e-compact1"
     vcenters:
       - datacenters:
           - Datacenter
