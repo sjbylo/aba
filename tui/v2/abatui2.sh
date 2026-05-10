@@ -484,6 +484,8 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
 			"$TUI2_CONNO_TAG_DELETE"         "$del_label"
+			"" "──── Advanced ──────────────────────"
+			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
 			"" "──── Mode ──────────────────────────"
 			"$TUI2_CONNO_TAG_SWITCH_DIRECT"  "$switch_label"
 			"$TUI2_CONNO_TAG_SWITCH_DISCO"   "$disco_switch_label"
@@ -613,6 +615,9 @@ Mode switching:
 				else
 					cluster_delete
 				fi
+				;;
+			"$TUI2_CONNO_TAG_ADVANCED")
+				tui_advanced_menu
 				;;
 	"$TUI2_CONNO_TAG_SWITCH_DIRECT")
 		if [[ "$switch_avail" == "false" ]]; then

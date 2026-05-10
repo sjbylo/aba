@@ -1207,9 +1207,21 @@ _cluster_execute() {
 
 	tui_log "Installing cluster ($install_step): $cmd"
 
+	# Clean stale artifacts if connection mode changed (prevents mirror refs in DIRECT etc.)
+	local cluster_dir="$ABA_ROOT/$cl_name"
+	if [[ -f "$cluster_dir/cluster.conf" ]]; then
+		local _old_conn
+		_old_conn=$(grep '^int_connection=' "$cluster_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+		[[ -z "$_old_conn" ]] && _old_conn="mirror"
+		local _new_conn="${cl_connection:-mirror}"
+		if [[ "$_old_conn" != "$_new_conn" ]]; then
+			tui_log "Connection mode changed ($cluster_dir): $_old_conn -> $_new_conn, cleaning stale artifacts"
+			rm -f "$cluster_dir/install-config.yaml" "$cluster_dir/.init" "$cluster_dir/.configured" 2>/dev/null
+		fi
+	fi
+
 	# Write macs.conf if MACs were entered (bare-metal)
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
-		local cluster_dir="$ABA_ROOT/$cl_name"
 		mkdir -p "$cluster_dir"
 		echo "$cl_macs" > "$cluster_dir/macs.conf"
 		tui_log "Wrote ${cluster_dir}/macs.conf with $(echo "$cl_macs" | wc -l) entries"
@@ -1337,6 +1349,55 @@ cluster_delete() {
 	[[ $rc -ne 0 ]] && return 1
 
 	confirm_and_execute "aba -d $SELECTED_CLUSTER delete" "$TUI2_TITLE_CLUSTER_DELETE: $cl_display"
+}
+
+# =============================================================================
+# Advanced Menu
+# =============================================================================
+
+tui_advanced_menu() {
+	tui_log "Action: Advanced Menu"
+	local default_item="R"
+
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--menu "Advanced operations (use with care):" 0 0 0 \
+			"R" "Reset ABA (full clean — returns to initial state)" \
+			"P" "Reconfigure Platform (vmware/kvm/none)" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		[[ $rc -ne 0 ]] && return 0
+
+		local choice
+		choice=$(<"$_TUI_TMP")
+		default_item="$choice"
+
+		case "$choice" in
+			"R")
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
+					--yes-label "Reset" --no-label "Cancel" \
+					--yesno "Reset ABA to initial state?\n\nThis will remove ALL configuration, clusters, and mirror data.\nEquivalent to: aba reset --force\n\nThis action cannot be undone!" 0 0
+				[[ $? -ne 0 ]] && continue
+				confirm_and_execute "aba reset --force" "Reset ABA"
+				return 0
+				;;
+			"P")
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
+					--cancel-label "$TUI2_BTN_BACK" \
+					--menu "Select platform:" 0 0 0 \
+					"vmw"  "VMware vSphere (ESXi/vCenter)" \
+					"kvm"  "KVM (libvirt)" \
+					"none" "Bare Metal / Other" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && continue
+				local plat
+				plat=$(<"$_TUI_TMP")
+				confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
+				;;
+		esac
+	done
 }
 
 # =============================================================================

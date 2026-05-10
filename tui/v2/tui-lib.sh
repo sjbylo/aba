@@ -447,11 +447,16 @@ mirror_state_label() {
 	fi
 }
 
+# Invalidate the mirror-ready cache (call after sync/load to force fresh check)
+_invalidate_mirror_cache() {
+	rm -f "$HOME/.aba/runner/tui-mirror-ready.cache"
+}
+
 # Check if the current release image exists in the mirror registry.
-# Uses a cached result (valid for 10 minutes) to avoid slow skopeo calls on every menu refresh.
+# Uses a cached result (valid for 2 minutes) to avoid slow skopeo calls on every menu refresh.
 _mirror_has_release_image() {
 	local cache_file="$HOME/.aba/runner/tui-mirror-ready.cache"
-	local cache_ttl=600  # 10 minutes
+	local cache_ttl=120  # 2 minutes
 
 	# Use cache if fresh
 	if [[ -f "$cache_file" ]]; then

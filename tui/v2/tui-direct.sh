@@ -536,6 +536,8 @@ _direct_action_menu() {
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"$TUI2_DIRECT_TAG_MONITOR"        "$mon_label"
 			"$TUI2_DIRECT_TAG_DELETE"         "$del_label"
+			"" "──── Advanced ──────────────────────"
+			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
 			" "                               "──── Other ─────────────────────────"
 			"$TUI2_DIRECT_TAG_SWITCH_MIRROR"  "Switch to MIRROR mode"
 		)
@@ -611,6 +613,9 @@ Workflow:
 				else
 					cluster_delete
 				fi
+				;;
+			"$TUI2_DIRECT_TAG_ADVANCED")
+				tui_advanced_menu
 				;;
 			"$TUI2_DIRECT_TAG_SWITCH_MIRROR")
 				_TUI_MODE="CONNO"

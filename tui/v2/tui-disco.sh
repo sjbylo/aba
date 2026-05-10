@@ -85,6 +85,8 @@ disco_main() {
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"$TUI2_DISCO_TAG_MONITOR"     "$mon_label"
 			"$TUI2_DISCO_TAG_DELETE"      "$del_label"
+			"" "──── Advanced ──────────────────────"
+			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced Options"
 			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 			"$TUI2_DISCO_TAG_RESET"       "$reset_label"
 		)
@@ -181,6 +183,9 @@ Typical workflow:
 					cluster_delete
 				fi
 				;;
+			"$TUI2_DISCO_TAG_ADVANCED")
+				tui_advanced_menu
+				;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_view_isc "true"
 				;;
@@ -239,6 +244,7 @@ disco_load_images() {
 	fi
 
 	confirm_and_execute "aba -d mirror load" "Load Images into Registry"
+	_invalidate_mirror_cache
 }
 
 # =============================================================================
