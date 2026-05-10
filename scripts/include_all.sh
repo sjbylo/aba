@@ -675,8 +675,10 @@ _state_override_mirror() {
 
 # Recreate a deleted cluster directory from externalized state backup.
 # Returns 0 if successfully recreated, 1 if no backup exists.
+# backup/ holds everything needed: configs, markers, macs.conf.
 _recreate_cluster_dir() {
-	local _name="$1" _state_dir="$HOME/.aba/clusters/$_name"
+	local _name="$1"
+	local _state_dir="$HOME/.aba/clusters/$_name"
 	local _backup="$_state_dir/backup"
 
 	[ -s "$_state_dir/state.sh" ] || return 1
@@ -685,15 +687,7 @@ _recreate_cluster_dir() {
 	aba_info "Recreating cluster directory '$_name' from state backup"
 
 	mkdir -p "$_name"
-	cp -p "$_backup/cluster.conf" "$_name/"
-	[ -f "$_backup/install-config.yaml" ] && cp -p "$_backup/install-config.yaml" "$_name/"
-	[ -f "$_backup/agent-config.yaml" ] && cp -p "$_backup/agent-config.yaml" "$_name/"
-	[ -f "$_backup/macs.conf" ] && cp -p "$_backup/macs.conf" "$_name/"
-
-	for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete; do
-		[ -f "$_backup/$_flag" ] && cp -p "$_backup/$_flag" "$_name/"
-	done
-
+	cp -pa "$_backup/." "$_name/"
 	ln -fs ../templates/Makefile.cluster "$_name/Makefile"
 	make -s -C "$_name" init 2>/dev/null || true
 	ln -sfn "$_state_dir" "$_name/clusterstate"
