@@ -175,6 +175,7 @@ _mirror_install_local() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 
 	confirm_and_execute "aba -d mirror install" "Install Local Mirror"
+	_invalidate_mirror_cache
 }
 
 _mirror_install_remote() {
@@ -313,6 +314,7 @@ _mirror_install_remote() {
 	replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$ABA_ROOT/mirror/mirror.conf"
 
 	confirm_and_execute "aba -d mirror install" "Install Remote Mirror"
+	_invalidate_mirror_cache
 }
 
 # =============================================================================
@@ -322,6 +324,7 @@ _mirror_install_remote() {
 mirror_save() {
 	tui_log "Action: Save Images"
 	confirm_and_execute "aba -d mirror save" "Save Images to Archive"
+	_invalidate_mirror_cache
 }
 
 # =============================================================================
@@ -331,6 +334,7 @@ mirror_save() {
 mirror_sync() {
 	tui_log "Action: Sync Images"
 	confirm_and_execute "aba -d mirror sync" "Sync Images to Registry"
+	_invalidate_mirror_cache
 }
 
 # =============================================================================

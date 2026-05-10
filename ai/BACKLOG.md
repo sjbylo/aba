@@ -33,24 +33,40 @@ Add a "remember my choice" mechanism so the TUI saves user preferences (e.g. exe
 
 ## TUI v2: "Advanced" sub-menu
 
-**Priority:** Low
+**Priority:** Low → **DONE**
 **Scope:** TUI v2 only
 
 ### Summary
 
-Add a single "A  Advanced..." item at the bottom of each mode's action menu. Selecting it opens a sub-menu dialog with lifecycle/recovery operations:
+Implemented as `tui_advanced_menu()` in `tui-cluster.sh`. Available from all three mode menus (CONNO, DISCO, DIRECT) under the "Advanced" section.
 
-- **Uninstall Mirror** (CONNO/DISCO only): `aba -d mirror uninstall`
-- **Clean Cluster** (all modes): `aba -d <name> clean` — cluster picker, retry install
-- **Delete Cluster VMs** (all modes): `aba -d <name> delete` — destroy VMs
-- **Reset ABA** (all modes): `aba reset --force` — double-confirm, exits TUI
+Current items:
+- **Reset ABA** (`aba reset --force`) — double-confirm, cleans everything
+- **Reconfigure Platform** — select vmw/kvm/none, runs `aba -p <plat> <plat>`
 
-All logic in one shared `_advanced_menu()` function in `tui-lib.sh` (mode-filtered).
-`_pick_cluster()` scans for existing cluster dirs, auto-selects if only one.
+---
 
-### Plan file
+## Known issue: DNS on different subnet unreachable during CoreOS early boot
 
-Full implementation details: `~/.cursor/plans/advanced_menu_item_2e032710.plan.md`
+**Priority:** Low (environmental / documentation)
+**Scope:** Cluster installation (all modes)
+
+### Observation
+
+When installing a cluster on the `10.0.x.x/16` network (e.g., "VM Network" port group), using a DNS server on a different subnet (`192.168.2.8` on "Private Network") causes "Cannot access Rendezvous Host" failures. The VM boots CoreOS but cannot resolve its own hostname during early agent startup because the cross-subnet DNS is unreachable at that stage.
+
+### Workaround
+
+Use a DNS server on the **same subnet** as the cluster nodes (e.g., `10.0.1.8` instead of `192.168.2.8`). NTP can remain cross-subnet since it's less time-critical.
+
+### Root cause hypothesis
+
+During CoreOS early boot (initramfs/dracut stage), networking may not yet have a full routing table. The default gateway is configured but cross-subnet traffic may be blocked by the port group's VLAN configuration or by ESXi's virtual switch settings. Once the OS fully boots, routing works normally — but the agent fails before that point.
+
+### Action items
+
+- Consider adding a TUI warning when DNS is on a different subnet from `machine_network`
+- Document in README/troubleshooting section
 
 ---
 
