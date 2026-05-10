@@ -38,7 +38,7 @@ if ! govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1; then
 		"Available datastores: $(govc datastore.ls 2>/dev/null | tr '\n' ', ')" \
 		"Fix GOVC_DATASTORE in vmware.conf and try again."
 fi
-if ! govc network.info "$GOVC_NETWORK" >/dev/null 2>&1; then
+if ! govc find / -type Network -name "$GOVC_NETWORK" 2>/dev/null | grep -q .; then
 	aba_abort \
 		"Network '$GOVC_NETWORK' not found." \
 		"Available networks: $(govc ls network/ 2>/dev/null | xargs -I{} basename {} | tr '\n' ', ')" \
