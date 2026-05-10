@@ -145,49 +145,48 @@ NOTIFY_CMD=~/bin/notify.sh    # Notification command (e.g. Telegram alerts); dep
 
 ```
 Commands:
-  run.sh run [-s X] [-p 1,2,3]        Run suites (default: -a/--all)
-  run.sh run -p all                    Run all suites across all pools
-  run.sh run -s X -p 2 -f -y          Force dispatch onto pool 2
-  run.sh run -p 1 -r                   Re-run last suite, skip passed tests
-  run.sh run -p all -d                 Push local source to ~/aba, then run
-  run.sh run -a -D -p all              Include dummy framework test suites
-  run.sh reschedule [-s X]             Re-queue completed suites
-  run.sh deploy [-p 2,3]               Push source code + harness to conN
-  run.sh restart [-p 2] [-r]           Stop + harness deploy + re-run last suite
-  run.sh restart -p 2 -d               Stop + source deploy + harness + re-run
-  run.sh restart -s X -p 2             Stop + deploy + run suite X on pool 2
-  run.sh stop [-p 2,3] [-c]            Kill runner(s) (-c: delete clusters/mirrors)
-  run.sh start [-p 1-4]                Power on pool VMs (conN + disN)
-  run.sh status [-p 3]                 Show what's running
-  run.sh verify [-p all]               Verify pool VMs (no dispatch)
-  run.sh list                          List available suites (shows dummy suites separately)
-  run.sh destroy [-p all] [-c]         Destroy pool VMs (-c: delete clusters first)
-  run.sh attach conN                   Attach to conN's tmux session
-  run.sh live [-p 1-3]                 Interactive multi-pane dashboard
-  run.sh dash [-p all] [log]           Read-only summary dashboard
+  run.sh run [-s X] [-p 1,2,3]             Run suites (blocks until completion)
+  run.sh run -p all                        Run all suites across all pools
+  run.sh run -s X -p 2 -f                 Force dispatch onto pool 2
+  run.sh run -p all -d                     Push local source to ~/aba, then run
+  run.sh run -a -D -p all                  Include dummy framework test suites
+  run.sh daemon [-a] [-p 1-4]              Auto-restarting dispatcher (crash-resilient)
+  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
+  run.sh deploy [-p 2,3]                   Push source code + harness to conN
+  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
+  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
+  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
+  run.sh status [-p 3]                     Show what's running
+  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
+  run.sh list                              List available suites (dummy suites shown separately)
+  run.sh destroy [-p all] [--no-clean]     Destroy pool VMs (cleans clusters/mirrors by default)
+  run.sh attach conN                       Attach to runner tmux session on conN
+  run.sh logs                              Tail the daemon log
+  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
+  run.sh dash [-p all] [log]               Read-only summary dashboard
 
 Options:
   -s, --suite X,Y        Select specific suite(s) (comma-separated)
   -a, --all              Select all suites (default for run/reschedule)
-  -D, --with-dummy       Include dummy-* framework test suites (excluded from --all)
+  -D, --with-dummy       Include dummy-* suites (excluded from --all by default)
   -p, --pool SPEC        Pool selection: N, N-M, N,M,O, or "all"
                          (aliases: --pools, --pool-list)
-  -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
-  -d, --dev              Push local source to ~/aba on conN (developer mode)
-  -r, --resume           Skip previously-passed tests (run, restart)
+  -F, --fresh            Clear old results and run all suites from scratch (aliases: -f, --force)
+  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
+  -r, --resume           Skip previously-passed tests (checkpointed)
   -n, --dry-run          Show dispatch plan, don't execute
-  -c, --clean            Delete clusters/mirrors before stopping/destroying
+  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
+  --no-clean             Skip cluster/mirror cleanup on stop/destroy
   -V, --revert           Revert pool VMs to pool-ready snapshot before running
   -G, --recreate-golden  Force rebuild golden VM from template
-  -R, --recreate-vms     Force reclone all conN/disN from golden (scoped to -p)
+  -R, --recreate-vms     Force reclone conN/disN from golden (scoped to -p)
   -y, --yes              Auto-accept prompts
-  -q, --quiet            CI mode: no interactive prompts (implies -y)
+  -q, --quiet            CI mode (implies -y)
   -o, --os RHEL          RHEL version for pool VMs (rhel8|rhel9|rhel10)
   -v, --vmware-conf F    Path to vmware.conf (e.g. ~/.vmware-esxi.conf)
   -u, --user USER        SSH user for both conN and disN
   --con-user USER        SSH user for conN only
   --dis-user USER        SSH user for disN only
-  -h, --help             Show usage help
 ```
 
 ### Common Workflows
