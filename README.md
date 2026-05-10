@@ -187,6 +187,7 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 
 [Back to top](#quick-start)
 
+<!-- perma-link: bundle README_FIRST.md -->
 <a id="downloading-an-install-bundle"></a>
 <!-- this is a perma-link from the bundle maker README_FIRST.md file -->
 
@@ -280,6 +281,7 @@ Now, continue with [Partially Disconnected Installation](#partially-disconnected
 
 [Back to top](#quick-start)
 
+<!-- perma-link: backward compatibility -->
 <a id="partially-disconnected-scenario"></a>
 
 # Partially Disconnected Installation
@@ -317,6 +319,7 @@ Now continue with [Installing a Cluster](#installing-a-cluster) below.
 
 [Back to top](#quick-start)
 
+<!-- perma-link: backward compatibility -->
 <a id="fully-disconnected-air-gapped-scenario"></a>
 
 # Air-Gapped Installation
@@ -390,6 +393,8 @@ Now continue with [Installing a Cluster](#installing-a-cluster) below.
 
 [Back to top](#quick-start)
 
+<!-- perma-link: bundle README_FIRST.md -->
+<!-- perma-link: bundle README_FIRST.md -->
 <a id="creating-a-custom-install-bundle"></a>
 
 ## Custom Bundles
@@ -537,6 +542,7 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 [Back to top](#quick-start)
 
+<!-- perma-link: backward compatibility -->
 <a id="installing-openshift"></a>
 
 # Installing a Cluster
@@ -647,6 +653,7 @@ aba --verify off     # Skip all validation
 
 Use `aba -D iso` for debug output.
 
+<!-- perma-link: backward compatibility -->
 <a id="how-to-customize-the-agent-based-configuration-files"></a>
 
 ## Customizing Install Configuration
@@ -736,6 +743,7 @@ oc get configmap bootstrap-config -n openshift-config
 
 [Back to top](#quick-start)
 
+<!-- perma-link: Red Hat Developers blog, Oct 2025 -->
 <a id="day-2-operations"></a>
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
@@ -853,6 +861,7 @@ aba day2-ntp
 
 - Ensures all nodes are connected to NTP servers. Time drift can cause installation or operation failures.
 
+<!-- perma-link: backward compatibility -->
 <a id="enable-openshift-update-service-osus"></a>
 
 ## Cluster Updates (OSUS)
@@ -933,6 +942,7 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 # Prerequisites
 
+<!-- perma-link: Red Hat Developers blog, Oct 2025 -->
 <a id="common-prerequisites-for-both-environments"></a>
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
@@ -978,6 +988,7 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 - **VMware**: Ensure sufficient [vCenter privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs — set values in `vmware.conf`. See the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
 - **KVM/libvirt**: Passwordless SSH from the bastion to the KVM host is required. Configure connection URI, storage pool, and bridge network in `kvm.conf`.
 
+<!-- perma-link: Red Hat Developers blog, Oct 2025 -->
 <a id="existing-registry-prerequisites"></a>
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
@@ -1034,6 +1045,7 @@ To install OpenShift in a fully disconnected environment, you need one connected
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
 
+<!-- perma-link: Red Hat Developers blog, Oct 2025 -->
 <a id="internal-bastion-prerequisites"></a>
 <!-- this is a perma-link from ABA blog, Oct 2025 -->
 
@@ -1201,6 +1213,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 
 [Back to top](#quick-start)
 
+<!-- perma-link: backward compatibility -->
 <a id="advanced-use"></a>
 
 # Advanced Topics
@@ -1406,6 +1419,7 @@ To re-install ABA, see [Install ABA](#install-aba).
 
 [Back to top](#quick-start)
 
+<!-- perma-link: backward compatibility -->
 <a id="frequently-asked-questions-faq"></a>
 
 # FAQ
