@@ -7,6 +7,7 @@
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 source scripts/include_all.sh
+source scripts/reg-common.sh
 
 vendor="$1"; shift
 
