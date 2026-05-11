@@ -40,8 +40,17 @@ disco_main() {
 		local reset_avail=true
 
 		if mirror_available; then
-			reg_label="Install Registry $TUI2_GREY_ALREADY_INSTALLED"
+			reg_label="Install Registry (installed)"
 			reg_avail=false
+			if _mirror_has_release_image; then
+				load_label="Load Images (loaded)"
+			else
+				inst_label="Install Cluster [load mirror first]"
+			fi
+		else
+			load_label="Load Images [install registry first]"
+			inst_label="Install Cluster [install registry first]"
+			load_avail=false
 		fi
 
 		# Check if any cluster exists / is installed
@@ -60,11 +69,6 @@ disco_main() {
 			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
 
-		# Grey out "Install Cluster" if mirror exists but not loaded
-		if mirror_available && ! _mirror_has_release_image; then
-			inst_label="Install Cluster [load mirror first]"
-		fi
-
 		# Internet status set once at startup (_TUI_INET). No per-loop re-check.
 		if [[ "$_TUI_INET" == "no" ]]; then
 			reset_avail=false
@@ -72,8 +76,10 @@ disco_main() {
 		fi
 
 		items+=(
+			"" "──── Registry ──────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL_REG" "$reg_label"
 			"$TUI2_DISCO_TAG_LOAD"        "$load_label"
+			"" "──── Cluster ───────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
 			"$TUI2_DISCO_TAG_MONITOR"     "$mon_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
@@ -103,9 +109,14 @@ Typical workflow:
   2. Load Images — load container images into the registry
   3. Install Cluster — configure and provision OpenShift
   4. Finalize Installation — wait for install to complete
-  5. Day-2 — apply NTP, OSUS, and other post-install config
+  5. Day-2 — apply cluster resources, NTP, update service, etc.
 
-'Reset to Connected Mode' switches back if internet is restored."
+'Reset to Connected Mode' switches back if internet is restored.
+
+Navigation:
+  • Arrow keys / Tab — move between items and buttons
+  • Enter — select highlighted item
+  • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
 			1|255)
@@ -137,7 +148,7 @@ Typical workflow:
 				;;
 			"$TUI2_DISCO_TAG_LOAD")
 				if [[ "$load_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --title "Mirror Required" \
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 						--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be loaded.\n\nContinue?" 0 0
 					if [[ $? -eq 0 ]]; then
 						_mirror_config_review && disco_load_images
@@ -147,9 +158,13 @@ Typical workflow:
 				fi
 				;;
 			"$TUI2_DISCO_TAG_INSTALL")
-				if mirror_available && ! _mirror_has_release_image; then
-					dlg --backtitle "$(ui_backtitle)" --title "Mirror Not Synced" \
-						--yes-label "Install Anyway" --no-label "Back" \
+				if ! mirror_available; then
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+						--msgbox "A mirror registry must be installed and loaded\nbefore you can install a cluster.\n\nUse 'Install Registry' followed by 'Load Images' first." 0 0
+					continue
+				elif ! _mirror_has_release_image; then
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \
+						--yes-label "Install Anyway" --no-label "$TUI2_BTN_BACK" \
 						--yesno "The mirror is installed but has no release images yet.\n\nYou should load the mirror before installing a cluster.\nProceeding without loaded images will likely fail.\n\nContinue anyway?" 0 0
 					[[ $? -ne 0 ]] && continue
 				fi

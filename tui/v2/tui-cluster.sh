@@ -162,10 +162,10 @@ _gate_platform_config() {
 			cached_info=$(grep -m1 "^LIBVIRT_URI=" "$cached_path" 2>/dev/null | cut -d= -f2 | tr -d "'" | tr -d '"')
 		fi
 
-		dlg --backtitle "$(ui_backtitle)" --title " $plat_label Configuration " \
+		dlg --backtitle "$(ui_backtitle)" --title "$plat_label Configuration" \
 			--yes-label "Use Saved" \
 			--no-label "Configure New" \
-			--extra-button --extra-label "Skip" \
+			--extra-button --extra-label "$TUI2_BTN_SKIP" \
 			--yesno "\n$plat_label config not found in project.\n\nA saved config exists: ${cached_info:-$cached_path}\n\nUse it, configure a new one, or skip for now?" 0 0
 		local rc=$?
 		case "$rc" in
@@ -186,9 +186,9 @@ _gate_platform_config() {
 	fi
 
 	# No cached config — prompt to configure or skip
-	dlg --backtitle "$(ui_backtitle)" --title " $plat_label Configuration " \
+	dlg --backtitle "$(ui_backtitle)" --title "$plat_label Configuration" \
 		--yes-label "Configure Now" \
-		--no-label "Skip" \
+		--no-label "$TUI2_BTN_SKIP" \
 		--yesno "\nPlatform is set to $cl_platform but $conf_name is not configured.\n\nConfigure now or skip? (Required before install.)" 0 0
 	local rc=$?
 	case "$rc" in
@@ -215,8 +215,8 @@ _configure_platform_file() {
 	fi
 
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title " Edit $plat_label Config " \
-			--ok-label "Save" --cancel-label "Cancel" \
+		dlg --backtitle "$(ui_backtitle)" --title "Edit $plat_label Config" \
+			--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
 			--editbox "$conf_path" 0 0 2>"$_TUI_TMP"
 		local rc=$?
 		if [[ $rc -ne 0 ]]; then
@@ -245,7 +245,7 @@ _configure_platform_file() {
 		fi
 
 		if [[ "$valid" == "false" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --title " Connection Failed " \
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONN_FAILED" \
 				--yes-label "Edit Again" \
 				--no-label "Save Anyway" \
 				--yesno "\nConnection test failed. Edit again or save as-is?" 0 0
@@ -425,15 +425,25 @@ cluster_install_flow() {
 			5)
 				_cluster_execute
 				local _rc=$?
-				if [[ $_rc -eq 0 ]]; then _cl_save_state; return 0; fi
-				if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
-				# Back from review → return to last real page
-				if [[ "$cl_platform" != "bm" ]]; then
-					page=4
-				else
-					page=3
-				fi
-				continue
+				case "$_rc" in
+					0)
+						# Command ran (success or failure) — exit wizard to main menu
+						_cl_save_state; return 0
+						;;
+					1)
+						# "Back" pressed on the review page — return to last edit page
+						if [[ "$cl_platform" != "bm" ]]; then
+							page=4
+						else
+							page=3
+						fi
+						continue
+						;;
+					*)
+						# ESC or anything else — exit wizard
+						_cl_save_state; return 1
+						;;
+				esac
 				;;
 			0)
 				_persist_cluster_draft
@@ -488,6 +498,7 @@ _cluster_page_basics() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
+			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_CLUSTER_BASICS" 14 60 5 \
@@ -660,6 +671,7 @@ _cluster_page_network() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
+			--default-button ok \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_CLUSTER_NETWORK" 16 60 7 \
 			"${items[@]}" \
@@ -824,22 +836,32 @@ _cluster_page_iface() {
 				iface_items+=("M" "MACs:        (none — paste to add)")
 			fi
 		fi
-
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_IFACE" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
+			--default-button ok \
+			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_IFACE" 13 55 4 \
+			--menu "$TUI2_MSG_CLUSTER_IFACE" 0 55 0 \
 			"${iface_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			3) return 0 ;;  # Next (Extra button)
+			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
+"• Ports: network port names (e.g. ens160, ens1f0,ens1f1)
+• VLAN: optional 802.1Q VLAN tag
+• Connection: how the cluster reaches the internet
+  - mirror: fully through the mirror registry (default)
+  - proxy: cluster uses an HTTP proxy
+  - direct: cluster has direct internet access
+• MACs: paste MAC addresses for bare-metal nodes"
+			   continue ;;
 			1) return 1 ;;  # Back (Cancel button)
 			255) return 255 ;;
-			0) ;;
+			0) ;;  # Select (OK button)
 		esac
 
 		local choice
@@ -900,7 +922,7 @@ _cluster_page_iface() {
 			;;
 		M)
 			# Paste MAC addresses (one per line, for bare-metal nodes)
-			dlg --backtitle "$(ui_backtitle)" --title "MAC Addresses" \
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_ADDRS" \
 				--inputbox "Enter MAC addresses (one per line, or comma-separated).\nFormat: aa:bb:cc:dd:ee:ff\n\nNeeded: 1 per node per port (masters + workers × ports)." \
 				0 0 "$(echo "$cl_macs" | tr '\n' ',' | sed 's/,$//')" \
 				2>"$_TUI_TMP"
@@ -938,6 +960,7 @@ _cluster_page_vm() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
+			--default-button ok \
 			--default-item "$default_item" \
 			--menu "$(printf "$TUI2_MSG_CLUSTER_VM" "$cl_platform")" 15 55 6 \
 			"${items[@]}" \
@@ -1135,7 +1158,7 @@ _cluster_execute() {
 
 	# For bare-metal: offer choice between ISO creation only or full install
 	if [[ "$cl_platform" == "bm" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "Install Action" \
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INSTALL_ACTION" \
 			--menu "Choose the install action:" 0 0 0 \
 			"F" "Full Install (create ISO + monitor until complete)" \
 			"I" "Create ISO only (download ISO, then boot servers manually)" \
@@ -1179,7 +1202,10 @@ _cluster_execute() {
 	_check_platform_config "$cl_name" || return 1
 
 	# Long operation — use confirm_and_execute (terminal/TUI mode choice)
+	# Always return 0 after command execution so the wizard exits back to the
+	# main menu.  Return 1 is reserved for "Back" on the review page (above).
 	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
+	return 0
 }
 
 # =============================================================================
@@ -1287,7 +1313,7 @@ cluster_delete() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
-		--yes-label "Delete" --no-label "Cancel" \
+		--yes-label "Delete" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Delete cluster '$cl_display'?\n\nThis will destroy all VMs and remove cluster resources.\nThis action cannot be undone." 0 0
 	local rc=$?
 	[[ $rc -ne 0 ]] && return 1
@@ -1331,7 +1357,7 @@ tui_advanced_menu() {
 		case "$choice" in
 			"R")
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
-					--yes-label "Reset" --no-label "Cancel" \
+					--yes-label "Reset" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Reset ABA to initial state?\n\nThis will remove ALL configuration, clusters, and mirror data.\nEquivalent to: aba reset --force\n\nThis action cannot be undone!" 0 0
 				[[ $? -ne 0 ]] && continue
 				confirm_and_execute "aba reset --force" "Reset ABA"
@@ -1351,8 +1377,8 @@ tui_advanced_menu() {
 				confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
 				;;
 			"U")
-				dlg --backtitle "$(ui_backtitle)" --title "Uninstall Mirror" \
-					--yes-label "Uninstall" --no-label "Cancel" \
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
+					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Uninstall the mirror registry?\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
 				confirm_and_execute "aba -d mirror uninstall" "Uninstall Mirror Registry"
@@ -1372,7 +1398,7 @@ tui_advanced_menu() {
 
 cluster_day2_menu() {
 	tui_log "Action: Day-2 / Cluster Management menu"
-	local default_item="F"
+	local default_item="R"
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_MENU" \
@@ -1381,17 +1407,17 @@ cluster_day2_menu() {
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
 			"" "──── Configuration ────────────────" \
-			"F" "Full Day-2 configuration" \
-			"N" "Configure NTP" \
-			"O" "OSUS (upgrade service)" \
+			"R" "Cluster Resources (OperatorHub, oc-mirror)" \
+			"N" "Network Time Protocol" \
+			"O" "OpenShift Update Service (OSUS)" \
 			"" "──── Status ───────────────────────" \
 			"S" "Cluster status" \
-			"H" "SSH into node 0" \
+			"H" "SSH into Rendezvous Server" \
 			"" "──── Lifecycle ────────────────────" \
 			"U" "Upgrade cluster" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
-			"R" "Refresh (recreate VMs, new install)" \
+			"F" "Refresh (recreate VMs, new install)" \
 			"" "──── Cleanup ──────────────────────" \
 			"C" "Clean (remove artifacts, retry install)" \
 			"K" "Delete cluster (destroy VMs)" \
@@ -1402,13 +1428,13 @@ cluster_day2_menu() {
 			2)
 				show_help "$TUI2_HELP_TITLE_DAY2" \
 "Configuration:
-• Full: applies all Day-2 config (IDMS, CatalogSources, NTP, etc.)
-• NTP: configures NTP on all cluster nodes
-• OSUS: installs the Cincinnati/OSUS operator for upgrades
+• Resources: applies all Day-2 config (IDMS, CatalogSources, OperatorHub, etc.)
+• NTP: configures Network Time Protocol on all cluster nodes
+• OSUS: installs the OpenShift Update Service operator for upgrades
 
 Status:
 • Cluster status: shows cluster operators and node status
-• SSH: opens an interactive SSH session on the first node
+• SSH: opens an interactive SSH session on the Rendezvous Server
 
 Lifecycle:
 • Upgrade: upgrade cluster to a newer OpenShift version
@@ -1418,7 +1444,12 @@ Lifecycle:
 
 Cleanup:
 • Clean: remove generated artifacts so you can retry install
-• Delete: destroy VMs and remove all cluster resources"
+• Delete: destroy VMs and remove all cluster resources
+
+Navigation:
+• Arrow keys / Tab — move between items and buttons
+• Enter — select highlighted item
+• ESC — go back to the main menu"
 				continue
 				;;
 			0) ;;
@@ -1430,7 +1461,7 @@ Cleanup:
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			F) _day2_run "day2" ;;
+			R) _day2_run "day2" ;;
 			N) _day2_run "day2-ntp" ;;
 			O) _day2_run_osus ;;
 			S) _day2_status ;;
@@ -1438,7 +1469,7 @@ Cleanup:
 			U) _day2_upgrade ;;
 			G) _day2_shutdown ;;
 			T) _day2_startup ;;
-			R) _day2_refresh ;;
+			F) _day2_refresh ;;
 			C) _day2_clean ;;
 			K) _day2_delete ;;
 		esac
@@ -1508,18 +1539,18 @@ _day2_status() {
 	rm -f "$output_file"
 }
 
-# --- SSH into node 0 ---
+# --- SSH into Rendezvous Server ---
 _day2_ssh() {
 	if ! select_installed_cluster "$TUI2_TITLE_DAY2_SSH" "Select cluster for SSH:"; then
 		return 1
 	fi
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
-	tui_log "SSH into node 0 of $cl_display"
+	tui_log "SSH into Rendezvous Server of $cl_display"
 
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
-	echo "  SSH into node 0 of: $cl_display"
+	echo "  SSH into Rendezvous Server of: $cl_display"
 	echo "  Type 'exit' to return to TUI"
 	echo "═══════════════════════════════════════════════════════════════"
 	echo
@@ -1549,7 +1580,7 @@ _day2_shutdown() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_SHUTDOWN" \
-		--yes-label "Shutdown" --no-label "Cancel" \
+		--yes-label "Shutdown" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon and drain all nodes, then power off VMs.\nThe operation will wait until shutdown is complete." 0 0
 	[[ $? -ne 0 ]] && return 0
 
@@ -1565,7 +1596,7 @@ _day2_startup() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
-		--yes-label "Start" --no-label "Cancel" \
+		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Start cluster '$cl_display'?\n\nThis will power on the cluster VMs." 0 0
 	[[ $? -ne 0 ]] && return 0
 
@@ -1581,7 +1612,7 @@ _day2_refresh() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
-		--yes-label "Refresh" --no-label "Cancel" \
+		--yes-label "Refresh" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
 	[[ $? -ne 0 ]] && return 0
 
@@ -1597,7 +1628,7 @@ _day2_clean() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
-		--yes-label "Clean" --no-label "Cancel" \
+		--yes-label "Clean" --no-label "$TUI2_BTN_CANCEL" \
 		--yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
 	[[ $? -ne 0 ]] && return 0
 

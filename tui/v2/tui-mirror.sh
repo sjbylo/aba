@@ -42,10 +42,10 @@ _mirror_config_review() {
 
 	local default_item="H"
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration " \
+		dlg --backtitle "$(ui_backtitle)" --title "Mirror Configuration" \
 			--default-item "$default_item" \
 			--ok-label "$TUI2_BTN_SELECT" \
-			--extra-button --extra-label "Continue" \
+			--extra-button --extra-label "$TUI2_BTN_CONTINUE" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--help-button \
 			--menu "Mirror will be installed as part of this operation.\nReview/edit settings, then press Continue:" 18 70 7 \
@@ -199,7 +199,7 @@ _mirror_install_local() {
 	# Menu-style config page
 	local default_item="H"
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration (local) " \
+		dlg --backtitle "$(ui_backtitle)" --title "Mirror Configuration (local)" \
 			--default-item "$default_item" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
@@ -323,7 +323,7 @@ _mirror_install_remote() {
 	# Menu-style config page
 	local default_item="H"
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration (remote) " \
+		dlg --backtitle "$(ui_backtitle)" --title "Mirror Configuration (remote)" \
 			--default-item "$default_item" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
@@ -725,8 +725,8 @@ Selected operators will be included in the ImageSet config."
 			if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "Basket is already empty." 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --title "Clear Basket" \
-					--yes-label "Clear" --no-label "Cancel" \
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLEAR_BASKET" \
+					--yes-label "Clear" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Remove all ${#OP_BASKET[@]} operators from basket?" 0 0
 				if [[ $? -eq 0 ]]; then
 					OP_BASKET=()
@@ -965,19 +965,19 @@ _ensure_offline_prereqs() {
 		return 0
 	fi
 
-	dlg --backtitle "$(ui_backtitle)" --title "Preparing" \
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PREPARING" \
 		--infobox "Downloading offline files (CLI tools + registry installers)...\n\nPlease wait." 7 65
 
 	# cli-download-all.sh uses per-tool run_once IDs (cli:download:<tool>[:<ver>])
 	if ! bash -lc "cd '$ABA_ROOT' && scripts/cli-download-all.sh --wait" >>"$_TUI_LOG_FILE" 2>&1; then
-		dlg --backtitle "$(ui_backtitle)" --title " Download Failed " \
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
 			--msgbox "Failed to download CLI tools.\n\nCheck internet connectivity and try again." 0 0
 		return 1
 	fi
 
 	if ! run_once -q -w -i "mirror:reg:download" -- \
 		make -sC "$ABA_ROOT/mirror" download-registries >>"$_TUI_LOG_FILE" 2>&1; then
-		dlg --backtitle "$(ui_backtitle)" --title " Download Failed " \
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
 			--msgbox "Failed to download registry installers.\n\nCheck internet connectivity and try again." 0 0
 		return 1
 	fi

@@ -101,22 +101,32 @@ TUI2_TITLE_CLUSTER_WORKER_MEM="Worker Memory"
 TUI2_TITLE_CLUSTER_DATA_DISK="Data Disk"
 TUI2_TITLE_CLUSTER_MAC_TEMPLATE="MAC Template"
 TUI2_TITLE_CLUSTER_SELECT="Select Cluster"
+TUI2_TITLE_CLUSTER_MAC_ADDRS="MAC Addresses"
 TUI2_TITLE_CLUSTER_INSTALL="Install Cluster"
+TUI2_TITLE_CLUSTER_INSTALL_ACTION="Install Action"
 TUI2_TITLE_CLUSTER_MONITOR="Finalize Installation"
 TUI2_TITLE_CLUSTER_DELETE="Delete Cluster"
 TUI2_TITLE_ADVANCED="Advanced"
 TUI2_TITLE_CLUSTER_OSUS_WARN="OSUS Warning"
+TUI2_TITLE_CONN_FAILED="Connection Failed"
+TUI2_TITLE_MIRROR_REQUIRED="Mirror Required"
+TUI2_TITLE_MIRROR_NOT_SYNCED="Mirror Not Synced"
+TUI2_TITLE_MIRROR_NOT_LOADED="Mirror Not Loaded"
+TUI2_TITLE_UNINSTALL_MIRROR="Uninstall Mirror"
+TUI2_TITLE_CLEAR_BASKET="Clear Basket"
+TUI2_TITLE_PREPARING="Preparing"
+TUI2_TITLE_DOWNLOAD_FAILED="Download Failed"
 
 # =============================================================================
 # Dialog Titles — Day-2 / Cluster Management
 # =============================================================================
 
 TUI2_TITLE_DAY2_MENU="Day-2 / Cluster Management"
-TUI2_TITLE_DAY2_FULL="Day-2: Full Configuration"
-TUI2_TITLE_DAY2_NTP="Day-2: NTP Configuration"
-TUI2_TITLE_DAY2_OSUS="Day-2: OSUS (Cincinnati)"
+TUI2_TITLE_DAY2_FULL="Day-2: Cluster Resources"
+TUI2_TITLE_DAY2_NTP="Day-2: Network Time Protocol"
+TUI2_TITLE_DAY2_OSUS="Day-2: OpenShift Update Service (OSUS)"
 TUI2_TITLE_DAY2_STATUS="Cluster Status"
-TUI2_TITLE_DAY2_SSH="SSH to Node 0"
+TUI2_TITLE_DAY2_SSH="SSH to Rendezvous Server"
 TUI2_TITLE_DAY2_UPGRADE="Upgrade Cluster"
 TUI2_TITLE_DAY2_SHUTDOWN="Graceful Cluster Shutdown"
 TUI2_TITLE_DAY2_STARTUP="Graceful Cluster Startup"
@@ -308,19 +318,19 @@ TUI2_MSG_VERSION_FETCH_FAIL="Cannot fetch version data (no internet?).\n\nUsing 
 # Messages — Day-2
 # =============================================================================
 
-TUI2_MSG_DAY2_MENU="Select operation:"
+TUI2_MSG_DAY2_MENU="Select operation:\n(Navigate with Arrow keys, Tab, and ESC)"
 
 # =============================================================================
 # Messages — DIRECT Mode
 # =============================================================================
 
-TUI2_MSG_DIRECT_MENU="Fully Connected — Install from internet (no mirror):"
+TUI2_MSG_DIRECT_MENU="Fully Connected — Install from internet (no mirror):\n(Navigate with Arrow keys, Tab, and ESC)"
 
 # =============================================================================
 # Messages — DISCO Mode
 # =============================================================================
 
-TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
+TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:\n(Navigate with Arrow keys, Tab, and ESC)"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
 TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThe bundle state will be cleared and you will be asked\nto choose between Partially Disconnected (mirror) and Fully Connected (direct) modes."
@@ -341,7 +351,7 @@ TUI2_MSG_OPERATOR_BASKET_MENU="Select to remove from basket:"
 TUI2_MSG_NO_OPERATOR_SETS="No operator set files found."
 TUI2_MSG_NO_SEARCH_RESULTS="No operators matching '%s' found."
 TUI2_MSG_BASKET_EMPTY="Basket is empty.\n\nUse 'Select Operator Sets' or 'Search' to add operators."
-TUI2_MSG_BUNDLE_PATH_PROMPT="Enter output path for install bundle:\n\n(Version suffix added automatically)"
+TUI2_MSG_BUNDLE_PATH_PROMPT="Create a portable bundle (tar) containing the ABA repo,\nCLI tools, registry installer, and container images.\n\nThis bundle can be transferred to a disconnected\nenvironment via USB or other media.\n\nEnter output path (version suffix added automatically):"
 TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\nUse --light to exclude large archives (saves disk space)?"
 
 # =============================================================================
