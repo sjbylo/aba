@@ -25,14 +25,18 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-hosts="$WORKER_NAMES $CP_NAMES"
-[ "$workers" ] && hosts="$WORKER_NAMES"
-[ "$masters" ] && hosts="$CP_NAMES"
-[ ! "$hosts" ] && hosts="$CP_NAMES"
+_select_vm_hosts
+
+_running_vms=$(kvm_running_vms $hosts)
+
+if [ -z "$_running_vms" ]; then
+	aba_info "All VMs are already shut off"
+	exit 0
+fi
 
 if [ "$ask" ]; then
 	echo
-	for name in $hosts; do
+	for name in $_running_vms; do
 		echo "$(vm_name "$CLUSTER_NAME" "$name")"
 	done
 

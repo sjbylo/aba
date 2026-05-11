@@ -28,6 +28,12 @@ fi
 # Persist resolved vendor for uninstall and status display
 echo "$vendor" > .reg_vendor
 
+# "existing" = externally managed registry; nothing to install
+if [ "$vendor" = "existing" ]; then
+	aba_debug "Registry vendor is 'existing' -- skipping install (externally managed)"
+	exit 0
+fi
+
 # Dispatch: remote (SSH) or local
 if [ "$reg_ssh_key" ]; then
 	exec scripts/reg-install-remote.sh "$vendor" "$@"

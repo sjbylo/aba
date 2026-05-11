@@ -11,7 +11,7 @@ aba_debug "Starting: $0 $*"
 # Uses SSH to KVM_HOST (derived from LIBVIRT_URI by normalize-kvm-conf).
 _kvm_verify_objects() {
 	local _err=""
-	local _ssh="ssh -F ~/.aba/ssh.conf ${KVM_HOST}"
+	local _ssh="ssh -F $HOME/.aba/ssh.conf ${KVM_HOST}"
 
 	if [ "$KVM_STORAGE_POOL" ]; then
 		if $_ssh "test -d '$KVM_STORAGE_POOL'" 2>/dev/null; then
