@@ -53,6 +53,23 @@ _vsphere_resource_pool_path=""
 # with a concrete privilege error.
 _vsphere_d12_count=0
 
+# --- Shared emit helpers (private to this file) ---------------------------
+# Keep label and counter in sync. aba_warning prints with whatever prefix we
+# pass via -p; the counter we bump is the matching parent-aggregated total.
+_vsphere_err() {
+	local main="$1"
+	shift
+	aba_warning -p Error "vSphere: $main" "$@"
+	_preflight_errors=$(( _preflight_errors + 1 ))
+}
+
+_vsphere_warn() {
+	local main="$1"
+	shift
+	aba_warning "vSphere: $main" "$@"
+	_preflight_warnings=$(( _preflight_warnings + 1 ))
+}
+
 # --- Phase 2 Layer 1 helpers (private to this file) -----------------------
 
 # Extract host + port from GOVC_URL into two fields echoed on stdout.
@@ -90,8 +107,7 @@ _vsphere_probe_tcp() {
 		aba_info_ok "vSphere: TCP reachable ($host:$port)"
 		return 0
 	fi
-	aba_warning "vSphere: cannot reach $host:$port (TCP) - check DNS/firewall/GOVC_URL"
-	_preflight_errors=$(( _preflight_errors + 1 ))
+	_vsphere_err "cannot reach $host:$port (TCP) - check DNS/firewall/GOVC_URL"
 	return 1
 }
 
@@ -132,10 +148,9 @@ _vsphere_probe_tls() {
 	fi
 
 	# D-03 two-option remediation - GOVC_INSECURE=1 listed FIRST, then CA install.
-	aba_warning "vSphere: TLS trust chain failure talking to $host" \
+	_vsphere_err "TLS trust chain failure talking to $host" \
 		"Set GOVC_INSECURE=1 in vmware.conf to skip trust validation (development/lab only)" \
 		"OR add the vCenter CA certificate to the system trust store for production use"
-	_preflight_errors=$(( _preflight_errors + 1 ))
 	return 1
 }
 
@@ -153,9 +168,8 @@ _vsphere_probe_auth() {
 	# Trim to first line so we don't dump a multi-line error blob to the user.
 	local first_line
 	first_line=$(echo "$about_out" | head -1)
-	aba_warning "vSphere: authentication to $GOVC_URL as '$GOVC_USERNAME' failed" \
+	_vsphere_err "authentication to $GOVC_URL as '$GOVC_USERNAME' failed" \
 		"govc said: $first_line"
-	_preflight_errors=$(( _preflight_errors + 1 ))
 	return 1
 }
 
@@ -179,8 +193,7 @@ _vsphere_object_exists() {
 		aba_info_ok "vSphere: $kind '$path'"
 		return 0
 	fi
-	aba_warning "vSphere: $kind '$path' not found"
-	_preflight_errors=$(( _preflight_errors + 1 ))
+	_vsphere_err "$kind '$path' not found"
 	return 1
 }
 
@@ -231,8 +244,7 @@ _vsphere_resolve_object() {
 			_vsphere_resolver_result="$hint"
 			return 0
 		fi
-		aba_warning "vSphere: $kind '$hint' not found"
-		_preflight_errors=$(( _preflight_errors + 1 ))
+		_vsphere_err "$kind '$hint' not found"
 		return 1
 	fi
 
@@ -275,16 +287,14 @@ _vsphere_resolve_object() {
 	fi
 
 	if [ "$hits_count" -gt 1 ]; then
-		aba_warning "vSphere: $kind '$hint' matches $hits_count objects under '$search_root' (ambiguous; use an absolute path in vmware.conf)"
-		_preflight_errors=$(( _preflight_errors + 1 ))
+		_vsphere_err "$kind '$hint' matches $hits_count objects under '$search_root' (ambiguous; use an absolute path in vmware.conf)"
 		return 1
 	fi
 
 	# Neither flat-path nor find found anything. Use the flat path in the
 	# warning message for backward compatibility with existing tests /
 	# tooling that matches on the old "$kind '$flat' not found" wording.
-	aba_warning "vSphere: $kind '$flat' not found"
-	_preflight_errors=$(( _preflight_errors + 1 ))
+	_vsphere_err "$kind '$flat' not found"
 	return 1
 }
 
@@ -325,8 +335,7 @@ _vsphere_probe_resources_network_on_cluster() {
 	done
 
 	if [ "$overlap" -eq 0 ]; then
-		aba_warning "vSphere: network '$GOVC_NETWORK' is not attached to any host in cluster '$GOVC_CLUSTER'"
-		_preflight_errors=$(( _preflight_errors + 1 ))
+		_vsphere_err "network '$GOVC_NETWORK' is not attached to any host in cluster '$GOVC_CLUSTER'"
 		return 1
 	fi
 	aba_info_ok "vSphere: network '$GOVC_NETWORK' attached to cluster '$GOVC_CLUSTER'"
@@ -411,8 +420,7 @@ _vsphere_probe_resources() {
 			_vsphere_resource_pool_found=1
 			aba_info_ok "vSphere: using default resource pool '$default_rp_path'"
 		else
-			aba_warning "vSphere: default resource pool '$default_rp_path' not found - verify the cluster is properly configured."
-			_preflight_errors=$(( _preflight_errors + 1 ))
+			_vsphere_err "default resource pool '$default_rp_path' not found - verify the cluster is properly configured."
 		fi
 	else
 		# 'p' = resource pool type filter on govc find; scopes bare-name searches
@@ -457,11 +465,10 @@ _vsphere_check_privileges() {
 	if [ "$perms_rc" -ne 0 ]; then
 		local first_line
 		first_line=$(echo "$perms_out" | head -1)
-		aba_warning "vSphere: cannot verify write-access on '$scope_path'" \
+		_vsphere_warn "cannot verify write-access on '$scope_path'" \
 			"govc permissions.ls said: $first_line" \
 			"User may lack 'Permissions.ModifyPermissions' or equivalent read right." \
 			"Skipping RES-07 for this scope; Phase 3 privilege query may still catch gaps."
-		_preflight_warnings=$(( _preflight_warnings + 1 ))
 		return 0
 	fi
 
@@ -477,8 +484,7 @@ _vsphere_check_privileges() {
 	fi
 
 	if [ -z "$role_name" ]; then
-		aba_warning "vSphere: user '$GOVC_USERNAME' has no role assigned on '$scope_path' (D-12; group assignments not resolved)"
-		_preflight_warnings=$(( _preflight_warnings + 1 ))
+		_vsphere_warn "user '$GOVC_USERNAME' has no role assigned on '$scope_path' (D-12; group assignments not resolved)"
 		_vsphere_d12_count=$(( _vsphere_d12_count + 1 ))
 		return 0
 	fi
@@ -493,8 +499,7 @@ _vsphere_check_privileges() {
 	if [ "$role_name" = "No access" ]; then
 		local req
 		for req in "${required_privs[@]}"; do
-			aba_warning "vSphere: $kind '$scope_path' missing privilege '$req' (user has role 'No access')"
-			_preflight_errors=$(( _preflight_errors + 1 ))
+			_vsphere_err "$kind '$scope_path' missing privilege '$req' (user has role 'No access')"
 		done
 		return 0
 	fi
@@ -503,8 +508,7 @@ _vsphere_check_privileges() {
 	local role_privs role_rc=0
 	role_privs=$(govc role.ls "$role_name" 2>&1) || role_rc=$?
 	if [ "$role_rc" -ne 0 ]; then
-		aba_warning "vSphere: cannot resolve privileges for role '$role_name' on '$scope_path'"
-		_preflight_warnings=$(( _preflight_warnings + 1 ))
+		_vsphere_warn "cannot resolve privileges for role '$role_name' on '$scope_path'"
 		return 0
 	fi
 
@@ -513,8 +517,7 @@ _vsphere_check_privileges() {
 	local req
 	for req in "${required_privs[@]}"; do
 		if ! echo "$role_privs" | grep -qxF -- "$req"; then
-			aba_warning "vSphere: $kind '$scope_path' missing privilege '$req'"
-			_preflight_errors=$(( _preflight_errors + 1 ))
+			_vsphere_err "$kind '$scope_path' missing privilege '$req'"
 		fi
 	done
 	return 0
@@ -642,7 +645,7 @@ _vsphere_probe_privileges() {
 	# D-18: summary does NOT bump _preflight_errors.
 	local gap_count=$(( _preflight_errors - errors_before ))
 	if [ "$gap_count" -gt 0 ]; then
-		aba_warning "vSphere: $gap_count privilege gap(s) across $scopes_with_gaps scope(s)" \
+		aba_warning -p Error "vSphere: $gap_count privilege gap(s) across $scopes_with_gaps scope(s)" \
 			"Next: review the curated list at scripts/vmware-required-privileges.sh and the OpenShift docs linked in its header." \
 			"Grant the missing privileges to the vCenter user or role and re-run aba install."
 	fi
@@ -700,8 +703,7 @@ preflight_check_vsphere() {
 		# Bump _preflight_errors once per missing field; parent summary aborts on count > 0.
 		# Never call 'exit' here - let the parent aggregation decide.
 		for f in "${missing[@]}"; do
-			aba_warning "vSphere: required field '$f' is missing from vmware.conf"
-			_preflight_errors=$(( _preflight_errors + 1 ))
+			_vsphere_err "required field '$f' is missing from vmware.conf"
 		done
 		return 0
 	fi
