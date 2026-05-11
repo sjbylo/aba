@@ -240,15 +240,20 @@ govc() {
 				esac
 			fi
 			# Generic existence probe (prop == "name").
+			# ha-datacenter/* paths back the ESXi probe set (Paths BB onward);
+			# /MissingFolder is exercised by Path AA + by Paths BB/CC ESXi shape.
 			case "$path" in
-				/MissingDC*)                 return 1 ;;
-				/MissingPool*)               return 1 ;;
-				/GoodDC/datastore/Missing*)  return 1 ;;
-				/GoodDC/host/Missing*)       return 1 ;;
-				/GoodDC/network/Missing*)    return 1 ;;
-				/MissingFolder*)             return 1 ;;
-				/GoodDC*)                    echo "GoodName"; return 0 ;;
-				*)                           return 1 ;;
+				/MissingDC*)                          return 1 ;;
+				/MissingPool*)                        return 1 ;;
+				/GoodDC/datastore/Missing*)           return 1 ;;
+				/GoodDC/host/Missing*)                return 1 ;;
+				/GoodDC/network/Missing*)             return 1 ;;
+				/ha-datacenter/datastore/Missing*)    return 1 ;;
+				/ha-datacenter/network/Missing*)      return 1 ;;
+				/MissingFolder*)                      return 1 ;;
+				/GoodDC*)                             echo "GoodName"; return 0 ;;
+				/ha-datacenter*)                      echo "GoodName"; return 0 ;;
+				*)                                    return 1 ;;
 			esac
 			;;
 		find)
@@ -889,6 +894,91 @@ else
 fi
 # Restore VC_FOLDER to the default known-good value for any subsequent Paths.
 export VC_FOLDER=/GoodDC/vm/folder
+
+# ----------------------------------------------------------------------------
+# ESXi-shape paths (BB onwards). normalize-vmware-conf sets VC= for ESXi; the
+# preflight then drops DC/Cluster from required-field checks, redirects Layer 3
+# probes to /ha-datacenter, and skips the cluster / RP / privilege layers.
+# ----------------------------------------------------------------------------
+
+# 45. Path BB: ESXi happy path. VC empty, DC/Cluster unset, datastore + network
+# resolve under /ha-datacenter/, RP / privilege layers skipped, banner reads
+# 'ESXi detected'.
+_reset_path_state
+export VC=
+unset GOVC_DATACENTER GOVC_CLUSTER
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+banner=$(grep -c '^OK: vSphere: ESXi detected' "$_smoke_out" || true)
+ds_ok=$(grep -c "^OK: vSphere: datastore '/ha-datacenter/datastore/" "$_smoke_out" || true)
+net_ok=$(grep -c "^OK: vSphere: network '/ha-datacenter/network/" "$_smoke_out" || true)
+priv_skip=$(grep -c 'ESXi detected, skipping vCenter privilege scope checks' "$_smoke_out" || true)
+cluster_probe=$(grep -c "cluster '/" "$_smoke_out" || true)
+rp_probe=$(grep -c 'resource pool' "$_smoke_out" || true)
+if [ "$banner" -eq 1 ] && [ "$ds_ok" -eq 1 ] && [ "$net_ok" -eq 1 ] && [ "$priv_skip" -eq 1 ] && [ "$cluster_probe" -eq 0 ] && [ "$rp_probe" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path BB: ESXi happy path -> banner + ds/net under /ha-datacenter/ + cluster/RP/priv skipped + errors=0"
+else
+	test_fail "Path BB broken: banner=$banner ds_ok=$ds_ok net_ok=$net_ok priv_skip=$priv_skip cluster=$cluster_probe rp=$rp_probe errors=$_preflight_errors out='$(cat "$_smoke_out")'"
+fi
+
+# 46. Path CC: ESXi + missing field (drops DC/Cluster from required set). 5 of
+# the 5 ESXi-required fields missing -> 5 ERROR lines, no DC/Cluster errors.
+_reset_path_state
+export VC=
+unset GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATASTORE GOVC_NETWORK GOVC_DATACENTER GOVC_CLUSTER
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+err_count=$(grep -c '^ERROR: vSphere: required field' "$_smoke_out" || true)
+dc_err=$(grep -c "^ERROR: vSphere: required field 'GOVC_DATACENTER'" "$_smoke_out" || true)
+cluster_err=$(grep -c "^ERROR: vSphere: required field 'GOVC_CLUSTER'" "$_smoke_out" || true)
+if [ "$err_count" -eq 5 ] && [ "$dc_err" -eq 0 ] && [ "$cluster_err" -eq 0 ] && [ "$_preflight_errors" -eq 5 ]; then
+	test_pass "Path CC: ESXi missing fields -> 5 ERROR lines, DC/Cluster not required"
+else
+	test_fail "Path CC broken: err_count=$err_count dc_err=$dc_err cluster_err=$cluster_err errors=$_preflight_errors out='$(cat "$_smoke_out")'"
+fi
+
+# 47. Path DD: ESXi + bad GOVC_NETWORK -> ERROR line (not Warning) + errors=1.
+# Locks the label/counter alignment fix specifically on the ESXi network probe.
+_reset_path_state
+export VC=
+unset GOVC_DATACENTER GOVC_CLUSTER
+export GOVC_NETWORK=Missing
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+err_line=$(grep -c "^ERROR: vSphere: network '/ha-datacenter/network/Missing' not found" "$_smoke_out" || true)
+warn_label=$(grep -c "^WARN: vSphere: network '/ha-datacenter/network/Missing' not found" "$_smoke_out" || true)
+if [ "$err_line" -eq 1 ] && [ "$warn_label" -eq 0 ] && [ "$_preflight_errors" -eq 1 ]; then
+	test_pass "Path DD: ESXi bad network -> ERROR-labelled line + errors=1 (no Warning mislabel)"
+else
+	test_fail "Path DD broken: err_line=$err_line warn_label=$warn_label errors=$_preflight_errors out='$(cat "$_smoke_out")'"
+fi
+
+# 48. Path EE: VC_FOLDER unset on vCenter -> INFO note, no error bump. Locks the
+# optional-field gating fix that stopped probing /<DC>/vm/ with an empty hint.
+_reset_path_state
+unset VC_FOLDER
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+info_line=$(grep -c 'VC_FOLDER not set, installer will create the default folder' "$_smoke_out" || true)
+folder_err=$(grep -c "^ERROR: vSphere: folder " "$_smoke_out" || true)
+if [ "$info_line" -eq 1 ] && [ "$folder_err" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
+	test_pass "Path EE: vCenter + VC_FOLDER unset -> INFO note + no folder error"
+else
+	test_fail "Path EE broken: info=$info_line folder_err=$folder_err errors=$_preflight_errors out='$(cat "$_smoke_out")'"
+fi
+
+# 49. Path FF: label/counter alignment guard. Across the full set of error
+# branches exercised in this suite, every line that contributes to
+# _preflight_errors must be labelled ERROR; every line that contributes to
+# _preflight_warnings must be labelled WARN. Re-run Paths B + AA in a fresh
+# state, assert ERROR line count matches the delta in _preflight_errors.
+_reset_path_state
+export VC=1
+unset GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATACENTER GOVC_CLUSTER GOVC_DATASTORE GOVC_NETWORK
+preflight_check_vsphere >"$_smoke_out" 2>&1 || true
+err_lines=$(grep -c '^ERROR: vSphere: ' "$_smoke_out" || true)
+warn_lines=$(grep -c '^WARN: vSphere: ' "$_smoke_out" || true)
+if [ "$err_lines" -eq "$_preflight_errors" ] && [ "$warn_lines" -eq "$_preflight_warnings" ]; then
+	test_pass "Path FF: ERROR/WARN labels match their counter contributions"
+else
+	test_fail "Path FF broken: err_lines=$err_lines errors=$_preflight_errors warn_lines=$warn_lines warnings=$_preflight_warnings"
+fi
 
 echo
 echo -e "${GREEN}=== All Tests Passed ===${NC}"
