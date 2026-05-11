@@ -54,7 +54,7 @@ for name in $CP_NAMES $WORKER_NAMES; do
 	aba_info "Destroy VM $vm (was $power_state)"
 	exec_cmd="govc vm.destroy $vm"
 	aba_debug "Running: $exec_cmd"
-	$exec_cmd
+	$exec_cmd || true
 	aba_debug "Running: govc vm.info -json $vm (verify)"
 	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
 	[ "$power_state" != "null" ] && aba_abort "VM $vm still exists after destroy (state=$power_state)"
@@ -67,7 +67,7 @@ if [ "$VC" ]; then
 		aba_info "Deleting cluster folder $cluster_folder"
 		exec_cmd="govc object.destroy $cluster_folder"
 		aba_debug "Running: $exec_cmd"
-		$exec_cmd
+		$exec_cmd || true
 	fi
 fi
 

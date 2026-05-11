@@ -3,6 +3,11 @@
 
 source scripts/include_all.sh
 
+aba_debug "Running: $0 $*" >&2
+
+. <(process_args $*)
+. <(echo $* | tr " " "\n")
+
 if [ -s kvm.conf ]; then
 	ensure_virsh
 	source <(normalize-kvm-conf)
@@ -20,16 +25,25 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
+_select_vm_hosts
+
+_running_vms=$(kvm_running_vms $hosts)
+
+if [ -z "$_running_vms" ]; then
+	aba_info "All VMs are already powered off"
+	exit 0
+fi
+
 if [ "$ask" ]; then
 	echo
-	for name in $CP_NAMES $WORKER_NAMES; do
+	for name in $_running_vms; do
 		echo "$(vm_name "$CLUSTER_NAME" "$name")"
 	done
 
 	ask "Immediately power down the above virtual machine(s)" || exit 1
 fi
 
-for name in $CP_NAMES $WORKER_NAMES; do
+for name in $hosts; do
 	exec_cmd="virsh -c $LIBVIRT_URI destroy $(vm_name "$CLUSTER_NAME" "$name")"
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd || true

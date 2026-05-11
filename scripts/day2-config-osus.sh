@@ -177,7 +177,7 @@ if echo "$ca_bundle_crt" | grep -q "$tmp_line8" && echo "$ca_bundle_crt" | grep 
 else
 	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert_json"
 	oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
-	echo_green "CA cert added"
+	aba_info "CA cert added"
 fi
 
 aba_info Adding trustedCA to cluster proxy ...
