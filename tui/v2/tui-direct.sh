@@ -433,10 +433,10 @@ _direct_operators() {
 	# Save config first so mirror_select_operators can read ocp_version
 	_direct_save_config
 
-	dlg --backtitle "$(ui_backtitle)" --title " Select Operators " \
+	dlg --backtitle "$(ui_backtitle)" --title "Select Operators" \
 		--ok-label "$TUI2_BTN_SELECT" \
 		--cancel-label "$TUI2_BTN_BACK" \
-		--extra-button --extra-label "Skip" \
+		--extra-button --extra-label "$TUI2_BTN_SKIP" \
 		--menu "Select operators to include in the mirror, or skip for now.\n\nYou can always do this later from the action menu." 0 0 0 \
 		"1" "Select Operator Sets (day2, storage, networking...)" \
 		"2" "Search Operator Names" \
@@ -526,12 +526,13 @@ _direct_action_menu() {
 		fi
 
 		items+=(
+			"" "──── Cluster ───────────────────────"
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
 			"$TUI2_DIRECT_TAG_MONITOR"        "$mon_label"
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
-			" "                               "──── Other ─────────────────────────"
+			"" "──── Mode ──────────────────────────"
 			"$TUI2_DIRECT_TAG_SWITCH_MIRROR"  "Switch to Partially Disconnected"
 		)
 
@@ -554,7 +555,12 @@ without a mirror registry.
 Workflow:
   1. Install Cluster — configure, review, and provision OpenShift
   2. Finalize Installation — wait for install to complete
-  3. Day-2 — post-install configuration (NTP, OSUS, etc.)"
+  3. Day-2 — post-install config (resources, NTP, update service, etc.)
+
+Navigation:
+  • Arrow keys / Tab — move between items and buttons
+  • Enter — select highlighted item
+  • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
 		1)

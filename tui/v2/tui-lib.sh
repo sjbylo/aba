@@ -212,7 +212,10 @@ ui_backtitle() {
 	esac
 	local ver="${ocp_version:-?}"
 	local ch="${ocp_channel:-?}"
-	echo "ABA TUI v2  |  ${mode_display}  |  ${ch} ${ver}"
+	local text="ABA TUI v2  |  ${mode_display}  |  ${ch} ${ver}"
+	local cols=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
+	local pad=$(( (cols - ${#text}) / 2 ))
+	[[ $pad -gt 0 ]] && printf '%*s%s' "$pad" '' "$text" || echo "$text"
 }
 
 # =============================================================================
@@ -259,6 +262,57 @@ show_help() {
 # =============================================================================
 # Confirm and Execute (terminal mode / TUI mode choice)
 # =============================================================================
+
+# Format a long command for display: one flag per line with backslash continuations.
+# Splits on any flag token (--foo or -x).  Short commands (<=3 flags) pass through unchanged.
+_format_cmd_display() {
+	local cmd="$1"
+	local -a words
+	read -ra words <<< "$cmd"
+
+	# Count flags (tokens starting with -)
+	local flag_count=0
+	for w in "${words[@]}"; do
+		[[ "$w" == -* ]] && flag_count=$(( flag_count + 1 ))
+	done
+	if (( flag_count <= 3 )); then
+		printf '%s' "$cmd"
+		return
+	fi
+
+	# First token is the base command (e.g. "aba"), collect until first flag
+	local -a base=()
+	local -a rest=()
+	local in_base=1
+	for w in "${words[@]}"; do
+		if (( in_base )) && [[ "$w" != -* ]]; then
+			base+=("$w")
+		else
+			in_base=0
+			rest+=("$w")
+		fi
+	done
+
+	local out="${base[*]}"
+	local i=0
+	while (( i < ${#rest[@]} )); do
+		local token="${rest[$i]}"
+		if [[ "$token" == -* ]]; then
+			# Collect flag + its value args (everything until next flag)
+			local chunk="$token"
+			i=$(( i + 1 ))
+			while (( i < ${#rest[@]} )) && [[ "${rest[$i]}" != -* ]]; do
+				chunk="$chunk ${rest[$i]}"
+				i=$(( i + 1 ))
+			done
+			printf -v out '%s \\\n    %s' "$out" "$chunk"
+		else
+			out="$out $token"
+			i=$(( i + 1 ))
+		fi
+	done
+	printf '%s' "$out"
+}
 
 # Session-scoped execution mode preference (empty = ask every time)
 _TUI_EXEC_MODE="${_TUI_EXEC_MODE:-}"
@@ -312,7 +366,7 @@ confirm_and_execute() {
 				continue
 				;;
 			3)
-				show_help "Command to execute" "$cmd"
+				show_help "Command to execute" "$(_format_cmd_display "$cmd")"
 				continue
 				;;
 			0) ;;  # proceed to choice
@@ -482,22 +536,36 @@ _invalidate_mirror_cache() {
 }
 
 # Check if the current release image exists in the mirror registry.
-# Uses a cached result (valid for 2 minutes) to avoid slow skopeo calls on every menu refresh.
+# Returns instantly from cache; refreshes in the background when stale.
+# Only blocks on the very first call (no cache file yet).
 _mirror_has_release_image() {
 	local cache_file="$HOME/.aba/runner/tui-mirror-ready.cache"
-	local cache_ttl=120  # 2 minutes
+	local cache_ttl=120  # seconds
 
-	# Use cache if fresh
 	if [[ -f "$cache_file" ]]; then
 		local age
 		age=$(( $(date +%s) - $(stat -c %Y "$cache_file") ))
-		if (( age < cache_ttl )); then
-			[[ "$(cat "$cache_file")" == "1" ]]
-			return
+		if (( age >= cache_ttl )); then
+			# Stale — reset mtime (prevents duplicate spawns), then refresh in background
+			touch "$cache_file"
+			_mirror_check_release_image &>/dev/null &
+			disown 2>/dev/null
 		fi
+		[[ "$(cat "$cache_file")" == "1" ]]
+		return
 	fi
 
-	# Find openshift-install (may be in ~/bin or not yet extracted)
+	# No cache at all — synchronous check (one-time cost on first TUI launch)
+	_mirror_check_release_image
+	[[ -f "$cache_file" ]] && [[ "$(cat "$cache_file")" == "1" ]]
+}
+
+# The slow part: runs skopeo inspect and writes result to the cache file.
+# Called synchronously (first time) or in a background subshell (subsequent).
+_mirror_check_release_image() {
+	local cache_file="$HOME/.aba/runner/tui-mirror-ready.cache"
+	mkdir -p "$(dirname "$cache_file")"
+
 	local _oi=""
 	if [[ -x "$HOME/bin/openshift-install" ]]; then
 		_oi="$HOME/bin/openshift-install"
@@ -506,43 +574,36 @@ _mirror_has_release_image() {
 	fi
 
 	# Fallback: if openshift-install not available, use imageset-config-digest.yaml
-	# as an indicator that oc-mirror has synced/loaded images into the registry
 	if [[ -z "$_oi" ]]; then
 		if [[ -f "$ABA_ROOT/mirror/data/imageset-config-digest.yaml" ]]; then
 			echo "1" > "$cache_file"
-			return 0
 		else
 			echo "0" > "$cache_file"
-			return 1
 		fi
+		return
 	fi
 
 	local _out _release_sha _reg_host _reg_port _reg_path _url
-	_out=$("$_oi" version 2>/dev/null) || { echo "0" > "$cache_file"; return 1; }
+	_out=$("$_oi" version 2>/dev/null) || { echo "0" > "$cache_file"; return; }
 	_release_sha=$(echo "$_out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 
-	# Source mirror.conf values
 	_reg_host=$(grep '^reg_host=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
 	_reg_port=$(grep '^reg_port=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
 	_reg_path=$(grep '^reg_path=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
 	_reg_port="${_reg_port:-8443}"
 	_reg_path="${_reg_path:-/ocp4/openshift4}"
 
-	[[ -z "$_reg_host" || -z "$_release_sha" ]] && { echo "0" > "$cache_file"; return 1; }
+	[[ -z "$_reg_host" || -z "$_release_sha" ]] && { echo "0" > "$cache_file"; return; }
 
 	_url="docker://${_reg_host}:${_reg_port}${_reg_path}/openshift/release-images${_release_sha}"
 
-	# Use ABA's mirror credentials explicitly (default auth files may not be populated)
 	local _authfile="$ABA_ROOT/mirror/regcreds/pull-secret-mirror.json"
 	[[ ! -f "$_authfile" ]] && _authfile="$ABA_ROOT/mirror/regcreds/pull-secret-full.json"
 
-	mkdir -p "$(dirname "$cache_file")"
 	if skopeo inspect ${_authfile:+--authfile "$_authfile"} "$_url" >/dev/null 2>&1; then
 		echo "1" > "$cache_file"
-		return 0
 	else
 		echo "0" > "$cache_file"
-		return 1
 	fi
 }
 
@@ -560,15 +621,24 @@ cluster_installed() {
 
 # List cluster directories (dirs containing cluster.conf, excluding templates)
 list_cluster_dirs() {
+	# Sort by directory modification time (newest first) so the most
+	# recently touched cluster appears at the top of selection dialogs.
 	local dir
+	local -a dirs=()
 	for dir in "$ABA_ROOT"/*/cluster.conf; do
 		[[ -f "$dir" ]] || continue
 		dir="${dir%/cluster.conf}"
 		dir="${dir##*/}"
-		# Skip mirror and template dirs
 		[[ "$dir" == "mirror" || "$dir" == "templates" ]] && continue
-		echo "$dir"
+		dirs+=("$dir")
 	done
+	if [[ ${#dirs[@]} -eq 0 ]]; then
+		return
+	fi
+	# stat -c '%Y' = mtime epoch; sort -rnk1 = newest first
+	for dir in "${dirs[@]}"; do
+		printf '%s %s\n' "$(stat -c '%Y' "$ABA_ROOT/$dir" 2>/dev/null || echo 0)" "$dir"
+	done | sort -rnk1 | awk '{print $2}'
 }
 
 # List installed clusters (dirs with kubeconfig)

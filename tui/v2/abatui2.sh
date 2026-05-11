@@ -449,7 +449,7 @@ _conno_main() {
 		# Dynamic menu title with mirror state
 		local _mstate
 		_mstate="$(mirror_state_label)"
-		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):"
+		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):\n(Navigate with Arrow keys, Tab, and ESC)"
 
 		# Mirror health warning
 		local mirror_warn=""
@@ -468,11 +468,12 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
-			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
+			"" "──── Transfer ──────────────────────"
+			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
 			"" "──── Mode ──────────────────────────"
@@ -501,17 +502,24 @@ Mirror operations:
   • Sync — push images directly to registry
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
-  • Bundle — create a portable bundle (tar) for USB transfer
 
 Cluster operations:
   • Install Cluster — configure, review, and provision OpenShift
   • Finalize Installation — wait for install to complete (re-attach)
-  • Day-2 — post-install configuration (NTP, OSUS, etc.)
+  • Day-2 — post-install config (resources, NTP, update service, etc.)
+
+Transfer:
+  • Bundle — create a portable bundle (tar) for USB transfer
 
 Mode switching:
   • Fully Connected — install from internet without a mirror
   • Fully Disconnected — work offline using this repo in-place
-    Downloads CLI tools + registry installers first if missing."
+    Downloads CLI tools + registry installers first if missing.
+
+Navigation:
+  • Arrow keys / Tab — move between items and buttons
+  • Enter — select highlighted item
+  • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
 			1|255)
@@ -554,7 +562,7 @@ Mode switching:
 			if [[ "$_TUI_INET" == "no" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
 			elif ! mirror_available; then
-				dlg --backtitle "$(ui_backtitle)" --title "Mirror Required" \
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
 				if [[ $? -eq 0 ]]; then
 					_mirror_config_review && mirror_sync
@@ -582,15 +590,15 @@ Mode switching:
 				;;
 			"$TUI2_CONNO_TAG_INSTALL")
 				if ! mirror_available; then
-					dlg --backtitle "$(ui_backtitle)" --title "No Mirror Installed" \
-						--yes-label "Install & Sync" --no-label "Back" \
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+						--yes-label "Install & Sync" --no-label "$TUI2_BTN_BACK" \
 						--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
 					if [[ $? -eq 0 ]]; then
 						_mirror_config_review && mirror_sync && cluster_install_flow
 					fi
 				elif ! _mirror_has_release_image; then
-					dlg --backtitle "$(ui_backtitle)" --title "Mirror Not Synced" \
-						--yes-label "Sync Now" --no-label "Back" \
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_SYNCED" \
+						--yes-label "Sync Now" --no-label "$TUI2_BTN_BACK" \
 						--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
 					if [[ $? -eq 0 ]]; then
 						mirror_sync && cluster_install_flow

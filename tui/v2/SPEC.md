@@ -94,9 +94,9 @@ All screens follow these rules:
 |----------------------|----------------------------------------------------------------------------|
 | HELP on every screen | `--help-button`; rc=2 → show context-sensitive msgbox, re-display dialog   |
 | NEXT/BACK (forms)    | `--ok-label "Next"` + `--extra-button --extra-label "Back"` (Enter=submit=Next) |
-| Menu-style pages     | `--ok-label "Select"` + `--cancel-label "Back"` + `"NEXT" ">>> Next >>>"` menu item |
+| Menu-style pages     | `--ok-label "Select"` + `--cancel-label "Back"` + `">" "── Next ──→"` menu item |
 | Cancel (rc=1)        | Go back one level                                                            |
-| ESC (rc=255)         | ALWAYS trigger `confirm_quit` dialog — never treat as "Back"                 |
+| ESC (rc=255)         | Hierarchical: sub-menu/wizard → return to parent; main menu → confirm quit   |
 
 ### Execution Modes
 
@@ -336,7 +336,9 @@ Value precedence: `aba.conf` (if set) → `get_*()` auto-detect → smart guess 
   3) Connection:     mirror        [toggle: mirror → proxy → direct]
 ```
 
-- In DIRECT mode: Connection locked to "direct", not toggleable
+- Uses `--extra-button --extra-label "Next"` + `--help-button` (must include
+  `--help-button` — without it, dialog can mis-fire rc=3 on first Enter)
+- In DIRECT mode: Connection toggle cycles direct ↔ proxy only
 
 ### Page 4: VM Resources (form-style, only if platform != bm)
 
