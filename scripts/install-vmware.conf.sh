@@ -8,71 +8,67 @@ aba_debug "Starting: $0 $*"
 
 # Verify that vSphere objects referenced in vmware.conf actually exist.
 # Called after govc about succeeds (login is valid).
+# Runs all checks in parallel; silent on success, reports all failures at once.
 _vmw_verify_objects() {
-	local _err=""
+	local _tmpdir
+	_tmpdir=$(mktemp -d)
 
 	if [ "$GOVC_DATASTORE" ]; then
-		if govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1; then
-			aba_info "Datastore '$GOVC_DATASTORE' ... OK"
-		else
-			aba_warning "Datastore '$GOVC_DATASTORE' not found!"
-			_err=1
-		fi
+		( govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1 \
+			&& echo "ok Datastore '$GOVC_DATASTORE'" > "$_tmpdir/datastore" \
+			|| echo "fail Datastore '$GOVC_DATASTORE' not found" > "$_tmpdir/datastore" ) &
 	fi
 
 	if [ "${ISO_DATASTORE:-}" ]; then
-		if govc datastore.info "$ISO_DATASTORE" >/dev/null 2>&1; then
-			aba_info "ISO Datastore '$ISO_DATASTORE' ... OK"
-		else
-			aba_warning "ISO Datastore '$ISO_DATASTORE' not found!"
-			_err=1
-		fi
+		( govc datastore.info "$ISO_DATASTORE" >/dev/null 2>&1 \
+			&& echo "ok ISO Datastore '$ISO_DATASTORE'" > "$_tmpdir/iso-datastore" \
+			|| echo "fail ISO Datastore '$ISO_DATASTORE' not found" > "$_tmpdir/iso-datastore" ) &
 	fi
 
 	if [ "$GOVC_NETWORK" ]; then
-		if [ "$(govc find / -type Network -name "$GOVC_NETWORK")" ]; then
-			aba_info "Network '$GOVC_NETWORK' ... OK"
-		else
-			aba_warning "Network (port group) '$GOVC_NETWORK' not found!"
-			_err=1
-		fi
+		( [ "$(govc find / -type Network -name "$GOVC_NETWORK")" ] \
+			&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
+			|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
 	fi
 
 	if [ "${GOVC_DATACENTER:-}" ]; then
-		if govc datacenter.info "$GOVC_DATACENTER" >/dev/null 2>&1; then
-			aba_info "Datacenter '$GOVC_DATACENTER' ... OK"
-		else
-			aba_warning "Datacenter '$GOVC_DATACENTER' not found!"
-			_err=1
-		fi
+		( govc datacenter.info "$GOVC_DATACENTER" >/dev/null 2>&1 \
+			&& echo "ok Datacenter '$GOVC_DATACENTER'" > "$_tmpdir/datacenter" \
+			|| echo "fail Datacenter '$GOVC_DATACENTER' not found" > "$_tmpdir/datacenter" ) &
 	fi
 
-	# govc cluster.info doesn't exist; use find instead
 	if [ "${GOVC_CLUSTER:-}" ]; then
-		if [ "$(govc find / -type ClusterComputeResource -name "$GOVC_CLUSTER")" ]; then
-			aba_info "Cluster '$GOVC_CLUSTER' ... OK"
-		else
-			aba_warning "Cluster '$GOVC_CLUSTER' not found!"
-			_err=1
-		fi
+		( [ "$(govc find / -type ClusterComputeResource -name "$GOVC_CLUSTER")" ] \
+			&& echo "ok Cluster '$GOVC_CLUSTER'" > "$_tmpdir/cluster" \
+			|| echo "fail Cluster '$GOVC_CLUSTER' not found" > "$_tmpdir/cluster" ) &
 	fi
 
 	if [ "${VC_FOLDER:-}" ]; then
-		if govc folder.info "$VC_FOLDER" >/dev/null 2>&1; then
-			aba_info "Folder '$VC_FOLDER' ... OK"
-		else
-			aba_info "Folder '$VC_FOLDER' does not exist yet (will be created at install time)"
-		fi
+		( govc folder.info "$VC_FOLDER" >/dev/null 2>&1 \
+			&& echo "ok Folder '$VC_FOLDER'" > "$_tmpdir/folder" \
+			|| echo "info Folder '$VC_FOLDER' does not exist yet (will be created at install time)" > "$_tmpdir/folder" ) &
 	fi
 
 	if [ "${GOVC_RESOURCE_POOL:-}" ]; then
-		if govc pool.info "$GOVC_RESOURCE_POOL" >/dev/null 2>&1; then
-			aba_info "Resource pool '$GOVC_RESOURCE_POOL' ... OK"
-		else
-			aba_warning "Resource pool '$GOVC_RESOURCE_POOL' not found!"
-			_err=1
-		fi
+		( govc pool.info "$GOVC_RESOURCE_POOL" >/dev/null 2>&1 \
+			&& echo "ok Resource pool '$GOVC_RESOURCE_POOL'" > "$_tmpdir/pool" \
+			|| echo "fail Resource pool '$GOVC_RESOURCE_POOL' not found" > "$_tmpdir/pool" ) &
 	fi
+
+	wait
+
+	local _err=""
+	for _f in "$_tmpdir"/*; do
+		[ -f "$_f" ] || continue
+		local _line
+		_line=$(cat "$_f")
+		case "$_line" in
+			ok*)   aba_debug "Verified: ${_line#ok }" ;;
+			info*) aba_debug "${_line#info }" ;;
+			fail*) aba_warning "${_line#fail }"; _err=1 ;;
+		esac
+	done
+	rm -rf "$_tmpdir"
 
 	[ "$_err" ] && aba_abort "One or more vSphere objects in vmware.conf do not exist. Fix vmware.conf and try again."
 
