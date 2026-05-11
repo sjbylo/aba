@@ -172,9 +172,23 @@ fi
 # mutations propagate correctly to this shell - matching real usage in preflight-check.sh.
 
 # Stub aba_* helpers so messages become predictable strings.
+# aba_warning honours the same -p PREFIX / -c COLOR / -n flags the production helper
+# accepts (scripts/include_all.sh aba_warning), so callers using `-p Error` produce
+# ERROR-prefixed lines, matching the label the user sees in the real install flow.
 aba_info()      { echo "INFO: $*"; }
 aba_info_ok()   { echo "OK: $*"; }
-aba_warning()   { echo "WARN: $*"; }
+aba_warning() {
+	local prefix=WARN
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-p) prefix=$(echo "$2" | tr '[:lower:]' '[:upper:]'); shift 2 ;;
+			-c) shift 2 ;;
+			-n) shift ;;
+			*) break ;;
+		esac
+	done
+	echo "$prefix: $*"
+}
 aba_abort()     { echo "ABORT: $*"; return 0; }
 aba_debug()     { :; }
 # Stub normalize-vmware-conf: the function is invoked as a command inside source <(...)
@@ -343,11 +357,11 @@ unset GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATACENTER GOVC_CLUSTER GOVC_DAT
 _preflight_errors=0
 preflight_check_vsphere >"$_smoke_out" 2>&1
 _path_b_out=$(cat "$_smoke_out")
-warn_count=$(grep -c '^WARN: vSphere: required field' "$_smoke_out" || true)
-if [ "$warn_count" -eq 7 ] && [ "$_preflight_errors" -eq 7 ]; then
-	test_pass "Path B: 7 missing fields produce 7 warnings + _preflight_errors=7"
+err_count=$(grep -c '^ERROR: vSphere: required field' "$_smoke_out" || true)
+if [ "$err_count" -eq 7 ] && [ "$_preflight_errors" -eq 7 ]; then
+	test_pass "Path B: 7 missing fields produce 7 ERROR lines + _preflight_errors=7"
 else
-	test_fail "Path B broken: warn_count=$warn_count errors=$_preflight_errors out='$_path_b_out'"
+	test_fail "Path B broken: err_count=$err_count errors=$_preflight_errors out='$_path_b_out'"
 fi
 
 # 20. Path C: platform=vmw + all fields present -> 1 OK line, _preflight_errors=0, 0 warnings.
@@ -374,11 +388,11 @@ _preflight_warnings=0
 preflight_check_vsphere >"$_smoke_out" 2>&1
 _path_c_out=$(cat "$_smoke_out")
 ok_count=$(grep -c '^OK: vSphere: configuration fields present' "$_smoke_out" || true)
-warn_count=$(grep -c '^WARN:' "$_smoke_out" || true)
+warn_count=$(grep -cE '^(WARN|ERROR):' "$_smoke_out" || true)
 if [ "$ok_count" -eq 1 ] && [ "$_preflight_errors" -eq 0 ] && [ "$warn_count" -eq 0 ]; then
 	test_pass "Path C: all fields present produces 1 OK line + no errors + no warnings"
 else
-	test_fail "Path C broken: ok_count=$ok_count warns=$warn_count errors=$_preflight_errors out='$_path_c_out'"
+	test_fail "Path C broken: ok_count=$ok_count warns_or_errs=$warn_count errors=$_preflight_errors out='$_path_c_out'"
 fi
 
 # -------- Phase 2 Layer 1-4 behavioural paths (D through P) ------------------
@@ -428,7 +442,7 @@ _reset_path_state() {
 _reset_path_state
 TCP_STUB_RC=1
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-warn=$(grep -c '^WARN: vSphere: cannot reach' "$_smoke_out" || true)
+warn=$(grep -c '^ERROR: vSphere: cannot reach' "$_smoke_out" || true)
 if [ "$warn" -eq 1 ] && [ "$_preflight_errors" -eq 1 ]; then
 	test_pass "Path D: TCP failure -> 1 cannot-reach warning + errors=1"
 else
@@ -444,7 +458,7 @@ _reset_path_state
 OPENSSL_STUB_RC=1
 OPENSSL_STUB_OUT="depth=0 verify error:num=18:self-signed certificate"
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-trust_line=$(grep -c '^WARN: vSphere: TLS trust chain failure talking to' "$_smoke_out" || true)
+trust_line=$(grep -c '^ERROR: vSphere: TLS trust chain failure talking to' "$_smoke_out" || true)
 insecure_hint=$(grep -c 'GOVC_INSECURE=1 in vmware.conf' "$_smoke_out" || true)
 ca_hint=$(grep -c 'add the vCenter CA certificate to the system trust store' "$_smoke_out" || true)
 if [ "$trust_line" -eq 1 ] && [ "$insecure_hint" -ge 1 ] && [ "$ca_hint" -ge 1 ] && [ "$_preflight_errors" -eq 1 ]; then
@@ -473,7 +487,7 @@ fi
 _reset_path_state
 GOVC_STUB_ABOUT_RC=1
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-auth_line=$(grep -c '^WARN: vSphere: authentication to' "$_smoke_out" || true)
+auth_line=$(grep -c '^ERROR: vSphere: authentication to' "$_smoke_out" || true)
 ds_line=$(grep -c 'datastore' "$_smoke_out" || true)
 if [ "$auth_line" -eq 1 ] && [ "$_preflight_errors" -eq 1 ] && [ "$ds_line" -eq 0 ]; then
 	test_pass "Path G: auth failure -> 1 auth warning + errors=1 + no Layer 3 probes"
@@ -489,7 +503,7 @@ fi
 _reset_path_state
 export GOVC_DATACENTER=MissingDC
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-dc_warn=$(grep -c "^WARN: vSphere: datacenter '/MissingDC' not found" "$_smoke_out" || true)
+dc_warn=$(grep -c "^ERROR: vSphere: datacenter '/MissingDC' not found" "$_smoke_out" || true)
 cascade_info=$(grep -c '^INFO: vSphere: skipping cluster/datastore/network/folder/resource-pool' "$_smoke_out" || true)
 cluster_probe=$(grep -c "cluster '/MissingDC" "$_smoke_out" || true)
 if [ "$dc_warn" -eq 1 ] && [ "$cascade_info" -eq 1 ] && [ "$_preflight_errors" -eq 1 ] && [ "$cluster_probe" -eq 0 ]; then
@@ -520,7 +534,7 @@ _reset_path_state
 export GOVC_DATASTORE=Missing
 export ISO_DATASTORE=Missing
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
-ds_warn=$(grep -c "^WARN: vSphere: datastore '/GoodDC/datastore/Missing' not found" "$_smoke_out" || true)
+ds_warn=$(grep -c "^ERROR: vSphere: datastore '/GoodDC/datastore/Missing' not found" "$_smoke_out" || true)
 if [ "$ds_warn" -eq 1 ]; then
 	test_pass "Path J: ISO_DATASTORE equals GOVC_DATASTORE -> dedup; 1 probe only"
 else
@@ -630,8 +644,8 @@ GOVC_STUB_ROLE_OUT=$'VirtualMachine.Inventory.Create\n'
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
 miss=$(grep -c "missing privilege '" "$_smoke_out" || true)
 inv_create=$(grep -c "missing privilege 'VirtualMachine.Inventory.Create'" "$_smoke_out" || true)
-dc_missing=$(grep -c "^WARN: vSphere: datacenter '/GoodDC' missing privilege '" "$_smoke_out" || true)
-folder_missing=$(grep -c "^WARN: vSphere: folder '/GoodDC/vm/folder' missing privilege '" "$_smoke_out" || true)
+dc_missing=$(grep -c "^ERROR: vSphere: datacenter '/GoodDC' missing privilege '" "$_smoke_out" || true)
+folder_missing=$(grep -c "^ERROR: vSphere: folder '/GoodDC/vm/folder' missing privilege '" "$_smoke_out" || true)
 if [ "$miss" -eq 81 ] && [ "$inv_create" -eq 0 ] && [ "$dc_missing" -eq 29 ] && [ "$folder_missing" -eq 27 ] && [ "$_preflight_errors" -eq 81 ]; then
 	test_pass "Path P: VMBuilder with only Inventory.Create -> 81 missing (DC 29 + FOLDER 27 dedupe the one granted priv) + errors=81"
 else
