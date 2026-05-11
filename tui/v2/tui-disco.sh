@@ -217,11 +217,7 @@ disco_load_images() {
 			local rc=$?
 			case "$rc" in
 				0) ;;  # Check again
-				1) return 0 ;;  # Back
-				255)
-					if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-					continue
-					;;
+				1|255) return 0 ;;
 			esac
 
 			# Re-check
@@ -252,11 +248,7 @@ disco_reset() {
 		local rc=$?
 		case "$rc" in
 			0) break ;;  # Confirmed
-			1) return 0 ;;  # Cancel
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			1|255) return 0 ;;
 		esac
 	done
 

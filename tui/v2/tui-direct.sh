@@ -246,10 +246,9 @@ _direct_channel() {
 		3)
 			DIALOG_RC="back"
 			;;
-		255)
-			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-			DIALOG_RC="repeat"
-			;;
+	255)
+		DIALOG_RC=""
+		;;
 	esac
 }
 
@@ -374,10 +373,9 @@ _direct_version() {
 		3)
 			DIALOG_RC="back"
 			;;
-		255)
-			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-			DIALOG_RC="repeat"
-			;;
+	255)
+		DIALOG_RC=""
+		;;
 	esac
 }
 
@@ -421,10 +419,9 @@ _direct_platform() {
 		3)
 			DIALOG_RC="back"
 			;;
-		255)
-			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-			DIALOG_RC="repeat"
-			;;
+	255)
+		DIALOG_RC=""
+		;;
 	esac
 }
 

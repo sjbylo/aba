@@ -257,13 +257,25 @@ show_help() {
 }
 
 # =============================================================================
-# Confirm and Execute (terminal mode / TUI mode choice — same as v1)
+# Confirm and Execute (terminal mode / TUI mode choice)
 # =============================================================================
+
+# Session-scoped execution mode preference (empty = ask every time)
+_TUI_EXEC_MODE="${_TUI_EXEC_MODE:-}"
 
 confirm_and_execute() {
 	local cmd="$1"
 	local title="${2:-Confirm Execution}"
 	tui_log "Confirming command: $cmd"
+
+	# If user previously chose "always", skip the picker
+	if [[ -n "$_TUI_EXEC_MODE" ]]; then
+		tui_log "Using remembered exec mode: $_TUI_EXEC_MODE"
+		case "$_TUI_EXEC_MODE" in
+			tui)      _exec_in_tui "$cmd" "$title"; return $? ;;
+			terminal) _exec_in_terminal "$cmd" "$title"; return $? ;;
+		esac
+	fi
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
@@ -272,8 +284,10 @@ confirm_and_execute() {
 			--help-button \
 			--extra-button --extra-label "Command" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
-			"1" "Run in TUI (auto-answer, dialog output)" \
-			"2" "Run in Terminal (interactive, full colors)" \
+			"1" "Run in TUI" \
+			"2" "Run in Terminal" \
+			"3" "Always TUI (this session)" \
+			"4" "Always Terminal (this session)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -289,7 +303,12 @@ confirm_and_execute() {
 • Run in Terminal
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
-  - Press ENTER to return to TUI"
+  - Press ENTER to return to TUI
+
+• Always TUI / Always Terminal
+  - Remembers your choice for this session
+  - Skips this dialog for all subsequent commands
+  - Reset via Advanced > Reset Execution Mode"
 				continue
 				;;
 			3)
@@ -301,10 +320,7 @@ confirm_and_execute() {
 				tui_log "User cancelled execution"
 				return 1
 				;;
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			255) return 1 ;;
 		esac
 
 		local choice
@@ -313,9 +329,14 @@ confirm_and_execute() {
 		case "$choice" in
 			1) _exec_in_tui "$cmd" "$title" ;;
 			2) _exec_in_terminal "$cmd" "$title" ;;
+			3) _TUI_EXEC_MODE="tui"
+			   tui_log "Exec mode set to: always TUI"
+			   _exec_in_tui "$cmd" "$title" ;;
+			4) _TUI_EXEC_MODE="terminal"
+			   tui_log "Exec mode set to: always Terminal"
+			   _exec_in_terminal "$cmd" "$title" ;;
 		esac
 		local exec_rc=$?
-		# rc=2 means "retry" — loop back to confirmation dialog
 		[[ $exec_rc -eq 2 ]] && continue
 		return $exec_rc
 	done
@@ -368,7 +389,7 @@ _exec_in_tui() {
 	tail -"$visible_lines" "$output_file" > "$review_file"
 
 	if [[ $exit_code -eq 0 ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn: $cmd" \
+		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn" \
 			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
 			--extra-button --extra-label "$TUI2_BTN_EXIT_TUI" \
 			--textbox "$review_file" 0 0
@@ -382,7 +403,7 @@ _exec_in_tui() {
 				;;
 		esac
 	else
-		dlg --backtitle "$(ui_backtitle)" --title "\Z1FAILED (exit $exit_code)\Zn: $cmd" \
+		dlg --backtitle "$(ui_backtitle)" --title "\Z1FAILED (exit $exit_code)\Zn" \
 			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
 			--extra-button --extra-label "$TUI2_BTN_RETRY" \
 			--textbox "$review_file" 0 0

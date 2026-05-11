@@ -160,11 +160,7 @@ After installation, use 'Save' or 'Sync' to populate it with images."
 				continue
 				;;
 			0) ;;
-			1) return 1 ;;
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			1|255) return 1 ;;
 		esac
 
 		local choice
@@ -703,12 +699,8 @@ Selected operators will be included in the ImageSet config."
 				tui_log "Operator selection done with $basket_count operators"
 				return 0
 				;;
-			1)
+			1|255)
 				return 0
-				;;
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
 				;;
 			0) ;;
 		esac

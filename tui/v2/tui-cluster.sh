@@ -9,8 +9,8 @@
 #     moves to buttons instead of the next field, causing users to accidentally
 #     advance pages. Menu-style: user selects a row, edits in a focused inputbox,
 #     then returns to the menu. Consistent with Basics and Interfaces pages.
-#   - Button layout: Select | Next | Back | Help (page 1) or Restart (pages 2-4).
-#     Page 1 Help shows comprehensive wizard help. Pages 2-4 Restart jumps to page 1.
+#   - Button layout: Select | Next | Back | Help (page 1).
+#     Page 1 Help shows comprehensive wizard help. ESC exits wizard to main menu.
 #     Tab order from menu area: Tab→Extra(Next), Tab Tab→Cancel(Back).
 #     Empirically verified on dialog 1.3 (RHEL 9). See plan appendix A.25.
 #   - Fixed menu dimensions (width + menu-height) on pages where items appear/
@@ -383,48 +383,50 @@ cluster_install_flow() {
 		_cl_platform="$cl_platform"
 	}
 
-	# Page navigation: each page function returns 0 (advance) or 1 (go back).
+	# Page navigation: 0=advance, 1=back one page, 255=ESC (exit wizard).
 	# Page 1 Back breaks the loop (returns to action menu).
-	# Per-page save: persist cluster.conf after each page's NEXT.
 	local page=1
 	while :; do
 		case $page in
 			1)
-				_cluster_page_basics || { page=0; break; }
-				# Gate: check VMware/KVM config on leaving Basics
+				_cluster_page_basics
+				local _rc=$?
+				if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
+				if [[ $_rc -ne 0 ]]; then page=0; break; fi
 				_gate_platform_config || continue
 				_persist_cluster_draft
 				;;
 			2)
 				_cluster_page_network
 				local _rc=$?
-				if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue
-				elif [[ $_rc -eq 2 ]]; then page=1; continue; fi
+				if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
+				if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue; fi
 				_persist_cluster_draft
 				;;
 			3)
 				_cluster_page_iface
 				local _rc=$?
-				if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue
-				elif [[ $_rc -eq 2 ]]; then page=1; continue; fi
+				if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
+				if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue; fi
 				_persist_cluster_draft
 				;;
 			4)
 				if [[ "$cl_platform" != "bm" ]]; then
 					_cluster_page_vm
 					local _rc=$?
-					if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue
-					elif [[ $_rc -eq 2 ]]; then page=1; continue; fi
+					if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
+					if [[ $_rc -eq 1 ]]; then page=$((page - 1)); continue; fi
 					_persist_cluster_draft
 				else
-					# Skip VM page for bare metal, go to review
 					page=5
 					continue
 				fi
 				;;
 			5)
-				# Review/confirm page — returns 1 if user presses "Back"
-				_cluster_execute && { _cl_save_state; return 0; }
+				_cluster_execute
+				local _rc=$?
+				if [[ $_rc -eq 0 ]]; then _cl_save_state; return 0; fi
+				if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
 				# Back from review → return to last real page
 				if [[ "$cl_platform" != "bm" ]]; then
 					page=4
@@ -434,7 +436,6 @@ cluster_install_flow() {
 				continue
 				;;
 			0)
-				# Cancelled from page 1 — still save draft if user entered anything
 				_persist_cluster_draft
 				_cl_save_state
 				return 1
@@ -522,7 +523,7 @@ Toggle 'Type' or 'Platform' to cycle options.
 
 --- Navigation ---
 Select: edit a field   Next: advance page   Back: previous page
-On pages 2-4, press 'Restart' to jump back here.
+Press ESC on any page to return to the main menu.
 
 OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				continue
@@ -535,10 +536,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				tui_log "Page 1: Back (Cancel button)"
 				return 1
 				;;
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			255) return 255 ;;
 			0) ;;
 		esac
 
@@ -662,7 +660,6 @@ _cluster_page_network() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
-			--help-button --help-label "Restart" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_CLUSTER_NETWORK" 16 60 7 \
 			"${items[@]}" \
@@ -670,13 +667,9 @@ _cluster_page_network() {
 		local rc=$?
 
 		case "$rc" in
-			2) return 2 ;;  # Restart — jump to page 1
 			3) return 0 ;;  # Next
 			1) return 1 ;;  # Back
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			255) return 255 ;;
 			0) ;;
 		esac
 
@@ -836,7 +829,6 @@ _cluster_page_iface() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
-			--help-button --help-label "Restart" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_CLUSTER_IFACE" 13 55 4 \
 			"${iface_items[@]}" \
@@ -844,13 +836,9 @@ _cluster_page_iface() {
 		local rc=$?
 
 		case "$rc" in
-			2) return 2 ;;  # Restart — jump to page 1
 			3) return 0 ;;  # Next (Extra button)
 			1) return 1 ;;  # Back (Cancel button)
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			255) return 255 ;;
 			0) ;;
 		esac
 
@@ -950,7 +938,6 @@ _cluster_page_vm() {
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
-			--help-button --help-label "Restart" \
 			--default-item "$default_item" \
 			--menu "$(printf "$TUI2_MSG_CLUSTER_VM" "$cl_platform")" 15 55 6 \
 			"${items[@]}" \
@@ -958,13 +945,9 @@ _cluster_page_vm() {
 		local rc=$?
 
 		case "$rc" in
-			2) return 2 ;;  # Restart — jump to page 1
 			3) return 0 ;;  # Next
 			1) return 1 ;;  # Back
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			255) return 255 ;;
 			0) ;;
 		esac
 
@@ -1146,10 +1129,7 @@ _cluster_execute() {
 		case "$rc" in
 			0) break ;;  # Install
 			1) return 1 ;;  # Back to edit
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			255) return 255 ;;
 		esac
 	done
 
@@ -1247,11 +1227,7 @@ _platform_config_missing() {
 			2>"$_TUI_TMP"
 		local rc=$?
 		case "$rc" in
-			1) return 1 ;;  # Cancel
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			1|255) return 1 ;;
 			0) ;;
 		esac
 
@@ -1334,6 +1310,9 @@ tui_advanced_menu() {
 		if mirror_available; then
 			adv_items+=("U" "Uninstall Mirror Registry")
 		fi
+		if [[ -n "$_TUI_EXEC_MODE" ]]; then
+			adv_items+=("E" "Reset Execution Mode (currently: $_TUI_EXEC_MODE)")
+		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
@@ -1377,6 +1356,11 @@ tui_advanced_menu() {
 					--yesno "Uninstall the mirror registry?\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
 				confirm_and_execute "aba -d mirror uninstall" "Uninstall Mirror Registry"
+				;;
+			"E")
+				_TUI_EXEC_MODE=""
+				tui_log "Execution mode preference reset"
+				dlg --backtitle "$(ui_backtitle)" --msgbox "Execution mode reset.\n\nYou will be asked to choose TUI or Terminal for each command." 0 0
 				;;
 		esac
 	done
@@ -1438,11 +1422,7 @@ Cleanup:
 				continue
 				;;
 			0) ;;
-			1) return 0 ;;
-			255)
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-				;;
+			1|255) return 0 ;;
 		esac
 
 		local choice
