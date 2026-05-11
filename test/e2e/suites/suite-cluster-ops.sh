@@ -422,8 +422,8 @@ e2e_run "Register pool registry to named mirror" \
 e2e_run "Verify named mirror registry access" \
     "aba -d $ENCLAVE_MIRROR verify"
 
-e2e_run "Verify state.sh has REG_VENDOR=existing" \
-    "grep REG_VENDOR=existing ~/.aba/mirror/$ENCLAVE_MIRROR/state.sh"
+e2e_run "Verify state.sh has reg_vendor=existing" \
+    "grep reg_vendor=existing ~/.aba/mirror/$ENCLAVE_MIRROR/state.sh"
 
 test_end
 

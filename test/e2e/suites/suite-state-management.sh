@@ -403,25 +403,27 @@ CONF
 touch $_P4_STATE/backup/.init $_P4_STATE/backup/.install-complete"
 
 e2e_run "Verify e2e-test-recreate dir does NOT exist yet" \
-	"cd ~/aba && test ! -d $_P4_NAME"
+	"cd ~/aba && [ ! -d $_P4_NAME ] || { echo 'ERROR: $_P4_NAME already exists'; ls -ld $_P4_NAME; false; }"
 
 e2e_run "aba --dir triggers recreation from state" \
-	"cd ~/aba && aba --dir $_P4_NAME info 2>&1 || true"
+	"cd ~/aba && aba --dir $_P4_NAME info"
 
 e2e_run "Cluster dir was recreated" \
-	"cd ~/aba && test -d $_P4_NAME"
+	"cd ~/aba && [ -d $_P4_NAME ] || { echo 'ERROR: $_P4_NAME was not recreated'; ls -la; false; }"
 
 e2e_run "cluster.conf restored from backup" \
-	"cd ~/aba && test -s $_P4_NAME/cluster.conf && grep -q 'cluster_name=e2e-test-recreate' $_P4_NAME/cluster.conf"
+	"cd ~/aba/$_P4_NAME && [ -s cluster.conf ] || { echo 'ERROR: cluster.conf missing or empty'; ls -la; false; }
+	 grep -q 'cluster_name=e2e-test-recreate' cluster.conf || { echo 'ERROR: cluster_name not found in cluster.conf'; cat cluster.conf; false; }"
 
 e2e_run "Makefile symlink created" \
-	"cd ~/aba && test -L $_P4_NAME/Makefile"
+	"cd ~/aba && [ -L $_P4_NAME/Makefile ] || { echo 'ERROR: Makefile not a symlink'; ls -la $_P4_NAME/Makefile; false; }"
 
 e2e_run ".install-complete marker restored" \
-	"cd ~/aba && test -f $_P4_NAME/.install-complete"
+	"cd ~/aba && [ -f $_P4_NAME/.install-complete ] || { echo 'ERROR: .install-complete missing'; ls -la $_P4_NAME/; false; }"
 
 e2e_run "clusterstate symlink points to state dir" \
-	"cd ~/aba && test -L $_P4_NAME/clusterstate && readlink $_P4_NAME/clusterstate | grep -q '.aba/clusters/$_P4_NAME'"
+	"cd ~/aba && [ -L $_P4_NAME/clusterstate ] || { echo 'ERROR: clusterstate not a symlink'; ls -la $_P4_NAME/; false; }
+	 readlink $_P4_NAME/clusterstate | grep -q '.aba/clusters/$_P4_NAME' || { echo 'ERROR: clusterstate points to wrong target:'; readlink $_P4_NAME/clusterstate; false; }"
 
 e2e_run -q "Cleanup recreate test" \
 	"cd ~/aba && rm -rf $_P4_NAME && rm -rf $_P4_STATE"

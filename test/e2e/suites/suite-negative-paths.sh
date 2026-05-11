@@ -201,7 +201,7 @@ e2e_run "Restore mirror.conf after localhost test" \
 e2e_run "Set reg_host for idempotent install test" \
 	"aba -d mirror -H \$(hostname -f)"
 e2e_run "Create fake state.sh for idempotent install test" \
-	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
+	"mkdir -p ~/.aba/mirror/mirror && echo reg_host=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
 e2e_run "Remove .available to trigger install path" \
 	"rm -f mirror/.available"
 e2e_run "Idempotent install on healthy registry must succeed" \
@@ -212,7 +212,7 @@ e2e_run "Cleanup idempotent install test state" \
 # Stale state detection: reg_detect_existing() must clear state.sh and proceed
 # when the saved registry host is unreachable (e.g. VM reverted, registry wiped).
 e2e_run "Create stale state.sh for gone registry" \
-	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
+	"mkdir -p ~/.aba/mirror/mirror && echo reg_host=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
 e2e_run "Set reg_host to match stale state" \
 	"aba -d mirror -H gone-registry.example.com"
 e2e_run "Remove .available to trigger install path" \
@@ -258,11 +258,11 @@ e2e_run "Install Docker registry on port $_DOCKER_PORT" \
 e2e_run "Credentials saved: state.sh exists" \
 	"test -s ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
-e2e_run "state.sh has REG_VENDOR=docker" \
-	"grep 'REG_VENDOR=docker' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
+e2e_run "state.sh has reg_vendor=docker" \
+	"grep 'reg_vendor=docker' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
 e2e_run "state.sh has correct port" \
-	"grep 'REG_PORT=$_DOCKER_PORT' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
+	"grep 'reg_port=$_DOCKER_PORT' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
 e2e_run "Verify Docker registry accessible" \
 	"aba -d $_DOCKER_MIRROR verify"
@@ -312,8 +312,8 @@ e2e_run "Install Docker registry on port $_DOCKER_NEG_PORT" \
 e2e_run "Credentials saved: state.sh exists" \
 	"test -s ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
 
-e2e_run "state.sh has REG_VENDOR=docker" \
-	"grep 'REG_VENDOR=docker' ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
+e2e_run "state.sh has reg_vendor=docker" \
+	"grep 'reg_vendor=docker' ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
 
 e2e_run "Block port $_DOCKER_NEG_PORT with iptables on disN" \
 	"_essh $DIS_HOST 'sudo iptables -I INPUT 1 -p tcp --dport $_DOCKER_NEG_PORT -j REJECT'"
@@ -419,7 +419,7 @@ e2e_run "Set reg_host for auto-inject test" \
 e2e_run "Auto-inject register (no explicit target)" \
 	"aba -d mirror --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Verify state.sh created by auto-inject" \
-	"test -f ~/.aba/mirror/mirror/state.sh && grep REG_VENDOR=existing ~/.aba/mirror/mirror/state.sh"
+	"test -f ~/.aba/mirror/mirror/state.sh && grep reg_vendor=existing ~/.aba/mirror/mirror/state.sh"
 e2e_run "Unregister after auto-inject test" \
 	"aba -d mirror unregister"
 e2e_run "Restore mirror.conf after auto-inject test" \

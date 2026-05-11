@@ -778,6 +778,7 @@ fi
 
 declare -A _completed=()
 declare -A _busy_pools=()
+declare -A _external_running=()
 declare -a _work_queue=()
 declare -A _results=()
 declare -A _result_pool=()
@@ -993,10 +994,15 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		_inj_count=0
 		while IFS= read -r _inj_suite; do
 			[ -z "$_inj_suite" ] && continue
+			# Skip if already completed with PASS (exit=0)
+			if [ "${_results[$_inj_suite]:-}" = "0" ]; then
+				printf "  [%s] SKIPPED: %s (already passed)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue
+			fi
 			_already_running=""
 			for _bp in "${!_busy_pools[@]}"; do
 				[ "${_busy_pools[$_bp]}" = "$_inj_suite" ] && _already_running=1 && break
 			done
+			[ -z "$_already_running" ] && _is_running_on_external_pool "$_inj_suite" && _already_running=1
 			[ -n "$_already_running" ] && { printf "  [%s] SKIPPED: %s (running)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
 			_already_queued=""
 			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
@@ -1027,10 +1033,18 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 		free=$(_find_free_pool) || break
 		suite="${_work_queue[$_queue_idx]}"
+		# Skip suites already completed with PASS
+		if [ "${_results[$suite]:-}" = "0" ]; then
+			printf "  [%s] SKIP: %s (already passed)\n" "$(date '+%H:%M:%S')" "$suite"
+			_queue_idx=$(( _queue_idx + 1 )); continue
+		fi
 		_dup=""
 		for _dp in "${!_busy_pools[@]}"; do
 			[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
 		done
+		if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+			_dup=1; _dp="${_external_running[$suite]}"
+		fi
 		if [ -n "$_dup" ]; then
 			printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
 			_queue_idx=$(( _queue_idx + 1 )); continue
@@ -1068,6 +1082,17 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 				free=$(_find_free_pool) || break
 				suite="${_work_queue[$_queue_idx]}"
+				_dup=""
+				for _dp in "${!_busy_pools[@]}"; do
+					[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
+				done
+				if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+					_dup=1; _dp="${_external_running[$suite]}"
+				fi
+				if [ -n "$_dup" ]; then
+					printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
+					_queue_idx=$(( _queue_idx + 1 )); continue
+				fi
 				_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
 				_queue_idx=$(( _queue_idx + 1 ))
 			done
@@ -1091,6 +1116,12 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			fi
 			echo ""; _prev_status="$_status_line"
 		fi
+	fi
+
+	# Refresh external pool state every ~60s to detect new/finished external suites
+	if [ $(( SECONDS - ${_last_ext_refresh:-0} )) -ge 60 ]; then
+		_refresh_external_running
+		_last_ext_refresh=$SECONDS
 	fi
 
 	# Adaptive polling: short interval after state changes, back off when idle
