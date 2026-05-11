@@ -107,6 +107,10 @@ Long-running operations (install, load, save, sync) offer both:
 
 Same as v1: user picks which mode before execution.
 
+Both modes MUST:
+- Display the command being executed at the top (e.g. `Executing: aba -d mirror sync`)
+- Return the real exit code to the caller (callers gate on success/failure)
+
 ### Unavailable Menu Items
 
 Items that cannot be activated (prerequisites unmet) are **shown but greyed out** with a short reason tag. Example:
@@ -117,6 +121,8 @@ Items that cannot be activated (prerequisites unmet) are **shown but greyed out*
 ```
 
 This lets the user see the full workflow at a glance.
+
+**Exception:** Operations where the Makefile handles prerequisites (e.g. Sync, Load) are NEVER greyed out — even if the mirror isn't installed. The TUI shows a config review dialog and the single `aba` command handles the install as a dependency.
 
 ### Default Values
 
@@ -135,6 +141,34 @@ Fields with a small fixed set of values use select-to-cycle (toggle), not free-t
 - Kick off `run_once` tasks early (internet check at startup, versions after channel selection)
 - Only show "Please Wait" if the user navigates faster than the background task completes
 - Data should typically be ready before the user reaches that screen
+- Init order: modules → connectivity (background) → packages → config → ready
+
+### Makefile Dependency Principle
+
+The TUI MUST NOT orchestrate multi-step operations as separate commands. Instead:
+
+- Run the user's intended command (e.g. `aba sync`, `aba load`)
+- The Makefile dependency chain handles prerequisites automatically (e.g. `sync` depends on `install`)
+- One command = one execution = one exit code
+
+**When mirror is not installed and user requests sync/load:**
+1. Inform: "Mirror not installed. A mirror will be installed first. Continue?"
+2. Show `_mirror_config_review()` — existing `mirror.conf` values for review/editing
+3. Run single command (`aba sync` or `aba load`) which handles install as a dependency
+
+This avoids double-confirmation, redundant prompts, and split error handling.
+
+### Config Review Before First-Time Operations
+
+When an operation will trigger a first-time install (mirror or cluster), the TUI MUST:
+1. Inform the user that install will happen as part of the operation
+2. Show existing config values (from `mirror.conf` or `cluster.conf`) for review/editing
+3. If config exists from a prior aborted attempt — load those values, never skip the review
+4. Proceed with the single command after user confirms
+
+### Focus Preservation
+
+Every menu dialog in a `while :; do` loop MUST pass `--default-item "$default_item"` so focus stays on the last-selected item after an edit or toggle action.
 
 ---
 
@@ -147,7 +181,7 @@ Unavailable items shown greyed out:
 | #  | Item                     | Availability                                     |
 |----|--------------------------|--------------------------------------------------|
 | 1  | Install Registry         | Always (local or remote; re-install if needed)   |
-| 2  | Load Images              | Greyed until registry installed                  |
+| 2  | Load Images              | Always (if no registry: config review → `aba load` handles install as dep) |
 | 3  | Install Cluster          | Always (unified: configure → review → install)   |
 | 4  | Day-2: NTP / OSUS / Full | Greyed until cluster installed                   |
 | 5  | Monitor Cluster          | Greyed until cluster installed                   |
@@ -164,12 +198,16 @@ Unavailable items shown greyed out:
 
 ### UC-D2: Load Images
 
-1. If light bundle (no `mirror/data/mirror_*.tar`):
+1. If registry not installed:
+   - Inform: "Mirror registry is not installed. A mirror will be installed first, then images loaded. Continue?"
+   - If Yes: show mirror config review (`_mirror_config_review()`) for confirmation/editing
+   - Then proceed (Makefile handles install as dependency of load)
+2. If light bundle (no `mirror/data/mirror_*.tar`):
    - Show: "Light bundle detected. Copy archives to `mirror/data/`."
    - Offer: "Check again" / "Back"
    - Block until at least one tar file present
-2. Execute: `aba -d mirror load` (terminal/TUI mode)
-3. On success: return to action menu
+3. Execute: `aba -d mirror load` (terminal/TUI mode) — single command handles install+load
+4. On success: return to action menu
 
 ### UC-D3: View ISC
 
@@ -199,8 +237,8 @@ Unavailable items shown greyed out:
 | #  | Item              | Availability                       |
 |----|-------------------|------------------------------------|
 | 1  | Install Mirror    | Always (local or remote)           |
-| 2  | Save Images       | Greyed until mirror installed      |
-| 3  | Sync Images       | Greyed until mirror installed      |
+| 2  | Save Images       | Always (m2d — only needs internet, no mirror) |
+| 3  | Sync Images       | Always (if no mirror: config review → `aba sync` handles install as dep) |
 | 4  | View/Edit ISC     | Always                             |
 | 5  | Select Operators  | Always (same as v1 checklist)      |
 | 6  | Create Bundle     | Always                             |

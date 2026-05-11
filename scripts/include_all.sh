@@ -327,6 +327,41 @@ _vm_annotation() {
 	EOF
 }
 
+# Select which VM hosts to operate on based on workers=/masters= args.
+# Sets the caller's $hosts variable. Defaults to all VMs (workers + masters).
+_select_vm_hosts() {
+	if [ "${workers:-}" ]; then
+		hosts="$WORKER_NAMES"
+	elif [ "${masters:-}" ]; then
+		hosts="$CP_NAMES"
+	else
+		hosts="${WORKER_NAMES:+$WORKER_NAMES }$CP_NAMES"
+	fi
+	[ -z "$hosts" ] && hosts="$CP_NAMES"
+}
+
+# Output names of VMs that are currently poweredOn (VMware).
+# Requires: govc, jq, $CLUSTER_NAME, vm_name()
+vmw_running_vms() {
+	local name vm power_state
+	for name in "$@"; do
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		power_state=$(govc vm.info -json "$vm" 2>/dev/null | jq -r '.virtualMachines[0].runtime.powerState')
+		[ "$power_state" = "poweredOn" ] && echo "$name"
+	done
+}
+
+# Output names of VMs that are currently running (KVM).
+# Requires: virsh, $CLUSTER_NAME, $LIBVIRT_URI, vm_name()
+kvm_running_vms() {
+	local name vm _state
+	for name in "$@"; do
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		_state=$(virsh -c "$LIBVIRT_URI" domstate "$vm" 2>/dev/null || true)
+		[ "$_state" = "running" ] && echo "$name"
+	done
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.
@@ -499,7 +534,7 @@ verify-mirror-conf() {
 
 	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker)$' || { echo_red "Error: reg_vendor must be auto, quay, or docker in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker|existing)$' || { echo_red "Error: reg_vendor must be auto, quay, docker, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	return $ret
 }
@@ -647,7 +682,7 @@ _state_override_cluster() {
 			*" $_field "*)
 				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2-)
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-					aba_warning -p "State" "cluster.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value" >&2
+					aba_debug "State: cluster.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
 				fi
 				;;
 		esac
@@ -665,9 +700,9 @@ _state_override_mirror() {
 	for _field in $_immutable; do
 		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
 		[ -z "$_sval" ] && continue
-		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2-)
+		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-			aba_warning -p "State" "mirror.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value" >&2
+			aba_debug "State: mirror.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
 		fi
 		echo "export ${_field}=${_sval}"
 	done
@@ -689,6 +724,7 @@ _recreate_cluster_dir() {
 	mkdir -p "$_name"
 	cp -pa "$_backup/." "$_name/"
 	ln -fs ../templates/Makefile.cluster "$_name/Makefile"
+	rm -f "$_name/.init"
 	make -s -C "$_name" init 2>/dev/null || true
 	ln -sfn "$_state_dir" "$_name/clusterstate"
 

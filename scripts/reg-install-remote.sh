@@ -160,16 +160,10 @@ case "$vendor" in
 		REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 		REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
-		# Two-tier cert check (tier 1 runs locally using state.sh).
-		# If state.sh shows a different reg_host, force cert regeneration on remote.
+		# After ADR-007 Phase 3, $reg_host is already overridden from state.sh
+		# by normalize-mirror-conf, so hostname drift is impossible here.
+		# Remote cert check relies on the SAN match inside the heredoc below.
 		_force_regen=""
-		if [[ -s "$regcreds_dir/state.sh" ]]; then
-			_state_reg_host=$(grep '^reg_host=' "$regcreds_dir/state.sh" | cut -d= -f2)
-			if [[ -n "$_state_reg_host" && "$_state_reg_host" != "$reg_host" ]]; then
-				aba_info "Hostname changed ('$_state_reg_host' -> '$reg_host') — will regenerate certificate on remote ..."
-				_force_regen=true
-			fi
-		fi
 
 		aba_info "Running Docker registry install on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: podman run -d -p ${reg_port}:5000 --name registry docker.io/library/registry:latest"

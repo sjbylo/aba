@@ -14,6 +14,124 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 # =============================================================================
+# Mirror Config Review (show/edit mirror.conf values before an operation)
+# Used when mirror isn't installed yet but an operation (sync/save) will trigger install via deps.
+# Returns 0 if user confirms, 1 if user cancels.
+# =============================================================================
+
+_mirror_config_review() {
+	tui_log "Mirror config review (pre-install)"
+
+	# Ensure mirror.conf exists
+	if [[ ! -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+	fi
+
+	# Load current values
+	local m_host="" m_port="" m_user="" m_pw="" m_path="" m_vendor="" m_datadir=""
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+	fi
+	m_host="${reg_host:-$(hostname -f 2>/dev/null || hostname)}"
+	m_port="${reg_port:-8443}"
+	m_user="${reg_user:-init}"
+	m_pw="${reg_pw:-p4ssw0rd}"
+	m_path="${reg_path:-/ocp4/openshift4}"
+	m_vendor="${reg_vendor:-auto}"
+	m_datadir="${data_dir:-~}"
+
+	local default_item="H"
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration " \
+			--default-item "$default_item" \
+			--ok-label "$TUI2_BTN_SELECT" \
+			--extra-button --extra-label "Continue" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--help-button \
+			--menu "Mirror will be installed as part of this operation.\nReview/edit settings, then press Continue:" 18 70 7 \
+			"H"  "Hostname:     $m_host" \
+			"P"  "Port:         $m_port" \
+			"U"  "Username:     $m_user" \
+			"W"  "Password:     $m_pw" \
+			"I"  "Image path:   $m_path" \
+			"V"  "Vendor:       $m_vendor" \
+			"D"  "Data dir:     $m_datadir" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case "$rc" in
+			2)
+				show_help "Mirror Configuration" \
+"These settings will be used to install the mirror registry:
+
+  • Hostname — FQDN for the registry (must resolve to this host)
+  • Port — registry listen port (default 8443)
+  • Username — registry login user
+  • Password — registry login password
+  • Image path — namespace path for mirrored images
+  • Vendor — auto (detects arch), quay, or docker
+  • Data dir — storage location for images
+
+Press 'Continue' when ready. The mirror will be installed automatically."
+				continue
+				;;
+			3) break ;;  # Continue → proceed
+			1|255) return 1 ;;  # Back/Cancel
+			0) ;;  # Select → edit
+		esac
+
+		local field
+		field=$(<"$_TUI_TMP")
+		[[ -n "$field" ]] && default_item="$field"
+
+		case "$field" in
+			H)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_host=$(<"$_TUI_TMP")
+				;;
+			P)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_port=$(<"$_TUI_TMP")
+				;;
+			U)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_user=$(<"$_TUI_TMP")
+				;;
+			W)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_pw=$(<"$_TUI_TMP")
+				;;
+			I)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_path=$(<"$_TUI_TMP")
+				;;
+			V)
+				case "$m_vendor" in
+					auto) m_vendor="quay" ;;
+					quay) m_vendor="docker" ;;
+					docker) m_vendor="auto" ;;
+					*) m_vendor="auto" ;;
+				esac
+				;;
+			D)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory (absolute path):" 0 60 "$m_datadir" 2>"$_TUI_TMP"
+				[[ $? -eq 0 ]] && m_datadir=$(<"$_TUI_TMP")
+				;;
+		esac
+	done
+
+	# Save any changes to mirror.conf
+	replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
+	replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+	return 0
+}
+
+# =============================================================================
 # Install Mirror (local or remote)
 # =============================================================================
 
@@ -86,6 +204,7 @@ _mirror_install_local() {
 	local default_item="H"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration (local) " \
+			--default-item "$default_item" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -175,7 +294,9 @@ _mirror_install_local() {
 	replace-value-conf -q -n reg_ssh_key -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 
 	confirm_and_execute "aba -d mirror install" "Install Local Mirror"
+	local rc=$?
 	_invalidate_mirror_cache
+	return $rc
 }
 
 _mirror_install_remote() {
@@ -207,6 +328,7 @@ _mirror_install_remote() {
 	local default_item="H"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title " Mirror Configuration (remote) " \
+			--default-item "$default_item" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -314,7 +436,9 @@ _mirror_install_remote() {
 	replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$ABA_ROOT/mirror/mirror.conf"
 
 	confirm_and_execute "aba -d mirror install" "Install Remote Mirror"
+	local rc=$?
 	_invalidate_mirror_cache
+	return $rc
 }
 
 # =============================================================================
@@ -324,7 +448,9 @@ _mirror_install_remote() {
 mirror_save() {
 	tui_log "Action: Save Images"
 	confirm_and_execute "aba -d mirror save" "Save Images to Archive"
+	local rc=$?
 	_invalidate_mirror_cache
+	return $rc
 }
 
 # =============================================================================
@@ -334,7 +460,9 @@ mirror_save() {
 mirror_sync() {
 	tui_log "Action: Sync Images"
 	confirm_and_execute "aba -d mirror sync" "Sync Images to Registry"
+	local rc=$?
 	_invalidate_mirror_cache
+	return $rc
 }
 
 # =============================================================================
@@ -912,43 +1040,22 @@ mirror_create_bundle() {
 	local force_flag=""
 	if ls "$ABA_ROOT"/mirror/data/mirror_*.tar >/dev/null 2>&1; then
 		local _bundle_data_choice=""
-		while :; do
-			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
-				--yes-label "Reuse (fast)" \
-				--no-label "Clean Rebuild" \
-				--help-button \
-				--yesno "Existing image data found in mirror/data/.\n\n\
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
+			--yes-label "Reuse (fast)" \
+			--no-label "Clean Rebuild" \
+			--yesno "Existing image data found in mirror/data/.\n\n\
 Reuse: only download changed/new images (incremental, fast).\n\
 Clean Rebuild: delete existing data and re-download everything.\n\n\
 Reuse is recommended unless you changed OpenShift version or suspect corruption." 0 0
-			local choice_rc=$?
-			case $choice_rc in
-				0) tui_log "Bundle: reusing existing image data (incremental)"
-				   _bundle_data_choice="reuse"
-				   break ;;
-				1) force_flag="--force"
-				   tui_log "Bundle: clean rebuild (--force)"
-				   _bundle_data_choice="rebuild"
-				   break ;;
-				2) show_help "Bundle Image Reuse" \
-"oc-mirror is incremental by design. When image data already exists,
-it only downloads what has changed since the last save/sync.
-
-Choose 'Reuse (fast)' to keep existing data and download only deltas.
-Choose 'Clean Rebuild' to delete everything and start fresh.
-
-When to use Clean Rebuild:
-• You changed the OpenShift version or channel significantly
-• Previous download was interrupted or data appears corrupt
-• You want a guaranteed clean state
-
-In most cases, 'Reuse' is the right choice — it is faster and
-uses less bandwidth."
-				   continue ;;
-				255)
-				   return 1 ;;
-			esac
-		done
+		local choice_rc=$?
+		case $choice_rc in
+			0) tui_log "Bundle: reusing existing image data (incremental)"
+			   _bundle_data_choice="reuse" ;;
+			1) force_flag="--force"
+			   tui_log "Bundle: clean rebuild (--force)"
+			   _bundle_data_choice="rebuild" ;;
+			*) return 1 ;;
+		esac
 		[[ -z "$_bundle_data_choice" ]] && return 1
 	fi
 

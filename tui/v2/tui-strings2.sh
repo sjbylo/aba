@@ -48,18 +48,18 @@ TUI2_TITLE_OPERATOR_SEARCH="Search Operators"
 # Dialog Titles — DISCO Mode
 # =============================================================================
 
-TUI2_TITLE_DISCO_MENU="DISCO Mode – Actions"
+TUI2_TITLE_DISCO_MENU="Fully Disconnected – Actions"
 TUI2_TITLE_DISCO_INSTALL_REG="Install Registry"
 TUI2_TITLE_DISCO_LOAD="Load Images"
 TUI2_TITLE_DISCO_VIEW_ISC="ImageSet Configuration (read-only)"
 TUI2_TITLE_DISCO_RESET="Reset to Connected Mode"
-TUI2_TITLE_DISCO_LIGHT="Light Bundle Detected"
+TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
 
 # =============================================================================
 # Dialog Titles — CONNO Mode
 # =============================================================================
 
-TUI2_TITLE_CONNO_MENU="CONNO Mode – Actions"
+TUI2_TITLE_CONNO_MENU="Partially Disconnected – Actions"
 TUI2_TITLE_CONNO_INSTALL_MIRROR="Install Mirror Registry"
 TUI2_TITLE_CONNO_SAVE="Save Images"
 TUI2_TITLE_CONNO_SYNC="Sync Images"
@@ -71,7 +71,7 @@ TUI2_TITLE_CONNO_BUNDLE="Create Bundle"
 # Dialog Titles — DIRECT Mode
 # =============================================================================
 
-TUI2_TITLE_DIRECT_MENU="DIRECT Mode – Actions"
+TUI2_TITLE_DIRECT_MENU="Fully Connected – Actions"
 TUI2_TITLE_DIRECT_WIZARD="Direct Install Setup"
 
 # =============================================================================
@@ -102,19 +102,26 @@ TUI2_TITLE_CLUSTER_DATA_DISK="Data Disk"
 TUI2_TITLE_CLUSTER_MAC_TEMPLATE="MAC Template"
 TUI2_TITLE_CLUSTER_SELECT="Select Cluster"
 TUI2_TITLE_CLUSTER_INSTALL="Install Cluster"
-TUI2_TITLE_CLUSTER_MONITOR="Monitor Cluster"
+TUI2_TITLE_CLUSTER_MONITOR="Finalize Installation"
 TUI2_TITLE_CLUSTER_DELETE="Delete Cluster"
 TUI2_TITLE_ADVANCED="Advanced"
 TUI2_TITLE_CLUSTER_OSUS_WARN="OSUS Warning"
 
 # =============================================================================
-# Dialog Titles — Day-2
+# Dialog Titles — Day-2 / Cluster Management
 # =============================================================================
 
-TUI2_TITLE_DAY2_MENU="Day-2 Operations"
+TUI2_TITLE_DAY2_MENU="Day-2 / Cluster Management"
 TUI2_TITLE_DAY2_FULL="Day-2: Full Configuration"
 TUI2_TITLE_DAY2_NTP="Day-2: NTP Configuration"
 TUI2_TITLE_DAY2_OSUS="Day-2: OSUS (Cincinnati)"
+TUI2_TITLE_DAY2_STATUS="Cluster Status"
+TUI2_TITLE_DAY2_SSH="SSH to Node 0"
+TUI2_TITLE_DAY2_UPGRADE="Upgrade Cluster"
+TUI2_TITLE_DAY2_SHUTDOWN="Graceful Cluster Shutdown"
+TUI2_TITLE_DAY2_STARTUP="Graceful Cluster Startup"
+TUI2_TITLE_DAY2_REFRESH="Refresh Cluster"
+TUI2_TITLE_DAY2_CLEAN="Clean Cluster"
 
 # =============================================================================
 # Dialog Titles — Platform Config
@@ -130,7 +137,7 @@ TUI2_DISCO_TAG_INSTALL_REG="R"
 TUI2_DISCO_TAG_LOAD="L"
 TUI2_DISCO_TAG_INSTALL="I"
 TUI2_DISCO_TAG_DAY2="D"
-TUI2_DISCO_TAG_MONITOR="N"
+TUI2_DISCO_TAG_MONITOR="W"
 TUI2_DISCO_TAG_DELETE="K"
 TUI2_DISCO_TAG_ADVANCED="A"
 TUI2_DISCO_TAG_VIEW_ISC="V"
@@ -151,7 +158,7 @@ TUI2_CONNO_TAG_OPERATORS="O"
 TUI2_CONNO_TAG_BUNDLE="B"
 TUI2_CONNO_TAG_INSTALL="I"
 TUI2_CONNO_TAG_DAY2="D"
-TUI2_CONNO_TAG_MONITOR="N"
+TUI2_CONNO_TAG_MONITOR="W"
 TUI2_CONNO_TAG_DELETE="K"
 TUI2_CONNO_TAG_ADVANCED="A"
 TUI2_CONNO_TAG_SWITCH_DIRECT="X"
@@ -164,7 +171,7 @@ TUI2_CONNO_TAG_SWITCH_DISCO="Z"
 TUI2_DIRECT_TAG_INSTALL="I"
 TUI2_DIRECT_TAG_DAY2="D"
 TUI2_DIRECT_TAG_DELETE="K"
-TUI2_DIRECT_TAG_MONITOR="N"
+TUI2_DIRECT_TAG_MONITOR="W"
 TUI2_DIRECT_TAG_ADVANCED="A"
 TUI2_DIRECT_TAG_SWITCH_MIRROR="M"
 
@@ -192,8 +199,8 @@ TUI2_MSG_VERSION_FETCHING="Fetching versions for '%s' channel...\n\nPlease wait.
 # Prompt / Message Text — Cluster Validation
 # =============================================================================
 
-TUI2_MSG_INVALID_CLUSTER_NAME="Invalid cluster name.\n\nMust start with a letter and contain only lowercase a-z, 0-9, hyphens."
-TUI2_MSG_DIRECT_CONN_LOCKED="Connection is locked to 'direct' in DIRECT mode."
+TUI2_MSG_INVALID_CLUSTER_NAME="Invalid cluster name.\n\nMust be a valid DNS label:\n• Start with a lowercase letter\n• End with a letter or digit (not hyphen)\n• Only lowercase a-z, 0-9, hyphens\n• Maximum 63 characters"
+TUI2_MSG_DIRECT_CONN_LOCKED="Connection is locked to 'direct' in Fully Connected mode."
 TUI2_MSG_PLATFORM_CONFIG_MISSING="%s configuration not found.\n\nExpected: %s\nRequired fields: %s\n\nHow to proceed:"
 
 # =============================================================================
@@ -228,7 +235,7 @@ TUI2_BTN_BACK_TO_MENU="Back to Menu"
 TUI2_BTN_CHECK_AGAIN="Check again"
 TUI2_BTN_CONTINUE="Continue"
 TUI2_BTN_EXIT_TUI="Exit TUI"
-TUI2_BTN_DISCO_MODE="DISCO mode"
+TUI2_BTN_DISCO_MODE="Fully Disconnected"
 TUI2_BTN_CONNECTED_MODE="Connected mode"
 TUI2_BTN_LIGHT_BUNDLE="Light bundle"
 TUI2_BTN_FULL_BUNDLE="Full bundle"
@@ -238,11 +245,11 @@ TUI2_BTN_FULL_BUNDLE="Full bundle"
 # =============================================================================
 
 TUI2_MSG_BUNDLE_INCOMPLETE="Bundle incomplete.\n\nThe bundle flag (.bundle) is present but no ImageSet\nconfiguration was found.\n\nRe-transfer the bundle or run 'aba reset'."
-TUI2_MSG_BUNDLE_CONNECTED="This host has an ABA install bundle but also has internet access.\nThe bundle is intended for disconnected environments.\n\n• DISCO mode — use the bundle as intended\n• Connected mode — use internet access (mirror or direct)"
+TUI2_MSG_BUNDLE_CONNECTED="This host has an ABA install bundle but also has internet access.\nThe bundle is intended for disconnected environments.\n\n• Fully Disconnected — use the bundle as intended\n• Connected mode — use internet access (mirror or direct)"
 TUI2_MSG_DEAD_END="Cannot proceed.\n\nNo internet access and no bundle detected.\n\nTransfer a bundle from a connected host first,\nor ensure internet connectivity."
 TUI2_MSG_MODE_SELECT="This choice affects the ENTIRE installation workflow.\n\n   How would you like to install OpenShift?"
 TUI2_MSG_MODE_MIRROR="WITH MIRROR REGISTRY (recommended for production)"
-TUI2_MSG_MODE_DIRECT="DIRECT FROM INTERNET (no mirror, simpler setup)"
+TUI2_MSG_MODE_DIRECT="FULLY CONNECTED (no mirror, simpler setup)"
 
 # =============================================================================
 # Messages — CONNO Action Menu
@@ -251,6 +258,7 @@ TUI2_MSG_MODE_DIRECT="DIRECT FROM INTERNET (no mirror, simpler setup)"
 TUI2_MSG_CONNO_MENU=""  # Dynamic — set at runtime by _conno_menu_msg()
 TUI2_MSG_MIRROR_REINSTALL="Mirror registry is already installed.\n\nReinstall it?"
 TUI2_MSG_MIRROR_FIRST="Mirror registry is not installed.\n\nUse 'Install Mirror' to set up a local or remote registry first."
+TUI2_MSG_MIRROR_FIRST_OFFER="Mirror registry is not installed.\n\nThis operation requires a mirror. Install it now?\n\n(You will be asked to choose local or remote setup.)"
 TUI2_MSG_CLUSTER_FIRST="No cluster installed yet.\n\nUse 'Install Cluster' to configure and provision a cluster first."
 
 # =============================================================================
@@ -261,7 +269,7 @@ TUI2_MSG_CLUSTER_BASICS="Cluster Basics — select a row to edit/toggle:"
 TUI2_MSG_CLUSTER_NETWORK="Network configuration — select a row to edit:"
 TUI2_MSG_CLUSTER_IFACE="Interface configuration:"
 TUI2_MSG_CLUSTER_VM="VM Resources (platform: %s):"
-TUI2_MSG_CLUSTER_NAME_PROMPT="Enter cluster name (lowercase, a-z, 0-9, hyphens):"
+TUI2_MSG_CLUSTER_NAME_PROMPT="Enter cluster name (DNS label: a-z, 0-9, hyphens, max 63):"
 TUI2_MSG_CLUSTER_WORKER_PROMPT="Number of worker nodes:"
 TUI2_MSG_BASE_DOMAIN_PROMPT="Enter base domain for the cluster\n(e.g. example.com, ocp.local):"
 TUI2_MSG_NET_CIDR_PROMPT="CIDR notation (e.g. 10.0.0.0/24):"
@@ -300,23 +308,23 @@ TUI2_MSG_VERSION_FETCH_FAIL="Cannot fetch version data (no internet?).\n\nUsing 
 # Messages — Day-2
 # =============================================================================
 
-TUI2_MSG_DAY2_MENU="Select Day-2 operation:"
+TUI2_MSG_DAY2_MENU="Select operation:"
 
 # =============================================================================
 # Messages — DIRECT Mode
 # =============================================================================
 
-TUI2_MSG_DIRECT_MENU="Direct Mode — Install from internet (no mirror):"
+TUI2_MSG_DIRECT_MENU="Fully Connected — Install from internet (no mirror):"
 
 # =============================================================================
 # Messages — DISCO Mode
 # =============================================================================
 
-TUI2_MSG_DISCO_MENU="Disconnected Mode — Choose an action:"
+TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
-TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThe bundle state will be cleared and you will be asked\nto choose between Mirror and Direct installation modes."
-TUI2_MSG_DISCO_LIGHT="Light bundle detected — no archive files found.\n\nCopy the image archive file(s) (mirror_*.tar) from your\ntransfer media to:\n\n  %s/mirror/data/\n\nThen select 'Check again'."
+TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThe bundle state will be cleared and you will be asked\nto choose between Partially Disconnected (mirror) and Fully Connected (direct) modes."
+TUI2_MSG_DISCO_LIGHT="No image archive files found.\n\nIf you used 'light' mode to create the bundle,\ncopy the image archive file(s) (mirror_*.tar) from your\ntransfer media to:\n\n  %s/mirror/data/\n\nThen select 'Check again'."
 
 # =============================================================================
 # Messages — Mirror Operations
@@ -356,14 +364,14 @@ TUI2_MSG_PULL_SECRET_INFO="A Red Hat pull secret is required.\n\nGet yours from:
 # =============================================================================
 
 TUI2_HELP_TITLE_MODE="Installation Mode"
-TUI2_HELP_TITLE_CONNO="CONNO Mode"
-TUI2_HELP_TITLE_DIRECT="DIRECT Mode"
-TUI2_HELP_TITLE_DISCO="DISCO Mode"
+TUI2_HELP_TITLE_CONNO="Partially Disconnected"
+TUI2_HELP_TITLE_DIRECT="Fully Connected"
+TUI2_HELP_TITLE_DISCO="Fully Disconnected"
 TUI2_HELP_TITLE_BASICS="Cluster Basics"
 TUI2_HELP_TITLE_NETWORK="Cluster Networking"
 TUI2_HELP_TITLE_IFACE="Interfaces"
 TUI2_HELP_TITLE_VM="VM Resources"
-TUI2_HELP_TITLE_DAY2="Day-2 Operations"
+TUI2_HELP_TITLE_DAY2="Day-2 / Cluster Management"
 TUI2_HELP_TITLE_CHANNEL="OpenShift Channels"
 TUI2_HELP_TITLE_VERSION="Version Selection"
 TUI2_HELP_TITLE_PLATFORM="Platform"

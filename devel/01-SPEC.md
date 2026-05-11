@@ -285,8 +285,8 @@ remove these -- only Makefiles may.
 
 Installed-object state lives outside the working dir in `~/.aba/`:
 
-- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, etc.)
-- **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, platform, etc.)
+- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw) plus operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened)
+- **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
 
 State files use lowercase vars matching config file names. Normalize functions
 source state.sh after config; immutable fields (locked after install) are

@@ -82,6 +82,8 @@ while [ $i -le $# ]; do
 						mkdir -p "$target_dir"
 						cp -pa "$_sdir/backup/." "$target_dir/"
 						ln -fs ../templates/Makefile.cluster "$target_dir/Makefile"
+						rm -f "$target_dir/.init"
+						make -s -C "$target_dir" init 2>/dev/null || true
 						ln -sfn "$_sdir" "$target_dir/clusterstate"
 					else
 						echo "Error: directory $target_dir does not exist!" >&2 && exit 1
@@ -897,6 +899,10 @@ elif [ "$1" = "--light" ]; then
 		fi
 		_set_cluster_conf vlan "$vlan_val" "$_flag"
 		shift
+	elif [ "$1" = "--mac-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf mac_prefix "$2" "$1"
+		shift 2
 	elif [ "$1" = "--ssh-key" ]; then
 		_flag="$1"
 		ssh_key_val=

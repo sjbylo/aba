@@ -507,11 +507,10 @@ _direct_action_menu() {
 	while :; do
 		local items=()
 		local inst_label="Install Cluster"
-		local day2_label="Day-2 Operations"
-		local mon_label="Monitor Cluster"
-		local del_label="Delete Cluster"
+		local day2_label="Day-2 / Cluster Management"
+		local mon_label="Finalize Installation (wait-for)"
 
-		local day2_avail=true mon_avail=true del_avail=true
+		local day2_avail=true mon_avail=true
 
 		local has_installed=false
 		local has_any_cluster=false
@@ -521,25 +520,22 @@ _direct_action_menu() {
 			cluster_installed "$dir" && has_installed=true
 		done
 		if [[ "$has_any_cluster" == "false" ]]; then
-			del_avail=false
-			del_label="Delete Cluster [no clusters]"
+			day2_avail=false
+			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
 		fi
 		if [[ "$has_installed" == "false" ]]; then
-			day2_avail=false
-			day2_label="Day-2 Operations $TUI2_GREY_INSTALL_FIRST"
 			mon_avail=false
-			mon_label="Monitor Cluster $TUI2_GREY_INSTALL_FIRST"
+			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
 
 		items+=(
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
-			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"$TUI2_DIRECT_TAG_MONITOR"        "$mon_label"
+			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_DIRECT_TAG_DELETE"         "$del_label"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
 			" "                               "──── Other ─────────────────────────"
-			"$TUI2_DIRECT_TAG_SWITCH_MIRROR"  "Switch to MIRROR mode"
+			"$TUI2_DIRECT_TAG_SWITCH_MIRROR"  "Switch to Partially Disconnected"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DIRECT_MENU" \
@@ -555,12 +551,13 @@ _direct_action_menu() {
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_DIRECT" \
-"Install OpenShift directly from the internet without a mirror registry.
+"Fully connected mode — install OpenShift directly from the internet
+without a mirror registry.
 
 Workflow:
   1. Install Cluster — configure, review, and provision OpenShift
-  2. Day-2 — post-install configuration (NTP, OSUS, etc.)
-  3. Monitor — watch cluster installation status"
+  2. Finalize Installation — wait for install to complete
+  3. Day-2 — post-install configuration (NTP, OSUS, etc.)"
 				continue
 				;;
 		1)
@@ -595,7 +592,7 @@ Workflow:
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
 				if [[ "$day2_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
 				else
 					cluster_day2_menu
 				fi
@@ -605,13 +602,6 @@ Workflow:
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
 				else
 					cluster_monitor
-				fi
-				;;
-			"$TUI2_DIRECT_TAG_DELETE")
-				if [[ "$del_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "No clusters to delete." 0 0
-				else
-					cluster_delete
 				fi
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
