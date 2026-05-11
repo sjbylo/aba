@@ -178,6 +178,28 @@ preflight aborts before `openshift-install` is invoked and the ISO file
 (`iso-agent-based/agent.$(arch).iso`) is NOT produced. Every preflight output
 line starts with the token `vSphere:` for greppability.
 
+### ESXi vs vCenter
+
+`normalize-vmware-conf` keys off the `API type` reported by `govc about`. On a
+standalone ESXi host (`API type: HostAgent`), `GOVC_DATACENTER` and
+`GOVC_CLUSTER` are optional - the synthetic `/ha-datacenter` is always
+present, ESXi has no clusters, and ESXi auth is typically as root with
+implicit full privileges. The preflight runs a reduced probe set:
+
+- Layer 1 (TCP / TLS / auth) - same as vCenter.
+- Layer 2 - datastore and network resolved under `/ha-datacenter/datastore`
+  and `/ha-datacenter/network`. `VC_FOLDER` is probed if set; if unset, an
+  info note is emitted and the installer creates the folder on first use.
+- Layer 3 (cluster + network-on-cluster attach + resource pool) - skipped.
+- Layer 4 (vCenter-style privilege scopes) - skipped.
+
+The success banner tells you which path ran:
+
+```
+vSphere: ESXi detected (reduced preflight: TCP+TLS+auth+datastore+network)
+vSphere: vCenter detected, running checks...
+```
+
 ### For operators: reading the output
 
 Example failing output:
