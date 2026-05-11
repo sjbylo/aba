@@ -337,7 +337,10 @@ _select_vm_hosts() {
 	else
 		hosts="${WORKER_NAMES:+$WORKER_NAMES }$CP_NAMES"
 	fi
-	[ -z "$hosts" ] && hosts="$CP_NAMES"
+	if [ -z "$hosts" ]; then
+		hosts="$CP_NAMES"
+	fi
+	return 0
 }
 
 # Output names of VMs that are currently poweredOn (VMware).
@@ -2464,7 +2467,7 @@ wait_for_all_catalogs() {
 _oc_mirror_pin_catalogs_by_digest() {
 	local isc_file="$1"
 	local ocp_ver_major="$2"
-	local digest_isc="imageset-config-digest.yaml"
+	local digest_isc=".imageset-config-digest.yaml"
 	local sed_args=()
 
 	for catalog_name in redhat-operator certified-operator community-operator; do
