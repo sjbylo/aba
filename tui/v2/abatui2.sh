@@ -77,6 +77,16 @@ for fn in check_internet_connectivity get_domain get_machine_network run_once re
 	type -t "$fn" >/dev/null 2>&1 || { echo "FATAL: required function '$fn' not found in include_all.sh"; exit 1; }
 done
 
+# =============================================================================
+# Kick off internet check early (runs in background while we do other init)
+# =============================================================================
+
+tui_log "Kicking off background internet check"
+run_once -i "aba:check:internet" -- \
+	bash -lc "source ./scripts/include_all.sh; check_internet_connectivity aba"
+
+_tick "Checking connectivity"
+
 # Auto-install required packages if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
 
@@ -185,14 +195,6 @@ run_once -F 2>/dev/null || true
 
 _tick "Loading config"
 
-# =============================================================================
-# Pre-fetch internet check in background
-# =============================================================================
-
-tui_log "Kicking off background internet check"
-run_once -i "aba:check:internet" -- \
-	bash -lc "source ./scripts/include_all.sh; check_internet_connectivity aba"
-
 # Pre-fetch latest stable version (no pull secret needed, just api.openshift.com)
 tui_log "Kicking off background version fetch (stable)"
 run_once -i "ocp:stable:latest_version" -- \
@@ -203,8 +205,6 @@ if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
 	tui_log "Kicking off background mirror verify"
 	run_once -i "aba:mirror:verify" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror verify" &
 fi
-
-_tick "Checking connectivity"
 
 # Wait for internet check to complete (this is the slow part)
 run_once -q -w -i "aba:check:internet" 2>/dev/null || true
@@ -391,8 +391,8 @@ _conno_main() {
 		local visc_label="View/Edit ImageSet Config"
 		local ops_label="Select Operators"
 		local bndl_label="Create Bundle"
-		local switch_label="Switch to DIRECT mode"
-		local disco_switch_label="Switch to DISCO mode"
+		local switch_label="Switch to Fully Connected"
+		local disco_switch_label="Switch to Fully Disconnected"
 
 		local save_avail=true sync_avail=true
 		local ops_avail=true bndl_avail=true switch_avail=true
@@ -408,30 +408,20 @@ _conno_main() {
 			bndl_avail=false
 			bndl_label="Create Bundle $TUI2_GREY_NO_INTERNET"
 			switch_avail=false
-			switch_label="Switch to DIRECT mode $TUI2_GREY_NO_INTERNET"
+			switch_label="Switch to Fully Connected $TUI2_GREY_NO_INTERNET"
 		fi
 
 		if mirror_available; then
 			mirr_avail=false
 			mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
-		else
-			if [[ "$save_avail" == "true" ]]; then
-				save_avail=false
-				save_label="Save Images $TUI2_GREY_MIRROR_FIRST"
-			fi
-			if [[ "$sync_avail" == "true" ]]; then
-				sync_avail=false
-				sync_label="Sync Images $TUI2_GREY_MIRROR_FIRST"
-			fi
 		fi
 
 		# Cluster operations — "Install Cluster" is the unified flow (configure → review → install)
 		local inst_label="Install Cluster"
-		local day2_label="Day-2 Operations"
-		local mon_label="Monitor Cluster"
-		local del_label="Delete Cluster"
+		local day2_label="Day-2 / Cluster Management"
+		local mon_label="Finalize Installation (wait-for)"
 
-		local day2_avail=true mon_avail=true del_avail=true
+		local day2_avail=true mon_avail=true
 
 		local has_installed=false
 		local has_any_cluster=false
@@ -441,18 +431,18 @@ _conno_main() {
 			cluster_installed "$dir" && has_installed=true
 		done
 		if [[ "$has_any_cluster" == "false" ]]; then
-			del_avail=false
-			del_label="Delete Cluster [no clusters]"
+			day2_avail=false
+			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
 		fi
 		if [[ "$has_installed" == "false" ]]; then
-			day2_avail=false
-			day2_label="Day-2 Operations $TUI2_GREY_INSTALL_FIRST"
 			mon_avail=false
-			mon_label="Monitor Cluster $TUI2_GREY_INSTALL_FIRST"
+			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
 
-		# Grey out "Install Cluster" if mirror exists but not synced
-		if mirror_available && ! _mirror_has_release_image; then
+		# Hint on "Install Cluster" if mirror not ready
+		if ! mirror_available; then
+			inst_label="Install Cluster [no mirror]"
+		elif ! _mirror_has_release_image; then
 			inst_label="Install Cluster [sync mirror first]"
 		fi
 
@@ -481,10 +471,9 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
-			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
+			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_CONNO_TAG_DELETE"         "$del_label"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
 			"" "──── Mode ──────────────────────────"
 			"$TUI2_CONNO_TAG_SWITCH_DIRECT"  "$switch_label"
@@ -504,7 +493,7 @@ _conno_main() {
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_CONNO" \
-"Connected mode with a mirror registry. Full ABA workflow:
+"Partially disconnected mode with a mirror registry. Full ABA workflow:
 
 Mirror operations:
   • Install Mirror — set up registry (local or remote)
@@ -516,12 +505,12 @@ Mirror operations:
 
 Cluster operations:
   • Install Cluster — configure, review, and provision OpenShift
+  • Finalize Installation — wait for install to complete (re-attach)
   • Day-2 — post-install configuration (NTP, OSUS, etc.)
-  • Monitor — watch cluster installation status
 
 Mode switching:
-  • DIRECT — install from internet without a mirror
-  • DISCO — work offline using this repo in-place (no tar needed)
+  • Fully Connected — install from internet without a mirror
+  • Fully Disconnected — work offline using this repo in-place
     Downloads CLI tools + registry installers first if missing."
 				continue
 				;;
@@ -548,27 +537,32 @@ Mode switching:
 				dlg --backtitle "$(ui_backtitle)" --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba -d mirror uninstall" "Uninstall Existing Mirror"
-					mirror_install
+					confirm_and_execute "aba -d mirror uninstall" "Uninstall Existing Mirror" && mirror_install
 				fi
 			else
 				mirror_install
 			fi
 			;;
-			"$TUI2_CONNO_TAG_SAVE")
-				if [[ "$save_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_MIRROR_FIRST" 0 0
-				else
-					mirror_save
+		"$TUI2_CONNO_TAG_SAVE")
+			if [[ "$_TUI_INET" == "no" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_save
+			fi
+			;;
+		"$TUI2_CONNO_TAG_SYNC")
+			if [[ "$_TUI_INET" == "no" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			elif ! mirror_available; then
+				dlg --backtitle "$(ui_backtitle)" --title "Mirror Required" \
+					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
+				if [[ $? -eq 0 ]]; then
+					_mirror_config_review && mirror_sync
 				fi
-				;;
-			"$TUI2_CONNO_TAG_SYNC")
-				if [[ "$sync_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_MIRROR_FIRST" 0 0
-				else
-					mirror_sync
-				fi
-				;;
+			else
+				mirror_sync
+			fi
+			;;
 			"$TUI2_CONNO_TAG_VIEW_ISC")
 				mirror_view_isc "false"
 				;;
@@ -587,17 +581,27 @@ Mode switching:
 				fi
 				;;
 			"$TUI2_CONNO_TAG_INSTALL")
-				if mirror_available && ! _mirror_has_release_image; then
+				if ! mirror_available; then
+					dlg --backtitle "$(ui_backtitle)" --title "No Mirror Installed" \
+						--yes-label "Install & Sync" --no-label "Back" \
+						--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
+					if [[ $? -eq 0 ]]; then
+						_mirror_config_review && mirror_sync && cluster_install_flow
+					fi
+				elif ! _mirror_has_release_image; then
 					dlg --backtitle "$(ui_backtitle)" --title "Mirror Not Synced" \
-						--yes-label "Install Anyway" --no-label "Back" \
-						--yesno "The mirror is installed but has no release images yet.\n\nYou should sync/load the mirror before installing a cluster.\nProceeding without synced images will likely fail.\n\nContinue anyway?" 0 0
-					[[ $? -ne 0 ]] && continue
+						--yes-label "Sync Now" --no-label "Back" \
+						--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
+					if [[ $? -eq 0 ]]; then
+						mirror_sync && cluster_install_flow
+					fi
+				else
+					cluster_install_flow
 				fi
-				cluster_install_flow
 				;;
 			"$TUI2_CONNO_TAG_DAY2")
 				if [[ "$day2_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
 				else
 					cluster_day2_menu
 				fi
@@ -607,13 +611,6 @@ Mode switching:
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
 				else
 					cluster_monitor
-				fi
-				;;
-			"$TUI2_CONNO_TAG_DELETE")
-				if [[ "$del_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "No clusters to delete." 0 0
-				else
-					cluster_delete
 				fi
 				;;
 			"$TUI2_CONNO_TAG_ADVANCED")

@@ -120,56 +120,13 @@ _cluster_load_conf() {
 	return 0
 }
 
-# Persist current wizard values to cluster.conf (draft save)
-_persist_cluster_draft() {
-	[[ -z "$cl_name" ]] && return 0
-
-	local cluster_dir="$ABA_ROOT/$cl_name"
-	mkdir -p "$cluster_dir" 2>/dev/null || true
-
-	local conf="$cluster_dir/cluster.conf"
-
-	# If cluster.conf doesn't exist yet, seed from template
-	if [[ ! -s "$conf" ]]; then
-		cp "$ABA_ROOT/templates/cluster.conf.j2" "$conf"
-		# Strip j2 placeholders to bare key=value (replace {{ xxx }} with empty)
-		sed -i 's/{{ *[a-z_]* *}}//g' "$conf"
-	fi
-
-	# Derive num_masters/num_workers from type
-	local _nm=1 _nw=0
-	case "$cl_type" in
-		sno)      _nm=1; _nw=0 ;;
-		compact)  _nm=3; _nw=0 ;;
-		standard) _nm=3; _nw="${cl_workers:-2}" ;;
-	esac
-
-	# Use replace-value-conf for each field (preserves comments and format)
-	replace-value-conf -q -n cluster_name    -v "$cl_name"             -f "$conf"
-	replace-value-conf -q -n base_domain     -v "${cl_domain:-}"       -f "$conf"
-	replace-value-conf -q -n api_vip         -v "${cl_api_vip:-}"      -f "$conf"
-	replace-value-conf -q -n ingress_vip     -v "${cl_ingress_vip:-}"  -f "$conf"
-	replace-value-conf -q -n machine_network -v "${cl_network:-}"      -f "$conf"
-	replace-value-conf -q -n starting_ip     -v "${cl_starting_ip:-}"  -f "$conf"
-	replace-value-conf -q -n num_masters     -v "$_nm"                 -f "$conf"
-	replace-value-conf -q -n num_workers     -v "$_nw"                 -f "$conf"
-	replace-value-conf -q -n dns_servers     -v "${cl_dns:-}"          -f "$conf"
-	replace-value-conf -q -n next_hop_address -v "${cl_gateway:-}"     -f "$conf"
-	replace-value-conf -q -n ntp_servers     -v "${cl_ntp:-}"          -f "$conf"
-	replace-value-conf -q -n ports           -v "${cl_ports:-}"        -f "$conf"
-	replace-value-conf -q -n vlan            -v "${cl_vlan:-}"         -f "$conf"
-	local _conn_val="${cl_connection:-}"
-	[[ "$_conn_val" == "mirror" ]] && _conn_val=""
-	replace-value-conf -q -n int_connection  -v "$_conn_val"           -f "$conf"
-	replace-value-conf -q -n mac_prefix      -v "${cl_mac_template:-}" -f "$conf"
-	replace-value-conf -q -n master_cpu_count -v "${cl_master_cpu:-8}" -f "$conf"
-	replace-value-conf -q -n master_mem      -v "${cl_master_mem:-32}" -f "$conf"
-	replace-value-conf -q -n worker_cpu_count -v "${cl_worker_cpu:-4}" -f "$conf"
-	replace-value-conf -q -n worker_mem      -v "${cl_worker_mem:-16}" -f "$conf"
-	replace-value-conf -q -n data_disk       -v "${cl_disk:-}"         -f "$conf"
-
-	tui_log "Saved cluster draft: $conf"
-}
+# _persist_cluster_draft — REMOVED
+# The TUI must NOT create or write cluster.conf. ABA's create-cluster-conf.sh
+# is the single authority for generating this file (with proper defaults like
+# mac_prefix). The TUI passes all values via CLI flags to "aba cluster", which
+# routes them through _set_cluster_conf() / BUILD_COMMAND to the creation script.
+# Wizard state is kept in _cl_* globals between pages — no disk persistence needed.
+_persist_cluster_draft() { :; }
 
 # Gate: check platform config when leaving Basics page (vmw/kvm only)
 _gate_platform_config() {
@@ -493,7 +450,7 @@ cluster_install_flow() {
 
 # --- Page 1: Basics (menu-style with toggle) ---
 _cluster_page_basics() {
-	local default_item="name"
+	local default_item="N"
 	while :; do
 		# Build menu items (hide worker row for sno)
 		local items=()
@@ -598,10 +555,13 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			[[ $? -ne 0 ]] && break
 			local input
 			input=$(<"$_TUI_TMP")
-			if [[ -n "$input" && ! "$input" =~ ^[a-z][a-z0-9-]*$ ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"$TUI2_MSG_INVALID_CLUSTER_NAME" 0 0 || true
-				continue
+			if [[ -n "$input" ]]; then
+				# DNS label: start with letter, end with letter/digit, max 63 chars
+				if [[ ${#input} -gt 63 || ! "$input" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"$TUI2_MSG_INVALID_CLUSTER_NAME" 0 0 || true
+					continue
+				fi
 			fi
 			[[ -n "$input" ]] && cl_name="$input"
 			# Silently load existing cluster.conf if present
@@ -1086,6 +1046,7 @@ _cluster_execute() {
 			[[ -n "$cl_worker_mem" && "$cl_worker_mem" != "16" ]] && cmd="$cmd --wmem $cl_worker_mem"
 		fi
 		[[ -n "$cl_disk" ]] && cmd="$cmd --data-disk-gb $cl_disk"
+		[[ -n "$cl_mac_template" ]] && cmd="$cmd --mac-prefix $cl_mac_template"
 	fi
 
 	# Step will be determined after review (bm gets ISO vs Install choice)
@@ -1133,7 +1094,14 @@ _cluster_execute() {
 	summary+="  Type:         $cl_type ($_nm master, $_nw workers = $total_nodes node$( [[ $total_nodes -ne 1 ]] && echo s))\n"
 	summary+="  Platform:     $_plat_disp\n"
 	summary+="  OpenShift:    ${ocp_version:-?} (${ocp_channel:-?})\n"
-	summary+="  Mode:         $_TUI_MODE\n"
+	local _mode_display
+	case "$_TUI_MODE" in
+		DISCO)  _mode_display="Fully Disconnected" ;;
+		CONNO)  _mode_display="Partially Disconnected" ;;
+		DIRECT) _mode_display="Fully Connected" ;;
+		*)      _mode_display="$_TUI_MODE" ;;
+	esac
+	summary+="  Mode:         $_mode_display\n"
 	summary+="  Mirror:       $_mirror_disp\n"
 	summary+="\n"
 	summary+="  Network:      ${cl_network:-(auto)}\n"
@@ -1316,13 +1284,13 @@ _platform_config_missing() {
 }
 
 # =============================================================================
-# Cluster Monitor
+# Finalize Installation (wait-for install-complete)
 # =============================================================================
 
 cluster_monitor() {
-	tui_log "Action: Monitor Cluster"
+	tui_log "Action: Finalize Installation (wait-for)"
 
-	if ! select_installed_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to monitor:"; then
+	if ! select_installed_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to finalize:"; then
 		return 1
 	fi
 
@@ -1360,11 +1328,18 @@ tui_advanced_menu() {
 	local default_item="R"
 
 	while :; do
+		local adv_items=()
+		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
+		adv_items+=("P" "Reconfigure Platform (vmware/kvm/none)")
+		if mirror_available; then
+			adv_items+=("U" "Uninstall Mirror Registry")
+		fi
+
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
+			--default-item "$default_item" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--menu "Advanced operations (use with care):" 0 0 0 \
-			"R" "Reset ABA (full clean — returns to initial state)" \
-			"P" "Reconfigure Platform (vmware/kvm/none)" \
+			"${adv_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -1396,6 +1371,13 @@ tui_advanced_menu() {
 				plat=$(<"$_TUI_TMP")
 				confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
 				;;
+			"U")
+				dlg --backtitle "$(ui_backtitle)" --title "Uninstall Mirror" \
+					--yes-label "Uninstall" --no-label "Cancel" \
+					--yesno "Uninstall the mirror registry?\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
+				[[ $? -ne 0 ]] && continue
+				confirm_and_execute "aba -d mirror uninstall" "Uninstall Mirror Registry"
+				;;
 		esac
 	done
 }
@@ -1405,8 +1387,8 @@ tui_advanced_menu() {
 # =============================================================================
 
 cluster_day2_menu() {
-	tui_log "Action: Day-2 menu"
-	local default_item="full"
+	tui_log "Action: Day-2 / Cluster Management menu"
+	local default_item="F"
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_MENU" \
@@ -1414,23 +1396,49 @@ cluster_day2_menu() {
 			--help-button \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
-			"F" "Day-2: Full configuration" \
-			"N" "Day-2: NTP only" \
-			"O" "Day-2: OSUS (Cincinnati upgrade service)" \
+			"" "──── Configuration ────────────────" \
+			"F" "Full Day-2 configuration" \
+			"N" "Configure NTP" \
+			"O" "OSUS (upgrade service)" \
+			"" "──── Status ───────────────────────" \
+			"S" "Cluster status" \
+			"H" "SSH into node 0" \
+			"" "──── Lifecycle ────────────────────" \
+			"U" "Upgrade cluster" \
+			"G" "Graceful cluster shutdown" \
+			"T" "Graceful cluster startup" \
+			"R" "Refresh (recreate VMs, new install)" \
+			"" "──── Cleanup ──────────────────────" \
+			"C" "Clean (remove artifacts, retry install)" \
+			"K" "Delete cluster (destroy VMs)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_DAY2" \
-"• Full: applies all Day-2 configuration (IDMS, CatalogSources, NTP, etc.)
+"Configuration:
+• Full: applies all Day-2 config (IDMS, CatalogSources, NTP, etc.)
 • NTP: configures NTP on all cluster nodes
-• OSUS: installs the Cincinnati/OSUS operator for connected upgrades
-  (requires the cincinnati-operator in your ImageSet config)"
+• OSUS: installs the Cincinnati/OSUS operator for upgrades
+
+Status:
+• Cluster status: shows cluster operators and node status
+• SSH: opens an interactive SSH session on the first node
+
+Lifecycle:
+• Upgrade: upgrade cluster to a newer OpenShift version
+• Shutdown: graceful cluster shutdown (waits for completion)
+• Startup: graceful cluster startup (powers on VMs)
+• Refresh: destroy VMs and trigger a fresh installation
+
+Cleanup:
+• Clean: remove generated artifacts so you can retry install
+• Delete: destroy VMs and remove all cluster resources"
 				continue
 				;;
 			0) ;;
-			1) return 0 ;;  # Back
+			1) return 0 ;;
 			255)
 				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
 				continue
@@ -1445,6 +1453,14 @@ cluster_day2_menu() {
 			F) _day2_run "day2" ;;
 			N) _day2_run "day2-ntp" ;;
 			O) _day2_run_osus ;;
+			S) _day2_status ;;
+			H) _day2_ssh ;;
+			U) _day2_upgrade ;;
+			G) _day2_shutdown ;;
+			T) _day2_startup ;;
+			R) _day2_refresh ;;
+			C) _day2_clean ;;
+			K) _day2_delete ;;
 		esac
 	done
 }
@@ -1473,4 +1489,142 @@ _day2_run_osus() {
 	fi
 
 	_day2_run "day2-osus"
+}
+
+# --- Status: oc get co + oc get nodes ---
+_day2_status() {
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_STATUS" "Select cluster for status:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	local cl_dir="$SELECTED_CLUSTER"
+	tui_log "Running status check on $cl_display"
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STATUS" \
+		--infobox "Fetching status for $cl_display ...\n\nThis may take a moment if the cluster is slow to respond." 5 60
+
+	local output_file
+	output_file=$(mktemp)
+
+	trap : INT
+	{
+		echo "═══ Cluster Operators ($cl_display) ═══"
+		echo ""
+		cd "$ABA_ROOT"
+		KUBECONFIG="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig" oc get co 2>&1
+		echo ""
+		echo "═══ Nodes ($cl_display) ═══"
+		echo ""
+		KUBECONFIG="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig" oc get nodes 2>&1
+	} > "$output_file" 2>&1
+	trap - INT
+
+	sed -i -r 's/\x1B\[[0-9;]*[mK]//g; s/\x1B\(B//g' "$output_file"
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STATUS: $cl_display" \
+		--exit-label "$TUI2_BTN_BACK" \
+		--textbox "$output_file" 0 0
+	rm -f "$output_file"
+}
+
+# --- SSH into node 0 ---
+_day2_ssh() {
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_SSH" "Select cluster for SSH:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	tui_log "SSH into node 0 of $cl_display"
+
+	clear
+	echo "═══════════════════════════════════════════════════════════════"
+	echo "  SSH into node 0 of: $cl_display"
+	echo "  Type 'exit' to return to TUI"
+	echo "═══════════════════════════════════════════════════════════════"
+	echo
+
+	cd "$ABA_ROOT"
+	bash -c "aba -d $SELECTED_CLUSTER ssh" || true
+
+	echo
+	read -rp "Press ENTER to return to TUI..."
+}
+
+# --- Upgrade cluster ---
+_day2_upgrade() {
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_UPGRADE" "Select cluster to upgrade:"; then
+		return 1
+	fi
+
+	confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade" "$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY"
+}
+
+# --- Graceful Cluster Shutdown ---
+_day2_shutdown() {
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_SHUTDOWN" "Select cluster to shut down:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_SHUTDOWN" \
+		--yes-label "Shutdown" --no-label "Cancel" \
+		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon and drain all nodes, then power off VMs.\nThe operation will wait until shutdown is complete." 0 0
+	[[ $? -ne 0 ]] && return 0
+
+	confirm_and_execute "aba -d $SELECTED_CLUSTER shutdown --wait" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
+}
+
+# --- Graceful Cluster Startup ---
+_day2_startup() {
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_STARTUP" "Select cluster to start:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
+		--yes-label "Start" --no-label "Cancel" \
+		--yesno "Start cluster '$cl_display'?\n\nThis will power on the cluster VMs." 0 0
+	[[ $? -ne 0 ]] && return 0
+
+	confirm_and_execute "aba -d $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+}
+
+# --- Refresh (recreate VMs, trigger new install) ---
+_day2_refresh() {
+	if ! select_cluster "$TUI2_TITLE_DAY2_REFRESH" "Select cluster to refresh:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_REFRESH" \
+		--yes-label "Refresh" --no-label "Cancel" \
+		--yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
+	[[ $? -ne 0 ]] && return 0
+
+	confirm_and_execute "aba -d $SELECTED_CLUSTER refresh" "$TUI2_TITLE_DAY2_REFRESH: $cl_display"
+}
+
+# --- Clean cluster dir (retry install) ---
+_day2_clean() {
+	if ! select_cluster "$TUI2_TITLE_DAY2_CLEAN" "Select cluster to clean:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_CLEAN" \
+		--yes-label "Clean" --no-label "Cancel" \
+		--yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
+	[[ $? -ne 0 ]] && return 0
+
+	confirm_and_execute "aba -d $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"
+}
+
+# --- Delete cluster (reuses existing cluster_delete, now accessed from Day-2 menu) ---
+_day2_delete() {
+	cluster_delete
 }

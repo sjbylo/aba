@@ -22,7 +22,9 @@ Externalize installed-object state to ~/.aba/ for both mirrors and clusters:
   fields, warn on drift via stderr
 - Immutable fields (locked after install): reg_host, reg_port, reg_vendor,
   reg_root, reg_user, reg_pw (mirror); cluster_name, base_domain,
-  starting_ip, cluster_type, machine_network, platform (cluster)
+  starting_ip, cluster_type, machine_network, prefix_length, platform (cluster)
+- Operational state (mirror): reg_ssh_key, reg_ssh_user, reg_root_opts,
+  reg_fw_opened (tracks whether ABA opened the firewall port)
 - Mutable fields: ops, op_sets (mirror, in aba.conf/mirror.conf)
 - Config backups stored in backup/ subdir (cp -p for timestamps)
 - Deleted cluster dirs are recreated from state backup on demand

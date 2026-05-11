@@ -93,20 +93,18 @@ reg_check_fqdn() {
 # Also aborts if ABA already manages a registry at this host (state.sh with
 # matching reg_host).  There is no "reinstall" -- user must uninstall first.
 reg_detect_existing() {
-	# Skip install if ABA already has a healthy registry at this host. This is also needed if user edits mirror.conf which triggers a installation
+	# Skip install if ABA already manages a healthy registry at this host.
+	# After Phase 3 (ADR-007), $reg_host is already overridden from state.sh
+	# by normalize-mirror-conf, so no need to grep state.sh separately.
 	if [ -s "$regcreds_dir/state.sh" ]; then
-		local _saved_host
-		_saved_host=$(grep '^reg_host=' "$regcreds_dir/state.sh" 2>/dev/null | cut -d= -f2)
-		if [ "$_saved_host" = "$reg_host" ]; then
-			if probe_host --any "$reg_url/v2/" "existing registry"; then
-				aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
-				exit 0
-			else
-				aba_warning "Registry at $reg_host is unreachable but state.sh still exists." \
-					"The registry may have been removed externally." \
-					"Clearing stale state and proceeding with fresh install."
-				rm -f "$regcreds_dir/state.sh"
-			fi
+		if probe_host --any "$reg_url/v2/" "existing registry"; then
+			aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
+			exit 0
+		else
+			aba_warning "Registry at $reg_host is unreachable but state.sh still exists." \
+				"The registry may have been removed externally." \
+				"Clearing stale state and proceeding with fresh install."
+			rm -f "$regcreds_dir/state.sh"
 		fi
 	fi
 

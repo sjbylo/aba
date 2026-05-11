@@ -203,10 +203,16 @@ _TUI_MODE=""   # Set by mode detection: DISCO, CONNO, DIRECT
 _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 
 ui_backtitle() {
-	local mode_tag="${_TUI_MODE:-?}"
+	local mode_display
+	case "${_TUI_MODE:-}" in
+		DISCO)  mode_display="Fully Disconnected" ;;
+		CONNO)  mode_display="Partially Disconnected" ;;
+		DIRECT) mode_display="Fully Connected" ;;
+		*)      mode_display="?" ;;
+	esac
 	local ver="${ocp_version:-?}"
 	local ch="${ocp_channel:-?}"
-	echo "ABA TUI v2  |  mode: ${mode_tag}  channel: ${ch}  version: ${ver}"
+	echo "ABA TUI v2  |  ${mode_display}  |  ${ch} ${ver}"
 }
 
 # =============================================================================
@@ -215,36 +221,26 @@ ui_backtitle() {
 
 confirm_quit() {
 	tui_log "User attempting to quit"
-	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONFIRM_EXIT" \
-			--help-button \
-			--yes-label "$TUI2_BTN_EXIT" \
-			--no-label "$TUI2_BTN_CONTINUE" \
-			--yesno "$TUI2_MSG_CONFIRM_EXIT" 0 0
-		local rc=$?
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONFIRM_EXIT" \
+		--yes-label "$TUI2_BTN_EXIT" \
+		--no-label "$TUI2_BTN_CONTINUE" \
+		--yesno "$TUI2_MSG_CONFIRM_EXIT" 0 0
+	local rc=$?
 
-		case "$rc" in
-			0)
-				tui_log "User confirmed quit"
-				return 0
-				;;
-			1)
-				tui_log "User cancelled quit"
-				return 1
-				;;
-			255)
-				tui_log "ESC again — quitting"
-				return 0
-				;;
-			2)
-				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_EXIT_HELP" 0 0 || true
-				continue
-				;;
-			*)
-				return 1
-				;;
-		esac
-	done
+	case "$rc" in
+		0)
+			tui_log "User confirmed quit"
+			return 0
+			;;
+		255)
+			tui_log "ESC again — quitting"
+			return 0
+			;;
+		*)
+			tui_log "User cancelled quit"
+			return 1
+			;;
+	esac
 }
 
 # =============================================================================
@@ -329,6 +325,15 @@ confirm_and_execute() {
 _exec_in_tui() {
 	local cmd="$1"
 	local title="${2:-Executing}"
+
+	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
+	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
+		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Command blocked: contains invalid characters.\n\nThis is a safety check to prevent command injection." 0 0
+		return 1
+	fi
+
 	local tui_cmd="$cmd"
 	[[ "$tui_cmd" != *" -y "* && "$tui_cmd" != *" -y" ]] && tui_cmd="$tui_cmd -y"
 
@@ -345,7 +350,7 @@ _exec_in_tui() {
 	box_width=$((term_width - 2))
 
 	trap : INT
-	PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1 | tee "$output_file" | \
+	{ echo "Executing: $cmd"; echo; PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1; } | tee "$output_file" | \
 		sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--progressbox $box_height $box_width
@@ -355,18 +360,12 @@ _exec_in_tui() {
 	# Strip ANSI escape codes so dialog textbox can scroll properly
 	sed -i -r 's/\x1B\[[0-9;]*[mK]//g; s/\x1B\(B//g' "$output_file"
 
-	# Prepend last lines to top so user sees the result immediately
-	local review_file
+	# Show the tail of output sized to fit the terminal without scrolling
+	local review_file visible_lines
 	review_file=$(mktemp)
-	{
-		echo "═══ Result (last output) ═══════════════════════════════"
-		echo ""
-		tail -20 "$output_file"
-		echo ""
-		echo "═══ Full log (scroll down) ═════════════════════════════"
-		echo ""
-		cat "$output_file"
-	} > "$review_file"
+	visible_lines=$(( $(tput lines) - 8 ))
+	(( visible_lines < 10 )) && visible_lines=10
+	tail -"$visible_lines" "$output_file" > "$review_file"
 
 	if [[ $exit_code -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn: $cmd" \
@@ -399,6 +398,15 @@ _exec_in_tui() {
 # --- Execute in Terminal mode ---
 _exec_in_terminal() {
 	local cmd="$1"
+
+	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
+	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
+		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
+		echo "ERROR: Command blocked — contains invalid characters."
+		read -rp "Press ENTER to return to TUI..."
+		return 1
+	fi
+
 	tui_log "Executing in terminal: $cmd"
 	cd "$ABA_ROOT"
 
@@ -419,7 +427,7 @@ _exec_in_terminal() {
 	fi
 	echo
 	read -rp "Press ENTER to return to TUI..."
-	return 0
+	return $exit_code
 }
 
 # =============================================================================
@@ -468,14 +476,28 @@ _mirror_has_release_image() {
 		fi
 	fi
 
-	# Need openshift-install and mirror config
-	if [[ ! -x "$HOME/bin/openshift-install" ]]; then
-		echo "0" > "$cache_file"
-		return 1
+	# Find openshift-install (may be in ~/bin or not yet extracted)
+	local _oi=""
+	if [[ -x "$HOME/bin/openshift-install" ]]; then
+		_oi="$HOME/bin/openshift-install"
+	elif command -v openshift-install >/dev/null 2>&1; then
+		_oi="openshift-install"
+	fi
+
+	# Fallback: if openshift-install not available, use imageset-config-digest.yaml
+	# as an indicator that oc-mirror has synced/loaded images into the registry
+	if [[ -z "$_oi" ]]; then
+		if [[ -f "$ABA_ROOT/mirror/data/imageset-config-digest.yaml" ]]; then
+			echo "1" > "$cache_file"
+			return 0
+		else
+			echo "0" > "$cache_file"
+			return 1
+		fi
 	fi
 
 	local _out _release_sha _reg_host _reg_port _reg_path _url
-	_out=$(openshift-install version 2>/dev/null) || { echo "0" > "$cache_file"; return 1; }
+	_out=$("$_oi" version 2>/dev/null) || { echo "0" > "$cache_file"; return 1; }
 	_release_sha=$(echo "$_out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
 
 	# Source mirror.conf values
@@ -489,8 +511,12 @@ _mirror_has_release_image() {
 
 	_url="docker://${_reg_host}:${_reg_port}${_reg_path}/openshift/release-images${_release_sha}"
 
+	# Use ABA's mirror credentials explicitly (default auth files may not be populated)
+	local _authfile="$ABA_ROOT/mirror/regcreds/pull-secret-mirror.json"
+	[[ ! -f "$_authfile" ]] && _authfile="$ABA_ROOT/mirror/regcreds/pull-secret-full.json"
+
 	mkdir -p "$(dirname "$cache_file")"
-	if skopeo inspect "$_url" >/dev/null 2>&1; then
+	if skopeo inspect ${_authfile:+--authfile "$_authfile"} "$_url" >/dev/null 2>&1; then
 		echo "1" > "$cache_file"
 		return 0
 	else
@@ -568,12 +594,14 @@ select_cluster() {
 	local prompt="${2:-Choose a cluster:}"
 	local clusters=()
 	local dir display
-	declare -A _cl_display_map
+	local -a _cl_dirs=()
+	local idx=0
 
 	for dir in $(list_cluster_dirs); do
 		display=$(cluster_display_name "$dir")
-		_cl_display_map["$dir"]="$display"
-		clusters+=("$dir" "$display")
+		idx=$(( idx + 1 ))
+		_cl_dirs+=("$dir")
+		clusters+=("$idx" "$dir  $display")
 	done
 
 	if [[ ${#clusters[@]} -eq 0 ]]; then
@@ -592,8 +620,14 @@ select_cluster() {
 		return 1
 	fi
 
-	SELECTED_CLUSTER=$(<"$_TUI_TMP")
-	SELECTED_CLUSTER_DISPLAY="${_cl_display_map[$SELECTED_CLUSTER]:-$SELECTED_CLUSTER}"
+	local selected_idx=$(<"$_TUI_TMP")
+	SELECTED_CLUSTER="${_cl_dirs[$(( selected_idx - 1 ))]}"
+	if [[ ! "$SELECTED_CLUSTER" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Invalid cluster name: '$SELECTED_CLUSTER'\n\nCluster directory names must be valid DNS labels." 0 0
+		return 1
+	fi
+	SELECTED_CLUSTER_DISPLAY=$(cluster_display_name "$SELECTED_CLUSTER")
 	return 0
 }
 
@@ -603,12 +637,14 @@ select_installed_cluster() {
 	local prompt="${2:-Choose an installed cluster:}"
 	local clusters=()
 	local dir display
-	declare -A _cl_display_map
+	local -a _cl_dirs=()
+	local idx=0
 
 	for dir in $(list_installed_clusters); do
 		display=$(cluster_display_name "$dir")
-		_cl_display_map["$dir"]="$display"
-		clusters+=("$dir" "$display")
+		idx=$(( idx + 1 ))
+		_cl_dirs+=("$dir")
+		clusters+=("$idx" "$dir  $display")
 	done
 
 	if [[ ${#clusters[@]} -eq 0 ]]; then
@@ -627,8 +663,14 @@ select_installed_cluster() {
 		return 1
 	fi
 
-	SELECTED_CLUSTER=$(<"$_TUI_TMP")
-	SELECTED_CLUSTER_DISPLAY="${_cl_display_map[$SELECTED_CLUSTER]:-$SELECTED_CLUSTER}"
+	local selected_idx=$(<"$_TUI_TMP")
+	SELECTED_CLUSTER="${_cl_dirs[$(( selected_idx - 1 ))]}"
+	if [[ ! "$SELECTED_CLUSTER" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Invalid cluster name: '$SELECTED_CLUSTER'\n\nCluster directory names must be valid DNS labels." 0 0
+		return 1
+	fi
+	SELECTED_CLUSTER_DISPLAY=$(cluster_display_name "$SELECTED_CLUSTER")
 	return 0
 }
 

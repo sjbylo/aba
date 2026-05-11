@@ -1,5 +1,96 @@
 # ABA Backlog
 
+## Feature: Store oc-mirror metadata in the registry as an OCI image
+
+**Priority:** High
+**Scope:** Core ABA (`mirror/Makefile`, `scripts/reg-sync.sh`, `scripts/reg-load.sh`, `scripts/day2-apply.sh`)
+
+### Problem
+
+After `mirror sync` or `mirror load`, oc-mirror produces YAML files (IDMS, ITMS, CatalogSources) that must be applied to the cluster via `aba day2`. In DISCO environments, ABA often runs on a **different host** (the internal bastion) than the one that loaded the images. Currently the user must manually copy these YAML files across the air gap — error-prone and annoying.
+
+### Proposed solution
+
+After every `sync` or `load`, automatically:
+1. Package the oc-mirror output YAMLs into a lightweight OCI image (using `podman build` or `oras push`)
+2. Push to the mirror registry under a well-known tag, e.g. `<reg_host>:<reg_port>/aba/mirror-metadata:latest`
+3. On the disconnected side, `aba day2` pulls that image from the registry, extracts the YAMLs, and applies them
+
+### Why it works
+
+- The mirror registry is already the shared resource accessible from both sides of the air gap
+- The metadata image is tiny (a few KB of YAML)
+- No manual file transfer needed — the registry IS the transport
+- Idempotent: each sync/load overwrites `:latest` with the current state
+
+### Implementation ideas
+
+1. **Push side** (after sync/load completes):
+   ```bash
+   # Build a minimal image containing the YAML output
+   tar -cf - -C results-dir/ . | podman import - localhost/aba-metadata
+   podman tag localhost/aba-metadata <reg>/aba/mirror-metadata:latest
+   podman push <reg>/aba/mirror-metadata:latest
+   ```
+   Or use `oras push` for a cleaner OCI artifact (no Dockerfile needed):
+   ```bash
+   oras push <reg>/aba/mirror-metadata:latest ./results-dir/:application/yaml
+   ```
+
+2. **Pull side** (`aba day2` on disconnected bastion):
+   ```bash
+   # Pull and extract
+   podman pull <reg>/aba/mirror-metadata:latest
+   podman create --name aba-meta <reg>/aba/mirror-metadata:latest
+   podman cp aba-meta:/. ./mirror-metadata/
+   podman rm aba-meta
+   # Apply YAMLs to cluster
+   oc apply -f ./mirror-metadata/
+   ```
+
+3. **Versioning** (optional): tag with OCP version or timestamp for rollback:
+   `<reg>/aba/mirror-metadata:4.16-20260510`
+
+### Open questions
+
+- `oras` vs `podman import` — oras is cleaner but adds a dependency. Podman is already available.
+- Should we version-tag (keep history) or just use `:latest` (simpler)?
+- Should `aba day2` auto-detect "am I on a different host?" or always try to pull from registry first?
+- Fallback: if the image doesn't exist in the registry (first install, or pre-feature), fall back to local files.
+
+---
+
+## Security: Prevent sensitive data in log/trace files
+
+**Priority:** High
+**Scope:** Core ABA (`scripts/include_all.sh`, trace/debug infrastructure)
+
+### Problem
+
+Credentials (e.g. `reg_pw`, pull-secret tokens) can leak into:
+- ABA trace files (`$ABA_TRACE_FILE`)
+- Debug output (`DEBUG_ABA=1`)
+- State override messages (now debug-level but still logged)
+- Any `aba_debug`/`aba_info`/`aba_warning` call that prints config values
+
+Example: `aba_debug "State: mirror.conf reg_pw=p4ssw0rd differs from..."` writes the password to the trace file.
+
+### Approach ideas
+
+1. **Redaction in logging functions**: `aba_debug`/`aba_warning`/`aba_info` could pipe through a redaction filter before writing. Pattern: replace values of known sensitive fields (`reg_pw`, `password`, `token`, `secret`, `pull-secret`) with `***`.
+2. **Redaction at source**: Callers mask sensitive fields before logging (e.g. `_sval_display="${_sval:0:1}***"` for known password fields).
+3. **Sensitive field list**: Maintain a list of field names that should never be logged in cleartext (e.g. `_SENSITIVE_FIELDS="reg_pw pull_secret token password"`).
+4. **Trace file permissions**: Ensure trace files are created with `600` permissions (owner-only read).
+5. **Audit**: grep the codebase for any place credentials are echoed/logged.
+
+### Open questions
+
+- Which approach is most robust? (Centralized redaction in the logging function is safest — one place to maintain.)
+- Should redaction apply to all output or only trace/file output? (Probably all — even stderr in debug mode.)
+- Are there cases where the full credential MUST be logged for troubleshooting? (Probably not — first/last char + `***` is enough.)
+
+---
+
 ## TUI v2: "Remember my selection" — persistent user preferences
 
 **Priority:** Medium
