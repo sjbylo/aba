@@ -389,6 +389,26 @@ _detect_running_and_completed() {
 		fi
 	done
 
+	# Pass 1b: scan pools OUTSIDE CLI_POOL_LIST for running suites.
+	# Prevents duplicate dispatch when multiple dispatchers coexist.
+	local _all_known_pools=""
+	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf" 2>/dev/null) || _all_known_pools=""
+	for _p in $_all_known_pools; do
+		local _is_cli_pool=""
+		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
+		[ -n "$_is_cli_pool" ] && continue
+		local sess_exists=""
+		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		if [ "$sess_exists" = "yes" ]; then
+			local suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			if [ -n "$suite" ]; then
+				_external_running[$suite]="$_p"
+				echo "    con${_p}: $suite running (external pool -- will not duplicate)"
+			fi
+		fi
+	done
+
 	# Pass 2: detect completed suites (.rc files)
 	for _p in $CLI_POOL_LIST; do
 		local rc_files=""
@@ -411,6 +431,31 @@ _detect_running_and_completed() {
 			done <<< "$rc_files"
 		fi
 	done
+}
+
+_is_running_on_external_pool() {
+	local suite="$1"
+	[ -n "${_external_running[$suite]:-}" ]
+}
+
+_refresh_external_running() {
+	local _all_known_pools=""
+	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf" 2>/dev/null) || return 0
+	local -A _new_ext=()
+	for _p in $_all_known_pools; do
+		local _is_cli_pool=""
+		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
+		[ -n "$_is_cli_pool" ] && continue
+		local sess_exists=""
+		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		if [ "$sess_exists" = "yes" ]; then
+			local suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			[ -n "$suite" ] && _new_ext[$suite]="$_p"
+		fi
+	done
+	_external_running=()
+	for _s in "${!_new_ext[@]}"; do _external_running[$_s]="${_new_ext[$_s]}"; done
 }
 
 # --- Force-clean helpers (--fresh / --force) -----------------------------------

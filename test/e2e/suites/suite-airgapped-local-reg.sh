@@ -599,11 +599,11 @@ e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
 e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' 2>&1 | grep 'Recommended updates'"
 
-# Re-verify operator health right before triggering -- cluster can degrade between
-# the poll above and the trigger (imagestream reconciliation after mesh/OSUS install)
-e2e_wait_operators_available $SNO remote
-
-e2e_wait_operators_ready $SNO remote
+# Wait up to 30 min for all operators to stabilize before upgrading.
+# Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
+# Require 3 consecutive positive checks (30s apart) to rule out flapping.
+e2e_poll_remote 1800 30 "Wait for all operators stable (3 consecutive checks, max 30m)" \
+    "cd ~/aba && _ok=0; for _i in 1 2 3; do if aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -qv '^True False False\$'; then exit 1; fi; _ok=\$((_ok+1)); [ \$_i -lt 3 ] && sleep 30; done; [ \$_ok -eq 3 ]"
 
 e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
     "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
