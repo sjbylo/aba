@@ -351,6 +351,12 @@ else
 	test_fail "Path A broken: output='$_path_a_out' errors=$_preflight_errors"
 fi
 
+# Default the behavioural smoke section to vCenter mode (VC=1). The normalize-
+# vmware-conf stub is a no-op, so VC is not set otherwise; preflight_check_vsphere
+# treats VC empty as ESXi and skips DC/Cluster/RP/privileges. Tests that need
+# the ESXi path (Paths BB-ESXi etc.) override this locally.
+export VC=1
+
 # 19. Path B: platform=vmw + all fields missing -> 7 warnings + _preflight_errors=7
 platform=vmw
 unset GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATACENTER GOVC_CLUSTER GOVC_DATASTORE GOVC_NETWORK
@@ -387,7 +393,7 @@ _preflight_errors=0
 _preflight_warnings=0
 preflight_check_vsphere >"$_smoke_out" 2>&1
 _path_c_out=$(cat "$_smoke_out")
-ok_count=$(grep -c '^OK: vSphere: configuration fields present' "$_smoke_out" || true)
+ok_count=$(grep -cE '^OK: vSphere: (vCenter|ESXi) detected' "$_smoke_out" || true)
 warn_count=$(grep -cE '^(WARN|ERROR):' "$_smoke_out" || true)
 if [ "$ok_count" -eq 1 ] && [ "$_preflight_errors" -eq 0 ] && [ "$warn_count" -eq 0 ]; then
 	test_pass "Path C: all fields present produces 1 OK line + no errors + no warnings"

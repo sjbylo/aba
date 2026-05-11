@@ -350,6 +350,37 @@ _vsphere_probe_resources_network_on_cluster() {
 #   0 - DC exists (some siblings may have failed; counters carry the signal)
 #   1 - DC missing (Layer 3 short-circuited; caller should stop)
 _vsphere_probe_resources() {
+	# ESXi (VC empty - set by normalize-vmware-conf via 'govc about' API-type probe):
+	# no datacenter / cluster / resource pool, no per-host RBAC privilege model.
+	# Probe datastore + network under the synthetic /ha-datacenter root that
+	# ESXi always exposes; folder still probed if VC_FOLDER is set; everything
+	# else short-circuits with an INFO line so the user sees which checks ran.
+	if [ -z "${VC:-}" ]; then
+		if _vsphere_resolve_object datastore "$GOVC_DATASTORE" "/ha-datacenter/datastore"; then
+			_vsphere_datastore_path="$_vsphere_resolver_result"
+			_vsphere_datastore_found=1
+		fi
+		if [ -n "${ISO_DATASTORE:-}" ] && [ "$ISO_DATASTORE" != "$GOVC_DATASTORE" ]; then
+			if _vsphere_resolve_object datastore "$ISO_DATASTORE" "/ha-datacenter/datastore"; then
+				_vsphere_iso_datastore_path="$_vsphere_resolver_result"
+				_vsphere_iso_datastore_found=1
+			fi
+		fi
+		if _vsphere_resolve_object network "$GOVC_NETWORK" "/ha-datacenter/network"; then
+			_vsphere_network_path="$_vsphere_resolver_result"
+			_vsphere_network_found=1
+		fi
+		if [ -n "${VC_FOLDER:-}" ]; then
+			if _vsphere_resolve_object folder "$VC_FOLDER" "/ha-datacenter/vm"; then
+				_vsphere_folder_path="$_vsphere_resolver_result"
+				_vsphere_folder_found=1
+			fi
+		else
+			aba_info "vSphere: VC_FOLDER not set, installer will create the default folder per cluster"
+		fi
+		return 0
+	fi
+
 	# D-07: if DC is missing, emit cascade note and bail. The note is aba_info
 	# (NOT aba_warning) and must NOT bump _preflight_errors - _vsphere_object_exists
 	# already bumped once for the "not found" line, keeping the total at exactly 1.
@@ -396,9 +427,13 @@ _vsphere_probe_resources() {
 		_vsphere_probe_resources_network_on_cluster || :
 	fi
 
-	# RES-05: VM folder. VC_FOLDER is typically already an absolute path
-	# (e.g. /DC/vm/MyFolder) but the resolver also handles a bare leaf name.
-	if _vsphere_resolve_object folder "$VC_FOLDER" "/$GOVC_DATACENTER/vm"; then
+	# RES-05: VM folder. VC_FOLDER is optional (commented-out config is valid;
+	# the installer creates the default folder). Skip the probe when empty
+	# rather than running the resolver with an empty hint, which would land on
+	# '/<DC>/vm/' and falsely bump the error counter.
+	if [ -z "${VC_FOLDER:-}" ]; then
+		aba_info "vSphere: VC_FOLDER not set, installer will create the default folder per cluster"
+	elif _vsphere_resolve_object folder "$VC_FOLDER" "/$GOVC_DATACENTER/vm"; then
 		_vsphere_folder_path="$_vsphere_resolver_result"
 		_vsphere_folder_found=1
 	fi
@@ -538,6 +573,13 @@ _vsphere_check_privileges() {
 # D-18: summary does NOT bump _preflight_errors (presentation only; the
 #       individual gap warnings already bumped once each).
 _vsphere_probe_privileges() {
+	# ESXi has no vCenter-style RBAC; the curated 7-scope Permission.Has model
+	# does not apply (logins are typically as root with implicit full privileges).
+	if [ -z "${VC:-}" ]; then
+		aba_info "vSphere: ESXi detected, skipping vCenter privilege scope checks"
+		return 0
+	fi
+
 	# Source the curated privilege arrays. Re-sourcing is idempotent.
 	source scripts/vmware-required-privileges.sh
 
@@ -688,9 +730,17 @@ preflight_check_vsphere() {
 	fi
 
 	# CON-03 (moved from Phase 2 per D-09): required-field presence check.
+	# DC / Cluster are vCenter-only; normalize-vmware-conf strips them and sets
+	# VC= when the target host advertises 'API type: HostAgent' (ESXi). Treat
+	# them as optional on ESXi shapes so a standalone-host vmware.conf does not
+	# fail preflight before the deeper checks ever run.
+	local required_fields=(GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATASTORE GOVC_NETWORK)
+	if [ -n "${VC:-}" ]; then
+		required_fields+=(GOVC_DATACENTER GOVC_CLUSTER)
+	fi
 	local missing=()
 	local f
-	for f in GOVC_URL GOVC_USERNAME GOVC_PASSWORD GOVC_DATACENTER GOVC_CLUSTER GOVC_DATASTORE GOVC_NETWORK; do
+	for f in "${required_fields[@]}"; do
 		# Indirect expansion: ${!f} expands to the value of the variable NAMED by $f.
 		# :- default tolerates any future set -u without relying on it being set.
 		if [ -z "${!f:-}" ]; then
@@ -699,7 +749,7 @@ preflight_check_vsphere() {
 	done
 
 	if [ ${#missing[@]} -gt 0 ]; then
-		# Loud on failure (D-14): one aba_warning line per missing field.
+		# Loud on failure (D-14): one error line per missing field.
 		# Bump _preflight_errors once per missing field; parent summary aborts on count > 0.
 		# Never call 'exit' here - let the parent aggregation decide.
 		for f in "${missing[@]}"; do
@@ -708,9 +758,14 @@ preflight_check_vsphere() {
 		return 0
 	fi
 
-	# Success (UX-01 / D-10): one aba_info_ok line. Forward-compatible wording so
-	# Phase 2/3 can append connectivity / privilege check lines without rewording.
-	aba_info_ok "vSphere: configuration fields present, running checks..."
+	# Success (UX-01 / D-10): one aba_info_ok line; tell the user which shape
+	# (ESXi vs vCenter) was detected so the reduced ESXi probe set is not
+	# mistaken for a regression.
+	if [ -z "${VC:-}" ]; then
+		aba_info_ok "vSphere: ESXi detected (reduced preflight: TCP+TLS+auth+datastore+network)"
+	else
+		aba_info_ok "vSphere: vCenter detected, running checks..."
+	fi
 
 	# Phase 2 Layer 1 + Layer 2: connectivity (TCP + TLS) + auth. Short-circuit the
 	# function on any layer failure; the `return 0` is deliberate - preflight_check_vsphere
