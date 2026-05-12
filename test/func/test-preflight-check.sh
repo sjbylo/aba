@@ -61,7 +61,7 @@ fi
 # 8. Script is executable
 [ -x "$SCRIPT" ] && test_pass "Script is executable" || test_fail "Script is not executable"
 
-# 9. Has extensibility hook for vSphere (IICCCN-55)
+# 9. Has extensibility hook for vSphere (preflight_check_vsphere)
 grep -q 'preflight-check-vsphere' "$SCRIPT" && test_pass "Has vSphere extensibility hook" || test_fail "Missing vSphere extensibility hook"
 
 # 10. Uses shared counters for extensibility

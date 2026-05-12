@@ -429,3 +429,36 @@ Settings can be defined at three levels (highest precedence wins):
 1. **CLI flags** (`-o rhel9`, `-p 1-4`, etc.)
 2. **Per-pool overrides** in `pools.conf` (`CON_SSH_USER=root`, `VM_DATASTORE=...`)
 3. **Defaults** in `config.env`
+
+## Lab provisioning for vSphere preflight tests
+
+The `suite-vsphere-preflight.sh` suite verifies both the happy path (install
+proceeds past preflight, TEST-03) and the negative path (preflight aborts
+`aba install` before any ISO is generated, TEST-04).
+
+**No custom role or user provisioning is required.** The negative test
+triggers a Layer 1 (authentication) preflight failure by swapping
+`vmware.conf` to bogus credentials. Fine-grained privilege scenarios
+(missing `Resource.AssignVMToPool`, etc.) are covered exhaustively by
+`test/func/test-preflight-check-vsphere.sh` (Paths A-Z + AA, 44 assertions,
+mocked `govc`); the E2E suite's unique value is proving that `aba install`
+actually invokes preflight and preflight actually gates the make chain.
+
+### `pools.conf` tokens
+
+Each active pool line carries two tokens the suite reads:
+
+```
+pool1  con1  dis1  aba-e2e-template-rhel8  ...  GOVC_USERNAME_BROKEN=NOT-A-REAL-USER@vsphere.local  GOVC_PASSWORD_BROKEN=NOT-A-REAL-PASSWORD
+```
+
+The defaults shipped in `pools.conf` are ready to use. The values **MUST**
+use only characters from `[A-Za-z0-9._@+-]`; the `pools.conf` parser (see
+`test/e2e/runner.sh`) whitespace-splits tokens and does not support quoted
+values, so any space, `#`, or shell-special character will be silently
+truncated or misparsed.
+
+If you ever need to override the defaults (e.g. to force a different
+failure path), any clearly-not-real username / password within that
+character class will work - the only requirement is that vCenter rejects
+them at authentication time.

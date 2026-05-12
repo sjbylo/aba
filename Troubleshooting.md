@@ -169,3 +169,122 @@ In tests, it was found that repeated installation of OpenShift using the exact s
 When installing a fresh cluster, it is better not to run 'aba refresh' but to run 'aba clean' first and then run 'aba'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
 
 
+## vSphere Preflight Validation
+
+Before generating the ISO, ABA runs a vSphere preflight check (when
+`platform=vmw` in `aba.conf`) that verifies connectivity, TLS trust,
+credentials, resource existence, and per-scope privilege grants. On failure,
+preflight aborts before `openshift-install` is invoked and the ISO file
+(`iso-agent-based/agent.$(arch).iso`) is NOT produced. Every preflight output
+line starts with the token `vSphere:` for greppability.
+
+### ESXi vs vCenter
+
+`normalize-vmware-conf` keys off the `API type` reported by `govc about`. On a
+standalone ESXi host (`API type: HostAgent`), `GOVC_DATACENTER` and
+`GOVC_CLUSTER` are optional - the synthetic `/ha-datacenter` is always
+present, ESXi has no clusters, and ESXi auth is typically as root with
+implicit full privileges. The preflight runs a reduced probe set:
+
+- Layer 1 (TCP / TLS / auth) - same as vCenter.
+- Layer 2 - datastore and network resolved under `/ha-datacenter/datastore`
+  and `/ha-datacenter/network`. `VC_FOLDER` is probed if set; if unset, an
+  info note is emitted and the installer creates the folder on first use.
+- Layer 3 (cluster + network-on-cluster attach + resource pool) - skipped.
+- Layer 4 (vCenter-style privilege scopes) - skipped.
+
+The success banner tells you which path ran:
+
+```
+vSphere: ESXi detected (reduced preflight: TCP+TLS+auth+datastore+network)
+vSphere: vCenter detected, running checks...
+```
+
+### For operators: reading the output
+
+Example failing output:
+
+```
+vSphere: datastore '/Datacenter/datastore/fast-ssd' missing privilege 'Datastore.AllocateSpace'
+vSphere: folder '/Datacenter/vm/aba-test' missing privilege 'Resource.AssignVMToPool'
+vSphere: 2 privilege gap(s) across 2 scope(s)
+```
+
+Line-by-line:
+
+- `vSphere: ... missing privilege 'X'` - the vCenter user has a role assigned
+  on that specific vSphere object, but the role does not grant privilege `X`.
+  Ask your vSphere admin to grant it (or bind a role that does) - see the
+  admin subsection below for a worked example.
+- `vSphere: ... not found` - the named vSphere object does not exist at the
+  stated path. This is a **configuration** problem, not an RBAC problem:
+  check the spelling of `GOVC_DATACENTER`, `GOVC_CLUSTER`, `GOVC_DATASTORE`,
+  `GOVC_NETWORK`, `VC_FOLDER`, and `GOVC_RESOURCE_POOL` in your
+  `vmware.conf`. "Privilege not granted" and "object not found" are
+  **never** conflated by preflight - the wording tells you which class of
+  problem to fix.
+- `vSphere: cannot verify write-access on '...'` (warning) - the user lacks
+  permission to even READ the permission list on that object, typically
+  because the user is missing `System.Read`. The query gap is reported as a
+  warning (not counted as an error) because subsequent scope checks may
+  still catch actionable privilege gaps. To fix this warning specifically,
+  grant `System.Read` on the object.
+- `vSphere: N privilege gap(s) across M scope(s)` - the summary line that
+  appears only when at least one privilege gap was recorded. N is the total
+  gap count; M is the number of distinct vSphere scopes (root, datacenter,
+  cluster, datastore, network, folder, resource pool) where at least one
+  gap was observed.
+
+After fixing the RBAC or the configuration, re-run `aba install`. No extra
+flag is needed - preflight runs automatically on every install attempt.
+
+The full curated list of privileges preflight expects is in
+[scripts/vmware-required-privileges.sh](scripts/vmware-required-privileges.sh).
+Hand this file to your vSphere admin if you do not have admin rights
+yourself; the file header links to the upstream OpenShift documentation
+section it derives from.
+
+### For vSphere admins: granting the privileges
+
+The curated privilege list lives in
+[scripts/vmware-required-privileges.sh](scripts/vmware-required-privileges.sh)
+as one bash array per vSphere scope (root, datacenter, cluster, datastore,
+network, folder, resource pool). The file's header links to the upstream
+OpenShift documentation section it derives from.
+
+To create a role that holds every required privilege across every scope and
+bind it to a vCenter user, use `govc`:
+
+    # Source the curated arrays
+    source scripts/vmware-required-privileges.sh
+
+    # Create an "aba-installer" role holding the union of all required
+    # privileges (govc role.create takes a role name followed by privilege
+    # strings; the "${ARRAY[@]}" expansion passes each element as a
+    # separate argument).
+    govc role.create aba-installer \
+        "${VSPHERE_PRIVS_ROOT[@]}" \
+        "${VSPHERE_PRIVS_DATACENTER[@]}" \
+        "${VSPHERE_PRIVS_CLUSTER[@]}" \
+        "${VSPHERE_PRIVS_DATASTORE[@]}" \
+        "${VSPHERE_PRIVS_NETWORK[@]}" \
+        "${VSPHERE_PRIVS_FOLDER[@]}" \
+        "${VSPHERE_PRIVS_RESOURCE_POOL[@]}"
+
+    # Bind the role to the installer user on each relevant scope. Example
+    # for the resource pool scope:
+    govc permissions.set \
+        -principal installer@vsphere.local \
+        -role aba-installer \
+        /Datacenter/host/Cluster/Resources
+
+    # Repeat 'govc permissions.set' for each scope the installer needs:
+    # the root (/), the datacenter, the cluster, each datastore, the
+    # network/portgroup, and the target VM folder.
+
+Because the `role.create` above expands the arrays at run time, if a new
+privilege is ever added to
+[scripts/vmware-required-privileges.sh](scripts/vmware-required-privileges.sh)
+the admin only needs to re-run the two commands - the updated array is
+picked up on the next shell expansion with no script edits.
+
