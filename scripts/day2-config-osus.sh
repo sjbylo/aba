@@ -22,8 +22,8 @@ scripts/cli-install-all.sh --wait oc
 
 # Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then
-	aba_info "Your cluster is a 'connected cluster' since the value 'int_connection' is set to '$int_connection' in $PWD/cluster.conf"
-	aba_info "There is nothing for 'aba day2-osus' to do and there is no need to run: aba day2 also!"
+	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
+	aba_info "OpenShift Update Service is not needed — the cluster can reach update channels directly."
 
 	exit 0
 fi
@@ -144,6 +144,17 @@ aba_info "Accessing the cluster ..."
 
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 ! oc whoami && aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
+
+# Gate: ensure the cluster install completed (or let the user override)
+if [ ! -f .install-complete ]; then
+	if cluster_is_ready; then
+		aba_info "Cluster is ready but .install-complete marker is missing — creating it now."
+		touch .install-complete
+	else
+		aba_warning "The cluster install has not been finalized (aba install / aba mon has not completed)."
+		ask "The cluster has not been finalized, continue anyway" || exit 1
+	fi
+fi
 
 warn_if_cluster_unstable
 

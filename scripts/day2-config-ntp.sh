@@ -141,6 +141,17 @@ exec_cmd="oc whoami"
 aba_debug "Running: $exec_cmd"
 $exec_cmd || aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
+# Gate: ensure the cluster install completed (or let the user override)
+if [ ! -f .install-complete ]; then
+	if cluster_is_ready; then
+		aba_info "Cluster is ready but .install-complete marker is missing — creating it now."
+		touch .install-complete
+	else
+		aba_warning "The cluster install has not been finalized (aba install / aba mon has not completed)."
+		ask "The cluster has not been finalized, continue anyway" || exit 1
+	fi
+fi
+
 warn_if_cluster_unstable
 
 # Check if MachineConfig would change anything before applying.

@@ -76,8 +76,13 @@ while [ $i -le $# ]; do
 				target_dir=$(eval echo "$target_dir")  # Expand ~ in path
 				# ADR-007: if dir is missing, recreate from external state backup
 				if [ ! -e "$target_dir" ]; then
-					_sdir="$HOME/.aba/clusters/$(basename "$target_dir")"
-					if [ -s "$_sdir/state.sh" ] && [ -s "$_sdir/backup/cluster.conf" ]; then
+					_bn=$(basename "$target_dir")
+					# Find state dir matching this cluster name (name.domain pattern)
+					_sdir=""
+					for _candidate in "$HOME/.aba/clusters/${_bn}."*; do
+						[ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ] && _sdir="$_candidate" && break
+					done
+					if [ "$_sdir" ]; then
 						echo "[ABA] Recreating cluster directory '$target_dir' from state backup" >&2
 						mkdir -p "$target_dir"
 						cp -pa "$_sdir/backup/." "$target_dir/"
@@ -177,6 +182,12 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 		$0 "$@"  # This means aba was updated and needs to be called again
 		exit
 	fi
+fi
+
+# If invoked as "abatui", launch the TUI instead of the CLI
+if [ "$(basename "$0")" = "abatui" ]; then
+	cd "$ABA_ROOT" || exit 1
+	exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
 fi
 
 source $ABA_ROOT/scripts/include_all.sh
@@ -491,7 +502,19 @@ elif [ "$1" = "--light" ]; then
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		# ADR-007: persistent state locks reg_host after install/register.
+		# Reject -H if it conflicts with the installed value.
+		_h_state_file="$HOME/.aba/mirror/$(basename "$WORK_DIR")/state.sh"
+		if [ -s "$_h_state_file" ]; then
+			_h_state_host=$(grep '^reg_host=' "$_h_state_file" 2>/dev/null | head -1 | cut -d= -f2)
+			if [ "$_h_state_host" ] && [ "$_h_state_host" != "$2" ]; then
+				aba_abort \
+					"reg_host is locked to '$_h_state_host' by installed state." \
+					"The -H flag cannot override an installed/registered registry." \
+					"To change the registry host, run 'aba -d $(basename "$WORK_DIR") unregister' (or 'uninstall') first."
+			fi
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_host -v "$2" -f $WORK_DIR/mirror.conf
@@ -988,11 +1011,17 @@ if [ "$cur_target" ]; then
 		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
-				if _recreate_cluster_dir "$_cn"; then
-					:
-				else
-					aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
-				fi
+				_recreated=false
+				for _candidate in "$HOME/.aba/clusters/${_cn}."*; do
+					if [ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ]; then
+						_bd=$(grep '^base_domain=' "$_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
+						if [ "$_bd" ] && _recreate_cluster_dir "$_cn" "$_bd"; then
+							_recreated=true
+							break
+						fi
+					fi
+				done
+				$_recreated || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
 			fi
 			;;
 	esac
@@ -1023,15 +1052,20 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		shell)
-			_kc=$(cluster_kubeconfig "$(basename "$PWD")")
+			_cn=$(basename "$PWD")
+			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
+			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			echo "export KUBECONFIG=$_kc"
 			exit
 		;;
 		getco)
-			exec_cmd="oc --kubeconfig iso-agent-based/auth/kubeconfig get co"
-			aba_debug "Running: $exec_cmd"
-			$exec_cmd
+			OC="oc --kubeconfig iso-agent-based/auth/kubeconfig"
+			aba_debug "Running: $OC get clusterversion"
+			$OC get clusterversion
+			echo
+			aba_debug "Running: $OC get co"
+			$OC get co
 			exit
 		;;
 		day2)

@@ -107,7 +107,7 @@ else
 	echo_red "Unable to discover cluster's certificate expiration date." >&2
 fi
 
-echo_info "Never power down a cluster for an extended period without taking a fresh etcd snapshot first!"
+aba_info "Never power down a cluster for an extended period without taking a fresh etcd snapshot first!"
 echo
 ask "Gracefully shut down the cluster" || exit 1
 

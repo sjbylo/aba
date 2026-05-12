@@ -89,7 +89,7 @@ else
 	_cluster_type=standard
 fi
 
-_state_dir=$(cluster_state_dir "$CLUSTER_NAME")
+_state_dir=$(cluster_state_dir "$CLUSTER_NAME" "$BASE_DOMAIN")
 mkdir -p "$_state_dir/backup"
 chmod 700 "$_state_dir"
 chmod 700 "$(dirname "$_state_dir")"

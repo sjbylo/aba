@@ -73,6 +73,14 @@ if ! oc whoami --request-timeout='20s' >/dev/null; then
 	aba_abort "Cannot access the cluster. Check KUBECONFIG=$KUBECONFIG"
 fi
 
+# Preflight: cluster health — warn and let user decide (default: continue)
+if ! cluster_is_ready; then
+	aba_warning \
+		"The cluster is not fully healthy (degraded operators or install still progressing)." \
+		"To investigate: oc get co | grep -v 'True.*False.*False'"
+	ask "Continue with upgrade anyway" || exit 1
+fi
+
 # Preflight: get current version from live cluster
 aba_debug "Running: oc get clusterversion version -o jsonpath='{.status.desired.version}'"
 current_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}') || current_ver=""
