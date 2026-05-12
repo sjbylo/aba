@@ -241,8 +241,7 @@ build_and_test_cluster() {
     e2e_run "Run post-install checks ($cluster_type)" \
         "aba --dir $cluster_type run"
 
-    e2e_run "Verify cluster operators ($cluster_type)" \
-        "aba --dir $cluster_type cmd 'oc get co'"
+    e2e_wait_cluster_ready $cluster_type
 }
 
 # --- build_and_test_cluster_remote ------------------------------------------
@@ -262,6 +261,5 @@ build_and_test_cluster_remote() {
     e2e_run_remote "Run post-install checks ($cluster_type)" \
         "cd ~/aba && aba --dir $cluster_type run"
 
-    e2e_run_remote "Verify cluster operators ($cluster_type)" \
-        "cd ~/aba && aba --dir $cluster_type cmd 'oc get co'"
+    e2e_wait_cluster_ready $cluster_type remote
 }
