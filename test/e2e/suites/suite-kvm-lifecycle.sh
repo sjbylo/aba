@@ -142,8 +142,8 @@ e2e_run -r 2 10 "Create VMs and start install" \
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
     "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 
-# Let cluster initialize (~10 min) so cluster_is_ready() can detect it
-e2e_run "Sleep 10 min for cluster to initialize" "sleep 600"
+# Let cluster initialize (~20 min on KVM) so cluster_is_ready() can detect it
+e2e_run "Sleep 20 min for cluster to initialize" "sleep 1200"
 
 # EARLY day2: .install-complete does NOT exist yet.
 # day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,

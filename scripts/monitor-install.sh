@@ -76,60 +76,7 @@ fi
 aba_info_ok "The cluster has been successfully installed!"
 
 # --- Externalize cluster state (ADR-007) ---
-# Source config to get cluster identity fields for state.sh
-source <(normalize-aba-conf)
-source <(normalize-cluster-conf)
-
-# Derive cluster_type from replica counts (already available from cluster-config.sh)
-if [ "${CP_REPLICAS:-3}" = "1" ] && [ "${WORKER_REPLICAS:-0}" = "0" ]; then
-	_cluster_type=sno
-elif [ "${WORKER_REPLICAS:-0}" = "0" ]; then
-	_cluster_type=compact
-else
-	_cluster_type=standard
-fi
-
-_state_dir=$(cluster_state_dir "$CLUSTER_NAME" "$BASE_DOMAIN")
-mkdir -p "$_state_dir/backup"
-chmod 700 "$_state_dir"
-chmod 700 "$(dirname "$_state_dir")"
-
-# Write state.sh (lowercase vars, sourceable)
-cat > "$_state_dir/state.sh" <<EOF
-cluster_name=$CLUSTER_NAME
-base_domain=$BASE_DOMAIN
-cluster_type=$_cluster_type
-platform=${platform:-bm}
-starting_ip=${starting_ip:-}
-machine_network=${machine_network:-}
-prefix_length=${prefix_length:-}
-cp_names="$CP_NAMES"
-worker_names="${WORKER_NAMES:-}"
-mirror_name=${mirror_name:-mirror}
-installed_from="$PWD"
-installed_on="$(date -Iseconds)"
-EOF
-
-# Copy auth files to state dir root
-if [ -f "$ASSETS_DIR/auth/kubeconfig" ]; then cp -p "$ASSETS_DIR/auth/kubeconfig" "$_state_dir/"; fi
-if [ -f "$ASSETS_DIR/auth/kubeadmin-password" ]; then cp -p "$ASSETS_DIR/auth/kubeadmin-password" "$_state_dir/"; fi
-
-# Backup config files for dir recreation (preserve timestamps for Make)
-if [ -f cluster.conf ]; then cp -p cluster.conf "$_state_dir/backup/"; fi
-if [ -f install-config.yaml ]; then cp -p install-config.yaml "$_state_dir/backup/"; fi
-if [ -f agent-config.yaml ]; then cp -p agent-config.yaml "$_state_dir/backup/"; fi
-if [ -f macs.conf ]; then cp -p macs.conf "$_state_dir/backup/"; fi
-
-# Backup marker/flag files (timestamps matter for Make dependency tracking)
-# .install-complete is created by the Makefile after this script returns
-for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
-	if [ -f "$_flag" ]; then cp -p "$_flag" "$_state_dir/backup/"; fi
-done
-
-# Convenience symlink for human browsing (scripts use cluster_state_dir())
-ln -sfn "$_state_dir" clusterstate
-
-aba_info "Cluster state saved to $_state_dir/"
+externalize_cluster_state
 
 aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
 aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
