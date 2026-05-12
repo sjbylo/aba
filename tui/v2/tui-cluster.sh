@@ -1617,7 +1617,7 @@ _day2_shutdown() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_SHUTDOWN" \
 		--yes-label "Shutdown" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon and drain all nodes, then power off VMs.\nThe operation will wait until shutdown is complete." 0 0
+		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba -d $SELECTED_CLUSTER shutdown --wait" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
