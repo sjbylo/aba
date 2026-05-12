@@ -23,10 +23,10 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
-# Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
+# Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then
-	aba_info "Your cluster is a 'connected cluster' since the value 'int_connection' is set to '$int_connection' in $PWD/cluster.conf"
-	aba_info "There is nothing for 'aba day2' to do and there is no need to run: aba day2-osus also!"
+	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
+	aba_info "OperatorHub is already configured to pull from public registries — no mirror integration needed."
 
 	exit 0
 fi
@@ -49,6 +49,22 @@ if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 		if ! oc whoami --request-timeout='20s' >/dev/null; then
 			aba_abort "Unable to log into the cluster" 
 		fi
+	fi
+fi
+
+# Gate: ensure the cluster install completed (or let the user override)
+if [ ! -f .install-complete ]; then
+	if cluster_is_ready; then
+		aba_info "Cluster is ready but .install-complete marker is missing — creating it now."
+		touch .install-complete
+		# Run monitor-install to externalize state (auth, backups) if not yet done
+		if [ ! -L clusterstate ]; then
+			aba_info "Externalizing cluster state ..."
+			scripts/monitor-install.sh || true
+		fi
+	else
+		aba_warning "The cluster install has not been finalized (aba install / aba mon has not completed)."
+		ask "The cluster has not been finalized, continue anyway" || exit 1
 	fi
 fi
 
@@ -234,11 +250,19 @@ if [ "$latest_working_dir" ]; then
 	# Apply any CatalogSource files created by oc-mirror v2
 	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
-	[ ! "$cs_file_list" ] && \
-		aba_warning -p IMPORTANT \
-			"No CatalogSource files found under $latest_working_dir/cluster-resources" \
-			"This usually means that Aba has not yet pushed any operator images to your mirror registry." \
-			"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
+	# Only warn about missing CatalogSources when operators are actually in the ISC.
+	# If the ISC has no operators section, CatalogSource files are expected to be absent.
+	if [ ! "$cs_file_list" ]; then
+		_isc="mirror/data/imageset-config.yaml"
+		if [ -f "$_isc" ] && grep -q '^[[:space:]]*operators:' "$_isc"; then
+			aba_warning -p IMPORTANT \
+				"No CatalogSource files found under $latest_working_dir/cluster-resources" \
+				"Your imageset-config.yaml includes operators, but no CatalogSource files were generated." \
+				"Run 'aba -d mirror sync' or 'aba -d mirror save' (transfer ISC and archive files), then 'aba -d mirror load' to mirror operator images."
+		else
+			aba_debug "No CatalogSource files found (no operators in 'aba.conf', 'mirror/mirror.conf' or in 'mirror/data/imageset-config.yaml') — skipping."
+		fi
+	fi
 
 	wait_for_cs=
 

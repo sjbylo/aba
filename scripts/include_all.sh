@@ -349,8 +349,10 @@ vmw_running_vms() {
 	local name vm power_state
 	for name in "$@"; do
 		vm=$(vm_name "$CLUSTER_NAME" "$name")
-		power_state=$(govc vm.info -json "$vm" 2>/dev/null | jq -r '.virtualMachines[0].runtime.powerState')
-		[ "$power_state" = "poweredOn" ] && echo "$name"
+		power_state=$(govc vm.info -json "$vm" 2>/dev/null | jq -r '.virtualMachines[0].runtime.powerState' || true)
+		if [ "$power_state" = "poweredOn" ]; then
+			echo "$name"
+		fi
 	done
 }
 
@@ -361,7 +363,9 @@ kvm_running_vms() {
 	for name in "$@"; do
 		vm=$(vm_name "$CLUSTER_NAME" "$name")
 		_state=$(virsh -c "$LIBVIRT_URI" domstate "$vm" 2>/dev/null || true)
-		[ "$_state" = "running" ] && echo "$name"
+		if [ "$_state" = "running" ]; then
+			echo "$name"
+		fi
 	done
 }
 
@@ -418,6 +422,26 @@ warn_if_cluster_unstable() {
 		| grep -q True; then
 		aba_warning "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
 	fi
+}
+
+# Check if the cluster install is truly complete (all three success criteria).
+# Returns 0 if ready, 1 if not. Requires oc to be authenticated.
+# Criteria: ClusterVersion Available=True, Progressing=False, no Degraded operators.
+cluster_is_ready() {
+	local _cv_available _cv_progressing _degraded_count
+
+	aba_debug "Running: oc get clusterversion (readiness check)"
+
+	_cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null)
+	[ "$_cv_available" = "True" ] || return 1
+
+	_cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null)
+	[ "$_cv_progressing" = "False" ] || return 1
+
+	_degraded_count=$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null | grep -c "True" || true)
+	[ "$_degraded_count" -eq 0 ] || return 1
+
+	return 0
 }
 
 verify-aba-conf() {
@@ -582,10 +606,17 @@ normalize-cluster-conf()
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 
 	# Phase 3 (ADR-007): override immutable fields from installed state
-	local _cn
+	local _cn _sd_candidate
 	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
-	if [ "$_cn" ] && [ -s "$HOME/.aba/clusters/$_cn/state.sh" ]; then
-		_state_override_cluster "$_cn"
+	if [ "$_cn" ]; then
+		for _sd_candidate in "$HOME/.aba/clusters/${_cn}."*; do
+			if [ -s "$_sd_candidate/state.sh" ]; then
+				local _bd_state
+				_bd_state=$(grep '^base_domain=' "$_sd_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
+				[ "$_bd_state" ] && _state_override_cluster "$_cn" "$_bd_state"
+				break
+			fi
+		done
 	fi
 }
 
@@ -642,38 +673,42 @@ cidr_host_count() {
 # Convenience symlinks (clusterstate) exist for humans; scripts use these.
 # -----------------------------------------------------------------------------
 
-# Returns path to the external state dir for a cluster
+# Returns path to the external state dir for a cluster.
+# Key is cluster_name.base_domain (e.g. sno.example.com) for global uniqueness.
+# Usage: cluster_state_dir [name [domain]]
 cluster_state_dir() {
 	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
+	local domain="${2:-${base_domain:-${BASE_DOMAIN:-}}}"
 	[ -z "$name" ] && return 1
-	echo "$HOME/.aba/clusters/$name"
+	[ -z "$domain" ] && return 1
+	echo "$HOME/.aba/clusters/$name.$domain"
 }
 
 # Returns path to kubeconfig (prefers external state, falls back to local)
 cluster_kubeconfig() {
-	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
-	[ -z "$name" ] && return 1
-	local state_path="$HOME/.aba/clusters/$name/kubeconfig"
+	local _sd
+	_sd=$(cluster_state_dir "$@") || return 1
 	local local_path="iso-agent-based/auth/kubeconfig"
-	if [[ -f "$state_path" ]]; then
-		echo "$state_path"
+	if [[ -f "$_sd/kubeconfig" ]]; then
+		echo "$_sd/kubeconfig"
 	elif [[ -f "$local_path" ]]; then
-		echo "$local_path"
+		echo "$PWD/$local_path"
 	fi
 }
 
 # Check if a cluster has externalized state (installed at least once)
 cluster_is_installed() {
-	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
-	[ -z "$name" ] && return 1
-	[[ -s "$HOME/.aba/clusters/$name/state.sh" ]]
+	local _sd
+	_sd=$(cluster_state_dir "$@") || return 1
+	[[ -s "$_sd/state.sh" ]]
 }
 
 # Emit export lines that override immutable cluster fields from state.sh.
 # Called at the end of normalize-cluster-conf() so state wins over config.
 # Drift (config != state) triggers a stderr warning for user-visible fields.
 _state_override_cluster() {
-	local _name="$1" _state="$HOME/.aba/clusters/$1/state.sh"
+	local _name="$1" _domain="$2"
+	local _state="$HOME/.aba/clusters/$_name.$_domain/state.sh"
 	local _immutable="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
 	local _warn_fields="cluster_name base_domain starting_ip cluster_type platform"
 	local _field _sval _cval
@@ -715,8 +750,8 @@ _state_override_mirror() {
 # Returns 0 if successfully recreated, 1 if no backup exists.
 # backup/ holds everything needed: configs, markers, macs.conf.
 _recreate_cluster_dir() {
-	local _name="$1"
-	local _state_dir="$HOME/.aba/clusters/$_name"
+	local _name="$1" _domain="$2"
+	local _state_dir="$HOME/.aba/clusters/$_name.$_domain"
 	local _backup="$_state_dir/backup"
 
 	[ -s "$_state_dir/state.sh" ] || return 1
