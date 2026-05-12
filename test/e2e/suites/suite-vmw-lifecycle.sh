@@ -187,14 +187,33 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create VMs and start install" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step refresh"
 
-e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
+# Wait for bootstrap only (not full install-complete)
+e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
+    "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
+
+# Let cluster initialize (~10 min) so cluster_is_ready() can detect it
+e2e_run "Sleep 10 min for cluster to initialize" "sleep 600"
+
+# EARLY day2: .install-complete does NOT exist yet.
+# day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,
+# externalize state via monitor-install.sh, and proceed with day2 config.
+e2e_run "Verify .install-complete does NOT exist yet" \
+    "[ ! -f $SNO/.install-complete ] || { echo 'ERROR: .install-complete already exists'; false; }"
+e2e_run "Apply day2 EARLY (tests cluster_is_ready gate)" "aba --dir $SNO day2"
+
+# Verify the gate created .install-complete and externalized state
+e2e_run "Verify .install-complete was auto-created by day2 gate" \
+    "[ -f $SNO/.install-complete ] || { echo 'ERROR: day2 did not create .install-complete'; false; }"
+e2e_run "Verify clusterstate symlink exists (state externalized)" \
+    "[ -L $SNO/clusterstate ] || { echo 'ERROR: clusterstate not created'; false; }"
+
+# Finalize: aba mon should complete quickly (cluster already up)
+e2e_run -r 2 30 "Finalize install (aba mon)" "aba --dir $SNO mon"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_poll 600 30 "Wait for all operators fully available" \
     "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
-
-e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
 
 test_end
 

@@ -301,33 +301,37 @@ test_end
 test_begin "Helper functions: cluster state helpers"
 
 # Test helper functions by sourcing include_all.sh directly
-e2e_run "cluster_state_dir returns correct path" \
-	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && result=\$(cluster_state_dir testcluster) && test \"\$result\" = \"\$HOME/.aba/clusters/testcluster\"'"
+e2e_run "cluster_state_dir returns correct path (name.domain)" \
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && result=\$(cluster_state_dir testcluster example.com) && test \"\$result\" = \"\$HOME/.aba/clusters/testcluster.example.com\"'"
 
 e2e_run "cluster_state_dir rejects empty name" \
-	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_state_dir \"\"'"
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_state_dir \"\" \"\"'"
+
+e2e_run "cluster_state_dir rejects missing domain" \
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_state_dir testcluster \"\"'"
 
 e2e_run "cluster_kubeconfig rejects empty name" \
-	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_kubeconfig \"\"'"
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_kubeconfig \"\" \"\"'"
 
 e2e_run "cluster_is_installed returns false for nonexistent" \
-	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_is_installed nonexistent_xyz'"
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && ! cluster_is_installed nonexistent_xyz nonexistent.domain'"
 
-# Create a fake state to test positive path
+# Create a fake state to test positive path (name.domain dir format)
 e2e_run "Create fake cluster state for helper test" \
-	"mkdir -p ~/.aba/clusters/e2e-helper-test && echo 'cluster_name=e2e-helper-test' > ~/.aba/clusters/e2e-helper-test/state.sh"
+	"mkdir -p ~/.aba/clusters/e2e-helper-test.test.example.com && echo 'cluster_name=e2e-helper-test
+base_domain=test.example.com' > ~/.aba/clusters/e2e-helper-test.test.example.com/state.sh"
 
 e2e_run "cluster_is_installed returns true when state exists" \
-	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && cluster_is_installed e2e-helper-test'"
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && cluster_is_installed e2e-helper-test test.example.com'"
 
 e2e_run "cluster_kubeconfig returns empty when no kubeconfig" \
-	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && result=\$(cluster_kubeconfig e2e-helper-test) && test -z \"\$result\"'"
+	"cd ~/aba && bash -c 'source scripts/include_all.sh noerr && result=\$(cluster_kubeconfig e2e-helper-test test.example.com) && test -z \"\$result\"'"
 
 e2e_run "cluster_kubeconfig returns state path when kubeconfig exists" \
-	"touch ~/.aba/clusters/e2e-helper-test/kubeconfig && cd ~/aba && bash -c 'source scripts/include_all.sh noerr && result=\$(cluster_kubeconfig e2e-helper-test) && test \"\$result\" = \"\$HOME/.aba/clusters/e2e-helper-test/kubeconfig\"'"
+	"touch ~/.aba/clusters/e2e-helper-test.test.example.com/kubeconfig && cd ~/aba && bash -c 'source scripts/include_all.sh noerr && result=\$(cluster_kubeconfig e2e-helper-test test.example.com) && test \"\$result\" = \"\$HOME/.aba/clusters/e2e-helper-test.test.example.com/kubeconfig\"'"
 
 e2e_run -q "Cleanup fake cluster state" \
-	"rm -rf ~/.aba/clusters/e2e-helper-test"
+	"rm -rf ~/.aba/clusters/e2e-helper-test.test.example.com"
 
 test_end
 
@@ -381,7 +385,7 @@ test_end
 test_begin "Phase 4: dir recreation from state backup"
 
 _P4_NAME="e2e-test-recreate"
-_P4_STATE="\$HOME/.aba/clusters/$_P4_NAME"
+_P4_STATE="\$HOME/.aba/clusters/${_P4_NAME}.example.com"
 
 e2e_run "Create fake cluster state backup" \
 	"mkdir -p $_P4_STATE/backup && chmod 700 $_P4_STATE && \
@@ -389,7 +393,7 @@ e2e_run "Create fake cluster state backup" \
 cluster_name=e2e-test-recreate
 base_domain=example.com
 cluster_type=sno
-platform=vmw
+platform=bm
 starting_ip=10.0.2.10
 machine_network=10.0.0.0
 prefix_length=20
@@ -405,8 +409,8 @@ touch $_P4_STATE/backup/.init $_P4_STATE/backup/.install-complete"
 e2e_run "Verify e2e-test-recreate dir does NOT exist yet" \
 	"cd ~/aba && [ ! -d $_P4_NAME ] || { echo 'ERROR: $_P4_NAME already exists'; ls -ld $_P4_NAME; false; }"
 
-e2e_run "aba --dir triggers recreation from state" \
-	"cd ~/aba && aba --dir $_P4_NAME ls"
+e2e_run "aba --dir triggers dir recreation" \
+	"cd ~/aba && aba --dir $_P4_NAME help"
 
 e2e_run "Cluster dir was recreated" \
 	"cd ~/aba && [ -d $_P4_NAME ] || { echo 'ERROR: $_P4_NAME was not recreated'; ls -la; false; }"
@@ -423,7 +427,7 @@ e2e_run ".install-complete marker restored" \
 
 e2e_run "clusterstate symlink points to state dir" \
 	"cd ~/aba && [ -L $_P4_NAME/clusterstate ] || { echo 'ERROR: clusterstate not a symlink'; ls -la $_P4_NAME/; false; }
-	 readlink $_P4_NAME/clusterstate | grep -q '.aba/clusters/$_P4_NAME' || { echo 'ERROR: clusterstate points to wrong target:'; readlink $_P4_NAME/clusterstate; false; }"
+	 readlink $_P4_NAME/clusterstate | grep -q '.aba/clusters/${_P4_NAME}.example.com' || { echo 'ERROR: clusterstate points to wrong target:'; readlink $_P4_NAME/clusterstate; false; }"
 
 e2e_run -q "Cleanup recreate test" \
 	"cd ~/aba && rm -rf $_P4_NAME && rm -rf $_P4_STATE"
@@ -453,7 +457,7 @@ e2e_run "Remove mirror working dir" \
 
 # Remove fake cluster state from helper tests
 e2e_run -q "Remove fake cluster state" \
-	"rm -rf ~/.aba/clusters/e2e-helper-test"
+	"rm -rf ~/.aba/clusters/e2e-helper-test.test.example.com"
 
 test_end
 

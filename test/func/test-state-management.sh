@@ -67,7 +67,7 @@ fi
 
 # 3c: drift warning emitted on stderr
 _stderr_file="/tmp/_e2e_drift_stderr_mirror.txt"
-(cd "$_test_mirror_dir" && bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; normalize-mirror-conf" >/dev/null 2>"$_stderr_file")
+(cd "$_test_mirror_dir" && bash -c "export DEBUG_ABA=1; source $REPO_ROOT/scripts/include_all.sh noerr; normalize-mirror-conf" >/dev/null 2>"$_stderr_file")
 if grep -q "reg_host=drifted.example.com differs" "$_stderr_file"; then
 	test_pass "Drift warning emitted for reg_host mismatch"
 else
@@ -97,7 +97,7 @@ rm -rf "$_test_mirror_dir" "$_test_mirror_state"
 echo "--- Phase 3: Cluster drift detection ---"
 
 _test_cluster_dir="$PWD/_test-drift-cluster"
-_test_cluster_state="$HOME/.aba/clusters/_test-drift-cluster"
+_test_cluster_state="$HOME/.aba/clusters/_test-drift-cluster.original.example.com"
 
 mkdir -p "$_test_cluster_dir" "$_test_cluster_state"
 
@@ -123,7 +123,7 @@ STATE
 
 # Cluster normalize needs aba.conf in parent
 _stderr_file3="/tmp/_e2e_drift_stderr_cluster.txt"
-_out=$(cd "$_test_cluster_dir" && bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; eval \"\$(normalize-cluster-conf 2>$_stderr_file3)\"; echo \"\$base_domain\"")
+_out=$(cd "$_test_cluster_dir" && bash -c "export DEBUG_ABA=1; source $REPO_ROOT/scripts/include_all.sh noerr; eval \"\$(normalize-cluster-conf 2>$_stderr_file3)\"; echo \"\$base_domain\"")
 if [ "$_out" = "original.example.com" ]; then
 	test_pass "state.sh base_domain overrides drifted cluster.conf"
 else
@@ -144,7 +144,7 @@ rm -rf "$_test_cluster_dir" "$_test_cluster_state"
 echo "--- Phase 4: Directory recreation ---"
 
 _test_cluster_dir="$PWD/_test-recreate"
-_test_cluster_state="$HOME/.aba/clusters/_test-recreate"
+_test_cluster_state="$HOME/.aba/clusters/_test-recreate.example.com"
 
 mkdir -p "$_test_cluster_state/backup"
 chmod 700 "$_test_cluster_state"
@@ -208,7 +208,7 @@ fi
 # 4f: clusterstate symlink
 if [ -L "$_test_cluster_dir/clusterstate" ]; then
 	_target=$(readlink "$_test_cluster_dir/clusterstate")
-	if echo "$_target" | grep -q ".aba/clusters/_test-recreate"; then
+	if echo "$_target" | grep -q ".aba/clusters/_test-recreate.example.com"; then
 		test_pass "clusterstate symlink points to state dir"
 	else
 		test_fail "clusterstate symlink points to wrong target: $_target"
@@ -225,7 +225,7 @@ rm -rf "$_test_cluster_dir" "$_test_cluster_state"
 echo "--- Phase 4: _recreate_cluster_dir helper ---"
 
 _test_cluster_dir="$PWD/_test-helper-recreate"
-_test_cluster_state="$HOME/.aba/clusters/_test-helper-recreate"
+_test_cluster_state="$HOME/.aba/clusters/_test-helper-recreate.test.example.com"
 
 mkdir -p "$_test_cluster_state/backup"
 chmod 700 "$_test_cluster_state"
@@ -244,7 +244,7 @@ touch "$_test_cluster_state/backup/.init"
 
 # 4g: helper returns 0 on success
 _rc=0
-bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; _recreate_cluster_dir _test-helper-recreate" || _rc=$?
+bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; _recreate_cluster_dir _test-helper-recreate test.example.com" || _rc=$?
 if [ "$_rc" -eq 0 ] && [ -d "$_test_cluster_dir" ]; then
 	test_pass "_recreate_cluster_dir returns 0 and creates dir"
 else
@@ -255,7 +255,7 @@ rm -rf "$_test_cluster_dir" "$_test_cluster_state"
 
 # 4h: helper returns 1 when no state exists
 _rc=0
-bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; _recreate_cluster_dir _nonexistent_cluster_xyz" || _rc=$?
+bash -c "source $REPO_ROOT/scripts/include_all.sh noerr; _recreate_cluster_dir _nonexistent_cluster_xyz nonexistent.domain" || _rc=$?
 if [ "$_rc" -eq 1 ]; then
 	test_pass "_recreate_cluster_dir returns 1 for missing state"
 else
