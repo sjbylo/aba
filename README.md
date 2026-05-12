@@ -619,6 +619,8 @@ Run 'aba day2-ntp' to configure NTP on this cluster.
 
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme.
 
+**vSphere-specific:** See [vSphere Preflight Validation](Troubleshooting.md#vsphere-preflight-validation) for how to read vSphere preflight output and how to grant the required vCenter privileges.
+
 ## Pre-flight Validation
 
 Before generating the ISO, ABA automatically runs pre-flight checks:

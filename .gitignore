@@ -96,3 +96,5 @@ e2e-parallel.log.*
 ai/OPP*docx
 ai/OPP*pdf
 ai/RELEASE_BULLETS_*.md
+
+.planning/

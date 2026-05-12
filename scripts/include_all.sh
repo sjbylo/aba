@@ -1038,6 +1038,25 @@ normalize-vmware-conf()
 	fi
 }
 
+# Resolve the resource-pool path used by the vSphere preflight RES-06 check (Phase 2).
+# When GOVC_RESOURCE_POOL is set and non-empty, echo it unchanged - normalize-vmware-conf
+# has already expanded any $GOVC_DATACENTER / $GOVC_CLUSTER placeholders inside the value.
+# When unset or empty, echo the implicit per-cluster default path that vSphere always
+# provisions: /<DC>/host/<Cluster>/Resources. Callers pass the result to
+# `govc object.collect -s "<path>" name` to probe existence.
+#
+# This lives OUTSIDE normalize-vmware-conf because the default-path computation is a
+# DERIVED value; normalize-*-conf helpers emit only file/default VALUES (CLAUDE.md +
+# Phase 1 carry-forward). Placeholder expansion of an explicit value is a separate
+# concern, already handled inside normalize-vmware-conf.
+resolve-default-resource-pool() {
+	if [ -n "${GOVC_RESOURCE_POOL:-}" ]; then
+		echo "$GOVC_RESOURCE_POOL"
+	else
+		echo "/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources"
+	fi
+}
+
 normalize-kvm-conf()
 {
 	[ ! -s kvm.conf ] && return 0
