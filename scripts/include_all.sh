@@ -444,6 +444,55 @@ cluster_is_ready() {
 	return 0
 }
 
+# Auto-finalize a cluster that completed installation in the background.
+# If kubeconfig exists but .install-complete is missing, probe the cluster API.
+# If the cluster is ready, create the marker and externalize state.
+# Usage: auto_finalize_cluster <cluster-dir>  (absolute or relative to ABA_ROOT)
+auto_finalize_cluster() {
+	local dir="${1:?usage: auto_finalize_cluster <dir>}"
+	local abs_dir
+
+	# Resolve to absolute path
+	if [[ "$dir" == /* ]]; then
+		abs_dir="$dir"
+	else
+		abs_dir="${ABA_ROOT:-$PWD}/$dir"
+	fi
+
+	# Already finalized — nothing to do
+	[[ -f "$abs_dir/.install-complete" ]] && return 0
+
+	# No kubeconfig — cluster was never installed far enough to probe
+	local kc="$abs_dir/iso-agent-based/auth/kubeconfig"
+	[[ -f "$kc" ]] || return 1
+
+	# Probe the cluster with a short timeout
+	local saved_kc="${KUBECONFIG:-}"
+	export KUBECONFIG="$kc"
+
+	# Quick connectivity check — bail fast if API is unreachable
+	oc version --request-timeout=5s >/dev/null 2>&1 || {
+		[[ -n "$saved_kc" ]] && export KUBECONFIG="$saved_kc" || unset KUBECONFIG
+		return 1
+	}
+
+	if cluster_is_ready; then
+		touch "$abs_dir/.install-complete"
+		aba_info "Cluster in '$dir' is ready — created .install-complete marker."
+		# Externalize state if not already done
+		if [[ ! -L "$abs_dir/clusterstate" ]]; then
+			( cd "$abs_dir" && externalize_cluster_state ) || true
+		fi
+	fi
+
+	# Restore KUBECONFIG
+	if [[ -n "$saved_kc" ]]; then
+		export KUBECONFIG="$saved_kc"
+	else
+		unset KUBECONFIG
+	fi
+}
+
 verify-aba-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
@@ -701,6 +750,74 @@ cluster_is_installed() {
 	local _sd
 	_sd=$(cluster_state_dir "$@") || return 1
 	[[ -s "$_sd/state.sh" ]]
+}
+
+# Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
+# Copies auth, config backups, and creates clusterstate symlink.
+# Must be called from the cluster directory (e.g. ~/aba/sno/).
+# Requires: normalize-aba-conf and normalize-cluster-conf already sourced,
+#           or will source them itself.
+externalize_cluster_state() {
+	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
+	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
+
+	[ -z "${cluster_name:-}" ] && aba_warning "externalize_cluster_state: cluster_name not set" && return 1
+	[ -z "${base_domain:-}" ] && aba_warning "externalize_cluster_state: base_domain not set" && return 1
+
+	local _assets_dir="${ASSETS_DIR:-iso-agent-based}"
+
+	# Derive cluster_type from replica counts
+	local _cluster_type
+	if [ "${num_masters:-3}" = "1" ] && [ "${num_workers:-0}" = "0" ]; then
+		_cluster_type=sno
+	elif [ "${num_workers:-0}" = "0" ]; then
+		_cluster_type=compact
+	else
+		_cluster_type=standard
+	fi
+
+	local _state_dir
+	_state_dir=$(cluster_state_dir "$cluster_name" "$base_domain")
+	mkdir -p "$_state_dir/backup"
+	chmod 700 "$_state_dir"
+	chmod 700 "$(dirname "$_state_dir")"
+
+	# Write state.sh (lowercase vars, sourceable)
+	cat > "$_state_dir/state.sh" <<-EOF
+	cluster_name=$cluster_name
+	base_domain=$base_domain
+	cluster_type=$_cluster_type
+	platform=${platform:-bm}
+	starting_ip=${starting_ip:-}
+	machine_network=${machine_network:-}
+	prefix_length=${prefix_length:-}
+	cp_names="${cp_names:-}"
+	worker_names="${worker_names:-}"
+	mirror_name=${mirror_name:-mirror}
+	installed_from="$PWD"
+	installed_on="$(date -Iseconds)"
+	EOF
+
+	# Copy auth files
+	[ -f "$_assets_dir/auth/kubeconfig" ] && cp -p "$_assets_dir/auth/kubeconfig" "$_state_dir/"
+	[ -f "$_assets_dir/auth/kubeadmin-password" ] && cp -p "$_assets_dir/auth/kubeadmin-password" "$_state_dir/"
+
+	# Backup config files (preserve timestamps for Make)
+	[ -f cluster.conf ] && cp -p cluster.conf "$_state_dir/backup/"
+	[ -f install-config.yaml ] && cp -p install-config.yaml "$_state_dir/backup/"
+	[ -f agent-config.yaml ] && cp -p agent-config.yaml "$_state_dir/backup/"
+	[ -f macs.conf ] && cp -p macs.conf "$_state_dir/backup/"
+
+	# Backup marker/flag files
+	local _flag
+	for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
+		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
+	done
+
+	# Convenience symlink
+	ln -sfn "$_state_dir" clusterstate
+
+	aba_info "Cluster state saved to $_state_dir/"
 }
 
 # Emit export lines that override immutable cluster fields from state.sh.

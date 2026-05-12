@@ -640,9 +640,14 @@ list_cluster_dirs() {
 }
 
 # List installed clusters (dirs with .install-complete marker)
+# Also auto-finalizes clusters that completed in the background.
 list_installed_clusters() {
 	local dir
 	for dir in $(list_cluster_dirs); do
+		if ! cluster_installed "$dir"; then
+			# Probe: did this cluster finish installing in the background?
+			auto_finalize_cluster "$dir" 2>/dev/null || true
+		fi
 		cluster_installed "$dir" && echo "$dir" || true
 	done
 }

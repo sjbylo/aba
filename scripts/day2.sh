@@ -57,10 +57,10 @@ if [ ! -f .install-complete ]; then
 	if cluster_is_ready; then
 		aba_info "Cluster is ready but .install-complete marker is missing — creating it now."
 		touch .install-complete
-		# Run monitor-install to externalize state (auth, backups) if not yet done
+		# Externalize state (auth, backups) if not yet done
 		if [ ! -L clusterstate ]; then
 			aba_info "Externalizing cluster state ..."
-			scripts/monitor-install.sh || true
+			externalize_cluster_state || true
 		fi
 	else
 		aba_warning "The cluster install has not been finalized (aba install / aba mon has not completed)."
