@@ -206,6 +206,13 @@ if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
 	run_once -i "aba:mirror:verify" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror verify" &
 fi
 
+# Background ISC generation (so it's ready before user opens View/Edit ISC)
+if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+	tui_log "Kicking off background ISC generation"
+	run_once -i "aba:isconf:generate" -- \
+		bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$_TUI_LOG_FILE" 2>&1 &
+fi
+
 # Wait for internet check to complete (this is the slow part)
 run_once -q -w -i "aba:check:internet" 2>/dev/null || true
 
@@ -336,15 +343,19 @@ _detect_mode() {
 		tui_log "Mode detected: CONNO (internet available, default to mirror)"
 	else
 		_TUI_INET="no"
-		# No internet, no bundle — check if repo is a "bundle equivalent"
-		# Minimum: aba.conf + CLI + registry install files + ISC (yaml+tar OR mirror alive)
+		tui_log "Internet check failed: FAILED_SITES=[$FAILED_SITES]"
+
+		# Show detailed error so user knows which sites are unreachable
+		local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"
+		dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
+			--no-collapse \
+			--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
+
+		# After showing error, check if we can fall back to DISCO
 		if [[ -f "$ABA_ROOT/aba.conf" ]] && _validate_payload; then
 			_TUI_MODE="DISCO"
 			tui_log "Mode detected: DISCO (offline, payload ready)"
 		else
-			# Dead end: insufficient payload for offline operation
-			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" \
-				--msgbox "$TUI2_MSG_PAYLOAD_INCOMPLETE" 0 0
 			clear
 			exit 1
 		fi
@@ -386,8 +397,8 @@ _conno_main() {
 
 		local mirr_label="Install Mirror (local or remote)"
 		local mirr_avail=true
-		local save_label="Save Images"
-		local sync_label="Sync Images"
+		local save_label="Save Images (mirror2disk)"
+		local sync_label="Sync Images (mirror2mirror)"
 		local visc_label="View/Edit ImageSet Config"
 		local ops_label="Select Operators"
 		local bndl_label="Create Bundle"
@@ -400,9 +411,9 @@ _conno_main() {
 		# Internet-dependent items greyed out in offline mode
 		if [[ "$_TUI_INET" == "no" ]]; then
 			save_avail=false
-			save_label="Save Images $TUI2_GREY_NO_INTERNET"
+			save_label="Save Images (mirror2disk) $TUI2_GREY_NO_INTERNET"
 			sync_avail=false
-			sync_label="Sync Images $TUI2_GREY_NO_INTERNET"
+			sync_label="Sync Images (mirror2mirror) $TUI2_GREY_NO_INTERNET"
 			ops_avail=false
 			ops_label="Select Operators $TUI2_GREY_NO_INTERNET"
 			bndl_avail=false
@@ -449,7 +460,7 @@ _conno_main() {
 		# Dynamic menu title with mirror state
 		local _mstate
 		_mstate="$(mirror_state_label)"
-		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):\n(Navigate with Arrow keys, Tab, and ESC)"
+		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):"
 
 		# Mirror health warning
 		local mirror_warn=""
@@ -463,8 +474,8 @@ _conno_main() {
 
 		items+=(
 			"" "──── Mirror ────────────────────────"
-			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_VIEW_ISC"       "$visc_label"
+			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"

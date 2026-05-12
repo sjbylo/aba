@@ -50,7 +50,7 @@ TUI2_TITLE_OPERATOR_SEARCH="Search Operators"
 
 TUI2_TITLE_DISCO_MENU="Fully Disconnected – Actions"
 TUI2_TITLE_DISCO_INSTALL_REG="Install Registry"
-TUI2_TITLE_DISCO_LOAD="Load Images"
+TUI2_TITLE_DISCO_LOAD="Load Images (disk2mirror)"
 TUI2_TITLE_DISCO_VIEW_ISC="ImageSet Configuration (read-only)"
 TUI2_TITLE_DISCO_RESET="Reset to Connected Mode"
 TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
@@ -61,8 +61,8 @@ TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
 
 TUI2_TITLE_CONNO_MENU="Partially Disconnected – Actions"
 TUI2_TITLE_CONNO_INSTALL_MIRROR="Install Mirror Registry"
-TUI2_TITLE_CONNO_SAVE="Save Images"
-TUI2_TITLE_CONNO_SYNC="Sync Images"
+TUI2_TITLE_CONNO_SAVE="Save Images (mirror2disk)"
+TUI2_TITLE_CONNO_SYNC="Sync Images (mirror2mirror)"
 TUI2_TITLE_CONNO_VIEW_ISC="ImageSet Configuration"
 TUI2_TITLE_CONNO_EDIT_ISC="Edit ImageSet Configuration"
 TUI2_TITLE_CONNO_BUNDLE="Create Bundle"
@@ -318,19 +318,19 @@ TUI2_MSG_VERSION_FETCH_FAIL="Cannot fetch version data (no internet?).\n\nUsing 
 # Messages — Day-2
 # =============================================================================
 
-TUI2_MSG_DAY2_MENU="Select operation:\n(Navigate with Arrow keys, Tab, and ESC)"
+TUI2_MSG_DAY2_MENU="Select operation:"
 
 # =============================================================================
 # Messages — DIRECT Mode
 # =============================================================================
 
-TUI2_MSG_DIRECT_MENU="Fully Connected — Install from internet (no mirror):\n(Navigate with Arrow keys, Tab, and ESC)"
+TUI2_MSG_DIRECT_MENU="Fully Connected — Install from internet (no mirror):"
 
 # =============================================================================
 # Messages — DISCO Mode
 # =============================================================================
 
-TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:\n(Navigate with Arrow keys, Tab, and ESC)"
+TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
 TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThe bundle state will be cleared and you will be asked\nto choose between Partially Disconnected (mirror) and Fully Connected (direct) modes."

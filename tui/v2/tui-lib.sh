@@ -166,6 +166,7 @@ dlg() {
 	local args=()
 	local next_is_title=false
 	local next_is_text=false
+	local has_menu=false
 
 	for arg in "$@"; do
 		if [[ "$next_is_title" == "true" ]]; then
@@ -176,19 +177,24 @@ dlg() {
 		if [[ "$next_is_text" == "true" ]]; then
 			# Prepend \n (empty line below title) unless already starts with \n
 			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
-				args+=("\n$arg")
-			else
-				args+=("$arg")
+				arg="\n$arg"
 			fi
+			# Append navigation hint for list-style dialogs
+			if [[ "$has_menu" == "true" ]]; then
+				arg="${arg}\n(Navigate: Arrow keys, Tab, ESC)"
+			fi
+			args+=("$arg")
 			next_is_text=false
 			continue
 		fi
 
 		case "$arg" in
 			--title) next_is_title=true ;;
-			--menu|--msgbox|--yesno|--inputbox|--radiolist|--infobox|--checklist|--mixedform)
+			--menu|--radiolist|--checklist)
+				next_is_text=true; has_menu=true ;;
+			--msgbox|--yesno|--inputbox|--infobox|--mixedform)
 				next_is_text=true ;;
-		esac
+			esac
 		args+=("$arg")
 	done
 
@@ -445,17 +451,8 @@ _exec_in_tui() {
 	if [[ $exit_code -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn" \
 			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
-			--extra-button --extra-label "$TUI2_BTN_EXIT_TUI" \
 			--textbox "$review_file" 0 0
-		local btn=$?
 		rm -f "$output_file" "$review_file"
-		case $btn in
-			3)
-				clear
-				_show_v2_exit_summary
-				exit 0
-				;;
-		esac
 	else
 		dlg --backtitle "$(ui_backtitle)" --title "\Z1FAILED (exit $exit_code)\Zn" \
 			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
@@ -613,10 +610,11 @@ cluster_configured() {
 	[[ -f "$ABA_ROOT/$dir/cluster.conf" ]]
 }
 
-# Is a cluster installed? (kubeconfig exists)
+# Is a cluster installed? (.install-complete is created by Makefile on success
+# and removed by 'aba delete')
 cluster_installed() {
 	local dir="$1"
-	[[ -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]]
+	[[ -f "$ABA_ROOT/$dir/.install-complete" ]]
 }
 
 # List cluster directories (dirs containing cluster.conf, excluding templates)
@@ -641,11 +639,11 @@ list_cluster_dirs() {
 	done | sort -rnk1 | awk '{print $2}'
 }
 
-# List installed clusters (dirs with kubeconfig)
+# List installed clusters (dirs with .install-complete marker)
 list_installed_clusters() {
 	local dir
 	for dir in $(list_cluster_dirs); do
-		cluster_installed "$dir" && echo "$dir"
+		cluster_installed "$dir" && echo "$dir" || true
 	done
 }
 

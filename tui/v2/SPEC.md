@@ -4,11 +4,14 @@
 
 TUI v2 (`tui/v2/abatui2.sh`) is a **complete replacement for v1**, covering the entire ABA workflow: mirror setup, image save/sync/bundle, cluster configuration/installation, monitoring, and Day-2 operations. It supports three operating modes — DISCO, CONNO, and DIRECT — detected automatically at startup.
 
-**Entry:** `./tui/v2/abatui2.sh` (or symlink)
+**Entry points:**
+- `abatui` — installed in `$PATH` (symlink `~/bin/abatui → aba`; `aba.sh` detects `basename == abatui` and exec's the TUI)
+- `./abatui` — repo-root symlink → `tui/v2/abatui2.sh`
+- `./tui/v2/abatui2.sh` — direct invocation
 
 **Dependencies:** `dialog`, `scripts/include_all.sh`, `tui/v2/tui-lib.sh`, `tui/v2/tui-strings2.sh`
 
-**Relationship to v1:** v2 reuses working v1 code (copied and adapted). The original `tui/abatui.sh` stays untouched as a fallback until v2 is proven stable.
+**Relationship to v1:** v2 reuses working v1 code (copied and adapted). v2 is now the primary TUI; the repo-root `abatui` symlink points to v2.
 
 ---
 
@@ -88,15 +91,23 @@ A light bundle (`aba bundle --light`) contains the ISC but no `mirror_*.tar` arc
 
 All screens follow these rules:
 
+### Navigation Hint
+
+The `dlg()` wrapper automatically appends `\n(Navigate: Arrow keys, Tab, ESC)` to the message text of every `--menu`, `--radiolist`, and `--checklist` dialog. This appears above the list, below the prompt text. No manual injection needed — every list-style dialog gets it for free.
+
 ### Buttons
 
 | Rule                 | Pattern                                                                    |
 |----------------------|----------------------------------------------------------------------------|
 | HELP on every screen | `--help-button`; rc=2 → show context-sensitive msgbox, re-display dialog   |
 | NEXT/BACK (forms)    | `--ok-label "Next"` + `--extra-button --extra-label "Back"` (Enter=submit=Next) |
-| Menu-style pages     | `--ok-label "Select"` + `--cancel-label "Back"` + `">" "── Next ──→"` menu item |
+| Menu-style pages     | `--ok-label "Select"` + `--extra-button --extra-label "Next"` + `--cancel-label "Back"` + `--help-button` + `--default-button ok` |
 | Cancel (rc=1)        | Go back one level                                                            |
 | ESC (rc=255)         | Hierarchical: sub-menu/wizard → return to parent; main menu → confirm quit   |
+
+#### Critical: `--help-button` Required on All Menu-style Pages
+
+When a dialog uses `--extra-button` (for "Next"), it MUST also include `--help-button`. Without it, `dialog` can misfire rc=3 (Extra/Next) on the first Enter press from a menu item, instead of rc=0 (Select/OK). This is a known `dialog` quirk — adding `--help-button` stabilizes the internal button handling.
 
 ### Execution Modes
 
@@ -111,6 +122,11 @@ Both modes MUST:
 - Display the command being executed at the top (e.g. `Executing: aba -d mirror sync`)
 - Return the real exit code to the caller (callers gate on success/failure)
 
+### Post-Execution Dialogs
+
+- **Success (exit 0):** Show output in a textbox with only "Back to Menu" button. No "Exit TUI" — the user just completed an operation and almost always wants to continue.
+- **Failure (exit != 0):** Show output with "Back to Menu" and "Retry" buttons.
+
 ### Unavailable Menu Items
 
 Items that cannot be activated (prerequisites unmet) are **shown but greyed out** with a short reason tag. Example:
@@ -122,7 +138,42 @@ Items that cannot be activated (prerequisites unmet) are **shown but greyed out*
 
 This lets the user see the full workflow at a glance.
 
+**Cluster installed check:** `cluster_installed()` checks for the `.install-complete` marker file (created by the Makefile on successful install, removed by `aba delete`). Do NOT use `iso-agent-based/auth/kubeconfig` — it persists after deletion and causes deleted clusters to appear as installed.
+
+**ERR trap safety:** `list_installed_clusters()` uses `cluster_installed "$dir" && echo "$dir" || true` — the `|| true` is required because under `set -e` or an ERR trap, a false return from `cluster_installed` would abort the loop.
+
 **Exception:** Operations where the Makefile handles prerequisites (e.g. Sync, Load) are NEVER greyed out — even if the mirror isn't installed. The TUI shows a config review dialog and the single `aba` command handles the install as a dependency.
+
+### Dynamic Menu Titles (Mirror State)
+
+Main menus in CONNO and DISCO modes display the current mirror state in the menu body text:
+
+- CONNO: `"Partially Disconnected Mode (mirror ready):"`
+- DISCO: `"Fully Disconnected — Choose an action (mirror ready):"`
+
+Possible states: `no mirror` → `mirror installed` → `mirror ready` (from `mirror_state_label()`).
+
+### Command Display Formatting
+
+Long `aba` commands (more than 3 flags) are displayed in multi-line format with backslash continuations when shown in "Command to execute" dialogs:
+
+```
+aba bundle \
+    --pull-secret "~/.pull-secret.json" \
+    --channel stable \
+    --version latest \
+    --op-sets ocp odf virt
+```
+
+Implemented by `_format_cmd_display()` in `tui-lib.sh`.
+
+### Platform Toggle Alignment
+
+`dialog --menu` sizes columns based on the **raw byte length** of item descriptions, including invisible ANSI color codes (`\Z2\Zb✓\Zn` = ~10 extra bytes). To prevent menu shifting when toggling fields with status indicators:
+
+- Pad descriptions to ensure consistent raw byte length across all options
+- Items WITH color codes: pad the text less (color codes already add width)
+- Items WITHOUT color codes: pad the text more (compensate for missing invisible bytes)
 
 ### Default Values
 
@@ -166,6 +217,16 @@ When an operation will trigger a first-time install (mirror or cluster), the TUI
 3. If config exists from a prior aborted attempt — load those values, never skip the review
 4. Proceed with the single command after user confirms
 
+### Save-on-Edit (Mirror Config)
+
+Mirror config dialogs (`_mirror_config_review`, `_mirror_install_local`, `_mirror_install_remote`) save each field to `mirror.conf` **immediately when the user confirms an edit** — not deferred to a "Continue"/"Next" action. This ensures:
+
+- Values persist even if the user presses Back/Cancel
+- Switching between different TUI paths (e.g. "Install Registry" → "Load Images") preserves edits
+- Crash safety: no edits are lost
+
+This matches the cluster wizard pattern (which uses `_set_cluster_conf` after each field).
+
 ### Focus Preservation
 
 Every menu dialog in a `while :; do` loop MUST pass `--default-item "$default_item"` so focus stays on the last-selected item after an edit or toggle action.
@@ -176,13 +237,15 @@ Every menu dialog in a `while :; do` loop MUST pass `--default-item "$default_it
 
 ### Action Menu
 
+Dynamic title: `"Fully Disconnected — Choose an action (mirror ready):"` (state from `mirror_state_label()`)
+
 Unavailable items shown greyed out:
 
 | #  | Item                     | Availability                                     |
 |----|--------------------------|--------------------------------------------------|
 | 1  | Install Registry         | Always (local or remote; re-install if needed)   |
-| 2  | Load Images              | Always (if no registry: config review → `aba load` handles install as dep) |
-| 3  | Install Cluster          | Always (unified: configure → review → install)   |
+| 2  | Load Images (disk2mirror)| Always (if no registry: config review → `aba load` handles install as dep) |
+| 3  | Install Cluster          | Always (if no mirror: offers Install & Load; if no images: offers Load Now) |
 | 4  | Day-2: NTP / OSUS / Full | Greyed until cluster installed                   |
 | 5  | Monitor Cluster          | Greyed until cluster installed                   |
 | 7  | View ISC                 | Always (read-only; ISC came from bundle)         |
@@ -209,11 +272,25 @@ Unavailable items shown greyed out:
 3. Execute: `aba -d mirror load` (terminal/TUI mode) — single command handles install+load
 4. On success: return to action menu
 
-### UC-D3: View ISC
+### UC-D3: Install Cluster
+
+Parallels CONNO's Install Cluster flow with DISCO-specific adaptations:
+
+1. If mirror not installed:
+   - Offer: "Install & Load" / "Back"
+   - If Yes: show mirror config review (`_mirror_config_review()`) → `disco_load_images` → `cluster_install_flow`
+   - Single `aba -d mirror load` command handles install+load (Makefile deps)
+2. If mirror installed but no release images:
+   - Offer: "Load Now" / "Back"
+   - If Yes: `disco_load_images` → `cluster_install_flow`
+3. If mirror ready:
+   - Proceed directly to `cluster_install_flow`
+
+### UC-D4: View ISC
 
 Read-only view of `mirror/data/imageset-config.yaml` via `--textbox`. No editing (ISC came from bundle, modifications belong on the connected host).
 
-### UC-D4: Reset to Connected Mode
+### UC-D5: Reset to Connected Mode
 
 1. Pre-check: internet available? If not → greyed, cannot activate.
 2. Confirm: "Switch to connected mode? The bundle state will be cleared."
@@ -234,14 +311,16 @@ Unavailable items shown greyed out:
 
 **Mirror operations:**
 
-| #  | Item              | Availability                       |
-|----|-------------------|------------------------------------|
-| 1  | Install Mirror    | Always (local or remote)           |
-| 2  | Save Images       | Always (m2d — only needs internet, no mirror) |
-| 3  | Sync Images       | Always (if no mirror: config review → `aba sync` handles install as dep) |
-| 4  | View/Edit ISC     | Always                             |
-| 5  | Select Operators  | Always (same as v1 checklist)      |
-| 6  | Create Bundle     | Always                             |
+| #  | Item                           | Availability                       |
+|----|--------------------------------|------------------------------------|
+| 1  | View/Edit ImageSet Config      | Always (shows first — most commonly reviewed) |
+| 2  | Select Operators               | Always (same as v1 checklist)      |
+| 3  | Install Mirror                 | Always (local or remote)           |
+| 4  | Save Images (mirror2disk)      | Always (m2d — only needs internet, no mirror) |
+| 5  | Sync Images (mirror2mirror)    | Always (if no mirror: config review → `aba sync` handles install as dep) |
+| 6  | Create Bundle                  | Always                             |
+
+Menu label convention: Save/Sync/Load include directional suffixes — `(mirror2disk)`, `(mirror2mirror)`, `(disk2mirror)` — so the user knows the data flow direction at a glance.
 
 **Cluster operations:**
 
@@ -336,9 +415,10 @@ Value precedence: `aba.conf` (if set) → `get_*()` auto-detect → smart guess 
   3) Connection:     mirror        [toggle: mirror → proxy → direct]
 ```
 
-- Uses `--extra-button --extra-label "Next"` + `--help-button` (must include
-  `--help-button` — without it, dialog can mis-fire rc=3 on first Enter)
+- Uses `--ok-label "Select"` + `--extra-button --extra-label "Next"` + `--cancel-label "Back"` + `--help-button` + `--default-button ok`
+- **MUST include `--help-button`** — without it, dialog misfires rc=3 (Next) on first Enter from a menu item instead of rc=0 (Select). This is a confirmed `dialog` quirk.
 - In DIRECT mode: Connection toggle cycles direct ↔ proxy only
+- **Help text** mentions: multiple port names create a bond (e.g. `ens1f0,ens1f1`). The "MACs" field description is omitted from the generic help — it only applies to bare-metal platforms and is shown contextually.
 
 ### Page 4: VM Resources (form-style, only if platform != bm)
 
@@ -401,6 +481,12 @@ Correct CLI flags (from `others/help-cluster.txt`):
 | Day-2: Full    | `aba -d <cluster> day2`         | DISCO, CONNO       | None                                       |
 | Day-2: NTP     | `aba -d <cluster> day2-ntp`     | ALL modes          | None                                       |
 | Day-2: OSUS    | `aba -d <cluster> day2-osus`    | DISCO, CONNO       | Warn if Cincinnati operator not in ISC     |
+| Upgrade        | `aba -d <cluster> upgrade --to <ver>` | ALL modes   | Prompts for target version                 |
+| Shutdown       | `aba -d <cluster> shutdown --wait`    | ALL modes   | None                                       |
+| Startup        | `aba -d <cluster> startup --wait`     | ALL modes   | None                                       |
+| Refresh        | `aba -d <cluster> refresh`            | ALL modes   | None                                       |
+| Clean          | `aba -d <cluster> clean`              | ALL modes   | None                                       |
+| Delete         | `aba -d <cluster> delete`             | ALL modes   | None                                       |
 
 ### Flow
 
@@ -409,6 +495,24 @@ Correct CLI flags (from `others/help-cluster.txt`):
 3. Confirm execution
 4. Run in terminal/TUI mode
 5. Return to action menu
+
+### Upgrade Workflow
+
+The upgrade flow prompts for a target version because `aba upgrade` requires `--to <version>`:
+
+1. `select_installed_cluster` → user picks a cluster
+2. Input dialog: "Target version for <cluster>:" with three buttons:
+   - **Upgrade** (OK) — validates non-empty input, executes `aba -d <cluster> upgrade --to <version>`
+   - **List Available** (extra button) — executes `aba -d <cluster> upgrade --dry-run` to show available versions
+   - **Back** (cancel) — returns to Day-2 menu
+3. After "List Available", the user returns to the same input dialog to enter the version
+
+### Connected Cluster Messaging
+
+When `day2` or `day2-osus` runs against a cluster with `int_connection` set (connected to internet):
+- `day2.sh` prints: "This cluster connects directly to the internet. OperatorHub is already configured to pull from public registries — no mirror integration needed."
+- `day2-config-osus.sh` prints: "OpenShift Update Service is not needed — the cluster can reach update channels directly."
+These are high-level messages (no internal variable dumps) so the user understands *why* the operation is a no-op.
 
 ---
 
@@ -441,7 +545,7 @@ Triggered before cluster install when platform is vmw or kvm:
 
 - Named mirrors (`aba mirror --name foo`)
 - VMware/KVM config file form editors (TUI offers `$EDITOR`, not a full form)
-- `aba reset`, `aba upgrade`, `aba bundle --out -` (piping to stdout)
+- `aba reset`, `aba bundle --out -` (piping to stdout)
 - Multi-cluster management (TUI handles one at a time)
 - `aba tar` (low-level archive operations)
 
@@ -451,14 +555,20 @@ Triggered before cluster install when platform is vmw or kvm:
 
 TUI and CLI share cached operation results via unified `aba:` prefix:
 
-| Operation          | Cache key               |
-|--------------------|-------------------------|
-| Internet checks    | `aba:check:*`           |
-| Catalog prefetch   | `aba:prefetch:catalogs` |
-| ISC generation     | `aba:isconf:generate`   |
-| OCP versions       | `ocp:${channel}:*`      |
+| Operation          | Cache key               | TTL     |
+|--------------------|-------------------------|---------|
+| Internet checks    | `aba:check:*`           | 5 min   |
+| Catalog prefetch   | `aba:prefetch:catalogs` | session |
+| ISC generation     | `aba:isconf:generate`   | session |
+| OCP versions       | `ocp:${channel}:*`      | session |
 
 Benefit: if user ran `aba` CLI recently, the TUI instantly uses cached results — zero wait. CLI and TUI are fully interchangeable.
+
+**Important:** The internet check cache is intentional for fast TUI startup. Do NOT purge it on every TUI launch. If testing disconnected mode on a host that recently had internet, manually clear the runner entries:
+
+```bash
+rm -f ~/.aba/runner/aba:check:internet* ~/.aba/runner/aba:check:api.* ~/.aba/runner/aba:check:mirror.* ~/.aba/runner/aba:check:registry.*
+```
 
 ## ISC Background Regeneration
 
@@ -470,6 +580,7 @@ Its inputs are: `ocp_channel`, `ocp_version`, `ops`, `op_sets`, `ARCH`, `excl_pl
 2. **Wait only when viewing** — `mirror_view_isc()` calls `run_once -p` to check completion, then `run_once -q -w` only if still running
 
 **Triggers (write to aba.conf + background ISC regen):**
+- **TUI startup** — if `aba.conf` exists, ISC generation is kicked off in the background before the main menu renders (all modes: CONNO, DISCO, DIRECT). This prevents delays when the user first opens "View/Edit ISC".
 - Channel/version saved (`_direct_save_config`)
 - Operator basket changed (`_persist_operator_basket`)
 
@@ -479,9 +590,10 @@ This means ISC is usually ready before the user navigates to "View ISC".
 
 ## Navigation Rules
 
-- **ESC** at any dialog → confirm quit (same as v1)
-- **Back** button → previous page/menu
-- **Help** (F1 or button) → context-sensitive help msgbox
+- **ESC** (rc=255) → hierarchical: sub-menu/wizard → return to parent; main menu → confirm quit
+- **Back** button (rc=1) → previous page/menu
+- **Help** (rc=2) → context-sensitive help msgbox, then re-display same dialog
+- **Next** (rc=3, extra button) → advance to next page/step
 - Unavailable items visible but greyed — cannot be activated
 - After long-running operations: return to action menu automatically
 - Cluster lists always show full `<cluster-name>.<base_domain>`
@@ -522,6 +634,39 @@ Each `tui-*.sh` is sourceable AND standalone (`BASH_SOURCE` guard for dev/testin
 7. **Default to bm** — platform default is bare metal; VM pages only shown for vmw/kvm
 8. **CLI and TUI interchangeable** — shared `run_once` caches, same config files; user can switch between TUI and CLI mid-workflow
 9. **Single-letter menu shortcuts** — every `--menu` item MUST use a single uppercase letter as its tag (e.g. `"P" "Platform: ..."` not `"plat" "Platform: ..."`). This gives users instant keyboard shortcuts. Exception: `--radiolist` items where the tag IS the config value (e.g. `"vmw"`, `"stable"`) keep their semantic names since they are written directly to config files.
+
+## Learnings and Pitfalls
+
+### `dialog` Quirks
+
+1. **`--help-button` stabilizes Extra button:** Without `--help-button`, `dialog` can misfire rc=3 (Extra/Next) on the first Enter press from a menu item. Always include it on menu-style pages.
+2. **Column sizing includes invisible bytes:** `dialog --menu` sizes columns based on raw byte length including ANSI color codes (`\Z2\Zb✓\Zn` = ~10 extra bytes). Pad descriptions to keep columns stable across toggled states.
+3. **No text between list and buttons:** `dialog` has no native option to place text between the menu list and the button row. The `--hline` option places text in the bottom border but it's visually noisy — prefer the message text area (above the list) for hints.
+4. **`\n` in message text:** `dialog --colors` interprets `\\n` for line breaks. Literal newlines in shell strings may not render correctly — use explicit `\\n` escape sequences.
+5. **Enter from menu list always triggers OK (rc=0):** Even with `--extra-button`, pressing Enter on a highlighted menu item fires the OK button's return code, not the Extra button's.
+
+### Marker Files
+
+- **`.install-complete`** is the canonical "cluster installed" marker. Created by Makefile on install success, removed by `aba delete`. The TUI's `cluster_installed()` MUST check this file.
+- **`iso-agent-based/auth/kubeconfig`** persists after `aba delete` — NEVER use it to determine if a cluster is installed.
+- **`.available`** marks a mirror as installed. `.unavailable` marks it as explicitly absent.
+
+### `set -e` / ERR Trap Safety
+
+- `cmd1 && cmd2` returns non-zero if `cmd1` fails, which triggers `set -e` abort. Always use `cmd1 && cmd2 || true` in loops where failure is expected (e.g. `cluster_installed "$dir" && echo "$dir" || true`).
+- Never use `(( var++ ))` — when `var` is 0, `(( 0 ))` returns exit code 1. Use `var=$(( var + 1 ))`.
+
+### Entry Point Chain
+
+```
+~/bin/abatui → aba (symlink)
+  → aba.sh detects basename == "abatui"
+  → exec tui/v2/abatui2.sh
+```
+
+Also: repo-root `./abatui → tui/v2/abatui2.sh` for convenience.
+
+---
 
 ## Testing with tmux (on registry4)
 

@@ -87,23 +87,38 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 		case "$field" in
 			H)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_host=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_host=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			P)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_port=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_port=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			U)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_user=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_user=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			W)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_pw=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_pw=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			I)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_path=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_path=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			V)
 				case "$m_vendor" in
@@ -112,22 +127,18 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 					docker) m_vendor="auto" ;;
 					*) m_vendor="auto" ;;
 				esac
+				replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
 				;;
 			D)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory (absolute path):" 0 60 "$m_datadir" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_datadir=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_datadir=$(<"$_TUI_TMP")
+					replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 		esac
 	done
 
-	# Save any changes to mirror.conf
-	replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
 	return 0
 }
 
@@ -242,23 +253,38 @@ _mirror_install_local() {
 		case "$field" in
 			H)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_host=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_host=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			P)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_port=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_port=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			U)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_user=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_user=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			W)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_pw=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_pw=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			I)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_path=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_path=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			V)
 				# Toggle: auto → quay → docker → auto
@@ -268,24 +294,21 @@ _mirror_install_local() {
 					docker) m_vendor="auto" ;;
 					*) m_vendor="auto" ;;
 				esac
+				replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
 				tui_log "Toggled vendor to: $m_vendor"
 				;;
 			D)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory (absolute path):" 0 60 "$m_datadir" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_datadir=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_datadir=$(<"$_TUI_TMP")
+					replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 		esac
 	done
 
-	# Save to mirror.conf
+	# Save SSH fields (local install clears them)
 	tui_log "Saving mirror config: host=$m_host port=$m_port vendor=$m_vendor"
-	replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
 	replace-value-conf -q -n reg_ssh_user -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 	replace-value-conf -q -n reg_ssh_key -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 
@@ -377,31 +400,52 @@ _mirror_install_remote() {
 		case "$field" in
 			H)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Remote registry hostname (FQDN):" 0 60 "$m_host" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_host=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_host=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			S)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH username:" 0 40 "$m_ssh_user" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_ssh_user=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_ssh_user=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			K)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH private key path:" 0 60 "$m_ssh_key" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_ssh_key=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_ssh_key=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			P)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_port=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_port=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			U)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_user=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_user=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			W)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_pw=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_pw=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			I)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_path=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_path=$(<"$_TUI_TMP")
+					replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 			V)
 				case "$m_vendor" in
@@ -410,24 +454,21 @@ _mirror_install_remote() {
 					docker) m_vendor="auto" ;;
 					*) m_vendor="auto" ;;
 				esac
+				replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
 				tui_log "Toggled vendor to: $m_vendor"
 				;;
 			D)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Data directory on remote host:" 0 60 "$m_datadir" 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && m_datadir=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					m_datadir=$(<"$_TUI_TMP")
+					replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+				fi
 				;;
 		esac
 	done
 
-	# Save to mirror.conf
-	tui_log "Saving mirror config: host=$m_host ssh=$m_ssh_user vendor=$m_vendor"
-	replace-value-conf -q -n reg_host -v "$m_host" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_port -v "$m_port" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_user -v "$m_user" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_path -v "$m_path" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n reg_vendor -v "$m_vendor" -f "$ABA_ROOT/mirror/mirror.conf"
-	replace-value-conf -q -n data_dir -v "$m_datadir" -f "$ABA_ROOT/mirror/mirror.conf"
+	# Save SSH-specific fields that may not have been edited individually
+	tui_log "Saving mirror config: host=$m_host ssh=$m_ssh_user key=$m_ssh_key vendor=$m_vendor"
 	replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$ABA_ROOT/mirror/mirror.conf"
 	replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$ABA_ROOT/mirror/mirror.conf"
 
@@ -443,7 +484,7 @@ _mirror_install_remote() {
 
 mirror_save() {
 	tui_log "Action: Save Images"
-	confirm_and_execute "aba -d mirror save" "Save Images to Archive"
+	confirm_and_execute "aba -d mirror save" "Save Images (mirror2disk)"
 	local rc=$?
 	_invalidate_mirror_cache
 	return $rc
@@ -455,7 +496,7 @@ mirror_save() {
 
 mirror_sync() {
 	tui_log "Action: Sync Images"
-	confirm_and_execute "aba -d mirror sync" "Sync Images to Registry"
+	confirm_and_execute "aba -d mirror sync" "Sync Images (mirror2mirror)"
 	local rc=$?
 	_invalidate_mirror_cache
 	return $rc
@@ -1025,7 +1066,23 @@ mirror_create_bundle() {
 			--yes-label "$TUI2_BTN_LIGHT_BUNDLE" \
 			--no-label "$TUI2_BTN_FULL_BUNDLE" \
 			--yesno "$TUI2_MSG_BUNDLE_LIGHT_CONFIRM" 0 0
-		[[ $? -eq 0 ]] && light_flag="--light"
+		if [[ $? -eq 0 ]]; then
+			light_flag="--light"
+		else
+			# Full bundle on same device — warn about disk space
+			dlg --backtitle "$(ui_backtitle)" --title "Disk Space Warning" \
+				--yes-label "$TUI2_BTN_CONTINUE" \
+				--no-label "$TUI2_BTN_CANCEL" \
+				--yesno "\Z3Disk Space Consideration\Zn\n\n\
+Bundle and mirror are on the same filesystem.\n\n\
+Creating a full bundle requires:\n\
+  • Mirror image-set archives in mirror/data/\n\
+  • Complete bundle copy written to: $bundle_path\n\n\
+You may temporarily need roughly \Zbdouble the space\Zn.\n\n\
+\ZbRecommendation:\Zn Use light bundle to avoid this.\n\n\
+Continue with full bundle anyway?" 0 0
+			[[ $? -ne 0 ]] && return 1
+		fi
 	fi
 
 	# If images already exist, offer reuse vs clean rebuild
