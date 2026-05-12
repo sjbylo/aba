@@ -111,19 +111,19 @@ installed_on="$(date -Iseconds)"
 EOF
 
 # Copy auth files to state dir root
-[ -f "$ASSETS_DIR/auth/kubeconfig" ] && cp -p "$ASSETS_DIR/auth/kubeconfig" "$_state_dir/"
-[ -f "$ASSETS_DIR/auth/kubeadmin-password" ] && cp -p "$ASSETS_DIR/auth/kubeadmin-password" "$_state_dir/"
+if [ -f "$ASSETS_DIR/auth/kubeconfig" ]; then cp -p "$ASSETS_DIR/auth/kubeconfig" "$_state_dir/"; fi
+if [ -f "$ASSETS_DIR/auth/kubeadmin-password" ]; then cp -p "$ASSETS_DIR/auth/kubeadmin-password" "$_state_dir/"; fi
 
 # Backup config files for dir recreation (preserve timestamps for Make)
-[ -f cluster.conf ] && cp -p cluster.conf "$_state_dir/backup/"
-[ -f install-config.yaml ] && cp -p install-config.yaml "$_state_dir/backup/"
-[ -f agent-config.yaml ] && cp -p agent-config.yaml "$_state_dir/backup/"
-[ -f macs.conf ] && cp -p macs.conf "$_state_dir/backup/"
+if [ -f cluster.conf ]; then cp -p cluster.conf "$_state_dir/backup/"; fi
+if [ -f install-config.yaml ]; then cp -p install-config.yaml "$_state_dir/backup/"; fi
+if [ -f agent-config.yaml ]; then cp -p agent-config.yaml "$_state_dir/backup/"; fi
+if [ -f macs.conf ]; then cp -p macs.conf "$_state_dir/backup/"; fi
 
 # Backup marker/flag files (timestamps matter for Make dependency tracking)
 # .install-complete is created by the Makefile after this script returns
 for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
-	[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
+	if [ -f "$_flag" ]; then cp -p "$_flag" "$_state_dir/backup/"; fi
 done
 
 # Convenience symlink for human browsing (scripts use cluster_state_dir())
@@ -133,9 +133,10 @@ aba_info "Cluster state saved to $_state_dir/"
 
 aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
 aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
-[ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
-	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
+if [ -f "$regcreds_dir/pull-secret-mirror.json" ]; then
+	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)."
 	aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
+fi
 aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
 aba_info_ok "Run 'aba info' to view this information again."
 aba_info_ok "Run 'aba help' and 'aba -h' for more options."

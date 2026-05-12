@@ -193,7 +193,9 @@ create_node() {
 				govc device.connect -vm "$vm_name" "$_cdrom_dev" 2>/dev/null || true
 				sleep 2
 			done
-			[ -z "$_cdrom_ok" ] && aba_warning "CD-ROM may still be disconnected on $vm_name -- check ISO datastore accessibility"
+			if [ -z "$_cdrom_ok" ]; then
+				aba_warning "CD-ROM may still be disconnected on $vm_name -- check ISO datastore accessibility"
+			fi
 		fi
 
 		if [ -n "${START_VM:-}" ]; then
