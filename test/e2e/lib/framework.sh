@@ -934,6 +934,7 @@ _interactive_prompt() {
                 continue
                 ;;
             r|R|"")
+                [ -z "$ans" ] && _e2e_log "  Empty input at interactive prompt -- treating as retry"
                 rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $cmd"
                 return 2
@@ -1297,44 +1298,94 @@ e2e_poll_remote() {
         "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
 }
 
-# --- Operator readiness helpers ---------------------------------------------
+# --- Cluster readiness helpers ------------------------------------------------
 #
-# Reusable wait functions for OpenShift cluster operator stabilization.
-# Both use wall-clock-bounded polling (e2e_poll / e2e_poll_remote).
+# Reusable wait functions for OpenShift cluster stabilization with
+# anti-flapping: the condition must pass STABILITY consecutive times
+# (default 3) before the helper returns success.
+#
+# Two modes:
+#   "available" -- loose: all COs AVAILABLE=True (ignores PROGRESSING/DEGRADED)
+#   "ready"     -- strict: ClusterVersion Available=True, Progressing=False,
+#                  zero Degraded COs (matches core cluster_is_ready())
 #
 # Usage:
-#   e2e_wait_operators_available $SNO           # local, AVAILABLE=True only
-#   e2e_wait_operators_available $SNO remote    # remote (disN)
-#   e2e_wait_operators_ready $SNO remote        # remote, strict 3-column check
+#   e2e_wait_cluster_available $SNO              # local, 10-min timeout
+#   e2e_wait_cluster_available $SNO remote       # remote (disN)
+#   e2e_wait_cluster_ready $SNO                  # local, 30-min timeout
+#   e2e_wait_cluster_ready $SNO remote 2700      # remote, 45-min timeout
 #
 
-# Loose check: all operators have AVAILABLE=True (ignores PROGRESSING/DEGRADED).
-# 10 min timeout, 30s interval.
-e2e_wait_operators_available() {
-	local cluster_dir="$1"
-	local location="${2:-local}"
-	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3}' | tail -n +2 | grep -v '^True\$' | wc -l | grep ^0\$"
+_e2e_wait_cluster_condition() {
+	local mode="$1"
+	local cluster_dir="$2"
+	local location="${3:-local}"
+	local timeout="${4:-1800}"
+	local interval="${5:-30}"
+	local stability="${6:-3}"
+
+	local desc pass_count
+	case "$mode" in
+		available) desc="Wait for all operators available (${stability}x stable)" ;;
+		ready)     desc="Wait for cluster ready (${stability}x stable)" ;;
+		*)         echo "BUG: unknown mode '$mode'"; return 1 ;;
+	esac
+
+	local check_cmd
+	case "$mode" in
+		available)
+			check_cmd="cd ~/aba && lines=\$(aba --dir $cluster_dir run | tail -n +2 | awk 'NR>1{print \$3}'); [ -n \"\$lines\" ] && bad=\$(echo \"\$lines\" | grep -cv '^True\$' || true) && echo \"Unavailable=\$bad\" && [ \"\$bad\" -eq 0 ]"
+			;;
+		ready)
+			check_cmd="cd ~/aba && export KUBECONFIG=\$PWD/$cluster_dir/iso-agent-based/auth/kubeconfig && cv_avail=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' 2>/dev/null) && cv_prog=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].status}' 2>/dev/null) && deg=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null | grep -c True || true) && echo \"Available=\$cv_avail Progressing=\$cv_prog Degraded=\$deg\" && [ \"\$cv_avail\" = True ] && [ \"\$cv_prog\" = False ] && [ \"\$deg\" -eq 0 ]"
+			;;
+	esac
+
+	local stability_loop="
+pass=0
+end=\$((SECONDS + $timeout))
+while [ \$SECONDS -lt \$end ]; do
+	if ( $check_cmd ); then
+		pass=\$((pass + 1))
+		echo \"  [stability \$pass/$stability]\"
+		[ \$pass -ge $stability ] && exit 0
+	else
+		[ \$pass -gt 0 ] && echo \"  [stability reset -> 0/$stability]\"
+		pass=0
+	fi
+	sleep $interval
+done
+echo \"TIMEOUT after ${timeout}s (needed $stability consecutive passes)\"
+exit 1"
 
 	if [ "$location" = "remote" ]; then
-		e2e_poll_remote 600 30 "Wait for all operators available" "$_cmd"
+		e2e_run_remote "$desc (max $((timeout/60))m)" "$stability_loop"
 	else
-		e2e_poll 600 30 "Wait for all operators available" "$_cmd"
+		e2e_run "$desc (max $((timeout/60))m)" "$stability_loop"
 	fi
 }
 
-# Strict check: all operators AVAILABLE=True, PROGRESSING=False, DEGRADED=False.
-# 10 min timeout, 30s interval.
-e2e_wait_operators_ready() {
+# Loose check: all operators AVAILABLE=True (ignores PROGRESSING/DEGRADED).
+# Default: 10-min timeout, 30s interval, 3 consecutive passes.
+e2e_wait_cluster_available() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
-	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
-
-	if [ "$location" = "remote" ]; then
-		e2e_poll_remote 600 30 "Wait for all operators fully ready" "$_cmd"
-	else
-		e2e_poll 600 30 "Wait for all operators fully ready" "$_cmd"
-	fi
+	local timeout="${3:-600}"
+	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 30 3
 }
+
+# Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
+# Default: 30-min timeout, 30s interval, 3 consecutive passes.
+e2e_wait_cluster_ready() {
+	local cluster_dir="$1"
+	local location="${2:-local}"
+	local timeout="${3:-1800}"
+	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 30 3
+}
+
+# Backward-compat aliases (deprecated -- use e2e_wait_cluster_* instead)
+e2e_wait_operators_available() { e2e_wait_cluster_available "$@"; }
+e2e_wait_operators_ready() { e2e_wait_cluster_ready "$@"; }
 
 # --- e2e_diag ---------------------------------------------------------------
 #

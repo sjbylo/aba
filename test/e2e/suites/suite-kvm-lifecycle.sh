@@ -143,14 +143,7 @@ e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
     "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 
 # Wait for cluster to become ready (KVM SNO can take 30-40 min after bootstrap)
-# Poll ClusterVersion Available=True + Progressing=False + no Degraded operators
-e2e_poll 2700 60 "Wait for cluster to become ready (ClusterVersion)" \
-    "export KUBECONFIG=$PWD/$SNO/iso-agent-based/auth/kubeconfig && \
-     cv_avail=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' 2>/dev/null) && \
-     cv_prog=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].status}' 2>/dev/null) && \
-     deg=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null | grep -c True || true) && \
-     echo \"Available=\$cv_avail Progressing=\$cv_prog Degraded=\$deg\" && \
-     [ \"\$cv_avail\" = True ] && [ \"\$cv_prog\" = False ] && [ \"\$deg\" -eq 0 ]"
+e2e_wait_cluster_ready $SNO local 2700
 
 # EARLY day2: .install-complete does NOT exist yet.
 # day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,
@@ -169,8 +162,7 @@ e2e_run "Verify clusterstate symlink exists (state externalized)" \
 e2e_run -r 2 30 "Finalize install (aba mon)" "aba --dir $SNO mon"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 
 test_end
@@ -230,8 +222,7 @@ e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
 e2e_poll 300 15 "Wait for all nodes Ready after startup" \
     "aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw Ready && ! aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw NotReady"
 e2e_diag "Show nodes after startup" "aba --dir $SNO run --cmd 'oc get nodes'"
-e2e_poll 600 30 "Wait for all cluster operators available after startup" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators after shutdown/startup" \
     "aba --dir $SNO run --cmd 'oc get co'"
 

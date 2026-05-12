@@ -231,8 +231,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO remote
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
@@ -587,7 +586,7 @@ e2e_run_remote "Apply OSUS day2" \
     "cd ~/aba && aba --dir $SNO day2-osus"
 
 # Wait for all COs to be available (AVAILABLE=True)
-e2e_wait_operators_available $SNO remote
+e2e_wait_cluster_available $SNO remote
 
 # Set the cluster update channel to fast (matching the imageset config)
 _OCP_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
@@ -600,9 +599,7 @@ e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
 
 # Wait up to 30 min for all operators to stabilize before upgrading.
 # Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
-# Require 3 consecutive positive checks (30s apart) to rule out flapping.
-e2e_poll_remote 1800 30 "Wait for all operators stable (3 consecutive checks, max 30m)" \
-    "cd ~/aba && _ok=0; for _i in 1 2 3; do if aba --dir $SNO run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -qv '^True False False\$'; then exit 1; fi; _ok=\$((_ok+1)); [ \$_i -lt 3 ] && sleep 30; done; [ \$_ok -eq 3 ]"
+e2e_wait_cluster_ready $SNO remote 1800
 
 e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
     "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
@@ -631,7 +628,7 @@ e2e_poll_remote 180 10 "Wait for VM to power on" \
     "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
 
 # Wait for API server and operators to stabilize after startup before asserting
-e2e_wait_operators_available $SNO remote
+e2e_wait_cluster_available $SNO remote
 
 # GAP 4: Verify 'aba login' and 'aba shell' set up kubeconfig correctly
 e2e_run_remote "Verify 'aba login' sets kubeconfig" \
@@ -639,7 +636,7 @@ e2e_run_remote "Verify 'aba login' sets kubeconfig" \
 e2e_run_remote "Verify 'aba shell' exports work" \
     "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
 
-e2e_wait_operators_ready $SNO remote
+e2e_wait_cluster_ready $SNO remote
 
 test_end
 
