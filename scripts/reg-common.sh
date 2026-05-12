@@ -456,10 +456,10 @@ reg_post_install() {
 
 	# Backup mirror.conf + marker files for dir recreation (ADR-007)
 	mkdir -p "$regcreds_dir/backup"
-	[ -f mirror.conf ] && cp -p mirror.conf "$regcreds_dir/backup/"
+	if [ -f mirror.conf ]; then cp -p mirror.conf "$regcreds_dir/backup/"; fi
 	# .available is created by the Makefile after this function returns
 	for _flag in .init .rpmsext .rpmsint; do
-		[ -f "$_flag" ] && cp -p "$_flag" "$regcreds_dir/backup/"
+		if [ -f "$_flag" ]; then cp -p "$_flag" "$regcreds_dir/backup/"; fi
 	done
 
 	echo

@@ -70,7 +70,9 @@ _vmw_verify_objects() {
 	done
 	rm -rf "$_tmpdir"
 
-	[ "$_err" ] && aba_abort "One or more vSphere objects in vmware.conf do not exist. Fix vmware.conf and try again."
+	if [ "$_err" ]; then
+		aba_abort "One or more vSphere objects in vmware.conf do not exist. Fix vmware.conf and try again."
+	fi
 
 	return 0
 }
