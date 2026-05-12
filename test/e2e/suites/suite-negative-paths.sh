@@ -284,6 +284,7 @@ e2e_run "Verify state.sh is gone" \
 
 e2e_run "Uninstall with missing state (fallback path)" \
 	"aba -y -d $_DOCKER_MIRROR uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Remove local $_DOCKER_MIRROR dir" "rm -rf $_DOCKER_MIRROR"
 
@@ -329,6 +330,7 @@ e2e_run "Verify now succeeds after unblocking" \
 
 e2e_run "Uninstall neg-test registry" \
 	"aba -y -d $_DOCKER_NEG_MIRROR uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Remove local $_DOCKER_NEG_MIRROR dir" "rm -rf $_DOCKER_NEG_MIRROR"
 
@@ -338,6 +340,7 @@ e2e_run "Clean leftover mirror dirs (uninstall + remove if exist)" \
 	"for d in $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR; do
 		if [ -d \$d ]; then aba -y -d \$d uninstall && rm -rf \$d; fi
 	done"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Verify docker-reg removed on disN" \
 	"_essh $DIS_HOST 'test ! -d ~/docker-reg'"

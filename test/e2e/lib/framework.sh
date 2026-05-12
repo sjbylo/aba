@@ -829,6 +829,66 @@ e2e_cleanup_mirrors() {
 	fi
 }
 
+# --- Post-Uninstall Assertion -----------------------------------------------
+#
+# Verify that a registry (Quay or Docker) is fully removed on a target host.
+# Checks containers, secrets, systemd units.
+# Use after 'aba -d mirror uninstall' for defense-in-depth.
+#   e2e_assert_registry_removed              # check disN (INTERNAL_BASTION)
+#   e2e_assert_registry_removed local        # check conN (localhost)
+e2e_assert_registry_removed() {
+	local location="${1:-remote}"
+	local _target
+
+	if [ "$location" = "local" ]; then
+		_target="localhost"
+	else
+		_target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	fi
+
+	local _stale="" _containers
+	if [ "$_target" = "localhost" ]; then
+		_containers=$(podman ps -a --format '{{.Names}}' || true)
+	else
+		_containers=$(_essh "$_target" "podman ps -a --format '{{.Names}}'" || true)
+	fi
+
+	if echo "$_containers" | grep -qE 'quay-app|quay-redis|quay-postgres'; then
+		_stale+="  Quay containers still present on $_target"$'\n'
+	fi
+	if echo "$_containers" | grep -q '^registry$'; then
+		_stale+="  Docker registry container still present on $_target"$'\n'
+	fi
+
+	local _secrets
+	if [ "$_target" = "localhost" ]; then
+		_secrets=$(podman secret ls --format '{{.Name}}' || true)
+	else
+		_secrets=$(_essh "$_target" "podman secret ls --format '{{.Name}}'" || true)
+	fi
+	if echo "$_secrets" | grep -q redis_pass; then
+		_stale+="  redis_pass podman secret still exists on $_target"$'\n'
+	fi
+
+	# systemctl --user may fail if no user session exists (no lingering)
+	local _units
+	if [ "$_target" = "localhost" ]; then
+		_units=$(systemctl --user list-units 'quay-*' --no-legend 2>&1 || true)
+	else
+		_units=$(_essh "$_target" "systemctl --user list-units 'quay-*' --no-legend 2>&1" || true)
+	fi
+	if echo "$_units" | grep -v 'not-found' | grep -q .; then
+		_stale+="  Quay systemd user units still active on $_target"$'\n'
+	fi
+
+	if [ -n "$_stale" ]; then
+		echo "FAIL: Registry NOT fully removed on $_target:"
+		echo "$_stale"
+		return 1
+	fi
+	return 0
+}
+
 # --- Interactive Prompt -----------------------------------------------------
 
 _interactive_prompt() {

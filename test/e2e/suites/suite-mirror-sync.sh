@@ -163,8 +163,7 @@ test_end
 test_begin "Save/Load: roundtrip"
 
 e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
-e2e_run_remote "Verify registry removed" \
-    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"
 
@@ -258,6 +257,7 @@ _marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror
 
 e2e_diag "Markers: before uninstall-1" "_marker_snap"
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-1" "_marker_snap"
 
 e2e_run -r 3 2 "Save and reload images (should install mirror)" "aba --dir mirror save load --retry"
@@ -270,6 +270,7 @@ e2e_diag "Markers: after save-load" "_marker_snap"
 # fresh install with the new configuration.
 e2e_diag "Markers: before uninstall-2" "_marker_snap"
 e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/e2e-mirror-datadir1'"
@@ -349,8 +350,7 @@ e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
-e2e_run_remote "Verify no registry containers on disN" \
-    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
@@ -369,16 +369,16 @@ e2e_run "Delete SNO cluster" \
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \
     "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
+e2e_run "Assert: registry fully removed on disN (docker1)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
     "aba --dir mirror uninstall"
+e2e_run "Assert: registry fully removed on disN (mirror)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir1 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
 e2e_run "Remove e2e-mirror-datadir1 on conN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
-e2e_run_remote "Verify no registry containers on disN" \
-    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run_remote "Verify no leftover mirror data dirs on disN" \
     "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1"
 e2e_run "Verify no leftover mirror data dirs on conN" \
