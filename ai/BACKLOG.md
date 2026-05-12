@@ -3040,3 +3040,32 @@ When clicking "Install Mirror" on an already-installed mirror (shows as "install
 
 In `_mirror_install_local()` or the reinstall confirmation handler, add an explicit uninstall step when the user confirms reinstall.
 
+---
+
+## TUI v2: Validate input syntax at entry time (e.g. CIDR format)
+
+**Priority:** Medium
+**Scope:** TUI v2 — cluster wizard (`tui-cluster.sh`)
+
+### Problem
+
+The TUI accepts invalid input (e.g. machine network "10.0.0.0" without a prefix length) and only fails later when `aba cluster` rejects it at install time. The user has to navigate back through the wizard to fix the value.
+
+### Expected behavior
+
+Validate input immediately after the user enters it in the dialog. For example:
+- **Machine network**: Must be valid CIDR (e.g. `10.0.0.0/16`) — reject if missing `/prefix`
+- **Starting IP**: Must be a valid IPv4 address
+- **DNS/NTP/Gateway**: Must be valid IPv4 addresses (comma-separated list for DNS/NTP)
+- **Cluster name**: Must be a DNS label (a-z, 0-9, hyphens, max 63 chars) — already partially validated
+- **VLAN**: Must be a number 1–4094 or empty
+
+If validation fails, show an inline error message and re-present the same input dialog (don't advance).
+
+### Observed during testing (2026-05-12)
+
+- Entered "10.0.0.0" as machine network (missing /16 prefix)
+- TUI accepted it without complaint
+- Install failed later with: `[ABA] Error: invalid CIDR [10.0.0.0]`
+- User had to navigate back and re-enter with `/16`
+
