@@ -223,6 +223,10 @@ do
 		# Now, try to install aba
 		if $SUDO cp -p scripts/aba.sh $d/aba; then
 			$SUDO chmod +x $d/aba
+
+			# Create abatui symlink → aba (TUI entry point)
+			$SUDO ln -sf aba $d/abatui
+
 			if [ ! "$quiet" ]; then
 				echo ABA has been $action to $d/aba >&2
 				if [ -n "$msg" ]; then

@@ -86,6 +86,7 @@ _cluster_load_conf() {
 			cluster_name)     cl_name="$val" ;;
 			base_domain)      cl_domain="$val" ;;
 			machine_network)  cl_network="$val" ;;
+			prefix_length)    [[ -n "$val" && "$cl_network" != */* ]] && cl_network="${cl_network}/${val}" ;;
 			starting_ip)      cl_starting_ip="$val" ;;
 			api_vip)          cl_api_vip="$val" ;;
 			ingress_vip)      cl_ingress_vip="$val" ;;
@@ -468,25 +469,30 @@ _cluster_page_basics() {
 		local _plat_desc="" _plat_status=""
 		case "$cl_platform" in
 			bm)  _plat_desc="bm (bare-metal)" ;;
-			vmw)
-				_plat_desc="vmw (VMware/ESXi)"
-				if [[ -s "$ABA_ROOT/vmware.conf" || -s "$HOME/.vmware.conf" ]]; then
-					_plat_status=" \Z2\Zb✓\Zn"
-				else
-					_plat_status=" \Z1⚠\Zn"
-				fi
-				;;
-			kvm)
-				_plat_desc="kvm (libvirt/KVM)"
-				if [[ -s "$ABA_ROOT/kvm.conf" || -s "$HOME/.kvm.conf" ]]; then
-					_plat_status=" \Z2\Zb✓\Zn"
-				else
-					_plat_status=" \Z1⚠\Zn"
-				fi
-				;;
+			vmw) _plat_desc="vmw (VMware/ESXi)" ;;
+			kvm) _plat_desc="kvm (libvirt/KVM)" ;;
 			*)   _plat_desc="$cl_platform" ;;
 		esac
-		items+=("P" "Platform:       ${_plat_desc}${_plat_status}")
+		if [[ "$cl_platform" == "vmw" || "$cl_platform" == "kvm" ]]; then
+			local _conf_ok=false
+			[[ "$cl_platform" == "vmw" ]] && [[ -s "$ABA_ROOT/vmware.conf" || -s "$HOME/.vmware.conf" ]] && _conf_ok=true
+			[[ "$cl_platform" == "kvm" ]] && [[ -s "$ABA_ROOT/kvm.conf" || -s "$HOME/.kvm.conf" ]] && _conf_ok=true
+			if $_conf_ok; then
+				_plat_status=" \Z2\Zb✓\Zn"
+			else
+				_plat_status=" \Z1⚠\Zn"
+			fi
+		fi
+		# Pad to fixed raw byte width so dialog column sizing stays stable.
+		# Color-coded status (" \Z2\Zb✓\Zn") adds ~10 raw bytes; compensate
+		# with trailing spaces when there's no status indicator.
+		local _plat_full
+		if [[ -n "$_plat_status" ]]; then
+			printf -v _plat_full "%-18s" "$_plat_desc"
+		else
+			printf -v _plat_full "%-28s" "$_plat_desc"
+		fi
+		items+=("P" "Platform:       ${_plat_full}${_plat_status}")
 		items+=("N" "Cluster name:   $cl_name")
 		items+=("D" "Base domain:    ${cl_domain:-(not set)}")
 		items+=("T" "Type:           $cl_type")
@@ -851,13 +857,13 @@ _cluster_page_iface() {
 		case "$rc" in
 			3) return 0 ;;  # Next (Extra button)
 			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
-"• Ports: network port names (e.g. ens160, ens1f0,ens1f1)
+"• Ports: network port names (e.g. ens160, ens1f0)
+  Multiple ports create a bond (e.g. ens1f0,ens1f1)
 • VLAN: optional 802.1Q VLAN tag
 • Connection: how the cluster reaches the internet
   - mirror: fully through the mirror registry (default)
   - proxy: cluster uses an HTTP proxy
-  - direct: cluster has direct internet access
-• MACs: paste MAC addresses for bare-metal nodes"
+  - direct: cluster has direct internet access"
 			   continue ;;
 			1) return 1 ;;  # Back (Cancel button)
 			255) return 255 ;;
@@ -1568,7 +1574,37 @@ _day2_upgrade() {
 		return 1
 	fi
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade" "$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY"
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
+			--ok-label "Upgrade" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--extra-button --extra-label "List Available" \
+			--inputbox "Target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Use 'List Available' to see versions in the mirror)" 0 60 "" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case $rc in
+			0)
+				local target_ver
+				target_ver=$(<"$_TUI_TMP")
+				if [[ -z "$target_ver" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
+					continue
+				fi
+				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $target_ver" \
+					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
+				return
+				;;
+			3)
+				# List available versions (--dry-run)
+				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --dry-run" \
+					"Available Versions: $SELECTED_CLUSTER_DISPLAY"
+				;;
+			*)
+				return 1
+				;;
+		esac
+	done
 }
 
 # --- Graceful Cluster Shutdown ---

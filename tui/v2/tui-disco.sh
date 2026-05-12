@@ -22,10 +22,10 @@ disco_main() {
 	local default_item="$TUI2_DISCO_TAG_INSTALL_REG"
 
 	while :; do
-		# Build menu items with greyed-out labels for unavailable items
+		# Build menu items with dynamic status labels (matching CONNO style)
 		local items=()
 		local reg_label="Install Registry (local or remote)"
-		local load_label="Load Images"
+		local load_label="Load Images (disk2mirror)"
 		local inst_label="Install Cluster"
 		local day2_label="Day-2 / Cluster Management"
 		local mon_label="Finalize Installation (wait-for)"
@@ -43,12 +43,12 @@ disco_main() {
 			reg_label="Install Registry (installed)"
 			reg_avail=false
 			if _mirror_has_release_image; then
-				load_label="Load Images (loaded)"
+				load_label="Load Images (disk2mirror) (loaded)"
 			else
 				inst_label="Install Cluster [load mirror first]"
 			fi
 		else
-			load_label="Load Images [install registry first]"
+			load_label="Load Images (disk2mirror) [install registry first]"
 			inst_label="Install Cluster [install registry first]"
 			load_avail=false
 		fi
@@ -75,6 +75,11 @@ disco_main() {
 			reset_label="Reset to Connected Mode $TUI2_GREY_NO_INTERNET"
 		fi
 
+		# Dynamic menu title with mirror state (matching CONNO)
+		local _mstate
+		_mstate="$(mirror_state_label)"
+		local disco_menu_msg="Fully Disconnected — Choose an action (${_mstate}):"
+
 		items+=(
 			"" "──── Registry ──────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL_REG" "$reg_label"
@@ -94,7 +99,7 @@ disco_main() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_DISCO_MENU" 0 0 0 \
+			--menu "$disco_menu_msg" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -157,19 +162,25 @@ Navigation:
 					disco_load_images
 				fi
 				;;
-			"$TUI2_DISCO_TAG_INSTALL")
-				if ! mirror_available; then
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
-						--msgbox "A mirror registry must be installed and loaded\nbefore you can install a cluster.\n\nUse 'Install Registry' followed by 'Load Images' first." 0 0
-					continue
-				elif ! _mirror_has_release_image; then
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \
-						--yes-label "Install Anyway" --no-label "$TUI2_BTN_BACK" \
-						--yesno "The mirror is installed but has no release images yet.\n\nYou should load the mirror before installing a cluster.\nProceeding without loaded images will likely fail.\n\nContinue anyway?" 0 0
-					[[ $? -ne 0 ]] && continue
+		"$TUI2_DISCO_TAG_INSTALL")
+			if ! mirror_available; then
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+					--yes-label "Install & Load" --no-label "$TUI2_BTN_BACK" \
+					--yesno "No mirror registry installed.\n\nA mirror with loaded images is required to install a cluster.\n\nInstall the registry and load images now?" 0 0
+				if [[ $? -eq 0 ]]; then
+					_mirror_config_review && disco_load_images && cluster_install_flow
 				fi
+			elif ! _mirror_has_release_image; then
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \
+					--yes-label "Load Now" --no-label "$TUI2_BTN_BACK" \
+					--yesno "The mirror is installed but has no release images.\n\nLoad images into the mirror now?" 0 0
+				if [[ $? -eq 0 ]]; then
+					disco_load_images && cluster_install_flow
+				fi
+			else
 				cluster_install_flow
-				;;
+			fi
+			;;
 			"$TUI2_DISCO_TAG_DAY2")
 				if [[ "$day2_avail" == "false" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -242,7 +253,7 @@ disco_load_images() {
 		done
 	fi
 
-	confirm_and_execute "aba -d mirror load" "Load Images into Registry"
+	confirm_and_execute "aba -d mirror load" "Load Images (disk2mirror)"
 	local rc=$?
 	_invalidate_mirror_cache
 	return $rc
