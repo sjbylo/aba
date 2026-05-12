@@ -208,17 +208,28 @@ if [ ! "$upgrade_already_running" ]; then
 
 	# When OSUS is active, use --to <version> which lets the CVO validate
 	# the upgrade path via the local graph.  No --allow-explicit-upgrade needed.
+	# Fall back to --to-image if the OSUS graph is unreachable (503, timeout).
+	_image_cmd="oc adm upgrade --to-image=$mirror_image_by_digest --allow-explicit-upgrade $opt_force"
+
 	if [ "$osus_upstream" ]; then
 		aba_info "Local update graph detected: $osus_upstream"
 		upgrade_cmd="oc adm upgrade --to $target_ver $opt_force"
 	else
-		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest --allow-explicit-upgrade $opt_force"
+		upgrade_cmd="$_image_cmd"
 	fi
 
 	# Execute upgrade
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
-	$upgrade_cmd
+	_upgrade_out=$($upgrade_cmd 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
+	echo "$_upgrade_out"
+	if [ $_upgrade_rc -ne 0 ] && echo "$_upgrade_out" | grep -q "cannot refresh available updates"; then
+		aba_warning "OSUS update graph unavailable — falling back to --to-image with digest"
+		aba_debug "Running: $_image_cmd"
+		$_image_cmd
+	elif [ $_upgrade_rc -ne 0 ]; then
+		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd"
+	fi
 
 	aba_info_ok "Upgrade command accepted by cluster"
 fi

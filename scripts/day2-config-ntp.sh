@@ -288,6 +288,9 @@ _ntp_source_synced() {
 	return 0
 }
 
+echo
+aba_info "Checking NTP source sync on all nodes ..."
+
 _wait_rc=0
 aba_wait_show "Waiting for NTP source sync on all nodes (Ctrl-C to skip)" 5 600 _ntp_source_synced || _wait_rc=$?
 if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
