@@ -41,7 +41,9 @@ _kvm_verify_objects() {
 	done
 	rm -rf "$_tmpdir"
 
-	[ "$_err" ] && aba_abort "One or more KVM objects in kvm.conf do not exist. Fix kvm.conf and try again."
+	if [ "$_err" ]; then
+		aba_abort "One or more KVM objects in kvm.conf do not exist. Fix kvm.conf and try again."
+	fi
 
 	return 0
 }
