@@ -31,7 +31,7 @@ Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/bl
 
 <div align="center">
 <img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="300">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="300">
-<br><sub>The ABA TUI — a guided wizard for environment setup, operator selection, and bundle creation (<code>./abatui</code>)</sub>
+<br><sub>The ABA TUI — a guided wizard for the complete OpenShift installation workflow (<code>abatui</code>)</sub>
 </div>
 
 # Quick Start
@@ -42,7 +42,7 @@ cd aba
 aba          # Interactive mode — ABA guides you through the entire workflow
 ```
 
-Or use the TUI wizard for a guided experience: `./abatui`
+Or use the TUI wizard for a guided experience: `abatui`
 
 That's it. ABA will prompt you for your OpenShift version, operators, registry type, and deployment scenario.
 
@@ -64,6 +64,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Embedding Custom Manifests (Day-0)](#embedding-custom-manifests-day-0)
 - [Day-2 Operations](#day-2-operations)
   - [Login and Verify Cluster State](#login-and-verify-cluster-state)
+  - [Adding Operators to the Mirror Registry](#adding-operators-to-the-mirror-registry)
   - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
   - [Custom Manifests for Day-2](#custom-manifests-for-day-2)
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
@@ -167,7 +168,7 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 > | **C** | **[Connected (no mirror)](#connected-installation-no-mirror)**     | Cluster nodes can pull images from the Internet directly or via a proxy.                        | Set `int_connection=direct` or `proxy` in `cluster.conf` |
 >
 >
-> **Not sure?** Run `aba` (CLI) or `./abatui` (guided wizard) — both walk you through the decision.
+> **Not sure?** Run `aba` (CLI) or `abatui` (guided wizard) — both walk you through the decision.
 >
 > Already have a ready-made bundle? Start at **[Install Bundles](#install-bundles)**.
 
@@ -270,12 +271,14 @@ Running `aba` creates the `aba.conf` file. Review and update values such as your
 **TUI (Text User Interface):** For a guided wizard experience:
 
 ```bash
-./abatui    # Interactive wizard to configure and prepare your environment
+abatui      # Interactive wizard — full workflow.
 ```
 
-Requires: Internet access and `dialog` package (`dnf install dialog`). The TUI walks you through selecting OpenShift version, operators, registry type (Auto/Quay/Docker), and creating install bundles or syncing to registries.
+The `abatui` command is installed to your `$PATH` alongside `aba` and can be run from any directory within the ABA repository.
 
-> **TUI scope:** The TUI covers environment preparation (version, operators, mirror configuration, bundle creation, and image save/sync). Cluster installation, Day-2 operations, and KVM platform configuration are handled via the CLI only.
+The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), operator selection, mirror configuration, image sync/save/load, bundle creation, cluster installation (wizard for name, type, platform, networking, interfaces), Day-2 operations, and cluster lifecycle management.
+
+Requires `dialog` package (`dnf install dialog`). Internet access is needed for connected modes; fully disconnected mode works offline with a bundle.
 
 Now, continue with [Partially Disconnected Installation](#partially-disconnected-installation), [Air-Gapped Installation](#air-gapped-installation), or [Connected Installation (No Mirror)](#connected-installation-no-mirror) below.
 
@@ -313,7 +316,7 @@ aba -d cli download
 
 - *Optionally* download the CLI binaries into `aba/cli`. Only needed if you plan to disconnect from the Internet before installing OpenShift.
 
-**Tip:** The TUI wizard can also configure and execute registry sync operations interactively: `./abatui`
+**Tip:** The TUI wizard can also configure and execute registry sync operations interactively: `abatui`
 
 Now continue with [Installing a Cluster](#installing-a-cluster) below.
 
@@ -403,7 +406,7 @@ You can create an install bundle with everything you need to install OpenShift i
 
 > **Download ready-made install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
 
-**Tip:** You can also use the TUI wizard to configure and create an install bundle interactively: `./abatui`
+**Tip:** You can also use the TUI wizard to configure and create an install bundle interactively: `abatui`
 
 #### Prerequisites
 
@@ -778,6 +781,67 @@ oc whoami
 oc get co
 ```
 
+## Adding Operators to the Mirror Registry
+
+ABA mirrors Operators alongside the OpenShift platform images. Operators are configured in `aba.conf` (or overridden per mirror in `mirror.conf`) using two variables:
+
+| Variable | Purpose | Example |
+| -------- | ------- | ------- |
+| `op_sets` | Predefined sets of related operators | `op_sets=ocp,odf,virt` |
+| `ops` | Individual operator package names | `ops=web-terminal,devworkspace-operator` |
+
+**Step-by-step:**
+
+1. **List available operator sets:**
+
+```
+aba show-op-sets
+```
+
+2. **Add operators to `aba.conf`:**
+
+```bash
+# Predefined sets (recommended starting point)
+op_sets=ocp
+
+# Individual operators (comma-separated, no spaces)
+ops=web-terminal,devworkspace-operator
+```
+
+You can use `op_sets`, `ops`, or both together.
+
+3. **Mirror the operator images:**
+
+For partially disconnected (direct sync):
+```
+aba -d mirror sync
+```
+
+For fully disconnected (save to disk, transfer, load):
+```
+aba -d mirror save    # on the connected workstation
+# Transfer mirror/data/imageset-config.yaml and mirror/data/mirror_*.tar to the bastion
+aba -d mirror load    # on the internal bastion
+```
+
+4. **Apply to the cluster:**
+
+```
+aba -d <cluster> day2
+```
+
+This connects OperatorHub to your mirror and applies the CatalogSource files generated by `oc-mirror`.
+
+> **Finding operator names for `ops=`:**
+> - **Quickest:** Browse `aba/.index/redhat-operator-index-v4.21` (or the version matching your OCP release). These are pre-built, three-column indexes (package name, display name, channel) generated by `aba` when it downloads catalog metadata. Use the first column (package name) for `ops=`.
+> - **Grep example:** `grep -i kafka .index/redhat-operator-index-v4.21` finds all Kafka-related operators.
+> - **Full catalog YAML:** `mirror/imageset-config-redhat-operator-catalog-v4.21.yaml` lists every operator with its channels — useful for advanced `imageset-config.yaml` edits.
+> - **Online:** Search the Red Hat [Ecosystem Catalog](https://catalog.redhat.com/software/operators/search). Use the *package name* (e.g. `odf-operator`, not the display name).
+
+> **Per-mirror override:** Set `op_sets=` and/or `ops=` in a mirror's `mirror.conf` to use different operators per enclave. See [Named Mirror Directories](#named-mirror-directories-enclaves).
+
+[Back to top](#quick-start)
+
 ## Connect OperatorHub to Internal Mirror Registry
 
 ```
@@ -787,6 +851,8 @@ aba day2
 Configures OpenShift to use your *internal mirror registry* as the source for OperatorHub content.
 
 **Important:** Re-run this command whenever new Operators are added or updated in your mirror registry — for example, after running `aba -d mirror load` or `aba -d mirror sync` again.
+
+> **First time?** If you haven't mirrored any operators yet, see [Adding Operators to the Mirror Registry](#adding-operators-to-the-mirror-registry) first.
 
 ## Custom Manifests for Day-2
 
@@ -1202,6 +1268,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | Command               | Description                                                        |
 | --------------------- | ------------------------------------------------------------------ |
 | `aba`                 | Interactive mode — guides you through the workflow                 |
+| `abatui`              | TUI wizard — full guided workflow                                  |
 | `aba ocp-versions`    | Show a table of latest OpenShift versions per channel              |
 | `aba show-op-sets`    | List available operator sets and their descriptions                |
 | `aba -d cli download` | Download all required CLI tools                                    |
@@ -1424,14 +1491,14 @@ aba -d mirror uninstall    # Uninstall the registry if installed by ABA
 aba -d mirror unregister   # Or, deregister an existing registry (removes creds only)
 cd ..
 rm -rf aba
-sudo rm $(which aba)
+sudo rm $(which aba) $(which abatui)
 ```
 
 Run on the workstation or laptop:
 
 ```
 rm -rf aba
-sudo rm $(which aba)
+sudo rm $(which aba) $(which abatui)
 ```
 
 To re-install ABA, see [Install ABA](#install-aba).
@@ -1516,6 +1583,18 @@ Note that `oc-mirror` maintains its own image cache (by default under `~/.oc-mir
 ## Q: Can I install Operators from community catalogs?
 
 **Yes.** ABA supports three Red Hat operator catalogs: redhat-operator, certified-operator, and community-operator.
+
+---
+
+## Q: What is a CatalogSource and why does `aba day2` warn about missing CatalogSource files?
+
+A **CatalogSource** is an OpenShift resource that tells OperatorHub where to find the operator catalog index image in your mirror registry. Without it, OperatorHub cannot discover or install mirrored operators.
+
+`oc-mirror` generates CatalogSource files (named `cs-*-index*.yaml`) automatically when it mirrors operator images. If you see `aba day2` warn about missing CatalogSource files, it means your `imageset-config.yaml` includes operators but the CatalogSource files were not generated — typically because `aba sync` or `aba save/load` has not yet been run with operators configured.
+
+**To fix:** Follow the steps in [Adding Operators to the Mirror Registry](#adding-operators-to-the-mirror-registry), then re-run `aba day2`.
+
+If your mirror was populated with only platform release images (no operators), this warning does not appear.
 
 ---
 
