@@ -180,8 +180,7 @@ e2e_run_remote "Verify Quay running" \
     "podman ps | grep quay"
 e2e_run_remote "Uninstall Quay registry" \
     "cd ~/aba && aba -d mirror uninstall"
-e2e_run_remote "Verify Quay removed" \
-    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 # Negative path: load without data/ dir should fail
 e2e_run_remote -q "Remove data dir for must-fail test" \
@@ -695,8 +694,7 @@ test_begin "Cleanup: uninstall registry on disN"
 
 e2e_run_remote "Uninstall Docker registry" \
     "cd ~/aba && aba -d mirror uninstall"
-e2e_run_remote "Verify no registry containers" \
-    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 

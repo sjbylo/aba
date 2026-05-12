@@ -324,6 +324,7 @@ test_begin "Cleanup: delete cluster and uninstall mirror on disN"
 
 e2e_run_remote "Uninstall mirror registry on disN" \
     "cd ~/aba && aba -d mirror uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 test_end
 

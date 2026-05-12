@@ -224,6 +224,7 @@ e2e_run "Recreate mirror dir for uninstall" "cd ~/aba && aba mirror --name $_MIR
 
 e2e_run "Uninstall Docker registry" \
 	"cd ~/aba && aba -d $_MIRROR_NAME uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "state.sh removed after uninstall" \
 	"test ! -f $_STATE_DIR/state.sh"
@@ -252,6 +253,7 @@ e2e_run "Fresh state.sh is lowercase" \
 
 e2e_run "Uninstall again for next test" \
 	"cd ~/aba && aba -d $_MIRROR_NAME uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 test_end
 
@@ -442,6 +444,7 @@ test_begin "Cleanup: uninstall mirror"
 # Uninstall registry if state.sh still exists (covers mid-test failure)
 e2e_run "Uninstall Docker registry if still tracked" \
 	"if [ -s $_STATE_DIR/state.sh ]; then cd ~/aba && test -d $_MIRROR_NAME || aba mirror --name $_MIRROR_NAME && aba -d $_MIRROR_NAME uninstall; else echo 'No state.sh -- registry already cleaned up'; fi"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 # Unregister if registered (covers failure during register test)
 e2e_run "Unregister if still registered" \
