@@ -139,13 +139,10 @@ test_begin "Must-fail checks"
 e2e_run_must_fail "Uninstall existing reg should abort (state=existing)" \
     "aba -d mirror uninstall -y"
 
-e2e_run_must_fail "Sync to unknown host should fail" \
+# ADR-007: -H with a host that differs from installed state must abort.
+# The core fix in aba.sh checks persistent state and refuses to override.
+e2e_run_must_fail "-H to different host should abort (state locks reg_host)" \
     "aba -d mirror sync -H unknown.example.com --retry"
-
-# Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf).
-e2e_run "Restore reg_host after must-fail" \
-    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
-e2e_diag "Show mirror.conf after restore" "grep -E '^\w' mirror/mirror.conf"
 
 # Pool registry is already registered -- idempotent install must succeed (skip)
 e2e_run "Install on already-registered registry succeeds (idempotent)" \
