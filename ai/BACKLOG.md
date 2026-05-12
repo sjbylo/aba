@@ -1,5 +1,29 @@
 # ABA Backlog
 
+## Refactor: Unify CLUSTER_NAME (uppercase) to cluster_name (lowercase) across all scripts
+
+**Priority:** Medium
+**Scope:** ~25 scripts in `scripts/` (vmw-*.sh, kvm-*.sh, monitor-*.sh, generate-image.sh, cluster-config.sh, check-macs.sh, cluster-rescue.sh, cluster-graceful-shutdown.sh)
+
+### Problem
+
+Two parallel variable conventions coexist:
+- `cluster-config.sh` outputs uppercase: `CLUSTER_NAME`, `BASE_DOMAIN`, `CP_NAMES`, `WORKER_NAMES`, `CP_REPLICAS`, `WORKER_REPLICAS`
+- `normalize-cluster-conf` outputs lowercase: `cluster_name`, `base_domain`, `num_masters`, `num_workers`
+
+~80+ references to `$CLUSTER_NAME` across ~25 scripts. The newer `externalize_cluster_state()` and `auto_finalize_cluster()` use lowercase only. This split adds cognitive overhead and forces bridging logic when the two conventions meet.
+
+### Proposed approach
+
+1. Update `cluster-config.sh` to output lowercase vars (or make `normalize-cluster-conf` the single source)
+2. Update all ~25 scripts to use lowercase `$cluster_name`, `$base_domain`, etc.
+3. Remove or deprecate `cluster-config.sh` if `normalize-cluster-conf` can fully replace it
+4. Run full E2E suite (vmw + kvm lifecycle) to validate
+
+### Risk
+
+High — touches the entire VM lifecycle layer. Must be done as a focused effort with full E2E coverage.
+
 ## Feature: Store oc-mirror metadata in the registry as an OCI image
 
 **Priority:** High

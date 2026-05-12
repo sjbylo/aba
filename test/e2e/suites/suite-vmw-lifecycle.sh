@@ -191,8 +191,15 @@ e2e_run -r 2 10 "Create VMs and start install" \
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
     "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 
-# Let cluster initialize (~15 min on VMware) so cluster_is_ready() can detect it
-e2e_run "Sleep 15 min for cluster to initialize" "sleep 900"
+# Wait for cluster to become ready (VMware SNO typically 15-25 min after bootstrap)
+# Poll ClusterVersion Available=True + Progressing=False + no Degraded operators
+e2e_poll 2100 60 "Wait for cluster to become ready (ClusterVersion)" \
+    "export KUBECONFIG=$PWD/$SNO/iso-agent-based/auth/kubeconfig && \
+     cv_avail=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' 2>/dev/null) && \
+     cv_prog=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].status}' 2>/dev/null) && \
+     deg=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null | grep -c True || true) && \
+     echo \"Available=\$cv_avail Progressing=\$cv_prog Degraded=\$deg\" && \
+     [ \"\$cv_avail\" = True ] && [ \"\$cv_prog\" = False ] && [ \"\$deg\" -eq 0 ]"
 
 # EARLY day2: .install-complete does NOT exist yet.
 # day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,
