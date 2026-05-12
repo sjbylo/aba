@@ -626,41 +626,25 @@ _cleanup_dis() {
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-	# Registry cleanup on conN is handled by _cleanup_con_registry() -- not here.
-	# This function only cleans the disN filesystem and firewall.
-
-	# 0. Uninstall any stale registry on disN via aba, for EACH user that may
-	#    have installed one.  A previous suite may have run as a different user
-	#    (e.g. steve when current is root), leaving a rootless registry that the
-	#    current user's podman can't see.
-	#    If aba uninstall FAILS, we must stop -- proceeding with stale podman
-	#    state (secrets, systemd units) will break the next install.
+	# Three mirror install/uninstall cases:
+	#   1. conN → conN (local):  _cleanup_con_registry() already handled this.
+	#   2. conN → disN (remote): _cleanup_con_registry() already handled this
+	#      (aba uninstall from conN SSHes to disN to tear down Quay).
+	#   3. disN → disN (local):  Must uninstall FROM disN -- handled below.
 	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
 	local _default_user="${VM_DEFAULT_USER:-steve}"
 
-	# Verify infra-owned aba binary exists on disN for both users
-	local _aba_missing=""
-	local _try_user
-	for _try_user in root "$_default_user"; do
-		if ! _essh "${_try_user}@${_dis_fqdn}" "test -x ~/.e2e-harness/bin/aba" 2>&1; then
-			echo "  FATAL: ~/.e2e-harness/bin/aba missing for $_try_user on disN"
-			_aba_missing=1
-		fi
-	done
-	if [ -n "$_aba_missing" ]; then
-		echo "  Infra-owned aba binary was not deployed to disN."
-		echo "  Run 'run.sh deploy' to push the harness, or check sync_dis_aba."
-		return 1
-	fi
-
-	echo "  Checking for stale registries on disN (all users) ..."
+	# Case 3: uninstall any mirror installed locally on disN.
+	# ~/aba/mirror on disN only exists if a suite ran aba directly on disN.
+	echo "  Checking for locally-installed registries on disN ..."
 	local _uninstall_failed=""
+	local _try_user
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "
 			_aba=\$HOME/.e2e-harness/bin/aba
 			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
-				echo '  [cleanup] Found mirror dir for $_try_user -- trying aba uninstall'
+				echo '  [cleanup] Found mirror dir for $_try_user on disN -- uninstalling locally'
 				if cd ~/aba && \$_aba -y -d mirror uninstall 2>&1; then
 					echo '  [cleanup] uninstall OK'
 				else
@@ -670,13 +654,11 @@ _cleanup_dis() {
 			fi
 		" 2>&1 || {
 			echo "  ERROR: aba uninstall/unregister as $_try_user on disN failed (rc=$?)"
-			echo "  Stale podman state (secrets, systemd units) will break the next install."
 			_uninstall_failed=1
 		}
 	done
 	if [ -n "$_uninstall_failed" ]; then
-		echo "  FATAL: aba uninstall failed on disN. Cannot proceed with dirty host."
-		echo "  Investigate why 'aba -d mirror uninstall' failed on disN, fix, and re-run."
+		echo "  FATAL: aba uninstall on disN failed. Cannot proceed with dirty host."
 		return 1
 	fi
 
@@ -976,7 +958,11 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			exit 99
 		}
 	else
-		# Default: clean disN using ABA's own commands (exercises product code paths)
+		# Uninstall registries from conN FIRST -- mirrors are installed from
+		# conN, so aba uninstall must run here to properly clean disN via SSH.
+		_cleanup_con_registry
+
+		# Now clean disN filesystem/firewall and verify disN is clean.
 		if ! _cleanup_dis; then
 			echo ""
 			echo "  ERROR: disN cleanup failed -- cannot proceed with a dirty disN."
@@ -987,8 +973,6 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		fi
 	fi
 
-	# Clean up any stale Quay/registry state on conN from previous suite
-	_cleanup_con_registry
 	_cleanup_non_mirror_local
 	_reset_con_firewall
 
@@ -1088,13 +1072,13 @@ while true; do
 					exit 99
 				}
 			else
+				_cleanup_con_registry
 				if ! _cleanup_dis; then
 					echo "  ERROR: disN cleanup failed during restart -- cannot proceed."
 					echo "99" > "$RC_FILE"
 					exit 99
 				fi
 			fi
-			_cleanup_con_registry
 			_cleanup_non_mirror_local
 			_reset_con_firewall
 
