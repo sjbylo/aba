@@ -636,10 +636,6 @@ list_cluster_dirs() {
 list_installed_clusters() {
 	local dir
 	for dir in $(list_cluster_dirs); do
-		if ! cluster_installed "$dir"; then
-			# Probe: did this cluster finish installing in the background?
-			auto_finalize_cluster "$dir" 2>/dev/null || true
-		fi
 		cluster_installed "$dir" && echo "$dir" || true
 	done
 }
