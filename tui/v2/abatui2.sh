@@ -126,6 +126,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 # =============================================================================
+# Single-instance lock (flock)
+# =============================================================================
+# Hold an exclusive non-blocking flock for the lifetime of this process so only one
+# TUI runs per host. Do NOT use fd 9: run_once() in include_all.sh uses fd 9 for task
+# directory locks (exec 9>>… / exec 9>&-) and would replace or close ours. Allocate a
+# dedicated fd with {ABA_TUI_FLOCK_FD}> so nothing in ABA reuses it mid-session.
+exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock" || { echo "Error: Cannot open ${HOME}/.aba/.tui.lock" >&2; exit 1; }
+flock -n "${ABA_TUI_FLOCK_FD}" || { echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2; exit 1; }
+
+# =============================================================================
 # Load existing config (if any)
 # =============================================================================
 
@@ -199,12 +209,6 @@ _tick "Loading config"
 tui_log "Kicking off background version fetch (stable)"
 run_once -i "ocp:stable:latest_version" -- \
 	bash -lc "source ./scripts/include_all.sh; fetch_latest_version stable"
-
-# Background mirror health check (if mirror exists)
-if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
-	tui_log "Kicking off background mirror verify"
-	run_once -i "aba:mirror:verify" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror verify" &
-fi
 
 # Background ISC generation (so it's ready before user opens View/Edit ISC)
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
@@ -383,7 +387,7 @@ _conno_main() {
 	# CONNO action menu — single-letter tags displayed as keyboard shortcuts.
 	# Items that are unavailable get "[reason]" appended to their label
 	# and show a msgbox when selected (greyed-out pattern).
-	# Separators (space tags) visually group mirror ops from cluster ops.
+	# Separators (space tags) visually group mirror, transfer, and cluster ops.
 	local default_item="$TUI2_CONNO_TAG_OPERATORS"
 	while :; do
 		# Re-check internet status each iteration (handles dynamic connectivity changes)
@@ -401,7 +405,7 @@ _conno_main() {
 		local sync_label="Sync Images (mirror2mirror)"
 		local visc_label="View/Edit ImageSet Config"
 		local ops_label="Select Operators"
-		local bndl_label="Create Bundle"
+		local bndl_label="Create Install Bundle"
 		local switch_label="Switch to Fully Connected"
 		local disco_switch_label="Switch to Fully Disconnected"
 
@@ -417,7 +421,7 @@ _conno_main() {
 			ops_avail=false
 			ops_label="Select Operators $TUI2_GREY_NO_INTERNET"
 			bndl_avail=false
-			bndl_label="Create Bundle $TUI2_GREY_NO_INTERNET"
+			bndl_label="Create Install Bundle $TUI2_GREY_NO_INTERNET"
 			switch_avail=false
 			switch_label="Switch to Fully Connected $TUI2_GREY_NO_INTERNET"
 		fi
@@ -477,14 +481,14 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_VIEW_ISC"       "$visc_label"
 			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
-			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
+			"" "──── Transfer ──────────────────────"
+			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
+			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
-			"" "──── Transfer ──────────────────────"
-			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
 			"" "──── Mode ──────────────────────────"
@@ -509,18 +513,18 @@ _conno_main() {
 
 Mirror operations:
   • Install Mirror — set up registry (local or remote)
-  • Save — download images to local archive
-  • Sync — push images directly to registry
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
+
+Transfer:
+  • Save — download images to local archive
+  • Sync — push images directly to registry
+  • Bundle — create a portable bundle (tar) for USB transfer
 
 Cluster operations:
   • Install Cluster — configure, review, and provision OpenShift
   • Finalize Installation — wait for install to complete (re-attach)
   • Day-2 — post-install config (resources, NTP, update service, etc.)
-
-Transfer:
-  • Bundle — create a portable bundle (tar) for USB transfer
 
 Mode switching:
   • Fully Connected — install from internet without a mirror
@@ -668,6 +672,12 @@ Navigation:
 # =============================================================================
 
 _detect_mode
+
+# Pre-cache mirror verify for CONNO (task id matches run_once -E in _conno_main)
+if [[ "$_TUI_MODE" == "CONNO" ]] && mirror_available; then
+	tui_log "Kicking off background mirror verify (CONNO prefetch)"
+	run_once -i "aba:mirror:verify" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror verify"
+fi
 
 tui_log "Final mode: $_TUI_MODE"
 

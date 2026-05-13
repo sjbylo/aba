@@ -162,11 +162,18 @@ EOF
 # dlg — wrapper that adds consistent styling:
 #   - Pads --title with spaces: "Foo" → " Foo "
 #   - Prepends \n to the prompt/message text (empty line below title)
+#   - For menu/radiolist/checklist: replaces menu-height=0 with the actual
+#     item count so dialog sizes the box to fit all items (no scrollbar)
 dlg() {
 	local args=()
 	local next_is_title=false
 	local next_is_text=false
 	local has_menu=false
+	local menu_type=""
+	local dims_after_text=0
+	local height_idx=-1
+	local width_val=""
+	local dims_idx=-1
 
 	for arg in "$@"; do
 		if [[ "$next_is_title" == "true" ]]; then
@@ -175,28 +182,58 @@ dlg() {
 			continue
 		fi
 		if [[ "$next_is_text" == "true" ]]; then
-			# Prepend \n (empty line below title) unless already starts with \n
 			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
 				arg="\n$arg"
 			fi
-			# Append navigation hint for list-style dialogs
 			if [[ "$has_menu" == "true" ]]; then
 				arg="${arg}\n(Navigate: Arrow keys, Tab, ESC)"
+				dims_after_text=3
 			fi
 			args+=("$arg")
 			next_is_text=false
 			continue
 		fi
 
+		if [[ $dims_after_text -gt 0 ]]; then
+			case $dims_after_text in
+				3) height_idx=${#args[@]} ;;
+				2) width_val="$arg" ;;
+				1) dims_idx=${#args[@]} ;;
+			esac
+			dims_after_text=$(( dims_after_text - 1 ))
+			args+=("$arg")
+			continue
+		fi
+
 		case "$arg" in
 			--title) next_is_title=true ;;
-			--menu|--radiolist|--checklist)
-				next_is_text=true; has_menu=true ;;
+			--menu)
+				next_is_text=true; has_menu=true; menu_type="menu" ;;
+			--radiolist|--checklist)
+				next_is_text=true; has_menu=true; menu_type="checklist" ;;
 			--msgbox|--yesno|--inputbox|--infobox|--mixedform)
 				next_is_text=true ;;
-			esac
+		esac
 		args+=("$arg")
 	done
+
+	# If menu-height was 0, replace with actual item count and compute height
+	if [[ $dims_idx -ge 0 && "${args[$dims_idx]}" == "0" ]]; then
+		local items_start=$(( dims_idx + 1 ))
+		local remaining=$(( ${#args[@]} - items_start ))
+		local item_count
+		if [[ "$menu_type" == "checklist" ]]; then
+			item_count=$(( remaining / 3 ))
+		else
+			item_count=$(( remaining / 2 ))
+		fi
+		args[$dims_idx]=$item_count
+		# When width is explicit (not 0), dialog's auto-height underestimates;
+		# compute height from item count + overhead for borders/message/buttons
+		if [[ "$width_val" != "0" && $height_idx -ge 0 && "${args[$height_idx]}" == "0" ]]; then
+			args[$height_idx]=$(( item_count + 10 ))
+		fi
+	fi
 
 	dialog --no-shadow --colors "${args[@]}"
 }
