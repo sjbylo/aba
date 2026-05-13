@@ -853,6 +853,10 @@ address=/api.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_api_
 address=/.apps.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_apps_vip}
 address=/api.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_api_vip}
 address=/.apps.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_apps_vip}
+address=/api.$(pool_cluster_name vmw-preflight-pos ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name vmw-preflight-pos ${pool_num}).${domain}/${node_ip}
+address=/api.$(pool_cluster_name vmw-preflight-neg ${pool_num}).${domain}/${node_ip}
+address=/.apps.$(pool_cluster_name vmw-preflight-neg ${pool_num}).${domain}/${node_ip}
 address=/registry.${domain}/${POOL_SUBNET:-10.0.2}.$((pool_num * 10))
 DNSEOF
 

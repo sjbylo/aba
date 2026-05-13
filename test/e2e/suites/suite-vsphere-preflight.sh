@@ -176,14 +176,12 @@ e2e_run "Delete positive cluster (removes VMs)" \
 	"if [ -d $POS ]; then aba -y --dir $POS delete && rm -rf $POS; else echo '[cleanup] $POS already removed'; fi"
 
 e2e_run "Delete negative cluster (guarded: no ISO = preflight aborted, no VMs to delete)" \
-	"if [ -d $NEG ]; then \
-		if [ -f $NEG/iso-agent-based/agent.\$(uname -m).iso ]; then \
-			aba -y --dir $NEG delete && rm -rf $NEG; \
-		else \
-			# Negative install aborted at preflight - no VMs exist; aba delete would exit 1 (see scripts/vmw-delete.sh). \
-			# Narrow exception per CLAUDE.md: the cluster dir is a test concern, not a product concern; rm -rf is correct here. \
-			rm -rf $NEG; \
-		fi; \
+	"if [ -d $NEG ]; then
+		if [ -f $NEG/iso-agent-based/agent.\$(uname -m).iso ]; then
+			aba -y --dir $NEG delete && rm -rf $NEG
+		else
+			rm -rf $NEG
+		fi
 	else echo '[cleanup] $NEG already removed'; fi"
 
 e2e_run "Unregister pool registry" \

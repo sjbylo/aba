@@ -799,15 +799,17 @@ e2e_cleanup_mirrors() {
 	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
-		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
-		# Only uninstall the registry (stop containers, remove creds). Leave the
-		# directory in place — the pre-suite check uses .available to detect stale
-		# registries, not directory existence.
+		# Registered-only mirrors (reg_vendor=existing) need 'unregister', not 'uninstall'.
 		_essh "$target" \
 			"if [ -d '$abs_path' ] && [ -f '$abs_path/.available' ]; then
-				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
+				if grep -qs 'reg_vendor=existing' '$abs_path/regcreds/state.sh' 2>/dev/null; then
+					echo '  Externally-managed registry -- using unregister'
+					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister
+				else
+					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
+				fi
 			elif [ -d '$abs_path' ]; then
 				echo '  (mirror $abs_path already uninstalled -- skipping)'
 			else
