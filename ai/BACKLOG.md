@@ -3069,3 +3069,48 @@ If validation fails, show an inline error message and re-present the same input 
 - Install failed later with: `[ABA] Error: invalid CIDR [10.0.0.0]`
 - User had to navigate back and re-enter with `/16`
 
+---
+
+## TUI v2: Remove "Finalize Installation" menu item — auto-detect cluster readiness transparently
+
+**Priority:** Medium
+**Scope:** TUI v2 — CONNO/DISCO main menus, cluster state detection
+
+### Problem
+
+The "Finalize Installation (wait-for)" menu item exists because if the user triggers an install but doesn't wait for the "ready" state, the TUI needs to detect completion itself. Currently, the user must manually select "Finalize" to re-attach to the monitoring.
+
+The previous approach (`auto_finalize_cluster` probing `oc version` with a 5s timeout per cluster) caused 10-20s TUI hangs and was removed from `list_installed_clusters()`.
+
+### Desired behavior
+
+Remove the "Finalize" menu item entirely. Instead, detect cluster readiness **transparently**:
+
+1. After `aba install` completes (even if the user dismisses early), kick off a **background** readiness check (non-blocking, via `run_once` or similar).
+2. On each main menu loop iteration, check if the background probe has completed — if yes, update the `.install-complete` marker silently.
+3. The cluster then appears in "installed" lists without the user needing to do anything.
+4. If the background probe hasn't finished yet, show a subtle indicator (e.g., "sno2 (installing...)") rather than hiding the cluster entirely.
+
+### Key constraint
+
+Must be 100% non-blocking — never add latency to menu rendering. Use the same pattern as `aba_mirror_verify_wait` (background `run_once` + wait-at-menu-top).
+
+---
+
+## TUI v2: Interfaces page has insufficient vertical space (shows scrollbar at 66%)
+
+**Priority:** Medium
+**Scope:** TUI v2 — cluster wizard (`tui-cluster.sh`), Interfaces page
+
+### Problem
+
+The "Cluster – Interfaces" page only has 2 items (Ports, VLAN) but the inner list box is too short, showing a scrollbar indicator (`↓(+) 66%`) even though all items are visible. This wastes vertical space and looks cramped compared to other wizard pages.
+
+### Expected behavior
+
+The inner list box height should be sized to fit the content (or at least not show a scrollbar when all items are visible). Other wizard pages (Basics, Networking, VM Resources) handle this correctly.
+
+### Screenshot
+
+See `assets/image-9a65f471-d459-4e57-bfb7-997120c83c09.png` — the 66% scrollbar is visible at the bottom of the list box despite only 2 items being shown.
+
