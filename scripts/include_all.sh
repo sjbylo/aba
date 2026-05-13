@@ -2771,34 +2771,41 @@ _run_oc_mirror_with_retry() {
 	return 0
 }
 
-# Usage: probe_host <url> [description]
+# Usage: probe_host [--quick] [--any] <url> [description]
 # Returns: 0 if reachable, 1 if not
-# Errors shown naturally by curl to stderr
+#   --any:   accept any HTTP response (including 401); only fail on connection errors
+#   --quick: short timeout, no retries (for interactive/TUI paths)
 #
 # Examples:
 #   probe_host "https://api.openshift.com/"
-#   probe_host "https://registry:8443/health/instance" "Quay registry"
+#   probe_host --quick --any "https://registry:8443/v2/" "registry"
 probe_host() {
-	# --any: accept any HTTP response (including 401); only fail on connection errors
-	local _pf="-f"
-	if [ "${1:-}" = "--any" ]; then _pf=""; shift; fi
+	local _pf="-f" _connect_timeout=5 _max_time=15 _retry=2
+
+	while true; do
+		case "${1:-}" in
+			--any)   _pf=""; shift ;;
+			--quick) _connect_timeout=3; _max_time=5; _retry=0; shift ;;
+			*)       break ;;
+		esac
+	done
+
 	local url="$1"
 	local desc="${2:-$url}"
-	
-	aba_debug "Probing $desc"
-	aba_debug "curl -s ${_pf:+$_pf }--connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
-	
-	# -s: silent (no progress bar)
-	# -f: fail on HTTP errors (4xx, 5xx) — omitted when --any is used
+
+	aba_debug "Probing $desc (timeout=${_connect_timeout}s, retries=$_retry)"
+
+	# -k: skip TLS verification — probe_host checks unknown/untrusted hosts
+	# (e.g. hairpin NAT diagnostics via localhost). Not used for primary verification.
 	if curl -s $_pf \
-		--connect-timeout 5 \
-		--max-time 15 \
-		--retry 2 \
+		--connect-timeout "$_connect_timeout" \
+		--max-time "$_max_time" \
+		--retry "$_retry" \
 		-ILk \
 		"$url" >/dev/null 2>&1; then
 		return 0
 	fi
-	
+
 	return 1
 }
 
@@ -3084,6 +3091,170 @@ ensure_openshift_install() {
 	fi
 	run_once -q -w -i "cli:download:openshift-install:${ocp_version}" -- make -sC cli download-openshift-install
 	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
+}
+
+# Check if the OCP release image is available in the mirror registry.
+# Pure curl — no skopeo or openshift-install needed.
+# Handles both Docker (Basic auth) and Quay (Bearer token exchange).
+# Requires: ocp_version (from normalize-aba-conf)
+# Requires: reg_host, reg_port, reg_path, regcreds_dir (from normalize-mirror-conf)
+# Returns: 0 if available, 1 if not.
+# Sets: _release_ver, _release_http_code, _release_check_err
+check_release_image() {
+	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
+	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
+	local _cacert="${regcreds_dir}/rootCA.pem"
+	local _repo="${reg_path#/}/openshift/release-images"
+	local _manifest_url="https://$reg_host:$reg_port/v2/$_repo/manifests/$_tag"
+	local _accept="Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+
+	_release_ver="$ocp_version"
+	_release_http_code=""
+	_release_check_err=""
+
+	local _b64auth _curl_opts
+	aba_debug "Running: jq -r '.auths[\"$reg_host:$reg_port\"].auth' $_authfile"
+	_b64auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$_authfile" 2>/dev/null)
+	_curl_opts="--cacert $_cacert --connect-timeout 3 --max-time 10 --retry 1"
+
+	aba_debug "Checking release image: $_manifest_url"
+
+	local _tmp_body="${TMPDIR:-/tmp}/_aba_curl_body.$$"
+	local _tmp_err="${TMPDIR:-/tmp}/_aba_curl_err.$$"
+
+	# Try Basic auth first (works for Docker registry)
+	aba_debug "Running: curl -sS -w %{http_code} $_curl_opts -H 'Authorization: Basic <redacted>' -H '$_accept' $_manifest_url"
+	_release_http_code=$(curl -sS -o "$_tmp_body" -w "%{http_code}" \
+		$_curl_opts \
+		-H "Authorization: Basic $_b64auth" \
+		-H "$_accept" \
+		"$_manifest_url" 2>"$_tmp_err") || true
+	_release_check_err=$(cat "$_tmp_err" 2>/dev/null)
+
+	aba_debug "curl result: HTTP $_release_http_code"
+
+	if [ "$_release_http_code" = "200" ]; then
+		rm -f "$_tmp_body" "$_tmp_err"
+		return 0
+	fi
+
+	# 401 with Basic auth — try Bearer token exchange (Quay)
+	if [ "$_release_http_code" = "401" ]; then
+		local _userpass _token _token_url
+		_userpass=$(echo "$_b64auth" | base64 -d)
+		_token_url="https://$reg_host:$reg_port/v2/auth?service=$reg_host:$reg_port&scope=repository:$_repo:pull"
+		aba_debug "Running: curl -s $_curl_opts -u <redacted> $_token_url"
+		# Token exchange curl: -s (not -sS) because Docker registries don't have
+		# this endpoint and the 404 error is expected, not diagnostic.
+		_token=$(curl -s $_curl_opts \
+			-u "$_userpass" \
+			"$_token_url" 2>/dev/null \
+			| jq -r '.token // empty' 2>/dev/null)
+
+		if [ -n "$_token" ]; then
+			aba_debug "Bearer token obtained, retrying manifest check"
+			aba_debug "Running: curl -sS -w %{http_code} $_curl_opts -H 'Authorization: Bearer <redacted>' -H '$_accept' $_manifest_url"
+			_release_http_code=$(curl -sS -o "$_tmp_body" -w "%{http_code}" \
+				$_curl_opts \
+				-H "Authorization: Bearer $_token" \
+				-H "$_accept" \
+				"$_manifest_url" 2>"$_tmp_err") || true
+			_release_check_err=$(cat "$_tmp_err" 2>/dev/null)
+
+			aba_debug "Bearer curl result: HTTP $_release_http_code"
+			if [ "$_release_http_code" = "200" ]; then
+				rm -f "$_tmp_body" "$_tmp_err"
+				return 0
+			fi
+		fi
+	fi
+
+	# Extract error detail from response body (registry v2 JSON: {"errors":[{"message":"..."}]})
+	if [ -s "$_tmp_body" ]; then
+		local _body_err
+		_body_err=$(jq -r '.errors[0].message // empty' "$_tmp_body" 2>/dev/null)
+		if [ -n "$_body_err" ]; then
+			_release_check_err="$_body_err"
+		elif [ "$_release_http_code" = "000" ]; then
+			: # keep curl stderr as the error
+		else
+			_release_check_err=$(head -c 200 "$_tmp_body")
+		fi
+	fi
+	rm -f "$_tmp_body" "$_tmp_err"
+
+	aba_debug "Error: HTTP $_release_http_code — $_release_check_err"
+
+	return 1
+}
+
+# =============================================================================
+# Background task wrappers (for TUI and CLI callers)
+# =============================================================================
+# These wrap run_once() so callers don't need to know task IDs or flags.
+
+# --- Mirror check-image (release image present in registry?) ---
+
+# Start check-image in background (non-blocking)
+aba_mirror_verify_start() {
+	run_once -i "aba:mirror:check-image" -- bash -lc "cd '${ABA_ROOT:-.}' && make -sC mirror check-image"
+}
+
+# Re-trigger after sync/load (invalidate old result, start fresh check)
+aba_mirror_verify_refresh() {
+	run_once -r -i "aba:mirror:check-image" 2>/dev/null || true
+	aba_mirror_verify_start
+}
+
+# Wait for check-image to complete (blocking). For use after sync/load/install.
+aba_mirror_verify_wait() {
+	run_once -q -w -i "aba:mirror:check-image" 2>/dev/null || true
+}
+
+# Get cached exit code (non-blocking, for menu rendering). Echoes exit code.
+aba_mirror_verify_exit() {
+	run_once -E -i "aba:mirror:check-image" 2>/dev/null
+}
+
+# --- Internet connectivity ---
+
+# Start internet check in background (non-blocking)
+aba_inet_check_start() {
+	run_once -i "aba:check:internet" -- \
+		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet"
+}
+
+# Wait for internet check result (blocking)
+aba_inet_check_wait() {
+	run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+}
+
+# Wait and return success/failure (for mode detection)
+aba_inet_check_wait_status() {
+	run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
+}
+
+# --- OCP version fetch ---
+
+# Start stable version fetch in background (non-blocking)
+aba_version_fetch_start() {
+	run_once -i "ocp:stable:latest_version" -- \
+		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_latest_version stable"
+}
+
+# --- ISC generation ---
+
+# Start ISC generation in background (non-blocking)
+aba_isconf_generate_start() {
+	run_once -i "aba:isconf:generate" -- \
+		bash -lc "cd '${ABA_ROOT:-.}' && aba -d mirror isconf"
+}
+
+# --- Cleanup ---
+
+# Clean up failed/stale run_once tasks
+aba_bg_cleanup() {
+	run_once -F 2>/dev/null || true
 }
 
 # Ensure govc is installed in ~/bin

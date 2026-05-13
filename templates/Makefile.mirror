@@ -274,6 +274,10 @@ verify: .init mirror.conf ## Using the credential files in '~/.aba/mirror/' and 
 	@$(SCRIPTS)/reg-verify.sh
 	@touch .available
 
+.PHONY: check-image
+check-image: .init mirror.conf ## Check if the OCP release image exists in the mirror registry (exit 0=found, 1=not found).
+	@$(SCRIPTS)/reg-check-image.sh
+
 #.PHONY: uninstallclean
 #uninstallclean:
 #	@rm -f .unavailable
