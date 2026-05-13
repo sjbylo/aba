@@ -149,6 +149,8 @@ elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile;
 	interactive_mode=
 else
 	# Give an error to change to the top level dir. Text must be coded here.
+	local _cmd
+	_cmd=$(basename "$0")
 	(
 		echo "  __   ____   __  "
 		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the ABA utility!"
@@ -158,13 +160,13 @@ else
 		echo "Run ABA from the top of its repository."
 		echo
 		echo "For example:                          cd aba"
-		echo "                                      aba"
+		echo "                                      $_cmd"
 		echo "                                      aba -h"
 		echo
 		echo "Otherwise, clone ABA from GitHub:     git clone https://github.com/sjbylo/aba.git"
 		echo "Change to the ABA repo directory:     cd aba"
 		echo "Install latest ABA:                   ./install"
-		echo "Run ABA:                              aba" 
+		echo "Run ABA:                              $_cmd" 
 		echo "                                      aba -h" 
 	) >&2
 
@@ -220,8 +222,14 @@ if [ -t 1 ]; then
 	exec {ABA_TTY_FD}>&1
 	export ABA_TTY_FD
 fi
-# Duplicate stdout+stderr to the trace file. Terminal output is unchanged.
-exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+# Duplicate stdout+stderr to the trace file for post-mortem debugging.
+# When stdout is piped (e.g. 'aba tar --out - | ssh ...'), only trace stderr
+# to avoid capturing binary tar data (which caused 29GB+ trace files).
+if [ -t 1 ]; then
+	exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+else
+	exec 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+fi
 
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
