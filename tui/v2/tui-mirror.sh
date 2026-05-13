@@ -312,9 +312,8 @@ _mirror_install_local() {
 	replace-value-conf -q -n reg_ssh_user -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 	replace-value-conf -q -n reg_ssh_key -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 
-	confirm_and_execute "aba -d mirror install" "Install Local Mirror"
+	confirm_and_execute "aba -d mirror install" "Install Local Mirror" _invalidate_mirror_cache
 	local rc=$?
-	_invalidate_mirror_cache
 	return $rc
 }
 
@@ -472,9 +471,8 @@ _mirror_install_remote() {
 	replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$ABA_ROOT/mirror/mirror.conf"
 	replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$ABA_ROOT/mirror/mirror.conf"
 
-	confirm_and_execute "aba -d mirror install" "Install Remote Mirror"
+	confirm_and_execute "aba -d mirror install" "Install Remote Mirror" _invalidate_mirror_cache
 	local rc=$?
-	_invalidate_mirror_cache
 	return $rc
 }
 
@@ -484,9 +482,8 @@ _mirror_install_remote() {
 
 mirror_save() {
 	tui_log "Action: Save Images"
-	confirm_and_execute "aba -d mirror save" "Save Images (mirror2disk)"
+	confirm_and_execute "aba -d mirror save" "Save Images (mirror2disk)" _invalidate_mirror_cache
 	local rc=$?
-	_invalidate_mirror_cache
 	return $rc
 }
 
@@ -496,9 +493,8 @@ mirror_save() {
 
 mirror_sync() {
 	tui_log "Action: Sync Images"
-	confirm_and_execute "aba -d mirror sync" "Sync Images (mirror2mirror)"
+	confirm_and_execute "aba -d mirror sync" "Sync Images (mirror2mirror)" _invalidate_mirror_cache
 	local rc=$?
-	_invalidate_mirror_cache
 	return $rc
 }
 
@@ -568,7 +564,7 @@ _persist_operator_basket() {
 	fi
 
 	# Kick off ISC regeneration in background (non-blocking)
-	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+	run_once -r -i "aba:isconf:generate" >>"$_TUI_LOG_FILE" 2>&1 || true
 	run_once -i "aba:isconf:generate" -- \
 		bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$_TUI_LOG_FILE" 2>&1 &
 
@@ -660,7 +656,7 @@ mirror_view_isc() {
 					;;
 				3)
 					touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
-					run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+					run_once -r -i "aba:isconf:generate" >/dev/null 2>&1 || true
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"$TUI2_MSG_ISC_RESET" 0 0 || true
 					;;
@@ -775,7 +771,7 @@ Selected operators will be included in the ImageSet config."
 					_OP_BASKET_DIRTY=true
 					_persist_operator_basket
 					tui_log "Basket cleared"
-					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared." 5 30
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared." 0 0
 				fi
 			fi
 			;;
@@ -1007,7 +1003,7 @@ _ensure_offline_prereqs() {
 	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PREPARING" \
-		--infobox "Downloading offline files (CLI tools + registry installers)...\n\nPlease wait." 7 65
+		--infobox "Downloading offline files (CLI tools + registry installers)...\n\nPlease wait." 0 0
 
 	# cli-download-all.sh uses per-tool run_once IDs (cli:download:<tool>[:<ver>])
 	if ! bash -lc "cd '$ABA_ROOT' && scripts/cli-download-all.sh --wait" >>"$_TUI_LOG_FILE" 2>&1; then

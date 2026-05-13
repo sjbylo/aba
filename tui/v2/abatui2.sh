@@ -73,7 +73,10 @@ _tick "Loading modules"
 # Startup guard — verify critical functions
 # =============================================================================
 
-for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf; do
+for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf \
+	aba_mirror_verify_start aba_mirror_verify_refresh aba_mirror_verify_exit \
+	aba_inet_check_start aba_inet_check_wait aba_inet_check_wait_status \
+	aba_version_fetch_start aba_isconf_generate_start aba_bg_cleanup; do
 	type -t "$fn" >/dev/null 2>&1 || { echo "FATAL: required function '$fn' not found in include_all.sh"; exit 1; }
 done
 
@@ -82,8 +85,10 @@ done
 # =============================================================================
 
 tui_log "Kicking off background internet check"
-run_once -i "aba:check:internet" -- \
-	bash -lc "source ./scripts/include_all.sh; check_internet_connectivity aba"
+aba_inet_check_start
+
+tui_log "Kicking off background mirror verify"
+aba_mirror_verify_start
 
 _tick "Checking connectivity"
 
@@ -200,25 +205,23 @@ if [[ -n "${op_sets:-}" ]]; then
 fi
 unset _ver_short _ops_arr _op _set_arr _s _sf _line
 
-# Clean up failed run_once tasks from previous sessions
-run_once -F 2>/dev/null || true
+# Clean up failed/stale background tasks from previous sessions
+aba_bg_cleanup
 
 _tick "Loading config"
 
 # Pre-fetch latest stable version (no pull secret needed, just api.openshift.com)
 tui_log "Kicking off background version fetch (stable)"
-run_once -i "ocp:stable:latest_version" -- \
-	bash -lc "source ./scripts/include_all.sh; fetch_latest_version stable"
+aba_version_fetch_start
 
 # Background ISC generation (so it's ready before user opens View/Edit ISC)
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
 	tui_log "Kicking off background ISC generation"
-	run_once -i "aba:isconf:generate" -- \
-		bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$_TUI_LOG_FILE" 2>&1 &
+	aba_isconf_generate_start
 fi
 
 # Wait for internet check to complete (this is the slow part)
-run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+aba_inet_check_wait
 
 _tick "Ready"
 unset -f _tick
@@ -314,7 +317,7 @@ _detect_mode() {
 		fi
 
 		# Bundle + ISC exists. Check internet.
-		run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
+		aba_inet_check_wait_status
 		if check_internet_connectivity "aba" quiet 2>/dev/null; then
 			_TUI_INET="yes"
 			# Bundle + internet: ask user
@@ -340,7 +343,7 @@ _detect_mode() {
 	fi
 
 	# No bundle — check internet
-	run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
+	aba_inet_check_wait_status
 	if check_internet_connectivity "aba" quiet 2>/dev/null; then
 		_TUI_INET="yes"
 		_TUI_MODE="CONNO"
@@ -461,6 +464,9 @@ _conno_main() {
 			inst_label="Install Cluster [sync mirror first]"
 		fi
 
+		# Wait for any in-flight mirror verify before reading state
+		aba_mirror_verify_wait
+
 		# Dynamic menu title with mirror state
 		local _mstate
 		_mstate="$(mirror_state_label)"
@@ -470,7 +476,7 @@ _conno_main() {
 		local mirror_warn=""
 		if mirror_available; then
 			local verify_exit
-			verify_exit=$(run_once -E -i "aba:mirror:verify" 2>/dev/null) || true
+			verify_exit=$(aba_mirror_verify_exit) || true
 			if [[ -n "$verify_exit" && "$verify_exit" != "0" ]]; then
 				mirror_warn=" \Z3Warning: mirror may be unreachable (verify failed)\Zn"
 			fi
@@ -609,14 +615,14 @@ Navigation:
 						--yes-label "Install & Sync" --no-label "$TUI2_BTN_BACK" \
 						--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
 					if [[ $? -eq 0 ]]; then
-						_mirror_config_review && mirror_sync && cluster_install_flow
+						_mirror_config_review && mirror_sync
 					fi
 				elif ! _mirror_has_release_image; then
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_SYNCED" \
 						--yes-label "Sync Now" --no-label "$TUI2_BTN_BACK" \
 						--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
 					if [[ $? -eq 0 ]]; then
-						mirror_sync && cluster_install_flow
+						mirror_sync
 					fi
 				else
 					cluster_install_flow
@@ -672,12 +678,6 @@ Navigation:
 # =============================================================================
 
 _detect_mode
-
-# Pre-cache mirror verify for CONNO (task id matches run_once -E in _conno_main)
-if [[ "$_TUI_MODE" == "CONNO" ]] && mirror_available; then
-	tui_log "Kicking off background mirror verify (CONNO prefetch)"
-	run_once -i "aba:mirror:verify" -- bash -lc "cd '$ABA_ROOT' && aba -d mirror verify"
-fi
 
 tui_log "Final mode: $_TUI_MODE"
 
