@@ -254,8 +254,6 @@ aba_warning() {
 	for line in "$@"; do
 		echo_$col "[ABA] ${indent}${line}" >&2
 	done
-
-	sleep 1
 }
 
 #aba_warning() {
@@ -2010,7 +2008,7 @@ get_ntp_servers() {
 trust_root_ca() {
 	if [ -s $1 ]; then
 		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
-			aba_info "$1 already in system trust"
+			aba_debug "$1 already in system trust"
 		else
 			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
@@ -3096,94 +3094,127 @@ ensure_openshift_install() {
 # Check if the OCP release image is available in the mirror registry.
 # Pure curl — no skopeo or openshift-install needed.
 # Handles both Docker (Basic auth) and Quay (Bearer token exchange).
+# Two-phase check (run in parallel for speed):
+#   Phase 1: GET /v2/ — verifies connectivity + TLS + credentials
+#   Phase 2: GET /v2/.../manifests/<tag> — verifies the release image exists
 # Requires: ocp_version (from normalize-aba-conf)
 # Requires: reg_host, reg_port, reg_path, regcreds_dir (from normalize-mirror-conf)
 # Returns: 0 if available, 1 if not.
-# Sets: _release_ver, _release_http_code, _release_check_err
+# Sets: _release_ver, _release_http_code, _release_check_err, _registry_auth_ok
 check_release_image() {
 	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
 	local _repo="${reg_path#/}/openshift/release-images"
+	local _v2_url="https://$reg_host:$reg_port/v2/"
 	local _manifest_url="https://$reg_host:$reg_port/v2/$_repo/manifests/$_tag"
 	local _accept="Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
 
 	_release_ver="$ocp_version"
 	_release_http_code=""
 	_release_check_err=""
+	_registry_auth_ok=false
 
-	local _b64auth _curl_opts
+	local _b64auth _userpass _curl_opts
 	aba_debug "Running: jq -r '.auths[\"$reg_host:$reg_port\"].auth' $_authfile"
 	_b64auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$_authfile" 2>/dev/null)
+	_userpass=$(echo "$_b64auth" | base64 -d)
 	_curl_opts="--cacert $_cacert --connect-timeout 3 --max-time 10 --retry 1"
 
-	aba_debug "Checking release image: $_manifest_url"
+	local _td="${TMPDIR:-/tmp}/_aba_cri.$$"
+	mkdir -p "$_td"
 
-	local _tmp_body="${TMPDIR:-/tmp}/_aba_curl_body.$$"
-	local _tmp_err="${TMPDIR:-/tmp}/_aba_curl_err.$$"
+	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---
+	aba_debug "Parallel check: Phase 1 ($_v2_url) + Phase 2 ($_manifest_url)"
 
-	# Try Basic auth first (works for Docker registry)
-	aba_debug "Running: curl -sS -w %{http_code} $_curl_opts -H 'Authorization: Basic <redacted>' -H '$_accept' $_manifest_url"
-	_release_http_code=$(curl -sS -o "$_tmp_body" -w "%{http_code}" \
-		$_curl_opts \
-		-H "Authorization: Basic $_b64auth" \
+	curl -sS -o "$_td/p1.body" -w "%{http_code}" \
+		$_curl_opts -H "Authorization: Basic $_b64auth" \
+		"$_v2_url" 2>"$_td/p1.err" > "$_td/p1.code" &
+	local _pid1=$!
+
+	curl -sS -o "$_td/p2.body" -w "%{http_code}" \
+		$_curl_opts -H "Authorization: Basic $_b64auth" \
 		-H "$_accept" \
-		"$_manifest_url" 2>"$_tmp_err") || true
-	_release_check_err=$(cat "$_tmp_err" 2>/dev/null)
+		"$_manifest_url" 2>"$_td/p2.err" > "$_td/p2.code" &
+	local _pid2=$!
 
-	aba_debug "curl result: HTTP $_release_http_code"
+	wait "$_pid1" "$_pid2" 2>/dev/null || true
 
-	if [ "$_release_http_code" = "200" ]; then
-		rm -f "$_tmp_body" "$_tmp_err"
-		return 0
+	local _p1_code _p2_code
+	_p1_code=$(cat "$_td/p1.code" 2>/dev/null)
+	_p2_code=$(cat "$_td/p2.code" 2>/dev/null)
+
+	aba_debug "Parallel Basic auth results: Phase 1=$_p1_code Phase 2=$_p2_code"
+
+	# --- Fast path: Docker registry where Basic auth works for both ---
+	if [ "$_p1_code" = "200" ]; then
+		_registry_auth_ok=true
+		if [ "$_p2_code" = "200" ]; then
+			rm -rf "$_td"
+			return 0
+		fi
 	fi
 
-	# 401 with Basic auth — try Bearer token exchange (Quay)
-	if [ "$_release_http_code" = "401" ]; then
-		local _userpass _token _token_url
-		_userpass=$(echo "$_b64auth" | base64 -d)
-		_token_url="https://$reg_host:$reg_port/v2/auth?service=$reg_host:$reg_port&scope=repository:$_repo:pull"
+	# --- Quay path: both return 401 with Basic, need Bearer token exchange ---
+	# A successful token exchange proves credentials are valid (no separate /v2/ check needed).
+	if [ "$_p1_code" = "401" ]; then
+		local _token_url="https://$reg_host:$reg_port/v2/auth?service=$reg_host:$reg_port&scope=repository:$_repo:pull"
 		aba_debug "Running: curl -s $_curl_opts -u <redacted> $_token_url"
-		# Token exchange curl: -s (not -sS) because Docker registries don't have
-		# this endpoint and the 404 error is expected, not diagnostic.
+		local _token
 		_token=$(curl -s $_curl_opts \
 			-u "$_userpass" \
 			"$_token_url" 2>/dev/null \
 			| jq -r '.token // empty' 2>/dev/null)
 
 		if [ -n "$_token" ]; then
-			aba_debug "Bearer token obtained, retrying manifest check"
+			_registry_auth_ok=true
+			aba_debug "Bearer token obtained — credentials valid, checking manifest"
 			aba_debug "Running: curl -sS -w %{http_code} $_curl_opts -H 'Authorization: Bearer <redacted>' -H '$_accept' $_manifest_url"
-			_release_http_code=$(curl -sS -o "$_tmp_body" -w "%{http_code}" \
+			_p2_code=$(curl -sS -o "$_td/p2.body" -w "%{http_code}" \
 				$_curl_opts \
 				-H "Authorization: Bearer $_token" \
 				-H "$_accept" \
-				"$_manifest_url" 2>"$_tmp_err") || true
-			_release_check_err=$(cat "$_tmp_err" 2>/dev/null)
+				"$_manifest_url" 2>"$_td/p2.err") || true
 
-			aba_debug "Bearer curl result: HTTP $_release_http_code"
-			if [ "$_release_http_code" = "200" ]; then
-				rm -f "$_tmp_body" "$_tmp_err"
+			aba_debug "Bearer manifest result: HTTP $_p2_code"
+			if [ "$_p2_code" = "200" ]; then
+				rm -rf "$_td"
 				return 0
 			fi
 		fi
 	fi
 
-	# Extract error detail from response body (registry v2 JSON: {"errors":[{"message":"..."}]})
-	if [ -s "$_tmp_body" ]; then
-		local _body_err
-		_body_err=$(jq -r '.errors[0].message // empty' "$_tmp_body" 2>/dev/null)
-		if [ -n "$_body_err" ]; then
-			_release_check_err="$_body_err"
-		elif [ "$_release_http_code" = "000" ]; then
-			: # keep curl stderr as the error
-		else
-			_release_check_err=$(head -c 200 "$_tmp_body")
+	# --- Failure: extract error details ---
+	if [ "$_registry_auth_ok" = "false" ]; then
+		# Phase 1 failed — report /v2/ error
+		_release_http_code="${_p1_code:-000}"
+		_release_check_err=$(cat "$_td/p1.err" 2>/dev/null)
+		if [ -s "$_td/p1.body" ]; then
+			local _body_err
+			_body_err=$(jq -r '.errors[0].message // empty' "$_td/p1.body" 2>/dev/null)
+			if [ -n "$_body_err" ]; then
+				_release_check_err="$_body_err"
+			elif [ "$_p1_code" != "000" ]; then
+				_release_check_err=$(head -c 200 "$_td/p1.body")
+			fi
+		fi
+	else
+		# Phase 1 passed but Phase 2 failed — report manifest error
+		_release_http_code="${_p2_code:-000}"
+		_release_check_err=$(cat "$_td/p2.err" 2>/dev/null)
+		if [ -s "$_td/p2.body" ]; then
+			local _body_err
+			_body_err=$(jq -r '.errors[0].message // empty' "$_td/p2.body" 2>/dev/null)
+			if [ -n "$_body_err" ]; then
+				_release_check_err="$_body_err"
+			elif [ "$_p2_code" != "000" ]; then
+				_release_check_err=$(head -c 200 "$_td/p2.body")
+			fi
 		fi
 	fi
-	rm -f "$_tmp_body" "$_tmp_err"
 
-	aba_debug "Error: HTTP $_release_http_code — $_release_check_err"
+	rm -rf "$_td"
+	aba_debug "FAILED: auth_ok=$_registry_auth_ok HTTP $_release_http_code — $_release_check_err"
 
 	return 1
 }
