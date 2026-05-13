@@ -176,7 +176,7 @@ _cleanup_con_registry() {
     local _regcreds="$HOME/.aba/mirror/mirror"
     for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.available" ]; then
-            if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh"; then
+            if [ -f "$_regcreds/state.sh" ] && grep -qi 'reg_vendor=existing' "$_regcreds/state.sh"; then
                 echo "  [cleanup] Found .available + existing registry -- running aba unregister"
                 ( cd "$_dir" && ./aba -y -d mirror unregister ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba unregister failed in $_dir (rc=$?)"
