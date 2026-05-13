@@ -2,7 +2,9 @@
 
 ## Overview
 
-TUI v2 (`tui/v2/abatui2.sh`) is a **complete replacement for v1**, covering the entire ABA workflow: mirror setup, image save/sync/bundle, cluster configuration/installation, monitoring, and Day-2 operations. It supports three operating modes — DISCO, CONNO, and DIRECT — detected automatically at startup.
+TUI v2 (`tui/v2/abatui2.sh`) is a **complete replacement for v1**, covering the entire ABA workflow: mirror setup, image save/sync/bundle, cluster configuration/installation, monitoring, and Day-2 operations. It supports three operating modes — DISCO, CONNO, and DIRECT. DISCO and CONNO are chosen from bundle/offline state or default startup; **DIRECT is not auto-detected** — the user switches from the CONNO menu when internet is available.
+
+**Single-instance guard:** On launch, the TUI opens `~/.aba/.tui.lock` and takes a non-blocking `flock(2)` exclusive lock for the process lifetime. A second instance on the same host exits with an error until the first exits.
 
 **Entry points:**
 - `abatui` — installed in `$PATH` (symlink `~/bin/abatui → aba`; `aba.sh` detects `basename == abatui` and exec's the TUI)
@@ -17,11 +19,11 @@ TUI v2 (`tui/v2/abatui2.sh`) is a **complete replacement for v1**, covering the 
 
 ## Modes
 
-| Mode   | Detection                                        | Purpose                                             |
-|--------|--------------------------------------------------|-----------------------------------------------------|
-| DISCO  | `.bundle` exists AND ISC present                 | Disconnected host: install registry, load, cluster  |
-| CONNO  | Internet available, user chooses "with mirror"   | Connected host with mirror: full ABA workflow       |
-| DIRECT | Internet available, user chooses "direct"        | Connected host, no mirror: install from internet    |
+| Mode   | Detection                                                                 | Purpose                                                      |
+|--------|-----------------------------------------------------------------------------|--------------------------------------------------------------|
+| DISCO  | `.bundle` + ISC, or no internet with valid offline payload (`aba.conf` + tools + ISC + mirror or tars) | Disconnected host: install registry, load, cluster           |
+| CONNO  | Internet available and no `.bundle` (or user removed `.bundle` from bundle-on-connected flow)        | Connected host with mirror: full ABA workflow (default path) |
+| DIRECT | User chooses **Switch to Fully Connected** from CONNO (while internet available)                        | Connected host, no mirror: install from internet             |
 
 ---
 
@@ -36,28 +38,23 @@ flowchart TD
     BundleInet -->|no| DISCO["DISCO Mode"]
     BundleInet -->|yes| BundleAsk{"Bundle on connected host: DISCO or connected?"}
     BundleAsk -->|"Continue DISCO"| DISCO
-    BundleAsk -->|"Switch to connected"| SwitchConnected["Switch to connected mode"]
-    SwitchConnected --> ModeDialog
+    BundleAsk -->|"Switch to connected"| SwitchConnected["Remove .bundle → CONNO"]
     BundleCheck -->|no| InetCheck{"Internet usable?"}
-    InetCheck -->|yes| ModeDialog["Ask: Mirror or Direct?"]
-    ModeDialog -->|"With mirror"| CONNO[CONNO Mode]
-    ModeDialog -->|"Direct from Internet"| DIRECT[DIRECT Mode]
-    InetCheck -->|no| FallbackCheck{"aba.conf + mirror/.available?"}
-    FallbackCheck -->|yes| CONNO
-    FallbackCheck -->|no| DeadEnd2["Error: no internet, no bundle"]
+    InetCheck -->|yes| CONNO[CONNO Mode — default]
+    InetCheck -->|no| FallbackCheck{"aba.conf + valid offline payload?"}
+    FallbackCheck -->|yes| DISCO
+    FallbackCheck -->|no| DeadEndInet["Error dialog: internet required"]
 ```
 
 ### Internet Check
 
 "Internet usable" = `check_internet_connectivity "aba"` from `include_all.sh`. Checks `api.openshift.com`, `mirror.openshift.com`, and `registry.redhat.io`. Pre-fetched in background at TUI startup via `run_once`.
 
-### Mirror-vs-Direct Dialog
+### No Mirror-vs-Direct Dialog at Startup
 
-Always shown when internet is available. Pre-selected default:
+When internet is usable and `.bundle` is absent, startup goes **straight to CONNO** (mirror-based workflow — `abatui2.sh` comment: `_mode_select_mirror_or_direct removed`). There is **no** initial "mirror or direct?" dialog.
 
-- `mirror/.available` exists → highlight "With a mirror registry"
-- No mirror configured → still highlight "With a mirror registry" (ABA's primary use case is mirror-based)
-- User can always override and pick the other option
+To use **DIRECT**, open the CONNO action menu and choose **Switch to Fully Connected** (`Switch to Fully Connected` in the Mode section).
 
 ### Edge Case: `.bundle` + Internet
 
@@ -76,7 +73,9 @@ The bundle is intended for disconnected environments.
 | Condition                                     | Message                                                      |
 |-----------------------------------------------|--------------------------------------------------------------|
 | `.bundle` exists but no ISC                   | "Bundle incomplete. Re-transfer or run `aba reset`."         |
-| No `.bundle`, no internet, no `aba.conf`      | "No internet and no bundle. Transfer a bundle first."        |
+| No `.bundle`, no internet, insufficient offline payload | Internet-required error dialog; exit unless `aba.conf` + ISC + tooling/archives satisfy `_validate_payload` → DISCO |
+
+When internet fails and offline payload is valid, the TUI enters **DISCO** (not CONNO).
 
 ### Light Bundle Handling
 
@@ -116,7 +115,7 @@ Long-running operations (install, load, save, sync) offer both:
 - **Terminal mode** — clear screen, live output (user sees full scrolling log)
 - **TUI mode** — tailbox/progress within dialog (stays inside TUI chrome)
 
-Same as v1: user picks which mode before execution.
+Same as v1: user picks which mode before execution (unless **Always TUI** or **Always Terminal** is set for **this session** — see `confirm_and_execute()` in `tui-lib.sh`; reset via **Advanced Options → Reset Execution Mode** when that item appears).
 
 Both modes MUST:
 - Display the command being executed at the top (e.g. `Executing: aba -d mirror sync`)
@@ -124,25 +123,29 @@ Both modes MUST:
 
 ### Post-Execution Dialogs
 
-- **Success (exit 0):** Show output in a textbox with only "Back to Menu" button. No "Exit TUI" — the user just completed an operation and almost always wants to continue.
-- **Failure (exit != 0):** Show output with "Back to Menu" and "Retry" buttons.
+- **Success (exit 0):** Same in both paths: show output in a textbox with **Back to Menu** only.
+- **Failure (exit ≠ 0):**
+  - **TUI execution** (`_exec_in_tui`): textbox with **Back to Menu** and **Retry** (`--extra-button`).
+  - **Terminal execution** (`_exec_in_terminal`): prints failure on the cleared terminal, then **`Press ENTER to return to TUI`** — **no Retry** (user re-runs the action from the menu if needed).
 
 ### Unavailable Menu Items
 
 Items that cannot be activated (prerequisites unmet) are **shown but greyed out** with a short reason tag. Example:
 
 ```
-  Day-2: NTP          [install cluster first]
-  Monitor Cluster     [install cluster first]
+  Day-2 / Cluster Management     [install cluster first]
+  Finalize Installation (wait-for) [install cluster first]
 ```
 
 This lets the user see the full workflow at a glance.
 
 **Cluster installed check:** `cluster_installed()` checks for the `.install-complete` marker file (created by the Makefile on successful install, removed by `aba delete`). Do NOT use `iso-agent-based/auth/kubeconfig` — it persists after deletion and causes deleted clusters to appear as installed.
 
-**ERR trap safety:** `list_installed_clusters()` uses `cluster_installed "$dir" && echo "$dir" || true` — the `|| true` is required because under `set -e` or an ERR trap, a false return from `cluster_installed` would abort the loop.
+**ERR trap safety / install detection:** `list_installed_clusters()` walks `list_cluster_dirs`; for each dir without `.install-complete`, it **probes `auto_finalize_cluster "$dir"`** (background install may have finished) before re-checking `cluster_installed`. The final `cluster_installed "$dir" && echo "$dir" || true` needs `|| true` so a false `cluster_installed` under `set -e` / ERR does not abort the loop.
 
-**Exception:** Operations where the Makefile handles prerequisites (e.g. Sync, Load) are NEVER greyed out — even if the mirror isn't installed. The TUI shows a config review dialog and the single `aba` command handles the install as a dependency.
+**CONNO:** Operations where the Makefile handles prerequisites (e.g. **Sync**) are not greyed purely for “mirror not installed” — selecting them can run `_mirror_config_review()` and a single `aba` command installs the mirror as a dependency.
+
+**DISCO:** **Load Images** shows `[install registry first]` in the menu label when no registry is installed. The row is still selectable: choosing it prompts to install a mirror first (`_mirror_config_review` + load), matching the dimmed “reminder” pattern used elsewhere.
 
 ### Dynamic Menu Titles (Mirror State)
 
@@ -189,10 +192,15 @@ Fields with a small fixed set of values use select-to-cycle (toggle), not free-t
 
 ### Background Pre-fetch
 
-- Kick off `run_once` tasks early (internet check at startup, versions after channel selection)
+- Kick off `run_once` tasks early (internet check at startup, stable version fetch at startup, ISC generation when `aba.conf` exists)
 - Only show "Please Wait" if the user navigates faster than the background task completes
 - Data should typically be ready before the user reaches that screen
 - Init order: modules → connectivity (background) → packages → config → ready
+- **CONNO mirror verify prefetch:** After mode detection, if mode is CONNO and a mirror is installed, `run_once -i "aba:mirror:verify"` runs **`aba -d mirror verify`** in the background. The CONNO menu checks cached exit status (`run_once -E`) to append a non-blocking warning if verify failed.
+
+### Default menu focus (CONNO / DISCO)
+
+Main loops set `--default-item` to the **View/Edit ImageSet Config** tag (CONNO) or **View ImageSet Config** tag (DISCO) so reopening the menu returns focus to that entry (typically first workflow step).
 
 ### Makefile Dependency Principle
 
@@ -239,17 +247,19 @@ Every menu dialog in a `while :; do` loop MUST pass `--default-item "$default_it
 
 Dynamic title: `"Fully Disconnected — Choose an action (mirror ready):"` (state from `mirror_state_label()`)
 
-Unavailable items shown greyed out:
+Menu layout (exact order):
 
-| #  | Item                     | Availability                                     |
-|----|--------------------------|--------------------------------------------------|
-| 1  | Install Registry         | Always (local or remote; re-install if needed)   |
-| 2  | Load Images (disk2mirror)| Always (if no registry: config review → `aba load` handles install as dep) |
-| 3  | Install Cluster          | Always (if no mirror: offers Install & Load; if no images: offers Load Now) |
-| 4  | Day-2: NTP / OSUS / Full | Greyed until cluster installed                   |
-| 5  | Monitor Cluster          | Greyed until cluster installed                   |
-| 7  | View ISC                 | Always (read-only; ISC came from bundle)         |
-| 8  | Reset to Connected Mode  | Greyed if no internet available                  |
+1. **──── Registry ────**
+2. Install Registry (local or remote) — `(installed)` / disabled pattern when mirror already present
+3. Load Images `(disk2mirror)` — label includes `[install registry first]` until a registry exists; selecting still opens the install-then-load path (see UC-D2)
+4. **──── Cluster ────**
+5. Install Cluster — hints such as `[install registry first]`, `[load mirror first]` when prerequisites missing
+6. **Finalize Installation (wait-for)** — grey tag `[install cluster first]` until a cluster reaches `.install-complete`
+7. **Day-2 / Cluster Management** — grey tag `[install cluster first]` until at least one cluster directory exists
+8. **──── Advanced ────**
+9. Advanced Options — shared advanced menu (`tui_advanced_menu`)
+10. **View ImageSet Config** — always (read-only; ISC came from bundle)
+11. **Reset to Connected Mode** — grey tag `[no internet]` when `_TUI_INET` is “no”; otherwise clears `.bundle` and reconnects workflow
 
 ### UC-D1: Install Registry
 
@@ -261,10 +271,9 @@ Unavailable items shown greyed out:
 
 ### UC-D2: Load Images
 
-1. If registry not installed:
-   - Inform: "Mirror registry is not installed. A mirror will be installed first, then images loaded. Continue?"
-   - If Yes: show mirror config review (`_mirror_config_review()`) for confirmation/editing
-   - Then proceed (Makefile handles install as dependency of load)
+1. If registry not installed (including when the menu row shows `[install registry first]`):
+   - Selecting **Load Images** prompts: install mirror first, then load — Continue?
+   - If Yes: show mirror config review (`_mirror_config_review()`) → `disco_load_images()` (Makefile handles install as dependency of load where applicable)
 2. If light bundle (no `mirror/data/mirror_*.tar`):
    - Show: "Light bundle detected. Copy archives to `mirror/data/`."
    - Offer: "Check again" / "Back"
@@ -295,7 +304,7 @@ Read-only view of `mirror/data/imageset-config.yaml` via `--textbox`. No editing
 1. Pre-check: internet available? If not → greyed, cannot activate.
 2. Confirm: "Switch to connected mode? The bundle state will be cleared."
 3. Internally remove `.bundle` flag
-4. Re-run mode detection → enters Mirror-vs-Direct dialog
+4. Internet is verified again (`disco_reset`) → re-detect mode; user lands in **CONNO** when internet works (same as cold start without `.bundle`).
 
 ---
 
@@ -303,44 +312,40 @@ Read-only view of `mirror/data/imageset-config.yaml` via `--textbox`. No editing
 
 ### Initial Wizard (first entry only)
 
-Entering CONNO mode for the first time runs the **v1 wizard flow**: pull secret → channel → version → platform → operator selection → ISC generation. This is the same wizard as v1 (copied and adapted to v2 dialog standards). Once wizard state is saved (`aba.conf` populated), subsequent entries skip straight to the action menu.
+Entering CONNO mode for the first time runs **`direct_wizard`** (same step order as DIRECT when `aba.conf` is incomplete): **pull secret (paste)** → channel → version → platform → operator selection → config save / ISC regeneration. Adapted from v1 to v2 dialog standards. Once `aba.conf` has channel + version (and wizard completes), subsequent entries skip straight to the action menu.
 
 ### Action Menu
 
-Unavailable items shown greyed out:
+Items use single-letter shortcut tags (`abatui2.sh`). Unavailable rows keep the shortcut but append reason tags (`[no internet]`, `[install cluster first]`, `(installed)`, hints on **Install Cluster** such as **`[sync mirror first]`**, etc.). **Default `--default-item`:** View/Edit ImageSet Config.
 
-**Mirror operations:**
+Layout (exact order):
 
-| #  | Item                           | Availability                       |
-|----|--------------------------------|------------------------------------|
-| 1  | View/Edit ImageSet Config      | Always (shows first — most commonly reviewed) |
-| 2  | Select Operators               | Always (same as v1 checklist)      |
-| 3  | Install Mirror                 | Always (local or remote)           |
-| 4  | Save Images (mirror2disk)      | Always (m2d — only needs internet, no mirror) |
-| 5  | Sync Images (mirror2mirror)    | Always (if no mirror: config review → `aba sync` handles install as dep) |
-| 6  | Create Bundle                  | Always                             |
+1. **──── Mirror ────** — View/Edit ImageSet Config; Select Operators; Install Mirror; Sync Images `(mirror2mirror)`
+2. **──── Transfer ────** — **Create Install Bundle**; Save Images `(mirror2disk)`
+3. **──── Cluster ────** — Install Cluster; **Finalize Installation (wait-for)**; **Day-2 / Cluster Management**
+4. **──── Advanced ────** — Advanced Options (`tui_advanced_menu`)
+5. **──── Mode ────** — **Switch to Fully Connected** (→ DIRECT); **Switch to Fully Disconnected** (→ DISCO in-place, after `_ensure_offline_prereqs`)
 
 Menu label convention: Save/Sync/Load include directional suffixes — `(mirror2disk)`, `(mirror2mirror)`, `(disk2mirror)` — so the user knows the data flow direction at a glance.
 
-**Cluster operations:**
+### Advanced Options (CONNO / DISCO / DIRECT)
 
-| #  | Item              | Availability                       |
-|----|-------------------|------------------------------------|
-| 7  | Install Cluster      | Always (unified: configure → review → install) |
-| 8  | Day-2: Full/NTP/OSUS | Greyed until installed          |
-| 9  | Monitor Cluster      | Greyed until installed             |
+All three modes expose **Advanced Options** on the main menu; handler: `tui_advanced_menu()` in `tui-cluster.sh`. Items:
 
-**Mode switch:**
+| Tag | Item | Notes |
+|-----|------|-------|
+| R | Reset ABA (full clean) | Confirms, then `confirm_and_execute "aba reset --force"` |
+| P | Reconfigure Platform | `vmw` / `kvm` / `none` (bare metal) via `aba -p …` |
+| U | Uninstall Mirror Registry | Shown only when `mirror_available` |
+| E | Reset Execution Mode | Shown only when a session preference **Always TUI** or **Always Terminal** is active; clears `_TUI_EXEC_MODE` |
 
-| #  | Item                  | Availability |
-|----|-----------------------|--------------|
-| 11 | Switch to DIRECT mode | Always       |
+(No separate “purge `~/.aba/runner`” / generic cache-clear action exists in-menu today — use manual cleanup from the **Shared Caching** section below when testing.)
 
 ### Mirror Health Warning
 
-Background `aba verify` kicked off at startup. If unhealthy → non-blocking warning in status line: "Warning: mirror may be unreachable (verify failed)".
+When the menu renders in CONNO and a mirror is installed, the code reads cached exit status from **`run_once -i "aba:mirror:verify"`** (background task started after mode detection: `aba -d mirror verify`). If the last exit code was non-zero → append a non-blocking status-line warning: `Warning: mirror may be unreachable (verify failed)`.
 
-### UC-C6: Create Bundle
+### UC-C6: Create Install Bundle
 
 1. Run `_ensure_offline_prereqs()` (download CLI tools + registry installers)
 2. Prompt for output path (default `/tmp/ocp-bundle`)
@@ -359,24 +364,25 @@ Background `aba verify` kicked off at startup. If unhealthy → non-blocking war
 
 ### Minimal Wizard
 
-Same look and feel as v1:
+Same look and feel as v1, **five content steps**:
 
-1. **Pull secret** — check `~/.pull-secret.json`, prompt if missing (paste or file path)
+1. **Pull secret** — if `pull_secret_file` / `~/.pull-secret.json` missing or user chooses replace: **paste JSON via dialog** (saved to `~/.pull-secret.json` — no separate “file path” picker)
 2. **Channel** — radio: stable / fast / candidate (HELP, NEXT/BACK)
-3. **Version** — pre-fetch via `run_once`, show Latest/Previous/Older/Manual (same as v1)
+3. **Version** — pre-fetch via `run_once`, show Latest/Previous/Older/Manual (same UX as v1)
 4. **Platform** — radio: bm / vmw / kvm (default: bm)
+5. **Operator selection** — same checklist pattern / persistence as CONNO (`_direct_operators`), then `_direct_save_config`
 
-Pre-fetch: start fetching version data immediately after channel selection.
+Pre-fetch: background catalog/version work overlaps channel and wizard start (same as `tui-direct.sh` headers).
 
 ### Action Menu
 
-After wizard completes (unavailable items greyed out):
+Layout (exact order):
 
-| #  | Item              | Availability                       |
-|----|-------------------|------------------------------------|
-| 1  | Install Cluster   | Always (unified: configure → review → install) |
-| 2  | Day-2: NTP / Full | Greyed until installed             |
-| 3  | Monitor Cluster   | Greyed until installed             |
+1. **──── Cluster ────** — Install Cluster; **Finalize Installation (wait-for)**; **Day-2 / Cluster Management** (grey tags `[install cluster first]` on Day-2 / Finalize until prerequisites met — same messaging as CONNO)
+2. **──── Advanced ────** — Advanced Options
+3. **──── Mode ────** — **Switch to Partially Disconnected** (return to mirror / CONNO path)
+
+Default `--default-item`: Install Cluster shortcut tag (see `tui-direct.sh`).
 
 ---
 
@@ -391,7 +397,7 @@ After wizard completes (unavailable items greyed out):
 ```
 
 - Toggle "Type" auto-adjusts: sno/compact → "Worker count" row disappears; standard → shows with default 2
-- Cluster name validated: `[a-z0-9-]+`, max 15 chars
+- Cluster name validated as a **DNS label**: `[a-z0-9-]+`, **max 63 characters** (see `TUI2_MSG_INVALID_CLUSTER_NAME` / `tui-cluster.sh`)
 
 ### Page 2: Networking (form-style, pre-filled)
 
@@ -464,26 +470,30 @@ Correct CLI flags (from `others/help-cluster.txt`):
 
 ---
 
-## Install + Monitor Behavior
+## Install + Finalize (Monitor) Behavior
 
-`aba -d <cluster> install` always auto-runs `aba -d <cluster> mon` at the end (built into the install Makefile target). The separate **Monitor Cluster** menu item remains available for:
+`aba -d <cluster> install` always auto-runs `aba -d <cluster> mon` at the end (built into the install Makefile target). The separate **Finalize Installation (wait-for)** menu item (`cluster_monitor`) remains available for:
 
-- Re-monitoring after Day-2 operations
-- Checking cluster status at any time
-- Resuming monitoring if user previously exited with Ctrl-C
+- Re-attaching to wait for `.install-complete` after Day-2 or other interruptions
+- Checking long-running install status at any time
+- Resuming monitoring if the user previously exited with Ctrl-C
 
 ---
 
 ## Day-2 Operations
 
-| Operation      | Command                         | Available in       | Pre-check                                  |
-|----------------|----------------------------------|--------------------|--------------------------------------------|
-| Day-2: Full    | `aba -d <cluster> day2`         | DISCO, CONNO       | None                                       |
-| Day-2: NTP     | `aba -d <cluster> day2-ntp`     | ALL modes          | None                                       |
-| Day-2: OSUS    | `aba -d <cluster> day2-osus`    | DISCO, CONNO       | Warn if Cincinnati operator not in ISC     |
+Submenu title: **Day-2 / Cluster Management** (`cluster_day2_menu` in `tui-cluster.sh`).
+
+| Operation      | Command / action                         | Available in       | Pre-check                                  |
+|----------------|------------------------------------------|--------------------|--------------------------------------------|
+| Cluster Resources (day2) | `aba -d <cluster> day2`         | DISCO, CONNO       | None                                       |
+| NTP            | `aba -d <cluster> day2-ntp`     | ALL modes          | None                                       |
+| OSUS           | `aba -d <cluster> day2-osus`    | DISCO, CONNO       | Warn if Cincinnati operator not in ISC     |
+| **Cluster status** (`S`) | `oc get co`, `oc get nodes` (via kubeconfig) | ALL modes | Cluster must exist (selector)        |
+| **SSH to Rendezvous** (`H`) | `aba -d <cluster> ssh` (interactive shell) | ALL modes | Cluster must exist; ends with `Press ENTER to return to TUI` |
 | Upgrade        | `aba -d <cluster> upgrade --to <ver>` | ALL modes   | Prompts for target version                 |
 | Shutdown       | `aba -d <cluster> shutdown --wait`    | ALL modes   | None                                       |
-| Startup        | `aba -d <cluster> startup --wait`     | ALL modes   | None                                       |
+| Startup        | `aba -d <cluster> startup` (no `--wait` in TUI) | ALL modes   | None                                       |
 | Refresh        | `aba -d <cluster> refresh`            | ALL modes   | None                                       |
 | Clean          | `aba -d <cluster> clean`              | ALL modes   | None                                       |
 | Delete         | `aba -d <cluster> delete`             | ALL modes   | None                                       |
@@ -541,13 +551,15 @@ Triggered before cluster install when platform is vmw or kvm:
 
 ---
 
-## CLI-Only (NOT in TUI v2)
+## CLI-Only (NOT in TUI v2 primary menus)
 
 - Named mirrors (`aba mirror --name foo`)
 - VMware/KVM config file form editors (TUI offers `$EDITOR`, not a full form)
-- `aba reset`, `aba bundle --out -` (piping to stdout)
+- `aba bundle --out -` (piping to stdout)
 - Multi-cluster management (TUI handles one at a time)
 - `aba tar` (low-level archive operations)
+
+**Note:** `aba reset` is **not** CLI-only — **Advanced Options → Reset ABA** runs `aba reset --force` via `confirm_and_execute`.
 
 ---
 
@@ -558,6 +570,7 @@ TUI and CLI share cached operation results via unified `aba:` prefix:
 | Operation          | Cache key               | TTL     |
 |--------------------|-------------------------|---------|
 | Internet checks    | `aba:check:*`           | 5 min   |
+| Mirror verify (CONNO prefetch) | `aba:mirror:verify` | until `run_once` replaces task |
 | Catalog prefetch   | `aba:prefetch:catalogs` | session |
 | ISC generation     | `aba:isconf:generate`   | session |
 | OCP versions       | `ocp:${channel}:*`      | session |
@@ -584,7 +597,7 @@ Its inputs are: `ocp_channel`, `ocp_version`, `ops`, `op_sets`, `ARCH`, `excl_pl
 - Channel/version saved (`_direct_save_config`)
 - Operator basket changed (`_persist_operator_basket`)
 
-This means ISC is usually ready before the user navigates to "View ISC".
+This means ISC is usually ready before the user opens **View/Edit ImageSet Config** (CONNO) / **View ImageSet Config** (DISCO).
 
 ---
 
@@ -594,7 +607,7 @@ This means ISC is usually ready before the user navigates to "View ISC".
 - **Back** button (rc=1) → previous page/menu
 - **Help** (rc=2) → context-sensitive help msgbox, then re-display same dialog
 - **Next** (rc=3, extra button) → advance to next page/step
-- Unavailable items visible but greyed — cannot be activated
+- Greyed rows show prerequisites at a glance. **Hard-disabled** selections show a msgbox (e.g. Day-2 with no clusters). Some dimmed rows (e.g. **DISCO → Load Images** before registry exists) remain selectable and launch the install-first guided flow instead of running `mirror load` blindly.
 - After long-running operations: return to action menu automatically
 - Cluster lists always show full `<cluster-name>.<base_domain>`
 
@@ -610,7 +623,7 @@ tui/v2/
   tui-mirror.sh    — Mirror/bundle: save, sync, bundle, operators, ISC (from v1)
   tui-cluster.sh   — Cluster: configure/install/monitor/day2 (NEW)
   tui-disco.sh     — DISCO mode: registry install + load
-  tui-direct.sh    — DIRECT mode: minimal wizard, straight to cluster
+  tui-direct.sh    — DIRECT mode: wizard (pull secret, channel, version, platform, operators) + cluster menu
   SPEC.md          — This file
 ```
 
@@ -629,11 +642,12 @@ Each `tui-*.sh` is sourceable AND standalone (`BASH_SOURCE` guard for dev/testin
    - ABA core always reads from config files; the TUI must ensure those files are current before invoking any `aba` command
 3. **ABA core functions first** — use `include_all.sh` functions, never reimplement
 4. **Reuse v1 code** — copy working wizard functions, adapt to v2 standards, don't rewrite
-5. **Greyed-out menus** — show full workflow, disable items until prerequisites met
+5. **Greyed-out menus** — show prerequisite state; most blocked rows only msgbox when selected, while a few (e.g. DISCO **Load Images**) still open a corrective flow
 6. **Sourceable + standalone** — each `tui-*.sh` has `BASH_SOURCE` guard
 7. **Default to bm** — platform default is bare metal; VM pages only shown for vmw/kvm
 8. **CLI and TUI interchangeable** — shared `run_once` caches, same config files; user can switch between TUI and CLI mid-workflow
 9. **Single-letter menu shortcuts** — every `--menu` item MUST use a single uppercase letter as its tag (e.g. `"P" "Platform: ..."` not `"plat" "Platform: ..."`). This gives users instant keyboard shortcuts. Exception: `--radiolist` items where the tag IS the config value (e.g. `"vmw"`, `"stable"`) keep their semantic names since they are written directly to config files.
+10. **Session-scoped execution preference** — `confirm_and_execute()` remembers **Always TUI** / **Always Terminal** for this process (`_TUI_EXEC_MODE`). Clear it from **Advanced Options → Reset Execution Mode** when that menu entry appears.
 
 ## Learnings and Pitfalls
 
@@ -725,7 +739,7 @@ Look up exact IPs via DNS (`dig sno.example.com`). Starting IPs can be lower (10
 1. **DIRECT mode** (no mirror, `int_connection=proxy` on VM Network)
    - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
    - Internet UP the whole time (proxy provides connectivity)
-   - TUI: Pull secret → channel → version → platform=vmw → cluster wizard
+   - TUI: Pull secret (paste JSON if needed) → channel → version → platform → operators → cluster wizard …
    - Set connection type to `proxy` (not `direct` — no External Network DNS)
    - Install sno first, then compact, then standard (one at a time)
    - Wait for "Agent alive" message
