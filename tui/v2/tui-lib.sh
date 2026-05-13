@@ -186,7 +186,7 @@ dlg() {
 				arg="\n$arg"
 			fi
 			if [[ "$has_menu" == "true" ]]; then
-				arg="${arg}\n(Navigate: Arrow keys, Tab, ESC)"
+				arg="${arg}\n\n(Navigate: Arrow keys, Tab, ESC)"
 				dims_after_text=3
 			fi
 			args+=("$arg")
@@ -363,14 +363,15 @@ _TUI_EXEC_MODE="${_TUI_EXEC_MODE:-}"
 confirm_and_execute() {
 	local cmd="$1"
 	local title="${2:-Confirm Execution}"
+	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
 
 	# If user previously chose "always", skip the picker
 	if [[ -n "$_TUI_EXEC_MODE" ]]; then
 		tui_log "Using remembered exec mode: $_TUI_EXEC_MODE"
 		case "$_TUI_EXEC_MODE" in
-			tui)      _exec_in_tui "$cmd" "$title"; return $? ;;
-			terminal) _exec_in_terminal "$cmd" "$title"; return $? ;;
+			tui)      _exec_in_tui "$cmd" "$title" "$post_cmd_hook"; return $? ;;
+			terminal) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook"; return $? ;;
 		esac
 	fi
 
@@ -424,14 +425,14 @@ confirm_and_execute() {
 		choice=$(<"$_TUI_TMP")
 
 		case "$choice" in
-			1) _exec_in_tui "$cmd" "$title" ;;
-			2) _exec_in_terminal "$cmd" "$title" ;;
+			1) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
+			2) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
 			3) _TUI_EXEC_MODE="tui"
 			   tui_log "Exec mode set to: always TUI"
-			   _exec_in_tui "$cmd" "$title" ;;
+			   _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
 			4) _TUI_EXEC_MODE="terminal"
 			   tui_log "Exec mode set to: always Terminal"
-			   _exec_in_terminal "$cmd" "$title" ;;
+			   _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
 		esac
 		local exec_rc=$?
 		[[ $exec_rc -eq 2 ]] && continue
@@ -443,6 +444,7 @@ confirm_and_execute() {
 _exec_in_tui() {
 	local cmd="$1"
 	local title="${2:-Executing}"
+	local post_cmd_hook="${3:-}"
 
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
 	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
@@ -475,6 +477,12 @@ _exec_in_tui() {
 	local exit_code=${PIPESTATUS[0]}
 	trap - INT
 
+	# Run post-command hook (non-blocking background work while user reads results)
+	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
+		tui_log "Running post-command hook: $post_cmd_hook"
+		"$post_cmd_hook"
+	fi
+
 	# Strip ANSI escape codes so dialog textbox can scroll properly
 	sed -i -r 's/\x1B\[[0-9;]*[mK]//g; s/\x1B\(B//g' "$output_file"
 
@@ -487,7 +495,7 @@ _exec_in_tui() {
 
 	if [[ $exit_code -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn" \
-			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
+			--ok-label "OK" \
 			--textbox "$review_file" 0 0
 		rm -f "$output_file" "$review_file"
 	else
@@ -507,6 +515,8 @@ _exec_in_tui() {
 # --- Execute in Terminal mode ---
 _exec_in_terminal() {
 	local cmd="$1"
+	local _title="${2:-}"
+	local post_cmd_hook="${3:-}"
 
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
 	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
@@ -528,6 +538,12 @@ _exec_in_terminal() {
 	bash -c "$cmd"
 	local exit_code=$?
 
+	# Run post-command hook (non-blocking background work while user reads output)
+	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
+		tui_log "Running post-command hook: $post_cmd_hook"
+		"$post_cmd_hook"
+	fi
+
 	echo
 	if [[ $exit_code -eq 0 ]]; then
 		echo "── Command completed successfully ──"
@@ -548,97 +564,36 @@ mirror_available() {
 	[[ -f "$ABA_ROOT/mirror/.available" ]]
 }
 
+# Check if the mirror has been verified (release image present in registry).
+# Uses the background run_once task — non-blocking, returns cached result.
+# Returns 0 (true) if verified, 1 (false) if not yet verified or failed.
+_mirror_has_release_image() {
+	local exit_code
+	exit_code=$(aba_mirror_verify_exit) || true
+	[[ "$exit_code" == "0" ]]
+}
+
 # Return human-readable mirror state for the menu title.
 # States: "no mirror" → "mirror installed" → "mirror ready"
 # "mirror ready" means the release image is actually present in the registry.
+# Color-coded via dialog --colors escape codes: green=ready, yellow=installed, red=none.
 mirror_state_label() {
 	if ! mirror_available; then
-		echo "no mirror"
+		echo "\\Z1no mirror\\Zn"
 		return
 	fi
-	# Mirror is installed. Check if the release image exists via skopeo.
 	if _mirror_has_release_image; then
-		echo "mirror ready"
+		echo "\\Z2\\Zbmirror ready\\Zn"
 	else
-		echo "mirror installed"
+		echo "\\Z3mirror installed\\Zn"
 	fi
 }
 
-# Invalidate the mirror-ready cache (call after sync/load to force fresh check)
+# Invalidate mirror verify and kick off a fresh background check.
+# Called after sync, save, load, or install operations.
+# Non-blocking: the check runs in background while the user reads results.
 _invalidate_mirror_cache() {
-	rm -f "$HOME/.aba/runner/tui-mirror-ready.cache"
-}
-
-# Check if the current release image exists in the mirror registry.
-# Returns instantly from cache; refreshes in the background when stale.
-# Only blocks on the very first call (no cache file yet).
-_mirror_has_release_image() {
-	local cache_file="$HOME/.aba/runner/tui-mirror-ready.cache"
-	local cache_ttl=120  # seconds
-
-	if [[ -f "$cache_file" ]]; then
-		local age
-		age=$(( $(date +%s) - $(stat -c %Y "$cache_file") ))
-		if (( age >= cache_ttl )); then
-			# Stale — reset mtime (prevents duplicate spawns), then refresh in background
-			touch "$cache_file"
-			_mirror_check_release_image &>/dev/null &
-			disown 2>/dev/null
-		fi
-		[[ "$(cat "$cache_file")" == "1" ]]
-		return
-	fi
-
-	# No cache at all — synchronous check (one-time cost on first TUI launch)
-	_mirror_check_release_image
-	[[ -f "$cache_file" ]] && [[ "$(cat "$cache_file")" == "1" ]]
-}
-
-# The slow part: runs skopeo inspect and writes result to the cache file.
-# Called synchronously (first time) or in a background subshell (subsequent).
-_mirror_check_release_image() {
-	local cache_file="$HOME/.aba/runner/tui-mirror-ready.cache"
-	mkdir -p "$(dirname "$cache_file")"
-
-	local _oi=""
-	if [[ -x "$HOME/bin/openshift-install" ]]; then
-		_oi="$HOME/bin/openshift-install"
-	elif command -v openshift-install >/dev/null 2>&1; then
-		_oi="openshift-install"
-	fi
-
-	# Fallback: if openshift-install not available, use imageset-config-digest.yaml
-	if [[ -z "$_oi" ]]; then
-		if [[ -f "$ABA_ROOT/mirror/data/imageset-config-digest.yaml" ]]; then
-			echo "1" > "$cache_file"
-		else
-			echo "0" > "$cache_file"
-		fi
-		return
-	fi
-
-	local _out _release_sha _reg_host _reg_port _reg_path _url
-	_out=$("$_oi" version 2>/dev/null) || { echo "0" > "$cache_file"; return; }
-	_release_sha=$(echo "$_out" | grep "release image" | sed "s/.*\(@sha.*$\)/\1/g")
-
-	_reg_host=$(grep '^reg_host=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
-	_reg_port=$(grep '^reg_port=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
-	_reg_path=$(grep '^reg_path=' "$ABA_ROOT/mirror/mirror.conf" | cut -d= -f2 | awk '{print $1}')
-	_reg_port="${_reg_port:-8443}"
-	_reg_path="${_reg_path:-/ocp4/openshift4}"
-
-	[[ -z "$_reg_host" || -z "$_release_sha" ]] && { echo "0" > "$cache_file"; return; }
-
-	_url="docker://${_reg_host}:${_reg_port}${_reg_path}/openshift/release-images${_release_sha}"
-
-	local _authfile="$ABA_ROOT/mirror/regcreds/pull-secret-mirror.json"
-	[[ ! -f "$_authfile" ]] && _authfile="$ABA_ROOT/mirror/regcreds/pull-secret-full.json"
-
-	if skopeo inspect ${_authfile:+--authfile "$_authfile"} "$_url" >/dev/null 2>&1; then
-		echo "1" > "$cache_file"
-	else
-		echo "0" > "$cache_file"
-	fi
+	aba_mirror_verify_refresh
 }
 
 # Is a cluster configured? (cluster.conf exists in given dir)

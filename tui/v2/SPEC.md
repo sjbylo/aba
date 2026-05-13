@@ -128,9 +128,27 @@ Both modes MUST:
   - **TUI execution** (`_exec_in_tui`): textbox with **Back to Menu** and **Retry** (`--extra-button`).
   - **Terminal execution** (`_exec_in_terminal`): prints failure on the cleared terminal, then **`Press ENTER to return to TUI`** — **no Retry** (user re-runs the action from the menu if needed).
 
-### Unavailable Menu Items
+### Menu Items and Prerequisites
 
-Items that cannot be activated (prerequisites unmet) are **shown but greyed out** with a short reason tag. Example:
+Every menu item is always **active and selectable**. When a user selects an item whose prerequisites are unmet, the action handler guides them through satisfying those prerequisites inline:
+
+- **Mirror-dependent items** (Sync, Load, Install Cluster): if no mirror is installed, the handler asks "Install mirror first?", shows config review, then runs the single `aba` command (Makefile deps handle install as a dependency of sync/load).
+- **Cluster-dependent items** (Day-2, Finalize): if no clusters exist, shows a msgbox "No clusters found. Install a cluster first." and returns to the menu.
+
+**Status indicators** (not prerequisite hints) remain on labels:
+- `(installed)` — informational suffix on Install Mirror when already installed
+- `[no internet]` — hard physical constraint the TUI cannot fix
+- `(mirror2disk)`, `(disk2mirror)`, `(mirror2mirror)` — directional suffixes
+
+**Bracket hint labels** (e.g. `[sync mirror first]`, `[install cluster first]`) are shown during development/testing for workflow visibility. These will be removed in a future pass once all guided flows are fully validated.
+
+**Cluster installed check:** `cluster_installed()` checks for the `.install-complete` marker file (created by the Makefile on successful install, removed by `aba delete`). Do NOT use `iso-agent-based/auth/kubeconfig` — it persists after deletion and causes deleted clusters to appear as installed.
+
+**ERR trap safety / install detection:** `list_installed_clusters()` walks `list_cluster_dirs`; for each dir without `.install-complete`, it **probes `auto_finalize_cluster "$dir"`** (background install may have finished) before re-checking `cluster_installed`. The final `cluster_installed "$dir" && echo "$dir" || true` needs `|| true` so a false `cluster_installed` under `set -e` / ERR does not abort the loop.
+
+**(Legacy example kept for reference during transition):**
+
+Items that cannot be activated (prerequisites unmet) are shown with a short reason tag. Example:
 
 ```
   Day-2 / Cluster Management     [install cluster first]
@@ -139,20 +157,18 @@ Items that cannot be activated (prerequisites unmet) are **shown but greyed out*
 
 This lets the user see the full workflow at a glance.
 
-**Cluster installed check:** `cluster_installed()` checks for the `.install-complete` marker file (created by the Makefile on successful install, removed by `aba delete`). Do NOT use `iso-agent-based/auth/kubeconfig` — it persists after deletion and causes deleted clusters to appear as installed.
-
-**ERR trap safety / install detection:** `list_installed_clusters()` walks `list_cluster_dirs`; for each dir without `.install-complete`, it **probes `auto_finalize_cluster "$dir"`** (background install may have finished) before re-checking `cluster_installed`. The final `cluster_installed "$dir" && echo "$dir" || true` needs `|| true` so a false `cluster_installed` under `set -e` / ERR does not abort the loop.
-
-**CONNO:** Operations where the Makefile handles prerequisites (e.g. **Sync**) are not greyed purely for “mirror not installed” — selecting them can run `_mirror_config_review()` and a single `aba` command installs the mirror as a dependency.
-
-**DISCO:** **Load Images** shows `[install registry first]` in the menu label when no registry is installed. The row is still selectable: choosing it prompts to install a mirror first (`_mirror_config_review` + load), matching the dimmed “reminder” pattern used elsewhere.
 
 ### Dynamic Menu Titles (Mirror State)
 
-Main menus in CONNO and DISCO modes display the current mirror state in the menu body text:
+Main menus in CONNO and DISCO modes display the current mirror state in the menu body text, **color-coded** for quick visual identification:
 
 - CONNO: `"Partially Disconnected Mode (mirror ready):"`
 - DISCO: `"Fully Disconnected — Choose an action (mirror ready):"`
+
+Color codes (via `dialog --colors`):
+- **Green bold** (`\Z2\Zb...\Zn`): `mirror ready` — release image verified in registry
+- **Yellow** (`\Z3...\Zn`): `mirror installed` — registry accessible but images not synced/loaded
+- **Red** (`\Z1...\Zn`): `no mirror` — no registry installed
 
 Possible states: `no mirror` → `mirror installed` → `mirror ready` (from `mirror_state_label()`).
 
@@ -251,11 +267,11 @@ Menu layout (exact order):
 
 1. **──── Registry ────**
 2. Install Registry (local or remote) — `(installed)` / disabled pattern when mirror already present
-3. Load Images `(disk2mirror)` — label includes `[install registry first]` until a registry exists; selecting still opens the install-then-load path (see UC-D2)
+3. Load Images `(disk2mirror)` — selecting when no registry exists opens the install-then-load guided path (see UC-D2)
 4. **──── Cluster ────**
-5. Install Cluster — hints such as `[install registry first]`, `[load mirror first]` when prerequisites missing
-6. **Finalize Installation (wait-for)** — grey tag `[install cluster first]` until a cluster reaches `.install-complete`
-7. **Day-2 / Cluster Management** — grey tag `[install cluster first]` until at least one cluster directory exists
+5. Install Cluster — selecting with unmet mirror prereqs triggers guided install/load flow (see UC-D3)
+6. **Finalize Installation (wait-for)** — selecting with no clusters shows msgbox "No clusters found"
+7. **Day-2 / Cluster Management** — selecting with no clusters shows msgbox "No clusters found"
 8. **──── Advanced ────**
 9. Advanced Options — shared advanced menu (`tui_advanced_menu`)
 10. **View ImageSet Config** — always (read-only; ISC came from bundle)
@@ -316,7 +332,7 @@ Entering CONNO mode for the first time runs **`direct_wizard`** (same step order
 
 ### Action Menu
 
-Items use single-letter shortcut tags (`abatui2.sh`). Unavailable rows keep the shortcut but append reason tags (`[no internet]`, `[install cluster first]`, `(installed)`, hints on **Install Cluster** such as **`[sync mirror first]`**, etc.). **Default `--default-item`:** View/Edit ImageSet Config.
+Items use single-letter shortcut tags (`abatui2.sh`). Status indicators remain on some labels: `[no internet]` (hard constraint), `(installed)` (informational), directional suffixes like `(mirror2disk)`. Bracket hint labels (e.g. `[sync mirror first]`) are kept during testing and will be removed later. **Default `--default-item`:** View/Edit ImageSet Config.
 
 Layout (exact order):
 
@@ -378,7 +394,7 @@ Pre-fetch: background catalog/version work overlaps channel and wizard start (sa
 
 Layout (exact order):
 
-1. **──── Cluster ────** — Install Cluster; **Finalize Installation (wait-for)**; **Day-2 / Cluster Management** (grey tags `[install cluster first]` on Day-2 / Finalize until prerequisites met — same messaging as CONNO)
+1. **──── Cluster ────** — Install Cluster; **Finalize Installation (wait-for)**; **Day-2 / Cluster Management** (selecting Day-2/Finalize with no clusters shows msgbox "No clusters found")
 2. **──── Advanced ────** — Advanced Options
 3. **──── Mode ────** — **Switch to Partially Disconnected** (return to mirror / CONNO path)
 
@@ -607,7 +623,7 @@ This means ISC is usually ready before the user opens **View/Edit ImageSet Confi
 - **Back** button (rc=1) → previous page/menu
 - **Help** (rc=2) → context-sensitive help msgbox, then re-display same dialog
 - **Next** (rc=3, extra button) → advance to next page/step
-- Greyed rows show prerequisites at a glance. **Hard-disabled** selections show a msgbox (e.g. Day-2 with no clusters). Some dimmed rows (e.g. **DISCO → Load Images** before registry exists) remain selectable and launch the install-first guided flow instead of running `mirror load` blindly.
+- All menu items are always selectable. When selected with unmet prerequisites, the handler either guides through satisfying them (mirror-dependent items) or shows a msgbox (cluster-dependent items like Day-2).
 - After long-running operations: return to action menu automatically
 - Cluster lists always show full `<cluster-name>.<base_domain>`
 
@@ -642,7 +658,7 @@ Each `tui-*.sh` is sourceable AND standalone (`BASH_SOURCE` guard for dev/testin
    - ABA core always reads from config files; the TUI must ensure those files are current before invoking any `aba` command
 3. **ABA core functions first** — use `include_all.sh` functions, never reimplement
 4. **Reuse v1 code** — copy working wizard functions, adapt to v2 standards, don't rewrite
-5. **Greyed-out menus** — show prerequisite state; most blocked rows only msgbox when selected, while a few (e.g. DISCO **Load Images**) still open a corrective flow
+5. **Active menus with guided prerequisites** — all menu items are always selectable; when prerequisites are unmet, the handler guides through satisfying them inline (e.g. install mirror, sync images) or shows a msgbox for items where auto-chaining is impractical
 6. **Sourceable + standalone** — each `tui-*.sh` has `BASH_SOURCE` guard
 7. **Default to bm** — platform default is bare metal; VM pages only shown for vmw/kvm
 8. **CLI and TUI interchangeable** — shared `run_once` caches, same config files; user can switch between TUI and CLI mid-workflow

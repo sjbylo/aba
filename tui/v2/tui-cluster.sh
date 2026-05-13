@@ -1011,7 +1011,7 @@ _cluster_page_vm() {
 				;;
 			D)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DATA_DISK" \
-					--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 9 55 "$cl_disk" \
+					--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 0 0 "$cl_disk" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_disk=$(<"$_TUI_TMP")
 				;;
@@ -1519,7 +1519,7 @@ _day2_status() {
 	tui_log "Running status check on $cl_display"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STATUS" \
-		--infobox "Fetching status for $cl_display ...\n\nThis may take a moment if the cluster is slow to respond." 5 60
+		--infobox "Fetching status for $cl_display ...\n\nThis may take a moment if the cluster is slow to respond." 0 0
 
 	local output_file
 	output_file=$(mktemp)

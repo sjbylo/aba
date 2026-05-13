@@ -75,6 +75,9 @@ disco_main() {
 			reset_label="Reset to Connected Mode $TUI2_GREY_NO_INTERNET"
 		fi
 
+		# Wait for any in-flight mirror verify before reading state
+		aba_mirror_verify_wait
+
 		# Dynamic menu title with mirror state (matching CONNO)
 		local _mstate
 		_mstate="$(mirror_state_label)"
@@ -253,9 +256,8 @@ disco_load_images() {
 		done
 	fi
 
-	confirm_and_execute "aba -d mirror load" "Load Images (disk2mirror)"
+	confirm_and_execute "aba -d mirror load" "Load Images (disk2mirror)" _invalidate_mirror_cache
 	local rc=$?
-	_invalidate_mirror_cache
 	return $rc
 }
 
