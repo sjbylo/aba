@@ -388,7 +388,7 @@ _conno_main() {
 	# Items that are unavailable get "[reason]" appended to their label
 	# and show a msgbox when selected (greyed-out pattern).
 	# Separators (space tags) visually group mirror, transfer, and cluster ops.
-	local default_item="$TUI2_CONNO_TAG_OPERATORS"
+	local default_item="$TUI2_CONNO_TAG_VIEW_ISC"
 	while :; do
 		# Re-check internet status each iteration (handles dynamic connectivity changes)
 		if check_internet_connectivity "aba" quiet 2>/dev/null; then

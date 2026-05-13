@@ -19,7 +19,7 @@ fi
 
 disco_main() {
 	tui_log "Entering DISCO mode action menu"
-	local default_item="$TUI2_DISCO_TAG_INSTALL_REG"
+	local default_item="$TUI2_DISCO_TAG_VIEW_ISC"
 
 	while :; do
 		# Build menu items with dynamic status labels (matching CONNO style)
