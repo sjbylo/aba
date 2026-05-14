@@ -1069,6 +1069,18 @@ _cluster_page_iface() {
 	[[ -z "$cl_connection" ]] && cl_connection="mirror"
 	while :; do
 		local conn_display="$cl_connection"
+		if [[ "$cl_connection" == "mirror" || -z "$cl_connection" ]]; then
+			local _rh="" _rp=""
+			if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+				_rh="${reg_host:-}" _rp="${reg_port:-}"
+			fi
+			if [[ -n "$_rh" ]]; then
+				conn_display="mirror (${_rh}${_rp:+:$_rp})"
+			else
+				conn_display="mirror"
+			fi
+		fi
 
 		# Build items — add MAC row for bare-metal
 		local iface_items=(
@@ -1407,8 +1419,12 @@ _cluster_execute() {
 	# Operator count
 	local _op_count="${#OP_BASKET[@]}"
 
-	# Connection display
+	# Connection display (enrich "mirror" with registry FQDN)
 	local _conn_disp="${cl_connection:-mirror}"
+	if [[ "$_conn_disp" == "mirror" ]]; then
+		local _srh="${reg_host:-}" _srp="${reg_port:-}"
+		[[ -n "$_srh" ]] && _conn_disp="mirror (${_srh}${_srp:+:$_srp})"
+	fi
 
 	local summary="Review — Confirm before installing:\n\n"
 	summary+="  Cluster:      $fqdn\n"

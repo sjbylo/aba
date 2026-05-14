@@ -305,10 +305,10 @@ _direct_version() {
 
 	# Build menu items
 	local items=()
-	items+=("1" "Latest:   $latest")
-	[[ -n "$previous" ]] && items+=("2" "Previous: $previous")
-	[[ -n "$older" ]] && items+=("3" "Older:    $older")
-	items+=("4" "Manual entry...")
+	items+=("L" "Latest:   $latest")
+	[[ -n "$previous" ]] && items+=("P" "Previous: $previous")
+	[[ -n "$older" ]] && items+=("O" "Older:    $older")
+	items+=("M" "Manual entry...")
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
 		--no-cancel \
@@ -325,10 +325,10 @@ _direct_version() {
 			local choice
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
-				1) ocp_version="$latest" ;;
-				2) ocp_version="$previous" ;;
-				3) ocp_version="$older" ;;
-			4)
+				L) ocp_version="$latest" ;;
+				P) ocp_version="$previous" ;;
+				O) ocp_version="$older" ;;
+			M)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
 						--inputbox "$TUI2_MSG_VERSION_ENTRY" 0 0 "${ocp_version:-$latest}" \
