@@ -472,15 +472,8 @@ _conno_main() {
 		_mstate="$(mirror_state_label)"
 		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):"
 
-		# Mirror health warning
+		# Mirror state is already shown via color-coded label (green/yellow/red)
 		local mirror_warn=""
-		if mirror_available; then
-			local verify_exit
-			verify_exit=$(aba_mirror_verify_exit) || true
-			if [[ -n "$verify_exit" && "$verify_exit" != "0" ]]; then
-				mirror_warn=" \Z3Warning: mirror may be unreachable (verify failed)\Zn"
-			fi
-		fi
 
 		items+=(
 			"" "──── Mirror ────────────────────────"
