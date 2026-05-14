@@ -78,16 +78,12 @@ _generate_yaml() {
 	done > "$yaml_file"
 }
 
-# Cleanup on interrupt
-handle_interrupt() {
-	echo_red "Aborting catalog extraction for $catalog_name"
-	[ ! -f "$done_file" ] && rm -f "$index_file" "$done_file"
-	# Clean up container and temp dir
-	podman rm -f "$container_name" >/dev/null 2>&1
-	[ -d "$tmp_dir" ] && rm -rf "$tmp_dir"
-	exit 1
+# Cleanup on exit (catches signals, errors, aba_abort, TUI close — not just INT/TERM)
+_cleanup() {
+	[ -n "${container_name:-}" ] && podman rm -f "$container_name" >/dev/null 2>&1 || true
+	[ -d "${tmp_dir:-}" ] && rm -rf "$tmp_dir"
 }
-trap 'handle_interrupt' INT TERM
+trap _cleanup EXIT
 
 # Check if already downloaded
 if [[ -s "$index_file" && -f "$done_file" ]]; then
@@ -132,7 +128,6 @@ echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
 
 aba_info "Pulling operator catalog image: $catalog_url"
 _pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || {
-	rm -rf "$tmp_dir"
 	aba_abort "Failed to pull catalog image: $catalog_url" "$_pull_err"
 }
 
@@ -151,18 +146,16 @@ fi
 # Run container and extract /configs
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
 _run_err=$(podman run -q -d --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
-	rm -rf "$tmp_dir"
 	aba_abort "Failed to start catalog container" "$_run_err"
 }
 
 _cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
-	podman rm -f "$container_name" >/dev/null 2>&1
-	rm -rf "$tmp_dir"
 	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
 }
 
-# Container no longer needed
-podman rm -f "$container_name" >/dev/null 2>&1
+# Container no longer needed (EXIT trap handles cleanup, but remove early to free resources)
+podman rm -f "$container_name" >/dev/null 2>&1 || true
+container_name=""
 
 # Extract operator data from FBC (File-Based Catalog)
 # Each operator directory under /configs can use one of several formats:
