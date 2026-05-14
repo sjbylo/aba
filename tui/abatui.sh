@@ -231,6 +231,10 @@ log "ABA_ROOT: $ABA_ROOT"
 cd "$ABA_ROOT" || { log "ERROR: Cannot cd to ABA_ROOT"; exit 1; }
 log "Changed to ABA_ROOT"
 
+# Single-instance lock (flock) — prevent multiple TUI instances on the same host
+mkdir -p "${HOME}/.aba" 2>/dev/null || true
+exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock" || { echo "Error: Cannot open ${HOME}/.aba/.tui.lock" >&2; exit 1; }
+flock -n "${ABA_TUI_FLOCK_FD}" || { echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2; exit 1; }
 
 # shellcheck disable=SC1091
 source scripts/include_all.sh

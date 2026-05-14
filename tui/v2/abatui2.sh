@@ -678,6 +678,25 @@ _detect_mode
 
 tui_log "Final mode: $_TUI_MODE"
 
+# --- Splash screen (shown once per session) ---
+_aba_ver=""
+[[ -f "$ABA_ROOT/VERSION" ]] && _aba_ver=$(<"$ABA_ROOT/VERSION")
+_aba_ver="${_aba_ver//[[:space:]]/}"
+
+dialog --no-shadow --colors --no-collapse --backtitle "$(ui_backtitle)" \
+	--title " $TUI2_TITLE_WELCOME " \
+	--ok-label "Continue" \
+	--msgbox "\
+  __   ____   __
+ / _\\ (  _ \\ / _\\     ABA v${_aba_ver}
+/    \\ ) _ \\/    \\    Install & configure
+\\_/\\_/(____/\\_/\\_/    air-gapped OpenShift quickly!
+
+Follow the setup wizard or see the README.md file for more.
+Get help: https://github.com/sjbylo/aba/discussions
+
+Navigate with Arrow keys, Tab, and Enter. Press ESC to go back." 0 0 {ABA_TUI_FLOCK_FD}>&-
+
 while :; do
 	case "$_TUI_MODE" in
 		DISCO)
