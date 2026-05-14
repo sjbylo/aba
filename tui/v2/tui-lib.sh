@@ -235,7 +235,8 @@ dlg() {
 		fi
 	fi
 
-	dialog --no-shadow --colors "${args[@]}"
+	# Close the flock fd so dialog doesn't inherit it (prevents orphaned lock on kill)
+	dialog --no-shadow --colors "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
 }
 
 # =============================================================================
@@ -299,7 +300,7 @@ show_help() {
 	local title="$1"
 	local body="$2"
 	dialog --no-shadow --colors --backtitle "$(ui_backtitle)" \
-		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 || true
+		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 {ABA_TUI_FLOCK_FD}>&- || true
 }
 
 # =============================================================================
