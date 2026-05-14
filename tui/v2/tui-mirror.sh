@@ -13,6 +13,23 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	exit 1
 fi
 
+_prompt_password() {
+	local pw1 pw2
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox "Enter registry password:" 0 40 2>"$_TUI_TMP"
+		[[ $? -ne 0 ]] && return 1
+		pw1=$(<"$_TUI_TMP")
+		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox "Confirm registry password:" 0 40 2>"$_TUI_TMP"
+		[[ $? -ne 0 ]] && return 1
+		pw2=$(<"$_TUI_TMP")
+		if [[ "$pw1" == "$pw2" ]]; then
+			echo "$pw1"
+			return 0
+		fi
+		dlg --backtitle "$(ui_backtitle)" --msgbox "Passwords do not match. Try again." 0 0
+	done
+}
+
 # =============================================================================
 # Mirror Config Review (show/edit mirror.conf values before an operation)
 # Used when mirror isn't installed yet but an operation (sync/save) will trigger install via deps.
@@ -52,7 +69,7 @@ _mirror_config_review() {
 			"H"  "Hostname:     $m_host" \
 			"P"  "Port:         $m_port" \
 			"U"  "Username:     $m_user" \
-			"W"  "Password:     $m_pw" \
+			"W"  "Password:     ${m_pw:+(set)}" \
 			"I"  "Image path:   $m_path" \
 			"V"  "Vendor:       $m_vendor" \
 			"D"  "Data dir:     $m_datadir" \
@@ -107,9 +124,9 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				;;
 			W)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
-				if [[ $? -eq 0 ]]; then
-					m_pw=$(<"$_TUI_TMP")
+				local pw
+				if pw=$(_prompt_password); then
+					m_pw="$pw"
 					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
 				fi
 				;;
@@ -220,7 +237,7 @@ _mirror_install_local() {
 			"H"  "Hostname:     $m_host" \
 			"P"  "Port:         $m_port" \
 			"U"  "Username:     $m_user" \
-			"W"  "Password:     $m_pw" \
+			"W"  "Password:     ${m_pw:+(set)}" \
 			"I"  "Image path:   $m_path" \
 			"V"  "Vendor:       $m_vendor" \
 			"D"  "Data dir:     $m_datadir" \
@@ -273,9 +290,9 @@ _mirror_install_local() {
 				fi
 				;;
 			W)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
-				if [[ $? -eq 0 ]]; then
-					m_pw=$(<"$_TUI_TMP")
+				local pw
+				if pw=$(_prompt_password); then
+					m_pw="$pw"
 					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
 				fi
 				;;
@@ -357,7 +374,7 @@ _mirror_install_remote() {
 			"K"  "SSH key:      $m_ssh_key" \
 			"P"  "Port:         $m_port" \
 			"U"  "Username:     $m_user" \
-			"W"  "Password:     $m_pw" \
+			"W"  "Password:     ${m_pw:+(set)}" \
 			"I"  "Image path:   $m_path" \
 			"V"  "Vendor:       $m_vendor" \
 			"D"  "Data dir:     $m_datadir" \
@@ -433,9 +450,9 @@ _mirror_install_remote() {
 				fi
 				;;
 			W)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry password:" 0 40 "$m_pw" 2>"$_TUI_TMP"
-				if [[ $? -eq 0 ]]; then
-					m_pw=$(<"$_TUI_TMP")
+				local pw
+				if pw=$(_prompt_password); then
+					m_pw="$pw"
 					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$ABA_ROOT/mirror/mirror.conf"
 				fi
 				;;
@@ -719,7 +736,7 @@ _operator_menu() {
 				show_help "$TUI2_HELP_TITLE_OPERATORS" \
 "Choose operators to include in your mirror/bundle.
 
-• Operator Sets: pre-defined groups (day2, storage, networking...)
+• Operator Sets: pre-defined groups (ocp, odf, virt, acm, quay...)
 • Search: find operators by name in the catalog
 • View/Edit Basket: see and modify your current selection
 • Clear: remove all operators from the basket
@@ -875,6 +892,10 @@ _operator_search() {
 	local query
 	query=$(<"$_TUI_TMP")
 	[[ -z "$query" ]] && return
+	if [[ ${#query} -lt 2 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "Please enter at least 2 characters." 0 0
+		return
+	fi
 
 	# Search across all catalog indexes (format: "op-name  Display Name  channel")
 	local items=()
@@ -889,7 +910,7 @@ _operator_search() {
 		state="off"
 		[[ -n "${OP_BASKET[$op_name]:-}" ]] && state="on"
 		items+=("$op_name" "${display_name:--}" "$state")
-	done < <(grep -ih "$query" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null | sort -u | head -50)
+	done < <(grep -iF "$query" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null | sort -u | head -50)
 
 	if [[ ${#items[@]} -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --msgbox "$(printf "$TUI2_MSG_NO_SEARCH_RESULTS" "$query")" 0 0

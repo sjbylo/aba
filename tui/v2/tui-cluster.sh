@@ -48,6 +48,7 @@ _cl_ntp=""
 _cl_ports=""
 _cl_vlan=""
 _cl_connection=""
+_cl_ssh_key="~/.ssh/id_rsa"
 _cl_macs=""
 _cl_master_cpu=""
 _cl_master_mem=""
@@ -104,6 +105,7 @@ _cluster_load_conf() {
 			worker_cpu_count) cl_worker_cpu="$val" ;;
 			worker_mem)       cl_worker_mem="$val" ;;
 			data_disk)        cl_disk="$val" ;;
+			ssh_key_file)     cl_ssh_key="$val" ;;
 		esac
 	done < "$conf"
 
@@ -311,7 +313,8 @@ cluster_install_flow() {
 	local cl_api_vip="$_cl_api_vip" cl_ingress_vip="$_cl_ingress_vip"
 	local cl_dns="$_cl_dns" cl_gateway="$_cl_gateway" cl_ntp="$_cl_ntp"
 	local cl_ports="$_cl_ports" cl_vlan="$_cl_vlan"
-	local cl_connection="$_cl_connection" cl_macs="$_cl_macs"
+	local cl_connection="$_cl_connection" cl_ssh_key="$_cl_ssh_key"
+	local cl_macs="$_cl_macs"
 	local cl_master_cpu="$_cl_master_cpu" cl_master_mem="$_cl_master_mem"
 	local cl_worker_cpu="$_cl_worker_cpu" cl_worker_mem="$_cl_worker_mem"
 	local cl_disk="$_cl_disk" cl_mac_template="$_cl_mac_template"
@@ -385,7 +388,8 @@ cluster_install_flow() {
 		_cl_api_vip="$cl_api_vip"; _cl_ingress_vip="$cl_ingress_vip"
 		_cl_dns="$cl_dns"; _cl_gateway="$cl_gateway"; _cl_ntp="$cl_ntp"
 		_cl_ports="$cl_ports"; _cl_vlan="$cl_vlan"
-		_cl_connection="$cl_connection"; _cl_macs="$cl_macs"
+		_cl_connection="$cl_connection"; _cl_ssh_key="$cl_ssh_key"
+		_cl_macs="$cl_macs"
 		_cl_master_cpu="$cl_master_cpu"; _cl_master_mem="$cl_master_mem"
 		_cl_worker_cpu="$cl_worker_cpu"; _cl_worker_mem="$cl_worker_mem"
 		_cl_disk="$cl_disk"; _cl_mac_template="$cl_mac_template"
@@ -653,11 +657,11 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 					[[ $? -ne 0 ]] && break
 					local wrk_input
 					wrk_input=$(<"$_TUI_TMP")
-					if [[ -n "$wrk_input" && ! "$wrk_input" =~ ^[0-9]+$ ]]; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid worker count.\n\nMust be a positive number (e.g. 2, 3, 5)." 0 0 || true
-						continue
-					fi
+				if [[ -n "$wrk_input" ]] && { [[ ! "$wrk_input" =~ ^[0-9]+$ ]] || [[ "$wrk_input" -eq 0 && "$cl_type" == "standard" ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid worker count.\n\nMust be a positive number (e.g. 2, 3, 5).\nStandard clusters require at least 1 worker." 0 0 || true
+					continue
+				fi
 					[[ -n "$wrk_input" ]] && cl_workers="$wrk_input"
 					break
 				done
@@ -840,6 +844,7 @@ _cluster_page_iface() {
 			"P" "Ports:       $cl_ports"
 			"V" "VLAN:        ${cl_vlan:-(none)}"
 			"C" "Connection:  $conn_display"
+			"K" "SSH key:     ${cl_ssh_key:-~/.ssh/id_rsa}"
 		)
 		if [[ "$cl_platform" == "bm" ]]; then
 			local mac_count=0
@@ -908,9 +913,9 @@ _cluster_page_iface() {
 				[[ $? -ne 0 ]] && break
 				local vlan_val
 				vlan_val=$(<"$_TUI_TMP")
-				if [[ -n "$vlan_val" && ! "$vlan_val" =~ ^[0-9]+$ ]]; then
+				if [[ -n "$vlan_val" ]] && { [[ ! "$vlan_val" =~ ^[0-9]+$ ]] || [[ "$vlan_val" -lt 1 || "$vlan_val" -gt 4094 ]]; }; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid VLAN tag.\n\nMust be a number (e.g. 100, 4094)." 0 0 || true
+						"Invalid VLAN tag.\n\nMust be a number between 1 and 4094." 0 0 || true
 					continue
 				fi
 				cl_vlan="$vlan_val"
@@ -945,6 +950,15 @@ _cluster_page_iface() {
 				# Normalize: convert commas/spaces to newlines, trim whitespace
 				cl_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
+			fi
+			;;
+		K)
+			dlg --backtitle "$(ui_backtitle)" --title "SSH Key" \
+				--inputbox "Path to SSH private key:" 0 60 "$cl_ssh_key" \
+				2>"$_TUI_TMP"
+			if [[ $? -eq 0 ]]; then
+				local key_val=$(<"$_TUI_TMP")
+				[[ -n "$key_val" ]] && cl_ssh_key="$key_val"
 			fi
 			;;
 	esac
@@ -994,34 +1008,79 @@ _cluster_page_vm() {
 
 		case "$choice" in
 			C)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
-					--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
-					2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cl_master_cpu=$(<"$_TUI_TMP")
+				while :; do
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
+						--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
+						2>"$_TUI_TMP"
+					[[ $? -ne 0 ]] && break
+					local val=$(<"$_TUI_TMP")
+					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
+						continue
+					fi
+					[[ -n "$val" ]] && cl_master_cpu="$val"
+					break
+				done
 				;;
 			R)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
-					--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
-					2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cl_master_mem=$(<"$_TUI_TMP")
+				while :; do
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
+						--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
+						2>"$_TUI_TMP"
+					[[ $? -ne 0 ]] && break
+					local val=$(<"$_TUI_TMP")
+					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
+						continue
+					fi
+					[[ -n "$val" ]] && cl_master_mem="$val"
+					break
+				done
 				;;
 			W)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
-					--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
-					2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cl_worker_cpu=$(<"$_TUI_TMP")
+				while :; do
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
+						--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
+						2>"$_TUI_TMP"
+					[[ $? -ne 0 ]] && break
+					local val=$(<"$_TUI_TMP")
+					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
+						continue
+					fi
+					[[ -n "$val" ]] && cl_worker_cpu="$val"
+					break
+				done
 				;;
 			E)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
-					--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
-					2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cl_worker_mem=$(<"$_TUI_TMP")
+				while :; do
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
+						--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
+						2>"$_TUI_TMP"
+					[[ $? -ne 0 ]] && break
+					local val=$(<"$_TUI_TMP")
+					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
+						continue
+					fi
+					[[ -n "$val" ]] && cl_worker_mem="$val"
+					break
+				done
 				;;
 			D)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DATA_DISK" \
-					--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 0 0 "$cl_disk" \
-					2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cl_disk=$(<"$_TUI_TMP")
+				while :; do
+					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DATA_DISK" \
+						--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 0 0 "$cl_disk" \
+						2>"$_TUI_TMP"
+					[[ $? -ne 0 ]] && break
+					local val=$(<"$_TUI_TMP")
+					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 0 ]]; }; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a non-negative number (0 = no extra disk)." 0 0 || true
+						continue
+					fi
+					[[ -n "$val" ]] && cl_disk="$val"
+					break
+				done
 				;;
 			A)
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_TEMPLATE" \
@@ -1038,6 +1097,7 @@ _cluster_execute() {
 	local cmd="aba cluster --name $cl_name --type $cl_type"
 	[[ -n "$cl_domain" ]] && cmd="$cmd --base-domain $cl_domain"
 	[[ -n "$cl_platform" && "$cl_platform" != "bm" ]] && cmd="$cmd --platform $cl_platform"
+	[[ -n "$cl_ssh_key" && "$cl_ssh_key" != "~/.ssh/id_rsa" ]] && cmd="$cmd --ssh-key $cl_ssh_key"
 
 	[[ -n "$cl_starting_ip" ]] && cmd="$cmd --starting-ip $cl_starting_ip"
 	[[ -n "$cl_network" ]] && cmd="$cmd --machine-network $cl_network"
@@ -1137,7 +1197,7 @@ _cluster_execute() {
 	summary+="  Ports:        ${cl_ports:-(default)}\n"
 	[[ -n "$cl_vlan" ]] && summary+="  VLAN:         $cl_vlan\n"
 	summary+="  Connection:   $_conn_disp\n"
-	summary+="  SSH key:      ~/.ssh/id_rsa\n"
+	summary+="  SSH key:      ${cl_ssh_key:-~/.ssh/id_rsa}\n"
 	summary+="\n"
 	if [[ "$cl_platform" != "bm" ]]; then
 		summary+="  Master CPU:   $cl_master_cpu\n"
@@ -1274,16 +1334,22 @@ _platform_config_missing() {
 		local choice
 		choice=$(<"$_TUI_TMP")
 
+		# Pre-populate from template if file doesn't exist
+		if [[ ! -f "$path" ]]; then
+			local _tmpl="$ABA_ROOT/templates/$path"
+			if [[ -f "$_tmpl" ]]; then
+				cp "$_tmpl" "$path"
+			else
+				echo "# $name configuration — fill in required values" > "$path"
+			fi
+		fi
+
 		case "$choice" in
 			1)
 				clear
 				${EDITOR:-vi} "$path"
 				;;
 			2)
-				# Create minimal template if file doesn't exist
-				if [[ ! -f "$path" ]]; then
-					echo "# $name configuration" > "$path"
-				fi
 				dlg --backtitle "$(ui_backtitle)" --title "Edit $name Config" \
 					--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
 					--editbox "$path" 0 0 2>"$_TUI_TMP"
