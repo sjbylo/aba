@@ -1066,6 +1066,7 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	fi
 	if [ -n "$_has_retryable" ] && _find_free_pool >/dev/null; then
 		_retry_added=0
+		_retry_names=""
 		for _rs in "${!_results[@]}"; do
 			_rrc="${_results[$_rs]}"
 			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
@@ -1074,11 +1075,12 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 				[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
 				unset '_results[$_rs]'; _work_queue+=("$_rs")
 				printf "  [%s] RETRY %d/%d: %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
+				_retry_names="${_retry_names:+$_retry_names, }$_rs"
 				_retry_added=$(( _retry_added + 1 ))
 			fi
 		done
 		if [ "$_retry_added" -gt 0 ]; then
-			[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_added} re-queued" < /dev/null >/dev/null
+			[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_names} (${_retry_added} re-queued)" < /dev/null >/dev/null
 			while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 				free=$(_find_free_pool) || break
 				suite="${_work_queue[$_queue_idx]}"
