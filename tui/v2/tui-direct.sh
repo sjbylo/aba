@@ -448,8 +448,8 @@ _direct_operators() {
 			local choice
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
-				1) mirror_select_operators ;;
-				2) mirror_select_operators ;;
+			1) mirror_select_operators ;;
+			2) _operator_search "$_ver_short" ;;
 			esac
 			DIALOG_RC="next"
 			;;
@@ -576,7 +576,10 @@ Navigation:
 			continue
 			;;
 		255)
-			# ESC always triggers confirm_quit (A.19)
+			# ESC: if entered from CONNO, return to CONNO menu; otherwise confirm quit (A.19)
+			if [[ "$_TUI_DIRECT_FROM_CONNO" == "true" ]]; then
+				return 0
+			fi
 			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
 			continue
 			;;

@@ -232,15 +232,23 @@ _configure_platform_file() {
 		# Validate connection
 		local valid=true
 		if [[ "$conf_name" == "vmware.conf" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --infobox "\nTesting vSphere connection..." 0 0
+			dlg --backtitle "$(ui_backtitle)" --infobox "\nInstalling govc and testing vSphere connection..." 0 0
 			source <(normalize-vmware-conf) 2>/dev/null || true
-			if command -v govc >/dev/null 2>&1 && ! govc about >/dev/null 2>&1; then
+			ensure_govc 2>/dev/null || true
+			if ! command -v govc >/dev/null 2>&1; then
+				dlg --backtitle "$(ui_backtitle)" --title "Warning" \
+					--msgbox "\n'govc' could not be installed — cannot verify vSphere connection.\n\nConfig saved but not validated." 0 0
+			elif ! govc about >/dev/null 2>&1; then
 				valid=false
 			fi
 		elif [[ "$conf_name" == "kvm.conf" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --infobox "\nTesting libvirt connection..." 0 0
+			dlg --backtitle "$(ui_backtitle)" --infobox "\nInstalling virsh and testing libvirt connection..." 0 0
 			source <(normalize-kvm-conf) 2>/dev/null || true
-			if command -v virsh >/dev/null 2>&1 && ! virsh -c "${LIBVIRT_URI:-}" version >/dev/null 2>&1; then
+			ensure_virsh 2>/dev/null || true
+			if ! command -v virsh >/dev/null 2>&1; then
+				dlg --backtitle "$(ui_backtitle)" --title "Warning" \
+					--msgbox "\n'virsh' could not be installed — cannot verify libvirt connection.\n\nConfig saved but not validated." 0 0
+			elif ! virsh -c "${LIBVIRT_URI:-}" version >/dev/null 2>&1; then
 				valid=false
 			fi
 		fi
@@ -1338,7 +1346,7 @@ tui_advanced_menu() {
 	while :; do
 		local adv_items=()
 		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
-		adv_items+=("P" "Reconfigure Platform (vmware/kvm/none)")
+		adv_items+=("P" "Reconfigure Platform (vmware/kvm/bm)")
 		if mirror_available; then
 			adv_items+=("U" "Uninstall Mirror Registry")
 		fi
@@ -1373,14 +1381,14 @@ tui_advanced_menu() {
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 					--cancel-label "$TUI2_BTN_BACK" \
 					--menu "Select platform:" 0 0 0 \
-					"vmw"  "VMware vSphere (ESXi/vCenter)" \
-					"kvm"  "KVM (libvirt)" \
-					"none" "Bare Metal / Other" \
-					2>"$_TUI_TMP"
-				[[ $? -ne 0 ]] && continue
-				local plat
-				plat=$(<"$_TUI_TMP")
-				confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
+				"vmw"  "VMware vSphere (ESXi/vCenter)" \
+				"kvm"  "KVM (libvirt)" \
+				"bm"   "Bare Metal / Other" \
+				2>"$_TUI_TMP"
+			[[ $? -ne 0 ]] && continue
+			local plat
+			plat=$(<"$_TUI_TMP")
+			confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
 				;;
 			"U")
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
@@ -1589,6 +1597,10 @@ _day2_upgrade() {
 				target_ver=$(<"$_TUI_TMP")
 				if [[ -z "$target_ver" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
+					continue
+				fi
+				if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z (e.g. 4.21.15)" 0 0
 					continue
 				fi
 				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $target_ver" \

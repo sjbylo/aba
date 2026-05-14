@@ -46,6 +46,10 @@ vmw:
 kvm:
 	@$(SCRIPTS)/install-kvm.conf.sh
 
+.PHONY: bm
+bm:
+	#@rm -f vmware.conf kvm.conf  # We should keep those 
+
 #.PHONY: cli
 #cli:  ## Download and install the CLI binaries into ~/bin
 #	@echo "Run either one of:"
