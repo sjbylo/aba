@@ -68,7 +68,7 @@ _valid_ip() {
 	local IFS='.'
 	read -ra octets <<< "$ip"
 	for o in "${octets[@]}"; do
-		[[ "$o" -le 255 ]] || return 1
+		[[ "10#$o" -le 255 ]] || return 1
 	done
 	return 0
 }
@@ -186,7 +186,7 @@ dlg() {
 				arg="\n$arg"
 			fi
 			if [[ "$has_menu" == "true" ]]; then
-				arg="${arg}\n\n(Navigate: Arrow keys, Tab, ESC)"
+				arg="${arg}\n\n(Navigate: Arrow keys, Tab, SPACE, ESC)"
 				dims_after_text=3
 			fi
 			args+=("$arg")

@@ -109,24 +109,15 @@ direct_wizard() {
 					*) return 1 ;;
 				esac
 				;;
-			platform)
-				_direct_platform
-				case "$DIALOG_RC" in
-					next) step="operators" ;;
-					back) step="version" ;;
-					repeat) ;;
-					*) return 1 ;;
-				esac
-				;;
-			operators)
-				_direct_operators
-				case "$DIALOG_RC" in
-					next) break ;;  # Wizard done
-					back) step="platform" ;;
-					repeat) ;;
-					*) return 1 ;;
-				esac
-				;;
+		platform)
+			_direct_platform
+			case "$DIALOG_RC" in
+				next) break ;;  # Wizard done
+				back) step="version" ;;
+				repeat) ;;
+				*) return 1 ;;
+			esac
+			;;
 		esac
 	done
 
@@ -374,7 +365,7 @@ _direct_version() {
 			DIALOG_RC="back"
 			;;
 	255)
-		DIALOG_RC=""
+		DIALOG_RC="back"
 		;;
 	esac
 }
@@ -438,7 +429,7 @@ _direct_operators() {
 		--cancel-label "$TUI2_BTN_BACK" \
 		--extra-button --extra-label "$TUI2_BTN_SKIP" \
 		--menu "Select operators to include in the mirror, or skip for now.\n\nYou can always do this later from the action menu." 0 0 0 \
-		"1" "Select Operator Sets (day2, storage, networking...)" \
+		"1" "Select Operator Sets (ocp, odf, virt, acm, quay...)" \
 		"2" "Search Operator Names" \
 		2>"$_TUI_TMP"
 	local rc=$?
