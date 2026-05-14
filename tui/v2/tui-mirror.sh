@@ -629,10 +629,6 @@ mirror_view_isc() {
 				"${_isc_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
-			if [[ $rc -eq 255 ]]; then
-				if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
-				continue
-			fi
 			[[ $rc -ne 0 ]] && return 0
 
 			local choice
