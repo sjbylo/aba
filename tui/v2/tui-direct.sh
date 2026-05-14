@@ -191,21 +191,18 @@ _direct_channel() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: channel"
 
-	local s_state="on" f_state="off" c_state="off"
-	case "${ocp_channel:-stable}" in
-		candidate) c_state="on"; s_state="off" ;;
-		fast) f_state="on"; s_state="off" ;;
-	esac
+	local _default_channel="${ocp_channel:-stable}"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CHANNEL" \
+		--default-item "$_default_channel" \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
-		--radiolist "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
-		"stable"    "Recommended for production" $s_state \
-		"fast"      "Latest GA release"          $f_state \
-		"candidate" "Preview/beta"               $c_state \
+		--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
+		"stable"    "Recommended for production" \
+		"fast"      "Latest GA release" \
+		"candidate" "Preview/beta" \
 		2>"$_TUI_TMP"
 	local rc=$?
 
@@ -238,7 +235,7 @@ _direct_channel() {
 			DIALOG_RC="back"
 			;;
 	255)
-		DIALOG_RC=""
+		DIALOG_RC="back"
 		;;
 	esac
 }
@@ -375,21 +372,18 @@ _direct_platform() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: platform"
 
-	local bm_state="on" vmw_state="off" kvm_state="off"
-	case "${platform:-bm}" in
-		vmw) vmw_state="on"; bm_state="off" ;;
-		kvm) kvm_state="on"; bm_state="off" ;;
-	esac
+	local _default_plat="${platform:-bm}"
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PLATFORM" \
+		--default-item "$_default_plat" \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
-		--radiolist "$TUI2_MSG_PLATFORM_PROMPT" 0 0 3 \
-		"bm"  "Bare metal (default)"  $bm_state \
-		"vmw" "VMware vSphere"        $vmw_state \
-		"kvm" "KVM/libvirt"           $kvm_state \
+		--menu "$TUI2_MSG_PLATFORM_PROMPT" 0 0 3 \
+		"bm"  "Bare metal (default)" \
+		"vmw" "VMware vSphere" \
+		"kvm" "KVM/libvirt" \
 		2>"$_TUI_TMP"
 	local rc=$?
 
@@ -411,7 +405,7 @@ _direct_platform() {
 			DIALOG_RC="back"
 			;;
 	255)
-		DIALOG_RC=""
+		DIALOG_RC="back"
 		;;
 	esac
 }

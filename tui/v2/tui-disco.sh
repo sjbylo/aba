@@ -246,7 +246,7 @@ disco_load_images() {
 			local rc=$?
 			case "$rc" in
 				0) ;;  # Check again
-				1|255) return 0 ;;
+				1|255) return 1 ;;
 			esac
 
 			# Re-check

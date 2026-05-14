@@ -48,6 +48,13 @@ fi
 cd "$ABA_ROOT" || { echo "ERROR: Cannot cd to $ABA_ROOT"; exit 1; }
 
 # =============================================================================
+# Single-instance lock (flock) — check FIRST before any heavy init
+# =============================================================================
+mkdir -p "${HOME}/.aba" 2>/dev/null || true
+exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock" || { echo "Error: Cannot open ${HOME}/.aba/.tui.lock" >&2; exit 1; }
+flock -n "${ABA_TUI_FLOCK_FD}" || { echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2; exit 1; }
+
+# =============================================================================
 # Source dependencies
 # =============================================================================
 
@@ -129,16 +136,6 @@ while [[ $# -gt 0 ]]; do
 	esac
 	shift
 done
-
-# =============================================================================
-# Single-instance lock (flock)
-# =============================================================================
-# Hold an exclusive non-blocking flock for the lifetime of this process so only one
-# TUI runs per host. Do NOT use fd 9: run_once() in include_all.sh uses fd 9 for task
-# directory locks (exec 9>>… / exec 9>&-) and would replace or close ours. Allocate a
-# dedicated fd with {ABA_TUI_FLOCK_FD}> so nothing in ABA reuses it mid-session.
-exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock" || { echo "Error: Cannot open ${HOME}/.aba/.tui.lock" >&2; exit 1; }
-flock -n "${ABA_TUI_FLOCK_FD}" || { echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2; exit 1; }
 
 # =============================================================================
 # Load existing config (if any)
@@ -302,6 +299,11 @@ _detect_mode() {
 	if [[ -n "$_TUI_FORCE_MODE" ]]; then
 		_TUI_MODE="$_TUI_FORCE_MODE"
 		tui_log "Mode forced via flag: $_TUI_MODE"
+		if check_internet_connectivity "aba" quiet 2>/dev/null; then
+			_TUI_INET="yes"
+		else
+			_TUI_INET="no"
+		fi
 		return
 	fi
 
@@ -336,6 +338,7 @@ _detect_mode() {
 				return
 			fi
 		else
+			_TUI_INET="no"
 			_TUI_MODE="DISCO"
 		fi
 		tui_log "Mode detected: DISCO"

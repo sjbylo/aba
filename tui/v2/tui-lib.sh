@@ -804,7 +804,8 @@ _show_v2_exit_summary() {
 	echo "TUI v2 complete."
 	echo
 	local f mod_epoch shown=0
-	for f in aba.conf mirror/mirror.conf mirror/data/imageset-config.yaml; do
+	for f in aba.conf mirror/mirror.conf mirror/data/imageset-config.yaml \
+		vmware.conf kvm.conf; do
 		[[ -f "$ABA_ROOT/$f" ]] || continue
 		mod_epoch=$(stat -c %Y "$ABA_ROOT/$f" 2>/dev/null) || continue
 		if (( mod_epoch >= _TUI_START_EPOCH )); then
@@ -813,6 +814,17 @@ _show_v2_exit_summary() {
 				shown=1
 			fi
 			echo "  $f"
+		fi
+	done
+	for f in "$ABA_ROOT"/*/cluster.conf; do
+		[[ -f "$f" ]] || continue
+		mod_epoch=$(stat -c %Y "$f" 2>/dev/null) || continue
+		if (( mod_epoch >= _TUI_START_EPOCH )); then
+			if (( shown == 0 )); then
+				echo "Files created/updated:"
+				shown=1
+			fi
+			echo "  ${f#$ABA_ROOT/}"
 		fi
 	done
 	if (( shown == 0 )); then
