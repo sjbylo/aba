@@ -305,7 +305,8 @@ _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
         local _msg="[e2e] $subject $(_e2e_notify_suffix)"
-        $NOTIFY_CMD "$_msg" >/dev/null 2>&1
+        local _suffix; _suffix="$(_e2e_notify_suffix)"
+        { cat; printf "\n%s\n" "$_suffix"; } | $NOTIFY_CMD "$_msg" >/dev/null 2>&1
     else
         cat > /dev/null  # drain stdin
     fi
@@ -938,7 +939,11 @@ _interactive_prompt() {
             r|R|"")
                 [ -z "$ans" ] && _e2e_log "  Empty input at interactive prompt -- treating as retry"
                 rm -f "$_paused_file"
-                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $cmd"
+                if [[ "$cmd" == *$'\n'* ]]; then
+                    _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $description"
+                else
+                    _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $cmd"
+                fi
                 return 2
                 ;;
             s)
@@ -1097,7 +1102,11 @@ e2e_run() {
         _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
         _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"
     fi
-    _e2e_log_and_print "  $(_e2e_dim "$cmd")"
+    if [[ "$cmd" == *$'\n'* ]]; then
+        _e2e_log "  CMD: $cmd"
+    else
+        _e2e_log_and_print "  $(_e2e_dim "$cmd")"
+    fi
     _e2e_summary "  $(_e2e_Dim "$cmd")"
 
     local _step_start
@@ -1145,7 +1154,7 @@ e2e_run() {
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
                     _e2e_summary "  $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
-                    _e2e_notify "RECOVERED: $description (attempt $attempt/$tot_cnt, $_dur)"
+                    _e2e_notify "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "  $(_e2e_green "OK") ($_dur)"
                 _e2e_summary "  $(_e2e_Green "OK ($_dur)")"
@@ -1211,7 +1220,9 @@ e2e_run() {
                 _e2e_log_and_print "  Applied ImagePrunerJobFailed workaround before retry"
 
             attempt=$(( attempt + 1 ))
-            if [ -n "$host" ]; then
+            if [[ "$cmd" == *$'\n'* ]]; then
+                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $description"
+            elif [ -n "$host" ]; then
                 _e2e_log_and_print "  >> $(_e2e_magenta "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $(_e2e_magenta "$cmd")"
             else
                 _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $cmd"
@@ -1368,20 +1379,20 @@ exit 1"
 }
 
 # Loose check: all operators AVAILABLE=True (ignores PROGRESSING/DEGRADED).
-# Default: 10-min timeout, 30s interval, 3 consecutive passes.
+# Default: 15-min timeout, 30s interval, 3 consecutive passes.
 e2e_wait_cluster_available() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
-	local timeout="${3:-600}"
+	local timeout="${3:-900}"
 	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 30 3
 }
 
 # Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
-# Default: 30-min timeout, 30s interval, 3 consecutive passes.
+# Default: 45-min timeout, 30s interval, 3 consecutive passes.
 e2e_wait_cluster_ready() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
-	local timeout="${3:-1800}"
+	local timeout="${3:-2700}"
 	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 30 3
 }
 
