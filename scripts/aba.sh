@@ -149,7 +149,6 @@ elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile;
 	interactive_mode=
 else
 	# Give an error to change to the top level dir. Text must be coded here.
-	local _cmd
 	_cmd=$(basename "$0")
 	(
 		echo "  __   ____   __  "
