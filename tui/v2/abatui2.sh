@@ -92,6 +92,7 @@ done
 # =============================================================================
 
 tui_log "Kicking off background internet check"
+aba_inet_check_reset
 aba_inet_check_start
 
 tui_log "Kicking off background mirror verify"
@@ -396,8 +397,8 @@ _conno_main() {
 	# Separators (space tags) visually group mirror, transfer, and cluster ops.
 	local default_item="$TUI2_CONNO_TAG_VIEW_ISC"
 	while :; do
-		# Re-check internet status each iteration (handles dynamic connectivity changes)
-		if check_internet_connectivity "aba" quiet 2>/dev/null; then
+		# Re-check internet status periodically (cached for 30s via run_once TTL)
+		if aba_inet_check_cached 30; then
 			_TUI_INET="yes"
 		else
 			_TUI_INET="no"

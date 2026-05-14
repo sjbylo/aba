@@ -157,10 +157,11 @@ _direct_pull_secret() {
 
 	# Loop until valid JSON entered or user presses Back
 	while :; do
+		echo "" > "${_TUI_TMP}.edit"
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET_PASTE" \
 			--ok-label "$TUI2_BTN_SAVE" \
 			--cancel-label "$TUI2_BTN_BACK" \
-			--inputbox "$TUI2_MSG_PULL_SECRET_PASTE" 0 0 "" \
+			--editbox "${_TUI_TMP}.edit" 20 76 \
 			2>"$_TUI_TMP"
 		local rc=$?
 		[[ $rc -ne 0 ]] && return 1
@@ -179,9 +180,9 @@ _direct_pull_secret() {
 		fi
 
 		# Valid JSON — save and exit loop
-		echo "$secret" > "$HOME/.pull-secret.json"
-		chmod 600 "$HOME/.pull-secret.json"
-		tui_log "Pull secret saved to ~/.pull-secret.json"
+		echo "$secret" > "$ps_file"
+		chmod 600 "$ps_file"
+		tui_log "Pull secret saved to $ps_file"
 		return 0
 	done
 }
