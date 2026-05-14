@@ -32,6 +32,13 @@ alwaysApply: true
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
 - IMPORTANT: `pre-commit-checks.sh` runs `git pull` which can overwrite local uncommitted changes. After running pre-commit checks, ALWAYS verify that edited files still contain the intended changes (e.g. `git diff` the files) before staging and committing.
 
+## Multi-chat safety
+
+- Commit messages are cross-chat context: write descriptive messages explaining WHY, not just what
+- Before starting edits, check `git status` and `git log -3` to see if another chat made recent changes
+- Update `ai/SESSION_STATE.md` before handing off to another chat
+- When resuming after another chat worked, read `ai/SESSION_STATE.md` and `git log --oneline -10`
+
 ## Backup uncommitted changes before editing
 
 - Before editing a file, check if it has uncommitted changes (`git diff --name-only`)

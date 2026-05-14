@@ -185,6 +185,9 @@ _gate_platform_config() {
 				tui_log "Skipped $conf_name configuration (will be required at install time)"
 				return 0
 				;;
+			255)
+				return 1
+				;;
 		esac
 	fi
 
@@ -206,68 +209,285 @@ _gate_platform_config() {
 	esac
 }
 
-# Open platform config for editing (template → editor → validate)
+# Route to the appropriate platform config form
 _configure_platform_file() {
 	local conf_name="$1" plat_label="$2"
-	local conf_path="$ABA_ROOT/$conf_name"
-	local template_path="$ABA_ROOT/templates/$conf_name"
 
-	# Copy template if config doesn't exist
-	if [[ ! -s "$conf_path" && -f "$template_path" ]]; then
-		cp "$template_path" "$conf_path"
+	case "$conf_name" in
+		vmware.conf) _configure_vmw_form ;;
+		kvm.conf)    _configure_kvm_form ;;
+	esac
+}
+
+# VMware config form — menu with one row per GOVC_* field
+_configure_vmw_form() {
+	local conf_path="$ABA_ROOT/vmware.conf"
+
+	# Create from template if missing
+	if [[ ! -s "$conf_path" ]]; then
+		cp "$ABA_ROOT/templates/vmware.conf" "$conf_path"
 	fi
 
+	# Load current values
+	local v_url="" v_user="" v_pass="" v_datastore="" v_network=""
+	local v_datacenter="" v_cluster="" v_folder="" v_insecure=""
+	source <(normalize-vmware-conf) 2>/dev/null || true
+	v_url="${GOVC_URL:-}"
+	v_user="${GOVC_USERNAME:-}"
+	v_pass="${GOVC_PASSWORD:-}"
+	v_datastore="${GOVC_DATASTORE:-}"
+	v_network="${GOVC_NETWORK:-}"
+	v_datacenter="${GOVC_DATACENTER:-}"
+	v_cluster="${GOVC_CLUSTER:-}"
+	v_folder="${VC_FOLDER:-}"
+	v_insecure="${GOVC_INSECURE:-true}"
+
+	local default_item="U"
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title "Edit $plat_label Config" \
-			--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
-			--editbox "$conf_path" 0 0 2>"$_TUI_TMP"
+		dlg --backtitle "$(ui_backtitle)" --title "VMware/ESXi Configuration" \
+			--default-item "$default_item" \
+			--ok-label "$TUI2_BTN_SELECT" \
+			--extra-button --extra-label "Continue" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--menu "Configure vSphere/ESXi connection — select a row to edit:" 0 0 0 \
+			"U"  "vCenter/ESXi URL:  $v_url" \
+			"N"  "Username:          $v_user" \
+			"P"  "Password:          ${v_pass:+(set)}" \
+			"D"  "Datastore:         $v_datastore" \
+			"W"  "Network:           $v_network" \
+			"C"  "Datacenter:        $v_datacenter" \
+			"L"  "Cluster:           $v_cluster" \
+			"F"  "VM Folder:         $v_folder" \
+			"I"  "Skip TLS verify:   $v_insecure" \
+			"T"  "── Test Connection ──" \
+			2>"$_TUI_TMP"
 		local rc=$?
-		if [[ $rc -ne 0 ]]; then
-			tui_log "$conf_name editing cancelled"
-			return 0
-		fi
 
-		# Save edited content
-		cp "$_TUI_TMP" "$conf_path"
-		tui_log "Saved $conf_name"
+		case "$rc" in
+			3) break ;;        # Continue → done
+			1|255) return 1 ;; # Back/Cancel
+			0) ;;              # Select → edit field
+		esac
 
-		# Validate connection
-		local valid=true
-		if [[ "$conf_name" == "vmware.conf" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --infobox "\nInstalling govc and testing vSphere connection..." 0 0
-			source <(normalize-vmware-conf) 2>/dev/null || true
-			ensure_govc 2>/dev/null || true
-			if ! command -v govc >/dev/null 2>&1; then
-				dlg --backtitle "$(ui_backtitle)" --title "Warning" \
-					--msgbox "\n'govc' could not be installed — cannot verify vSphere connection.\n\nConfig saved but not validated." 0 0
-			elif ! govc about >/dev/null 2>&1; then
-				valid=false
-			fi
-		elif [[ "$conf_name" == "kvm.conf" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --infobox "\nInstalling virsh and testing libvirt connection..." 0 0
-			source <(normalize-kvm-conf) 2>/dev/null || true
-			ensure_virsh 2>/dev/null || true
-			if ! command -v virsh >/dev/null 2>&1; then
-				dlg --backtitle "$(ui_backtitle)" --title "Warning" \
-					--msgbox "\n'virsh' could not be installed — cannot verify libvirt connection.\n\nConfig saved but not validated." 0 0
-			elif ! virsh -c "${LIBVIRT_URI:-}" version >/dev/null 2>&1; then
-				valid=false
-			fi
-		fi
+		local field
+		field=$(<"$_TUI_TMP")
+		[[ -n "$field" ]] && default_item="$field"
 
-		if [[ "$valid" == "false" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONN_FAILED" \
-				--yes-label "Edit Again" \
-				--no-label "Save Anyway" \
-				--yesno "\nConnection test failed. Edit again or save as-is?" 0 0
-			[[ $? -eq 0 ]] && continue
-		fi
-
-		# Cache validated config to home dir
-		cp "$conf_path" "$HOME/.$conf_name" 2>/dev/null || true
-		tui_log "Cached $conf_name to ~/.$conf_name"
-		break
+		case "$field" in
+			U)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "vCenter or ESXi hostname/IP:" 0 60 "$v_url" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_url=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_URL -v "$v_url" -f "$conf_path"
+				fi
+				;;
+			N)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Username:" 0 60 "$v_user" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_user=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_USERNAME -v "$v_user" -f "$conf_path"
+				fi
+				;;
+			P)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Password:" 0 60 "$v_pass" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_pass=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_PASSWORD -v "'$v_pass'" -f "$conf_path"
+				fi
+				;;
+			D)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Datastore name:" 0 60 "$v_datastore" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_datastore=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_DATASTORE -v "$v_datastore" -f "$conf_path"
+				fi
+				;;
+			W)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Network (port group name):" 0 60 "$v_network" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_network=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_NETWORK -v "'$v_network'" -f "$conf_path"
+				fi
+				;;
+			C)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Datacenter name:" 0 60 "$v_datacenter" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_datacenter=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_DATACENTER -v "$v_datacenter" -f "$conf_path"
+				fi
+				;;
+			L)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Cluster name:" 0 60 "$v_cluster" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_cluster=$(<"$_TUI_TMP")
+					replace-value-conf -q -n GOVC_CLUSTER -v "$v_cluster" -f "$conf_path"
+				fi
+				;;
+			F)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "VM folder path (e.g. /Datacenter/vm):" 0 60 "$v_folder" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					v_folder=$(<"$_TUI_TMP")
+					replace-value-conf -q -n VC_FOLDER -v "$v_folder" -f "$conf_path"
+				fi
+				;;
+			I)
+				# Toggle true/false
+				if [[ "$v_insecure" == "true" ]]; then
+					v_insecure="false"
+				else
+					v_insecure="true"
+				fi
+				replace-value-conf -q -n GOVC_INSECURE -v "$v_insecure" -f "$conf_path"
+				;;
+			T)
+				_test_vmw_connection
+				;;
+		esac
 	done
+
+	# Save to home cache
+	[[ -s "$conf_path" ]] && cp "$conf_path" "$HOME/.vmware.conf" 2>/dev/null || true
+	tui_log "VMware config saved"
+	return 0
+}
+
+# Test vSphere/ESXi connection using current vmware.conf
+_test_vmw_connection() {
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nTesting vSphere/ESXi connection..." 0 0
+	source <(normalize-vmware-conf) 2>/dev/null || true
+	ensure_govc >>"$_TUI_LOG_FILE" 2>&1 || true
+
+	if ! command -v govc >/dev/null 2>&1; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "\n'govc' could not be installed.\n\nCannot verify vSphere connection." 0 0
+		return 1
+	fi
+
+	local _out
+	if _out=$(govc about 2>&1); then
+		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
+			--msgbox "\nvSphere connection verified!\n\n$_out" 0 0
+		return 0
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Connection Failed" \
+			--msgbox "\nCannot connect to vSphere at ${GOVC_URL:-?}\n\n$_out\n\nCheck URL, username, and password." 0 0
+		return 1
+	fi
+}
+
+# KVM/libvirt config form — menu with one row per field
+_configure_kvm_form() {
+	local conf_path="$ABA_ROOT/kvm.conf"
+
+	# Create from template if missing
+	if [[ ! -s "$conf_path" ]]; then
+		cp "$ABA_ROOT/templates/kvm.conf" "$conf_path"
+	fi
+
+	# Load current values
+	local k_uri="" k_pool="" k_network="" k_boot="" k_graphics=""
+	source <(normalize-kvm-conf) 2>/dev/null || true
+	k_uri="${LIBVIRT_URI:-}"
+	k_pool="${KVM_STORAGE_POOL:-}"
+	k_network="${KVM_NETWORK:-}"
+	k_boot="${KVM_BOOT_ARGS:-}"
+	k_graphics="${KVM_GRAPHICS_ARGS:-}"
+
+	local default_item="U"
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "KVM/Libvirt Configuration" \
+			--default-item "$default_item" \
+			--ok-label "$TUI2_BTN_SELECT" \
+			--extra-button --extra-label "Continue" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--menu "Configure KVM/libvirt connection — select a row to edit:" 0 0 0 \
+			"U"  "Libvirt URI:    $k_uri" \
+			"S"  "Storage pool:   $k_pool" \
+			"N"  "Network bridge: $k_network" \
+			"B"  "Boot args:      $k_boot" \
+			"G"  "Graphics args:  $k_graphics" \
+			"T"  "── Test Connection ──" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case "$rc" in
+			3) break ;;        # Continue → done
+			1|255) return 1 ;; # Back/Cancel
+			0) ;;              # Select → edit field
+		esac
+
+		local field
+		field=$(<"$_TUI_TMP")
+		[[ -n "$field" ]] && default_item="$field"
+
+		case "$field" in
+			U)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Libvirt connection URI\n(e.g. qemu+ssh://user@host/system):" 0 70 "$k_uri" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					k_uri=$(<"$_TUI_TMP")
+					replace-value-conf -q -n LIBVIRT_URI -v "$k_uri" -f "$conf_path"
+				fi
+				;;
+			S)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Storage pool path on KVM host:" 0 60 "$k_pool" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					k_pool=$(<"$_TUI_TMP")
+					replace-value-conf -q -n KVM_STORAGE_POOL -v "$k_pool" -f "$conf_path"
+				fi
+				;;
+			N)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Bridge name on KVM host:" 0 60 "$k_network" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					k_network=$(<"$_TUI_TMP")
+					replace-value-conf -q -n KVM_NETWORK -v "$k_network" -f "$conf_path"
+				fi
+				;;
+			B)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Boot firmware/order (e.g. uefi,hd,cdrom):" 0 60 "$k_boot" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					k_boot=$(<"$_TUI_TMP")
+					replace-value-conf -q -n KVM_BOOT_ARGS -v "$k_boot" -f "$conf_path"
+				fi
+				;;
+			G)
+				dlg --backtitle "$(ui_backtitle)" --inputbox "Graphics args (e.g. vnc,listen=0.0.0.0 --video virtio):" 0 70 "$k_graphics" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					k_graphics=$(<"$_TUI_TMP")
+					replace-value-conf -q -n KVM_GRAPHICS_ARGS -v "'$k_graphics'" -f "$conf_path"
+				fi
+				;;
+			T)
+				_test_kvm_connection
+				;;
+		esac
+	done
+
+	# Save to home cache
+	[[ -s "$conf_path" ]] && cp "$conf_path" "$HOME/.kvm.conf" 2>/dev/null || true
+	tui_log "KVM config saved"
+	return 0
+}
+
+# Test libvirt connection using current kvm.conf
+_test_kvm_connection() {
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nTesting libvirt connection..." 0 0
+	source <(normalize-kvm-conf) 2>/dev/null || true
+	ensure_virsh >>"$_TUI_LOG_FILE" 2>&1 || true
+
+	if ! command -v virsh >/dev/null 2>&1; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "\n'virsh' could not be installed.\n\nCannot verify libvirt connection." 0 0
+		return 1
+	fi
+
+	local _out
+	if _out=$(virsh -c "${LIBVIRT_URI:-}" version 2>&1); then
+		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
+			--msgbox "\nLibvirt connection verified!\n\n$_out" 0 0
+		return 0
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Connection Failed" \
+			--msgbox "\nCannot connect to libvirt at:\n${LIBVIRT_URI:-?}\n\n$_out\n\nCheck URI and SSH access." 0 0
+		return 1
+	fi
 }
 
 # =============================================================================
@@ -519,7 +739,7 @@ _cluster_page_basics() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_BASICS" 14 60 5 \
+			--menu "$TUI2_MSG_CLUSTER_BASICS" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -690,14 +910,25 @@ _cluster_page_network() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
 			--default-button ok \
+			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_NETWORK" 16 60 7 \
+			--menu "$TUI2_MSG_CLUSTER_NETWORK" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			3) return 0 ;;  # Next
+			2) show_help "$TUI2_TITLE_CLUSTER_NETWORK" \
+"• Machine network: cluster subnet in CIDR (e.g. 10.0.0.0/24)
+• Starting IP: first IP for cluster nodes (auto-calculated if blank)
+• API VIP: virtual IP for Kubernetes API (compact/standard only)
+• Ingress VIP: virtual IP for ingress routes (compact/standard only)
+  VIPs are auto-fetched from DNS if not set.
+• DNS servers: comma-separated DNS server IPs
+• Gateway: default gateway IP
+• NTP servers: comma-separated NTP server addresses (optional)"
+			   continue ;;
 			1) return 1 ;;  # Back
 			255) return 255 ;;
 			0) ;;
@@ -989,14 +1220,24 @@ _cluster_page_vm() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_NEXT" \
 			--default-button ok \
+			--help-button \
 			--default-item "$default_item" \
-			--menu "$(printf "$TUI2_MSG_CLUSTER_VM" "$cl_platform")" 15 55 6 \
+			--menu "$(printf "$TUI2_MSG_CLUSTER_VM" "$cl_platform")" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			3) return 0 ;;  # Next
+			2) show_help "$TUI2_TITLE_CLUSTER_VM" \
+"• Master CPUs: vCPU count per control-plane VM (min 4)
+• Master Memory: RAM in GB per control-plane VM (min 16)
+• Worker CPUs: vCPU count per worker VM (standard only, min 2)
+• Worker Memory: RAM in GB per worker VM (standard only, min 8)
+• Data disk: additional disk in GB (0 = no extra disk)
+• MAC template: prefix for auto-generated MAC addresses
+  (e.g. 00:50:56:xx — last 3 octets auto-filled)"
+			   continue ;;
 			1) return 1 ;;  # Back
 			255) return 255 ;;
 			0) ;;
@@ -1273,7 +1514,7 @@ _cluster_execute() {
 	fi
 
 	# Platform config check before executing
-	_check_platform_config "$cl_name" || return 1
+	_check_platform_config "$cl_name" "$cl_platform" || return 1
 
 	# Long operation — use confirm_and_execute (terminal/TUI mode choice)
 	# Always return 0 after command execution so the wizard exits back to the
@@ -1292,19 +1533,18 @@ _cluster_execute() {
 # --- Platform config check ---
 _check_platform_config() {
 	local dir="$1"
-	# $platform already available from sourced aba.conf
-	# vmware.conf/kvm.conf live in cluster dir, with fallback to parent and $HOME
+	local plat="${2:-$platform}"
 
-	case "$platform" in
+	case "$plat" in
 		vmw)
-			if [[ ! -s "$dir/vmware.conf" && ! -s vmware.conf && ! -s "$HOME/vmware.conf" ]]; then
+			if [[ ! -s "$dir/vmware.conf" && ! -s vmware.conf && ! -s "$HOME/.vmware.conf" ]]; then
 				_platform_config_missing "VMware" "vmware.conf" \
 					"vcenter_fqdn, vcenter_user, vcenter_pass, datacenter, datastore, network, folder, cluster"
 				return $?
 			fi
 			;;
 		kvm)
-			if [[ ! -s "$dir/kvm.conf" && ! -s kvm.conf && ! -s "$HOME/kvm.conf" ]]; then
+			if [[ ! -s "$dir/kvm.conf" && ! -s kvm.conf && ! -s "$HOME/.kvm.conf" ]]; then
 				_platform_config_missing "KVM" "kvm.conf" \
 					"libvirt_uri, storage_pool, network"
 				return $?
@@ -1317,52 +1557,17 @@ _check_platform_config() {
 _platform_config_missing() {
 	local name="$1" path="$2" fields="$3"
 
-	while :; do
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PLATFORM_CHECK" \
-			--cancel-label "$TUI2_BTN_CANCEL" \
-			--menu "$(printf "$TUI2_MSG_PLATFORM_CONFIG_MISSING" "$name" "$path" "$fields")" 0 0 0 \
-			"1" "Edit in terminal (\$EDITOR)" \
-			"2" "Edit in TUI dialog" \
-			"3" "Skip (proceed without config)" \
-			2>"$_TUI_TMP"
-		local rc=$?
-		case "$rc" in
-			1|255) return 1 ;;
-			0) ;;
-		esac
+	dlg --backtitle "$(ui_backtitle)" --title "$name Configuration Required" \
+		--yes-label "Configure Now" \
+		--no-label "$TUI2_BTN_CANCEL" \
+		--yesno "\n$name configuration ($path) is required but not found.\n\nFields needed: $fields\n\nConfigure now?" 0 0
+	local rc=$?
+	[[ $rc -ne 0 ]] && return 1
 
-		local choice
-		choice=$(<"$_TUI_TMP")
-
-		# Pre-populate from template if file doesn't exist
-		if [[ ! -f "$path" ]]; then
-			local _tmpl="$ABA_ROOT/templates/$path"
-			if [[ -f "$_tmpl" ]]; then
-				cp "$_tmpl" "$path"
-			else
-				echo "# $name configuration — fill in required values" > "$path"
-			fi
-		fi
-
-		case "$choice" in
-			1)
-				clear
-				${EDITOR:-vi} "$path"
-				;;
-			2)
-				dlg --backtitle "$(ui_backtitle)" --title "Edit $name Config" \
-					--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
-					--editbox "$path" 0 0 2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cp "$_TUI_TMP" "$path"
-				;;
-			3)
-				return 0
-				;;
-		esac
-
-		# Re-check
-		[[ -f "$path" ]] && return 0
-	done
+	case "$path" in
+		vmware.conf) _configure_vmw_form ;;
+		kvm.conf)    _configure_kvm_form ;;
+	esac
 }
 
 # =============================================================================

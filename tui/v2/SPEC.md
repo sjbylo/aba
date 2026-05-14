@@ -92,7 +92,7 @@ All screens follow these rules:
 
 ### Navigation Hint
 
-The `dlg()` wrapper automatically appends `\n(Navigate: Arrow keys, Tab, ESC)` to the message text of every `--menu`, `--radiolist`, and `--checklist` dialog. This appears above the list, below the prompt text. No manual injection needed — every list-style dialog gets it for free.
+The `dlg()` wrapper automatically appends `\n(Navigate: Arrow keys, Tab, SPACE, ESC)` to the message text of every `--menu`, `--radiolist`, and `--checklist` dialog. This appears above the list, below the prompt text. No manual injection needed — every list-style dialog gets it for free.
 
 ### Buttons
 
@@ -546,15 +546,16 @@ These are high-level messages (no internal variable dumps) so the user understan
 
 Triggered before cluster install when platform is vmw or kvm:
 
-1. Check for config file (`~/.vmware.conf` or `~/.kvm.conf`)
+1. Check for config file (`vmware.conf` / `kvm.conf` in ABA root, or cached `~/.vmware.conf` / `~/.kvm.conf`)
 2. If missing:
-   - Show: "VMware/KVM config not found at `~/<file>`"
-   - List required fields
-   - Ask: "Edit in terminal ($EDITOR)" / "Edit in TUI dialog" / "Skip"
-   - If terminal: clear screen, open editor, return
-   - If TUI dialog: show `--editbox`
-   - Loop until file exists or user cancels
-3. For platform=bm: no check needed (proceed directly)
+   - Show: "VMware/KVM Configuration Required — Configure now?"
+   - "Configure Now" → opens menu-based config form (`_configure_vmw_form()` / `_configure_kvm_form()`)
+   - Form shows one row per field (menu+inputbox pattern), pre-populated from `templates/vmware.conf` or `templates/kvm.conf`
+   - "Test Connection" row validates with `govc about` (VMware) or `virsh version` (KVM)
+   - "Continue" saves and returns to wizard; "Back" cancels
+   - "Skip" proceeds without config (install will fail later)
+3. If found: proceed directly (no form shown)
+4. For platform=bm: no check needed
 
 ---
 
@@ -570,7 +571,7 @@ Triggered before cluster install when platform is vmw or kvm:
 ## CLI-Only (NOT in TUI v2 primary menus)
 
 - Named mirrors (`aba mirror --name foo`)
-- VMware/KVM config file form editors (TUI offers `$EDITOR`, not a full form)
+- VMware/KVM config file editing via raw `$EDITOR` (TUI now has full menu-based forms)
 - `aba bundle --out -` (piping to stdout)
 - Multi-cluster management (TUI handles one at a time)
 - `aba tar` (low-level archive operations)
@@ -662,7 +663,7 @@ Each `tui-*.sh` is sourceable AND standalone (`BASH_SOURCE` guard for dev/testin
 6. **Sourceable + standalone** — each `tui-*.sh` has `BASH_SOURCE` guard
 7. **Default to bm** — platform default is bare metal; VM pages only shown for vmw/kvm
 8. **CLI and TUI interchangeable** — shared `run_once` caches, same config files; user can switch between TUI and CLI mid-workflow
-9. **Single-letter menu shortcuts** — every `--menu` item MUST use a single uppercase letter as its tag (e.g. `"P" "Platform: ..."` not `"plat" "Platform: ..."`). This gives users instant keyboard shortcuts. Exception: `--radiolist` items where the tag IS the config value (e.g. `"vmw"`, `"stable"`) keep their semantic names since they are written directly to config files.
+9. **Single-letter menu shortcuts** — every `--menu` item MUST use a single uppercase letter as its tag (e.g. `"P" "Platform: ..."` not `"plat" "Platform: ..."`). This gives users instant keyboard shortcuts. Exception: `--menu` items in DIRECT wizard where the tag IS the config value (e.g. `"vmw"`, `"stable"`) keep their semantic names since they are written directly to config files.
 10. **Session-scoped execution preference** — `confirm_and_execute()` remembers **Always TUI** / **Always Terminal** for this process (`_TUI_EXEC_MODE`). Clear it from **Advanced Options → Reset Execution Mode** when that menu entry appears.
 
 ## Learnings and Pitfalls
@@ -857,8 +858,8 @@ aba cluster --name standard --type standard --platform vmw \
 | 2 | DIRECT + proxy + SNO | **SUCCESS** | Agent alive. Connection=proxy works. |
 | 3 | DISCO (switch from CONNO) + Docker local + SNO | **SUCCESS** | Agent alive. Mode switch works. |
 | 4 | DISCO via .bundle + Docker local + SNO | **PASS (flow)** | Bundle detection, dialog, and DISCO menu all work. Agent timeout due to retained VLAN=233 config (known: VM Network doesn't support VLAN). |
-| 5 | VMware config from scratch | **PASS** | TUI detects missing vmware.conf, shows template editor. |
-| 6 | KVM config from scratch | **PASS** | TUI detects missing kvm.conf, shows template editor. |
+| 5 | VMware config from scratch | **PASS** | TUI detects missing vmware.conf, shows menu-based config form with template values. |
+| 6 | KVM config from scratch | **PASS** | TUI detects missing kvm.conf, shows menu-based config form with template values. |
 | 7 | Quay mirror (vendor toggle) | **PASS (TUI flow)** | Vendor toggle works. Reinstall flow doesn't properly uninstall existing registry first (UX bug logged). |
 
 ### Bugs Found and Fixed
