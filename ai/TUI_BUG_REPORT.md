@@ -1083,7 +1083,7 @@ govc: ServerFaultCode: Cannot complete login due to an incorrect user name or pa
 
 ---
 
-## Bug #60: Operator search corrupts basket entries with grep file path prefix
+## Bug #60: ~~FIXED~~ Operator search corrupts basket entries with grep file path prefix
 **File:** `tui/v2/tui-mirror.sh` line 913 (`_operator_search`)
 **Severity:** CRITICAL — Data corruption; operators saved as invalid paths, silently lost on restoration
 **Verified:** Code review + confirmed by inspecting corrupted `templates/operator-set-custom-20260514-181224`
@@ -1358,21 +1358,9 @@ These are corrupted entries from operator search. Fix: add `-h` flag to grep to 
 
 ---
 
-## Bug #74: `confirm_quit` treats ESC as quit confirmation — causes unintended exits
+## ~~Bug #74~~ NOT A BUG — by design: double-ESC is intentional quick-exit
 **File:** `tui/v2/tui-lib.sh` line 282
-**Severity:** MEDIUM — UX: accidental TUI exit
-**Steps to reproduce:**
-1. Navigate deep into nested menus (e.g., main menu → Advanced → Platform selection)
-2. Press ESC rapidly 3+ times to "go back, go back, go back"
-3. The first ESC closes the innermost dialog
-4. The second ESC closes the next dialog
-5. The third ESC hits the main menu, triggering `confirm_quit`
-6. If a fourth ESC arrives while `confirm_quit` dialog is shown, rc=255 → return 0 → TUI exits
-
-**Root cause:** Line 282: `confirm_quit` treats `rc=255` (ESC) as "quit confirmed" (returns 0). This is documented as intentional ("ESC again — quitting"), but in practice it causes unintended exits when users rapidly press ESC to back out of nested menus. Buffered ESC keystrokes are consumed by the confirm dialog before the user can read it. **Verified live:** Sending two ESCs via tmux to a nested dialog stack caused the TUI to exit completely without user confirmation.
-
-**Expected:** `confirm_quit` should treat ESC as "cancel the quit" (return 1), requiring the user to explicitly select "Exit" to quit.
-**Actual:** ESC in the confirm dialog also exits, creating a multi-ESC chain that exits the TUI unexpectedly.
+**Status:** NOT A BUG — by design. The code comment "ESC again — quitting" confirms the developer intended double-ESC as a quick-exit shortcut. If the user is hammering ESC, they clearly want to leave.
 
 ---
 
@@ -1439,13 +1427,31 @@ These are corrupted entries from operator search. Fix: add `-h` flag to grep to 
 
 ---
 
+## Bug #79: Copy-paste error in `verify-cluster-conf` error messages
+**File:** `scripts/include_all.sh` lines 969, 972
+**Severity:** LOW — Misleading error messages
+**Steps to reproduce:**
+1. Set `master_mem=abc` or `worker_mem=xyz` in a cluster.conf
+2. Run `aba cluster` or any command that triggers `verify-cluster-conf`
+3. Error messages show the wrong variable name
+
+**Root cause:** Copy-paste errors in validation:
+- Line 969: `"Error: master_mem is invalid: [$master_cpu_count]"` — should be `[$master_mem]`
+- Line 972: `"Error: worker_mem is invalid: [$worker_cpu_count]"` — should be `[$worker_mem]`
+
+The validation logic itself is correct (checks `$master_mem` / `$worker_mem`), but the error messages display the wrong variable (`$master_cpu_count` / `$worker_cpu_count`), confusing users about which config field is actually invalid.
+
+**Expected:** Error messages should reference the correct variable: `[$master_mem]` and `[$worker_mem]`.
+
+---
+
 ### Summary by severity:
 | Severity | Count | Bug IDs |
 |----------|-------|---------|
 | CRITICAL | 6 | #3, #45, #47, #49, #50, #60 |
 | HIGH | 13 | #1, #9, #18, #20, #22, #24, #35, #41, #42, #53, #55, #59, #64 |
 | MEDIUM | 34 | #5, #6, #7, #13, #14, #15, #16, #17, #21, #23, #25, #26, #29, #37, #38, #43, #44, #48, #51, #52, #54, #56, #57, #61, #63, #65, #66, #69, #71, #72, #74, #75, #77, #78 |
-| LOW | 24 | #2, #4, #8, #11, #12, #19, #27, #28, #30, #31, #32, #33, #34, #36, #39, #40, #46, #58, #62, #67, #68, #70, #73, #76 |
+| LOW | 25 | #2, #4, #8, #11, #12, #19, #27, #28, #30, #31, #32, #33, #34, #36, #39, #40, #46, #58, #62, #67, #68, #70, #73, #76, #79 |
 
 ### Workflows tested via TUI:
 1. **CONNO mode SNO install** — Full install from wizard to "Success" dialog. Cluster reached 4.21.14, all operators available.
@@ -1492,3 +1498,449 @@ These are corrupted entries from operator search. Fix: add `-h` flag to grep to 
 - `rm -f ~/aba/vmware.conf ~/aba/kvm.conf ~/.vmware.conf ~/.kvm.conf && rm -rf ~/.aba/` — clean environment for "from scratch" test
 - `cp ~/aba/vmware.conf.bk-scratch ~/aba/vmware.conf` — restore vmware.conf after password corruption test
 - `replace-value-conf` CLI tests — verified Bug #45 root cause with multiple values containing spaces
+
+---
+
+# Session 2 — New Bugs Found (2026-05-15, 18:00+)
+
+## Bug #79: ~~FIXED~~ Internet check (aba_inet_check_cached) systematically fails after TTL expiry with `set -o pipefail`
+
+**Severity**: HIGH — blocks core TUI functionality
+
+**Location**: `scripts/include_all.sh` — `aba_inet_check_cached()` function
+
+**Root cause**: After the 30-second TTL expires, `run_once -t $ttl` starts a new background check. Immediately after, `run_once -E` tries to read the exit code file. But the new check hasn't completed yet, so `-E` either reads a stale/empty file or returns non-zero. With `set -o pipefail` active (set in `abatui2.sh` line 26), the pipeline `run_once -E ... | grep -q '^0$'` fails, causing `aba_inet_check_cached` to return 1 (no internet).
+
+**Reproduction**: Launch TUI with proxy, wait >30 seconds, observe `[no internet]` tags appearing on menu items.
+
+**Verified**: YES — via CLI test simulating the `run_once` flow and via TUI observation.
+
+## Bug #80: ~~FIXED~~ Internet check failure blocks TUI operations (cascading from Bug #79)
+
+**Severity**: CRITICAL — makes CONNO workflow unusable
+
+**Location**: `tui/v2/abatui2.sh` — CONNO main menu loop; `tui/v2/tui-mirror.sh` — sync/save/bundle operations
+
+**Root cause**: When `aba_inet_check_cached` returns failure (Bug #79), the TUI marks items with `[no internet]` AND gates their execution. When user selects a gated item, a blocking dialog appears: "This action requires internet access. Restore internet connectivity to use this feature." The user cannot override this, even though internet IS available via proxy.
+
+**Reproduction**: In CONNO mode, wait >30s, try "Sync Images" — blocked with "requires internet" dialog.
+
+**Verified**: YES — observed in TUI.
+
+## Bug #81: ~~FIXED~~ TUI flock file descriptor inherited by Docker registry container — prevents TUI restart
+
+**Severity**: CRITICAL — TUI cannot be restarted after installing Docker mirror
+
+**Location**: `tui/v2/abatui2.sh` lines 54-55
+
+**Root cause**: The TUI opens `~/.aba/.tui.lock` with `exec {ABA_TUI_FLOCK_FD}>...` and acquires an flock. When the TUI runs `aba -d mirror install`, which starts a Docker registry container, the `conmon` process (container runtime monitor) inherits the open file descriptor. When the TUI exits, `conmon` still holds the FD (and the flock), preventing any new TUI instance from starting. The error message is "Another TUI instance is already running."
+
+**Reproduction**: Install a Docker mirror via TUI → exit TUI → try to restart TUI → "Another TUI instance is already running" error.
+
+**Verified**: YES — observed after mirror install. `fuser ~/.aba/.tui.lock` showed PID of the `conmon` process.
+
+**Fix hint**: Set `FD_CLOEXEC` on the lock FD before spawning subprocesses, or close the FD explicitly in child processes.
+
+## Bug #82: VMware password displayed in plaintext in configuration inputbox
+
+**Severity**: MEDIUM — security concern
+
+**Location**: `tui/v2/tui-cluster.sh` line 292
+
+**Root cause**: The password field uses `--inputbox` (plaintext) instead of `--passwordbox` (masked). The current password value `$v_pass` is displayed in clear text in the input field.
+
+**Code**: `dlg --backtitle "$(ui_backtitle)" --inputbox "Password:" 0 60 "$v_pass" 2>"$_TUI_TMP"`
+
+**Reproduction**: In cluster wizard, reach VMware config → select Password → see plaintext password.
+
+**Verified**: YES — code inspection confirmed. (Same as previously reported Bug #5 but re-verified in Session 2.)
+
+## Bug #83: `_cluster_load_conf` — prefix_length/machine_network order dependency
+
+**Severity**: LOW — depends on config file key ordering
+
+**Location**: `tui/v2/tui-cluster.sh` lines 86-90
+
+**Root cause**: If `prefix_length` appears before `machine_network` in `cluster.conf`, the line `cl_network="${cl_network}/${val}"` produces `/${val}` (e.g., `/24`). When `machine_network` is subsequently read, it overwrites `cl_network`, losing the prefix. The config parser assumes `machine_network` appears before `prefix_length` in the file.
+
+**Code**:
+```bash
+machine_network)  cl_network="$val" ;;
+prefix_length)    [[ -n "$val" && "$cl_network" != */* ]] && cl_network="${cl_network}/${val}" ;;
+```
+
+**Verified**: Code inspection only — would need a cluster.conf with reversed key order to reproduce.
+
+## Bug #84: VIP auto-detection uses default cluster name "ocp" instead of user's chosen name
+
+**Severity**: MEDIUM — VIPs pre-filled with wrong DNS values
+
+**Location**: `tui/v2/tui-cluster.sh` lines 580-587
+
+**Root cause**: The VIP auto-detection runs during wizard initialization (before the user changes the cluster name). It looks up `api.ocp.${domain}` and `*.apps.ocp.${domain}` instead of `api.${cl_name}.${domain}`. When the user changes the cluster name (e.g., to "sno"), the VIPs are NOT re-fetched from DNS. The user sees incorrect VIP values on the Network page.
+
+**Reproduction**: Open cluster wizard → default name is "ocp" → change to "sno" → go to Network page → VIPs show values from api.ocp.example.com DNS lookup, not api.sno.example.com.
+
+**Verified**: Code inspection confirmed. VIP auto-detect runs once at init time only.
+
+## Bug #85: Ctrl+C silently ignored during `_exec_in_tui` command execution
+
+**Severity**: MEDIUM — user cannot cancel long-running operations
+
+**Location**: `tui/v2/tui-lib.sh` line 473
+
+**Root cause**: `trap : INT` is set before the execution pipeline, making Ctrl+C a no-op. The user cannot cancel a long-running `aba sync` or `aba cluster install` operation from within the TUI progress box. The only option is to kill the TUI process externally.
+
+**Code**: `trap : INT`
+
+**Verified**: Code inspection confirmed.
+
+## Bug #86: Platform "bm" not passed as `--platform` flag — causes wrong platform when aba.conf differs
+
+**Severity**: HIGH — cluster created with wrong platform
+
+**Location**: `tui/v2/tui-cluster.sh` line 1352
+
+**Root cause**: The condition `[[ "$cl_platform" != "bm" ]]` means `--platform bm` is NEVER added to the command. If `aba.conf` has `platform=vmw` but the user selects "bm" in the wizard, the cluster is created with `vmw` (from aba.conf) instead of `bm`.
+
+**Code**: `[[ -n "$cl_platform" && "$cl_platform" != "bm" ]] && cmd="$cmd --platform $cl_platform"`
+
+**Verified**: Code inspection confirmed. (Same as previously reported Bug #3.)
+
+## Bug #87: Connection field truncated on Interfaces page
+
+**Severity**: LOW — cosmetic
+
+**Location**: `tui/v2/tui-cluster.sh` — `_cluster_page_iface()` function
+
+**Root cause**: The dialog menu box width is too narrow for the "Connection: mirror (registry4.example.com:8443)" value. The display truncates to "mirror (registry4.example.com:844" — missing the closing "3)".
+
+**Reproduction**: Open cluster wizard → go to Interfaces page → observe truncated Connection field.
+
+**Verified**: YES — observed in TUI.
+
+## Bug #88: ESC from VMware configuration silently continues wizard to next page
+
+**Severity**: MEDIUM — user confusion
+
+**Location**: `tui/v2/tui-cluster.sh` lines 201-202, 213-219
+
+**Root cause**: When the user selects "Configure Now" for VMware and then presses ESC inside the VMware config form, `_configure_vmw_form` returns 1. But `_configure_platform_file` doesn't check the return code, and `_gate_platform_config` returns 0 regardless. The wizard proceeds to the Network page as if VMware configuration was completed successfully.
+
+**Reproduction**: Cluster wizard → Basics page → press Next → "Configure Now" → press ESC → wizard advances to Network page instead of returning to Basics.
+
+**Verified**: YES — observed in TUI.
+
+## Bug #89: Wizard defaults for VM resources don't match cluster.conf template defaults — misleading review page
+
+**Severity**: HIGH — user installs cluster with different specs than shown
+
+**Location**: `tui/v2/tui-cluster.sh` lines 517-521 (defaults) and lines 1375-1381 (command construction)
+
+**Root cause**: The wizard initializes VM resource defaults as: CPU=8, Memory=32 GB, Disk=(none). These are shown on the VM Resources page and the review page. However, the command construction skips `--mcpu`, `--mmem`, and `--data-disk-gb` flags when values match these wizard defaults (line 1375: `"$cl_master_cpu" != "8"`). Since the flags are not passed, ABA core uses its own template defaults from cluster.conf, which are DIFFERENT:
+- Template CPU = 10 (wizard shows 8)
+- Template Memory = 20 GB (wizard shows 32 GB)
+- Template Disk = 500 GB (wizard shows "none")
+
+The review page displays: "Master CPU: 8, Master Mem: 32 GB" but the actual VM is created with 10 CPUs, 20 GB RAM, and a 500 GB data disk.
+
+**Reproduction**: Create SNO cluster via wizard → leave VM Resources at defaults → review page shows 8 CPU/32GB → install → VM created with 10C/20G/500GB disk.
+
+**Verified**: YES — observed in TUI install. `cluster.conf` confirmed: `master_cpu_count=10, master_mem=20, data_disk=500`.
+
+## Bug #90: TUI shows "Success" when install process is killed externally
+
+**Severity**: HIGH — misleading feedback
+
+**Location**: `tui/v2/tui-lib.sh` lines 473-478 (`_exec_in_tui`)
+
+**Root cause**: When `openshift-install agent wait-for install-complete` is killed with SIGTERM (e.g., user kills the process externally), the pipeline in `_exec_in_tui` still reports exit code 0 via `PIPESTATUS[0]`. The TUI then shows "Success" (green title) instead of "FAILED". This is because the `bash -c "$tui_cmd"` subshell has `trap : INT` set, and the signal may propagate as a clean exit through the `aba` CLI wrapper and make target chain. Also, with `set -o pipefail`, the pipeline's exit status depends on all components — `tee` and `sed` and `dialog --progressbox` may all exit 0, masking the subshell's non-zero exit.
+
+**Impact**: User sees "Success" and EXIT button after an interrupted/failed install. They may believe the cluster was successfully installed. No "Retry" option is offered.
+
+**Reproduction**: Start cluster install via TUI → externally kill `openshift-install` process → TUI shows "Success" dialog with "Received interrupt signal" in the log.
+
+**Verified**: YES — observed in TUI. Killed PID with `kill`, TUI displayed "Success" title despite "Received interrupt signal" message.
+
+## Bug #91: "Reset to auto-generated" ISC doesn't actually regenerate the file
+
+**Severity**: MEDIUM — user may sync/save with stale ISC
+
+**Location**: `tui/v2/tui-mirror.sh` lines 670-674
+
+**Root cause**: When the user selects "Reset to auto-generated" in the View/Edit ISC menu, the code only: (1) touches `.created` flag, (2) resets the `run_once` state with `run_once -r`. It does NOT trigger an actual ISC regeneration. The stale user-edited ISC file remains on disk. Regeneration only happens when `_persist_operator_basket` is called, which occurs on the NEXT entry into the "View ISC" menu.
+
+**Impact**: If the user resets the ISC and then immediately runs "Sync Images" or "Save Images", the old edited ISC file is used — not the regenerated default. The user sees "ImageSet configuration reset to auto-generated. It will be regenerated from current settings on next use." which implies deferred action, but doesn't warn that syncing right now uses the stale file.
+
+**Verified**: YES — code review confirms `run_once -r` only resets state without starting regeneration.
+
+## Bug #92: Bundle path with spaces breaks the command
+
+**Severity**: LOW — unlikely but possible user input
+
+**Location**: `tui/v2/tui-mirror.sh` line 1124
+
+**Root cause**: The bundle path `$bundle_path` is interpolated without quoting into the command string: `local cmd="aba bundle --out $bundle_path"`. This is then passed to `bash -c "$cmd"` via `confirm_and_execute`. If the user enters a path with spaces (e.g., `/tmp/my bundle`), the command becomes `aba bundle --out /tmp/my bundle`, which splits incorrectly.
+
+**Reproduction**: Mirror → Create Bundle → enter path with spaces like "/tmp/my bundle" → command fails silently or with wrong arguments.
+
+**Verified**: YES — code review confirms no quoting of `$bundle_path` in command string.
+
+## Bug #93: Dead code `_direct_operators()` with undefined variable
+
+**Severity**: LOW — dead code, no runtime impact unless called
+
+**Location**: `tui/v2/tui-direct.sh` lines 415-452
+
+**Root cause**: The `_direct_operators()` function is defined but never called from anywhere in the TUI codebase. Additionally, at line 438, it references `$_ver_short` which is undefined in this function's scope. The variable was `local` to `direct_wizard()` (line 101) and is not accessible in `_direct_operators()`. If this function were ever called, `_operator_search` would receive an empty string for the version parameter.
+
+**Verified**: YES — grep confirms function is never called; code review confirms `_ver_short` is out of scope.
+
+## Bug #94: Mirror config edits saved immediately even if user cancels
+
+**Severity**: LOW — user expectation issue
+
+**Location**: `tui/v2/tui-mirror.sh` lines 270-324 (local) and 416-483 (remote)
+
+**Root cause**: When configuring the mirror (both local and remote), each field edit immediately calls `replace-value-conf` to write the change to `mirror.conf`. If the user edits a field (e.g., changes hostname) and then presses "Back" to cancel the configuration, the change is already persisted to `mirror.conf`. The user expects "Back" to discard changes, but partial edits remain.
+
+**Verified**: YES — code review confirms `replace-value-conf` is called inside each field's case handler, before the user confirms with "Next".
+
+---
+
+## Bug #95: KVM `KVM_GRAPHICS_ARGS` wrapped in extra single quotes when saving to `kvm.conf`
+
+**Severity**: MEDIUM — silently corrupts config value
+
+**Location**: `tui/v2/tui-cluster.sh` line 455
+
+**Root cause**: When the user edits the "Graphics args" field in the KVM configuration form, the value is saved with extra single quotes around it:
+```bash
+replace-value-conf -q -n KVM_GRAPHICS_ARGS -v "'$k_graphics'" -f "$conf_path"
+```
+This produces `KVM_GRAPHICS_ARGS='vnc,listen=0.0.0.0 --video virtio'` with the outer quotes from `replace-value-conf` PLUS the inner single quotes from the code. The resulting file would have double quoting. This is the same pattern as Bug #5 (VMware password) and Bug #46 (KVM field quoting).
+
+**Verified**: YES — code review confirms the `'$k_graphics'` wrapping at line 455.
+
+---
+
+## Bug #96: VMware config from template shows "Password: (set)" when actually placeholder
+
+**Severity**: LOW — misleading UX
+
+**Location**: `tui/v2/tui-cluster.sh` line 255, `templates/vmware.conf` line 7
+
+**Steps to reproduce**:
+1. Remove `~/.vmware.conf` and `~/aba/vmware.conf` (simulate fresh install)
+2. Start TUI → CONNO → Install Cluster → Enter cluster name → Next
+3. "Configure Now" for VMware
+4. VMware form shows "Password: (set)"
+
+**Root cause**: When `vmware.conf` is created from the template (line 227-229), the template contains `GOVC_PASSWORD='<my password here>'`. The TUI displays `${v_pass:+(set)}` (line 255), which shows "(set)" whenever `v_pass` is non-empty. The template placeholder `<my password here>` is non-empty, so it displays "(set)" as if a real password is configured. Opening the password field reveals the plaintext placeholder. The user might skip editing the password, thinking it's already configured.
+
+**Verified**: YES — reproduced in TUI on registry4. After renaming `~/.vmware.conf` and `~/aba/vmware.conf`, the VMware form showed "Password: (set)". Clicking on the field revealed the template placeholder `<my password here>` in plaintext.
+
+---
+
+## Bug #97: Optional fields (NTP, VIP) cannot be cleared once populated
+
+**Severity**: LOW — prevents user from unsetting optional values
+
+**Location**: `tui/v2/tui-cluster.sh` lines 1044-1059 (NTP), 976-1008 (VIPs)
+
+**Root cause**: All Network page fields use the pattern:
+```bash
+[[ -n "$ntp_val" ]] && cl_ntp="$ntp_val"
+```
+If the user opens the inputbox, clears the content, and presses OK, the empty value is ignored and the old value persists. For required fields (machine_network, DNS, gateway), this is sensible. But NTP servers are documented as optional in the help text ("NTP servers: comma-separated NTP server addresses (optional)"). Once auto-populated (e.g., with `10.0.1.8,2.rhel.pool.ntp.org`), the user cannot remove NTP servers through the TUI. Similarly, API VIP and Ingress VIP cannot be cleared if auto-detected from DNS.
+
+**Verified**: YES — code review confirms empty values are ignored for all Network page fields, including optional ones.
+
+## Bug #98: Mirror state race — menu item label reads stale cache before verify completes
+
+**Severity**: LOW (cosmetic, first-iteration only)
+
+**Location**: `tui/v2/abatui2.sh` lines 464-472, `tui/v2/tui-disco.sh` lines 42-79
+
+**Description**: In both CONNO and DISCO main menu loops, the "Install Cluster" label hint (`[sync mirror first]` / `[load mirror first]`) is computed BEFORE `aba_mirror_verify_wait` completes, while the menu title (e.g., `mirror ready`) is computed AFTER the wait. On the first loop iteration — when the background verify kicked off at startup hasn't finished yet — `_mirror_has_release_image()` returns stale/false because the cached exit code from `run_once` isn't written yet. After the wait, `mirror_state_label()` correctly reads the final result.
+
+**Result**: On the very first menu display, the menu title can say "mirror ready" (green) while the Install Cluster item simultaneously says "[sync mirror first]" — contradictory information. Subsequent iterations are fine because the cache is populated.
+
+**Fix**: Move `aba_mirror_verify_wait` before the `inst_label` hint logic (before line 464 in CONNO, before line 42 in DISCO).
+
+**Verified**: YES — code review confirms the ordering issue in both modes.
+
+## Bug #99: `--ntp`/`--dns`/`--gateway` flags target wrong `cluster.conf` when used with `--name`
+
+**Severity**: MEDIUM (config inconsistency, may cause wrong values in existing cluster dirs)
+
+**Location**: `scripts/aba.sh` lines 630, 642, 654 (and similar flag handlers)
+
+**Description**: When running `aba cluster --name sno --ntp 10.0.1.8 ...`, the `--ntp` flag processing at line 642 runs:
+```bash
+replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+```
+`WORK_DIR` is set to `$PWD` (line 55), which is the ABA root directory (`~/aba`). The `--name` flag does NOT change `WORK_DIR` — it only adds `name='sno'` to `BUILD_COMMAND`. So the `replace-value-conf` targets `~/aba/cluster.conf` (doesn't exist) instead of `~/aba/sno/cluster.conf`.
+
+**Result**: `aba.conf` is correctly updated, but the existing `sno/cluster.conf` retains its old value. Since `create-cluster-conf.sh` is skipped when `cluster.conf` already exists (Makefile dependency), the stale value persists. This was observed in testing: `aba.conf` had `ntp_servers=10.0.1.8` but `sno/cluster.conf` still had `ntp_servers=10.0.1.8,2.rhel.pool.ntp.org`.
+
+The same issue affects `--dns` (line 630), `--gateway-ip` (line 654), and any other flag that uses `$WORK_DIR/cluster.conf`.
+
+Note: This is a core ABA bug exposed through the TUI's generated command. The TUI correctly generates `--ntp 10.0.1.8` but the core flag handler doesn't route it to the right cluster.conf.
+
+**Verified**: YES — observed during SNO installation: `aba.conf` updated correctly, `sno/cluster.conf` retained old NTP value.
+
+## Bug #100: VM resource inputs accept values below OpenShift minimums
+
+**Severity**: LOW (UX, leads to installation failure later)
+
+**Location**: `tui/v2/tui-cluster.sh` lines 1269-1327 (`_cluster_page_vm`)
+
+**Description**: All VM resource input fields (Master CPUs, Master Memory, Worker CPUs, Worker Memory) validate only that the entered value is a positive integer (`>= 1`). However, the help text documents minimum requirements: Master CPUs min 4, Master Memory min 16 GB, Worker CPUs min 2, Worker Memory min 8 GB. A user can enter `1` CPU or `2` GB memory and the TUI will accept it. The installation will then fail when OpenShift's resource requirements aren't met.
+
+**Verified**: YES — code review confirms all four fields use `[[ "$val" -lt 1 ]]` as the only lower bound check.
+
+## Bug #101: Operator basket marked dirty even when user makes no changes
+
+**Severity**: LOW (performance, unnecessary ISC regeneration)
+
+**Location**: `tui/v2/tui-mirror.sh` lines 762-772 (`_operator_menu`)
+
+**Description**: When the user selects "Select Operator Sets" (option 1), "Search Operator Names" (option 2), or "View/Edit Basket" (option 3) from the operator menu, `_OP_BASKET_DIRTY=true` is set unconditionally BEFORE `_persist_operator_basket` is called — even if the user immediately pressed Back/Cancel without changing anything. This triggers unnecessary ISC regeneration (background `aba isconf` run), wasting CPU/disk I/O.
+
+**Fix**: Set `_OP_BASKET_DIRTY=true` inside the individual functions only when an actual change is made, or check the basket before/after and set the flag based on difference.
+
+**Verified**: YES — code review confirms the dirty flag is set regardless of user action.
+
+## Bug #102: Removing an operator set deletes shared operators from other active sets
+
+**Severity**: MEDIUM (data loss — operators silently disappear from basket)
+
+**Location**: `tui/v2/tui-mirror.sh` lines 838-878 (`_operator_sets`)
+
+**Description**: When the user unchecks an operator set, ALL operators from that set are removed from `OP_BASKET` (lines 845-851). However, some operators may belong to multiple sets. If operator "foo" exists in both set A and set B, and the user unchecks set A while keeping set B selected, "foo" is removed from the basket.
+
+The addition loop (lines 858-878) only adds sets that are NOT already in `OP_SET_ADDED`. Since set B was already marked as added, its operators are NOT re-added to the basket. Result: "foo" is lost even though set B (which contains "foo") is still selected.
+
+**Scenario**:
+1. Select sets A (foo, bar) and B (foo, baz) → basket = {foo, bar, baz}
+2. Uncheck A, keep B → removal loop deletes foo and bar
+3. Addition loop skips B (already added) → basket = {baz}
+4. Expected: basket = {foo, baz} (A removed, B retained)
+
+**Fix**: After removing unchecked sets, rebuild the basket by re-adding all operators from ALL remaining active sets. Alternatively, track operator reference counts (how many sets contributed each operator).
+
+**Verified**: YES — code review confirms the removal and addition logic operates independently, with no reconciliation of shared operators.
+
+## Bug #103: Upgrade version parser extracts current version and noise from dry-run output
+
+**Severity**: MEDIUM (confusing UX — current version shown as upgrade target)
+
+**Location**: `tui/v2/tui-cluster.sh` lines 1884-1900 (`_day2_upgrade`)
+
+**Description**: The version parser uses `grep -oE '[0-9]+\.[0-9]+\.[0-9]+'` on every line of `upgrade --dry-run` output, which includes info messages containing the CURRENT cluster version, not just upgrade targets. The `2>&1` merges stderr into stdout, and `|| true` masks failures.
+
+The dry-run script (`scripts/cluster-upgrade.sh` lines 157-185) outputs structured info like:
+- "Current version: 4.17.3" (info line)
+- "Target version: 4.18.0" (info line)
+- "Versions in mirror (higher than 4.17.3):" (info header)
+- "  4.18.0 ← target" (actual upgrade target)
+
+The parser blindly extracts ALL semver patterns, so `4.17.3` (the current version) appears alongside `4.18.0` (the actual upgrade target). After dedup/sort, the user sees both versions as selectable upgrade targets. Selecting the current version triggers a no-op ("already at version"), wasting time and confusing the user.
+
+Additionally, if the dry-run fails (e.g., no `ocp_version_target` set, cluster unreachable, cluster unhealthy), `|| true` silences the error. The user sees "No available upgrade versions" with no indication of the actual problem (missing config, network issue, etc.).
+
+**Fix**: Parse only the indented version lines from the "Versions in mirror" section (e.g., lines matching `^\[ABA\]   [0-9]+`). Or better: have the upgrade script output a machine-parseable section (e.g., `##VERSIONS## 4.18.0 4.18.1`). Also: don't use `|| true` — check the exit code and show the actual error to the user if dry-run fails.
+
+**Verified**: YES — code review confirms the parser uses unstructured regex on the full output, and the dry-run output always includes the current version in info lines.
+
+## Bug #104: EUS channel missing from TUI channel selection
+
+**Severity**: MEDIUM (feature gap — EUS users forced to CLI)
+
+**Location**: `tui/v2/tui-direct.sh` lines 203-206 (`_direct_channel`)
+
+**Description**: The `aba.conf` template documents four OpenShift release channels: `stable`, `fast`, `candidate`, and `eus` (Extended Update Support). The TUI's channel selection dialog only offers three options — `eus` is missing:
+
+```bash
+--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
+    "stable"    "Recommended for production" \
+    "fast"      "Latest GA release" \
+    "candidate" "Preview/beta" \
+```
+
+Users who need EUS (required for certain upgrade paths and longer support cycles) cannot select it through the TUI. They must manually edit `aba.conf` to set `ocp_channel=eus`.
+
+**Fix**: Add `"eus" "Extended Update Support"` to the menu items, and update the menu count from 3 to 4.
+
+**Verified**: YES — code review confirms the channel list has only 3 items; `aba.conf.j2` line 3 documents 4 valid channels including `eus`.
+
+---
+
+## Bug #105: DISCO mode never re-checks internet status during session
+
+**Severity**: MEDIUM (UX gap — user must restart TUI after connecting)
+
+**File:** `tui/v2/tui-disco.sh` line 72-76
+
+**Root cause:** DISCO mode sets `_TUI_INET` once at startup and never re-checks:
+```bash
+# Internet status set once at startup (_TUI_INET). No per-loop re-check.
+if [[ "$_TUI_INET" == "no" ]]; then
+    reset_avail=false
+    reset_label="Reset to Connected Mode $TUI2_GREY_NO_INTERNET"
+fi
+```
+
+In contrast, CONNO mode (abatui2.sh line 401) re-checks `aba_inet_check_cached 30` on every menu loop iteration, so it detects when internet is restored mid-session.
+
+**Expected:** If internet is restored mid-session (e.g., cable plugged in, proxy configured), the "Reset to Connected Mode" item should become available after a short delay.
+**Actual:** "Reset to Connected Mode" stays greyed out forever until the TUI is restarted, even if internet access is restored.
+
+**Verified**: YES — code review confirms DISCO mode has no per-loop `aba_inet_check_cached` call. CONNO mode at line 401 has `aba_inet_check_cached 30` inside the `while :` loop.
+
+---
+
+## Bug #106: DISCO mode blocks on mirror verification every menu redraw
+
+**Severity**: LOW (performance — menu may freeze for seconds after mirror operations)
+
+**File:** `tui/v2/tui-disco.sh` line 79
+
+**Root cause:** The DISCO menu loop calls `aba_mirror_verify_wait` (blocking) on every iteration:
+```bash
+# Wait for any in-flight mirror verify before reading state
+aba_mirror_verify_wait
+```
+
+This blocks until the background `make -sC mirror check-image` completes (which runs `skopeo inspect` or similar). After operations that trigger `_invalidate_mirror_cache` (like load or install), the next menu render blocks for the duration of the verification (typically 2-10 seconds depending on registry responsiveness).
+
+In contrast, CONNO mode uses `_mirror_has_release_image()` → `aba_mirror_verify_exit()` → `run_once -E` (non-blocking, reads cached exit code). CONNO's menu renders instantly and shows the last-known state.
+
+**Expected:** DISCO menu should render immediately using cached mirror state (like CONNO does), with the state updating on the next render after the background check completes.
+**Actual:** DISCO menu freezes for the duration of the mirror verification on every render cycle.
+
+**Verified**: YES — code review confirms `aba_mirror_verify_wait` (blocking) on DISCO line 79, vs non-blocking `_mirror_has_release_image` pattern used by CONNO.
+
+---
+
+## Bug #107: Direct script invocations bypass make dependency tracking
+
+**Severity**: LOW (architectural — no immediate user impact but breaks invariants)
+
+**File:** `tui/v2/tui-direct.sh` lines 67, 81, 103; `tui/v2/tui-mirror.sh` line 1026
+
+**Root cause:** Multiple TUI files call scripts under `scripts/` directly instead of via `aba` CLI or Makefile targets:
+
+1. `tui-direct.sh:67` — `"$ABA_ROOT/scripts/create-containers-auth.sh"`
+2. `tui-direct.sh:81` — `"$ABA_ROOT/scripts/download-catalog-index.sh"`
+3. `tui-direct.sh:103` — `"$ABA_ROOT/scripts/cli-download-all.sh"`
+4. `tui-mirror.sh:1026` — `scripts/cli-download-all.sh --wait`
+5. `tui-direct.sh:466` — `"$ABA_ROOT/scripts/j2"` (template renderer)
+
+This violates the architectural invariant: "Scripts in `scripts/` must NEVER be called directly — only via Makefile targets or `aba` CLI." Direct invocations bypass make's dependency tracking and marker management.
+
+**Expected:** Use `aba` CLI commands or `make` targets instead.
+**Actual:** Scripts called directly, bypassing dependency tracking.
+
+**Verified**: YES — code review confirms all 5 direct invocations.

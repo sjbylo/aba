@@ -3271,6 +3271,10 @@ aba_inet_check_wait_status() {
 # Reset cached internet check (use at TUI startup to force a fresh probe)
 aba_inet_check_reset() {
 	run_once -r -i "aba:check:internet"
+	# Also reset per-site caches (300s TTL) so a fresh probe doesn't reuse stale failures
+	run_once -r -i "aba:check:api.openshift.com" 2>/dev/null || true
+	run_once -r -i "aba:check:mirror.openshift.com" 2>/dev/null || true
+	run_once -r -i "aba:check:registry.redhat.io" 2>/dev/null || true
 }
 
 # Re-check internet with TTL cache (returns cached result within TTL seconds)
@@ -3278,6 +3282,10 @@ aba_inet_check_cached() {
 	local ttl="${1:-30}"
 	run_once -i "aba:check:internet" -t "$ttl" -- \
 		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet" 2>/dev/null
+	# If no result exists yet (first call or after TTL expiry), wait for the check to complete
+	if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
+		run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+	fi
 	run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'
 }
 

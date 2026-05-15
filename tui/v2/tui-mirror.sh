@@ -910,7 +910,8 @@ _operator_search() {
 		state="off"
 		[[ -n "${OP_BASKET[$op_name]:-}" ]] && state="on"
 		items+=("$op_name" "${display_name:--}" "$state")
-	done < <(grep -iF "$query" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null | sort -u | head -50)
+	# -h suppresses filename prefix when grep matches across multiple index files
+	done < <(grep -hiF "$query" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null | sort -u | head -50)
 
 	if [[ ${#items[@]} -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --msgbox "$(printf "$TUI2_MSG_NO_SEARCH_RESULTS" "$query")" 0 0
@@ -1023,7 +1024,8 @@ _ensure_offline_prereqs() {
 		--infobox "Downloading offline files (CLI tools + registry installers)...\n\nPlease wait." 0 0
 
 	# cli-download-all.sh uses per-tool run_once IDs (cli:download:<tool>[:<ver>])
-	if ! bash -lc "cd '$ABA_ROOT' && scripts/cli-download-all.sh --wait" >>"$_TUI_LOG_FILE" 2>&1; then
+	# Close flock fd so child processes don't inherit and hold the TUI lock
+	if ! bash -lc "cd '$ABA_ROOT' && scripts/cli-download-all.sh --wait" {ABA_TUI_FLOCK_FD}>&- >>"$_TUI_LOG_FILE" 2>&1; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
 			--msgbox "Failed to download CLI tools.\n\nCheck internet connectivity and try again." 0 0
 		return 1

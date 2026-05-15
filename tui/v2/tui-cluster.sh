@@ -763,7 +763,7 @@ Toggle 'Type' or 'Platform' to cycle options.
 --- Page 3: Interfaces ---
 • Ports: host NIC name(s) (e.g. ens1f0)
 • VLAN: optional VLAN tag
-• Connection: mirror | proxy | direct
+• Image source: mirror | proxy | direct
 
 --- Page 4: VM Resources (vmw/kvm only) ---
 • CPUs / Memory: per-VM allocation
@@ -1068,26 +1068,31 @@ _cluster_page_iface() {
 	# Normalize empty connection to "mirror" (ABA default)
 	[[ -z "$cl_connection" ]] && cl_connection="mirror"
 	while :; do
-		local conn_display="$cl_connection"
-		if [[ "$cl_connection" == "mirror" || -z "$cl_connection" ]]; then
-			local _rh="" _rp=""
-			if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-				source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
-				_rh="${reg_host:-}" _rp="${reg_port:-}"
-			fi
-			if [[ -n "$_rh" ]]; then
-				conn_display="mirror (${_rh}${_rp:+:$_rp})"
-			else
-				conn_display="mirror"
-			fi
-		fi
+		local conn_display=""
+		case "$cl_connection" in
+			mirror|"")
+				local _rh="" _rp=""
+				if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+					source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+					_rh="${reg_host:-}" _rp="${reg_port:-}"
+				fi
+				if [[ -n "$_rh" ]]; then
+					conn_display="mirror (${_rh}${_rp:+:$_rp})"
+				else
+					conn_display="mirror"
+				fi
+				;;
+			proxy)  conn_display="proxy (public registries)" ;;
+			direct) conn_display="direct (public registries)" ;;
+			*)      conn_display="$cl_connection" ;;
+		esac
 
 		# Build items — add MAC row for bare-metal
 		local iface_items=(
-			"P" "Ports:       $cl_ports"
-			"V" "VLAN:        ${cl_vlan:-(none)}"
-			"C" "Connection:  $conn_display"
-			"K" "SSH key:     ${cl_ssh_key:-~/.ssh/id_rsa}"
+			"P" "Ports:        $cl_ports"
+			"V" "VLAN:         ${cl_vlan:-(none)}"
+			"C" "Image source: $conn_display"
+			"K" "SSH key:      ${cl_ssh_key:-~/.ssh/id_rsa}"
 		)
 		if [[ "$cl_platform" == "bm" ]]; then
 			local mac_count=0
@@ -1105,7 +1110,7 @@ _cluster_page_iface() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_IFACE" 0 55 0 \
+			--menu "$TUI2_MSG_CLUSTER_IFACE" 0 0 0 \
 			"${iface_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -1116,10 +1121,10 @@ _cluster_page_iface() {
 "• Ports: network port names (e.g. ens160, ens1f0)
   Multiple ports create a bond (e.g. ens1f0,ens1f1)
 • VLAN: optional 802.1Q VLAN tag
-• Connection: how the cluster reaches the internet
-  - mirror: fully through the mirror registry (default)
-  - proxy: cluster uses an HTTP proxy
-  - direct: cluster has direct internet access"
+• Image source: where the cluster pulls container images from
+  - mirror: from the local mirror registry (default)
+  - proxy: from public registries via HTTP proxy
+  - direct: from public registries with direct internet"
 			   continue ;;
 			1) return 1 ;;  # Back (Cancel button)
 			255) return 255 ;;
@@ -1419,12 +1424,16 @@ _cluster_execute() {
 	# Operator count
 	local _op_count="${#OP_BASKET[@]}"
 
-	# Connection display (enrich "mirror" with registry FQDN)
+	# Image source display (enrich with details)
 	local _conn_disp="${cl_connection:-mirror}"
-	if [[ "$_conn_disp" == "mirror" ]]; then
-		local _srh="${reg_host:-}" _srp="${reg_port:-}"
-		[[ -n "$_srh" ]] && _conn_disp="mirror (${_srh}${_srp:+:$_srp})"
-	fi
+	case "$_conn_disp" in
+		mirror)
+			local _srh="${reg_host:-}" _srp="${reg_port:-}"
+			[[ -n "$_srh" ]] && _conn_disp="mirror (${_srh}${_srp:+:$_srp})"
+			;;
+		proxy)  _conn_disp="proxy (public registries)" ;;
+		direct) _conn_disp="direct (public registries)" ;;
+	esac
 
 	local summary="Review — Confirm before installing:\n\n"
 	summary+="  Cluster:      $fqdn\n"
@@ -1453,7 +1462,7 @@ _cluster_execute() {
 	summary+="\n"
 	summary+="  Ports:        ${cl_ports:-(default)}\n"
 	[[ -n "$cl_vlan" ]] && summary+="  VLAN:         $cl_vlan\n"
-	summary+="  Connection:   $_conn_disp\n"
+	summary+="  Image source: $_conn_disp\n"
 	summary+="  SSH key:      ${cl_ssh_key:-~/.ssh/id_rsa}\n"
 	summary+="\n"
 	if [[ "$cl_platform" != "bm" ]]; then
@@ -1857,7 +1866,8 @@ _day2_ssh() {
 	echo
 
 	cd "$ABA_ROOT"
-	bash -c "aba -d $SELECTED_CLUSTER ssh" || true
+	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
+	bash -c "aba -d $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&- || true
 
 	echo
 	read -rp "Press ENTER to return to TUI..."
