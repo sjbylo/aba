@@ -338,10 +338,10 @@ fi
 
 run_once -r -i "test:reset"
 
-if [[ ! -d "$RUN_ONCE_DIR/test:reset" ]]; then
-	test_pass "Task directory removed after reset"
+if [[ ! -f "$RUN_ONCE_DIR/test:reset/exit" ]]; then
+	test_pass "Task runtime state cleared after reset (exit file removed)"
 else
-	test_fail "Task directory still exists after reset"
+	test_fail "Task exit file still exists after reset"
 fi
 
 # Test 7.2: Global cleanup

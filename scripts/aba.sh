@@ -1276,8 +1276,8 @@ if [ -f .bundle ]; then
 	# Start extracting all CLI binaries and mirror-registry in parallel (tarballs already in bundle)
 	# These run in background and will be ready when user runs commands that need them
 	
-	scripts/cli-install-all.sh                                    # Start CLI extractions (background)
-	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start mirror-registry extraction (background)
+	scripts/cli-install-all.sh                                    # Start: CLI extractions. Wait: ensure_oc() etc in include_all.sh
+	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start: Quay extract. Wait: ensure_quay_registry() in include_all.sh
 
 	echo_yellow "ABA install bundle detected for OpenShift v$ocp_version."
 
@@ -1352,7 +1352,8 @@ fi
 #else
 
 	aba_debug "Fetching OpenShift version data in background ..."
-	# Download openshift version data in the background.  'bash -lc ...' used here 'cos can't setsid a function.
+	# Start: fetch OCP versions in background. 'bash -lc' needed because can't setsid a function.
+	# Wait: ~80 lines below (run_once -w ocp:$channel:latest_version*)
 	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
 	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
 	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
@@ -1360,6 +1361,7 @@ fi
 	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
 
+	# Start: extract oc-mirror in background. Wait: ensure_oc_mirror() in include_all.sh
 	aba_debug "Downloading oc-mirror in the background ..."
 	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- make -sC cli oc-mirror
 
@@ -1434,7 +1436,7 @@ fi
 #else
 
 	echo_white -n "Fetching available versions ..."
-	# Wait for only the data we need (quietly - message already shown above)
+	# Wait: block for version data started ~80 lines above (run_once -i ocp:$channel:*)
 	if ! run_once -w -q -i ocp:$ocp_channel:latest_version; then
 		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version)
 		aba_abort "Failed to fetch latest OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
@@ -1589,7 +1591,7 @@ download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
-# Initiate download of mirror-install and docker-reg image
+# Start: download mirror-registry and docker-reg images. Wait: ensure_quay_registry() in include_all.sh
 run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries
 
 # make & jq are needed below and in the next steps 

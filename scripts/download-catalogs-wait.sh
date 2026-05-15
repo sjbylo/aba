@@ -19,7 +19,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Extract major.minor version (e.g., 4.20.8 -> 4.20)
 ocp_ver_short="${ocp_version%.*}"
 
-# Wait for each catalog individually
+# Wait: catalogs started by download_all_catalogs() in include_all.sh
 for catalog in redhat-operator certified-operator community-operator; do
 	task_id="catalog:${ocp_ver_short}:${catalog}"
 

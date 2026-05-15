@@ -42,7 +42,8 @@ do
 
 	aba_debug "$out: item=$item"
 	aba_debug "run_once $ro_opt -i \"cli:install:$item\" -- make -sC cli $item"
-	run_once $ro_opt -i "cli:install:$item" -- make -sC cli $item  # This is non-blocking
+	# Start: CLI install in background. Wait: ensure_oc(), ensure_openshift_install() etc in include_all.sh
+	run_once $ro_opt -i "cli:install:$item" -- make -sC cli $item
 done
 
 exit 0
