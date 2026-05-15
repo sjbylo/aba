@@ -1869,40 +1869,116 @@ _day2_upgrade() {
 		return 1
 	fi
 
+	# Fetch available versions
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
+	local _versions_raw
+	_versions_raw=$(aba -d "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
+
+	# Parse version lines (format: "X.Y.Z" or lines containing semver patterns)
+	local _versions=()
+	while IFS= read -r line; do
+		local ver
+		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		[[ -n "$ver" ]] && _versions+=("$ver")
+	done <<< "$_versions_raw"
+
+	# De-duplicate and sort descending
+	local _sorted=()
+	if [[ ${#_versions[@]} -gt 0 ]]; then
+		while IFS= read -r v; do
+			_sorted+=("$v")
+		done < <(printf '%s\n' "${_versions[@]}" | sort -t. -k1,1nr -k2,2nr -k3,3nr | uniq)
+	fi
+
+	if [[ ${#_sorted[@]} -eq 0 ]]; then
+		local _upgrade_hint=""
+		case "$_TUI_MODE" in
+			CONNO)
+				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
+				;;
+			DISCO)
+				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config on the connected host\n  2. Save images to disk (main menu → S)\n  3. Transfer and Load images (main menu → L)\n  4. Run Day-2 to apply changes (main menu → D)\n  5. Then retry Upgrade here"
+				;;
+			*)
+				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."
+				;;
+		esac
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
+			--msgbox "No available upgrade versions found for $SELECTED_CLUSTER_DISPLAY.\n\n$_upgrade_hint" 0 0
+		return 1
+	fi
+
 	while :; do
+		if [[ ${#_sorted[@]} -gt 0 ]]; then
+			# Build menu from available versions
+			local items=()
+			local idx=0
+			for v in "${_sorted[@]}"; do
+				local tag
+				tag=$(echo "${v}" | cut -d. -f1-2)
+				if [[ $idx -eq 0 ]]; then
+					items+=("$v" "(newest)")
+				else
+					items+=("$v" "")
+				fi
+				idx=$(( idx + 1 ))
+			done
+			items+=("M" "Manual entry...")
+
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
+				--ok-label "Upgrade" \
+				--cancel-label "$TUI2_BTN_BACK" \
+				--help-button \
+				--menu "Select target version for $SELECTED_CLUSTER_DISPLAY:" 0 0 0 \
+				"${items[@]}" \
+				2>"$_TUI_TMP"
+			local rc=$?
+
+			case $rc in
+				2)
+					# Help — show raw output from dry-run
+					dlg --backtitle "$(ui_backtitle)" --title "Available Versions (raw)" \
+						--msgbox "$_versions_raw" 0 0
+					continue
+					;;
+				1|255) return 1 ;;
+				0) ;;
+			esac
+
+			local choice
+			choice=$(<"$_TUI_TMP")
+
+			if [[ "$choice" == "M" ]]; then
+				# Fall through to manual entry below
+				:
+			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $choice" \
+					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
+				return
+			fi
+		fi
+
+		# Manual entry (fallback or explicit choice)
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
 			--ok-label "Upgrade" \
 			--cancel-label "$TUI2_BTN_BACK" \
-			--extra-button --extra-label "List Available" \
-			--inputbox "Target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Use 'List Available' to see versions in the mirror)" 0 60 "" \
+			--inputbox "Enter target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Format: X.Y.Z, e.g. 4.21.15)" 0 0 "" \
 			2>"$_TUI_TMP"
-		local rc=$?
+		[[ $? -ne 0 ]] && return 1
 
-		case $rc in
-			0)
-				local target_ver
-				target_ver=$(<"$_TUI_TMP")
-				if [[ -z "$target_ver" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
-					continue
-				fi
-				if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z (e.g. 4.21.15)" 0 0
-					continue
-				fi
-				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $target_ver" \
-					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
-				return
-				;;
-			3)
-				# List available versions (--dry-run)
-				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --dry-run" \
-					"Available Versions: $SELECTED_CLUSTER_DISPLAY"
-				;;
-			*)
-				return 1
-				;;
-		esac
+		local target_ver
+		target_ver=$(<"$_TUI_TMP")
+		if [[ -z "$target_ver" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
+			continue
+		fi
+		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z (e.g. 4.21.15)" 0 0
+			continue
+		fi
+		confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $target_ver" \
+			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
+		return
 	done
 }
 
