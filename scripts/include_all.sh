@@ -2129,7 +2129,13 @@ run_once() {
 			fi
 		fi
 
-		rm -rf "$id_dir"
+		# Surgical cleanup: remove runtime/cached state but preserve task identity
+		# Identity files (cmd.sh, cmd, cwd) allow run_once -w to reload and
+		# re-execute a task after TTL expiry without the caller providing a command.
+		rm -f "$id_dir"/{pid,lock,exit}
+		# Rotate logs for one generation of diagnostic history
+		[[ -f "$id_dir/log.out" ]] && mv -f "$id_dir/log.out" "$id_dir/log.out.prev" || true
+		[[ -f "$id_dir/log.err" ]] && mv -f "$id_dir/log.err" "$id_dir/log.err.prev" || true
 	}
 
 	# --- GLOBAL CLEAN ---
@@ -2359,9 +2365,10 @@ run_once() {
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
 				_log_history "SIGNAL rc=$exit_code (restarting)"
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
-				rm -rf "$id_dir"
-				mkdir -p "$id_dir"
-				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				# Surgical cleanup: preserve cmd.sh/cmd/cwd so wait can reload the command
+				rm -f "$id_dir"/{pid,lock,exit}
+				[[ -f "$id_dir/log.out" ]] && mv -f "$id_dir/log.out" "$id_dir/log.out.prev" || true
+				[[ -f "$id_dir/log.err" ]] && mv -f "$id_dir/log.err" "$id_dir/log.err.prev" || true
 				# Fall through to restart logic below
 			fi
 		fi
@@ -2369,8 +2376,15 @@ run_once() {
 		if [[ ! -f "$exit_file" ]]; then
 			exec 9>>"$lock_file"
 			if flock -n 9; then
-				# Lock is free => not running => implicitly start (requires command)
+				# Lock is free => not running => implicitly start
 				# Keep FD 9 open -- lock transfers to _start_task's subshell
+				if [[ ${#command[@]} -eq 0 ]]; then
+					# No command on CLI -- try reloading from saved cmd.sh
+					if [[ -f "$id_dir/cmd.sh" ]]; then
+						source "$id_dir/cmd.sh"
+						aba_debug "Reloaded saved command for restart: ${command[*]}"
+					fi
+				fi
 				if [[ ${#command[@]} -eq 0 ]]; then
 					exec 9>&-   # Release lock on error path
 					# Only show internal diagnostic when not in quiet mode;
@@ -2535,8 +2549,9 @@ download_all_catalogs() {
 
 	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
 
+	# Start: catalog downloads in background (with optional throttle-wait inline).
+	# Wait: wait_for_all_catalogs() below, or download-catalogs-wait.sh (via Makefile)
 	for catalog in "${catalogs[@]}"; do
-		# If at max capacity, wait for the earliest to finish before launching next
 		if (( running >= max_parallel )); then
 			local wait_idx=$(( running - max_parallel ))
 			run_once -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
@@ -2574,8 +2589,7 @@ wait_for_all_catalogs() {
 	
 	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_secs}s)"
 	
-	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
-	
+	# Wait: block for catalogs started by download_all_catalogs() above
 	if ! run_once -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
 		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
 		return 1
@@ -3052,16 +3066,14 @@ ensure_sigstore_mirror_config() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
-	# Wait for oc-mirror download to complete before extracting
-	# (cli-download-all.sh starts downloads in background; extracting a
-	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
-	# Provide command so run_once can start the download if task was reset
+	# Wait: cli-download-all.sh starts downloads; aba.sh starts extract ($TASK_OC_MIRROR)
 	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
 	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
 	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
 }
 
 # Ensure oc CLI is installed in ~/bin
+# Wait: cli-download-all.sh and cli-install-all.sh start downloads/installs in background
 ensure_oc() {
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_oc: ocp_version not set, skipping"
@@ -3072,6 +3084,7 @@ ensure_oc() {
 }
 
 # Ensure openshift-install is installed in ~/bin
+# Wait: cli-download-all.sh and cli-install-all.sh start downloads/installs in background
 ensure_openshift_install() {
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
@@ -3310,6 +3323,7 @@ ensure_butane() {
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
+# Wait: aba.sh starts $TASK_QUAY_REG and $TASK_QUAY_REG_DOWNLOAD in background
 ensure_quay_registry() {
 	aba_debug "ensure_quay_registry: installing mirror-registry"
 	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
@@ -3346,12 +3360,12 @@ check_internet_connectivity() {
 		need_check=true
 	fi
 	
-	# Start all three checks in parallel (lightweight curl HEAD requests, 5-min TTL)
+	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
 	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
 	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
 	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
-	# Now wait for all three and check results (quietly, no waiting messages)
+	# Wait: block for the 3 checks started above
 	FAILED_SITES=""
 	ERROR_DETAILS=""
 	
