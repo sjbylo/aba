@@ -367,44 +367,61 @@ kvm_running_vms() {
 	done
 }
 
+# Shared sanitizer for normalize-*-conf() pipelines.  Reads config lines from
+# stdin, cleans them up, and prepends "export " to each line.
+#
+# Steps:
+#   1. Remove full-line comments (lines starting with optional whitespace then #)
+#   2. Delete blank/whitespace-only lines
+#   3. Strip leading whitespace (config files may be indented)
+#   4. Strip trailing whitespace
+#   5. Strip trailing comments outside single-quoted values
+#      e.g. reg_pw='pass#word' # comment  ->  reg_pw='pass#word'
+#      The regex skips over paired single-quote groups so # inside quotes is preserved
+#   6. Strip trailing whitespace again (residue left after comment removal)
+#   7. Prepend "export " to each surviving line
+_normalize_export() {
+	sed -E \
+		-e "s/^\s*#.*//g" \
+		-e '/^[ \t]*$/d' \
+		-e "s/^[ \t]*//g" \
+		-e "s/[ \t]*$//g" \
+		-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
+		-e "s/[ \t]*$//g" \
+		-e "s/^/export /"
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.
-	# Normalize or sanitize the config file
-	# Remove all chars from lines with <white-space>#<anything>
-	# Remove all white-space lines
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Remove all leading and trailing white-space
-	# Remove all #commends except for pass="b#c" values -> 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/'
-	# Correct ask=? which must be either =1 or = (empty)
-	# Extract machine_network and prefix_length from the CIDR notation
-	# Ensure only one arg after 'export'
-	# Prepend "export "
 	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf is missing, output a safe default, "ask=true"
 
-	cat aba.conf | \
+	# Sanitize config, normalize boolean flags (users may write =0/=1/=true/=false),
+	# and split machine_network CIDR into two vars (machine_network + prefix_length).
+	_normalize_export < aba.conf | \
 		sed -E	\
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
-		awk '{print $1}' | \
-		sed	-e "s/^/export /g";
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g'
 
-			#-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	echo 'export verify_conf=${verify_conf:-all}'  # Default undefined/empty to "all"
+	# Resolve derived values immediately — deferred expansion like ${ocp_version%%.*}
+	# breaks when callers use eval "$(normalize-aba-conf)" because the shell expands
+	# the ${} before eval processes the exports.
+	local _ocp_ver
+	_ocp_ver=$(sed -n 's/^[[:space:]]*ocp_version=//p' aba.conf | sed -E 's/[[:space:]]*#.*//; s/[[:space:]]*$//' | head -1)
+
+	# Default verify_conf to "all" if not set or empty in config
+	grep -q '^verify_conf=\S' aba.conf 2>/dev/null || echo "export verify_conf=all"
 
 	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
 
-	# Derived variable: OCP major version number (e.g. "4" from "4.21.10", "5" from "5.0.3").
+	# Derived variable: OCP major version number (e.g. "4" from "4.21.14", "5" from "5.0.3").
 	# Used for CDN paths (openshift-v4/, openshift-v5/), art-dev repos, registry paths, etc.
-	echo 'export ocp_major=${ocp_version%%.*}'
+	[ "$_ocp_ver" ] && echo "export ocp_major=${_ocp_ver%%.*}"
 }
 
 warn_if_cluster_unstable() {
@@ -544,34 +561,19 @@ normalize-mirror-conf()
 {
 	# Output only the values from mirror.conf (with defaults for backwards compat).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
-	# Normalize or sanitize the config file
-	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
-	# Ensure data_disk has ~ masked in each case of: ^data_dir=$ ^data_disk=~ ^data_disk=  
-	# Ensure reg_ssh_user has a value
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
-	# Prepend "export "
-	# reg_path must not start with a /, if so, remove it
-	# Force tls_verify=true 
-	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
 
 	grep -q '^reg_vendor=' mirror.conf 2>/dev/null	|| echo export reg_vendor=auto
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
 	(
-		cat mirror.conf | \
+		# Sanitize config, then:
+		#   - Mask empty/~/whitespace data_dir to \~ (expanded on remote host later)
+		#   - Ensure reg_path starts with / (user convenience: reg_path=mypath -> /mypath)
+		_normalize_export < mirror.conf | \
 			sed -E	\
-				-e "s/^\s*#.*//g" \
-				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-				-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
-				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
-				-e 's#^reg_path=([^/ \t])#reg_path=/\1#g' \
-				| \
-			awk '{print $1}' | \
-			sed	-e "s/^/export /g"
-
-		#echo export tls_verify=true
+				-e 's/^(export data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
+				-e 's#^(export reg_path=)([^/ \t])#\1/\2#g'
 	)
 
 	# Phase 3 (ADR-007): override immutable fields from installed state
@@ -581,9 +583,6 @@ normalize-mirror-conf()
 		_state_override_mirror "$_mn"
 	fi
 }
-
-				#-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
-				#-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
 
 verify-mirror-conf() {
 	[ "$verify_conf" = "off" ] && return 0
@@ -617,37 +616,23 @@ normalize-cluster-conf()
 {
 	# Output only the values from cluster.conf (with defaults for backwards compat).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
-	# Normalize or sanitize the config file
-	# Remove all chars from lines with <white-space>#<anything>
-	# Remove all white-space lines
-	# Remove all leading and trailing white-space
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Extract machine_network and prefix_length from the CIDR notation
-	# Ensure only one arg after 'export'
-	# Prepend "export "
-	# Adjust new int_connection value for compatibility
 
 	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
-	cat cluster.conf | \
+	# Sanitize config, then:
+	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
+	#   - Normalize old int_connection=none to empty (backward compat)
+	_normalize_export < cluster.conf | \
 		sed -E	\
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' \
-			-e 's/^int_connection=none/int_connection= /g' | \
-		awk '{print $1}' | \
-		sed -e "s/^/export /g";
-
-	#	awk -F= '{printf sep $2; sep=","} END {print ""}' ports.conf | sed 's/^/ports=/' | \
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
+			-e 's/^(export )int_connection=none/\1int_connection= /g'
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
 	# Convert 'port0/1=' to 'ports=' for backwards compatibility
-	#grep -q ^ports= cluster.conf 		|| echo export ports=$(cat cluster.conf | sed -n '/^port[0-9]=/s/.*=//p' | awk '{print $1}' | paste -sd, -)
 	grep -q ^ports= cluster.conf 		|| echo export ports=$(grep -E "^port[01]=\S" cluster.conf | cut -d= -f2 | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
@@ -993,25 +978,11 @@ verify-cluster-conf() {
 
 normalize-vmware-conf()
 {
-        # Normalize or sanitize the config file
-	# Determine if ESXi or vCenter
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Ensure only one arg after 'export'
-	# Prepend "export "
-	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
-
-	# Removed this line since GOVC_PASSWORD='<my password here>' was getting cut and failing to parse
-	#awk '{print $1}' | \
+	# Determine if ESXi or vCenter and adjust VC_FOLDER accordingly
 
 	[ ! -s vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
 
-        vars=$(cat vmware.conf | \
-		sed -E	\
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
-			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
-                sed	-e "s/^/export /g")
+	vars=$(_normalize_export < vmware.conf)
 	eval "$vars"
 	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
 	# FIXME: Is this the right place to check?!
@@ -1060,12 +1031,7 @@ normalize-kvm-conf()
 	[ ! -s kvm.conf ] && return 0
 
 	local vars
-	vars=$(cat kvm.conf | \
-		sed -E \
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" | \
-		sed -e "s/^/export /g")
+	vars=$(_normalize_export < kvm.conf)
 	eval "$vars"
 	echo "$vars"
 
@@ -1646,6 +1612,11 @@ replace-value-conf() {
 	# -n <string> : name of value to change
 	# -v <string> : new value. If missing, remove the value
 	# -f <files>
+	# -q          : quiet (debug-level messages only)
+	#
+	# Handles single-quoted old values (e.g. reg_pw='p4ssw0rd').
+	# Auto-quotes new values that contain spaces or '#'.
+	# If the caller already pre-quotes (e.g. -v "'password'"), no double-quoting occurs.
 
 	aba_debug "Calling: replace-value-conf() $*"
 
@@ -1684,33 +1655,52 @@ replace-value-conf() {
 		esac
 	done
 
+	# Auto-quote values containing spaces or '#' (unquoted '#' starts a comment in bash).
+	# Skip if the caller already pre-quoted (value starts and ends with single quote).
+	local _write_value="$value"
+	if [ -n "$value" ]; then
+		if [[ "$value" == \'*\' ]]; then
+			# Already single-quoted by caller (e.g. -v "'password'")
+			_write_value="$value"
+		elif [[ "$value" == *[[:space:]]* || "$value" == *"#"* ]]; then
+			_write_value="'$value'"
+		fi
+	fi
+
 	# Step through the files by priority...
 	for f in $files
 	do
 		[ ! -s "$f" ] && continue # Try next file
 
-		aba_debug "Replacing config value [$name] with [$value] in file: $f" >&2
+		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
 
 		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
 		# ... change nothing!
-		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
-			[ "$value" ] && aba_debug "Value ${name}=${value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
+		if grep -q -E "^${name}=${_write_value}[[:space:]]*(#.*)?$" "$f"; then
+			[ "$value" ] && aba_debug "Value ${name}=${_write_value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
 
 			return 0
 		fi
 
 		# Key must exist in file (active or commented out) for sed to work
-		if ! grep -q -E "^[# ]*${name}=" $f; then
+		if ! grep -q -E "^[# ]*${name}=" "$f"; then
 			aba_debug "Key [$name] not found in file $f — skipping" >&2
 			continue
 		fi
 
-		sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
+		# Trailing whitespace + comment is captured in \1 and preserved.
+		# Uses | as sed delimiter (| is forbidden in config values).
+		if grep -q "^[# ]*${name}='" "$f"; then
+			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_write_value}\1|g" "$f"
+		else
+			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_write_value}\1|g" "$f"
+		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
 		fi
 
 		return 0
