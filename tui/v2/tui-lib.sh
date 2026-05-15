@@ -471,7 +471,8 @@ _exec_in_tui() {
 	box_width=$((term_width - 2))
 
 	trap : INT
-	{ echo "Executing: $cmd"; echo; PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" 2>&1; } | tee "$output_file" | \
+	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
+	{ echo "Executing: $cmd"; echo; PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
 		sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--progressbox $box_height $box_width
@@ -536,7 +537,8 @@ _exec_in_terminal() {
 	echo "═══════════════════════════════════════════════════════════════"
 	echo
 
-	bash -c "$cmd"
+	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
+	bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
 	local exit_code=$?
 
 	# Run post-command hook (non-blocking background work while user reads output)
