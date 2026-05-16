@@ -217,7 +217,7 @@ TUI2_MSG_PLATFORM_CONFIG_MISSING="%s configuration not found.\n\nExpected: %s\nR
 # Prompt / Message Text — Mirror / ISC
 # =============================================================================
 
-TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration...\n\nPlease wait."
+TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration...\n\nDownloading operator catalog indexes (first time may take 1-2 minutes).\nPlease wait."
 TUI2_MSG_ISC_NOT_FOUND="ImageSet configuration file not found.\n\nFile: %s"
 TUI2_MSG_ISC_SAVED="ImageSet configuration saved.\n\nABA will not overwrite your edits.\nUse 'Reset' to revert to auto-generated."
 TUI2_MSG_ISC_RESET="ImageSet configuration reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
