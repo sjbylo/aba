@@ -779,7 +779,7 @@ See individual bugs — same patterns apply to KVM:
 
 **Total bugs found: 43** (Bug #10 invalidated, net 42 confirmed bugs)
 
-## Bug #45: `replace-value-conf` corrupts values containing spaces (SYSTEMIC)
+## Bug #45: ~~FIXED~~ `replace-value-conf` corrupts values containing spaces (SYSTEMIC)
 **File:** `scripts/include_all.sh` line 1708
 **Severity:** CRITICAL — Data corruption
 **Verified:** YES — Reproduced via CLI and TUI
@@ -837,7 +837,7 @@ But `KVM_GRAPHICS_ARGS` is wrapped in single quotes (line 455): `replace-value-c
 
 ---
 
-## Bug #47: VMware Network value space corruption via TUI form
+## Bug #47: ~~FIXED~~ VMware Network value space corruption via TUI form
 **File:** `tui/v2/tui-cluster.sh` line 309
 **Severity:** CRITICAL — Data corruption (specific instance of Bug #45)
 **Verified:** YES — Reproduced via CLI
@@ -1503,7 +1503,9 @@ The validation logic itself is correct (checks `$master_mem` / `$worker_mem`), b
 
 # Session 2 — New Bugs Found (2026-05-15, 18:00+)
 
-## Bug #79: ~~FIXED~~ Internet check (aba_inet_check_cached) systematically fails after TTL expiry with `set -o pipefail`
+## Bug #79b: ~~FIXED~~ Internet check (aba_inet_check_cached) systematically fails after TTL expiry with `set -o pipefail`
+
+> **Note:** Numbered #79b to avoid collision with Bug #79 above (copy-paste error in verify-cluster-conf). This is a DIFFERENT bug found in Session 2.
 
 **Severity**: HIGH — blocks core TUI functionality
 
@@ -1515,7 +1517,7 @@ The validation logic itself is correct (checks `$master_mem` / `$worker_mem`), b
 
 **Verified**: YES — via CLI test simulating the `run_once` flow and via TUI observation.
 
-## Bug #80: ~~FIXED~~ Internet check failure blocks TUI operations (cascading from Bug #79)
+## Bug #80: ~~FIXED~~ Internet check failure blocks TUI operations (cascading from Bug #79b)
 
 **Severity**: CRITICAL — makes CONNO workflow unusable
 
@@ -1541,35 +1543,13 @@ The validation logic itself is correct (checks `$master_mem` / `$worker_mem`), b
 
 **Fix hint**: Set `FD_CLOEXEC` on the lock FD before spawning subprocesses, or close the FD explicitly in child processes.
 
-## Bug #82: VMware password displayed in plaintext in configuration inputbox
+## Bug #82: ~~DUPLICATE OF Bug #4~~ VMware password displayed in plaintext in configuration inputbox
 
-**Severity**: MEDIUM — security concern
+**DUPLICATE** — Same issue as Bug #4. See Bug #4 for details.
 
-**Location**: `tui/v2/tui-cluster.sh` line 292
+## Bug #83: ~~DUPLICATE OF Bug #38~~ `_cluster_load_conf` — prefix_length/machine_network order dependency
 
-**Root cause**: The password field uses `--inputbox` (plaintext) instead of `--passwordbox` (masked). The current password value `$v_pass` is displayed in clear text in the input field.
-
-**Code**: `dlg --backtitle "$(ui_backtitle)" --inputbox "Password:" 0 60 "$v_pass" 2>"$_TUI_TMP"`
-
-**Reproduction**: In cluster wizard, reach VMware config → select Password → see plaintext password.
-
-**Verified**: YES — code inspection confirmed. (Same as previously reported Bug #5 but re-verified in Session 2.)
-
-## Bug #83: `_cluster_load_conf` — prefix_length/machine_network order dependency
-
-**Severity**: LOW — depends on config file key ordering
-
-**Location**: `tui/v2/tui-cluster.sh` lines 86-90
-
-**Root cause**: If `prefix_length` appears before `machine_network` in `cluster.conf`, the line `cl_network="${cl_network}/${val}"` produces `/${val}` (e.g., `/24`). When `machine_network` is subsequently read, it overwrites `cl_network`, losing the prefix. The config parser assumes `machine_network` appears before `prefix_length` in the file.
-
-**Code**:
-```bash
-machine_network)  cl_network="$val" ;;
-prefix_length)    [[ -n "$val" && "$cl_network" != */* ]] && cl_network="${cl_network}/${val}" ;;
-```
-
-**Verified**: Code inspection only — would need a cluster.conf with reversed key order to reproduce.
+**DUPLICATE** — Same issue as Bug #38. See Bug #38 for details.
 
 ## Bug #84: VIP auto-detection uses default cluster name "ocp" instead of user's chosen name
 
@@ -1583,29 +1563,13 @@ prefix_length)    [[ -n "$val" && "$cl_network" != */* ]] && cl_network="${cl_ne
 
 **Verified**: Code inspection confirmed. VIP auto-detect runs once at init time only.
 
-## Bug #85: Ctrl+C silently ignored during `_exec_in_tui` command execution
+## Bug #85: ~~DUPLICATE OF Bug #42~~ Ctrl+C silently ignored during `_exec_in_tui` command execution
 
-**Severity**: MEDIUM — user cannot cancel long-running operations
+**DUPLICATE** — Same issue as Bug #42 (and related Bug #18). See Bug #42 for details.
 
-**Location**: `tui/v2/tui-lib.sh` line 473
+## Bug #86: ~~DUPLICATE OF Bug #3~~ Platform "bm" not passed as `--platform` flag
 
-**Root cause**: `trap : INT` is set before the execution pipeline, making Ctrl+C a no-op. The user cannot cancel a long-running `aba sync` or `aba cluster install` operation from within the TUI progress box. The only option is to kill the TUI process externally.
-
-**Code**: `trap : INT`
-
-**Verified**: Code inspection confirmed.
-
-## Bug #86: Platform "bm" not passed as `--platform` flag — causes wrong platform when aba.conf differs
-
-**Severity**: HIGH — cluster created with wrong platform
-
-**Location**: `tui/v2/tui-cluster.sh` line 1352
-
-**Root cause**: The condition `[[ "$cl_platform" != "bm" ]]` means `--platform bm` is NEVER added to the command. If `aba.conf` has `platform=vmw` but the user selects "bm" in the wizard, the cluster is created with `vmw` (from aba.conf) instead of `bm`.
-
-**Code**: `[[ -n "$cl_platform" && "$cl_platform" != "bm" ]] && cmd="$cmd --platform $cl_platform"`
-
-**Verified**: Code inspection confirmed. (Same as previously reported Bug #3.)
+**DUPLICATE** — Same issue as Bug #3. See Bug #3 for details.
 
 ## Bug #87: Connection field truncated on Interfaces page
 
@@ -1648,53 +1612,21 @@ The review page displays: "Master CPU: 8, Master Mem: 32 GB" but the actual VM i
 
 **Verified**: YES — observed in TUI install. `cluster.conf` confirmed: `master_cpu_count=10, master_mem=20, data_disk=500`.
 
-## Bug #90: TUI shows "Success" when install process is killed externally
+## Bug #90: ~~DUPLICATE OF Bug #44~~ TUI shows "Success" when install process is killed externally
 
-**Severity**: HIGH — misleading feedback
+**DUPLICATE** — Same issue as Bug #44. This entry adds `set -o pipefail` interaction detail and live reproduction evidence. See Bug #44 for details.
 
-**Location**: `tui/v2/tui-lib.sh` lines 473-478 (`_exec_in_tui`)
+## Bug #91: ~~DUPLICATE OF Bug #69~~ "Reset to auto-generated" ISC doesn't actually regenerate the file
 
-**Root cause**: When `openshift-install agent wait-for install-complete` is killed with SIGTERM (e.g., user kills the process externally), the pipeline in `_exec_in_tui` still reports exit code 0 via `PIPESTATUS[0]`. The TUI then shows "Success" (green title) instead of "FAILED". This is because the `bash -c "$tui_cmd"` subshell has `trap : INT` set, and the signal may propagate as a clean exit through the `aba` CLI wrapper and make target chain. Also, with `set -o pipefail`, the pipeline's exit status depends on all components — `tee` and `sed` and `dialog --progressbox` may all exit 0, masking the subshell's non-zero exit.
+**DUPLICATE** — Same issue as Bug #69. This entry adds the note that syncing immediately after reset uses the stale file. See Bug #69 for details.
 
-**Impact**: User sees "Success" and EXIT button after an interrupted/failed install. They may believe the cluster was successfully installed. No "Retry" option is offered.
+## Bug #92: ~~DUPLICATE OF Bug #71~~ Bundle path with spaces breaks the command
 
-**Reproduction**: Start cluster install via TUI → externally kill `openshift-install` process → TUI shows "Success" dialog with "Received interrupt signal" in the log.
+**DUPLICATE** — Same issue as Bug #71. See Bug #71 for details.
 
-**Verified**: YES — observed in TUI. Killed PID with `kill`, TUI displayed "Success" title despite "Received interrupt signal" message.
+## Bug #93: ~~DUPLICATE OF Bug #2~~ Dead code `_direct_operators()` with undefined variable
 
-## Bug #91: "Reset to auto-generated" ISC doesn't actually regenerate the file
-
-**Severity**: MEDIUM — user may sync/save with stale ISC
-
-**Location**: `tui/v2/tui-mirror.sh` lines 670-674
-
-**Root cause**: When the user selects "Reset to auto-generated" in the View/Edit ISC menu, the code only: (1) touches `.created` flag, (2) resets the `run_once` state with `run_once -r`. It does NOT trigger an actual ISC regeneration. The stale user-edited ISC file remains on disk. Regeneration only happens when `_persist_operator_basket` is called, which occurs on the NEXT entry into the "View ISC" menu.
-
-**Impact**: If the user resets the ISC and then immediately runs "Sync Images" or "Save Images", the old edited ISC file is used — not the regenerated default. The user sees "ImageSet configuration reset to auto-generated. It will be regenerated from current settings on next use." which implies deferred action, but doesn't warn that syncing right now uses the stale file.
-
-**Verified**: YES — code review confirms `run_once -r` only resets state without starting regeneration.
-
-## Bug #92: Bundle path with spaces breaks the command
-
-**Severity**: LOW — unlikely but possible user input
-
-**Location**: `tui/v2/tui-mirror.sh` line 1124
-
-**Root cause**: The bundle path `$bundle_path` is interpolated without quoting into the command string: `local cmd="aba bundle --out $bundle_path"`. This is then passed to `bash -c "$cmd"` via `confirm_and_execute`. If the user enters a path with spaces (e.g., `/tmp/my bundle`), the command becomes `aba bundle --out /tmp/my bundle`, which splits incorrectly.
-
-**Reproduction**: Mirror → Create Bundle → enter path with spaces like "/tmp/my bundle" → command fails silently or with wrong arguments.
-
-**Verified**: YES — code review confirms no quoting of `$bundle_path` in command string.
-
-## Bug #93: Dead code `_direct_operators()` with undefined variable
-
-**Severity**: LOW — dead code, no runtime impact unless called
-
-**Location**: `tui/v2/tui-direct.sh` lines 415-452
-
-**Root cause**: The `_direct_operators()` function is defined but never called from anywhere in the TUI codebase. Additionally, at line 438, it references `$_ver_short` which is undefined in this function's scope. The variable was `local` to `direct_wizard()` (line 101) and is not accessible in `_direct_operators()`. If this function were ever called, `_operator_search` would receive an empty string for the version parameter.
-
-**Verified**: YES — grep confirms function is never called; code review confirms `_ver_short` is out of scope.
+**DUPLICATE** — Same issue as Bug #2. See Bug #2 for details.
 
 ## Bug #94: Mirror config edits saved immediately even if user cancels
 
@@ -1708,19 +1640,9 @@ The review page displays: "Master CPU: 8, Master Mem: 32 GB" but the actual VM i
 
 ---
 
-## Bug #95: KVM `KVM_GRAPHICS_ARGS` wrapped in extra single quotes when saving to `kvm.conf`
+## Bug #95: ~~DUPLICATE OF Bug #46~~ KVM `KVM_GRAPHICS_ARGS` wrapped in extra single quotes
 
-**Severity**: MEDIUM — silently corrupts config value
-
-**Location**: `tui/v2/tui-cluster.sh` line 455
-
-**Root cause**: When the user edits the "Graphics args" field in the KVM configuration form, the value is saved with extra single quotes around it:
-```bash
-replace-value-conf -q -n KVM_GRAPHICS_ARGS -v "'$k_graphics'" -f "$conf_path"
-```
-This produces `KVM_GRAPHICS_ARGS='vnc,listen=0.0.0.0 --video virtio'` with the outer quotes from `replace-value-conf` PLUS the inner single quotes from the code. The resulting file would have double quoting. This is the same pattern as Bug #5 (VMware password) and Bug #46 (KVM field quoting).
-
-**Verified**: YES — code review confirms the `'$k_graphics'` wrapping at line 455.
+**DUPLICATE** — Same issue as Bug #46 (KVM field quoting inconsistency). See Bug #46 for details.
 
 ---
 
@@ -1790,47 +1712,17 @@ Note: This is a core ABA bug exposed through the TUI's generated command. The TU
 
 **Verified**: YES — observed during SNO installation: `aba.conf` updated correctly, `sno/cluster.conf` retained old NTP value.
 
-## Bug #100: VM resource inputs accept values below OpenShift minimums
+## Bug #100: ~~DUPLICATE OF Bug #62~~ VM resource inputs accept values below OpenShift minimums
 
-**Severity**: LOW (UX, leads to installation failure later)
+**DUPLICATE** — Same issue as Bug #62. See Bug #62 for details.
 
-**Location**: `tui/v2/tui-cluster.sh` lines 1269-1327 (`_cluster_page_vm`)
+## Bug #101: ~~DUPLICATE OF Bug #73~~ Operator basket marked dirty even when user makes no changes
 
-**Description**: All VM resource input fields (Master CPUs, Master Memory, Worker CPUs, Worker Memory) validate only that the entered value is a positive integer (`>= 1`). However, the help text documents minimum requirements: Master CPUs min 4, Master Memory min 16 GB, Worker CPUs min 2, Worker Memory min 8 GB. A user can enter `1` CPU or `2` GB memory and the TUI will accept it. The installation will then fail when OpenShift's resource requirements aren't met.
+**DUPLICATE** — Same issue as Bug #73 (and related Bug #23). See Bug #73 for details.
 
-**Verified**: YES — code review confirms all four fields use `[[ "$val" -lt 1 ]]` as the only lower bound check.
+## Bug #102: ~~DUPLICATE OF Bug #59~~ Removing an operator set deletes shared operators from other active sets
 
-## Bug #101: Operator basket marked dirty even when user makes no changes
-
-**Severity**: LOW (performance, unnecessary ISC regeneration)
-
-**Location**: `tui/v2/tui-mirror.sh` lines 762-772 (`_operator_menu`)
-
-**Description**: When the user selects "Select Operator Sets" (option 1), "Search Operator Names" (option 2), or "View/Edit Basket" (option 3) from the operator menu, `_OP_BASKET_DIRTY=true` is set unconditionally BEFORE `_persist_operator_basket` is called — even if the user immediately pressed Back/Cancel without changing anything. This triggers unnecessary ISC regeneration (background `aba isconf` run), wasting CPU/disk I/O.
-
-**Fix**: Set `_OP_BASKET_DIRTY=true` inside the individual functions only when an actual change is made, or check the basket before/after and set the flag based on difference.
-
-**Verified**: YES — code review confirms the dirty flag is set regardless of user action.
-
-## Bug #102: Removing an operator set deletes shared operators from other active sets
-
-**Severity**: MEDIUM (data loss — operators silently disappear from basket)
-
-**Location**: `tui/v2/tui-mirror.sh` lines 838-878 (`_operator_sets`)
-
-**Description**: When the user unchecks an operator set, ALL operators from that set are removed from `OP_BASKET` (lines 845-851). However, some operators may belong to multiple sets. If operator "foo" exists in both set A and set B, and the user unchecks set A while keeping set B selected, "foo" is removed from the basket.
-
-The addition loop (lines 858-878) only adds sets that are NOT already in `OP_SET_ADDED`. Since set B was already marked as added, its operators are NOT re-added to the basket. Result: "foo" is lost even though set B (which contains "foo") is still selected.
-
-**Scenario**:
-1. Select sets A (foo, bar) and B (foo, baz) → basket = {foo, bar, baz}
-2. Uncheck A, keep B → removal loop deletes foo and bar
-3. Addition loop skips B (already added) → basket = {baz}
-4. Expected: basket = {foo, baz} (A removed, B retained)
-
-**Fix**: After removing unchecked sets, rebuild the basket by re-adding all operators from ALL remaining active sets. Alternatively, track operator reference counts (how many sets contributed each operator).
-
-**Verified**: YES — code review confirms the removal and addition logic operates independently, with no reconciliation of shared operators.
+**DUPLICATE** — Same issue as Bug #59. See Bug #59 for details. (This entry adds a concrete A/B scenario example.)
 
 ## Bug #103: Upgrade version parser extracts current version and noise from dry-run output
 
@@ -1877,27 +1769,9 @@ Users who need EUS (required for certain upgrade paths and longer support cycles
 
 ---
 
-## Bug #105: DISCO mode never re-checks internet status during session
+## Bug #105: ~~DUPLICATE OF Bug #61~~ DISCO mode never re-checks internet status during session
 
-**Severity**: MEDIUM (UX gap — user must restart TUI after connecting)
-
-**File:** `tui/v2/tui-disco.sh` line 72-76
-
-**Root cause:** DISCO mode sets `_TUI_INET` once at startup and never re-checks:
-```bash
-# Internet status set once at startup (_TUI_INET). No per-loop re-check.
-if [[ "$_TUI_INET" == "no" ]]; then
-    reset_avail=false
-    reset_label="Reset to Connected Mode $TUI2_GREY_NO_INTERNET"
-fi
-```
-
-In contrast, CONNO mode (abatui2.sh line 401) re-checks `aba_inet_check_cached 30` on every menu loop iteration, so it detects when internet is restored mid-session.
-
-**Expected:** If internet is restored mid-session (e.g., cable plugged in, proxy configured), the "Reset to Connected Mode" item should become available after a short delay.
-**Actual:** "Reset to Connected Mode" stays greyed out forever until the TUI is restarted, even if internet access is restored.
-
-**Verified**: YES — code review confirms DISCO mode has no per-loop `aba_inet_check_cached` call. CONNO mode at line 401 has `aba_inet_check_cached 30` inside the `while :` loop.
+**DUPLICATE** — Same issue as Bug #61. See Bug #61 for details.
 
 ---
 
@@ -1944,3 +1818,67 @@ This violates the architectural invariant: "Scripts in `scripts/` must NEVER be 
 **Actual:** Scripts called directly, bypassing dependency tracking.
 
 **Verified**: YES — code review confirms all 5 direct invocations.
+
+---
+
+# Unified Summary (All Sessions)
+
+**Last updated:** 2026-05-16
+
+## Counts
+
+| Category | Count | IDs |
+|----------|-------|-----|
+| **Total entries** | 107 | #1–#107 (plus #79b) |
+| **Duplicates** | 13 | #82(=#4), #83(=#38), #85(=#42), #86(=#3), #90(=#44), #91(=#69), #92(=#71), #93(=#2), #95(=#46), #100(=#62), #101(=#73), #102(=#59), #105(=#61) |
+| **Fixed** | 6 | #45, #47, #60, #79b, #80, #81 |
+| **Invalidated** | 1 | #10 |
+| **Unique open bugs** | **87** | (107 − 13 dupes − 6 fixed − 1 invalid) |
+
+## Open bugs by severity
+
+| Severity | Count | Bug IDs |
+|----------|-------|---------|
+| CRITICAL | 3 | #3, #49, #50 |
+| HIGH | 14 | #1, #9, #18, #20, #22, #24, #35, #41, #42, #53, #55, #59, #64, #89 |
+| MEDIUM | 39 | #5, #6, #7, #13, #14, #15, #16, #17, #21, #23, #25, #26, #29, #37, #38, #43, #44, #48, #51, #52, #54, #56, #57, #61, #63, #65, #66, #69, #71, #72, #74, #75, #77, #78, #84, #88, #99, #103, #104 |
+| LOW | 31 | #2, #4, #8, #11, #12, #19, #27, #28, #30, #31, #32, #33, #34, #36, #39, #46, #58, #62, #67, #68, #70, #73, #76, #79, #87, #94, #96, #97, #98, #106, #107 |
+
+## New unique bugs from Session 2 (not duplicates)
+
+| # | Bug | Severity |
+|---|-----|----------|
+| 79b | ~~FIXED~~ Internet check fails with `set -o pipefail` | HIGH |
+| 80 | ~~FIXED~~ Internet check failure blocks TUI operations | CRITICAL |
+| 81 | ~~FIXED~~ TUI flock FD inherited by Docker container | CRITICAL |
+| 84 | VIP auto-detection uses default "ocp" name | MEDIUM |
+| 87 | Connection field truncated on Interfaces page | LOW |
+| 88 | ESC from VMware config silently continues wizard | MEDIUM |
+| 89 | Wizard VM defaults don't match cluster.conf template | HIGH |
+| 94 | Mirror config edits saved immediately even on cancel | LOW |
+| 96 | VMware password placeholder shows "(set)" | LOW |
+| 97 | Optional fields (NTP, VIP) cannot be cleared | LOW |
+| 98 | Mirror state race — stale label on first render | LOW |
+| 99 | --ntp/--dns/--gateway target wrong cluster.conf | MEDIUM |
+| 103 | Upgrade version parser captures noise/current ver | MEDIUM |
+| 104 | EUS channel missing from TUI selection | MEDIUM |
+| 106 | DISCO blocks on mirror verify every menu redraw | LOW |
+| 107 | Direct script invocations bypass make | LOW |
+
+## Duplicate cross-reference
+
+| Duplicate | Original | Description |
+|-----------|----------|-------------|
+| #82 | #4 | VMware password plaintext |
+| #83 | #38 | prefix_length/machine_network order |
+| #85 | #42 | Ctrl+C blocked in progressbox |
+| #86 | #3 | --platform bm not passed |
+| #90 | #44 | False "Success" when process killed |
+| #91 | #69 | ISC reset doesn't regenerate |
+| #92 | #71 | Bundle path with spaces |
+| #93 | #2 | Dead code _direct_operators |
+| #95 | #46 | KVM quoting inconsistency |
+| #100 | #62 | VM values below minimums |
+| #101 | #73 | Basket dirty flag unconditional |
+| #102 | #59 | Shared operator removal |
+| #105 | #61 | DISCO no internet re-check |
