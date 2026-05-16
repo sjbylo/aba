@@ -495,14 +495,15 @@ _exec_in_tui() {
 	(( visible_lines < 10 )) && visible_lines=10
 	tail -"$visible_lines" "$output_file" > "$review_file"
 
+	# --textbox uses --exit-label for its button (not --ok-label which is ignored)
 	if [[ $exit_code -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "\Z2Success\Zn" \
-			--ok-label "OK" \
+			--exit-label "OK" \
 			--textbox "$review_file" 0 0
 		rm -f "$output_file" "$review_file"
 	else
 		dlg --backtitle "$(ui_backtitle)" --title "\Z1FAILED (exit $exit_code)\Zn" \
-			--ok-label "$TUI2_BTN_BACK_TO_MENU" \
+			--exit-label "$TUI2_BTN_BACK_TO_MENU" \
 			--extra-button --extra-label "$TUI2_BTN_RETRY" \
 			--textbox "$review_file" 0 0
 		local fail_btn=$?

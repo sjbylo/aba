@@ -857,6 +857,8 @@ _operator_sets() {
 	done < "$_TUI_TMP"
 
 	# Remove sets that were previously added but are now unchecked
+	# Uses ref-counting: decrement instead of unset, so shared operators
+	# remain in the basket as long as at least one set still contains them
 	local prev_set
 	for prev_set in "${!OP_SET_ADDED[@]}"; do
 		if [[ -z "${_newly_selected[$prev_set]:-}" ]]; then
@@ -868,7 +870,13 @@ _operator_sets() {
 					[[ -z "$line" ]] && continue
 					line="${line##[[:space:]]}"
 					line="${line%%[[:space:]]}"
-					unset 'OP_BASKET[$line]'
+					local _count=${OP_BASKET[$line]:-0}
+					_count=$(( _count - 1 ))
+					if [[ $_count -le 0 ]]; then
+						unset 'OP_BASKET[$line]'
+					else
+						OP_BASKET["$line"]=$_count
+					fi
 				done < "$sf"
 			fi
 			unset 'OP_SET_ADDED[$prev_set]'
@@ -876,7 +884,7 @@ _operator_sets() {
 		fi
 	done
 
-	# Add newly selected sets
+	# Add newly selected sets (increment ref-count for each operator)
 	local new_set
 	for new_set in "${!_newly_selected[@]}"; do
 		if [[ -z "${OP_SET_ADDED[$new_set]:-}" ]]; then
@@ -889,7 +897,7 @@ _operator_sets() {
 					line="${line##[[:space:]]}"
 					line="${line%%[[:space:]]}"
 					if grep -q "^$line[[:space:]]" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
-						OP_BASKET["$line"]=1
+						OP_BASKET["$line"]=$(( ${OP_BASKET[$line]:-0} + 1 ))
 					fi
 				done < "$sf"
 			fi
