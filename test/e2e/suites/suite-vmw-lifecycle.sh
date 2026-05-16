@@ -323,8 +323,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-vmw-lifecycle.sh"
-
-exit 0
+exit $_rc

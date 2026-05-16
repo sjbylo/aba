@@ -189,6 +189,6 @@ e2e_run "Unregister pool registry" \
 
 test_end
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-vsphere-preflight.sh"
+exit $_rc

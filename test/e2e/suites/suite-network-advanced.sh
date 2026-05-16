@@ -327,8 +327,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-network-advanced.sh"
-
-exit 0
+exit $_rc

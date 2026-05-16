@@ -236,8 +236,6 @@ test_end 0
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-config-validation.sh"
-
-exit 0
+exit $_rc

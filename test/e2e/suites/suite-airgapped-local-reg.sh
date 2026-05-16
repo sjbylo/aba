@@ -697,8 +697,6 @@ e2e_run "Verify registry unreachable on disN" \
 
 test_end
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-airgapped-local-reg.sh"
-
-exit 0
+exit $_rc
