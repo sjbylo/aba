@@ -452,6 +452,12 @@ On first save, the template (`templates/cluster.conf.j2`) is copied to seed all 
 comments. All subsequent writes use `replace-value-conf -q` — NEVER raw heredocs or sed.
 This preserves user comments and ABA's standard config format.
 
+**starting_ip default** — The TUI does NOT compute `starting_ip`. The core
+(`create-cluster-conf.sh`) auto-generates a sensible default from the CIDR via
+`suggest_starting_ip()`. The TUI reads and displays whatever value is in
+`cluster.conf`. VIPs (`api_vip`, `ingress_vip`) are similarly not computed by
+the TUI — they are resolved from DNS at display time (pre-population only).
+
 **Platform config gate (VMware/KVM)** — When the user hits NEXT on the Basics page with
 platform=vmw or platform=kvm, the TUI checks if the platform config file exists:
 1. If `vmware.conf`/`kvm.conf` exists in `$ABA_ROOT` → proceed silently.

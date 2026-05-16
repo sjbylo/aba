@@ -3114,3 +3114,26 @@ The inner list box height should be sized to fit the content (or at least not sh
 
 See `assets/image-9a65f471-d459-4e57-bfb7-997120c83c09.png` — the 66% scrollbar is visible at the bottom of the list box despite only 2 items being shown.
 
+---
+
+## Optimize `replace-value-conf` for batch updates
+
+**Priority:** Low
+**Scope:** Core (`scripts/include_all.sh`), TUI v2 (`tui-cluster.sh`)
+
+### Problem
+
+`_persist_cluster_draft()` in the TUI cluster wizard calls `replace-value-conf` ~21 times after every page transition, each invocation doing a separate `grep` + `sed` on the same file. Currently takes ~0.375s total — acceptable, but wasteful.
+
+### Proposed solution
+
+Add a batch mode to `replace-value-conf` (or a new `replace-values-conf` function) that accepts multiple `-n`/`-v` pairs and generates a single `sed` command with multiple `-e` expressions. This would reduce ~21 file reads + writes to 1.
+
+### Risk
+
+Moderate — `replace-value-conf` is used throughout ABA core and has complex escaping logic (`_sed_escape_replacement`, auto-quoting). A new batch function would be safer than modifying the existing one. Must handle per-value escaping correctly.
+
+### Benchmark
+
+21 individual calls = 0.375s (measured on registry4). A single sed would be ~0.02s.
+
