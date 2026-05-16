@@ -9,6 +9,7 @@
 #   - normalize-vmware-conf: ESXi/vCenter detection, VC_FOLDER
 #   - normalize-kvm-conf:    KVM_HOST extraction
 #   - The awk '{print $1}' bug (regression guard)
+#   - suggest_starting_ip() helper (IP math)
 
 cd "$(dirname "$0")/../.."
 REPO_ROOT="$PWD"
@@ -540,6 +541,88 @@ if [ "$actual_noawk" = "$expected_noawk" ]; then
 	test_pass "no-awk: quoted value with space preserved"
 else
 	test_fail "no-awk: quoted value with space" "expected [$expected_noawk], got [$actual_noawk]"
+fi
+
+# =========================================================================
+# suggest_starting_ip() tests
+# =========================================================================
+echo
+echo "--- suggest_starting_ip() ---"
+
+# Normal /20 network — offset 100 fits easily
+result_sip=$(suggest_starting_ip 10.0.0.0 20)
+expected_sip="10.0.0.100"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: /20 => .100"
+else
+	test_fail "suggest_starting_ip: /20 => .100" "expected [$expected_sip], got [$result_sip]"
+fi
+
+# Normal /24 network — offset 100 fits
+result_sip=$(suggest_starting_ip 192.168.1.0 24)
+expected_sip="192.168.1.100"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: /24 => .100"
+else
+	test_fail "suggest_starting_ip: /24 => .100" "expected [$expected_sip], got [$result_sip]"
+fi
+
+# /30 network — only 2 usable hosts, offset clamped to 75% => 1
+result_sip=$(suggest_starting_ip 10.0.0.0 30)
+expected_sip="10.0.0.1"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: /30 (tiny) => .1"
+else
+	test_fail "suggest_starting_ip: /30 (tiny) => .1" "expected [$expected_sip], got [$result_sip]"
+fi
+
+# /25 network — 126 usable hosts, offset 100 fits
+result_sip=$(suggest_starting_ip 172.16.0.0 25)
+expected_sip="172.16.0.100"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: /25 => .100"
+else
+	test_fail "suggest_starting_ip: /25 => .100" "expected [$expected_sip], got [$result_sip]"
+fi
+
+# /26 network — 62 usable hosts, offset clamped to 46 (62*3/4)
+result_sip=$(suggest_starting_ip 10.0.0.0 26)
+expected_sip="10.0.0.46"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: /26 (62 hosts) => .46"
+else
+	test_fail "suggest_starting_ip: /26 (62 hosts) => .46" "expected [$expected_sip], got [$result_sip]"
+fi
+
+# /16 network — 65534 hosts, offset 100 is fine
+result_sip=$(suggest_starting_ip 10.1.0.0 16)
+expected_sip="10.1.0.100"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: /16 => .100"
+else
+	test_fail "suggest_starting_ip: /16 => .100" "expected [$expected_sip], got [$result_sip]"
+fi
+
+# /31 and /32 — no usable hosts, should return error (exit 1)
+if ! suggest_starting_ip 10.0.0.0 31 >/dev/null 2>&1; then
+	test_pass "suggest_starting_ip: /31 returns error"
+else
+	test_fail "suggest_starting_ip: /31 returns error" "expected failure, got success"
+fi
+
+if ! suggest_starting_ip 10.0.0.0 32 >/dev/null 2>&1; then
+	test_pass "suggest_starting_ip: /32 returns error"
+else
+	test_fail "suggest_starting_ip: /32 returns error" "expected failure, got success"
+fi
+
+# Non-zero base — verify offset is relative to network address
+result_sip=$(suggest_starting_ip 10.10.5.0 24)
+expected_sip="10.10.5.100"
+if [ "$result_sip" = "$expected_sip" ]; then
+	test_pass "suggest_starting_ip: non-zero base /24"
+else
+	test_fail "suggest_starting_ip: non-zero base /24" "expected [$expected_sip], got [$result_sip]"
 fi
 
 # =========================================================================
