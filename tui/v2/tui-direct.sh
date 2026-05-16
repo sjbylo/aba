@@ -2,7 +2,7 @@
 # =============================================================================
 # TUI v2 — DIRECT Mode (connected, no mirror)
 # =============================================================================
-# Minimal wizard (pull secret, channel, version, platform) then action menu.
+# Minimal wizard (pull secret, channel, version, platform, operators) then action menu.
 # Adapted from v1 wizard flow.
 #
 # Design decisions:
@@ -52,12 +52,13 @@ _direct_config_complete() {
 }
 
 # =============================================================================
-# DIRECT Mode Wizard (pull secret, channel, version, platform)
+# DIRECT Mode Wizard (pull secret, channel, version, platform, operators)
 # =============================================================================
 
 direct_wizard() {
 	tui_log "Running DIRECT wizard"
 	local step="pull_secret"
+	local _ver_short=""
 
 	while :; do
 		case "$step" in
@@ -98,7 +99,9 @@ direct_wizard() {
 				_direct_version
 				case "$DIALOG_RC" in
 					next)
-						local _ver_short="${ocp_version%.*}"
+						_ver_short="${ocp_version%.*}"
+						# Save config early: catalog downloads need pull_secret_file from aba.conf
+						_direct_save_config
 						tui_log "Starting CLI + catalog downloads for OpenShift $_ver_short"
 						"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
@@ -112,8 +115,17 @@ direct_wizard() {
 		platform)
 			_direct_platform
 			case "$DIALOG_RC" in
-				next) break ;;  # Wizard done
+				next) step="operators" ;;
 				back) step="version" ;;
+				repeat) ;;
+				*) return 1 ;;
+			esac
+			;;
+		operators)
+			_direct_operators_step "$_ver_short"
+			case "$DIALOG_RC" in
+				next) break ;;  # Wizard done → save
+				back) step="platform" ;;
 				repeat) ;;
 				*) return 1 ;;
 			esac
@@ -411,7 +423,58 @@ _direct_platform() {
 	esac
 }
 
-# --- Operator Selection (optional wizard step) ---
+# --- Operator selection (wizard step; blocks until catalog indexes are ready) ---
+_direct_operators_step() {
+	DIALOG_RC=""
+	local _cat_ver="${1:-}"
+
+	if [[ -z "$_cat_ver" ]]; then
+		_cat_ver="${ocp_version%.*}"
+	fi
+	tui_log "DIRECT wizard: operator selection ($_cat_ver)"
+
+	# Ensure config is saved (platform may have changed since version step)
+	_direct_save_config
+
+	dlg --backtitle "$(ui_backtitle)" --infobox \
+		"Downloading operator catalog indexes...\n\nPlease wait." 0 0
+
+	if ! wait_for_all_catalogs "$_cat_ver" >>"$_TUI_LOG_FILE" 2>&1; then
+		dlg --backtitle "$(ui_backtitle)" \
+			--yes-label "Retry" --no-label "Back" \
+			--yesno \
+			"Failed to download operator catalog indexes.\n\nCheck your network and pull secret, then try again." \
+			0 0
+		local _err_rc=$?
+		case "$_err_rc" in
+			0)
+				# Reset failed catalog tasks so they re-download on retry
+				local _cat
+				for _cat in redhat-operator certified-operator community-operator; do
+					run_once -r -i "catalog:${_cat_ver}:${_cat}" 2>/dev/null || true
+				done
+				download_all_catalogs "$_cat_ver" >>"$_TUI_LOG_FILE" 2>&1
+				DIALOG_RC="repeat"
+				;;
+			*)
+				DIALOG_RC="back"
+				;;
+		esac
+		return
+	fi
+
+	local _op_rc=0
+	mirror_select_operators wizard || _op_rc=$?
+	case "$_op_rc" in
+		0) DIALOG_RC="next" ;;
+		2) DIALOG_RC="back" ;;
+		*)
+			DIALOG_RC="repeat"
+			;;
+	esac
+}
+
+# --- Operator Selection (optional — e.g. action-menu paths calling _direct_operators) ---
 _direct_operators() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: operator selection"
@@ -435,7 +498,7 @@ _direct_operators() {
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
 			1) mirror_select_operators ;;
-			2) _operator_search "$_ver_short" ;;
+			2) _operator_search "${ocp_version%.*}" ;;
 			esac
 			DIALOG_RC="next"
 			;;

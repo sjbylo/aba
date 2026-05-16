@@ -208,9 +208,16 @@ aba_bg_cleanup
 
 _tick "Loading config"
 
-# Pre-fetch latest stable version (no pull secret needed, just api.openshift.com)
+# Stable:latest fetch must run before prefetch-catalogs.sh — that script waits on
+# run_once ID ocp:stable:latest_version when aba.conf has no ocp_version yet.
 tui_log "Kicking off background version fetch (stable)"
 aba_version_fetch_start
+
+# Pre-fetch catalog indexes in background (uses aba.conf version or stable:latest minor)
+if [[ -f "$HOME/.pull-secret.json" ]]; then
+	tui_log "Starting background catalog pre-fetch"
+	run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh" >>"$_TUI_LOG_FILE" 2>&1
+fi
 
 # Background ISC generation (so it's ready before user opens View/Edit ISC)
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
