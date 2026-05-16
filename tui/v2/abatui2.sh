@@ -50,9 +50,37 @@ cd "$ABA_ROOT" || { echo "ERROR: Cannot cd to $ABA_ROOT"; exit 1; }
 # =============================================================================
 # Single-instance lock (flock) — check FIRST before any heavy init
 # =============================================================================
+_ABA_TUI_PID_FILE="${HOME}/.aba/.tui.pid"
 mkdir -p "${HOME}/.aba" 2>/dev/null || true
 exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock" || { echo "Error: Cannot open ${HOME}/.aba/.tui.lock" >&2; exit 1; }
-flock -n "${ABA_TUI_FLOCK_FD}" || { echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2; exit 1; }
+if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
+	_other_pid=""
+	[[ -f "$_ABA_TUI_PID_FILE" ]] && _other_pid=$(<"$_ABA_TUI_PID_FILE")
+	if [[ -n "$_other_pid" ]] && kill -0 "$_other_pid" 2>/dev/null; then
+		echo ""
+		read -r -p "Another TUI is already running (PID $_other_pid). Terminate it? (Y/n) " _ans </dev/tty
+		_ans="${_ans:-Y}"
+		if [[ "$_ans" =~ ^[Yy]$ ]]; then
+			kill "$_other_pid" 2>/dev/null
+			# Wait for old process to exit and release the lock
+			for _i in $(seq 1 20); do
+				kill -0 "$_other_pid" 2>/dev/null || break
+				sleep 0.25
+			done
+			if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
+				echo "Error: Could not acquire lock after terminating PID $_other_pid." >&2
+				exit 1
+			fi
+		else
+			echo "Exiting. Stop the other TUI first." >&2
+			exit 1
+		fi
+	else
+		echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2
+		exit 1
+	fi
+fi
+echo $$ > "$_ABA_TUI_PID_FILE"
 
 # =============================================================================
 # Source dependencies
