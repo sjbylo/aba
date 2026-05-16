@@ -255,8 +255,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-kvm-lifecycle.sh"
-
-exit 0
+exit $_rc

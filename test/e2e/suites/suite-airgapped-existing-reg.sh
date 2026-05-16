@@ -502,10 +502,13 @@ e2e_run "Deregister pool registry on conN" \
 e2e_run_remote "Deregister pool registry on disN" \
     "cd ~/aba && aba -d mirror unregister"
 
+# Purge extra blobs (ACM, service-mesh, vote-app, etc.) loaded during this suite.
+# Without this, ~37GB of stale blobs accumulate and starve disk for the next suite.
+e2e_run "Purge extra images from pool registry" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
 test_end
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-airgapped-existing-reg.sh"
-
-exit 0
+exit $_rc

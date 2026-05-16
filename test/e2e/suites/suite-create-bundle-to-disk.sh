@@ -214,9 +214,9 @@ e2e_run "Run mirror clean" "aba --dir mirror clean"
 e2e_run "Verify mirror-registry removed after clean" \
     "test ! -f mirror/mirror-registry"
 
-# Verify run_once state for mirror:reg:install does not exist
+# Verify run_once cached result for mirror:reg:install was cleared (task is reset for re-run)
 e2e_run "Verify no leftover run_once state for reg:install" \
-    "test ! -d ~/.aba/runner/mirror:reg:install"
+    "test ! -f ~/.aba/runner/mirror:reg:install/exit"
 
 # Re-extract -- should succeed after clean
 e2e_run "Re-extract mirror-registry after clean" \
@@ -330,8 +330,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-create-bundle-to-disk.sh"
-
-exit 0
+exit $_rc
