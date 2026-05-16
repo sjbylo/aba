@@ -699,6 +699,22 @@ cidr_host_count() {
 	fi
 }
 
+# Suggest a sensible starting IP for cluster nodes within a CIDR.
+# Picks network_base + 100 to skip common infra addresses (routers, DNS, DHCP).
+# If the range is too small for +100, falls back to 75% through the usable range.
+# Args: NETWORK_ADDR  PREFIX_LEN
+# Example: suggest_starting_ip 10.0.0.0 20 => 10.0.0.100
+suggest_starting_ip() {
+	local net_addr="$1" prefix="$2"
+	local net_int=$(ip_to_int "$net_addr")
+	local host_count=$(cidr_host_count "$prefix")
+	[ "$host_count" -eq 0 ] && return 1
+	local offset=100
+	[ $offset -gt $host_count ] && offset=$(( host_count * 3 / 4 ))
+	[ $offset -lt 1 ] && offset=1
+	int_to_ip $(( net_int + offset ))
+}
+
 # -----------------------------------------------------------------------------
 # Cluster State Helpers (ADR-007: unified state management)
 # Scripts use these instead of hard-coding ~/.aba/ paths.

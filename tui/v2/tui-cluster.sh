@@ -131,6 +131,68 @@ _cluster_load_conf() {
 # Wizard state is kept in _cl_* globals between pages — no disk persistence needed.
 _persist_cluster_draft() { :; }
 
+# Generate a preliminary cluster.conf via aba core to get real defaults.
+# Called after page 1 (Basics) completes. Sources the generated config to
+# fill form fields with actual values. Stores originals so finalize can
+# pass only changed flags.
+_cluster_generate_defaults() {
+	local _conf="$ABA_ROOT/$cl_name/cluster.conf"
+
+	# Skip if config already exists (editing existing cluster)
+	if [[ -f "$_conf" ]]; then
+		# Still load and store originals if not already done
+		if [[ -z "$_ORIG_LOADED" ]]; then
+			_cluster_load_conf "$_conf"
+			_cluster_store_originals
+			tui_log "Loaded existing cluster.conf for '$cl_name', originals stored"
+		fi
+		return 0
+	fi
+
+	# Build the generation command
+	local _cmd="aba cluster -n $cl_name -t $cl_type -p $cl_platform -s cluster.conf -y"
+	tui_log "Generating defaults: $_cmd"
+
+	# Run it (fast ~2s) — fully detached from TUI's terminal/dialog
+	local _gen_rc=0
+	(cd "$ABA_ROOT" && eval "$_cmd") </dev/null >>"$_TUI_LOG_FILE" 2>&1 || _gen_rc=$?
+	if [[ $_gen_rc -ne 0 ]]; then
+		tui_log "WARNING: Failed to generate preliminary cluster.conf (rc=$_gen_rc)"
+		return 0
+	fi
+
+	# Load the generated config into form fields
+	if [[ -f "$_conf" ]]; then
+		_cluster_load_conf "$_conf"
+		_cluster_store_originals
+		tui_log "Generated and loaded cluster.conf defaults, originals stored"
+	fi
+}
+
+# Store current form values as originals (for diff on finalize)
+_cluster_store_originals() {
+	_ORIG_LOADED=true
+	_orig_network="$cl_network"
+	_orig_starting_ip="$cl_starting_ip"
+	_orig_api_vip="$cl_api_vip"
+	_orig_ingress_vip="$cl_ingress_vip"
+	_orig_dns="$cl_dns"
+	_orig_gateway="$cl_gateway"
+	_orig_ntp="$cl_ntp"
+	_orig_ports="$cl_ports"
+	_orig_vlan="$cl_vlan"
+	_orig_connection="$cl_connection"
+	_orig_master_cpu="$cl_master_cpu"
+	_orig_master_mem="$cl_master_mem"
+	_orig_worker_cpu="$cl_worker_cpu"
+	_orig_worker_mem="$cl_worker_mem"
+	_orig_disk="$cl_disk"
+	_orig_mac_template="$cl_mac_template"
+	_orig_ssh_key="$cl_ssh_key"
+	_orig_domain="$cl_domain"
+	_orig_workers="$cl_workers"
+}
+
 # Gate: check platform config when leaving Basics page (vmw/kvm only)
 _gate_platform_config() {
 	[[ "$cl_platform" == "bm" ]] && return 0
@@ -514,13 +576,14 @@ cluster_install_flow() {
 		_cl_vlan=""
 		_cl_connection="mirror"
 		_cl_macs=""
-		_cl_master_cpu="8"
-		_cl_master_mem="32"
-		_cl_worker_cpu="4"
-		_cl_worker_mem="16"
+		_cl_master_cpu=""
+		_cl_master_mem=""
+		_cl_worker_cpu=""
+		_cl_worker_mem=""
 		_cl_disk=""
 		_cl_mac_template=""
 		_cl_platform="${platform:-bm}"
+		_ORIG_LOADED=""
 		_CL_STATE_INIT=true
 	fi
 
@@ -565,16 +628,6 @@ cluster_install_flow() {
 		cl_ntp="${ntp_servers:-}"
 		[[ -z "$cl_ntp" ]] && cl_ntp=$(get_ntp_servers 2>/dev/null) || true
 		cl_ntp=$(filter_disco_values "$cl_ntp")
-
-		# Smart guess for starting IP from machine network
-		if [[ -z "$cl_starting_ip" && -n "$cl_network" ]]; then
-			local net_prefix="${cl_network%%/*}"
-			local octets
-			IFS='.' read -ra octets <<< "$net_prefix"
-			if [[ ${#octets[@]} -eq 4 ]]; then
-				cl_starting_ip="${octets[0]}.${octets[1]}.${octets[2]}.100"
-			fi
-		fi
 
 		# Smart guess VIPs from DNS (if base domain available)
 		if [[ -n "$cl_domain" ]]; then
@@ -627,6 +680,8 @@ cluster_install_flow() {
 				if [[ $_rc -eq 255 ]]; then _cl_save_state; return 1; fi
 				if [[ $_rc -ne 0 ]]; then page=0; break; fi
 				_gate_platform_config || continue
+				# Generate preliminary cluster.conf to get real defaults from aba core
+				_cluster_generate_defaults
 				_persist_cluster_draft
 				;;
 			2)
@@ -1223,13 +1278,13 @@ _cluster_page_vm() {
 
 	while :; do
 		local items=()
-		items+=("C" "Master CPUs:    ${cl_master_cpu:-8}")
-		items+=("R" "Master Memory:  ${cl_master_mem:-32} GB")
+		items+=("C" "Master CPUs:    ${cl_master_cpu:-(not set)}")
+		items+=("R" "Master Memory:  ${cl_master_mem:-(not set)} GB")
 		if [[ "$cl_type" == "standard" ]]; then
-			items+=("W" "Worker CPUs:    ${cl_worker_cpu:-4}")
-			items+=("E" "Worker Memory:  ${cl_worker_mem:-16} GB")
+			items+=("W" "Worker CPUs:    ${cl_worker_cpu:-(not set)}")
+			items+=("E" "Worker Memory:  ${cl_worker_mem:-(not set)} GB")
 		fi
-		items+=("D" "Data disk:      ${cl_disk:-(none)} GB")
+		items+=("D" "Data disk:      ${cl_disk:-(not set)} GB")
 		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VM" \
@@ -1352,39 +1407,45 @@ _cluster_page_vm() {
 
 # --- Assemble command, show review page, execute install ---
 _cluster_execute() {
+	# Build command: name/type/platform are always required
 	local cmd="aba cluster --name $cl_name --type $cl_type"
-	[[ -n "$cl_domain" ]] && cmd="$cmd --base-domain $cl_domain"
-	[[ -n "$cl_platform" && "$cl_platform" != "bm" ]] && cmd="$cmd --platform $cl_platform"
-	[[ -n "$cl_ssh_key" && "$cl_ssh_key" != "~/.ssh/id_rsa" ]] && cmd="$cmd --ssh-key $cl_ssh_key"
+	[[ -n "$cl_platform" ]] && cmd="$cmd --platform $cl_platform"
 
-	[[ -n "$cl_starting_ip" ]] && cmd="$cmd --starting-ip $cl_starting_ip"
-	[[ -n "$cl_network" ]] && cmd="$cmd --machine-network $cl_network"
-	[[ -n "$cl_dns" ]] && cmd="$cmd --dns ${cl_dns//,/ }"
-	[[ -n "$cl_gateway" ]] && cmd="$cmd --gateway-ip $cl_gateway"
-	[[ -n "$cl_ntp" ]] && cmd="$cmd --ntp ${cl_ntp//,/ }"
-	[[ -n "$cl_ports" ]] && cmd="$cmd --ports ${cl_ports//,/ }"
-	[[ -n "$cl_vlan" ]] && cmd="$cmd --vlan $cl_vlan"
-	[[ "$cl_connection" == "proxy" || "$cl_connection" == "direct" ]] && cmd="$cmd --int-connection $cl_connection"
+	# Only pass flags for values the user changed from the generated defaults.
+	# cluster.conf was already created by _cluster_generate_defaults after page 1.
+	[[ -n "$cl_domain" && "$cl_domain" != "$_orig_domain" ]] && cmd="$cmd --base-domain $cl_domain"
+	[[ -n "$cl_ssh_key" && "$cl_ssh_key" != "${_orig_ssh_key:-~/.ssh/id_rsa}" ]] && cmd="$cmd --ssh-key '$cl_ssh_key'"
+
+	[[ -n "$cl_starting_ip" && "$cl_starting_ip" != "$_orig_starting_ip" ]] && cmd="$cmd --starting-ip $cl_starting_ip"
+	[[ -n "$cl_network" && "$cl_network" != "$_orig_network" ]] && cmd="$cmd --machine-network $cl_network"
+	[[ -n "$cl_dns" && "$cl_dns" != "$_orig_dns" ]] && cmd="$cmd --dns ${cl_dns//,/ }"
+	[[ -n "$cl_gateway" && "$cl_gateway" != "$_orig_gateway" ]] && cmd="$cmd --gateway-ip $cl_gateway"
+	[[ -n "$cl_ntp" && "$cl_ntp" != "$_orig_ntp" ]] && cmd="$cmd --ntp ${cl_ntp//,/ }"
+	[[ -n "$cl_ports" && "$cl_ports" != "$_orig_ports" ]] && cmd="$cmd --ports ${cl_ports//,/ }"
+	[[ -n "$cl_vlan" && "$cl_vlan" != "$_orig_vlan" ]] && cmd="$cmd --vlan $cl_vlan"
+	[[ "$cl_connection" != "${_orig_connection:-}" ]] && \
+		[[ "$cl_connection" == "proxy" || "$cl_connection" == "direct" ]] && cmd="$cmd --int-connection $cl_connection"
 
 	if [[ "$cl_type" != "sno" ]]; then
-		[[ -n "$cl_api_vip" ]] && cmd="$cmd --api-vip $cl_api_vip"
-		[[ -n "$cl_ingress_vip" ]] && cmd="$cmd --ingress-vip $cl_ingress_vip"
+		[[ -n "$cl_api_vip" && "$cl_api_vip" != "$_orig_api_vip" ]] && cmd="$cmd --api-vip $cl_api_vip"
+		[[ -n "$cl_ingress_vip" && "$cl_ingress_vip" != "$_orig_ingress_vip" ]] && cmd="$cmd --ingress-vip $cl_ingress_vip"
 	fi
 
-	if [[ "$cl_type" == "standard" && -n "$cl_workers" ]]; then
-		cmd="$cmd --num-workers $cl_workers"
+	if [[ "$cl_type" == "standard" ]]; then
+		[[ -n "$cl_workers" && "$cl_workers" != "$_orig_workers" ]] && cmd="$cmd --num-workers $cl_workers"
 	fi
 
 	# VM resource flags (only for vmw/kvm platforms)
+	# Only pass if user changed the value from what aba core generated
 	if [[ "$cl_platform" != "bm" ]]; then
-		[[ -n "$cl_master_cpu" && "$cl_master_cpu" != "8" ]] && cmd="$cmd --mcpu $cl_master_cpu"
-		[[ -n "$cl_master_mem" && "$cl_master_mem" != "32" ]] && cmd="$cmd --mmem $cl_master_mem"
+		[[ -n "$cl_master_cpu" && "$cl_master_cpu" != "$_orig_master_cpu" ]] && cmd="$cmd --mcpu $cl_master_cpu"
+		[[ -n "$cl_master_mem" && "$cl_master_mem" != "$_orig_master_mem" ]] && cmd="$cmd --mmem $cl_master_mem"
 		if [[ "$cl_type" == "standard" ]]; then
-			[[ -n "$cl_worker_cpu" && "$cl_worker_cpu" != "4" ]] && cmd="$cmd --wcpu $cl_worker_cpu"
-			[[ -n "$cl_worker_mem" && "$cl_worker_mem" != "16" ]] && cmd="$cmd --wmem $cl_worker_mem"
+			[[ -n "$cl_worker_cpu" && "$cl_worker_cpu" != "$_orig_worker_cpu" ]] && cmd="$cmd --wcpu $cl_worker_cpu"
+			[[ -n "$cl_worker_mem" && "$cl_worker_mem" != "$_orig_worker_mem" ]] && cmd="$cmd --wmem $cl_worker_mem"
 		fi
-		[[ -n "$cl_disk" ]] && cmd="$cmd --data-disk-gb $cl_disk"
-		[[ -n "$cl_mac_template" ]] && cmd="$cmd --mac-prefix $cl_mac_template"
+		[[ -n "$cl_disk" && "$cl_disk" != "$_orig_disk" ]] && cmd="$cmd --data-disk-gb $cl_disk"
+		[[ -n "$cl_mac_template" && "$cl_mac_template" != "$_orig_mac_template" ]] && cmd="$cmd --mac-prefix $cl_mac_template"
 	fi
 
 	# Step will be determined after review (bm gets ISO vs Install choice)
@@ -1466,13 +1527,13 @@ _cluster_execute() {
 	summary+="  SSH key:      ${cl_ssh_key:-~/.ssh/id_rsa}\n"
 	summary+="\n"
 	if [[ "$cl_platform" != "bm" ]]; then
-		summary+="  Master CPU:   $cl_master_cpu\n"
-		summary+="  Master Mem:   ${cl_master_mem} GB\n"
+		summary+="  Master CPU:   ${cl_master_cpu:-(not set)}\n"
+		summary+="  Master Mem:   ${cl_master_mem:-(not set)} GB\n"
 		if [[ "$cl_type" == "standard" ]]; then
-			summary+="  Worker CPU:   $cl_worker_cpu\n"
-			summary+="  Worker Mem:   ${cl_worker_mem} GB\n"
+			summary+="  Worker CPU:   ${cl_worker_cpu:-(not set)}\n"
+			summary+="  Worker Mem:   ${cl_worker_mem:-(not set)} GB\n"
 		fi
-		[[ -n "$cl_disk" ]] && summary+="  Data disk:    ${cl_disk} GB\n"
+		summary+="  Data disk:    ${cl_disk:-(not set)} GB\n"
 		summary+="  MAC prefix:   ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
@@ -1602,7 +1663,7 @@ _platform_config_missing() {
 cluster_monitor() {
 	tui_log "Action: Finalize Installation (wait-for)"
 
-	if ! select_installed_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to finalize:"; then
+	if ! select_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to finalize:"; then
 		return 1
 	fi
 
