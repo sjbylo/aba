@@ -64,7 +64,7 @@ disco_main() {
 			day2_avail=false
 			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
 		fi
-		if [[ "$has_installed" == "false" ]]; then
+		if [[ "$has_any_cluster" == "false" ]]; then
 			mon_avail=false
 			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
@@ -127,13 +127,23 @@ Navigation:
   • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
-			1|255)
-				if confirm_quit; then
-					clear
-					_show_v2_exit_summary
-					exit 0
-				fi
-				continue
+		1)
+			if [[ "$_TUI_DISCO_FROM_CONNO" == "true" ]]; then
+				return 0
+			fi
+			if confirm_quit; then
+				clear
+				_show_v2_exit_summary
+				exit 0
+			fi
+			continue
+			;;
+		255)
+			if [[ "$_TUI_DISCO_FROM_CONNO" == "true" ]]; then
+				return 0
+			fi
+			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
+			continue
 				;;
 			0) ;;
 		esac

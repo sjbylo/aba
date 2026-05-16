@@ -139,6 +139,7 @@ _tick "Checking packages"
 
 _TUI_FORCE_MODE=""
 _TUI_DIRECT_FROM_CONNO=false
+_TUI_DISCO_FROM_CONNO=false
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -491,7 +492,7 @@ _conno_main() {
 			day2_avail=false
 			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
 		fi
-		if [[ "$has_installed" == "false" ]]; then
+		if [[ "$has_any_cluster" == "false" ]]; then
 			mon_avail=false
 			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
@@ -693,9 +694,11 @@ Navigation:
 	"$TUI2_CONNO_TAG_SWITCH_DISCO")
 		_ensure_offline_prereqs || continue
 		_TUI_MODE="DISCO"
+		_TUI_DISCO_FROM_CONNO=true
 		tui_log "Switching to DISCO mode (in-place repo)"
 		disco_main || true
 		_TUI_MODE="CONNO"
+		_TUI_DISCO_FROM_CONNO=false
 		tui_log "Returned from DISCO, back to CONNO"
 		;;
 		" "|"  "|"   ")

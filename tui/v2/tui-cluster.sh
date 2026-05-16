@@ -123,29 +123,60 @@ _cluster_load_conf() {
 	return 0
 }
 
-# _persist_cluster_draft — REMOVED
-# The TUI must NOT create or write cluster.conf. ABA's create-cluster-conf.sh
-# is the single authority for generating this file (with proper defaults like
-# mac_prefix). The TUI passes all values via CLI flags to "aba cluster", which
-# routes them through _set_cluster_conf() / BUILD_COMMAND to the creation script.
-# Wizard state is kept in _cl_* globals between pages — no disk persistence needed.
-_persist_cluster_draft() { :; }
+# Write current wizard values back to cluster.conf (the single source of truth).
+# Called after every page transition so changes persist across re-entries and crashes.
+_persist_cluster_draft() {
+	local _conf="$ABA_ROOT/$cl_name/cluster.conf"
+	[[ ! -f "$_conf" ]] && return 0
+
+	replace-value-conf -q -n cluster_name     -v "$cl_name"        -f "$_conf"
+	replace-value-conf -q -n base_domain      -v "$cl_domain"      -f "$_conf"
+	replace-value-conf -q -n machine_network  -v "$cl_network"     -f "$_conf"
+	replace-value-conf -q -n starting_ip      -v "$cl_starting_ip" -f "$_conf"
+	replace-value-conf -q -n api_vip          -v "$cl_api_vip"     -f "$_conf"
+	replace-value-conf -q -n ingress_vip      -v "$cl_ingress_vip" -f "$_conf"
+	replace-value-conf -q -n dns_servers      -v "$cl_dns"         -f "$_conf"
+	replace-value-conf -q -n next_hop_address -v "$cl_gateway"     -f "$_conf"
+	replace-value-conf -q -n ntp_servers      -v "$cl_ntp"         -f "$_conf"
+	replace-value-conf -q -n ports            -v "$cl_ports"       -f "$_conf"
+	replace-value-conf -q -n vlan             -v "$cl_vlan"        -f "$_conf"
+	replace-value-conf -q -n ssh_key_file     -v "$cl_ssh_key"     -f "$_conf"
+	replace-value-conf -q -n mac_prefix       -v "$cl_mac_template" -f "$_conf"
+	replace-value-conf -q -n master_cpu_count -v "$cl_master_cpu"  -f "$_conf"
+	replace-value-conf -q -n master_mem       -v "$cl_master_mem"  -f "$_conf"
+	replace-value-conf -q -n worker_cpu_count -v "$cl_worker_cpu"  -f "$_conf"
+	replace-value-conf -q -n worker_mem       -v "$cl_worker_mem"  -f "$_conf"
+	replace-value-conf -q -n data_disk        -v "$cl_disk"        -f "$_conf"
+
+	# int_connection: empty means "use mirror" (the default)
+	local _conn="$cl_connection"
+	[[ "$_conn" == "mirror" ]] && _conn=""
+	replace-value-conf -q -n int_connection   -v "$_conn"          -f "$_conf"
+
+	# Derive num_masters/num_workers from type
+	case "$cl_type" in
+		sno)      replace-value-conf -q -n num_masters -v 1 -f "$_conf"
+		          replace-value-conf -q -n num_workers -v 0 -f "$_conf" ;;
+		compact)  replace-value-conf -q -n num_masters -v 3 -f "$_conf"
+		          replace-value-conf -q -n num_workers -v 0 -f "$_conf" ;;
+		standard) replace-value-conf -q -n num_masters -v 3 -f "$_conf"
+		          replace-value-conf -q -n num_workers -v "$cl_workers" -f "$_conf" ;;
+	esac
+
+	tui_log "Persisted wizard values to $_conf"
+}
 
 # Generate a preliminary cluster.conf via aba core to get real defaults.
-# Called after page 1 (Basics) completes. Sources the generated config to
-# fill form fields with actual values. Stores originals so finalize can
-# pass only changed flags.
+# Called after page 1 (Basics) completes. If the config already exists,
+# just loads it. The file is the single source of truth — _persist_cluster_draft
+# writes user changes back after every page.
 _cluster_generate_defaults() {
 	local _conf="$ABA_ROOT/$cl_name/cluster.conf"
 
-	# Skip if config already exists (editing existing cluster)
+	# If config already exists, just load it
 	if [[ -f "$_conf" ]]; then
-		# Still load and store originals if not already done
-		if [[ -z "$_ORIG_LOADED" ]]; then
-			_cluster_load_conf "$_conf"
-			_cluster_store_originals
-			tui_log "Loaded existing cluster.conf for '$cl_name', originals stored"
-		fi
+		_cluster_load_conf "$_conf"
+		tui_log "Loaded existing cluster.conf for '$cl_name'"
 		return 0
 	fi
 
@@ -164,33 +195,8 @@ _cluster_generate_defaults() {
 	# Load the generated config into form fields
 	if [[ -f "$_conf" ]]; then
 		_cluster_load_conf "$_conf"
-		_cluster_store_originals
-		tui_log "Generated and loaded cluster.conf defaults, originals stored"
+		tui_log "Generated and loaded cluster.conf defaults"
 	fi
-}
-
-# Store current form values as originals (for diff on finalize)
-_cluster_store_originals() {
-	_ORIG_LOADED=true
-	_orig_network="$cl_network"
-	_orig_starting_ip="$cl_starting_ip"
-	_orig_api_vip="$cl_api_vip"
-	_orig_ingress_vip="$cl_ingress_vip"
-	_orig_dns="$cl_dns"
-	_orig_gateway="$cl_gateway"
-	_orig_ntp="$cl_ntp"
-	_orig_ports="$cl_ports"
-	_orig_vlan="$cl_vlan"
-	_orig_connection="$cl_connection"
-	_orig_master_cpu="$cl_master_cpu"
-	_orig_master_mem="$cl_master_mem"
-	_orig_worker_cpu="$cl_worker_cpu"
-	_orig_worker_mem="$cl_worker_mem"
-	_orig_disk="$cl_disk"
-	_orig_mac_template="$cl_mac_template"
-	_orig_ssh_key="$cl_ssh_key"
-	_orig_domain="$cl_domain"
-	_orig_workers="$cl_workers"
 }
 
 # Gate: check platform config when leaving Basics page (vmw/kvm only)
@@ -583,7 +589,6 @@ cluster_install_flow() {
 		_cl_disk=""
 		_cl_mac_template=""
 		_cl_platform="${platform:-bm}"
-		_ORIG_LOADED=""
 		_CL_STATE_INIT=true
 	fi
 
@@ -603,20 +608,18 @@ cluster_install_flow() {
 	local cl_disk="$_cl_disk" cl_mac_template="$_cl_mac_template"
 	local cl_platform="$_cl_platform"
 
-	# --- Load from existing cluster.conf if present (config = single source of truth) ---
+	# --- Always load from cluster.conf (the single source of truth) ---
+	# _persist_cluster_draft writes changes after every page, so the file
+	# always has the user's latest values, even across re-entries.
 	local _draft_loaded=false
-	local _is_reentry=false
-	[[ -n "$cl_name" && "$cl_name" != "ocp" ]] && _is_reentry=true
-	[[ -n "$cl_network" || -n "$cl_starting_ip" ]] && _is_reentry=true
-
 	if [[ -n "$cl_name" && -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
 		_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
 		_draft_loaded=true
-		tui_log "Loaded existing cluster.conf for '$cl_name'"
+		tui_log "Loaded cluster.conf for '$cl_name'"
 	fi
 
-	# Only apply auto-detect defaults on first entry (not re-entry or draft load)
-	if [[ "$_draft_loaded" == "false" && "$_is_reentry" == "false" ]]; then
+	# Auto-detect defaults only when no cluster.conf exists yet (before page 1 generates one)
+	if [[ "$_draft_loaded" == "false" ]]; then
 		# Pre-fill from sourced aba.conf variables, fallback to auto-detect
 		cl_network="${machine_network:-}"
 		[[ -z "$cl_network" ]] && cl_network=$(get_machine_network 2>/dev/null) || true
@@ -1158,6 +1161,8 @@ _cluster_page_iface() {
 				iface_items+=("M" "MACs:        (none — paste to add)")
 			fi
 		fi
+		# Width 62: prevents narrow dialog when "Image source" has short values (proxy/direct)
+		# while still expanding for long FQDNs (mirror with registry host:port)
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_IFACE" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
@@ -1165,7 +1170,7 @@ _cluster_page_iface() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_IFACE" 0 0 0 \
+			--menu "$TUI2_MSG_CLUSTER_IFACE" 0 62 0 \
 			"${iface_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -1243,17 +1248,21 @@ _cluster_page_iface() {
 			tui_log "Toggled connection to: $cl_connection"
 			;;
 		M)
-			# Paste MAC addresses (one per line, for bare-metal nodes)
+			# Use --editbox (multi-line) instead of --inputbox (single-line) so users
+			# can paste or type multiple MACs — one per line, as required for bare-metal
+			local _mac_edit="${_TUI_TMP}.macs"
+			echo "$cl_macs" > "$_mac_edit"
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_ADDRS" \
-				--inputbox "Enter MAC addresses (one per line, or comma-separated).\nFormat: aa:bb:cc:dd:ee:ff\n\nNeeded: 1 per node per port (masters + workers × ports)." \
-				0 0 "$(echo "$cl_macs" | tr '\n' ',' | sed 's/,$//')" \
+				--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
+				--editbox "$_mac_edit" 18 70 \
 				2>"$_TUI_TMP"
 			if [[ $? -eq 0 ]]; then
 				local raw=$(<"$_TUI_TMP")
-				# Normalize: convert commas/spaces to newlines, trim whitespace
+				# Normalize: convert commas/spaces to newlines, trim empty lines and whitespace
 				cl_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
 			fi
+			rm -f "$_mac_edit"
 			;;
 		K)
 			dlg --backtitle "$(ui_backtitle)" --title "SSH Key" \
@@ -1407,46 +1416,9 @@ _cluster_page_vm() {
 
 # --- Assemble command, show review page, execute install ---
 _cluster_execute() {
-	# Build command: name/type/platform are always required
-	local cmd="aba cluster --name $cl_name --type $cl_type"
-	[[ -n "$cl_platform" ]] && cmd="$cmd --platform $cl_platform"
-
-	# Only pass flags for values the user changed from the generated defaults.
-	# cluster.conf was already created by _cluster_generate_defaults after page 1.
-	[[ -n "$cl_domain" && "$cl_domain" != "$_orig_domain" ]] && cmd="$cmd --base-domain $cl_domain"
-	[[ -n "$cl_ssh_key" && "$cl_ssh_key" != "${_orig_ssh_key:-~/.ssh/id_rsa}" ]] && cmd="$cmd --ssh-key '$cl_ssh_key'"
-
-	[[ -n "$cl_starting_ip" && "$cl_starting_ip" != "$_orig_starting_ip" ]] && cmd="$cmd --starting-ip $cl_starting_ip"
-	[[ -n "$cl_network" && "$cl_network" != "$_orig_network" ]] && cmd="$cmd --machine-network $cl_network"
-	[[ -n "$cl_dns" && "$cl_dns" != "$_orig_dns" ]] && cmd="$cmd --dns ${cl_dns//,/ }"
-	[[ -n "$cl_gateway" && "$cl_gateway" != "$_orig_gateway" ]] && cmd="$cmd --gateway-ip $cl_gateway"
-	[[ -n "$cl_ntp" && "$cl_ntp" != "$_orig_ntp" ]] && cmd="$cmd --ntp ${cl_ntp//,/ }"
-	[[ -n "$cl_ports" && "$cl_ports" != "$_orig_ports" ]] && cmd="$cmd --ports ${cl_ports//,/ }"
-	[[ -n "$cl_vlan" && "$cl_vlan" != "$_orig_vlan" ]] && cmd="$cmd --vlan $cl_vlan"
-	[[ "$cl_connection" != "${_orig_connection:-}" ]] && \
-		[[ "$cl_connection" == "proxy" || "$cl_connection" == "direct" ]] && cmd="$cmd --int-connection $cl_connection"
-
-	if [[ "$cl_type" != "sno" ]]; then
-		[[ -n "$cl_api_vip" && "$cl_api_vip" != "$_orig_api_vip" ]] && cmd="$cmd --api-vip $cl_api_vip"
-		[[ -n "$cl_ingress_vip" && "$cl_ingress_vip" != "$_orig_ingress_vip" ]] && cmd="$cmd --ingress-vip $cl_ingress_vip"
-	fi
-
-	if [[ "$cl_type" == "standard" ]]; then
-		[[ -n "$cl_workers" && "$cl_workers" != "$_orig_workers" ]] && cmd="$cmd --num-workers $cl_workers"
-	fi
-
-	# VM resource flags (only for vmw/kvm platforms)
-	# Only pass if user changed the value from what aba core generated
-	if [[ "$cl_platform" != "bm" ]]; then
-		[[ -n "$cl_master_cpu" && "$cl_master_cpu" != "$_orig_master_cpu" ]] && cmd="$cmd --mcpu $cl_master_cpu"
-		[[ -n "$cl_master_mem" && "$cl_master_mem" != "$_orig_master_mem" ]] && cmd="$cmd --mmem $cl_master_mem"
-		if [[ "$cl_type" == "standard" ]]; then
-			[[ -n "$cl_worker_cpu" && "$cl_worker_cpu" != "$_orig_worker_cpu" ]] && cmd="$cmd --wcpu $cl_worker_cpu"
-			[[ -n "$cl_worker_mem" && "$cl_worker_mem" != "$_orig_worker_mem" ]] && cmd="$cmd --wmem $cl_worker_mem"
-		fi
-		[[ -n "$cl_disk" && "$cl_disk" != "$_orig_disk" ]] && cmd="$cmd --data-disk-gb $cl_disk"
-		[[ -n "$cl_mac_template" && "$cl_mac_template" != "$_orig_mac_template" ]] && cmd="$cmd --mac-prefix $cl_mac_template"
-	fi
+	# cluster.conf is already up to date (_persist_cluster_draft writes after every page).
+	# Just tell aba to use the existing config — no flags needed.
+	local cmd="aba cluster --name $cl_name"
 
 	# Step will be determined after review (bm gets ISO vs Install choice)
 	local install_step="install"

@@ -569,7 +569,7 @@ _direct_action_menu() {
 			day2_avail=false
 			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
 		fi
-		if [[ "$has_installed" == "false" ]]; then
+		if [[ "$has_any_cluster" == "false" ]]; then
 			mon_avail=false
 			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
