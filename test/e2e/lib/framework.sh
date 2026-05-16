@@ -1979,12 +1979,3 @@ e2e_setup() {
     _e2e_log "  _E2E_INTERACTIVE=${_E2E_INTERACTIVE:-off}"
 }
 
-e2e_teardown() {
-    _e2e_log "=== E2E Teardown ==="
-    _e2e_log "  Log file: $E2E_LOG_FILE"
-
-    # Print final summary if suite was started
-    if [ -n "$_E2E_SUITE_NAME" ]; then
-        suite_end
-    fi
-}

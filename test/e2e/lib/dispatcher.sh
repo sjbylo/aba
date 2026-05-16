@@ -593,6 +593,8 @@ _notify_periodic_status() {
 "
 			_n_ok=$(( _n_ok + 1 ))
 		elif [ "$_nrc" -eq 3 ] 2>/dev/null; then
+			_notify_body+="  con${_np}: ${_ns} SKIP
+"
 			_n_skip=$(( _n_skip + 1 ))
 		else
 			_notify_body+="  con${_np}: ${_ns} FAIL(${_nrc})
@@ -601,7 +603,9 @@ _notify_periodic_status() {
 		fi
 	done
 	local _q_left=$(( ${#_work_queue[@]} - _queue_idx ))
-	local _hdr="[e2e $(date '+%H:%M:%S')] ${#_results[@]} done (${_n_ok}ok ${_n_fail}fail), ${#_busy_pools[@]} running"
+	local _hdr="[e2e $(date '+%H:%M:%S')] ${#_results[@]} done (${_n_ok}ok ${_n_fail}fail"
+	[ "$_n_skip" -gt 0 ] && _hdr+=" ${_n_skip}skip"
+	_hdr+="), ${#_busy_pools[@]} running"
 	[ "$_q_left" -gt 0 ] && _hdr+=", ${_q_left} queued"
 	$NOTIFY_CMD "${_hdr}
 ${_notify_body}" < /dev/null >/dev/null &
