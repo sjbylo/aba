@@ -79,6 +79,7 @@ bundles/v2/work
 .bundle
 test/e2e/LAB-NETWORK.md
 test/e2e/SESSION-NOTES.md
+ai/*
 ai/SESSION_STATE.md
 test/func/screenshots/
 vmware.conf.bk

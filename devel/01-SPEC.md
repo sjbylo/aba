@@ -129,7 +129,7 @@ FROM config.
 |------|-------|------------|
 | `aba.conf` | Global | `ocp_version`, `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
 | `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_version_target` (upgrade) |
-| `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
+| `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `starting_ip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
 
 **Read the config variable, not the file existence.** Config files created by ABA
 contain valid values. But don't use file existence as a boolean proxy for a
@@ -244,6 +244,15 @@ values after sourcing.
 
 - `normalize-aba-conf`, `normalize-mirror-conf`, `normalize-cluster-conf`,
   `normalize-vmware-conf`, `normalize-kvm-conf`
+
+### IP math helpers
+
+Utility functions for CIDR arithmetic in `scripts/include_all.sh`:
+
+- `ip_to_int`, `int_to_ip` — dotted-quad ↔ 32-bit integer conversion
+- `ip_in_cidr` — test if an IP is within a CIDR
+- `cidr_last_ip`, `cidr_host_count` — broadcast address and usable host count
+- `suggest_starting_ip` — compute a sensible default node IP (network base + 100, clamped for small CIDRs). Used by `create-cluster-conf.sh` to auto-populate `starting_ip` instead of a placeholder string.
 
 ### ensure_*()
 
