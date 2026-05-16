@@ -16,10 +16,23 @@ fi
 _prompt_password() {
 	local pw1 pw2
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox "Enter registry password:" 0 40 2>"$_TUI_TMP"
+		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \
+			"Enter registry password (min 8 chars, no whitespace, no single quote):" 0 70 2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
 		pw1=$(<"$_TUI_TMP")
-		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox "Confirm registry password:" 0 40 2>"$_TUI_TMP"
+		if [[ ${#pw1} -lt 8 ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "Password must be at least 8 characters." 0 0
+			continue
+		fi
+		if [[ "$pw1" =~ [[:space:]] ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "Password cannot contain whitespace." 0 0
+			continue
+		fi
+		if [[ "$pw1" == *"'"* ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "Password cannot contain single quote (') characters." 0 0
+			continue
+		fi
+		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox "Confirm registry password:" 0 70 2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
 		pw2=$(<"$_TUI_TMP")
 		if [[ "$pw1" == "$pw2" ]]; then
@@ -684,6 +697,8 @@ mirror_view_isc() {
 # =============================================================================
 
 mirror_select_operators() {
+	local wizard_mode="${1:-}"
+
 	tui_log "Action: Select Operators"
 
 	local version_short="${ocp_version%.*}"
@@ -709,11 +724,13 @@ mirror_select_operators() {
 	fi
 
 	# Delegate to the operator selection menu (same as v1 structure)
-	_operator_menu "$version_short"
+	_operator_menu "$version_short" "${wizard_mode:-}"
+	return $?
 }
 
 _operator_menu() {
 	local version_short="$1"
+	local wizard_mode="${2:-}"
 
 	while :; do
 		local basket_count="${#OP_BASKET[@]}"
@@ -750,6 +767,10 @@ Selected operators will be included in the ImageSet config."
 				return 0
 				;;
 			1|255)
+				# Wizard: Back returns to platform; action menu treats Back same as Done
+				if [[ "$wizard_mode" == "wizard" ]]; then
+					return 2
+				fi
 				return 0
 				;;
 			0) ;;

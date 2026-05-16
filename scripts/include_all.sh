@@ -1607,6 +1607,15 @@ fetch_older_version() {
 }
 
 
+# Escape characters that are special in sed replacement strings.
+# Must be called before interpolating user values into sed 's|...|...|' commands.
+_sed_escape_replacement() {
+	# Order matters: escape \ first (otherwise later escapes get double-escaped).
+	# & → \&  (& means "entire matched text" in sed replacement)
+	# | → \|  (| is our sed delimiter in replace-value-conf)
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/[&|]/\\&/g'
+}
+
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
 	# -n <string> : name of value to change
@@ -1675,8 +1684,9 @@ replace-value-conf() {
 		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
 
 		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
-		# ... change nothing!
-		if grep -q -E "^${name}=${_write_value}[[:space:]]*(#.*)?$" "$f"; then
+		# ... change nothing!  Uses grep -F (fixed string) so (), [], + etc. in values are not treated as regex.
+		if grep -q -F "${name}=${_write_value}" "$f" && \
+		   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
 			[ "$value" ] && aba_debug "Value ${name}=${_write_value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
 
 			return 0
@@ -1688,13 +1698,17 @@ replace-value-conf() {
 			continue
 		fi
 
+		# Escape sed-special chars (&, \, |) in the replacement value
+		local _sed_safe
+		_sed_safe=$(_sed_escape_replacement "$_write_value")
+
 		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
 		# Trailing whitespace + comment is captured in \1 and preserved.
 		# Uses | as sed delimiter (| is forbidden in config values).
 		if grep -q "^[# ]*${name}='" "$f"; then
-			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_write_value}\1|g" "$f"
+			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		else
-			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_write_value}\1|g" "$f"
+			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		fi
 
 		if [ ! "$quiet" ]; then
