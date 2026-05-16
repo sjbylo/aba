@@ -1059,6 +1059,18 @@ while true; do
 	_rc=0
 	bash "$suite_file" || _rc=$?
 
+	# Defense-in-depth: if the suite exited 0 but suite_end logged failures,
+	# the suite script has a bug (e.g. hardcoded exit 0).  Override to FAIL.
+	if [ "$_rc" -eq 0 ]; then
+		_log="${E2E_LOG_DIR}/${SUITE}-latest.log"
+		if [ -f "$_log" ] && grep -q "Fail: [1-9]" "$_log" 2>/dev/null; then
+			echo ""
+			echo "  *** BUG: suite exited 0 but suite_end reported failures -- overriding to rc=1 ***"
+			echo ""
+			_rc=1
+		fi
+	fi
+
 	if [ $_rc -eq 4 ]; then
 		echo ""
 		echo "  Suite $SUITE: RESTARTING by user request (from scratch) ..."
