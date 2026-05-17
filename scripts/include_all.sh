@@ -3321,10 +3321,16 @@ aba_inet_check_cached() {
 
 # --- OCP version fetch ---
 
-# Start stable version fetch in background (non-blocking)
+# Start version fetches for all channels in background (non-blocking).
+# Stable runs first — prefetch-catalogs.sh waits on ocp:stable:latest_version
+# when aba.conf has no ocp_version yet.
 aba_version_fetch_start() {
-	run_once -i "ocp:stable:latest_version" -- \
-		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_latest_version stable"
+	local _ch
+	for _ch in stable fast candidate; do
+		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_latest_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_previous_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_older_version $_ch"
+	done
 }
 
 # --- ISC generation ---
