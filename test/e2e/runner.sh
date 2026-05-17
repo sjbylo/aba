@@ -1063,7 +1063,7 @@ while true; do
 	# the suite script has a bug (e.g. hardcoded exit 0).  Override to FAIL.
 	if [ "$_rc" -eq 0 ]; then
 		_log="${E2E_LOG_DIR}/${SUITE}-latest.log"
-		if [ -f "$_log" ] && grep -q "Fail: [1-9]" "$_log" 2>/dev/null; then
+		if [ -f "$_log" ] && grep -q "Total:.*Fail: [1-9]" "$_log" 2>/dev/null; then
 			echo ""
 			echo "  *** BUG: suite exited 0 but suite_end reported failures -- overriding to rc=1 ***"
 			echo ""

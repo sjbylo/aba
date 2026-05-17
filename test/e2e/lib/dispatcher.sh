@@ -266,9 +266,19 @@ _check_hung() {
 	if [ "$_idle_secs" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
 		_hung_notified[$pool_num]=1
 		local _idle_min=$(( _idle_secs / 60 ))
-		printf "  \033[1;35mWARNING:\033[0m %s on pool %s may be hung (no output for %d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
+
+		# Distinguish "paused at interactive failure prompt" from genuinely hung.
+		local _last_line="" _label _color _detail
+		_last_line=$(_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p 2>/dev/null | grep -a '.' | tail -1" 2>/dev/null) || _last_line=""
+
+		if [[ "$_last_line" == *"[R]etry"* ]]; then
+			_label="PAUSED" _color="1;33" _detail="waiting at failure prompt"
+		else
+			_label="HUNG?" _color="1;35" _detail="no output"
+		fi
+		printf "  \033[${_color}m${_label}:\033[0m %s on pool %s -- ${_detail} (%d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-			$NOTIFY_CMD "[e2e] HUNG? ${suite} on pool ${pool_num} -- no output for ${_idle_min} min" < /dev/null >/dev/null &
+			$NOTIFY_CMD "[e2e] ${_label}: ${suite} on pool ${pool_num} -- ${_detail} (${_idle_min} min)" < /dev/null >/dev/null &
 		fi
 	fi
 }
@@ -322,7 +332,12 @@ _record_result() {
 		_print_box "1;45;97" "${_infra_lines[@]}"
 		# Don't record in _results; append to _work_queue for re-dispatch.
 		# Caller handles _busy_pools unset and log collection.
-		_work_queue+=("$suite")
+		# Guard against duplicates from repeated infra failures.
+		local _already_queued=""
+		for _qi in "${_work_queue[@]:$_queue_idx}"; do
+			[ "$_qi" = "$suite" ] && _already_queued=1 && break
+		done
+		[ -z "$_already_queued" ] && _work_queue+=("$suite")
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 			local _cd_msg=""
 			[ "$_pfc" -ge "$_POOL_INFRA_FAIL_THRESHOLD" ] && _cd_msg=" (pool $pool_num cooldown ${_POOL_COOLDOWN_SECONDS}s)"

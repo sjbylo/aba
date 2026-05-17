@@ -487,7 +487,7 @@ suite_end() {
 
     _print_progress
 
-    if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
+    if [ "$_E2E_FAIL_COUNT" -gt 0 ] || [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
@@ -585,27 +585,6 @@ test_skip() {
     _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
     _checkpoint_write "$test_name" "SKIP"
     _E2E_CURRENT_TEST=""
-}
-
-# Convenience: wrap a test name + body in begin/end
-run_test() {
-    local test_name="$1"; shift
-
-    # Check checkpoint/resume -- skip if already passed
-    if should_skip_checkpoint "$test_name"; then
-        _E2E_TEST_COUNT=$(( _E2E_TEST_COUNT + 1 ))
-        _checkpoint_write "$test_name" "0"
-        _update_plan "$test_name" "DONE"
-        _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
-        _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
-        return 0
-    fi
-
-    test_begin "$test_name"
-    local rc=0
-    eval "$@" || rc=$?
-    test_end "$rc"
-    return "$rc"
 }
 
 # --- Checkpoint / Resume ---------------------------------------------------

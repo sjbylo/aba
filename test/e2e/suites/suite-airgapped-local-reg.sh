@@ -534,7 +534,7 @@ e2e_diag_remote "Show travels app pods" \
 
 # Cleanup: uninstall mesh demo (free resources before upgrade)
 e2e_run_remote "Uninstall service mesh demo" \
-    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./99-uninstall-all-mesh3.sh || true"
+    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./99-uninstall-all-mesh3.sh"
 e2e_run_remote "Remove mesh demo dir" "rm -rf ~/mesh-demo"
 e2e_run "Remove local mesh demo clone" "rm -rf /tmp/mesh-demo"
 fi
