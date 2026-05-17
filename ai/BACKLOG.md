@@ -3137,3 +3137,42 @@ Moderate — `replace-value-conf` is used throughout ABA core and has complex es
 
 21 individual calls = 0.375s (measured on registry4). A single sed would be ~0.02s.
 
+## Bug: Skip SSH localhost check for Docker registry local install
+
+**Priority:** Low
+**Scope:** Core (`scripts/reg-install.sh` or related registry install logic)
+
+### Problem
+
+When installing a Docker registry on localhost (`aba -d mirror install`), ABA performs an SSH access check to the local host (e.g. "SSH access to localhost via 'registry4.example.com' is working."). This is unnecessary — Docker registry local install doesn't need SSH. SSH is only required for remote registry installations.
+
+### Expected behavior
+
+Skip the SSH connectivity check when the registry is being installed locally. Only perform the SSH check for remote installs (where `reg_ssh_user` / `reg_ssh_key` are set).
+
+## Bug: Skip Quay mirror-registry tarball download/extract for Docker registry
+
+**Priority:** Low
+**Scope:** Core (registry install workflow)
+
+### Problem
+
+When installing a Docker registry, ABA still downloads and extracts the Quay `mirror-registry` installer tarball. This is unnecessary — the Docker registry uses a simple container image, not the Quay installer. Downloading the ~700MB+ tarball wastes time and bandwidth for Docker registry users.
+
+### Expected behavior
+
+Only download/extract the `mirror-registry` tarball when `reg_vendor=quay` (or `auto` which defaults to Quay). Skip it entirely for `reg_vendor=docker`.
+
+## Enhancement: run_once "force re-run" flag (-f)
+
+**Priority:** Low
+**Scope:** Core (`scripts/include_all.sh`, `run_once()`)
+
+### Problem
+
+To force a task to re-execute, callers must currently make two separate calls: `run_once -r -i <id>` (reset) then `run_once -s -i <id> <command>` (start). This is verbose and easy to forget.
+
+### Proposed solution
+
+Add a `-f` (force) flag that combines reset + start in one call: `run_once -f -i <id> <command>`. Internally it would call `_kill_id` to clear the exit/lock/pid files, then proceed with the normal start path.
+
