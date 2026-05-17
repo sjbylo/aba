@@ -226,16 +226,14 @@ _direct_channel() {
 			tui_log "Selected channel: $ocp_channel"
 			DIALOG_RC="next"
 
-			# Pre-fetch versions in background. The "&" is CRITICAL: without it,
-			# run_once blocks until the HTTP fetch completes (~2 min), freezing the UI.
-			# With "&", fetches happen while user reads the next dialog.
-			# Results are later retrieved via "run_once -o -i ID" (cached output).
+			# Ensure version fetches are running (already started at TUI boot;
+			# run_once -i is non-blocking and skips if task already completed)
 			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $ocp_channel" &
+				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $ocp_channel"
 			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $ocp_channel" &
+				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $ocp_channel"
 			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_older_version $ocp_channel" &
+				bash -lc "source ./scripts/include_all.sh; fetch_older_version $ocp_channel"
 			;;
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
@@ -296,7 +294,7 @@ _direct_version() {
 		fi
 		while :; do
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
-				--inputbox "$TUI2_MSG_VERSION_MANUAL_PROMPT" 0 0 "" \
+				--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "" \
 				2>"$_TUI_TMP"
 			local man_rc=$?
 			if [[ $man_rc -ne 0 ]]; then
@@ -304,13 +302,34 @@ _direct_version() {
 				return
 			fi
 			ocp_version=$(<"$_TUI_TMP")
+			ocp_version="${ocp_version##[[:space:]]}"
+			ocp_version="${ocp_version%%[[:space:]]}"
 			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
 				return
+			elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+				# x.y format — resolve to latest z-stream
+				local _input_minor="$ocp_version"
+				tui_log "Resolving $ocp_version to latest z-stream"
+				run_once -i "ocp:${ocp_channel}:${ocp_version}:latest_z" -- \
+					bash -lc "source '${ABA_ROOT}/scripts/include_all.sh'; fetch_latest_z_version '$ocp_channel' '$ocp_version'"
+				dlg --backtitle "$(ui_backtitle)" --infobox \
+					"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+				run_once -q -w -S -i "ocp:${ocp_channel}:${ocp_version}:latest_z"
+				ocp_version=$(run_once -o -i "ocp:${ocp_channel}:${ocp_version}:latest_z" 2>/dev/null)
+				if [[ -n "$ocp_version" && "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+					tui_log "Resolved $_input_minor to $ocp_version"
+					DIALOG_RC="next"
+					return
+				fi
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
+				ocp_version=""
+			else
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Invalid version format.\n\nExpected: x.y or x.y.z (e.g. 4.18 or 4.18.10)" 0 0
 			fi
-			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"Invalid version format.\n\nExpected: x.y.z (e.g. 4.16.3)" 0 0
 		done
 		return
 	fi
@@ -320,7 +339,7 @@ _direct_version() {
 	items+=("L" "Latest:   $latest")
 	[[ -n "$previous" ]] && items+=("P" "Previous: $previous")
 	[[ -n "$older" ]] && items+=("O" "Older:    $older")
-	items+=("M" "Manual entry...")
+	items+=("M" "Manual entry (x.y or x.y.z)")
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
 		--no-cancel \
@@ -343,18 +362,38 @@ _direct_version() {
 			M)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
-						--inputbox "$TUI2_MSG_VERSION_ENTRY" 0 0 "${ocp_version:-$latest}" \
+						--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "${ocp_version:-$latest}" \
 						2>"$_TUI_TMP"
 					if [[ $? -ne 0 ]]; then
 						DIALOG_RC="repeat"
 						return
 					fi
 					ocp_version=$(<"$_TUI_TMP")
+					ocp_version="${ocp_version##[[:space:]]}"
+					ocp_version="${ocp_version%%[[:space:]]}"
 					if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 						break
+					elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+						# x.y format — resolve to latest z-stream
+						local _input_minor="$ocp_version"
+						tui_log "Resolving $ocp_version to latest z-stream"
+						run_once -i "ocp:${ocp_channel}:${ocp_version}:latest_z" -- \
+							bash -lc "source '${ABA_ROOT}/scripts/include_all.sh'; fetch_latest_z_version '$ocp_channel' '$ocp_version'"
+						dlg --backtitle "$(ui_backtitle)" --infobox \
+							"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+						run_once -q -w -S -i "ocp:${ocp_channel}:${ocp_version}:latest_z"
+						ocp_version=$(run_once -o -i "ocp:${ocp_channel}:${ocp_version}:latest_z" 2>/dev/null)
+						if [[ -n "$ocp_version" && "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+							tui_log "Resolved $_input_minor to $ocp_version"
+							break
+						fi
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
+						ocp_version=""
+					else
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid version format.\n\nExpected: x.y or x.y.z (e.g. 4.18 or 4.18.10)" 0 0
 					fi
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid version format.\n\nExpected: x.y.z (e.g. 4.16.3)" 0 0
 				done
 				;;
 			esac
@@ -368,7 +407,7 @@ _direct_version() {
 • Latest: most recent release in the channel
 • Previous: one release back (good for stability)
 • Older: two releases back
-• Manual: enter any valid x.y.z version"
+• Manual: enter specific version (x.y or x.y.z)"
 			DIALOG_RC="repeat"
 			;;
 		3)
@@ -581,8 +620,6 @@ _direct_action_menu() {
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
-			"" "──── Mode ──────────────────────────"
-			"$TUI2_DIRECT_TAG_SWITCH_MIRROR"  "Switch to Partially Disconnected"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DIRECT_MENU" \
@@ -661,11 +698,6 @@ Navigation:
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
 				tui_advanced_menu
-				;;
-			"$TUI2_DIRECT_TAG_SWITCH_MIRROR")
-				_TUI_MODE="CONNO"
-				tui_log "Switching from DIRECT to CONNO mode"
-				return 0
 				;;
 		esac
 	done

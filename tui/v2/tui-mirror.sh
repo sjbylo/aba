@@ -179,8 +179,10 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 mirror_install() {
 	tui_log "Action: Install Mirror"
 
+	local default_item="1"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_INSTALL_MIRROR" \
+			--default-item "$default_item" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--help-button \
 			--menu "$TUI2_MSG_MIRROR_TARGET" 0 0 0 \
@@ -206,6 +208,7 @@ After installation, use 'Save' or 'Sync' to populate it with images."
 
 		local choice
 		choice=$(<"$_TUI_TMP")
+		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
 			1) _mirror_install_local ;;
@@ -644,6 +647,7 @@ mirror_view_isc() {
 			--textbox "$isconf_file" 0 0
 	else
 		# Editable — offer view/edit/reset
+		local default_item="1"
 		while :; do
 		# Only show "Reset" if ISC was manually edited (newer than .created flag)
 		local _isc_items=("1" "View (read-only)" "2" "Edit")
@@ -655,6 +659,7 @@ mirror_view_isc() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
+			--default-item "$default_item" \
 			--menu "$TUI2_MSG_ISC_MENU" 0 0 0 \
 				"${_isc_items[@]}" \
 				2>"$_TUI_TMP"
@@ -663,6 +668,7 @@ mirror_view_isc() {
 
 			local choice
 			choice=$(<"$_TUI_TMP")
+			[[ -n "$choice" ]] && default_item="$choice"
 
 			case "$choice" in
 				1)
@@ -732,10 +738,12 @@ _operator_menu() {
 	local version_short="$1"
 	local wizard_mode="${2:-}"
 
+	local default_item="1"
 	while :; do
 		local basket_count="${#OP_BASKET[@]}"
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_OPERATORS" \
+			--default-item "$default_item" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--help-button \
 			--ok-label "$TUI2_BTN_SELECT" \
@@ -778,6 +786,7 @@ Selected operators will be included in the ImageSet config."
 
 		local choice
 		choice=$(<"$_TUI_TMP")
+		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
 			1) _operator_sets "$version_short"

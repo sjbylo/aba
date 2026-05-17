@@ -649,12 +649,17 @@ cluster_install_flow() {
 		esac
 	fi
 
-	# Mode-aware connection default: prevent state leaking between modes
-	if [[ "$_TUI_MODE" == "DIRECT" ]]; then
-		[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
-	else
-		[[ "$cl_connection" == "direct" ]] && cl_connection="mirror"
-	fi
+	# Mode-aware connection default: prevent state leaking between modes.
+	# Extracted to a function so it can be re-applied after every _cluster_load_conf
+	# call (which may reset cl_connection to empty/mirror from cluster.conf).
+	_apply_mode_connection() {
+		if [[ "$_TUI_MODE" == "DIRECT" ]]; then
+			[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
+		else
+			[[ "$cl_connection" == "direct" ]] && cl_connection="mirror"
+		fi
+	}
+	_apply_mode_connection
 
 	# Save locals back to globals (called before every return)
 	_cl_save_state() {
@@ -685,6 +690,7 @@ cluster_install_flow() {
 				_gate_platform_config || continue
 				# Generate preliminary cluster.conf to get real defaults from aba core
 				_cluster_generate_defaults
+				_apply_mode_connection
 				_persist_cluster_draft
 				;;
 			2)
@@ -797,7 +803,7 @@ _cluster_page_basics() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_BASICS" 0 0 0 \
+			--menu "$TUI2_MSG_CLUSTER_BASICS" 0 58 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -872,6 +878,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			# Silently load existing cluster.conf if present
 			if [[ -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
 				_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
+				_apply_mode_connection
 				tui_log "Loaded existing cluster.conf for '$cl_name'"
 			fi
 			break
@@ -1123,8 +1130,10 @@ _cluster_page_network() {
 # --- Page 3: Interfaces (menu-style with toggle) ---
 _cluster_page_iface() {
 	local default_item="P"
-	# Normalize empty connection to "mirror" (ABA default)
-	[[ -z "$cl_connection" ]] && cl_connection="mirror"
+	# Normalize empty connection: "direct" in DIRECT mode, "mirror" otherwise
+	if [[ -z "$cl_connection" ]]; then
+		[[ "$_TUI_MODE" == "DIRECT" ]] && cl_connection="direct" || cl_connection="mirror"
+	fi
 	while :; do
 		local conn_display=""
 		case "$cl_connection" in
@@ -1458,7 +1467,10 @@ _cluster_execute() {
 	local _op_count="${#OP_BASKET[@]}"
 
 	# Image source display (enrich with details)
-	local _conn_disp="${cl_connection:-mirror}"
+	local _conn_disp="$cl_connection"
+	if [[ -z "$_conn_disp" ]]; then
+		[[ "$_TUI_MODE" == "DIRECT" ]] && _conn_disp="direct" || _conn_disp="mirror"
+	fi
 	case "$_conn_disp" in
 		mirror)
 			local _srh="${reg_host:-}" _srp="${reg_port:-}"
@@ -1557,7 +1569,10 @@ _cluster_execute() {
 		local _old_conn
 		_old_conn=$(grep '^int_connection=' "$cluster_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | awk '{print $1}')
 		[[ -z "$_old_conn" ]] && _old_conn="mirror"
-		local _new_conn="${cl_connection:-mirror}"
+		local _new_conn="$cl_connection"
+		if [[ -z "$_new_conn" ]]; then
+			[[ "$_TUI_MODE" == "DIRECT" ]] && _new_conn="direct" || _new_conn="mirror"
+		fi
 		if [[ "$_old_conn" != "$_new_conn" ]]; then
 			tui_log "Connection mode changed ($cluster_dir): $_old_conn -> $_new_conn, cleaning stale artifacts"
 			rm -f "$cluster_dir/install-config.yaml" "$cluster_dir/.init" "$cluster_dir/.configured" 2>/dev/null
@@ -1682,6 +1697,20 @@ tui_advanced_menu() {
 		if [[ -n "$_TUI_EXEC_MODE" ]]; then
 			adv_items+=("E" "Reset Execution Mode (currently: $_TUI_EXEC_MODE)")
 		fi
+		# Mode switches (normally auto-detected; here for manual override)
+		adv_items+=("" "──── Switch Mode ───────────────────")
+		case "$_TUI_MODE" in
+			CONNO)
+				adv_items+=("X" "Switch to Fully Connected (direct)")
+				adv_items+=("Z" "Switch to Fully Disconnected")
+				;;
+			DIRECT)
+				adv_items+=("X" "Switch to Partially Disconnected (mirror)")
+				;;
+			DISCO)
+				adv_items+=("X" "Switch to Connected Mode")
+				;;
+		esac
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
@@ -1695,7 +1724,7 @@ tui_advanced_menu() {
 
 		local choice
 		choice=$(<"$_TUI_TMP")
-		default_item="$choice"
+		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
 			"R")
@@ -1730,6 +1759,38 @@ tui_advanced_menu() {
 				_TUI_EXEC_MODE=""
 				tui_log "Execution mode preference reset"
 				dlg --backtitle "$(ui_backtitle)" --msgbox "Execution mode reset.\n\nYou will be asked to choose TUI or Terminal for each command." 0 0
+				;;
+			"X")
+				case "$_TUI_MODE" in
+					CONNO)
+						_TUI_MODE="DIRECT"
+						_TUI_DIRECT_FROM_CONNO=true
+						tui_log "Advanced: switching to DIRECT mode"
+						direct_main || true
+						_TUI_MODE="CONNO"
+						_TUI_DIRECT_FROM_CONNO=false
+						;;
+					DIRECT)
+						_TUI_MODE="CONNO"
+						tui_log "Advanced: switching to CONNO mode"
+						return 0
+						;;
+					DISCO)
+						disco_reset
+						return 0
+						;;
+				esac
+				;;
+			"Z")
+				if [[ "$_TUI_MODE" == "CONNO" ]]; then
+					_ensure_offline_prereqs || continue
+					_TUI_MODE="DISCO"
+					_TUI_DISCO_FROM_CONNO=true
+					tui_log "Advanced: switching to DISCO mode"
+					disco_main || true
+					_TUI_MODE="CONNO"
+					_TUI_DISCO_FROM_CONNO=false
+				fi
 				;;
 		esac
 	done
@@ -1951,6 +2012,8 @@ _day2_upgrade() {
 		return 1
 	fi
 
+	local default_item="${_sorted[0]}"
+
 	while :; do
 		if [[ ${#_sorted[@]} -gt 0 ]]; then
 			# Build menu from available versions
@@ -1972,6 +2035,7 @@ _day2_upgrade() {
 				--ok-label "Upgrade" \
 				--cancel-label "$TUI2_BTN_BACK" \
 				--help-button \
+				--default-item "$default_item" \
 				--menu "Select target version for $SELECTED_CLUSTER_DISPLAY:" 0 0 0 \
 				"${items[@]}" \
 				2>"$_TUI_TMP"
@@ -1990,6 +2054,7 @@ _day2_upgrade() {
 
 			local choice
 			choice=$(<"$_TUI_TMP")
+			[[ -n "$choice" ]] && default_item="$choice"
 
 			if [[ "$choice" == "M" ]]; then
 				# Fall through to manual entry below
