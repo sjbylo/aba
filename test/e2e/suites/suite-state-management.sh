@@ -464,4 +464,6 @@ e2e_run -q "Remove fake cluster state" \
 
 test_end
 
-suite_end
+suite_end; _rc=$?
+
+exit $_rc

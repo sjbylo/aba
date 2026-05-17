@@ -347,4 +347,6 @@ test_end
 
 # --- Cleanup ----------------------------------------------------------------
 # Full upgrade flow is tested in suite-cluster-ops (piggybacks on its SNO).
-suite_end
+suite_end; _rc=$?
+
+exit $_rc

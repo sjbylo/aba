@@ -56,7 +56,7 @@ test_begin "Setup: install aba and configure"
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
@@ -204,7 +204,7 @@ e2e_run "Verify no active --remove-signatures in config" \
     "! grep -q '^OC_MIRROR_FLAGS=.*--remove-signatures' \$HOME/.aba/config"
 
 e2e_diag "Check oc-mirror cache (local)" \
-    "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*' 2>/dev/null"
+    "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*'"
 
 test_end
 
