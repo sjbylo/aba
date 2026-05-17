@@ -376,12 +376,14 @@ confirm_and_execute() {
 		esac
 	fi
 
+	local default_item="1"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--extra-button --extra-label "Command" \
+			--default-item "$default_item" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
 			"1" "Run in TUI" \
 			"2" "Run in Terminal" \
@@ -424,6 +426,7 @@ confirm_and_execute() {
 
 		local choice
 		choice=$(<"$_TUI_TMP")
+		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
 			1) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
