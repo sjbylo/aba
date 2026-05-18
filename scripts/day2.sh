@@ -52,22 +52,6 @@ if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	fi
 fi
 
-# Gate: ensure the cluster install completed (or let the user override)
-if [ ! -f .install-complete ]; then
-	if cluster_is_ready; then
-		aba_info "Cluster is ready but .install-complete marker is missing — creating it now."
-		touch .install-complete
-		# Externalize state (auth, backups) if not yet done
-		if [ ! -L clusterstate ]; then
-			aba_info "Externalizing cluster state ..."
-			externalize_cluster_state || true
-		fi
-	else
-		aba_warning "The cluster install has not been finalized (aba install / aba mon has not completed)."
-		ask "The cluster has not been finalized, continue anyway" || exit 1
-	fi
-fi
-
 warn_if_cluster_unstable
 
 aba_info "What this 'day2' script does:"
