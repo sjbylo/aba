@@ -143,6 +143,9 @@ start_tui() {
 
 	# Kill any leftover session (e.g. dead pane kept by remain-on-exit)
 	tmux kill-session -t "$SESSION" 2>/dev/null || true
+	sleep 0.5
+	# Remove stale TUI lock/pid so flock is not held by a dead process
+	rm -f "$HOME/.aba/.tui.lock" "$HOME/.aba/.tui.pid"
 
 	log_info "Starting TUI in tmux session: $SESSION"
 	tmux new-session -d -s "$SESSION" -x 240 -y 70 "$cmd"

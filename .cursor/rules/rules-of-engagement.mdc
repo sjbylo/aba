@@ -81,6 +81,7 @@ alwaysApply: true
 - Add comments for non-obvious bash features
 - Format bash scripts with proper and correct indentaton (pretty print).
 - **NEVER use `(( var++ ))` or `(( var-- ))` for arithmetic** — when `var` is 0, `(( 0 ))` returns exit code 1, which crashes under `set -e` or an ERR trap. Use `var=$(( var + 1 ))` instead. Never band-aid with `(( var++ )) || true`.
+- **NEVER use `local` outside a function** — `local` is only valid inside a bash function. At script top level, just use a plain variable assignment (e.g. `splash_rc=$?` not `local splash_rc=$?`). Bash will error with "local: can only be used in a function".
 - **Always prefer `sudo` over running as root directly.** SSH to a host as the normal user and use `sudo <command>` for privileged operations. Never SSH as root just to avoid typing `sudo`. This keeps audit trails, reduces blast radius, and matches how real users operate.
 
 ## Key architecture
