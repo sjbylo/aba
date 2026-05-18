@@ -133,7 +133,7 @@ Both modes MUST:
 Every menu item is always **active and selectable**. When a user selects an item whose prerequisites are unmet, the action handler guides them through satisfying those prerequisites inline:
 
 - **Mirror-dependent items** (Sync, Load, Install Cluster): if no mirror is installed, the handler asks "Install mirror first?", shows config review, then runs the single `aba` command (Makefile deps handle install as a dependency of sync/load).
-- **Cluster-dependent items** (Day-2, Finalize): if no clusters exist, shows a msgbox "No clusters found. Install a cluster first." and returns to the menu.
+- **Cluster-dependent items** (Day-2): if no clusters exist, shows a msgbox "No clusters found. Install a cluster first." and returns to the menu.
 
 **Status indicators** (not prerequisite hints) remain on labels:
 - `(installed)` — informational suffix on Install Mirror when already installed
@@ -144,7 +144,7 @@ Every menu item is always **active and selectable**. When a user selects an item
 
 **Cluster installed check:** `cluster_installed()` checks for the `.install-complete` marker file (created by the Makefile on successful install, removed by `aba delete`). Do NOT use `iso-agent-based/auth/kubeconfig` — it persists after deletion and causes deleted clusters to appear as installed.
 
-**ERR trap safety / install detection:** `list_installed_clusters()` walks `list_cluster_dirs`; for each dir without `.install-complete`, it **probes `auto_finalize_cluster "$dir"`** (background install may have finished) before re-checking `cluster_installed`. The final `cluster_installed "$dir" && echo "$dir" || true` needs `|| true` so a false `cluster_installed` under `set -e` / ERR does not abort the loop.
+**ERR trap safety / install detection:** `list_installed_clusters()` walks `list_cluster_dirs`; for each dir without `.install-complete`, it **probes `auto_complete_install "$dir"`** (background install may have finished) before re-checking `cluster_installed`. The final `cluster_installed "$dir" && echo "$dir" || true` needs `|| true` so a false `cluster_installed` under `set -e` / ERR does not abort the loop.
 
 **(Legacy example kept for reference during transition):**
 
@@ -152,7 +152,6 @@ Items that cannot be activated (prerequisites unmet) are shown with a short reas
 
 ```
   Day-2 / Cluster Management     [install cluster first]
-  Finalize Installation (wait-for) [install cluster first]
 ```
 
 This lets the user see the full workflow at a glance.
@@ -270,10 +269,9 @@ Menu layout (exact order):
 3. Load Images `(disk2mirror)` — selecting when no registry exists opens the install-then-load guided path (see UC-D2)
 4. **──── Cluster ────**
 5. Install Cluster — selecting with unmet mirror prereqs triggers guided install/load flow (see UC-D3)
-6. **Finalize Installation (wait-for)** — selecting with no clusters shows msgbox "No clusters found"
-7. **Day-2 / Cluster Management** — selecting with no clusters shows msgbox "No clusters found"
-8. **──── Advanced ────**
-9. Advanced Options — shared advanced menu (`tui_advanced_menu`)
+6. **Day-2 / Cluster Management** — selecting with no clusters shows msgbox "No clusters found"
+7. **──── Advanced ────**
+8. Advanced Options — shared advanced menu (`tui_advanced_menu`); includes **Finalize Installation (wait-for / re-attach)** when clusters exist
 10. **View ImageSet Config** — always (read-only; ISC came from bundle)
 11. **Reset to Connected Mode** — grey tag `[no internet]` when `_TUI_INET` is “no”; otherwise clears `.bundle` and reconnects workflow
 
@@ -338,8 +336,8 @@ Layout (exact order):
 
 1. **──── Mirror ────** — View/Edit ImageSet Config; Select Operators; Install Mirror; Sync Images `(mirror2mirror)`
 2. **──── Transfer ────** — **Create Install Bundle**; Save Images `(mirror2disk)`
-3. **──── Cluster ────** — Install Cluster; **Finalize Installation (wait-for)**; **Day-2 / Cluster Management**
-4. **──── Advanced ────** — Advanced Options (`tui_advanced_menu`)
+3. **──── Cluster ────** — Install Cluster; **Day-2 / Cluster Management**
+4. **──── Advanced ────** — Advanced Options (`tui_advanced_menu`); includes **Finalize Installation (wait-for / re-attach)** when clusters exist
 5. **──── Mode ────** — **Switch to Fully Connected** (→ DIRECT); **Switch to Fully Disconnected** (→ DISCO in-place, after `_ensure_offline_prereqs`)
 
 Menu label convention: Save/Sync/Load include directional suffixes — `(mirror2disk)`, `(mirror2mirror)`, `(disk2mirror)` — so the user knows the data flow direction at a glance.
@@ -394,8 +392,8 @@ Pre-fetch: background catalog/version work overlaps channel and wizard start (sa
 
 Layout (exact order):
 
-1. **──── Cluster ────** — Install Cluster; **Finalize Installation (wait-for)**; **Day-2 / Cluster Management** (selecting Day-2/Finalize with no clusters shows msgbox "No clusters found")
-2. **──── Advanced ────** — Advanced Options
+1. **──── Cluster ────** — Install Cluster; **Day-2 / Cluster Management** (selecting Day-2 with no clusters shows msgbox "No clusters found")
+2. **──── Advanced ────** — Advanced Options; includes **Finalize Installation (wait-for / re-attach)** when clusters exist
 3. **──── Mode ────** — **Switch to Partially Disconnected** (return to mirror / CONNO path)
 
 Default `--default-item`: Install Cluster shortcut tag (see `tui-direct.sh`).
@@ -486,11 +484,13 @@ Correct CLI flags (from `others/help-cluster.txt`):
 
 ---
 
-## Install + Finalize (Monitor) Behavior
+## Install Completion Detection
 
-`aba -d <cluster> install` always auto-runs `aba -d <cluster> mon` at the end (built into the install Makefile target). The separate **Finalize Installation (wait-for)** menu item (`cluster_monitor`) remains available for:
+`aba -d <cluster> install` always auto-runs `aba -d <cluster> mon` at the end (built into the install Makefile target). Additionally, ABA core (`scripts/aba.sh`) auto-detects install completion via `auto_complete_install()` whenever cluster commands (`day2`, `shutdown`, `startup`, `rescue`, `upgrade`) are invoked — if `.install-complete` is missing but the cluster API reports ready, the marker is created automatically.
 
-- Re-attaching to wait for `.install-complete` after Day-2 or other interruptions
+The **Finalize Installation (wait-for / re-attach)** item lives under **Advanced Options** (`tui_advanced_menu`) for rare cases:
+
+- Re-attaching to wait for `.install-complete` after an interrupted install
 - Checking long-running install status at any time
 - Resuming monitoring if the user previously exited with Ctrl-C
 

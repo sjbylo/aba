@@ -182,10 +182,10 @@ dlg() {
 			continue
 		fi
 		if [[ "$next_is_text" == "true" ]]; then
-			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
-				arg="\n$arg"
-			fi
 			if [[ "$has_menu" == "true" ]]; then
+				if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
+					arg="\n$arg"
+				fi
 				arg="${arg}\n\n(Navigate: Arrow keys, Tab, SPACE, ESC)"
 				dims_after_text=3
 			fi
@@ -236,7 +236,7 @@ dlg() {
 	fi
 
 	# Close the flock fd so dialog doesn't inherit it (prevents orphaned lock on kill)
-	dialog --no-shadow --colors "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
+	dialog --no-shadow --colors --no-collapse "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
 }
 
 # =============================================================================
@@ -245,6 +245,9 @@ dlg() {
 
 _TUI_MODE=""   # Set by mode detection: DISCO, CONNO, DIRECT
 _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
+
+# Session-only: forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
+_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-0}"
 
 ui_backtitle() {
 	local mode_display
@@ -459,7 +462,7 @@ _exec_in_tui() {
 	fi
 
 	local tui_cmd="$cmd"
-	[[ "$tui_cmd" != *" -y "* && "$tui_cmd" != *" -y" ]] && tui_cmd="$tui_cmd -y"
+	[[ "$tui_cmd" != *" --yes"* && "$tui_cmd" != *" -y"* ]] && tui_cmd="$tui_cmd --yes"
 
 	tui_log "Executing in TUI: $tui_cmd"
 	cd "$ABA_ROOT"
@@ -639,7 +642,7 @@ list_cluster_dirs() {
 }
 
 # List installed clusters (dirs with .install-complete marker)
-# Also auto-finalizes clusters that completed in the background.
+# Also auto-detects clusters that completed installation in the background.
 list_installed_clusters() {
 	local dir
 	for dir in $(list_cluster_dirs); do
@@ -672,6 +675,274 @@ mirror_has_archives() {
 is_bundle_mode() {
 	[[ -f "$ABA_ROOT/.bundle" ]]
 }
+
+# Append ` --retry N` when _TUI_RETRY_COUNT > 0 (for oc-mirror operations).
+_tui_oc_mirror_retry_suffix() {
+	if [[ "${_TUI_RETRY_COUNT:-0}" -gt 0 ]]; then
+		printf ' --retry %s' "${_TUI_RETRY_COUNT}"
+	fi
+}
+
+# Compute cluster-related menu greying/state for DISCO / CONNO / DIRECT main menus.
+# Sets globals (readable from any sourcing script):
+#   _CLUSTER_HAS_ANY, _CLUSTER_HAS_INSTALLED,
+#   _CLUSTER_DAY2_AVAIL, _CLUSTER_MON_AVAIL,
+#   _CLUSTER_INST_LABEL
+# Optional arg: workflow hint — CONNO | DISCO | DIRECT (default DIRECT).
+tui_cluster_menu_flags() {
+	local _workflow="${1:-DIRECT}"
+
+	_CLUSTER_HAS_ANY=false
+	_CLUSTER_HAS_INSTALLED=false
+	local dir=""
+	for dir in $(list_cluster_dirs); do
+		_CLUSTER_HAS_ANY=true
+		cluster_installed "$dir" && _CLUSTER_HAS_INSTALLED=true
+	done
+
+	_CLUSTER_DAY2_AVAIL=true
+	_CLUSTER_MON_AVAIL=true
+	if [[ "$_CLUSTER_HAS_ANY" != "true" ]]; then
+		_CLUSTER_DAY2_AVAIL=false
+		_CLUSTER_MON_AVAIL=false
+	fi
+
+	local _lbl="Install Cluster"
+	case "$_workflow" in
+		CONNO)
+			if ! mirror_available; then
+				_lbl="Install Cluster [no mirror]"
+			elif ! _mirror_has_release_image; then
+				_lbl="Install Cluster [sync mirror first]"
+			fi
+			;;
+		DISCO)
+			if ! mirror_available; then
+				_lbl="Install Cluster [install registry first]"
+			elif ! _mirror_has_release_image; then
+				_lbl="Install Cluster [load mirror first]"
+			fi
+			;;
+		DIRECT|"")
+			;;
+		*)
+			;;
+	esac
+	_CLUSTER_INST_LABEL="$_lbl"
+}
+
+# -----------------------------------------------------------------------------
+# Settings: ask= (aba.conf), reg_vendor (mirror.conf), oc-mirror retries (session)
+# -----------------------------------------------------------------------------
+
+# raw ask= value trimmed (no normalize), for interpreting yes/no/true
+_tui_abaconf_raw_ask() {
+	if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
+		echo ""
+		return
+	fi
+	local line=""
+	line=$(grep -m1 '^[[:space:]#]*ask=' "$ABA_ROOT/aba.conf" || true)
+	line="${line#*ask=}"
+	line="${line%%#*}"
+	line=$(echo "$line" | sed -e 's/^[[:space:]"'\'']//' -e 's/[[:space:]"'\'']$//')
+	line="${line//\t/}"
+	line="${line// /}"
+	echo "$line"
+}
+
+# Human label for Settings menu Auto-answer row
+_tui_settings_ask_label() {
+	local raw=""
+	raw=$(_tui_abaconf_raw_ask)
+
+	case "${raw,,}" in
+		""|"true"|"1")
+			echo "Ask every time"
+			;;
+		yes)
+			echo "Auto yes"
+			;;
+		no)
+			echo "Auto no"
+			;;
+		false|0)
+			echo "Ask every time"
+			;;
+		*)
+			echo "Ask every time (${raw:-unset})"
+			;;
+	esac
+}
+
+_tui_settings_persist_ask_mode() {
+	local mode="$1"
+	local conf="$ABA_ROOT/aba.conf"
+	if [[ ! -f "$conf" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"No aba.conf found — cannot save settings.\n\nRun setup or copy templates first." 0 0
+		return 1
+	fi
+	case "$mode" in
+		always)
+			replace-value-conf -q -n ask -v true -f "$conf"
+			;;
+		yes)
+			replace-value-conf -q -n ask -v yes -f "$conf"
+			;;
+		no)
+			replace-value-conf -q -n ask -v no -f "$conf"
+			;;
+		*)
+			return 1
+			;;
+	esac
+	source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+	return 0
+}
+
+_tui_settings_menu_reg_vendor() {
+	local vf="$ABA_ROOT/mirror/mirror.conf"
+	if [[ ! -f "$vf" ]]; then
+		make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+	fi
+
+	local cur="auto"
+	if [[ -f "$vf" ]]; then
+		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+		cur="${reg_vendor:-auto}"
+	fi
+
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+		--cancel-label "$TUI2_BTN_BACK" \
+		--menu "Select registry installer vendor (stored in mirror/mirror.conf).\nAuto picks Quay vs Docker based on detected architecture.\nCurrent: $cur" 0 0 3 \
+		"auto"  "Auto (architecture-based)" \
+		"quay"  "Quay mirror-registry" \
+		"docker" "Docker registry tarball" \
+		2>"$_TUI_TMP"
+	local rc=$?
+	[[ $rc -ne 0 ]] && return
+
+	local pick
+	pick=$(<"$_TUI_TMP")
+	case "$pick" in
+		auto|quay|docker)
+			if [[ ! -f "$vf" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "mirror.conf not available." 0 0
+				return 1
+			fi
+			replace-value-conf -q -n reg_vendor -v "$pick" -f "$vf"
+			tui_log "Settings: reg_vendor=$pick"
+			;;
+	esac
+}
+
+_tui_settings_menu_retry() {
+	local current="${_TUI_RETRY_COUNT:-0}"
+	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+		--inputbox "Oc-mirror retry count for this session (0 = omit --retry):" 0 0 "$current" \
+		2>"$_TUI_TMP"
+	[[ $? -ne 0 ]] && return
+
+	local val
+	val=$(<"$_TUI_TMP")
+	val=$(echo "$val" | tr -dc '0-9')
+	[[ -z "$val" ]] && val="0"
+
+	if [[ "$val" =~ ^[0-9]+$ ]] && [[ "$val" -le 999 ]]; then
+		_TUI_RETRY_COUNT="$val"
+		tui_log "Settings: _TUI_RETRY_COUNT=$val"
+	else
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Invalid retry count.\n\nEnter an integer between 0 and 999." 0 0
+	fi
+}
+
+# Settings submenu from CONNO / DIRECT action menus (and callable elsewhere).
+_tui_settings_menu() {
+	local default_item="1"
+	while :; do
+		local ask_row reg_label
+		ask_row=$(_tui_settings_ask_label)
+		local rv="auto"
+		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			rv="${reg_vendor:-auto}"
+		fi
+		reg_label="Registry vendor: ${rv}"
+
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--help-button \
+			--default-item "$default_item" \
+			--menu "Tune interactive behavior for this workstation.\n\n• Auto-answer maps to ask= in aba.conf (ABA may distinguish only some variants).\n• Registry vendor is persisted in mirror/mirror.conf.\n• Retry count affects mirror save/sync/load this session only." 0 0 0 \
+			"1" "Auto-answer (aba.conf ask=): ${ask_row}" \
+			"2" "${reg_label}" \
+			"3" "Oc-mirror retry count (session): ${_TUI_RETRY_COUNT:-0}" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case "$rc" in
+			2)
+				show_help "$TUI2_TITLE_SETTINGS" \
+"Auto-answer (ask=)
+  Ask every time — ask=true or empty/true-like legacy values restore prompts.
+  Auto yes — ask=yes may be interpreted as non-interactive by some scripts when supported.
+  Auto no — ask=no prefers negative confirmation defaults where supported.
+
+Registry type (mirror/mirror.conf: reg_vendor)
+  auto — pick Quay or Docker based on detected architecture.
+
+Retry count (_TUI_RETRY_COUNT)
+  Appended as --retry N to mirror save/sync/load during this TUI session (0 disables)."
+				continue
+				;;
+			1|255)
+				return 0
+				;;
+			0) ;;
+		esac
+
+		local choice
+		choice=$(<"$_TUI_TMP")
+		[[ -n "$choice" ]] && default_item="$choice"
+
+		case "$choice" in
+			1)
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+					--cancel-label "$TUI2_BTN_BACK" \
+					--menu "$(printf '%s%s' \
+						"How should ask= behave in aba.conf? Current: " \
+						"$( _tui_settings_ask_label )")" 0 0 0 \
+					"always" "Always ask (interactive)" \
+					"yes" "Auto yes" \
+					"no" "Auto no" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && continue
+				local inner
+				inner=$(<"$_TUI_TMP")
+				case "$inner" in
+					always)
+						_tui_settings_persist_ask_mode always
+						;;
+					yes)
+						_tui_settings_persist_ask_mode yes
+						;;
+					no)
+						_tui_settings_persist_ask_mode no
+						;;
+				esac
+				;;
+			2)
+				_tui_settings_menu_reg_vendor
+				;;
+			3)
+				_tui_settings_menu_retry
+				;;
+		esac
+	done
+}
+
 
 # =============================================================================
 # Cluster selector dialog
@@ -840,4 +1111,133 @@ _show_v2_exit_summary() {
 	echo "Log file: $_TUI_LOG_FILE"
 	echo
 	echo "Run 'aba --help' for available commands."
+}
+
+# =============================================================================
+# Mirror / ISC / catalog helpers shared across TUI v2 modules
+# =============================================================================
+
+# Resolve x.y to x.y.z via fetch_latest_z_version. Prints the resolved version.
+# Returns 1 if resolution fails (caller should show error).
+_resolve_minor_to_patch() {
+	local _ver="$1"
+	local _channel="${2:-stable}"
+
+	# Already x.y.z? Return as-is
+	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		echo "$_ver"
+		return 0
+	fi
+
+	# x.y format — resolve to latest z (include_all expects channel then minor)
+	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+		local _resolved
+		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null)
+		if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			echo "$_resolved"
+			return 0
+		fi
+	fi
+
+	return 1
+}
+
+# Reset and restart ISC generation in background (non-blocking)
+tui_kick_isconf_regen() {
+	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+	(cd "$ABA_ROOT" && aba_isconf_generate_start) &
+}
+
+# Gate Install Cluster menu action: prompts for mirror/registry prep when needed.
+# Returns:
+#   0 — mirror ready; caller should run cluster_install_flow now
+#   1 — do not proceed (cancelled / async remediation)
+#   3 — DISCO only: cluster_install_flow was already invoked by this helper (success chain)
+tui_install_cluster_gate() {
+	if mirror_available && _mirror_has_release_image; then
+		return 0
+	fi
+
+	local _rc
+
+	case "${1:-}" in
+		CONNO)
+			if ! mirror_available; then
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+					--yes-label "Install & Sync" --no-label "$TUI2_BTN_BACK" \
+					--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
+				_rc=$?
+				if [[ $_rc -eq 0 ]]; then
+					_mirror_config_review && mirror_sync
+				fi
+				return 1
+			fi
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_SYNCED" \
+				--yes-label "Sync Now" --no-label "$TUI2_BTN_BACK" \
+				--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
+			_rc=$?
+			if [[ $_rc -eq 0 ]]; then
+				mirror_sync
+			fi
+			return 1
+			;;
+		DISCO)
+			if ! mirror_available; then
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+					--yes-label "Install & Load" --no-label "$TUI2_BTN_BACK" \
+					--yesno "No mirror registry installed.\n\nA mirror with loaded images is required to install a cluster.\n\nInstall the registry and load images now?" 0 0
+				_rc=$?
+				if [[ $_rc -eq 0 ]]; then
+					if _mirror_config_review && disco_load_images; then
+						cluster_install_flow
+						return 3
+					fi
+				fi
+				return 1
+			fi
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \
+				--yes-label "Load Now" --no-label "$TUI2_BTN_BACK" \
+				--yesno "The mirror is installed but has no release images.\n\nLoad images into the mirror now?" 0 0
+			_rc=$?
+			if [[ $_rc -eq 0 ]]; then
+				if disco_load_images; then
+					cluster_install_flow
+					return 3
+				fi
+			fi
+			return 1
+			;;
+	esac
+
+	return 1
+}
+
+# Start catalog downloads if needed and block until operator indexes exist.
+# Uses download_all_catalogs + wait_for_all_catalogs from include_all.
+# Returns 0 on success; 1 if catalogs did not become ready (stderr -> log).
+tui_ensure_catalogs_ready() {
+	local version_short="$1"
+
+	dlg --backtitle "$(ui_backtitle)" --infobox \
+		"Downloading operator catalog indexes...\n\nPlease wait." 0 0
+
+	# Reset any cached failures from earlier prefetch attempts (e.g. startup
+	# prefetch ran before pull secret was ready). run_once -i skips "done" tasks
+	# even if they failed — reset clears the cached failure so they re-run.
+	local _cat _exit_code
+	for _cat in redhat-operator certified-operator community-operator; do
+		_exit_code=$(run_once -E -i "catalog:${version_short}:${_cat}" 2>/dev/null) || continue
+		if [[ "$_exit_code" != "0" ]]; then
+			tui_log "Resetting failed catalog task: catalog:${version_short}:${_cat} (exit=$_exit_code)"
+			run_once -r -i "catalog:${version_short}:${_cat}" 2>/dev/null || true
+		fi
+	done
+
+	download_all_catalogs "$version_short" >>"$_TUI_LOG_FILE" 2>&1
+
+	if ! wait_for_all_catalogs "$version_short" >>"$_TUI_LOG_FILE" 2>&1; then
+		return 1
+	fi
+
+	return 0
 }

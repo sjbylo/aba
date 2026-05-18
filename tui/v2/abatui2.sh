@@ -111,7 +111,7 @@ _tick "Loading modules"
 for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf \
 	aba_mirror_verify_start aba_mirror_verify_refresh aba_mirror_verify_exit \
 	aba_inet_check_start aba_inet_check_wait aba_inet_check_wait_status \
-	aba_version_fetch_start aba_isconf_generate_start aba_bg_cleanup; do
+	aba_version_fetch_start aba_isconf_generate_start aba_prefetch_catalogs aba_bg_cleanup; do
 	type -t "$fn" >/dev/null 2>&1 || { echo "FATAL: required function '$fn' not found in include_all.sh"; exit 1; }
 done
 
@@ -237,16 +237,42 @@ aba_bg_cleanup
 
 _tick "Loading config"
 
-# Stable:latest fetch must run before prefetch-catalogs.sh — that script waits on
-# run_once ID ocp:stable:latest_version when aba.conf has no ocp_version yet.
-tui_log "Kicking off background version fetch (stable)"
+# Stable + other channels warmed here; prefetch uses aba_prefetch_catalogs +
+# Cincinnati graph cache when aba.conf has no ocp_version yet.
+tui_log "Kicking off background version fetch (stable/fast/candidate)"
 aba_version_fetch_start
 
-# Pre-fetch catalog indexes in background (uses aba.conf version or stable:latest minor)
-if [[ -f "$HOME/.pull-secret.json" ]]; then
-	tui_log "Starting background catalog pre-fetch"
-	run_once -S -i "tui:prefetch:catalogs" -- "$ABA_ROOT/scripts/prefetch-catalogs.sh" >>"$_TUI_LOG_FILE" 2>&1
+# Ensure aba.conf exists so background catalog downloads can read pull_secret_file
+# (mirrors v1's resume_from_conf — config must exist BEFORE prefetch)
+if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
+	if [[ -f "$ABA_ROOT/templates/aba.conf.j2" ]]; then
+		_domain=$(get_domain 2>/dev/null) || true
+		export domain="${_domain}"
+		machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
+			"$ABA_ROOT/scripts/j2" "$ABA_ROOT/templates/aba.conf.j2" > "$ABA_ROOT/aba.conf" 2>>"$_TUI_LOG_FILE"
+		tui_log "Created aba.conf from template (pull_secret_file set)"
+		# Wait for latest stable version and write it to aba.conf
+		run_once -q -w -S -i "ocp:stable:latest_version" 2>>"$_TUI_LOG_FILE" || true
+		_latest_ver=$(fetch_latest_version stable 2>>"$_TUI_LOG_FILE") || true
+		if [[ -n "$_latest_ver" ]]; then
+			replace-value-conf -q -n ocp_version -v "$_latest_ver" -f "$ABA_ROOT/aba.conf"
+			replace-value-conf -q -n ocp_channel -v "stable"      -f "$ABA_ROOT/aba.conf"
+			tui_log "Set default version=$_latest_ver channel=stable in aba.conf"
+		fi
+	fi
 fi
+
+# Pre-fetch catalog indexes in background (uses ocp_version/ocp_channel from aba.conf)
+_ps_path="${pull_secret_file:-$HOME/.pull-secret.json}"
+_ps_path="${_ps_path/#\~/$HOME}"
+if [[ -f "$_ps_path" ]]; then
+	tui_log "Starting background catalog pre-fetch"
+	(aba_prefetch_catalogs >>"$_TUI_LOG_FILE" 2>&1) &
+fi
+
+# Background CLI tool downloads (non-blocking, uses run_once per tool)
+tui_log "Kicking off background CLI tool downloads"
+"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
 
 # Background ISC generation (so it's ready before user opens View/Edit ISC)
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
@@ -469,43 +495,23 @@ _conno_main() {
 			switch_label="Switch to Fully Connected $TUI2_GREY_NO_INTERNET"
 		fi
 
-		if mirror_available; then
+		# Wait for any in-flight mirror verify before computing labels.
+		aba_mirror_verify_wait
+
+		if mirror_available && _mirror_has_release_image; then
 			mirr_avail=false
 			mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
+		elif mirror_available; then
+			mirr_label="Install Mirror (installed — not verified)"
 		fi
 
-		# Cluster operations — "Install Cluster" is the unified flow (configure → review → install)
-		local inst_label="Install Cluster"
+		# Cluster operations — Install uses unified gate; grey Day-2 until clusters exist.
+		tui_cluster_menu_flags CONNO
+		local inst_label="${_CLUSTER_INST_LABEL}"
 		local day2_label="Day-2 / Cluster Management"
-		local mon_label="Finalize Installation (wait-for)"
-
-		local day2_avail=true mon_avail=true
-
-		local has_installed=false
-		local has_any_cluster=false
-		local dir
-		for dir in $(list_cluster_dirs); do
-			has_any_cluster=true
-			cluster_installed "$dir" && has_installed=true
-		done
-		if [[ "$has_any_cluster" == "false" ]]; then
-			day2_avail=false
+		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
 		fi
-		if [[ "$has_any_cluster" == "false" ]]; then
-			mon_avail=false
-			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
-		fi
-
-		# Hint on "Install Cluster" if mirror not ready
-		if ! mirror_available; then
-			inst_label="Install Cluster [no mirror]"
-		elif ! _mirror_has_release_image; then
-			inst_label="Install Cluster [sync mirror first]"
-		fi
-
-		# Wait for any in-flight mirror verify before reading state
-		aba_mirror_verify_wait
 
 		# Dynamic menu title with mirror state
 		local _mstate
@@ -526,9 +532,10 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
-			"$TUI2_CONNO_TAG_MONITOR"        "$mon_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
+			"$TUI2_CONNO_TAG_SETTINGS"       "Settings — Auto-answer, registry type, oc-mirror retries"
+			"$TUI2_CONNO_TAG_RECONFIGURE"    "Reconfigure — Change channel, version, or platform"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
 			"" "──── Mode ──────────────────────────"
 			"$TUI2_CONNO_TAG_SWITCH_DIRECT"  "$switch_label"
@@ -599,7 +606,7 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba -d mirror uninstall" "Uninstall Existing Mirror" && mirror_install
+					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" && mirror_install
 				fi
 			else
 				mirror_install
@@ -643,40 +650,27 @@ Navigation:
 				fi
 				;;
 			"$TUI2_CONNO_TAG_INSTALL")
-				if ! mirror_available; then
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
-						--yes-label "Install & Sync" --no-label "$TUI2_BTN_BACK" \
-						--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
-					if [[ $? -eq 0 ]]; then
-						_mirror_config_review && mirror_sync
-					fi
-				elif ! _mirror_has_release_image; then
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_SYNCED" \
-						--yes-label "Sync Now" --no-label "$TUI2_BTN_BACK" \
-						--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
-					if [[ $? -eq 0 ]]; then
-						mirror_sync
-					fi
-				else
-					cluster_install_flow
-				fi
+				tui_install_cluster_gate CONNO
+				case "$?" in
+				0) cluster_install_flow ;;
+				esac
 				;;
 			"$TUI2_CONNO_TAG_DAY2")
-				if [[ "$day2_avail" == "false" ]]; then
+				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
 				else
 					cluster_day2_menu
 				fi
 				;;
-			"$TUI2_CONNO_TAG_MONITOR")
-				if [[ "$mon_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
-				else
-					cluster_monitor
-				fi
+			"$TUI2_CONNO_TAG_SETTINGS")
+				_tui_settings_menu
 				;;
 			"$TUI2_CONNO_TAG_ADVANCED")
 				tui_advanced_menu
+				;;
+			"$TUI2_CONNO_TAG_RECONFIGURE")
+				direct_wizard || true
+				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
 				;;
 	"$TUI2_CONNO_TAG_SWITCH_DIRECT")
 		if [[ "$switch_avail" == "false" ]]; then
@@ -701,9 +695,6 @@ Navigation:
 		_TUI_DISCO_FROM_CONNO=false
 		tui_log "Returned from DISCO, back to CONNO"
 		;;
-		" "|"  "|"   ")
-				# Separator — do nothing
-				;;
 		esac
 	done
 }
@@ -716,24 +707,59 @@ _detect_mode
 
 tui_log "Final mode: $_TUI_MODE"
 
-# --- Splash screen (shown once per session) ---
+# --- Splash screen (shown once per session); Help shows quick UX guide ---
 _aba_ver=""
 [[ -f "$ABA_ROOT/VERSION" ]] && _aba_ver=$(<"$ABA_ROOT/VERSION")
 _aba_ver="${_aba_ver//[[:space:]]/}"
 
-dialog --no-shadow --colors --no-collapse --backtitle "$(ui_backtitle)" \
-	--title " $TUI2_TITLE_WELCOME " \
-	--ok-label "Continue" \
-	--msgbox "\
+while :; do
+	dlg --backtitle "$(ui_backtitle)" \
+		--title " $TUI2_TITLE_WELCOME " \
+		--yes-label "Continue" \
+		--no-label "Exit" \
+		--help-button \
+		--yesno "\
   __   ____   __
- / _\\ (  _ \\ / _\\     ABA v${_aba_ver}
-/    \\ ) _ \\/    \\    Install & configure
+ / _\\ (  _ \\ / _\\      Aba v${_aba_ver}
+/    \\ ) _ (/    \\    Install & configure
 \\_/\\_/(____/\\_/\\_/    air-gapped OpenShift quickly!
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
 
-Navigate with Arrow keys, Tab, and Enter. Press ESC to go back." 0 0 {ABA_TUI_FLOCK_FD}>&-
+Note: Internet access is required.
+
+Navigate with <Tab> and arrow keys. Press <ESC> to quit." 0 0
+	splash_rc=$?
+	case "$splash_rc" in
+		1|255)
+			clear
+			_show_v2_exit_summary
+			exit 0
+			;;
+		2)
+			show_help "$TUI2_TITLE_HELP" \
+"ABA TUI - Quick Guide
+
+The TUI guides you through:
+  1. Pull secret configuration
+  2. OpenShift channel and version selection
+  3. Platform selection
+  4. Operator catalog configuration
+  5. Mirror registry setup
+  6. Cluster installation
+
+Navigation:
+  Next     - Proceed to next step
+  Back     - Return to previous step
+  Help     - Show context help
+  Ctrl+C   - Exit TUI"
+			;;
+		*)
+			break
+			;;
+	esac
+done
 
 while :; do
 	case "$_TUI_MODE" in
