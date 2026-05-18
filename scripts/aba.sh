@@ -1033,6 +1033,20 @@ if [ "$cur_target" ]; then
 			;;
 	esac
 
+	# Auto-detect install completion for commands that operate on installed clusters
+	case $cur_target in
+		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue)
+			if [[ ! -f .install-complete && -f iso-agent-based/auth/kubeconfig ]]; then
+				auto_complete_install "$PWD" 2>/dev/null || true
+			fi
+			# If still not marked after auto-detect, warn and ask
+			if [[ ! -f .install-complete && -f iso-agent-based/auth/kubeconfig ]]; then
+				aba_warning "Cluster has not completed installation."
+				ask "Cluster has not completed installation, continue anyway" || exit 1
+			fi
+			;;
+	esac
+
 	case $cur_target in
 		ssh)
 			trap - ERR  # No need for this anymore
@@ -1368,7 +1382,7 @@ fi
 	# Check Internet connectivity to required sites (using shared function)
 	aba_info "Checking Internet connectivity to required sites..."
 	
-	if ! check_internet_connectivity "cli"; then
+	if ! check_internet_connectivity "aba"; then
 		aba_abort \
 			"Cannot access required sites: $FAILED_SITES" \
 			"" \

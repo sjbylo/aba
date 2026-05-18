@@ -145,18 +145,6 @@ aba_info "Accessing the cluster ..."
 [ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
 ! oc whoami && aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
-# Gate: ensure the cluster install completed (or let the user override)
-if [ ! -f .install-complete ]; then
-	if cluster_is_ready; then
-		aba_info "Cluster is ready but .install-complete marker is missing — creating it now."
-		touch .install-complete
-		[ ! -L clusterstate ] && externalize_cluster_state || true
-	else
-		aba_warning "The cluster install has not been finalized (aba install / aba mon has not completed)."
-		ask "The cluster has not been finalized, continue anyway" || exit 1
-	fi
-fi
-
 warn_if_cluster_unstable
 
 #####################

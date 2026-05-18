@@ -213,6 +213,11 @@ aba_abort() {
         exit 1
 }
 
+# Non-fatal error (like aba_abort but does NOT exit)
+aba_error() {
+	echo_red "[ABA] Error: $*" >&2
+}
+
 aba_warning() {
         local prefix="Warning"
 	local newline=
@@ -459,12 +464,12 @@ cluster_is_ready() {
 	return 0
 }
 
-# Auto-finalize a cluster that completed installation in the background.
+# Auto-detect that a cluster install has completed.
 # If kubeconfig exists but .install-complete is missing, probe the cluster API.
 # If the cluster is ready, create the marker and externalize state.
-# Usage: auto_finalize_cluster <cluster-dir>  (absolute or relative to ABA_ROOT)
-auto_finalize_cluster() {
-	local dir="${1:?usage: auto_finalize_cluster <dir>}"
+# Usage: auto_complete_install <cluster-dir>  (absolute or relative to ABA_ROOT)
+auto_complete_install() {
+	local dir="${1:?usage: auto_complete_install <dir>}"
 	local abs_dir
 
 	# Resolve to absolute path
@@ -474,7 +479,7 @@ auto_finalize_cluster() {
 		abs_dir="${ABA_ROOT:-$PWD}/$dir"
 	fi
 
-	# Already finalized — nothing to do
+	# Already completed — nothing to do
 	[[ -f "$abs_dir/.install-complete" ]] && return 0
 
 	# No kubeconfig — cluster was never installed far enough to probe
@@ -493,7 +498,7 @@ auto_finalize_cluster() {
 
 	if cluster_is_ready; then
 		touch "$abs_dir/.install-complete"
-		aba_info "Cluster in '$dir' is ready — created .install-complete marker."
+		aba_info "Cluster install completed — created .install-complete marker."
 		# Externalize state if not already done
 		if [[ ! -L "$abs_dir/clusterstate" ]]; then
 			( cd "$abs_dir" && externalize_cluster_state ) || true
@@ -2642,6 +2647,39 @@ wait_for_all_catalogs() {
 	aba_info_ok "All catalog downloads completed for OCP $version_short" >&2
 }
 
+# Prefetch catalog indexes for current and previous minor versions.
+# Called by scripts/prefetch-catalogs.sh and TUI v2 for early background catalog fetching.
+# Requires: ocp_version and/or ocp_channel from aba.conf (or callers set them beforehand).
+aba_prefetch_catalogs() {
+	local _ver="${ocp_version:-}"
+	local _channel="${ocp_channel:-stable}"
+
+	# If no version set, try to determine latest z for channel
+	if [[ -z "$_ver" ]]; then
+		_ver=$(fetch_latest_z_version "$_channel" "" 2>/dev/null) || return 0
+	fi
+
+	[[ -n "$_ver" ]] || return 0
+
+	# Minor x.y — download_all_catalogs uses catalog:${minor}:* task IDs (not patch z)
+	local _minor="${_ver%.*}"
+
+	download_all_catalogs "$_minor"
+	wait_for_all_catalogs "$_minor" || return 0
+
+	# Previous minor line (same major): x.(y-1)
+	local _major="${_minor%%.*}"
+	local _minor_num="${_minor##*.}"
+	if [[ "$_minor_num" -gt 0 ]]; then
+		local _prev_minor="$_major.$((_minor_num - 1))"
+		local _prev_ver
+		_prev_ver=$(fetch_latest_z_version "$_channel" "$_prev_minor" 2>/dev/null) || true
+		if [[ -n "$_prev_ver" ]]; then
+			download_all_catalogs "${_prev_ver%.*}"
+		fi
+	fi
+}
+
 # --- Aba-facing cleanup ---
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
 # Use 'aba reset' to explicitly kill all background tasks and clean up.
@@ -3322,8 +3360,8 @@ aba_inet_check_cached() {
 # --- OCP version fetch ---
 
 # Start version fetches for all channels in background (non-blocking).
-# Stable runs first — prefetch-catalogs.sh waits on ocp:stable:latest_version
-# when aba.conf has no ocp_version yet.
+# Stable/stable-channel graph data is warmed early; prefetch uses fetch_latest_z_version
+# (shared Cincinnati cache via _fetch_graph_cached) when aba.conf has no ocp_version yet.
 aba_version_fetch_start() {
 	local _ch
 	for _ch in stable fast candidate; do
@@ -3388,7 +3426,7 @@ is_bundle_mode() {
 
 # Check internet connectivity to required sites
 # Usage: check_internet_connectivity <prefix> [quiet]
-#   prefix: Task ID prefix (e.g., "cli" or "tui")
+#   prefix: Task ID prefix (e.g., "aba" for shared CLI/TUI probes)
 #   quiet:  If "true", suppress checking message (default: false)
 # Returns: 0 if all sites accessible, 1 if any failed
 # Sets global variables: FAILED_SITES, ERROR_DETAILS (for caller to handle)

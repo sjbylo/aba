@@ -68,8 +68,7 @@ showed_wait_msg=false
 
 aba_debug "Fetching download list from cli/Makefile ($make_list_target)"
 items=$(make --no-print-directory -sC cli "$make_list_target") || {
-	aba_err "Failed to get download list from cli/Makefile ($make_list_target)"
-	exit 1
+	aba_abort "Failed to get download list from cli/Makefile ($make_list_target)"
 }
 
 for item in $items
@@ -78,7 +77,7 @@ do
 
 	# Sanity-check the tool name from Makefile output
 	if [[ ! "$tool" =~ ^[a-z][-a-z]*$ ]]; then
-		aba_err "Unexpected tool name from cli/Makefile: '$tool' (item='$item')"
+		aba_error "Unexpected tool name from cli/Makefile: '$tool' (item='$item')"
 		continue
 	fi
 
