@@ -1047,6 +1047,99 @@ resolve-default-resource-pool() {
 	fi
 }
 
+normalize-bmc-conf()
+{
+	# Normalize/sanitize bmc.conf. Single entry point for BMC config reads.
+	# Mirrors normalize-vmware-conf shape (see above). Adds mode-0600 enforcement
+	# and bmc_password_* filtering on the echoed stdout so downstream consumers
+	# (.bk backups, aba show config, aba_debug env snapshots) never see plaintext.
+	#
+	# NOTE: do NOT pipe through `awk '{print $1}'` - bmc_password_* values
+	# containing spaces would be truncated (same precedent as GOVC_PASSWORD above).
+
+	# INT-03 silent-skip: absent file -> return 0, no output, no env change.
+	[ -f bmc.conf ] || return 0
+
+	# Mode-0600 enforcement BEFORE eval (defense against file-poison if perms drift).
+	# Accept only modes whose last two digits are "00" (600, 400, 500, 700) so that
+	# group/world read/write/exec is rejected. GNU stat -c '%a' emits octal (no BSD target).
+	local mode
+	mode=$(stat -c '%a' bmc.conf)
+	case "$mode" in
+		*00) : ;;
+		*)   aba_abort "bmc.conf must be mode 0600 (found: $mode - run: chmod 600 bmc.conf)" ;;
+	esac
+
+	# Strip comments, trim whitespace, prepend 'export '. Mirror of normalize-vmware-conf.
+	local vars
+	vars=$(cat bmc.conf | \
+		sed -E \
+			-e "s/^\s*#.*//g" \
+			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
+			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" | \
+		sed -e "s/^/export /g")
+
+	# eval populates the process env so _bm_build_auth can read bmc_password_<node>
+	# via ${!varname} indirection in preflight-check-bm.sh.
+	eval "$vars"
+
+	# D-11 / Phase 10: validate mac_discovery_<node> allowlist. Only "disabled"
+	# or unset is accepted in v1.1; any other value calls aba_abort. Kept inline
+	# (not extracted to a helper) to preserve the single-grep-point pattern.
+	local _mdv _mdval
+	for _mdv in $(compgen -v mac_discovery_ 2>/dev/null); do
+		_mdval="${!_mdv}"
+		case "$_mdval" in
+			disabled|'') : ;;
+			*)
+				aba_abort "BMC: $_mdv='$_mdval' must be 'disabled' or unset (only allowed value in v1.1 per D-09)"
+				;;
+		esac
+	done
+
+	# D-09 advisory cross-field check: warn (do NOT abort) when discovery is opted
+	# out but no operator mac_<node> is set in this env. The hard-fail with MAC-09
+	# lands in preflight-check-bm.sh (Plan 10-02) where the full cluster context
+	# (including cluster.conf mac_master*/mac_worker* values) is available.
+	# Hard-aborting here would regress D-16 (v1.1-compatible bmc.conf with no
+	# mac_discovery_* still works) because normalize-bmc-conf is called from
+	# multiple sites before cluster.conf is loaded.
+	local _mdnode _macvar
+	for _mdv in $(compgen -v mac_discovery_ 2>/dev/null); do
+		[ "${!_mdv}" = "disabled" ] || continue
+		_mdnode="${_mdv#mac_discovery_}"
+		_macvar="mac_${_mdnode}"
+		if [ -z "${!_macvar:-}" ]; then
+			aba_warning "BMC: mac_discovery_${_mdnode}=disabled but mac_${_mdnode} not set in bmc.conf - cluster.conf must provide mac_master*/mac_worker* (final check in preflight)"
+		fi
+	done
+
+	# Filter bmc_password_* from echoed stdout. Consumers of this output never see plaintext.
+	echo "$vars" | grep -v '^export bmc_password_'
+}
+
+bmc_redact_env()
+{
+	# D-07 chokepoint: emit 'export <var>=<val>' lines for every BMC config env var
+	# EXCEPT bmc_password_*. Used by any consumer that needs a BMC env snapshot
+	# (aba show config, .bk backup, aba_debug env dump). One place filters passwords.
+	#
+	# compgen -v lists ALL shell variable names starting with the given prefix (bash 4.0+).
+	# We also emit iso_url (cluster-level, no suffix). bmc_password_* is filtered explicitly.
+	# Single-quote wrapping protects values with spaces; internal single quotes are rare
+	# in hostnames/usernames but the caller is responsible for sanitizing exotic values.
+
+	local var
+	for var in $(compgen -v bmc_) iso_url; do
+		# Skip unset iso_url (compgen already filters unset bmc_* since they wouldn't exist).
+		[ "$var" = "iso_url" ] && [ -z "${iso_url+x}" ] && continue
+		case "$var" in
+			bmc_password_*) continue ;;
+		esac
+		printf "export %s='%s'\n" "$var" "${!var}"
+	done
+}
+
 normalize-kvm-conf()
 {
 	[ ! -s kvm.conf ] && return 0

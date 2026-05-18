@@ -1,5 +1,37 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.2...HEAD)
 
+### Added (Phase 10: MAC Auto-Discovery + Real-Hardware Vendor Validation)
+
+- BMC-driven MAC auto-discovery: for nodes with `bmc_host_<node>` set,
+  aba queries the BMC's Redfish EthernetInterfaces collection during
+  preflight and populates or validates `mac_<node>`. See
+  Troubleshooting.md "MAC discovery" subsection for the operator runbook,
+  the MAC-* error reference (MAC-03 through MAC-09), and the per-vendor
+  validation status.
+- New optional bmc.conf field: `mac_discovery_<node>=disabled` to opt
+  out per-node (see templates/bmc.conf for usage).
+- Real-HW E2E suite: test/e2e/suites/suite-bmc-mac-discovery.sh
+  (iRMC-only in v1.1; stretch vendors deferred to v1.2).
+
+### Behavior change (Phase 10)
+
+An existing bmc.conf with operator-set `mac_<node>` values is now
+validated against the BMC's EthernetInterfaces report on every preflight
+run. A previously-working install can hard-fail at preflight with MAC-03
+if the operator's MAC is on a NIC the BMC reports as LinkDown or
+InterfaceEnabled=false. Remediation: cable the NIC, enable it in BMC
+firmware, update `mac_<node>` to the currently-active NIC's MAC, or set
+`mac_discovery_<node>=disabled` in bmc.conf to skip discovery for that
+node.
+
+### Deferred to v1.2 (Phase 10)
+
+Real-hardware E2E validation for MAC discovery on Dell iDRAC, HPE iLO,
+Supermicro X12/X13, and Lenovo XCC. The MAC discovery code path runs
+against any DSP0266-compliant Redfish BMC and is exercised by mocked
+tests (test/func/test-bmc-mac-discovery.sh) for all stretch vendors;
+only iRMC has a passing real-HW gate in v1.1.
+
 ---
 
 ## [1.0.2](https://github.com/sjbylo/aba/releases/tag/v1.0.2) - 2026-05-07

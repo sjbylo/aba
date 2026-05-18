@@ -462,3 +462,63 @@ If you ever need to override the defaults (e.g. to force a different
 failure path), any clearly-not-real username / password within that
 character class will work - the only requirement is that vCenter rejects
 them at authentication time.
+
+### Lab provisioning for BMC E2E tests
+
+The `suite-bmc-preflight.sh` suite requires one or more real BMC-accessible nodes per pool. A lab admin must provision the following **once per pool**:
+
+1. **Hardware**: a Fujitsu PRIMERGY server with iRMC S5 or S6.
+2. **VirtualMedia license**: the iRMC must have the Fujitsu Advanced Pack (or equivalent VirtualMedia entitlement) activated.
+3. **Two BMC user bindings per pool**:
+   - A working `BMC_USER_<role>` whose iRMC role grants Configure BMC plus VirtualMedia and Power: this is the user `aba install` authenticates as.
+   - A wrong-creds `BMC_USER_BROKEN` whose password in pools.conf is deliberately wrong: the negative test sed-swaps to this binding to exercise the L2 wrong-password preflight path. The user can be Read-Only; only the password needs to fail.
+4. **Routing**: `BMC_HOST_<role>` MUST resolve and be routable from the pool bastion (`con${POOL_NUM}.${VM_BASE_DOMAIN}`) so that PRE-06 ISO-URL auto-derive can succeed.
+5. **TLS**: lab BMCs typically use self-signed certs; set `BMC_INSECURE_<role>=true`.
+
+One worked `pools.conf` example block showing all BMC_* fields populated:
+
+```
+pool1  con1  dis1  aba-e2e-template-rhel8  INT_BASTION_RHEL_VER=rhel8  POOL_NUM=1  VM_DATASTORE=Datastore4-1  VC_FOLDER=/Datacenter/vm/aba-e2e/pool1  BMC_NODE_LIST=master0  BMC_TYPE_master0=irmc  BMC_HOST_master0=irmc-master0.lab.example  BMC_USER_master0=aba-installer  BMC_PASSWORD_master0=lab-password-here  BMC_INSECURE_master0=true  BMC_USER_BROKEN=aba-installer  BMC_PASSWORD_BROKEN=intentionally-wrong-password
+```
+
+Once `pools.conf` is populated for a pool, run the suite with:
+
+```bash
+./run.sh --suite suite-bmc-preflight --pools 1
+```
+
+Stretch vendor pools (Dell PowerEdge with iDRAC9, HPE ProLiant with iLO 5/6, Supermicro X12/X13, Lenovo ThinkSystem with XCC) land in v1.2.
+
+#### MAC discovery (Phase 10)
+
+The suite `suite-bmc-mac-discovery.sh` (iRMC-only in v1.1 per D-12) requires one additional pool field per node:
+
+- `BMC_EXPECTED_MAC_<role>` (e.g. `BMC_EXPECTED_MAC_master0`): the MAC address the BMC will report for the node's PXE/UEFI-boot-eligible NIC.
+
+Discover the expected MAC out-of-band before configuring the pool:
+
+```bash
+bmc_host=<your iRMC fqdn>
+bmc_user=<your bmc user>
+bmc_password=<your bmc password>
+auth=$(printf '%s:%s' "$bmc_user" "$bmc_password" | base64 -w0)
+# List the EthernetInterfaces collection
+curl -sk -H "Authorization: Basic $auth" -H "Accept: application/json" \
+     "https://$bmc_host/redfish/v1/Systems/0/EthernetInterfaces" \
+     | jq -r '.Members[]."@odata.id"'
+# For each NIC URI returned, GET it and print MAC + LinkStatus + InterfaceEnabled
+curl -sk -H "Authorization: Basic $auth" -H "Accept: application/json" \
+     "https://$bmc_host/redfish/v1/Systems/0/EthernetInterfaces/<nic_id>" \
+     | jq '{Id, MACAddress, LinkStatus, InterfaceEnabled, InterfaceType}'
+```
+
+The MAC of the single NIC that satisfies `LinkStatus=LinkUp` AND `InterfaceEnabled=true` AND is NOT a bond/team entry is what aba's MAC discovery will pick (per D-04, D-06). Use that value as the `BMC_EXPECTED_MAC_<role>` pool field.
+
+Run the suite (HUMAN-UAT; mirrors Phase 9 TEST-04 pattern per D-12):
+
+```bash
+cd test/e2e
+./run-suite.sh suite-bmc-mac-discovery.sh
+```
+
+Stretch-vendor coverage (Dell iDRAC, HPE iLO, Supermicro, Lenovo XCC) is **code-complete in v1.1 but NOT real-hardware-validated**. The MAC discovery code path runs against any DSP0266-compliant Redfish BMC, but only iRMC has a passing E2E gate in this release. Formal drop-list and v1.2 backlog tracked separately per D-13 / D-14.

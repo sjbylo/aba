@@ -44,6 +44,8 @@ run_test() {
 
 # Unit tests (fast, no downloads)
 unit_tests=(
+	# Phase 9: hygiene gate runs FIRST (cheap, fails fast on any shipped-file violation).
+	test/func/test-shipped-file-hygiene.sh
 	test/func/test-no-aba-root-in-registry-scripts.sh
 	test/func/test-run-once-task-consistency.sh
 	test/func/test-run-once-failed-cleanup.sh
@@ -68,6 +70,12 @@ integration_tests=(
 	test/func/test-tui-v2-02-basket.sh
 	test/func/test-tui-v2-03-actions.sh
 	test/func/test-tui-v2-04-isconf.sh
+	# Phase 9: BMC functional tests (offline; use test/func/lib/bmc-redfish-stub.sh).
+	test/func/test-preflight-check-bm.sh
+	# Phase 10: TEST-06 MAC auto-discovery (offline; extends bmc-redfish-stub.sh
+	# with EthernetInterfaces fixtures from Plan 10-03 Task 1).
+	test/func/test-bmc-mac-discovery.sh
+	test/func/test-bmc-boot.sh
 )
 
 passed=0
