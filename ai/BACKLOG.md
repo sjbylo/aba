@@ -3176,3 +3176,50 @@ To force a task to re-execute, callers must currently make two separate calls: `
 
 Add a `-f` (force) flag that combines reset + start in one call: `run_once -f -i <id> <command>`. Internally it would call `_kill_id` to clear the exit/lock/pid files, then proceed with the normal start path.
 
+## Bug: VM lifecycle commands unnecessarily trigger full aba.conf validation
+
+**Priority:** Medium
+**Scope:** Core (`Makefile`, `scripts/aba.sh`)
+
+### Problem
+
+VM lifecycle commands (`aba start`, `aba stop`, `aba ls`, `aba delete`, `aba startup`, etc.) call `make -s init`, which depends on the `aba` phony target (`init: aba .init`). The `aba` target runs `aba --interactive`, which triggers `verify-aba-conf` — the full config validation including operator set file checks.
+
+This means a simple `aba startup` fails with "No such operator set" if `aba.conf` references a deleted custom operator set file, even though startup doesn't need operator config at all.
+
+**Call chain:** `aba startup` -> `cluster-startup.sh` -> `aba start` -> `make -s init` -> `make aba` -> `aba --interactive` -> `verify-aba-conf` -> FAIL.
+
+### Expected behavior
+
+VM lifecycle operations (`start`, `stop`, `kill`, `ls`, `delete`, `startup`, `shutdown`, `refresh`, `upload`) only need the hypervisor config (`vmware.conf` / `kvm.conf`) and `cluster.conf`. They should not validate `aba.conf` operator sets, pull secret, OCP version, etc.
+
+### Proposed fix
+
+Either: (a) make `init` not depend on the full `aba` target for lifecycle commands, or (b) have lifecycle commands skip `make init` entirely and only call `_ensure_hv_ready` (which already sources `normalize-aba-conf` and checks the hypervisor config).
+
+## Bug: Stale custom operator set reference in aba.conf
+
+**Priority:** Low
+**Scope:** Core (`tui/`, `scripts/aba.sh`)
+
+### Problem
+
+The TUI creates custom operator set files like `templates/operator-set-custom-20260517-234316` and writes the set name to `aba.conf` as `op_sets=custom-20260517-234316`. If the file is later deleted (e.g. TUI cleanup of older custom sets, manual deletion), `aba.conf` still references it, causing `verify-aba-conf` to fail with "No such operator set".
+
+### Expected behavior
+
+Either: (a) TUI cleanup of old custom set files should also update `op_sets` in `aba.conf` to remove stale references, or (b) `verify-aba-conf` should treat a missing custom set file as a warning rather than a hard error (the operators are already mirrored).
+
+## Bug: VM delete/re-create prompt shown when no VMs exist (bare-metal)
+
+**Priority:** Medium
+**Scope:** Core (cluster install workflow)
+
+### Problem
+
+During cluster installation, ABA prompts: `[ABA] To (re)start the installation, delete, re-create & start the VM(s)? (Y/n)` even when the platform is bare-metal (`platform=bm`) and there are no VMs to delete or re-create. This confuses bare-metal users.
+
+### Expected behavior
+
+Skip the VM delete/re-create prompt when `platform=bm` (no hypervisor config). The prompt should only appear for `platform=vmw` or `platform=kvm` where VMs actually exist and can be managed by ABA.
+
