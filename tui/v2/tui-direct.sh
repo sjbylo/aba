@@ -57,6 +57,32 @@ _direct_config_complete() {
 
 direct_wizard() {
 	tui_log "Running DIRECT wizard"
+
+	# Resume dialog: if channel+version exist, offer to continue or reconfigure (CONNO / DIRECT only)
+	if [[ "$_TUI_MODE" == "CONNO" || "$_TUI_MODE" == "DIRECT" ]] && \
+	   [[ -n "${ocp_channel:-}" && -n "${ocp_version:-}" ]]; then
+		local _resume_summary="Current configuration:\n\n"
+		_resume_summary+="  Channel:  ${ocp_channel}\n"
+		_resume_summary+="  Version:  ${ocp_version}\n"
+		[[ -n "${platform:-}" ]] && _resume_summary+="  Platform: ${platform}\n"
+		_resume_summary+="\nContinue with this configuration?"
+		dlg --backtitle "$(ui_backtitle)" \
+			--title "Resume Configuration" \
+			--yes-label "Continue" \
+			--no-label "Reconfigure" \
+			--yesno "$_resume_summary" 14 50
+		local _resume_rc=$?
+		if [[ $_resume_rc -eq 0 ]]; then
+			if _direct_config_complete; then
+				tui_log "Resuming with existing config"
+				return 0
+			fi
+			dlg --backtitle "$(ui_backtitle)" --title "Incomplete configuration" \
+				--msgbox "Continue requires a pull secret path in aba.conf and a valid secret file.\nComplete the wizard to finish setup." 0 0
+		fi
+		# Else: fall through to wizard steps
+	fi
+
 	local step="pull_secret"
 	local _ver_short=""
 
@@ -89,22 +115,31 @@ direct_wizard() {
 		channel)
 			_direct_channel
 			case "$DIALOG_RC" in
-					next) step="version" ;;
-					back) step="pull_secret" ;;
-					repeat) ;;  # Stay on channel
-					*) return 1 ;;
-				esac
-				;;
+				next) step="version" ;;
+				back) return 1 ;;  # Exit wizard (pull secret already valid — no step to go back to)
+				repeat) ;;  # Stay on channel
+				*) return 1 ;;
+			esac
+			;;
 			version)
 				_direct_version
 				case "$DIALOG_RC" in
 					next)
+						dlg --backtitle "$(ui_backtitle)" \
+							--title "Confirm Configuration" \
+							--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
+							10 50 || { step="channel"; continue; }
+
 						_ver_short="${ocp_version%.*}"
 						# Save config early: catalog downloads need pull_secret_file from aba.conf
 						_direct_save_config
-						tui_log "Starting CLI + catalog downloads for OpenShift $_ver_short"
-						"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
+					if [[ "$_TUI_MODE" != "DIRECT" ]]; then
+						tui_log "Starting catalog downloads for OpenShift $_ver_short"
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
+						# Start registry download early (shared task ID with aba.sh)
+						run_once -i "mirror:reg:download" -- \
+							make -sC "$ABA_ROOT/mirror" download-registries >>"$_TUI_LOG_FILE" 2>&1
+					fi
 						step="platform"
 						;;
 					back) step="channel" ;;
@@ -115,7 +150,12 @@ direct_wizard() {
 		platform)
 			_direct_platform
 			case "$DIALOG_RC" in
-				next) step="operators" ;;
+				next)
+					if [[ "$_TUI_MODE" == "DIRECT" ]]; then
+						break  # DIRECT: no mirror, no operator selection needed
+					fi
+					step="operators"
+					;;
 				back) step="version" ;;
 				repeat) ;;
 				*) return 1 ;;
@@ -144,6 +184,18 @@ _direct_pull_secret() {
 
 	local ps_file="${pull_secret_file:-$HOME/.pull-secret.json}"
 	ps_file="${ps_file/#\~/$HOME}"
+
+	# Auto-skip if pull secret already present and valid JSON.
+	# DIALOG_RC="next" so the wizard advances forward; when navigating back
+	# to this step, the wizard's pull_secret handler calls us — we return 0
+	# (success) and the wizard goes forward to channel again, which is correct
+	# because the pull secret IS valid. The wizard exits via Back from pull_secret
+	# only when _direct_pull_secret returns non-zero (user cancelled the dialog).
+	if [[ -f "$ps_file" ]] && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$ps_file" >/dev/null 2>&1; then
+		tui_log "Pull secret already valid at $ps_file, skipping"
+		DIALOG_RC="next"
+		return 0
+	fi
 
 	if [[ -f "$ps_file" ]]; then
 		# Already exists — confirm or re-enter
@@ -204,25 +256,37 @@ _direct_channel() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: channel"
 
-	local _default_channel="${ocp_channel:-stable}"
+	local _default_tag=s
+	case "${ocp_channel:-stable}" in
+	stable)    _default_tag=s ;;
+	fast)      _default_tag=f ;;
+	candidate) _default_tag=c ;;
+	esac
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CHANNEL" \
-		--default-item "$_default_channel" \
+		--default-item "$_default_tag" \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
 		--menu "$TUI2_MSG_CHANNEL_PROMPT" 0 0 3 \
-		"stable"    "Recommended for production" \
-		"fast"      "Latest GA release" \
-		"candidate" "Preview/beta" \
+		"s" "stable    — Recommended" \
+		"f" "fast      — Latest GA" \
+		"c" "candidate — Preview" \
 		2>"$_TUI_TMP"
 	local rc=$?
 
 	case "$rc" in
 		0)
-			ocp_channel=$(<"$_TUI_TMP")
-			[[ -z "$ocp_channel" ]] && ocp_channel="stable"
+			local _ch_tag
+			_ch_tag=$(<"$_TUI_TMP")
+			[[ -z "$_ch_tag" ]] && _ch_tag=s
+			case "$_ch_tag" in
+				s) ocp_channel="stable" ;;
+				f) ocp_channel="fast" ;;
+				c) ocp_channel="candidate" ;;
+				*) ocp_channel="stable" ;;
+			esac
 			tui_log "Selected channel: $ocp_channel"
 			DIALOG_RC="next"
 
@@ -312,13 +376,11 @@ _direct_version() {
 				# x.y format — resolve to latest z-stream
 				local _input_minor="$ocp_version"
 				tui_log "Resolving $ocp_version to latest z-stream"
-				run_once -i "ocp:${ocp_channel}:${ocp_version}:latest_z" -- \
-					bash -lc "source '${ABA_ROOT}/scripts/include_all.sh'; fetch_latest_z_version '$ocp_channel' '$ocp_version'"
 				dlg --backtitle "$(ui_backtitle)" --infobox \
 					"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
-				run_once -q -w -S -i "ocp:${ocp_channel}:${ocp_version}:latest_z"
-				ocp_version=$(run_once -o -i "ocp:${ocp_channel}:${ocp_version}:latest_z" 2>/dev/null)
-				if [[ -n "$ocp_version" && "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+				local _resolved=""
+				if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
+					ocp_version="$_resolved"
 					tui_log "Resolved $_input_minor to $ocp_version"
 					DIALOG_RC="next"
 					return
@@ -335,13 +397,40 @@ _direct_version() {
 	fi
 
 	# Build menu items
+	local _has_current=false
+	if [[ -n "${ocp_version:-}" ]] &&
+	   [[ "$ocp_version" != "$latest" ]] &&
+	   [[ "$ocp_version" != "${previous:-}" ]] &&
+	   [[ "$ocp_version" != "${older:-}" ]]; then
+		_has_current=true
+	fi
+
+	local _default_ver_tag=l
+	if [[ -n "${ocp_version:-}" ]]; then
+		if [[ "$_has_current" == true ]]; then
+			_default_ver_tag=c
+		elif [[ "$ocp_version" == "$latest" ]]; then
+			_default_ver_tag=l
+		elif [[ -n "$previous" && "$ocp_version" == "$previous" ]]; then
+			_default_ver_tag=p
+		elif [[ -n "$older" && "$ocp_version" == "$older" ]]; then
+			_default_ver_tag=o
+		else
+			_default_ver_tag=m
+		fi
+	fi
+
 	local items=()
-	items+=("L" "Latest:   $latest")
-	[[ -n "$previous" ]] && items+=("P" "Previous: $previous")
-	[[ -n "$older" ]] && items+=("O" "Older:    $older")
-	items+=("M" "Manual entry (x.y or x.y.z)")
+	if [[ "$_has_current" == true ]]; then
+		items+=("c" "Current   ($ocp_version)")
+	fi
+	items+=("l" "Latest    ($latest)")
+	[[ -n "$previous" ]] && items+=("p" "Previous  ($previous)")
+	[[ -n "$older" ]] && items+=("o" "Older     ($older)")
+	items+=("m" "Manual entry (x.y or x.y.z)")
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
+		--default-item "$_default_ver_tag" \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
@@ -356,10 +445,11 @@ _direct_version() {
 			local choice
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
-				L) ocp_version="$latest" ;;
-				P) ocp_version="$previous" ;;
-				O) ocp_version="$older" ;;
-			M)
+				c) ;;
+				l) ocp_version="$latest" ;;
+				p) ocp_version="$previous" ;;
+				o) ocp_version="$older" ;;
+				m)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
 						--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "${ocp_version:-$latest}" \
@@ -377,13 +467,11 @@ _direct_version() {
 						# x.y format — resolve to latest z-stream
 						local _input_minor="$ocp_version"
 						tui_log "Resolving $ocp_version to latest z-stream"
-						run_once -i "ocp:${ocp_channel}:${ocp_version}:latest_z" -- \
-							bash -lc "source '${ABA_ROOT}/scripts/include_all.sh'; fetch_latest_z_version '$ocp_channel' '$ocp_version'"
 						dlg --backtitle "$(ui_backtitle)" --infobox \
 							"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
-						run_once -q -w -S -i "ocp:${ocp_channel}:${ocp_version}:latest_z"
-						ocp_version=$(run_once -o -i "ocp:${ocp_channel}:${ocp_version}:latest_z" 2>/dev/null)
-						if [[ -n "$ocp_version" && "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+						local _resolved=""
+						if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
+							ocp_version="$_resolved"
 							tui_log "Resolved $_input_minor to $ocp_version"
 							break
 						fi
@@ -478,7 +566,7 @@ _direct_operators_step() {
 	dlg --backtitle "$(ui_backtitle)" --infobox \
 		"Downloading operator catalog indexes...\n\nPlease wait." 0 0
 
-	if ! wait_for_all_catalogs "$_cat_ver" >>"$_TUI_LOG_FILE" 2>&1; then
+	if ! tui_ensure_catalogs_ready "$_cat_ver"; then
 		dlg --backtitle "$(ui_backtitle)" \
 			--yes-label "Retry" --no-label "Back" \
 			--yesno \
@@ -576,9 +664,7 @@ _direct_save_config() {
 	tui_log "Config saved: channel=$ocp_channel version=$ocp_version platform=${platform:-bm}"
 
 	# Kick off ISC regeneration in background (channel/version are ISC inputs)
-	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-	run_once -i "aba:isconf:generate" -- \
-		bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$_TUI_LOG_FILE" 2>&1 &
+	tui_kick_isconf_regen
 }
 
 # =============================================================================
@@ -591,34 +677,23 @@ _direct_action_menu() {
 
 	while :; do
 		local items=()
-		local inst_label="Install Cluster"
+		local inst_label
 		local day2_label="Day-2 / Cluster Management"
-		local mon_label="Finalize Installation (wait-for)"
 
-		local day2_avail=true mon_avail=true
+		tui_cluster_menu_flags DIRECT
+		inst_label="${_CLUSTER_INST_LABEL}"
 
-		local has_installed=false
-		local has_any_cluster=false
-		local dir
-		for dir in $(list_cluster_dirs); do
-			has_any_cluster=true
-			cluster_installed "$dir" && has_installed=true
-		done
-		if [[ "$has_any_cluster" == "false" ]]; then
-			day2_avail=false
+		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
-		fi
-		if [[ "$has_any_cluster" == "false" ]]; then
-			mon_avail=false
-			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
 
 		items+=(
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
-			"$TUI2_DIRECT_TAG_MONITOR"        "$mon_label"
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
+			"$TUI2_DIRECT_TAG_SETTINGS"       "Settings — Auto-answer, registry type, oc-mirror retries"
+			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Reconfigure — Change channel, version, or platform"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
 		)
 
@@ -683,21 +758,21 @@ Navigation:
 				cluster_install_flow
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
-				if [[ "$day2_avail" == "false" ]]; then
+				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
 				else
 					cluster_day2_menu
 				fi
 				;;
-			"$TUI2_DIRECT_TAG_MONITOR")
-				if [[ "$mon_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_CLUSTER_FIRST" 0 0
-				else
-					cluster_monitor
-				fi
+			"$TUI2_DIRECT_TAG_SETTINGS")
+				_tui_settings_menu
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
 				tui_advanced_menu
+				;;
+			"$TUI2_DIRECT_TAG_RECONFIGURE")
+				direct_wizard || true
+				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
 				;;
 		esac
 	done

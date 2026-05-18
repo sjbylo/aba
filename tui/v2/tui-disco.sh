@@ -14,11 +14,104 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 # =============================================================================
+# DISCO first-run gate — bundle marker / archives / guided install + load
+# =============================================================================
+
+_disco_bundle_wizard_gate() {
+	# Offline DISCO allowed without .bundle once mirror/archives exist (_validate_payload path).
+	if [[ ! -f "$ABA_ROOT/.bundle" ]]; then
+		if mirror_available || mirror_has_archives; then
+			tui_log "DISCO: no .bundle file; proceeding (mirror or archives already present)."
+			return 0
+		fi
+		clear
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" --msgbox \
+			"No ABA install-bundle marker (.bundle) was found, and no mirror/archives are available yet.\n\n\
+You need either:\n\
+  • A transferred ABA bundle (touch \".bundle\" if your transfer omitted it)\n\
+  • Or mirror ISA archives under:\n\
+      $ABA_ROOT/mirror/data/mirror_*.tar\n\
+  • Or an installed mirror registry from a prior setup\n\n\
+Then restart abatui2." 0 0
+		tui_log "DISCO wizard: missing .bundle and no offline source — returning"
+		return 1
+	fi
+
+	local _bv="${ocp_version:-?}"
+	local _bc="${ocp_channel:-?}"
+	local _isa_hint="" _payload_line=""
+	if mirror_has_archives; then
+		_isa_hint="ISA archives: mirror_*.tar detected in mirror/data/ (disk payload present)."
+	else
+		_isa_hint="ISA archives: NONE in mirror/data/ — copy mirror_*.tar from removable media\n(related paths: legacy mirror/save/ was merged into mirror/data/)."
+	fi
+
+	local min_size=1000000
+	local has_quay="" has_docker=""
+	has_quay=$(find "$ABA_ROOT/mirror/" -maxdepth 1 -name "mirror-registry*.tar.gz" -size +${min_size}c 2>/dev/null | head -1)
+	has_docker=$(find "$ABA_ROOT/mirror/" -maxdepth 1 -name "docker-reg-image.tgz" -size +${min_size}c 2>/dev/null | head -1)
+	if [[ -n "$has_quay" && -n "$has_docker" ]]; then
+		_payload_line="Registry installers: Quay tarball + Docker image present."
+	elif [[ -n "$has_quay" ]]; then
+		_payload_line="Registry installers: Quay mirror-registry tarball present."
+	elif [[ -n "$has_docker" ]]; then
+		_payload_line="Registry installers: Docker registry tarball present."
+	else
+		_payload_line="Registry installers: (none detected yet — rerun cli/registry prep if needed)."
+	fi
+
+	dlg --backtitle "$(ui_backtitle)" --title "ABA Install Bundle" --msgbox \
+		"You are operating from an install bundle (.bundle).\n\n\
+Disconnected payload summary:\n\
+  • OpenShift version (aba.conf): ${_bv}\n\
+  • Update channel (aba.conf): ${_bc}\n\
+  • ${_isa_hint}\n\
+  • ${_payload_line}\n\n\
+Next: ensure ISA archives exist, then the TUI installs the mirror registry\nand loads images before cluster install." \
+		0 0
+
+	if ! mirror_has_archives; then
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" --msgbox \
+			"No mirror archive files found.\n\n\
+Place mirror_*.tar files in:\n\
+  $ABA_ROOT/mirror/data/\n\
+(Older docs referred to mirror/save/ — that layout is folded into mirror/data/.)\n\n\
+Restart the TUI after copying archives." \
+			0 0
+		tui_log "DISCO wizard: missing ISA archives — returning"
+		return 1
+	fi
+
+	if [[ "${_TUI_DISCO_FROM_CONNO:-false}" == "true" ]]; then
+		tui_log "DISCO wizard: skipping auto mirror install/load (entered from CONNO menu)."
+		return 0
+	fi
+
+	if mirror_available && _mirror_has_release_image; then
+		tui_log "DISCO wizard: mirror already populated — skipping auto install/load."
+		return 0
+	fi
+
+	if ! mirror_available; then
+		tui_log "DISCO wizard: auto-running mirror_install"
+		mirror_install || return 1
+	fi
+
+	if mirror_available && ! _mirror_has_release_image; then
+		tui_log "DISCO wizard: auto-running disco_load_images"
+		disco_load_images || return 1
+	fi
+
+	return 0
+}
+
+# =============================================================================
 # DISCO Main Action Menu
 # =============================================================================
 
 disco_main() {
 	tui_log "Entering DISCO mode action menu"
+	_disco_bundle_wizard_gate || return 1
 	local default_item="$TUI2_DISCO_TAG_VIEW_ISC"
 
 	while :; do
@@ -26,47 +119,33 @@ disco_main() {
 		local items=()
 		local reg_label="Install Registry (local or remote)"
 		local load_label="Load Images (disk2mirror)"
-		local inst_label="Install Cluster"
-		local day2_label="Day-2 / Cluster Management"
-		local mon_label="Finalize Installation (wait-for)"
 		local isc_label="View ImageSet Config"
 		local reset_label="Reset to Connected Mode"
 
-		# Determine availability
 		local reg_avail=true
 		local load_avail=true
-		local day2_avail=true
-		local mon_avail=true
 		local reset_avail=true
+
+		aba_mirror_verify_wait
 
 		if mirror_available; then
 			reg_label="Install Registry (installed)"
 			reg_avail=false
 			if _mirror_has_release_image; then
 				load_label="Load Images (disk2mirror) (loaded)"
-			else
-				inst_label="Install Cluster [load mirror first]"
 			fi
 		else
 			load_label="Load Images (disk2mirror) [install registry first]"
-			inst_label="Install Cluster [install registry first]"
 			load_avail=false
 		fi
 
-		# Check if any cluster exists / is installed
-		local has_installed=false
-		local has_any_cluster=false
-		for dir in $(list_cluster_dirs); do
-			has_any_cluster=true
-			cluster_installed "$dir" && has_installed=true
-		done
-		if [[ "$has_any_cluster" == "false" ]]; then
-			day2_avail=false
+		local day2_label="Day-2 / Cluster Management"
+
+		tui_cluster_menu_flags DISCO
+		local inst_label="${_CLUSTER_INST_LABEL}"
+
+		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
-		fi
-		if [[ "$has_any_cluster" == "false" ]]; then
-			mon_avail=false
-			mon_label="Finalize Installation (wait-for) $TUI2_GREY_INSTALL_FIRST"
 		fi
 
 		# Internet status set once at startup (_TUI_INET). No per-loop re-check.
@@ -74,9 +153,6 @@ disco_main() {
 			reset_avail=false
 			reset_label="Reset to Connected Mode $TUI2_GREY_NO_INTERNET"
 		fi
-
-		# Wait for any in-flight mirror verify before reading state
-		aba_mirror_verify_wait
 
 		# Dynamic menu title with mirror state (matching CONNO)
 		local _mstate
@@ -89,7 +165,6 @@ disco_main() {
 			"$TUI2_DISCO_TAG_LOAD"        "$load_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
-			"$TUI2_DISCO_TAG_MONITOR"     "$mon_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced Options"
@@ -158,7 +233,7 @@ Navigation:
 					dlg --backtitle "$(ui_backtitle)" --yesno \
 						"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 					if [[ $? -eq 0 ]]; then
-						confirm_and_execute "aba -d mirror uninstall" "Uninstall Existing Registry" && disco_install_reg
+						confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" && disco_install_reg
 					fi
 				else
 					disco_install_reg
@@ -176,38 +251,18 @@ Navigation:
 				fi
 				;;
 		"$TUI2_DISCO_TAG_INSTALL")
-			if ! mirror_available; then
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
-					--yes-label "Install & Load" --no-label "$TUI2_BTN_BACK" \
-					--yesno "No mirror registry installed.\n\nA mirror with loaded images is required to install a cluster.\n\nInstall the registry and load images now?" 0 0
-				if [[ $? -eq 0 ]]; then
-					_mirror_config_review && disco_load_images && cluster_install_flow
-				fi
-			elif ! _mirror_has_release_image; then
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_NOT_LOADED" \
-					--yes-label "Load Now" --no-label "$TUI2_BTN_BACK" \
-					--yesno "The mirror is installed but has no release images.\n\nLoad images into the mirror now?" 0 0
-				if [[ $? -eq 0 ]]; then
-					disco_load_images && cluster_install_flow
-				fi
-			else
-				cluster_install_flow
-			fi
+			tui_install_cluster_gate DISCO
+			case "$?" in
+			0) cluster_install_flow ;;
+			3) ;;
+			esac
 			;;
 			"$TUI2_DISCO_TAG_DAY2")
-				if [[ "$day2_avail" == "false" ]]; then
+				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"$TUI2_MSG_NO_CLUSTERS" 0 0
 				else
 					cluster_day2_menu
-				fi
-				;;
-			"$TUI2_DISCO_TAG_MONITOR")
-				if [[ "$mon_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"$TUI2_MSG_CLUSTER_FIRST" 0 0
-				else
-					cluster_monitor
 				fi
 				;;
 			"$TUI2_DISCO_TAG_ADVANCED")
@@ -266,7 +321,7 @@ disco_load_images() {
 		done
 	fi
 
-	confirm_and_execute "aba -d mirror load" "Load Images (disk2mirror)" _invalidate_mirror_cache
+	confirm_and_execute "aba --dir mirror load$(_tui_oc_mirror_retry_suffix)" "Load Images (disk2mirror)" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
 }

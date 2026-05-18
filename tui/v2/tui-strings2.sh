@@ -171,8 +171,10 @@ TUI2_CONNO_TAG_DAY2="D"
 TUI2_CONNO_TAG_MONITOR="W"
 TUI2_CONNO_TAG_DELETE="K"
 TUI2_CONNO_TAG_ADVANCED="A"
+TUI2_CONNO_TAG_RECONFIGURE="R"
 TUI2_CONNO_TAG_SWITCH_DIRECT="X"
 TUI2_CONNO_TAG_SWITCH_DISCO="Z"
+TUI2_CONNO_TAG_SETTINGS="G"
 
 # =============================================================================
 # Menu Tags — DIRECT Action Menu
@@ -183,7 +185,15 @@ TUI2_DIRECT_TAG_DAY2="D"
 TUI2_DIRECT_TAG_DELETE="K"
 TUI2_DIRECT_TAG_MONITOR="W"
 TUI2_DIRECT_TAG_ADVANCED="A"
+TUI2_DIRECT_TAG_RECONFIGURE="R"
 TUI2_DIRECT_TAG_SWITCH_MIRROR="M"
+TUI2_DIRECT_TAG_SETTINGS="S"
+
+# =============================================================================
+# Dialog Titles — Settings
+# =============================================================================
+
+TUI2_TITLE_SETTINGS="Settings"
 
 # =============================================================================
 # Menu Labels (plain text for greyed-out items)
@@ -217,7 +227,7 @@ TUI2_MSG_PLATFORM_CONFIG_MISSING="%s configuration not found.\n\nExpected: %s\nR
 # Prompt / Message Text — Mirror / ISC
 # =============================================================================
 
-TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration...\n\nDownloading operator catalog indexes (first time may take 1-2 minutes).\nPlease wait."
+TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration...\n\nPlease wait."
 TUI2_MSG_ISC_NOT_FOUND="ImageSet configuration file not found.\n\nFile: %s"
 TUI2_MSG_ISC_SAVED="ImageSet configuration saved.\n\nABA will not overwrite your edits.\nUse 'Reset' to revert to auto-generated."
 TUI2_MSG_ISC_RESET="ImageSet configuration reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
@@ -239,7 +249,7 @@ TUI2_BTN_INSTALL="Install"
 TUI2_BTN_SWITCH="Switch"
 TUI2_BTN_TOGGLE="Toggle"
 TUI2_BTN_REMOVE="Remove"
-TUI2_BTN_DONE="Done"
+TUI2_BTN_DONE="Next"
 TUI2_BTN_RETRY="Retry"
 TUI2_BTN_BACK_TO_MENU="Back to Menu"
 TUI2_BTN_CHECK_AGAIN="Check again"

@@ -181,15 +181,17 @@ _cluster_generate_defaults() {
 	fi
 
 	# Build the generation command
-	local _cmd="aba cluster -n $cl_name -t $cl_type -p $cl_platform -s cluster.conf -y"
+	local _cmd="aba cluster --name $cl_name --type $cl_type --platform $cl_platform --step cluster.conf --yes"
 	tui_log "Generating defaults: $_cmd"
 
 	# Run it (fast ~2s) — fully detached from TUI's terminal/dialog
 	local _gen_rc=0
 	(cd "$ABA_ROOT" && eval "$_cmd") </dev/null >>"$_TUI_LOG_FILE" 2>&1 || _gen_rc=$?
 	if [[ $_gen_rc -ne 0 ]]; then
-		tui_log "WARNING: Failed to generate preliminary cluster.conf (rc=$_gen_rc)"
-		return 0
+		tui_log "ERROR: Failed to generate cluster.conf (rc=$_gen_rc)"
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Failed to generate cluster configuration (exit code $_gen_rc).\n\nCheck the TUI log for details:\n  $_TUI_LOG_FILE\n\nYou may need to fix aba.conf or platform configuration." 0 0 || true
+		return 1
 	fi
 
 	# Load the generated config into form fields
@@ -689,7 +691,7 @@ cluster_install_flow() {
 				if [[ $_rc -ne 0 ]]; then page=0; break; fi
 				_gate_platform_config || continue
 				# Generate preliminary cluster.conf to get real defaults from aba core
-				_cluster_generate_defaults
+				_cluster_generate_defaults || continue
 				_apply_mode_connection
 				_persist_cluster_draft
 				;;
@@ -1017,11 +1019,11 @@ _cluster_page_network() {
 							"Invalid CIDR format.\n\nExpected: IP/prefix (e.g. 10.0.0.0/24)" 0 0 || true
 						continue
 					fi
-					[[ -n "$net_val" ]] && cl_network="$net_val"
-					break
-				done
-				;;
-			S)
+				cl_network="$net_val"
+				break
+			done
+			;;
+		S)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_STARTING_IP" \
 						--inputbox "$TUI2_MSG_NET_STARTING_IP_PROMPT" 0 0 "$cl_starting_ip" \
@@ -1034,11 +1036,11 @@ _cluster_page_network() {
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.100)" 0 0 || true
 						continue
 					fi
-					[[ -n "$sip_val" ]] && cl_starting_ip="$sip_val"
-					break
-				done
-				;;
-			A)
+				cl_starting_ip="$sip_val"
+				break
+			done
+			;;
+		A)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_API_VIP" \
 						--inputbox "$TUI2_MSG_NET_API_VIP_PROMPT" 0 0 "$cl_api_vip" \
@@ -1051,11 +1053,11 @@ _cluster_page_network() {
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.200)" 0 0 || true
 						continue
 					fi
-					[[ -n "$api_val" ]] && cl_api_vip="$api_val"
-					break
-				done
-				;;
-			I)
+				cl_api_vip="$api_val"
+				break
+			done
+			;;
+		I)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INGRESS_VIP" \
 						--inputbox "$TUI2_MSG_NET_INGRESS_VIP_PROMPT" 0 0 "$cl_ingress_vip" \
@@ -1068,11 +1070,11 @@ _cluster_page_network() {
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.0.201)" 0 0 || true
 						continue
 					fi
-					[[ -n "$ing_val" ]] && cl_ingress_vip="$ing_val"
-					break
-				done
-				;;
-			D)
+				cl_ingress_vip="$ing_val"
+				break
+			done
+			;;
+		D)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DNS" \
 						--inputbox "$TUI2_MSG_NET_DNS_PROMPT" 0 0 "$cl_dns" \
@@ -1085,11 +1087,11 @@ _cluster_page_network() {
 							"Invalid DNS entry.\n\nExpected: comma-separated IPs (e.g. 10.0.1.8,10.0.1.9)" 0 0 || true
 						continue
 					fi
-					[[ -n "$dns_val" ]] && cl_dns="$dns_val"
-					break
-				done
-				;;
-			G)
+				cl_dns="$dns_val"
+				break
+			done
+			;;
+		G)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_GATEWAY" \
 						--inputbox "$TUI2_MSG_NET_GATEWAY_PROMPT" 0 0 "$cl_gateway" \
@@ -1102,11 +1104,11 @@ _cluster_page_network() {
 							"Invalid IP address.\n\nExpected format: N.N.N.N (e.g. 10.0.1.1)" 0 0 || true
 						continue
 					fi
-					[[ -n "$gw_val" ]] && cl_gateway="$gw_val"
-					break
-				done
-				;;
-			N)
+				cl_gateway="$gw_val"
+				break
+			done
+			;;
+		N)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NTP" \
 						--inputbox "$TUI2_MSG_NET_NTP_PROMPT" 0 0 "$cl_ntp" \
@@ -1119,11 +1121,11 @@ _cluster_page_network() {
 							"Invalid NTP entry.\n\nExpected: comma-separated IPs or hostnames\n(e.g. 10.0.1.8,ntp.lab.local)" 0 0 || true
 						continue
 					fi
-					[[ -n "$ntp_val" ]] && cl_ntp="$ntp_val"
-					break
-				done
-				;;
-		esac
+				cl_ntp="$ntp_val"
+				break
+			done
+			;;
+	esac
 	done
 }
 
@@ -1246,14 +1248,21 @@ _cluster_page_iface() {
 					direct) cl_connection="proxy" ;;
 					*) cl_connection="direct" ;;
 				esac
-			else
-				# Toggle: mirror → proxy → direct → mirror
-				case "$cl_connection" in
-					mirror|"") cl_connection="proxy" ;;
-					proxy) cl_connection="direct" ;;
-					direct) cl_connection="mirror" ;;
-				esac
+		elif [[ "$_TUI_MODE" == "DISCO" ]]; then
+			# DISCO: only "mirror" is valid (no internet)
+			if [[ "$cl_connection" != "mirror" ]]; then
+				cl_connection="mirror"
 			fi
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"In disconnected mode only \"mirror\" is available as an image source." 0 0 || true
+		else
+			# CONNO: Toggle mirror → proxy → direct → mirror
+			case "$cl_connection" in
+				mirror|"") cl_connection="proxy" ;;
+				proxy) cl_connection="direct" ;;
+				direct) cl_connection="mirror" ;;
+			esac
+		fi
 			tui_log "Toggled connection to: $cl_connection"
 			;;
 		M)
@@ -1279,7 +1288,7 @@ _cluster_page_iface() {
 				2>"$_TUI_TMP"
 			if [[ $? -eq 0 ]]; then
 				local key_val=$(<"$_TUI_TMP")
-				[[ -n "$key_val" ]] && cl_ssh_key="$key_val"
+				cl_ssh_key="$key_val"
 			fi
 			;;
 	esac
@@ -1349,11 +1358,11 @@ _cluster_page_vm() {
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
 						continue
 					fi
-					[[ -n "$val" ]] && cl_master_cpu="$val"
-					break
-				done
-				;;
-			R)
+				cl_master_cpu="$val"
+				break
+			done
+			;;
+		R)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
 						--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
@@ -1364,11 +1373,11 @@ _cluster_page_vm() {
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
 						continue
 					fi
-					[[ -n "$val" ]] && cl_master_mem="$val"
-					break
-				done
-				;;
-			W)
+				cl_master_mem="$val"
+				break
+			done
+			;;
+		W)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
 						--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
@@ -1379,11 +1388,11 @@ _cluster_page_vm() {
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
 						continue
 					fi
-					[[ -n "$val" ]] && cl_worker_cpu="$val"
-					break
-				done
-				;;
-			E)
+				cl_worker_cpu="$val"
+				break
+			done
+			;;
+		E)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
 						--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
@@ -1394,13 +1403,13 @@ _cluster_page_vm() {
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
 						continue
 					fi
-					[[ -n "$val" ]] && cl_worker_mem="$val"
-					break
-				done
-				;;
-			D)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DATA_DISK" \
+				cl_worker_mem="$val"
+				break
+			done
+			;;
+		D)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DATA_DISK" \
 						--inputbox "$TUI2_MSG_VM_DISK_PROMPT" 0 0 "$cl_disk" \
 						2>"$_TUI_TMP"
 					[[ $? -ne 0 ]] && break
@@ -1409,12 +1418,12 @@ _cluster_page_vm() {
 						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a non-negative number (0 = no extra disk)." 0 0 || true
 						continue
 					fi
-					[[ -n "$val" ]] && cl_disk="$val"
-					break
-				done
-				;;
-			A)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_TEMPLATE" \
+				cl_disk="$val"
+				break
+			done
+			;;
+		A)
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_TEMPLATE" \
 					--inputbox "$TUI2_MSG_VM_MAC_PROMPT" 0 0 "$cl_mac_template" \
 					2>"$_TUI_TMP"
 				[[ $? -eq 0 ]] && cl_mac_template=$(<"$_TUI_TMP")
@@ -1559,7 +1568,7 @@ _cluster_execute() {
 			1|255) return 1 ;;
 		esac
 	fi
-	cmd="$cmd -s $install_step"
+	cmd="$cmd --step $install_step"
 
 	tui_log "Installing cluster ($install_step): $cmd"
 
@@ -1654,7 +1663,7 @@ cluster_monitor() {
 		return 1
 	fi
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER mon" "$TUI2_TITLE_CLUSTER_MONITOR"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER mon" "$TUI2_TITLE_CLUSTER_MONITOR"
 }
 
 # =============================================================================
@@ -1676,7 +1685,7 @@ cluster_delete() {
 	local rc=$?
 	[[ $rc -ne 0 ]] && return 1
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER delete" "$TUI2_TITLE_CLUSTER_DELETE: $cl_display"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER delete" "$TUI2_TITLE_CLUSTER_DELETE: $cl_display"
 }
 
 # =============================================================================
@@ -1693,6 +1702,9 @@ tui_advanced_menu() {
 		adv_items+=("P" "Reconfigure Platform (vmware/kvm/bm)")
 		if mirror_available; then
 			adv_items+=("U" "Uninstall Mirror Registry")
+		fi
+		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
+			adv_items+=("F" "Finalize Installation (wait-for / re-attach)")
 		fi
 		if [[ -n "$_TUI_EXEC_MODE" ]]; then
 			adv_items+=("E" "Reset Execution Mode (currently: $_TUI_EXEC_MODE)")
@@ -1746,14 +1758,17 @@ tui_advanced_menu() {
 			[[ $? -ne 0 ]] && continue
 			local plat
 			plat=$(<"$_TUI_TMP")
-			confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
+			confirm_and_execute "aba --platform $plat $plat" "Set Platform: $plat"
 				;;
 			"U")
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
 					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Uninstall the mirror registry?\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
-				confirm_and_execute "aba -d mirror uninstall" "Uninstall Mirror Registry"
+				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry"
+				;;
+			"F")
+				cluster_monitor
 				;;
 			"E")
 				_TUI_EXEC_MODE=""
@@ -1887,7 +1902,7 @@ _day2_run() {
 		return 1
 	fi
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER $target" "Day-2: $target"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER $target" "Day-2: $target"
 }
 
 _day2_run_osus() {
@@ -1961,7 +1976,7 @@ _day2_ssh() {
 
 	cd "$ABA_ROOT"
 	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
-	bash -c "aba -d $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&- || true
+	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&- || true
 
 	echo
 	read -rp "Press ENTER to return to TUI..."
@@ -1976,7 +1991,7 @@ _day2_upgrade() {
 	# Fetch available versions
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
 	local _versions_raw
-	_versions_raw=$(aba -d "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
+	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
 
 	# Parse version lines (format: "X.Y.Z" or lines containing semver patterns)
 	local _versions=()
@@ -2060,7 +2075,7 @@ _day2_upgrade() {
 				# Fall through to manual entry below
 				:
 			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-				confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $choice" \
+				confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $choice" \
 					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
 				return
 			fi
@@ -2084,7 +2099,7 @@ _day2_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z (e.g. 4.21.15)" 0 0
 			continue
 		fi
-		confirm_and_execute "aba -d $SELECTED_CLUSTER upgrade --to $target_ver" \
+		confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $target_ver" \
 			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
 		return
 	done
@@ -2103,7 +2118,7 @@ _day2_shutdown() {
 		--yesno "Gracefully shut down cluster '$cl_display'?\n\nThis will cordon, drain and shutdown all nodes.\nThe operation will wait until shutdown is complete." 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER shutdown --wait" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER shutdown --wait" "$TUI2_TITLE_DAY2_SHUTDOWN: $cl_display"
 }
 
 # --- Graceful Cluster Startup ---
@@ -2119,7 +2134,7 @@ _day2_startup() {
 		--yesno "Start cluster '$cl_display'?\n\nThis will power on the cluster VMs." 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
 }
 
 # --- Refresh (recreate VMs, trigger new install) ---
@@ -2135,7 +2150,7 @@ _day2_refresh() {
 		--yesno "Refresh cluster '$cl_display'?\n\nThis will destroy existing VMs and trigger a fresh installation.\nAll current cluster data will be lost.\n\nThis action cannot be undone!" 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER refresh" "$TUI2_TITLE_DAY2_REFRESH: $cl_display"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER refresh" "$TUI2_TITLE_DAY2_REFRESH: $cl_display"
 }
 
 # --- Clean cluster dir (retry install) ---
@@ -2151,7 +2166,7 @@ _day2_clean() {
 		--yesno "Clean cluster '$cl_display'?\n\nThis removes generated artifacts (ISO, install-config, etc.)\nso you can retry the installation.\n\nCluster configuration (cluster.conf) is preserved." 0 0
 	[[ $? -ne 0 ]] && return 0
 
-	confirm_and_execute "aba -d $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"
+	confirm_and_execute "aba --dir $SELECTED_CLUSTER clean" "$TUI2_TITLE_DAY2_CLEAN: $cl_display"
 }
 
 # --- Delete cluster (reuses existing cluster_delete, now accessed from Day-2 menu) ---
