@@ -934,6 +934,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				bm)  cl_ports="" ;;
 			esac
 		fi
+		replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
 		tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
 		;;
 		W)
