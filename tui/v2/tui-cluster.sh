@@ -1654,13 +1654,13 @@ _platform_config_missing() {
 }
 
 # =============================================================================
-# Finalize Installation (wait-for install-complete)
+# Monitor Cluster Installation (re-attach to wait-for install-complete)
 # =============================================================================
 
 cluster_monitor() {
-	tui_log "Action: Finalize Installation (wait-for)"
+	tui_log "Action: Monitor Cluster Installation"
 
-	if ! select_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to finalize:"; then
+	if ! select_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to monitor:"; then
 		return 1
 	fi
 
@@ -1695,17 +1695,24 @@ cluster_delete() {
 
 tui_advanced_menu() {
 	tui_log "Action: Advanced Menu"
-	local default_item="R"
+	local default_item="P"
 
 	while :; do
 		local adv_items=()
-		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
-		adv_items+=("P" "Reconfigure Platform (vmware/kvm/bm)")
+		# Platform config (view/edit vmware.conf or kvm.conf)
+		local _plat_label="Reconfigure Platform"
+		source <(normalize-aba-conf) 2>/dev/null || true
+		case "${platform:-}" in
+			vmw) _plat_label="Platform Settings (vmware.conf)" ;;
+			kvm) _plat_label="Platform Settings (kvm.conf)" ;;
+			*)   _plat_label="Reconfigure Platform (vmware/kvm/bm)" ;;
+		esac
+		adv_items+=("P" "$_plat_label")
 		if mirror_available; then
-			adv_items+=("U" "Uninstall Mirror Registry")
+			adv_items+=("U" "Uninstall Mirror Registry (destructive)")
 		fi
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
-			adv_items+=("F" "Finalize Installation (wait-for / re-attach)")
+			adv_items+=("F" "Monitor Cluster Installation (re-attach)")
 		fi
 		if [[ -n "$_TUI_EXEC_MODE" ]]; then
 			adv_items+=("E" "Reset Execution Mode (currently: $_TUI_EXEC_MODE)")
@@ -1724,16 +1731,37 @@ tui_advanced_menu() {
 				adv_items+=("X" "Switch to Connected Mode")
 				;;
 		esac
+		adv_items+=("" "──── Danger Zone ───────────────────")
+		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
 			--cancel-label "$TUI2_BTN_BACK" \
+			--help-button \
 			--menu "Advanced operations (use with care):" 0 0 0 \
 			"${adv_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
-		[[ $rc -ne 0 ]] && return 0
+		[[ $rc -eq 1 || $rc -eq 255 ]] && return 0
+
+		if [[ $rc -eq 2 ]]; then
+			dlg --backtitle "$(ui_backtitle)" --title "Advanced Menu Help" \
+				--msgbox "\
+P - Platform Settings: View or edit your hypervisor configuration\n\
+    (vmware.conf for vSphere, kvm.conf for KVM/libvirt).\n\n\
+U - Uninstall Mirror Registry: Removes the mirror registry container\n\
+    and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
+F - Monitor Cluster Installation: Re-attach to a running install\n\
+    and wait for completion. Rarely needed since ABA auto-detects.\n\n\
+E - Reset Execution Mode: Clears your 'Always TUI' or 'Always Terminal'\n\
+    preference for this session.\n\n\
+X/Z - Switch Mode: Manually switch between Connected, Partially\n\
+    Disconnected, and Fully Disconnected workflows.\n\n\
+R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
+    returns ABA to its initial unpacked state. CANNOT BE UNDONE." 0 0
+			continue
+		fi
 
 		local choice
 		choice=$(<"$_TUI_TMP")
@@ -1749,17 +1777,28 @@ tui_advanced_menu() {
 				return 0
 				;;
 			"P")
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
-					--cancel-label "$TUI2_BTN_BACK" \
-					--menu "Select platform:" 0 0 0 \
-				"vmw"  "VMware vSphere (ESXi/vCenter)" \
-				"kvm"  "KVM (libvirt)" \
-				"bm"   "Bare Metal / Other" \
-				2>"$_TUI_TMP"
-			[[ $? -ne 0 ]] && continue
-			local plat
-			plat=$(<"$_TUI_TMP")
-			confirm_and_execute "aba --platform $plat $plat" "Set Platform: $plat"
+				source <(normalize-aba-conf) 2>/dev/null || true
+				case "${platform:-}" in
+					vmw)
+						confirm_and_execute "aba vmw" "Platform Settings (VMware)"
+						;;
+					kvm)
+						confirm_and_execute "aba kvm" "Platform Settings (KVM)"
+						;;
+					*)
+						dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
+							--cancel-label "$TUI2_BTN_BACK" \
+							--menu "Select platform:" 0 0 0 \
+							"vmw"  "VMware vSphere (ESXi/vCenter)" \
+							"kvm"  "KVM (libvirt)" \
+							"bm"   "Bare Metal / Other" \
+							2>"$_TUI_TMP"
+						[[ $? -ne 0 ]] && continue
+						local plat
+						plat=$(<"$_TUI_TMP")
+						confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
+						;;
+				esac
 				;;
 			"U")
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
