@@ -73,6 +73,15 @@ if [ $ret -ne 0 ]; then
 	exit $ret
 fi
 
+# Phase 6 BMC-06 + BMC-07: post-install cleanup - disable boot override + eject media.
+# Platform-gated; best-effort (scripts/bmc-unmount.sh exits 0 always per D-13).
+# $platform is available here via the include_all.sh / normalize-aba-conf chain.
+# Trailing `|| true` handles three failure modes W6:
+#   (1) non-bm platform (short-circuit on `[ "$platform" = "bm" ]`),
+#   (2) absent bmc.conf (short-circuit on `[ -f bmc.conf ]`),
+#   (3) scripts/bmc-unmount.sh non-zero (D-13 says never; belt+braces).
+[ "$platform" = "bm" ] && [ -f bmc.conf ] && scripts/bmc-unmount.sh || true
+
 aba_info_ok "The cluster has been successfully installed!"
 
 # --- Externalize cluster state (ADR-007) ---

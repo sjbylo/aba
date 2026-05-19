@@ -19,6 +19,29 @@ unset WORKER_NAMES
 unset WKR_MAC_ADDRS
 unset WKR_IP_ADDR
 
+# -----------------------------------------------------------------------------
+# Phase 10 D-03: when bmc.conf is present with bmc_host_* entries, route the
+# final exported CP_MAC_ADDRS / WKR_MAC_ADDRS through _bm_get_mac so operator-
+# supplied mac_<node> wins over jq-extracted agent-config MACs, with
+# .bmc-state.<node>::discovered_mac as the fallback. When bmc.conf is absent
+# (D-17 INT-03 day-zero contract), the gate stays false and existing behavior
+# is preserved verbatim.
+# D-03 invariant: check-macs.sh consumes CP_MAC_ADDRS / WKR_MAC_ADDRS unchanged;
+# ARP-cache conflict detection is unaffected.
+# -----------------------------------------------------------------------------
+_BMC_MAC_OVERRIDE_ACTIVE=false
+if [ -f bmc.conf ] && grep -qE '^[[:space:]]*bmc_host_' bmc.conf; then
+	_BMC_MAC_OVERRIDE_ACTIVE=true
+	# _bm_get_mac (D-03) lives in bmc-mac-discovery.sh.
+	[ -f scripts/bmc-redfish.sh ]         && source scripts/bmc-redfish.sh
+	[ -f scripts/bmc-adapter-generic.sh ] && source scripts/bmc-adapter-generic.sh
+	[ -f scripts/bmc-mac-discovery.sh ]   && source scripts/bmc-mac-discovery.sh
+	# Populate mac_<node> + mac_discovery_<node> via normalize-bmc-conf so the
+	# helper's operator-mac branch can see them. include_all.sh already provided
+	# the normalize helper.
+	source <(normalize-bmc-conf)
+fi
+
 yaml2json()
 {
 	python3 -c 'import yaml; import json; import sys; print(json.dumps(yaml.safe_load(sys.stdin)));'
@@ -143,6 +166,41 @@ fi
 
 export ASSETS_DIR=iso-agent-based
 echo export ASSETS_DIR=$ASSETS_DIR
+
+# -----------------------------------------------------------------------------
+# Phase 10 D-03: helper-routing override. Must run AFTER both distribute_macs
+# calls above (so the helper-derived value is the final exported one - last
+# write wins in the sourced `echo export ...` output). Plan-checker
+# revision-iteration-2 WARNING 2 explicitly calls this ordering out.
+#
+# Behavior:
+#   - bmc.conf absent -> _BMC_MAC_OVERRIDE_ACTIVE=false; this block is a no-op
+#     (D-17 INT-03 day-zero contract preserved).
+#   - bmc.conf present with bmc_host_* -> rebuild CP_MAC_ADDRS / WKR_MAC_ADDRS
+#     by iterating bmc.conf node names in declaration order and calling
+#     _bm_get_mac (D-03 resolution: operator mac_<node> > sidecar
+#     discovered_mac > hard-fail). master*/worker* node-name prefix decides
+#     the CP vs WKR bucket; other patterns are ignored with a debug line.
+# -----------------------------------------------------------------------------
+if [ "$_BMC_MAC_OVERRIDE_ACTIVE" = "true" ]; then
+	_new_cp=""
+	_new_wkr=""
+	while IFS= read -r _bmc_node; do
+		[ -z "$_bmc_node" ] && continue
+		_mac=$(_bm_get_mac "$_bmc_node") || aba_abort "Cannot resolve MAC for BMC node $_bmc_node (no operator mac_${_bmc_node} and no discovered_mac in .bmc-state.${_bmc_node})"
+		case "$_bmc_node" in
+			master*) _new_cp="$_new_cp $_mac" ;;
+			worker*) _new_wkr="$_new_wkr $_mac" ;;
+			*)       aba_debug "BMC: unrecognized node-name pattern $_bmc_node (not master*/worker*); leaving CP/WKR list unchanged for this node" ;;
+		esac
+	done < <(grep -E '^[[:space:]]*bmc_host_[A-Za-z0-9_-]+=' bmc.conf | sed -E 's/^[[:space:]]*bmc_host_([A-Za-z0-9_-]+)=.*/\1/')
+	# Trim leading space.
+	CP_MAC_ADDRS="${_new_cp# }"
+	WKR_MAC_ADDRS="${_new_wkr# }"
+	# Re-emit the export lines AFTER the original ones so they win.
+	echo export CP_MAC_ADDRS=\"$CP_MAC_ADDRS\"
+	[ "$WKR_MAC_ADDRS" ] && echo export WKR_MAC_ADDRS=\"$WKR_MAC_ADDRS\"
+fi
 
 # basic checks
 [ ! "$CLUSTER_NAME" ] && echo_red "Cluster name .metadata.name missing in $ICONF" >&2 && err=1

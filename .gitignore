@@ -98,4 +98,5 @@ ai/OPP*docx
 ai/OPP*pdf
 ai/RELEASE_BULLETS_*.md
 
+# Local planning directory - never ship to public repo
 .planning/
