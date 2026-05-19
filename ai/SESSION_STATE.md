@@ -1,20 +1,25 @@
 # Session State
 
 ## Current goal
-TUI long-flags change + reviewing uncommitted scripts/ changes.
+Shipped Catalog Index Files -- plan finalized, awaiting user approval to implement.
 
 ## Done this session
-- Changed all short flags (`-d`, `-p`, `-n`, `-t`, `-s`, `-y`) to long flags (`--dir`, `--platform`, `--name`, `--type`, `--step`, `--yes`) across all TUI v2 `.sh` files
-- Files modified: `tui-cluster.sh` (16 changes), `tui-mirror.sh` (6), `tui-disco.sh` (2), `abatui2.sh` (1), `tui-lib.sh` (1)
-- Fixed the `-y` auto-append guard in `_exec_in_tui` to also detect `--yes`
-- Replaced `aba_error` + `exit 1` with `aba_abort` in `scripts/cli-download-all.sh`
-- Summarized all uncommitted changes under `scripts/` for user review
+- Discovered consumers don't check `.done` -- only `-s .index/X`
+- Discovered TTL re-download is broken (script's .done skip defeats run_once TTL)
+- Simplified to populate-from-shipped + atomic rename + remove .done
+- Chose `catalog-indexes/` as top-level dir (not in bundle, useful for connected users)
+- Eliminated .gitignore and backup.sh changes entirely
+- Added refresh script (`tools/refresh-catalog-indexes.sh`) to keep indexes fresh between releases
 
 ## Next steps
-- Commit and push when approved
-- Continue TUI hackathon testing if needed
+- Get user approval on the final plan
+- Implement (5 todos: populate-fn, atomic-download, seed-shipped, refresh-script, test)
 
 ## Decisions / notes
-- SPEC.md was NOT updated (documentation, not executable code)
-- The uncommitted `scripts/` changes are from a previous session (not this one)
-- Second `aba_error` in `cli-download-all.sh` (line 81) left as-is -- it uses `continue`, not `exit`
+- `catalog-indexes/` = top-level, git-tracked, NOT in bundle (backup.sh untouched)
+- Populate copies `catalog-indexes/X` -> `.index/X` on init if live doesn't exist
+- No `.done` file -- run_once is sole gatekeeper; fixes latent TTL re-download bug
+- Atomic mv: write to `.downloading` temp, rename when complete
+- Refresh script: downloads, verifies (canary-style), commits, optionally moves release tag
+- Zero consumer changes, zero .gitignore changes, zero backup.sh changes
+- Plan file: `~/.cursor/plans/baked_catalog_indexes_02fc9df9.plan.md`
