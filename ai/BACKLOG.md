@@ -3223,3 +3223,39 @@ During cluster installation, ABA prompts: `[ABA] To (re)start the installation, 
 
 Skip the VM delete/re-create prompt when `platform=bm` (no hypervisor config). The prompt should only appear for `platform=vmw` or `platform=kvm` where VMs actually exist and can be managed by ABA.
 
+## Security: Mask sensitive values (passwords, tokens, certs) in error/debug output
+
+**Priority:** Medium
+**Scope:** Core (`scripts/include_all.sh`, error handling, debug logging)
+
+### Problem
+
+When commands fail, ABA logs the full command including sensitive values like passwords and tokens. For example:
+
+```
+Error occurred in command: 'oc login -u kubeadmin -p 'ihd5h-B9erT-ABnBL-y4DsK' --insecure-skip-tls-verify https://api.sno.example.com:6443'
+```
+
+This leaks the kubeadmin password in terminal output, log files, and potentially CI/CD artifacts.
+
+### Expected behavior
+
+Sensitive arguments should be masked before display. For example:
+
+```
+Error occurred in command: 'oc login -u kubeadmin -p '****' --insecure-skip-tls-verify https://api.sno.example.com:6443'
+```
+
+### Scope of masking
+
+- `-p` / `--password` arguments
+- `reg_pw` values in debug/error output
+- Bearer tokens (`--token`)
+- Certificate/key file contents if echoed
+- Pull secret contents
+- Any variable known to hold secrets (`reg_pw`, `KUBEADMIN_PW`, etc.)
+
+### Proposed approach
+
+Add a `_mask_sensitive()` helper that scrubs known patterns (e.g. `-p '[^']*'`, `--token [^ ]*`) before outputting command strings in `aba_debug`, ERR trap handlers, and error messages.
+
