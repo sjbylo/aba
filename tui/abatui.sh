@@ -1952,51 +1952,65 @@ select_operators() {
 	log "Starting registry download task"
 	run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C "$ABA_ROOT/mirror" download-registries
 	
-	# WAIT for catalog indexes to download (needed for operator sets AND search)
-	# Catalogs were started in background after version selection
-	# wait_for_all_catalogs returns immediately if already complete
+	# Ensure catalog indexes are available for operator sets AND search
 	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
 	log "Checking catalog indexes for version ${version_short}..."
-	
-	# Check if catalogs are already complete (quick check)
-	local need_wait=false
-	run_once -p -i "catalog:${version_short}:redhat-operator" || need_wait=true
-	run_once -p -i "catalog:${version_short}:certified-operator" || need_wait=true
-	run_once -p -i "catalog:${version_short}:community-operator" || need_wait=true
-	
-	# If catalogs are still downloading, show a waiting dialog
-	if [[ "$need_wait" == "true" ]]; then
-		log "Catalogs still downloading, showing wait dialog..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs for OCP ${version_short}...\n\nThis may take a few minutes on first run." 6 60
-	fi
-	
-	# Ensure all 3 catalogs are running in parallel (no-op if already started)
-	download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
-	
-	# Now wait for all 3 — they're already running in parallel
-	local failed_catalogs=()
-	
-	for catalog in redhat-operator certified-operator community-operator; do
-		if ! run_once -q -w -i "catalog:${version_short}:${catalog}"; then
-			log "ERROR: Catalog download failed: $catalog"
-			failed_catalogs+=("$catalog")
-		fi
+
+	# Populate .index/ from shipped catalogs if missing
+	_populate_shipped_indexes
+
+	# If at least one catalog index exists for this version, proceed immediately
+	local _have_files=false
+	local _f
+	for _f in "$ABA_ROOT"/.index/*-operator-index-v${version_short}; do
+		[[ -s "$_f" ]] && { _have_files=true; break; }
 	done
-	
-	# If any catalogs failed, show a user-friendly error
-	if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
-		log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
-		
-		# Get error details via run_once (not direct runner access)
-		local first_failed="${failed_catalogs[0]}"
-		local error_msg
-		error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
-		
-		if [[ -z "$error_msg" ]]; then
-			error_msg="No details available."
+
+	if [[ "$_have_files" == true ]]; then
+		# Still kick off downloads in background for freshness (no-op if already running)
+		download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
+		log "Catalog indexes available (shipped or downloaded) for version ${version_short}"
+	else
+		# No files at all -- must download and wait
+		# Check if catalogs are already complete (quick check)
+		local need_wait=false
+		run_once -p -i "catalog:${version_short}:redhat-operator" || need_wait=true
+		run_once -p -i "catalog:${version_short}:certified-operator" || need_wait=true
+		run_once -p -i "catalog:${version_short}:community-operator" || need_wait=true
+
+		# If catalogs are still downloading, show a waiting dialog
+		if [[ "$need_wait" == "true" ]]; then
+			log "Catalogs still downloading, showing wait dialog..."
+			dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs for OCP ${version_short}...\n\nThis may take a few minutes on first run." 6 60
 		fi
-		
-		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+
+		# Ensure all 3 catalogs are running in parallel (no-op if already started)
+		download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
+
+		# Now wait for all 3 — they're already running in parallel
+		local failed_catalogs=()
+
+		for catalog in redhat-operator certified-operator community-operator; do
+			if ! run_once -q -w -i "catalog:${version_short}:${catalog}"; then
+				log "ERROR: Catalog download failed: $catalog"
+				failed_catalogs+=("$catalog")
+			fi
+		done
+
+		# If any catalogs failed, show a user-friendly error
+		if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
+			log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
+
+			# Get error details via run_once (not direct runner access)
+			local first_failed="${failed_catalogs[0]}"
+			local error_msg
+			error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
+
+			if [[ -z "$error_msg" ]]; then
+				error_msg="No details available."
+			fi
+
+			dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
 "\Z1ERROR: Failed to download operator catalogs\Zn
 
 Failed catalog(s): ${failed_catalogs[*]}
@@ -2006,12 +2020,13 @@ $error_msg
 \ZbWhat to try:\Zn
   1. Check your internet connection
   2. Press OK and go back to retry" 0 0
-		
-		DIALOG_RC="back"
-		return
+
+			DIALOG_RC="back"
+			return
+		fi
+
+		log "Catalog indexes ready for version ${version_short}"
 	fi
-	
-	log "Catalog indexes ready for version ${version_short}"
 	
 	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
 
