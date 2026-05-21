@@ -60,7 +60,6 @@ for ver in $VERSIONS; do
 			continue
 		fi
 		echo -e "${CYAN}--- Generating oc-mirror reference: ${cat} v${ver} ---${NC}"
-		rm -f "${REF_DIR}/.${cat}-index-v${ver}.done"
 		if scripts/download-catalog-index.sh "$cat" "$ver" 2>&1 | tail -3; then
 			if [ -s "${REF_DIR}/${cat}-index-v${ver}" ]; then
 				cp "${REF_DIR}/${cat}-index-v${ver}" "$ref_backup"
@@ -93,7 +92,7 @@ for ver in $VERSIONS; do
 		fi
 
 		# Clear state and run podman extraction
-		rm -f "${REF_DIR}/${cat}-index-v${ver}" "${REF_DIR}/.${cat}-index-v${ver}.done"
+		rm -f "${REF_DIR}/${cat}-index-v${ver}"
 
 		echo "  Running podman extraction ..."
 		if ! scripts/download-catalog-index.sh "$cat" "$ver" 2>&1 | tail -2; then

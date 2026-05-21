@@ -88,9 +88,13 @@ e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run -q "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 # Negative path: VM creation without vmware.conf should fail
+# ABA falls back to ~/.vmware.conf and may create VMs before failing,
+# so register for cleanup to avoid orphan VMs in vCenter.
+e2e_add_to_cluster_cleanup "$PWD/e2e-neg-test"
 e2e_run -q "Ensure no vmware.conf" "rm -f vmware.conf"
 e2e_run_must_fail "Create VMs without vmware.conf should fail" \
     "aba cluster -n e2e-neg-test -t sno -s install"
+e2e_run -q "Delete neg-test cluster" "aba -y --dir e2e-neg-test delete 2>/dev/null; rm -rf e2e-neg-test; true"
 
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"

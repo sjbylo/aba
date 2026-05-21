@@ -487,7 +487,11 @@ suite_end() {
 
     _print_progress
 
-    if [ "$_E2E_FAIL_COUNT" -gt 0 ] || [ -n "$_E2E_SUITE_SKIPPED" ]; then
+    if [ -n "$_E2E_SUITE_SKIPPED" ] && [ "$_E2E_FAIL_COUNT" -eq 0 ]; then
+        _e2e_summary "$(_e2e_Yellow "========== SKIPPED: $_E2E_SUITE_NAME  ($_total_dur) ==========")"
+        _e2e_notify "SKIPPED: $_E2E_SUITE_NAME ($_total_dur)"
+        return 3
+    elif [ "$_E2E_FAIL_COUNT" -gt 0 ] || [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1

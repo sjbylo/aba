@@ -362,6 +362,7 @@ _record_result() {
 	if [ "$rc" -ne 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 		local _status="FAIL (exit=$rc)"
 		[ "$rc" -eq 3 ] && _status="SKIP"
+		[ "$rc" -eq 5 ] && _status="FAIL (exit=5, orphan VMs or leftover containers)"
 		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null &
 	fi
 }
