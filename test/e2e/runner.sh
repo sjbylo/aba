@@ -1211,13 +1211,18 @@ if [ -x "$_govc" ] && [ -n "${VC_FOLDER:-}" ]; then
 	if [ -n "$_orphan_vms" ]; then
 		echo ""
 		echo "  *** POST-SUITE INTEGRITY FAILURE: orphan VMs found in $VC_FOLDER ***"
+		local _vm_list=""
 		while IFS= read -r _ovm; do
 			[ -z "$_ovm" ] && continue
 			echo "    $_ovm"
+			_vm_list="${_vm_list:+$_vm_list, }$(basename "$_ovm")"
 		done <<< "$_orphan_vms"
 		echo ""
 		echo "  Suite cleanup left VMs behind. Stopping for investigation."
 		echo "  To proceed: manually destroy the VMs and re-run the suite."
+		if [ "$_rc" -eq 0 ]; then
+			_e2e_notify "OVERRIDE PASS->FAIL: $SUITE -- orphan VMs: $_vm_list"
+		fi
 		_rc=5
 	fi
 fi
@@ -1233,6 +1238,9 @@ if [ -n "${DIS_VM:-}" ]; then
 		echo "$_reg_containers"
 		echo ""
 		echo "  Suite cleanup did not uninstall the mirror. Stopping for investigation."
+		if [ "$_rc" -eq 0 ]; then
+			_e2e_notify "OVERRIDE PASS->FAIL: $SUITE -- leftover containers on $_dis: $_reg_containers"
+		fi
 		_rc=5
 	fi
 fi
