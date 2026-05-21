@@ -392,7 +392,10 @@ _detect_mode() {
 			exit 1
 		fi
 
-		# Bundle + ISC exists. Check internet.
+		# Bundle + ISC exists. Check internet (fresh — reset stale TTL cache).
+		run_once -r -i "aba:check:api.openshift.com" 2>/dev/null || true
+		run_once -r -i "aba:check:mirror.openshift.com" 2>/dev/null || true
+		run_once -r -i "aba:check:registry.redhat.io" 2>/dev/null || true
 		aba_inet_check_wait_status
 		if check_internet_connectivity "aba" quiet 2>/dev/null; then
 			_TUI_INET="yes"
