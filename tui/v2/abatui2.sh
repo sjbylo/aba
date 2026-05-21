@@ -61,26 +61,37 @@ if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
 		read -r -p "Another TUI is already running (PID $_other_pid). Terminate it? (Y/n) " _ans </dev/tty
 		_ans="${_ans:-Y}"
 		if [[ "$_ans" =~ ^[Yy]$ ]]; then
-			kill "$_other_pid" 2>/dev/null
-			# Wait for old process to exit and release the lock
+			# Kill entire process group (catches dialog and other children holding the lock FD)
+			kill -- -"$_other_pid" 2>/dev/null || kill "$_other_pid" 2>/dev/null || true
 			for _i in $(seq 1 20); do
 				kill -0 "$_other_pid" 2>/dev/null || break
 				sleep 0.25
 			done
-			if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
-				echo "Error: Could not acquire lock after terminating PID $_other_pid." >&2
-				exit 1
-			fi
+			# Force-kill if still alive
+			kill -0 "$_other_pid" 2>/dev/null && kill -9 -- -"$_other_pid" 2>/dev/null || true
 		else
 			echo "Exiting. Stop the other TUI first." >&2
 			exit 1
 		fi
-	else
-		echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2
+	fi
+	# Close the old FD, remove stale lock, reopen and acquire fresh
+	eval "exec ${ABA_TUI_FLOCK_FD}>&-" 2>/dev/null || true
+	rm -f "${HOME}/.aba/.tui.lock"
+	exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock"
+	if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
+		echo "Error: Cannot acquire TUI lock. Kill any remaining abatui processes and try again." >&2
 		exit 1
 	fi
 fi
 echo $$ > "$_ABA_TUI_PID_FILE"
+
+# Clean exit on signals (SIGHUP = terminal closed, SIGTERM = kill)
+_tui_exit_cleanup() {
+	rm -f "$_ABA_TUI_PID_FILE"
+	# flock FD is released automatically when process exits
+}
+trap '_tui_exit_cleanup; exit 0' EXIT
+trap 'exit 0' HUP TERM INT
 
 # =============================================================================
 # Source dependencies
@@ -458,12 +469,26 @@ _conno_main() {
 	# and show a msgbox when selected (greyed-out pattern).
 	# Separators (space tags) visually group mirror, transfer, and cluster ops.
 	local default_item="$TUI2_CONNO_TAG_VIEW_ISC"
+
+	# --- Menu state recheck optimization ---
+	# IMPORTANT: _conno_need_recheck controls whether expensive state checks
+	# (aba_mirror_verify_wait, mirror_available, tui_cluster_menu_flags) run
+	# before redrawing the menu. Set to "true" on first entry and after any
+	# action that can change mirror/cluster state. Actions that only touch
+	# config files or display info (Settings, Help, View ISC, Select Operators,
+	# Rerun Wizard, Save, Bundle) set it to "false" — avoiding a blocking
+	# pause on every menu redraw.
+	local _conno_need_recheck=true
+
 	while :; do
-		# Re-check internet status periodically (cached for 30s via run_once TTL)
-		if aba_inet_check_cached 30; then
-			_TUI_INET="yes"
-		else
-			_TUI_INET="no"
+		# Only re-probe internet when state may have changed (same gate as mirror/cluster checks).
+		# Internet status is external — it can't change due to TUI actions like Settings or View ISC.
+		if [[ "$_conno_need_recheck" == "true" ]]; then
+			if aba_inet_check_cached 120; then
+				_TUI_INET="yes"
+			else
+				_TUI_INET="no"
+			fi
 		fi
 
 		local items=()
@@ -475,11 +500,8 @@ _conno_main() {
 		local visc_label="View/Edit ImageSet Config"
 		local ops_label="Select Operators"
 		local bndl_label="Create Install Bundle"
-		local switch_label="Switch to Fully Connected"
-		local disco_switch_label="Switch to Fully Disconnected"
-
 		local save_avail=true sync_avail=true
-		local ops_avail=true bndl_avail=true switch_avail=true
+		local ops_avail=true bndl_avail=true
 
 		# Internet-dependent items greyed out in offline mode
 		if [[ "$_TUI_INET" == "no" ]]; then
@@ -491,22 +513,36 @@ _conno_main() {
 			ops_label="Select Operators $TUI2_GREY_NO_INTERNET"
 			bndl_avail=false
 			bndl_label="Create Install Bundle $TUI2_GREY_NO_INTERNET"
-			switch_avail=false
-			switch_label="Switch to Fully Connected $TUI2_GREY_NO_INTERNET"
 		fi
 
-		# Wait for any in-flight mirror verify before computing labels.
-		aba_mirror_verify_wait
+		# Only run expensive state checks when a previous action may have
+		# changed mirror/cluster state. Skipping these eliminates the blocking
+		# pause after harmless actions like Settings or View ISC.
+		if [[ "$_conno_need_recheck" == "true" ]]; then
+			# Wait for any in-flight mirror verify before computing labels.
+			aba_mirror_verify_wait
 
-		if mirror_available && _mirror_has_release_image; then
-			mirr_avail=false
-			mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
-		elif mirror_available; then
-			mirr_label="Install Mirror (installed — not verified)"
+			if mirror_available && _mirror_has_release_image; then
+				mirr_avail=false
+				mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
+			elif mirror_available; then
+				mirr_label="Install Mirror (installed — not verified)"
+			fi
+
+			# Cluster operations — Install uses unified gate; grey Day-2 until clusters exist.
+			tui_cluster_menu_flags CONNO
+		else
+			# Reuse cached mirror state from last check
+			if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
+				if _mirror_has_release_image; then
+					mirr_avail=false
+					mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
+				else
+					mirr_label="Install Mirror (installed — not verified)"
+				fi
+			fi
 		fi
 
-		# Cluster operations — Install uses unified gate; grey Day-2 until clusters exist.
-		tui_cluster_menu_flags CONNO
 		local inst_label="${_CLUSTER_INST_LABEL}"
 		local day2_label="Day-2 / Cluster Management"
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -534,12 +570,9 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_CONNO_TAG_SETTINGS"       "Settings — Auto-answer, registry type, oc-mirror retries"
-			"$TUI2_CONNO_TAG_RECONFIGURE"    "Reconfigure — Change channel, version, or platform"
+			"$TUI2_CONNO_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_CONNO_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
-			"" "──── Mode ──────────────────────────"
-			"$TUI2_CONNO_TAG_SWITCH_DIRECT"  "$switch_label"
-			"$TUI2_CONNO_TAG_SWITCH_DISCO"   "$disco_switch_label"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_MENU" \
@@ -565,17 +598,14 @@ Mirror operations:
 Transfer:
   • Save — download images to local archive
   • Sync — push images directly to registry
-  • Bundle — create a portable bundle (tar) for USB transfer
+  • Install Bundle — create a portable bundle (tar) for USB transfer
 
 Cluster operations:
   • Install Cluster — configure, review, and provision OpenShift
   • Finalize Installation — wait for install to complete (re-attach)
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
-Mode switching:
-  • Fully Connected — install from internet without a mirror
-  • Fully Disconnected — work offline using this repo in-place
-    Downloads CLI tools + registry installers first if missing.
+Use 'Advanced Options' to switch modes or manage platform settings.
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
@@ -611,6 +641,8 @@ Navigation:
 			else
 				mirror_install
 			fi
+			# RECHECK: may have installed/uninstalled mirror registry
+			_conno_need_recheck=true
 			;;
 		"$TUI2_CONNO_TAG_SAVE")
 			if [[ "$_TUI_INET" == "no" ]]; then
@@ -618,6 +650,8 @@ Navigation:
 			else
 				mirror_save
 			fi
+			# NO RECHECK: save only writes archive files to disk
+			_conno_need_recheck=false
 			;;
 		"$TUI2_CONNO_TAG_SYNC")
 			if [[ "$_TUI_INET" == "no" ]]; then
@@ -631,9 +665,13 @@ Navigation:
 			else
 				mirror_sync
 			fi
+			# RECHECK: sync pushes images into registry (changes check-image result)
+			_conno_need_recheck=true
 			;;
 			"$TUI2_CONNO_TAG_VIEW_ISC")
 				mirror_view_isc "false"
+				# NO RECHECK: only edits a config file
+				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_OPERATORS")
 				if [[ "$ops_avail" == "false" ]]; then
@@ -641,6 +679,8 @@ Navigation:
 				else
 					mirror_select_operators
 				fi
+				# NO RECHECK: only edits operator selection lists
+				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_BUNDLE")
 				if [[ "$bndl_avail" == "false" ]]; then
@@ -648,12 +688,16 @@ Navigation:
 				else
 					mirror_create_bundle
 				fi
+				# NO RECHECK: bundle only writes a tar to disk
+				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_INSTALL")
 				tui_install_cluster_gate CONNO
 				case "$?" in
 				0) cluster_install_flow ;;
 				esac
+				# RECHECK: may have created/installed a cluster
+				_conno_need_recheck=true
 				;;
 			"$TUI2_CONNO_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -661,40 +705,25 @@ Navigation:
 				else
 					cluster_day2_menu
 				fi
+				# RECHECK: day2 sub-menu may delete clusters or change state
+				_conno_need_recheck=true
 				;;
 			"$TUI2_CONNO_TAG_SETTINGS")
 				_tui_settings_menu
+				# NO RECHECK: only changes config values (ask, reg_vendor, retry)
+				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_ADVANCED")
 				tui_advanced_menu
+				# RECHECK: advanced menu may uninstall mirror or delete clusters
+				_conno_need_recheck=true
 				;;
 			"$TUI2_CONNO_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+				# NO RECHECK: wizard only changes channel/version/platform in aba.conf
+				_conno_need_recheck=false
 				;;
-	"$TUI2_CONNO_TAG_SWITCH_DIRECT")
-		if [[ "$switch_avail" == "false" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-		else
-			_TUI_MODE="DIRECT"
-			_TUI_DIRECT_FROM_CONNO=true
-			tui_log "Switching to DIRECT mode"
-			direct_main || true
-			_TUI_MODE="CONNO"
-			_TUI_DIRECT_FROM_CONNO=false
-			tui_log "Returned from DIRECT, back to CONNO"
-		fi
-		;;
-	"$TUI2_CONNO_TAG_SWITCH_DISCO")
-		_ensure_offline_prereqs || continue
-		_TUI_MODE="DISCO"
-		_TUI_DISCO_FROM_CONNO=true
-		tui_log "Switching to DISCO mode (in-place repo)"
-		disco_main || true
-		_TUI_MODE="CONNO"
-		_TUI_DISCO_FROM_CONNO=false
-		tui_log "Returned from DISCO, back to CONNO"
-		;;
 		esac
 	done
 }
@@ -720,16 +749,14 @@ while :; do
 		--help-button \
 		--yesno "\
   __   ____   __
- / _\\ (  _ \\ / _\\      Aba v${_aba_ver}
+ / _\\ (  _ \\ / _\\     ABA v${_aba_ver}
 /    \\ ) _ (/    \\    Install & configure
 \\_/\\_/(____/\\_/\\_/    air-gapped OpenShift quickly!
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
 
-Note: Internet access is required.
-
-Navigate with <Tab> and arrow keys. Press <ESC> to quit." 0 0
+Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit." 0 0
 	splash_rc=$?
 	case "$splash_rc" in
 		1|255)

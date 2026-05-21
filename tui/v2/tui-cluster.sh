@@ -230,9 +230,9 @@ _gate_platform_config() {
 	if [[ -s "$cached_path" ]]; then
 		local cached_info=""
 		if [[ "$cl_platform" == "vmw" ]]; then
-			cached_info=$(grep -m1 "^GOVC_URL=" "$cached_path" 2>/dev/null | cut -d= -f2 | tr -d "'" | tr -d '"')
+			cached_info=$(source "$cached_path" 2>/dev/null && echo "$GOVC_URL")
 		else
-			cached_info=$(grep -m1 "^LIBVIRT_URI=" "$cached_path" 2>/dev/null | cut -d= -f2 | tr -d "'" | tr -d '"')
+			cached_info=$(source "$cached_path" 2>/dev/null && echo "$LIBVIRT_URI")
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$plat_label Configuration" \
@@ -435,6 +435,7 @@ _test_vmw_connection() {
 	local _out
 	if _out=$(govc about 2>&1); then
 		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
+			--no-collapse --cr-wrap \
 			--msgbox "\nvSphere connection verified!\n\n$_out" 0 0
 		return 0
 	else
@@ -790,6 +791,13 @@ _cluster_page_basics() {
 		else
 			printf -v _plat_full "%-28s" "$_plat_desc"
 		fi
+		# Show OCP version and image source so the user knows what will be installed
+		local _src_desc
+		case "$_TUI_MODE" in
+			DIRECT) _src_desc="internet" ;;
+			*)      _src_desc="mirror registry" ;;
+		esac
+
 		items+=("P" "Platform:       ${_plat_full}${_plat_status}")
 		items+=("N" "Cluster name:   $cl_name")
 		items+=("D" "Base domain:    ${cl_domain:-(not set)}")
@@ -798,6 +806,9 @@ _cluster_page_basics() {
 			items+=("W" "Worker count:   $cl_workers")
 		fi
 
+		local _basics_msg
+		_basics_msg="OpenShift ${ocp_version:-?} (${ocp_channel:-?}) — source: ${_src_desc}\n\n$TUI2_MSG_CLUSTER_BASICS"
+
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_BASICS" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
@@ -805,7 +816,7 @@ _cluster_page_basics() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_CLUSTER_BASICS" 0 58 0 \
+			--menu "$_basics_msg" 0 62 8 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -1577,7 +1588,7 @@ _cluster_execute() {
 	local cluster_dir="$ABA_ROOT/$cl_name"
 	if [[ -f "$cluster_dir/cluster.conf" ]]; then
 		local _old_conn
-		_old_conn=$(grep '^int_connection=' "$cluster_dir/cluster.conf" 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+		_old_conn=$(source <(cd "$cluster_dir" && normalize-cluster-conf) 2>/dev/null && echo "$int_connection")
 		[[ -z "$_old_conn" ]] && _old_conn="mirror"
 		local _new_conn="$cl_connection"
 		if [[ -z "$_new_conn" ]]; then
@@ -1660,7 +1671,7 @@ _platform_config_missing() {
 cluster_monitor() {
 	tui_log "Action: Monitor Cluster Installation"
 
-	if ! select_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select cluster to monitor:"; then
+	if ! select_cluster "$TUI2_TITLE_CLUSTER_MONITOR" "Select installing cluster to monitor:" "installing"; then
 		return 1
 	fi
 
@@ -1700,13 +1711,9 @@ tui_advanced_menu() {
 	while :; do
 		local adv_items=()
 		# Platform config (view/edit vmware.conf or kvm.conf)
-		local _plat_label="Reconfigure Platform"
+		local _plat_label="Platform Settings"
 		source <(normalize-aba-conf) 2>/dev/null || true
-		case "${platform:-}" in
-			vmw) _plat_label="Platform Settings (vmware.conf)" ;;
-			kvm) _plat_label="Platform Settings (kvm.conf)" ;;
-			*)   _plat_label="Reconfigure Platform (vmware/kvm/bm)" ;;
-		esac
+		_plat_label="Platform Settings (${platform:-bm})"
 		adv_items+=("P" "$_plat_label")
 		if mirror_available; then
 			adv_items+=("U" "Uninstall Mirror Registry (destructive)")
@@ -1778,32 +1785,44 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				;;
 			"P")
 				source <(normalize-aba-conf) 2>/dev/null || true
-				case "${platform:-}" in
-					vmw)
-						confirm_and_execute "aba vmw" "Platform Settings (VMware)"
+				local _default_ptag="M"
+				case "${platform:-bm}" in
+					vmw) _default_ptag="V" ;;
+					kvm) _default_ptag="K" ;;
+				esac
+				dlg --backtitle "$(ui_backtitle)" --title "Platform Settings" \
+					--default-item "$_default_ptag" \
+					--cancel-label "$TUI2_BTN_BACK" \
+					--menu "Select platform to configure:" 0 0 0 \
+					"M"  "Bare Metal" \
+					"V"  "VMware vSphere" \
+					"K"  "KVM/libvirt" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && continue
+				local _ptag
+				_ptag=$(<"$_TUI_TMP")
+				case "$_ptag" in
+					V)
+						replace-value-conf -q -n platform -v vmw -f "$ABA_ROOT/aba.conf"
+						_configure_platform_file "vmware.conf" "VMware/ESXi"
 						;;
-					kvm)
-						confirm_and_execute "aba kvm" "Platform Settings (KVM)"
+					K)
+						replace-value-conf -q -n platform -v kvm -f "$ABA_ROOT/aba.conf"
+						_configure_platform_file "kvm.conf" "KVM/libvirt"
 						;;
-					*)
-						dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
-							--cancel-label "$TUI2_BTN_BACK" \
-							--menu "Select platform:" 0 0 0 \
-							"vmw"  "VMware vSphere (ESXi/vCenter)" \
-							"kvm"  "KVM (libvirt)" \
-							"bm"   "Bare Metal / Other" \
-							2>"$_TUI_TMP"
-						[[ $? -ne 0 ]] && continue
-						local plat
-						plat=$(<"$_TUI_TMP")
-						confirm_and_execute "aba -p $plat $plat" "Set Platform: $plat"
+					M)
+						replace-value-conf -q -n platform -v bm -f "$ABA_ROOT/aba.conf"
+						tui_log "Platform set to bare metal"
 						;;
 				esac
 				;;
 			"U")
+				local _unreg_host
+				_unreg_host=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_host")
+				[[ -z "$_unreg_host" ]] && _unreg_host="localhost"
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_UNINSTALL_MIRROR" \
 					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
-					--yesno "Uninstall the mirror registry?\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
+					--yesno "Uninstall the mirror registry on: ${_unreg_host}\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
 				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry"
 				;;
@@ -1977,16 +1996,17 @@ _day2_status() {
 	local output_file
 	output_file=$(mktemp)
 
+	local kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
 	trap : INT
 	{
 		echo "═══ Cluster Operators ($cl_display) ═══"
 		echo ""
 		cd "$ABA_ROOT"
-		KUBECONFIG="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig" oc get co 2>&1
+		KUBECONFIG="$kc" oc get co --request-timeout=5s 2>&1 || echo "(Cluster API unreachable — is the cluster shut down?)"
 		echo ""
 		echo "═══ Nodes ($cl_display) ═══"
 		echo ""
-		KUBECONFIG="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig" oc get nodes 2>&1
+		KUBECONFIG="$kc" oc get nodes --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 	} > "$output_file" 2>&1
 	trap - INT
 

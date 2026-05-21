@@ -26,7 +26,7 @@ TUI2_TITLE_CONFIRM_EXEC="Confirm Execution"
 # =============================================================================
 
 TUI2_TITLE_MODE_SELECT="INSTALLATION MODE"
-TUI2_TITLE_BUNDLE_CONNECTED="Bundle on Connected Host"
+TUI2_TITLE_BUNDLE_CONNECTED="Install Bundle on Connected Host"
 TUI2_TITLE_DEAD_END="Cannot Proceed"
 
 # =============================================================================
@@ -65,7 +65,7 @@ TUI2_TITLE_CONNO_SAVE="Save Images (mirror2disk)"
 TUI2_TITLE_CONNO_SYNC="Sync Images (mirror2mirror)"
 TUI2_TITLE_CONNO_VIEW_ISC="ImageSet Configuration"
 TUI2_TITLE_CONNO_EDIT_ISC="Edit ImageSet Configuration"
-TUI2_TITLE_CONNO_BUNDLE="Create Bundle"
+TUI2_TITLE_CONNO_BUNDLE="Create Install Bundle"
 
 # =============================================================================
 # Dialog Titles — DIRECT Mode
@@ -171,10 +171,10 @@ TUI2_CONNO_TAG_DAY2="D"
 TUI2_CONNO_TAG_MONITOR="W"
 TUI2_CONNO_TAG_DELETE="K"
 TUI2_CONNO_TAG_ADVANCED="A"
-TUI2_CONNO_TAG_RECONFIGURE="R"
+TUI2_CONNO_TAG_RECONFIGURE="W"
 TUI2_CONNO_TAG_SWITCH_DIRECT="X"
 TUI2_CONNO_TAG_SWITCH_DISCO="Z"
-TUI2_CONNO_TAG_SETTINGS="G"
+TUI2_CONNO_TAG_SETTINGS="C"
 
 # =============================================================================
 # Menu Tags — DIRECT Action Menu
@@ -185,9 +185,9 @@ TUI2_DIRECT_TAG_DAY2="D"
 TUI2_DIRECT_TAG_DELETE="K"
 TUI2_DIRECT_TAG_MONITOR="W"
 TUI2_DIRECT_TAG_ADVANCED="A"
-TUI2_DIRECT_TAG_RECONFIGURE="R"
+TUI2_DIRECT_TAG_RECONFIGURE="W"
 TUI2_DIRECT_TAG_SWITCH_MIRROR="M"
-TUI2_DIRECT_TAG_SETTINGS="S"
+TUI2_DIRECT_TAG_SETTINGS="C"
 
 # =============================================================================
 # Dialog Titles — Settings
@@ -368,7 +368,7 @@ TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\n
 # Messages — Execution / Exit
 # =============================================================================
 
-TUI2_MSG_CONFIRM_EXIT="Exit ABA TUI?\n\nUnsaved changes will be lost."
+TUI2_MSG_CONFIRM_EXIT="Exit ABA TUI?"
 TUI2_MSG_EXIT_HELP="Navigation:\n\n• Press ESC to go back to the previous menu\n• In a wizard, ESC returns to the main menu\n• At the main menu, ESC offers to exit the TUI\n• Press ESC again on the exit dialog to quit immediately\n\nConfiguration is only saved when you complete actions."
 TUI2_MSG_EXEC_MODE="Choose execution mode:"
 TUI2_MSG_EDITOR_PROMPT="How would you like to edit?\n\n  %s"

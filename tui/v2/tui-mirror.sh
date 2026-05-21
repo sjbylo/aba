@@ -626,16 +626,17 @@ _operator_menu() {
 	while :; do
 		local basket_count="${#OP_BASKET[@]}"
 
-		# Build catalog operator counts for menu text
-		local _cat_stats="" _cat _count _idx
+		# Build catalog operator counts for menu text (aligned columns)
+		local _cat_stats="" _cat _count _idx _line
 		for _cat in redhat-operator certified-operator community-operator; do
 			_idx="$ABA_ROOT/.index/${_cat}-index-v${version_short}"
 			if [[ -s "$_idx" ]]; then
 				_count=$(wc -l < "$_idx")
-				_cat_stats="${_cat_stats}  ${_cat}s: ${_count}\n"
+				printf -v _line "  %-22s %s" "${_cat}s:" "$_count"
 			else
-				_cat_stats="${_cat_stats}  ${_cat}s: (downloading)\n"
+				printf -v _line "  %-22s %s" "${_cat}s:" "(downloading)"
 			fi
+			_cat_stats="${_cat_stats}${_line}\n"
 		done
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_OPERATORS" \
@@ -992,7 +993,7 @@ _ensure_offline_prereqs() {
 # =============================================================================
 
 mirror_create_bundle() {
-	tui_log "Action: Create Bundle"
+	tui_log "Action: Create Install Bundle"
 
 	_ensure_offline_prereqs || return 1
 
@@ -1072,5 +1073,5 @@ Reuse is recommended unless you changed OpenShift version or suspect corruption.
 	[[ -n "$light_flag" ]] && cmd="$cmd $light_flag"
 	[[ -n "$force_flag" ]] && cmd="$cmd $force_flag"
 
-	confirm_and_execute "$cmd" "Create Bundle"
+	confirm_and_execute "$cmd" "Create Install Bundle"
 }
