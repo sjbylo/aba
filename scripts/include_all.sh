@@ -2647,10 +2647,25 @@ wait_for_all_catalogs() {
 	aba_info_ok "All catalog downloads completed for OCP $version_short" >&2
 }
 
+# Copy shipped catalog indexes into .index/ if live versions don't exist yet.
+# Gives the TUI instant operator browsing before background downloads complete.
+_populate_shipped_indexes() {
+	local f target
+	for f in catalogs/*-operator-index-v*; do
+		[[ -s "$f" ]] || continue
+		target=".index/$(basename "$f")"
+		[[ -s "$target" ]] && continue
+		cp "$f" "$target"
+	done
+}
+
 # Prefetch catalog indexes for current and previous minor versions.
 # Called by scripts/prefetch-catalogs.sh and TUI v2 for early background catalog fetching.
 # Requires: ocp_version and/or ocp_channel from aba.conf (or callers set them beforehand).
 aba_prefetch_catalogs() {
+	# Populate .index/ from shipped catalogs (instant fallback for TUI)
+	_populate_shipped_indexes
+
 	local _ver="${ocp_version:-}"
 	local _channel="${ocp_channel:-stable}"
 
@@ -2722,7 +2737,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 	if [ ${#sed_args[@]} -gt 0 ]; then
 		sed "${sed_args[@]}" "$isc_file" > "$digest_isc"
-		aba_info "Catalog references pinned by digest in $digest_isc (prevents upstream registry contact)" >&2
+		aba_debug "Catalog tags resolved to digests in $digest_isc (ensures air-gap compatibility)"
 		echo "$digest_isc"
 	else
 		aba_debug "No catalog digests found -- using original ISC"
