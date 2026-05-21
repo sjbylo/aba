@@ -247,7 +247,19 @@ _TUI_MODE=""   # Set by mode detection: DISCO, CONNO, DIRECT
 _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 
 # Session-only: forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
-_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-0}"
+_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-2}"
+
+# Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
+# Values: "auto", "quay", "docker"
+_TUI_REG_VENDOR="auto"
+if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+	_saved_vendor=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_vendor")
+	case "$_saved_vendor" in
+		quay)   _TUI_REG_VENDOR="quay" ;;
+		docker) _TUI_REG_VENDOR="docker" ;;
+	esac
+	unset _saved_vendor
+fi
 
 ui_backtitle() {
 	local mode_display
@@ -542,11 +554,20 @@ _exec_in_terminal() {
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Executing: $cmd"
 	echo "═══════════════════════════════════════════════════════════════"
+	if [[ "$cmd" != *" --yes"* && "$cmd" != *" -y"* ]]; then
+		echo "  Tip: Enable auto-answer in TUI Settings to skip prompts"
+	fi
 	echo
+
+	# Trap INT so Ctrl-C kills only the child command, not the TUI itself
+	local _term_interrupted=false
+	trap '_term_interrupted=true' INT
 
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
 	bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
 	local exit_code=$?
+
+	trap - INT
 
 	# Run post-command hook (non-blocking background work while user reads output)
 	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
@@ -555,14 +576,16 @@ _exec_in_terminal() {
 	fi
 
 	echo
-	if [[ $exit_code -eq 0 ]]; then
+	if [[ "$_term_interrupted" == "true" ]]; then
+		echo "── Command interrupted (Ctrl-C) ──"
+	elif [[ $exit_code -eq 0 ]]; then
 		echo "── Command completed successfully ──"
 	else
 		echo "── Command FAILED (exit code: $exit_code) ──"
 	fi
 	echo
 	read -rp "Press ENTER to return to TUI..."
-	return $exit_code
+	return 0
 }
 
 # =============================================================================
@@ -641,12 +664,42 @@ list_cluster_dirs() {
 	done | sort -rnk1 | awk '{print $2}'
 }
 
-# List installed clusters (dirs with .install-complete marker)
-# Also auto-detects clusters that completed installation in the background.
+# List installed clusters (dirs with .install-complete marker).
+# Pure output function -- no UI calls (safe inside command substitution).
 list_installed_clusters() {
 	local dir
 	for dir in $(list_cluster_dirs); do
 		cluster_installed "$dir" && echo "$dir" || true
+	done
+}
+
+# List clusters that have kubeconfig but no .install-complete (candidates for auto-detection).
+# Skips clusters that are known to be shut down (.shutdown.log exists).
+list_undetected_clusters() {
+	local dir
+	for dir in $(list_cluster_dirs); do
+		if [[ ! -f "$ABA_ROOT/$dir/.install-complete" && -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]]; then
+			[[ -f "$ABA_ROOT/$dir/.shutdown.log" ]] && continue
+			echo "$dir"
+		fi
+	done
+}
+
+# Probe undetected clusters and create .install-complete if ready.
+# Shows "please wait" dialog only when there are candidates to probe.
+# Must be called BEFORE list_installed_clusters (it updates marker files).
+_probe_undetected_clusters() {
+	local -a candidates=()
+	local dir
+
+	mapfile -t candidates < <(list_undetected_clusters)
+	[[ ${#candidates[@]} -eq 0 ]] && return 0
+
+	local names="${candidates[*]}"
+	dlg --backtitle "$(ui_backtitle)" \
+		--infobox "\nDetecting installation status: ${names// /, }..." 5 55
+	for dir in "${candidates[@]}"; do
+		auto_complete_install "$dir" >/dev/null 2>&1 || true
 	done
 }
 
@@ -735,20 +788,15 @@ tui_cluster_menu_flags() {
 # Settings: ask= (aba.conf), reg_vendor (mirror.conf), oc-mirror retries (session)
 # -----------------------------------------------------------------------------
 
-# raw ask= value trimmed (no normalize), for interpreting yes/no/true
+# Read current ask= value via normalize-aba-conf (single source of truth)
 _tui_abaconf_raw_ask() {
 	if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
 		echo ""
 		return
 	fi
-	local line=""
-	line=$(grep -m1 '^[[:space:]#]*ask=' "$ABA_ROOT/aba.conf" || true)
-	line="${line#*ask=}"
-	line="${line%%#*}"
-	line=$(echo "$line" | sed -e 's/^[[:space:]"'\'']//' -e 's/[[:space:]"'\'']$//')
-	line="${line//\t/}"
-	line="${line// /}"
-	echo "$line"
+	local _ask_val
+	_ask_val=$(source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null && echo "$ask")
+	echo "$_ask_val"
 }
 
 # Human label for Settings menu Auto-answer row
@@ -838,7 +886,7 @@ _tui_settings_menu_reg_vendor() {
 }
 
 _tui_settings_menu_retry() {
-	local current="${_TUI_RETRY_COUNT:-0}"
+	local current="${_TUI_RETRY_COUNT:-2}"
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
 		--inputbox "Oc-mirror retry count for this session (0 = omit --retry):" 0 0 "$current" \
 		2>"$_TUI_TMP"
@@ -858,43 +906,88 @@ _tui_settings_menu_retry() {
 	fi
 }
 
-# Settings submenu from CONNO / DIRECT action menus (and callable elsewhere).
+# Build a compact settings summary string for the menu item label.
+# Output: "(ask, Docker, retry=2)" with color codes.
+_tui_settings_summary() {
+	local ask_short reg_short retry_short
+	local raw
+	raw=$(_tui_abaconf_raw_ask)
+	case "${raw,,}" in
+		yes) ask_short="-y" ;;
+		*)   ask_short="ask" ;;
+	esac
+
+	local rv="Auto"
+	case "$_TUI_REG_VENDOR" in
+		quay)   rv="Quay" ;;
+		docker) rv="Docker" ;;
+	esac
+	reg_short="$rv"
+
+	retry_short="${_TUI_RETRY_COUNT:-2}"
+
+	printf '(\Z6%s, %s, retry=%s\Zn)' "$ask_short" "$reg_short" "$retry_short"
+}
+
+# Settings submenu -- v1-style toggle behavior.
+# Each item cycles through its values on Enter (no sub-dialogs).
 _tui_settings_menu() {
 	local default_item="1"
 	while :; do
-		local ask_row reg_label
-		ask_row=$(_tui_settings_ask_label)
-		local rv="auto"
-		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
-			rv="${reg_vendor:-auto}"
-		fi
-		reg_label="Registry vendor: ${rv}"
+		# Current auto-answer display (ON = skip prompts, OFF = ask user)
+		local ask_display
+		local raw
+		raw=$(_tui_abaconf_raw_ask)
+		case "${raw,,}" in
+			yes)  ask_display="Auto-answer: \Z2ON\Zn (-y)" ;;
+			*)    ask_display="Auto-answer: \Z1OFF\Zn" ;;
+		esac
+
+		# Current registry type display (from in-memory state)
+		local reg_display
+		case "$_TUI_REG_VENDOR" in
+			quay)   reg_display="Registry Type: \Z2Quay\Zn" ;;
+			docker) reg_display="Registry Type: \Z3Docker\Zn" ;;
+			*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
+		esac
+
+		# Current retry count display
+		local retry_display
+		local rc_val="${_TUI_RETRY_COUNT:-2}"
+		case "$rc_val" in
+			0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
+			*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;
+		esac
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+			--ok-label "Toggle" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "Tune interactive behavior for this workstation.\n\n• Auto-answer maps to ask= in aba.conf (ABA may distinguish only some variants).\n• Registry vendor is persisted in mirror/mirror.conf.\n• Retry count affects mirror save/sync/load this session only." 0 0 0 \
-			"1" "Auto-answer (aba.conf ask=): ${ask_row}" \
-			"2" "${reg_label}" \
-			"3" "Oc-mirror retry count (session): ${_TUI_RETRY_COUNT:-0}" \
+			--menu "Select a setting to toggle:" 0 0 3 \
+			"1" "$ask_display" \
+			"2" "$reg_display" \
+			"3" "$retry_display" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_TITLE_SETTINGS" \
-"Auto-answer (ask=)
-  Ask every time — ask=true or empty/true-like legacy values restore prompts.
-  Auto yes — ask=yes may be interpreted as non-interactive by some scripts when supported.
-  Auto no — ask=no prefers negative confirmation defaults where supported.
+"Auto-answer (-y):
+  When ON, aba commands run without confirmation prompts.
+  When OFF, you will be asked to confirm each action.
 
-Registry type (mirror/mirror.conf: reg_vendor)
-  auto — pick Quay or Docker based on detected architecture.
+Registry Type:
+  Auto   - Let aba choose the registry (recommended).
+  Quay   - Force Quay mirror registry.
+  Docker - Force Docker V2 mirror registry.
 
-Retry count (_TUI_RETRY_COUNT)
-  Appended as --retry N to mirror save/sync/load during this TUI session (0 disables)."
+Retry Count:
+  How many times to retry failed oc-mirror operations.
+  OFF = no retries, 2 or 8 = retry that many times.
+
+Toggle a setting by selecting it and pressing Enter."
 				continue
 				;;
 			1|255)
@@ -909,35 +1002,45 @@ Retry count (_TUI_RETRY_COUNT)
 
 		case "$choice" in
 			1)
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
-					--cancel-label "$TUI2_BTN_BACK" \
-					--menu "$(printf '%s%s' \
-						"How should ask= behave in aba.conf? Current: " \
-						"$( _tui_settings_ask_label )")" 0 0 0 \
-					"always" "Always ask (interactive)" \
-					"yes" "Auto yes" \
-					"no" "Auto no" \
-					2>"$_TUI_TMP"
-				[[ $? -ne 0 ]] && continue
-				local inner
-				inner=$(<"$_TUI_TMP")
-				case "$inner" in
-					always)
-						_tui_settings_persist_ask_mode always
-						;;
+				# Toggle: OFF ↔ ON (like v1)
+				raw=$(_tui_abaconf_raw_ask)
+				case "${raw,,}" in
 					yes)
-						_tui_settings_persist_ask_mode yes
+						_tui_settings_persist_ask_mode always
+						tui_log "Settings: Auto-answer toggled OFF"
 						;;
-					no)
-						_tui_settings_persist_ask_mode no
+					*)
+						_tui_settings_persist_ask_mode yes
+						tui_log "Settings: Auto-answer toggled ON"
 						;;
 				esac
 				;;
 			2)
-				_tui_settings_menu_reg_vendor
+				# Toggle in-memory: auto → quay → docker → auto
+				case "$_TUI_REG_VENDOR" in
+					auto)   _TUI_REG_VENDOR="quay";   tui_log "Settings: Registry type toggled to Quay" ;;
+					quay)   _TUI_REG_VENDOR="docker"; tui_log "Settings: Registry type toggled to Docker" ;;
+					docker) _TUI_REG_VENDOR="auto";   tui_log "Settings: Registry type toggled to Auto" ;;
+					*)      _TUI_REG_VENDOR="auto";   tui_log "Settings: Registry type reset to Auto" ;;
+				esac
+				# Persist to file
+				local vf="$ABA_ROOT/mirror/mirror.conf"
+				if [[ ! -f "$vf" ]]; then
+					make -sC "$ABA_ROOT/mirror" mirror.conf 2>/dev/null || true
+				fi
+				if [[ -f "$vf" ]]; then
+					replace-value-conf -q -n reg_vendor -v "$_TUI_REG_VENDOR" -f "$vf"
+				fi
 				;;
 			3)
-				_tui_settings_menu_retry
+				# Toggle: 0 → 1 → 2 → 5 → 0
+				case "${_TUI_RETRY_COUNT:-2}" in
+					0) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count toggled to 1" ;;
+					1) _TUI_RETRY_COUNT=2; tui_log "Settings: Retry count toggled to 2" ;;
+					2) _TUI_RETRY_COUNT=5; tui_log "Settings: Retry count toggled to 5" ;;
+					5) _TUI_RETRY_COUNT=0; tui_log "Settings: Retry count toggled to OFF" ;;
+					*) _TUI_RETRY_COUNT=2; tui_log "Settings: Retry count reset to 2" ;;
+				esac
 				;;
 		esac
 	done
@@ -948,16 +1051,27 @@ Retry count (_TUI_RETRY_COUNT)
 # Cluster selector dialog
 # =============================================================================
 
-# select_cluster "title" "prompt" — sets SELECTED_CLUSTER and SELECTED_CLUSTER_DISPLAY or returns 1
+# select_cluster "title" "prompt" [filter] — sets SELECTED_CLUSTER and SELECTED_CLUSTER_DISPLAY or returns 1
+# Optional filter values:
+#   "installing" — only clusters with kubeconfig but no .install-complete (actively installing)
+#   ""           — all clusters (default)
 select_cluster() {
 	local title="${1:-Select Cluster}"
 	local prompt="${2:-Choose a cluster:}"
+	local filter="${3:-}"
 	local clusters=()
 	local dir display
 	local -a _cl_dirs=()
 	local idx=0
 
 	for dir in $(list_cluster_dirs); do
+		# Apply filter if specified
+		if [[ "$filter" == "installing" ]]; then
+			# Skip clusters that are already fully installed
+			[[ -f "$ABA_ROOT/$dir/.install-complete" ]] && continue
+			# Skip clusters that haven't started installing (no kubeconfig)
+			[[ ! -f "$ABA_ROOT/$dir/kubeconfig" ]] && continue
+		fi
 		display=$(cluster_display_name "$dir")
 		idx=$(( idx + 1 ))
 		_cl_dirs+=("$dir")
@@ -965,7 +1079,12 @@ select_cluster() {
 	done
 
 	if [[ ${#clusters[@]} -eq 0 ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
+		if [[ "$filter" == "installing" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"No clusters are currently installing.\n\nAll clusters are either fully installed or not yet started." 0 0
+		else
+			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
+		fi
 		return 1
 	fi
 
@@ -992,6 +1111,7 @@ select_cluster() {
 }
 
 # select_installed_cluster — same but only installed clusters
+# Probes undetected clusters first (shows "please wait" if any need checking).
 select_installed_cluster() {
 	local title="${1:-Select Cluster}"
 	local prompt="${2:-Choose an installed cluster:}"
@@ -999,6 +1119,9 @@ select_installed_cluster() {
 	local dir display
 	local -a _cl_dirs=()
 	local idx=0
+
+	# Probe clusters that might have completed installation in the background
+	_probe_undetected_clusters
 
 	for dir in $(list_installed_clusters); do
 		display=$(cluster_display_name "$dir")
@@ -1212,12 +1335,30 @@ tui_install_cluster_gate() {
 	return 1
 }
 
-# Start catalog downloads if needed and block until operator indexes exist.
-# Uses download_all_catalogs + wait_for_all_catalogs from include_all.
-# Returns 0 on success; 1 if catalogs did not become ready (stderr -> log).
+# Ensure catalog indexes are available for a given OCP version.
+# If shipped/downloaded files already exist in .index/, proceed immediately
+# (downloads still run in background for freshness). Only blocks if no files
+# exist at all (e.g. user picked a version not in catalogs/).
 tui_ensure_catalogs_ready() {
 	local version_short="$1"
 
+	# Populate .index/ from shipped catalogs if missing
+	_populate_shipped_indexes
+
+	# If at least one catalog index exists for this version, proceed immediately
+	local _have_files=false
+	local _f
+	for _f in .index/*-operator-index-v${version_short}; do
+		[[ -s "$_f" ]] && { _have_files=true; break; }
+	done
+
+	if [[ "$_have_files" == true ]]; then
+		# Still kick off downloads in background for freshness (no-op if already running)
+		download_all_catalogs "$version_short" >>"$_TUI_LOG_FILE" 2>&1
+		return 0
+	fi
+
+	# No files at all -- must download and wait
 	dlg --backtitle "$(ui_backtitle)" --infobox \
 		"Downloading operator catalog indexes...\n\nPlease wait." 0 0
 

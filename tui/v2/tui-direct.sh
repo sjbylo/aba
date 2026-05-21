@@ -512,25 +512,34 @@ _direct_platform() {
 	DIALOG_RC=""
 	tui_log "DIRECT wizard: platform"
 
-	local _default_plat="${platform:-bm}"
+	local _default_tag="M"
+	case "${platform:-bm}" in
+		vmw) _default_tag="V" ;;
+		kvm) _default_tag="K" ;;
+	esac
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PLATFORM" \
-		--default-item "$_default_plat" \
+		--default-item "$_default_tag" \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
 		--ok-label "$TUI2_BTN_NEXT" \
 		--menu "$TUI2_MSG_PLATFORM_PROMPT" 0 0 3 \
-		"bm"  "Bare metal (default)" \
-		"vmw" "VMware vSphere" \
-		"kvm" "KVM/libvirt" \
+		"M"  "Bare metal (default)" \
+		"V"  "VMware vSphere" \
+		"K"  "KVM/libvirt" \
 		2>"$_TUI_TMP"
 	local rc=$?
 
 	case "$rc" in
 		0)
-			platform=$(<"$_TUI_TMP")
-			[[ -z "$platform" ]] && platform="bm"
+			local _tag
+			_tag=$(<"$_TUI_TMP")
+			case "$_tag" in
+				V) platform="vmw" ;;
+				K) platform="kvm" ;;
+				*) platform="bm" ;;
+			esac
 			tui_log "Selected platform: $platform"
 			DIALOG_RC="next"
 			;;
@@ -675,12 +684,23 @@ _direct_action_menu() {
 	tui_log "DIRECT action menu"
 	local default_item="$TUI2_DIRECT_TAG_INSTALL"
 
+	# --- Menu state recheck optimization ---
+	# IMPORTANT: _direct_need_recheck controls whether expensive state checks
+	# (tui_cluster_menu_flags) run before redrawing the menu. Set to "true"
+	# on first entry and after actions that can change cluster state. Actions
+	# that only touch config (Settings, Rerun Wizard) set it to "false" —
+	# avoiding unnecessary filesystem scans on every redraw.
+	local _direct_need_recheck=true
+
 	while :; do
 		local items=()
 		local inst_label
 		local day2_label="Day-2 / Cluster Management"
 
-		tui_cluster_menu_flags DIRECT
+		# Only rescan cluster directories when previous action may have changed state
+		if [[ "$_direct_need_recheck" == "true" ]]; then
+			tui_cluster_menu_flags DIRECT
+		fi
 		inst_label="${_CLUSTER_INST_LABEL}"
 
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -692,8 +712,8 @@ _direct_action_menu() {
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_DIRECT_TAG_SETTINGS"       "Settings — Auto-answer, registry type, oc-mirror retries"
-			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Reconfigure — Change channel, version, or platform"
+			"$TUI2_DIRECT_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
 		)
 
@@ -724,24 +744,13 @@ Navigation:
   • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
-		1)
-			# Exit button: if entered from CONNO, just return to CONNO menu
-			if [[ "$_TUI_DIRECT_FROM_CONNO" == "true" ]]; then
-				return 0
-			fi
+		1|255)
+			# ESC or Exit button: always confirm quit, regardless of how we got here
 			if confirm_quit; then
 				clear
 				_show_v2_exit_summary
 				exit 0
 			fi
-			continue
-			;;
-		255)
-			# ESC: if entered from CONNO, return to CONNO menu; otherwise confirm quit (A.19)
-			if [[ "$_TUI_DIRECT_FROM_CONNO" == "true" ]]; then
-				return 0
-			fi
-			if confirm_quit; then clear; _show_v2_exit_summary; exit 0; fi
 			continue
 			;;
 			0) ;;
@@ -756,6 +765,8 @@ Navigation:
 				continue ;;
 			"$TUI2_DIRECT_TAG_INSTALL")
 				cluster_install_flow
+				# RECHECK: may have created/installed a cluster
+				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -763,16 +774,25 @@ Navigation:
 				else
 					cluster_day2_menu
 				fi
+				# RECHECK: day2 sub-menu may delete clusters or change state
+				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_SETTINGS")
 				_tui_settings_menu
+				# NO RECHECK: only changes config values (ask, reg_vendor, retry)
+				_direct_need_recheck=false
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
 				tui_advanced_menu
+				[[ "$_TUI_MODE" != "DIRECT" ]] && return 0
+				# RECHECK: advanced menu may delete clusters
+				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+				# NO RECHECK: wizard only changes channel/version/platform in aba.conf
+				_direct_need_recheck=false
 				;;
 		esac
 	done
