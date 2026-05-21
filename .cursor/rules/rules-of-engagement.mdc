@@ -16,6 +16,14 @@ alwaysApply: true
 - WAIT for user to explicitly say "commit", "push", or "commit and push"
 - NEVER use required_permissions: ["all"] for git commit or git push — they must run inside the sandbox so Cursor's approval gate is enforced
 
+## NEVER commit log files, artifacts, or generated output
+
+- Before EVERY `git add`, review `git status` and `git diff --stat` to ensure NO log files, test output, build artifacts, temporary files, or large generated files are included
+- NEVER commit: `*.log`, test output/snapshots, `.state` files, core dumps, coverage reports, build output, editor backups, container images, tarballs
+- If `git status` shows unexpected files in dirs like `test/e2e/logs/`, `*.tmp`, `/tmp/`, `.cache/` — STOP and ask the user before adding them
+- When a `.gitignore` file is removed in a commit, CHECK if that removal causes previously-ignored files to become tracked — this is how the 2026-05-21 incident happened
+- Always use `git add <specific-files>` or `git add -p` — NEVER use `git add .` or `git add -A` without first reviewing what will be staged
+
 ## NEVER add AI attribution to commits
 
 - No "Co-authored-by: Cursor" or similar tags in commit messages
