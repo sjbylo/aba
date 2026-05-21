@@ -19,6 +19,23 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Extract major.minor version (e.g., 4.20.8 -> 4.20)
 ocp_ver_short="${ocp_version%.*}"
 
+# Populate .index/ from shipped catalogs if live versions don't exist yet
+_populate_shipped_indexes
+
+# If all 3 catalog indexes already exist (shipped or previously downloaded),
+# kick off background refreshes but don't block.
+_have_all=true
+for catalog in redhat-operator certified-operator community-operator; do
+	[[ -s ".index/${catalog}-index-v${ocp_ver_short}" ]] || { _have_all=false; break; }
+done
+
+if [[ "$_have_all" == true ]]; then
+	# Start downloads for freshness (no-op if already running)
+	download_all_catalogs "$ocp_ver_short" >/dev/null 2>&1 || true
+	aba_info_ok "All operator catalogs ready for OCP $ocp_ver_short"
+	exit 0
+fi
+
 # Wait: catalogs started by download_all_catalogs() in include_all.sh
 for catalog in redhat-operator certified-operator community-operator; do
 	task_id="catalog:${ocp_ver_short}:${catalog}"

@@ -277,7 +277,7 @@ _ntp_source_synced() {
 }
 
 echo
-aba_info "Checking NTP source sync on all nodes ..."
+aba_info "Checking NTP source sync on all nodes ... (Ctrl-C to skip)"
 
 _wait_rc=0
 aba_wait_show "Waiting for NTP source sync on all nodes (Ctrl-C to skip)" 5 600 _ntp_source_synced || _wait_rc=$?
