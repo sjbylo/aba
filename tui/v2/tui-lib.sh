@@ -100,6 +100,55 @@ _valid_ip_or_host_list() {
 	return 0
 }
 
+# Validate comma-separated list of IPv4 addresses ONLY (no hostnames).
+# Matches verify-cluster-conf behavior for dns_servers.
+_valid_ip_list() {
+	local input="$1"
+	[[ -z "$input" ]] && return 0
+	local IFS=',' entry
+	read -ra entries <<< "$input"
+	for entry in "${entries[@]}"; do
+		entry=$(echo "$entry" | tr -d ' ')
+		[[ -z "$entry" ]] && continue
+		_valid_ip "$entry" || return 1
+	done
+	return 0
+}
+
+# Validate FQDN (must have at least one dot and a TLD label)
+_valid_fqdn() {
+	[[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || return 1
+	[[ "$1" == *.* ]] || return 1
+}
+
+# Validate TCP/UDP port number (1-65535)
+_valid_port() {
+	[[ "$1" =~ ^[0-9]+$ ]] || return 1
+	[[ "$1" -ge 1 && "$1" -le 65535 ]] || return 1
+}
+
+# Validate absolute path or ~-prefixed path
+_valid_abs_path() {
+	[[ "$1" =~ ^(/|~) ]] || return 1
+}
+
+# Validate MAC prefix pattern (exactly 5 octets with trailing colon, e.g. 00:50:56:xx:xx:)
+_valid_mac_prefix() {
+	[[ -z "$1" ]] && return 0
+	[[ "$1" =~ ^([0-9A-Fa-fXx]{2}:){5}$ ]]
+}
+
+# Validate full MAC address (e.g. 00:50:56:ab:cd:ef)
+_valid_mac() {
+	[[ "$1" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]
+}
+
+# Validate comma-separated network port names (e.g. ens1f0,ens1f1)
+_valid_port_names() {
+	[[ -z "$1" ]] && return 0
+	[[ "$1" =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]]
+}
+
 # =============================================================================
 # Temp file management
 # =============================================================================
@@ -253,12 +302,16 @@ _TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
 # Values: "auto", "quay", "docker"
 _TUI_REG_VENDOR="auto"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-	_saved_vendor=$(source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "$reg_vendor")
-	case "$_saved_vendor" in
+	# Read reg_vendor directly from mirror.conf to reflect user's configured intent.
+	# normalize-mirror-conf would return the resolved/installed value from state.sh.
+	_raw_vendor=$(grep '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+	case "${_raw_vendor,,}" in
 		quay)   _TUI_REG_VENDOR="quay" ;;
 		docker) _TUI_REG_VENDOR="docker" ;;
+		auto)   _TUI_REG_VENDOR="auto" ;;
+		*)      _TUI_REG_VENDOR="auto" ;;
 	esac
-	unset _saved_vendor
+	unset _raw_vendor
 fi
 
 ui_backtitle() {
@@ -316,6 +369,56 @@ show_help() {
 	local body="$2"
 	dialog --no-shadow --colors --backtitle "$(ui_backtitle)" \
 		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 {ABA_TUI_FLOCK_FD}>&- || true
+}
+
+# =============================================================================
+# Input validation helpers
+# =============================================================================
+
+# Reject single quotes in user input destined for config files.
+# Config files are sourced by bash — unescaped single quotes corrupt them.
+# Usage:  _tui_reject_squote "$value" || continue
+_tui_reject_squote() {
+	[[ "$1" != *"'"* ]] && return 0
+	dlg --backtitle "$(ui_backtitle)" --msgbox \
+		"Input cannot contain single-quote (') characters.\n\nPlease re-enter without single quotes." 0 0
+	return 1
+}
+
+# Generic password prompt: hidden input, double entry, match check.
+# Prints the validated password to stdout; returns 1 if user cancels.
+# Usage:  pw=$(_tui_prompt_password "Enter vSphere password:" [min_len])
+_tui_prompt_password() {
+	local prompt="${1:-Enter password:}"
+	local min_len="${2:-1}"
+	local pw1 pw2
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \
+			"$prompt" 0 70 2>"$_TUI_TMP"
+		[[ $? -ne 0 ]] && return 1
+		pw1=$(<"$_TUI_TMP")
+		if [[ ${#pw1} -lt $min_len ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Password must be at least $min_len character(s)." 0 0
+			continue
+		fi
+		if [[ "$pw1" =~ [[:space:]] ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Password cannot contain whitespace." 0 0
+			continue
+		fi
+		_tui_reject_squote "$pw1" || continue
+		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \
+			"Confirm password:" 0 70 2>"$_TUI_TMP"
+		[[ $? -ne 0 ]] && return 1
+		pw2=$(<"$_TUI_TMP")
+		if [[ "$pw1" == "$pw2" ]]; then
+			echo "$pw1"
+			return 0
+		fi
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Passwords do not match. Try again." 0 0
+	done
 }
 
 # =============================================================================
@@ -578,21 +681,21 @@ _exec_in_terminal() {
 	echo
 	if [[ "$_term_interrupted" == "true" ]]; then
 		echo "── Command interrupted (Ctrl-C) ──"
+		echo
+		read -rp "Press ENTER to continue..."
+		return 1
 	elif [[ $exit_code -eq 0 ]]; then
 		echo "── Command completed successfully ──"
 		echo
-		read -rp "Press ENTER to return to TUI..."
+		read -rp "Press ENTER to continue..."
 		return 0
 	else
 		echo "── Command FAILED (exit code: $exit_code) ──"
+		echo
+		read -rp "Press R to retry, ENTER to return to menu... " _reply
+		[[ "$_reply" == [Rr] ]] && return 2
+		return 1
 	fi
-	echo
-	local _reply=""
-	read -rp "Press R to retry, ENTER to return to TUI... " _reply
-	if [[ "$_reply" == [Rr] ]]; then
-		return 2
-	fi
-	return 1
 }
 
 # =============================================================================
@@ -767,20 +870,20 @@ tui_cluster_menu_flags() {
 		_CLUSTER_MON_AVAIL=false
 	fi
 
-	local _lbl="Install Cluster"
+	local _lbl="$TUI2_LABEL_INSTALL_CLUSTER"
 	case "$_workflow" in
 		CONNO)
 			if ! mirror_available; then
-				_lbl="Install Cluster [no mirror]"
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_MIRROR"
 			elif ! _mirror_has_release_image; then
-				_lbl="Install Cluster [sync mirror first]"
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_SYNC_FIRST"
 			fi
 			;;
 		DISCO)
 			if ! mirror_available; then
-				_lbl="Install Cluster [install registry first]"
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_INSTALL_REGISTRY"
 			elif ! _mirror_has_release_image; then
-				_lbl="Install Cluster [load mirror first]"
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_LOAD_FIRST"
 			fi
 			;;
 		DIRECT|"")
@@ -914,9 +1017,10 @@ _tui_settings_menu_retry() {
 }
 
 # Build a compact settings summary string for the menu item label.
-# Output: "(ask, Docker, retry=2)" with color codes.
+# DIRECT mode: "(ask)" — no mirror settings shown (Bug #131).
+# CONNO/DISCO:  "(ask, Docker, retry=2)" with color codes.
 _tui_settings_summary() {
-	local ask_short reg_short retry_short
+	local ask_short
 	local raw
 	raw=$(_tui_abaconf_raw_ask)
 	case "${raw,,}" in
@@ -924,16 +1028,18 @@ _tui_settings_summary() {
 		*)   ask_short="ask" ;;
 	esac
 
+	if [[ "${_TUI_MODE:-}" == "DIRECT" ]]; then
+		printf '(\Z6%s\Zn)' "$ask_short"
+		return
+	fi
+
 	local rv="Auto"
 	case "$_TUI_REG_VENDOR" in
 		quay)   rv="Quay" ;;
 		docker) rv="Docker" ;;
 	esac
-	reg_short="$rv"
 
-	retry_short="${_TUI_RETRY_COUNT:-1}"
-
-	printf '(\Z6%s, %s, retry=%s\Zn)' "$ask_short" "$reg_short" "$retry_short"
+	printf '(\Z6%s, %s, retry=%s\Zn)' "$ask_short" "$rv" "${_TUI_RETRY_COUNT:-1}"
 }
 
 # Settings submenu -- v1-style toggle behavior.
@@ -950,31 +1056,41 @@ _tui_settings_menu() {
 			*)    ask_display="Auto-answer: \Z1OFF\Zn" ;;
 		esac
 
-		# Current registry type display (from in-memory state)
-		local reg_display
-		case "$_TUI_REG_VENDOR" in
-			quay)   reg_display="Registry Type: \Z2Quay\Zn" ;;
-			docker) reg_display="Registry Type: \Z3Docker\Zn" ;;
-			*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
-		esac
+		# Mirror-related settings: only relevant when a mirror is in play
+		local _menu_items=("1" "$ask_display")
+		local _help_extra=""
+		if [[ "${_TUI_MODE:-}" != "DIRECT" ]]; then
+			local reg_display
+			case "$_TUI_REG_VENDOR" in
+				quay)   reg_display="Registry Type: \Z2Quay\Zn" ;;
+				docker) reg_display="Registry Type: \Z3Docker\Zn" ;;
+				*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
+			esac
+			local retry_display
+			local rc_val="${_TUI_RETRY_COUNT:-2}"
+			case "$rc_val" in
+				0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
+				*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;
+			esac
+			_menu_items+=("2" "$reg_display" "3" "$retry_display")
+			_help_extra="
+Registry Type:
+  Auto   - Let aba choose the registry (recommended).
+  Quay   - Force Quay mirror registry.
+  Docker - Force Docker V2 mirror registry.
 
-		# Current retry count display
-		local retry_display
-		local rc_val="${_TUI_RETRY_COUNT:-2}"
-		case "$rc_val" in
-			0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
-			*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;
-		esac
+Retry Count:
+  How many times to retry failed oc-mirror operations.
+  OFF = no retries, 2 or 8 = retry that many times."
+		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
 			--ok-label "Toggle" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "Select a setting to toggle:" 0 0 3 \
-			"1" "$ask_display" \
-			"2" "$reg_display" \
-			"3" "$retry_display" \
+			--menu "Select a setting to toggle:" 0 0 0 \
+			"${_menu_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -984,16 +1100,7 @@ _tui_settings_menu() {
 "Auto-answer (-y):
   When ON, aba commands run without confirmation prompts.
   When OFF, you will be asked to confirm each action.
-
-Registry Type:
-  Auto   - Let aba choose the registry (recommended).
-  Quay   - Force Quay mirror registry.
-  Docker - Force Docker V2 mirror registry.
-
-Retry Count:
-  How many times to retry failed oc-mirror operations.
-  OFF = no retries, 2 or 8 = retry that many times.
-
+${_help_extra}
 Toggle a setting by selecting it and pressing Enter."
 				continue
 				;;

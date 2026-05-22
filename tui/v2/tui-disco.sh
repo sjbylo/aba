@@ -125,9 +125,9 @@ disco_main() {
 	while :; do
 		# Build menu items with dynamic status labels (matching CONNO style)
 		local items=()
-		local reg_label="Install Registry (local or remote)"
-		local load_label="Load Images (disk2mirror)"
-		local isc_label="View ImageSet Config"
+		local reg_label="$TUI2_LABEL_INSTALL_REGISTRY"
+		local load_label="$TUI2_LABEL_LOAD"
+		local isc_label="$TUI2_LABEL_VIEW_ISC_RO"
 
 		local reg_avail=true
 		local load_avail=true
@@ -139,13 +139,13 @@ disco_main() {
 			aba_mirror_verify_wait
 
 			if mirror_available; then
-				reg_label="Install Registry (installed)"
+				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
 				reg_avail=false
 				if _mirror_has_release_image; then
-					load_label="Load Images (disk2mirror) (loaded)"
+					load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
 				fi
 			else
-				load_label="Load Images (disk2mirror) [install registry first]"
+				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
 				load_avail=false
 			fi
 
@@ -153,29 +153,29 @@ disco_main() {
 		else
 			# Reuse cached state — just recompute labels from marker files (fast)
 			if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
-				reg_label="Install Registry (installed)"
+				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
 				reg_avail=false
 				if _mirror_has_release_image; then
-					load_label="Load Images (disk2mirror) (loaded)"
+					load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
 				fi
 			else
-				load_label="Load Images (disk2mirror) [install registry first]"
+				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
 				load_avail=false
 			fi
 		fi
 
-		local day2_label="Day-2 / Cluster Management"
+		local day2_label="$TUI2_LABEL_DAY2"
 		local inst_label="${_CLUSTER_INST_LABEL}"
 
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
-			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
+			day2_label="$TUI2_LABEL_DAY2 $TUI2_STATUS_INSTALL_CLUSTER"
 		fi
 
 
 		# Dynamic menu title with mirror state (matching CONNO)
 		local _mstate
 		_mstate="$(mirror_state_label)"
-		local disco_menu_msg="Fully Disconnected — Choose an action (${_mstate}):"
+		local disco_menu_msg="Status: ${_mstate}"
 
 		items+=(
 			"" "──── Registry ──────────────────────"
@@ -185,7 +185,7 @@ disco_main() {
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced Options"
+			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
 			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
 
@@ -206,12 +206,14 @@ disco_main() {
 
 Typical workflow:
   1. Install Registry — set up a local container registry
-  2. Load Images — load container images into the registry
+  2. Load Images — disk-to-mirror (d2m): load saved images into registry
   3. Install Cluster — configure and provision OpenShift
-  4. Finalize Installation — wait for install to complete
-  5. Day-2 — apply cluster resources, NTP, update service, etc.
+  4. Day-2 — apply cluster resources, NTP, update service, etc.
 
-Use 'Advanced Options' to switch modes or manage platform settings.
+Image transfer uses oc-mirror (disk2mirror). The saved archives
+were created on a connected host via 'Save images to disk' (mirror2disk).
+
+Use 'Advanced' to switch modes or manage platform settings.
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
@@ -333,7 +335,7 @@ disco_load_images() {
 		done
 	fi
 
-	confirm_and_execute "aba --dir mirror load$(_tui_oc_mirror_retry_suffix)" "Load Images (disk2mirror)" _invalidate_mirror_cache
+	confirm_and_execute "aba --dir mirror load$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
 }

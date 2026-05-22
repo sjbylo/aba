@@ -21,7 +21,23 @@
 #   - Fixed dialog dimensions where content changes dynamically (e.g. Basics
 #     page) to prevent dialog resize flicker.
 
-echo "Initializing ABA TUI v2..."
+printf 'Initializing ABA TUI v2...\n'
+printf '  [ ] Loading modules\n'
+printf '  [ ] Checking connectivity\n'
+printf '  [ ] Checking packages\n'
+printf '  [ ] Loading config\n'
+
+# Progress tick helper — moves cursor up and overwrites the step with a checkmark
+_TICK_TOTAL=4
+_TICK_N=0
+_tick() {
+	local lines_up=$(( _TICK_TOTAL - _TICK_N ))
+	printf '\033[%dA\r  [✓] %s\033[K\033[%dB\r' "$lines_up" "$1" "$lines_up"
+	_TICK_N=$(( _TICK_N + 1 ))
+}
+_tick_done() {
+	printf '  done\n'
+}
 
 set -o pipefail
 set +m
@@ -31,9 +47,6 @@ if [[ ! -t 0 ]]; then
 	echo "ERROR: TUI requires an interactive terminal (stdin is not a TTY)."
 	exit 1
 fi
-
-# Progress tick helper (prints inline tick after each stage)
-_tick() { echo "  [done] $1"; }
 
 # =============================================================================
 # Derive ABA_ROOT
@@ -247,6 +260,7 @@ unset _ver_short _ops_arr _op _set_arr _s _sf _line
 aba_bg_cleanup
 
 _tick "Loading config"
+_tick_done
 
 # Stable + other channels warmed here; prefetch uses aba_prefetch_catalogs +
 # Cincinnati graph cache when aba.conf has no ocp_version yet.
@@ -496,26 +510,26 @@ _conno_main() {
 
 		local items=()
 
-		local mirr_label="Install Mirror (local or remote)"
+		local mirr_label="$TUI2_LABEL_INSTALL_MIRROR"
 		local mirr_avail=true
-		local save_label="Save Images (mirror2disk)"
-		local sync_label="Sync Images (mirror2mirror)"
-		local visc_label="View/Edit ImageSet Config"
-		local ops_label="Select Operators"
-		local bndl_label="Create Install Bundle"
+		local save_label="$TUI2_LABEL_SAVE"
+		local sync_label="$TUI2_LABEL_SYNC"
+		local visc_label="$TUI2_LABEL_VIEW_ISC"
+		local ops_label="$TUI2_LABEL_OPERATORS"
+		local bndl_label="$TUI2_LABEL_BUNDLE"
 		local save_avail=true sync_avail=true
 		local ops_avail=true bndl_avail=true
 
 		# Internet-dependent items greyed out in offline mode
 		if [[ "$_TUI_INET" == "no" ]]; then
 			save_avail=false
-			save_label="Save Images (mirror2disk) $TUI2_GREY_NO_INTERNET"
+			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_NO_INTERNET"
 			sync_avail=false
-			sync_label="Sync Images (mirror2mirror) $TUI2_GREY_NO_INTERNET"
+			sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_NO_INTERNET"
 			ops_avail=false
-			ops_label="Select Operators $TUI2_GREY_NO_INTERNET"
+			ops_label="$TUI2_LABEL_OPERATORS $TUI2_STATUS_NO_INTERNET"
 			bndl_avail=false
-			bndl_label="Create Install Bundle $TUI2_GREY_NO_INTERNET"
+			bndl_label="$TUI2_LABEL_BUNDLE $TUI2_STATUS_NO_INTERNET"
 		fi
 
 		# Only run expensive state checks when a previous action may have
@@ -527,9 +541,18 @@ _conno_main() {
 
 			if mirror_available && _mirror_has_release_image; then
 				mirr_avail=false
-				mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
+				mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
+				# Mirror has release image → sync was successful
+				if [[ "$sync_avail" == "true" ]]; then
+					sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+				fi
 			elif mirror_available; then
-				mirr_label="Install Mirror (installed — not verified)"
+				mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
+			fi
+
+			# Save status: tar archives exist in mirror/data/
+			if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
+				save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
 			fi
 
 			# Cluster operations — Install uses unified gate; grey Day-2 until clusters exist.
@@ -539,23 +562,29 @@ _conno_main() {
 			if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
 				if _mirror_has_release_image; then
 					mirr_avail=false
-					mirr_label="Install Mirror $TUI2_GREY_ALREADY_INSTALLED"
+					mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
+					if [[ "$sync_avail" == "true" ]]; then
+						sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+					fi
 				else
-					mirr_label="Install Mirror (installed — not verified)"
+					mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
 				fi
+			fi
+			if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
+				save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
 			fi
 		fi
 
 		local inst_label="${_CLUSTER_INST_LABEL}"
-		local day2_label="Day-2 / Cluster Management"
+		local day2_label="$TUI2_LABEL_DAY2"
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
-			day2_label="Day-2 / Cluster Management $TUI2_GREY_INSTALL_FIRST"
+			day2_label="$TUI2_LABEL_DAY2 $TUI2_STATUS_INSTALL_CLUSTER"
 		fi
 
 		# Dynamic menu title with mirror state
 		local _mstate
 		_mstate="$(mirror_state_label)"
-		local conno_menu_msg="Partially Disconnected Mode (${_mstate}):"
+		local conno_menu_msg="Status: ${_mstate}"
 
 		# Mirror state is already shown via color-coded label (green/yellow/red)
 		local mirror_warn=""
@@ -575,7 +604,7 @@ _conno_main() {
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
 			"$TUI2_CONNO_TAG_RECONFIGURE"    "Rerun Wizard"
-			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced Options"
+			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_MENU" \
@@ -598,17 +627,17 @@ Mirror operations:
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
 
-Transfer:
-  • Save — download images to local archive
-  • Sync — push images directly to registry
+Transfer (uses oc-mirror):
+  • Sync — mirror-to-mirror (m2m): push images directly to registry
+  • Save — mirror-to-disk (m2d): download images to local archive
+  • Load — disk-to-mirror (d2m): load saved images into registry
   • Install Bundle — create a portable bundle (tar) for USB transfer
 
 Cluster operations:
   • Install Cluster — configure, review, and provision OpenShift
-  • Finalize Installation — wait for install to complete (re-attach)
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
-Use 'Advanced Options' to switch modes or manage platform settings.
+Use 'Advanced' to switch modes or manage platform settings.
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
@@ -751,6 +780,7 @@ while :; do
 		--no-label "Exit" \
 		--help-button \
 		--yesno "\
+
   __   ____   __
  / _\\ (  _ \\ / _\\     ABA v${_aba_ver}
 /    \\ ) _ (/    \\    Install & configure
@@ -759,7 +789,9 @@ while :; do
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
 
-Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit." 0 0
+
+Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit.
+" 0 0
 	splash_rc=$?
 	case "$splash_rc" in
 		1|255)
@@ -769,21 +801,33 @@ Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit." 0 0
 			;;
 		2)
 			show_help "$TUI2_TITLE_HELP" \
-"ABA TUI - Quick Guide
+"ABA TUI — Quick Guide
 
-The TUI guides you through:
-  1. Pull secret configuration
-  2. OpenShift channel and version selection
-  3. Platform selection
-  4. Operator catalog configuration
-  5. Mirror registry setup
-  6. Cluster installation
+The TUI wizard walks you through installing OpenShift
+in connected, partially disconnected, or fully air-gapped
+environments.
+
+Workflow:
+  1. Pull secret     — Configure Red Hat registry credentials
+  2. Version         — Choose OCP channel and version
+  3. Platform        — Select bare-metal, VMware, or KVM
+  4. Operators       — Pick operators to include in the mirror
+  5. Mirror registry — Set up a local Quay or Docker registry
+  6. Cluster install — Create, install, and monitor your cluster
+
+After installation, Day-2 operations are available:
+  - Add/remove operators, sync registry, apply updates
+  - Connect OperatorHub, configure NTP, trust registry CA
 
 Navigation:
-  Next     - Proceed to next step
-  Back     - Return to previous step
-  Help     - Show context help
-  Ctrl+C   - Exit TUI"
+  Tab / Arrows  — Move between items
+  Enter         — Select / confirm
+  Next          — Proceed to next step
+  Back          — Return to previous step
+  ESC           — Exit the TUI
+
+Tip: You can also run any step from the CLI:
+     aba --help"
 			;;
 		*)
 			break

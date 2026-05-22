@@ -1,28 +1,17 @@
 # Session State
 
 ## Current goal
-DISCO cluster install running on "registry" host — monitoring progress
+TUI v2 — fix `_TUI_REG_VENDOR` to show configured intent ("auto") instead of resolved/installed value.
 
 ## Done this session
-- Created install bundle on registry4 (CONNO mode) — 25G, 191 images
-- Transferred bundle to "registry" host (10.0.1.2)
-- Unpacked bundle, installed aba, launched TUI in DISCO mode
-- Installed Quay mirror registry + loaded 191 images successfully
-- Started SNO cluster install (ocp.example.com) — initially hung (no DNS)
-- **Bug #169 fixed by user**: verify-config.sh now aborts on DNS errors
-- Code review found Bug #170, #171; updated TUI_BUG_REPORT.md (#159-#171)
-- DNS records added by user (10.0.1.100), cluster install re-started
-- **Bug #171 fixed**: `_exec_in_terminal` now returns proper exit codes and offers retry on failure
-- Cluster install progressing in TUI mode on registry host
+- Analyzed the flow: `reg-install.sh` resolves "auto"→"quay", writes resolved value to state.sh, `_state_override_mirror()` overrides `reg_vendor` in normalize-mirror-conf output, TUI reads that and shows "quay" instead of "auto".
+- Determined the minimal fix: TUI reads `mirror.conf` directly (bypassing state override) for display purposes only. No changes needed to state.sh, scripts, or override logic.
+- Showed the proposed change to user (awaiting approval).
 
 ## Next steps
-1. Commit Bug #171 fix (awaiting user approval)
-2. Monitor DISCO cluster install to completion
-3. Continue interactive bug verification (#170, #161, #162, #168)
-4. Test Day-2 flows once cluster is up
+1. Apply the TUI change to `tui/v2/tui-lib.sh` once user approves.
+2. Test that TUI shows "Auto" when mirror.conf has `reg_vendor=auto`.
 
 ## Decisions / notes
-- `oc_mirror_retry` feature is complete — no outstanding fix needed
-- Bug #171 fix follows same return convention as `_exec_in_tui`: 0=success, 1=back, 2=retry
-- "Always" exec mode paths (line 389-390) pass return code to caller rather than looping — pre-existing behavior, same for both TUI and terminal modes
-- Bug report has 171 entries total
+- Scripts SHOULD use the resolved value (from state.sh override) — they need to dispatch to the correct vendor script (quay vs docker). Only the TUI display needs the raw config value.
+- The fix is a single isolated change in `tui-lib.sh` lines 301-311.
