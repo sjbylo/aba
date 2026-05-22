@@ -250,13 +250,16 @@ _check_hung() {
 	local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
 	[ "$_elapsed" -lt "${E2E_HUNG_TIMEOUT:-3600}" ] && return
 
-	# Check per-suite summary log (symlink to timestamped file, created by suite_start).
-	# Falls back to tmux pane activity if the summary log doesn't exist yet.
-	local _log_age=""
+	# Use the most recent of: summary log mtime OR tmux pane activity.
+	# A long-running single command (e.g. neg-test install timeout) won't
+	# update the summary log, but the tmux pane still receives output.
+	local _log_age="" _pane_age=""
 	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
-	if [ -z "$_log_age" ]; then
-		# No suite summary log yet -- check tmux pane activity instead
-		_log_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{pane_last_activity}' 2>/dev/null" 2>/dev/null) || _log_age=""
+	_pane_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{pane_last_activity}' 2>/dev/null" 2>/dev/null) || _pane_age=""
+	if [ -n "$_log_age" ] && [ -n "$_pane_age" ]; then
+		[ "$_pane_age" -gt "$_log_age" ] && _log_age="$_pane_age"
+	elif [ -z "$_log_age" ]; then
+		_log_age="$_pane_age"
 	fi
 	[ -z "$_log_age" ] && return
 

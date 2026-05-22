@@ -344,6 +344,31 @@ TOTAL=14                                      # Total steps (for [N/$TOTAL] labe
 RELEASE_BRANCH_NAME="_release-v$NEW_VERSION"  # Temp branch name used with --ref
 
 # -----------------------------------------------------------------------------
+# Step 0: Ensure cluster directories are gitignored
+# -----------------------------------------------------------------------------
+# Cluster working dirs (created by 'aba cluster --name X') contain cluster.conf.
+# They must never be committed. Auto-add any missing ones to .gitignore.
+_cluster_dirs_added=0
+while IFS= read -r _cdir; do
+    _cdir="${_cdir%/cluster.conf}"
+    _cdir="${_cdir#./}"
+    _entry="/${_cdir}/"
+    # Check if already covered (exact match or by existing glob patterns)
+    if git check-ignore -q "$_cdir" 2>/dev/null; then
+        continue
+    fi
+    echo "$_entry" >> .gitignore
+    echo -e "${YELLOW}  Added '$_entry' to .gitignore${NC}"
+    _cluster_dirs_added=$((_cluster_dirs_added + 1))
+done < <(find . -maxdepth 2 -name cluster.conf -not -path './templates/*' 2>/dev/null)
+
+if (( _cluster_dirs_added > 0 )); then
+    echo -e "${GREEN}  ✓ Added $_cluster_dirs_added cluster dir(s) to .gitignore${NC}"
+    git add .gitignore
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
 # Step 1: Pre-commit checks
 # -----------------------------------------------------------------------------
 # In --ref mode we:

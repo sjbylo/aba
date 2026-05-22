@@ -1,25 +1,31 @@
 # Session State
 
 ## Current goal
-Shipped Catalog Index Files -- plan finalized, awaiting user approval to implement.
+TUI v2 bug fixes, UX improvements, and CLI tarball race condition fix.
 
 ## Done this session
-- Discovered consumers don't check `.done` -- only `-s .index/X`
-- Discovered TTL re-download is broken (script's .done skip defeats run_once TTL)
-- Simplified to populate-from-shipped + atomic rename + remove .done
-- Chose `catalog-indexes/` as top-level dir (not in bundle, useful for connected users)
-- Eliminated .gitignore and backup.sh changes entirely
-- Added refresh script (`tools/refresh-catalog-indexes.sh`) to keep indexes fresh between releases
+1. **Bug A fixed**: Mode bar showing "?" after Advanced → Switch Mode
+2. **Bug B resolved**: Retry count is session-only by design (default=1)
+3. **Delete cluster UX**: Renamed label, added Help button, platform-neutral wording
+4. **Cluster status annotations**: "(shut down)" / "(installed)" in cluster selection dialogs
+5. **Makefile .init/.cli split**: Separated symlink setup from CLI download
+6. **aba.sh delete refactored**: No more CLI download on delete; bare-metal works
+7. **CLI tarball race condition FIXED and VERIFIED**:
+   - Root cause: tarball listed as Make prerequisite → fires unprotected curl
+   - Fix: removed tarball from prerequisites in cli/Makefile (5 targets)
+   - Pre-fix test: proved 2 concurrent curls (race detected)
+   - Post-fix test: only 1 curl, valid tarball (fix verified)
+   - Also reproduced the exact "gzip: unexpected end of file" error
 
 ## Next steps
-- Get user approval on the final plan
-- Implement (5 todos: populate-fn, atomic-download, seed-shipped, refresh-script, test)
+- Commit and push all changes (awaiting user approval)
+- Also need to check: `Makefile.cluster` line 145 (`~/bin/openshift-install` target)
+  may also need updating since we split .init from .cli
 
 ## Decisions / notes
-- `catalog-indexes/` = top-level, git-tracked, NOT in bundle (backup.sh untouched)
-- Populate copies `catalog-indexes/X` -> `.index/X` on init if live doesn't exist
-- No `.done` file -- run_once is sole gatekeeper; fixes latent TTL re-download bug
-- Atomic mv: write to `.downloading` temp, rename when complete
-- Refresh script: downloads, verifies (canary-style), commits, optionally moves release tag
-- Zero consumer changes, zero .gitignore changes, zero backup.sh changes
-- Plan file: `~/.cursor/plans/baked_catalog_indexes_02fc9df9.plan.md`
+- Retry count: session-only, default=1
+- `.init` = symlinks only; `.cli` = full CLI download
+- CLI race fix: removing tarball prerequisites is the correct structural fix
+  because run-once.sh -w in the recipe body already handles download serialization
+- The race was between: run_once-protected background download AND
+  Make's prerequisite-triggered unprotected download (same file, two curls)
