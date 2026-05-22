@@ -1170,13 +1170,22 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		delete)
-			_ensure_hv_ready
-			exec_cmd="make -s init"
-			aba_debug "Running: $exec_cmd (delete)"
-			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-delete.sh || exit $?
-			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
-			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
+			make -s init
+			source <(normalize-aba-conf)
+			case "$platform" in
+				vmw|kvm)
+					_ensure_hv_ready
+					$ABA_ROOT/scripts/${platform}-delete.sh || exit $?
+					;;
+				bm)
+					aba_info "Bare-metal: no VMs to delete. Removing cluster state."
+					;;
+				*)
+					aba_abort "Unknown platform '$platform' in aba.conf"
+					;;
+			esac
+			# Remove stamp files so the chain re-runs on next install
+			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete .shutdown.log
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
