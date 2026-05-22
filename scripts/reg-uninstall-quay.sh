@@ -30,10 +30,10 @@ if ask "Uninstall Quay mirror registry on localhost, installed at $reg_host:$reg
 		aba_info "Removing stale ansible_runner_instance ..." && \
 		podman stop ansible_runner_instance && podman rm ansible_runner_instance
 
-	cmd="./mirror-registry uninstall -v --autoApprove $reg_root_opts"
-
-	aba_info "Running command: $cmd"
-	eval $cmd || exit 1
+	aba_info "Running command: ./mirror-registry uninstall -v --autoApprove $reg_root_opts"
+	# $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
+	# shellcheck disable=SC2086
+	./mirror-registry uninstall -v --autoApprove $reg_root_opts || exit 1
 
 	reg_close_firewall
 

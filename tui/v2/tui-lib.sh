@@ -386,16 +386,33 @@ _tui_reject_squote() {
 }
 
 # Generic password prompt: hidden input, double entry, match check.
-# Prints the validated password to stdout; returns 1 if user cancels.
-# Usage:  pw=$(_tui_prompt_password "Enter vSphere password:" [min_len])
+# On success: writes validated password to $_TUI_TMP and returns 0.
+# On cancel: returns 1. Must NOT be called in a subshell $(...) — dialog
+# hangs when run inside command substitution on some terminals.
+# Usage:  _tui_prompt_password "prompt" [min_len] && pw=$(<"$_TUI_TMP")
 _tui_prompt_password() {
 	local prompt="${1:-Enter password:}"
 	local min_len="${2:-1}"
 	local pw1 pw2
 	while :; do
-		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \
-			"$prompt" 0 70 2>"$_TUI_TMP"
-		[[ $? -ne 0 ]] && return 1
+		dlg --backtitle "$(ui_backtitle)" --insecure \
+			--help-button --help-label "Rules" \
+			--passwordbox "$prompt" 0 70 2>"$_TUI_TMP"
+		local _rc=$?
+		if [[ $_rc -eq 2 ]]; then
+			dlg --backtitle "$(ui_backtitle)" --title "Password Rules" --msgbox \
+				"Password requirements:\n\n\
+  • Minimum $min_len characters\n\
+  • No whitespace (spaces or tabs)\n\
+  • No quote characters (' or \")\n\n\
+All other special characters are allowed:\n\
+  ! @ # \$ % ^ & * ( ) < > | ; \` ~ { } = + - _ [ ] \\\\\n\n\
+Why no quotes? The upstream mirror-registry installer\n\
+embeds the password in a shell command internally and\n\
+cannot handle quote characters." 0 0
+			continue
+		fi
+		[[ $_rc -ne 0 ]] && return 1
 		pw1=$(<"$_TUI_TMP")
 		if [[ ${#pw1} -lt $min_len ]]; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -407,13 +424,17 @@ _tui_prompt_password() {
 				"Password cannot contain whitespace." 0 0
 			continue
 		fi
-		_tui_reject_squote "$pw1" || continue
+		if [[ "$pw1" == *"'"* || "$pw1" == *'"'* ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Password cannot contain quote characters (' or \").\n\n(The upstream mirror-registry tool cannot handle quotes.)\nAll other special characters are allowed." 0 0
+			continue
+		fi
 		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \
 			"Confirm password:" 0 70 2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
 		pw2=$(<"$_TUI_TMP")
 		if [[ "$pw1" == "$pw2" ]]; then
-			echo "$pw1"
+			printf '%s' "$pw1" > "$_TUI_TMP"
 			return 0
 		fi
 		dlg --backtitle "$(ui_backtitle)" --msgbox \

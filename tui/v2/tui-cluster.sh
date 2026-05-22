@@ -370,9 +370,8 @@ _configure_vmw_form() {
 				fi
 				;;
 			P)
-				local _new_pass
-				_new_pass=$(_tui_prompt_password "Enter vSphere/ESXi password:") || continue
-				v_pass="$_new_pass"
+				_tui_prompt_password "Enter vSphere/ESXi password:" || continue
+				v_pass=$(<"$_TUI_TMP")
 				replace-value-conf -q -n GOVC_PASSWORD -v "'$v_pass'" -f "$conf_path"
 				;;
 			D)

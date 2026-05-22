@@ -35,9 +35,6 @@ _tick() {
 	printf '\033[%dA\r  [✓] %s\033[K\033[%dB\r' "$lines_up" "$1" "$lines_up"
 	_TICK_N=$(( _TICK_N + 1 ))
 }
-_tick_done() {
-	printf '  done\n'
-}
 
 set -o pipefail
 set +m
@@ -260,7 +257,6 @@ unset _ver_short _ops_arr _op _set_arr _s _sf _line
 aba_bg_cleanup
 
 _tick "Loading config"
-_tick_done
 
 # Stable + other channels warmed here; prefetch uses aba_prefetch_catalogs +
 # Cincinnati graph cache when aba.conf has no ocp_version yet.
@@ -308,7 +304,7 @@ fi
 # Wait for internet check to complete (this is the slow part)
 aba_inet_check_wait
 
-_tick "Ready"
+printf '  Ready.\n'
 unset -f _tick
 sleep 0.3
 clear
