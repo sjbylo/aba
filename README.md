@@ -194,7 +194,7 @@ This chart shows the complete flow — fully disconnected, partially disconnecte
 
 # Install Bundles
 
-An ABA `Install Bundle` is a single archive containing everything required to install OpenShift in an air-gapped environment for a specific use case.
+An ABA `Install Bundle` is a single archive containing everything required to install OpenShift in an air-gapped environment for a specific use case. 
 It includes platform and operator images, matching OpenShift CLI installation tools, registry configuration for Quay and Docker, and automation to set up a mirror registry and generate the configuration files needed for installation — tested, repeatable, and ready to use.
 
 Download the latest Install Bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy)
@@ -202,7 +202,7 @@ Download the latest Install Bundles from: [https://red.ht/disco-easy](https://re
 If these bundles don't suit your needs, [let us know](https://github.com/sjbylo/aba/issues/new) your requirements — including the use case and which images or operators are needed. Alternatively, join the [Slack Channel](https://red.ht/slack-forum-aba).
 
 You can also [create your own bundle](#custom-bundles).
-<!-- this is a perma-link from the bundle maker README_FIRST.md file -->
+<!-- this is a perma-link from the bundle maker README_FIRST.md file --> 
 
 [Back to top](#quick-start)
 
@@ -305,10 +305,10 @@ aba -d mirror sync
 
 This command:
 
-- triggers `aba -d mirror install` (to configure or install the mirror registry).
+  - triggers `aba -d mirror install` (to configure or install the mirror registry).
   - for an existing registry, checks that the connection is available and working.
   - or, installs *Mirror Registry for Red Hat OpenShift* (Quay) or Docker Registry on the local bastion. For remote host installation, see [Load images to a remote host](#load-images-to-a-remote-host).
-- pulls images from the Internet and stores them in the registry.
+  - pulls images from the Internet and stores them in the registry.
 
 ```
 aba -d cli download

@@ -3259,3 +3259,25 @@ Error occurred in command: 'oc login -u kubeadmin -p '****' --insecure-skip-tls-
 
 Add a `_mask_sensitive()` helper that scrubs known patterns (e.g. `-p '[^']*'`, `--token [^ ]*`) before outputting command strings in `aba_debug`, ERR trap handlers, and error messages.
 
+---
+
+## TUI: Streamline command output for TUI users
+
+### Problem
+
+When running cluster operations (e.g. `aba cluster --step install`) from the TUI, the "Success" dialog shows CLI-oriented output like "cd ocp", "edit agent-config.yaml", "run 'aba install' again" — instructions that assume a command-line workflow. A TUI user won't want to drop to the shell to follow these steps.
+
+### Expected behavior
+
+When invoked from the TUI, post-action messages should be TUI-aware:
+- Instead of "cd ocp" → the TUI should automatically navigate to the right context
+- Instead of "edit agent-config.yaml" → offer to open an editor dialog or provide a menu item
+- Instead of "run 'aba install' again" → the TUI should offer the next action directly (e.g. "Create ISO" button)
+- The bare-metal "Next steps" message (`Makefile.cluster .bm-message`) should adapt when `$ABA_TUI` is set
+
+### Proposed approach
+
+- Detect TUI context via an env var (e.g. `ABA_TUI=1`) set by `abatui2.sh`
+- Scripts/Makefiles check `$ABA_TUI` and suppress or reformat CLI-oriented "next steps" messages
+- The TUI's `confirm_and_execute` result dialog could append TUI-specific guidance (e.g. "Select 'Install Cluster' again to create the ISO")
+

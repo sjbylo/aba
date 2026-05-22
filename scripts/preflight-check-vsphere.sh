@@ -580,6 +580,15 @@ _vsphere_probe_privileges() {
 		return 0
 	fi
 
+	# administrator@vsphere.local has full privileges via the built-in
+	# Administrators group. govc permissions.ls cannot resolve group membership,
+	# so per-scope queries return "no role assigned" (D-12) on every scope —
+	# all noise, no signal. Short-circuit to avoid misleading warnings.
+	if [[ "$GOVC_USERNAME" == "administrator@vsphere.local" ]]; then
+		aba_info_ok "vSphere: '$GOVC_USERNAME' is the built-in admin — skipping privilege scope checks"
+		return 0
+	fi
+
 	# Source the curated privilege arrays. Re-sourcing is idempotent.
 	source scripts/vmware-required-privileges.sh
 

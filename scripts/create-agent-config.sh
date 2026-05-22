@@ -88,7 +88,7 @@ replace_hash_with_random_hex() {
     local output_string=""
 
     for ((i=0; i<${#input_string}; i++)); do
-        if [ "${input_string:i:1}" == "x" ]; then
+        if [ "${input_string:i:1}" == "x" ] || [ "${input_string:i:1}" == "X" ]; then
             output_string+=$(generate_random_hex)
         else
             output_string+="${input_string:i:1}"

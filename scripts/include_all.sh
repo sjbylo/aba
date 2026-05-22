@@ -984,7 +984,10 @@ verify-cluster-conf() {
 	[ "$int_connection" ] && { echo $int_connection | grep -q -E "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
-	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { echo_red "Error: mac_prefix is invalid in cluster.conf: [$mac_prefix]" >&2; ret=1; }
+	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warning -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
+
+	# mac_prefix is required for virtual platforms (VMs need unique MACs)
+	[[ "$platform" == "vmw" || "$platform" == "kvm" ]] && [ -z "$mac_prefix" ] && { aba_warning -p "Error" "mac_prefix is required for platform=$platform in cluster.conf"; ret=1; }
 
 	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
 	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
