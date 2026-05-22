@@ -1,51 +1,90 @@
-ai/
-cli/.init
-cli/*tar.gz
-cli/butane-binary
-cli/*-download
-*.md.bak
-*.bak
-.backup/
+# =============================================================================
+# ABA .gitignore
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Cluster working directories (created by 'aba cluster --name X')
+# Auto-maintained by build/release.sh Step 0
+# -----------------------------------------------------------------------------
+/sno*/
+/demo*/
+/compact*/
+/standard*/
+/ocp/
+/sno1-ext/
+/sno2-ext/
+
+# -----------------------------------------------------------------------------
+# ABA runtime state
+# -----------------------------------------------------------------------------
+aba.conf*
+.aba.conf.seen
+target-ocp-version.conf
+vmware.conf
+vmware.conf.bk
+kvm.conf
+mirror.conf
+*.ssh.conf
+.index
+.index-test/
+.index-backup/
+
+# -----------------------------------------------------------------------------
+# mirror/ directory (generated/downloaded content)
+# -----------------------------------------------------------------------------
 mirror/aba.conf
 mirror/*.sha256
-mirror.conf
 mirror/.dnf-install.log
 mirror/execution-environment.tar
 mirror/image-archive.tar
 mirror/imageset-config*yaml
 mirror/.initialized
 mirror/.available
+mirror/.unavailable
+mirror/.synced
 mirror/mirror-registry
 mirror/mirror-registry.tar.gz
+mirror/mirror-registry-amd64.tar.gz
 mirror/.oc-mirror.log
 mirror/oc-mirror-workspace
 mirror/pause.tar
 mirror/postgres.tar
 mirror/quay.tar
 mirror/redis.tar
+mirror/sqlite3.tar
 mirror/regcreds
+mirror/regcreds.bk
 mirror/.registry-creds.txt
 mirror/.rpms
 mirror/data
 mirror/scripts
 mirror/templates
 mirror/*.sh
-mirror/.synced
-mirror/.unavailable
 mirror/.*
-mirror/mirror.conf.bk
-mirror/.redhat-operator-index*
-mirror/mirror-registry-amd64.tar.gz
-mirror/sqlite3.tar
 mirror/.??*
+mirror/.redhat-operator-index*
+mirror/mirror.conf*
+mirror/docker-reg-image.tgz
+mirror/cli
 mirror/mirror
-/sno*
-/demo*
-/compact*
-*/cluster.conf
-*.ssh.conf
-/standard*
-target-ocp-version.conf
+mirror/reg-uninstall.sh.provision
+
+# -----------------------------------------------------------------------------
+# cli/ directory (downloaded binaries)
+# -----------------------------------------------------------------------------
+cli/.init
+cli/*tar.gz
+cli/butane-binary
+cli/butane-amd64
+cli/*-download
+cli/govc
+cli/.*installed
+cli/*.sha256
+cli/scripts
+
+# -----------------------------------------------------------------------------
+# test/ directory
+# -----------------------------------------------------------------------------
 test/mirror-registry.tar.gz
 test/.ssh.conf
 test/test.log*
@@ -55,48 +94,54 @@ test/?-stage
 test/docker-reg/certs
 test/docker-reg/data
 test/docker-reg/auth
-vmware.conf
-kvm.conf
-rpms/*.rpm
-mirror/reg-uninstall.sh.provision
-aba.conf
-cli/.*installed
-.??*.log
-aba.conf.bk
-templates/operator-set-abatest
-templates/operator-set-custom-[0-9]*
-.aba.conf.seen
-mirror/docker-reg-image.tgz
-mirror/cli
-cli/butane-amd64
-cli/*.sha256
-*/*sha256sum.txt
-cli/scripts
-bundles/work
-bundles/v2/build.log
-bundles/v2/work
-.vscode*
-.bundle
+test/func/screenshots/
 test/e2e/LAB-NETWORK.md
 test/e2e/SESSION-NOTES.md
-ai/*
-ai/SESSION_STATE.md
-test/func/screenshots/
-vmware.conf.bk
-xxx/
-mirror/regcreds.bk
-.index
-.index-test/
-.index-backup/
 test/e2e/.config.env.deploy
 test/e2e/.e2e-last-run
 test/e2e/.pool-os/
 test/e2e/logs/
-.cursor/
-ai/aba-installations-chart.html
 e2e-parallel.log.*
-ai/OPP*docx
-ai/OPP*pdf
-ai/RELEASE_BULLETS_*.md
 
+# -----------------------------------------------------------------------------
+# templates/ (generated operator sets)
+# -----------------------------------------------------------------------------
+templates/operator-set-abatest
+templates/operator-set-custom-[0-9]*
+
+# -----------------------------------------------------------------------------
+# bundles/
+# -----------------------------------------------------------------------------
+bundles/work
+bundles/v2/build.log
+bundles/v2/work
+
+# -----------------------------------------------------------------------------
+# rpms/
+# -----------------------------------------------------------------------------
+rpms/*.rpm
+
+# -----------------------------------------------------------------------------
+# ai/ directory (session artifacts, not tracked except SESSION_STATE.md)
+# -----------------------------------------------------------------------------
+ai/*
+!ai/SESSION_STATE.md
+
+# -----------------------------------------------------------------------------
+# Editor / IDE / tooling
+# -----------------------------------------------------------------------------
+.vscode*
+.cursor/
 .planning/
+
+# -----------------------------------------------------------------------------
+# General patterns
+# -----------------------------------------------------------------------------
+*.md.bak
+*.bak
+.backup/
+.bundle
+.??*.log
+*/*sha256sum.txt
+*/cluster.conf
+xxx/
