@@ -50,7 +50,7 @@ TUI2_TITLE_OPERATOR_SEARCH="Search Operators"
 
 TUI2_TITLE_DISCO_MENU="Fully Disconnected – Actions"
 TUI2_TITLE_DISCO_INSTALL_REG="Install Registry"
-TUI2_TITLE_DISCO_LOAD="Load Images (disk2mirror)"
+TUI2_TITLE_DISCO_LOAD="Load Images to Mirror"
 TUI2_TITLE_DISCO_VIEW_ISC="ImageSet Configuration (read-only)"
 TUI2_TITLE_DISCO_RESET="Reset to Connected Mode"
 TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
@@ -61,8 +61,8 @@ TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
 
 TUI2_TITLE_CONNO_MENU="Partially Disconnected – Actions"
 TUI2_TITLE_CONNO_INSTALL_MIRROR="Install Mirror Registry"
-TUI2_TITLE_CONNO_SAVE="Save Images (mirror2disk)"
-TUI2_TITLE_CONNO_SYNC="Sync Images (mirror2mirror)"
+TUI2_TITLE_CONNO_SAVE="Save Images to Disk"
+TUI2_TITLE_CONNO_SYNC="Sync Images to Mirror"
 TUI2_TITLE_CONNO_VIEW_ISC="ImageSet Configuration"
 TUI2_TITLE_CONNO_EDIT_ISC="Edit ImageSet Configuration"
 TUI2_TITLE_CONNO_BUNDLE="Create Install Bundle"
@@ -196,14 +196,47 @@ TUI2_DIRECT_TAG_SETTINGS="C"
 TUI2_TITLE_SETTINGS="Settings"
 
 # =============================================================================
-# Menu Labels (plain text for greyed-out items)
+# Menu Item Labels (base text)
 # =============================================================================
 
-TUI2_GREY_INSTALL_FIRST="[install cluster first]"
-TUI2_GREY_REG_FIRST="[install registry first]"
-TUI2_GREY_MIRROR_FIRST="[install mirror first]"
-TUI2_GREY_ALREADY_INSTALLED="(installed)"
-TUI2_GREY_NO_INTERNET="[no internet]"
+TUI2_LABEL_INSTALL_MIRROR="Install Mirror (local or remote)"
+TUI2_LABEL_INSTALL_REGISTRY="Install Registry (local or remote)"
+TUI2_LABEL_SYNC="Sync images to mirror"
+TUI2_LABEL_SAVE="Save images to disk"
+TUI2_LABEL_LOAD="Load images to mirror"
+TUI2_LABEL_VIEW_ISC="View/Edit ImageSet Config"
+TUI2_LABEL_VIEW_ISC_RO="View ImageSet Config"
+TUI2_LABEL_OPERATORS="Select Operators"
+TUI2_LABEL_BUNDLE="Create Install Bundle"
+TUI2_LABEL_INSTALL_CLUSTER="Install Cluster"
+TUI2_LABEL_DAY2="Day-2 / Cluster Management"
+
+# =============================================================================
+# Menu Status Suffixes (colored)
+# =============================================================================
+
+TUI2_STATUS_INSTALLED="\Z2(installed)\Zn"
+TUI2_STATUS_SYNCED="\Z2(synced)\Zn"
+TUI2_STATUS_SAVED="\Z2(saved)\Zn"
+TUI2_STATUS_LOADED="\Z2(loaded)\Zn"
+TUI2_STATUS_NOT_VERIFIED="\Z3(installed — not verified)\Zn"
+TUI2_STATUS_NO_MIRROR="\Z1[no mirror]\Zn"
+TUI2_STATUS_NO_INTERNET="\Z1[no internet]\Zn"
+TUI2_STATUS_INSTALL_REGISTRY="\Z1[install registry]\Zn"
+TUI2_STATUS_INSTALL_CLUSTER="\Z1[install cluster]\Zn"
+TUI2_STATUS_INSTALL_MIRROR="\Z1[install mirror]\Zn"
+TUI2_STATUS_SYNC_FIRST="\Z3[sync mirror first]\Zn"
+TUI2_STATUS_LOAD_FIRST="\Z3[load mirror first]\Zn"
+
+# =============================================================================
+# Legacy aliases (for existing references)
+# =============================================================================
+
+TUI2_GREY_INSTALL_FIRST="$TUI2_STATUS_INSTALL_CLUSTER"
+TUI2_GREY_REG_FIRST="$TUI2_STATUS_INSTALL_REGISTRY"
+TUI2_GREY_MIRROR_FIRST="$TUI2_STATUS_INSTALL_MIRROR"
+TUI2_GREY_ALREADY_INSTALLED="$TUI2_STATUS_INSTALLED"
+TUI2_GREY_NO_INTERNET="$TUI2_STATUS_NO_INTERNET"
 TUI2_MSG_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to use this feature."
 TUI2_MSG_PAYLOAD_INCOMPLETE="Insufficient files for offline operation.\n\nRequired (minimum bundle equivalent):\n  • aba.conf\n  • cli/openshift-client-linux*.tar.gz (>1MB)\n  • cli/openshift-install-linux*.tar.gz (>1MB)\n  • cli/oc-mirror*.tar.gz (>1MB)\n  • mirror/mirror-registry*.tar.gz or docker-reg-image.tgz\n  • mirror/data/imageset-config.yaml (non-empty)\n  • EITHER: mirror running OR tar archives in mirror/data/\n\nTransfer a bundle or restore internet connectivity."
 
@@ -334,7 +367,7 @@ TUI2_MSG_DAY2_MENU="Select operation:"
 # Messages — DIRECT Mode
 # =============================================================================
 
-TUI2_MSG_DIRECT_MENU="Fully Connected — Install from internet (no mirror):"
+TUI2_MSG_DIRECT_MENU="Install from internet (no mirror):"
 
 # =============================================================================
 # Messages — DISCO Mode
@@ -368,7 +401,7 @@ TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\n
 # Messages — Execution / Exit
 # =============================================================================
 
-TUI2_MSG_CONFIRM_EXIT="Exit ABA TUI?"
+TUI2_MSG_CONFIRM_EXIT="\nExit ABA TUI?\n"
 TUI2_MSG_EXIT_HELP="Navigation:\n\n• Press ESC to go back to the previous menu\n• In a wizard, ESC returns to the main menu\n• At the main menu, ESC offers to exit the TUI\n• Press ESC again on the exit dialog to quit immediately\n\nConfiguration is only saved when you complete actions."
 TUI2_MSG_EXEC_MODE="Choose execution mode:"
 TUI2_MSG_EDITOR_PROMPT="How would you like to edit?\n\n  %s"

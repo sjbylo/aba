@@ -13,34 +13,9 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	exit 1
 fi
 
+# Legacy wrapper — delegates to _tui_prompt_password in tui-lib.sh
 _prompt_password() {
-	local pw1 pw2
-	while :; do
-		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \
-			"Enter registry password (min 8 chars, no whitespace, no single quote):" 0 70 2>"$_TUI_TMP"
-		[[ $? -ne 0 ]] && return 1
-		pw1=$(<"$_TUI_TMP")
-		if [[ ${#pw1} -lt 8 ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "Password must be at least 8 characters." 0 0
-			continue
-		fi
-		if [[ "$pw1" =~ [[:space:]] ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "Password cannot contain whitespace." 0 0
-			continue
-		fi
-		if [[ "$pw1" == *"'"* ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "Password cannot contain single quote (') characters." 0 0
-			continue
-		fi
-		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox "Confirm registry password:" 0 70 2>"$_TUI_TMP"
-		[[ $? -ne 0 ]] && return 1
-		pw2=$(<"$_TUI_TMP")
-		if [[ "$pw1" == "$pw2" ]]; then
-			echo "$pw1"
-			return 0
-		fi
-		dlg --backtitle "$(ui_backtitle)" --msgbox "Passwords do not match. Try again." 0 0
-	done
+	_tui_prompt_password "Enter registry password (min 8 chars, no whitespace):" 8
 }
 
 # =============================================================================
@@ -245,6 +220,12 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				if [[ $? -eq 0 ]]; then
 					m_host=$(<"$_TUI_TMP")
+					_tui_reject_squote "$m_host" || continue
+					if [[ -n "$m_host" ]] && ! _valid_fqdn "$m_host" && ! _valid_ip "$m_host"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid hostname.\n\nMust be a valid FQDN (e.g. registry.example.com) or IP address." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_host -v "$m_host" -f "$mcf"
 				fi
 				;;
@@ -252,6 +233,11 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_port=$(<"$_TUI_TMP")
+					if [[ -n "$m_port" ]] && ! _valid_port "$m_port"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid port.\n\nMust be a number between 1 and 65535." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_port -v "$m_port" -f "$mcf"
 				fi
 				;;
@@ -259,12 +245,13 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_user=$(<"$_TUI_TMP")
+					_tui_reject_squote "$m_user" || continue
 					replace-value-conf -q -n reg_user -v "$m_user" -f "$mcf"
 				fi
 				;;
 			W)
 				local pw
-				if pw=$(_prompt_password); then
+				if pw=$(_tui_prompt_password "Enter registry password (min 8 chars, no whitespace):" 8); then
 					m_pw="$pw"
 					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$mcf"
 				fi
@@ -273,6 +260,12 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Image path (e.g. /ocp4/openshift4):" 0 60 "$m_path" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_path=$(<"$_TUI_TMP")
+					_tui_reject_squote "$m_path" || continue
+					if [[ -n "$m_path" ]] && ! _valid_abs_path "$m_path"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid image path.\n\nMust start with / (e.g. /ocp4/openshift4)." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_path -v "$m_path" -f "$mcf"
 				fi
 				;;
@@ -296,6 +289,12 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				if [[ $? -eq 0 ]]; then
 					m_datadir=$(<"$_TUI_TMP")
+					_tui_reject_squote "$m_datadir" || continue
+					if [[ -n "$m_datadir" ]] && ! _valid_abs_path "$m_datadir"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid directory path.\n\nMust start with / or ~ (e.g. ~/quay-mirror)." 0 0
+						continue
+					fi
 					replace-value-conf -q -n data_dir -v "$m_datadir" -f "$mcf"
 				fi
 				;;
@@ -306,6 +305,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH username:" 0 40 "$m_ssh_user" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_ssh_user=$(<"$_TUI_TMP")
+					_tui_reject_squote "$m_ssh_user" || continue
 					replace-value-conf -q -n reg_ssh_user -v "$m_ssh_user" -f "$mcf"
 				fi
 				;;
@@ -316,6 +316,12 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH private key path:" 0 60 "$m_ssh_key" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_ssh_key=$(<"$_TUI_TMP")
+					_tui_reject_squote "$m_ssh_key" || continue
+					if [[ -n "$m_ssh_key" ]] && ! _valid_abs_path "$m_ssh_key"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid path.\n\nMust start with / or ~ (e.g. ~/.ssh/id_rsa)." 0 0
+						continue
+					fi
 					replace-value-conf -q -n reg_ssh_key -v "$m_ssh_key" -f "$mcf"
 				fi
 				;;
@@ -412,7 +418,7 @@ _mirror_install_remote() {
 
 mirror_save() {
 	tui_log "Action: Save Images"
-	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "Save Images (mirror2disk)" _invalidate_mirror_cache
+	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
 }
@@ -423,7 +429,7 @@ mirror_save() {
 
 mirror_sync() {
 	tui_log "Action: Sync Images"
-	confirm_and_execute "aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)" "Sync Images (mirror2mirror)" _invalidate_mirror_cache
+	confirm_and_execute "aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
 }
@@ -541,15 +547,28 @@ mirror_view_isc() {
 			--exit-label "OK" \
 			--textbox "$isconf_file" 0 0
 	else
-		# Editable — offer view/edit/reset
+		# Editable — offer view/edit/reset/operators-only toggle
 		local default_item="1"
 		while :; do
+		# Read current excl_platform state from aba.conf
+		local _excl_plat="false"
+		source <(normalize-aba-conf) 2>/dev/null
+		_excl_plat="${excl_platform:-false}"
+
 		# Only show "Reset" if ISC was manually edited (newer than .created flag)
 		local _isc_items=("1" "View (read-only)" "2" "Edit")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
 		if [[ -f "$_created_flag" && "$isconf_file" -nt "$_created_flag" ]]; then
 			_isc_items+=("3" "Reset to auto-generated")
 		fi
+		# Toggle: process operators only (skip release images)
+		local _excl_label
+		if [[ "$_excl_plat" == "true" ]]; then
+			_excl_label="Operators Only: \Z1ON\Zn (release images excluded)"
+		else
+			_excl_label="Operators Only: \Z2OFF\Zn (all images included)"
+		fi
+		_isc_items+=("4" "$_excl_label")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -581,13 +600,23 @@ mirror_view_isc() {
 							"$TUI2_MSG_ISC_SAVED" 0 0 || true
 					fi
 					;;
-			3)
-				touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
-				rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
-				tui_kick_isconf_regen
-				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"$TUI2_MSG_ISC_RESET" 0 0 || true
-				;;
+				3)
+					touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
+					rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
+					tui_kick_isconf_regen
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"$TUI2_MSG_ISC_RESET" 0 0 || true
+					;;
+				4)
+					if [[ "$_excl_plat" == "true" ]]; then
+						replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+						tui_log "Settings: excl_platform=false (all images)"
+					else
+						replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf"
+						tui_log "Settings: excl_platform=true (operators only)"
+					fi
+					tui_kick_isconf_regen
+					;;
 			esac
 		done
 	fi
@@ -645,7 +674,7 @@ _operator_menu() {
 			--help-button \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--extra-button --extra-label "$TUI2_BTN_DONE" \
-			--menu "Operator Selection:\n\n${_cat_stats}" 0 0 0 \
+			--menu "Available catalogs:\n\n${_cat_stats}" 0 0 0 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
 			3 "View/Edit Basket ($basket_count operator$( [[ $basket_count -ne 1 ]] && echo s))" \
@@ -674,8 +703,8 @@ Selected operators will be included in the ImageSet config."
 						--yes-label "Continue" \
 						--no-label "Go Back" \
 						--yesno \
-						"No operators are selected.\n\nContinue without any operators?" \
-						8 50
+						"\nNo operators are selected.\n\nContinue without any operators?" \
+						9 50
 					local _nb_rc=$?
 					[[ $_nb_rc -ne 0 ]] && continue
 				fi

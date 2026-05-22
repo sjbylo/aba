@@ -348,6 +348,16 @@ _configure_vmw_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "vCenter or ESXi hostname/IP:" 0 60 "$v_url" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_url=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_url" || continue
+					# Strip protocol prefix for validation; govc accepts host, host:port, or https://host forms
+					local _url_host="${v_url#https://}"
+					_url_host="${_url_host%%/*}"
+					_url_host="${_url_host%%:*}"
+					if [[ -n "$_url_host" ]] && ! _valid_fqdn "$_url_host" && ! _valid_ip "$_url_host"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid hostname/IP.\n\nExpected: FQDN or IP (e.g. vcenter.lab.com, 10.0.1.5)." 0 0
+						continue
+					fi
 					replace-value-conf -q -n GOVC_URL -v "$v_url" -f "$conf_path"
 				fi
 				;;
@@ -355,20 +365,21 @@ _configure_vmw_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Username:" 0 60 "$v_user" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_user=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_user" || continue
 					replace-value-conf -q -n GOVC_USERNAME -v "$v_user" -f "$conf_path"
 				fi
 				;;
 			P)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Password:" 0 60 "$v_pass" 2>"$_TUI_TMP"
-				if [[ $? -eq 0 ]]; then
-					v_pass=$(<"$_TUI_TMP")
-					replace-value-conf -q -n GOVC_PASSWORD -v "'$v_pass'" -f "$conf_path"
-				fi
+				local _new_pass
+				_new_pass=$(_tui_prompt_password "Enter vSphere/ESXi password:") || continue
+				v_pass="$_new_pass"
+				replace-value-conf -q -n GOVC_PASSWORD -v "'$v_pass'" -f "$conf_path"
 				;;
 			D)
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Datastore name:" 0 60 "$v_datastore" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_datastore=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_datastore" || continue
 					replace-value-conf -q -n GOVC_DATASTORE -v "$v_datastore" -f "$conf_path"
 				fi
 				;;
@@ -376,6 +387,7 @@ _configure_vmw_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Network (port group name):" 0 60 "$v_network" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_network=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_network" || continue
 					replace-value-conf -q -n GOVC_NETWORK -v "'$v_network'" -f "$conf_path"
 				fi
 				;;
@@ -383,6 +395,7 @@ _configure_vmw_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Datacenter name:" 0 60 "$v_datacenter" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_datacenter=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_datacenter" || continue
 					replace-value-conf -q -n GOVC_DATACENTER -v "$v_datacenter" -f "$conf_path"
 				fi
 				;;
@@ -390,6 +403,7 @@ _configure_vmw_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Cluster name:" 0 60 "$v_cluster" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_cluster=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_cluster" || continue
 					replace-value-conf -q -n GOVC_CLUSTER -v "$v_cluster" -f "$conf_path"
 				fi
 				;;
@@ -397,6 +411,7 @@ _configure_vmw_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "VM folder path (e.g. /Datacenter/vm):" 0 60 "$v_folder" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					v_folder=$(<"$_TUI_TMP")
+					_tui_reject_squote "$v_folder" || continue
 					replace-value-conf -q -n VC_FOLDER -v "$v_folder" -f "$conf_path"
 				fi
 				;;
@@ -495,6 +510,7 @@ _configure_kvm_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Libvirt connection URI\n(e.g. qemu+ssh://user@host/system):" 0 70 "$k_uri" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_uri=$(<"$_TUI_TMP")
+					_tui_reject_squote "$k_uri" || continue
 					replace-value-conf -q -n LIBVIRT_URI -v "$k_uri" -f "$conf_path"
 				fi
 				;;
@@ -502,6 +518,7 @@ _configure_kvm_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Storage pool path on KVM host:" 0 60 "$k_pool" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_pool=$(<"$_TUI_TMP")
+					_tui_reject_squote "$k_pool" || continue
 					replace-value-conf -q -n KVM_STORAGE_POOL -v "$k_pool" -f "$conf_path"
 				fi
 				;;
@@ -509,6 +526,7 @@ _configure_kvm_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Bridge name on KVM host:" 0 60 "$k_network" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_network=$(<"$_TUI_TMP")
+					_tui_reject_squote "$k_network" || continue
 					replace-value-conf -q -n KVM_NETWORK -v "$k_network" -f "$conf_path"
 				fi
 				;;
@@ -516,6 +534,7 @@ _configure_kvm_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Boot firmware/order (e.g. uefi,hd,cdrom):" 0 60 "$k_boot" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_boot=$(<"$_TUI_TMP")
+					_tui_reject_squote "$k_boot" || continue
 					replace-value-conf -q -n KVM_BOOT_ARGS -v "$k_boot" -f "$conf_path"
 				fi
 				;;
@@ -523,6 +542,7 @@ _configure_kvm_form() {
 				dlg --backtitle "$(ui_backtitle)" --inputbox "Graphics args (e.g. vnc,listen=0.0.0.0 --video virtio):" 0 70 "$k_graphics" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					k_graphics=$(<"$_TUI_TMP")
+					_tui_reject_squote "$k_graphics" || continue
 					replace-value-conf -q -n KVM_GRAPHICS_ARGS -v "'$k_graphics'" -f "$conf_path"
 				fi
 				;;
@@ -1094,9 +1114,9 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local dns_val
 					dns_val=$(<"$_TUI_TMP")
-					if [[ -n "$dns_val" ]] && ! _valid_ip_or_host_list "$dns_val"; then
+					if [[ -n "$dns_val" ]] && ! _valid_ip_list "$dns_val"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid DNS entry.\n\nExpected: comma-separated IPs (e.g. 10.0.1.8,10.0.1.9)" 0 0 || true
+							"Invalid DNS entry.\n\nExpected: comma-separated IP addresses (e.g. 10.0.1.8,10.0.1.9)." 0 0 || true
 						continue
 					fi
 				cl_dns="$dns_val"
@@ -1201,13 +1221,19 @@ _cluster_page_iface() {
 		case "$rc" in
 			3) return 0 ;;  # Next (Extra button)
 			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
+
 "• Ports: network port names (e.g. ens160, ens1f0)
   Multiple ports create a bond (e.g. ens1f0,ens1f1)
+
 • VLAN: optional 802.1Q VLAN tag
+
 • Image source: where the cluster pulls container images from
   - mirror: from the local mirror registry (default)
   - proxy: from public registries via HTTP proxy
-  - direct: from public registries with direct internet"
+  - direct: from public registries with direct internet
+
+• MACs (bare-metal only): paste one or more MAC addresses per node
+  Ensures each node gets the correct IP via mac address mapping."
 			   continue ;;
 			1) return 1 ;;  # Back (Cancel button)
 			255) return 255 ;;
@@ -1227,9 +1253,9 @@ _cluster_page_iface() {
 				[[ $? -ne 0 ]] && break
 				local ports_val
 				ports_val=$(<"$_TUI_TMP")
-				if [[ -n "$ports_val" && "$ports_val" =~ [[:space:]] ]]; then
+				if [[ -n "$ports_val" ]] && ! _valid_port_names "$ports_val"; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid port name(s).\n\nUse commas to separate multiple ports (e.g. ens1f0,ens1f1).\nSpaces are not allowed." 0 0 || true
+						"Invalid port name(s).\n\nOnly letters, digits, dots, dashes, underscores allowed.\nComma-separated for multiple (e.g. ens1f0,ens1f1)." 0 0 || true
 					continue
 				fi
 				cl_ports="$ports_val"
@@ -1300,6 +1326,12 @@ _cluster_page_iface() {
 				2>"$_TUI_TMP"
 			if [[ $? -eq 0 ]]; then
 				local key_val=$(<"$_TUI_TMP")
+				_tui_reject_squote "$key_val" || continue
+				if [[ -n "$key_val" ]] && ! _valid_abs_path "$key_val"; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid path.\n\nMust start with / or ~ (e.g. ~/.ssh/id_rsa)." 0 0
+					continue
+				fi
 				cl_ssh_key="$key_val"
 			fi
 			;;
@@ -1438,7 +1470,15 @@ _cluster_page_vm() {
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MAC_TEMPLATE" \
 					--inputbox "$TUI2_MSG_VM_MAC_PROMPT" 0 0 "$cl_mac_template" \
 					2>"$_TUI_TMP"
-				[[ $? -eq 0 ]] && cl_mac_template=$(<"$_TUI_TMP")
+				if [[ $? -eq 0 ]]; then
+					local _mac_val=$(<"$_TUI_TMP")
+					if [[ -n "$_mac_val" ]] && ! _valid_mac_prefix "$_mac_val"; then
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid MAC prefix.\n\nExpected: 5 hex octets with trailing colon\ne.g. 00:50:56:1a:2b: or 00:50:56:xx:xx:\n\nUse 'x' for random hex (auto-generated per VM)." 0 0 || true
+						continue
+					fi
+					cl_mac_template="$_mac_val"
+				fi
 				;;
 		esac
 	done

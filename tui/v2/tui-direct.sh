@@ -714,7 +714,7 @@ _direct_action_menu() {
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DIRECT_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
 			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Rerun Wizard"
-			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced Options"
+			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DIRECT_MENU" \
@@ -735,7 +735,7 @@ without a mirror registry.
 
 Workflow:
   1. Install Cluster — configure, review, and provision OpenShift
-  2. Finalize Installation — wait for install to complete
+  2. Monitor Cluster — track install progress until completion
   3. Day-2 — post-install config (resources, NTP, update service, etc.)
 
 Navigation:

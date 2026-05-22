@@ -53,7 +53,7 @@ TUI_TITLE_IMAGESET="ImageSet Configuration"
 
 TUI_TITLE_ACTION_MENU="Choose Next Action"
 TUI_TITLE_SETTINGS="Settings"
-TUI_TITLE_ADVANCED="Advanced Options"
+TUI_TITLE_ADVANCED="Advanced"
 TUI_TITLE_CREATE_BUNDLE="Create Bundle"
 TUI_TITLE_DISK_SPACE_WARNING="Disk Space Warning"
 TUI_TITLE_LOCAL_QUAY="Local Quay Registry"
@@ -100,7 +100,7 @@ TUI_ACTION_LABEL_LOCAL_REGISTRY="Install & Sync to \ZuL\Znocal Registry"
 TUI_ACTION_LABEL_REMOTE_REGISTRY="Install & Sync to \ZuR\Znemote Registry via SSH"
 TUI_ACTION_LABEL_RERUN_WIZARD="Rerun \ZuW\Znizard"
 TUI_ACTION_LABEL_SETTINGS="\ZuC\Znonfigure..."
-TUI_ACTION_LABEL_ADVANCED="Advanced \ZuO\Znptions..."
+TUI_ACTION_LABEL_ADVANCED="\ZuA\Zndvanced..."
 
 # Plain-text versions for test assertions (dialog strips \Zu/\Zn on screen)
 TUI_ACTION_TEXT_VIEW_IMAGESET="View Generated ImageSet Config"
