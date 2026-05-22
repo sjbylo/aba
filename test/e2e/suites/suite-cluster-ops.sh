@@ -280,10 +280,14 @@ test_begin "SNO: IP conflict detection"
 SNO_DUP="${SNO}-dup"
 e2e_run "Create duplicate SNO config with same IP" \
     "rm -rf $SNO_DUP && aba cluster -n $SNO_DUP -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+# Skip DNS checks for config generation -- the duplicate cluster has no DNS entries.
+# Restore full checks before preflight so the IP conflict check is exercised.
+e2e_run -q "Skip DNS for dup config" "aba --verify conf"
 e2e_run "Generate install-config.yaml for duplicate" \
     "aba --dir $SNO_DUP install-config.yaml"
 e2e_run "Generate agent-config.yaml for duplicate" \
     "aba --dir $SNO_DUP agent-config.yaml"
+e2e_run -q "Restore full verification" "aba --verify all"
 e2e_run_must_fail "Preflight must detect IP conflict with running SNO" \
     "aba --dir $SNO_DUP preflight"
 
@@ -411,6 +415,7 @@ ENCLAVE_MIRROR="e2e-test-enclave"
 
 e2e_run "Create named mirror directory" \
     "aba mirror --name $ENCLAVE_MIRROR || true"  # make exits non-zero with editor=none after creating dir
+e2e_add_to_mirror_cleanup "$PWD/$ENCLAVE_MIRROR"
 
 e2e_run "Assert enclave mirror directory exists" \
     "test -d $ENCLAVE_MIRROR && test -f $ENCLAVE_MIRROR/mirror.conf"

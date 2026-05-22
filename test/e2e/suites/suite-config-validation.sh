@@ -47,7 +47,7 @@ e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 
 e2e_run "Create throwaway SNO cluster dir" \
-	"aba cluster -n e2etmp -t sno --starting-ip $(pool_sno_ip)"
+	"aba cluster -n e2etmp -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 e2e_run "Ensure mirror dir initialised" \
 	"aba -d mirror mirror.conf"

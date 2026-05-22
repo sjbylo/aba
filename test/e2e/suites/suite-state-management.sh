@@ -53,6 +53,7 @@ plan_tests \
 	"State persistence: survives aba reset" \
 	"Uninstall: reads lowercase state.sh" \
 	"Reinstall after uninstall: clean state" \
+	"Tilde expansion: local and remote data_dir" \
 	"Register existing: lowercase state.sh" \
 	"Helper functions: cluster state helpers" \
 	"Phase 3: drift detection overrides config with state" \
@@ -109,6 +110,14 @@ e2e_run "state.sh: reg_pw is set" \
 
 e2e_run "state.sh: reg_root is set" \
 	"grep -q '^reg_root=' $_STATE_DIR/state.sh"
+
+# Tilde expansion: reg_root must be an absolute path expanded on the REMOTE host.
+# A literal ~ here means the remote install failed to resolve it.
+e2e_run "state.sh: reg_root is absolute (no literal ~)" \
+	"bash -c 'source $_STATE_DIR/state.sh && [[ \$reg_root == /* ]] || { echo \"reg_root=\$reg_root is not absolute\"; false; }'"
+
+e2e_run "state.sh: reg_root is <remote_home>/docker-reg" \
+	"_rh=\$(_essh $DIS_HOST 'echo ~') && _expect=\"\${_rh}/docker-reg\" && bash -c 'source $_STATE_DIR/state.sh && [ \"\$reg_root\" = \"'\"\$_expect\"'\" ] || { echo \"reg_root=\$reg_root expected='\"\$_expect\"'\"; false; }'"
 
 e2e_run "state.sh: reg_ssh_key is set (remote install)" \
 	"grep -q '^reg_ssh_key=' $_STATE_DIR/state.sh"
@@ -258,7 +267,78 @@ e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 test_end
 
 # ============================================================================
-# 7. Register existing: lowercase state.sh
+# 7. Tilde expansion: local and remote data_dir
+# ============================================================================
+# reg_setup_data_dir() handles ~ differently for local vs remote installs.
+# Remote: keeps literal ~ so the remote shell expands it (user/path may differ).
+# Local: expands ~ immediately via eval.
+# The expansion logic is vendor-agnostic (Docker and Quay share the same code).
+test_begin "Tilde expansion: local and remote data_dir"
+
+_TILDE_MIRROR="e2e-mirror-tilde"
+_TILDE_PORT=5112
+_TILDE_STATE="\$HOME/.aba/mirror/$_TILDE_MIRROR"
+_TILDE_REMOTE_SUBDIR="e2e-tilde-remote-data"
+_TILDE_LOCAL_SUBDIR="e2e-tilde-local-data"
+
+# --- Remote install with data_dir=~/subdir ---
+# Verify ~ expands to the REMOTE user's home, not the local user's.
+e2e_run "Create mirror dir for remote tilde test" \
+	"cd ~/aba && aba mirror --name $_TILDE_MIRROR"
+e2e_add_to_mirror_cleanup "$PWD/$_TILDE_MIRROR"
+
+e2e_run "Remote install with data_dir=~/$_TILDE_REMOTE_SUBDIR" \
+	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_REMOTE_SUBDIR' -H $DIS_HOST -k ~/.ssh/id_rsa"
+
+e2e_run "Remote: reg_root is absolute (no literal ~)" \
+	"bash -c 'source $_TILDE_STATE/state.sh && [[ \$reg_root == /* ]] || { echo \"reg_root=\$reg_root not absolute\"; false; }'"
+
+# Verify the full expected path: <remote_home>/<subdir>/docker-reg
+e2e_run "Remote: reg_root is <remote_home>/$_TILDE_REMOTE_SUBDIR/docker-reg" \
+	"_rh=\$(_essh $DIS_HOST 'echo ~') && _expect=\"\${_rh}/$_TILDE_REMOTE_SUBDIR/docker-reg\" && bash -c 'source $_TILDE_STATE/state.sh && [ \"\$reg_root\" = \"'\"\$_expect\"'\" ] || { echo \"reg_root=\$reg_root expected='\"\$_expect\"'\"; false; }'"
+
+e2e_run "Remote: data dir exists on remote host at expected path" \
+	"_rh=\$(_essh $DIS_HOST 'echo ~') && _essh $DIS_HOST \"test -d \${_rh}/$_TILDE_REMOTE_SUBDIR/docker-reg\""
+
+e2e_run "Verify remote tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
+
+e2e_run "Uninstall remote tilde registry" \
+	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall"
+e2e_run "Assert: remote tilde registry removed" "e2e_assert_registry_removed"
+e2e_run "Remote: data dir cleaned up" \
+	"_rh=\$(_essh $DIS_HOST 'echo ~') && _essh $DIS_HOST \"test ! -d \${_rh}/$_TILDE_REMOTE_SUBDIR\" || _essh $DIS_HOST \"rm -rf \${_rh}/$_TILDE_REMOTE_SUBDIR\""
+
+# --- Local install with data_dir=~/subdir ---
+# Verify ~ expands to the LOCAL user's home.
+e2e_run "Recreate mirror dir for local tilde test" \
+	"cd ~/aba && rm -rf $_TILDE_MIRROR && aba mirror --name $_TILDE_MIRROR"
+
+e2e_run "Local install with data_dir=~/$_TILDE_LOCAL_SUBDIR" \
+	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_LOCAL_SUBDIR'"
+
+e2e_run "Local: reg_root is absolute (no literal ~)" \
+	"bash -c 'source $_TILDE_STATE/state.sh && [[ \$reg_root == /* ]] || { echo \"reg_root=\$reg_root not absolute\"; false; }'"
+
+# Verify the full expected path: $HOME/<subdir>/docker-reg
+e2e_run "Local: reg_root is \$HOME/$_TILDE_LOCAL_SUBDIR/docker-reg" \
+	"bash -c 'source $_TILDE_STATE/state.sh && [ \"\$reg_root\" = \"\$HOME/$_TILDE_LOCAL_SUBDIR/docker-reg\" ] || { echo \"reg_root=\$reg_root expected=\$HOME/$_TILDE_LOCAL_SUBDIR/docker-reg\"; false; }'"
+
+e2e_run "Local: data dir exists at expected path" \
+	"test -d \$HOME/$_TILDE_LOCAL_SUBDIR/docker-reg"
+
+e2e_run "Verify local tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
+
+e2e_run "Uninstall local tilde registry" \
+	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall"
+
+e2e_run "Local: cleanup data dir" "rm -rf ~/$_TILDE_LOCAL_SUBDIR"
+e2e_run "Cleanup tilde mirror dir" \
+	"cd ~/aba && rm -rf $_TILDE_MIRROR"
+
+test_end
+
+# ============================================================================
+# 8. Register existing: lowercase state.sh
 # ============================================================================
 test_begin "Register existing: lowercase state.sh"
 
@@ -298,7 +378,7 @@ e2e_run -q "Cleanup dummy certs" \
 test_end
 
 # ============================================================================
-# 8. Helper functions: cluster state helpers
+# 9. Helper functions: cluster state helpers
 # ============================================================================
 test_begin "Helper functions: cluster state helpers"
 
@@ -338,7 +418,7 @@ e2e_run -q "Cleanup fake cluster state" \
 test_end
 
 # ============================================================================
-# 9. Phase 3: Drift detection overrides config with state
+# 10. Phase 3: Drift detection overrides config with state
 # ============================================================================
 test_begin "Phase 3: drift detection overrides config with state"
 
@@ -382,7 +462,7 @@ e2e_run -q "Cleanup drift test" \
 test_end
 
 # ============================================================================
-# 10. Phase 4: Dir recreation from state backup
+# 11. Phase 4: Dir recreation from state backup
 # ============================================================================
 test_begin "Phase 4: dir recreation from state backup"
 
@@ -437,7 +517,7 @@ e2e_run -q "Cleanup recreate test" \
 test_end
 
 # ============================================================================
-# 11. Cleanup
+# 12. Cleanup
 # ============================================================================
 test_begin "Cleanup: uninstall mirror"
 
