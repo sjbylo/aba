@@ -1,31 +1,30 @@
 # Session State
 
 ## Current goal
-TUI v2 bug fixes, UX improvements, and CLI tarball race condition fix.
+DISCO cluster install running on "registry" host — monitoring progress
 
 ## Done this session
-1. **Bug A fixed**: Mode bar showing "?" after Advanced → Switch Mode
-2. **Bug B resolved**: Retry count is session-only by design (default=1)
-3. **Delete cluster UX**: Renamed label, added Help button, platform-neutral wording
-4. **Cluster status annotations**: "(shut down)" / "(installed)" in cluster selection dialogs
-5. **Makefile .init/.cli split**: Separated symlink setup from CLI download
-6. **aba.sh delete refactored**: No more CLI download on delete; bare-metal works
-7. **CLI tarball race condition FIXED and VERIFIED**:
-   - Root cause: tarball listed as Make prerequisite → fires unprotected curl
-   - Fix: removed tarball from prerequisites in cli/Makefile (5 targets)
-   - Pre-fix test: proved 2 concurrent curls (race detected)
-   - Post-fix test: only 1 curl, valid tarball (fix verified)
-   - Also reproduced the exact "gzip: unexpected end of file" error
+- Created install bundle on registry4 (CONNO mode) — 25G, 191 images
+- Transferred bundle to "registry" host (10.0.1.2)
+- Unpacked bundle, installed aba, launched TUI in DISCO mode
+- TUI correctly detected "Fully Disconnected" mode
+- Installed Quay mirror registry + loaded 191 images successfully
+- Started SNO cluster install (ocp.example.com) — initially hung (no DNS)
+- **Bug #169 fixed by user**: verify-config.sh now aborts on DNS errors
+- Killed hanging install, deleted stuck VM, synced fix to registry
+- Code review found Bug #170 (trap handler clobbered) and Bug #171 (terminal mode returns 0)
+- Updated TUI_BUG_REPORT.md with bugs #159-#171
+- DNS records added by user (10.0.1.100), cluster install re-started
+- Cert temporarily broken for Bug #171 testing, restored before damage
+- Cluster install now progressing (ISO generation in progress)
 
 ## Next steps
-- Commit and push all changes (awaiting user approval)
-- Also need to check: `Makefile.cluster` line 145 (`~/bin/openshift-install` target)
-  may also need updating since we split .init from .cli
+1. Monitor DISCO cluster install to completion
+2. Continue interactive bug verification (Bug #171, #170, #161, #162, #168)
+3. Test Day-2 flows once cluster is up
+4. Continue bug hunting in remaining areas
 
 ## Decisions / notes
-- Retry count: session-only, default=1
-- `.init` = symlinks only; `.cli` = full CLI download
-- CLI race fix: removing tarball prerequisites is the correct structural fix
-  because run-once.sh -w in the recipe body already handles download serialization
-- The race was between: run_once-protected background download AND
-  Make's prerequisite-triggered unprotected download (same file, two curls)
+- `oc_mirror_retry` feature is complete — no outstanding fix needed
+- Bug report now has 171 entries total (107 from git + 12 new from sessions)
+- Cluster install is running in TUI mode on registry host
