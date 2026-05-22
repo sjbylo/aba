@@ -580,12 +580,19 @@ _exec_in_terminal() {
 		echo "── Command interrupted (Ctrl-C) ──"
 	elif [[ $exit_code -eq 0 ]]; then
 		echo "── Command completed successfully ──"
+		echo
+		read -rp "Press ENTER to return to TUI..."
+		return 0
 	else
 		echo "── Command FAILED (exit code: $exit_code) ──"
 	fi
 	echo
-	read -rp "Press ENTER to return to TUI..."
-	return 0
+	local _reply=""
+	read -rp "Press R to retry, ENTER to return to TUI... " _reply
+	if [[ "$_reply" == [Rr] ]]; then
+		return 2
+	fi
+	return 1
 }
 
 # =============================================================================
