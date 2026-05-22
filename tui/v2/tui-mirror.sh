@@ -15,7 +15,7 @@ fi
 
 # Legacy wrapper — delegates to _tui_prompt_password in tui-lib.sh
 _prompt_password() {
-	_tui_prompt_password "Enter registry password (min 8 chars, no whitespace):" 8
+	_tui_prompt_password "Enter registry password (min 8 chars, no whitespace or quotes):" 8
 }
 
 # =============================================================================
@@ -250,10 +250,11 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				;;
 			W)
-				local pw
-				if pw=$(_tui_prompt_password "Enter registry password (min 8 chars, no whitespace):" 8); then
-					m_pw="$pw"
-					replace-value-conf -q -n reg_pw -v "$m_pw" -f "$mcf"
+				_tui_prompt_password "Enter registry password (min 8 chars, no whitespace or quotes):" 8
+				if [[ $? -eq 0 ]]; then
+					m_pw=$(<"$_TUI_TMP")
+					# Pre-quote: passwords may contain $, \, `, " etc. that must stay literal
+					replace-value-conf -q -n reg_pw -v "'$m_pw'" -f "$mcf"
 				fi
 				;;
 			I)
@@ -413,11 +414,70 @@ _mirror_install_remote() {
 }
 
 # =============================================================================
+# Pre-operation confirmation with OCP/operator summary + View ISC
+# =============================================================================
+
+# Shows a summary dialog before save/sync/load/bundle operations.
+# Lets the user confirm, go back, or view the ISC file.
+# Returns 0 if confirmed, 1 if cancelled.
+_mirror_op_confirm() {
+	local title="$1"
+
+	source <(normalize-aba-conf) 2>/dev/null
+	local _ver="${ocp_version:-unknown}"
+	local _chan="${ocp_channel:-stable}"
+	local _op_count=${#OP_BASKET[@]}
+	local _op_preview=""
+	if [[ $_op_count -gt 0 ]]; then
+		local _shown=() _i=0
+		for _op in "${!OP_BASKET[@]}"; do
+			_shown+=("$_op")
+			_i=$(( _i + 1 ))
+			[[ $_i -ge 5 ]] && break
+		done
+		_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+		if [[ $_op_count -gt 5 ]]; then
+			_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+		fi
+	fi
+
+	local _summary="OCP: $_ver ($_chan)\n"
+	if [[ $_op_count -gt 0 ]]; then
+		_summary+="Operators ($_op_count): $_op_preview\n"
+	else
+		_summary+="Operators: none\n"
+	fi
+	_summary+="\nContinue?"
+
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "$title" \
+			--yes-label "$TUI2_BTN_CONTINUE" \
+			--no-label "$TUI2_BTN_BACK" \
+			--help-button --help-label "View ISC" \
+			--yesno "$_summary" 0 0
+		local rc=$?
+		if [[ $rc -eq 2 ]]; then
+			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+			if [[ -f "$_isc" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+					--exit-label "OK" --textbox "$_isc" 0 0
+			else
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 6 40
+			fi
+			continue
+		fi
+		[[ $rc -eq 0 ]] && return 0
+		return 1
+	done
+}
+
+# =============================================================================
 # Save Images (to local archive)
 # =============================================================================
 
 mirror_save() {
 	tui_log "Action: Save Images"
+	_mirror_op_confirm "$TUI2_LABEL_SAVE" || return 1
 	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
@@ -429,6 +489,7 @@ mirror_save() {
 
 mirror_sync() {
 	tui_log "Action: Sync Images"
+	_mirror_op_confirm "$TUI2_LABEL_SYNC" || return 1
 	confirm_and_execute "aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
@@ -548,7 +609,7 @@ mirror_view_isc() {
 			--textbox "$isconf_file" 0 0
 	else
 		# Editable — offer view/edit/reset/operators-only toggle
-		local default_item="1"
+		local default_item="V"
 		while :; do
 		# Read current excl_platform state from aba.conf
 		local _excl_plat="false"
@@ -556,10 +617,10 @@ mirror_view_isc() {
 		_excl_plat="${excl_platform:-false}"
 
 		# Only show "Reset" if ISC was manually edited (newer than .created flag)
-		local _isc_items=("1" "View (read-only)" "2" "Edit")
+		local _isc_items=("V" "View (read-only)" "E" "Edit")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
 		if [[ -f "$_created_flag" && "$isconf_file" -nt "$_created_flag" ]]; then
-			_isc_items+=("3" "Reset to auto-generated")
+			_isc_items+=("R" "Reset to auto-generated")
 		fi
 		# Toggle: process operators only (skip release images)
 		local _excl_label
@@ -568,7 +629,7 @@ mirror_view_isc() {
 		else
 			_excl_label="Operators Only: \Z2OFF\Zn (all images included)"
 		fi
-		_isc_items+=("4" "$_excl_label")
+		_isc_items+=("O" "$_excl_label")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -585,11 +646,20 @@ mirror_view_isc() {
 			[[ -n "$choice" ]] && default_item="$choice"
 
 			case "$choice" in
-				1)
+				V|E)
+					# Wait for any in-flight ISC regeneration to finish
+					if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+						dlg --backtitle "$(ui_backtitle)" --infobox \
+							"$TUI2_MSG_ISC_GENERATING" 0 0
+						run_once -q -w -i "aba:isconf:generate" -- \
+							bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$_TUI_LOG_FILE" 2>&1 || true
+					fi
+					;;&
+				V)
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 						--exit-label "OK" --textbox "$isconf_file" 0 0
 					;;
-				2)
+				E)
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
 						--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
 						--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
@@ -600,23 +670,23 @@ mirror_view_isc() {
 							"$TUI2_MSG_ISC_SAVED" 0 0 || true
 					fi
 					;;
-				3)
-					touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
-					rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
-					tui_kick_isconf_regen
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"$TUI2_MSG_ISC_RESET" 0 0 || true
-					;;
-				4)
-					if [[ "$_excl_plat" == "true" ]]; then
-						replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
-						tui_log "Settings: excl_platform=false (all images)"
-					else
-						replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf"
-						tui_log "Settings: excl_platform=true (operators only)"
-					fi
-					tui_kick_isconf_regen
-					;;
+			R)
+				touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
+				rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
+				tui_kick_isconf_regen
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"$TUI2_MSG_ISC_RESET" 0 0 || true
+				;;
+			O)
+				if [[ "$_excl_plat" == "true" ]]; then
+					replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_platform=false (all images)"
+				else
+					replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_platform=true (operators only)"
+				fi
+				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+				;;
 			esac
 		done
 	fi
@@ -1026,15 +1096,58 @@ mirror_create_bundle() {
 
 	_ensure_offline_prereqs || return 1
 
+	# Build summary: OCP version/channel + operator list
+	source <(normalize-aba-conf) 2>/dev/null
+	local _ver="${ocp_version:-unknown}"
+	local _chan="${ocp_channel:-stable}"
+	local _op_count=${#OP_BASKET[@]}
+	local _op_preview=""
+	if [[ $_op_count -gt 0 ]]; then
+		local _shown=()
+		local _i=0
+		for _op in "${!OP_BASKET[@]}"; do
+			_shown+=("$_op")
+			_i=$(( _i + 1 ))
+			[[ $_i -ge 5 ]] && break
+		done
+		_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+		if [[ $_op_count -gt 5 ]]; then
+			_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+		fi
+	fi
+
+	local _summary="OCP: $_ver ($_chan)\n"
+	if [[ $_op_count -gt 0 ]]; then
+		_summary+="Operators ($_op_count): $_op_preview\n"
+	else
+		_summary+="Operators: none\n"
+	fi
+	_summary+="\nEnter output path (version suffix added automatically):"
+
 	local default_bundle="/tmp/ocp-bundle"
 
-	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--ok-label "$TUI2_BTN_NEXT" \
-		--inputbox "$TUI2_MSG_BUNDLE_PATH_PROMPT" 0 0 "$default_bundle" \
-		2>"$_TUI_TMP"
-	local rc=$?
-	[[ $rc -ne 0 ]] && return 1
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--ok-label "$TUI2_BTN_NEXT" \
+			--help-button --help-label "View ISC" \
+			--inputbox "$_summary" 0 0 "$default_bundle" \
+			2>"$_TUI_TMP"
+		local rc=$?
+		if [[ $rc -eq 2 ]]; then
+			# Help button = View ISC
+			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+			if [[ -f "$_isc" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
+					--exit-label "OK" --textbox "$_isc" 0 0
+			else
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 6 40
+			fi
+			continue
+		fi
+		[[ $rc -ne 0 ]] && return 1
+		break
+	done
 
 	local bundle_path
 	bundle_path=$(<"$_TUI_TMP")

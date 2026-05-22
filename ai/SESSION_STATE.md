@@ -1,17 +1,23 @@
 # Session State
 
 ## Current goal
-TUI v2 — fix `_TUI_REG_VENDOR` to show configured intent ("auto") instead of resolved/installed value.
+Password special-char testing for Quay mirror install.
 
 ## Done this session
-- Analyzed the flow: `reg-install.sh` resolves "auto"→"quay", writes resolved value to state.sh, `_state_override_mirror()` overrides `reg_vendor` in normalize-mirror-conf output, TUI reads that and shows "quay" instead of "auto".
-- Determined the minimal fix: TUI reads `mirror.conf` directly (bypassing state override) for display purposes only. No changes needed to state.sh, scripts, or override logic.
-- Showed the proposed change to user (awaiting approval).
+- Tested 6 passwords with various special characters against `aba install` (Quay mirror-registry).
+- Identified 4 dangerous characters that break the install: backtick, double-quote, single-quote, dollar-sign.
+- Root cause: `mirror-registry` (Red Hat tool) passes password through multiple unescaped quoting layers (shell → podman → bash -c → ansible -e).
+- Confirmed safe chars: `!@#%^&*()<>|;\`
+- Restored mirror.conf to working password `!@#$%^&*()`.
+- Applied TUI fix (earlier): `_TUI_REG_VENDOR` reads mirror.conf directly instead of via normalize-mirror-conf.
 
 ## Next steps
-1. Apply the TUI change to `tui/v2/tui-lib.sh` once user approves.
-2. Test that TUI shows "Auto" when mirror.conf has `reg_vendor=auto`.
+1. Decide whether to add input validation for dangerous password chars in ABA (reject `` ` `` `"` `'` `$` with a clear error).
+2. Consider filing a bug against `mirror-registry` upstream.
+3. Commit pending TUI changes if approved.
 
 ## Decisions / notes
-- Scripts SHOULD use the resolved value (from state.sh override) — they need to dispatch to the correct vendor script (quay vs docker). Only the TUI display needs the raw config value.
-- The fix is a single isolated change in `tui-lib.sh` lines 301-311.
+- Dangerous password chars: `` ` `` (backtick), `"` (double-quote), `'` (single-quote), `$` (dollar sign)
+- `$` is the most insidious — install succeeds but auth silently fails (password mangled by variable expansion)
+- This is upstream `mirror-registry` bug, not ABA's fault, but ABA should validate early to protect users
+- `\` alone seems safe, but interacts badly with `$` (e.g. `\$` becomes literal `$` after one layer of expansion)

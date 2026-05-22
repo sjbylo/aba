@@ -335,6 +335,7 @@ disco_load_images() {
 		done
 	fi
 
+	_mirror_op_confirm "$TUI2_LABEL_LOAD" || return 1
 	confirm_and_execute "aba --dir mirror load$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_LOAD" _invalidate_mirror_cache
 	local rc=$?
 	return $rc
