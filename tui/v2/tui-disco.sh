@@ -283,8 +283,10 @@ Navigation:
 				;;
 			"$TUI2_DISCO_TAG_ADVANCED")
 				tui_advanced_menu
+				local _adv_rc=$?
 				# RECHECK: advanced menu may uninstall registry or delete clusters
 				_disco_need_recheck=true
+				[[ $_adv_rc -eq 2 ]] && return 2
 				;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_view_isc "true"
@@ -361,6 +363,5 @@ disco_reset() {
 
 	# Clear forced mode so re-detection works
 	_TUI_FORCE_MODE=""
-	_TUI_MODE=""
 	return 2  # Special return code: re-detect mode
 }
