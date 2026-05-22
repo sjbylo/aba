@@ -247,7 +247,7 @@ _TUI_MODE=""   # Set by mode detection: DISCO, CONNO, DIRECT
 _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 
 # Session-only: forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
-_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-2}"
+_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
 
 # Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
 # Values: "auto", "quay", "docker"
@@ -924,7 +924,7 @@ _tui_settings_summary() {
 	esac
 	reg_short="$rv"
 
-	retry_short="${_TUI_RETRY_COUNT:-2}"
+	retry_short="${_TUI_RETRY_COUNT:-1}"
 
 	printf '(\Z6%s, %s, retry=%s\Zn)' "$ask_short" "$reg_short" "$retry_short"
 }
@@ -1034,12 +1034,12 @@ Toggle a setting by selecting it and pressing Enter."
 				;;
 			3)
 				# Toggle: 0 → 1 → 2 → 5 → 0
-				case "${_TUI_RETRY_COUNT:-2}" in
+				case "${_TUI_RETRY_COUNT:-1}" in
 					0) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count toggled to 1" ;;
 					1) _TUI_RETRY_COUNT=2; tui_log "Settings: Retry count toggled to 2" ;;
 					2) _TUI_RETRY_COUNT=5; tui_log "Settings: Retry count toggled to 5" ;;
 					5) _TUI_RETRY_COUNT=0; tui_log "Settings: Retry count toggled to OFF" ;;
-					*) _TUI_RETRY_COUNT=2; tui_log "Settings: Retry count reset to 2" ;;
+					*) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count reset to 1" ;;
 				esac
 				;;
 		esac
@@ -1073,6 +1073,12 @@ select_cluster() {
 			[[ ! -f "$ABA_ROOT/$dir/kubeconfig" ]] && continue
 		fi
 		display=$(cluster_display_name "$dir")
+		# Annotate status so the user sees cluster state at a glance
+		if [[ -f "$ABA_ROOT/$dir/.shutdown.log" ]]; then
+			display="$display (shut down)"
+		elif [[ -f "$ABA_ROOT/$dir/.install-complete" ]]; then
+			display="$display (installed)"
+		fi
 		idx=$(( idx + 1 ))
 		_cl_dirs+=("$dir")
 		clusters+=("$idx" "$dir  $display")
@@ -1125,6 +1131,10 @@ select_installed_cluster() {
 
 	for dir in $(list_installed_clusters); do
 		display=$(cluster_display_name "$dir")
+		# Annotate shut-down clusters so the user knows before selecting
+		if [[ -f "$ABA_ROOT/$dir/.shutdown.log" ]]; then
+			display="$display (shut down)"
+		fi
 		idx=$(( idx + 1 ))
 		_cl_dirs+=("$dir")
 		clusters+=("$idx" "$dir  $display")
