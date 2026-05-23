@@ -404,12 +404,12 @@ _tui_prompt_password() {
 				"Password requirements:\n\n\
   • Minimum $min_len characters\n\
   • No whitespace (spaces or tabs)\n\
-  • No quote characters (' or \")\n\n\
+  • Not allowed: '  \"  \`  \$\n\n\
 All other special characters are allowed:\n\
-  ! @ # \$ % ^ & * ( ) < > | ; \` ~ { } = + - _ [ ] \\\\\n\n\
-Why no quotes? The upstream mirror-registry installer\n\
-embeds the password in a shell command internally and\n\
-cannot handle quote characters." 0 0
+  ! @ # % ^ & * ( ) < > | ; ~ { } = + - _ [ ] \\\\\n\n\
+Why? The upstream Quay mirror-registry installer\n\
+embeds the password in a shell command and cannot\n\
+handle these 4 characters." 0 0
 			continue
 		fi
 		[[ $_rc -ne 0 ]] && return 1
@@ -424,9 +424,9 @@ cannot handle quote characters." 0 0
 				"Password cannot contain whitespace." 0 0
 			continue
 		fi
-		if [[ "$pw1" == *"'"* || "$pw1" == *'"'* ]]; then
+		if [[ "$pw1" == *"'"* || "$pw1" == *'"'* || "$pw1" == *'`'* || "$pw1" == *'$'* ]]; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"Password cannot contain quote characters (' or \").\n\n(The upstream mirror-registry tool cannot handle quotes.)\nAll other special characters are allowed." 0 0
+				"Password cannot contain: '  \"  \`  \$\n\n(The upstream Quay mirror-registry tool cannot handle these.)\nAll other special characters are allowed." 0 0
 			continue
 		fi
 		dlg --backtitle "$(ui_backtitle)" --insecure --passwordbox \

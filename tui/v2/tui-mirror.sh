@@ -250,7 +250,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				;;
 			W)
-				_tui_prompt_password "Enter registry password (min 8 chars, no whitespace or quotes):" 8
+				_tui_prompt_password "Enter registry password (min 8 chars, no whitespace or quotes/backtick/dollar):" 8
 				if [[ $? -eq 0 ]]; then
 					m_pw=$(<"$_TUI_TMP")
 					# Pre-quote: passwords may contain $, \, `, " etc. that must stay literal

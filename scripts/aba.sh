@@ -578,6 +578,10 @@ elif [ "$1" = "--light" ]; then
 		# The password used to access the mirror registry 
 		# Add a password in ='password'
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
+		# Reject quote characters — mirror-registry cannot handle them internally
+		if [[ "$reg_pw_value" == *"'"* || "$reg_pw_value" == *'"'* ]]; then
+			aba_abort "Password cannot contain quote characters (' or \"). The upstream mirror-registry tool cannot handle them."
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $WORK_DIR/mirror.conf

@@ -18,7 +18,7 @@ reg_path=/ocp{{ ocp_major }}/openshift{{ ocp_major }}		# Path where mirrored ima
 reg_user=init				# Username for the registry. 
 
 reg_pw='p4ssw0rd'			# Registry password. Leave empty to auto-generate one (e.g. reg_pw=).
-					# Must be at least 8 characters with no whitespace or quotes (' or ").
+					# Must be at least 8 characters with no whitespace and not include: "'`$
 
 reg_vendor=auto				# Registry type: auto, quay, or docker.
 					# auto   = Quay if available for this architecture, otherwise Docker.
