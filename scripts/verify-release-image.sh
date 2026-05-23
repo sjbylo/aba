@@ -44,7 +44,8 @@ else
 fi
 
 # Extract openshift-install binary from the mirror, if not already.  Use this binary to install OpenShift.
-openshift_install_mirror="./openshift-install-mirror-$reg_host"
+# Version+host+port in the filename ensures a version change triggers re-extraction.
+openshift_install_mirror="./openshift-install-mirror-${ocp_version}-${reg_host}-${reg_port}"
 if [ ! -x $openshift_install_mirror ]; then
 	# HACK
 	cat > .idms.yaml <<-END

@@ -614,6 +614,17 @@ verify-mirror-conf() {
 
 	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker|existing)$' || { echo_red "Error: reg_vendor must be auto, quay, docker, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
+	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
+	# These chars break install or silently corrupt the password (upstream bug).
+	if [ "$reg_pw" ] && [ "${reg_vendor:-auto}" != "docker" ]; then
+		case "$reg_pw" in
+			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+			*"'"*) echo_red "Error: reg_pw contains a single-quote (') which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+			*'$'*) echo_red "Error: reg_pw contains a dollar sign (\$) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+		esac
+	fi
+
 	return $ret
 }
 
