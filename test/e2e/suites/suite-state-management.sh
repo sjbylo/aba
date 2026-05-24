@@ -281,35 +281,51 @@ _TILDE_STATE="\$HOME/.aba/mirror/$_TILDE_MIRROR"
 _TILDE_REMOTE_SUBDIR="e2e-tilde-remote-data"
 _TILDE_LOCAL_SUBDIR="e2e-tilde-local-data"
 
-# --- Remote install with data_dir=~/subdir ---
-# Verify ~ expands to the REMOTE user's home, not the local user's.
+# --- Remote install with data_dir=~/subdir AS A DIFFERENT USER ---
+# Verify ~ expands to the REMOTE user's home (testy), not the local user's (steve).
+# Using a different SSH user proves the tilde is expanded on the remote host
+# in the context of the SSH target user.
+_TILDE_REMOTE_USER="testy"
+
+e2e_run "Setup: SSH authorized_keys for $_TILDE_REMOTE_USER on disN" \
+	"_essh $DIS_HOST \"sudo mkdir -p /home/$_TILDE_REMOTE_USER/.ssh && sudo cp ~steve/.ssh/authorized_keys /home/$_TILDE_REMOTE_USER/.ssh/ && sudo chown -R $_TILDE_REMOTE_USER: /home/$_TILDE_REMOTE_USER/.ssh && sudo chmod 700 /home/$_TILDE_REMOTE_USER/.ssh && sudo chmod 600 /home/$_TILDE_REMOTE_USER/.ssh/authorized_keys\""
+
 e2e_run "Create mirror dir for remote tilde test" \
 	"cd ~/aba && aba mirror --name $_TILDE_MIRROR"
 e2e_add_to_mirror_cleanup "$PWD/$_TILDE_MIRROR"
 
-e2e_run "Remote install with data_dir=~/$_TILDE_REMOTE_SUBDIR" \
-	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_REMOTE_SUBDIR' -H $DIS_HOST -k ~/.ssh/id_rsa"
+e2e_run "Remote install as $_TILDE_REMOTE_USER with data_dir=~/$_TILDE_REMOTE_SUBDIR" \
+	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_REMOTE_SUBDIR' -H $DIS_HOST -k ~/.ssh/id_rsa -U $_TILDE_REMOTE_USER"
 
 e2e_run "Remote: reg_root is absolute (no literal ~)" \
 	"bash -c 'source $_TILDE_STATE/state.sh && [[ \$reg_root == /* ]] || { echo \"reg_root=\$reg_root not absolute\"; false; }'"
 
-# Verify the full expected path: <remote_home>/<subdir>/docker-reg
-e2e_run "Remote: reg_root is <remote_home>/$_TILDE_REMOTE_SUBDIR/docker-reg" \
-	"_rh=\$(_essh $DIS_HOST 'echo ~') && _expect=\"\${_rh}/$_TILDE_REMOTE_SUBDIR/docker-reg\" && bash -c 'source $_TILDE_STATE/state.sh && [ \"\$reg_root\" = \"'\"\$_expect\"'\" ] || { echo \"reg_root=\$reg_root expected='\"\$_expect\"'\"; false; }'"
+# Verify ~ resolved to testy's home (/home/testy), NOT steve's (/home/steve)
+e2e_run "Remote: reg_root uses $_TILDE_REMOTE_USER home, not steve" \
+	"bash -c 'source $_TILDE_STATE/state.sh && [[ \$reg_root == /home/$_TILDE_REMOTE_USER/* ]] || { echo \"reg_root=\$reg_root does not start with /home/$_TILDE_REMOTE_USER/\"; false; }'"
 
-e2e_run "Remote: data dir exists on remote host at expected path" \
-	"_rh=\$(_essh $DIS_HOST 'echo ~') && _essh $DIS_HOST \"test -d \${_rh}/$_TILDE_REMOTE_SUBDIR/docker-reg\""
+e2e_run "Remote: reg_root is /home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg" \
+	"bash -c 'source $_TILDE_STATE/state.sh && [ \"\$reg_root\" = \"/home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg\" ] || { echo \"reg_root=\$reg_root expected=/home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg\"; false; }'"
+
+e2e_run "Remote: data dir exists on disN at $_TILDE_REMOTE_USER path" \
+	"_essh $DIS_HOST \"test -d /home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg\""
 
 e2e_run "Verify remote tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
 
 e2e_run "Uninstall remote tilde registry" \
 	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall"
 e2e_run "Assert: remote tilde registry removed" "e2e_assert_registry_removed"
-e2e_run "Remote: data dir cleaned up" \
-	"_rh=\$(_essh $DIS_HOST 'echo ~') && _essh $DIS_HOST \"test ! -d \${_rh}/$_TILDE_REMOTE_SUBDIR\" || _essh $DIS_HOST \"rm -rf \${_rh}/$_TILDE_REMOTE_SUBDIR\""
+e2e_run "Remote: cleanup $_TILDE_REMOTE_USER data dir" \
+	"_essh $DIS_HOST \"sudo rm -rf /home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR\""
 
 # --- Local install with data_dir=~/subdir ---
 # Verify ~ expands to the LOCAL user's home.
+# The pool-registry (Docker, --network host) already binds the debug port :5001.
+# A second Docker registry on the same host would crash on that port conflict.
+# Stop pool-registry for the duration of this local install test.
+e2e_run "Stop pool-registry to free debug port 5001" \
+	"podman stop pool-registry"
+
 e2e_run "Recreate mirror dir for local tilde test" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR && aba mirror --name $_TILDE_MIRROR"
 
@@ -334,6 +350,9 @@ e2e_run "Uninstall local tilde registry" \
 e2e_run "Local: cleanup data dir" "rm -rf ~/$_TILDE_LOCAL_SUBDIR"
 e2e_run "Cleanup tilde mirror dir" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR"
+
+e2e_run "Restart pool-registry" \
+	"podman start pool-registry"
 
 test_end
 
