@@ -219,7 +219,7 @@ reg_setup_data_dir() {
 	if [ "$reg_ssh_key" ]; then
 		if [ ! "$data_dir" ]; then data_dir='~'; fi
 	else
-		if [ ! "$data_dir" ]; then data_dir=~; else data_dir=$(eval echo "$data_dir"); fi
+		if [ ! "$data_dir" ]; then data_dir="$HOME"; else data_dir=$(_expand_tilde "$data_dir"); fi
 	fi
 
 	case "$vendor" in
@@ -422,8 +422,7 @@ reg_post_install() {
 				"The registry install may have failed — check the output above."
 		fi
 	else
-		# eval handles ~ in paths
-		eval cp "$ca_source" "$regcreds_dir/rootCA.pem"
+		cp "$ca_source" "$regcreds_dir/rootCA.pem"
 	fi
 
 	# Trust the CA system-wide (updates /etc/pki/ca-trust/)
