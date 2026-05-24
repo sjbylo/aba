@@ -562,6 +562,14 @@ verify-aba-conf() {
 	return $ret
 }
 
+_expand_tilde() {
+	case "$1" in
+		"~/"*) echo "$HOME/${1#\~/}" ;;
+		"~")   echo "$HOME" ;;
+		*)     echo "$1" ;;
+	esac
+}
+
 normalize-mirror-conf()
 {
 	# Output only the values from mirror.conf (with defaults for backwards compat).

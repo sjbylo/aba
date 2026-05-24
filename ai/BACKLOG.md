@@ -3281,3 +3281,23 @@ When invoked from the TUI, post-action messages should be TUI-aware:
 - Scripts/Makefiles check `$ABA_TUI` and suppress or reformat CLI-oriented "next steps" messages
 - The TUI's `confirm_and_execute` result dialog could append TUI-specific guidance (e.g. "Select 'Install Cluster' again to create the ISO")
 
+
+## Investigate: data_dir tilde expansion written back to mirror.conf
+
+### Problem
+
+User reports that `data_dir=~/custom` in `mirror.conf` sometimes gets overwritten to `data_dir=/home/steve/custom` (tilde expanded). The original `~` should be preserved — whatever the user writes in mirror.conf should stay as-is.
+
+### What we know
+
+- `normalize-mirror-conf` already escapes `~` correctly (adds `\~` to prevent shell expansion when sourced)
+- The CLI `--data-dir` flag writes the raw value directly (no expansion)
+- TUI v2 writes `$m_datadir` from user input (should be fine)
+- TUI v1 writes `$data_dir` which may come from sourced normalize output
+
+### Investigation needed
+
+- Reproduce: set `data_dir=~/custom` in mirror.conf, run through TUI v1 and v2 install flows, check if mirror.conf is modified
+- Check if any code path sources `normalize-mirror-conf` and then writes `$data_dir` back without the `\~` escaping
+- The 3 TUI v1 locations: `abatui.sh` lines 2784, 2866, 2959
+

@@ -308,7 +308,7 @@ e2e_run "Remote: reg_root is /home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/doc
 	"bash -c 'source $_TILDE_STATE/state.sh && [ \"\$reg_root\" = \"/home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg\" ] || { echo \"reg_root=\$reg_root expected=/home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg\"; false; }'"
 
 e2e_run "Remote: data dir exists on disN at $_TILDE_REMOTE_USER path" \
-	"_essh $DIS_HOST \"test -d /home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR/docker-reg\""
+	"_essh $_TILDE_REMOTE_USER@$DIS_HOST \"test -d ~/$_TILDE_REMOTE_SUBDIR/docker-reg\""
 
 e2e_run "Verify remote tilde registry" "cd ~/aba && aba -d $_TILDE_MIRROR verify"
 
@@ -316,7 +316,7 @@ e2e_run "Uninstall remote tilde registry" \
 	"cd ~/aba && aba -d $_TILDE_MIRROR uninstall"
 e2e_run "Assert: remote tilde registry removed" "e2e_assert_registry_removed"
 e2e_run "Remote: cleanup $_TILDE_REMOTE_USER data dir" \
-	"_essh $DIS_HOST \"sudo rm -rf /home/$_TILDE_REMOTE_USER/$_TILDE_REMOTE_SUBDIR\""
+	"_essh $_TILDE_REMOTE_USER@$DIS_HOST \"rm -rf ~/$_TILDE_REMOTE_SUBDIR\""
 
 # --- Local install with data_dir=~/subdir ---
 # Verify ~ expands to the LOCAL user's home.

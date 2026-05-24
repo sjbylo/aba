@@ -73,7 +73,7 @@ while [ $i -le $# ]; do
 
 				# Validate directory argument
 				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
-				target_dir=$(eval echo "$target_dir")  # Expand ~ in path
+				case "$target_dir" in "~/"*) target_dir="$HOME/${target_dir#\~/}" ;; "~") target_dir="$HOME" ;; esac
 				# ADR-007: if dir is missing, recreate from external state backup
 				if [ ! -e "$target_dir" ]; then
 					_bn=$(basename "$target_dir")
