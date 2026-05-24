@@ -324,7 +324,8 @@ test_begin "Regression: verify_conf=conf extracts mirror binary"
 
 _REG_HOST=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
 _REG_PORT=$(grep '^reg_port=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
-_MIRROR_BIN="openshift-install-mirror-${OCP_VERSION}-${_REG_HOST}-${_REG_PORT}"
+_CUR_VER=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_MIRROR_BIN="openshift-install-mirror-${_CUR_VER}-${_REG_HOST}-${_REG_PORT}"
 
 e2e_run "Sanity: mirror binary exists from SNO install" \
 	"test -x $SNO/$_MIRROR_BIN"
@@ -406,7 +407,8 @@ e2e_run "Create throwaway cluster dir for extraction test" \
 	"aba cluster -n e2e-test-extract -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 # The old-version mirror binary should NOT exist in the new cluster dir.
-_OLD_MIRROR_BIN="openshift-install-mirror-${OCP_VERSION}-${_REG_HOST2}-${_REG_PORT2}"
+# _CUR_VER (resolved in test 11) is the pre-upgrade version.
+_OLD_MIRROR_BIN="openshift-install-mirror-${_CUR_VER}-${_REG_HOST2}-${_REG_PORT2}"
 _NEW_MIRROR_BIN="openshift-install-mirror-${_NEW_VER}-${_REG_HOST2}-${_REG_PORT2}"
 
 e2e_run "Assert old-version mirror binary does not exist" \
