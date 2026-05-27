@@ -156,7 +156,7 @@ _valid_port_names() {
 _TUI_TMP=$(mktemp)
 
 _tui_cleanup() {
-	rm -f "$_TUI_TMP" "${_TUI_DIALOGRC:-}"
+	rm -f "$_TUI_TMP" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
 	tui_log "TUI v2 exited"
 }
 trap '_tui_cleanup' EXIT
@@ -506,13 +506,18 @@ confirm_and_execute() {
 	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
 
-	# If user previously chose "always", skip the picker
+	# If user previously chose "always", skip the picker but retain retry loop
 	if [[ -n "$_TUI_EXEC_MODE" ]]; then
 		tui_log "Using remembered exec mode: $_TUI_EXEC_MODE"
-		case "$_TUI_EXEC_MODE" in
-			tui)      _exec_in_tui "$cmd" "$title" "$post_cmd_hook"; return $? ;;
-			terminal) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook"; return $? ;;
-		esac
+		while :; do
+			case "$_TUI_EXEC_MODE" in
+				tui)      _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
+				terminal) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
+			esac
+			local exec_rc=$?
+			[[ $exec_rc -eq 2 ]] && continue
+			return $exec_rc
+		done
 	fi
 
 	local default_item="1"
@@ -619,7 +624,8 @@ _exec_in_tui() {
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--progressbox $box_height $box_width
 	local exit_code=${PIPESTATUS[0]}
-	trap - INT
+	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
+	trap 'exit 0' HUP TERM INT
 
 	# Run post-command hook (non-blocking background work while user reads results)
 	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
@@ -691,7 +697,8 @@ _exec_in_terminal() {
 	bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
 	local exit_code=$?
 
-	trap - INT
+	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
+	trap 'exit 0' HUP TERM INT
 
 	# Run post-command hook (non-blocking background work while user reads output)
 	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
@@ -1205,7 +1212,7 @@ select_cluster() {
 			# Skip clusters that are already fully installed
 			[[ -f "$ABA_ROOT/$dir/.install-complete" ]] && continue
 			# Skip clusters that haven't started installing (no kubeconfig)
-			[[ ! -f "$ABA_ROOT/$dir/kubeconfig" ]] && continue
+			[[ ! -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]] && continue
 		fi
 		display=$(cluster_display_name "$dir")
 		# Annotate status so the user sees cluster state at a glance
@@ -1436,7 +1443,10 @@ tui_install_cluster_gate() {
 					--yesno "No mirror registry installed.\n\nA mirror with synced images is required to install a cluster.\n\nInstall the mirror and sync images now?" 0 0
 				_rc=$?
 				if [[ $_rc -eq 0 ]]; then
-					_mirror_config_review && mirror_sync
+					if _mirror_config_review && mirror_sync; then
+						cluster_install_flow
+						return 3
+					fi
 				fi
 				return 1
 			fi
@@ -1445,7 +1455,10 @@ tui_install_cluster_gate() {
 				--yesno "The mirror is installed but has no release images.\n\nSync images to the mirror now?" 0 0
 			_rc=$?
 			if [[ $_rc -eq 0 ]]; then
-				mirror_sync
+				if mirror_sync; then
+					cluster_install_flow
+					return 3
+				fi
 			fi
 			return 1
 			;;

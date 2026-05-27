@@ -248,7 +248,7 @@ _gate_platform_config() {
 				return 0
 				;;
 			1)
-				_configure_platform_file "$conf_name" "$plat_label"
+				_configure_platform_file "$conf_name" "$plat_label" || return 1
 				return 0
 				;;
 			3)
@@ -269,7 +269,8 @@ _gate_platform_config() {
 	local rc=$?
 	case "$rc" in
 		0)
-			_configure_platform_file "$conf_name" "$plat_label"
+			# If user cancels inside config form, return 1 to stay on page 1
+			_configure_platform_file "$conf_name" "$plat_label" || return 1
 			return 0
 			;;
 		*)
@@ -638,12 +639,18 @@ cluster_install_flow() {
 		_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
 		_draft_loaded=true
 		tui_log "Loaded cluster.conf for '$cl_name'"
+		# Load macs.conf for bare-metal (separate file, not in cluster.conf)
+		if [[ -f "$ABA_ROOT/$cl_name/macs.conf" ]]; then
+			cl_macs=$(<"$ABA_ROOT/$cl_name/macs.conf")
+		fi
 	fi
 
 	# Auto-detect defaults only when no cluster.conf exists yet (before page 1 generates one)
 	if [[ "$_draft_loaded" == "false" ]]; then
 		# Pre-fill from sourced aba.conf variables, fallback to auto-detect
 		cl_network="${machine_network:-}"
+		# Recombine prefix_length (normalize-aba-conf splits "10.0.0.0/24" into two vars)
+		[[ -n "${prefix_length:-}" && -n "$cl_network" && "$cl_network" != */* ]] && cl_network="${cl_network}/${prefix_length}"
 		[[ -z "$cl_network" ]] && cl_network=$(get_machine_network 2>/dev/null) || true
 		cl_dns="${dns_servers:-}"
 		[[ -z "$cl_dns" ]] && cl_dns=$(get_dns_servers 2>/dev/null) || true
@@ -671,13 +678,14 @@ cluster_install_flow() {
 		esac
 	fi
 
-	# Mode-aware connection default: prevent state leaking between modes.
-	# Extracted to a function so it can be re-applied after every _cluster_load_conf
-	# call (which may reset cl_connection to empty/mirror from cluster.conf).
+	# Sanitize cl_connection for the current TUI mode.
+	# DIRECT: only "direct" and "proxy" are valid.
+	# DISCO: only "mirror" is valid (no internet).
+	# CONNO: all three (mirror/proxy/direct) are valid — don't override.
 	_apply_mode_connection() {
 		if [[ "$_TUI_MODE" == "DIRECT" ]]; then
 			[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
-		else
+		elif [[ "$_TUI_MODE" == "DISCO" ]]; then
 			[[ "$cl_connection" == "direct" ]] && cl_connection="mirror"
 		fi
 	}
@@ -1858,14 +1866,17 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				case "$_ptag" in
 					V)
 						replace-value-conf -q -n platform -v vmw -f "$ABA_ROOT/aba.conf"
+						platform=vmw
 						_configure_platform_file "vmware.conf" "VMware/ESXi"
 						;;
 					K)
 						replace-value-conf -q -n platform -v kvm -f "$ABA_ROOT/aba.conf"
+						platform=kvm
 						_configure_platform_file "kvm.conf" "KVM/libvirt"
 						;;
 					M)
 						replace-value-conf -q -n platform -v bm -f "$ABA_ROOT/aba.conf"
+						platform=bm
 						tui_log "Platform set to bare metal"
 						;;
 				esac
@@ -2062,7 +2073,8 @@ _day2_status() {
 		echo ""
 		KUBECONFIG="$kc" oc get nodes --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 	} > "$output_file" 2>&1
-	trap - INT
+	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
+	trap 'exit 0' HUP TERM INT
 
 	sed -i -r 's/\x1B\[[0-9;]*[mK]//g; s/\x1B\(B//g' "$output_file"
 
@@ -2107,9 +2119,11 @@ _day2_upgrade() {
 	local _versions_raw
 	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
 
-	# Parse version lines (format: "X.Y.Z" or lines containing semver patterns)
+	# Parse version lines — only from the "Versions in mirror" list section
+	# (skip info/header lines that also contain semver patterns)
 	local _versions=()
 	while IFS= read -r line; do
+		[[ "$line" =~ Current\ version|Target\ version|DRY\ RUN|Mirror\ image|Update\ graph|Versions\ in\ mirror ]] && continue
 		local ver
 		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 		[[ -n "$ver" ]] && _versions+=("$ver")

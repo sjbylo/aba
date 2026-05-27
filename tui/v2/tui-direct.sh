@@ -265,6 +265,7 @@ _direct_channel() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CHANNEL" \
 		--default-item "$_default_tag" \
+		--default-button ok \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \

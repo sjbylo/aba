@@ -1228,7 +1228,7 @@ Reuse is recommended unless you changed OpenShift version or suspect corruption.
 		[[ -z "$_bundle_data_choice" ]] && return 1
 	fi
 
-	local cmd="aba bundle --out $bundle_path"
+	local cmd="aba bundle --out \"$bundle_path\""
 	[[ -n "$light_flag" ]] && cmd="$cmd $light_flag"
 	[[ -n "$force_flag" ]] && cmd="$cmd $force_flag"
 
