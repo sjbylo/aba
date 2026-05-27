@@ -241,8 +241,9 @@ if [[ -n "${op_sets:-}" ]]; then
 		while IFS= read -r _line; do
 			[[ "$_line" =~ ^[[:space:]]*# ]] && continue
 			[[ -z "$_line" ]] && continue
-			_line="${_line##[[:space:]]}"
-			_line="${_line%%[[:space:]]}"
+			_line="${_line%%#*}"                          # Strip inline comment
+			_line="${_line#"${_line%%[![:space:]]*}"}"    # Trim leading whitespace
+			_line="${_line%"${_line##*[![:space:]]}"}"    # Trim trailing whitespace
 			[[ -z "$_line" ]] && continue
 			if [[ -n "$_ver_short" ]] && ! grep -q "^${_line}[[:space:]]" "$ABA_ROOT"/.index/*-index-v${_ver_short} 2>/dev/null; then
 				continue
