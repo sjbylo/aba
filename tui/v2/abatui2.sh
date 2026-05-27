@@ -724,6 +724,7 @@ Navigation:
 				tui_install_cluster_gate CONNO
 				case "$?" in
 				0) cluster_install_flow ;;
+				3) ;;  # gate already invoked cluster_install_flow after sync
 				esac
 				# RECHECK: may have created/installed a cluster
 				_conno_need_recheck=true

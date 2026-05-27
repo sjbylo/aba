@@ -1,21 +1,20 @@
 # Session State
 
 ## Current goal
-Apply all 3 CLI version-tracking fixes (pending user approval).
+Der Tippmeister -- APAC mini-tournament loaded, various improvements.
 
 ## Done this session
-- Implemented and fully tested content-layer-digest detection in `tools/refresh-catalog-indexes.sh`:
-  - Uses `layers[-1]` (last layer) — the only catalog-specific layer
-  - All 5 tests pass: tampered digest, missing digest, missing index, parallel safety, edge cases
-  - Key bug caught: `layers[-2]` is shared base (same across all catalogs); `layers[-1]` is unique
-- Confirmed `oc-mirror-web-app` reference still in README.md
+- Fixed blank/pink page issue: added **flask-compress** for gzip (95-96% size reduction)
+- Optimized admin predictions grid: JS click handlers instead of `<a>` wraps
+- Created `seed_apac.py` -- 8-team APAC tournament (16 matches, 7 days)
+- Externalized secrets to `~/.tm.conf` (chmod 600), sourced by `start.sh`
+- **Timezone auto-detect**: browser `Intl` API detects timezone on registration (auto-set), login (auto-set if empty), and profile page ("Detected: X, Use this" hint)
 
 ## Next steps
-1. Apply Fix 3 (`verify-release-image.sh` version check) — awaiting user approval.
-2. Commit all pending changes (password validation, TUI, Makefile deps, verify-release-image, catalog refresh).
+- Remaining features: "Next 3/7 days" filters, "My Tips" → "My Predictions" rename
+- User testing the APAC mini-tournament
 
 ## Decisions / notes
-- FBC catalog images: layers[-1] is catalog-specific content; layers[0-3] are shared base.
-- Content layer digest approach eliminates false-positive downloads from base-image rebuilds.
-- Old `.remote-digest` files are harmlessly ignored; new code uses `.content-layer-digest`.
-- Three CLI fixes still pending: (1) `.cli: .init aba.conf`, (2) `~/bin/*: .init ../aba.conf`, (3) version check in verify-release-image.sh.
+- Timezone detect uses `Intl.DateTimeFormat().resolvedOptions().timeZone` (reliable in all modern browsers)
+- Login auto-set only fires if user.timezone is empty/None (doesn't override existing choice)
+- Profile hint only shows when detected != saved timezone
