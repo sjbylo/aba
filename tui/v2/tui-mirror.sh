@@ -884,8 +884,10 @@ _operator_sets() {
 				while IFS= read -r line; do
 					[[ "$line" =~ ^[[:space:]]*# ]] && continue
 					[[ -z "$line" ]] && continue
-					line="${line##[[:space:]]}"
-					line="${line%%[[:space:]]}"
+					line="${line%%#*}"                          # Strip inline comment
+					line="${line#"${line%%[![:space:]]*}"}"     # Trim leading whitespace
+					line="${line%"${line##*[![:space:]]}"}"     # Trim trailing whitespace
+					[[ -z "$line" ]] && continue
 					local _count=${OP_BASKET[$line]:-0}
 					_count=$(( _count - 1 ))
 					if [[ $_count -le 0 ]]; then
@@ -910,8 +912,10 @@ _operator_sets() {
 				while IFS= read -r line; do
 					[[ "$line" =~ ^[[:space:]]*# ]] && continue
 					[[ -z "$line" ]] && continue
-					line="${line##[[:space:]]}"
-					line="${line%%[[:space:]]}"
+					line="${line%%#*}"                          # Strip inline comment
+					line="${line#"${line%%[![:space:]]*}"}"     # Trim leading whitespace
+					line="${line%"${line##*[![:space:]]}"}"     # Trim trailing whitespace
+					[[ -z "$line" ]] && continue
 					if grep -q "^$line[[:space:]]" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
 						OP_BASKET["$line"]=$(( ${OP_BASKET[$line]:-0} + 1 ))
 					fi
@@ -943,20 +947,28 @@ _operator_search() {
 	fi
 
 	# Search across all catalog indexes (format: "op-name  Display Name  channel")
+	# Priority order: redhat, certified, community — first match per operator wins
 	local items=()
 	local line op_name display_name state
+	declare -A _seen_ops=()
 	while IFS= read -r line; do
 		line="${line##[[:space:]]}"
 		line="${line%%[[:space:]]}"
 		[[ -z "$line" ]] && continue
 		op_name="${line%%[[:space:]]*}"
 		[[ -z "$op_name" ]] && continue
+		[[ -n "${_seen_ops[$op_name]:-}" ]] && continue
+		_seen_ops["$op_name"]=1
 		display_name=$(echo "$line" | awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}')
 		state="off"
 		[[ -n "${OP_BASKET[$op_name]:-}" ]] && state="on"
 		items+=("$op_name" "${display_name:--}" "$state")
-	# -h suppresses filename prefix when grep matches across multiple index files
-	done < <(grep -hiF "$query" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null | sort -u | head -50)
+	# -h suppresses filename prefix; search redhat/certified before community
+	done < <(grep -hiF "$query" \
+		"$ABA_ROOT"/.index/redhat-operator-index-v${version_short} \
+		"$ABA_ROOT"/.index/certified-operator-index-v${version_short} \
+		"$ABA_ROOT"/.index/community-operator-index-v${version_short} \
+		2>/dev/null | head -100)
 
 	if [[ ${#items[@]} -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --msgbox "$(printf "$TUI2_MSG_NO_SEARCH_RESULTS" "$query")" 0 0
@@ -989,7 +1001,7 @@ _operator_search() {
 	for ((i=0; i<${#items[@]}; i+=3)); do
 		op="${items[$i]}"
 		if [[ -n "${_SEL[$op]:-}" ]]; then
-			OP_BASKET["$op"]=1
+			[[ -z "${OP_BASKET[$op]:-}" ]] && OP_BASKET["$op"]=1
 		elif [[ -n "${OP_BASKET[$op]:-}" ]]; then
 			unset 'OP_BASKET[$op]'
 			tui_log "Removed operator: $op"
@@ -1009,7 +1021,12 @@ _operator_view_basket() {
 	local op display_name line
 	for op in $(echo "${!OP_BASKET[@]}" | tr ' ' '\n' | sort); do
 		display_name=""
-		line=$(grep -m1 "^${op}[[:space:]]" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null)
+		# Search redhat first, then certified, then community (priority order)
+		line=$(grep -m1 "^${op}[[:space:]]" \
+			"$ABA_ROOT"/.index/redhat-operator-index-v${version_short} \
+			"$ABA_ROOT"/.index/certified-operator-index-v${version_short} \
+			"$ABA_ROOT"/.index/community-operator-index-v${version_short} \
+			2>/dev/null)
 		if [[ -n "$line" ]]; then
 			display_name=$(echo "$line" | awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}')
 		fi
