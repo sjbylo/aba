@@ -109,6 +109,10 @@ case "$vendor" in
 			aba_abort "Failed to extract mirror-registry:\n$error_msg"
 		fi
 
+		# mirror-registry's internal Ansible needs quay_installer to SSH back to
+		# the same host. The binary creates the keypair but doesn't authorize it.
+		$_ssh "if [ ! -s \\\$HOME/.ssh/quay_installer ]; then mkdir -p \\\$HOME/.ssh && chmod 700 \\\$HOME/.ssh && ssh-keygen -t ed25519 -f \\\$HOME/.ssh/quay_installer -N '' >/dev/null && cat \\\$HOME/.ssh/quay_installer.pub >> \\\$HOME/.ssh/authorized_keys; fi"
+
 		aba_info "Copying mirror-registry tarball to remote host ..."
 		$_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 

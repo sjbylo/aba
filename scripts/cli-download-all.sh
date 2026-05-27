@@ -1,10 +1,12 @@
 #!/bin/bash
 # ── Contract ──────────────────────────────────────────────────────────
 # Script:  cli-download-all.sh
-# Purpose: Orchestrate parallel, non-blocking CLI tarball downloads via run_once.
+# Purpose: Orchestrate parallel, non-blocking CLI tarball downloads.
 #
 # Modes (mutually exclusive):
 #   (default)      Start background downloads for all tools (non-blocking).
+#                  Downloads are serialized per-tarball via run_once inside
+#                  the Makefile recipes — this script just triggers them.
 #   --wait         Block until every download task has completed.
 #   --reset        Reset download task markers (forces re-download on next run).
 #   --no-version   Only start downloads for version-independent tools
@@ -19,8 +21,8 @@
 #   Each target outputs "tool[:version] ..." (e.g. "oc:4.20.12 oc-mirror butane govc")
 #
 # Side effects:
-#   Creates run_once tasks: cli:download:<tool[:version]>
-#   Each task runs: make -sC cli download-<tool>
+#   Triggers cli/Makefile download/reset targets which manage
+#   per-tarball run_once serialization internally.
 #
 # Callers (9+): aba.sh, include_all.sh, Makefile (tar/tarrepo), cli/Makefile,
 #   reg-save.sh, make-bundle.sh, tui/abatui.sh, cli-install-all.sh
@@ -36,19 +38,14 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 # Parse mode flag (mutually exclusive)
-ro_opts=()
-out=Downloading
-wait_mode=false
+mode=start
 make_list_target=out-download-all
 
 if [ "${1:-}" = "--wait" ]; then
-	ro_opts=(-q -w)
-	out=Waiting
-	wait_mode=true
+	mode=wait
 	shift
 elif [ "${1:-}" = "--reset" ]; then
-	ro_opts=(-r)
-	out=Resetting
+	mode=reset
 	shift
 fi
 
@@ -59,7 +56,7 @@ fi
 
 tool_filter=("$@")
 
-aba_debug "Mode: $out (ro_opts=[${ro_opts[*]}]) filter=[${tool_filter[*]}] list_target=$make_list_target"
+aba_debug "Mode: $mode filter=[${tool_filter[*]}] list_target=$make_list_target"
 
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
@@ -87,17 +84,18 @@ do
 		continue
 	fi
 
-	# In --wait mode, show a message only once and only if a download is still pending
-	# 2>/dev/null: peek failure is expected ("not done yet") and must be silent in DISCO mode
-	if $wait_mode && ! $showed_wait_msg; then
-		if ! run_once -p -i "cli:download:$item" 2>/dev/null; then
+	aba_debug "$mode: item=$item tool=$tool"
+
+	if [[ "$mode" == "reset" ]]; then
+		make -sC cli reset-download-$tool
+	elif [[ "$mode" == "wait" ]]; then
+		if ! $showed_wait_msg; then
 			aba_info "Ensuring CLI downloads are complete ..."
 			showed_wait_msg=true
 		fi
+		make -sC cli download-$tool
+	else
+		make -sC cli download-$tool &
 	fi
-
-	aba_debug "$out: item=$item tool=$tool"
-	aba_debug "run_once ${ro_opts[*]} -i \"cli:download:$item\" -- make -sC cli download-$tool"
-	run_once "${ro_opts[@]}" -i "cli:download:$item" -- make -sC cli download-$tool
 done
-aba_debug "All CLI download tasks initiated"
+aba_debug "All CLI download tasks processed"
