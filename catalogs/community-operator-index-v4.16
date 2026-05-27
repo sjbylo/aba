@@ -89,6 +89,7 @@ beegfs-csi-driver-operator                              BeeGFS CSI Driver       
 bpfman-operator                                         Bpfman Operator                                              alpha
 camel-karavan-operator                                  Camel Karavan Operator                                       alpha
 camel-k                                                 Camel K Operator                                             stable-v2
+camel-monitor-operator                                  Camel Monitor Operator                                       stable-v0
 cass-operator-community                                 DataStax Kubernetes Operator for Apache Cassandra            stable
 cert-manager                                            cert-manager                                                 stable
 cert-utils-operator                                     Cert Utils Operator                                          alpha
@@ -140,14 +141,14 @@ grafana-operator                                        Grafana Operator        
 group-sync-operator                                     Group Sync Operator                                          alpha
 hawtio-operator                                         Hawtio Operator                                              stable-v1
 hedvig-operator                                         Hedvig Operator                                              stable
-hive-operator                                           -                                                            alpha
+hive-operator                                           Hive for Red Hat OpenShift                                   alpha
 horreum-operator                                        Horreum                                                      alpha
 hyperfoil-bundle                                        Hyperfoil                                                    alpha
 ibm-block-csi-operator-community                        IBM block storage CSI driver operator                        stable
 ibmcloud-operator                                       IBM Cloud Operator                                           stable
 ibm-security-verify-access-operator                     IBM Security Verify Access Operator                          stable
 ibm-spectrum-scale-csi-operator                         IBM Spectrum Scale CSI Plugin Operator                       stable
-infinispan                                              -                                                            stable
+infinispan                                              Infinispan Operator                                          stable
 integrity-shield-operator                               K8s Integrity Shield                                         alpha-0.3.3
 ipfs-operator                                           IPFS Operator                                                alpha
 istio-workspace-operator                                Istio Workspace                                              alpha

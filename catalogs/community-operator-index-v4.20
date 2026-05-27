@@ -91,6 +91,7 @@ beegfs-csi-driver-operator                              BeeGFS CSI Driver       
 bpfman-operator                                         Bpfman Operator                                              alpha
 camel-karavan-operator                                  Camel Karavan Operator                                       alpha
 camel-k                                                 Camel K Operator                                             stable-v2
+camel-monitor-operator                                  Camel Monitor Operator                                       stable-v0
 cass-operator-community                                 DataStax Kubernetes Operator for Apache Cassandra            stable
 cat-facts-operator                                      Cat Facts Operator                                           stable
 cert-manager                                            cert-manager                                                 stable

@@ -157,11 +157,12 @@ stackable-superset-operator                             Stackable Operator for A
 stackable-trino-operator                                Stackable Operator for Trino                                 stable
 stackable-zookeeper-operator                            Stackable Operator for Apache ZooKeeper                      stable
 stackgres-certified                                     StackGres                                                    stable
+strategy-operator                                       Strategy Customer Managed Cloud                              stable-v1
 sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Collection Helm Operator               alpha
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
-tawon-operator                                          Tawon                                                        alpha
+tawon-operator                                          Tawon                                                        candidate-v3
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.8
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42

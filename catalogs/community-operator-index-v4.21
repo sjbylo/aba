@@ -90,6 +90,7 @@ beegfs-csi-driver-operator                              BeeGFS CSI Driver       
 bpfman-operator                                         Bpfman Operator                                              alpha
 camel-karavan-operator                                  Camel Karavan Operator                                       alpha
 camel-k                                                 Camel K Operator                                             stable-v2
+camel-monitor-operator                                  Camel Monitor Operator                                       stable-v0
 cass-operator-community                                 DataStax Kubernetes Operator for Apache Cassandra            stable
 cat-facts-operator                                      Cat Facts Operator                                           stable
 cert-manager                                            cert-manager                                                 stable
@@ -260,6 +261,7 @@ sosivio                                                 Sosivio | Predictive Tro
 sosreport-operator                                      sosreport-operator                                           alpha
 spark-helm-operator                                     Spark Helm Operator                                          alpha
 special-resource-operator                               Special Resource Operator                                    alpha
+stackgres-community                                     StackGres                                                    stable
 strimzi-kafka-operator                                  Strimzi                                                      stable
 susql-operator                                          SusQL                                                        alpha
 syndesis                                                Syndesis Operator                                            latest
