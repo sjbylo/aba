@@ -1,23 +1,21 @@
 # Session State
 
 ## Current goal
-Password special-char testing for Quay mirror install.
+Apply all 3 CLI version-tracking fixes (pending user approval).
 
 ## Done this session
-- Tested 6 passwords with various special characters against `aba install` (Quay mirror-registry).
-- Identified 4 dangerous characters that break the install: backtick, double-quote, single-quote, dollar-sign.
-- Root cause: `mirror-registry` (Red Hat tool) passes password through multiple unescaped quoting layers (shell → podman → bash -c → ansible -e).
-- Confirmed safe chars: `!@#%^&*()<>|;\`
-- Restored mirror.conf to working password `!@#$%^&*()`.
-- Applied TUI fix (earlier): `_TUI_REG_VENDOR` reads mirror.conf directly instead of via normalize-mirror-conf.
+- Implemented and fully tested content-layer-digest detection in `tools/refresh-catalog-indexes.sh`:
+  - Uses `layers[-1]` (last layer) — the only catalog-specific layer
+  - All 5 tests pass: tampered digest, missing digest, missing index, parallel safety, edge cases
+  - Key bug caught: `layers[-2]` is shared base (same across all catalogs); `layers[-1]` is unique
+- Confirmed `oc-mirror-web-app` reference still in README.md
 
 ## Next steps
-1. Decide whether to add input validation for dangerous password chars in ABA (reject `` ` `` `"` `'` `$` with a clear error).
-2. Consider filing a bug against `mirror-registry` upstream.
-3. Commit pending TUI changes if approved.
+1. Apply Fix 3 (`verify-release-image.sh` version check) — awaiting user approval.
+2. Commit all pending changes (password validation, TUI, Makefile deps, verify-release-image, catalog refresh).
 
 ## Decisions / notes
-- Dangerous password chars: `` ` `` (backtick), `"` (double-quote), `'` (single-quote), `$` (dollar sign)
-- `$` is the most insidious — install succeeds but auth silently fails (password mangled by variable expansion)
-- This is upstream `mirror-registry` bug, not ABA's fault, but ABA should validate early to protect users
-- `\` alone seems safe, but interacts badly with `$` (e.g. `\$` becomes literal `$` after one layer of expansion)
+- FBC catalog images: layers[-1] is catalog-specific content; layers[0-3] are shared base.
+- Content layer digest approach eliminates false-positive downloads from base-image rebuilds.
+- Old `.remote-digest` files are harmlessly ignored; new code uses `.content-layer-digest`.
+- Three CLI fixes still pending: (1) `.cli: .init aba.conf`, (2) `~/bin/*: .init ../aba.conf`, (3) version check in verify-release-image.sh.

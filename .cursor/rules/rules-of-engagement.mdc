@@ -188,6 +188,14 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 - Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested
 - Report back a summary when the user returns
 
+## NEVER interfere with paused/failed E2E suites
+
+- **NEVER send keystrokes (`0`, `R`, `s`, `S`, etc.) to a paused suite prompt** without explicit user permission
+- If a suite is PAUSED (exhausted retries), it is FAILED -- report it as a failure, investigate the root cause, and wait for user instructions
+- NEVER restart, skip, or skip-suite on behalf of the user -- these actions mask failures and produce unreliable test results
+- The ONLY acceptable autonomous actions on paused suites are: reading logs, checking tmux output, and investigating the root cause
+- When reporting test results, NEVER count a manually-restarted suite as PASS -- if you restarted it, clearly state that the original run FAILED and the second run was a manual retry
+
 ## Development workflow
 
 - ALL code changes are made ONLY on bastion (the dev server). All other hosts (conN, disN, bundle, etc.) are test-only targets -- code reaches them via `run.sh deploy`, `git pull`, or tarball, NEVER by direct editing
