@@ -305,12 +305,12 @@ if [ ! "$interactive_mode" ]; then
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
-			if [ "$ocp_version" ]; then
-				aba_debug "Non-interactive mode - starting all CLI downloads early"
-				$ABA_ROOT/scripts/cli-download-all.sh
-			else
-				aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
-				$ABA_ROOT/scripts/cli-download-all.sh --no-version
+		if [ "$ocp_version" ]; then
+			aba_debug "Non-interactive mode - starting all CLI downloads early"
+			$ABA_ROOT/scripts/cli-download-all.sh >&2
+		else
+			aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
+			$ABA_ROOT/scripts/cli-download-all.sh --no-version >&2
 			fi
 			;;
 	esac

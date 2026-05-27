@@ -117,13 +117,10 @@ endef
 # Targets
 
 # govc is optional, depends on platform != bm
-# .wait-downloads prevents a race: aba.sh starts background downloads (cli-download-all.sh)
-# and then runs 'make install' — without the wait, both the background run_once AND the
-# foreground Make try to curl the same tarball simultaneously, corrupting it.
-install: .check-ocp-version .wait-downloads oc openshift-install oc-mirror butane $(govc_bin)
+install: .check-ocp-version oc openshift-install oc-mirror butane $(govc_bin)
 
 # Force d/l of govc too
-install-all: .check-ocp-version .wait-downloads oc openshift-install oc-mirror butane govc
+install-all: .check-ocp-version oc openshift-install oc-mirror butane govc
 
 out-install:
 	echo oc openshift-install oc-mirror butane $(govc_bin)
@@ -143,13 +140,6 @@ out-install-all:
 		exit 1; \
 	fi
 
-# Wait for any background CLI downloads started by aba.sh (cli-download-all.sh).
-# Without this, the foreground 'make install' and the background run_once both run
-# curl on the same tarball, corrupting it (double-write race).
-# If no background downloads are running, returns immediately (~100ms).
-.PHONY: .wait-downloads
-.wait-downloads:
-	@$(SCRIPTS)/cli-download-all.sh --wait || true
 
 ##@ Help-related tasks
 .PHONY: help
@@ -200,7 +190,8 @@ openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
 # 	openshift-install-linux-arm64-4.20.8.tar.gz
 
 # Logical download targets — group tarballs by tool so callers don't need to know filenames.
-# cli-download-all.sh iterates over out-download-all and creates run_once tasks per tool.
+# Per-tarball run_once serialization (internal) prevents double-write races.
+# Callers see only tool-level targets (download-oc, wait-download-oc, etc.).
 .PHONY: download-oc download-oc-mirror download-openshift-install download-butane download-govc
 
 download-oc: $(rhel9_oc_tar_file) $(rhel8_oc_tar_file)
@@ -213,8 +204,29 @@ download-govc: $(govc_tar_file)
 download: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane $(if $(govc_bin),download-govc)
 download-all: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane download-govc
 
+
+# Reset targets: clear run_once state for a tool (forces re-download).
+.PHONY: reset-download-oc reset-download-oc-mirror reset-download-openshift-install reset-download-butane reset-download-govc
+reset-download-oc:
+	@$(SCRIPTS)/run-once.sh -r -i "cli:download:oc-rhel9:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:download:oc-rhel8:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:install:oc:$(ocp_version)" 2>/dev/null || true
+reset-download-openshift-install:
+	@$(SCRIPTS)/run-once.sh -r -i "cli:download:openshift-install:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:install:openshift-install:$(ocp_version)" 2>/dev/null || true
+reset-download-oc-mirror:
+	@$(SCRIPTS)/run-once.sh -r -i "cli:download:oc-mirror" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:fetch:oc-mirror" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:fetch:oc-mirror-rhel9" 2>/dev/null || true
+reset-download-butane:
+	@$(SCRIPTS)/run-once.sh -r -i "cli:download:butane" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:fetch:butane" 2>/dev/null || true
+reset-download-govc:
+	@$(SCRIPTS)/run-once.sh -r -i "cli:download:govc" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -r -i "cli:fetch:govc" 2>/dev/null || true
+
 # Output logical tool names for cli-download-all.sh
-# Task IDs become: cli:download:oc, cli:download:oc-mirror, etc.
+# Task IDs are internal to Makefile; callers use only tool names.
 out-download:
 	echo oc oc-mirror openshift-install butane $(govc_bin)
 
@@ -228,35 +240,50 @@ out-download-no-version:
 
 
 ########################################
-# Install targets intentionally do NOT list tarball files as prerequisites.
-# Reason: Make's prerequisite resolution fires an unprotected curl that races with
-# cli-download-all.sh's run_once-protected background download (same file, two curls
-# = corrupt gzip). Instead, run-once.sh -w in the recipe body ensures the download
-# is complete before extraction — this is the single serialization point.
-
 # Extract the oc file with priority for the rhel8/9 version, then the generic version (fallback)
+# run_once on install serializes extraction — prevents concurrent tar writes to ~/bin/oc.
 oc: ~/bin/oc  ## Install oc into ~/bin
-~/bin/oc: .init | ~/bin
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for oc download" -i "cli:download:oc:$(ocp_version)" -- $(MAKE) --no-print-directory download-oc
+~/bin/oc: $(local_oc_tar_file) .init | ~/bin
+	@test -f $(local_oc_tar_file) || $(SCRIPTS)/run-once.sh -r -i "cli:download:oc-rhel9:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -S -w -m "Waiting for oc download" -i "cli:download:oc-rhel9:$(ocp_version)" -- $(MAKE) --no-print-directory _fetch-oc-rhel9
+	@test -x ~/bin/oc || $(SCRIPTS)/run-once.sh -r -i "cli:install:oc:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:install:oc:$(ocp_version)" -- $(MAKE) --no-print-directory _extract-oc
+
+.PHONY: _extract-oc
+_extract-oc:
 	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
-	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_tar_file)"; rm -f $(local_oc_tar_file); $(MAKE) --no-print-directory download-oc; tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || exit 1; }
+	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || { echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_tar_file)"; rm -f $(local_oc_tar_file); $(MAKE) --no-print-directory _fetch-oc-rhel9; tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || exit 1; }
 	~/bin/oc --help >/dev/null 2>&1
 
 openshift_install_url := https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)
 
-# Ensure all possible tarballs are downloaded
-$(rhel9_oc_tar_file):  ## Downlaod oc tarball for rhel9, if available
-	curl -sfkLI $(rhel9_oc_url) >/dev/null # Check connection only
-	echo [ABA] Downloading $(rhel9_oc_url)
-	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(@) failed download; > $(@); }
-	$(call verify-sha256,$@,$(openshift_install_url)/sha256sum.txt)
+# Tarball recipes: run_once -S -w serializes and blocks until download completes.
+# Prevents double-write races when multiple processes trigger the same tarball.
+# -S skips self-healing validation (which would re-download and race with extractors).
+# Stale state (tarball deleted, run_once says "done") is handled in install recipes.
+$(rhel9_oc_tar_file):  ## Download oc tarball for rhel9, if available
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:download:oc-rhel9:$(ocp_version)" -- $(MAKE) --no-print-directory _fetch-oc-rhel9
 
-# Ensure all possible tarballs are downloaded
-$(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
-	curl -sfkLI $(rhel8_oc_url) >/dev/null # Check connection only
+$(rhel8_oc_tar_file):  ## Download oc tarball for rhel8, if available
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:download:oc-rhel8:$(ocp_version)" -- $(MAKE) --no-print-directory _fetch-oc-rhel8
+
+.PHONY: _fetch-oc-rhel9
+_fetch-oc-rhel9:
+ifeq (,$(wildcard $(rhel9_oc_tar_file)))
+	curl -sfkLI $(rhel9_oc_url) >/dev/null
+	echo [ABA] Downloading $(rhel9_oc_url)
+	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(rhel9_oc_tar_file) failed download; > $(rhel9_oc_tar_file); }
+	$(call verify-sha256,$(rhel9_oc_tar_file),$(openshift_install_url)/sha256sum.txt)
+endif
+
+.PHONY: _fetch-oc-rhel8
+_fetch-oc-rhel8:
+ifeq (,$(wildcard $(rhel8_oc_tar_file)))
+	curl -sfkLI $(rhel8_oc_url) >/dev/null
 	echo [ABA] Downloading $(rhel8_oc_url)
-	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(@) failed download; > $(@); }
-	$(call verify-sha256,$@,$(openshift_install_url)/sha256sum.txt)
+	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file); }
+	$(call verify-sha256,$(rhel8_oc_tar_file),$(openshift_install_url)/sha256sum.txt)
+endif
 
 #	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-client-rhel8-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=$$(sha256sum $@) && grep -q "$$cs" openshift-client-rhel8-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 #	echo [ABA] "File $(rhel8_oc_tar_file) checksum valid!"  # Be sure it's valid
@@ -265,16 +292,28 @@ $(rhel8_oc_tar_file):  ## Downlaod oc tarball for rhel8, if available
 ########################################
 
 openshift-install: ~/bin/openshift-install ## Install openshift-install into ~/bin
-~/bin/openshift-install: .init | ~/bin
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for openshift-install download" -i "cli:download:openshift-install:$(ocp_version)" -- $(MAKE) --no-print-directory download-openshift-install
-	@echo [ABA] Extracting  $(openshift_install_file) to $@
-	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || { echo "[ABA] Error: Corrupt tarball, re-downloading $(openshift_install_file)"; rm -f $(openshift_install_file); $(MAKE) --no-print-directory download-openshift-install; tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || exit 1; }
-	$@ --help >/dev/null || { echo [ABA] "Error: file $@ invalid!"; exit 1; }
+~/bin/openshift-install: $(openshift_install_file) .init | ~/bin
+	@test -f $(openshift_install_file) || $(SCRIPTS)/run-once.sh -r -i "cli:download:openshift-install:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -S -w -m "Waiting for openshift-install download" -i "cli:download:openshift-install:$(ocp_version)" -- $(MAKE) --no-print-directory _fetch-openshift-install
+	@test -x ~/bin/openshift-install || $(SCRIPTS)/run-once.sh -r -i "cli:install:openshift-install:$(ocp_version)" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:install:openshift-install:$(ocp_version)" -- $(MAKE) --no-print-directory _extract-openshift-install
+
+.PHONY: _extract-openshift-install
+_extract-openshift-install:
+	@echo [ABA] Extracting  $(openshift_install_file) to ~/bin/openshift-install
+	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || { echo "[ABA] Error: Corrupt tarball, re-downloading $(openshift_install_file)"; rm -f $(openshift_install_file); $(MAKE) --no-print-directory _fetch-openshift-install; tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || exit 1; }
+	~/bin/openshift-install --help >/dev/null || { echo [ABA] "Error: file ~/bin/openshift-install invalid!"; exit 1; }
 
 $(openshift_install_file):  ## Download openshift-install tarball
-	@echo [ABA] Downloading $(openshift_install_url)/$@
-	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$@
-	$(call verify-sha256,$@,$(openshift_install_url)/sha256sum.txt)
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:download:openshift-install:$(ocp_version)" -- $(MAKE) --no-print-directory _fetch-openshift-install
+
+.PHONY: _fetch-openshift-install
+_fetch-openshift-install:
+ifeq (,$(wildcard $(openshift_install_file)))
+	@echo [ABA] Downloading $(openshift_install_url)/$(openshift_install_file)
+	curl -f --retry 8 $(CURL_PROGRESS) -OL https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$(openshift_install_file)
+	$(call verify-sha256,$(openshift_install_file),$(openshift_install_url)/sha256sum.txt)
+endif
 
 #	curl -f --retry 8 -sL $(CURL_PROGRESS) -o openshift-install-sha256sum.txt $(openshift_install_url)/sha256sum.txt && cs=`sha256sum $@` && grep -q "$$cs" openshift-install-sha256sum.txt || { echo [ABA] "Error: file $@ checksum invalid!"; exit 1; }
 #	echo [ABA] "File $@ checksum valid!"
@@ -299,14 +338,26 @@ oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clien
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz: ## Download oc-mirror tarball
-	echo [ABA] Downloading $(oc_mirror_base_url)/$@
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/$@
-	$(call verify-sha256,$@,$(oc_mirror_sha256sum))
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:fetch:oc-mirror" -- $(MAKE) --no-print-directory _fetch-oc-mirror
 
 oc-mirror.rhel9.tar.gz: ## Download oc-mirror tarball for rhel9
-	echo [ABA] Downloading $(oc_mirror_base_url)/$@
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/$@
-	$(call verify-sha256,$@,$(oc_mirror_sha256sum))
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:fetch:oc-mirror-rhel9" -- $(MAKE) --no-print-directory _fetch-oc-mirror-rhel9
+
+.PHONY: _fetch-oc-mirror
+_fetch-oc-mirror:
+ifeq (,$(wildcard oc-mirror.tar.gz))
+	echo [ABA] Downloading $(oc_mirror_base_url)/oc-mirror.tar.gz
+	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/oc-mirror.tar.gz
+	$(call verify-sha256,oc-mirror.tar.gz,$(oc_mirror_sha256sum))
+endif
+
+.PHONY: _fetch-oc-mirror-rhel9
+_fetch-oc-mirror-rhel9:
+ifeq (,$(wildcard oc-mirror.rhel9.tar.gz))
+	echo [ABA] Downloading $(oc_mirror_base_url)/oc-mirror.rhel9.tar.gz
+	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/oc-mirror.rhel9.tar.gz
+	$(call verify-sha256,oc-mirror.rhel9.tar.gz,$(oc_mirror_sha256sum))
+endif
 
 
 ########################################
@@ -320,9 +371,16 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 
 govc_url = https://github.com/vmware/govmomi/releases/latest/download
 $(govc_tar_file):   ## Download govc tarball
-	echo [ABA] Downloading $(govc_url)/$@
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -O "$(govc_url)/$@"
-	$(call verify-sha256,$@,$(govc_url)/checksums.txt)
+	@test -f $(govc_tar_file) || $(SCRIPTS)/run-once.sh -r -i "cli:fetch:govc" 2>/dev/null || true
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:fetch:govc" -- $(MAKE) --no-print-directory _fetch-govc
+
+.PHONY: _fetch-govc
+_fetch-govc:
+ifeq (,$(wildcard $(govc_tar_file)))
+	echo [ABA] Downloading $(govc_url)/$(govc_tar_file)
+	curl -f --retry 8 -sL $(CURL_PROGRESS) -O "$(govc_url)/$(govc_tar_file)"
+	$(call verify-sha256,$(govc_tar_file),$(govc_url)/checksums.txt)
+endif
 
 # Use either amd64 or aarch64 
 .PHONY: butane
@@ -340,10 +398,16 @@ butane_binary_file_url = $(butane_binary_url)/$(butane_binary_file)
 butane_binary_url_sha256sum = $(butane_binary_url)/sha256sum.txt
 
 $(butane_binary_file): ## Download butane binary 
+	@$(SCRIPTS)/run-once.sh -S -w -i "cli:fetch:butane" -- $(MAKE) --no-print-directory _fetch-butane
+
+.PHONY: _fetch-butane
+_fetch-butane:
+ifeq (,$(wildcard $(butane_binary_file)))
 	echo [ABA] Downloading $(butane_binary_file_url)
-	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $@ --connect-timeout 30 $(butane_binary_file_url)
-	chmod +x $@
-	$(call verify-sha256,$@,$(butane_binary_url_sha256sum))
+	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $(butane_binary_file) --connect-timeout 30 $(butane_binary_file_url)
+	chmod +x $(butane_binary_file)
+	$(call verify-sha256,$(butane_binary_file),$(butane_binary_url_sha256sum))
+endif
 
 
 ########################################

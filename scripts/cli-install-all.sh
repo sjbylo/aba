@@ -32,6 +32,21 @@ if [ "$ro_opt" != "-r" ] && ! is_bundle_mode; then
 	aba_debug "CLI downloads complete"
 fi
 
+# Version guard: if ocp_version changed, the installed binary is stale but Make
+# can't detect this when the binary is newer than the tarball (e.g. after a
+# downgrade).  Backdate the binary so Make re-extracts from the correct tarball.
+if [ "$ro_opt" != "-r" ]; then
+	_ver=$(source aba.conf 2>/dev/null && echo "$ocp_version")
+	for _bin in oc openshift-install; do
+		if [ -x ~/bin/$_bin ] && [ "$_ver" ] && ! ~/bin/$_bin version 2>/dev/null | grep -q "$_ver"; then
+			aba_debug "Version mismatch: ~/bin/$_bin does not match ocp_version=$_ver, backdating"
+			touch -t 200001010000 ~/bin/$_bin
+			run_once -r -i "cli:install:$_bin" 2>/dev/null || true
+			run_once -r -i "cli:install:$_bin:$_ver" 2>/dev/null || true
+		fi
+	done
+fi
+
 for item in $(make --no-print-directory -sC cli out-install-all)
 do
 	# If a filter was given, skip tools not in the list
