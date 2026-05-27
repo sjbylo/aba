@@ -134,6 +134,8 @@ stackable-spark-operator                                Stackable Operator for A
 stackable-superset-operator                             Stackable Operator for Apache Superset                       stable
 stackable-trino-operator                                Stackable Operator for Trino                                 stable
 stackable-zookeeper-operator                            Stackable Operator for Apache ZooKeeper                      stable
+stackgres-certified                                     StackGres                                                    stable
+strategy-operator                                       Strategy Customer Managed Cloud                              stable-v1
 sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Collection Helm Operator               alpha
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable

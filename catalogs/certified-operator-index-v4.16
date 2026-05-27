@@ -77,6 +77,7 @@ hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric 
 hpe-filex-csi-operator                                  HPE GreenLake File Storage CSI Operator                      beta
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 hulft                                                   HULFT10 for Container Platform                               stable
+iax-webhook-router                                      ITRS Analytics Webhook Router                                stable
 ibm-application-gateway-operator                        IBM Application Gateway Operator                             stable
 ibm-block-csi-operator                                  IBM block storage CSI driver operator                        stable
 ibm-common-service-operator                             IBM Cloud Pak foundational services                          v4.12
@@ -197,7 +198,7 @@ redis-enterprise-operator-cert                          Redis Enterprise Operato
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.30
+scaleops-operator                                       -                                                            stable-v1.30
 silicom-sts-operator                                    Silicom STS Operator                                         stable
 smilecdr-operator                                       Smilecdr Operator                                            alpha
 sn-operator                                             StreamNative Operator                                        alpha
@@ -225,7 +226,7 @@ sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Co
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
-tawon-operator                                          Tawon                                                        fast-v2
+tawon-operator                                          Tawon                                                        candidate-v3
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.8
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.38
