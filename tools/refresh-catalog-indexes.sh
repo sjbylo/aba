@@ -83,20 +83,64 @@ echo ""
 
 mkdir -p "$CATALOGS_DIR" "$INDEX_DIR"
 
-# Phase 1a: Parallel digest check to find which catalogs need re-downloading.
-# Runs up to MAX_PARALLEL skopeo probes concurrently (~3s each).
+# Phase 1a: Parallel content-layer check to find which catalogs need re-downloading.
+# Instead of comparing the whole image digest (which changes on base-image security
+# rebuilds), we compare the catalog content layer digest. FBC catalog images have a
+# stable 5-layer structure where layers[-1] is the only catalog-specific layer
+# (containing /configs + /tmp/cache). Layers 0-3 are shared base infrastructure.
+# Same content = same SHA-256 layer digest, regardless of base image changes.
 MAX_PARALLEL=4
 NEEDS_DOWNLOAD_DIR=$(mktemp -d)
 trap "rm -rf '$NEEDS_DOWNLOAD_DIR'" EXIT
 
-echo "=== Phase 1: Checking for upstream changes (${MAX_PARALLEL} parallel) ==="
+echo "=== Phase 1: Checking for upstream content changes (${MAX_PARALLEL} parallel) ==="
 skipped=0
 running=0
 
-_check_digest() {
+# Resolve manifest list → arch-specific manifest → extract content layer digest.
+# Returns the digest of layers[-1] (the catalog-specific FBC data + cache layer).
+# Verified: layers[-2] is shared base infrastructure across all catalog types;
+# layers[-1] is the only layer unique per catalog (contains /configs + /tmp/cache).
+_get_content_layer_digest() {
+	local remote_ref="$1"
+
+	# Resolve manifest list to amd64 architecture
+	local arch_digest
+	arch_digest=$(skopeo inspect --raw "$remote_ref" 2>/dev/null | \
+		jq -r '.manifests[]? | select(.platform.architecture=="amd64") | .digest')
+
+	# If not a manifest list (single-arch image), get manifest directly
+	if [[ -z "$arch_digest" ]]; then
+		local manifest
+		manifest=$(skopeo inspect --raw "$remote_ref" 2>/dev/null)
+		local layer_count
+		layer_count=$(echo "$manifest" | jq '.layers | length' 2>/dev/null)
+		if [[ "$layer_count" -ge 4 ]]; then
+			echo "$manifest" | jq -r '.layers[-1].digest'
+			return 0
+		fi
+		return 1
+	fi
+
+	# Get arch-specific manifest
+	local base_ref="${remote_ref%:*}"
+	local manifest
+	manifest=$(skopeo inspect --raw "${base_ref}@${arch_digest}" 2>/dev/null)
+
+	# Safety: expect at least 4 layers (standard FBC images have 5)
+	local layer_count
+	layer_count=$(echo "$manifest" | jq '.layers | length' 2>/dev/null)
+	if [[ -z "$layer_count" ]] || [[ "$layer_count" -lt 4 ]]; then
+		return 1
+	fi
+
+	echo "$manifest" | jq -r '.layers[-1].digest'
+}
+
+_check_content_change() {
 	local catalog="$1" ver="$2"
 	local index="${INDEX_DIR}/${catalog}-index-v${ver}"
-	local remote_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.remote-digest"
+	local layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
 	local remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
 
 	# --force: always re-download
@@ -113,53 +157,50 @@ _check_digest() {
 		return
 	fi
 
-	# No saved remote digest: probe it now. If local index exists, save digest and skip.
-	if [[ ! -f "$remote_digest_file" ]]; then
+	# No saved content layer digest: probe and save it for next time
+	if [[ ! -f "$layer_digest_file" ]]; then
 		if [[ -s "$index" ]]; then
-			# Have a valid local file -- just need to save the digest for next time
-			local remote_rd
-			remote_rd=$(skopeo inspect --no-tags --format '{{.Digest}}' "$remote_ref" 2>/dev/null) || remote_rd=""
-			if [[ -n "$remote_rd" ]]; then
-				echo "$remote_rd" > "$remote_digest_file"
-				echo "--- ${catalog} v${ver} --- SKIP (saved digest for next run)"
+			local remote_cld
+			remote_cld=$(_get_content_layer_digest "$remote_ref") || remote_cld=""
+			if [[ -n "$remote_cld" ]]; then
+				echo "$remote_cld" > "$layer_digest_file"
+				echo "--- ${catalog} v${ver} --- SKIP (saved content layer digest for next run)"
 				return
 			fi
-			# skopeo failed but we have a local file -- skip anyway
-			echo "--- ${catalog} v${ver} --- SKIP (local index exists, skopeo probe failed)"
+			echo "--- ${catalog} v${ver} --- SKIP (local index exists, layer probe failed)"
 			return
 		fi
-		# No local index at all: must download
 		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
 		echo "--- ${catalog} v${ver} --- DOWNLOAD (no local index or digest)"
 		return
 	fi
 
-	# Probe remote digest
-	local local_rd remote_rd
-	local_rd=$(< "$remote_digest_file")
-	remote_rd=$(skopeo inspect --no-tags --format '{{.Digest}}' "$remote_ref" 2>/dev/null) || remote_rd=""
+	# Probe current content layer digest
+	local stored_cld remote_cld
+	stored_cld=$(< "$layer_digest_file")
+	remote_cld=$(_get_content_layer_digest "$remote_ref") || remote_cld=""
 
-	# skopeo failed (network/timeout)
-	if [[ -z "$remote_rd" ]]; then
+	# Probe failed (network/timeout)
+	if [[ -z "$remote_cld" ]]; then
 		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-		echo "--- ${catalog} v${ver} --- DOWNLOAD (skopeo probe failed)"
+		echo "--- ${catalog} v${ver} --- DOWNLOAD (layer probe failed)"
 		return
 	fi
 
-	# Digest matches: upstream unchanged
-	if [[ "$remote_rd" == "$local_rd" ]]; then
-		echo "--- ${catalog} v${ver} --- SKIP (digest unchanged)"
+	# Content layer digest matches: catalog operators haven't changed
+	if [[ "$remote_cld" == "$stored_cld" ]]; then
+		echo "--- ${catalog} v${ver} --- SKIP (content unchanged, base-image-only rebuild)"
 		return
 	fi
 
-	# Digest changed: upstream has a new image
+	# Content layer changed: real operator updates
 	touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-	echo "--- ${catalog} v${ver} --- DOWNLOAD (upstream changed)"
+	echo "--- ${catalog} v${ver} --- DOWNLOAD (catalog content changed)"
 }
 
 for ver in "${VERSIONS[@]}"; do
 	for catalog in "${CATALOGS[@]}"; do
-		_check_digest "$catalog" "$ver" &
+		_check_content_change "$catalog" "$ver" &
 		running=$((running + 1))
 		if (( running >= MAX_PARALLEL )); then
 			wait -n 2>/dev/null || true
@@ -201,13 +242,13 @@ if [[ ${#needs_download[@]} -gt 0 ]]; then
 		catalog="${entry%%:*}"
 		ver="${entry#*:}"
 		remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
-		remote_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.remote-digest"
+		layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
 
 		echo "--- ${catalog} v${ver} ---"
 		if scripts/download-catalog-index.sh "$catalog" "$ver"; then
-			# Save remote digest for future idempotency checks
-			rd=$(skopeo inspect --no-tags --format '{{.Digest}}' "$remote_ref" 2>/dev/null) || rd=""
-			[[ -n "$rd" ]] && echo "$rd" > "$remote_digest_file"
+			# Save content layer digest for future change detection
+			cld=$(_get_content_layer_digest "$remote_ref") || cld=""
+			[[ -n "$cld" ]] && echo "$cld" > "$layer_digest_file"
 			echo "  OK: downloaded ${catalog} v${ver}"
 			downloaded=$((downloaded + 1))
 		else
@@ -363,6 +404,19 @@ if git diff --quiet "${CATALOGS_DIR}/" 2>/dev/null && git diff --quiet --cached 
 elif [[ "$do_commit" == true ]]; then
 	echo ""
 	echo "=== Changes detected -- committing and pushing ==="
+	# This script legitimately runs on both 'main' (to keep shipped catalogs fresh
+	# for users) and 'dev' (during development). Confirm the target branch so the
+	# operator doesn't accidentally push to the wrong one.
+	current_branch=$(git branch --show-current)
+	if [[ "$do_yes" != true ]]; then
+		read -rp "Commit and push to '${current_branch}'? (Y/n) " _answer
+		if [[ "$_answer" =~ ^[Nn] ]]; then
+			echo "Aborted -- changes NOT committed."
+			echo "Changes detected in ${CATALOGS_DIR}/:"
+			git diff --stat "${CATALOGS_DIR}/"
+			exit 0
+		fi
+	fi
 	git add "${CATALOGS_DIR}/"
 	git commit -m "$(cat <<'EOF'
 Update shipped catalog indexes
