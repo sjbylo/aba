@@ -288,7 +288,7 @@ _TILDE_LOCAL_SUBDIR="e2e-tilde-local-data"
 _TILDE_REMOTE_USER="testy"
 
 e2e_run "Setup: SSH authorized_keys for $_TILDE_REMOTE_USER on disN" \
-	"_essh $DIS_HOST \"sudo mkdir -p /home/$_TILDE_REMOTE_USER/.ssh && sudo cp ~steve/.ssh/authorized_keys /home/$_TILDE_REMOTE_USER/.ssh/ && sudo chown -R $_TILDE_REMOTE_USER: /home/$_TILDE_REMOTE_USER/.ssh && sudo chmod 700 /home/$_TILDE_REMOTE_USER/.ssh && sudo chmod 600 /home/$_TILDE_REMOTE_USER/.ssh/authorized_keys\""
+	"_essh $DIS_HOST \"sudo bash -c 'cat ~steve/.ssh/authorized_keys >> /home/$_TILDE_REMOTE_USER/.ssh/authorized_keys && sort -u -o /home/$_TILDE_REMOTE_USER/.ssh/authorized_keys /home/$_TILDE_REMOTE_USER/.ssh/authorized_keys' && sudo chown -R $_TILDE_REMOTE_USER: /home/$_TILDE_REMOTE_USER/.ssh && sudo chmod 700 /home/$_TILDE_REMOTE_USER/.ssh && sudo chmod 600 /home/$_TILDE_REMOTE_USER/.ssh/authorized_keys\""
 
 e2e_run "Create mirror dir for remote tilde test" \
 	"cd ~/aba && aba mirror --name $_TILDE_MIRROR"

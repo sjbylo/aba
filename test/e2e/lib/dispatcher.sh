@@ -600,10 +600,27 @@ _notify_periodic_status() {
 
 	local _n_ok=0 _n_fail=0 _n_skip=0
 	local _notify_body=""
+
+	# Build set of suites being retried (running or re-queued)
+	local -A _retrying=()
 	for _ns in "${!_busy_pools[@]}"; do
-		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} RUNNING
+		_retrying[${_busy_pools[$_ns]}]=1
+	done
+	for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+		_retrying[${_work_queue[$_qi]}]=1
+	done
+
+	# Show running suites with PAUSED detection
+	for _ns in "${!_busy_pools[@]}"; do
+		local _pool_state="RUNNING"
+		local _pane_line=""
+		_pane_line=$(_ssh_con "$_ns" "tmux capture-pane -t '$_TMUX_SESSION' -p 2>/dev/null | grep -a '.' | tail -1" 2>/dev/null) || _pane_line=""
+		[[ "$_pane_line" == *"[R]etry"* ]] && _pool_state="PAUSED"
+		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} ${_pool_state}
 "
 	done
+
+	# Show completed results; mark stale FAILs that are being retried
 	for _ns in "${!_results[@]}"; do
 		local _nrc="${_results[$_ns]}"
 		local _np="${_result_pool[$_ns]:-?}"
@@ -615,6 +632,10 @@ _notify_periodic_status() {
 			_notify_body+="  con${_np}: ${_ns} SKIP
 "
 			_n_skip=$(( _n_skip + 1 ))
+		elif [ -n "${_retrying[$_ns]:-}" ]; then
+			_notify_body+="  con${_np}: ${_ns} FAIL(${_nrc})→retry
+"
+			_n_fail=$(( _n_fail + 1 ))
 		else
 			_notify_body+="  con${_np}: ${_ns} FAIL(${_nrc})
 "

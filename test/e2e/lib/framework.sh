@@ -794,8 +794,13 @@ e2e_cleanup_mirrors() {
 				else
 					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
 				fi
-			elif [ -d '$abs_path' ]; then
-				echo '  (mirror $abs_path already uninstalled -- skipping)'
+		elif [ -d '$abs_path' ]; then
+			if [ \"\$(basename '$abs_path')\" = mirror ]; then
+				echo '  (preserving pool mirror dir $abs_path)'
+			else
+				echo '  (mirror $abs_path has no .available -- removing orphaned data dir)'
+				rm -rf '$abs_path'
+			fi
 			else
 				echo '  (mirror dir $abs_path does not exist -- skipping)'
 			fi" \
