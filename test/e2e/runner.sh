@@ -128,6 +128,7 @@ _cleanup_non_mirror_local() {
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	rm -rf ~/tmp/*
+	rm -f ~/aba/cli/*.tar.gz
 
 	# When switching between --user root and --user steve (or any user), the
 	# OTHER user's home may still contain large artifacts from a previous run.
@@ -224,6 +225,18 @@ _cleanup_test_artifact_dirs() {
 				echo "  WARNING: test artifact dirs found on $label ($_check_user): $_found"
 				_essh "${_check_user}@${_dis_fqdn}" "rm -rf ~/e2e-test-*" 2>&1
 			fi
+			_found=$(_essh "${_check_user}@${_dis_fqdn}" \
+				"for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && echo \"SKIP \$d\" && continue; echo \"\$d\"; done" 2>/dev/null || true)
+			if [ -n "$_found" ]; then
+				local _skip _clean
+				_skip=$(echo "$_found" | grep '^SKIP ' || true)
+				_clean=$(echo "$_found" | grep -v '^SKIP ' || true)
+				[ -n "$_skip" ] && echo "  SKIPPED on $label ($_check_user): $(echo "$_skip" | sed 's/^SKIP //' | tr '\n' ' ')"
+				if [ -n "$_clean" ]; then
+					echo "  WARNING: orphan artifact dirs on $label ($_check_user): $(echo "$_clean" | tr '\n' ' ')"
+					_essh "${_check_user}@${_dis_fqdn}" "for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && continue; rm -rf \"\$d\"; done" 2>&1
+				fi
+			fi
 		done
 	else
 		local _found=""
@@ -234,6 +247,19 @@ _cleanup_test_artifact_dirs() {
 			echo "  WARNING: test artifact dirs found on $label:$_found"
 			rm -rf "$HOME"/e2e-test-*
 		fi
+
+		# Also clean ~/aba/e2e-* orphans (cluster, mirror, and test dirs).
+		# Skip any dir that has VM lifecycle markers (.autorefresh or .autoupload)
+		# — those may reference live VMs and must be cleaned via aba delete.
+		for _d in "$HOME"/aba/e2e-*; do
+			[ -d "$_d" ] || continue
+			if [ -f "$_d/.autorefresh" ] || [ -f "$_d/.autoupload" ]; then
+				echo "  SKIPPED: $_d (has VM markers -- use aba delete)"
+				continue
+			fi
+			echo "  WARNING: orphan artifact dir on $label: $_d"
+			rm -rf "$_d"
+		done
 	fi
 }
 
@@ -891,10 +917,10 @@ _pre_suite_cleanup() {
 					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister
 				else
 					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
-				fi && rm -rf '$abs_path'
-			else
-				echo '  (dir not found -- already cleaned)'
-			fi" \
+			fi && if [ \"\$(basename '$abs_path')\" = mirror ]; then echo '  (preserving pool mirror dir)'; else rm -rf '$abs_path'; fi
+		else
+			echo '  (dir not found -- already cleaned)'
+		fi" \
 			< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"

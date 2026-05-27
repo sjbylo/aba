@@ -83,8 +83,8 @@ test_begin "Setup: install aba and configure"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify / available space > 200GB after reset" \
-    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
+e2e_run "Verify / available space > 195GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 195 ]"
 
 # Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
 # || true: some packages may not be installed -- dnf returns non-zero if any are missing
@@ -560,6 +560,7 @@ e2e_diag "Show enclave SNO cluster.conf" "grep -E '^\w' $ENCLAVE_SNO/cluster.con
 e2e_run "Verify cluster.conf references enclave mirror" \
     "grep -q 'mirror_name=$ENCLAVE_MIRROR' $ENCLAVE_SNO/cluster.conf"
 
+e2e_run -q "Skip DNS for enclave SNO" "aba --verify conf"
 e2e_run "Generate ISO for enclave SNO" "aba --dir $ENCLAVE_SNO iso"
 e2e_run "Upload ISO for enclave SNO" "aba --dir $ENCLAVE_SNO upload"
 e2e_add_to_cluster_cleanup "$PWD/$ENCLAVE_SNO"

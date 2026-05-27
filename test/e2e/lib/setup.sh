@@ -217,6 +217,18 @@ _cleanup_con_registry() {
         echo "  [cleanup] Removing stale registry credentials (~/.aba/mirror/)"
         rm -rf "$HOME/.aba/mirror"
     fi
+
+    # Remove stale oc-mirror temp dirs (>1 day old) from /var/tmp.
+    # oc-mirror's Go containers/image library creates these during catalog pulls
+    # but orphans them on crash/interrupt.
+    local _stale_tmp
+    _stale_tmp=$(find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 2>/dev/null)
+    if [ -n "$_stale_tmp" ]; then
+        local _count
+        _count=$(echo "$_stale_tmp" | wc -l)
+        echo "  [cleanup] Removing $_count stale oc-mirror temp dirs (>1 day old) from /var/tmp"
+        echo "$_stale_tmp" | xargs rm -rf
+    fi
 }
 
 # --- build_and_test_cluster -------------------------------------------------
