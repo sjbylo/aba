@@ -59,6 +59,7 @@ WORK_DIR=$PWD # Remember so can change config file here
 # This scans through all arguments and filters out these special options
 new_args=()           # Array to collect arguments we want to keep
 dir_already_set=false # Only process first --dir/-d
+_CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
 i=1
 
 while [ $i -le $# ]; do
@@ -112,6 +113,14 @@ while [ $i -le $# ]; do
 
 		--debug|-D)
 			export DEBUG_ABA=1
+			;;
+
+		--name|-n)
+			# Extract cluster name early so flag handlers (--ntp, --dns, etc.)
+			# can target the correct cluster.conf
+			i=$((i + 1))
+			_CLI_CLUSTER_NAME="${!i}"
+			new_args+=("$arg" "$_CLI_CLUSTER_NAME")
 			;;
 
 		*)
@@ -608,12 +617,12 @@ elif [ "$1" = "--light" ]; then
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
-		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		else
 			aba_abort "invalid CIDR [$2]" 
 		fi
@@ -631,7 +640,7 @@ elif [ "$1" = "--light" ]; then
 			fi
 			shift
 		done
-		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# If arg missing remove from aba.conf
@@ -643,7 +652,7 @@ elif [ "$1" = "--light" ]; then
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
-		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--gateway-ip" -o "$1" = "--gateway" -o "$1" = "-g" ]; then
 		# If arg missing remove from aba.conf
@@ -655,7 +664,7 @@ elif [ "$1" = "--light" ]; then
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
 	#		gw_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
-		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
 		_flag="$1"
