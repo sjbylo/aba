@@ -49,4 +49,6 @@ test_begin "Step 3: should run after skip"
 e2e_run "Echo world" "echo 'hello from step 3'"
 test_end
 
-suite_end
+suite_end; _rc=$?
+
+exit $_rc

@@ -324,7 +324,7 @@ e2e_run "Remote: cleanup $_TILDE_REMOTE_USER data dir" \
 # A second Docker registry on the same host would crash on that port conflict.
 # Stop pool-registry for the duration of this local install test.
 e2e_run "Stop pool-registry to free debug port 5001 (if running)" \
-	"podman stop pool-registry 2>/dev/null || echo 'pool-registry not running -- port already free'"
+	"podman stop pool-registry || echo 'pool-registry not running -- port already free'"
 
 e2e_run "Recreate mirror dir for local tilde test" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR && aba mirror --name $_TILDE_MIRROR"
@@ -352,7 +352,7 @@ e2e_run "Cleanup tilde mirror dir" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR"
 
 e2e_run "Restart pool-registry (if it was running)" \
-	"podman start pool-registry 2>/dev/null || echo 'pool-registry was not present -- skip'"
+	"podman start pool-registry || echo 'pool-registry was not present -- skip'"
 
 test_end
 
