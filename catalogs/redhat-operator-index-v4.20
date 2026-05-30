@@ -140,7 +140,7 @@ smart-gateway-operator                                  Smart Gateway Operator  
 smb-csi-driver-operator                                 CIFS/SMB CSI Driver Operator                                 stable
 sriov-network-operator                                  SR-IOV Network Operator                                      stable
 storage-base-remediation                                SBD                                                          candidate
-submariner                                              Submariner                                                   stable-0.23
+submariner                                              Submariner                                                   stable-0.24
 support-log-gather-operator                             support log gather                                           tech-preview
 tang-operator                                           NBDE Tang Server                                             alpha
 tempo-product                                           Tempo Operator                                               stable
