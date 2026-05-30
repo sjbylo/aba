@@ -53,9 +53,8 @@ if [ ${#missing_pkgs[@]} -gt 0 ]; then
 	printf "  ⏳ Installing packages (%d, logging to .dnf-install.log)...\n" "${#missing_pkgs[@]}" >&2
 
 	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
-		echo
-		echo "Error installing required packages. See: .dnf-install.log" >&2
-		echo "Install the correct rpm packages (${missing_pkgs[*]}) and try again." >&2
+		printf "\n  Error installing packages. See: .dnf-install.log\n" >&2
+		printf "  Try:  sudo dnf install %s\n\n" "${missing_pkgs[*]}" >&2
 
 		exit 1
 	fi
@@ -126,9 +125,10 @@ download_repo() {
 
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 		[ ! "$quiet" ] && printf "  ⏳ Cloning repository...\n" >&2
-		if ! git clone --quiet --depth 1 -b $branch https://github.com/${repo}.git; then
-			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
-
+		_clone_cmd="git clone --quiet --depth 1 -b $branch https://github.com/${repo}.git"
+		if ! _clone_out=$($_clone_cmd 2>&1); then
+			printf "\n  Command: %s\n" "$_clone_cmd" >&2
+			printf "  Error:   %s\n\n" "$_clone_out" >&2
 			exit 1
 		fi
 
