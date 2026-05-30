@@ -126,7 +126,7 @@ download_repo() {
 
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
 		[ ! "$quiet" ] && printf "  ⏳ Cloning repository...\n" >&2
-		if ! git clone --depth 1 -b $branch https://github.com/${repo}.git; then
+		if ! git clone --quiet --depth 1 -b $branch https://github.com/${repo}.git; then
 			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
 
 			exit 1
