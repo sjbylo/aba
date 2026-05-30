@@ -120,6 +120,12 @@ _cluster_load_conf() {
 		cl_workers="$_nw"
 	fi
 
+	# Load macs.conf if it exists alongside cluster.conf
+	local _macs_file="${conf%/*}/macs.conf"
+	if [[ -f "$_macs_file" ]]; then
+		cl_macs="$(< "$_macs_file")"
+	fi
+
 	return 0
 }
 
@@ -164,6 +170,12 @@ _persist_cluster_draft() {
 	esac
 
 	tui_log "Persisted wizard values to $_conf"
+
+	# Persist macs.conf for bare-metal (not stored in cluster.conf)
+	if [[ "${cl_platform:-}" == "bm" && -n "${cl_macs:-}" ]]; then
+		echo "$cl_macs" > "$ABA_ROOT/$cl_name/macs.conf"
+		tui_log "Persisted macs.conf for '$cl_name'"
+	fi
 }
 
 # Generate a preliminary cluster.conf via aba core to get real defaults.
@@ -915,6 +927,13 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				fi
 			fi
 			[[ -n "$input" ]] && cl_name="$input"
+			# Warn if cluster is already installed
+			if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+					--yes-label "Continue" --no-label "Back" \
+					--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
+				[[ $? -ne 0 ]] && continue
+			fi
 			# Silently load existing cluster.conf if present
 			if [[ -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
 				_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
@@ -1903,11 +1922,9 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				case "$_TUI_MODE" in
 					CONNO)
 						_TUI_MODE="DIRECT"
-						_TUI_DIRECT_FROM_CONNO=true
 						tui_log "Advanced: switching to DIRECT mode"
 						direct_main || true
 						_TUI_MODE="CONNO"
-						_TUI_DIRECT_FROM_CONNO=false
 						;;
 					DIRECT)
 						_TUI_MODE="CONNO"
@@ -2072,6 +2089,16 @@ _day2_status() {
 		echo "═══ Nodes ($cl_display) ═══"
 		echo ""
 		KUBECONFIG="$kc" oc get nodes --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
+		echo ""
+		echo "═══ Pending Pods ($cl_display) ═══"
+		echo ""
+		KUBECONFIG="$kc" oc get po -A --sort-by=.status.conditions[-1].lastTransitionTime --request-timeout=5s 2>&1 \
+			| awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print}' \
+			|| echo "(Cluster API unreachable)"
+		echo ""
+		echo "═══ Upgrade Status ($cl_display) ═══"
+		echo ""
+		KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 	} > "$output_file" 2>&1
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
