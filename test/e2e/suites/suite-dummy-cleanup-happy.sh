@@ -129,4 +129,6 @@ e2e_run "Verify no cleanup files remain" "
 
 test_end
 
-suite_end
+suite_end; _rc=$?
+
+exit $_rc

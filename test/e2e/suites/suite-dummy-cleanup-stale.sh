@@ -71,4 +71,6 @@ e2e_run "Suite will end -- cleanup should handle stale references gracefully" \
 
 test_end
 
-suite_end
+suite_end; _rc=$?
+
+exit $_rc

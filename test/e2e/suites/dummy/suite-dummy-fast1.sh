@@ -19,5 +19,6 @@ e2e_run "Sleep 5s" "sleep 5"
 e2e_run "Echo OK" "echo dummy-fast1-B"
 test_end 0
 
-suite_end
-echo "SUCCESS: dummy-fast1"
+suite_end; _rc=$?
+
+exit $_rc

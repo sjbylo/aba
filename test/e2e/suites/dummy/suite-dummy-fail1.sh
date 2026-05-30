@@ -17,4 +17,6 @@ test_begin "Fail step"
 e2e_run "Sleep 2s" "sleep 2"
 test_end 1
 
-suite_end
+suite_end; _rc=$?
+
+exit $_rc
