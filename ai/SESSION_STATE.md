@@ -1,20 +1,20 @@
 # Session State
 
 ## Current goal
-Der Tippmeister -- APAC mini-tournament loaded, various improvements.
+Install script styling complete. No active task.
 
 ## Done this session
-- Fixed blank/pink page issue: added **flask-compress** for gzip (95-96% size reduction)
-- Optimized admin predictions grid: JS click handlers instead of `<a>` wraps
-- Created `seed_apac.py` -- 8-team APAC tournament (16 matches, 7 days)
-- Externalized secrets to `~/.tm.conf` (chmod 600), sourced by `start.sh`
-- **Timezone auto-detect**: browser `Intl` API detects timezone on registration (auto-set), login (auto-set if empty), and profile page ("Detected: X, Use this" hint)
+- Implemented styled output for `./install` (green checkmarks, bold banner, sequential steps)
+- Fixed E2E grep compatibility ("installed to" substring preserved)
+- Fixed 4 review issues: dnf log mention, git clone stderr visible, clone path shown, cache cleared
+- Committed and pushed: `10db9e69` style(install): add styled output with green checkmarks
 
 ## Next steps
-- Remaining features: "Next 3/7 days" filters, "My Tips" → "My Predictions" rename
-- User testing the APAC mini-tournament
+- Pending from prior sessions: fix `state.sh` single-quote quoting bug in `scripts/reg-common.sh`
+- Pending: commit `test/func/test-cli-download-pipeline.sh`
 
 ## Decisions / notes
-- Timezone detect uses `Intl.DateTimeFormat().resolvedOptions().timeZone` (reliable in all modern browsers)
-- Login auto-set only fires if user.timezone is empty/None (doesn't override existing choice)
-- Profile hint only shows when detected != saved timezone
+- Package install feedback prints unconditionally (quiet flag parsed later) — matches original
+- No `[ ]` checkboxes upfront (rejected for terminal compat)
+- `⏳` for in-progress, `✓` for complete — no cursor repositioning
+- git clone output NOT suppressed — user needs errors visible
