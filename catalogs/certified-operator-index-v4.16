@@ -198,7 +198,7 @@ redis-enterprise-operator-cert                          Redis Enterprise Operato
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable
-scaleops-operator                                       -                                                            stable-v1.30
+scaleops-operator                                       ScaleOps                                                     stable-v1.30
 silicom-sts-operator                                    Silicom STS Operator                                         stable
 smilecdr-operator                                       Smilecdr Operator                                            alpha
 sn-operator                                             StreamNative Operator                                        alpha
