@@ -62,6 +62,16 @@ test_begin "Setup: ensure pre-populated registry"
 e2e_run "Verify con bastion is reachable" \
 	"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${CON_HOST} 'echo OK: bastion reachable'"
 
+e2e_install_aba
+e2e_run "Configure aba.conf (temporary, for version resolution)" \
+	"aba --noask --platform vmw --channel \$TEST_CHANNEL --version \$OCP_VERSION --base-domain \$(pool_domain)"
+
+_ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Ensure pre-populated registry (OCP ${_ocp_channel} ${_ocp_version})" \
+	"test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
 test_end
 
 # ============================================================================
@@ -100,8 +110,11 @@ e2e_run "Clear reg_ssh_user (local registry)" \
 
 e2e_add_to_mirror_cleanup "$PWD/mirror"
 
+e2e_run "Generate pool-registry pull secret via aba" \
+	"printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
+
 e2e_run "Register pool registry" \
-	"aba -d mirror register pull_secret_mirror=/tmp/pool-reg-pull-secret.json ca_cert=\$POOL_REG_DIR/certs/ca.crt"
+	"aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert \$POOL_REG_DIR/certs/ca.crt"
 
 e2e_run "Verify mirror registry access" "aba -d mirror verify"
 
