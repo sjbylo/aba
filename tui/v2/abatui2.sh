@@ -159,7 +159,6 @@ _tick "Checking packages"
 # =============================================================================
 
 _TUI_FORCE_MODE=""
-_TUI_DIRECT_FROM_CONNO=false
 _TUI_DISCO_FROM_CONNO=false
 
 while [[ $# -gt 0 ]]; do
