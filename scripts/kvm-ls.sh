@@ -1,5 +1,6 @@
 #!/bin/bash
-# Display the VMs and their state on the KVM host
+# Display the VMs and their state on the KVM host.
+# Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
 
@@ -18,24 +19,6 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
-header="Name CPU Memory State"
-
-output=
-for name in $CP_NAMES $WORKER_NAMES; do
-	vm=$(vm_name "$CLUSTER_NAME" "$name")
-	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $vm"
-	info=$(virsh -c "$LIBVIRT_URI" dominfo "$vm" 2>/dev/null) || continue
-
-	state=$(echo "$info" | awk '/^State:/ {$1=""; s=substr($0,2); gsub(/ /,"-",s); print s}')
-	num_cpu=$(echo "$info" | awk '/^CPU\(s\):/ {print $2}')
-	memory_kb=$(echo "$info" | awk '/^Max memory:/ {print $3}')
-	[ "$memory_kb" ] && memory_gb=$(( memory_kb / 1048576 )) || memory_gb="?"
-
-	output="$output\n${vm} ${num_cpu} ${memory_gb}GB $state"
-done
-
-if [ "$output" ]; then
-	echo -e "$header\n$output" | column -t
-else
-	echo "No resources"
-fi
+source scripts/vm-provider.sh
+vm_provider_load kvm
+vm_ls

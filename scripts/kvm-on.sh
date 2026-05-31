@@ -1,5 +1,6 @@
 #!/bin/bash
-# Determine if at least one VM is running on the KVM host
+# Determine if at least one VM is running on the KVM host.
+# Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
 
@@ -16,10 +17,6 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
-for name in $CP_NAMES $WORKER_NAMES; do
-	aba_debug "Running: virsh -c $LIBVIRT_URI domstate $(vm_name "$CLUSTER_NAME" "$name")"
-	state=$(virsh -c "$LIBVIRT_URI" domstate "$(vm_name "$CLUSTER_NAME" "$name")" 2>/dev/null)
-	[ "$state" = "running" ] && exit 0
-done
-
-exit 1
+source scripts/vm-provider.sh
+vm_provider_load kvm
+vm_on_any
