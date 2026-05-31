@@ -1,5 +1,6 @@
 #!/bin/bash
-# Check if at least one VM exists on the KVM host
+# Check if at least one VM exists on the KVM host.
+# Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
 
@@ -19,9 +20,6 @@ if [ ! "$CLUSTER_NAME" ]; then
 	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
-for name in $CP_NAMES $WORKER_NAMES; do
-	aba_debug "Running: virsh -c $LIBVIRT_URI dominfo $(vm_name "$CLUSTER_NAME" "$name")"
-	virsh -c "$LIBVIRT_URI" dominfo "$(vm_name "$CLUSTER_NAME" "$name")" >/dev/null 2>&1 && exit 0
-done
-
-exit 1
+source scripts/vm-provider.sh
+vm_provider_load kvm
+vm_exists_any
