@@ -267,21 +267,20 @@ _check_hung() {
 	_now_epoch=$(date +%s)
 	local _idle_secs=$(( _now_epoch - _log_age ))
 	if [ "$_idle_secs" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
+		# Paused suites produce no output by design -- skip hung detection.
+		# Marker file is written by _interactive_prompt (framework.sh); same
+		# signal cmd_status uses for PAUSED state.
+		local _paused=""
+		_paused=$(_ssh_con "$pool_num" "[ -f '/tmp/e2e-paused-${suite}' ] && echo yes" 2>/dev/null) || _paused=""
+		if [ "$_paused" = "yes" ]; then
+			return
+		fi
+
 		_hung_notified[$pool_num]=1
 		local _idle_min=$(( _idle_secs / 60 ))
-
-		# Distinguish "paused at interactive failure prompt" from genuinely hung.
-		local _last_line="" _label _color _detail
-		_last_line=$(_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p 2>/dev/null | grep -a '.' | tail -1" 2>/dev/null) || _last_line=""
-
-		if [[ "$_last_line" == *"[R]etry"* ]]; then
-			_label="PAUSED" _color="1;33" _detail="waiting at failure prompt"
-		else
-			_label="HUNG?" _color="1;35" _detail="no output"
-		fi
-		printf "  \033[${_color}m${_label}:\033[0m %s on pool %s -- ${_detail} (%d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
+		printf "  \033[1;35mHUNG?:\033[0m %s on pool %s -- no output (%d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-			$NOTIFY_CMD "[e2e] ${_label}: ${suite} on pool ${pool_num} -- ${_detail} (${_idle_min} min)" < /dev/null >/dev/null &
+			$NOTIFY_CMD "[e2e] HUNG?: ${suite} on pool ${pool_num} -- no output (${_idle_min} min)" < /dev/null >/dev/null &
 		fi
 	fi
 }
