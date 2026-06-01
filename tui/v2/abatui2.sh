@@ -142,6 +142,10 @@ done
 
 tui_log "Kicking off background internet check"
 aba_inet_check_reset
+
+# Clean up failed/stale background tasks from previous sessions
+aba_bg_cleanup
+
 aba_inet_check_start
 
 tui_log "Kicking off background mirror verify"
@@ -252,9 +256,6 @@ if [[ -n "${op_sets:-}" ]]; then
 	done
 fi
 unset _ver_short _ops_arr _op _set_arr _s _sf _line
-
-# Clean up failed/stale background tasks from previous sessions
-aba_bg_cleanup
 
 _tick "Loading config"
 
@@ -402,10 +403,7 @@ _detect_mode() {
 			exit 1
 		fi
 
-		# Bundle + ISC exists. Check internet (fresh — reset stale TTL cache).
-		run_once -r -i "aba:check:api.openshift.com" 2>/dev/null || true
-		run_once -r -i "aba:check:mirror.openshift.com" 2>/dev/null || true
-		run_once -r -i "aba:check:registry.redhat.io" 2>/dev/null || true
+		# Bundle + ISC exists. Use the internet check result from startup.
 		aba_inet_check_wait_status
 		if check_internet_connectivity "aba" quiet 2>/dev/null; then
 			_TUI_INET="yes"
@@ -761,11 +759,7 @@ Navigation:
 # Main Flow
 # =============================================================================
 
-_detect_mode
-
-tui_log "Final mode: $_TUI_MODE"
-
-# --- Splash screen (shown once per session); Help shows quick UX guide ---
+# --- Splash screen first (shown once per session, no blocking checks) ---
 _aba_ver=""
 [[ -f "$ABA_ROOT/VERSION" ]] && _aba_ver=$(<"$ABA_ROOT/VERSION")
 _aba_ver="${_aba_ver//[[:space:]]/}"
@@ -831,6 +825,11 @@ Tip: You can also run any step from the CLI:
 			;;
 	esac
 done
+
+# --- Detect mode (uses internet check result started during startup) ---
+_detect_mode
+
+tui_log "Final mode: $_TUI_MODE"
 
 while :; do
 	case "$_TUI_MODE" in
