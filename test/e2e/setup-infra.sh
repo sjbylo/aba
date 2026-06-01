@@ -861,7 +861,7 @@ _prepare_golden() {
 		govc vm.power -off "$_GOLDEN_NAME" || true
 	fi
 	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
-	_vm_annotate "$_GOLDEN_NAME" "Ready (golden-ready snapshot created)"
+	_vm_annotate "$_GOLDEN_NAME" "Ready (golden-ready snapshot created) | OS: $_RHEL_VER"
 
 	echo "  Golden VM created and snapshotted."
 	echo "=== Phase 0 complete ==="
@@ -1149,7 +1149,7 @@ if [ ${#_snapshot_vms[@]} -gt 0 ]; then
 		(
 			govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" \
 				|| { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
-			_vm_annotate "$vm_name" "Ready (pool-ready snapshot created)"
+			_vm_annotate "$vm_name" "Ready (pool-ready snapshot created) | OS: $_RHEL_VER"
 			echo "  Powering on $vm_name ..."
 			govc vm.power -on "$vm_name"
 		) &
