@@ -55,7 +55,7 @@ rm -vf ~/bin/{oc-mirror,oc,openshift-install}
 
 cd $TEST_DIR_DISCO
 rm -rf aba
-tar xvf delete-me*tar
+tar xvf delete-me*tar 		# IMPORTANT: UNPACKS THE BUNDLE into a fresh directory
 rm -vf delete-me*tar
 cd aba
 ./install
