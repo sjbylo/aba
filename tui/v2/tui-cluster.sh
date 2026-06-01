@@ -1939,10 +1939,23 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				;;
 			"Z")
 				if [[ "$_TUI_MODE" == "CONNO" ]]; then
+					dlg --backtitle "$(ui_backtitle)" \
+						--title "Warning: Switching to Fully Disconnected Mode" \
+						--defaultno \
+						--yesno "\
+Switching from Connected to Disconnected mode on the same host is not\n\
+the standard workflow.\n\n\
+Disconnected mode is designed for fully disconnected (air-gapped)\n\
+environments. The recommended workflow is:\n\n\
+  1. Create an Install Bundle in Connected mode\n\
+     (aba bundle, or aba save + aba tar)\n\
+  2. Transfer the bundle to the disconnected environment\n\
+  3. Unpack the bundle, install aba and run aba/TUI there\n\n\
+Continue only if you know what you are doing." 0 0 || continue
 					_ensure_offline_prereqs || continue
 					_TUI_MODE="DISCO"
 					_TUI_DISCO_FROM_CONNO=true
-					tui_log "Advanced: switching to DISCO mode"
+					tui_log "Advanced: switching to DISCO mode (user confirmed warning)"
 					disco_main || true
 					_TUI_MODE="CONNO"
 					_TUI_DISCO_FROM_CONNO=false

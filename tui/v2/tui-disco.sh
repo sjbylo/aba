@@ -26,24 +26,24 @@ _disco_bundle_wizard_gate() {
 		fi
 		clear
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" --msgbox \
-			"No ABA install-bundle marker (.bundle) was found, and no mirror/archives are available yet.\n\n\
-You need either:\n\
-  • A transferred ABA bundle (touch \".bundle\" if your transfer omitted it)\n\
-  • Or mirror ISA archives under:\n\
-      $ABA_ROOT/mirror/data/mirror_*.tar\n\
-  • Or an installed mirror registry from a prior setup\n\n\
-Then restart abatui2." 0 0
+			"No install bundle or offline source was found.\n\n\
+You need one of:\n\
+  • A transferred ABA install bundle\n\
+  • Image archive files (mirror_*.tar) under:\n\
+      $ABA_ROOT/mirror/data/\n\
+  • An installed mirror registry from a prior setup\n\n\
+Then restart the TUI." 0 0
 		tui_log "DISCO wizard: missing .bundle and no offline source — returning"
 		return 1
 	fi
 
 	local _bv="${ocp_version:-?}"
 	local _bc="${ocp_channel:-?}"
-	local _isa_hint="" _payload_line=""
+	local _archive_hint="" _payload_line=""
 	if mirror_has_archives; then
-		_isa_hint="ISA archives: mirror_*.tar detected in mirror/data/ (disk payload present)."
+		_archive_hint="Image archives: mirror_*.tar detected in mirror/data/"
 	else
-		_isa_hint="ISA archives: NONE in mirror/data/ — copy mirror_*.tar from removable media\n(related paths: legacy mirror/save/ was merged into mirror/data/)."
+		_archive_hint="Image archives: NONE — copy mirror_*.tar from transfer media to mirror/data/"
 	fi
 
 	local min_size=1000000
@@ -61,13 +61,13 @@ Then restart abatui2." 0 0
 	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "ABA Install Bundle" --msgbox \
-		"You are operating from an install bundle (.bundle).\n\n\
+		"You are operating from an install bundle.\n\n\
 Disconnected payload summary:\n\
-  • OpenShift version (aba.conf): ${_bv}\n\
-  • Update channel (aba.conf): ${_bc}\n\
-  • ${_isa_hint}\n\
+  • OpenShift version: ${_bv}\n\
+  • Update channel: ${_bc}\n\
+  • ${_archive_hint}\n\
   • ${_payload_line}\n\n\
-Next: ensure ISA archives exist, then the TUI installs the mirror registry\nand loads images before cluster install." \
+Next: ensure image archives exist, then the TUI installs the mirror\nregistry and loads images before cluster install." \
 		0 0
 
 	if ! mirror_has_archives; then
@@ -78,7 +78,7 @@ Place mirror_*.tar files in:\n\
 (Older docs referred to mirror/save/ — that layout is folded into mirror/data/.)\n\n\
 Restart the TUI after copying archives." \
 			0 0
-		tui_log "DISCO wizard: missing ISA archives — returning"
+		tui_log "DISCO wizard: missing image archives — returning"
 		return 1
 	fi
 

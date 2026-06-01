@@ -297,7 +297,7 @@ TUI2_BTN_FULL_BUNDLE="Full bundle"
 # Messages — Mode Detection
 # =============================================================================
 
-TUI2_MSG_BUNDLE_INCOMPLETE="Bundle incomplete.\n\nThe bundle flag (.bundle) is present but no ImageSet\nconfiguration was found.\n\nRe-transfer the bundle or run 'aba reset'."
+TUI2_MSG_BUNDLE_INCOMPLETE="Bundle incomplete.\n\nThe install bundle was detected but no ImageSet\nconfiguration was found.\n\nRe-transfer the bundle or run 'aba reset'."
 TUI2_MSG_BUNDLE_CONNECTED="This host has an ABA install bundle but also has internet access.\nThe bundle is intended for disconnected environments.\n\n• Fully Disconnected — use the bundle as intended\n• Connected mode — use internet access (mirror or direct)"
 TUI2_MSG_DEAD_END="Cannot proceed.\n\nNo internet access and no bundle detected.\n\nTransfer a bundle from a connected host first,\nor ensure internet connectivity."
 TUI2_MSG_MODE_SELECT="This choice affects the ENTIRE installation workflow.\n\n   How would you like to install OpenShift?"
@@ -376,7 +376,7 @@ TUI2_MSG_DIRECT_MENU="Install from internet (no mirror):"
 TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
-TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThe bundle state will be cleared and you will be asked\nto choose between Partially Disconnected (mirror) and Fully Connected (direct) modes."
+TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThis will switch to connected mode, which requires\ninternet access.\n\nIf you still need to operate in a disconnected environment,\ndo not switch — the bundle state cannot be automatically\nrestored without re-transferring and unpacking the bundle.\n\nContinue?"
 TUI2_MSG_DISCO_LIGHT="No image archive files found.\n\nIf you used 'light' mode to create the bundle,\ncopy the image archive file(s) (mirror_*.tar) from your\ntransfer media to:\n\n  %s/mirror/data/\n\nThen select 'Check again'."
 
 # =============================================================================
