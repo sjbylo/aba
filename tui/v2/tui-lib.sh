@@ -315,16 +315,20 @@ if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 fi
 
 ui_backtitle() {
-	local mode_display
+	local mode_display=""
 	case "${_TUI_MODE:-}" in
 		DISCO)  mode_display="Fully Disconnected" ;;
 		CONNO)  mode_display="Partially Disconnected" ;;
 		DIRECT) mode_display="Fully Connected" ;;
-		*)      mode_display="?" ;;
 	esac
-	local ver="${ocp_version:-?}"
-	local ch="${ocp_channel:-?}"
-	local text="ABA TUI v2  |  ${mode_display}  |  ${ch} ${ver}"
+	local ver="${ocp_version:-}"
+	local ch="${ocp_channel:-}"
+
+	# Build title progressively — only show sections with real data
+	local text="ABA TUI v2"
+	[ -n "$mode_display" ] && text="$text  |  $mode_display"
+	[ -n "$ch" ] && [ -n "$ver" ] && text="$text  |  $ch $ver"
+
 	local cols=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
 	local pad=$(( (cols - ${#text}) / 2 ))
 	[[ $pad -gt 0 ]] && printf '%*s%s' "$pad" '' "$text" || echo "$text"
