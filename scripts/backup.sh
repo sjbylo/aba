@@ -34,6 +34,9 @@ repo_dir=$(basename "$PWD")
 # Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
+# Clean up .bundle if script exits early (crash, set -e, Ctrl-C, etc.)
+trap 'rm -f "${repo_dir}/.bundle"' EXIT
+
 # If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
 
@@ -44,8 +47,16 @@ cd ..
 # vmware only needed on "private" bastion
 #aba/vmware.conf		\
 
-# Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
-touch "${repo_dir}/.bundle"  # Flag this archive as a bundle
+# The .bundle marker tells aba/TUI that this repo was unpacked from a bundle archive
+# and should operate in disconnected (DISCO) mode. Lifecycle:
+#   1. Created here (touch) — just before building the tar
+#   2. Included in the tar archive
+#   3. Removed from the SOURCE repo after tar completes (see rm -f below)
+#      — the source repo is NOT a bundle, only the tar archive is
+#   4. Appears on the disconnected host when the user unpacks: tar xvf bundle.tar
+# NEVER manually 'touch .bundle' — it only makes sense inside an unpacked bundle
+# where mirror/data/ contains the saved images matching the .index/ digests.
+touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
@@ -67,8 +78,8 @@ file_list=$(find				\
 	"${repo_dir}/CHANGELOG.md"		\
 	"${repo_dir}/LICENSE"			\
 	"${repo_dir}/Troubleshooting.md"	\
-	"${repo_dir}/mirror"			\
 	"${repo_dir}/.index"			\
+	"${repo_dir}/mirror"			\
 									\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
@@ -192,7 +203,7 @@ aba_info "Please wait!" >&2
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
 ret=$?
-rm -f "${repo_dir}/.bundle"  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
+rm -f "${repo_dir}/.bundle"  # Also cleaned up by EXIT trap, but explicit here for clarity
 if [ $ret -ne 0 ]; then
 	echo >&2
 	echo_red "Error: The tar command failed with return code $ret!" >&2
