@@ -75,6 +75,20 @@ while [ $i -le $# ]; do
 				# Validate directory argument
 				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
 				case "$target_dir" in "~/"*) target_dir="$HOME/${target_dir#\~/}" ;; "~") target_dir="$HOME" ;; esac
+				# If relative path doesn't exist at CWD, walk up to find it or reach ABA root
+				if [[ "$target_dir" != /* ]] && [ ! -e "$target_dir" ]; then
+					for _up in .. ../.. ../../..; do
+						if [ -e "$_up/$target_dir" ]; then
+							target_dir="$_up/$target_dir"
+							break
+						fi
+						# Reached ABA root - resolve target here, not inside a subdir
+						if grep -q "Top level Makefile" "$_up/Makefile" 2>/dev/null; then
+							target_dir="$_up/$target_dir"
+							break
+						fi
+					done
+				fi
 				# ADR-007: if dir is missing, recreate from external state backup
 				if [ ! -e "$target_dir" ]; then
 					_bn=$(basename "$target_dir")

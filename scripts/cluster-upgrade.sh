@@ -46,6 +46,9 @@ source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 source <(normalize-mirror-conf)
 
+# Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
+scripts/create-containers-auth.sh --load >/dev/null
+
 # Resolve target version: --to flag > mirror.conf:ocp_version_target > error
 if [ ! "$target_ver" ]; then
 	if [ "$ocp_version_target" ]; then

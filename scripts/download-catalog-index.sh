@@ -51,8 +51,10 @@ ocp_ver_major="${2:?Usage: $0 <catalog_name> <version_short>}"
 
 aba_debug "Catalog: $catalog_name, version: $ocp_ver_major"
 
-# Prepare container auth
-aba_debug "Creating container auth file"
+# Prepare container auth — regcreds_dir must be set so create-containers-auth.sh
+# merges mirror credentials into ~/.docker/config.json (not overwrites with Red Hat-only)
+export regcreds_dir=$HOME/.aba/mirror/mirror
+aba_debug "Creating container auth file (regcreds_dir=$regcreds_dir)"
 scripts/create-containers-auth.sh >/dev/null || exit 1
 
 # Setup paths - must be run from aba root directory
