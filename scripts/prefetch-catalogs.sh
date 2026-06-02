@@ -15,7 +15,8 @@ if [[ ! -f ~/.pull-secret.json ]]; then
 	exit 0
 fi
 
-# Container auth for registry.redhat.io
+# Container auth for registry.redhat.io — set regcreds_dir so mirror creds are preserved
+export regcreds_dir=$HOME/.aba/mirror/mirror
 scripts/create-containers-auth.sh >/dev/null 2>&1 || exit 0
 
 if [[ -f aba.conf ]]; then
