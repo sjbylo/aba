@@ -221,6 +221,43 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$_image_cmd"
 	fi
 
+	# Ensure the cluster's update channel matches the target version's major.minor.
+	# Only same-channel upgrades are supported (e.g. stable-4.20 → stable-4.21).
+	# The channel prefix is read from the live cluster — never from config files.
+	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
+	_target_major="${target_ver%.*}"
+	if [ -n "$_current_channel" ]; then
+		_channel_prefix="${_current_channel%-*}"
+	else
+		_channel_prefix="${ocp_channel:-stable}"
+		aba_warning "No update channel set on cluster — using '$_channel_prefix' from aba.conf"
+	fi
+	_required_channel="${_channel_prefix}-${_target_major}"
+	_channel_changed=""
+	if [ "$_current_channel" != "$_required_channel" ]; then
+		aba_info "Setting upgrade channel: ${_current_channel:-<unset>} → $_required_channel"
+		aba_debug "Running: oc adm upgrade channel $_required_channel"
+		oc adm upgrade channel "$_required_channel"
+		_channel_changed=1
+	fi
+
+	# When OSUS is active and the channel just changed, wait for the CVO to
+	# refresh available updates from the new channel's graph before proceeding.
+	if [ "$_channel_changed" ] && [ "$osus_upstream" ]; then
+		aba_info "Waiting for update graph to refresh after channel change ..."
+		local _graph_ok="" _try
+		for _try in $(seq 1 12); do
+			if oc adm upgrade 2>&1 | grep -q "$target_ver"; then
+				_graph_ok=1
+				break
+			fi
+			sleep 5
+		done
+		if [ -z "$_graph_ok" ]; then
+			aba_warning "Target $target_ver not yet visible in update graph after 60s — proceeding anyway (will fall back to --to-image if needed)"
+		fi
+	fi
+
 	# Execute upgrade
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
