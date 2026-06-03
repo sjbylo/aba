@@ -184,9 +184,10 @@ disco_main() {
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
-			"" "──── Advanced ──────────────────────"
-			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
-			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
+		"" "──── Advanced ──────────────────────"
+		"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+		"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
+		"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_MENU" \
@@ -283,13 +284,18 @@ Navigation:
 				# RECHECK: day2 sub-menu may delete clusters or change state
 				_disco_need_recheck=true
 				;;
-			"$TUI2_DISCO_TAG_ADVANCED")
-				tui_advanced_menu
-				local _adv_rc=$?
-				# RECHECK: advanced menu may uninstall registry or delete clusters
-				_disco_need_recheck=true
-				[[ $_adv_rc -eq 2 ]] && return 2
-				;;
+		"$TUI2_DISCO_TAG_SETTINGS")
+			_tui_settings_menu
+			# NO RECHECK: only changes config values (ask, reg_vendor, retry)
+			_disco_need_recheck=false
+			;;
+		"$TUI2_DISCO_TAG_ADVANCED")
+			tui_advanced_menu
+			local _adv_rc=$?
+			# RECHECK: advanced menu may uninstall registry or delete clusters
+			_disco_need_recheck=true
+			[[ $_adv_rc -eq 2 ]] && return 2
+			;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_view_isc "true"
 				# NO RECHECK: only views/edits a config file

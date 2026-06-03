@@ -1819,8 +1819,11 @@ tui_advanced_menu() {
 				adv_items+=("X" "Switch to Connected Mode")
 				;;
 		esac
-		adv_items+=("" "──── Danger Zone ───────────────────")
-		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
+	adv_items+=("" "──── Danger Zone ───────────────────")
+	if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
+		adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
+	fi
+	adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
@@ -1846,6 +1849,8 @@ E - Reset Execution Mode: Clears your 'Always TUI' or 'Always Terminal'\n\
     preference for this session.\n\n\
 X/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
+W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
+    installation from scratch. All current cluster data is lost.\n\n\
 R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
     returns ABA to its initial unpacked state. CANNOT BE UNDONE." 0 0
 			continue
@@ -1856,14 +1861,17 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			"R")
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
-					--yes-label "Reset" --no-label "$TUI2_BTN_CANCEL" \
-					--yesno "Reset ABA to initial state?\n\nThis will remove ALL configuration, clusters, and mirror data.\nEquivalent to: aba reset --force\n\nThis action cannot be undone!" 0 0
-				[[ $? -ne 0 ]] && continue
-				confirm_and_execute "aba reset --force" "Reset ABA"
-				return 0
-				;;
+		"W")
+			_day2_refresh
+			;;
+		"R")
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
+				--yes-label "Reset" --no-label "$TUI2_BTN_CANCEL" \
+				--yesno "Reset ABA to initial state?\n\nThis will remove ALL configuration, clusters, and mirror data.\nEquivalent to: aba reset --force\n\nThis action cannot be undone!" 0 0
+			[[ $? -ne 0 ]] && continue
+			confirm_and_execute "aba reset --force" "Reset ABA"
+			return 0
+			;;
 			"P")
 				source <(normalize-aba-conf) 2>/dev/null || true
 				local _default_ptag="M"
@@ -1990,8 +1998,7 @@ cluster_day2_menu() {
 			"U" "Upgrade cluster" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
-			"F" "Refresh (recreate VMs, new install)" \
-			"" "──── Cleanup ──────────────────────" \
+		"" "──── Cleanup ──────────────────────" \
 			"C" "Clean (remove artifacts, retry install)" \
 			"K" "Delete cluster" \
 			2>"$_TUI_TMP"
@@ -2013,7 +2020,6 @@ Lifecycle:
 • Upgrade: upgrade cluster to a newer OpenShift version
 • Shutdown: graceful cluster shutdown (waits for completion)
 • Startup: graceful cluster startup (powers on VMs)
-• Refresh: destroy VMs and trigger a fresh installation
 
 Cleanup:
 • Clean: remove generated artifacts so you can retry install
@@ -2040,10 +2046,9 @@ Navigation:
 			S) _day2_status ;;
 			H) _day2_ssh ;;
 			U) _day2_upgrade ;;
-			G) _day2_shutdown ;;
-			T) _day2_startup ;;
-			F) _day2_refresh ;;
-			C) _day2_clean ;;
+		G) _day2_shutdown ;;
+		T) _day2_startup ;;
+		C) _day2_clean ;;
 			K) _day2_delete ;;
 		esac
 	done
@@ -2109,10 +2114,14 @@ _day2_status() {
 			| awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print}' \
 			|| echo "(Cluster API unreachable)"
 		echo ""
-		echo "═══ Upgrade Status ($cl_display) ═══"
-		echo ""
-		KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
-	} > "$output_file" 2>&1
+	echo "═══ Upgrade Status ($cl_display) ═══"
+	echo ""
+	KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
+	echo ""
+	echo "═══ Cluster Info ($cl_display) ═══"
+	echo ""
+	aba --dir "$cl_dir" info 2>&1 || echo "(Unable to retrieve cluster info)"
+} > "$output_file" 2>&1
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
 
