@@ -16,3 +16,15 @@ rhcl-operator
 # Required for OSUS
 cincinnati-operator
 
+# Other required operators
+cluster-observability-operator
+tempo-product
+opentelemetry-product
+sriov-network-operator
+kueue-operator
+leader-worker-set
+openshift-custom-metrics-autoscaler-operator
+job-set
+cert-manager
+spyre-operator
+
