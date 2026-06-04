@@ -22,4 +22,7 @@ fi
 
 source scripts/vm-provider.sh
 vm_provider_load vmw
-vm_exists_any
+# || exit 1 keeps the call in a conditional context so the ERR trap doesn't
+# fire on the expected "no VMs exist" return code (which is a normal result,
+# not a script error).
+vm_exists_any || exit 1

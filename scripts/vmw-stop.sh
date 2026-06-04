@@ -31,4 +31,6 @@ vm_provider_load vmw
 scope=all
 [ "$workers" ] && scope=workers
 [ "$masters" ] && scope=masters
-vm_stop "$scope"
+# || exit 0: vm_stop returns 1 only when user declines the ask prompt.
+# The || suppresses the ERR trap (which would print a spurious "Script error").
+vm_stop "$scope" || exit 0

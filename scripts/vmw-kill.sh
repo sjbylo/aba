@@ -22,4 +22,6 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 source scripts/vm-provider.sh
 vm_provider_load vmw
-vm_kill
+# || exit 0: vm_kill returns 1 only when user declines the ask prompt.
+# The || suppresses the ERR trap (which would print a spurious "Script error").
+vm_kill || exit 0
