@@ -235,6 +235,7 @@ done
   vm_provider_load kvm
   export CLUSTER_NAME="ocp1" CP_NAMES="master1 master2" WORKER_NAMES="worker1"
   export MOCK_VMS="ocp1-master1 ocp1-master2 ocp1-worker1"
+  export MOCK_VMS_ON="ocp1-master1 ocp1-master2 ocp1-worker1"
   out=$(vm_kill 2>&1)
   echo "$out" | grep -q "destroy ocp1-master1" \
     && echo "$out" | grep -q "destroy ocp1-master2" \
@@ -242,8 +243,19 @@ done
 	&& ok "driver vm_kill: powers off every cluster VM" \
 	|| bad "driver vm_kill: powers off every cluster VM"
 
+# vm_kill is a no-op when no VMs are powered on (fresh install scenario).
 ( source scripts/vm-provider.sh
   vm_provider_load kvm
+  export CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
+  export MOCK_VMS="ocp1-master1 ocp1-worker1" MOCK_VMS_ON=""
+  out=$(vm_kill 2>&1)
+  [ -z "$out" ] ) \
+	&& ok "driver vm_kill: no-op when no VMs are powered on" \
+	|| bad "driver vm_kill: no-op when no VMs are powered on"
+
+( source scripts/vm-provider.sh
+  vm_provider_load kvm
+  ask() { return 0; }  # auto-approve: vm_start always calls ask()
   export ask= CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
   export MOCK_VMS="ocp1-master1 ocp1-worker1" MOCK_VMS_ON=""
   out=$(vm_start 2>&1)
@@ -263,6 +275,7 @@ done
 # Host scoping: masters= restricts the verb to control-plane VMs only.
 ( source scripts/vm-provider.sh
   vm_provider_load kvm
+  ask() { return 0; }  # auto-approve: vm_start always calls ask()
   export ask= CLUSTER_NAME="ocp1" CP_NAMES="master1" WORKER_NAMES="worker1"
   export MOCK_VMS="ocp1-master1 ocp1-worker1" MOCK_VMS_ON=""
   out=$(vm_start masters 2>&1)
