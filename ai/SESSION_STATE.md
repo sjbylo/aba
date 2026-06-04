@@ -1,23 +1,24 @@
 # Session State
 
 ## Current goal
-Clean working tree for PR #30 merge.
+Fix TUI upgrade workflow for DISCO mode — version discovery + Sigstore admin-ack blocker visibility.
 
 ## Done this session
-- Fixed auth overwrite bug (commit `2dbe10ad`)
-- Reviewed 3 PRs (#27, #29, #30) — all security clean
-- Committed stashed work:
-  - `675b08fc` — upgrade channel auto-set
-  - `09e35423` — TUI DISCO menu improvements
-  - `10539a47` — AI/ML operator set template
-- Working tree is clean, ready for PR #30 merge
+- Fixed `aba upgrade --dry-run` without `--to`: clean early-exit "version-discovery mode" (no sentinel hack)
+- Fixed TUI version parsing: only extracts versions after "Versions in mirror" header
+- Fixed Bug #366: `local` at top level in cluster-upgrade.sh (replaced with plain var)
+- Added immediate `Upgradeable=False` check after upgrade trigger — shows `oc adm upgrade` output right away instead of waiting 5min
+- Also improved the 5min timeout message to show `oc adm upgrade` output
 
 ## Next steps
-1. Merge PR #30 (VM provider refactor) — user approved
-2. **Release v1.1.0**: Still pending (catalogs refresh, dry-run, release)
-3. Post review comments on PRs #27, #29, #30 if requested
+- User testing TUI upgrade with immediate blocker message
+- Decide: should ABA auto-apply the Sigstore admin-ack, or just show the command?
+- Apply `oc patch` to unblock the 4.20→4.21 upgrade on registry cluster
+- Commit all changes (scripts/cluster-upgrade.sh + tui/v2/tui-cluster.sh)
+- Pending: Bug #352 (disco_main fall-through), Bug #351 (cl_connection fix), typo fixes
 
 ## Decisions / notes
-- PR #30 targets `main` — merge there, then sync to `dev`
-- PR #29 (Mermaid): safe to merge, docs only
-- PR #27 (BMC): draft, not ready yet
+- Version-discovery dry-run: separate clean code path, no sentinel values
+- Sigstore admin-ack is a new 4.20→4.21 requirement for mirrored clusters
+- `oc-mirror` handles signature mirroring automatically — only the ack patch is needed
+- TUI now shows the real `oc adm upgrade` output on blocker, not a generic message
