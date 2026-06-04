@@ -285,7 +285,7 @@ dlg() {
 	fi
 
 	# Close the flock fd so dialog doesn't inherit it (prevents orphaned lock on kill)
-	dialog --no-shadow --colors --no-collapse "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
+	dialog --no-shadow --colors --no-collapse --tab-correct "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
 }
 
 # =============================================================================
@@ -607,7 +607,7 @@ _exec_in_tui() {
 	fi
 
 	local tui_cmd="$cmd"
-	[[ "$tui_cmd" != *" --yes"* && "$tui_cmd" != *" -y"* ]] && tui_cmd="$tui_cmd --yes"
+	[[ "$tui_cmd" != *" --yes"* && "$tui_cmd" != *" -y "* && "$tui_cmd" != *" -y" ]] && tui_cmd="$tui_cmd --yes"
 
 	tui_log "Executing in TUI: $tui_cmd"
 	cd "$ABA_ROOT"
@@ -681,6 +681,11 @@ _exec_in_terminal() {
 		return 1
 	fi
 
+	# When auto-answer is ON, append --yes (same as _exec_in_tui)
+	if [[ "$(_tui_abaconf_raw_ask)" == "yes" ]]; then
+		[[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]] && cmd="$cmd --yes"
+	fi
+
 	tui_log "Executing in terminal: $cmd"
 	cd "$ABA_ROOT"
 
@@ -688,7 +693,7 @@ _exec_in_terminal() {
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Executing: $cmd"
 	echo "═══════════════════════════════════════════════════════════════"
-	if [[ "$cmd" != *" --yes"* && "$cmd" != *" -y"* ]]; then
+	if [[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]]; then
 		echo "  Tip: Enable auto-answer in TUI Settings to skip prompts"
 	fi
 	echo
