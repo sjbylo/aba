@@ -108,9 +108,11 @@ vm_start() {
 }
 
 # Gracefully stop every VM in scope. Honours 'ask'. With wait=1, blocks until
-# all are off. Scope: all|workers|masters.
+# all are off. No-op if no VMs are powered on. Scope: all|workers|masters.
 vm_stop() {
 	local scope=${1:-all} name
+	# Nothing to stop if no VMs are running
+	vm_on_any || return 0
 	if [ "${ask:-}" ]; then
 		echo
 		_vm_list_names "$scope"
@@ -124,8 +126,11 @@ vm_stop() {
 }
 
 # Immediately power off every cluster VM. Honours 'ask'.
+# No-op (return 0) if no VMs exist or none are powered on.
 vm_kill() {
 	local name
+	# Nothing to kill if no VMs are running
+	vm_on_any || return 0
 	if [ "${ask:-}" ]; then
 		echo
 		_vm_list_names all
