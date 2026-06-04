@@ -8,6 +8,8 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $* from $PWD"
 
+aba_warning "'aba upgrade' is EXPERIMENTAL and may change in future releases."
+
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
 # Parse flags
@@ -49,6 +51,59 @@ source <(normalize-mirror-conf)
 # Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
 scripts/create-containers-auth.sh --load >/dev/null
 
+# Preflight: kubeconfig
+export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
+if [ ! -f "$KUBECONFIG" ]; then
+	aba_abort "kubeconfig not found at $KUBECONFIG. Place your kubeconfig there first."
+fi
+
+# Preflight: cluster access
+aba_info "Checking cluster access ..."
+aba_debug "Running: oc whoami --request-timeout='20s'"
+if ! oc whoami --request-timeout='20s' >/dev/null; then
+	aba_abort "Cannot access the cluster. Check KUBECONFIG=$KUBECONFIG"
+fi
+
+# Preflight: get current version from live cluster
+aba_debug "Running: oc get clusterversion version -o jsonpath='{.status.desired.version}'"
+current_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}') || current_ver=""
+[ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version"
+aba_info "Current cluster version: $current_ver"
+
+# Query available versions from mirror.
+# Tags follow the pattern: <version>-<arch> (e.g. 4.21.12-x86_64)
+_list_mirror_versions() {
+	local repo="$reg_host:$reg_port$reg_path/openshift/release-images"
+	local arch
+	arch=$(uname -m)
+	skopeo list-tags "docker://$repo" 2>/dev/null \
+		| grep -oP '"(\d+\.\d+\.\d+)-'"$arch"'"' \
+		| tr -d '"' | sed "s/-${arch}$//" | sort -V
+}
+
+# Version-discovery mode: --dry-run without --to just lists what's available
+if [ "$opt_dry_run" ] && [ ! "$target_ver" ] && [ ! "$ocp_version_target" ]; then
+	osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || true
+	echo
+	aba_info "=== DRY RUN ==="
+	aba_info "Current version:  $current_ver"
+	[ "$osus_upstream" ] && aba_info "Update graph:     $osus_upstream"
+	echo
+	aba_info "Versions in mirror (higher than $current_ver):"
+	_avail_found=
+	while IFS= read -r v; do
+		[ -z "$v" ] && continue
+		higher_v=$(printf '%s\n%s' "$current_ver" "$v" | sort -V | tail -1)
+		if [ "$higher_v" = "$v" ] && [ "$v" != "$current_ver" ]; then
+			aba_info "  $v"
+			_avail_found=1
+		fi
+	done < <(_list_mirror_versions)
+	[ ! "$_avail_found" ] && aba_info "  (none — run 'aba -d mirror sync' or 'aba -d mirror load' first)"
+	echo
+	exit 0
+fi
+
 # Resolve target version: --to flag > mirror.conf:ocp_version_target > error
 if [ ! "$target_ver" ]; then
 	if [ "$ocp_version_target" ]; then
@@ -63,18 +118,7 @@ fi
 ! echo "$target_ver" | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && \
 	aba_abort "Invalid target version format: [$target_ver]. Expected x.y.z (e.g. 4.19.28)"
 
-# Preflight: kubeconfig
-export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
-if [ ! -f "$KUBECONFIG" ]; then
-	aba_abort "kubeconfig not found at $KUBECONFIG. Place your kubeconfig there first."
-fi
-
-# Preflight: cluster access
-aba_info "Checking cluster access ..."
-aba_debug "Running: oc whoami --request-timeout='20s'"
-if ! oc whoami --request-timeout='20s' >/dev/null; then
-	aba_abort "Cannot access the cluster. Check KUBECONFIG=$KUBECONFIG"
-fi
+aba_info "Target cluster version:  $target_ver"
 
 # Preflight: cluster health — warn and let user decide (default: continue)
 if ! cluster_is_ready; then
@@ -83,13 +127,6 @@ if ! cluster_is_ready; then
 		"To investigate: oc get co | grep -v 'True.*False.*False'"
 	ask "Continue with upgrade anyway" || exit 1
 fi
-
-# Preflight: get current version from live cluster
-aba_debug "Running: oc get clusterversion version -o jsonpath='{.status.desired.version}'"
-current_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}') || current_ver=""
-[ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version"
-aba_info "Current cluster version: $current_ver"
-aba_info "Target cluster version:  $target_ver"
 
 # Idempotency: if already at target version, succeed silently
 if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
@@ -131,17 +168,6 @@ release_arch=$(uname -m)
 mirror_image="$reg_host:$reg_port$reg_path/openshift/release-images:$target_ver-$release_arch"
 aba_info "Mirror release image: $mirror_image"
 
-# Query available versions from mirror.
-# Tags follow the pattern: <version>-<arch> (e.g. 4.21.12-x86_64)
-_list_mirror_versions() {
-	local repo="$reg_host:$reg_port$reg_path/openshift/release-images"
-	local arch
-	arch=$(uname -m)
-	skopeo list-tags "docker://$repo" 2>/dev/null \
-		| grep -oP '"(\d+\.\d+\.\d+)-'"$arch"'"' \
-		| tr -d '"' | sed "s/-${arch}$//" | sort -V
-}
-
 # Check if OSUS is configured (local update graph available).
 osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || true
 
@@ -156,7 +182,7 @@ if ! skopeo inspect "docker://$mirror_image" >/dev/null 2>&1; then
 	fi
 fi
 
-# Dry-run: show plan and exit
+# Dry-run with specific target: show plan and exit
 if [ "$opt_dry_run" ]; then
 	echo
 	aba_info "=== DRY RUN ==="
@@ -221,6 +247,16 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$_image_cmd"
 	fi
 
+	# Pre-flight: check for upgrade blockers before triggering
+	_adm_upgrade_out=$(oc adm upgrade 2>&1) || true
+	if echo "$_adm_upgrade_out" | grep -q "Upgradeable=False"; then
+		echo
+		aba_warning "The cluster reports Upgradeable=False — the upgrade is blocked:"
+		echo "$_adm_upgrade_out"
+		echo
+		exit 1
+	fi
+
 	# Ensure the cluster's update channel matches the target version's major.minor.
 	# Only same-channel upgrades are supported (e.g. stable-4.20 → stable-4.21).
 	# The channel prefix is read from the live cluster — never from config files.
@@ -245,7 +281,7 @@ if [ ! "$upgrade_already_running" ]; then
 	# refresh available updates from the new channel's graph before proceeding.
 	if [ "$_channel_changed" ] && [ "$osus_upstream" ]; then
 		aba_info "Waiting for update graph to refresh after channel change ..."
-		local _graph_ok="" _try
+		_graph_ok=""
 		for _try in $(seq 1 12); do
 			if oc adm upgrade 2>&1 | grep -q "$target_ver"; then
 				_graph_ok=1
@@ -294,8 +330,11 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 fi
 
 if [ "$_wait_rc" -ne 0 ]; then
-	aba_warning "Upgrade has not started progressing after 5 minutes." \
-		"Check with: aba -d $(basename "$PWD") run --cmd 'oc get clusterversion'"
+	aba_warning "Upgrade has not started progressing after 5 minutes."
+	echo
+	oc adm upgrade 2>&1
+	echo
+	aba_info "Check with: aba -d $(basename "$PWD") run --cmd 'oc adm upgrade'"
 	exit 1
 fi
 
