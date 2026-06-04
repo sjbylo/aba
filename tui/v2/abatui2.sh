@@ -589,9 +589,10 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
-			"" "──── Transfer ──────────────────────"
-			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
-			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
+		"" "──── Transfer ──────────────────────"
+		"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
+		"$TUI2_CONNO_TAG_SAVE"           "$save_label"
+		"$TUI2_CONNO_TAG_PREP_UPGRADE"   "Prepare Upgrade for Transfer"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
@@ -679,10 +680,19 @@ Navigation:
 			# NO RECHECK: save only writes archive files to disk
 			_conno_need_recheck=false
 			;;
-		"$TUI2_CONNO_TAG_SYNC")
-			if [[ "$_TUI_INET" == "no" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-			elif ! mirror_available; then
+	"$TUI2_CONNO_TAG_PREP_UPGRADE")
+		if [[ "$_TUI_INET" == "no" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+		else
+			mirror_prep_upgrade
+		fi
+		# NO RECHECK: only writes archive files to disk
+		_conno_need_recheck=false
+		;;
+	"$TUI2_CONNO_TAG_SYNC")
+		if [[ "$_TUI_INET" == "no" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+		elif ! mirror_available; then
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
 				if [[ $? -eq 0 ]]; then

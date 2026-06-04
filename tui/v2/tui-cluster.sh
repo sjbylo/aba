@@ -248,10 +248,10 @@ _gate_platform_config() {
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$plat_label Configuration" \
-			--yes-label "Use Saved" \
+			--yes-label "Use Existing" \
 			--no-label "Configure New" \
 			--extra-button --extra-label "$TUI2_BTN_SKIP" \
-			--yesno "\n$plat_label config not found in project.\n\nA saved config exists: ${cached_info:-$cached_path}\n\nUse it, configure a new one, or skip for now?" 0 0
+			--yesno "\nA previous $plat_label configuration was found:\n\n  ${cached_info:-$cached_path}\n\nUse this configuration or create a new one?" 0 0
 		local rc=$?
 		case "$rc" in
 			0)
@@ -1995,7 +1995,7 @@ cluster_day2_menu() {
 			"S" "Cluster status" \
 			"H" "SSH into Rendezvous Server" \
 			"" "──── Lifecycle ────────────────────" \
-			"U" "Upgrade cluster" \
+			"U" "Upgrade cluster (experimental)" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
 		"" "──── Cleanup ──────────────────────" \
@@ -2169,10 +2169,10 @@ _day2_upgrade() {
 	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
 
 	# Parse version lines — only from the "Versions in mirror" list section
-	# (skip info/header lines that also contain semver patterns)
-	local _versions=()
+	local _versions=() _in_list=0
 	while IFS= read -r line; do
-		[[ "$line" =~ Current\ version|Target\ version|DRY\ RUN|Mirror\ image|Update\ graph|Versions\ in\ mirror ]] && continue
+		[[ "$line" =~ Versions\ in\ mirror ]] && _in_list=1 && continue
+		[[ $_in_list -eq 0 ]] && continue
 		local ver
 		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 		[[ -n "$ver" ]] && _versions+=("$ver")
@@ -2192,9 +2192,9 @@ _day2_upgrade() {
 			CONNO)
 				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
 				;;
-			DISCO)
-				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config on the connected host\n  2. Save images to disk (main menu → S)\n  3. Transfer and Load images (main menu → L)\n  4. Run Day-2 to apply changes (main menu → D)\n  5. Then retry Upgrade here"
-				;;
+	DISCO)
+		_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Cluster Resources (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
+		;;
 			*)
 				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."
 				;;

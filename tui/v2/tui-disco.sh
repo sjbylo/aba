@@ -37,6 +37,12 @@ Then restart the TUI." 0 0
 		return 1
 	fi
 
+	# Skip the bundle info dialog if mirror is already installed and populated
+	if mirror_available && _mirror_has_release_image; then
+		tui_log "DISCO wizard: mirror already populated — skipping bundle dialog."
+		return 0
+	fi
+
 	local _bv="${ocp_version:-?}"
 	local _bc="${ocp_channel:-?}"
 	local _archive_hint="" _payload_line=""
@@ -60,14 +66,34 @@ Then restart the TUI." 0 0
 		_payload_line="Registry installers: (none detected yet — rerun cli/registry prep if needed)."
 	fi
 
+	# Build operator summary from the imageset-config that shipped with the bundle.
+	# Parse packages under "operators:" — operator names are unquoted, channel names are quoted.
+	local _op_summary="Operators: none"
+	local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
+	if [[ -f "$_isc" ]]; then
+		local _op_names
+		_op_names=$(awk '/packages:/,0 { if (/^[[:space:]]*- name:/ && !/\"/) { sub(/.*- name: */, ""); sub(/ *#.*/, ""); print } }' "$_isc" | sort -u)
+		local _op_count
+		_op_count=$(echo "$_op_names" | grep -c '.' || true)
+		if [[ $_op_count -gt 0 ]]; then
+			local _op_list _op_short
+			_op_list=$(echo "$_op_names" | tr '\n' ', ' | sed 's/,$//')
+			_op_short=$(echo "$_op_list" | cut -c1-60)
+			[[ ${#_op_list} -gt 60 ]] && _op_short="${_op_short}..."
+			_op_summary="Operators: ${_op_count} (${_op_short})"
+		fi
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "ABA Install Bundle" --msgbox \
-		"You are operating from an install bundle.\n\n\
+		"\nYou are operating from an install bundle.\n\n\
 Disconnected payload summary:\n\
   • OpenShift version: ${_bv}\n\
   • Update channel: ${_bc}\n\
   • ${_archive_hint}\n\
-  • ${_payload_line}\n\n\
-Next: ensure image archives exist, then the TUI installs the mirror\nregistry and loads images before cluster install." \
+  • ${_op_summary}\n\
+  • ${_payload_line}\n\
+  • CLI tools: included (oc, openshift-install, oc-mirror)\n\n\
+Next: the TUI will install a mirror registry and load images\nbefore cluster install.\n" \
 		0 0
 
 	if ! mirror_has_archives; then
@@ -84,11 +110,6 @@ Restart the TUI after copying archives." \
 
 	if [[ "${_TUI_DISCO_FROM_CONNO:-false}" == "true" ]]; then
 		tui_log "DISCO wizard: skipping auto mirror install/load (entered from CONNO menu)."
-		return 0
-	fi
-
-	if mirror_available && _mirror_has_release_image; then
-		tui_log "DISCO wizard: mirror already populated — skipping auto install/load."
 		return 0
 	fi
 

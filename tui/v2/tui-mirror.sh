@@ -424,8 +424,17 @@ _mirror_op_confirm() {
 	local title="$1"
 
 	source <(normalize-aba-conf) 2>/dev/null
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
 	local _ver="${ocp_version:-unknown}"
 	local _chan="${ocp_channel:-stable}"
+	# Show upgrade range if target is set, or detect from ISC maxVersion
+	local _target="${ocp_version_target:-}"
+	if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
+		_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
+	fi
+	if [[ -n "$_target" && "$_target" != "$_ver" ]]; then
+		_ver="${_ver} → ${_target}"
+	fi
 	local _op_count=${#OP_BASKET[@]}
 	local _op_preview=""
 	if [[ $_op_count -gt 0 ]]; then
@@ -480,6 +489,71 @@ mirror_save() {
 	_mirror_op_confirm "$TUI2_LABEL_SAVE" || return 1
 	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache
 	local rc=$?
+	return $rc
+}
+
+# =============================================================================
+# Prepare Upgrade for Transfer (set target version + save)
+# =============================================================================
+
+mirror_prep_upgrade() {
+	tui_log "Action: Prepare Upgrade for Transfer"
+
+	local _current_ver="${ocp_version:-unknown}"
+
+	# Prompt for target version
+	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
+		--ok-label "Next" \
+		--cancel-label "$TUI2_BTN_CANCEL" \
+		--inputbox "\nCurrent installed version: ${_current_ver}\n\nEnter target upgrade version:\n(e.g. 4.21.16)" \
+		0 0 "" \
+		2>"$_TUI_TMP"
+	[[ $? -ne 0 ]] && return 1
+
+	local _target_ver
+	_target_ver=$(<"$_TUI_TMP")
+	_target_ver=$(echo "$_target_ver" | tr -d ' ')
+
+	if [[ -z "$_target_ver" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
+		return 1
+	fi
+	if ! [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Invalid version format: '$_target_ver'\n\nExpected: X.Y.Z (e.g. 4.21.16)" 0 0
+		return 1
+	fi
+
+	# Confirm before proceeding
+	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
+		--yes-label "Save Upgrade Images" \
+		--no-label "$TUI2_BTN_CANCEL" \
+		--yesno "\nThis will:\n\n\
+  1. Set target version to ${_target_ver}\n\
+  2. Regenerate the ImageSet Config (if not user-edited)\n\
+  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\n\
+Proceed?" 0 0
+	[[ $? -ne 0 ]] && return 1
+
+	confirm_and_execute \
+		"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
+		"Prepare Upgrade: ${_current_ver} → ${_target_ver}" \
+		_invalidate_mirror_cache
+	local rc=$?
+
+	if [[ $rc -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
+			--msgbox "\nUpgrade images saved successfully.\n\n\
+To upgrade a disconnected cluster:\n\n\
+  1. Copy these files to the internal host:\n\
+     • mirror/data/imageset-config.yaml\n\
+     • mirror/data/mirror_*.tar\n\n\
+  2. On the internal host TUI:\n\
+     • Load images (L)\n\
+     • Day-2 → Cluster Resources (D → R)\n\
+     • Day-2 → Upgrade (D → U)\n" 0 0
+	fi
+
 	return $rc
 }
 
