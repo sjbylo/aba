@@ -588,14 +588,8 @@ e2e_run_remote "Apply OSUS day2" \
 # Wait for all COs to be available (AVAILABLE=True)
 e2e_wait_cluster_available $SNO remote
 
-# Set the cluster update channel to fast (matching the imageset config)
-_OCP_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade channel fast-${_OCP_MAJOR}'"
-
-# Wait until 'oc adm upgrade' lists recommended updates (cluster is healthy and ready)
-e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' 2>&1 | grep 'Recommended updates'"
+# Channel is now auto-set by 'aba upgrade' based on the live cluster's channel
+# prefix and the target version's major.minor. No manual channel-setting needed.
 
 # Wait up to 30 min for all operators to stabilize before upgrading.
 # Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
