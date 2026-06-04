@@ -31,4 +31,6 @@ vm_provider_load kvm
 scope=all
 [ "$workers" ] && scope=workers
 [ "$masters" ] && scope=masters
-vm_start "$scope"
+# || exit $?: vm_start returns 1 when no VMs exist or user declines.
+# The || suppresses the ERR trap; exit $? preserves the error for callers.
+vm_start "$scope" || exit $?
