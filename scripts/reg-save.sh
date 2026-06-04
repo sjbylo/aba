@@ -114,8 +114,16 @@ if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 fi
 
 echo
-aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
-aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
+if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_version_target})."
+	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
+	aba_info_ok "  mirror/data/imageset-config.yaml"
+	aba_info_ok "  mirror/data/mirror_*.tar"
+	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"
+else
+	aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
+	aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
+fi
 echo
 
 exit 0
