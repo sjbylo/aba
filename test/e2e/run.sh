@@ -951,7 +951,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$E2E_FORCE_RERUN"' EXIT
 
 declare -A _retried=()
 _MAX_RETRIES=2
@@ -985,6 +985,24 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			_state_changed=1
 		fi
 	done
+
+	# Force-rerun: clear suites from _results so they can be re-dispatched.
+	# Written by `reschedule` CLI; processed before inject queue so the
+	# subsequent inject won't skip the suite as "already passed".
+	if [ -f "$E2E_FORCE_RERUN" ] && [ -s "$E2E_FORCE_RERUN" ]; then
+		mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" 2>/dev/null || true
+	fi
+	if [ -f "${E2E_FORCE_RERUN}.processing" ]; then
+		while IFS= read -r _rr_suite; do
+			[ -z "$_rr_suite" ] && continue
+			if [ -n "${_results[$_rr_suite]:-}" ]; then
+				_old_rc="${_results[$_rr_suite]}"
+				unset '_results[$_rr_suite]'
+				printf "  [%s] RERUN: %s cleared from results (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rr_suite" "$_old_rc"
+			fi
+		done < "${E2E_FORCE_RERUN}.processing"
+		rm -f "${E2E_FORCE_RERUN}.processing"
+	fi
 
 	# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
 	if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
