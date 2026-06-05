@@ -548,9 +548,12 @@ test_begin "Upgrade: OSUS and cluster upgrade"
 
 # Save the target (newer) version images using --target-version (auto-generates
 # ISC with shortestPath, minVersion=current, maxVersion=target).
+# Force ISC regeneration: earlier tests (mesh, UBI, vote-app) manually appended to the ISC,
+# making it appear "user-edited" (newer than .created). Without this, the save step would
+# preserve the stale mesh-only ISC instead of generating the upgrade ISC with shortestPath.
 e2e_run "Set --target-version for upgrade" \
-    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && \
-     aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) imagesetconf"
+    "cd ~/aba && aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) && \
+     rm -f mirror/data/.created"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
 # The catalog YAML should already exist from the earlier catalogs-wait; verify it.
@@ -566,12 +569,12 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
      fi"
 
 e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
-e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
+e2e_run -r 1 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
-e2e_run_remote -r 3 2 "Load upgrade images" \
+e2e_run_remote -r 1 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 

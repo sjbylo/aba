@@ -247,14 +247,13 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$_image_cmd"
 	fi
 
-	# Pre-flight: check for upgrade blockers before triggering
+	# Pre-flight: warn about upgrade blockers (advisory only — let oc adm upgrade decide)
 	_adm_upgrade_out=$(oc adm upgrade 2>&1) || true
 	if echo "$_adm_upgrade_out" | grep -q "Upgradeable=False"; then
 		echo
-		aba_warning "The cluster reports Upgradeable=False — the upgrade is blocked:"
+		aba_warning "The cluster reports Upgradeable=False (proceeding anyway — the upgrade command will enforce if needed):"
 		echo "$_adm_upgrade_out"
 		echo
-		exit 1
 	fi
 
 	# Ensure the cluster's update channel matches the target version's major.minor.

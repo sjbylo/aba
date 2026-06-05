@@ -361,15 +361,12 @@ e2e_run "Resolve latest version for upgrade target" "
     echo \"Upgrade target: \$upgrade_target\"
 "
 
-e2e_run "Set --target-version and regenerate ISC" "
+e2e_run -r 1 2 "Set --target-version and sync upgrade images" "
     cd ~/aba
     target=\$(cat /tmp/e2e-upgrade-target)
     aba -d mirror --target-version \$target
-    rm -f mirror/data/imageset-config.yaml
-    aba -d mirror imagesetconf
+    aba -d mirror sync --retry
 "
-
-e2e_run -r 3 2 "Sync upgrade images" "aba -d mirror sync --retry"
 
 e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
 
@@ -378,7 +375,7 @@ e2e_run "Dry-run upgrade" \
 
 e2e_run -r 3 2 "Trigger and verify upgrade" "
     target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --skip-day2 --force || true  # may exit non-zero if already at target; desired-version assertion validates outcome
+    aba -d $SNO upgrade --to \$target --skip-day2
     desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
     echo \"Desired version: \$desired  (target: \$target)\"
     [ \"\$desired\" = \"\$target\" ]
