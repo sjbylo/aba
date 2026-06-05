@@ -16,22 +16,29 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-# Extract major.minor version (e.g., 4.20.8 -> 4.20)
-ocp_ver_short="${ocp_version%.*}"
+# Read mirror.conf for ocp_version_target (if set)
+[ -s mirror.conf ] && source <(normalize-mirror-conf)
+
+# Build version list (current + target if cross-minor upgrade)
+read -ra _versions <<< "$(_catalog_versions_to_mirror)"
 
 # Start downloads in parallel (non-blocking, TTL from ~/.aba/config)
-download_all_catalogs "$ocp_ver_short"
+for _ver in "${_versions[@]}"; do
+	download_all_catalogs "$_ver"
+done
 
 # Only announce if downloads are actually running (not already cached)
 _any_running=
-for catalog in redhat-operator certified-operator community-operator; do
-	if ! run_once -p -i "catalog:${ocp_ver_short}:${catalog}"; then
-		_any_running=1
-		break
-	fi
+for _ver in "${_versions[@]}"; do
+	for catalog in redhat-operator certified-operator community-operator; do
+		if ! run_once -p -i "catalog:${_ver}:${catalog}"; then
+			_any_running=1
+			break 2
+		fi
+	done
 done
 
 if [ -n "$_any_running" ]; then
-	aba_info "Downloading operator catalogs for OCP $ocp_ver_short in background..."
+	aba_info "Downloading operator catalogs for OCP ${_versions[*]} in background..."
 fi
 

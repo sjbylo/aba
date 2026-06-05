@@ -2580,6 +2580,20 @@ run_once() {
 
 # --- Catalog Download Helpers ---
 
+# Return space-separated list of major.minor versions needing catalog downloads.
+# Always includes the current ocp_version; adds ocp_version_target's major.minor
+# when it differs (cross-minor upgrade).  Expects ocp_version (and optionally
+# ocp_version_target) to be set in the environment.
+_catalog_versions_to_mirror() {
+	local _cur="${ocp_version%.*}"
+	local _versions=("$_cur")
+	if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+		local _tgt="${ocp_version_target%.*}"
+		[ "$_tgt" != "$_cur" ] && _versions+=("$_tgt")
+	fi
+	echo "${_versions[*]}"
+}
+
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)

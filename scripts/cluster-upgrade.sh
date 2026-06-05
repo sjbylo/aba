@@ -331,8 +331,14 @@ fi
 if [ "$_wait_rc" -ne 0 ]; then
 	aba_warning "Upgrade has not started progressing after 5 minutes."
 	echo
-	oc adm upgrade 2>&1
+	_stall_out=$(oc adm upgrade 2>&1) || true
+	echo "$_stall_out"
 	echo
+	if echo "$_stall_out" | grep -q "ReleaseAccepted=False\|AdminAckRequired"; then
+		aba_info "The cluster may require an admin acknowledgment before upgrading."
+		aba_info "Review the messages above and the referenced documentation link."
+		aba_info "If needed, --force can bypass precondition checks (use with caution)."
+	fi
 	aba_info "Check with: aba -d $(basename "$PWD") run --cmd 'oc adm upgrade'"
 	exit 1
 fi

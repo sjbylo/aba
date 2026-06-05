@@ -45,6 +45,12 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 export ocp_ver=$ocp_version
 export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
+# For cross-minor upgrades, use the target version's catalog index
+if [ "${tgt_major:-}" ] && [ "$tgt_major" != "$ocp_ver_major" ]; then
+	aba_info "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major" >&2
+	ocp_ver_major="$tgt_major"
+fi
+
 declare -A added_operators  # Associative array to track added operators
 op_names_arr=()  # Array to output op. list 
 
