@@ -9,11 +9,19 @@ mirror:
     - {{ ARCH }}
 {%- endif %}
     channels:
+{%- if ocp_version_target is defined and ocp_version_target and ocp_version_target != ocp_version %}
+    - name: {{ ocp_channel }}-{{ tgt_major }}
+      minVersion: {{ ocp_version }}
+      maxVersion: {{ ocp_version_target }}
+      type: ocp
+      shortestPath: true
+{%- else %}
     - name: {{ ocp_channel }}-{{ ocp_ver_major }}
       minVersion: {{ ocp_version }}
       maxVersion: {{ ocp_version }}
       type: ocp
 #      shortestPath: true
+{%- endif %}
     graph: true
 #  additionalImages:
 #  - name: registry.redhat.io/openshift4/ose-cli:latest
@@ -27,6 +35,6 @@ mirror:
 #  helm: {}
 {%- if ops == '' and op_sets == '' %}
 #  operators:
-#  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ ocp_ver_major }}
+#  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ tgt_major if (ocp_version_target is defined and ocp_version_target and ocp_version_target != ocp_version) else ocp_ver_major }}
 #    packages:
 {%- endif %}
