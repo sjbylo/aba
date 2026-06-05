@@ -375,7 +375,7 @@ e2e_run "Dry-run upgrade" \
 
 e2e_run -r 3 2 "Trigger and verify upgrade" "
     target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --skip-day2
+    aba -d $SNO upgrade --to \$target --skip-day2 --force
     desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
     echo \"Desired version: \$desired  (target: \$target)\"
     [ \"\$desired\" = \"\$target\" ]

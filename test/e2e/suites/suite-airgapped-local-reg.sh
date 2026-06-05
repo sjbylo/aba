@@ -599,7 +599,7 @@ e2e_wait_cluster_available $SNO remote
 e2e_wait_cluster_ready $SNO remote 1800
 
 e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
-    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
+    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2 --force"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
