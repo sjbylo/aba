@@ -229,8 +229,8 @@ else
 	test_fail "cli-install-all.sh MISSING cli-download-all.sh --wait call"
 fi
 
-# Verify the guard skips for --reset mode
-if grep -q '"$1" != "--reset"' scripts/cli-install-all.sh; then
+# Verify the guard skips for --reset mode (ro_opt is set to "-r" when --reset is passed)
+if grep -q 'ro_opt.*!=.*-r\|ro_opt.*!=.*reset' scripts/cli-install-all.sh; then
 	test_pass "Download wait guard is skipped during --reset"
 else
 	test_fail "Download wait guard missing --reset skip"

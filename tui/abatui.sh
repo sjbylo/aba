@@ -1950,7 +1950,7 @@ select_operators() {
 	# Start additional background tasks (catalog and CLI downloads already started after version confirmation)
 	log "Starting additional background tasks for operators"
 	log "Starting registry download task"
-	run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C "$ABA_ROOT/mirror" download-registries
+	run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- "${CMD_DL_QUAY_REG[@]}"
 	
 	# Ensure catalog indexes are available for operator sets AND search
 	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
@@ -3736,7 +3736,7 @@ run_once -i "ocp:candidate:latest_version_older"    -- bash -lc 'source ./script
 
 # Download oc-mirror early (needed for mirror save/sync/load later)
 log "Starting oc-mirror download in background"
-PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
+PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
 log "oc-mirror download started"
 
 # Initialize configuration and global arrays (must happen BEFORE prefetch

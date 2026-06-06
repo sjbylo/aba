@@ -236,6 +236,53 @@ Task deduplication and coordination. State in `~/.aba/runner/<id>/`.
 - **Testing**: `test/func/test-run-once-failed-cleanup.sh` covers failed-task
   cleanup, zombie cleanup, error messaging, and quiet-mode suppression.
 
+### run_once usage pattern
+
+1. **Liberal background kick-off**: Early in the flow, start tasks for everything
+   that *might* be needed. run_once is idempotent -- calling it multiple times is
+   safe (starts or returns immediately if already running/done). run_once handles
+   backgrounding internally -- no `&` after the call.
+
+2. **Targeted foreground wait**: Right before a specific tool is needed, wait for
+   ONLY that tool. Never "wait for all." Use `ensure_*()` functions or
+   `run_once -w -i "cli:download:<tool>"` for the specific task ID. Wait mode
+   does not need the command -- run_once saves it to `cmd.sh` on start and
+   reloads automatically. ALWAYS call start (with command) before wait (without
+   command) -- even in `ensure_*()` functions. The start is idempotent (fast
+   no-op if already running/done), so calling it redundantly is safe and
+   guarantees `cmd.sh` exists for the wait.
+
+3. **run_once wraps Make from outside**: run_once calls live in shell scripts
+   (cli-download-all.sh, cli-install-all.sh, ensure_*() functions), never inside
+   Makefile recipes. A user running `make oc` directly gets standard serial Make
+   behavior -- no bg processes, no races. Make handles file-target dependencies;
+   run_once handles cross-process coordination.
+
+4. **No "wait for all" gates**: Do not block on all tools when only one is needed.
+   `cli-install-all.sh --wait` (without a filter) and `.cli` are appropriate only
+   when ALL tools are genuinely required (e.g., bundling the entire repo).
+
+5. **Bundle downloads include all OS variants**: When creating a bundle
+   (`aba tar`, `aba bundle`), all tarballs must be downloaded -- including both
+   RHEL 8 and RHEL 9 variants of oc, oc-mirror, etc. The target host's OS
+   version is unknown at bundle creation time.
+
+6. **Optional tarballs (govc)**: Always TRY to download govc, but treat download
+   failure as fatal only when `platform=vmw`. If `platform!=vmw` and the download
+   fails (e.g., GitHub not whitelisted), ignore the failure and continue. This way
+   non-vmw users get govc if GitHub is reachable (useful if they switch platforms
+   later) but are never blocked by it. Only vmw users are hard-blocked on govc
+   download failure.
+
+7. **Shared task IDs between TUI and aba**: TUI and `aba` CLI share task IDs
+   by design — a user can stop the TUI and use `aba` (or vice versa) and
+   completed tasks carry over.  Commands for a given task ID must be
+   semantically equivalent but need not be string-identical.  Centralize
+   commands as variables in `include_all.sh` to prevent drift.  Do NOT
+   enforce string equality at runtime (a guard that did this caused FATAL
+   errors in E2E production due to relative vs absolute paths, `-d` vs
+   `--dir`, etc.).
+
 ### normalize*()
 
 Config normalization functions. Output ONLY values that exist in config files

@@ -176,7 +176,8 @@ rm -f "$ARTIFACT"
 
 run_once -i "$TASK_ID" -- bash -c "sleep 1; echo done > $ARTIFACT"
 
-if run_once -w -i "$TASK_ID" -- bash -c "sleep 1; echo fallback > $ARTIFACT"; then
+# Wait without command -- run_once reloads from saved cmd.sh
+if run_once -w -i "$TASK_ID"; then
 	if [ -f "$ARTIFACT" ]; then
 		pass "Narrow race: wait completed (content=$(cat "$ARTIFACT"))"
 	else
