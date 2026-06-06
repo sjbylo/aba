@@ -2218,18 +2218,20 @@ run_once() {
 			lockf="$d/lock"
 			if [[ -f "$exitf" ]]; then
 				rc="$(cat "$exitf" 2>/dev/null || echo 1)"
-				if [[ "$rc" -ne 0 ]]; then
-					aba_debug "Cleaning failed task: $id (exit code: $rc)"
-					_kill_id "$id"
-				fi
-			elif [[ -e "$d" ]]; then
-				# Zombie task: directory exists but no exit file.
-				# Caused by SIGKILL, OOM, or machine crash killing the
-				# subshell before it could write the exit file.
-				# Only clean if the lock is free (process is definitely dead).
-				if ( exec 9>>"$lockf" && flock -n 9 ); then
-					aba_debug "Cleaning zombie task: $id (no exit file, lock free)"
-					_kill_id "$id"
+			if [[ "$rc" -ne 0 ]]; then
+				aba_debug "Cleaning failed task: $id (exit code: $rc)"
+				_kill_id "$id"
+				rm -f "$d"/{cmd.sh,cmd,cwd}   # Full clean (like explicit -r)
+			fi
+		elif [[ -e "$d" ]]; then
+			# Zombie task: directory exists but no exit file.
+			# Caused by SIGKILL, OOM, or machine crash killing the
+			# subshell before it could write the exit file.
+			# Only clean if the lock is free (process is definitely dead).
+			if ( exec 9>>"$lockf" && flock -n 9 ); then
+				aba_debug "Cleaning zombie task: $id (no exit file, lock free)"
+				_kill_id "$id"
+				rm -f "$d"/{cmd.sh,cmd,cwd}   # Full clean (like explicit -r)
 				else
 					aba_debug "Skipping task: $id (no exit file, lock held — still running)"
 				fi
@@ -2261,7 +2263,7 @@ run_once() {
 	# Create the task directory
 	mkdir -p "$id_dir"
 	chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
-	
+
 	# --- GET ERROR MODE (stderr) ---
 	if [[ "$mode" == "get_error" ]]; then
 		[[ -f "$log_err_file" ]] && cat "$log_err_file"
@@ -2304,9 +2306,13 @@ run_once() {
 	fi
 
 	# --- RESET/KILL ---
+	# Full clean slate: _kill_id removes runtime state (pid, lock, exit, logs)
+	# but preserves identity files (cmd.sh, cmd, cwd) for TTL re-execution.
+	# Explicit reset also removes identity files -- "forget everything."
 	if [[ "$reset" == true ]]; then
 		_log_history "RESET"
 		_kill_id "$work_id"
+		rm -f "$id_dir"/{cmd.sh,cmd,cwd}
 		return 0
 	fi
 
@@ -2336,6 +2342,13 @@ run_once() {
 		: >"$log_out_file"
 		: >"$log_err_file"
 		rm -f "$exit_file"
+
+		# Normalize whitespace in command args (tabs→spaces, collapse runs)
+		# so that cmd.sh is deterministic regardless of caller formatting
+		local _i
+		for _i in "${!command[@]}"; do
+			command[$_i]="${command[$_i]//$'\t'/ }"
+		done
 
 		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
 		
@@ -2429,7 +2442,7 @@ run_once() {
 				# Fall through to restart logic below
 			fi
 		fi
-		
+
 		if [[ ! -f "$exit_file" ]]; then
 			exec 9>>"$lock_file"
 			if flock -n 9; then
@@ -3143,6 +3156,7 @@ validate_ntp_servers() {
 # Task IDs (single source of truth)
 # Guard against re-declaration when include_all.sh is sourced multiple times
 if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
+	# Install task IDs
 	readonly TASK_OC_MIRROR="cli:install:oc-mirror"
 	readonly TASK_OC="cli:install:oc"
 	readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
@@ -3150,7 +3164,34 @@ if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
 	readonly TASK_BUTANE="cli:install:butane"
 	readonly TASK_QUAY_REG_DOWNLOAD="mirror:reg:download"
 	readonly TASK_QUAY_REG="mirror:reg:install"
+
+	# Download task IDs -- version-independent
+	readonly TASK_DL_OC_MIRROR="cli:download:oc-mirror"
+	readonly TASK_DL_GOVC="cli:download:govc"
+	readonly TASK_DL_BUTANE="cli:download:butane"
+
+	# Download commands (arrays)
+	CMD_DL_OC=(make -sC cli download-oc)
+	CMD_DL_OC_MIRROR=(make -sC cli download-oc-mirror)
+	CMD_DL_OPENSHIFT_INSTALL=(make -sC cli download-openshift-install)
+	CMD_DL_GOVC=(make -sC cli download-govc)
+	CMD_DL_BUTANE=(make -sC cli download-butane)
+
+	# Install commands (arrays)
+	CMD_INST_OC=(make -sC cli oc)
+	CMD_INST_OC_MIRROR=(make -sC cli oc-mirror)
+	CMD_INST_OPENSHIFT_INSTALL=(make -sC cli openshift-install)
+	CMD_INST_GOVC=(make -sC cli govc)
+	CMD_INST_BUTANE=(make -sC cli butane)
+
+	# Mirror registry commands (arrays)
+	CMD_DL_QUAY_REG=(make -sC mirror download-registries)
+	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
 fi
+
+# Download task IDs -- version-dependent (functions, return full ID with version)
+task_dl_oc()                { echo "cli:download:oc:${ocp_version:?ocp_version not set}"; }
+task_dl_openshift_install() { echo "cli:download:openshift-install:${ocp_version:?ocp_version not set}"; }
 
 # Start all CLI tarball downloads (parallel, non-blocking)
 start_all_cli_downloads() {
@@ -3185,32 +3226,48 @@ ensure_sigstore_mirror_config() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
-	# Wait: cli-download-all.sh starts downloads; aba.sh starts extract ($TASK_OC_MIRROR)
 	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
-	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
-	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
+	# Liberal bg kick-off (idempotent — fast no-op if already running/done)
+	run_once -i "$TASK_DL_OC_MIRROR" -- "${CMD_DL_OC_MIRROR[@]}"
+	# Targeted fg wait (no command — reloads from cmd.sh)
+	run_once -q -w -i "$TASK_DL_OC_MIRROR"
+
+	run_once -i "$TASK_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
+	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR"
 }
 
 # Ensure oc CLI is installed in ~/bin
-# Wait: cli-download-all.sh and cli-install-all.sh start downloads/installs in background
 ensure_oc() {
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_oc: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:oc:${ocp_version}" -- make -sC cli download-oc
-	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
+	local task_dl
+	task_dl=$(task_dl_oc)
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$task_dl" -- "${CMD_DL_OC[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$task_dl"
+
+	run_once -i "$TASK_OC" -- "${CMD_INST_OC[@]}"
+	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC"
 }
 
 # Ensure openshift-install is installed in ~/bin
-# Wait: cli-download-all.sh and cli-install-all.sh start downloads/installs in background
 ensure_openshift_install() {
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:openshift-install:${ocp_version}" -- make -sC cli download-openshift-install
-	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
+	local task_dl
+	task_dl=$(task_dl_openshift_install)
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$task_dl" -- "${CMD_DL_OPENSHIFT_INSTALL[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$task_dl"
+
+	run_once -i "$TASK_OPENSHIFT_INSTALL" -- "${CMD_INST_OPENSHIFT_INSTALL[@]}"
+	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL"
 }
 
 # Check if the OCP release image is available in the mirror registry.
@@ -3416,9 +3473,9 @@ aba_inet_check_cached() {
 aba_version_fetch_start() {
 	local _ch
 	for _ch in stable fast candidate; do
-		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_latest_version $_ch"
-		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_previous_version $_ch"
-		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && fetch_older_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $_ch"
 	done
 }
 
@@ -3427,7 +3484,7 @@ aba_version_fetch_start() {
 # Start ISC generation in background (non-blocking)
 aba_isconf_generate_start() {
 	run_once -i "aba:isconf:generate" -- \
-		bash -lc "cd '${ABA_ROOT:-.}' && aba -d mirror isconf"
+		bash -lc "cd '${ABA_ROOT:-.}' && aba isconf --dir mirror"
 }
 
 # --- Cleanup ---
@@ -3440,8 +3497,13 @@ aba_bg_cleanup() {
 # Ensure govc is installed in ~/bin
 ensure_govc() {
 	aba_debug "ensure_govc: downloading and installing govc"
-	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
-	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$TASK_DL_GOVC" -- "${CMD_DL_GOVC[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$TASK_DL_GOVC"
+
+	run_once -i "$TASK_GOVC" -- "${CMD_INST_GOVC[@]}"
+	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC"
 }
 
 ensure_virsh() {
@@ -3451,15 +3513,21 @@ ensure_virsh() {
 # Ensure butane is installed in ~/bin
 ensure_butane() {
 	aba_debug "ensure_butane: downloading and installing butane"
-	run_once -q -w -i "cli:download:butane" -- make -sC cli download-butane
-	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$TASK_DL_BUTANE" -- "${CMD_DL_BUTANE[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$TASK_DL_BUTANE"
+
+	run_once -i "$TASK_BUTANE" -- "${CMD_INST_BUTANE[@]}"
+	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE"
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
 # Wait: aba.sh starts $TASK_QUAY_REG and $TASK_QUAY_REG_DOWNLOAD in background
 ensure_quay_registry() {
 	aba_debug "ensure_quay_registry: installing mirror-registry"
-	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
+	run_once -i "$TASK_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
+	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG"
 }
 
 # Get error output from a task (helper for error messages)

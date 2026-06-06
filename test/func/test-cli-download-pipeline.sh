@@ -100,7 +100,8 @@ rm -f ~/bin/oc ~/bin/kubectl
 local_tar=$(make --no-print-directory -sC cli -p 2>/dev/null | grep '^local_oc_tar_file' | head -1 | awk '{print $3}')
 [ -z "$local_tar" ] && local_tar="openshift-client-linux-amd64-rhel9-${OCP_VER}.tar.gz"
 rm -f "cli/$local_tar" "cli/${local_tar}.sha256"
-make -sC cli reset-download-oc 2>/dev/null || true
+run_once -r -i "cli:download:oc:${OCP_VER}" 2>/dev/null || true
+run_once -r -i "cli:install:oc" 2>/dev/null || true
 
 output=$(make -C cli ~/bin/oc 2>&1)
 rc=$?
@@ -139,7 +140,8 @@ section "Test 2: Parallel race — two processes trigger same tarball"
 # ──────────────────────────────────────────────────────────────────────
 
 rm -f ~/bin/oc ~/bin/kubectl "cli/$local_tar" "cli/${local_tar}.sha256"
-make -sC cli reset-download-oc 2>/dev/null || true
+run_once -r -i "cli:download:oc:${OCP_VER}" 2>/dev/null || true
+run_once -r -i "cli:install:oc" 2>/dev/null || true
 
 # Process A: make download-oc (downloads both rhel8+rhel9)
 make -C cli download-oc >/tmp/.aba-test-dl-A.log 2>&1 &
@@ -334,7 +336,8 @@ section "Test 6: Version change triggers re-download"
 oi_tar="openshift-install-linux-${OCP_VER}.tar.gz"
 
 # Ensure current version is installed
-make -sC cli reset-download-openshift-install 2>/dev/null || true
+run_once -r -i "cli:download:openshift-install:${OCP_VER}" 2>/dev/null || true
+run_once -r -i "cli:install:openshift-install" 2>/dev/null || true
 rm -f ~/bin/openshift-install "cli/$oi_tar" "cli/${oi_tar}.sha256"
 make -C cli ~/bin/openshift-install >/dev/null 2>&1
 rc=$?
@@ -357,38 +360,48 @@ fi
 # We use dry-run to avoid actually downloading a different version.
 dry_output=$(make -C cli -n ~/bin/openshift-install ocp_version=0.0.1 2>&1)
 
-if echo "$dry_output" | grep -q '_fetch-openshift-install'; then
-	test_pass "Version change triggers re-download (dry-run shows _fetch)"
+# With pure Make, a new ocp_version produces a different tarball filename.
+# dry-run must show curl (re-download) and tar (re-extract).
+if echo "$dry_output" | grep -q 'curl'; then
+	test_pass "Version change triggers re-download (dry-run shows curl)"
 else
 	test_fail "Version change NOT detected in dry-run"
 fi
 
-if echo "$dry_output" | grep -q '_extract-openshift-install\|Extracting'; then
-	test_pass "Version change triggers re-extract (dry-run shows _extract)"
+if echo "$dry_output" | grep -q 'tar\|Extracting'; then
+	test_pass "Version change triggers re-extract (dry-run shows tar)"
 else
 	test_fail "Version change does NOT trigger re-extract"
 fi
 
 # ──────────────────────────────────────────────────────────────────────
-section "Test 7: Concurrent download + install (aggressive)"
-# Hammer: 3 processes simultaneously download + install oc.
+section "Test 7: Concurrent download + install (aggressive, via run_once)"
+# 3 processes simultaneously trigger download + install via run_once.
+# run_once serializes — only one actually runs, others wait.
 # All must succeed, binary must be valid at the end.
 # ──────────────────────────────────────────────────────────────────────
 
 rm -f ~/bin/oc ~/bin/kubectl "cli/$local_tar" "cli/${local_tar}.sha256"
-make -sC cli reset-download-oc 2>/dev/null || true
+run_once -r -i "cli:download:oc:${OCP_VER}" 2>/dev/null || true
+run_once -r -i "cli:install:oc" 2>/dev/null || true
+
+dl_task="cli:download:oc:${OCP_VER}"
+inst_task="cli:install:oc"
 
 pids=()
 for i in 1 2 3; do
 	(
-		make -C cli ~/bin/oc >/dev/null 2>&1
+		run_once -i "$dl_task" -- make -sC cli download-oc 2>/dev/null
+		run_once -w -i "$dl_task" 2>/dev/null
+		run_once -i "$inst_task" -- make -sC cli ~/bin/oc 2>/dev/null
+		run_once -w -i "$inst_task" 2>/dev/null
 		exit $?
 	) &
 	pids+=($!)
 	sleep 0.1
 done
 
-echo "  Launched 3 concurrent make ~/bin/oc: PIDs ${pids[*]}"
+echo "  Launched 3 concurrent run_once download+install: PIDs ${pids[*]}"
 
 all_ok=true
 for pid in "${pids[@]}"; do
@@ -398,7 +411,7 @@ for pid in "${pids[@]}"; do
 done
 
 if $all_ok; then
-	test_pass "All 3 concurrent make ~/bin/oc succeeded (extraction serialized by run_once)"
+	test_pass "All 3 concurrent processes succeeded (serialized by run_once)"
 else
 	test_fail "Some concurrent processes failed"
 fi
@@ -432,7 +445,7 @@ section "Test 8: make download blocks with output (UX check)"
 # ──────────────────────────────────────────────────────────────────────
 
 rm -f "cli/$local_tar" "cli/${local_tar}.sha256"
-make -sC cli reset-download-oc 2>/dev/null || true
+run_once -r -i "cli:download:oc:${OCP_VER}" 2>/dev/null || true
 
 start_t=$SECONDS
 output=$(make -C cli download-oc 2>&1)

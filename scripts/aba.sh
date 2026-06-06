@@ -328,13 +328,17 @@ if [ ! "$interactive_mode" ]; then
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
-		if [ "$ocp_version" ]; then
+		# When targeting cli/ directly, Make handles its own downloads serially.
+		# Starting bg downloads would race with the foreground Make on the same tarballs.
+		if [[ "$PWD" == "$ABA_ROOT/cli" ]]; then
+			aba_debug "Direct cli target - Make will download serially, skipping early bg downloads"
+		elif [ "$ocp_version" ]; then
 			aba_debug "Non-interactive mode - starting all CLI downloads early"
 			$ABA_ROOT/scripts/cli-download-all.sh >&2
 		else
 			aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
 			$ABA_ROOT/scripts/cli-download-all.sh --no-version >&2
-			fi
+		fi
 			;;
 	esac
 fi
@@ -1276,6 +1280,7 @@ aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 if [ ! "$interactive_mode" ]; then
 	# Only run make if there's a target
 	if [ "$BUILD_COMMAND" ]; then
+
 		if [ "$DEBUG_ABA" ]; then
 			aba_debug ask=$ask DEBUG_ABA=$DEBUG_ABA INFO_ABA=$INFO_ABA
 			aba_debug "Running: \"make $BUILD_COMMAND\" from directory: $PWD" 
@@ -1327,7 +1332,7 @@ if [ -f .bundle ]; then
 	# These run in background and will be ready when user runs commands that need them
 	
 	scripts/cli-install-all.sh                                    # Start: CLI extractions. Wait: ensure_oc() etc in include_all.sh
-	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start: Quay extract. Wait: ensure_quay_registry() in include_all.sh
+	run_once -i "$TASK_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"  # Start: Quay extract. Wait: ensure_quay_registry() in include_all.sh
 
 	echo_yellow "ABA install bundle detected for OpenShift v$ocp_version."
 
@@ -1404,16 +1409,16 @@ fi
 	aba_debug "Fetching OpenShift version data in background ..."
 	# Start: fetch OCP versions in background. 'bash -lc' needed because can't setsid a function.
 	# Wait: ~80 lines below (run_once -w ocp:$channel:latest_version*)
-	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
-	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
-	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
-	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
-	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
-	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
+	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable'
+	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable'
+	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast'
+	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast'
+	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
+	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
 
 	# Start: extract oc-mirror in background. Wait: ensure_oc_mirror() in include_all.sh
 	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- make -sC cli oc-mirror
+	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- "${CMD_INST_OC_MIRROR[@]}"
 
 	# Check Internet connectivity to required sites (using shared function)
 	aba_info "Checking Internet connectivity to required sites..."
@@ -1642,7 +1647,7 @@ download_all_catalogs "$ocp_ver_short"
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
 # Start: download mirror-registry and docker-reg images. Wait: ensure_quay_registry() in include_all.sh
-run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries
+run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- "${CMD_DL_QUAY_REG[@]}"
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 
