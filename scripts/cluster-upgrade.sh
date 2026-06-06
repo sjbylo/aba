@@ -64,10 +64,13 @@ if ! oc whoami --request-timeout='20s' >/dev/null; then
 	aba_abort "Cannot access the cluster. Check KUBECONFIG=$KUBECONFIG"
 fi
 
-# Preflight: get current version from live cluster
-aba_debug "Running: oc get clusterversion version -o jsonpath='{.status.desired.version}'"
-current_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}') || current_ver=""
-[ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version"
+# Preflight: get current COMPLETED version from live cluster
+# Use history[Completed] not desired.version — desired flips immediately when an upgrade is requested
+aba_debug "Running: oc get clusterversion version (completed history)"
+current_ver=$(oc get clusterversion version \
+	-o jsonpath='{.status.history[?(@.state=="Completed")].version}' 2>/dev/null \
+	| awk '{print $1}') || current_ver=""
+[ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version (no completed version in history)"
 aba_info "Current cluster version: $current_ver"
 
 # Query available versions from mirror.
@@ -120,18 +123,18 @@ fi
 
 aba_info "Target cluster version:  $target_ver"
 
+# Idempotency: if already at target version, succeed silently (check BEFORE health)
+if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
+	aba_info_ok "Cluster is already at version $target_ver — nothing to do."
+	exit 0
+fi
+
 # Preflight: cluster health — warn and let user decide (default: continue)
 if ! cluster_is_ready; then
 	aba_warning \
 		"The cluster is not fully healthy (degraded operators or install still progressing)." \
 		"To investigate: oc get co | grep -v 'True.*False.*False'"
 	ask "Continue with upgrade anyway" || exit 1
-fi
-
-# Idempotency: if already at target version, succeed silently
-if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
-	aba_info_ok "Cluster is already at version $target_ver — nothing to do."
-	exit 0
 fi
 
 # Idempotency: if an upgrade to the same target is already in progress, fall through to monitoring
