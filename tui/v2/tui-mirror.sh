@@ -656,7 +656,8 @@ mirror_view_isc() {
 	if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"$TUI2_MSG_ISC_GENERATING" 0 0
-		if ! run_once -q -w -i "aba:isconf:generate" 2>>"$_TUI_LOG_FILE"; then
+		if ! run_once -q -w -i "aba:isconf:generate" -- \
+			bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$_TUI_LOG_FILE" 2>&1; then
 			tui_log "ERROR: ISC generation failed"
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
 				"Failed to generate ImageSet configuration.\nCheck log: $_TUI_LOG_FILE" 0 0
@@ -724,7 +725,8 @@ mirror_view_isc() {
 					if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
 						dlg --backtitle "$(ui_backtitle)" --infobox \
 							"$TUI2_MSG_ISC_GENERATING" 0 0
-						run_once -q -w -i "aba:isconf:generate" 2>>"$_TUI_LOG_FILE" || true
+						run_once -q -w -i "aba:isconf:generate" -- \
+							bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$_TUI_LOG_FILE" 2>&1 || true
 					fi
 					;;&
 				V)
@@ -1165,7 +1167,8 @@ _ensure_offline_prereqs() {
 		return 1
 	fi
 
-	if ! run_once -q -w -i "mirror:reg:download" 2>>"$_TUI_LOG_FILE"; then
+	if ! run_once -q -w -i "mirror:reg:download" -- \
+		make -sC "$ABA_ROOT/mirror" download-registries >>"$_TUI_LOG_FILE" 2>&1; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DOWNLOAD_FAILED" \
 			--msgbox "Failed to download registry installers.\n\nCheck internet connectivity and try again." 0 0
 		return 1
