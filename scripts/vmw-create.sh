@@ -38,11 +38,22 @@ if ! govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1; then
 		"Available datastores: $(govc datastore.ls 2>/dev/null | tr '\n' ', ')" \
 		"Fix GOVC_DATASTORE in vmware.conf and try again."
 fi
-if ! govc find / -type Network -name "$GOVC_NETWORK" 2>/dev/null | grep -q .; then
-	aba_abort \
-		"Network '$GOVC_NETWORK' not found." \
-		"Available networks: $(govc ls network/ 2>/dev/null | xargs -I{} basename {} | tr '\n' ', ')" \
-		"Fix GOVC_NETWORK in vmware.conf and try again."
+if [ "${VC:-}" ]; then
+	if ! govc find / -type Network -name "$GOVC_NETWORK" 2>/dev/null | grep -q .; then
+		aba_abort \
+			"Network '$GOVC_NETWORK' not found." \
+			"Available networks: $(govc ls network/ 2>/dev/null | xargs -I{} basename {} | tr '\n' ', ')" \
+			"Fix GOVC_NETWORK in vmware.conf and try again."
+	fi
+else
+	# ESXi standalone: govc find may not list port groups in the MOB.
+	# Use host.portgroup.info which queries host config directly.
+	if ! govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1; then
+		aba_abort \
+			"Network '$GOVC_NETWORK' not found." \
+			"Available networks: $(govc host.portgroup.info 2>/dev/null | grep '^Name:' | sed 's/Name: *//' | tr '\n' ', ')" \
+			"Fix GOVC_NETWORK in vmware.conf and try again."
+	fi
 fi
 
 cluster_folder="$VC_FOLDER"
