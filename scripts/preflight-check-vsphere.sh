@@ -352,9 +352,9 @@ _vsphere_probe_resources_network_on_cluster() {
 _vsphere_probe_resources() {
 	# ESXi (VC empty - set by normalize-vmware-conf via 'govc about' API-type probe):
 	# no datacenter / cluster / resource pool, no per-host RBAC privilege model.
-	# Probe datastore + network under the synthetic /ha-datacenter root that
-	# ESXi always exposes; folder still probed if VC_FOLDER is set; everything
-	# else short-circuits with an INFO line so the user sees which checks ran.
+	# Probe datastore under /ha-datacenter; network via host.portgroup.info
+	# (see network-check comment below for rationale);
+	# folder still probed if VC_FOLDER is set; everything else short-circuits.
 	if [ -z "${VC:-}" ]; then
 		if _vsphere_resolve_object datastore "$GOVC_DATASTORE" "/ha-datacenter/datastore"; then
 			_vsphere_datastore_path="$_vsphere_resolver_result"
@@ -366,9 +366,18 @@ _vsphere_probe_resources() {
 				_vsphere_iso_datastore_found=1
 			fi
 		fi
-		if _vsphere_resolve_object network "$GOVC_NETWORK" "/ha-datacenter/network"; then
-			_vsphere_network_path="$_vsphere_resolver_result"
+		# Use host.portgroup.info instead of _vsphere_resolve_object (which uses
+		# govc find / object.collect). Observed on ESXi 7.0.3 standalone: govc
+		# find/ls did not list port groups that were visible via host.portgroup.info
+		# and esxcli. Root cause not fully understood — may be version-specific or
+		# related to standalone-vs-vCenter-managed. host.portgroup.info queries the
+		# host config directly and works reliably in all observed scenarios.
+		_vsphere_network_path="/ha-datacenter/network/$GOVC_NETWORK"
+		if govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1; then
+			aba_info_ok "vSphere: network '$_vsphere_network_path'"
 			_vsphere_network_found=1
+		else
+			_vsphere_err "network '$_vsphere_network_path' not found"
 		fi
 		if [ -n "${VC_FOLDER:-}" ]; then
 			if _vsphere_resolve_object folder "$VC_FOLDER" "/ha-datacenter/vm"; then

@@ -121,11 +121,13 @@ fi
 #   - '/dev/tcp/...'  (the NTP-probe idiom at scripts/preflight-check.sh:75 -
 #     2>/dev/null is INSIDE the bash -c subshell to suppress bash's own
 #     "connect: Connection refused" stderr noise; Phase 2 Pitfall 6 in RESEARCH.md)
+#   - 'host.portgroup.info'  (ESXi network probe — we only care about exit code)
 # We reject any '2>/dev/null', '&>/dev/null', '>/dev/null 2>&1', or '2>&1 |' outside these.
 banned=$(grep -nE '(2>/dev/null|&>/dev/null|>/dev/null 2>&1|2>&1 \|)' "$SCRIPT" \
 	| grep -Pv '^\d+:\s*#' \
 	| grep -v 'command -v' \
 	| grep -v '/dev/tcp/' \
+	| grep -v 'host.portgroup.info' \
 	|| true)
 if [ -n "$banned" ]; then
 	test_fail "Contains banned stderr-suppression patterns"
@@ -295,6 +297,13 @@ govc() {
 				return "${!role_rc_key}"
 			fi
 			return "${GOVC_STUB_ROLE_RC:-0}"
+			;;
+		host.portgroup.info)
+			local pg_name="$2"
+			case "$pg_name" in
+				Missing*) return 1 ;;
+				*)        return 0 ;;
+			esac
 			;;
 		*)
 			return 0

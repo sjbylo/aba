@@ -287,7 +287,7 @@ This prints on the normal bastion terminal. `run.sh` exits with 0 if all passed,
 
 ```
 run.sh [--suite X,Y | --all]       # which suites (required)
-       [--pools N]                  # how many pools to use (default: 1)
+       [-p SPEC]                    # pool selection: N, N-M, N,M, or "all"
        [--recreate-golden]          # destroy + rebuild golden from template
        [--recreate-vms]             # destroy + reclone con/dis from golden
        [-q]                         # quiet mode (CI: no interactive prompts, minimal output)
@@ -306,7 +306,7 @@ Removed: `--parallel`, `--skip-phase2`, `--create-pools N`, `--sync`, `--resume`
 - `--sync` removed -- `aba install` handles deployment; developer copies changes manually
 - `--resume` removed -- checkpoint files always respected unless `--clean`
 - `--parallel` removed -- always distributes across available pools
-- `--create-pools` removed -- `--pools N` defines pool count; infra created automatically
+- `--create-pools` removed -- `-p SPEC` selects pools by number/range/list (e.g. `-p 1-3`); infra created automatically
 
 ## New File Structure
 
@@ -338,7 +338,7 @@ Files removed:
 
 ```
 # Run all suites (same command every time -- script figures out what to do):
-run.sh --all --pools 3
+run.sh --all -p 1-3
 
 # Run one suite for debugging:
 run.sh --suite airgapped-local-reg
@@ -353,7 +353,7 @@ run.sh attach con1
 
 # Nuke everything and start over:
 run.sh --destroy
-run.sh --all --pools 3
+run.sh --all -p 1-3
 
 # Force rebuild golden VM (e.g. after RHEL update):
 run.sh --all --recreate-golden
