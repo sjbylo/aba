@@ -7,7 +7,7 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 # Verify that vSphere objects referenced in vmware.conf actually exist.
-# Called after govc about succeeds (login is valid).
+# Called after normalize-vmware-conf has been sourced (VC=1 for vCenter, VC= for ESXi).
 # Runs all checks in parallel; silent on success, reports all failures at once.
 _vmw_verify_objects() {
 	local _tmpdir
@@ -26,33 +26,50 @@ _vmw_verify_objects() {
 	fi
 
 	if [ "$GOVC_NETWORK" ]; then
-		( [ "$(govc find / -type Network -name "$GOVC_NETWORK")" ] \
-			&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
-			|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
+		if [ "${VC:-}" ]; then
+			# vCenter: govc find works reliably (vCenter populates the MOB).
+			( [ "$(govc find / -type Network -name "$GOVC_NETWORK" 2>/dev/null)" ] \
+				&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
+				|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
+		else
+			# ESXi standalone: use host.portgroup.info instead of govc find.
+			# Observed on ESXi 7.0.3: govc find/ls did not list port groups
+			# that were visible via host.portgroup.info and esxcli. Root cause
+			# not fully understood — may be version-specific or related to how
+			# port groups were created. host.portgroup.info queries the host
+			# config directly and works reliably in all observed scenarios.
+			( govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1 \
+				&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
+				|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
+		fi
 	fi
 
-	if [ "${GOVC_DATACENTER:-}" ]; then
-		( govc datacenter.info "$GOVC_DATACENTER" >/dev/null 2>&1 \
-			&& echo "ok Datacenter '$GOVC_DATACENTER'" > "$_tmpdir/datacenter" \
-			|| echo "fail Datacenter '$GOVC_DATACENTER' not found" > "$_tmpdir/datacenter" ) &
-	fi
+	# Datacenter, Cluster, VC_FOLDER, and Resource Pool are vCenter-only concepts.
+	# On ESXi (VC is empty), skip these checks entirely.
+	if [ "${VC:-}" ]; then
+		if [ "${GOVC_DATACENTER:-}" ]; then
+			( govc datacenter.info "$GOVC_DATACENTER" >/dev/null 2>&1 \
+				&& echo "ok Datacenter '$GOVC_DATACENTER'" > "$_tmpdir/datacenter" \
+				|| echo "fail Datacenter '$GOVC_DATACENTER' not found" > "$_tmpdir/datacenter" ) &
+		fi
 
-	if [ "${GOVC_CLUSTER:-}" ]; then
-		( [ "$(govc find / -type ClusterComputeResource -name "$GOVC_CLUSTER")" ] \
-			&& echo "ok Cluster '$GOVC_CLUSTER'" > "$_tmpdir/cluster" \
-			|| echo "fail Cluster '$GOVC_CLUSTER' not found" > "$_tmpdir/cluster" ) &
-	fi
+		if [ "${GOVC_CLUSTER:-}" ]; then
+			( [ "$(govc find / -type ClusterComputeResource -name "$GOVC_CLUSTER" 2>/dev/null)" ] \
+				&& echo "ok Cluster '$GOVC_CLUSTER'" > "$_tmpdir/cluster" \
+				|| echo "fail Cluster '$GOVC_CLUSTER' not found" > "$_tmpdir/cluster" ) &
+		fi
 
-	if [ "${VC_FOLDER:-}" ]; then
-		( govc folder.info "$VC_FOLDER" >/dev/null 2>&1 \
-			&& echo "ok Folder '$VC_FOLDER'" > "$_tmpdir/folder" \
-			|| echo "info Folder '$VC_FOLDER' does not exist yet (will be created at install time)" > "$_tmpdir/folder" ) &
-	fi
+		if [ "${VC_FOLDER:-}" ]; then
+			( govc folder.info "$VC_FOLDER" >/dev/null 2>&1 \
+				&& echo "ok Folder '$VC_FOLDER'" > "$_tmpdir/folder" \
+				|| echo "info Folder '$VC_FOLDER' does not exist yet (will be created at install time)" > "$_tmpdir/folder" ) &
+		fi
 
-	if [ "${GOVC_RESOURCE_POOL:-}" ]; then
-		( govc pool.info "$GOVC_RESOURCE_POOL" >/dev/null 2>&1 \
-			&& echo "ok Resource pool '$GOVC_RESOURCE_POOL'" > "$_tmpdir/pool" \
-			|| echo "fail Resource pool '$GOVC_RESOURCE_POOL' not found" > "$_tmpdir/pool" ) &
+		if [ "${GOVC_RESOURCE_POOL:-}" ]; then
+			( govc pool.info "$GOVC_RESOURCE_POOL" >/dev/null 2>&1 \
+				&& echo "ok Resource pool '$GOVC_RESOURCE_POOL'" > "$_tmpdir/pool" \
+				|| echo "fail Resource pool '$GOVC_RESOURCE_POOL' not found" > "$_tmpdir/pool" ) &
+		fi
 	fi
 
 	wait

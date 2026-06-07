@@ -136,6 +136,8 @@ cmd="$1"
 case "$cmd" in
 	datastore.info|datacenter.info|folder.info|pool.info)
 		exit 0 ;;
+	host.portgroup.info)
+		exit 1 ;;
 	find)
 		# Return empty = not found
 		echo "" ;;
@@ -171,6 +173,7 @@ cmd="$1"
 case "$cmd" in
 	datastore.info) exit 1 ;;
 	datacenter.info) exit 1 ;;
+	host.portgroup.info) exit 1 ;;
 	folder.info|pool.info) exit 0 ;;
 	find) echo "" ;;
 	*) exit 0 ;;
@@ -188,6 +191,7 @@ chmod +x "$_mock_dir/govc"
 	GOVC_CLUSTER="BadCluster"
 	VC_FOLDER=""
 	GOVC_RESOURCE_POOL=""
+	VC=1
 	_vmw_verify_objects
 ) > "$_test_out" 2>&1
 _rc=$?

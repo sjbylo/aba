@@ -174,9 +174,10 @@ alwaysApply: true
 
 ## E2E pool usage
 
-- When only pools 1 and 2 are active, ALWAYS pass `--pools 2` on every `run.sh` invocation (run, deploy, restart, stop, status, verify, reschedule)
-- Using `--pool N` without `--pools` can trigger infrastructure setup for ALL pools in pools.conf, powering on VMs that should stay off
-- Rule of thumb: if you know how many pools are in use, always pass `--pools N`
+- ALWAYS pass `-p` with the correct pool spec on every `run.sh` invocation (run, deploy, restart, stop, status, verify, reschedule)
+- `-p N` means pool N only (single pool). `-p 1-4` means pools 1 through 4 (range). `-p 1,3` means pools 1 and 3 (list). `-p all` means all pools in pools.conf.
+- Example: 4 active pools → `-p 1-4`. Only pools 1 and 2 → `-p 1-2`. NEVER use `-p 4` to mean "4 pools" — that means "pool 4 only"!
+- Omitting `-p` on a read-only command (status, list) defaults to all pools. Omitting `-p` on a write command can trigger infrastructure setup for ALL pools in pools.conf, powering on VMs that should stay off.
 
 ## gotest directive
 
