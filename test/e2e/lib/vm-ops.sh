@@ -107,7 +107,7 @@ clone_vm() {
 		nic_net=$(_get_nic_network "$clone_name" "$device")
 		if [ -z "$nic_net" ]; then
 			[ $i -eq 0 ] && echo "  WARNING: Could not detect network for $device, using GOVC_NETWORK"
-			nic_net="${GOVC_NETWORK:-VM Network}"
+			nic_net="${GOVC_NETWORK:-Lab Network}"
 		fi
 
 		if [ $i -lt ${#macs[@]} ] && [ -n "${macs[$i]}" ]; then
@@ -157,8 +157,8 @@ destroy_vm() {
 }
 
 # --- Ensure 3 NICs on a VM --------------------------------------------------
-# Templates are built with 1 NIC (VM Network). The E2E framework needs 3:
-#   ethernet-0 / ens192 = VM Network       (lab, DHCP)
+# Templates are built with 1 NIC (Lab Network). The E2E framework needs 3:
+#   ethernet-0 / ens192 = Lab Network      (lab, DHCP)
 #   ethernet-1 / ens224 = Private Network  (VLAN trunk)
 #   ethernet-2 / ens256 = External Network (internet)
 # Adds any missing NICs. Safe to call on VMs that already have 3 NICs.

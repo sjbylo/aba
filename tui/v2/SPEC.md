@@ -710,7 +710,7 @@ Also: repo-root `./abatui → tui/v2/abatui2.sh` for convenience.
   - Report any other `aba` CLI commands you were forced to use!
 - **Proxy mode ONLY** (for now) — no DNS records for the External Network
   - Source `~/.proxy-set.sh` before launching the TUI
-  - Use `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+  - Use `GOVC_NETWORK='Lab Network'` in `~/aba/vmware.conf`
   - Set `int_connection=proxy` in DIRECT mode, or use mirror modes (CONNO/DISCO)
 - **Success criterion**: "Agent alive" message (VM booted, agent running) — no need to wait for full install
 - **Deep RCA on any errors** — investigate root cause, report, and fix (TUI or test code only)
@@ -726,13 +726,13 @@ Also: repo-root `./abatui → tui/v2/abatui2.sh` for convenience.
 ### Network Port Groups (critical!)
 
 - **External Network** — direct internet (for DIRECT mode with `int_connection=direct`)
-- **VM Network** — no internet (proxy only) — for CONNO/DISCO and proxy-based DIRECT
+- **Lab Network** — no internet (proxy only) — for CONNO/DISCO and proxy-based DIRECT
 - **Private Network** — supports VLAN tagging (need DNS records for this network)
 
 Key rules:
 - `GOVC_NETWORK` in `~/aba/vmware.conf` MUST match the mode being tested
-- **For now**: always use `GOVC_NETWORK='VM Network'` + proxy settings
-- CANNOT use VLAN on "VM Network" or "External Network"!
+- **For now**: always use `GOVC_NETWORK='Lab Network'` + proxy settings
+- CANNOT use VLAN on "Lab Network" or "External Network"!
 - For VLAN testing: need `GOVC_NETWORK='Private Network'` (not tested yet)
 
 ### Proxy config (source ~/.proxy-set.sh before TUI launch)
@@ -753,8 +753,8 @@ Look up exact IPs via DNS (`dig sno.example.com`). Starting IPs can be lower (10
 
 ### Test workflows (Docker mirror first, then Quay)
 
-1. **DIRECT mode** (no mirror, `int_connection=proxy` on VM Network)
-   - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+1. **DIRECT mode** (no mirror, `int_connection=proxy` on Lab Network)
+   - `GOVC_NETWORK='Lab Network'` in `~/aba/vmware.conf`
    - Internet UP the whole time (proxy provides connectivity)
    - TUI: Pull secret (paste JSON if needed) → channel → version → platform → operators → cluster wizard …
    - Set connection type to `proxy` (not `direct` — no External Network DNS)
@@ -763,7 +763,7 @@ Look up exact IPs via DNS (`dig sno.example.com`). Starting IPs can be lower (10
    - Then `aba -d <cluster> delete` and move to next
 
 2. **CONNO mode** (connected + mirror, `int_connection=mirror`)
-   - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+   - `GOVC_NETWORK='Lab Network'` in `~/aba/vmware.conf`
    - Internet UP on registry4 for mirror sync
    - TUI: Install mirror (Docker first) → Sync → Install cluster
    - Test sno/compact/standard
@@ -771,7 +771,7 @@ Look up exact IPs via DNS (`dig sno.example.com`). Starting IPs can be lower (10
    - Repeat all with Quay mirror
 
 3. **DISCO mode** (disconnected / air-gapped)
-   - `GOVC_NETWORK='VM Network'` in `~/aba/vmware.conf`
+   - `GOVC_NETWORK='Lab Network'` in `~/aba/vmware.conf`
    - **Via bundle**: Internet UP → TUI creates bundle → Internet DOWN → load → install
    - **Via mode switch**: Start in CONNO → switch to DISCO in TUI → load from existing save
    - Test sno install until "Agent alive"
@@ -784,7 +784,7 @@ Look up exact IPs via DNS (`dig sno.example.com`). Starting IPs can be lower (10
 cd ~/aba
 aba reset --force                  # Clean slate (allowed CLI)
 aba -p vmw vmw                     # Set platform (allowed CLI)
-# Check/edit ~/aba/vmware.conf — ensure GOVC_NETWORK='VM Network'
+# Check/edit ~/aba/vmware.conf — ensure GOVC_NETWORK='Lab Network'
 
 # Source proxy before TUI
 source ~/.proxy-set.sh
@@ -809,7 +809,7 @@ aba reset --force
 ### CLI equivalents (for reference only — do NOT use during TUI testing)
 
 ```bash
-# DIRECT+proxy mode (GOVC_NETWORK='VM Network')
+# DIRECT+proxy mode (GOVC_NETWORK='Lab Network')
 aba cluster --name sno --type sno --platform vmw --starting-ip 10.0.1.80 --int-connection proxy
 
 # CONNO mode (Docker mirror)
@@ -831,7 +831,7 @@ aba cluster --name standard --type standard --platform vmw \
 - Always `aba -d <cluster> delete` before trying the next cluster (frees VMware resources)
 - `aba reset --force` between workflow changes (DIRECT → CONNO → DISCO)
 - Docker mirror first (more reliable), Quay mirror second
-- No VLAN on "VM Network" — leave vlan empty
+- No VLAN on "Lab Network" — leave vlan empty
 - Test passes when "Agent alive" message appears
 - Source `~/.proxy-set.sh` before every TUI launch
 - Report ANY `aba` CLI commands used outside the allowed exceptions
@@ -847,7 +847,7 @@ aba cluster --name standard --type standard --platform vmw \
 - **Mirror**: Docker at registry4.example.com:8443
 - **Platform**: vmw (vCenter, govc 0.54.0)
 - **OCP Version**: 4.21.14 (stable)
-- **Network**: 10.0.0.0/20, DNS 10.0.1.8, VM Network port group
+- **Network**: 10.0.0.0/20, DNS 10.0.1.8, Lab Network port group
 - **Proxy**: sourced from ~/.proxy-set.sh
 
 ### Test Results

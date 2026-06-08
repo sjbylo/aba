@@ -15,7 +15,7 @@
 #   done
 #
 # VLAN tests use GOVC_NETWORK="Private Network" (VLAN-capable port group).
-# Non-VLAN tests use GOVC_NETWORK="VM Network" (regular lab network).
+# Non-VLAN tests use the pool's default GOVC_NETWORK (from vmware.conf).
 # =============================================================================
 
 set -u
@@ -168,7 +168,7 @@ _net_test() {
         next_hop="$(pool_vlan_gateway)"
         start_ip="$(pool_vlan_node_ip)"
     else
-        govc_network="VM Network"
+        govc_network="${GOVC_NETWORK:?GOVC_NETWORK must be set in vmware.conf}"
         machine_network="$(pool_machine_network)"
         next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
         start_ip="$(pool_node_ip)"
@@ -292,7 +292,7 @@ _net_test "VLAN standard: bonding" \
     standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # ============================================================================
-# 11-13. Non-VLAN bonding tests (GOVC_NETWORK="VM Network")
+# 11-13. Non-VLAN bonding tests (GOVC_NETWORK from vmware.conf)
 #         Single-port non-VLAN is already tested by cluster-ops/mirror-sync suites.
 # ============================================================================
 

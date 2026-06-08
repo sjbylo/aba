@@ -267,7 +267,7 @@ GOVC_URL=esxi4.lan
 GOVC_USERNAME=root
 GOVC_PASSWORD='...'
 GOVC_DATASTORE=datastore1
-GOVC_NETWORK="VM Network"
+GOVC_NETWORK="Lab Network"
 GOVC_INSECURE=true
 # No VC_FOLDER, GOVC_DATACENTER, or GOVC_CLUSTER for ESXi-direct
 ```
@@ -370,7 +370,7 @@ After a fresh ESXi install, configure these before running tests.
 
 | vSwitch  | Uplink | Port Group       | VLAN ID | Purpose |
 |----------|--------|------------------|---------|---------|
-| vSwitch0 | vmnic0/1 | VM Network (or VM Network 2) | 0 | Lab network — conN, disN, cluster VMs. Used by `GOVC_NETWORK` in `vmware.conf` |
+| vSwitch0 | vmnic0/1 | Lab Network | 0 | Lab network — conN, disN, cluster VMs. Used by `GOVC_NETWORK` in `vmware.conf` |
 | vSwitch1 | *(none)* | Private Network  | 4095 (trunk) | Isolated inter-VM VLAN testing (`network-advanced` suite). No uplink by design |
 | vSwitch2 | vmnic2   | External Network | 0 | Internet access for conN (ens256) |
 
@@ -401,7 +401,7 @@ configuration beyond basic management network connectivity.
 
 | VMkernel | Port Group       | Purpose |
 |----------|------------------|---------|
-| vmk0     | VM Network       | ESXi management (SSH, web UI, API) |
+| vmk0     | Lab Network      | ESXi management (SSH, web UI, API) |
 | vmk1     | External Network | Optional — ESXi internet access |
 
 **Known quirk — fresh ESXi install:**
