@@ -130,9 +130,18 @@ sync_extras() {
 		_essh "$target" "chmod +x ~/bin/notify.sh"
 	fi
 
-	# Custom vmware.conf
+	# Custom vmware.conf: deploy to original path AND as ~/.vmware.conf
+	# so suites that source ~/.vmware.conf pick it up after -V reverts.
 	if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
 		_escp "$CLI_VMWARE_CONF" "${target}:${CLI_VMWARE_CONF}"
+		_escp "$CLI_VMWARE_CONF" "${target}:~/.vmware.conf"
+		# Deploy to root on conN and to both users on disN (airgapped suites run
+		# aba on disN; some suites use sudo on conN).
+		local _host="${target#*@}"
+		local _dis_host="${_host/con/dis}"
+		for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
+			_escp "$CLI_VMWARE_CONF" "${_dt}:~/.vmware.conf" 2>/dev/null || true
+		done
 	fi
 
 	# Root essentials (govc, pull-secret, vmware.conf)
@@ -156,7 +165,7 @@ _deploy_root_essentials() {
 	if [ "$user" = "root" ]; then
 		local _ps="$HOME/.pull-secret.json"
 		[ -f "$_ps" ] && _escp "$_ps" "${target}:~/.pull-secret.json"
-		local _vf="$HOME/.vmware.conf"
+		local _vf="${CLI_VMWARE_CONF:-$HOME/.vmware.conf}"
 		[ -f "$_vf" ] && _escp "$_vf" "${target}:~/.vmware.conf"
 	fi
 }

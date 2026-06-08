@@ -768,6 +768,28 @@ else
 			fi
 		done
 	fi
+
+	# After -V revert, ~/aba may exist (from snapshot) but on the wrong branch.
+	# Ensure all conN hosts are on E2E_GIT_BRANCH.
+	echo ""
+	echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
+	for _p in $CLI_POOL_LIST; do
+		target=$(_con_target "$_p")
+		echo -n "    con${_p}: "
+		_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
+		if [ "$_cur_branch" = "$E2E_GIT_BRANCH" ]; then
+			_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null 2>&1
+			echo "ok (already on $E2E_GIT_BRANCH)"
+		elif [ -n "$_cur_branch" ]; then
+			if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null 2>&1; then
+				echo "switched $_cur_branch -> $E2E_GIT_BRANCH"
+			else
+				echo "FAILED to switch to $E2E_GIT_BRANCH"
+			fi
+		else
+			echo "skipped (no git repo)"
+		fi
+	done
 fi
 
 # =============================================================================

@@ -320,6 +320,9 @@ if [[ ! -f "$DONE_MARKER" ]]; then
     _oc_mirror_tmp_installed=""
     if ! command -v oc-mirror &>/dev/null; then
         echo "  Installing oc-mirror via aba cli Makefile ..."
+        # Wait for any background run_once downloads to finish before extracting;
+        # otherwise Make sees a partially-downloaded tarball and extraction fails.
+        "$ABA_ROOT/scripts/cli-download-all.sh" --wait oc-mirror 2>/dev/null || true
         make -C "$ABA_ROOT/cli" ~/bin/oc-mirror
         export PATH="$HOME/bin:$PATH"
         _oc_mirror_tmp_installed=1
