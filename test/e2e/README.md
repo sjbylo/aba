@@ -361,6 +361,57 @@ Coordinator (run.sh)
                  └── SSH ──> cluster   (via aba ssh)
 ```
 
+### ESXi Host Prerequisites
+
+The E2E tests assume the ESXi host has the following infrastructure in place.
+After a fresh ESXi install, configure these before running tests.
+
+**vSwitches and Port Groups:**
+
+| vSwitch  | Uplink | Port Group       | VLAN ID | Purpose |
+|----------|--------|------------------|---------|---------|
+| vSwitch0 | vmnic0/1 | VM Network (or VM Network 2) | 0 | Lab network — conN, disN, cluster VMs. Used by `GOVC_NETWORK` in `vmware.conf` |
+| vSwitch1 | *(none)* | Private Network  | 4095 (trunk) | Isolated inter-VM VLAN testing (`network-advanced` suite). No uplink by design |
+| vSwitch2 | vmnic2   | External Network | 0 | Internet access for conN (ens256) |
+
+**Private Network security policy** (required for VLAN trunk to work):
+- Allow promiscuous mode: **Accept**
+- Allow forged transmits: **Accept**
+- Allow MAC changes: Accept (optional)
+
+**NFS Datastore:**
+
+| Name       | NFS Host | Share Path          | Purpose |
+|------------|----------|---------------------|---------|
+| NFS-Shared | 10.0.1.8 | /volume1/nfs-vmware | Shared ISO storage — ABA uploads boot ISOs here for all pools |
+
+**Local Datastores:**
+
+One VMFS datastore per pool (e.g. `Datastore4-1` through `Datastore4-4`).
+Suites create cluster VMs on the pool's assigned datastore (set in `pools.conf`).
+
+**DNS:**
+
+Pool VMs (conN/disN) get their IPs via DHCP from the lab network (10.0.0.0/20).
+DNS/NTP upstream is 10.0.1.8. Each conN runs its own dnsmasq for cluster
+DNS (`*.pN.example.com`). The ESXi host itself does not need custom DNS
+configuration beyond basic management network connectivity.
+
+**VMkernel NICs:**
+
+| VMkernel | Port Group       | Purpose |
+|----------|------------------|---------|
+| vmk0     | VM Network       | ESXi management (SSH, web UI, API) |
+| vmk1     | External Network | Optional — ESXi internet access |
+
+**Known quirk — fresh ESXi install:**
+
+After a fresh ESXi installation, the default "VM Network" port group may not
+be visible to `govc` (not registered in the vSphere MOB). Port groups created
+via the ESXi web UI are visible. Workaround: create a new port group on the
+same vSwitch via the web UI (e.g. "VM Network 2") and use that name in
+`vmware.conf`. See `Troubleshooting.md` for details.
+
 ### vSphere Layout
 
 - Folder: `/Datacenter/vm/aba-e2e/poolN`

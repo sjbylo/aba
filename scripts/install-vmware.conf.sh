@@ -32,12 +32,10 @@ _vmw_verify_objects() {
 				&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
 				|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
 		else
-			# ESXi standalone: use host.portgroup.info instead of govc find.
-			# Observed on ESXi 7.0.3: govc find/ls did not list port groups
-			# that were visible via host.portgroup.info and esxcli. Root cause
-			# not fully understood — may be version-specific or related to how
-			# port groups were created. host.portgroup.info queries the host
-			# config directly and works reliably in all observed scenarios.
+			# ESXi standalone: govc find may not list some port groups (observed
+			# on freshly installed ESXi 7.0.3). host.portgroup.info queries
+			# host config directly and works reliably.
+			# See Troubleshooting.md "ESXi: Network not found" for details.
 			( govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1 \
 				&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
 				|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &

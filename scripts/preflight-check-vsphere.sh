@@ -366,12 +366,10 @@ _vsphere_probe_resources() {
 				_vsphere_iso_datastore_found=1
 			fi
 		fi
-		# Use host.portgroup.info instead of _vsphere_resolve_object (which uses
-		# govc find / object.collect). Observed on ESXi 7.0.3 standalone: govc
-		# find/ls did not list port groups that were visible via host.portgroup.info
-		# and esxcli. Root cause not fully understood — may be version-specific or
-		# related to standalone-vs-vCenter-managed. host.portgroup.info queries the
-		# host config directly and works reliably in all observed scenarios.
+		# ESXi standalone: govc find may not list some port groups (observed
+		# on freshly installed ESXi 7.0.3). host.portgroup.info queries
+		# host config directly and works reliably.
+		# See Troubleshooting.md "ESXi: Network not found" for details.
 		_vsphere_network_path="/ha-datacenter/network/$GOVC_NETWORK"
 		if govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1; then
 			aba_info_ok "vSphere: network '$_vsphere_network_path'"

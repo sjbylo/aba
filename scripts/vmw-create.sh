@@ -46,8 +46,10 @@ if [ "${VC:-}" ]; then
 			"Fix GOVC_NETWORK in vmware.conf and try again."
 	fi
 else
-	# ESXi standalone: govc find may not list port groups in the MOB.
-	# Use host.portgroup.info which queries host config directly.
+	# ESXi standalone: govc find may not list some port groups (observed
+	# on freshly installed ESXi 7.0.3). host.portgroup.info queries
+	# host config directly and works reliably.
+	# See Troubleshooting.md "ESXi: Network not found" for details.
 	if ! govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1; then
 		aba_abort \
 			"Network '$GOVC_NETWORK' not found." \

@@ -238,6 +238,32 @@ Line-by-line:
 After fixing the RBAC or the configuration, re-run `aba install`. No extra
 flag is needed - preflight runs automatically on every install attempt.
 
+### ESXi: "Network not found" on a freshly installed host
+
+On a freshly installed standalone ESXi host, `govc vm.create` (and
+`govc find / -type Network`) may fail to find port groups that clearly
+exist in the ESXi UI and via `esxcli network vswitch standard portgroup
+list`. This has been observed with the default "VM Network" port group
+on ESXi 7.0.3 after a fresh install — the port group was not visible
+in the vSphere Managed Object Browser (MOB), which `govc` relies on.
+The exact root cause is not fully understood; it may be related to how
+or when the port group was created during installation. Port groups
+created via the **ESXi web UI** were visible to `govc` on the same host.
+
+Previously vCenter-managed hosts were not affected in our testing.
+
+**Workaround:** In the ESXi web UI (Networking > Port groups), create a
+new port group on the same vSwitch (e.g. "VM Network 2") and use that
+name in `vmware.conf` (`GOVC_NETWORK`). The new port group will be on
+the same physical network (same vSwitch, same uplink) and will be
+visible to `govc`.
+
+**Permanent fix:** To reclaim the original name, power off all VMs,
+move the VMkernel NIC (`vmk0`) to a temporary port group, delete the
+installer-created "VM Network", recreate "VM Network" via the web UI,
+move `vmk0` back, then power VMs on. The recreated port group will be
+MOB-registered.
+
 The full curated list of privileges preflight expects is in
 [scripts/vmware-required-privileges.sh](scripts/vmware-required-privileges.sh).
 Hand this file to your vSphere admin if you do not have admin rights
