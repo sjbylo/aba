@@ -272,7 +272,7 @@ do
 		else
 			next_hop_address=10.0.1.1
 			machine_network=10.0.0.0/20
-			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"VM Network\" /g' $subdir/aba/vmware.conf"
+			test-cmd -h $DIS_SSH_USER@$int_bastion_hostname -m "Set non-vlan network" "sed -i 's/^.*GOVC_NETWORK=.*/GOVC_NETWORK=\"Lab Network\" /g' $subdir/aba/vmware.conf"
 			case "$ctype" in
 				sno)
 					start_ip=10.0.1.201
