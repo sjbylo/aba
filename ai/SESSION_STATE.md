@@ -1,23 +1,20 @@
-# Session State
+# Session state
 
 ## Current goal
-Pre-release v1.1.0 validation — COMPLETE.
+E2E testing on dev branch — gotest monitoring loop.
 
 ## Done this session
-- Full DISCO bundle workflow tested end-to-end via TUI ONLY — ALL 13 STEPS PASSED
-- Upgrade path: 4.20.20 → 4.20.23 (same-minor) → 4.21.17 (cross-minor)
-- Cluster delete and mirror uninstall tested via TUI
-- **Fixed bug in `scripts/cluster-upgrade.sh`:**
-  - Used `.status.desired.version` → changed to `.status.history[Completed].version`
-  - Moved idempotency check before health check (UX improvement)
-  - Fix deployed to registry and verified on live cluster
+- run_once pattern refactoring: renamed TASK_* vars, added -A flag, fixed download/install race (ADR-008)
+- ESXi network comments consolidated, e2e deploy vmware.conf fix, branch sync after -V revert
+- Committed and pushed both to dev
 
 ## Next steps
-- Commit the `cluster-upgrade.sh` fix (pending user approval)
-- Consider TUI enhancement: expose `--force` for AdminAckRequired cross-minor upgrades
-- Ready for v1.1.0 release
+- Monitor E2E tests for ~8 hours
+- Remaining ADR-008 phases (C-G) completed or cancelled — no more code changes needed
 
 ## Decisions / notes
-- AdminAckRequired for 4.20→4.21 (Sigstore) needed manual `oc patch` — TUI doesn't expose `--force`
-- All other TUI operations worked flawlessly end-to-end
-- Fix confirmed: "Current cluster version" now shows actual completed version, not desired
+- Phase D (cli-install-all.sh --wait split) cancelled — already safe via download wait at line 31
+- Phase E (TUI isconf pattern fix) and Phase G (centralize commands) are low-priority consistency — skipped for now
+
+## Incomplete plans
+- (none)
