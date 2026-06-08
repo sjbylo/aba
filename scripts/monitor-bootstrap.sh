@@ -24,7 +24,7 @@ opts=
 
 # Ensure openshift-install is available (wait for background download/install)
 if ! ensure_openshift_install >/dev/null; then
-	error_msg=$(get_task_error "$TASK_OPENSHIFT_INSTALL")
+	error_msg=$(get_task_error "$TASK_INST_OPENSHIFT_INSTALL")
 	aba_abort "Failed to install openshift-install:\n$error_msg"
 fi
 

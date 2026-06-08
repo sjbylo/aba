@@ -143,7 +143,7 @@ The ABA TUI (`./abatui`) is an interactive terminal wizard built with `dialog` t
    - `op_sets` (space-separated list of active set names)
 2. Create/reuse custom operator set file (`templates/operator-set-custom-YYYYMMDD-HHMMSS`)
 3. Clean up older custom set files
-4. Trigger background ImageSetConfiguration generation (`aba isconf -d mirror`)
+4. Trigger background ImageSetConfiguration generation (`aba isconf --dir mirror`)
 5. Display action menu (UC-8)
 
 **Postconditions:** Configuration finalized in `aba.conf`.
@@ -278,7 +278,7 @@ The ABA TUI (`./abatui`) is an interactive terminal wizard built with `dialog` t
 
 | # | Action | Description |
 |---|--------|-------------|
-| 1 | Generate ImageSet & Exit | Run `aba isconf -d mirror -y`, then exit TUI |
+| 1 | Generate ImageSet & Exit | Run `aba isconf --dir mirror -y`, then exit TUI |
 | 2 | Edit ImageSet Config | Open editbox (same as UC-13 Edit) |
 | 3 | Uninstall Registry | `aba uninstall -d mirror -y` (only if mirror.conf exists) |
 | 4 | Exit | Show exit summary and quit |
@@ -333,10 +333,10 @@ The ABA TUI (`./abatui`) is an interactive terminal wizard built with `dialog` t
 
 | Task ID | Command | Trigger |
 |---------|---------|---------|
-| `tui:isconf:generate` | `aba isconf -d mirror` | After summary_apply |
+| `tui:isconf:generate` | `aba isconf --dir mirror` | After summary_apply |
 | `tui:prefetch:catalogs:t2` | `scripts/prefetch-catalogs.sh` | After version confirmation |
-| `TASK_OC_MIRROR` | `make -sC cli oc-mirror` | Startup |
-| `TASK_QUAY_REG_DOWNLOAD` | `make -s -C mirror download-registries` | Before operator selection |
+| `TASK_INST_OC_MIRROR` | `make -sC cli oc-mirror` | Startup |
+| `TASK_DL_QUAY_REG` | `make -s -C mirror download-registries` | Before operator selection |
 | `stable:latest`, `fast:latest`, etc. | `fetch_latest_version` | Startup (parallel) |
 | `catalog:${ver}:${name}` | Catalog index downloads | After version set |
 

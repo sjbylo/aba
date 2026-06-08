@@ -189,7 +189,7 @@ set -x
 
 echo_step Create image set config file ...
 
-aba -d mirror isconf
+aba isconf --dir mirror
 
 uncomment_line additionalImages:			mirror/data/imageset-config.yaml
 uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/data/imageset-config.yaml

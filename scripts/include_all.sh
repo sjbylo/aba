@@ -2138,13 +2138,14 @@ run_once() {
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eoEW:m:qS" opt; do
+	while getopts "swi:cprAGFt:eoEW:m:qS" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
 			i) work_id=$OPTARG ;;
 			c) purge=true ;;
 			p) mode="peek" ;;
+			A) mode="active" ;;
 			r) reset=true ;;
 			G) global_clean=true ;;
 			F) global_failed_clean=true ;;
@@ -2319,6 +2320,22 @@ run_once() {
 	# --- PEEK ---
 	if [[ "$mode" == "peek" ]]; then
 		[[ -f "$exit_file" ]] && return 0 || return 1
+	fi
+
+	# --- ACTIVE (running or completed) ---
+	if [[ "$mode" == "active" ]]; then
+		[[ -f "$exit_file" ]] && return 0
+		# Check if lock is currently held (task running)
+		if [[ -f "$lock_file" ]]; then
+			exec 9>>"$lock_file"
+			if flock -n 9; then
+				exec 9>&-
+				return 1  # lock free — not running
+			fi
+			exec 9>&-
+			return 0  # lock held — running
+		fi
+		return 1  # no lock file — never started
 	fi
 
 	_start_task() {
@@ -3155,20 +3172,20 @@ validate_ntp_servers() {
 
 # Task IDs (single source of truth)
 # Guard against re-declaration when include_all.sh is sourced multiple times
-if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
-	# Install task IDs
-	readonly TASK_OC_MIRROR="cli:install:oc-mirror"
-	readonly TASK_OC="cli:install:oc"
-	readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
-	readonly TASK_GOVC="cli:install:govc"
-	readonly TASK_BUTANE="cli:install:butane"
-	readonly TASK_QUAY_REG_DOWNLOAD="mirror:reg:download"
-	readonly TASK_QUAY_REG="mirror:reg:install"
+if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
+	# Install task IDs (TASK_INST_* to distinguish from TASK_DL_* download tasks)
+	readonly TASK_INST_OC_MIRROR="cli:install:oc-mirror"
+	readonly TASK_INST_OC="cli:install:oc"
+	readonly TASK_INST_OPENSHIFT_INSTALL="cli:install:openshift-install"
+	readonly TASK_INST_GOVC="cli:install:govc"
+	readonly TASK_INST_BUTANE="cli:install:butane"
+	readonly TASK_INST_QUAY_REG="mirror:reg:install"
 
-	# Download task IDs -- version-independent
+	# Download task IDs (TASK_DL_*)
 	readonly TASK_DL_OC_MIRROR="cli:download:oc-mirror"
 	readonly TASK_DL_GOVC="cli:download:govc"
 	readonly TASK_DL_BUTANE="cli:download:butane"
+	readonly TASK_DL_QUAY_REG="mirror:reg:download"
 
 	# Download commands (arrays)
 	CMD_DL_OC=(make -sC cli download-oc)
@@ -3177,7 +3194,7 @@ if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
 	CMD_DL_GOVC=(make -sC cli download-govc)
 	CMD_DL_BUTANE=(make -sC cli download-butane)
 
-	# Install commands (arrays)
+	# Install commands (arrays) — plain make, no nesting
 	CMD_INST_OC=(make -sC cli oc)
 	CMD_INST_OC_MIRROR=(make -sC cli oc-mirror)
 	CMD_INST_OPENSHIFT_INSTALL=(make -sC cli openshift-install)
@@ -3232,8 +3249,8 @@ ensure_oc_mirror() {
 	# Targeted fg wait (no command — reloads from cmd.sh)
 	run_once -q -w -i "$TASK_DL_OC_MIRROR"
 
-	run_once -i "$TASK_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
-	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR"
+	run_once -i "$TASK_INST_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
+	run_once -w -m "Installing oc-mirror" -i "$TASK_INST_OC_MIRROR"
 }
 
 # Ensure oc CLI is installed in ~/bin
@@ -3249,8 +3266,8 @@ ensure_oc() {
 	# Targeted fg wait
 	run_once -q -w -i "$task_dl"
 
-	run_once -i "$TASK_OC" -- "${CMD_INST_OC[@]}"
-	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC"
+	run_once -i "$TASK_INST_OC" -- "${CMD_INST_OC[@]}"
+	run_once -w -m "Installing oc" -i "$TASK_INST_OC"
 }
 
 # Ensure openshift-install is installed in ~/bin
@@ -3266,8 +3283,8 @@ ensure_openshift_install() {
 	# Targeted fg wait
 	run_once -q -w -i "$task_dl"
 
-	run_once -i "$TASK_OPENSHIFT_INSTALL" -- "${CMD_INST_OPENSHIFT_INSTALL[@]}"
-	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL"
+	run_once -i "$TASK_INST_OPENSHIFT_INSTALL" -- "${CMD_INST_OPENSHIFT_INSTALL[@]}"
+	run_once -w -m "Installing openshift-install" -i "$TASK_INST_OPENSHIFT_INSTALL"
 }
 
 # Check if the OCP release image is available in the mirror registry.
@@ -3502,8 +3519,8 @@ ensure_govc() {
 	# Targeted fg wait
 	run_once -q -w -i "$TASK_DL_GOVC"
 
-	run_once -i "$TASK_GOVC" -- "${CMD_INST_GOVC[@]}"
-	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC"
+	run_once -i "$TASK_INST_GOVC" -- "${CMD_INST_GOVC[@]}"
+	run_once -w -m "Installing govc" -i "$TASK_INST_GOVC"
 }
 
 ensure_virsh() {
@@ -3518,16 +3535,19 @@ ensure_butane() {
 	# Targeted fg wait
 	run_once -q -w -i "$TASK_DL_BUTANE"
 
-	run_once -i "$TASK_BUTANE" -- "${CMD_INST_BUTANE[@]}"
-	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE"
+	run_once -i "$TASK_INST_BUTANE" -- "${CMD_INST_BUTANE[@]}"
+	run_once -w -m "Installing butane" -i "$TASK_INST_BUTANE"
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
-# Wait: aba.sh starts $TASK_QUAY_REG and $TASK_QUAY_REG_DOWNLOAD in background
+# Wait: aba.sh starts $TASK_INST_QUAY_REG and $TASK_DL_QUAY_REG in background
 ensure_quay_registry() {
 	aba_debug "ensure_quay_registry: installing mirror-registry"
-	run_once -i "$TASK_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
-	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG"
+	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
+	run_once -q -w -i "$TASK_DL_QUAY_REG"
+
+	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
+	run_once -w -m "Installing mirror-registry" -i "$TASK_INST_QUAY_REG"
 }
 
 # Get error output from a task (helper for error messages)

@@ -238,31 +238,48 @@ Task deduplication and coordination. State in `~/.aba/runner/<id>/`.
 
 ### run_once usage pattern
 
-1. **Liberal background kick-off**: Early in the flow, start tasks for everything
-   that *might* be needed. run_once is idempotent -- calling it multiple times is
-   safe (starts or returns immediately if already running/done). run_once handles
-   backgrounding internally -- no `&` after the call.
+1. **Background kick-off is optional** (zero or more times): Downloading can
+   happen zero or more times.  It is purely a performance optimization
+   (pre-warming).  The install task's Make handles its own download via
+   file-target dependencies.  run_once is idempotent -- calling it multiple
+   times is safe (starts or returns immediately if already running/done).
+   run_once handles backgrounding internally -- no `&` after the call.
 
-2. **Targeted foreground wait**: Right before a specific tool is needed, wait for
-   ONLY that tool. Never "wait for all." Use `ensure_*()` functions or
-   `run_once -w -i "cli:download:<tool>"` for the specific task ID. Wait mode
-   does not need the command -- run_once saves it to `cmd.sh` on start and
-   reloads automatically. ALWAYS call start (with command) before wait (without
-   command) -- even in `ensure_*()` functions. The start is idempotent (fast
-   no-op if already running/done), so calling it redundantly is safe and
-   guarantees `cmd.sh` exists for the wait.
+2. **`run_once -w` before first use of the artifact** (the only correctness
+   requirement): Right before a specific tool is first needed, wait for ONLY
+   that tool.  Never "wait for all."  Use `ensure_*()` functions or
+   `run_once -w` for the specific task ID.  Wait mode is self-sufficient:
+   if the task was never started, wait acquires the lock, reloads the command
+   from `cmd.sh` (or uses the command on the CLI), and runs it in the
+   foreground.  A prior `run_once -i` (start) is not required for
+   correctness -- it only saves time by running the task in the background
+   before the wait is reached.  **The wait MUST be quiet when the task is
+   already done** -- the `-m` message is only shown when `run_once -w`
+   actually has to block (task still running); if the task already completed,
+   the wait returns silently with no output.
 
-3. **run_once wraps Make from outside**: run_once calls live in shell scripts
+3. **CRITICAL -- download and install are different task IDs**: They have
+   separate flocks and can run concurrently on the same tarball.  Starting
+   an install while a download is still writing the tarball corrupts the
+   file (Make sees the partial file, runs `tar`, produces a truncated
+   binary).  To avoid this, either:
+   - Wait for the download task before starting the install task (what
+     `ensure_*()` and `cli-install-all.sh` do), **or**
+   - Do NOT start a separate download task -- let the install task's Make
+     handle the download serially (safe, single process, no race).
+   See ADR-008 Finding 5 for details.
+
+4. **run_once wraps Make from outside**: run_once calls live in shell scripts
    (cli-download-all.sh, cli-install-all.sh, ensure_*() functions), never inside
    Makefile recipes. A user running `make oc` directly gets standard serial Make
    behavior -- no bg processes, no races. Make handles file-target dependencies;
    run_once handles cross-process coordination.
 
-4. **No "wait for all" gates**: Do not block on all tools when only one is needed.
+5. **No "wait for all" gates**: Do not block on all tools when only one is needed.
    `cli-install-all.sh --wait` (without a filter) and `.cli` are appropriate only
    when ALL tools are genuinely required (e.g., bundling the entire repo).
 
-5. **Bundle downloads include all OS variants**: When creating a bundle
+6. **Bundle downloads include all OS variants**: When creating a bundle
    (`aba tar`, `aba bundle`), all tarballs must be downloaded -- including both
    RHEL 8 and RHEL 9 variants of oc, oc-mirror, etc. The target host's OS
    version is unknown at bundle creation time.

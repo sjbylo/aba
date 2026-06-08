@@ -79,7 +79,7 @@ aba_info "Installing mirror registry with command:"
 aba_info "./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts --initPassword <hidden>"
 
 if ! ensure_quay_registry; then
-	error_msg=$(get_task_error "$TASK_QUAY_REG")
+	error_msg=$(get_task_error "$TASK_INST_QUAY_REG")
 	aba_abort "Failed to extract mirror-registry:\n$error_msg"
 fi
 

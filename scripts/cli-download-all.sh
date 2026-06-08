@@ -111,6 +111,22 @@ do
 			fi
 		fi
 	else
+		# Skip download if an install task for this tool is already running or
+		# done — the install's make handles the download via file prerequisites.
+		# Starting both would race on the same tarball (ADR-008 Finding 5).
+		inst_task=""
+		case "$tool" in
+			oc-mirror)          inst_task="$TASK_INST_OC_MIRROR" ;;
+			oc)                 inst_task="$TASK_INST_OC" ;;
+			openshift-install)  inst_task="$TASK_INST_OPENSHIFT_INSTALL" ;;
+			govc)               inst_task="$TASK_INST_GOVC" ;;
+			butane)             inst_task="$TASK_INST_BUTANE" ;;
+		esac
+		if [[ -n "$inst_task" ]] && run_once -A -i "$inst_task" 2>/dev/null; then
+			aba_debug "Skipping download for $tool — install task running or done"
+			continue
+		fi
+
 		# Start mode: run_once backgrounds internally — no '&' needed
 		run_once -i "$task_id" -- make -sC cli download-$tool
 	fi

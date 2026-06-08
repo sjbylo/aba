@@ -10,10 +10,12 @@ download/install pipeline.  A subsequent code review found additional call sites
 that still use the old patterns.  This ADR documents them and provides a fix
 plan.
 
-## Safety assessment — no race conditions in current code
+## Safety assessment
 
-**The code as-is will NOT cause race conditions or data corruption.**  Here is
-why each violation is safe:
+**UPDATED 2026-06-08**: Finding 5 (below) identifies a **real race condition**
+between download and install tasks sharing the same tarball but using different
+task IDs (different flocks).  The original assessment ("no race conditions")
+was wrong for those call sites.  Other violations remain safe.
 
 ### Category 1: `run_once -w` (wait) inside Makefile recipes
 
@@ -76,9 +78,9 @@ enforcing string equality at runtime.
 
 | File | Line | Target | Call |
 |------|------|--------|------|
-| `Makefile` | 42 | `vmw:` | `run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc` |
+| `Makefile` | 42 | `vmw:` | `run-once.sh -w -m "Installing govc" -i cli:install:govc -- make -sC cli govc` |
 | `templates/Makefile.cluster` | 89 | `vmware.conf:` | Same govc wait |
-| `templates/Makefile.mirror` | 160 | `save:` | `run-once.sh -w -m "Waiting for registry binary download" -i "mirror:reg:download" -- $(MAKE) download-registries` |
+| `templates/Makefile.mirror` | 160 | `save:` | `run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) download-registries` |
 | `templates/Makefile.mirror` | 192 | `mirror-registry:` | Same registry download wait |
 | `templates/Makefile.mirror` | 357, 365-366 | `clean:` / `reset:` | `run-once.sh -r -i "mirror:reg:install"` (state cleanup only) |
 
@@ -88,7 +90,7 @@ enforcing string equality at runtime.
 
 | File | Line(s) | Task ID | Notes |
 |------|---------|---------|-------|
-| `scripts/include_all.sh` | 3545 | `$TASK_QUAY_REG` (`mirror:reg:install`) | `ensure_quay_registry()` — should split to start-then-wait |
+| `scripts/include_all.sh` | 3545 | `$TASK_INST_QUAY_REG` (`mirror:reg:install`) | `ensure_quay_registry()` — should split to start-then-wait |
 | `scripts/cli-install-all.sh` | 61 | `cli:install:$item` | `--wait` mode passes `-q -w` + `-- make -sC cli $item` |
 | `tui/v2/tui-mirror.sh` | 659, 728 | `aba:isconf:generate` | `-q -w` + `-- bash -lc "..."` |
 | `tui/abatui.sh` | 2486, 2547, 2594, 2720, 2889, 2980 | `tui:isconf:generate` | 6 instances of `-q -w` + `-- bash -lc "..."` |
@@ -107,7 +109,7 @@ these mismatches caused a FATAL error in E2E production.
 `include_all.sh` so all callers use the same string.  Partially done —
 remaining callers tracked below.
 
-#### 3a. `$TASK_OC_MIRROR` (`cli:install:oc-mirror`)
+#### 3a. `$TASK_INST_OC_MIRROR` (`cli:install:oc-mirror`)
 
 | Caller | Command saved to `cmd.sh` |
 |--------|---------------------------|
@@ -117,7 +119,7 @@ remaining callers tracked below.
 
 **Mismatch**: relative `cli` vs absolute `$ABA_ROOT/cli`.
 
-#### 3b. `$TASK_QUAY_REG_DOWNLOAD` (`mirror:reg:download`)
+#### 3b. `$TASK_DL_QUAY_REG` (`mirror:reg:download`)
 
 | Caller | Command saved to `cmd.sh` |
 |--------|---------------------------|
@@ -149,23 +151,87 @@ the args, so quotes don't differ in `cmd.sh` — but path and separator do).
 
 | Caller | Command saved to `cmd.sh` |
 |--------|---------------------------|
-| `include_all.sh:3502` | `bash -lc "cd '/home/steve/aba' && aba -d mirror isconf"` |
-| `tui-mirror.sh:585` (start) | `bash -lc "cd '/home/steve/aba' && aba isconf --dir mirror"` |
-| `tui-mirror.sh:659` (wait+cmd) | `bash -lc "cd '/home/steve/aba' && aba isconf --dir mirror"` |
+| `include_all.sh` | `bash -lc "cd '${ABA_ROOT}' && aba isconf --dir mirror"` |
+| `abatui.sh` (7 sites) | `bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror"` |
+| `tui-mirror.sh` (3 sites) | `bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror"` |
 
-**Mismatches**: `aba -d mirror isconf` vs `aba isconf --dir mirror` (different
-flag form `-d` vs `--dir`, different argument order).
+**Status**: Normalized — all callers now use `aba isconf --dir mirror`.
 
 ### Finding 4: Non-centralized task IDs
 
 | File | Task ID | Should be |
 |------|---------|-----------|
-| `templates/Makefile.mirror` | Hardcoded `"mirror:reg:download"` | `$(TASK_QUAY_REG_DOWNLOAD)` (not accessible from Make) |
-| `templates/Makefile.mirror` | Hardcoded `"mirror:reg:install"` | `$(TASK_QUAY_REG)` |
+| `templates/Makefile.mirror` | Hardcoded `"mirror:reg:download"` | `$(TASK_DL_QUAY_REG)` (not accessible from Make) |
+| `templates/Makefile.mirror` | Hardcoded `"mirror:reg:install"` | `$(TASK_INST_QUAY_REG)` |
 | `tui/abatui.sh` | Hardcoded `"tui:isconf:generate"` | Should use a centralized variable |
 | `tui/v2/tui-mirror.sh` | Hardcoded `"aba:isconf:generate"` | Should use a centralized variable |
 
 **Risk: NONE** — IDs are stable strings, just not DRY.
+
+### Finding 5: Download/install task ID mismatch — real race condition (ADDED 2026-06-08)
+
+Download and install tasks for the same tool use **different task IDs** (e.g.
+`cli:download:oc-mirror` vs `cli:install:oc-mirror`).  Different IDs means
+different flocks — both can run concurrently.  When an install task starts
+while a download task is still writing the tarball, Make sees the partial file,
+considers the prerequisite satisfied, and runs `tar` on it — producing a
+corrupt or truncated binary.
+
+This is the **same class of bug** as the `setup-pool-registry.sh` oc-mirror
+corruption fixed on 2026-06-08.
+
+**Affected call sites** (install started without waiting for download):
+
+| File | Line | Install task | Concurrent download |
+|------|------|-------------|---------------------|
+| `aba.sh` | 1421 | `cli:install:oc-mirror` (bg) | `cli:download:oc-mirror` started later at line 1639 by `cli-download-all.sh` |
+| `abatui.sh` | 3739 | `cli:install:oc-mirror` (bg) | `cli:download:oc-mirror` started later at line 1293 by `cli-download-all.sh` |
+| `Makefile` | 42 | `cli:install:govc` (fg wait) | `cli:download:govc` started earlier by `cli-download-all.sh` |
+| `Makefile.cluster` | 89 | `cli:install:govc` (fg wait) | `cli:download:govc` started earlier by `cli-download-all.sh` |
+
+**Why these race**: The install task's Make recipe sees the tarball file on
+disk (partially downloaded by the download task's curl) and runs `tar` on it.
+Two processes, two flock namespaces, one shared file.
+
+**Protected paths** (correct — wait for download before install):
+- `ensure_*()` functions: start download → **wait download** → start install → wait install
+- `cli-install-all.sh`: `cli-download-all.sh --wait` before starting any install
+- `setup-pool-registry.sh`: `cli-download-all.sh --wait oc-mirror` before `make`
+- `ensure_quay_registry()` / `Makefile.mirror`: safe because the Make recipe
+  internally waits for `mirror:reg:download` (same task ID)
+- `aba.sh:1335` (bundle mode): tarballs already on disk, no concurrent download
+
+**Risk**: LOW to MEDIUM — timing usually prevents the race (install starts
+first and creates the file, or interactive delay lets the download complete),
+but the `setup-pool-registry.sh` bug proved this class of race is real and
+reproducible under load.
+
+---
+
+## Pattern clarification (ADDED 2026-06-08)
+
+The `run_once` pattern is simpler than previously documented:
+
+1. **Background kick-off is optional** — downloading can happen zero or more
+   times.  It is purely a performance optimization (pre-warming).  The install
+   task's Make handles its own download via file-target dependencies.
+
+2. **`run_once -w` before every first use** — this is the only correctness
+   requirement.  Wait mode self-starts the task if it was never kicked off
+   (reloads from `cmd.sh` or uses the command on the CLI).
+
+3. **CRITICAL: download and install are different task IDs** — they have
+   separate flocks.  Starting an install while a download is in progress on
+   the same tarball is unsafe.  Either:
+   - Wait for the download task before starting the install task (what
+     `ensure_*()` and `cli-install-all.sh` do), **or**
+   - Do NOT start a separate download task at all — let the install task's
+     Make handle the download serially (safe because it is a single process).
+
+   The dangerous pattern is: kick off a download task in background, then
+   later start an install task on the same tarball without waiting for the
+   download to finish.  The two tasks have independent locks, so both run
+   concurrently on the same file.
 
 ---
 
@@ -184,7 +250,7 @@ scripts, following the `cli/` pattern.
    - `mirror-registry:` recipe calls the same script
    - `clean:` / `reset:` recipes call the script with `--reset` (or keep
      inline `run-once.sh -r` since reset is not a race risk — lowest priority)
-3. Add `TASK_QUAY_REG_DOWNLOAD` and `TASK_QUAY_REG` to the centralized block
+3. Add `TASK_DL_QUAY_REG` and `TASK_INST_QUAY_REG` to the centralized block
    in `include_all.sh` (already done — just ensure the new script uses them)
 
 **Testing**: Existing E2E suites covering `make save`, `make mirror-registry`,
@@ -205,12 +271,12 @@ scripts, following the `cli/` pattern.
 
 1. Split `ensure_quay_registry()` in `include_all.sh` from:
    ```bash
-   run_once -w -m "..." -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
+   run_once -w -m "..." -i "$TASK_INST_QUAY_REG" -- make -sC mirror mirror-registry
    ```
    to:
    ```bash
-   run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
-   run_once -w -m "..." -i "$TASK_QUAY_REG"
+   run_once -i "$TASK_INST_QUAY_REG" -- make -sC mirror mirror-registry
+   run_once -w -m "..." -i "$TASK_INST_QUAY_REG"
    ```
 
 **Testing**: Mirror E2E suites.
@@ -222,6 +288,27 @@ scripts, following the `cli/` pattern.
    in `cli-download-all.sh --wait`.
 
 **Testing**: `test-cli-download-pipeline.sh`, `test-download-before-install-race.sh`.
+
+### Phase H: Fix download/install task ID mismatch races — DONE
+
+**Root cause**: `cli-download-all.sh` starts `TASK_DL_*` for all tools, while
+`aba.sh`/`abatui.sh` also start `TASK_INST_*` for oc-mirror.  Both touch the
+same tarball under different locks → race.
+
+**Fix — two-pronged:**
+
+1. **`cli-download-all.sh`** (start mode): before starting a download, checks
+   whether the install task for that tool is already running (lock held) or
+   completed (exit file).  If so, skips the download — the install's make
+   handles it via file prerequisites.  No race because only one task touches
+   the tarball.
+
+2. **Makefiles** (`Makefile`, `Makefile.cluster`): a download-wait line
+   (`run-once.sh -q -w -i cli:download:govc`) was added before the install
+   wait.  These are foreground flows, so the extra wait adds no delay.
+
+Eager background install kick-offs in `aba.sh` and `abatui.sh` are preserved
+(download+extract in background for performance).
 
 ### Phase E: TUI isconf pattern fix (medium effort, low risk)
 
@@ -254,12 +341,12 @@ E2E).  Instead, centralize commands as arrays in `include_all.sh` and have
 every caller reference the centralized variable.  This prevents drift without
 brittle runtime string comparison.
 
-**3a fix — `$TASK_OC_MIRROR`:**
+**3a fix — `$TASK_INST_OC_MIRROR`:**
 - Add `CMD_INST_OC_MIRROR=(make -sC cli oc-mirror)` (already exists).
 - Change `abatui.sh:3739` from `make -sC "$ABA_ROOT/cli" oc-mirror` to
   `"${CMD_INST_OC_MIRROR[@]}"`.
 
-**3b fix — `$TASK_QUAY_REG_DOWNLOAD`:**
+**3b fix — `$TASK_DL_QUAY_REG`:**
 - Add `CMD_DL_QUAY_REG=(make -sC mirror download-registries)` to `include_all.sh`.
 - Change all callers (`aba.sh:1650`, `abatui.sh:1953`, `tui-direct.sh:140`,
   `tui-mirror.sh:1170`) to use `"${CMD_DL_QUAY_REG[@]}"`.
@@ -290,15 +377,19 @@ itself can be tested by temporarily making two callers overlap.
 
 | Phase | Effort | Risk if skipped | Recommendation |
 |-------|--------|-----------------|----------------|
+| ~~H (dl/install race)~~ | ~~Small~~ | ~~MEDIUM~~ | **DONE** — Option A applied to all 4 sites |
 | G (centralize cmds) | Medium | Drift risk only (guard removed) | Partially done; finish with remaining phases |
+| B (govc Makefile) | Small | LOW — subsumed by Phase H fix | Bundle with H |
 | C (ensure_quay) | Small | None | Quick win, bundle with G |
 | D (cli-install-all) | Small | None | Quick win, bundle with G |
 | F (centralize IDs) | Small | None | Mechanical, bundle with G |
 | A (mirror Makefile) | Medium | None (wait mode, no race) | Do when touching mirror code next |
-| B (govc Makefile) | Small | None | Do when touching vmw code next |
 | E (TUI isconf) | Medium | None | Do with next TUI refactoring |
 
 ## Decision
 Guard removed (caused E2E FATAL).  Commands partially centralized (mirror reg,
-oc-mirror, isconf, version fetches).  Remaining phases are pattern consistency
-fixes — fix opportunistically when touching the affected subsystems.
+oc-mirror, isconf, version fetches).  Phase H (download/install race) is now
+fixed — download wait gates were added before each install start/wait.
+Variable naming normalized: `TASK_INST_*` for install, `TASK_DL_*` for download.
+Remaining phases are pattern consistency fixes — fix opportunistically when
+touching the affected subsystems.
