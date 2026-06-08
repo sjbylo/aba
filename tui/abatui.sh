@@ -1950,7 +1950,7 @@ select_operators() {
 	# Start additional background tasks (catalog and CLI downloads already started after version confirmation)
 	log "Starting additional background tasks for operators"
 	log "Starting registry download task"
-	run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- "${CMD_DL_QUAY_REG[@]}"
+	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	
 	# Ensure catalog indexes are available for operator sets AND search
 	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
@@ -2483,7 +2483,7 @@ handle_action_view_isconf() {
 	log "Waiting for ImageSet config generation to complete"
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
-	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1; then
+	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$LOG_FILE" 2>&1; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2544,7 +2544,7 @@ handle_action_edit_isconf() {
 		log "Waiting for ImageSet config generation to complete"
 		dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 
-		if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1; then
+		if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$LOG_FILE" 2>&1; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2591,7 +2591,7 @@ handle_action_bundle() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Get output path from user
@@ -2717,7 +2717,7 @@ handle_action_local_quay() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Load existing values from mirror.conf
@@ -2886,7 +2886,7 @@ handle_action_remote_quay() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Load existing values from mirror.conf
@@ -2977,7 +2977,7 @@ handle_action_save() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# No form needed - just confirm and execute using global auto-answer setting
@@ -3012,9 +3012,9 @@ handle_action_isconf() {
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration..." 4 50
 	
 	local output rc
-	output=$(aba isconf -d mirror -y 2>&1) || true
+	output=$(aba isconf --dir mirror -y 2>&1) || true
 	rc=$?
-	log "aba isconf -d mirror -y returned rc=$rc"
+	log "aba isconf --dir mirror -y returned rc=$rc"
 	
 	if [[ $rc -eq 0 ]]; then
 		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Generated\Zn" \
@@ -3337,14 +3337,14 @@ summary_apply() {
 	
 	# Reset and start isconf generation in background (non-blocking)
 	# Reset ensures regeneration if user changes operators and comes back
-	log "Resetting and starting background task: aba isconf -d mirror"
+	log "Resetting and starting background task: aba isconf --dir mirror"
 	# DEBUG: Write directly to file
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to reset isconf task" >> /tmp/aba-tui-debug.log
 	run_once -r -i "tui:isconf:generate"
 	# Small delay to ensure reset completes
 	sleep 0.2
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to start isconf task" >> /tmp/aba-tui-debug.log
-	run_once -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >/dev/null 2>&1
+	run_once -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf --dir mirror" >/dev/null 2>&1
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] isconf task started, checking directory..." >> /tmp/aba-tui-debug.log
 	ls -la ~/.aba/runner/tui:isconf:generate/ >> /tmp/aba-tui-debug.log 2>&1
 	log "ImageSet config generation started in background"
@@ -3734,9 +3734,9 @@ run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./script
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_older"    -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate' >/dev/null
 
-# Download oc-mirror early (needed for mirror save/sync/load later)
-log "Starting oc-mirror download in background"
-PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
+# Download+install oc-mirror early (needed for mirror save/sync/load later)
+log "Starting oc-mirror install in background"
+PLAIN_OUTPUT=1 run_once -i "$TASK_INST_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
 log "oc-mirror download started"
 
 # Initialize configuration and global arrays (must happen BEFORE prefetch

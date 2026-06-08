@@ -157,7 +157,7 @@ sync: .init .rpmsint ~/.pull-secret.json                     install data/images
 # Note: catalogs-download dependency ensures catalogs start downloading; imageset config will wait for completion
 # Registry binaries: Quay tarball is required (fatal if missing); Docker image is best-effort (warn only).
 save: .init .rpmsext ~/.pull-secret.json                                                     data/imageset-config.yaml  ## Save images from the Internet to aba/mirror/data/mirror_000001.tar. Use --retry [count] to retry after failure.
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for registry binary download" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
 ifneq ($(arch),aarch64)
 	@[ -f $(MR_TARBALL) ] || { echo "[ABA] Error: $(MR_TARBALL) download failed. Cannot create bundle without the Quay mirror-registry installer."; exit 1; }
 endif
@@ -189,7 +189,7 @@ rpmsclean:
 	@rm -f .rpms*
 
 mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary 
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for mirror-registry download" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
+	@$(SCRIPTS)/run-once.sh -w -m "Downloading registry binaries" -i "mirror:reg:download" -- $(MAKE) --no-print-directory download-registries
 	@echo [ABA] Extracting $(MR_TARBALL) into $$PWD
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
 

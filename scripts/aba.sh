@@ -1332,7 +1332,7 @@ if [ -f .bundle ]; then
 	# These run in background and will be ready when user runs commands that need them
 	
 	scripts/cli-install-all.sh                                    # Start: CLI extractions. Wait: ensure_oc() etc in include_all.sh
-	run_once -i "$TASK_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"  # Start: Quay extract. Wait: ensure_quay_registry() in include_all.sh
+	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"  # Start: Quay extract. Wait: ensure_quay_registry() in include_all.sh
 
 	echo_yellow "ABA install bundle detected for OpenShift v$ocp_version."
 
@@ -1416,9 +1416,9 @@ fi
 	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
 	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
 
-	# Start: extract oc-mirror in background. Wait: ensure_oc_mirror() in include_all.sh
-	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- "${CMD_INST_OC_MIRROR[@]}"
+	# Start: download+install oc-mirror in background. Wait: ensure_oc_mirror()
+	aba_debug "Installing oc-mirror in the background ..."
+	PLAIN_OUTPUT=1 run_once -i "$TASK_INST_OC_MIRROR"			-- "${CMD_INST_OC_MIRROR[@]}"
 
 	# Check Internet connectivity to required sites (using shared function)
 	aba_info "Checking Internet connectivity to required sites..."
@@ -1647,7 +1647,7 @@ download_all_catalogs "$ocp_ver_short"
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
 # Start: download mirror-registry and docker-reg images. Wait: ensure_quay_registry() in include_all.sh
-run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- "${CMD_DL_QUAY_REG[@]}"
+run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 

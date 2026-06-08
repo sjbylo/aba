@@ -105,7 +105,7 @@ case "$vendor" in
 		aba_info "Installing Quay registry on remote host $reg_host ..."
 
 		if ! ensure_quay_registry; then
-			error_msg=$(get_task_error "$TASK_QUAY_REG")
+			error_msg=$(get_task_error "$TASK_INST_QUAY_REG")
 			aba_abort "Failed to extract mirror-registry:\n$error_msg"
 		fi
 

@@ -30,7 +30,7 @@ aba_debug "Configuration validated"
 # Be sure a download has started ..
 aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
-	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 aba_debug "oc-mirror is ready"

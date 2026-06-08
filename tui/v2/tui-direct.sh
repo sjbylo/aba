@@ -137,7 +137,7 @@ direct_wizard() {
 						tui_log "Starting catalog downloads for OpenShift $_ver_short"
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
 						# Start registry download early (shared task ID with aba.sh)
-						run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
+						run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
 					fi
 						step="platform"
 						;;
