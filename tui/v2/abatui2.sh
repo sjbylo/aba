@@ -293,8 +293,11 @@ if [[ -f "$_ps_path" ]]; then
 fi
 
 # Background CLI tool downloads (non-blocking, uses run_once per tool)
-tui_log "Kicking off background CLI tool downloads"
-"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
+# Start version-independent tools immediately (oc-mirror, butane, govc).
+# Version-dependent tools (oc, openshift-install) are kicked after the wizard
+# confirms ocp_version — see tui-direct.sh _direct_wizard().
+tui_log "Kicking off background CLI tool downloads (version-independent)"
+"$ABA_ROOT/scripts/cli-download-all.sh" --no-version >>"$_TUI_LOG_FILE" 2>&1
 
 # Background ISC generation (so it's ready before user opens View/Edit ISC)
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then

@@ -150,6 +150,17 @@ fi
 # Sanity check ...
 [ ! -x scripts/aba.sh ] && echo "Abort: Incomplete ABA repo! aba script not found in $PWD/scripts/aba.sh" >&2 && exit 1
 
+# Note if mirror.conf exists from a previous installation.
+# A fresh bundle never contains mirror/mirror.conf — if it exists AND is older
+# than .bundle, it survived from a previous aba/ that was overwritten by tar xf.
+if [ -f mirror/mirror.conf ] && [ -f .bundle ] && [ mirror/mirror.conf -ot .bundle ] && [ ! "$quiet" ]; then
+	echo "" >&2
+	echo "  NOTE: A mirror registry configuration was detected from a previous installation." >&2
+	echo "        If the registry is still running, you can reuse it (just load new images)." >&2
+	echo "        To start fresh instead: run 'aba -d mirror uninstall' before continuing." >&2
+	echo "" >&2
+fi
+
 mkdir -p ~/.aba
 
 # Always write ssh.conf so upgrades can add new options (e.g. BatchMode)
