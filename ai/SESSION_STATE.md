@@ -1,32 +1,26 @@
-# Session state
+# Session State
 
 ## Current goal
-E2E testing on dev branch — gotest monitoring loop (8 hours).
+E2E TUI Full Workflow test on conno/disco (following ai/E2E_TUI_FULL_WORKFLOW.md)
 
 ## Done this session
-- run_once pattern refactoring: renamed TASK_* vars, added -A flag, fixed download/install race (ADR-008)
-- ESXi network comments consolidated, e2e deploy vmware.conf fix, branch sync after -V revert
-- Committed and pushed both to dev (3 commits: run_once refactor, ESXi/e2e infra, session state)
-
-## E2E Status (last check: 00:25 UTC+8)
-- **9 suites PASS**: create-bundle-to-disk, config-validation, cli-validation, cluster-ops, connected-public, state-management, upgrade, vsphere-preflight, negative-paths
-- **3 RUNNING**: airgapped-local-reg (con1, upgrade step), airgapped-existing-reg (con3, compact install), mirror-sync (con4, docker install)
-- **1 PAUSED**: network-advanced (con2) — "VM Network not found" (ESXi MOB quirk, not code bug)
-- **2 PENDING**: kvm-lifecycle, vmw-lifecycle
-
-### con2 PAUSED investigation
-- `govc: network 'VM Network' not found` during `aba refresh` for e2e-sno2
-- `host.portgroup.info` confirms VM Network exists (2 active ports)
-- `govc find / -type Network` only sees Lab Network + Private Network
-- Root cause: Known ESXi MOB visibility issue. VM Network not registered in MOB.
-- Fix: Recreate VM Network via ESXi web UI (see Troubleshooting.md)
-- Suite was testing Non-VLAN SNO bonding which requires VM Network
+1. **SIGPIPE fix proven and applied** — include_all.sh, tui/v2/tui-mirror.sh, tui/abatui.sh, make-bundle.sh
+2. **VMs restarted** on new IPs: conno=10.0.0.10, disco=10.0.0.20
+3. **Phase 1-2** — clean conno, TUI wizard, full bundle created (30GB, all tarballs valid)
+4. **Phase 3-5** — bundle transferred to disco, ABA installed
+5. **Phase 6 in progress** — had to uninstall stale registry from previous session, then reinstalled fresh on disco.example.com:8443. Image load now running (~20-40 min)
 
 ## Next steps
-- Continue monitoring E2E suites
-- When suites complete and pools free up, dispatcher will auto-start pending suites
-- con2 blocked until VM Network ESXi infra issue is resolved (user action needed)
+- Wait for image load to complete on disco
+- Phase 7: Install SNO cluster (ocp.example.com, IP 10.0.1.100) via TUI
+- Phase 8: Day-2 operations
+- Phase 9: Delete cluster
 
 ## Decisions / notes
-- Phase D (cli-install-all.sh --wait split) cancelled — already safe
-- Phase E, G are low-priority consistency — skipped for now
+- conno=10.0.0.10, disco=10.0.0.20
+- SNO domain: ocp.example.com, DNS: api + *.apps → 10.0.1.100
+- Mirror hostname: disco.example.com:8443
+- Bug found: TUI showed "(loaded)" falsely when mirror_000001.tar existed but images weren't pushed
+- Bug found: `aba --dir mirror install` reported "Success" when it detected existing running registry without actually re-installing
+- SIGPIPE fix NOT yet committed (pending user permission)
+- Lesson: always uninstall stale registry before fresh bundle install on a host that had a previous session

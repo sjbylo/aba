@@ -26,6 +26,23 @@ _wait_for_cli_downloads() {
 	done
 }
 
+# Defense-in-depth: verify all .tar.gz files in cli/ are not truncated
+_verify_cli_tarballs() {
+	local f fail=0
+	for f in cli/*.tar.gz; do
+		[ -f "$f" ] || continue
+		if ! gzip -t "$f" 2>/dev/null; then
+			aba_info "ERROR: Corrupt tarball detected: $f (truncated or incomplete)" >&2
+			fail=1
+		fi
+	done
+	if [ $fail -ne 0 ]; then
+		aba_info "Refusing to create bundle with corrupt CLI tarballs. Re-download with: make -C cli clean && aba cli" >&2
+		return 1
+	fi
+	aba_debug "All CLI tarballs passed integrity check (gzip -t)"
+}
+
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -225,7 +242,8 @@ if [ "$light_bundle" ]; then
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
 	_wait_for_cli_downloads || exit 1
-	aba_debug "All CLI tarballs downloaded"
+	_verify_cli_tarballs || exit 1
+	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f $bundle_dest_file
@@ -267,7 +285,8 @@ else
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
 	_wait_for_cli_downloads || exit 1
-	aba_debug "All CLI tarballs downloaded"
+	_verify_cli_tarballs || exit 1
+	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating install bundle archive ..."
 	rm -f $bundle_dest_file

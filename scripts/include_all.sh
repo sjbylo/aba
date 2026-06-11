@@ -3499,9 +3499,10 @@ aba_version_fetch_start() {
 # --- ISC generation ---
 
 # Start ISC generation in background (non-blocking)
+# Uses make directly to avoid aba.sh's CLI download side-effects (SIGPIPE race condition)
 aba_isconf_generate_start() {
 	run_once -i "aba:isconf:generate" -- \
-		bash -lc "cd '${ABA_ROOT:-.}' && aba isconf --dir mirror"
+		make -sC "${ABA_ROOT:-.}/mirror" isconf
 }
 
 # --- Cleanup ---
