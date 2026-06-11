@@ -3301,3 +3301,25 @@ User reports that `data_dir=~/custom` in `mirror.conf` sometimes gets overwritte
 - Check if any code path sources `normalize-mirror-conf` and then writes `$data_dir` back without the `\~` escaping
 - The 3 TUI v1 locations: `abatui.sh` lines 2784, 2866, 2959
 
+## Replace ugly sed for excl_platform with Jinja2 template logic
+
+### Problem
+
+In the mirror/save flow, platform images are excluded using an ugly inline `sed` command:
+
+```bash
+[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" data/imageset-config.yaml && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
+```
+
+This comments out the `platform:` block in the generated `imageset-config.yaml` at runtime via sed, which is fragile and hard to read.
+
+### Fix
+
+Move this logic into the Jinja2 template (`imageset-config-save.yaml.j2` or similar) so the template conditionally omits or comments out the `platform:` section when `excl_platform` is set. The template already has access to config variables — use a Jinja2 `{% if %}` block instead of post-processing with sed.
+
+### Benefit
+
+- Cleaner, more maintainable
+- No fragile regex matching on YAML structure
+- Template is the single source of truth for imageset-config content
+
