@@ -1,26 +1,24 @@
 # Session State
 
 ## Current goal
-E2E TUI Full Workflow test on conno/disco (following ai/E2E_TUI_FULL_WORKFLOW.md)
+E2E TUI Full Workflow — Phase 7: Install SNO cluster (ocp.example.com) on disco
 
 ## Done this session
-1. **SIGPIPE fix proven and applied** — include_all.sh, tui/v2/tui-mirror.sh, tui/abatui.sh, make-bundle.sh
-2. **VMs restarted** on new IPs: conno=10.0.0.10, disco=10.0.0.20
-3. **Phase 1-2** — clean conno, TUI wizard, full bundle created (30GB, all tarballs valid)
-4. **Phase 3-5** — bundle transferred to disco, ABA installed
-5. **Phase 6 in progress** — had to uninstall stale registry from previous session, then reinstalled fresh on disco.example.com:8443. Image load now running (~20-40 min)
+- Phase 6 completed (mirror install + image load on disco)
+- Softened `install` script warning: now a non-blocking NOTE informing user they can reuse existing registry
+- Removed the interactive prompt (Y/n) — purely informational now
+- Started Phase 7 (cluster install wizard) — basics accepted (sno, ocp.example.com, vmw)
+- Identified DNS gap: `api-int.ocp.example.com` missing, needs user to add it
 
 ## Next steps
-- Wait for image load to complete on disco
-- Phase 7: Install SNO cluster (ocp.example.com, IP 10.0.1.100) via TUI
+- User adds `api-int.ocp.example.com → 10.0.1.100` to DNS
+- Change Starting IP in TUI from 10.0.0.100 to 10.0.1.100
+- Complete cluster networking + install SNO
 - Phase 8: Day-2 operations
-- Phase 9: Delete cluster
+- Phase 9: Cluster deletion
+- Commit all code changes (install script, TUI fixes) when workflow completes
 
 ## Decisions / notes
-- conno=10.0.0.10, disco=10.0.0.20
-- SNO domain: ocp.example.com, DNS: api + *.apps → 10.0.1.100
-- Mirror hostname: disco.example.com:8443
-- Bug found: TUI showed "(loaded)" falsely when mirror_000001.tar existed but images weren't pushed
-- Bug found: `aba --dir mirror install` reported "Success" when it detected existing running registry without actually re-installing
-- SIGPIPE fix NOT yet committed (pending user permission)
-- Lesson: always uninstall stale registry before fresh bundle install on a host that had a previous session
+- `install` script warning is now a non-blocking NOTE (no prompt) — user can reuse existing registry
+- SNO DNS: api and *.apps already point to 10.0.1.100; only api-int is missing
+- Starting IP must be 10.0.1.100 to match DNS (not 10.0.0.100)

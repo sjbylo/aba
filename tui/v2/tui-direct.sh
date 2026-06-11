@@ -174,6 +174,12 @@ direct_wizard() {
 
 	# Write config to aba.conf
 	_direct_save_config
+
+	# Kick off CLI downloads now that version is known (non-blocking).
+	# Without this, downloads only start at bundle-creation time.
+	tui_log "Kicking CLI downloads after wizard (version now known)"
+	"$ABA_ROOT/scripts/cli-download-all.sh" >>"$_TUI_LOG_FILE" 2>&1
+
 	return 0
 }
 
