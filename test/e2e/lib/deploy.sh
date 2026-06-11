@@ -130,19 +130,31 @@ sync_extras() {
 		_essh "$target" "chmod +x ~/bin/notify.sh"
 	fi
 
-	# Custom vmware.conf: deploy to original path AND as ~/.vmware.conf
-	# so suites that source ~/.vmware.conf pick it up after -V reverts.
-	if [ -n "${CLI_VMWARE_CONF:-}" ] && [ -f "${CLI_VMWARE_CONF:-}" ]; then
-		_escp "$CLI_VMWARE_CONF" "${target}:${CLI_VMWARE_CONF}"
-		_escp "$CLI_VMWARE_CONF" "${target}:~/.vmware.conf"
-		# Deploy to root on conN and to both users on disN (airgapped suites run
-		# aba on disN; some suites use sudo on conN).
+	# Deploy vmware.conf to all pool VMs so runner.sh sources correct
+	# GOVC_ credentials (golden snapshot may have stale values).
+	local _vf="${CLI_VMWARE_CONF:-$HOME/.vmware.conf}"
+	if [ -f "$_vf" ]; then
+		[ -n "${CLI_VMWARE_CONF:-}" ] && _escp "$_vf" "${target}:${CLI_VMWARE_CONF}"
+		_escp "$_vf" "${target}:~/.vmware.conf"
 		local _host="${target#*@}"
 		local _dis_host="${_host/con/dis}"
 		for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
-			_escp "$CLI_VMWARE_CONF" "${_dt}:~/.vmware.conf" 2>/dev/null || true
+			_escp "$_vf" "${_dt}:~/.vmware.conf" 2>/dev/null || true
 		done
 	fi
+
+	# Push corrected Makefile + template to disN after snapshot reverts.
+	# Pool-ready snapshots pre-date the cli:download:govc fallback fix;
+	# without --dev the ABA source tree is never re-synced, so we push
+	# just the two files that changed.
+	local _aba_root="${_RUN_DIR%/test/e2e}"
+	local _host="${target#*@}"
+	local _dis_host="${_host/con/dis}"
+	for _dt in "${target/con/dis}" "root@${_dis_host}"; do
+		_essh "$_dt" "[ -d ~/aba/templates ]" 2>/dev/null || continue
+		_escp "${_aba_root}/templates/Makefile.cluster" "${_dt}:~/aba/templates/Makefile.cluster" 2>/dev/null || true
+		_escp "${_aba_root}/Makefile"                   "${_dt}:~/aba/Makefile" 2>/dev/null || true
+	done
 
 	# Root essentials (govc, pull-secret, vmware.conf)
 	_deploy_root_essentials "$target" "$user"
@@ -165,8 +177,6 @@ _deploy_root_essentials() {
 	if [ "$user" = "root" ]; then
 		local _ps="$HOME/.pull-secret.json"
 		[ -f "$_ps" ] && _escp "$_ps" "${target}:~/.pull-secret.json"
-		local _vf="${CLI_VMWARE_CONF:-$HOME/.vmware.conf}"
-		[ -f "$_vf" ] && _escp "$_vf" "${target}:~/.vmware.conf"
 	fi
 }
 

@@ -651,6 +651,12 @@ _BASE_FOLDER="${VC_FOLDER:-/Datacenter/vm/aba-e2e}"
 # Golden VM always goes under aba-e2e/golden (even when VC_FOLDER is e.g. abatesting for pools)
 _VC_PARENT="${_BASE_FOLDER%/*}"
 _GOLDEN_FOLDER="${_VC_PARENT}/aba-e2e/golden"
+# On standalone ESXi, folder paths are flat (/ha-datacenter/vm/) and folder.create is unsupported.
+_IS_ESXI=""
+if _is_esxi; then
+	_IS_ESXI=1
+	_GOLDEN_FOLDER=""
+fi
 _SNAPSHOT_NAME="pool-ready"
 _LOG_DIR="$_INFRA_DIR/logs"
 
@@ -797,8 +803,10 @@ _prepare_golden() {
 
 	echo "  Cloning from template: $_VM_TEMPLATE ..."
 
-	govc folder.create "${_VC_PARENT}/aba-e2e" || true
-	govc folder.create "$_GOLDEN_FOLDER" || true
+	if [ -z "$_IS_ESXI" ]; then
+		govc folder.create "${_VC_PARENT}/aba-e2e" || true
+		govc folder.create "$_GOLDEN_FOLDER" || true
+	fi
 	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" "" "no" || return 1
 	_vm_ensure_3nics "$_GOLDEN_NAME" || return 1
 	echo "  Powering on clone '$_GOLDEN_NAME' ..."
@@ -929,7 +937,7 @@ for i in "${_POOL_ARRAY[@]}"; do
 	pool_log="$_LOG_DIR/create-pool${i}.log"
 	> "$pool_log"
 
-	govc folder.create "$pool_folder" || true
+	[ -z "$_IS_ESXI" ] && govc folder.create "$pool_folder" || true
 
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"

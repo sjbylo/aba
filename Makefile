@@ -39,7 +39,7 @@ init: aba .init
 ###vmware.conf:
 .PHONY: vmw
 vmw:
-	@$(SCRIPTS)/run-once.sh -q -w -i cli:download:govc
+	@$(SCRIPTS)/run-once.sh -q -w -i cli:download:govc -- make -sC cli download-govc
 	@$(SCRIPTS)/run-once.sh -w -m "Installing govc" -i cli:install:govc -- make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
