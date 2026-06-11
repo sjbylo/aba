@@ -536,9 +536,16 @@ echo ""
 # Check VM readiness and OS changes for each pool
 _POOL_OS_DIR="$_RUN_DIR/.pool-os"
 mkdir -p "$_POOL_OS_DIR"
-_cur_os="${INT_BASTION_RHEL_VER:-rhel8}"
 declare -a _pools_needing_reclone=()
 _need_infra=""
+
+# Per-pool RHEL version from pools.conf (falls back to CLI --os or default)
+declare -A _pool_os_map=()
+_default_os="${INT_BASTION_RHEL_VER:-rhel8}"
+for _p in $CLI_POOL_LIST; do
+	_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+	[ -z "${_pool_os_map[$_p]:-}" ] && _pool_os_map[$_p]="$_default_os"
+done
 
 _vms_ready() {
 	local pool_num="$1"
@@ -567,6 +574,7 @@ if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
 else
 	for _p in $CLI_POOL_LIST; do
 		_pool_os_file="$_POOL_OS_DIR/pool-${_p}"
+		_cur_os="${_pool_os_map[$_p]}"
 		if [ -n "${CLI_RECREATE_VMS:-}" ]; then
 			echo "  Pool $_p: will be recreated (--recreate-vms)"
 			_need_infra=1
@@ -603,13 +611,22 @@ if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; th
 
 		# Destroy ALL VMs in the pool folder (clusters, conN, disN, etc.)
 		echo "  Destroying all VMs in pool $_p folder ..."
-		while IFS= read -r _vm_path; do
-			[ -z "$_vm_path" ] && continue
-			_vm_name="${_vm_path##*/}"
-			echo "  Destroying $_vm_name (OS mismatch) ..."
-			govc vm.power -off "$_vm_path" 2>/dev/null || true
-			govc vm.destroy "$_vm_path" 2>/dev/null || true
-		done < <(govc find "$_pool_folder" -type m 2>/dev/null)
+		if [ -n "${VC_FOLDER:-}" ]; then
+			while IFS= read -r _vm_path; do
+				[ -z "$_vm_path" ] && continue
+				_vm_name="${_vm_path##*/}"
+				echo "  Destroying $_vm_name (OS mismatch) ..."
+				govc vm.power -off "$_vm_path" 2>/dev/null || true
+				govc vm.destroy "$_vm_path" 2>/dev/null || true
+			done < <(govc find "$_pool_folder" -type m 2>/dev/null)
+		else
+			# ESXi: no pool folders, destroy conN/disN by name
+			for _pfx in con dis; do
+				_vm="${_pfx}${_p}"
+				govc vm.power -off "$_vm" 2>/dev/null || true
+				govc vm.destroy "$_vm" 2>/dev/null || true
+			done
+		fi
 	done
 fi
 
@@ -642,12 +659,24 @@ if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_REC
 	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
 	[ -n "${CLI_YES:-}" ]             && _base_infra_flags+=" --yes"
 
-	_pool_csv="${CLI_POOL_LIST// /,}"
-	"$BASH" "$_RUN_DIR/setup-infra.sh" --pool-list "$_pool_csv" $_base_infra_flags 9>&- \
-		|| { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+	# Group pools by RHEL version and call setup-infra once per group.
+	# Each group gets its own golden VM (e.g. aba-e2e-golden-rhel8, aba-e2e-golden-rhel10).
+	declare -A _os_pool_groups=()
+	for _p in $CLI_POOL_LIST; do
+		_pos="${_pool_os_map[$_p]}"
+		_os_pool_groups[$_pos]+="${_os_pool_groups[$_pos]:+,}${_p}"
+	done
+
+	for _grp_os in "${!_os_pool_groups[@]}"; do
+		_grp_pools="${_os_pool_groups[$_grp_os]}"
+		echo "  --- RHEL group: $_grp_os (pools: $_grp_pools) ---"
+		INT_BASTION_RHEL_VER="$_grp_os" \
+		"$BASH" "$_RUN_DIR/setup-infra.sh" --pool-list "$_grp_pools" $_base_infra_flags 9>&- \
+			|| { echo "FATAL: Infrastructure setup failed for $_grp_os group (pools: $_grp_pools)" >&2; exit 1; }
+	done
 
 	for _p in $CLI_POOL_LIST; do
-		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${_p}"
+		echo "${_pool_os_map[$_p]}" > "$_POOL_OS_DIR/pool-${_p}"
 	done
 
 	_print_box "1;46;30" "✔  INFRA: Pool VMs ready (pools: $CLI_POOL_LIST)"

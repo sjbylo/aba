@@ -250,12 +250,15 @@ _check_hung() {
 	local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
 	[ "$_elapsed" -lt "${E2E_HUNG_TIMEOUT:-3600}" ] && return
 
-	# Use the most recent of: summary log mtime OR tmux pane activity.
-	# A long-running single command (e.g. neg-test install timeout) won't
-	# update the summary log, but the tmux pane still receives output.
+	# Use the most recent of: summary log mtime OR tmux window activity.
+	# A long-running single command (e.g. oc-mirror extraction) won't
+	# update the summary log, but the tmux window still receives output.
+	# NOTE: use window_activity, not pane_last_activity -- the latter
+	# doesn't exist in tmux 3.2a (RHEL 8/9 default) and silently returns
+	# empty, causing false HUNG? alerts on long-running silent operations.
 	local _log_age="" _pane_age=""
 	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
-	_pane_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{pane_last_activity}' 2>/dev/null" 2>/dev/null) || _pane_age=""
+	_pane_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{window_activity}' 2>/dev/null" 2>/dev/null) || _pane_age=""
 	if [ -n "$_log_age" ] && [ -n "$_pane_age" ]; then
 		[ "$_pane_age" -gt "$_log_age" ] && _log_age="$_pane_age"
 	elif [ -z "$_log_age" ]; then
