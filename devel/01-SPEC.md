@@ -110,6 +110,19 @@ using images from the local mirror registry. The workflow:
 - Release image must exist in the local mirror (verified via `skopeo inspect`).
 - The `--force` flag is passed through to `oc adm upgrade` when specified.
 
+### Cluster deletion (`aba delete`)
+
+Destroys cluster VMs and runs `make clean` to remove all generated artifacts
+(ISO, configs, stamp files, binaries). Only `cluster.conf` is preserved.
+With `--force`: removes the entire cluster directory.
+
+The ISO embeds a specific OCP version and cluster config — cleaning it
+ensures the next `aba cluster` regenerates from current settings. Note: The ISO
+has no certificate expiry (agent-based installer generates certs at runtime;
+see https://access.redhat.com/solutions/7087353).
+
+State backup in `~/.aba/clusters/` is not affected.
+
 ### Bundle content rules
 
 `backup.sh` controls what goes into bundles (`aba tar`, `aba bundle`).
