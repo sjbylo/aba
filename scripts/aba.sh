@@ -1215,8 +1215,8 @@ if [ "$cur_target" ]; then
 					aba_abort "Unknown platform '$platform' in aba.conf"
 					;;
 			esac
-			# Remove stamp files so the chain re-runs on next install
-			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete .shutdown.log
+			# Clean generated artifacts so next install starts fresh from current config
+			make -s clean
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
