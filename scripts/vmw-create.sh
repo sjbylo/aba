@@ -70,6 +70,7 @@ if [ -z "${NO_MAC_CHECK:-}" ]; then
 	scripts/check-macs.sh || exit 1
 fi
 
+source scripts/vm-vmw.sh
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
@@ -124,22 +125,10 @@ create_node() {
 		local annotation
 		annotation=$(_vm_annotation "$role")
 
-		cmd="govc vm.create \
-			-annotation='$annotation' \
-			-version vmx-15 \
-			-g rhel8_64Guest \
-			-firmware=efi \
-			-c=$cpu_count \
-			-m=$(( mem_gb * 1024 )) \
-			-net.adapter vmxnet3 \
-			-net.address='$mac' \
-			-disk-datastore=$GOVC_DATASTORE \
-			-folder='$cluster_folder' \
-			-on=false \
-			$vm_name"
+		vmp_create_vm "$vm_name" "$cpu_count" "$mem_gb" "$mac" \
+			"$GOVC_DATASTORE" "$GOVC_NETWORK" "$cluster_folder" "$nested_hv" "${data_disk:-}"
 
-		aba_debug Running: $cmd
-		eval $cmd  # eval needed for the ''s
+		govc vm.change -vm "$vm_name" -annotation="$annotation"
 
 		for cnt in $(seq 1 $max_ports_per_node); do
 			local sub_idx=$(( idx + cnt ))
@@ -147,96 +136,11 @@ create_node() {
 			aba_info "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
 
 			cmd="govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address '$sub_mac'"
-			aba_debug Running: $cmd; eval $cmd  # eval needed for the ''s
+			aba_debug Running: $cmd; eval $cmd
 		done
 
-		cmd="govc device.boot -secure -vm $vm_name"
-		aba_debug Running: $cmd
-		$cmd
-
-		#govc device.boot -secure -vm $vm_name
-
-		cmd="govc vm.change -vm $vm_name \
-			-e disk.enableUUID=TRUE \
-			-cpu-hot-add-enabled=true \
-			-memory-hot-add-enabled=true \
-			-nested-hv-enabled=$nested_hv"
-
-		aba_debug Running: $cmd
-		$cmd
-
-		aba_info "Attaching thin OS disk of size 120GB on [$GOVC_DATASTORE]"
-		cmd="govc vm.disk.create \
-			-vm $vm_name \
-			-name $vm_name/$vm_name \
-			-size 120GB \
-			-thick=false \
-			-ds=$GOVC_DATASTORE"
-
-		aba_debug Running: $cmd
-		$cmd
-
-		if [ -n "${data_disk:-}" ]; then
-			aba_info "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
-
-			cmd="govc vm.disk.create \
-				-vm $vm_name \
-				-name $vm_name/${vm_name}_data \
-				-size ${data_disk}GB \
-				-thick=false \
-				-ds=$GOVC_DATASTORE"
-
-			aba_debug Running: $cmd
-			$cmd
-		fi
-
-		# Attach ISO via explicit cdrom.add + cdrom.insert rather than the
-		# vm.create -iso shortcut. Why:
-		#   1. vm.create -iso silently leaves the CD-ROM disconnected when the
-		#      ISO datastore isn't immediately accessible (seen with NFS, but
-		#      can affect VMFS/vSAN too). The VM then boots to EFI Boot Manager
-		#      with no indication of what went wrong.
-		#   2. Explicit cdrom.insert returns a clear error on failure, allowing
-		#      retry and a meaningful abort message.
-		#   3. This matches the robust pattern used in tools/create-template.sh.
-		local _cdrom_dev _cdrom_err _iso_path="images/agent-${CLUSTER_NAME}.iso"
-		local _cdrom_out
-		_cdrom_out=$(govc device.cdrom.add -vm "$vm_name" 2>&1)
-		local _rc=$?
-		_cdrom_dev=$(echo "$_cdrom_out" | grep -o 'cdrom-[0-9]*')
-		aba_debug "govc device.cdrom.add -vm $vm_name: rc=$_rc out=$_cdrom_out dev=$_cdrom_dev"
-
-		if [ $_rc -ne 0 ] || [ -z "$_cdrom_dev" ]; then
-			aba_abort "Failed to add CD-ROM device on $vm_name: $_cdrom_out"
-		fi
-
-		local _insert_ok=""
-		for _try in 1 2 3; do
-			_cdrom_err=$(govc device.cdrom.insert -vm "$vm_name" -device "$_cdrom_dev" \
-				-ds "$ISO_DATASTORE" "$_iso_path" 2>&1)
-			local _rc=$?
-			aba_debug "govc device.cdrom.insert -vm $vm_name -device $_cdrom_dev -ds $ISO_DATASTORE $_iso_path (attempt $_try): rc=$_rc $_cdrom_err"
-			if [ $_rc -eq 0 ]; then
-				_insert_ok=1
-				break
-			fi
-			aba_warning "CD-ROM insert failed on $vm_name (attempt $_try/3): $_cdrom_err"
-			sleep 3
-		done
-		if [ -z "$_insert_ok" ]; then
-			aba_abort "Failed to insert ISO into CD-ROM on $vm_name after 3 attempts. Check ISO datastore ($ISO_DATASTORE) accessibility."
-		fi
-
-		# Verify the CD-ROM is connected (startConnected=true) after insert.
-		# On a powered-off VM, "connected" is always false (vSphere behaviour)
-		# but "startConnected" must be true for the ISO to attach at power-on.
-		local _verify_out _start_conn
-		_verify_out=$(govc device.info -json -vm "$vm_name" "$_cdrom_dev" 2>&1) || true
-		_start_conn=$(echo "$_verify_out" | grep -E '"(start)?[Cc]onnected"' | tr -d ' ,')
-		aba_debug "CD-ROM verify on $vm_name $_cdrom_dev: $_start_conn"
-		if ! echo "$_verify_out" | grep -q '"startConnected": true'; then
-			aba_warning "CD-ROM $_cdrom_dev on $vm_name: startConnected is NOT true after insert -- VM may fail to boot from ISO"
-		fi
+		vmp_attach_iso "$vm_name" "$ISO_DATASTORE" "images/agent-${CLUSTER_NAME}.iso" \
+			|| aba_abort "Failed to attach ISO on $vm_name. Check ISO datastore ($ISO_DATASTORE) accessibility."
 
 		if [ -n "${START_VM:-}" ]; then
 			cmd="govc vm.power -on $vm_name"
