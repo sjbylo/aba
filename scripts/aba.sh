@@ -964,6 +964,18 @@ elif [ "$1" = "--light" ]; then
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
 		_set_cluster_conf mac_prefix "$2" "$1"
 		shift 2
+	elif [ "$1" = "--host-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf hostPrefix "$2" "$1"
+		shift 2
+	elif [ "$1" = "--master-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf master_prefix "$2" "$1"
+		shift 2
+	elif [ "$1" = "--worker-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf worker_prefix "$2" "$1"
+		shift 2
 	elif [ "$1" = "--ssh-key" ]; then
 		_flag="$1"
 		ssh_key_val=
