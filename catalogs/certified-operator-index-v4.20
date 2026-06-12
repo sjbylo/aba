@@ -26,6 +26,7 @@ coherence-operator                                      Coherence Kubernetes Ope
 confluent-for-kubernetes                                Confluent for Kubernetes                                     3.2
 conjur-follower-operator                                Conjur Enterprise Follower Operator                          stable
 coroot-operator                                         Coroot                                                       stable
+couchbase-enterprise-certified                          Couchbase Operator                                           stable
 cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.14
 crunchy-postgres-operator                               Crunchy Postgres for Kubernetes                              v5
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
@@ -36,7 +37,7 @@ digitalai-release-operator                              Digital.ai Release      
 dxoperator                                              DxOperator V1 Legacy                                         alpha
 dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
-eda-k8s-operator                                        eda-openshift-operator                                       stable
+eda-k8s-operator                                        eda-openshift-operator                                       6.0
 edb-hcp-operator                                        EDB Postgres AI                                              alpha
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
@@ -85,7 +86,7 @@ kubeblocks                                              KubeBlocks              
 kubecost-operator                                       Kubecost                                                     stable
 kubedb-installer                                        KubeDB by AppsCode                                           stable
 kubeturbo-certified                                     Kubeturbo Operator                                           stable
-kurrentdb-operator                                      KurrentDB Operator                                           stable
+kurrentdb-operator                                      KurrentDB Operator                                           stable-v1
 lightbits-operator                                      Lightbits Operator                                           alpha
 linstor-operator                                        LINSTOR Operator                                             stable-v2
 mariadb-enterprise-operator                             MariaDB Enterprise Operator                                  stable
@@ -119,8 +120,8 @@ percona-postgresql-operator-certified                   Percona Operator for Pos
 percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
 percona-server-mysql-operator-certified                 Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator-certified               Percona Operator for MySQL based on Percona XtraDB Cluster   stable
-pg4k-pgd                                                EDB Postgres Distributed for Kubernetes (v2)                 stable
-portworx-certified                                      Portworx Operator                                            stable
+pg4k-pgd                                                EDB Postgres Distributed for Kubernetes                      stable
+portworx-certified                                      Portworx Enterprise                                          stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha
@@ -157,21 +158,22 @@ sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Co
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
-tawon-operator                                          Tawon                                                        candidate-v3
+tawon-operator                                          Tawon                                                        fast-v3
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.8
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
 trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    alpha
-uma-operator                                            DX APM Universal Monitoring Agent                            alpha
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     alpha
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
+uma-operator                                            DX APM Universal Monitoring Agent                            beta
+uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     beta
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 vfunction-server-operator                               vFunction Operator                                           stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
+visionone-containersecurity                             TrendAI Vision One Container Security                        stable
 webserver-operator                                      WebServer Operator                                           stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts

@@ -256,13 +256,15 @@ else
 	
 	if files_on_same_device mirror $bundle_dest_file; then
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
+		local _mount_point
+		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
 		aba_warning \
 			"Make sure there is enough free disk space under: $PWD" \
 			"The image-set archive file(s) created by oc-mirror will first be written to" \
 			"aba/mirror/data/mirror_000001.tar, and then a full copy of the Aba repository will be written" \
 			"to the bundle file you specified: $bundle_dest_file" \
-			"Because both files *reside on the same filesystem*, you may temporarily" \
+			"Because both files *reside on the same filesystem* (${_mount_point:-unknown}), you may temporarily" \
 			"need roughly double the required space (or more if you consider the oc-mirror cache). " \
 			">> IMPORTANT: <<" \
 			"If disk space is limited, consider using the '--light' option." \

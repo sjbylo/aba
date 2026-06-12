@@ -1,4 +1,4 @@
-3scale-operator                                         Red Hat Integration - 3scale                                 threescale-2.16
+3scale-operator                                         Red Hat Integration - 3scale                                 threescale-2.13
 advanced-cluster-management                             Advanced Cluster Management for Kubernetes                   release-2.16
 amq7-interconnect-operator                              Red Hat Integration - AMQ Interconnect                       1.10.x
 amq-broker-rhel8                                        Red Hat Integration - AMQ Broker for RHEL 8 (Multiarch)      7.12.x
@@ -8,7 +8,7 @@ amq-streams-proxy                                       Streams for Apache Kafka
 amq-streams                                             Streams for Apache Kafka                                     stable
 ansible-automation-platform-operator                    Ansible Automation Platform                                  stable-2.7
 ansible-cloud-addons-operator                           Ansible Cloud Addons                                         stable-2.5-cluster-scoped
-apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.16
+apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.14
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
 authorino-operator                                      Authorino Operator                                           stable
 aws-efs-csi-driver-operator                             AWS EFS CSI Driver Operator                                  stable
@@ -17,37 +17,29 @@ bamoe-businessautomation-operator                       IBM Business Automation 
 bamoe-kogito-operator                                   IBM BAMOE Kogito Operator                                    8.x
 bpfman-operator                                         eBPF Manager Operator                                        stable
 businessautomation-operator                             Business Automation                                          stable
-cephcsi-operator                                        CephCSI operator                                             stable-4.18
+cephcsi-operator                                        CephCSI operator                                             stable-4.21
 cincinnati-operator                                     OpenShift Update Service                                     v1
 cli-manager                                             CLI Manager                                                  tech-preview
 cluster-kube-descheduler-operator                       Kube Descheduler Operator                                    stable
-cluster-logging                                         Red Hat OpenShift Logging                                    stable-6.4
+cluster-logging                                         Red Hat OpenShift Logging                                    stable-6.5
 cluster-observability-operator                          Cluster Observability Operator                               stable
 clusterresourceoverride                                 ClusterResourceOverride Operator                             stable
 compliance-operator                                     Compliance Operator                                          stable
 container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.16
-costmanagement-metrics-operator                         Cost Management Metrics Operator                             stable
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
-deployment-validation-operator                          Deployment Validation Operator                               alpha
 devspaces                                               Red Hat OpenShift Dev Spaces                                 stable
 devworkspace-operator                                   DevWorkspace Operator                                        fast
 dns-operator                                            DNS Operator                                                 stable
 dpu-network-operator                                    DPU Network Operator                                         stable
 dpu-operator                                            DPU Operator                                                 stable
 eap                                                     JBoss EAP                                                    stable
-elasticsearch-operator                                  OpenShift Elasticsearch Operator                             stable-5.8
-exploit-iq-operator                                     RHTPA exploit intelligence(TechPreview)                      pre-ga
 external-dns-operator                                   ExternalDNS Operator                                         stable-v1
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
 file-integrity-operator                                 File Integrity Operator                                      stable
-fuse-apicurito                                          API Designer                                                 fuse-apicurito-7.13.x
-fuse-console                                            Red Hat Integration - Fuse Console                           7.13.x
-fuse-online                                             Red Hat Integration - Fuse Online                            latest
 gatekeeper-operator-product                             Gatekeeper Operator                                          stable
 gcp-filestore-csi-driver-operator                       GCP Filestore CSI Driver Operator                            stable
 ingress-node-firewall                                   Ingress Node Firewall Operator                               stable
-jaeger-product                                          Red Hat OpenShift distributed tracing platform               stable
 job-set                                                 Job Set Operator                                             stable-v1.0
 jws-operator                                            WebServer                                                    alpha
 kernel-module-management-hub                            Kernel Module Management (Hub)                               stable
@@ -56,77 +48,61 @@ kiali-ossm                                              Kiali Operator          
 kubernetes-nmstate-operator                             Kubernetes NMState Operator                                  stable
 kubevirt-hyperconverged                                 OpenShift Virtualization                                     stable
 kueue-operator                                          Red Hat build of Kueue                                       stable-v1.3
-leader-worker-set                                       Leader Worker Set Operator                                   stable-v1.0
+leader-worker-set                                       Red Hat build of Leader Worker Set                           stable-v1.0
 lifecycle-agent                                         Lifecycle Agent                                              stable
 lightspeed-operator                                     OpenShift Lightspeed Operator                                stable
 limitador-operator                                      Limitador Operator                                           stable
 local-storage-operator                                  Local Storage                                                stable
 logic-operator                                          OpenShift Serverless Logic Operator                          stable
 logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
-loki-operator                                           Loki Operator                                                stable-6.4
-lvms-operator                                           LVM Storage                                                  stable-4.18
+loki-operator                                           Loki Operator                                                stable-6.5
 machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
-mcg-operator                                            NooBaa Operator                                              stable-4.18
+mcg-operator                                            NooBaa Operator                                              stable-4.21
+mcp-gateway                                             MCP Gateway Operator (Tech Preview)                          preview
 metallb-operator                                        MetalLB Operator                                             stable
-model-validation-operator                               Model Validation Operator                                    tech-preview
-mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.1
-mtc-operator                                            Migration Toolkit for Containers Operator                    release-v1.8
+mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.0
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
-mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.10
-multiarch-tuning-operator                               Multiarch Tuning Operator                                    stable
+mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.11
 multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.11
-multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.7
-nbde-tang-server                                        NBDE Tang Server                                             stable
 netobserv-operator                                      Network Observability                                        stable
 nfd                                                     Node Feature Discovery Operator                              stable
 node-healthcheck-operator                               Node Health Check Operator                                   stable
 node-maintenance-operator                               Node Maintenance Operator                                    stable
 node-observability-operator                             Node Observability Operator                                  alpha
-numaresources-operator                                  NUMA Resources Operator                                      4.18
-ocs-client-operator                                     OpenShift Data Foundation Client                             stable-4.18
-ocs-operator                                            OpenShift Container Storage                                  stable-4.18
-odf-csi-addons-operator                                 CSI Addons                                                   stable-4.18
-odf-dependencies                                        Data Foundation Dependencies                                 stable-4.18
-odf-multicluster-orchestrator                           ODF Multicluster Orchestrator                                stable-4.18
-odf-operator                                            OpenShift Data Foundation                                    stable-4.18
-odf-prometheus-operator                                 Prometheus Operator                                          stable-4.18
-odr-cluster-operator                                    Openshift DR Cluster Operator                                stable-4.18
-odr-hub-operator                                        Openshift DR Hub Operator                                    stable-4.18
-openshift-builds-operator                               Builds for Red Hat OpenShift Operator                        latest
+numaresources-operator                                  NUMA Resources Operator                                      4.22
+o-cloud-manager                                         o-cloud manager                                              stable
+ocs-client-operator                                     OpenShift Data Foundation Client                             stable-4.21
+ocs-operator                                            OpenShift Container Storage                                  stable-4.21
+odf-csi-addons-operator                                 CSI Addons                                                   stable-4.21
+odf-dependencies                                        Data Foundation Dependencies                                 stable-4.21
+odf-external-snapshotter-operator                       Snapshot Controller                                          stable-4.21
+odf-multicluster-orchestrator                           ODF Multicluster Orchestrator                                stable-4.21
+odf-operator                                            OpenShift Data Foundation                                    stable-4.21
+odf-prometheus-operator                                 Prometheus Operator                                          stable-4.21
+odr-cluster-operator                                    Openshift DR Cluster Operator                                stable-4.21
+odr-hub-operator                                        Openshift DR Hub Operator                                    stable-4.21
 openshift-cert-manager-operator                         cert-manager Operator for Red Hat OpenShift                  stable-v1
-openshift-custom-metrics-autoscaler-operator            Custom Metrics Autoscaler                                    stable
 openshift-external-secrets-operator                     External Secrets Operator for Red Hat OpenShift              stable-v1
 openshift-gitops-operator                               Red Hat OpenShift GitOps                                     latest
 openshift-pipelines-operator-rh                         Red Hat OpenShift Pipelines                                  latest
 openshift-secondary-scheduler-operator                  Secondary Scheduler Operator for Red Hat OpenShift           stable
-openshift-zero-trust-workload-identity-manager          Zero Trust Workload Identity Manager                         stable-v1
-openstack-operator                                      OpenStack                                                    stable-v1.0
 opentelemetry-product                                   Red Hat build of OpenTelemetry                               stable
-orchestrator-operator                                   Orchestrator Operator                                        stable
 pf-status-relay-operator                                pf-status-relay-operator                                     stable
-policy-controller-operator                              Policy Controller Operator                                   stable
-power-monitoring-operator                               Power monitoring for Red Hat OpenShift                       tech-preview
 ptp-operator                                            PTP Operator                                                 stable
 quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.16
 quay-operator                                           Red Hat Quay                                                 stable-3.16
-recipe                                                  Recipe                                                       stable-4.18
-red-hat-camel-k                                         Red Hat Integration - Camel K                                1.10.x
+recipe                                                  Recipe                                                       stable-4.21
 red-hat-hawtio-operator                                 HawtIO Operator                                              v2
-redhat-oadp-operator                                    OADP Operator                                                stable-1.4
+redhat-oadp-operator                                    OADP Operator                                                stable
 rhacs-operator                                          Advanced Cluster Security for Kubernetes                     stable
-rhbk-operator                                           Red Hat build of Keycloak Operator                           stable-v26.6
 rhcl-operator                                           Red Hat Connectivity Link                                    stable
-rhdh                                                    Red Hat Developer Hub Operator                               fast
-rhods-operator                                          Red Hat OpenShift AI                                         stable
 rhpam-kogito-operator                                   RHPAM Kogito Operator                                        7.x
 rh-service-binding-operator                             Service Binding Operator                                     stable
 rhsso-operator                                          Red Hat Single Sign-On Operator                              stable
 rhtas-operator                                          Red Hat Trusted Artifact Signer                              stable
-rhtpa-operator                                          Red Hat Trusted Profile Analyzer                             stable-v1.1
-rook-ceph-operator                                      Rook-Ceph                                                    stable-4.18
+rook-ceph-operator                                      Rook-Ceph                                                    stable-4.21
 run-once-duration-override-operator                     Run Once Duration Override Operator                          stable
 runtimes-inventory-operator                             Runtimes Inventory Operator                                  stable
-sandboxed-containers-operator                           OpenShift sandboxed containers Operator                      stable
 secrets-store-csi-driver-operator                       Secrets Store CSI Driver Operator                            stable
 security-profiles-operator                              Security Profiles Operator                                   release-alpha-rhel-8
 self-node-remediation                                   Self Node Remediation Operator                               stable
@@ -134,19 +110,16 @@ serverless-operator                                     Red Hat OpenShift Server
 servicemeshoperator3                                    Red Hat OpenShift Service Mesh 3                             stable
 servicemeshoperator                                     Red Hat OpenShift Service Mesh 2                             stable
 service-registry-operator                               Red Hat build of Apicurio Registry                           2.x
-service-telemetry-operator                              Service Telemetry Operator                                   stable-1.5
 skupper-netobs-operator                                 Red Hat Service Interconnect Network Observer                stable-2
 skupper-operator                                        Red Hat Service Interconnect                                 stable-2
-smart-gateway-operator                                  Smart Gateway Operator                                       stable-1.5
 smb-csi-driver-operator                                 CIFS/SMB CSI Driver Operator                                 stable
 sriov-network-operator                                  SR-IOV Network Operator                                      stable
 submariner                                              Submariner                                                   stable-0.24
+support-log-gather-operator                             support log gather                                           tech-preview
 tang-operator                                           NBDE Tang Server                                             alpha
 tempo-product                                           Tempo Operator                                               stable
 topology-aware-lifecycle-manager                        Topology Aware Lifecycle Manager                             stable
-trustee-operator                                        Red Hat build of Trustee                                     stable
 vertical-pod-autoscaler                                 Vertical Pod Autoscaler Operator                             stable
 volsync-product                                         VolSync                                                      stable
-watcher-operator                                        Watcher Operator (Technology Preview)                        stable-v1.0
 web-terminal                                            Web Terminal                                                 fast
 windows-machine-config-operator                         Windows Machine Config Operator                              stable

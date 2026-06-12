@@ -17,6 +17,7 @@ ack-cloudwatchlogs-controller                           AWS Controllers for Kube
 ack-codeartifact-controller                             AWS Controllers for Kubernetes - Amazon codeartifact         alpha
 ack-cognitoidentityprovider-controller                  AWS Controllers for Kubernetes - Amazon Cognito Identity Provider alpha
 ack-documentdb-controller                               AWS Controllers for Kubernetes - Amazon DocumentDB           alpha
+ack-dsql-controller                                     AWS Controllers for Kubernetes - Amazon Aurora DSQL          alpha
 ack-dynamodb-controller                                 AWS Controllers for Kubernetes - Amazon DynamoDB             alpha
 ack-ec2-controller                                      AWS Controllers for Kubernetes - Amazon EC2                  alpha
 ack-ecr-controller                                      AWS Controllers for Kubernetes - Amazon ECR                  alpha
@@ -71,7 +72,7 @@ analytics-operator                                      Observability Analytics 
 annotationlab                                           NLPLab                                                       alpha
 apicast-community-operator                              APIcast                                                      stable
 apicurio-api-controller                                 Apicurio API Controller                                      0.x
-apicurio-registry-3                                     Apicurio Registry 3                                          3.x
+apicurio-registry-3                                     Apicurio Registry 3                                          3.2.x
 apicurio-registry                                       Apicurio Registry Operator                                   2.x
 apicurito                                               API Designer                                                 latest
 apimatic-kubernetes-operator                            APIMatic Operator                                            alpha
@@ -80,6 +81,7 @@ aqua                                                    Aqua Security Operator  
 argocd-operator                                         Argo CD                                                      alpha
 arkmq-org-broker-operator                               ArkMQ Operator                                               stable
 assisted-service-operator                               Infrastructure Operator for Red Hat OpenShift                alpha
+attune                                                  Attune                                                       stable
 authorino-operator                                      Authorino Operator                                           stable
 automotive-dev-operator                                 CentOS Automotive Suite                                      alpha
 automotive-infra                                        Automotive-CI                                                alpha
@@ -160,6 +162,7 @@ jhipster-online-operator                                JHipster Online Operator
 jumpstarter-operator                                    Jumpstarter Operator                                         alpha
 jupyter-notebook-validator-operator                     Jupyter Notebook Validator Operator                          stable
 k8gb                                                    k8gb                                                         alpha
+kairos-operator                                         Kairos Operator                                              stable
 keda                                                    [DEPRECATED] KEDA                                            alpha
 keepalived-operator                                     Keepalived Operator                                          alpha
 kepler-operator                                         Kepler                                                       alpha
@@ -168,7 +171,7 @@ keycloak-permissions-operator                           Keycloak Permissions Ope
 klusterlet                                              Klusterlet                                                   stable
 kogito-operator                                         Kogito                                                       1.x
 koku-metrics-operator                                   Koku Metrics Operator                                        beta
-konveyor-operator                                       Konveyor Operator                                            konveyor-0.9
+konveyor-operator                                       Konveyor Operator                                            alpha
 korrel8r                                                Korrel8r                                                     stable
 kruize-operator                                         Kruize Operator                                              alpha
 kuadrant-operator                                       Kuadrant Operator                                            stable
@@ -220,6 +223,7 @@ ocp-kea-dhcp                                            Kea DHCP Operator       
 odoo-operator                                           Odoo Operator                                                alpha
 opendatahub-operator                                    Open Data Hub Operator                                       fast-3
 openebs                                                 OpenEBS                                                      alpha
+openshift-integration-operator                          OpenShift Integration Operator                               alpha
 openshift-node-upgrade-mutex-operator                   OpenShift Node Upgrade Mutex Operator                        alpha
 openshift-qiskit-operator                               QiskitPlayground                                             alpha
 opentelemetry-operator                                  Community OpenTelemetry Operator                             alpha

@@ -6,7 +6,7 @@ amq-broker-rhel9                                        Red Hat Integration - AM
 amq-streams-console                                     Streams for Apache Kafka Console                             stable
 amq-streams-proxy                                       Streams for Apache Kafka Proxy                               stable
 amq-streams                                             Streams for Apache Kafka                                     stable
-ansible-automation-platform-operator                    Ansible Automation Platform                                  stable-2.6
+ansible-automation-platform-operator                    Ansible Automation Platform                                  stable-2.7
 ansible-cloud-addons-operator                           Ansible Cloud Addons                                         stable-2.5-cluster-scoped
 apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.16
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
@@ -53,7 +53,7 @@ kueue-operator                                          Red Hat build of Kueue  
 leader-worker-set                                       Red Hat build of Leader Worker Set                           stable-v1.0
 lifecycle-agent                                         Lifecycle Agent                                              stable
 lightspeed-operator                                     OpenShift Lightspeed Operator                                stable
-limitador-operator                                      Limitador                                                    stable
+limitador-operator                                      Limitador Operator                                           stable
 local-storage-operator                                  Local Storage                                                stable
 logic-operator                                          OpenShift Serverless Logic Operator                          stable
 logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
@@ -105,10 +105,10 @@ quay-bridge-operator                                    Red Hat Quay Bridge Oper
 quay-operator                                           Red Hat Quay                                                 stable-3.16
 recipe                                                  Recipe                                                       stable-4.21
 red-hat-camel-k                                         Red Hat Integration - Camel K                                1.10.x
-red-hat-hawtio-operator                                 HawtIO Operator                                              stable-v1
+red-hat-hawtio-operator                                 HawtIO Operator                                              v2
 redhat-oadp-operator                                    OADP Operator                                                stable
 rhacs-operator                                          Advanced Cluster Security for Kubernetes                     stable
-rhbk-operator                                           Red Hat build of Keycloak Operator                           stable-v26.4
+rhbk-operator                                           Red Hat build of Keycloak Operator                           stable-v26.6
 rhcl-operator                                           Red Hat Connectivity Link                                    stable
 rhdh                                                    Red Hat Developer Hub Operator                               fast
 rhods-operator                                          Red Hat OpenShift AI                                         stable
