@@ -324,8 +324,8 @@ gen_cluster_conf() {
         [ -n "$masters" ]     && sed -i "s/^num_masters=.*/num_masters=$masters/" "$dir/cluster.conf"
         [ -n "$workers" ]     && sed -i "s/^num_workers=.*/num_workers=$workers/" "$dir/cluster.conf"
         [ -n "$starting_ip" ] && sed -i "s/^starting_ip=.*/starting_ip=$starting_ip/" "$dir/cluster.conf"
-        [ -n "$ingress_ip" ]  && sed -i "s/^ingress_ip=.*/ingress_ip=$ingress_ip/" "$dir/cluster.conf"
-        [ -n "$api_ip" ]      && sed -i "s/^api_ip=.*/api_ip=$api_ip/" "$dir/cluster.conf"
+        [ -n "$ingress_ip" ]  && sed -i "s/^ingress_vip=.*/ingress_vip=$ingress_ip/" "$dir/cluster.conf"
+        [ -n "$api_ip" ]      && sed -i "s/^api_vip=.*/api_vip=$api_ip/" "$dir/cluster.conf"
     fi
 
     _e2e_log "  Configured cluster.conf in $dir" || true

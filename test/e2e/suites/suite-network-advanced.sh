@@ -200,10 +200,10 @@ _net_test() {
         local _vlan_api_vip _vlan_apps_vip
         _vlan_api_vip="$(pool_vlan_api_vip)"
         _vlan_apps_vip="$(pool_vlan_apps_vip)"
-        e2e_run "Set VLAN api_ip=$_vlan_api_vip" \
-            "sed -i \"s/^api_ip=.*/api_ip=$_vlan_api_vip /g\" $cname/cluster.conf"
-        e2e_run "Set VLAN ingress_ip=$_vlan_apps_vip" \
-            "sed -i \"s/^ingress_ip=.*/ingress_ip=$_vlan_apps_vip /g\" $cname/cluster.conf"
+        e2e_run "Set VLAN api_vip=$_vlan_api_vip" \
+            "sed -i \"s/^api_vip=.*/api_vip=$_vlan_api_vip /g\" $cname/cluster.conf"
+        e2e_run "Set VLAN ingress_vip=$_vlan_apps_vip" \
+            "sed -i \"s/^ingress_vip=.*/ingress_vip=$_vlan_apps_vip /g\" $cname/cluster.conf"
     fi
 
     e2e_run "Set ports=$ports" \
