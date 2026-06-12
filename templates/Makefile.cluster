@@ -99,7 +99,7 @@ kvm.conf: .init ## Use KVM/libvirt to create cluster.
 # deps only — their timestamps must NOT trigger rebuilds of downstream targets.
 # .cli/.init are setup markers; cluster.conf doesn't read mirror.conf.
 cluster.conf: .init | mirror.conf  ## Initialize the OpenShift cluster.conf file.
-	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) starting_ip=$(starting_ip) int_connection=$(int_connection) num_masters=$(num_masters) num_workers=$(num_workers) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip) ports=$(ports) vlan=$(vlan) ssh_key_file=$(ssh_key_file)
+	$(SCRIPTS)/create-cluster-conf.sh name=$(name) type=$(type) starting_ip=$(starting_ip) int_connection=$(int_connection) num_masters=$(num_masters) num_workers=$(num_workers) master_cpu_count=$(master_cpu_count) master_mem=$(master_mem) worker_cpu_count=$(worker_cpu_count) worker_mem=$(worker_mem) data_disk=$(data_disk) api_vip=$(api_vip) ingress_vip=$(ingress_vip) ports=$(ports) vlan=$(vlan) mac_prefix=$(mac_prefix) ssh_key_file=$(ssh_key_file) hostPrefix=$(hostPrefix) master_prefix=$(master_prefix) worker_prefix=$(worker_prefix) mirror_name=$(mirror_name)
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \

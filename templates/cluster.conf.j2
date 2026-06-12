@@ -19,11 +19,11 @@ starting_ip={{ starting_ip }}			# First static node IP (node0 / rendezvous)
 					# - Must be inside the machine_network range
 					# - Ensure IPs are unused
 
-hostPrefix=23				# Pod subnet per node; 23 gives 510 pod IPs
+hostPrefix={{ hostPrefix }}				# Pod subnet per node; 23 gives 510 pod IPs
 					# Use 22 or lower for more pod IPs (bare metal)
 
-master_prefix=master			# Node name prefix for masters
-worker_prefix=worker 			# Node name prefix for workers
+master_prefix={{ master_prefix }}			# Node name prefix for masters
+worker_prefix={{ worker_prefix }} 			# Node name prefix for workers
 
 num_masters={{ num_masters }} 				# Number of masters (control plane)
 num_workers={{ num_workers }}				# Number of workers (compute)
@@ -42,7 +42,7 @@ ports={{ ports }}				# Comma-separated interface names for machine network
 					# Multiple (bonded): ports=ens1f0,ens2f0,ens3f0,ens4f0
 vlan={{ vlan }}					# Optional VLAN tag (works with or without bonding)
 
-ssh_key_file=~/.ssh/id_rsa		# Path to SSH key (recommended)
+ssh_key_file={{ ssh_key_file }}		# Path to SSH key (recommended)
 					# - Public key (~/.ssh/id_rsa.pub) copied to all nodes
 					# - Private key (~/.ssh/id_rsa) used for SSH node access
 
@@ -51,7 +51,7 @@ int_connection={{ int_connection }}				# Internet connection mode:
 					#   direct - use NAT / direct Internet
 					#   empty  - use local mirror (default)
 
-mirror_name=mirror			# Mirror directory this cluster uses.
+mirror_name={{ mirror_name }}			# Mirror directory this cluster uses.
 					# Credentials are stored in ~/.aba/mirror/$mirror_name/.
 					# Change if using multiple mirrors (e.g. mirror2).
 
