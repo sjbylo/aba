@@ -661,7 +661,8 @@ _cleanup_dis() {
 	local _default_user="${VM_DEFAULT_USER:-steve}"
 
 	# Case 3: uninstall any mirror installed locally on disN.
-	# ~/aba/mirror on disN only exists if a suite ran aba directly on disN.
+	# Only trigger when a registry was actually installed (marker file exists).
+	# ~/aba/mirror/ always exists on disN after deploy (it's part of the source tree).
 	echo "  Checking for locally-installed registries on disN ..."
 	local _uninstall_failed=""
 	local _try_user
@@ -669,7 +670,7 @@ _cleanup_dis() {
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "
 			_aba=\$HOME/.e2e-harness/bin/aba
-			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
+			if [ -f ~/aba/mirror/.available ] || [ -f ~/aba/mirror/.installed ] || [ -f ~/aba/mirror/.unavailable ]; then
 				echo '  [cleanup] Found mirror dir for $_try_user on disN -- uninstalling locally'
 				if cd ~/aba && \$_aba -y -d mirror uninstall 2>&1; then
 					echo '  [cleanup] uninstall OK'
