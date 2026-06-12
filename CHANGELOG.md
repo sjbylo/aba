@@ -8,6 +8,7 @@
 - **Pre-built operator catalog indexes** — Ship catalog index files for the latest 6 GA OCP versions, enabling instant operator browsing in the TUI without network access.
 - **Smart `starting_ip` default** — Compute starting IP from the machine network CIDR instead of using a static placeholder.
 - **Content-layer catalog refresh** — `tools/refresh-catalog-indexes.sh` now compares the content layer digest (not the whole image digest) to detect real operator updates and avoid false re-downloads from metadata-only changes.
+- **AI/ML operator set** — New `op_sets=ai` option bundles GPU Operator, Node Feature Discovery, SR-IOV, Kueue, cert-manager, and ServiceMesh for AI/ML workloads.
 
 ### Improvements
 
@@ -23,9 +24,13 @@
 - **Hardened `replace-value-conf`** — Escape sed/grep metacharacters to prevent config corruption with special-character values.
 - **`run_once` surgical kill** — `_kill_id` preserves `cmd.sh` across TTL expiry instead of killing sibling processes.
 - **Trace file size guard** — Prevent 29GB trace files when stdout is piped.
+- **`aba delete` cleanup** — Now runs `make clean` to remove stale ISO files and build artifacts in addition to deleting VMs.
+- **Upgrade CLI binaries** — `aba -d mirror save` downloads CLI binaries for the target version, with copy instructions for disconnected upgrades.
 
 ### Bug Fixes
 
+- **ESXi detection failure** — `normalize-vmware-conf()` failed to detect standalone ESXi because template defaults (`GOVC_DATACENTER=Datacenter`) caused `govc about` to error out before the HostAgent check could match. All subsequent `govc` commands then failed with "Datacenter not found".
+- **ESXi network validation** — Use `host.portgroup.info` instead of `govc find` for network validation on standalone ESXi, where `govc find` may not list all port groups.
 - **DNS misconfiguration is fatal** — Reverted DNS checks to `aba_abort` (exit immediately) instead of warning-and-continue.
 - **CLI download race condition** — Fix concurrent tarball download corruption and allow `aba delete` without triggering CLI download.
 - **`set -e` crash prevention** — Replace `[ ] && cmd` patterns with `if/then/fi` across core scripts to prevent silent crashes under `set -e`.
@@ -34,10 +39,13 @@
 - **Two-tier cert hostname check** — Registry reinstall validates both short and FQDN hostnames against the existing certificate.
 - **Orphaned catalog containers** — Use EXIT trap to prevent container leaks during catalog index downloads.
 - **MAC prefix uppercase** — Fix MAC address prefix generation to use uppercase hex consistently.
+- **TUI auth credential destruction** — Prevent TUI background prefetch from overwriting mirror authentication credentials.
+- **TUI SIGPIPE race** — Prevent race condition in `isconf` background tasks that could cause spurious pipe errors.
 
 ### Community
 
 - **Mateusz Slugocki** (@mateuszslugocki) — vSphere preflight validation: 42 commits implementing multi-layer connectivity, authentication, resource existence, and privilege verification checks with comprehensive E2E test coverage.
+- **Kamil Blaz** (@KamilBlaz) — Mermaid workflow diagram (#29).
 
 ---
 
