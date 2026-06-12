@@ -10,9 +10,13 @@
 # PRODUCES:  catalogs/{catalog}-index-v{ver} for each supported OCP version
 #
 # Usage:
-#   tools/refresh-catalog-indexes.sh [--commit] [--tag]
+#   tools/refresh-catalog-indexes.sh [--commit]
 #     --commit   git add + commit + push the updated catalogs/
-#     --tag      also move the latest release tag forward (implies --commit)
+#
+# Workflow:
+#   On 'dev': run during release prep to refresh catalogs before tagging
+#   On 'main': run periodically (cron or manual) to keep shipped catalogs fresh
+#   Release tags are immutable -- never force-move them for catalog updates.
 
 cd "$(dirname "$0")/.."
 
@@ -25,22 +29,19 @@ MIN_OPERATORS=50
 DEPTH=6
 
 do_commit=false
-do_tag=false
 do_force=false
 do_yes=false
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--commit) do_commit=true; shift ;;
-		--tag)    do_tag=true; do_commit=true; shift ;;
 		--force)  do_force=true; shift ;;
 		-y|--yes) do_yes=true; shift ;;
 		-h|--help)
-			echo "Usage: $0 [--force] [-y] [--commit] [--tag]"
+			echo "Usage: $0 [--force] [-y] [--commit]"
 			echo "  --force    re-download all catalogs even if already present"
 			echo "  -y|--yes   skip confirmation prompts"
 			echo "  --commit   git add + commit + push updated catalogs/"
-			echo "  --tag      move latest release tag forward (implies --commit)"
 			echo "Covers the latest ${DEPTH} GA minor versions from the stable channel."
 			exit 0
 			;;
@@ -142,36 +143,28 @@ _check_content_change() {
 	local index="${INDEX_DIR}/${catalog}-index-v${ver}"
 	local layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
 	local remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
+	local _label
+	printf -v _label "%-18s  v%-5s" "$catalog" "$ver"
 
 	# --force: always re-download
 	if [[ "$do_force" == true ]]; then
 		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-		echo "--- ${catalog} v${ver} --- DOWNLOAD (--force)"
+		echo "  ${_label} DOWNLOAD (--force)"
 		return
 	fi
 
 	# No local index file: must download
 	if [[ ! -s "$index" ]]; then
 		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-		echo "--- ${catalog} v${ver} --- DOWNLOAD (no local index)"
+		echo "  ${_label} DOWNLOAD (no local index)"
 		return
 	fi
 
-	# No saved content layer digest: probe and save it for next time
+	# No saved content layer digest: no baseline to compare → must download.
+	# We can't know if the local index is current without a previous digest.
 	if [[ ! -f "$layer_digest_file" ]]; then
-		if [[ -s "$index" ]]; then
-			local remote_cld
-			remote_cld=$(_get_content_layer_digest "$remote_ref") || remote_cld=""
-			if [[ -n "$remote_cld" ]]; then
-				echo "$remote_cld" > "$layer_digest_file"
-				echo "--- ${catalog} v${ver} --- SKIP (saved content layer digest for next run)"
-				return
-			fi
-			echo "--- ${catalog} v${ver} --- SKIP (local index exists, layer probe failed)"
-			return
-		fi
 		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-		echo "--- ${catalog} v${ver} --- DOWNLOAD (no local index or digest)"
+		echo "  ${_label} DOWNLOAD (no stored digest)"
 		return
 	fi
 
@@ -183,19 +176,19 @@ _check_content_change() {
 	# Probe failed (network/timeout)
 	if [[ -z "$remote_cld" ]]; then
 		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-		echo "--- ${catalog} v${ver} --- DOWNLOAD (layer probe failed)"
+		echo "  ${_label} DOWNLOAD (layer probe failed)"
 		return
 	fi
 
 	# Content layer digest matches: catalog operators haven't changed
 	if [[ "$remote_cld" == "$stored_cld" ]]; then
-		echo "--- ${catalog} v${ver} --- SKIP (content unchanged, base-image-only rebuild)"
+		echo "  ${_label} SKIP (content unchanged)"
 		return
 	fi
 
 	# Content layer changed: real operator updates
 	touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-	echo "--- ${catalog} v${ver} --- DOWNLOAD (catalog content changed)"
+	echo "  ${_label} DOWNLOAD (content changed)"
 }
 
 for ver in "${VERSIONS[@]}"; do
@@ -243,16 +236,18 @@ if [[ ${#needs_download[@]} -gt 0 ]]; then
 		ver="${entry#*:}"
 		remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
 		layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
+		local _label
+		printf -v _label "%-18s  v%-5s" "$catalog" "$ver"
 
-		echo "--- ${catalog} v${ver} ---"
+		echo "  ${_label} ..."
 		if scripts/download-catalog-index.sh "$catalog" "$ver"; then
 			# Save content layer digest for future change detection
 			cld=$(_get_content_layer_digest "$remote_ref") || cld=""
 			[[ -n "$cld" ]] && echo "$cld" > "$layer_digest_file"
-			echo "  OK: downloaded ${catalog} v${ver}"
+			echo "  ${_label} OK"
 			downloaded=$((downloaded + 1))
 		else
-			echo "  FAIL: ${catalog} v${ver}" >&2
+			echo "  ${_label} FAIL" >&2
 			failed+=("${catalog}:${ver}")
 		fi
 	done
@@ -363,12 +358,12 @@ for ver in "${VERSIONS[@]}"; do
 		# Group output by version
 		if [[ "$ver" != "$_prev_ver" ]]; then
 			[[ -n "$_prev_ver" ]] && echo ""
-			printf "  v%-5s" "$ver"
+			printf "  v%-6s" "$ver"
 			_prev_ver="$ver"
 		fi
-		# Short catalog name
+		# Short catalog name, padded for alignment
 		short="${catalog%-operator}"
-		printf "  %s=%d/%d" "$short" "$count" "${expected:-$count}"
+		printf "  %-11s=%3d/%-3d" "$short" "$count" "${expected:-$count}"
 		(( pct < 100 )) && printf " [%d%% names]" "$pct"
 	done
 done
@@ -425,17 +420,6 @@ Refresh operator catalog index files for all supported OCP versions.
 EOF
 )"
 	git push
-
-	if [[ "$do_tag" == true ]]; then
-		local_tag=$(git describe --tags --abbrev=0 2>/dev/null) || true
-		if [[ -n "$local_tag" ]]; then
-			echo "Moving tag ${local_tag} to HEAD..."
-			git tag -f "$local_tag"
-			git push -f origin "$local_tag"
-		else
-			echo "No existing tag found -- skipping --tag"
-		fi
-	fi
 else
 	echo ""
 	echo "Changes detected in ${CATALOGS_DIR}/:"

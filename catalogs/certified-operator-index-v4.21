@@ -33,7 +33,7 @@ digitalai-release-operator                              Digital.ai Release      
 dxoperator                                              DxOperator V1 Legacy                                         alpha
 dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
-eda-k8s-operator                                        eda-openshift-operator                                       stable
+eda-k8s-operator                                        eda-openshift-operator                                       6.0
 edb-hcp-operator                                        EDB Postgres AI                                              innovation
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
@@ -54,6 +54,7 @@ hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric 
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 hulft                                                   HULFT10 for Container Platform                               stable
 iax-webhook-router                                      ITRS Analytics Webhook Router                                stable
+ibm-application-gateway-operator                        IBM Application Gateway Operator                             stable
 ibm-block-csi-operator                                  IBM block storage CSI driver operator                        stable
 ibm-data-reporter-operator                              IBM Data Reporter Operator                                   stable
 ibm-metrics-operator                                    IBM Metrics Operator                                         stable
@@ -69,11 +70,12 @@ ipm-controller                                          Intel® Infrastructure P
 k10-kasten-operator-rhmp                                Veeam Kasten                                                 stable
 k8s-triliovault                                         Trilio for Kubernetes                                        5.3.x
 kedify-agent-helm-operator                              kedify-agent-helm-operator                                   stable
+kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
 kubecost-operator                                       Kubecost                                                     stable
 kubedb-installer                                        KubeDB by AppsCode                                           stable
 kubeturbo-certified                                     Kubeturbo Operator                                           stable
-kurrentdb-operator                                      KurrentDB Operator                                           stable
+kurrentdb-operator                                      KurrentDB Operator                                           stable-v1
 lightbits-operator                                      Lightbits Operator                                           alpha
 linstor-operator                                        LINSTOR Operator                                             stable-v2
 mariadb-enterprise-operator                             MariaDB Enterprise Operator                                  stable
@@ -106,8 +108,8 @@ percona-postgresql-operator-certified                   Percona Operator for Pos
 percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
 percona-server-mysql-operator-certified                 Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator-certified               Percona Operator for MySQL based on Percona XtraDB Cluster   stable
-pg4k-pgd                                                EDB Postgres Distributed for Kubernetes (v2)                 stable
-portworx-certified                                      Portworx Operator                                            stable
+pg4k-pgd                                                EDB Postgres Distributed for Kubernetes                      stable
+portworx-certified                                      Portworx Enterprise                                          stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha
@@ -151,5 +153,6 @@ vast-csi-operator                                       VAST CSI driver operator
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
+visionone-containersecurity                             TrendAI Vision One Container Security                        stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts

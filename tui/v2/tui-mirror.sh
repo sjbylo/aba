@@ -1257,6 +1257,9 @@ mirror_create_bundle() {
 	mirror_dev=$(stat -c %d "$ABA_ROOT/mirror/data" 2>/dev/null)
 
 	if [[ -n "$output_dev" && -n "$mirror_dev" && "$output_dev" == "$mirror_dev" ]]; then
+		local _mount_point
+		_mount_point=$(df --output=target "$output_dir" 2>/dev/null | tail -1)
+
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
 			--yes-label "$TUI2_BTN_LIGHT_BUNDLE" \
 			--no-label "$TUI2_BTN_FULL_BUNDLE" \
@@ -1269,7 +1272,7 @@ mirror_create_bundle() {
 				--yes-label "$TUI2_BTN_CONTINUE" \
 				--no-label "$TUI2_BTN_CANCEL" \
 				--yesno "\Z3Disk Space Consideration\Zn\n\n\
-Bundle and mirror are on the same filesystem.\n\n\
+Bundle and mirror are on the same filesystem (${_mount_point:-unknown}).\n\n\
 Creating a full bundle requires:\n\
   • Mirror image-set archives in mirror/data/\n\
   • Complete bundle copy written to: $bundle_path\n\n\

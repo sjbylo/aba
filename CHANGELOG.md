@@ -7,7 +7,7 @@
 - **Externalized state management (ADR-007)** — Mirror and cluster state persisted to `state.sh` files, enabling state-aware normalization, automatic detection of background-completed clusters, and directory recreation from state.
 - **Pre-built operator catalog indexes** — Ship catalog index files for the latest 6 GA OCP versions, enabling instant operator browsing in the TUI without network access.
 - **Smart `starting_ip` default** — Compute starting IP from the machine network CIDR instead of using a static placeholder.
-- **Content-layer catalog refresh** — `tools/refresh-catalog-indexes.sh` now compares the content layer digest (not the whole image digest) to detect real operator updates and avoid false re-downloads from metadata-only changes.
+- **Smart catalog refresh** — `tools/refresh-catalog-indexes.sh` now compares the actual operator content digest (not the whole image digest) to detect real operator updates and avoid false re-downloads from base-image security rebuilds.
 - **AI/ML operator set** — New `op_sets=ai` option bundles GPU Operator, Node Feature Discovery, SR-IOV, Kueue, cert-manager, and ServiceMesh for AI/ML workloads.
 
 ### Improvements
@@ -45,7 +45,7 @@
 ### Community
 
 - **Mateusz Slugocki** (@mateuszslugocki) — vSphere preflight validation: 42 commits implementing multi-layer connectivity, authentication, resource existence, and privilege verification checks with comprehensive E2E test coverage.
-- **Kamil Blaz** (@KamilBlaz) — Mermaid workflow diagram (#29).
+- **Kamil Blaz** (@KamilBlaz) — Mermaid workflow diagram (#29), VM provider refactor with explicit KVM/vSphere contract.
 
 ---
 

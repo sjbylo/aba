@@ -49,10 +49,11 @@ digitalai-release-operator                              Digital.ai Release      
 dxoperator                                              DxOperator V1 Legacy                                         alpha
 dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
-eda-k8s-operator                                        eda-openshift-operator                                       stable
+eda-k8s-operator                                        eda-openshift-operator                                       6.0
 edb-hcp-operator                                        EDB Postgres AI                                              alpha
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
+eqube-operator                                          eQube Operator                                               stable
 exascaler-csi-driver-operator                           EXAScaler CSI File Driver                                    alpha
 f5-ai-security-operator                                 F5 AI Security Operator                                      stable
 f5-bigip-ctlr-operator                                  F5 Container Ingress Services                                stable
@@ -147,7 +148,7 @@ kubecost-operator                                       Kubecost                
 kubedb-installer                                        KubeDB by AppsCode                                           stable
 kubemq-operator-marketplace                             Kubemq Enterprise Operator                                   alpha
 kubeturbo-certified                                     Kubeturbo Operator                                           stable
-kurrentdb-operator                                      KurrentDB Operator                                           stable
+kurrentdb-operator                                      KurrentDB Operator                                           stable-v1
 lenovo-locd-operator                                    lenovo-locd-operator                                         alpha
 lightbits-operator                                      Lightbits Operator                                           alpha
 linstor-operator                                        LINSTOR Operator                                             stable-v2
@@ -189,9 +190,9 @@ percona-postgresql-operator-certified                   Percona Operator for Pos
 percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
 percona-server-mysql-operator-certified                 Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator-certified               Percona Operator for MySQL based on Percona XtraDB Cluster   stable
-pg4k-pgd                                                EDB Postgres Distributed for Kubernetes (v2)                 stable
+pg4k-pgd                                                EDB Postgres Distributed for Kubernetes                      stable
 pmem-csi-operator-os                                    Operator for PMEM-CSI driver                                 stable
-portworx-certified                                      Portworx Operator                                            stable
+portworx-certified                                      Portworx Enterprise                                          stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha
@@ -229,21 +230,22 @@ sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Co
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
-tawon-operator                                          Tawon                                                        candidate-v3
+tawon-operator                                          Tawon                                                        fast-v3
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.8
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.40
 timemachine-operator                                    Time Machine Operator                                        alpha
 trident-operator                                        NetApp Trident                                               stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    alpha
-uma-operator                                            DX APM Universal Monitoring Agent                            alpha
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     alpha
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
+uma-operator                                            DX APM Universal Monitoring Agent                            beta
+uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     beta
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 vfunction-server-operator                               vFunction Operator                                           stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
+visionone-containersecurity                             TrendAI Vision One Container Security                        stable
 webotx-operator                                         WebOTX Operator for Kubernetes                               stable
 webserver-operator                                      WebServer Operator                                           stable
 xcrypt-operator                                         Zettaset XCrypt Operator                                     alpha
