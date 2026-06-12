@@ -95,14 +95,73 @@ pool_registry_purge_extras() {
 
     if [[ $deleted -gt 0 ]]; then
         echo "  Purged $deleted manifest(s) from non-ISC repos ($kept repos kept)"
-        echo "  Running garbage collection (registry will restart) ..."
-        podman stop "$CONTAINER_NAME" >/dev/null
-        podman run --rm \
-            -v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
-            docker.io/library/registry:latest \
-            garbage-collect --delete-untagged /etc/distribution/config.yml >/dev/null 2>&1
-        podman start "$CONTAINER_NAME" >/dev/null
-        echo "  GC complete -- $(du -sh "${POOL_REG_DIR}/data" | awk '{print $1}') in data dir"
+        _pool_registry_gc
+    fi
+}
+
+_pool_registry_gc() {
+    echo "  Running garbage collection (registry will restart) ..."
+    podman stop "$CONTAINER_NAME" >/dev/null
+    podman run --rm \
+        -v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
+        docker.io/library/registry:latest \
+        garbage-collect --delete-untagged /etc/distribution/config.yml >/dev/null 2>&1
+    podman start "$CONTAINER_NAME" >/dev/null
+    echo "  GC complete -- $(du -sh "${POOL_REG_DIR}/data" | awk '{print $1}') in data dir"
+}
+
+# Prune old OCP release versions from the pool registry.
+# oc-mirror is additive -- it never removes images from previous syncs,
+# so blobs from older OCP versions accumulate across test runs and eat disk.
+# This deletes release-image tags AND their component images for any version
+# other than $keep_ver, then garbage-collects the orphaned blobs.
+pool_registry_prune_old_releases() {
+    local _host="$1" _keep_ver="$2"
+    local _reg="https://${_host}:${REG_PORT}"
+    local _auth="${REG_USER}:${REG_PW}"
+    local _arch
+    _arch="$(uname -m)"
+
+    local _total_deleted=0
+
+    # Prune both repos: release-images (manifest lists) and release (components)
+    local _repo
+    for _repo in "${REG_PATH#/}/openshift/release-images" "${REG_PATH#/}/openshift/release"; do
+        local tags
+        tags=$(curl -sk -u "$_auth" "${_reg}/v2/${_repo}/tags/list" 2>/dev/null \
+            | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tags") or []; [print(x) for x in t]' 2>/dev/null)
+        [[ -z "$tags" ]] && continue
+
+        local deleted=0
+        for tag in $tags; do
+            [[ "$tag" == "${_keep_ver}-${_arch}" ]] && continue
+            [[ "$tag" == "${_keep_ver}-${_arch}-"* ]] && continue
+            [[ "$tag" == sha256-* ]] && continue
+
+            local digest
+            digest=$(curl -skI -u "$_auth" \
+                -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+                -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+                -H "Accept: application/vnd.oci.image.index.v1+json" \
+                -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+                "${_reg}/v2/${_repo}/manifests/${tag}" 2>/dev/null \
+                | grep -i docker-content-digest | awk '{print $2}' | tr -d '\r\n')
+            [[ -z "$digest" ]] && continue
+
+            local rc
+            rc=$(curl -sk -u "$_auth" -X DELETE \
+                "${_reg}/v2/${_repo}/manifests/${digest}" \
+                -o /dev/null -w "%{http_code}" 2>/dev/null)
+            [[ "$rc" == "202" ]] && deleted=$((deleted + 1))
+        done
+
+        [[ $deleted -gt 0 ]] && echo "  Pruned $deleted old tag(s) from ${_repo##*/}"
+        _total_deleted=$((_total_deleted + deleted))
+    done
+
+    if [[ $_total_deleted -gt 0 ]]; then
+        echo "  Pruned $_total_deleted old release tag(s) total"
+        _pool_registry_gc
     fi
 }
 
@@ -251,6 +310,7 @@ fi
 if curl --retry 3 -sfk -o /dev/null -u "${REG_USER}:${REG_PW}" "https://${reg_host}:${REG_PORT}/v2/"; then
     echo "[1b/4] Checking for leftover repos from previous test suites ..."
     pool_registry_purge_extras "$reg_host"
+    pool_registry_prune_old_releases "$reg_host" "$version"
 fi
 
 # --- Step 2: Merge auth (pull-secret + local registry creds) ----------------
