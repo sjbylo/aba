@@ -42,6 +42,7 @@ plan_tests \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
     "Bare-metal: ISO simulation" \
+    "Bare-metal: full OOB SNO install" \
     "Cleanup: delete clusters and uninstall mirrors"
 
 suite_begin "mirror-sync"
@@ -278,6 +279,8 @@ e2e_run "Set reg_path=my/path" "aba -d mirror --reg-path my/path"
 e2e_run "Set reg_user=myuser" "aba -d mirror --reg-user myuser"
 e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
 e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
+e2e_run "Override ops in mirror.conf (exercises mirror.conf ops override)" \
+    "sed -i '/^#ops=/c\\ops=web-terminal' mirror/mirror.conf"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 e2e_run "Clean mirror working state" "aba -d mirror clean"
@@ -346,6 +349,86 @@ e2e_run "Second aba install (creates ISO, stops for server boot)" \
     "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
 e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
+e2e_run "Clean standard cluster dir (2-step done)" "rm -rf $STANDARD"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
+
+test_end
+
+# ============================================================================
+# 9. Bare-metal: full 3-step OOB SNO install
+#
+#    Full BM install using an out-of-band VMware VM to simulate real hardware.
+#    Uses the extracted vmp_* helpers from scripts/vm-vmw.sh for VM lifecycle.
+#
+#    3-step flow:
+#      1st `aba install` -> agent configs + .bm-message
+#      2nd `aba install` -> ISO          + .bm-nextstep
+#      Upload ISO + create OOB VM + boot
+#      3rd `aba install` -> wait-agent-up + monitor-install
+# ============================================================================
+test_begin "Bare-metal: full OOB SNO install"
+
+SNO_BM="${SNO}-bm"
+_BM_MAC="00:50:56:BE:E0:01"
+
+e2e_run "Ensure platform=bm" "aba --platform bm"
+e2e_run "Clean any leftover $SNO_BM cluster dir" "rm -rf $SNO_BM"
+e2e_add_to_cluster_cleanup "$PWD/$SNO_BM"
+
+e2e_run "Create SNO-BM cluster.conf with explicit macs.conf" \
+    "aba cluster -n $SNO_BM -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run "Write BM MAC to macs.conf" \
+    "echo '$_BM_MAC' > $SNO_BM/macs.conf"
+
+# Phase 1: agent configs
+e2e_run "BM Phase 1: generate agent configs" \
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase1.out && grep 'Check & edit' /tmp/bm3-phase1.out"
+e2e_run "Verify .bm-message exists" "test -f $SNO_BM/.bm-message"
+
+# Phase 2: ISO
+e2e_run "BM Phase 2: generate ISO" \
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase2.out && grep 'Boot your servers' /tmp/bm3-phase2.out"
+e2e_run "Verify ISO created" "ls -l $SNO_BM/iso-agent-based/agent.*.iso"
+
+# OOB VM creation using extracted helpers.
+# e2e_run evals in $HOME/aba (the aba workdir), so scripts/ is directly accessible.
+# Each e2e_run command runs in a subshell; source the helpers inside each one.
+_bm_iso_remote="images/agent-${SNO_BM}.iso"
+_bm_vm_name="${SNO_BM}-master-0"
+
+e2e_run "Upload BM ISO to datastore" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_upload_iso $SNO_BM/iso-agent-based/agent.*.iso \$GOVC_DATASTORE '$_bm_iso_remote'"
+
+e2e_run "Create OOB VM for BM SNO" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     _folder=\${VC_FOLDER:-}; [ -n \"\${VC:-}\" ] && _folder=\"\$VC_FOLDER/$SNO_BM\"; \
+     [ -n \"\${VC:-}\" ] && scripts/vmw-create-folder.sh \"\$_folder\"; \
+     vmp_create_vm '$_bm_vm_name' 16 32 '$_BM_MAC' \$GOVC_DATASTORE \$GOVC_NETWORK \"\$_folder\" false"
+
+e2e_run "Attach ISO to OOB VM" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_attach_iso '$_bm_vm_name' \$GOVC_DATASTORE '$_bm_iso_remote'"
+
+e2e_run "Power on OOB VM" \
+    "source scripts/include_all.sh && source <(normalize-vmware-conf) && govc vm.power -on '$_bm_vm_name'"
+
+# Phase 3: monitor install
+e2e_run -r 2 30 "BM Phase 3: monitor cluster install" \
+    "aba --dir $SNO_BM install"
+e2e_run "Show cluster operator status" "aba --dir $SNO_BM run"
+e2e_wait_cluster_ready "$SNO_BM"
+e2e_diag "Show cluster operators" "aba --dir $SNO_BM run --cmd 'oc get co'"
+
+# Cleanup OOB VM
+e2e_run "Destroy OOB VM" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_destroy '$_bm_vm_name'"
+e2e_run "Remove vCenter folder for BM OOB (if vCenter)" \
+    "source scripts/include_all.sh && source <(normalize-vmware-conf) && \
+     [ -n \"\${VC:-}\" ] && govc object.destroy \"\$VC_FOLDER/$SNO_BM\" || true"
+e2e_run "Clean BM cluster dir" "rm -rf $SNO_BM"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO_BM"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
