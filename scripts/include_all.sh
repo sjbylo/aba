@@ -1027,14 +1027,23 @@ normalize-vmware-conf()
 
 	vars=$(_normalize_export < vmware.conf)
 	eval "$vars"
-	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
-	# FIXME: Is this the right place to check?!
+
+	# Temporarily unset datacenter/cluster before ESXi detection.
+	# Template defaults (GOVC_DATACENTER=Datacenter, GOVC_CLUSTER=Cluster) cause
+	# 'govc about' to fail on standalone ESXi where these objects don't exist,
+	# preventing the HostAgent grep from ever matching.
+	local _saved_dc="${GOVC_DATACENTER:-}" _saved_cl="${GOVC_CLUSTER:-}"
+	unset GOVC_DATACENTER GOVC_CLUSTER
+
 	aba_debug "Running: govc about (ESXi detection)"
-        if govc about | grep -q "^API type:.*HostAgent$"; then
+	if govc about 2>/dev/null | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
 		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
 		echo export VC=
 	else
+		# Restore for vCenter path
+		GOVC_DATACENTER="$_saved_dc"
+		GOVC_CLUSTER="$_saved_cl"
 		echo "$vars"
 		echo export VC=1
 		# Resolve $GOVC_DATACENTER and $GOVC_CLUSTER placeholders in GOVC_RESOURCE_POOL.
