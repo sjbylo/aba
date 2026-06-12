@@ -131,6 +131,25 @@ maintains its own `mirror.conf` with site-specific registry settings
 (`reg_host`, `reg_port`, credentials). Transferring the connected side's
 `mirror.conf` would overwrite the disconnected side's registry configuration.
 
+### Bundle ISC protection
+
+The ISC (`mirror/data/imageset-config.yaml`) is the contract between save and load.
+It encodes channel, version range, and operators -- values that may differ between
+connected and disconnected configs (e.g. `ocp_version_target` lives in `mirror.conf`
+which is excluded from bundles). ISC generation is deterministic: same inputs produce
+the same output. The bug only manifests when ISC-affecting config values on the save
+side don't survive the bundle transfer.
+
+**Invariant**: A bundled ISC must not be regenerated before `aba load` completes.
+
+Mechanism:
+- `backup.sh` touches the ISC before tar creation (makes it newer than `.created`).
+  The existing regeneration guard in `reg-create-imageset-config.sh` then skips it.
+- If the ISC was user-edited before bundling, `backup.sh` creates `data/.isc-pinned`.
+- After successful load: unlock (touch `.created`) unless `.isc-pinned` exists,
+  then remove `.bundle` and `.isc-pinned`. The repo becomes a normal disconnected tree.
+- Source repo is restored after tar creation (dev workflow unaffected).
+
 ---
 
 ## Config as Single Source of Truth
@@ -352,6 +371,8 @@ remove these -- only Makefiles may.
 | `.bootstrap-complete` | cluster/ | Bootstrap phase completed |
 | `.preflight-done` | cluster/ | Preflight checks passed |
 | `.bundle` | repo root | Marks this tree as an extracted bundle (set by `backup.sh`) |
+| `.isc-pinned` | mirror/data/ | ISC was user-edited before bundling -- don't auto-unlock after load |
+| `.created` | mirror/data/ | Timestamp sentinel for ISC generation (ISC newer = skip regen) |
 
 ---
 

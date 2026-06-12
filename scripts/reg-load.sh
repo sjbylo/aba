@@ -1,4 +1,18 @@
-#!/bin/bash 
+#!/bin/bash
+# INTENT:      Load saved images from mirror/data/ into the mirror registry via oc-mirror
+# CALLED BY:   mirror/Makefile (load target)
+# CWD:         mirror/ (oc-mirror runs from mirror/data/)
+# ARGS:        [retry_count] number of retries on failure (default: 1 attempt)
+# REQUIRES:    oc-mirror binary, mirror_*.tar in data/, data/imageset-config.yaml,
+#              registry installed and reachable (reg_host:reg_port from mirror.conf)
+# PRODUCES:    Images pushed to registry; data/working-dir/ populated by oc-mirror
+# SIDE EFFECTS:
+#   - After successful load: touches data/.created (unlocks ISC) unless data/.isc-pinned exists
+#   - Removes ../.bundle and data/.isc-pinned (bundle phase complete, repo becomes normal)
+#   - Sets TMPDIR and OC_MIRROR_CACHE to data_dir if configured
+# IDEMPOTENT:  Yes (oc-mirror skips images already present in the registry)
+# ENV:         INFO_ABA (default: 1 when called from make)
+
 # Load the registry with images from the local disk
 
 # CWD is set by mirror/Makefile to the correct mirror directory
@@ -110,6 +124,15 @@ base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://
 if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
+
+# Bundle phase complete: unlock ISC so future config changes trigger regeneration.
+# touch .created makes it newer than ISC → reg-create-imageset-config.sh will regenerate.
+# Skip if .isc-pinned exists — user hand-edited the ISC and wants it preserved permanently.
+# Remove .bundle and .isc-pinned: this repo is now a normal disconnected tree.
+if [ ! -f data/.isc-pinned ]; then
+	touch data/.created
+fi
+rm -f ../.bundle data/.isc-pinned
 
 echo
 aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"

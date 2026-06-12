@@ -1,4 +1,18 @@
-#!/bin/bash 
+#!/bin/bash
+# INTENT:      Generate data/imageset-config.yaml for oc-mirror from config files
+# CALLED BY:   mirror/Makefile (data/imageset-config.yaml target)
+# CWD:         mirror/
+# REQUIRES:    aba.conf (ocp_version, ocp_channel, op_sets, ops),
+#              mirror.conf (optional ocp_version_target, op_sets/ops overrides),
+#              .index/ catalogs (for operator channel resolution)
+# PRODUCES:    data/imageset-config.yaml, touches data/.created after generation
+# GUARDS:
+#   - Skips regeneration if ISC is strictly newer than data/.created (user/bundle ownership)
+#   - In bundle mode (.bundle exists): prints info message explaining ISC is preserved
+#   - In non-bundle mode: prints warning with instructions to force regeneration
+# IDEMPOTENT:  Yes (same config inputs produce same ISC; user edits are preserved)
+# ENV:         INFO_ABA (default: 1 when called from make)
+
 # Generate the imageset configuration file for oc-mirror (used by save, sync, and load workflows).
 
 # CWD is set by mirror/Makefile to the correct mirror directory
@@ -73,6 +87,14 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 	aba_info "For advanced customization, edit mirror/data/imageset-config.yaml directly (your edits will be preserved)."
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"
-	aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
-		"To force regeneration: rm mirror/data/.created && aba -d mirror imagesetconf"
+	if [ -f ../.bundle ]; then
+		if [ -f data/.isc-pinned ]; then
+			aba_info "Preserving user-customized imageset-config from bundle (pinned)."
+		else
+			aba_info "Preserving bundled imageset-config (matches saved images). Will unlock after 'aba load'."
+		fi
+	else
+		aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
+			"To force regeneration: rm mirror/data/.created && aba -d mirror imagesetconf"
+	fi
 fi
