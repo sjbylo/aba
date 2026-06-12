@@ -122,10 +122,9 @@ bundles/v2/work
 rpms/*.rpm
 
 # -----------------------------------------------------------------------------
-# ai/ directory (session artifacts, not tracked except SESSION_STATE.md)
+# ai/ directory (session artifacts, never tracked)
 # -----------------------------------------------------------------------------
-ai/*
-!ai/SESSION_STATE.md
+ai/
 
 # -----------------------------------------------------------------------------
 # Editor / IDE / tooling
