@@ -81,6 +81,8 @@ cli/govc
 cli/.*installed
 cli/*.sha256
 cli/scripts
+cli/.tmp.*
+cli/.*.tmp
 
 # -----------------------------------------------------------------------------
 # test/ directory
