@@ -191,8 +191,18 @@ e2e_run "Generate imageset-config for ops=all" "aba -d mirror imagesetconf"
 # Verify: the YAML must contain the redhat-operator-index catalog entry
 e2e_run "Verify redhat-operator-index in imageset YAML" \
     "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
+e2e_run "Verify platform images present in ISC (excl_platform=false)" \
+    "grep -q '^ *platform:' mirror/data/imageset-config.yaml"
 
-# TODO: Replace with a proper verification for op-sets=all (backlog item)
+# Exercise excl_platform=true: platform images should be commented out
+e2e_run "Set excl_platform=true" "aba --excl-platform"
+e2e_run -q "Clean old imageset YAML" "rm -f mirror/data/imageset-config.yaml"
+e2e_run "Regenerate ISC with excl_platform" "aba -d mirror imagesetconf"
+e2e_run "Verify platform images excluded from ISC" \
+    "grep -q '^#.*platform:' mirror/data/imageset-config.yaml"
+e2e_run "Verify operators still present in ISC" \
+    "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
+e2e_run -q "Restore excl_platform=false" "aba --excl-platform false"
 
 # Restore original operator settings so we leave things clean
 e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"

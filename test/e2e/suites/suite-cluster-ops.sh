@@ -307,6 +307,12 @@ e2e_run "Set verify_conf=conf" \
     "aba --verify conf"
 e2e_run "Preflight must pass with verify_conf=conf despite IP conflict" \
     "aba --dir $SNO_DUP preflight"
+
+e2e_run "Set verify_conf=off (skips ALL preflight)" \
+    "aba --verify off"
+e2e_run "ISO gen must succeed with verify=off despite IP conflict" \
+    "aba --dir $SNO_DUP iso"
+
 e2e_run "Restore verify_conf=all" \
     "aba --verify all"
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"

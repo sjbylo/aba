@@ -31,6 +31,7 @@ NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
+NAMED_MIRROR="e2e-vmw-mirror"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -79,10 +80,12 @@ e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for VMware" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Override channel to candidate (exercises non-default channel)" \
+    "aba --channel candidate"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: channel=candidate" "grep ^ocp_channel=candidate aba.conf"
 e2e_run "Verify aba.conf: version format" \
     "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
@@ -97,26 +100,26 @@ e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 test_end
 
 # ============================================================================
-# 3. Configure mirror to use local pre-populated registry
+# 3. Configure named mirror to use local pre-populated registry
 # ============================================================================
 test_begin "Setup: configure mirror for local registry"
 
-e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set reg_host to local registry" \
-    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
-e2e_run "Clear reg_ssh_key (local registry)" \
-    "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
-e2e_run "Clear reg_ssh_user (local registry)" \
-    "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
-e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
+e2e_run "Create named mirror (exercises mirror_name through full pipeline)" \
+    "aba mirror --name $NAMED_MIRROR || true"
+e2e_run "Assert named mirror directory exists" \
+    "test -d $NAMED_MIRROR && test -f $NAMED_MIRROR/mirror.conf"
+e2e_add_to_mirror_cleanup "$PWD/$NAMED_MIRROR"
 
 e2e_run "Generate pool-registry pull secret via aba" \
-    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
+    "printf 'init\np4ssw0rd\n' | aba -d $NAMED_MIRROR password && cp ~/.aba/mirror/$NAMED_MIRROR/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
-e2e_run "Register pool registry" \
-    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Register pool registry to named mirror" \
+    "aba -d $NAMED_MIRROR register --reg-host ${CON_HOST} --reg-port 8443 \
+     --pull-secret-mirror /tmp/pool-reg-pull-secret.json \
+     --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
-e2e_run "Verify mirror registry access" "aba -d mirror verify"
+e2e_run "Verify named mirror registry access" "aba -d $NAMED_MIRROR verify"
+e2e_diag "Show named mirror.conf" "grep -E '^\w' $NAMED_MIRROR/mirror.conf"
 
 test_end
 
@@ -125,7 +128,7 @@ test_end
 # ============================================================================
 test_begin "Setup: sync images to registry"
 
-e2e_run -r 3 2 "Sync images to local registry" "aba -d mirror sync --retry"
+e2e_run -r 3 2 "Sync images to named mirror" "aba -d $NAMED_MIRROR sync --retry"
 
 test_end
 
@@ -141,8 +144,10 @@ e2e_run "Delete any leftover $COMPACT cluster" \
     "_e2e_delete_leftover_cluster $COMPACT"
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
 
-e2e_run "Create compact cluster.conf" \
-    "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
+e2e_run "Create compact cluster.conf (data_disk, prefixes, named mirror)" \
+    "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) \
+     --data-disk 300 --host-prefix 20 --master-prefix xxx --worker-prefix yyy \
+     --mirror-name $NAMED_MIRROR --step cluster.conf"
 e2e_run "Set mac_prefix for $COMPACT (VMware range, randomized)" \
     "sed -i 's#mac_prefix=.*#mac_prefix=00:50:56:1x:xx:#g' $COMPACT/cluster.conf"
 e2e_diag "Show compact cluster.conf" "grep -E '^\w' $COMPACT/cluster.conf"
@@ -184,8 +189,15 @@ e2e_run "Delete any leftover $SNO cluster" \
     "_e2e_delete_leftover_cluster $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
-e2e_run -r 2 10 "Create VMs and start install" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step refresh"
+e2e_run "Copy SSH key to alternate name (exercises ssh_key_file)" \
+    "cp -f ~/.ssh/id_rsa ~/.ssh/e2e_alt_key && cp -f ~/.ssh/id_rsa.pub ~/.ssh/e2e_alt_key.pub"
+e2e_run "Create SNO cluster.conf with alt SSH key and named mirror" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) \
+     --ssh-key ~/.ssh/e2e_alt_key --mirror-name $NAMED_MIRROR --step cluster.conf"
+e2e_run "Verify ssh_key_file set" "grep 'ssh_key_file=~/.ssh/e2e_alt_key' $SNO/cluster.conf"
+e2e_run "Verify mirror_name set" "grep 'mirror_name=$NAMED_MIRROR' $SNO/cluster.conf"
+e2e_run -r 2 10 "Install SNO (alt SSH key + named mirror)" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 
 # Wait for bootstrap only (not full install-complete)
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
@@ -316,8 +328,10 @@ e2e_run "Delete compact cluster if leftover" \
     "_e2e_delete_leftover_cluster $COMPACT"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
-e2e_run "Unregister pool registry" \
-    "aba -d mirror unregister"
+e2e_run "Unregister named mirror" \
+    "aba -d $NAMED_MIRROR unregister"
+e2e_remove_from_mirror_cleanup "$PWD/$NAMED_MIRROR"
+e2e_run "Remove named mirror directory" "rm -rf $NAMED_MIRROR"
 
 test_end
 
