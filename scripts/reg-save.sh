@@ -119,6 +119,7 @@ if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; the
 	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
 	aba_info_ok "  mirror/data/imageset-config.yaml"
 	aba_info_ok "  mirror/data/mirror_*.tar"
+	aba_info_ok "  cli/openshift-*-${ocp_version_target}*  (optional, for fresh install at target version)"
 	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"
 else
 	aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
