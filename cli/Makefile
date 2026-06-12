@@ -102,15 +102,30 @@ platform := $(strip $(shell echo $(platform)))
 # OCP major version (e.g. "4" from "4.21.10") for CDN paths (openshift-v4/, openshift-v5/, etc.)
 ocp_major := $(firstword $(subst ., ,$(ocp_version)))
 
-# Verify SHA256 checksum of a downloaded file.
-# Usage: $(call verify-sha256,FILE,SHA256SUM_URL)
-# On failure: removes the file so Make retries from scratch next time.
-define verify-sha256
-	@echo -n "[ABA] Verifying checksum for $(1): "
-	@curl -f --retry 8 -sL -o $(1).sha256 $(2) && \
-		grep "  $(notdir $(1))$$" $(1).sha256 | sha256sum --check --status && \
-		echo "valid!" || \
-		{ echo "INVALID or checksum unavailable! Removing $(1)."; rm -f $(1) $(1).sha256; exit 1; }
+# Atomic download with retry: curl→tmp, verify sha256, retry once on ANY failure, mv→target.
+# Usage: $(call atomic-download,DOWNLOAD_URL,SHA256SUM_URL)
+# Uses $@ as the target name (for tmp file naming and sha256 lookup).
+# PID in temp name prevents collision between concurrent make processes.
+# On curl failure or checksum mismatch: retries once. On second failure: exits 1.
+define atomic-download
+	@_tmp=.$@.tmp.$$$$; \
+	rm -f $$_tmp $$_tmp.sha256; \
+	for _try in 1 2; do \
+		curl -f --retry 8 $(CURL_PROGRESS) -o $$_tmp -L $(1) || \
+			{ echo "[ABA] Download failed for $@"; rm -f $$_tmp; \
+			  if [ "$$_try" = "2" ]; then exit 1; fi; \
+			  echo "[ABA] Retrying download of $@..."; continue; }; \
+		echo -n "[ABA] Verifying checksum for $@: "; \
+		curl -f --retry 8 -sL -o $$_tmp.sha256 $(2) && \
+		_expected=$$(grep "  $@$$" $$_tmp.sha256 | awk '{print $$1}') && \
+		_actual=$$(sha256sum $$_tmp | awk '{print $$1}') && \
+		[ -n "$$_expected" ] && [ "$$_expected" = "$$_actual" ] && \
+		echo "valid!" && rm -f $$_tmp.sha256 && break || \
+		{ echo "FAILED!"; rm -f $$_tmp $$_tmp.sha256; \
+		  if [ "$$_try" = "2" ]; then echo "[ABA] Checksum INVALID for $@!"; exit 1; fi; \
+		  echo "[ABA] Retrying download of $@..."; }; \
+	done; \
+	mv $$_tmp $@
 endef
 
 
@@ -226,23 +241,21 @@ out-download-no-version:
 # oc tarballs: download both rhel9 and rhel8 variants.
 # On download failure (e.g. 404 for an older rhel variant), create an empty
 # placeholder so Make doesn't retry. Bundles need both variants.
+# Special: these use HEAD check first, and create empty placeholder on 404 (not a hard error).
 $(rhel9_oc_tar_file):
-	@curl -sfkLI $(rhel9_oc_url) >/dev/null
+	@curl -sfkLI $(rhel9_oc_url) >/dev/null || { echo "[ABA] $@ not available (404)"; > $@; exit 0; }
 	@echo [ABA] Downloading $(rhel9_oc_url)
-	curl -f $(CURL_PROGRESS) -OL $(rhel9_oc_url) || { echo [ABA] $(rhel9_oc_tar_file) failed download; > $(rhel9_oc_tar_file); }
-	$(call verify-sha256,$(rhel9_oc_tar_file),$(openshift_install_url)/sha256sum.txt)
+	$(call atomic-download,$(rhel9_oc_url),$(openshift_install_url)/sha256sum.txt)
 
 $(rhel8_oc_tar_file):
-	@curl -sfkLI $(rhel8_oc_url) >/dev/null
+	@curl -sfkLI $(rhel8_oc_url) >/dev/null || { echo "[ABA] $@ not available (404)"; > $@; exit 0; }
 	@echo [ABA] Downloading $(rhel8_oc_url)
-	curl -f $(CURL_PROGRESS) -OL $(rhel8_oc_url) || { echo [ABA] $(rhel8_oc_tar_file) failed download; > $(rhel8_oc_tar_file); }
-	$(call verify-sha256,$(rhel8_oc_tar_file),$(openshift_install_url)/sha256sum.txt)
+	$(call atomic-download,$(rhel8_oc_url),$(openshift_install_url)/sha256sum.txt)
 
 # openshift-install tarball
 $(openshift_install_file):
 	@echo [ABA] Downloading $(openshift_install_url)/$(openshift_install_file)
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(openshift_install_url)/$(openshift_install_file)
-	$(call verify-sha256,$(openshift_install_file),$(openshift_install_url)/sha256sum.txt)
+	$(call atomic-download,$(openshift_install_url)/$(openshift_install_file),$(openshift_install_url)/sha256sum.txt)
 
 # oc-mirror pin: stable-4.21 is intentional -- new oc-mirror versions must be tested before adoption.
 # Hardcoded to openshift-v4 (NOT parameterized) because oc-mirror is version-independent
@@ -252,22 +265,19 @@ oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clien
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz:
-	@echo [ABA] Downloading $(oc_mirror_base_url)/oc-mirror.tar.gz
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/oc-mirror.tar.gz
-	$(call verify-sha256,oc-mirror.tar.gz,$(oc_mirror_sha256sum))
+	@echo [ABA] Downloading $(oc_mirror_base_url)/$@
+	$(call atomic-download,$(oc_mirror_base_url)/$@,$(oc_mirror_sha256sum))
 
 oc-mirror.rhel9.tar.gz:
-	@echo [ABA] Downloading $(oc_mirror_base_url)/oc-mirror.rhel9.tar.gz
-	curl -f --retry 8 $(CURL_PROGRESS) -OL $(oc_mirror_base_url)/oc-mirror.rhel9.tar.gz
-	$(call verify-sha256,oc-mirror.rhel9.tar.gz,$(oc_mirror_sha256sum))
+	@echo [ABA] Downloading $(oc_mirror_base_url)/$@
+	$(call atomic-download,$(oc_mirror_base_url)/$@,$(oc_mirror_sha256sum))
 
 # govc tarball (from GitHub, not mirror.openshift.com)
 govc_url = https://github.com/vmware/govmomi/releases/latest/download
 
 $(govc_tar_file):
-	@echo [ABA] Downloading $(govc_url)/$(govc_tar_file)
-	curl -f --retry 8 -sL $(CURL_PROGRESS) -O "$(govc_url)/$(govc_tar_file)"
-	$(call verify-sha256,$(govc_tar_file),$(govc_url)/checksums.txt)
+	@echo [ABA] Downloading $(govc_url)/$@
+	$(call atomic-download,$(govc_url)/$@,$(govc_url)/checksums.txt)
 
 # Butane binary is a shared client tool, hosted under openshift-v4/clients/ regardless of OCP major version
 butane_binary_url = https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest
@@ -276,14 +286,18 @@ butane_binary_url_sha256sum = $(butane_binary_url)/sha256sum.txt
 
 $(butane_binary_file):
 	@echo [ABA] Downloading $(butane_binary_file_url)
-	curl -f --retry 8 $(CURL_PROGRESS) -sL -o $(butane_binary_file) --connect-timeout 30 $(butane_binary_file_url)
-	chmod +x $(butane_binary_file)
-	$(call verify-sha256,$(butane_binary_file),$(butane_binary_url_sha256sum))
+	$(call atomic-download,$(butane_binary_file_url),$(butane_binary_url_sha256sum))
+	@chmod +x $@
 
 
 ########################################################################
 ##@ Install Targets (Extract) — tarball as prerequisite, simple extraction
 ########################################################################
+
+# All extraction targets use atomic pattern: extract→tmpdir, validate, mv→target.
+# Each process extracts to its own temp dir (.tmp.XXXXXX in CWD) — no collision
+# between concurrent make processes. The target file appears atomically via mv (rename).
+# CWD is used instead of /tmp to avoid filling /tmp with large binaries.
 
 # oc: extract from the tarball matching this host's RHEL version.
 # Self-healing: if tarball is corrupt, delete it and re-download.
@@ -292,11 +306,15 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 
 ~/bin/oc: .init $(local_oc_tar_file) | ~/bin
 	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
-	tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || \
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td -xmzf $(local_oc_tar_file) oc kubectl || \
 		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_tar_file)"; \
-		  rm -f $(local_oc_tar_file); $(MAKE) $(local_oc_tar_file); \
-		  tar -C ~/bin -xmzf $(local_oc_tar_file) oc kubectl || exit 1; }
-	~/bin/oc --help >/dev/null 2>&1
+		  rm -rf $$_td; rm -f $(local_oc_tar_file); $(MAKE) $(local_oc_tar_file); \
+		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
+		  tar -C $$_td -xmzf $(local_oc_tar_file) oc kubectl || { rm -rf $$_td; exit 1; }; }; \
+	$$_td/oc --help >/dev/null 2>&1 || { echo [ABA] "Error: oc binary invalid!"; rm -rf $$_td; exit 1; }; \
+	mv $$_td/oc $@ && mv $$_td/kubectl ~/bin/kubectl; \
+	rm -rf $$_td
 
 # openshift-install: extract from tarball.
 .PHONY: openshift-install
@@ -304,11 +322,15 @@ openshift-install: ~/bin/openshift-install  ## Install openshift-install into ~/
 
 ~/bin/openshift-install: .init $(openshift_install_file) | ~/bin
 	@echo [ABA] Extracting $(openshift_install_file) to ~/bin/openshift-install
-	tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || \
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td -xmzf $(openshift_install_file) openshift-install || \
 		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(openshift_install_file)"; \
-		  rm -f $(openshift_install_file); $(MAKE) $(openshift_install_file); \
-		  tar -C ~/bin -xmzf $(openshift_install_file) openshift-install || exit 1; }
-	~/bin/openshift-install --help >/dev/null || { echo [ABA] "Error: file ~/bin/openshift-install invalid!"; exit 1; }
+		  rm -rf $$_td; rm -f $(openshift_install_file); $(MAKE) $(openshift_install_file); \
+		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
+		  tar -C $$_td -xmzf $(openshift_install_file) openshift-install || { rm -rf $$_td; exit 1; }; }; \
+	$$_td/openshift-install --help >/dev/null || { echo [ABA] "Error: openshift-install binary invalid!"; rm -rf $$_td; exit 1; }; \
+	mv $$_td/openshift-install $@; \
+	rm -rf $$_td
 
 # oc-mirror: extract from the tarball matching this host's RHEL version.
 .PHONY: oc-mirror
@@ -316,8 +338,15 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 
 ~/bin/oc-mirror: .init $(local_oc_mirror_tar) | ~/bin
 	@echo [ABA] Extracting $(local_oc_mirror_tar) to ~/bin/oc-mirror
-	tar -C ~/bin -xmzf $(local_oc_mirror_tar) oc-mirror || { echo [ABA] Error: Failed to extract $(local_oc_mirror_tar); exit 1; }
-	chmod +x ~/bin/oc-mirror
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td -xmzf $(local_oc_mirror_tar) oc-mirror || \
+		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_mirror_tar)"; \
+		  rm -rf $$_td; rm -f $(local_oc_mirror_tar); $(MAKE) $(local_oc_mirror_tar); \
+		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
+		  tar -C $$_td -xmzf $(local_oc_mirror_tar) oc-mirror || { rm -rf $$_td; exit 1; }; }; \
+	chmod +x $$_td/oc-mirror; \
+	mv $$_td/oc-mirror $@; \
+	rm -rf $$_td
 
 # govc: extract from tarball.
 .PHONY: govc
@@ -325,8 +354,15 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 
 ~/bin/govc: .init $(govc_tar_file) | ~/bin
 	@echo [ABA] Extracting $(govc_tar_file) to ~/bin/govc
-	tar -C ~/bin -xmzf $(govc_tar_file) govc || { echo [ABA] Error: Failed to extract $(govc_tar_file); exit 1; }
-	~/bin/govc --help >/dev/null 2>&1
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td -xmzf $(govc_tar_file) govc || \
+		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(govc_tar_file)"; \
+		  rm -rf $$_td; rm -f $(govc_tar_file); $(MAKE) $(govc_tar_file); \
+		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
+		  tar -C $$_td -xmzf $(govc_tar_file) govc || { rm -rf $$_td; exit 1; }; }; \
+	$$_td/govc --help >/dev/null 2>&1 || { echo [ABA] "Error: govc binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_td/govc $@; \
+	rm -rf $$_td
 
 # butane: copy binary to ~/bin.
 .PHONY: butane
@@ -334,9 +370,17 @@ butane: ~/bin/butane  ## Install butane to ~/bin/butane
 
 ~/bin/butane: $(butane_binary_file) | ~/bin
 	@echo [ABA] Copying butane binary to $@
-	cp $(butane_binary_file) $@
-	chmod +x $@
-	$@ --help >/dev/null 2>&1 || { echo [ABA] "Error: $@ binary invalid"; exit 1; }
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	cp $(butane_binary_file) $$_td/butane; \
+	chmod +x $$_td/butane; \
+	$$_td/butane --help >/dev/null 2>&1 || \
+		{ echo "[ABA] Error: Corrupt binary, re-downloading $(butane_binary_file)"; \
+		  rm -rf $$_td; rm -f $(butane_binary_file); $(MAKE) $(butane_binary_file); \
+		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
+		  cp $(butane_binary_file) $$_td/butane; chmod +x $$_td/butane; \
+		  $$_td/butane --help >/dev/null 2>&1 || { rm -rf $$_td; exit 1; }; }; \
+	mv $$_td/butane $@; \
+	rm -rf $$_td
 
 # install/install-all: extract all tools.
 # Always includes govc (error handling for non-vmw is in the caller).
@@ -364,9 +408,11 @@ out-install-all:
 clean: ## Clean up installed binaries
 	@../scripts/cli-install-all.sh --reset
 	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt *.sha256
+	@rm -rf .tmp.*
 
 .PHONY: reset
 reset: clean  ## Clean up everything (tarballs + binaries). Only use if you know what you are doing!
 	@../scripts/cli-download-all.sh --reset
-	@rm -f *.tar.gz .init butane*
+	@rm -f *.tar.gz .init butane* .*.tmp .*.tmp.sha256
+	@rm -rf .tmp.*
 	@rm -f scripts
