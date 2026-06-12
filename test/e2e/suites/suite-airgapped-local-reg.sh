@@ -165,19 +165,26 @@ test_end
 # ============================================================================
 test_begin "Registry: Quay install and uninstall"
 
+_QUAY_PORT=8448
 e2e_run_remote "Create mirror.conf on bastion" \
     "cd ~/aba && aba -d mirror mirror.conf"
 e2e_run_remote "Set reg_host to local hostname" \
     "sed -i 's/^reg_host=.*/reg_host=${DIS_HOST}/g' ~/aba/mirror/mirror.conf"
+e2e_run_remote "Set custom reg_port=$_QUAY_PORT (non-default)" \
+    "sed -i 's/^reg_port=.*/reg_port=$_QUAY_PORT/' ~/aba/mirror/mirror.conf"
 e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
-e2e_run_remote "Install Quay registry" \
+e2e_run_remote "Install Quay registry on port $_QUAY_PORT" \
     "cd ~/aba && aba -d mirror install"
 e2e_poll_remote 60 5 "Wait for Quay container" \
     "podman ps | grep quay"
 e2e_run_remote "Verify Quay running" \
     "podman ps | grep quay"
+e2e_run_remote "Verify Quay listening on custom port $_QUAY_PORT" \
+    "ss -tlnp | grep ':${_QUAY_PORT} '"
+e2e_run_remote "Verify registry accessible on custom port" \
+    "curl -k -sf https://${DIS_HOST}:${_QUAY_PORT}/health/instance"
 e2e_run_remote "Uninstall Quay registry" \
     "cd ~/aba && aba -d mirror uninstall"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
@@ -194,17 +201,27 @@ test_end
 
 # ============================================================================
 # 7. Registry: install Docker registry and load images
+#    Uses non-default mirror.conf values to exercise the full custom-param
+#    workflow: install -> load -> cluster install -> day2 -> upgrade.
 # ============================================================================
 test_begin "Registry: Docker install and load"
 
+_DOCKER_PORT=5001
+_DOCKER_USER=e2etester
+_DOCKER_PW='T3st!@#P4ss&*()'
+_DOCKER_PATH=/e2e/mirror
+_DOCKER_DATADIR="~/e2e-mirror-datadir1"
+
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
-e2e_run_remote "Install Docker registry" \
-    "cd ~/aba && aba -d mirror install --vendor docker"
+e2e_run_remote "Install Docker registry (custom port/user/pw/path/data_dir)" \
+    "cd ~/aba && aba -d mirror install --vendor docker --reg-port $_DOCKER_PORT --reg-user $_DOCKER_USER --reg-password '${_DOCKER_PW}' --reg-path $_DOCKER_PATH --data-dir '$_DOCKER_DATADIR'"
 e2e_poll_remote 60 5 "Wait for Docker registry container" \
     "podman ps | grep registry"
 e2e_run_remote "Verify Docker registry running" \
     "podman ps | grep registry"
-e2e_run_remote "Verify Docker registry accessible" \
+e2e_run_remote "Verify Docker registry listening on port $_DOCKER_PORT" \
+    "ss -tlnp | grep ':${_DOCKER_PORT} '"
+e2e_run_remote "Verify Docker registry accessible with custom creds" \
     "cd ~/aba && aba -d mirror verify"
 
 e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
@@ -690,7 +707,9 @@ e2e_run_remote "Uninstall Docker registry" \
     "cd ~/aba && aba -d mirror uninstall"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:${_DOCKER_PORT}/v2/"
+e2e_run_remote "Remove custom data dir on disN" \
+    "sudo rm -rf $_DOCKER_DATADIR"
 
 test_end
 

@@ -76,7 +76,7 @@ if [ ! -s $HOME/.ssh/quay_installer ]; then
 fi
 
 aba_info "Installing mirror registry with command:"
-aba_info "./mirror-registry install -v --initUser $reg_user --quayHostname $reg_host $reg_root_opts --initPassword <hidden>"
+aba_info "./mirror-registry install -v --initUser $reg_user --quayHostname $reg_hostport $reg_root_opts --initPassword <hidden>"
 
 if ! ensure_quay_registry; then
 	error_msg=$(get_task_error "$TASK_INST_QUAY_REG")
@@ -86,7 +86,7 @@ fi
 # $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
 # $reg_pw is quoted to preserve special characters (e.g. " ! @ #).
 # shellcheck disable=SC2086
-./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_host" $reg_root_opts --initPassword "$reg_pw"
+./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_hostport" $reg_root_opts --initPassword "$reg_pw"
 
 reg_post_install "$reg_root/quay-rootCA/rootCA.pem" quay
 
