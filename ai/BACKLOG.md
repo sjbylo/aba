@@ -3323,3 +3323,42 @@ Move this logic into the Jinja2 template (`imageset-config-save.yaml.j2` or simi
 - No fragile regex matching on YAML structure
 - Template is the single source of truth for imageset-config content
 
+## Guard: --target-version must be higher than ISC maxVersion
+
+### Problem
+
+`aba -d mirror --target-version X` happily accepts any version, even one equal to or lower than what's already mirrored. No validation is performed.
+
+### Correct approach
+
+Check against the **ISC file** (e.g. `imageset-config-save.yaml`), not `ocp_version` in `aba.conf`. The ISC's `maxVersion` is the ground truth for what the mirror currently holds. `ocp_version` only reflects the initial install version and goes stale after syncs.
+
+Guard: `--target-version` must be strictly **greater than** the current `maxVersion` in the ISC.
+
+### Where to guard
+
+- In the CLI (`aba.sh`) when `--target-version` is parsed — fail fast before writing to `mirror.conf`
+- Use `sort -V` for version comparison
+
+### Error message
+
+`Error: --target-version 4.21.16 must be higher than the current mirrored maxVersion 4.21.17 (from imageset-config-save.yaml)`
+
+## Audit: version guards across mirror/sync/upgrade flows
+
+### Problem
+
+Beyond `--target-version`, there may be other places where version values enter the system without validation. If a user manually edits the ISC file (e.g. sets a lower `maxVersion` or `minVersion`), the mirror sync could push stale/wrong images or fail in confusing ways.
+
+### Audit checklist
+
+1. **Before `mirror sync`** — does the code validate that the ISC's `maxVersion` is sane (>= current mirror content)? If a user manually lowers `maxVersion`, we should warn or abort before pushing to the registry.
+2. **Before `mirror save`** — same check: ISC maxVersion should not go backwards vs. what's already been saved.
+3. **Before `mirror load`** — does the load flow validate that the tarball's version range makes sense relative to what's already in the target registry?
+4. **`--target-version` vs ISC consistency** — after writing `ocp_version_target` to `mirror.conf`, does the ISC generation step (`imageset-config-save.yaml.j2`) correctly pick it up? Or can they drift?
+5. **Manual ISC edits** — if the user hand-edits `maxVersion` in the ISC to something lower than what's already mirrored, does anything catch this before `oc-mirror` runs?
+
+### Principle
+
+The ISC file is the contract between ABA and oc-mirror. Any version value entering the ISC (from CLI, from template, or from manual edit) should be validated against what the mirror already holds. Never go backwards silently.
+
