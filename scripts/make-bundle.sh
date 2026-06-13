@@ -256,7 +256,6 @@ else
 	
 	if files_on_same_device mirror $bundle_dest_file; then
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
-		local _mount_point
 		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
 		aba_warning \
