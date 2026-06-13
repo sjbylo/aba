@@ -103,7 +103,9 @@ cluster.conf: .init | mirror.conf  ## Initialize the OpenShift cluster.conf file
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \
-	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds
+	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds; \
+	 if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf; \
+	 else rm -f mirror.conf && touch mirror.conf; fi
 
 agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to only generate the agent config files, so they can be edited. 
 
