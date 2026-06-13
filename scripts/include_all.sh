@@ -3323,6 +3323,16 @@ check_release_image() {
 	local _b64auth _userpass _curl_opts
 	aba_debug "Running: jq -r '.auths[\"$reg_host:$reg_port\"].auth' $_authfile"
 	_b64auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$_authfile" 2>/dev/null)
+
+	# Guard: if pull secret has no entry for this hostname, fail fast with 401.
+	# Without this, base64 -d of "null" produces garbage without a colon, causing
+	# curl -u to prompt interactively for a password — hanging indefinitely (Bug #396).
+	if [ -z "$_b64auth" ] || [ "$_b64auth" = "null" ]; then
+		_release_http_code="401"
+		_release_check_err="no credentials in pull secret for $reg_host:$reg_port"
+		return 1
+	fi
+
 	_userpass=$(echo "$_b64auth" | base64 -d)
 	_curl_opts="--cacert $_cacert --connect-timeout 3 --max-time 10 --retry 1"
 

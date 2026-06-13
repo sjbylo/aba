@@ -110,10 +110,12 @@ e2e_run "Assert named mirror directory exists" \
     "test -d $NAMED_MIRROR && test -f $NAMED_MIRROR/mirror.conf"
 e2e_add_to_mirror_cleanup "$PWD/$NAMED_MIRROR"
 
-e2e_run "Generate pool-registry pull secret via aba" \
+e2e_run "Set reg_host before generating pull secret (exercises --reg-host)" \
+    "aba -d $NAMED_MIRROR --reg-host ${CON_HOST} --reg-port 8443"
+e2e_run "Generate pool-registry pull secret via aba (keyed to CON_HOST)" \
     "printf 'init\np4ssw0rd\n' | aba -d $NAMED_MIRROR password && cp ~/.aba/mirror/$NAMED_MIRROR/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
-e2e_run "Register pool registry to named mirror" \
+e2e_run "Register pool registry to named mirror (--reg-host matches pull secret)" \
     "aba -d $NAMED_MIRROR register --reg-host ${CON_HOST} --reg-port 8443 \
      --pull-secret-mirror /tmp/pool-reg-pull-secret.json \
      --ca-cert $POOL_REG_DIR/certs/ca.crt"

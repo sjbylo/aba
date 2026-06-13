@@ -408,15 +408,47 @@ e2e_run_must_fail "Register with non-existent CA cert must fail" \
 e2e_run_must_fail "Register with no args at all must fail" \
 	"aba -d mirror register"
 
-# Register without reg_host set: reg-register.sh aborts when reg_host is empty
+# Register without reg_host set + single-entry pull secret: auto-infers hostname (path 5).
+# Previously this aborted, but smart reconciliation now infers from the pull secret.
 e2e_run "Clear reg_host in mirror.conf" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
-e2e_run_must_fail "Register without reg_host must fail" \
+e2e_run "Register without reg_host (auto-infers from single-entry pull secret)" \
 	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Verify reg_host was inferred from pull secret" \
+	"grep '^reg_host=registry.p${POOL_NUM}' mirror/mirror.conf"
+e2e_run "Unregister after infer test" \
+	"aba -d mirror unregister"
+
+# Create a multi-entry pull secret for ambiguity tests below.
+e2e_run "Create multi-entry pull secret (for ambiguity tests)" \
+	"jq '.auths[\"other.example.com:5000\"] = {\"auth\": \"dGVzdDp0ZXN0\"}' $POOL_REG_DIR/pool-reg-creds.json > /tmp/multi-entry-ps.json"
+
+# Register without reg_host + multi-entry pull secret: must abort (ambiguous, path 6).
+e2e_run "Clear reg_host in mirror.conf" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+e2e_run_must_fail "Register without reg_host and multi-entry pull secret must fail" \
+	"aba -d mirror register --pull-secret-mirror /tmp/multi-entry-ps.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Restore reg_host" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
-# Auto-inject: --pull-secret-mirror + --ca-cert without explicit target auto-injects 'register'
+# Hostname reconciliation: pull secret hostname doesn't match --reg-host but has 1 entry.
+# reg-register.sh should auto-infer the hostname from the pull secret (Bug #396 fix).
+e2e_run "Set reg_host to a MISMATCHED hostname" \
+	"aba -d mirror --reg-host bogus-host.example.com --reg-port 8443"
+e2e_run "Register with mismatched --reg-host (auto-infer from single-entry pull secret)" \
+	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Verify reg_host was updated to match pull secret" \
+	"grep '^reg_host=registry.p${POOL_NUM}' mirror/mirror.conf"
+e2e_run "Unregister after auto-infer test" \
+	"aba -d mirror unregister"
+
+# Hostname reconciliation: pull secret has MULTIPLE entries, none match → must abort (path 4).
+e2e_run "Set reg_host to something not in multi-entry pull secret" \
+	"aba -d mirror --reg-host nomatch.example.com --reg-port 9999"
+e2e_run_must_fail "Register with multi-entry pull secret and no match must fail" \
+	"aba -d mirror register --pull-secret-mirror /tmp/multi-entry-ps.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Restore mirror.conf after multi-entry test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 e2e_run "Set reg_host for auto-inject test" \
 	"aba -d mirror -H ${DIS_HOST}"
 e2e_run "Auto-inject register (no explicit target)" \

@@ -23,8 +23,52 @@ ca_cert_file="$2"
 [ ! -f "$pull_secret_file" ] && aba_abort "Pull secret file not found: $pull_secret_file"
 [ ! -f "$ca_cert_file" ] && aba_abort "CA cert file not found: $ca_cert_file"
 
-if [ ! "$reg_host" -o ! "$reg_port" ]; then
+# --- Reconcile reg_host:reg_port with the pull secret's .auths entries ---
+# The pull secret is the source of truth for "which hostname has these credentials".
+# ABA must ensure mirror.conf's reg_host:reg_port matches what the pull secret provides,
+# otherwise downstream commands (verify, sync, install) will fail to authenticate.
+_ps_keys=$(jq -r '.auths | keys[]' "$pull_secret_file" 2>/dev/null)
+_ps_count=$(echo "$_ps_keys" | wc -l)
+
+if [ -z "$_ps_keys" ]; then
+	aba_abort "Pull secret has no entries in .auths -- cannot determine registry hostname."
+fi
+
+if [ "$reg_host" ] && [ "$reg_port" ]; then
+	# mirror.conf has a hostname (from --reg-host or template default).
+	# Validate it exists in the pull secret -- catch mismatches early rather than
+	# failing later with cryptic auth errors or hangs (Bug #396).
+	if ! jq -e ".auths[\"$reg_host:$reg_port\"]" "$pull_secret_file" >/dev/null 2>&1; then
+		if [ "$_ps_count" -eq 1 ]; then
+			# Unambiguous: pull secret has exactly one entry. Use it.
+			# Common case: template defaulted to one name, pull secret was generated
+			# for the registry's canonical hostname. Both point to the same registry.
+			_inferred_host="${_ps_keys%%:*}"
+			_inferred_port="${_ps_keys##*:}"
+			aba_info "Pull secret is keyed to '$_ps_keys' (mirror.conf had '$reg_host:$reg_port')."
+			aba_info "Updating mirror.conf to match pull secret."
+			sed -i "s/^reg_host=.*/reg_host=$_inferred_host/" mirror.conf
+			sed -i "s/^reg_port=.*/reg_port=$_inferred_port/" mirror.conf
+			reg_host="$_inferred_host"
+			reg_port="$_inferred_port"
+		else
+			# Ambiguous: multiple entries, none match. User must disambiguate.
+			aba_abort "Pull secret has no entry for '$reg_host:$reg_port'." \
+				"Available entries:" \
+				"$_ps_keys" \
+				"Use --reg-host matching one of the above, or regenerate with: aba -d $(basename $PWD) password"
+		fi
+	fi
+elif [ "$_ps_count" -eq 1 ]; then
+	# No reg_host/reg_port in mirror.conf at all -- infer from the single pull secret entry.
+	reg_host="${_ps_keys%%:*}"
+	reg_port="${_ps_keys##*:}"
+	sed -i "s/^reg_host=.*/reg_host=$reg_host/" mirror.conf
+	sed -i "s/^reg_port=.*/reg_port=$reg_port/" mirror.conf
+	aba_info "Inferred reg_host=$reg_host reg_port=$reg_port (from pull secret)"
+else
 	aba_abort "reg_host and reg_port must be set in mirror.conf before registering." \
+		"Pull secret has multiple entries: $_ps_keys" \
 		"Run: aba -d $(basename $PWD) --reg-host <hostname> first."
 fi
 
@@ -35,7 +79,7 @@ if [ -d "$regcreds_dir" ]; then
 fi
 mkdir -p "$regcreds_dir"
 
-# Copy pull secret as-is
+# Copy pull secret (validated above to contain reg_host:reg_port)
 aba_info "Copying pull secret to $regcreds_dir/pull-secret-mirror.json"
 cp "$pull_secret_file" "$regcreds_dir/pull-secret-mirror.json"
 chmod 600 "$regcreds_dir/pull-secret-mirror.json"
