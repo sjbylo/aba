@@ -294,7 +294,7 @@ test_begin "Compact: install and delete cluster"
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
 
 e2e_run_remote "Set explicit non-default DNS (exercises dns_servers)" \
-    "cd ~/aba && aba --dns \$(awk '/^nameserver/{print \$2; exit}' /etc/resolv.conf) 8.8.8.8"
+    "cd ~/aba && aba --dns $(pool_dns_server) 8.8.4.4"
 e2e_run_remote "Set explicit gateway (exercises next_hop_address)" \
     "cd ~/aba && aba --gateway-ip \$(ip route | awk '/default/{print \$3; exit}')"
 e2e_run_remote "Create compact cluster.conf with explicit VIPs" \
@@ -307,7 +307,7 @@ e2e_run_remote "Verify explicit VIPs in cluster.conf" \
     "cd ~/aba && grep -q 'api_vip=$(pool_api_vip)' $COMPACT/cluster.conf && \
      grep -q 'ingress_vip=$(pool_apps_vip)' $COMPACT/cluster.conf"
 e2e_run_remote "Verify explicit dns_servers in cluster.conf" \
-    "cd ~/aba && grep -q 'dns_servers=.*8.8.8.8' $COMPACT/cluster.conf"
+    "cd ~/aba && grep -q 'dns_servers=.*8.8.4.4' $COMPACT/cluster.conf"
 e2e_diag_remote "Show compact cluster.conf" "grep -E '^\w' ~/aba/$COMPACT/cluster.conf"
 
 e2e_run_remote "Set verify_conf=off (skip all preflight)" \

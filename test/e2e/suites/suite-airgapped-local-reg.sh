@@ -167,7 +167,7 @@ test_end
 # ============================================================================
 test_begin "Registry: Docker install and verify (custom params)"
 
-_DOCKER_PORT=5001
+_DOCKER_PORT=5002
 _DOCKER_USER=e2etester
 _DOCKER_PW='T3st!@#P4ss&*()'
 _DOCKER_PATH=/e2e/mirror
@@ -213,8 +213,8 @@ test_end
 test_begin "Registry: Quay install and load"
 
 _QUAY_PORT=8448
-e2e_run_remote "Set custom reg_port=$_QUAY_PORT for Quay" \
-    "cd ~/aba && sed -i 's/^reg_port=.*/reg_port=$_QUAY_PORT/' mirror/mirror.conf"
+e2e_run_remote "Set vendor=quay and reg_port=$_QUAY_PORT for Quay" \
+    "cd ~/aba && aba --dir mirror --vendor quay --reg-port $_QUAY_PORT"
 e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 e2e_run_remote "Install Quay registry on port $_QUAY_PORT" \

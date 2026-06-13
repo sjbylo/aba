@@ -368,14 +368,14 @@ test_end
 # ============================================================================
 test_begin "Bare-metal: full OOB SNO install"
 
-SNO_BM="${SNO}-bm"
+SNO_BM="${SNO}"
 _BM_MAC="00:50:56:BE:E0:01"
 
 e2e_run "Ensure platform=bm" "aba --platform bm"
 e2e_run "Clean any leftover $SNO_BM cluster dir" "rm -rf $SNO_BM"
 e2e_add_to_cluster_cleanup "$PWD/$SNO_BM"
 
-e2e_run "Create SNO-BM cluster.conf with explicit macs.conf" \
+e2e_run "Create SNO-BM cluster.conf (reuses SNO DNS records)" \
     "aba cluster -n $SNO_BM -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 e2e_run "Write BM MAC to macs.conf" \
     "echo '$_BM_MAC' > $SNO_BM/macs.conf"
@@ -396,6 +396,10 @@ e2e_run "Verify ISO created" "ls -l $SNO_BM/iso-agent-based/agent.*.iso"
 _bm_iso_remote="images/agent-${SNO_BM}.iso"
 _bm_vm_name="${SNO_BM}-master-0"
 
+e2e_run "Destroy leftover OOB VM (if any)" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_destroy '$_bm_vm_name' || true"
+
 e2e_run "Upload BM ISO to datastore" \
     "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
      vmp_upload_iso $SNO_BM/iso-agent-based/agent.*.iso \$GOVC_DATASTORE '$_bm_iso_remote'"
@@ -404,7 +408,7 @@ e2e_run "Create OOB VM for BM SNO" \
     "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
      _folder=\${VC_FOLDER:-}; [ -n \"\${VC:-}\" ] && _folder=\"\$VC_FOLDER/$SNO_BM\"; \
      [ -n \"\${VC:-}\" ] && scripts/vmw-create-folder.sh \"\$_folder\"; \
-     vmp_create_vm '$_bm_vm_name' 16 32 '$_BM_MAC' \$GOVC_DATASTORE \$GOVC_NETWORK \"\$_folder\" false"
+     vmp_create_vm '$_bm_vm_name' 16 32 '$_BM_MAC' \$GOVC_DATASTORE \"\$GOVC_NETWORK\" \"\$_folder\" false"
 
 e2e_run "Attach ISO to OOB VM" \
     "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \

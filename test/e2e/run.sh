@@ -1008,7 +1008,7 @@ declare -A _retried=()
 _MAX_RETRIES=2
 _queue_idx=0
 _POLL_MIN=5
-_POLL_MAX=30
+_POLL_MAX=10
 _poll_interval=$_POLL_MIN
 
 if [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; then
