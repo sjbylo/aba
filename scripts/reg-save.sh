@@ -48,8 +48,7 @@ scripts/cli-download-all.sh
 # Also download CLIs for the upgrade target version (needed on disconnected host)
 if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
 	aba_info "Downloading CLI binaries for target version $ocp_version_target ..."
-	make -sC ../cli download-oc download-openshift-install ocp_version="$ocp_version_target" || \
-		aba_warn "Failed to download CLI binaries for $ocp_version_target (non-fatal)"
+	scripts/cli-download-all.sh --target-version "$ocp_version_target"
 fi
 
 # Wait for oc-mirror specifically (needed immediately below)

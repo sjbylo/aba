@@ -12,6 +12,8 @@
 #   --reset        Reset download task state (forces re-download on next run).
 #   --no-version   Only start downloads for version-independent tools
 #                  (oc-mirror, butane, govc) — used when ocp_version is unknown.
+#   --target-version <ver>  Download oc + openshift-install for <ver> (parallel).
+#                  Used by reg-save.sh to fetch CLIs for upgrade target version.
 #
 # Optional positional args after the mode flag are tool names to filter on.
 #   e.g.  cli-download-all.sh --wait oc openshift-install
@@ -42,6 +44,7 @@ aba_debug "Starting: $0 $*"
 # Parse mode flag (mutually exclusive)
 mode=start
 make_list_target=out-download-all
+target_ocp_version=""
 
 if [ "${1:-}" = "--wait" ]; then
 	mode=wait
@@ -56,17 +59,29 @@ if [ "${1:-}" = "--no-version" ]; then
 	shift
 fi
 
+if [ "${1:-}" = "--target-version" ]; then
+	target_ocp_version="$2"
+	shift 2
+fi
+
 tool_filter=("$@")
 
-aba_debug "Mode: $mode filter=[${tool_filter[*]}] list_target=$make_list_target"
+aba_debug "Mode: $mode filter=[${tool_filter[*]}] list_target=$make_list_target target_ver=$target_ocp_version"
 
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
 
 showed_wait_msg=false
 
+# When --target-version is given, override ocp_version for the make calls
+if [ "$target_ocp_version" ]; then
+	make_ocp_override="ocp_version=$target_ocp_version"
+else
+	make_ocp_override=""
+fi
+
 aba_debug "Fetching download list from cli/Makefile ($make_list_target)"
-items=$(make --no-print-directory -sC cli "$make_list_target") || {
+items=$(make --no-print-directory -sC cli "$make_list_target" $make_ocp_override) || {
 	aba_abort "Failed to get download list from cli/Makefile ($make_list_target)"
 }
 
@@ -99,7 +114,7 @@ do
 			showed_wait_msg=true
 		fi
 		# Idempotent start (guarantees cmd.sh exists for the wait)
-		run_once -i "$task_id" -- make -sC cli download-$tool
+		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override
 		# Wait without command — run_once reloads from saved cmd.sh
 		if ! run_once -q -w -i "$task_id"; then
 			# govc download failure is non-fatal for non-vmw platforms
@@ -128,7 +143,7 @@ do
 		fi
 
 		# Start mode: run_once backgrounds internally — no '&' needed
-		run_once -i "$task_id" -- make -sC cli download-$tool
+		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override
 	fi
 done
 aba_debug "All CLI download tasks processed"
