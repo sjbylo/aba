@@ -1205,6 +1205,9 @@ elif [ $_rc -eq 3 ]; then
 else
 	echo ""
 	echo "  Suite $SUITE: FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+	# suite_end (which normally sends the FAIL notification) is skipped when a
+	# suite exits early via EXHAUSTED/FATAL, so send the notification here.
+	_e2e_notify "FAILED: $SUITE (exit=$_rc, ${_mins}m${_secs}s)"
 fi
 
 # --- Post-suite integrity checks -------------------------------------------

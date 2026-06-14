@@ -251,13 +251,19 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$_image_cmd"
 	fi
 
-	# Pre-flight: warn about upgrade blockers (advisory only — let oc adm upgrade decide)
+	# Pre-flight: check for upgrade blockers that require manual admin action.
+	# The output of 'oc adm upgrade' contains gate-specific instructions and links
+	# that the user must follow — ABA cannot auto-apply these (the patch varies per gate).
 	_adm_upgrade_out=$(oc adm upgrade 2>&1) || true
 	if echo "$_adm_upgrade_out" | grep -q "Upgradeable=False"; then
 		echo
-		aba_warning "The cluster reports Upgradeable=False (proceeding anyway — the upgrade command will enforce if needed):"
+		aba_warning "The cluster reports Upgradeable=False." \
+			"This may require an admin acknowledgment before upgrading." \
+			"Review the output below and follow any instructions or links:"
+		echo
 		echo "$_adm_upgrade_out"
 		echo
+		ask "Continue with upgrade (only if you have resolved the above)" || exit 1
 	fi
 
 	# Ensure the cluster's update channel matches the target version's major.minor.
