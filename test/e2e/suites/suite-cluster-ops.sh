@@ -46,6 +46,8 @@ plan_tests \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
     "Upgrade: sync target and aba upgrade" \
+    "Regression: version change re-extracts mirror binary" \
+    "Regression: aba iso works after ocp_version change" \
     "Register: --reg-host and --reg-port CLI flags" \
     "Register: named mirror (enclave workflow)" \
     "Enclave: SNO install via named mirror" \
@@ -81,8 +83,8 @@ test_begin "Setup: install aba and configure"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify / available space > 200GB after reset" \
-    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
+e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
 
 # Clean-start bootstrap: remove packages ABA must auto-reinstall (ported from old test1-5)
 # || true: some packages may not be installed -- dnf returns non-zero if any are missing
@@ -244,8 +246,7 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 
 # Apply day2 (CatalogSources, IDMS/ITMS, trust CA)
@@ -281,10 +282,14 @@ test_begin "SNO: IP conflict detection"
 SNO_DUP="${SNO}-dup"
 e2e_run "Create duplicate SNO config with same IP" \
     "rm -rf $SNO_DUP && aba cluster -n $SNO_DUP -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+# Skip DNS checks for config generation -- the duplicate cluster has no DNS entries.
+# Restore full checks before preflight so the IP conflict check is exercised.
+e2e_run -q "Skip DNS for dup config" "aba --verify conf"
 e2e_run "Generate install-config.yaml for duplicate" \
     "aba --dir $SNO_DUP install-config.yaml"
 e2e_run "Generate agent-config.yaml for duplicate" \
     "aba --dir $SNO_DUP agent-config.yaml"
+e2e_run -q "Restore full verification" "aba --verify all"
 e2e_run_must_fail "Preflight must detect IP conflict with running SNO" \
     "aba --dir $SNO_DUP preflight"
 
@@ -302,6 +307,12 @@ e2e_run "Set verify_conf=conf" \
     "aba --verify conf"
 e2e_run "Preflight must pass with verify_conf=conf despite IP conflict" \
     "aba --dir $SNO_DUP preflight"
+
+e2e_run "Set verify_conf=off (skips ALL preflight)" \
+    "aba --verify off"
+e2e_run "ISO gen must succeed with verify=off despite IP conflict" \
+    "aba --dir $SNO_DUP iso"
+
 e2e_run "Restore verify_conf=all" \
     "aba --verify all"
 e2e_run "Clean up duplicate cluster dir" "rm -rf $SNO_DUP"
@@ -318,12 +329,15 @@ test_end
 test_begin "Regression: verify_conf=conf extracts mirror binary"
 
 _REG_HOST=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_REG_PORT=$(grep '^reg_port=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_CUR_VER=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
+_MIRROR_BIN="openshift-install-mirror-${_CUR_VER}-${_REG_HOST}-${_REG_PORT}"
 
 e2e_run "Sanity: mirror binary exists from SNO install" \
-	"test -x $SNO/openshift-install-mirror-$_REG_HOST"
+	"test -x $SNO/$_MIRROR_BIN"
 
 e2e_run "Remove mirror binary to force re-extraction" \
-	"rm -f $SNO/openshift-install-mirror-$_REG_HOST"
+	"rm -f $SNO/$_MIRROR_BIN"
 
 e2e_run "Set verify_conf=conf" \
 	"aba --verify conf"
@@ -332,7 +346,7 @@ e2e_run "Run verify-release-image.sh with verify_conf=conf" \
 	"cd $SNO && scripts/verify-release-image.sh"
 
 e2e_run "Assert mirror binary re-extracted despite verify_conf=conf" \
-	"test -x $SNO/openshift-install-mirror-$_REG_HOST"
+	"test -x $SNO/$_MIRROR_BIN"
 
 e2e_run "Restore verify_conf=all" \
 	"aba --verify all"
@@ -353,15 +367,12 @@ e2e_run "Resolve latest version for upgrade target" "
     echo \"Upgrade target: \$upgrade_target\"
 "
 
-e2e_run "Set --target-version and regenerate ISC" "
+e2e_run -r 1 2 "Set --target-version and sync upgrade images" "
     cd ~/aba
     target=\$(cat /tmp/e2e-upgrade-target)
     aba -d mirror --target-version \$target
-    rm -f mirror/data/imageset-config.yaml
-    aba -d mirror imagesetconf
+    aba -d mirror sync --retry
 "
-
-e2e_run -r 3 2 "Sync upgrade images" "aba -d mirror sync --retry"
 
 e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
 
@@ -370,7 +381,7 @@ e2e_run "Dry-run upgrade" \
 
 e2e_run -r 3 2 "Trigger and verify upgrade" "
     target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --skip-day2 --force || true  # may exit non-zero if already at target; desired-version assertion validates outcome
+    aba -d $SNO upgrade --to \$target --skip-day2 --force
     desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
     echo \"Desired version: \$desired  (target: \$target)\"
     [ \"\$desired\" = \"\$target\" ]
@@ -378,6 +389,106 @@ e2e_run -r 3 2 "Trigger and verify upgrade" "
 
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
+
+test_end
+
+# ============================================================================
+# 13. Regression: version change must re-extract mirror binary
+# ============================================================================
+# The upgrade test above changed ocp_version from "previous" to "latest".
+# The mirror binary filename includes the version, so the old binary should
+# NOT be used.  A fresh extraction from the registry must occur.
+# This guards against the regression introduced in 54803e35 where version
+# was dropped from the filename, causing stale binaries to be reused.
+test_begin "Regression: version change re-extracts mirror binary"
+
+_NEW_VER=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
+_REG_HOST2=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_REG_PORT2=$(grep '^reg_port=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Create throwaway cluster dir for extraction test" \
+	"aba cluster -n e2e-test-extract -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+
+# The old-version mirror binary should NOT exist in the new cluster dir.
+# _CUR_VER (resolved in test 11) is the pre-upgrade version.
+_OLD_MIRROR_BIN="openshift-install-mirror-${_CUR_VER}-${_REG_HOST2}-${_REG_PORT2}"
+_NEW_MIRROR_BIN="openshift-install-mirror-${_NEW_VER}-${_REG_HOST2}-${_REG_PORT2}"
+
+e2e_run "Assert old-version mirror binary does not exist" \
+	"test ! -f e2e-test-extract/$_OLD_MIRROR_BIN"
+
+e2e_run "Assert new-version mirror binary does not exist yet" \
+	"test ! -f e2e-test-extract/$_NEW_MIRROR_BIN"
+
+# Run verify-release-image.sh which should extract the new-version binary.
+e2e_run -q "Skip DNS for extraction test" "aba --verify conf"
+e2e_run "Extract mirror binary for new version" \
+	"cd e2e-test-extract && scripts/verify-release-image.sh"
+e2e_run -q "Restore full verification" "aba --verify all"
+
+e2e_run "Assert new-version mirror binary was extracted" \
+	"test -x e2e-test-extract/$_NEW_MIRROR_BIN"
+
+e2e_run "Assert extracted binary matches new ocp_version" \
+	"e2e-test-extract/$_NEW_MIRROR_BIN version 2>&1 | grep -q '$_NEW_VER'"
+
+e2e_run -q "Cleanup extraction test dir" "rm -rf e2e-test-extract"
+
+test_end
+
+# ============================================================================
+# 14. Regression: aba iso works after ocp_version change
+# ============================================================================
+# Full end-to-end: generate ISO with version A, change ocp_version to B, then
+# generate ISO again.  The second 'aba iso' must succeed -- CLIs refresh and
+# the versioned mirror binary is re-extracted automatically.
+# After the upgrade test (12), aba.conf has the "latest" version and the pool
+# registry contains both "previous" and "latest" images.
+test_begin "Regression: aba iso works after ocp_version change"
+
+_VER_A=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
+
+e2e_run "Create cluster dir for ISO version-change test" \
+	"aba cluster -n e2e-test-iso-verchg -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+
+# Skip DNS -- throwaway cluster has no dnsmasq entries; DNS is not what this test validates.
+e2e_run -q "Skip DNS for ISO test" "aba --verify conf"
+
+e2e_run "Generate ISO with version A (\$_VER_A)" \
+	"aba --dir e2e-test-iso-verchg iso"
+
+# Switch ocp_version back to the original (previous) version
+e2e_run "Change ocp_version back to original ($OCP_VERSION)" \
+	"aba --channel $TEST_CHANNEL --version $OCP_VERSION"
+
+_VER_B=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
+
+# Fresh cluster dir so the new version's artifacts are generated from scratch.
+e2e_run -q "Remove old test cluster dir" "rm -rf e2e-test-iso-verchg"
+e2e_run "Create fresh cluster dir for changed version" \
+	"aba cluster -n e2e-test-iso-verchg -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+
+e2e_run "Generate ISO after version change (\$_VER_B) -- must not fail" \
+	"aba --dir e2e-test-iso-verchg iso"
+
+# Verify the mirror binary matches the changed version
+_REG_H=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_REG_P=$(grep '^reg_port=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_EXPECTED_BIN="openshift-install-mirror-${_VER_B}-${_REG_H}-${_REG_P}"
+
+e2e_run "Assert mirror binary matches changed version" \
+	"test -x e2e-test-iso-verchg/$_EXPECTED_BIN"
+
+e2e_run "Assert binary reports correct version" \
+	"e2e-test-iso-verchg/$_EXPECTED_BIN version 2>&1 | grep -q '$_VER_B'"
+
+# Restore ocp_version to post-upgrade (latest) for subsequent tests
+e2e_run -q "Restore ocp_version to post-upgrade" \
+	"aba --channel $TEST_CHANNEL --version l"
+
+e2e_run -q "Restore full verification" "aba --verify all"
+
+e2e_run -q "Cleanup version-change ISO test" "rm -rf e2e-test-iso-verchg"
 
 test_end
 
@@ -412,6 +523,7 @@ ENCLAVE_MIRROR="e2e-test-enclave"
 
 e2e_run "Create named mirror directory" \
     "aba mirror --name $ENCLAVE_MIRROR || true"  # make exits non-zero with editor=none after creating dir
+e2e_add_to_mirror_cleanup "$PWD/$ENCLAVE_MIRROR"
 
 e2e_run "Assert enclave mirror directory exists" \
     "test -d $ENCLAVE_MIRROR && test -f $ENCLAVE_MIRROR/mirror.conf"
@@ -422,8 +534,8 @@ e2e_run "Register pool registry to named mirror" \
 e2e_run "Verify named mirror registry access" \
     "aba -d $ENCLAVE_MIRROR verify"
 
-e2e_run "Verify state.sh has REG_VENDOR=existing" \
-    "grep REG_VENDOR=existing ~/.aba/mirror/$ENCLAVE_MIRROR/state.sh"
+e2e_run "Verify state.sh has reg_vendor=existing" \
+    "grep reg_vendor=existing ~/.aba/mirror/$ENCLAVE_MIRROR/state.sh"
 
 test_end
 
@@ -451,6 +563,7 @@ e2e_diag "Show enclave SNO cluster.conf" "grep -E '^\w' $ENCLAVE_SNO/cluster.con
 e2e_run "Verify cluster.conf references enclave mirror" \
     "grep -q 'mirror_name=$ENCLAVE_MIRROR' $ENCLAVE_SNO/cluster.conf"
 
+e2e_run -q "Skip DNS for enclave SNO" "aba --verify conf"
 e2e_run "Generate ISO for enclave SNO" "aba --dir $ENCLAVE_SNO iso"
 e2e_run "Upload ISO for enclave SNO" "aba --dir $ENCLAVE_SNO upload"
 e2e_add_to_cluster_cleanup "$PWD/$ENCLAVE_SNO"
@@ -490,8 +603,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-cluster-ops.sh"
-
-exit 0
+exit $_rc

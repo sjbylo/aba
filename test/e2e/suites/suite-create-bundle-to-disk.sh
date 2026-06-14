@@ -67,8 +67,8 @@ e2e_install_aba
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify / available space > 200GB after reset" \
-    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
+e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
 
 test_end 0
 
@@ -87,10 +87,14 @@ e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run -q "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run -q "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
-# Negative path: VM creation without vmware.conf should fail
+# Negative path: VM creation without vmware.conf should fail immediately.
+# Must also hide ~/.vmware.conf to prevent ABA's fallback from restoring it.
 e2e_run -q "Ensure no vmware.conf" "rm -f vmware.conf"
+e2e_run -q "Hide ~/.vmware.conf fallback" "[ -f ~/.vmware.conf ] && mv ~/.vmware.conf ~/.vmware.conf.e2e-save || true"
 e2e_run_must_fail "Create VMs without vmware.conf should fail" \
     "aba cluster -n e2e-neg-test -t sno -s install"
+e2e_run -q "Restore ~/.vmware.conf" "[ -f ~/.vmware.conf.e2e-save ] && mv ~/.vmware.conf.e2e-save ~/.vmware.conf || true"
+e2e_run -q "Clean neg-test dir" "rm -rf e2e-neg-test"
 
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
@@ -187,8 +191,18 @@ e2e_run "Generate imageset-config for ops=all" "aba -d mirror imagesetconf"
 # Verify: the YAML must contain the redhat-operator-index catalog entry
 e2e_run "Verify redhat-operator-index in imageset YAML" \
     "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
+e2e_run "Verify platform images present in ISC (excl_platform=false)" \
+    "grep -q '^ *platform:' mirror/data/imageset-config.yaml"
 
-# TODO: Replace with a proper verification for op-sets=all (backlog item)
+# Exercise excl_platform=true: platform images should be commented out
+e2e_run "Set excl_platform=true" "aba --excl-platform"
+e2e_run -q "Clean old imageset YAML" "rm -f mirror/data/imageset-config.yaml"
+e2e_run "Regenerate ISC with excl_platform" "aba -d mirror imagesetconf"
+e2e_run "Verify platform images excluded from ISC" \
+    "grep -q '^#.*platform:' mirror/data/imageset-config.yaml"
+e2e_run "Verify operators still present in ISC" \
+    "grep 'redhat-operator-index' mirror/data/imageset-config.yaml"
+e2e_run -q "Restore excl_platform=false" "aba --excl-platform false"
 
 # Restore original operator settings so we leave things clean
 e2e_run -q "Restore op-sets to abatest" "aba --op-sets abatest"
@@ -214,9 +228,9 @@ e2e_run "Run mirror clean" "aba --dir mirror clean"
 e2e_run "Verify mirror-registry removed after clean" \
     "test ! -f mirror/mirror-registry"
 
-# Verify run_once state for mirror:reg:install does not exist
+# Verify run_once cached result for mirror:reg:install was cleared (task is reset for re-run)
 e2e_run "Verify no leftover run_once state for reg:install" \
-    "test ! -d ~/.aba/runner/mirror:reg:install"
+    "test ! -f ~/.aba/runner/mirror:reg:install/exit"
 
 # Re-extract -- should succeed after clean
 e2e_run "Re-extract mirror-registry after clean" \
@@ -324,13 +338,12 @@ test_begin "Cleanup: delete cluster and uninstall mirror on disN"
 
 e2e_run_remote "Uninstall mirror registry on disN" \
     "cd ~/aba && aba -d mirror uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-create-bundle-to-disk.sh"
-
-exit 0
+exit $_rc

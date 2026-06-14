@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.0.2
+ABA_VERSION=1.1.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260507183815
+ABA_BUILD=20260615000042
 
 # Sanity check build timestamp
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -59,6 +59,7 @@ WORK_DIR=$PWD # Remember so can change config file here
 # This scans through all arguments and filters out these special options
 new_args=()           # Array to collect arguments we want to keep
 dir_already_set=false # Only process first --dir/-d
+_CLI_CLUSTER_NAME=""  # Extracted from --name/-n for flag handlers
 i=1
 
 while [ $i -le $# ]; do
@@ -73,8 +74,41 @@ while [ $i -le $# ]; do
 
 				# Validate directory argument
 				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
-				target_dir=$(eval echo "$target_dir")  # Expand ~ in path
-				[ ! -e "$target_dir" ] && echo "Error: directory $target_dir does not exist!" >&2 && exit 1
+				case "$target_dir" in "~/"*) target_dir="$HOME/${target_dir#\~/}" ;; "~") target_dir="$HOME" ;; esac
+				# If relative path doesn't exist at CWD, walk up to find it or reach ABA root
+				if [[ "$target_dir" != /* ]] && [ ! -e "$target_dir" ]; then
+					for _up in .. ../.. ../../..; do
+						if [ -e "$_up/$target_dir" ]; then
+							target_dir="$_up/$target_dir"
+							break
+						fi
+						# Reached ABA root - resolve target here, not inside a subdir
+						if grep -q "Top level Makefile" "$_up/Makefile" 2>/dev/null; then
+							target_dir="$_up/$target_dir"
+							break
+						fi
+					done
+				fi
+				# ADR-007: if dir is missing, recreate from external state backup
+				if [ ! -e "$target_dir" ]; then
+					_bn=$(basename "$target_dir")
+					# Find state dir matching this cluster name (name.domain pattern)
+					_sdir=""
+					for _candidate in "$HOME/.aba/clusters/${_bn}."*; do
+						[ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ] && _sdir="$_candidate" && break
+					done
+					if [ "$_sdir" ]; then
+						echo "[ABA] Recreating cluster directory '$target_dir' from state backup" >&2
+						mkdir -p "$target_dir"
+						cp -pa "$_sdir/backup/." "$target_dir/"
+						ln -fs ../templates/Makefile.cluster "$target_dir/Makefile"
+						rm -f "$target_dir/.init"
+						make -s -C "$target_dir" init 2>/dev/null || true
+						ln -sfn "$_sdir" "$target_dir/clusterstate"
+					else
+						echo "Error: directory $target_dir does not exist!" >&2 && exit 1
+					fi
+				fi
 				[ ! -d "$target_dir" ] && echo "Error: cannot change to $target_dir: not a directory!" >&2 && exit 1
 
 				[ "$DEBUG_ABA" ] && echo "Changing dir to: $target_dir"
@@ -93,6 +127,14 @@ while [ $i -le $# ]; do
 
 		--debug|-D)
 			export DEBUG_ABA=1
+			;;
+
+		--name|-n)
+			# Extract cluster name early so flag handlers (--ntp, --dns, etc.)
+			# can target the correct cluster.conf
+			i=$((i + 1))
+			_CLI_CLUSTER_NAME="${!i}"
+			new_args+=("$arg" "$_CLI_CLUSTER_NAME")
 			;;
 
 		*)
@@ -130,6 +172,7 @@ elif [ -s ../../../Makefile ] && grep -q "Top level Makefile" ../../../Makefile;
 	interactive_mode=
 else
 	# Give an error to change to the top level dir. Text must be coded here.
+	_cmd=$(basename "$0")
 	(
 		echo "  __   ____   __  "
 		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the ABA utility!"
@@ -139,13 +182,13 @@ else
 		echo "Run ABA from the top of its repository."
 		echo
 		echo "For example:                          cd aba"
-		echo "                                      aba"
+		echo "                                      $_cmd"
 		echo "                                      aba -h"
 		echo
 		echo "Otherwise, clone ABA from GitHub:     git clone https://github.com/sjbylo/aba.git"
 		echo "Change to the ABA repo directory:     cd aba"
 		echo "Install latest ABA:                   ./install"
-		echo "Run ABA:                              aba" 
+		echo "Run ABA:                              $_cmd" 
 		echo "                                      aba -h" 
 	) >&2
 
@@ -163,6 +206,12 @@ if [ ! "$ABA_DO_NOT_UPDATE" ]; then
 		$0 "$@"  # This means aba was updated and needs to be called again
 		exit
 	fi
+fi
+
+# If invoked as "abatui", launch the TUI instead of the CLI
+if [ "$(basename "$0")" = "abatui" ]; then
+	cd "$ABA_ROOT" || exit 1
+	exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
 fi
 
 source $ABA_ROOT/scripts/include_all.sh
@@ -195,8 +244,14 @@ if [ -t 1 ]; then
 	exec {ABA_TTY_FD}>&1
 	export ABA_TTY_FD
 fi
-# Duplicate stdout+stderr to the trace file. Terminal output is unchanged.
-exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+# Duplicate stdout+stderr to the trace file for post-mortem debugging.
+# When stdout is piped (e.g. 'aba tar --out - | ssh ...'), only trace stderr
+# to avoid capturing binary tar data (which caused 29GB+ trace files).
+if [ -t 1 ]; then
+	exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+else
+	exec 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+fi
 
 aba_debug "Sourced file $ABA_ROOT/scripts/include_all.sh"
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
@@ -273,13 +328,17 @@ if [ ! "$interactive_mode" ]; then
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
-			if [ "$ocp_version" ]; then
-				aba_debug "Non-interactive mode - starting all CLI downloads early"
-				$ABA_ROOT/scripts/cli-download-all.sh
-			else
-				aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
-				$ABA_ROOT/scripts/cli-download-all.sh --no-version
-			fi
+		# When targeting cli/ directly, Make handles its own downloads serially.
+		# Starting bg downloads would race with the foreground Make on the same tarballs.
+		if [[ "$PWD" == "$ABA_ROOT/cli" ]]; then
+			aba_debug "Direct cli target - Make will download serially, skipping early bg downloads"
+		elif [ "$ocp_version" ]; then
+			aba_debug "Non-interactive mode - starting all CLI downloads early"
+			$ABA_ROOT/scripts/cli-download-all.sh >&2
+		else
+			aba_debug "Non-interactive mode - starting version-independent CLI downloads early"
+			$ABA_ROOT/scripts/cli-download-all.sh --no-version >&2
+		fi
 			;;
 	esac
 fi
@@ -477,7 +536,19 @@ elif [ "$1" = "--light" ]; then
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		_require_mirror_dir "$1"
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
+		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
+		# ADR-007: persistent state locks reg_host after install/register.
+		# Reject -H if it conflicts with the installed value.
+		_h_state_file="$HOME/.aba/mirror/$(basename "$WORK_DIR")/state.sh"
+		if [ -s "$_h_state_file" ]; then
+			_h_state_host=$(grep '^reg_host=' "$_h_state_file" 2>/dev/null | head -1 | cut -d= -f2)
+			if [ "$_h_state_host" ] && [ "$_h_state_host" != "$2" ]; then
+				aba_abort \
+					"reg_host is locked to '$_h_state_host' by installed state." \
+					"The -H flag cannot override an installed/registered registry." \
+					"To change the registry host, run 'aba -d $(basename "$WORK_DIR") unregister' (or 'uninstall') first."
+			fi
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_host -v "$2" -f $WORK_DIR/mirror.conf
@@ -534,6 +605,10 @@ elif [ "$1" = "--light" ]; then
 		# The password used to access the mirror registry 
 		# Add a password in ='password'
 		[[ "$2" =~ ^- || -z "$2" ]] && reg_pw_value= || { reg_pw_value="$2"; shift; }
+		# Reject quote characters — mirror-registry cannot handle them internally
+		if [[ "$reg_pw_value" == *"'"* || "$reg_pw_value" == *'"'* ]]; then
+			aba_abort "Password cannot contain quote characters (' or \"). The upstream mirror-registry tool cannot handle them."
+		fi
 		# force will skip over asking to edit the conf file
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_pw -v "'$reg_pw_value'" -f $WORK_DIR/mirror.conf
@@ -560,12 +635,12 @@ elif [ "$1" = "--light" ]; then
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
-		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'; then
-			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+			replace-value-conf -n machine_network -v "$2" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		else
 			aba_abort "invalid CIDR [$2]" 
 		fi
@@ -583,7 +658,7 @@ elif [ "$1" = "--light" ]; then
 			fi
 			shift
 		done
-		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# If arg missing remove from aba.conf
@@ -595,7 +670,7 @@ elif [ "$1" = "--light" ]; then
 			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
 			shift	
 		done
-		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--gateway-ip" -o "$1" = "--gateway" -o "$1" = "-g" ]; then
 		# If arg missing remove from aba.conf
@@ -607,7 +682,7 @@ elif [ "$1" = "--light" ]; then
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
 	#		gw_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
-		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf $ABA_ROOT/aba.conf
+		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
 		_flag="$1"
@@ -885,6 +960,22 @@ elif [ "$1" = "--light" ]; then
 		fi
 		_set_cluster_conf vlan "$vlan_val" "$_flag"
 		shift
+	elif [ "$1" = "--mac-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf mac_prefix "$2" "$1"
+		shift 2
+	elif [ "$1" = "--host-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf hostPrefix "$2" "$1"
+		shift 2
+	elif [ "$1" = "--master-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf master_prefix "$2" "$1"
+		shift 2
+	elif [ "$1" = "--worker-prefix" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf worker_prefix "$2" "$1"
+		shift 2
 	elif [ "$1" = "--ssh-key" ]; then
 		_flag="$1"
 		ssh_key_val=
@@ -965,9 +1056,37 @@ if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
 
 	# Externalized targets require a cluster directory (cluster.conf present)
+	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
 		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
-			[ -f cluster.conf ] || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
+			if [ ! -f cluster.conf ]; then
+				_cn=$(basename "$PWD")
+				_recreated=false
+				for _candidate in "$HOME/.aba/clusters/${_cn}."*; do
+					if [ -s "$_candidate/state.sh" ] && [ -s "$_candidate/backup/cluster.conf" ]; then
+						_bd=$(grep '^base_domain=' "$_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
+						if [ "$_bd" ] && _recreate_cluster_dir "$_cn" "$_bd"; then
+							_recreated=true
+							break
+						fi
+					fi
+				done
+				$_recreated || aba_abort "Not in a cluster directory. Use 'aba --dir <cluster> $cur_target'."
+			fi
+			;;
+	esac
+
+	# Auto-detect install completion for commands that operate on installed clusters
+	case $cur_target in
+		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue)
+			if [[ ! -f .install-complete && -f iso-agent-based/auth/kubeconfig ]]; then
+				auto_complete_install "$PWD" 2>/dev/null || true
+			fi
+			# If still not marked after auto-detect, warn and ask
+			if [[ ! -f .install-complete && -f iso-agent-based/auth/kubeconfig ]]; then
+				aba_warning "Cluster has not completed installation."
+				ask "Cluster has not completed installation, continue anyway" || exit 1
+			fi
 			;;
 	esac
 
@@ -997,13 +1116,20 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		shell)
-			echo "export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig"
+			_cn=$(basename "$PWD")
+			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
+			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
+			echo "export KUBECONFIG=$_kc"
 			exit
 		;;
 		getco)
-			exec_cmd="oc --kubeconfig iso-agent-based/auth/kubeconfig get co"
-			aba_debug "Running: $exec_cmd"
-			$exec_cmd
+			OC="oc --kubeconfig iso-agent-based/auth/kubeconfig"
+			aba_debug "Running: $OC get clusterversion"
+			$OC get clusterversion
+			echo
+			aba_debug "Running: $OC get co"
+			$OC get co
 			exit
 		;;
 		day2)
@@ -1087,13 +1213,22 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		delete)
-			_ensure_hv_ready
-			exec_cmd="make -s init"
-			aba_debug "Running: $exec_cmd (delete)"
-			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-delete.sh || exit $?
-			# Remove stamp files: VMs are gone, so the chain must re-run on next install.
-			rm -f .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete .install-complete
+			make -s init
+			source <(normalize-aba-conf)
+			case "$platform" in
+				vmw|kvm)
+					_ensure_hv_ready
+					$ABA_ROOT/scripts/${platform}-delete.sh || exit $?
+					;;
+				bm)
+					aba_info "Bare-metal: no VMs to delete. Removing cluster state."
+					;;
+				*)
+					aba_abort "Unknown platform '$platform' in aba.conf"
+					;;
+			esac
+			# Clean generated artifacts so next install starts fresh from current config
+			make -s clean
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
@@ -1157,6 +1292,7 @@ aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
 if [ ! "$interactive_mode" ]; then
 	# Only run make if there's a target
 	if [ "$BUILD_COMMAND" ]; then
+
 		if [ "$DEBUG_ABA" ]; then
 			aba_debug ask=$ask DEBUG_ABA=$DEBUG_ABA INFO_ABA=$INFO_ABA
 			aba_debug "Running: \"make $BUILD_COMMAND\" from directory: $PWD" 
@@ -1207,8 +1343,8 @@ if [ -f .bundle ]; then
 	# Start extracting all CLI binaries and mirror-registry in parallel (tarballs already in bundle)
 	# These run in background and will be ready when user runs commands that need them
 	
-	scripts/cli-install-all.sh                                    # Start CLI extractions (background)
-	run_once -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry  # Start mirror-registry extraction (background)
+	scripts/cli-install-all.sh                                    # Start: CLI extractions. Wait: ensure_oc() etc in include_all.sh
+	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"  # Start: Quay extract. Wait: ensure_quay_registry() in include_all.sh
 
 	echo_yellow "ABA install bundle detected for OpenShift v$ocp_version."
 
@@ -1283,21 +1419,23 @@ fi
 #else
 
 	aba_debug "Fetching OpenShift version data in background ..."
-	# Download openshift version data in the background.  'bash -lc ...' used here 'cos can't setsid a function.
-	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	stable'
-	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	stable'
-	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	fast'
-	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	fast'
-	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version	candidate'
-	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version	candidate'
+	# Start: fetch OCP versions in background. 'bash -lc' needed because can't setsid a function.
+	# Wait: ~80 lines below (run_once -w ocp:$channel:latest_version*)
+	run_once -i ocp:stable:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version stable'
+	run_once -i ocp:stable:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version stable'
+	run_once -i ocp:fast:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version fast'
+	run_once -i ocp:fast:latest_version_previous		-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version fast'
+	run_once -i ocp:candidate:latest_version			-- bash -lc 'source ./scripts/include_all.sh; fetch_latest_version candidate'
+	run_once -i ocp:candidate:latest_version_previous	-- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate'
 
-	aba_debug "Downloading oc-mirror in the background ..."
-	PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR"			-- make -sC cli oc-mirror
+	# Start: download+install oc-mirror in background. Wait: ensure_oc_mirror()
+	aba_debug "Installing oc-mirror in the background ..."
+	PLAIN_OUTPUT=1 run_once -i "$TASK_INST_OC_MIRROR"			-- "${CMD_INST_OC_MIRROR[@]}"
 
 	# Check Internet connectivity to required sites (using shared function)
 	aba_info "Checking Internet connectivity to required sites..."
 	
-	if ! check_internet_connectivity "cli"; then
+	if ! check_internet_connectivity "aba"; then
 		aba_abort \
 			"Cannot access required sites: $FAILED_SITES" \
 			"" \
@@ -1365,7 +1503,7 @@ fi
 #else
 
 	echo_white -n "Fetching available versions ..."
-	# Wait for only the data we need (quietly - message already shown above)
+	# Wait: block for version data started ~80 lines above (run_once -i ocp:$channel:*)
 	if ! run_once -w -q -i ocp:$ocp_channel:latest_version; then
 		error_msg=$(run_once -e -i ocp:$ocp_channel:latest_version)
 		aba_abort "Failed to fetch latest OCP version from Cincinnati API:\n$error_msg\n\nPlease check network/DNS and try again."
@@ -1520,8 +1658,8 @@ download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
 
-# Initiate download of mirror-install and docker-reg image
-run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C mirror download-registries
+# Start: download mirror-registry and docker-reg images. Wait: ensure_quay_registry() in include_all.sh
+run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 
 # make & jq are needed below and in the next steps 
 scripts/install-rpms.sh external 

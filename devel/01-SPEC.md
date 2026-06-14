@@ -110,6 +110,19 @@ using images from the local mirror registry. The workflow:
 - Release image must exist in the local mirror (verified via `skopeo inspect`).
 - The `--force` flag is passed through to `oc adm upgrade` when specified.
 
+### Cluster deletion (`aba delete`)
+
+Destroys cluster VMs and runs `make clean` to remove all generated artifacts
+(ISO, configs, stamp files, binaries). Only `cluster.conf` is preserved.
+With `--force`: removes the entire cluster directory.
+
+The ISO embeds a specific OCP version and cluster config — cleaning it
+ensures the next `aba cluster` regenerates from current settings. Note: The ISO
+has no certificate expiry (agent-based installer generates certs at runtime;
+see https://access.redhat.com/solutions/7087353).
+
+State backup in `~/.aba/clusters/` is not affected.
+
 ### Bundle content rules
 
 `backup.sh` controls what goes into bundles (`aba tar`, `aba bundle`).
@@ -117,6 +130,25 @@ using images from the local mirror registry. The workflow:
 maintains its own `mirror.conf` with site-specific registry settings
 (`reg_host`, `reg_port`, credentials). Transferring the connected side's
 `mirror.conf` would overwrite the disconnected side's registry configuration.
+
+### Bundle ISC protection
+
+The ISC (`mirror/data/imageset-config.yaml`) is the contract between save and load.
+It encodes channel, version range, and operators -- values that may differ between
+connected and disconnected configs (e.g. `ocp_version_target` lives in `mirror.conf`
+which is excluded from bundles). ISC generation is deterministic: same inputs produce
+the same output. The bug only manifests when ISC-affecting config values on the save
+side don't survive the bundle transfer.
+
+**Invariant**: A bundled ISC must not be regenerated before `aba load` completes.
+
+Mechanism:
+- `backup.sh` touches the ISC before tar creation (makes it newer than `.created`).
+  The existing regeneration guard in `reg-create-imageset-config.sh` then skips it.
+- If the ISC was user-edited before bundling, `backup.sh` creates `data/.isc-pinned`.
+- After successful load: unlock (touch `.created`) unless `.isc-pinned` exists,
+  then remove `.bundle` and `.isc-pinned`. The repo becomes a normal disconnected tree.
+- Source repo is restored after tar creation (dev workflow unaffected).
 
 ---
 
@@ -129,7 +161,7 @@ FROM config.
 |------|-------|------------|
 | `aba.conf` | Global | `ocp_version`, `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
 | `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_version_target` (upgrade) |
-| `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
+| `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `starting_ip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
 
 **Read the config variable, not the file existence.** Config files created by ABA
 contain valid values. But don't use file existence as a boolean proxy for a
@@ -236,6 +268,70 @@ Task deduplication and coordination. State in `~/.aba/runner/<id>/`.
 - **Testing**: `test/func/test-run-once-failed-cleanup.sh` covers failed-task
   cleanup, zombie cleanup, error messaging, and quiet-mode suppression.
 
+### run_once usage pattern
+
+1. **Background kick-off is optional** (zero or more times): Downloading can
+   happen zero or more times.  It is purely a performance optimization
+   (pre-warming).  The install task's Make handles its own download via
+   file-target dependencies.  run_once is idempotent -- calling it multiple
+   times is safe (starts or returns immediately if already running/done).
+   run_once handles backgrounding internally -- no `&` after the call.
+
+2. **`run_once -w` before first use of the artifact** (the only correctness
+   requirement): Right before a specific tool is first needed, wait for ONLY
+   that tool.  Never "wait for all."  Use `ensure_*()` functions or
+   `run_once -w` for the specific task ID.  Wait mode is self-sufficient:
+   if the task was never started, wait acquires the lock, reloads the command
+   from `cmd.sh` (or uses the command on the CLI), and runs it in the
+   foreground.  A prior `run_once -i` (start) is not required for
+   correctness -- it only saves time by running the task in the background
+   before the wait is reached.  **The wait MUST be quiet when the task is
+   already done** -- the `-m` message is only shown when `run_once -w`
+   actually has to block (task still running); if the task already completed,
+   the wait returns silently with no output.
+
+3. **CRITICAL -- download and install are different task IDs**: They have
+   separate flocks and can run concurrently on the same tarball.  Starting
+   an install while a download is still writing the tarball corrupts the
+   file (Make sees the partial file, runs `tar`, produces a truncated
+   binary).  To avoid this, either:
+   - Wait for the download task before starting the install task (what
+     `ensure_*()` and `cli-install-all.sh` do), **or**
+   - Do NOT start a separate download task -- let the install task's Make
+     handle the download serially (safe, single process, no race).
+   See ADR-008 Finding 5 for details.
+
+4. **run_once wraps Make from outside**: run_once calls live in shell scripts
+   (cli-download-all.sh, cli-install-all.sh, ensure_*() functions), never inside
+   Makefile recipes. A user running `make oc` directly gets standard serial Make
+   behavior -- no bg processes, no races. Make handles file-target dependencies;
+   run_once handles cross-process coordination.
+
+5. **No "wait for all" gates**: Do not block on all tools when only one is needed.
+   `cli-install-all.sh --wait` (without a filter) and `.cli` are appropriate only
+   when ALL tools are genuinely required (e.g., bundling the entire repo).
+
+6. **Bundle downloads include all OS variants**: When creating a bundle
+   (`aba tar`, `aba bundle`), all tarballs must be downloaded -- including both
+   RHEL 8 and RHEL 9 variants of oc, oc-mirror, etc. The target host's OS
+   version is unknown at bundle creation time.
+
+6. **Optional tarballs (govc)**: Always TRY to download govc, but treat download
+   failure as fatal only when `platform=vmw`. If `platform!=vmw` and the download
+   fails (e.g., GitHub not whitelisted), ignore the failure and continue. This way
+   non-vmw users get govc if GitHub is reachable (useful if they switch platforms
+   later) but are never blocked by it. Only vmw users are hard-blocked on govc
+   download failure.
+
+7. **Shared task IDs between TUI and aba**: TUI and `aba` CLI share task IDs
+   by design — a user can stop the TUI and use `aba` (or vice versa) and
+   completed tasks carry over.  Commands for a given task ID must be
+   semantically equivalent but need not be string-identical.  Centralize
+   commands as variables in `include_all.sh` to prevent drift.  Do NOT
+   enforce string equality at runtime (a guard that did this caused FATAL
+   errors in E2E production due to relative vs absolute paths, `-d` vs
+   `--dir`, etc.).
+
 ### normalize*()
 
 Config normalization functions. Output ONLY values that exist in config files
@@ -244,6 +340,15 @@ values after sourcing.
 
 - `normalize-aba-conf`, `normalize-mirror-conf`, `normalize-cluster-conf`,
   `normalize-vmware-conf`, `normalize-kvm-conf`
+
+### IP math helpers
+
+Utility functions for CIDR arithmetic in `scripts/include_all.sh`:
+
+- `ip_to_int`, `int_to_ip` — dotted-quad ↔ 32-bit integer conversion
+- `ip_in_cidr` — test if an IP is within a CIDR
+- `cidr_last_ip`, `cidr_host_count` — broadcast address and usable host count
+- `suggest_starting_ip` — compute a sensible default node IP (network base + 100, clamped for small CIDRs). Used by `create-cluster-conf.sh` to auto-populate `starting_ip` instead of a placeholder string.
 
 ### ensure_*()
 
@@ -266,6 +371,8 @@ remove these -- only Makefiles may.
 | `.bootstrap-complete` | cluster/ | Bootstrap phase completed |
 | `.preflight-done` | cluster/ | Preflight checks passed |
 | `.bundle` | repo root | Marks this tree as an extracted bundle (set by `backup.sh`) |
+| `.isc-pinned` | mirror/data/ | ISC was user-edited before bundling -- don't auto-unlock after load |
+| `.created` | mirror/data/ | Timestamp sentinel for ISC generation (ISC newer = skip regen) |
 
 ---
 
@@ -275,10 +382,37 @@ remove these -- only Makefiles may.
 |----------|---------|------------|
 | `~/.aba/config` | User-level config overrides | User / install script |
 | `~/.aba/runner/` | run_once task state | run_once() only |
-| `~/.aba/mirror/<name>/` | Per-mirror credentials (pull secrets, CA cert) | Mirror Makefile + scripts |
+| `~/.aba/mirror/<name>/` | Per-mirror credentials, state, config backups | Mirror Makefile + scripts |
+| `~/.aba/clusters/<name>/` | Per-cluster auth, state, config backups | monitor-install.sh (write), aba.sh (recreate) |
 | `~/.aba/ssh.conf` | SSH config for remote commands | Install script |
 | `~/.aba/cache/`, `~/.aba/tmp/` | Temporary data | Various scripts; wiped by `aba reset` |
 | Marker files (in-tree) | Lifecycle state | Makefiles only |
+
+### Externalized state (ADR-007)
+
+Installed-object state lives outside the working dir in `~/.aba/`:
+
+- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw) plus operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened)
+- **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
+
+State files use lowercase vars matching config file names. Normalize functions
+source state.sh after config; immutable fields (locked after install) are
+overridden from state.sh with a stderr warning on drift. Mutable fields
+(ops, op_sets) remain editable in config files.
+
+Auth files (kubeconfig, kubeadmin-password) and config backups (cluster.conf,
+install-config.yaml, agent-config.yaml, macs.conf, mirror.conf) are stored
+alongside state.sh. Backups go in a `backup/` subdir and use `cp -p` to
+preserve timestamps (critical for Make dependency tracking).
+
+If a cluster working dir is deleted, `aba delete` recreates it from the
+state backup (restoring config files, Makefile, symlinks, markers) and
+proceeds normally. All dirs under `~/.aba/clusters/` are mode 700.
+
+Helper functions (`cluster_kubeconfig()`, `cluster_state_dir()`,
+`cluster_is_installed()`) encapsulate lookups — scripts never hard-code
+`~/.aba/` paths. Convenience symlinks (`clusterstate ->`, `regcreds ->`)
+exist for human browsing; scripts use helpers directly.
 
 ---
 

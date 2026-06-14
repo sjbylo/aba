@@ -145,49 +145,48 @@ NOTIFY_CMD=~/bin/notify.sh    # Notification command (e.g. Telegram alerts); dep
 
 ```
 Commands:
-  run.sh run [-s X] [-p 1,2,3]        Run suites (default: -a/--all)
-  run.sh run -p all                    Run all suites across all pools
-  run.sh run -s X -p 2 -f -y          Force dispatch onto pool 2
-  run.sh run -p 1 -r                   Re-run last suite, skip passed tests
-  run.sh run -p all -d                 Push local source to ~/aba, then run
-  run.sh run -a -D -p all              Include dummy framework test suites
-  run.sh reschedule [-s X]             Re-queue completed suites
-  run.sh deploy [-p 2,3]               Push source code + harness to conN
-  run.sh restart [-p 2] [-r]           Stop + harness deploy + re-run last suite
-  run.sh restart -p 2 -d               Stop + source deploy + harness + re-run
-  run.sh restart -s X -p 2             Stop + deploy + run suite X on pool 2
-  run.sh stop [-p 2,3] [-c]            Kill runner(s) (-c: delete clusters/mirrors)
-  run.sh start [-p 1-4]                Power on pool VMs (conN + disN)
-  run.sh status [-p 3]                 Show what's running
-  run.sh verify [-p all]               Verify pool VMs (no dispatch)
-  run.sh list                          List available suites (shows dummy suites separately)
-  run.sh destroy [-p all] [-c]         Destroy pool VMs (-c: delete clusters first)
-  run.sh attach conN                   Attach to conN's tmux session
-  run.sh live [-p 1-3]                 Interactive multi-pane dashboard
-  run.sh dash [-p all] [log]           Read-only summary dashboard
+  run.sh run [-s X] [-p 1,2,3]             Run suites (blocks until completion)
+  run.sh run -p all                        Run all suites across all pools
+  run.sh run -s X -p 2 -f                 Force dispatch onto pool 2
+  run.sh run -p all -d                     Push local source to ~/aba, then run
+  run.sh run -a -D -p all                  Include dummy framework test suites
+  run.sh daemon [-a] [-p 1-4]              Auto-restarting dispatcher (crash-resilient)
+  run.sh reschedule [-s X]                 Re-queue suites to running dispatcher
+  run.sh deploy [-p 2,3]                   Push source code + harness to conN
+  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
+  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
+  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
+  run.sh status [-p 3]                     Show what's running
+  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
+  run.sh list                              List available suites (dummy suites shown separately)
+  run.sh destroy [-p all] [--no-clean]     Destroy pool VMs (cleans clusters/mirrors by default)
+  run.sh attach conN                       Attach to runner tmux session on conN
+  run.sh logs                              Tail the daemon log
+  run.sh live [-p 1-3]                     Interactive multi-pane dashboard
+  run.sh dash [-p all] [log]               Read-only summary dashboard
 
 Options:
   -s, --suite X,Y        Select specific suite(s) (comma-separated)
   -a, --all              Select all suites (default for run/reschedule)
-  -D, --with-dummy       Include dummy-* framework test suites (excluded from --all)
+  -D, --with-dummy       Include dummy-* suites (excluded from --all by default)
   -p, --pool SPEC        Pool selection: N, N-M, N,M,O, or "all"
                          (aliases: --pools, --pool-list)
-  -f, --force            Override safety checks (dispatch to busy pool, hot-deploy)
-  -d, --dev              Push local source to ~/aba on conN (developer mode)
-  -r, --resume           Skip previously-passed tests (run, restart)
+  -F, --fresh            Clear old results and run all suites from scratch (aliases: -f, --force)
+  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
+  -r, --resume           Skip previously-passed tests (checkpointed)
   -n, --dry-run          Show dispatch plan, don't execute
-  -c, --clean            Delete clusters/mirrors before stopping/destroying
+  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
+  --no-clean             Skip cluster/mirror cleanup on stop/destroy
   -V, --revert           Revert pool VMs to pool-ready snapshot before running
   -G, --recreate-golden  Force rebuild golden VM from template
-  -R, --recreate-vms     Force reclone all conN/disN from golden (scoped to -p)
+  -R, --recreate-vms     Force reclone conN/disN from golden (scoped to -p)
   -y, --yes              Auto-accept prompts
-  -q, --quiet            CI mode: no interactive prompts (implies -y)
+  -q, --quiet            CI mode (implies -y)
   -o, --os RHEL          RHEL version for pool VMs (rhel8|rhel9|rhel10)
   -v, --vmware-conf F    Path to vmware.conf (e.g. ~/.vmware-esxi.conf)
   -u, --user USER        SSH user for both conN and disN
   --con-user USER        SSH user for conN only
   --dis-user USER        SSH user for disN only
-  -h, --help             Show usage help
 ```
 
 ### Common Workflows
@@ -268,7 +267,7 @@ GOVC_URL=esxi4.lan
 GOVC_USERNAME=root
 GOVC_PASSWORD='...'
 GOVC_DATASTORE=datastore1
-GOVC_NETWORK="VM Network"
+GOVC_NETWORK="Lab Network"
 GOVC_INSECURE=true
 # No VC_FOLDER, GOVC_DATACENTER, or GOVC_CLUSTER for ESXi-direct
 ```
@@ -362,6 +361,57 @@ Coordinator (run.sh)
                  └── SSH ──> cluster   (via aba ssh)
 ```
 
+### ESXi Host Prerequisites
+
+The E2E tests assume the ESXi host has the following infrastructure in place.
+After a fresh ESXi install, configure these before running tests.
+
+**vSwitches and Port Groups:**
+
+| vSwitch  | Uplink | Port Group       | VLAN ID | Purpose |
+|----------|--------|------------------|---------|---------|
+| vSwitch0 | vmnic0/1 | Lab Network | 0 | Lab network — conN, disN, cluster VMs. Used by `GOVC_NETWORK` in `vmware.conf` |
+| vSwitch1 | *(none)* | Private Network  | 4095 (trunk) | Isolated inter-VM VLAN testing (`network-advanced` suite). No uplink by design |
+| vSwitch2 | vmnic2   | External Network | 0 | Internet access for conN (ens256) |
+
+**Private Network security policy** (required for VLAN trunk to work):
+- Allow promiscuous mode: **Accept**
+- Allow forged transmits: **Accept**
+- Allow MAC changes: Accept (optional)
+
+**NFS Datastore:**
+
+| Name       | NFS Host | Share Path          | Purpose |
+|------------|----------|---------------------|---------|
+| NFS-Shared | 10.0.1.8 | /volume1/nfs-vmware | Shared ISO storage — ABA uploads boot ISOs here for all pools |
+
+**Local Datastores:**
+
+One VMFS datastore per pool (e.g. `Datastore4-1` through `Datastore4-4`).
+Suites create cluster VMs on the pool's assigned datastore (set in `pools.conf`).
+
+**DNS:**
+
+Pool VMs (conN/disN) get their IPs via DHCP from the lab network (10.0.0.0/20).
+DNS/NTP upstream is 10.0.1.8. Each conN runs its own dnsmasq for cluster
+DNS (`*.pN.example.com`). The ESXi host itself does not need custom DNS
+configuration beyond basic management network connectivity.
+
+**VMkernel NICs:**
+
+| VMkernel | Port Group       | Purpose |
+|----------|------------------|---------|
+| vmk0     | Lab Network      | ESXi management (SSH, web UI, API) |
+| vmk1     | External Network | Optional — ESXi internet access |
+
+**Known quirk — fresh ESXi install:**
+
+After a fresh ESXi installation, the default "VM Network" port group may not
+be visible to `govc` (not registered in the vSphere MOB). Port groups created
+via the ESXi web UI are visible. Workaround: create a new port group on the
+same vSwitch via the web UI (e.g. "VM Network 2") and use that name in
+`vmware.conf`. See `Troubleshooting.md` for details.
+
 ### vSphere Layout
 
 - Folder: `/Datacenter/vm/aba-e2e/poolN`
@@ -430,3 +480,36 @@ Settings can be defined at three levels (highest precedence wins):
 1. **CLI flags** (`-o rhel9`, `-p 1-4`, etc.)
 2. **Per-pool overrides** in `pools.conf` (`CON_SSH_USER=root`, `VM_DATASTORE=...`)
 3. **Defaults** in `config.env`
+
+## Lab provisioning for vSphere preflight tests
+
+The `suite-vsphere-preflight.sh` suite verifies both the happy path (install
+proceeds past preflight, TEST-03) and the negative path (preflight aborts
+`aba install` before any ISO is generated, TEST-04).
+
+**No custom role or user provisioning is required.** The negative test
+triggers a Layer 1 (authentication) preflight failure by swapping
+`vmware.conf` to bogus credentials. Fine-grained privilege scenarios
+(missing `Resource.AssignVMToPool`, etc.) are covered exhaustively by
+`test/func/test-preflight-check-vsphere.sh` (Paths A-Z + AA, 44 assertions,
+mocked `govc`); the E2E suite's unique value is proving that `aba install`
+actually invokes preflight and preflight actually gates the make chain.
+
+### `pools.conf` tokens
+
+Each active pool line carries two tokens the suite reads:
+
+```
+pool1  con1  dis1  aba-e2e-template-rhel8  ...  GOVC_USERNAME_BROKEN=NOT-A-REAL-USER@vsphere.local  GOVC_PASSWORD_BROKEN=NOT-A-REAL-PASSWORD
+```
+
+The defaults shipped in `pools.conf` are ready to use. The values **MUST**
+use only characters from `[A-Za-z0-9._@+-]`; the `pools.conf` parser (see
+`test/e2e/runner.sh`) whitespace-splits tokens and does not support quoted
+values, so any space, `#`, or shell-special character will be silently
+truncated or misparsed.
+
+If you ever need to override the defaults (e.g. to force a different
+failure path), any clearly-not-real username / password within that
+character class will work - the only requirement is that vCenter rejects
+them at authentication time.

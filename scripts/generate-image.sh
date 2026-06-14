@@ -16,7 +16,8 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 aba_debug "Configuration validated"
 
 # Use the binary extracted from the mirror to install OpenShift.  For fully online installs (e.g. via proxy/NAT) reg_host etc is NOT defined.
-openshift_install_mirror="./openshift-install-mirror-$reg_host"
+# Version+host+port in the filename ensures a version change triggers re-extraction.
+openshift_install_mirror="./openshift-install-mirror-${ocp_version}-${reg_host}-${reg_port}"
 [ ! -x "$openshift_install_mirror" ] && openshift_install_mirror=openshift-install # fallback to the regular binary
 aba_debug "openshift_install_mirror=$openshift_install_mirror"
 
@@ -119,4 +120,5 @@ cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
 scripts/add_ntp_ignition_to_iso.sh
 
 echo 
-aba_info_ok "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"
+#aba_info_ok "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"
+aba_info_ok "The agent based ISO has been created."

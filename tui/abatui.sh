@@ -231,6 +231,37 @@ log "ABA_ROOT: $ABA_ROOT"
 cd "$ABA_ROOT" || { log "ERROR: Cannot cd to ABA_ROOT"; exit 1; }
 log "Changed to ABA_ROOT"
 
+# Single-instance lock (flock) — prevent multiple TUI instances on the same host
+_ABA_TUI_PID_FILE="${HOME}/.aba/.tui.pid"
+mkdir -p "${HOME}/.aba" 2>/dev/null || true
+exec {ABA_TUI_FLOCK_FD}>"${HOME}/.aba/.tui.lock" || { echo "Error: Cannot open ${HOME}/.aba/.tui.lock" >&2; exit 1; }
+if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
+	_other_pid=""
+	[[ -f "$_ABA_TUI_PID_FILE" ]] && _other_pid=$(<"$_ABA_TUI_PID_FILE")
+	if [[ -n "$_other_pid" ]] && kill -0 "$_other_pid" 2>/dev/null; then
+		echo ""
+		read -r -p "Another TUI is already running (PID $_other_pid). Terminate it? (Y/n) " _ans </dev/tty
+		_ans="${_ans:-Y}"
+		if [[ "$_ans" =~ ^[Yy]$ ]]; then
+			kill "$_other_pid" 2>/dev/null
+			for _i in $(seq 1 20); do
+				kill -0 "$_other_pid" 2>/dev/null || break
+				sleep 0.25
+			done
+			if ! flock -n "${ABA_TUI_FLOCK_FD}"; then
+				echo "Error: Could not acquire lock after terminating PID $_other_pid." >&2
+				exit 1
+			fi
+		else
+			echo "Exiting. Stop the other TUI first." >&2
+			exit 1
+		fi
+	else
+		echo "Error: Another TUI instance is already running on this host. Exit the other instance first." >&2
+		exit 1
+	fi
+fi
+echo $$ > "$_ABA_TUI_PID_FILE"
 
 # shellcheck disable=SC1091
 source scripts/include_all.sh
@@ -1919,53 +1950,67 @@ select_operators() {
 	# Start additional background tasks (catalog and CLI downloads already started after version confirmation)
 	log "Starting additional background tasks for operators"
 	log "Starting registry download task"
-	run_once -i "$TASK_QUAY_REG_DOWNLOAD" -- make -s -C "$ABA_ROOT/mirror" download-registries
+	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	
-	# WAIT for catalog indexes to download (needed for operator sets AND search)
-	# Catalogs were started in background after version selection
-	# wait_for_all_catalogs returns immediately if already complete
+	# Ensure catalog indexes are available for operator sets AND search
 	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
 	log "Checking catalog indexes for version ${version_short}..."
-	
-	# Check if catalogs are already complete (quick check)
-	local need_wait=false
-	run_once -p -i "catalog:${version_short}:redhat-operator" || need_wait=true
-	run_once -p -i "catalog:${version_short}:certified-operator" || need_wait=true
-	run_once -p -i "catalog:${version_short}:community-operator" || need_wait=true
-	
-	# If catalogs are still downloading, show a waiting dialog
-	if [[ "$need_wait" == "true" ]]; then
-		log "Catalogs still downloading, showing wait dialog..."
-		dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs for OCP ${version_short}...\n\nThis may take a few minutes on first run." 6 60
-	fi
-	
-	# Ensure all 3 catalogs are running in parallel (no-op if already started)
-	download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
-	
-	# Now wait for all 3 — they're already running in parallel
-	local failed_catalogs=()
-	
-	for catalog in redhat-operator certified-operator community-operator; do
-		if ! run_once -q -w -i "catalog:${version_short}:${catalog}"; then
-			log "ERROR: Catalog download failed: $catalog"
-			failed_catalogs+=("$catalog")
-		fi
+
+	# Populate .index/ from shipped catalogs if missing
+	_populate_shipped_indexes
+
+	# If at least one catalog index exists for this version, proceed immediately
+	local _have_files=false
+	local _f
+	for _f in "$ABA_ROOT"/.index/*-operator-index-v${version_short}; do
+		[[ -s "$_f" ]] && { _have_files=true; break; }
 	done
-	
-	# If any catalogs failed, show a user-friendly error
-	if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
-		log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
-		
-		# Get error details via run_once (not direct runner access)
-		local first_failed="${failed_catalogs[0]}"
-		local error_msg
-		error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
-		
-		if [[ -z "$error_msg" ]]; then
-			error_msg="No details available."
+
+	if [[ "$_have_files" == true ]]; then
+		# Still kick off downloads in background for freshness (no-op if already running)
+		download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
+		log "Catalog indexes available (shipped or downloaded) for version ${version_short}"
+	else
+		# No files at all -- must download and wait
+		# Check if catalogs are already complete (quick check)
+		local need_wait=false
+		run_once -p -i "catalog:${version_short}:redhat-operator" || need_wait=true
+		run_once -p -i "catalog:${version_short}:certified-operator" || need_wait=true
+		run_once -p -i "catalog:${version_short}:community-operator" || need_wait=true
+
+		# If catalogs are still downloading, show a waiting dialog
+		if [[ "$need_wait" == "true" ]]; then
+			log "Catalogs still downloading, showing wait dialog..."
+			dialog --backtitle "$(ui_backtitle)" --infobox "Downloading operator catalogs for OCP ${version_short}...\n\nThis may take a few minutes on first run." 6 60
 		fi
-		
-		dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
+
+		# Ensure all 3 catalogs are running in parallel (no-op if already started)
+		download_all_catalogs "$version_short" >>"$LOG_FILE" 2>&1
+
+		# Now wait for all 3 — they're already running in parallel
+		local failed_catalogs=()
+
+		for catalog in redhat-operator certified-operator community-operator; do
+			if ! run_once -q -w -i "catalog:${version_short}:${catalog}"; then
+				log "ERROR: Catalog download failed: $catalog"
+				failed_catalogs+=("$catalog")
+			fi
+		done
+
+		# If any catalogs failed, show a user-friendly error
+		if [[ ${#failed_catalogs[@]} -gt 0 ]]; then
+			log "ERROR: ${#failed_catalogs[@]} catalog(s) failed: ${failed_catalogs[*]}"
+
+			# Get error details via run_once (not direct runner access)
+			local first_failed="${failed_catalogs[0]}"
+			local error_msg
+			error_msg=$(run_once -e -i "catalog:${version_short}:${first_failed}" 2>/dev/null | head -5)
+
+			if [[ -z "$error_msg" ]]; then
+				error_msg="No details available."
+			fi
+
+			dialog --colors --backtitle "$(ui_backtitle)" --msgbox \
 "\Z1ERROR: Failed to download operator catalogs\Zn
 
 Failed catalog(s): ${failed_catalogs[*]}
@@ -1975,12 +2020,13 @@ $error_msg
 \ZbWhat to try:\Zn
   1. Check your internet connection
   2. Press OK and go back to retry" 0 0
-		
-		DIALOG_RC="back"
-		return
+
+			DIALOG_RC="back"
+			return
+		fi
+
+		log "Catalog indexes ready for version ${version_short}"
 	fi
-	
-	log "Catalog indexes ready for version ${version_short}"
 	
 	log "Catalog indexes ready. Starting operators menu with ${#OP_BASKET[@]} operators in basket"
 
@@ -2437,7 +2483,7 @@ handle_action_view_isconf() {
 	log "Waiting for ImageSet config generation to complete"
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 	
-	if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1; then
+	if ! run_once -q -w -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >>"$LOG_FILE" 2>&1; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2498,7 +2544,7 @@ handle_action_edit_isconf() {
 		log "Waiting for ImageSet config generation to complete"
 		dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration...\n\nThis may take a moment." 6 50
 
-		if ! run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1; then
+		if ! run_once -q -w -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >>"$LOG_FILE" 2>&1; then
 			log "ERROR: ImageSet config generation failed"
 			show_run_once_error "tui:isconf:generate" "ImageSet Config Generation Failed"
 			return 0
@@ -2545,7 +2591,7 @@ handle_action_bundle() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Get output path from user
@@ -2671,7 +2717,7 @@ handle_action_local_quay() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Load existing values from mirror.conf
@@ -2840,7 +2886,7 @@ handle_action_remote_quay() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# Load existing values from mirror.conf
@@ -2931,7 +2977,7 @@ handle_action_save() {
 	# Wait for background isconf to finish (avoid racing two make processes)
 	if ! run_once -p -i "tui:isconf:generate"; then
 		log "Waiting for background isconf to complete"
-		run_once -q -w -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >>"$LOG_FILE" 2>&1 || true
+		run_once -q -w -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >>"$LOG_FILE" 2>&1 || true
 	fi
 	
 	# No form needed - just confirm and execute using global auto-answer setting
@@ -2966,9 +3012,9 @@ handle_action_isconf() {
 	dialog --backtitle "$(ui_backtitle)" --infobox "Generating ImageSet configuration..." 4 50
 	
 	local output rc
-	output=$(aba isconf -d mirror -y 2>&1) || true
+	output=$(make -sC "$ABA_ROOT/mirror" isconf 2>&1) || true
 	rc=$?
-	log "aba isconf -d mirror -y returned rc=$rc"
+	log "make -sC mirror isconf returned rc=$rc"
 	
 	if [[ $rc -eq 0 ]]; then
 		dialog --colors --backtitle "$(ui_backtitle)" --title "\Z2ImageSet Config Generated\Zn" \
@@ -3291,14 +3337,14 @@ summary_apply() {
 	
 	# Reset and start isconf generation in background (non-blocking)
 	# Reset ensures regeneration if user changes operators and comes back
-	log "Resetting and starting background task: aba isconf -d mirror"
+	log "Resetting and starting background task: make -sC mirror isconf"
 	# DEBUG: Write directly to file
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to reset isconf task" >> /tmp/aba-tui-debug.log
 	run_once -r -i "tui:isconf:generate"
 	# Small delay to ensure reset completes
 	sleep 0.2
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to start isconf task" >> /tmp/aba-tui-debug.log
-	run_once -i "tui:isconf:generate" -- bash -lc "cd '$ABA_ROOT' && aba isconf -d mirror" >/dev/null 2>&1
+	run_once -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >/dev/null 2>&1
 	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] isconf task started, checking directory..." >> /tmp/aba-tui-debug.log
 	ls -la ~/.aba/runner/tui:isconf:generate/ >> /tmp/aba-tui-debug.log 2>&1
 	log "ImageSet config generation started in background"
@@ -3688,9 +3734,9 @@ run_once -i "ocp:candidate:latest_version"          -- bash -lc 'source ./script
 run_once -i "ocp:candidate:latest_version_previous" -- bash -lc 'source ./scripts/include_all.sh; fetch_previous_version candidate' >/dev/null
 run_once -i "ocp:candidate:latest_version_older"    -- bash -lc 'source ./scripts/include_all.sh; fetch_older_version candidate' >/dev/null
 
-# Download oc-mirror early (needed for mirror save/sync/load later)
-log "Starting oc-mirror download in background"
-PLAIN_OUTPUT=1 run_once -i "$TASK_OC_MIRROR" -- make -sC "$ABA_ROOT/cli" oc-mirror
+# Download+install oc-mirror early (needed for mirror save/sync/load later)
+log "Starting oc-mirror install in background"
+PLAIN_OUTPUT=1 run_once -i "$TASK_INST_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
 log "oc-mirror download started"
 
 # Initialize configuration and global arrays (must happen BEFORE prefetch

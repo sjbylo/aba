@@ -45,10 +45,16 @@ sleep 1
 aba_debug "Starting CLI downloads"
 scripts/cli-download-all.sh
 
+# Also download CLIs for the upgrade target version (needed on disconnected host)
+if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	aba_info "Downloading CLI binaries for target version $ocp_version_target ..."
+	scripts/cli-download-all.sh --target-version "$ocp_version_target"
+fi
+
 # Wait for oc-mirror specifically (needed immediately below)
 aba_debug "Ensuring oc-mirror is available"
 if ! ensure_oc_mirror; then
-	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 aba_debug "oc-mirror is ready"
@@ -94,10 +100,10 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ## Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
 # Had to use [[ && ]] here, as without it got "mkdir -p <missing operand>" error!
-[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
+[[ ! "$TMPDIR" && "$data_dir" ]] && export TMPDIR="$(_expand_tilde "$data_dir")/.tmp" && aba_debug "TMPDIR=$TMPDIR"
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir, if it's defined
-[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
+[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && export OC_MIRROR_CACHE="$(_expand_tilde "$data_dir")" && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
 # Build the base oc-mirror command. --since is only relevant for save (mirror-to-disk).
 # When OC_MIRROR_SINCE is set (e.g. "2020-01-01"), archives include all content since that
@@ -106,16 +112,25 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 # --v2 is an oc-mirror CLI flag (not related to OCP version). May become default in future releases.
 base_cmd="oc-mirror --v2 --config imageset-config.yaml file://. ${OC_MIRROR_SINCE:+--since $OC_MIRROR_SINCE}"
 
-[ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
-[ "$OC_MIRROR_CACHE" ] && eval mkdir -p "$OC_MIRROR_CACHE"
+[ "$TMPDIR" ] && mkdir -p "$TMPDIR"
+[ "$OC_MIRROR_CACHE" ] && mkdir -p "$OC_MIRROR_CACHE"
 
 if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
 echo
-aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
-aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
+if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_version_target})."
+	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
+	aba_info_ok "  mirror/data/imageset-config.yaml"
+	aba_info_ok "  mirror/data/mirror_*.tar"
+	aba_info_ok "  cli/openshift-*-${ocp_version_target}*  (matching CLI binaries for target version)"
+	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"
+else
+	aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
+	aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
+fi
 echo
 
 exit 0

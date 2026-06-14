@@ -65,8 +65,8 @@ e2e_run "Reset aba" "aba reset -f"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify / available space > 200GB after reset" \
-    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
+e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
 
 e2e_run "Reconfigure after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
@@ -233,8 +233,6 @@ test_end 0
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-cli-validation.sh"
-
-exit 0
+exit $_rc

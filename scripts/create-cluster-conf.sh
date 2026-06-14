@@ -71,10 +71,18 @@ _missing=0
 
 # If not already set, set reasonable defaults
 # Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 
-[ ! "$starting_ip" ]		&& export starting_ip="ADD-IP-ADDR-HERE"
+if [ ! "$starting_ip" ] && [ "$machine_network" ] && [ "$prefix_length" ]; then
+	export starting_ip=$(suggest_starting_ip "$machine_network" "$prefix_length")
+fi
+[ ! "$starting_ip" ]		&& export starting_ip=
 [ ! "$mac_prefix" ]		&& export mac_prefix=00:50:56:2x:xx:
 [ ! "$num_masters" ]		&& export num_masters=3
 [ ! "$num_workers" ]		&& export num_workers=3
+[ ! "$hostPrefix" ]		&& export hostPrefix=23
+[ ! "$master_prefix" ]		&& export master_prefix=master
+[ ! "$worker_prefix" ]		&& export worker_prefix=worker
+[ ! "$ssh_key_file" ]		&& export ssh_key_file=~/.ssh/id_rsa
+[ ! "$mirror_name" ]		&& export mirror_name=mirror
 [ ! "$ports" ]			&& export ports=ens160
 [ ! "$port0" ]			&& export port0=ens160
 [ ! "$port1" ]			&& export port1=

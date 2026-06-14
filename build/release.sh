@@ -344,6 +344,31 @@ TOTAL=14                                      # Total steps (for [N/$TOTAL] labe
 RELEASE_BRANCH_NAME="_release-v$NEW_VERSION"  # Temp branch name used with --ref
 
 # -----------------------------------------------------------------------------
+# Step 0: Ensure cluster directories are gitignored
+# -----------------------------------------------------------------------------
+# Cluster working dirs (created by 'aba cluster --name X') contain cluster.conf.
+# They must never be committed. Auto-add any missing ones to .gitignore.
+_cluster_dirs_added=0
+while IFS= read -r _cdir; do
+    _cdir="${_cdir%/cluster.conf}"
+    _cdir="${_cdir#./}"
+    _entry="/${_cdir}/"
+    # Check if already covered (exact match or by existing glob patterns)
+    if git check-ignore -q "$_cdir" 2>/dev/null; then
+        continue
+    fi
+    echo "$_entry" >> .gitignore
+    echo -e "${YELLOW}  Added '$_entry' to .gitignore${NC}"
+    _cluster_dirs_added=$((_cluster_dirs_added + 1))
+done < <(find . -maxdepth 2 -name cluster.conf -not -path './templates/*' 2>/dev/null)
+
+if (( _cluster_dirs_added > 0 )); then
+    echo -e "${GREEN}  ✓ Added $_cluster_dirs_added cluster dir(s) to .gitignore${NC}"
+    git add .gitignore
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
 # Step 1: Pre-commit checks
 # -----------------------------------------------------------------------------
 # In --ref mode we:
@@ -354,6 +379,12 @@ RELEASE_BRANCH_NAME="_release-v$NEW_VERSION"  # Temp branch name used with --ref
 #   d) Run pre-commit checks with --release-branch (skips branch and pull checks).
 #
 # In default mode we simply run pre-commit checks on dev as-is.
+#
+# Pre-set ABA_VERSION to the target semver now.  Step 3 does this formally,
+# but the pre-commit semver guard runs first and will reject a stale/corrupt
+# value (e.g. a timestamp left over from a previous failed attempt).
+sed -i "s/^ABA_VERSION=.*/ABA_VERSION=$NEW_VERSION/" scripts/aba.sh
+
 if [ -n "$REF_COMMIT" ]; then
     echo -e "${YELLOW}[1/$TOTAL] Creating temp branch from $REF_COMMIT and running pre-commit checks...${NC}"
     _tmp="/tmp/_aba_release_$$"
@@ -387,7 +418,8 @@ echo -e "${GREEN}       ✓ VERSION updated to $NEW_VERSION${NC}\n"
 # Step 3: Embed version in scripts/aba.sh
 # -----------------------------------------------------------------------------
 # scripts/aba.sh has an ABA_VERSION= line that gets printed on --version and
-# used at runtime.  We patch it in-place with sed.
+# used at runtime.  We patch it in-place with sed.  (Also pre-set before
+# step 1 to pass the semver guard, so this is intentionally idempotent.)
 echo -e "${YELLOW}[3/$TOTAL] Embedding version in scripts/aba.sh...${NC}"
 sed -i "s/^ABA_VERSION=.*/ABA_VERSION=$NEW_VERSION/" scripts/aba.sh
 echo -e "${GREEN}       ✓ scripts/aba.sh now contains ABA_VERSION=$NEW_VERSION${NC}\n"

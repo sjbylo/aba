@@ -139,13 +139,10 @@ test_begin "Must-fail checks"
 e2e_run_must_fail "Uninstall existing reg should abort (state=existing)" \
     "aba -d mirror uninstall -y"
 
-e2e_run_must_fail "Sync to unknown host should fail" \
+# ADR-007: -H with a host that differs from installed state must abort.
+# The core fix in aba.sh checks persistent state and refuses to override.
+e2e_run_must_fail "-H to different host should abort (state locks reg_host)" \
     "aba -d mirror sync -H unknown.example.com --retry"
-
-# Restore reg_host after the must-fail test (the -H flag above overwrites mirror.conf).
-e2e_run "Restore reg_host after must-fail" \
-    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
-e2e_diag "Show mirror.conf after restore" "grep -E '^\w' mirror/mirror.conf"
 
 # Pool registry is already registered -- idempotent install must succeed (skip)
 e2e_run "Install on already-registered registry succeeds (idempotent)" \
@@ -295,14 +292,30 @@ test_end
 test_begin "Compact: install and delete cluster"
 
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
-e2e_run_remote "Create compact cluster.conf" \
-    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
+
+e2e_run_remote "Set explicit non-default DNS (exercises dns_servers)" \
+    "cd ~/aba && aba --dns $(pool_dns_server) 8.8.4.4"
+e2e_run_remote "Set explicit gateway (exercises next_hop_address)" \
+    "cd ~/aba && aba --gateway-ip \$(ip route | awk '/default/{print \$3; exit}')"
+e2e_run_remote "Create compact cluster.conf with explicit VIPs" \
+    "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) \
+     --api-vip $(pool_api_vip) --ingress-vip $(pool_apps_vip) --step cluster.conf"
 e2e_run_remote "Increase compact resources for reliable bootstrap" \
     "cd ~/aba && sed -i 's/^master_cpu_count=.*/master_cpu_count=14/' $COMPACT/cluster.conf && \
      sed -i 's/^master_mem=.*/master_mem=28/' $COMPACT/cluster.conf"
+e2e_run_remote "Verify explicit VIPs in cluster.conf" \
+    "cd ~/aba && grep -q 'api_vip=$(pool_api_vip)' $COMPACT/cluster.conf && \
+     grep -q 'ingress_vip=$(pool_apps_vip)' $COMPACT/cluster.conf"
+e2e_run_remote "Verify explicit dns_servers in cluster.conf" \
+    "cd ~/aba && grep -q 'dns_servers=.*8.8.4.4' $COMPACT/cluster.conf"
 e2e_diag_remote "Show compact cluster.conf" "grep -E '^\w' ~/aba/$COMPACT/cluster.conf"
-e2e_run_remote -r 1 1 "Bootstrap compact cluster" \
+
+e2e_run_remote "Set verify_conf=off (skip all preflight)" \
+    "cd ~/aba && aba --verify off"
+e2e_run_remote -r 1 1 "Bootstrap compact cluster (verify=off)" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step bootstrap"
+e2e_run_remote "Restore verify_conf=all" \
+    "cd ~/aba && aba --verify all"
 e2e_run_remote "Delete compact cluster" \
     "cd ~/aba && aba --dir $COMPACT delete"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT" remote
@@ -328,8 +341,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO remote
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
@@ -506,10 +518,13 @@ e2e_run "Deregister pool registry on conN" \
 e2e_run_remote "Deregister pool registry on disN" \
     "cd ~/aba && aba -d mirror unregister"
 
+# Purge extra blobs (ACM, service-mesh, vote-app, etc.) loaded during this suite.
+# Without this, ~37GB of stale blobs accumulate and starve disk for the next suite.
+e2e_run "Purge extra images from pool registry" \
+    "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
+
 test_end
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-airgapped-existing-reg.sh"
-
-exit 0
+exit $_rc

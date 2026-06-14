@@ -175,6 +175,27 @@ _all_pool_numbers() {
 	done | sort -n | tr '\n' ' '
 }
 
+# Get the RHEL version for a specific pool number from pools.conf.
+# Returns the INT_BASTION_RHEL_VER value, or "rhel8" if not set.
+_pool_rhel_ver() {
+	local pools_file="$1" pool_num="$2"
+	[ -f "$pools_file" ] || return 1
+	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
+		local _pnum=""
+		local _rhel=""
+		for _kv in $_rest; do
+			case "$_kv" in
+				POOL_NUM=*)              _pnum="${_kv#POOL_NUM=}" ;;
+				INT_BASTION_RHEL_VER=*)  _rhel="${_kv#INT_BASTION_RHEL_VER=}" ;;
+			esac
+		done
+		if [ "$_pnum" = "$pool_num" ]; then
+			echo "${_rhel:-rhel8}"
+			return 0
+		fi
+	done
+}
+
 # Count pools in pools.conf.
 _pool_count_from_conf() {
 	local pools_file="$1"

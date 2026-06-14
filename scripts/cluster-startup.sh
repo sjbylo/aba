@@ -75,6 +75,7 @@ if ! $OC get nodes; then
 fi
 
 aba_info "Cluster endpoint accessible at $server_url"
+rm -f .shutdown.log
 
 # Remove stale 'oc debug' pods that may re-execute shutdown commands.
 # These persist in etcd after a graceful shutdown and can cause an

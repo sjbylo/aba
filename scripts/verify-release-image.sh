@@ -37,27 +37,15 @@ fi
 if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
 	aba_warning "verify_conf=$verify_conf: skipping release image connectivity check"
 else
-	_release_url="docker://$reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
-
-	# Check twice for the image (skopeo sometimes fails when it shouldn't!)
-	aba_debug "Running: skopeo inspect $_release_url"
-	if ! skopeo inspect "$_release_url" >/dev/null 2>&1; then
-		sleep 10
-		_skopeo_err=$(skopeo inspect "$_release_url" 2>&1 >/dev/null) || {
-			aba_abort \
-				"Cannot access the release image for OpenShift v$release_ver in your registry." \
-				"Image: $_release_url" \
-				"${_skopeo_err:+skopeo: $_skopeo_err}" \
-				"Possible causes:" \
-				"- Registry credentials are missing or expired (run: aba -d mirror verify)" \
-				"- Images have not been mirrored yet (run: aba sync or aba save/load)" \
-				"- OpenShift version mismatch between aba.conf (v$ocp_version) and mirrored images"
-		}
-	fi
+	check_release_image || aba_abort \
+		"Cannot access the release image for OpenShift v$ocp_version (HTTP ${_release_http_code:-?})" \
+		"${_release_check_err:+Error: $_release_check_err}" \
+		"Run 'aba -d mirror verify' for detailed diagnostics."
 fi
 
 # Extract openshift-install binary from the mirror, if not already.  Use this binary to install OpenShift.
-openshift_install_mirror="./openshift-install-mirror-$reg_host"
+# Version+host+port in the filename ensures a version change triggers re-extraction.
+openshift_install_mirror="./openshift-install-mirror-${ocp_version}-${reg_host}-${reg_port}"
 if [ ! -x $openshift_install_mirror ]; then
 	# HACK
 	cat > .idms.yaml <<-END

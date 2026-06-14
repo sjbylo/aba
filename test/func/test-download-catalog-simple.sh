@@ -22,9 +22,6 @@ export RUN_ONCE_DIR="/tmp/test-catalog-simple"
 rm -rf "$RUN_ONCE_DIR"
 mkdir -p "$RUN_ONCE_DIR"
 
-# Clean up any existing index files
-rm -f .index/redhat-operator-index-v*.done 2>/dev/null || true
-
 echo "=== Test 1: Download redhat-operator catalog ==="
 cd mirror
 run_once -i "test:catalog:redhat-operator" -- \
@@ -43,7 +40,6 @@ echo ""
 echo "=== Verifying output files ==="
 
 index_file=".index/redhat-operator-index-v${ocp_ver_major}"
-done_file=".index/.redhat-operator-index-v${ocp_ver_major}.done"
 yaml_file="imageset-config-redhat-operator-catalog-v${ocp_ver_major}.yaml"
 
 if [[ -f "$index_file" && -s "$index_file" ]]; then
@@ -52,13 +48,6 @@ if [[ -f "$index_file" && -s "$index_file" ]]; then
 	echo "  Lines: $line_count"
 else
 	echo "✗ Index file missing or empty"
-	exit 1
-fi
-
-if [[ -f "$done_file" ]]; then
-	echo "✓ Done marker exists: $done_file"
-else
-	echo "✗ Done marker missing"
 	exit 1
 fi
 
@@ -72,13 +61,13 @@ else
 fi
 
 echo ""
-echo "=== Test 2: Run again (should skip) ==="
+echo "=== Test 2: Run again (re-downloads, run_once gating) ==="
 run_once -r -i "test:catalog:redhat-operator"  # Reset task
 run_once -i "test:catalog:redhat-operator" -- \
 	"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$ocp_ver_major"
 run_once -w -i "test:catalog:redhat-operator"
 
-echo "✓ Second run completed (should have skipped actual download)"
+echo "✓ Second run completed (re-download via run_once reset)"
 
 echo ""
 echo "=== Test 3: Test with TTL ==="

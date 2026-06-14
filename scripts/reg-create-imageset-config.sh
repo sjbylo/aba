@@ -1,4 +1,18 @@
-#!/bin/bash 
+#!/bin/bash
+# INTENT:      Generate data/imageset-config.yaml for oc-mirror from config files
+# CALLED BY:   mirror/Makefile (data/imageset-config.yaml target)
+# CWD:         mirror/
+# REQUIRES:    aba.conf (ocp_version, ocp_channel, op_sets, ops),
+#              mirror.conf (optional ocp_version_target, op_sets/ops overrides),
+#              .index/ catalogs (for operator channel resolution)
+# PRODUCES:    data/imageset-config.yaml, touches data/.created after generation
+# GUARDS:
+#   - Skips regeneration if ISC is strictly newer than data/.created (user/bundle ownership)
+#   - In bundle mode (.bundle exists): prints info message explaining ISC is preserved
+#   - In non-bundle mode: prints warning with instructions to force regeneration
+# IDEMPOTENT:  Yes (same config inputs produce same ISC; user edits are preserved)
+# ENV:         INFO_ABA (default: 1 when called from make)
+
 # Generate the imageset configuration file for oc-mirror (used by save, sync, and load workflows).
 
 # CWD is set by mirror/Makefile to the correct mirror directory
@@ -40,10 +54,18 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
+	# Upgrade mode: export target version variables for the Jinja template
+	export ocp_version_target="${ocp_version_target:-}"
+	export tgt_major=""
+	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+		export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
+		aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+	fi
+
 	aba_info "Generating image set configuration: data/imageset-config.yaml ..."
 	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH' ..."
 
-	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version
+	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version ocp_version_target=$ocp_version_target
 	scripts/j2 ./templates/imageset-config.yaml.j2 > data/imageset-config.yaml
 	touch data/.created  # In case next line fails!
 
@@ -53,28 +75,26 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 
 	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" data/imageset-config.yaml && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
 
-	# Upgrade mode: when ocp_version_target is set and differs from ocp_version,
-	# rewrite the channel to span both versions with shortestPath.
-	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-		tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
-		tgt_channel="${ocp_channel}-${tgt_major}"
-		aba_info "Upgrade mode: rewriting ISC channel to $tgt_channel ($ocp_version → $ocp_version_target, shortestPath)"
-		sed -i \
-			-e "s/^    - name: ${ocp_channel}-${ocp_ver_major}/    - name: ${tgt_channel}/" \
-			-e "s/^      maxVersion: ${ocp_version}/      maxVersion: ${ocp_version_target}/" \
-			-e "s/^#      shortestPath: true/      shortestPath: true/" \
-			data/imageset-config.yaml
-		aba_info_ok "ISC configured for upgrade: $tgt_channel, minVersion=$ocp_version, maxVersion=$ocp_version_target, shortestPath=true"
-	fi
-
 	touch data/.created
 
-	aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
+	if [ "$tgt_major" ]; then
+		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml (upgrade: $ocp_version → $ocp_version_target, $ocp_channel-$tgt_major, shortestPath, $ARCH)"
+	else
+		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
+	fi
 	[ ! "$ops" ] && [ ! "$op_sets" ] && \
 		aba_info "To add operators, set 'op_sets' or 'ops' in aba.conf, then re-run 'aba save' or 'aba sync'."
 	aba_info "For advanced customization, edit mirror/data/imageset-config.yaml directly (your edits will be preserved)."
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"
-	aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
-		"To force regeneration: rm mirror/data/.created && aba -d mirror imagesetconf"
+	if [ -f ../.bundle ]; then
+		if [ -f data/.isc-pinned ]; then
+			aba_info "Preserving user-customized imageset-config from bundle (pinned)."
+		else
+			aba_info "Preserving bundled imageset-config (matches saved images). Will unlock after 'aba load'."
+		fi
+	else
+		aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
+			"To force regeneration: rm mirror/data/.created && aba -d mirror imagesetconf"
+	fi
 fi

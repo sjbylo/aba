@@ -234,8 +234,8 @@ fi
 echo "✓ ensure_quay_registry() completed successfully"
 
 # Verify it uses the correct constant
-if grep -q "TASK_QUAY_REG" scripts/include_all.sh; then
-	echo "✓ Function uses TASK_QUAY_REG constant"
+if grep -q "TASK_INST_QUAY_REG" scripts/include_all.sh; then
+	echo "✓ Function uses TASK_INST_QUAY_REG constant"
 fi
 
 aba_info_ok "Test 6 PASSED: ensure_quay_registry() function works" >&2

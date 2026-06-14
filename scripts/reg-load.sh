@@ -1,4 +1,18 @@
-#!/bin/bash 
+#!/bin/bash
+# INTENT:      Load saved images from mirror/data/ into the mirror registry via oc-mirror
+# CALLED BY:   mirror/Makefile (load target)
+# CWD:         mirror/ (oc-mirror runs from mirror/data/)
+# ARGS:        [retry_count] number of retries on failure (default: 1 attempt)
+# REQUIRES:    oc-mirror binary, mirror_*.tar in data/, data/imageset-config.yaml,
+#              registry installed and reachable (reg_host:reg_port from mirror.conf)
+# PRODUCES:    Images pushed to registry; data/working-dir/ populated by oc-mirror
+# SIDE EFFECTS:
+#   - After successful load: touches data/.created (unlocks ISC) unless data/.isc-pinned exists
+#   - Removes ../.bundle and data/.isc-pinned (bundle phase complete, repo becomes normal)
+#   - Sets TMPDIR and OC_MIRROR_CACHE to data_dir if configured
+# IDEMPOTENT:  Yes (oc-mirror skips images already present in the registry)
+# ENV:         INFO_ABA (default: 1 when called from make)
+
 # Load the registry with images from the local disk
 
 # CWD is set by mirror/Makefile to the correct mirror directory
@@ -31,7 +45,7 @@ aba_debug "Configuration validated"
 #PLAIN_OUTPUT=1 run_once    -i cli:install:oc-mirror -- make -sC cli oc-mirror
 aba_debug "Ensuring oc-mirror is available"
 if ! ensure_oc_mirror; then
-	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 aba_debug "oc-mirror is ready"
@@ -96,20 +110,29 @@ echo
 
 # Now using data_dir so reg_root=$data_dir/quay-install
 # Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)
-[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
+[[ ! "$TMPDIR" && "$data_dir" ]] && export TMPDIR="$(_expand_tilde "$data_dir")/.tmp" && aba_debug "TMPDIR=$TMPDIR"
 # Note that the cache is always used except for mirror-to-mirror (sync) workflows!
 # Place the '.oc-mirror/.cache' into a location where there should be more space, i.e. $data_dir.
-[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && eval export OC_MIRROR_CACHE=$data_dir && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
+[[ ! "$OC_MIRROR_CACHE" && "$data_dir" ]] && export OC_MIRROR_CACHE="$(_expand_tilde "$data_dir")" && aba_debug "OC_MIRROR_CACHE=$OC_MIRROR_CACHE"
 
 # --v2 is an oc-mirror CLI flag (not related to OCP version). May become default in future releases.
 base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://$reg_host:$reg_port$reg_path"
 
-[ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
-[ "$OC_MIRROR_CACHE" ] && eval mkdir -p "$OC_MIRROR_CACHE"
+[ "$TMPDIR" ] && mkdir -p "$TMPDIR"
+[ "$OC_MIRROR_CACHE" ] && mkdir -p "$OC_MIRROR_CACHE"
 
 if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
+
+# Bundle phase complete: unlock ISC so future config changes trigger regeneration.
+# touch .created makes it newer than ISC → reg-create-imageset-config.sh will regenerate.
+# Skip if .isc-pinned exists — user hand-edited the ISC and wants it preserved permanently.
+# Remove .bundle and .isc-pinned: this repo is now a normal disconnected tree.
+if [ ! -f data/.isc-pinned ]; then
+	touch data/.created
+fi
+rm -f ../.bundle data/.isc-pinned
 
 echo
 aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"

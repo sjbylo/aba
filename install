@@ -9,11 +9,24 @@
 
 uname -o | grep -q "^Darwin$" && echo "Install ABA on RHEL, Centos Stream or Fedora.  Most tested is RHEL 8 or 9 (no oc-mirror for Mac OS!)." >&2 && exit 1
 
+# Color support: use green checkmarks if terminal supports color, plain text otherwise
+if [ -t 2 ] && [ "${TERM:-dumb}" != "dumb" ]; then
+	_G='\033[0;32m'  # green
+	_B='\033[1m'     # bold
+	_N='\033[0m'     # reset
+	_CHECK="${_G}✓${_N}"
+else
+	_G='' _B='' _N=''
+	_CHECK="✓"
+fi
+
+_step() { printf "  ${_CHECK} %s\n" "$1" >&2; }
+
 # We need git, which, id, diff commands to run this script (not always available in a container) ... 
 # Other rpm packages that ABA requires are copied into the below lines at build time (which aren't available yet!)
 required_pkgs=(which file hostname diffutils git make jq python3 python3-jinja2 python3-pyyaml ncurses)
-required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which diffutils dialog podman httpd-tools skopeo)  # Synced from templates/rpms-external.txt
-required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd acl polkit)  # Synced from templates/rpms-internal.txt
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which dialog diffutils podman httpd-tools skopeo acl)  # Synced from templates/rpms-external.txt
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which dialog file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd acl polkit)  # Synced from templates/rpms-internal.txt
 required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
@@ -37,15 +50,15 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 if [ ${#missing_pkgs[@]} -gt 0 ]; then
 	# try our luck to install the missing packages ...
-	echo "Installing required rpms: ${missing_pkgs[*]} (logging to .dnf-install.log). Please wait!" >&2
+	printf "  ⏳ Installing packages (%d, logging to .dnf-install.log)...\n" "${#missing_pkgs[@]}" >&2
 
 	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
-		echo
-		echo "Error installing required packages. See: .dnf-install.log" >&2
-		echo "Install the correct rpm packages (${missing_pkgs[*]}) and try again." >&2
+		printf "\n  Error installing packages. See: .dnf-install.log\n" >&2
+		printf "  Try:  sudo dnf install %s\n\n" "${missing_pkgs[*]}" >&2
 
 		exit 1
 	fi
+	_step "Packages installed (${#missing_pkgs[@]})"
 fi
 
 if ! which id >/dev/null 2>&1; then
@@ -90,6 +103,9 @@ msg=
 [ "$1" ] && branch="$1"
 [ "$2" ] && repo="$2"
 
+# Print banner for manual installs
+[ ! "$quiet" ] && printf "\n${_B}ABA Installer${_N}\n\n" >&2
+
 is_repo_available() {
 	[ -s ./scripts/aba.sh -a -x ./scripts/aba.sh ] && return 0
 	# If curl is used...
@@ -108,16 +124,16 @@ download_repo() {
 	fi
 
 	if ! grep -q "Top level Makefile" Makefile 2>/dev/null; then
-		echo Cloning ABA with: "git clone --depth 1 -b $branch https://github.com/${repo}.git" >&2
-		if ! git clone --depth 1 -b $branch https://github.com/${repo}.git; then
-			echo "Error fetching git repo from https://github.com/${repo}.git (branch: $branch)" >&2
-
+		[ ! "$quiet" ] && printf "  ⏳ Cloning repository...\n" >&2
+		_clone_cmd="git clone --quiet --depth 1 -b $branch https://github.com/${repo}.git"
+		if ! _clone_out=$($_clone_cmd 2>&1); then
+			printf "\n  Command: %s\n" "$_clone_cmd" >&2
+			printf "  Error:   %s\n\n" "$_clone_out" >&2
 			exit 1
 		fi
 
-		echo
-		[ "$PWD" = "/" ] && echo "Cloned ABA branch $branch into /aba" >&2 || echo "Cloned ABA branch $branch into $PWD/aba" >&2
 		cd aba
+		[ "$PWD" = "/" ] && _step "Repository cloned into /aba (branch: $branch)" || _step "Repository cloned into $PWD (branch: $branch)"
 	fi
 }
 
@@ -133,6 +149,17 @@ fi
 
 # Sanity check ...
 [ ! -x scripts/aba.sh ] && echo "Abort: Incomplete ABA repo! aba script not found in $PWD/scripts/aba.sh" >&2 && exit 1
+
+# Note if mirror.conf exists from a previous installation.
+# A fresh bundle never contains mirror/mirror.conf — if it exists AND is older
+# than .bundle, it survived from a previous aba/ that was overwritten by tar xf.
+if [ -f mirror/mirror.conf ] && [ -f .bundle ] && [ mirror/mirror.conf -ot .bundle ] && [ ! "$quiet" ]; then
+	echo "" >&2
+	echo "  NOTE: A mirror registry configuration was detected from a previous installation." >&2
+	echo "        If the registry is still running, you can reuse it (just load new images)." >&2
+	echo "        To start fresh instead: run 'aba -d mirror uninstall' before continuing." >&2
+	echo "" >&2
+fi
 
 mkdir -p ~/.aba
 
@@ -170,6 +197,8 @@ if [ ! -f "$_SIGSTORE_DEST" ]; then
 	fi
 fi
 
+[ ! "$quiet" ] && _step "Config initialized"
+
 source scripts/include_all.sh
 
 # Reset ~/.aba state on manual install only
@@ -177,7 +206,7 @@ source scripts/include_all.sh
 if [ ! "$quiet" ]; then
 	if [ -d ~/.aba/runner ] || [ -d ~/.aba/cache ]; then
 		rm -rf ~/.aba/runner ~/.aba/cache
-		echo Cache deleted
+		_step "Cache cleared"
 	fi
 fi
 
@@ -197,7 +226,10 @@ do
 			[ -n "${DEBUG_ABA-}" ] && echo "Comparing $d/aba with scripts/aba.sh" >&2
 			if diff -q "$d/aba" scripts/aba.sh >/dev/null 2>&1; then
 				# Installed aba is identical to repo — genuinely up-to-date
-				[ ! "$quiet" ] && echo ABA is already up-to-date >&2
+				if [ ! "$quiet" ]; then
+					_step "ABA is already up-to-date"
+					printf "\n${_G}✓ Already up-to-date!${_N}\n\n" >&2
+				fi
 				exit 0
 			else
 				# Installed aba differs from repo — update needed.
@@ -223,12 +255,21 @@ do
 		# Now, try to install aba
 		if $SUDO cp -p scripts/aba.sh $d/aba; then
 			$SUDO chmod +x $d/aba
+
+			# Create abatui symlink → aba (TUI entry point)
+			$SUDO ln -sf aba $d/abatui
+
 			if [ ! "$quiet" ]; then
-				echo ABA has been $action to $d/aba >&2
+				_step "aba installed to $d/aba"
+				printf "\n${_G}✓ Installation Complete!${_N}\n" >&2
+				printf "\n${_B}Start using ABA:${_N}\n" >&2
+				printf "    aba          # CLI\n" >&2
+				printf "    abatui       # Interactive TUI\n" >&2
 				if [ -n "$msg" ]; then
-					###source scripts/include_all.sh
+					printf "\n" >&2
 					echo_yellow "$msg" >&2
 				fi
+				printf "\n" >&2
 			fi
 
 			exit $ret  # Success - if aba updates itself, ret=2 

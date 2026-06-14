@@ -16,6 +16,14 @@ alwaysApply: true
 - WAIT for user to explicitly say "commit", "push", or "commit and push"
 - NEVER use required_permissions: ["all"] for git commit or git push — they must run inside the sandbox so Cursor's approval gate is enforced
 
+## NEVER commit log files, artifacts, or generated output
+
+- Before EVERY `git add`, review `git status` and `git diff --stat` to ensure NO log files, test output, build artifacts, temporary files, or large generated files are included
+- NEVER commit: `*.log`, test output/snapshots, `.state` files, core dumps, coverage reports, build output, editor backups, container images, tarballs
+- If `git status` shows unexpected files in dirs like `test/e2e/logs/`, `*.tmp`, `/tmp/`, `.cache/` — STOP and ask the user before adding them
+- When a `.gitignore` file is removed in a commit, CHECK if that removal causes previously-ignored files to become tracked — this is how the 2026-05-21 incident happened
+- Always use `git add <specific-files>` or `git add -p` — NEVER use `git add .` or `git add -A` without first reviewing what will be staged
+
 ## NEVER add AI attribution to commits
 
 - No "Co-authored-by: Cursor" or similar tags in commit messages
@@ -27,10 +35,17 @@ alwaysApply: true
 - When multiple branches exist, ALWAYS clarify which branch to commit to BEFORE committing. Ask: "This should go on `dev` or `feature/xxx`?" Do NOT assume.
 - Default: commit AND push together (unless told otherwise)
 - Default: AI decides how to batch commits -- group by logical scope (e.g. core / test / docs) unless user specifies otherwise
-- **NEVER commit code changes without testing first!** If there is no automated test covering the change, ask the user to verify manually before committing. Docs-only changes are exempt.
+- **NEVER commit code changes without testing first!** EVERY code fix MUST be tested (run on registry4, unit test, or functional verification) BEFORE committing. "I showed the code and it looks right" is NOT testing. Actually execute the changed code path and verify it works. If there is no automated test covering the change, test manually on registry4 or ask the user to verify. Docs-only changes are exempt.
 - Run `build/pre-commit-checks.sh` before committing code changes
 - Run `build/pre-commit-checks.sh --skip-version` for docs-only commits
 - IMPORTANT: `pre-commit-checks.sh` runs `git pull` which can overwrite local uncommitted changes. After running pre-commit checks, ALWAYS verify that edited files still contain the intended changes (e.g. `git diff` the files) before staging and committing.
+
+## Multi-chat safety
+
+- Commit messages are cross-chat context: write descriptive messages explaining WHY, not just what
+- Before starting edits, check `git status` and `git log -3` to see if another chat made recent changes
+- Update `ai/SESSION_STATE.md` before handing off to another chat
+- When resuming after another chat worked, read `ai/SESSION_STATE.md` and `git log --oneline -10`
 
 ## Backup uncommitted changes before editing
 
@@ -74,6 +89,7 @@ alwaysApply: true
 - Add comments for non-obvious bash features
 - Format bash scripts with proper and correct indentaton (pretty print).
 - **NEVER use `(( var++ ))` or `(( var-- ))` for arithmetic** — when `var` is 0, `(( 0 ))` returns exit code 1, which crashes under `set -e` or an ERR trap. Use `var=$(( var + 1 ))` instead. Never band-aid with `(( var++ )) || true`.
+- **NEVER use `local` outside a function** — `local` is only valid inside a bash function. At script top level, just use a plain variable assignment (e.g. `splash_rc=$?` not `local splash_rc=$?`). Bash will error with "local: can only be used in a function".
 - **Always prefer `sudo` over running as root directly.** SSH to a host as the normal user and use `sudo <command>` for privileged operations. Never SSH as root just to avoid typing `sudo`. This keeps audit trails, reduces blast radius, and matches how real users operate.
 
 ## Key architecture
@@ -122,7 +138,8 @@ alwaysApply: true
 - Tests MUST NEVER call ABA-internal functions directly (e.g. `run_once()`, `download_all_catalogs()`) -- use `aba` CLI or `make` targets to simulate user actions. Exception: sourcing `include_all.sh` for utility functions in framework code is acceptable.
 - Tests MUST NOT use `aba reset` as a mid-process cleanup mechanism -- `aba reset` is a "distclean" that returns the repo to its original unpacked state. Only use it when a 100% fresh clean repo is genuinely required (e.g. `setup_aba_from_scratch`, or dedicated reset regression tests). For mid-process cleanup use `aba clean`, `aba uninstall`, or `aba delete`.
 - Every suite that creates clusters or mirrors MUST have an explicit `test_begin "Cleanup: ..."` block at the end that runs `aba delete` / `aba uninstall` / `aba unregister` for every resource created. The EXIT trap and `_pre_suite_cleanup` are safety nets for crashes -- NOT the primary cleanup path. Explicit cleanup also tests `aba delete`, `aba uninstall`, and `aba unregister`.
-- **NEVER bypass `aba uninstall` with manual podman/systemctl/rm commands** for registry cleanup in test code. Manual cleanup (e.g. `podman stop -a`, `podman rm -af`, `podman secret rm -a`, `systemctl --user stop quay-*`, `sudo rm -rf ~/aba/mirror`) has caused broken OS state in the past. Always use `aba uninstall`. If `aba` is not found, fix the deployment -- do not work around it with manual commands. The infra-owned `aba` binary at `~/.e2e-harness/bin/aba` is always available for cleanup.
+- **NEVER bypass `aba uninstall` with manual podman/systemctl/rm commands** for registry cleanup — in test code OR in core ABA scripts. Manual cleanup (e.g. `podman stop -a`, `podman rm -af`, `podman secret rm -a`, `systemctl --user stop quay-*`, `sudo rm -rf ~/aba/mirror`) has caused broken OS state in the past. Always use `aba uninstall`. If `aba` is not found, fix the deployment -- do not work around it with manual commands. The infra-owned `aba` binary at `~/.e2e-harness/bin/aba` is always available for cleanup.
+- **NEVER add manual systemd/podman cleanup to uninstall scripts.** Quay registry lifecycle (containers, systemd units, secrets) is managed by `mirror-registry uninstall` (Ansible playbook). ABA must NOT add `systemctl --user stop/disable/reset-failed quay-*`, `podman rm`, `rm -f ~/.config/systemd/user/quay-*`, or similar workarounds. If `mirror-registry uninstall` leaves stale state, that is a `mirror-registry` bug — report it upstream, do not paper over it in ABA.
 
 ## E2E framework code hygiene (anti-spaghetti)
 
@@ -157,9 +174,10 @@ alwaysApply: true
 
 ## E2E pool usage
 
-- When only pools 1 and 2 are active, ALWAYS pass `--pools 2` on every `run.sh` invocation (run, deploy, restart, stop, status, verify, reschedule)
-- Using `--pool N` without `--pools` can trigger infrastructure setup for ALL pools in pools.conf, powering on VMs that should stay off
-- Rule of thumb: if you know how many pools are in use, always pass `--pools N`
+- ALWAYS pass `-p` with the correct pool spec on every `run.sh` invocation (run, deploy, restart, stop, status, verify, reschedule)
+- `-p N` means pool N only (single pool). `-p 1-4` means pools 1 through 4 (range). `-p 1,3` means pools 1 and 3 (list). `-p all` means all pools in pools.conf.
+- Example: 4 active pools → `-p 1-4`. Only pools 1 and 2 → `-p 1-2`. NEVER use `-p 4` to mean "4 pools" — that means "pool 4 only"!
+- Omitting `-p` on a read-only command (status, list) defaults to all pools. Omitting `-p` on a write command can trigger infrastructure setup for ALL pools in pools.conf, powering on VMs that should stay off.
 
 ## gotest directive
 
@@ -170,6 +188,14 @@ When the user says **"gotest"** (or "run the tests"), enter an autonomous E2E te
 - **Core ABA file changes**: Prefer NOT to change core ABA files. However, if a test failure is clearly caused by a core ABA bug (not a test bug), and the fix is surgical and obvious (e.g. missing variable, wrong path, broken conditional), you MAY fix core code. Log every core change in `ai/SESSION_STATE.md` and notify the user via `~/bin/notify.sh`. If the fix is risky, large, or ambiguous, note it and move on.
 - Always keep ALL pools busy -- queue additional suites on idle pools, even if they have already been tested
 - Report back a summary when the user returns
+
+## NEVER interfere with paused/failed E2E suites
+
+- **NEVER send keystrokes (`0`, `R`, `s`, `S`, etc.) to a paused suite prompt** without explicit user permission
+- If a suite is PAUSED (exhausted retries), it is FAILED -- report it as a failure, investigate the root cause, and wait for user instructions
+- NEVER restart, skip, or skip-suite on behalf of the user -- these actions mask failures and produce unreliable test results
+- The ONLY acceptable autonomous actions on paused suites are: reading logs, checking tmux output, and investigating the root cause
+- When reporting test results, NEVER count a manually-restarted suite as PASS -- if you restarted it, clearly state that the original run FAILED and the second run was a manual retry
 
 ## Development workflow
 

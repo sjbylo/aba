@@ -138,14 +138,32 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create VMs and start install" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --ports enp1s0 --step refresh"
 
-e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
+# Wait for bootstrap only (not full install-complete)
+e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
+    "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
+
+# Wait for cluster to become ready (KVM SNO can take 30-40 min after bootstrap)
+e2e_wait_cluster_ready $SNO local 2700
+
+# EARLY day2: .install-complete does NOT exist yet.
+# day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,
+# externalize state via monitor-install.sh, and proceed with day2 config.
+e2e_run "Verify .install-complete does NOT exist yet" \
+    "[ ! -f $SNO/.install-complete ] || { echo 'ERROR: .install-complete already exists'; false; }"
+e2e_run "Apply day2 EARLY (tests cluster_is_ready gate)" "aba --dir $SNO day2"
+
+# Verify the gate created .install-complete and externalized state
+e2e_run "Verify .install-complete was auto-created by day2 gate" \
+    "[ -f $SNO/.install-complete ] || { echo 'ERROR: day2 did not create .install-complete'; false; }"
+e2e_run "Verify clusterstate symlink exists (state externalized)" \
+    "[ -L $SNO/clusterstate ] || { echo 'ERROR: clusterstate not created'; false; }"
+
+# Finalize: aba mon should complete quickly (cluster already up)
+e2e_run -r 2 30 "Finalize install (aba mon)" "aba --dir $SNO mon"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
-
-e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
 
 test_end
 
@@ -204,8 +222,7 @@ e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
 e2e_poll 300 15 "Wait for all nodes Ready after startup" \
     "aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw Ready && ! aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw NotReady"
 e2e_diag "Show nodes after startup" "aba --dir $SNO run --cmd 'oc get nodes'"
-e2e_poll 600 30 "Wait for all cluster operators available after startup" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators after shutdown/startup" \
     "aba --dir $SNO run --cmd 'oc get co'"
 
@@ -238,8 +255,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-kvm-lifecycle.sh"
-
-exit 0
+exit $_rc

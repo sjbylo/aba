@@ -115,27 +115,30 @@ else
 	exit 1
 fi
 
-# Check failed tasks were deleted
-if [[ ! -d "$RUN_ONCE_DIR/test:fail1" ]]; then
-	echo "✓ Failed task deleted: test:fail1"
+# Check failed tasks were cleared (exit file removed, identity preserved)
+if [[ ! -f "$RUN_ONCE_DIR/test:fail1/exit" ]]; then
+	echo "✓ Failed task cleared: test:fail1 (exit file removed)"
 else
-	echo "✗ FAIL: Failed task still exists: test:fail1"
+	echo "✗ FAIL: Failed task exit file still exists: test:fail1"
 	exit 1
 fi
 
-if [[ ! -d "$RUN_ONCE_DIR/test:fail2" ]]; then
-	echo "✓ Failed task deleted: test:fail2"
+if [[ ! -f "$RUN_ONCE_DIR/test:fail2/exit" ]]; then
+	echo "✓ Failed task cleared: test:fail2 (exit file removed)"
 else
-	echo "✗ FAIL: Failed task still exists: test:fail2"
+	echo "✗ FAIL: Failed task exit file still exists: test:fail2"
 	exit 1
 fi
 
-# Count remaining tasks (should be 2)
-remaining_count=$(ls -1d "$RUN_ONCE_DIR"/test:* 2>/dev/null | wc -l)
-if [[ $remaining_count -eq 2 ]]; then
-	echo "✓ Correct number of tasks remain: 2 (only successful tasks)"
+# Count active tasks (those with exit files -- should be 2 successful ones)
+active_count=0
+for d in "$RUN_ONCE_DIR"/test:*/; do
+	[[ -f "$d/exit" ]] && active_count=$((active_count + 1))
+done
+if [[ $active_count -eq 2 ]]; then
+	echo "✓ Correct number of active tasks: 2 (only successful tasks have exit files)"
 else
-	echo "✗ FAIL: Expected 2 remaining tasks, found $remaining_count"
+	echo "✗ FAIL: Expected 2 active tasks, found $active_count"
 	exit 1
 fi
 
@@ -220,11 +223,11 @@ else
 	exit 1
 fi
 
-# Verify zombie was cleaned
-if [[ ! -d "$RUN_ONCE_DIR/test:zombie" ]]; then
-	echo "✓ Zombie task cleaned up by -F"
+# Verify zombie runtime state was cleaned (pid/lock removed)
+if [[ ! -f "$RUN_ONCE_DIR/test:zombie/pid" && ! -f "$RUN_ONCE_DIR/test:zombie/lock" ]]; then
+	echo "✓ Zombie task runtime state cleaned by -F"
 else
-	echo "✗ FAIL: Zombie task still exists after -F"
+	echo "✗ FAIL: Zombie task runtime files still exist after -F"
 	ls "$RUN_ONCE_DIR/test:zombie/"
 	exit 1
 fi
@@ -270,10 +273,10 @@ sleep 0.3
 # Now -F should clean it (lock is free, no exit file)
 run_once -F
 
-if [[ ! -d "$RUN_ONCE_DIR/test:locked-zombie" ]]; then
-	echo "✓ Task cleaned after lock released"
+if [[ ! -f "$RUN_ONCE_DIR/test:locked-zombie/pid" && ! -f "$RUN_ONCE_DIR/test:locked-zombie/lock" ]]; then
+	echo "✓ Task runtime state cleaned after lock released"
 else
-	echo "✗ FAIL: Task should have been cleaned after lock release"
+	echo "✗ FAIL: Task runtime files should have been cleaned after lock release"
 	exit 1
 fi
 
@@ -376,10 +379,10 @@ fi
 
 # -F should clean it (non-zero exit)
 run_once -F
-if [[ ! -d "$RUN_ONCE_DIR/test:child-kill" ]]; then
-	echo "✓ Task cleaned by -F"
+if [[ ! -f "$RUN_ONCE_DIR/test:child-kill/exit" ]]; then
+	echo "✓ Task cleared by -F (exit file removed)"
 else
-	echo "✗ FAIL: Task not cleaned"
+	echo "✗ FAIL: Task exit file not cleaned"
 	exit 1
 fi
 
@@ -426,8 +429,8 @@ fi
 
 # -F should clean zombie if lock is free
 run_once -F
-if [[ ! -d "$RUN_ONCE_DIR/test:outer-kill" ]]; then
-	echo "✓ Zombie cleaned by -F"
+if [[ ! -f "$RUN_ONCE_DIR/test:outer-kill/pid" ]]; then
+	echo "✓ Zombie runtime state cleaned by -F"
 else
 	if [[ "$lock_free" == true ]]; then
 		echo "✗ FAIL: Lock was free but -F didn't clean it"
@@ -481,10 +484,10 @@ fi
 
 # -F should clean it
 run_once -F
-if [[ ! -d "$RUN_ONCE_DIR/test:both-kill" ]]; then
-	echo "✓ Zombie cleaned by -F"
+if [[ ! -f "$RUN_ONCE_DIR/test:both-kill/pid" && ! -f "$RUN_ONCE_DIR/test:both-kill/lock" ]]; then
+	echo "✓ Zombie runtime state cleaned by -F"
 else
-	echo "✗ FAIL: Zombie not cleaned"
+	echo "✗ FAIL: Zombie runtime files not cleaned"
 	exit 1
 fi
 

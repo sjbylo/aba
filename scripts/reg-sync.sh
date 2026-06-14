@@ -30,7 +30,7 @@ aba_debug "Configuration validated"
 # Be sure a download has started ..
 aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
-	error_msg=$(get_task_error "$TASK_OC_MIRROR")
+	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
 	aba_abort "Downloading oc-mirror binary failed:\n$error_msg\n\nPlease check network and try again."
 fi
 aba_debug "oc-mirror is ready"
@@ -106,12 +106,12 @@ echo
 
 # NOTE: that the cache is always used *except* for mirror-to-mirror (sync) workflows, where it is not used! See reg-save.sh and reg-load.sh.
 # Set TMPDIR path (defer mkdir to just before oc-mirror needs it)
-[[ ! "$TMPDIR" && "$data_dir" ]] && eval export TMPDIR=$data_dir/.tmp && aba_debug "TMPDIR=$TMPDIR"
+[[ ! "$TMPDIR" && "$data_dir" ]] && export TMPDIR="$(_expand_tilde "$data_dir")/.tmp" && aba_debug "TMPDIR=$TMPDIR"
 
 # --v2 is an oc-mirror CLI flag (not related to OCP version). May become default in future releases.
 base_cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. docker://$reg_host:$reg_port$reg_path"
 
-[ "$TMPDIR" ] && eval mkdir -p "$TMPDIR"
+[ "$TMPDIR" ] && mkdir -p "$TMPDIR"
 
 if ! _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd"; then
 	exit 1

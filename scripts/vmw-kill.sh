@@ -1,11 +1,11 @@
-#!/bin/bash 
-# Power off the VMs immediatelly 
+#!/bin/bash
+# Power off the VMs immediately.
+# Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
 
-
-
 if [ -s vmware.conf ]; then
+	ensure_govc
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	aba_info "vmware.conf file not defined. Run 'aba vmw' to create it if needed"
@@ -14,29 +14,14 @@ fi
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
-	eval `scripts/cluster-config.sh || exit 1`
+	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param
-
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-cluster_folder=$VC_FOLDER/$CLUSTER_NAME
-
-if [ "$ask" ]; then
-	echo
-	for name in $CP_NAMES $WORKER_NAMES; do
-		vm=$(vm_name "$CLUSTER_NAME" "$name")
-		[ "$VC" ] && echo $cluster_folder/$vm || echo $vm
-	done
-
-	ask "Immediately power down the above virtual machine(s)" || exit 1
-fi
-
-for name in $CP_NAMES $WORKER_NAMES; do
-	exec_cmd="govc vm.power -off $(vm_name "$CLUSTER_NAME" "$name")"
-	aba_debug "Running: $exec_cmd"
-	$exec_cmd || true
-done
-
-exit 0
+source scripts/vm-provider.sh
+vm_provider_load vmw
+# || exit 0: vm_kill returns 1 only when user declines the ask prompt.
+# The || suppresses the ERR trap (which would print a spurious "Script error").
+vm_kill || exit 0

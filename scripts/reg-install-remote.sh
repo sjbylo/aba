@@ -105,18 +105,22 @@ case "$vendor" in
 		aba_info "Installing Quay registry on remote host $reg_host ..."
 
 		if ! ensure_quay_registry; then
-			error_msg=$(get_task_error "$TASK_QUAY_REG")
+			error_msg=$(get_task_error "$TASK_INST_QUAY_REG")
 			aba_abort "Failed to extract mirror-registry:\n$error_msg"
 		fi
+
+		# mirror-registry's internal Ansible needs quay_installer to SSH back to
+		# the same host. The binary creates the keypair but doesn't authorize it.
+		$_ssh "if [ ! -s \\\$HOME/.ssh/quay_installer ]; then mkdir -p \\\$HOME/.ssh && chmod 700 \\\$HOME/.ssh && ssh-keygen -t ed25519 -f \\\$HOME/.ssh/quay_installer -N '' >/dev/null && cat \\\$HOME/.ssh/quay_installer.pub >> \\\$HOME/.ssh/authorized_keys; fi"
 
 		aba_info "Copying mirror-registry tarball to remote host ..."
 		$_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 
-		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword '\$REG_PW' $reg_root_opts"
+		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword '\$_reg_pw' $reg_root_opts"
 
 		aba_info "Extracting and installing Quay registry on remote host ..."
-		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_host --initUser $reg_user --initPassword *** $reg_root_opts"
-		if ! $_ssh "export REG_PW='$reg_pw' && $cmd"; then
+		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword *** $reg_root_opts"
+		if ! $_ssh "export _reg_pw='$reg_pw' && $cmd"; then
 			aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
 				"Check the output above for details."
 		fi
@@ -160,6 +164,11 @@ case "$vendor" in
 		REGISTRY_CERTS_DIR="$REGISTRY_DATA_DIR/.docker-certs"
 		REGISTRY_AUTH_DIR="$REGISTRY_DATA_DIR/.docker-auth"
 
+		# After ADR-007 Phase 3, $reg_host is already overridden from state.sh
+		# by normalize-mirror-conf, so hostname drift is impossible here.
+		# Remote cert check relies on the SAN match inside the heredoc below.
+		_force_regen=""
+
 		aba_info "Running Docker registry install on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: podman run -d -p ${reg_port}:5000 --name registry docker.io/library/registry:latest"
 		if ! $_ssh "
@@ -173,7 +182,17 @@ case "$vendor" in
 					-sha256 -days 3650 -out '$REGISTRY_CERTS_DIR/ca.crt' -subj '/CN=ABA-RegistryCA'
 			fi
 
-			if [ ! -f '$REGISTRY_CERTS_DIR/registry.crt' ]; then
+			_need_cert=false
+			if [ ! -f '$REGISTRY_CERTS_DIR/registry.crt' ] || [ ! -f '$REGISTRY_CERTS_DIR/registry.key' ]; then
+				_need_cert=true
+			elif [ '${_force_regen}' = true ]; then
+				echo '[ABA] Hostname changed — regenerating certificate ...'
+				_need_cert=true
+			elif ! openssl x509 -noout -ext subjectAltName -in '$REGISTRY_CERTS_DIR/registry.crt' 2>/dev/null | grep -q 'DNS:${reg_host}$'; then
+				echo '[ABA] Existing certificate does not match hostname ${reg_host} — regenerating ...'
+				_need_cert=true
+			fi
+			if [ \"\$_need_cert\" = true ]; then
 				openssl genrsa -out '$REGISTRY_CERTS_DIR/registry.key' 4096
 				openssl req -new -key '$REGISTRY_CERTS_DIR/registry.key' \
 					-out '$REGISTRY_CERTS_DIR/registry.csr' -subj '/CN=$reg_host'

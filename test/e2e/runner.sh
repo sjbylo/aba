@@ -121,13 +121,14 @@ _E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 # Stale firewall ports: test suites add these with --permanent; they persist
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
-_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 80/tcp"
+_E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
 
 _cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
 	rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,aba}
 	rm -rf ~/.oc-mirror ~/.cache/agent
 	rm -rf ~/tmp/*
+	rm -f ~/aba/cli/*.tar.gz
 
 	# When switching between --user root and --user steve (or any user), the
 	# OTHER user's home may still contain large artifacts from a previous run.
@@ -224,6 +225,18 @@ _cleanup_test_artifact_dirs() {
 				echo "  WARNING: test artifact dirs found on $label ($_check_user): $_found"
 				_essh "${_check_user}@${_dis_fqdn}" "rm -rf ~/e2e-test-*" 2>&1
 			fi
+			_found=$(_essh "${_check_user}@${_dis_fqdn}" \
+				"for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && echo \"SKIP \$d\" && continue; echo \"\$d\"; done" 2>/dev/null || true)
+			if [ -n "$_found" ]; then
+				local _skip _clean
+				_skip=$(echo "$_found" | grep '^SKIP ' || true)
+				_clean=$(echo "$_found" | grep -v '^SKIP ' || true)
+				[ -n "$_skip" ] && echo "  SKIPPED on $label ($_check_user): $(echo "$_skip" | sed 's/^SKIP //' | tr '\n' ' ')"
+				if [ -n "$_clean" ]; then
+					echo "  WARNING: orphan artifact dirs on $label ($_check_user): $(echo "$_clean" | tr '\n' ' ')"
+					_essh "${_check_user}@${_dis_fqdn}" "for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && continue; rm -rf \"\$d\"; done" 2>&1
+				fi
+			fi
 		done
 	else
 		local _found=""
@@ -234,6 +247,19 @@ _cleanup_test_artifact_dirs() {
 			echo "  WARNING: test artifact dirs found on $label:$_found"
 			rm -rf "$HOME"/e2e-test-*
 		fi
+
+		# Also clean ~/aba/e2e-* orphans (cluster, mirror, and test dirs).
+		# Skip any dir that has VM lifecycle markers (.autorefresh or .autoupload)
+		# — those may reference live VMs and must be cleaned via aba delete.
+		for _d in "$HOME"/aba/e2e-*; do
+			[ -d "$_d" ] || continue
+			if [ -f "$_d/.autorefresh" ] || [ -f "$_d/.autoupload" ]; then
+				echo "  SKIPPED: $_d (has VM markers -- use aba delete)"
+				continue
+			fi
+			echo "  WARNING: orphan artifact dir on $label: $_d"
+			rm -rf "$_d"
+		done
 	fi
 }
 
@@ -626,41 +652,26 @@ _cleanup_dis() {
 	echo ""
 	echo "  Cleaning disN ($dis_host) via ABA commands ..."
 
-	# Registry cleanup on conN is handled by _cleanup_con_registry() -- not here.
-	# This function only cleans the disN filesystem and firewall.
-
-	# 0. Uninstall any stale registry on disN via aba, for EACH user that may
-	#    have installed one.  A previous suite may have run as a different user
-	#    (e.g. steve when current is root), leaving a rootless registry that the
-	#    current user's podman can't see.
-	#    If aba uninstall FAILS, we must stop -- proceeding with stale podman
-	#    state (secrets, systemd units) will break the next install.
+	# Three mirror install/uninstall cases:
+	#   1. conN → conN (local):  _cleanup_con_registry() already handled this.
+	#   2. conN → disN (remote): _cleanup_con_registry() already handled this
+	#      (aba uninstall from conN SSHes to disN to tear down Quay).
+	#   3. disN → disN (local):  Must uninstall FROM disN -- handled below.
 	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
 	local _default_user="${VM_DEFAULT_USER:-steve}"
 
-	# Verify infra-owned aba binary exists on disN for both users
-	local _aba_missing=""
-	local _try_user
-	for _try_user in root "$_default_user"; do
-		if ! _essh "${_try_user}@${_dis_fqdn}" "test -x ~/.e2e-harness/bin/aba" 2>&1; then
-			echo "  FATAL: ~/.e2e-harness/bin/aba missing for $_try_user on disN"
-			_aba_missing=1
-		fi
-	done
-	if [ -n "$_aba_missing" ]; then
-		echo "  Infra-owned aba binary was not deployed to disN."
-		echo "  Run 'run.sh deploy' to push the harness, or check sync_dis_aba."
-		return 1
-	fi
-
-	echo "  Checking for stale registries on disN (all users) ..."
+	# Case 3: uninstall any mirror installed locally on disN.
+	# Only trigger when a registry was actually installed (marker file exists).
+	# ~/aba/mirror/ always exists on disN after deploy (it's part of the source tree).
+	echo "  Checking for locally-installed registries on disN ..."
 	local _uninstall_failed=""
+	local _try_user
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		_essh "$_uhost" "
 			_aba=\$HOME/.e2e-harness/bin/aba
-			if [ -f ~/aba/mirror/.available ] || [ -d ~/aba/mirror ]; then
-				echo '  [cleanup] Found mirror dir for $_try_user -- trying aba uninstall'
+			if [ -f ~/aba/mirror/.available ] || [ -f ~/aba/mirror/.installed ] || [ -f ~/aba/mirror/.unavailable ]; then
+				echo '  [cleanup] Found mirror dir for $_try_user on disN -- uninstalling locally'
 				if cd ~/aba && \$_aba -y -d mirror uninstall 2>&1; then
 					echo '  [cleanup] uninstall OK'
 				else
@@ -670,13 +681,11 @@ _cleanup_dis() {
 			fi
 		" 2>&1 || {
 			echo "  ERROR: aba uninstall/unregister as $_try_user on disN failed (rc=$?)"
-			echo "  Stale podman state (secrets, systemd units) will break the next install."
 			_uninstall_failed=1
 		}
 	done
 	if [ -n "$_uninstall_failed" ]; then
-		echo "  FATAL: aba uninstall failed on disN. Cannot proceed with dirty host."
-		echo "  Investigate why 'aba -d mirror uninstall' failed on disN, fix, and re-run."
+		echo "  FATAL: aba uninstall on disN failed. Cannot proceed with dirty host."
 		return 1
 	fi
 
@@ -899,11 +908,20 @@ _pre_suite_cleanup() {
 				_has_foreign=1
 				continue
 			fi
-			echo "    $target: aba -y -d $abs_path uninstall"
 			_mirror_rc=0
 			# < /dev/null prevents ssh from consuming the while-read loop's stdin
+			# Registered-only mirrors (reg_vendor=existing) need 'unregister', not 'uninstall'.
 		_essh "$target" \
-			"if [ -d '$abs_path' ]; then \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall && rm -rf '$abs_path'; else echo '  (dir not found -- already cleaned)'; fi" \
+			"if [ -d '$abs_path' ]; then
+				if grep -qs 'reg_vendor=existing' '$abs_path/regcreds/state.sh' 2>/dev/null; then
+					echo '  Externally-managed registry -- using unregister'
+					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister
+				else
+					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
+			fi && if [ \"\$(basename '$abs_path')\" = mirror ]; then echo '  (preserving pool mirror dir)'; else rm -rf '$abs_path'; fi
+		else
+			echo '  (dir not found -- already cleaned)'
+		fi" \
 			< /dev/null 2>&1 || _mirror_rc=$?
 			if [ "$_mirror_rc" -ne 0 ]; then
 				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
@@ -976,7 +994,11 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			exit 99
 		}
 	else
-		# Default: clean disN using ABA's own commands (exercises product code paths)
+		# Uninstall registries from conN FIRST -- mirrors are installed from
+		# conN, so aba uninstall must run here to properly clean disN via SSH.
+		_cleanup_con_registry
+
+		# Now clean disN filesystem/firewall and verify disN is clean.
 		if ! _cleanup_dis; then
 			echo ""
 			echo "  ERROR: disN cleanup failed -- cannot proceed with a dirty disN."
@@ -987,8 +1009,6 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		fi
 	fi
 
-	# Clean up any stale Quay/registry state on conN from previous suite
-	_cleanup_con_registry
 	_cleanup_non_mirror_local
 	_reset_con_firewall
 
@@ -1066,6 +1086,18 @@ while true; do
 	_rc=0
 	bash "$suite_file" || _rc=$?
 
+	# Defense-in-depth: if the suite exited 0 but suite_end logged failures,
+	# the suite script has a bug (e.g. hardcoded exit 0).  Override to FAIL.
+	if [ "$_rc" -eq 0 ]; then
+		_log="${E2E_LOG_DIR}/${SUITE}-latest.log"
+		if [ -f "$_log" ] && grep -q "Total:.*Fail: [1-9]" "$_log" 2>/dev/null; then
+			echo ""
+			echo "  *** BUG: suite exited 0 but suite_end reported failures -- overriding to rc=1 ***"
+			echo ""
+			_rc=1
+		fi
+	fi
+
 	if [ $_rc -eq 4 ]; then
 		echo ""
 		echo "  Suite $SUITE: RESTARTING by user request (from scratch) ..."
@@ -1088,13 +1120,13 @@ while true; do
 					exit 99
 				}
 			else
+				_cleanup_con_registry
 				if ! _cleanup_dis; then
 					echo "  ERROR: disN cleanup failed during restart -- cannot proceed."
 					echo "99" > "$RC_FILE"
 					exit 99
 				fi
 			fi
-			_cleanup_con_registry
 			_cleanup_non_mirror_local
 			_reset_con_firewall
 
@@ -1173,6 +1205,9 @@ elif [ $_rc -eq 3 ]; then
 else
 	echo ""
 	echo "  Suite $SUITE: FAIL (exit=$_rc, ${_mins}m ${_secs}s)"
+	# suite_end (which normally sends the FAIL notification) is skipped when a
+	# suite exits early via EXHAUSTED/FATAL, so send the notification here.
+	_e2e_notify "FAILED: $SUITE (exit=$_rc, ${_mins}m${_secs}s)"
 fi
 
 # --- Post-suite integrity checks -------------------------------------------
@@ -1206,13 +1241,18 @@ if [ -x "$_govc" ] && [ -n "${VC_FOLDER:-}" ]; then
 	if [ -n "$_orphan_vms" ]; then
 		echo ""
 		echo "  *** POST-SUITE INTEGRITY FAILURE: orphan VMs found in $VC_FOLDER ***"
+		local _vm_list=""
 		while IFS= read -r _ovm; do
 			[ -z "$_ovm" ] && continue
 			echo "    $_ovm"
+			_vm_list="${_vm_list:+$_vm_list, }$(basename "$_ovm")"
 		done <<< "$_orphan_vms"
 		echo ""
 		echo "  Suite cleanup left VMs behind. Stopping for investigation."
 		echo "  To proceed: manually destroy the VMs and re-run the suite."
+		if [ "$_rc" -eq 0 ]; then
+			_e2e_notify "OVERRIDE PASS->FAIL: $SUITE -- orphan VMs: $_vm_list"
+		fi
 		_rc=5
 	fi
 fi
@@ -1228,6 +1268,9 @@ if [ -n "${DIS_VM:-}" ]; then
 		echo "$_reg_containers"
 		echo ""
 		echo "  Suite cleanup did not uninstall the mirror. Stopping for investigation."
+		if [ "$_rc" -eq 0 ]; then
+			_e2e_notify "OVERRIDE PASS->FAIL: $SUITE -- leftover containers on $_dis: $_reg_containers"
+		fi
 		_rc=5
 	fi
 fi

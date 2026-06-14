@@ -38,6 +38,9 @@ Options:
     -W, --num-workers <count>             # Set number of worker nodes.
         --num-masters <count>             # Set number of master/control-plane nodes.
         --vlan [<tag>]                    # Set VLAN tag or empty to clear.
+        --host-prefix <bits>              # Pod subnet prefix per node (default: 23).
+        --master-prefix <name>            # Node name prefix for masters (default: master).
+        --worker-prefix <name>            # Node name prefix for workers (default: worker).
         --ssh-key [<path>]                # Path to SSH public key or empty to clear.
         --mirror-name <name>              # Mirror directory this cluster uses (default: mirror).
                                           # Set to match a named mirror dir (e.g. enclave1).

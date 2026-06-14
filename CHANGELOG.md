@@ -1,4 +1,69 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.0...HEAD)
+
+---
+
+## [1.1.0](https://github.com/sjbylo/aba/releases/tag/v1.1.0) - 2026-06-15
+
+Major new TUI v2, vSphere preflight, improved upgrade workflow, and reliability improvements
+
+
+### New Features
+
+- **TUI v2** — Complete rewrite of the interactive terminal UI with shared library (`tui-lib.sh`), wizard mode for guided setup, advanced menu for power users, in-terminal command execution with retry on failure, operator browsing with instant catalog indexes, and dynamic state display in menu titles.
+- **vSphere Preflight Validation** — Multi-layer pre-install checks for vSphere environments: TCP/TLS connectivity, authentication, resource existence (datacenter, cluster, datastore, network, resource pool, folder), write-access privilege verification, and DVS-nested network resolution. Emits per-check `[OK]/[FAIL]/[INFO]` report with warning/error counters. Supports both vCenter and standalone ESXi hosts. (@mateuszslugocki)
+- **Externalized state management (ADR-007)** — Mirror and cluster state persisted to `state.sh` files, enabling state-aware normalization, automatic detection of background-completed clusters, and directory recreation from state.
+- **Pre-built operator catalog indexes** — Ship catalog index files for the latest 6 GA OCP versions, enabling instant operator browsing in the TUI without network access.
+- **Smart `starting_ip` default** — Compute starting IP from the machine network CIDR instead of using a static placeholder.
+- **Smart catalog refresh** — `tools/refresh-catalog-indexes.sh` now compares the actual operator content digest (not the whole image digest) to detect real operator updates and avoid false re-downloads from base-image security rebuilds.
+- **AI/ML operator set** — New `op_sets=ai` option bundles GPU Operator, Node Feature Discovery, SR-IOV, Kueue, cert-manager, and ServiceMesh for AI/ML workloads.
+- **Cluster config CLI flags** — New `--host-prefix`, `--master-prefix`, and `--worker-prefix` flags for `aba cluster`.
+
+### Improvements
+
+- **Install script UX** — Styled sequential output with green checkmarks, bold banner, actionable error messages showing the failed command and retry instructions. Git clone progress noise suppressed.
+- **CLI version tracking** — `cli/Makefile` and `templates/Makefile.cluster` now rebuild binaries automatically when `ocp_version` changes in `aba.conf`. Stale `openshift-install-mirror` binaries are detected and re-extracted.
+- **Quay password validation** — Reject backtick, double-quote, single-quote, and dollar sign characters that break the upstream `mirror-registry` installer. Validated in both CLI (`verify-mirror-conf`) and TUI.
+- **CLI flag targeting with `--name`** — `--ntp`, `--dns`, `--gateway`, `--domain`, and `--machine-network` flags now correctly target the named cluster's `cluster.conf` instead of the current directory.
+- **TUI lock contention** — Offer to terminate an existing TUI session when the lock is already taken.
+- **vSphere folder path** — Automatically append `cluster_name` to vSphere folder path for OCP 4.21+ compatibility.
+- **vSphere object validation** — Verify vSphere objects (datacenter, network, datastore, etc.) exist during `vmware.conf` validation with `govc find`.
+- **Firewall port cleanup** — Close registry firewall port on `aba uninstall`.
+- **CLI tarball corruption recovery** — Detect and re-download corrupt CLI tarballs instead of failing silently.
+- **Hardened `replace-value-conf`** — Escape sed/grep metacharacters to prevent config corruption with special-character values.
+- **`run_once` surgical kill** — `_kill_id` preserves `cmd.sh` across TTL expiry instead of killing sibling processes.
+- **Trace file size guard** — Prevent 29GB trace files when stdout is piped.
+- **`aba delete` cleanup** — Now runs `make clean` to remove stale ISO files and build artifacts in addition to deleting VMs.
+- **Upgrade CLI binaries** — `aba -d mirror save` downloads CLI binaries for the target version in parallel (via `run_once`), with copy instructions for disconnected upgrades.
+- **Cluster creation pipeline** — All `cluster.conf` variables (`mac_prefix`, `ssh_key_file`, `mirror_name`, `hostPrefix`, `master_prefix`, `worker_prefix`) now flow correctly through `aba cluster --name` creation.
+- **Bundle ISC protection** — Bundled `imageset-config.yaml` is preserved on the disconnected side until `aba load` completes, preventing ISC regeneration mismatch.
+- **v4.22 operator catalogs** — Shipped catalog indexes updated to include OCP v4.22.
+
+### Bug Fixes
+
+- **ESXi detection failure** — `normalize-vmware-conf()` failed to detect standalone ESXi because template defaults (`GOVC_DATACENTER=Datacenter`) caused `govc about` to error out before the HostAgent check could match. All subsequent `govc` commands then failed with "Datacenter not found".
+- **ESXi network validation** — Use `host.portgroup.info` instead of `govc find` for network validation on standalone ESXi, where `govc find` may not list all port groups.
+- **DNS misconfiguration is fatal** — Reverted DNS checks to `aba_abort` (exit immediately) instead of warning-and-continue.
+- **CLI download race condition** — Fix concurrent tarball download corruption and allow `aba delete` without triggering CLI download.
+- **`set -e` crash prevention** — Replace `[ ] && cmd` patterns with `if/then/fi` across core scripts to prevent silent crashes under `set -e`.
+- **Normalize truncation** — Remove awk field-width bug that truncated long config values.
+- **Platform toggle persistence** — TUI platform toggle (`vmw`/`kvm`) now correctly persists to `aba.conf`.
+- **Two-tier cert hostname check** — Registry reinstall validates both short and FQDN hostnames against the existing certificate.
+- **Orphaned catalog containers** — Use EXIT trap to prevent container leaks during catalog index downloads.
+- **MAC prefix uppercase** — Fix MAC address prefix generation to use uppercase hex consistently.
+- **TUI auth credential destruction** — Prevent TUI background prefetch from overwriting mirror authentication credentials.
+- **TUI SIGPIPE race** — Prevent race condition in `isconf` background tasks that could cause spurious pipe errors.
+- **Bundle load failure** — Bundled ISC was regenerated from local config on disconnected side (missing `ocp_version_target`), causing "no release images found" during `oc-mirror load`.
+- **Quay `reg_port` ignored** — Mirror-registry install was ignoring custom `reg_port` setting.
+- **`make-bundle.sh` crash** — `local` keyword used outside a function caused bash error on bundle creation.
+- **Upgrade admin-ack** — Improved guidance when `Upgradeable=False` condition blocks upgrade.
+- **Upgrade dry-run** — Always lists available versions; relaxed health check to avoid false blockers.
+- **Mirror symlink breakage** — Re-link mirror symlinks in `setup-cluster.sh` after `cluster.conf` creation updates the mirror path.
+- **Pull secret hostname mismatch** — `aba register` now reconciles pull secret hostname with current registry configuration.
+
+### Community
+
+- **Mateusz Slugocki** (@mateuszslugocki) — vSphere preflight validation: 42 commits implementing multi-layer connectivity, authentication, resource existence, and privilege verification checks with comprehensive E2E test coverage.
+- **Kamil Blaz** (@KamilBlaz) — Mermaid workflow diagram (#29), VM provider refactor with explicit KVM/vSphere contract.
 
 ---
 

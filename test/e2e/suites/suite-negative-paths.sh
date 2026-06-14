@@ -55,10 +55,10 @@ test_begin "Setup: install and configure"
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches" \
-	"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+	"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
-e2e_run "Verify / available space > 200GB after reset" \
-	"avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
+e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
+	"avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
 
 e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
@@ -201,7 +201,7 @@ e2e_run "Restore mirror.conf after localhost test" \
 e2e_run "Set reg_host for idempotent install test" \
 	"aba -d mirror -H \$(hostname -f)"
 e2e_run "Create fake state.sh for idempotent install test" \
-	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
+	"mkdir -p ~/.aba/mirror/mirror && echo reg_host=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
 e2e_run "Remove .available to trigger install path" \
 	"rm -f mirror/.available"
 e2e_run "Idempotent install on healthy registry must succeed" \
@@ -212,7 +212,7 @@ e2e_run "Cleanup idempotent install test state" \
 # Stale state detection: reg_detect_existing() must clear state.sh and proceed
 # when the saved registry host is unreachable (e.g. VM reverted, registry wiped).
 e2e_run "Create stale state.sh for gone registry" \
-	"mkdir -p ~/.aba/mirror/mirror && echo REG_HOST=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
+	"mkdir -p ~/.aba/mirror/mirror && echo reg_host=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
 e2e_run "Set reg_host to match stale state" \
 	"aba -d mirror -H gone-registry.example.com"
 e2e_run "Remove .available to trigger install path" \
@@ -258,11 +258,11 @@ e2e_run "Install Docker registry on port $_DOCKER_PORT" \
 e2e_run "Credentials saved: state.sh exists" \
 	"test -s ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
-e2e_run "state.sh has REG_VENDOR=docker" \
-	"grep 'REG_VENDOR=docker' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
+e2e_run "state.sh has reg_vendor=docker" \
+	"grep 'reg_vendor=docker' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
 e2e_run "state.sh has correct port" \
-	"grep 'REG_PORT=$_DOCKER_PORT' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
+	"grep 'reg_port=$_DOCKER_PORT' ~/.aba/mirror/$_DOCKER_MIRROR/state.sh"
 
 e2e_run "Verify Docker registry accessible" \
 	"aba -d $_DOCKER_MIRROR verify"
@@ -284,6 +284,7 @@ e2e_run "Verify state.sh is gone" \
 
 e2e_run "Uninstall with missing state (fallback path)" \
 	"aba -y -d $_DOCKER_MIRROR uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Remove local $_DOCKER_MIRROR dir" "rm -rf $_DOCKER_MIRROR"
 
@@ -312,8 +313,8 @@ e2e_run "Install Docker registry on port $_DOCKER_NEG_PORT" \
 e2e_run "Credentials saved: state.sh exists" \
 	"test -s ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
 
-e2e_run "state.sh has REG_VENDOR=docker" \
-	"grep 'REG_VENDOR=docker' ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
+e2e_run "state.sh has reg_vendor=docker" \
+	"grep 'reg_vendor=docker' ~/.aba/mirror/$_DOCKER_NEG_MIRROR/state.sh"
 
 e2e_run "Block port $_DOCKER_NEG_PORT with iptables on disN" \
 	"_essh $DIS_HOST 'sudo iptables -I INPUT 1 -p tcp --dport $_DOCKER_NEG_PORT -j REJECT'"
@@ -329,6 +330,7 @@ e2e_run "Verify now succeeds after unblocking" \
 
 e2e_run "Uninstall neg-test registry" \
 	"aba -y -d $_DOCKER_NEG_MIRROR uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Remove local $_DOCKER_NEG_MIRROR dir" "rm -rf $_DOCKER_NEG_MIRROR"
 
@@ -338,6 +340,7 @@ e2e_run "Clean leftover mirror dirs (uninstall + remove if exist)" \
 	"for d in $_DOCKER_MIRROR $_DOCKER_NEG_MIRROR; do
 		if [ -d \$d ]; then aba -y -d \$d uninstall && rm -rf \$d; fi
 	done"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Verify docker-reg removed on disN" \
 	"_essh $DIS_HOST 'test ! -d ~/docker-reg'"
@@ -405,21 +408,53 @@ e2e_run_must_fail "Register with non-existent CA cert must fail" \
 e2e_run_must_fail "Register with no args at all must fail" \
 	"aba -d mirror register"
 
-# Register without reg_host set: reg-register.sh aborts when reg_host is empty
+# Register without reg_host set + single-entry pull secret: auto-infers hostname (path 5).
+# Previously this aborted, but smart reconciliation now infers from the pull secret.
 e2e_run "Clear reg_host in mirror.conf" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
-e2e_run_must_fail "Register without reg_host must fail" \
+e2e_run "Register without reg_host (auto-infers from single-entry pull secret)" \
 	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Verify reg_host was inferred from pull secret" \
+	"grep '^reg_host=${CON_HOST}' mirror/mirror.conf"
+e2e_run "Unregister after infer test" \
+	"aba -d mirror unregister"
+
+# Create a multi-entry pull secret for ambiguity tests below.
+e2e_run "Create multi-entry pull secret (for ambiguity tests)" \
+	"jq '.auths[\"other.example.com:5000\"] = {\"auth\": \"dGVzdDp0ZXN0\"}' $POOL_REG_DIR/pool-reg-creds.json > /tmp/multi-entry-ps.json"
+
+# Register without reg_host + multi-entry pull secret: must abort (ambiguous, path 6).
+e2e_run "Clear reg_host in mirror.conf" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+e2e_run_must_fail "Register without reg_host and multi-entry pull secret must fail" \
+	"aba -d mirror register --pull-secret-mirror /tmp/multi-entry-ps.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Restore reg_host" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
-# Auto-inject: --pull-secret-mirror + --ca-cert without explicit target auto-injects 'register'
+# Hostname reconciliation: pull secret hostname doesn't match --reg-host but has 1 entry.
+# reg-register.sh should auto-infer the hostname from the pull secret (Bug #396 fix).
+e2e_run "Set reg_host to a MISMATCHED hostname" \
+	"aba -d mirror --reg-host bogus-host.example.com --reg-port 8443"
+e2e_run "Register with mismatched --reg-host (auto-infer from single-entry pull secret)" \
+	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Verify reg_host was updated to match pull secret" \
+	"grep '^reg_host=${CON_HOST}' mirror/mirror.conf"
+e2e_run "Unregister after auto-infer test" \
+	"aba -d mirror unregister"
+
+# Hostname reconciliation: pull secret has MULTIPLE entries, none match → must abort (path 4).
+e2e_run "Set reg_host to something not in multi-entry pull secret" \
+	"aba -d mirror --reg-host nomatch.example.com --reg-port 9999"
+e2e_run_must_fail "Register with multi-entry pull secret and no match must fail" \
+	"aba -d mirror register --pull-secret-mirror /tmp/multi-entry-ps.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Restore mirror.conf after multi-entry test" \
+	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 e2e_run "Set reg_host for auto-inject test" \
 	"aba -d mirror -H ${DIS_HOST}"
 e2e_run "Auto-inject register (no explicit target)" \
 	"aba -d mirror --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Verify state.sh created by auto-inject" \
-	"test -f ~/.aba/mirror/mirror/state.sh && grep REG_VENDOR=existing ~/.aba/mirror/mirror/state.sh"
+	"test -f ~/.aba/mirror/mirror/state.sh && grep reg_vendor=existing ~/.aba/mirror/mirror/state.sh"
 e2e_run "Unregister after auto-inject test" \
 	"aba -d mirror unregister"
 e2e_run "Restore mirror.conf after auto-inject test" \
@@ -429,8 +464,6 @@ test_end 0
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-negative-paths.sh"
-
-exit 0
+exit $_rc

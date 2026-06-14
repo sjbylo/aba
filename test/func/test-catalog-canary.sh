@@ -88,14 +88,13 @@ echo
 _test_combo() {
 	local catalog="$1" ver="$2"
 	local index_file="${INDEX_DIR}/${catalog}-index-v${ver}"
-	local done_file="${INDEX_DIR}/.${catalog}-index-v${ver}.done"
 	local expected_count_file="${INDEX_DIR}/.${catalog}-index-v${ver}.expected-count"
 	local yaml_file="mirror/imageset-config-${catalog}-catalog-v${ver}.yaml"
 	local tag="${catalog} v${ver}"
 	local errors=()
 
 	# Clean previous results for this combo
-	rm -f "$index_file" "$done_file" "$expected_count_file" "$yaml_file"
+	rm -f "$index_file" "$expected_count_file" "$yaml_file"
 
 	echo -e "${CYAN}--- ${tag} ---${NC}"
 
