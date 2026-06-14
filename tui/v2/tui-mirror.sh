@@ -500,29 +500,47 @@ mirror_prep_upgrade() {
 	tui_log "Action: Prepare Upgrade for Transfer"
 
 	local _current_ver="${ocp_version:-unknown}"
-
-	# Prompt for target version
-	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
-		--ok-label "Next" \
-		--cancel-label "$TUI2_BTN_CANCEL" \
-		--inputbox "\nCurrent installed version: ${_current_ver}\n\nEnter target upgrade version:\n(e.g. 4.21.16)" \
-		0 0 "" \
-		2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return 1
-
 	local _target_ver
-	_target_ver=$(<"$_TUI_TMP")
-	_target_ver=$(echo "$_target_ver" | tr -d ' ')
 
-	if [[ -z "$_target_ver" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
-		return 1
-	fi
-	if ! [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"Invalid version format: '$_target_ver'\n\nExpected: X.Y.Z (e.g. 4.21.16)" 0 0
-		return 1
-	fi
+	# Input loop: re-prompt on invalid input, ESC exits to caller
+	while :; do
+		dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
+			--ok-label "Next" \
+			--cancel-label "$TUI2_BTN_CANCEL" \
+			--inputbox "\nCurrent installed version: ${_current_ver}\n\nEnter target upgrade version:\n(e.g. 4.21.16)" \
+			0 0 "" \
+			2>"$_TUI_TMP"
+		[[ $? -ne 0 ]] && return 1
+
+		_target_ver=$(<"$_TUI_TMP")
+		_target_ver=$(echo "$_target_ver" | tr -d ' ')
+
+		if [[ -z "$_target_ver" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
+			continue
+		fi
+		if ! [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Invalid version format: '$_target_ver'\n\nExpected: X.Y.Z (e.g. 4.21.16)" 0 0
+			continue
+		fi
+
+		# Reject downgrade or same-version (only upgrades make sense here)
+		if [[ "$_current_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			local _cur_major _cur_minor _cur_patch _tgt_major _tgt_minor _tgt_patch
+			IFS='.' read -r _cur_major _cur_minor _cur_patch <<< "$_current_ver"
+			IFS='.' read -r _tgt_major _tgt_minor _tgt_patch <<< "$_target_ver"
+			local _cur_num=$(( _cur_major * 1000000 + _cur_minor * 1000 + _cur_patch ))
+			local _tgt_num=$(( _tgt_major * 1000000 + _tgt_minor * 1000 + _tgt_patch ))
+			if [[ $_tgt_num -le $_cur_num ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Target version '$_target_ver' must be higher than current version '$_current_ver'.\n\nDowngrades and same-version are not supported." 0 0
+				continue
+			fi
+		fi
+
+		break
+	done
 
 	# Confirm before proceeding
 	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
