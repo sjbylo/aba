@@ -464,6 +464,21 @@ cluster_is_ready() {
 	return 0
 }
 
+# Relaxed health check: only verifies the cluster API is reachable and functional.
+# Use for upgrade pre-checks where "Available=True" is sufficient — a cluster with
+# Progressing operators or a flapping Degraded operator can still accept upgrades.
+# Reserve cluster_is_ready() for install-completion detection (strict).
+cluster_is_accessible() {
+	local _cv_available
+
+	aba_debug "Running: oc get clusterversion (accessibility check)"
+
+	_cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null)
+	[ "$_cv_available" = "True" ] || return 1
+
+	return 0
+}
+
 # Auto-detect that a cluster install has completed.
 # If kubeconfig exists but .install-complete is missing, probe the cluster API.
 # If the cluster is ready, create the marker and externalize state.

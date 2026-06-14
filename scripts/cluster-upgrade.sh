@@ -85,7 +85,7 @@ _list_mirror_versions() {
 }
 
 # Version-discovery mode: --dry-run without --to just lists what's available
-if [ "$opt_dry_run" ] && [ ! "$target_ver" ] && [ ! "$ocp_version_target" ]; then
+if [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 	osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || true
 	echo
 	aba_info "=== DRY RUN ==="
@@ -129,11 +129,12 @@ if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
 	exit 0
 fi
 
-# Preflight: cluster health — warn and let user decide (default: continue)
-if ! cluster_is_ready; then
+# Preflight: cluster accessibility — only needs API reachable (Available=True).
+# A cluster with Progressing operators or a Degraded operator can still accept upgrades.
+if ! cluster_is_accessible; then
 	aba_warning \
-		"The cluster is not fully healthy (degraded operators or install still progressing)." \
-		"To investigate: oc get co | grep -v 'True.*False.*False'"
+		"The cluster API is not reachable (ClusterVersion Available != True)." \
+		"To investigate: oc get clusterversion"
 	ask "Continue with upgrade anyway" || exit 1
 fi
 
