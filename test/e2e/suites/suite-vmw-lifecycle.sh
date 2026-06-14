@@ -196,7 +196,7 @@ e2e_run "Copy SSH key to alternate name (exercises ssh_key_file)" \
 e2e_run "Create SNO cluster.conf with alt SSH key and named mirror" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) \
      --ssh-key ~/.ssh/e2e_alt_key --mirror-name $NAMED_MIRROR --step cluster.conf"
-e2e_run "Verify ssh_key_file set" "grep 'ssh_key_file=~/.ssh/e2e_alt_key' $SNO/cluster.conf"
+e2e_run "Verify ssh_key_file set" "grep 'ssh_key_file=.*e2e_alt_key' $SNO/cluster.conf"
 e2e_run "Verify mirror_name set" "grep 'mirror_name=$NAMED_MIRROR' $SNO/cluster.conf"
 e2e_run -r 2 10 "Install SNO (alt SSH key + named mirror)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"

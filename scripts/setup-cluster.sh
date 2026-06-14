@@ -72,6 +72,18 @@ $exec_cmd
 [ "$ssh_key_file" ]      && replace-value-conf -q -n ssh_key_file      -v "$ssh_key_file"      -f cluster.conf
 [ "$mirror_name" ]       && replace-value-conf -q -n mirror_name       -v "$mirror_name"       -f cluster.conf
 
+# Re-link mirror/regcreds/mirror.conf to match the final mirror_name in cluster.conf.
+# This is necessary because .init (above) ran before cluster.conf existed, so it
+# defaulted mirror to ../mirror.  The Makefile.cluster cluster.conf recipe has the
+# same logic, but Make skips it here because create-cluster-conf.sh already created
+# cluster.conf -- the target file exists, so Make considers it up-to-date.
+source <(normalize-cluster-conf)
+_mn=${mirror_name:-mirror}
+ln -sfn ../$_mn mirror
+ln -sfn ~/.aba/mirror/$_mn regcreds
+if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf
+else rm -f mirror.conf && touch mirror.conf; fi
+
 [ "$step" ] && target="$step"
 
 msg="Install the cluster with: aba -d $name install  OR  cd $name; aba install"

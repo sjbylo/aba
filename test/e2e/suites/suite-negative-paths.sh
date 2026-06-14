@@ -415,7 +415,7 @@ e2e_run "Clear reg_host in mirror.conf" \
 e2e_run "Register without reg_host (auto-infers from single-entry pull secret)" \
 	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Verify reg_host was inferred from pull secret" \
-	"grep '^reg_host=registry.p${POOL_NUM}' mirror/mirror.conf"
+	"grep '^reg_host=${CON_HOST}' mirror/mirror.conf"
 e2e_run "Unregister after infer test" \
 	"aba -d mirror unregister"
 
@@ -438,7 +438,7 @@ e2e_run "Set reg_host to a MISMATCHED hostname" \
 e2e_run "Register with mismatched --reg-host (auto-infer from single-entry pull secret)" \
 	"aba -d mirror register --pull-secret-mirror $POOL_REG_DIR/pool-reg-creds.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
 e2e_run "Verify reg_host was updated to match pull secret" \
-	"grep '^reg_host=registry.p${POOL_NUM}' mirror/mirror.conf"
+	"grep '^reg_host=${CON_HOST}' mirror/mirror.conf"
 e2e_run "Unregister after auto-infer test" \
 	"aba -d mirror unregister"
 
