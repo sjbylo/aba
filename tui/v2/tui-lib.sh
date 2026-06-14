@@ -776,6 +776,60 @@ _invalidate_mirror_cache() {
 	aba_mirror_verify_refresh
 }
 
+# Offer to run day2 on installed clusters after a mirror load/sync.
+# Must be called AFTER confirm_and_execute returns (not from a post_cmd_hook)
+# to avoid nested execution and confusing dialog ordering.
+_offer_day2_after_mirror_update() {
+	local _clusters
+	_clusters=$(list_installed_clusters)
+	[[ -z "$_clusters" ]] && return 0
+
+	local _count=0 _list="" _cl
+	for _cl in $_clusters; do
+		_count=$(( _count + 1 ))
+		_list="${_list}\n  • $(cluster_display_name "$_cl")"
+	done
+
+	if [[ $_count -eq 1 ]]; then
+		_cl=$(echo "$_clusters" | head -1)
+		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+			--yes-label "Yes, apply now" \
+			--no-label "No, later" \
+			--yesno "Mirror updated successfully.\n\n\
+Your cluster $(cluster_display_name "$_cl") needs updated\n\
+OperatorHub configuration to use the new images.\n\n\
+Run 'Configure OperatorHub' (aba day2) now?" 0 0
+		[[ $? -ne 0 ]] && return 0
+		confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $(cluster_display_name "$_cl")"
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+			--yes-label "Yes, apply to all" \
+			--no-label "No, later" \
+			--extra-button --extra-label "Select..." \
+			--yesno "Mirror updated successfully.\n\n\
+$_count cluster(s) need updated OperatorHub configuration:$_list\n\n\
+Run 'Configure OperatorHub' (aba day2) now?" 0 0
+		local _rc=$?
+		case $_rc in
+			0)
+				for _cl in $_clusters; do
+					confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $(cluster_display_name "$_cl")"
+					[[ $? -ne 0 ]] && break
+				done
+				;;
+			3)
+				# "Select..." — let user pick via the existing Day-2 menu workflow
+				select_installed_cluster "Configure OperatorHub" "Select cluster to configure:"
+				[[ $? -ne 0 ]] && return 0
+				confirm_and_execute "aba --dir $SELECTED_CLUSTER day2" "Configure OperatorHub: $SELECTED_CLUSTER_DISPLAY"
+				;;
+			*)
+				return 0
+				;;
+		esac
+	fi
+}
+
 # Is a cluster configured? (cluster.conf exists in given dir)
 cluster_configured() {
 	local dir="$1"
@@ -835,6 +889,7 @@ list_undetected_clusters() {
 # Probe undetected clusters and create .install-complete if ready.
 # Shows "please wait" dialog only when there are candidates to probe.
 # Must be called BEFORE list_installed_clusters (it updates marker files).
+# If a cluster transitions to ready, offers to run day2 (mirror modes only).
 _probe_undetected_clusters() {
 	local -a candidates=()
 	local dir
@@ -846,7 +901,27 @@ _probe_undetected_clusters() {
 	dlg --backtitle "$(ui_backtitle)" \
 		--infobox "\nDetecting installation status: ${names// /, }..." 5 55
 	for dir in "${candidates[@]}"; do
-		auto_complete_install "$dir" >/dev/null 2>&1 || true
+		if [[ ! -f "$ABA_ROOT/$dir/.install-complete" ]]; then
+			auto_complete_install "$dir" >/dev/null 2>&1 || true
+			# Newly transitioned to ready — offer day2 in mirror modes
+			if [[ -f "$ABA_ROOT/$dir/.install-complete" && "$_TUI_MODE" != "DIRECT" ]]; then
+				local _fqdn
+				_fqdn=$(cluster_display_name "$dir")
+				dlg --backtitle "$(ui_backtitle)" --title "Cluster Ready!" \
+					--yes-label "Yes, apply now" \
+					--no-label "No, later" \
+					--yesno "Cluster $_fqdn just completed installation!\n\n\
+Run 'Configure OperatorHub' (aba day2) to set up:\n\
+  • OperatorHub catalog sources\n\
+  • Image content source policies\n\
+  • Release signature verification\n\n\
+This is needed for operators and upgrades to work\n\
+from your mirror registry." 0 0
+				if [[ $? -eq 0 ]]; then
+					confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
+				fi
+			fi
+		fi
 	done
 }
 
@@ -1230,9 +1305,13 @@ select_cluster() {
 		elif [[ -f "$ABA_ROOT/$dir/.install-complete" ]]; then
 			display="$display (installed)"
 		fi
+		# Show dir name only when it differs from the cluster name prefix
+		if [[ "$display" != "$dir"* ]]; then
+			display="$dir  $display"
+		fi
 		idx=$(( idx + 1 ))
 		_cl_dirs+=("$dir")
-		clusters+=("$idx" "$dir  $display")
+		clusters+=("$idx" "$display")
 	done
 
 	if [[ ${#clusters[@]} -eq 0 ]]; then
@@ -1286,9 +1365,13 @@ select_installed_cluster() {
 		if [[ -f "$ABA_ROOT/$dir/.shutdown.log" ]]; then
 			display="$display (shut down)"
 		fi
+		# Show dir name only when it differs from the cluster name prefix
+		if [[ "$display" != "$dir"* ]]; then
+			display="$dir  $display"
+		fi
 		idx=$(( idx + 1 ))
 		_cl_dirs+=("$dir")
-		clusters+=("$idx" "$dir  $display")
+		clusters+=("$idx" "$display")
 	done
 
 	if [[ ${#clusters[@]} -eq 0 ]]; then

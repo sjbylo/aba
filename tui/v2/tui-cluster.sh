@@ -1680,6 +1680,25 @@ _cluster_execute() {
 	# Always return 0 after command execution so the wizard exits back to the
 	# main menu.  Return 1 is reserved for "Back" on the review page (above).
 	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
+	local rc=$?
+
+	# After successful install in mirror mode, offer to configure OperatorHub
+	if [[ $rc -eq 0 && "$_TUI_MODE" != "DIRECT" && -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+			--yes-label "Yes, apply now" \
+			--no-label "No, later" \
+			--yesno "Cluster $fqdn installed successfully!\n\n\
+Run 'Configure OperatorHub' (aba day2) to set up:\n\
+  • OperatorHub catalog sources\n\
+  • Image content source policies\n\
+  • Release signature verification\n\n\
+This is needed for operators and upgrades to work\n\
+from your mirror registry." 0 0
+		if [[ $? -eq 0 ]]; then
+			confirm_and_execute "aba --dir $cl_name day2" "Configure OperatorHub: $fqdn"
+		fi
+	fi
+
 	return 0
 }
 
@@ -1741,7 +1760,28 @@ cluster_monitor() {
 		return 1
 	fi
 
-	confirm_and_execute "aba --dir $SELECTED_CLUSTER mon" "$TUI2_TITLE_CLUSTER_MONITOR"
+	local _cl="$SELECTED_CLUSTER"
+	confirm_and_execute "aba --dir $_cl mon" "$TUI2_TITLE_CLUSTER_MONITOR"
+	local rc=$?
+
+	# After successful monitor completion in mirror mode, offer to configure OperatorHub
+	if [[ $rc -eq 0 && "$_TUI_MODE" != "DIRECT" && -f "$ABA_ROOT/$_cl/.install-complete" ]]; then
+		local _fqdn
+		_fqdn=$(cluster_display_name "$_cl")
+		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+			--yes-label "Yes, apply now" \
+			--no-label "No, later" \
+			--yesno "Cluster $_fqdn is ready!\n\n\
+Run 'Configure OperatorHub' (aba day2) to set up:\n\
+  • OperatorHub catalog sources\n\
+  • Image content source policies\n\
+  • Release signature verification\n\n\
+This is needed for operators and upgrades to work\n\
+from your mirror registry." 0 0
+		if [[ $? -eq 0 ]]; then
+			confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $_fqdn"
+		fi
+	fi
 }
 
 # =============================================================================
@@ -1988,14 +2028,14 @@ cluster_day2_menu() {
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_DAY2_MENU" 0 0 0 \
 			"" "──── Configuration ────────────────" \
-			"R" "Cluster Resources (OperatorHub, oc-mirror)" \
+			"R" "Configure OperatorHub (after mirror load/sync)" \
 			"N" "Network Time Protocol" \
 			"O" "OpenShift Update Service (OSUS)" \
 			"" "──── Status ───────────────────────" \
 			"S" "Cluster status" \
 			"H" "SSH into Rendezvous Server" \
 			"" "──── Lifecycle ────────────────────" \
-			"U" "Upgrade cluster (experimental)" \
+			"U" "Upgrade cluster (beta)" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
 		"" "──── Cleanup ──────────────────────" \
@@ -2193,7 +2233,7 @@ _day2_upgrade() {
 				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
 				;;
 	DISCO)
-		_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Cluster Resources (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
+		_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
 		;;
 			*)
 				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."

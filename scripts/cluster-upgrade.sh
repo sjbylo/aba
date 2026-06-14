@@ -8,7 +8,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $* from $PWD"
 
-aba_warning "'aba upgrade' is EXPERIMENTAL and may change in future releases."
+aba_warning "'aba upgrade' is in BETA and may change in future releases."
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
