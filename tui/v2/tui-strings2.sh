@@ -122,7 +122,7 @@ TUI2_TITLE_DOWNLOAD_FAILED="Download Failed"
 # =============================================================================
 
 TUI2_TITLE_DAY2_MENU="Day-2 / Cluster Management"
-TUI2_TITLE_DAY2_FULL="Day-2: Cluster Resources"
+TUI2_TITLE_DAY2_FULL="Day-2: Configure OperatorHub"
 TUI2_TITLE_DAY2_NTP="Day-2: Network Time Protocol"
 TUI2_TITLE_DAY2_OSUS="Day-2: OpenShift Update Service (OSUS)"
 TUI2_TITLE_DAY2_STATUS="Cluster Status"

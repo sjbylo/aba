@@ -569,7 +569,7 @@ To upgrade a disconnected cluster:\n\n\
      • cli/openshift-*-<version>*  (matching CLI binaries for target version)\n\n\
   2. On the internal host TUI:\n\
      • Load images (L)\n\
-     • Day-2 → Cluster Resources (D → R)\n\
+     • Day-2 → Configure OperatorHub (D → R)\n\
      • Day-2 → Upgrade (D → U)\n" 0 0
 	fi
 
@@ -585,6 +585,7 @@ mirror_sync() {
 	_mirror_op_confirm "$TUI2_LABEL_SYNC" || return 1
 	confirm_and_execute "aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache
 	local rc=$?
+	[[ $rc -eq 0 ]] && _offer_day2_after_mirror_update
 	return $rc
 }
 
