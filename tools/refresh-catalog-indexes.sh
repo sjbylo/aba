@@ -236,7 +236,7 @@ if [[ ${#needs_download[@]} -gt 0 ]]; then
 		ver="${entry#*:}"
 		remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
 		layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
-		local _label
+		#local _label
 		printf -v _label "%-18s  v%-5s" "$catalog" "$ver"
 
 		echo "  ${_label} ..."
