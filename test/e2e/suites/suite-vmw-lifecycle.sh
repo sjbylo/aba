@@ -105,7 +105,7 @@ test_end
 test_begin "Setup: configure mirror for local registry"
 
 e2e_run "Create named mirror (exercises mirror_name through full pipeline)" \
-    "aba mirror --name $NAMED_MIRROR || true"
+    "aba mirror --name $NAMED_MIRROR"
 e2e_run "Assert named mirror directory exists" \
     "test -d $NAMED_MIRROR && test -f $NAMED_MIRROR/mirror.conf"
 e2e_add_to_mirror_cleanup "$PWD/$NAMED_MIRROR"
@@ -199,7 +199,7 @@ e2e_run "Create SNO cluster.conf with alt SSH key and named mirror" \
 e2e_run "Verify ssh_key_file set" "grep 'ssh_key_file=.*e2e_alt_key' $SNO/cluster.conf"
 e2e_run "Verify mirror_name set" "grep 'mirror_name=$NAMED_MIRROR' $SNO/cluster.conf"
 e2e_run -r 2 10 "Install SNO (alt SSH key + named mirror)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step refresh"
 
 # Wait for bootstrap only (not full install-complete)
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
