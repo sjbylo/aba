@@ -40,7 +40,17 @@ if [[ ! -f "$REGISTRY_CERTS_DIR/ca.crt" || ! -f "$REGISTRY_CERTS_DIR/ca.key" ]];
 fi
 
 # --- Generate registry certificate signed by CA ---
+# Regenerate if missing or if existing cert SAN doesn't match $reg_host.
+# After ADR-007 Phase 3, $reg_host is already overridden from state.sh by
+# normalize-mirror-conf, so hostname drift is impossible at this point.
+_need_cert=false
 if [[ ! -f "$REGISTRY_CERTS_DIR/registry.crt" || ! -f "$REGISTRY_CERTS_DIR/registry.key" ]]; then
+	_need_cert=true
+elif ! openssl x509 -noout -ext subjectAltName -in "$REGISTRY_CERTS_DIR/registry.crt" 2>/dev/null | grep -q "DNS:${reg_host}$"; then
+	aba_info "Existing certificate does not match hostname '$reg_host' — regenerating ..."
+	_need_cert=true
+fi
+if [[ "$_need_cert" == "true" ]]; then
 	aba_info "Generating registry certificate ..."
 	openssl genrsa -out "$REGISTRY_CERTS_DIR/registry.key" 4096
 	openssl req -new -key "$REGISTRY_CERTS_DIR/registry.key" \

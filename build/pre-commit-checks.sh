@@ -223,4 +223,39 @@ fi
 
 echo -e "${GREEN}      ✓ aba_warning/aba_abort usage OK${NC}\n"
 
+# =============================================================================
+# Step 7: Verify README.md permalink anchors (only if README.md changed)
+# =============================================================================
+# README.md contains <a id="..."> permalink anchors referenced by external
+# articles (Red Hat Developers blog, bundle README_FIRST.md, etc.).
+# The HTML comment block at the top of README.md lists every inbound link
+# as #anchor-name.  This step extracts those anchors and verifies each one
+# still has a matching <a id="anchor-name"> in the file body.
+# Only runs when README.md has staged or unstaged changes.
+_readme_changed=""
+git diff --name-only -- README.md 2>/dev/null | grep -q '^README.md$' && _readme_changed=1
+git diff --cached --name-only -- README.md 2>/dev/null | grep -q '^README.md$' && _readme_changed=1
+
+if [ "$_readme_changed" ]; then
+    echo -e "${YELLOW}[7/7] Verifying README.md permalink anchors...${NC}"
+    _anchor_missing=0
+    while IFS= read -r _anchor; do
+        [ -z "$_anchor" ] && continue
+        if ! grep -q "<a id=\"$_anchor\">" README.md; then
+            echo -e "  ${RED}✗ Missing permalink anchor: <a id=\"$_anchor\">${NC}"
+            _anchor_missing=1
+        fi
+    done < <(sed -n '1,/^-->/p' README.md | grep -oE '#[a-z0-9][-a-z0-9]*' | sed 's/^#//' | sort -u)
+
+    if [ $_anchor_missing -eq 1 ]; then
+        echo -e "${RED}      ✗ README.md permalink anchors are broken!${NC}"
+        echo -e "${RED}        External articles link to these anchors — do NOT remove them.${NC}"
+        echo -e "${RED}        See the HTML comment block at the top of README.md for details.${NC}\n"
+        exit 1
+    fi
+    echo -e "${GREEN}      ✓ All README.md permalink anchors verified${NC}\n"
+else
+    echo -e "${YELLOW}[7/7] Skipping README.md permalink check (file not changed)${NC}\n"
+fi
+
 echo -e "${GREEN}=== All Pre-Commit Checks Passed! ===${NC}"

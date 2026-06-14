@@ -143,6 +143,9 @@ start_tui() {
 
 	# Kill any leftover session (e.g. dead pane kept by remain-on-exit)
 	tmux kill-session -t "$SESSION" 2>/dev/null || true
+	sleep 0.5
+	# Remove stale TUI lock/pid so flock is not held by a dead process
+	rm -f "$HOME/.aba/.tui.lock" "$HOME/.aba/.tui.pid"
 
 	log_info "Starting TUI in tmux session: $SESSION"
 	tmux new-session -d -s "$SESSION" -x 240 -y 70 "$cmd"
@@ -174,32 +177,35 @@ capture() {
 #   4 Tabs → OK button (rc=0)
 # This differs from the visual order! Use "send Tab Enter" to hit Extra.
 send() {
-	if [[ $TUI_SLOW -eq 1 ]]; then
-		local _has_enter=0 _pre_args=()
-		for _arg in "$@"; do
-			if [[ "$_arg" == "Enter" ]]; then
-				_has_enter=1
-				break
-			fi
-			_pre_args+=("$_arg")
-		done
-		if [[ $_has_enter -eq 1 && ${#_pre_args[@]} -gt 0 ]]; then
-			tmux send-keys -t "$SESSION" "${_pre_args[@]}"
-			sleep 1
-			tmux send-keys -t "$SESSION" Enter
-		else
-			[[ $_has_enter -eq 1 ]] && sleep 1
-			tmux send-keys -t "$SESSION" "$@"
-		fi
-		sleep 1
-	else
-		tmux send-keys -t "$SESSION" "$@"
-	fi
+	# Sleep 0.5s between each key press. Dialog needs time to process each
+	# keystroke before the next arrives — without this delay, keystrokes are
+	# lost or misinterpreted (e.g. Tab+Enter arriving simultaneously can
+	# press the wrong button). 0.5s is the minimum reliable interval.
+	for _arg in "$@"; do
+		tmux send-keys -t "$SESSION" "$_arg"
+		sleep 0.5
+	done
 }
 
 # ============================================================
 # Assertions
 # ============================================================
+
+# Try waiting for a string — returns 0/1 without logging failure (for conditionals)
+try_wait_for() {
+	local expected="$1"
+	local timeout="${2:-$TIMEOUT}"
+	local elapsed=0
+
+	while [[ $elapsed -lt $timeout ]]; do
+		if capture | grep -qi "$expected"; then
+			return 0
+		fi
+		sleep "$POLL_INTERVAL"
+		elapsed=$((elapsed + POLL_INTERVAL))
+	done
+	return 1
+}
 
 # Wait for a string to appear on screen, with timeout
 # Usage: wait_for "expected text" [timeout_seconds]
@@ -810,32 +816,25 @@ operators_to_action_menu() {
 # button / field is highlighted.  Adjust the sleep here when tuning.
 
 send_enter() {
-	sleep 1
 	send Enter
 }
 
 send_tab_enter() {
-	send Tab
-	sleep 1
-	send Enter
+	send Tab Enter
 }
 
 send_input() {
-	send "$1"
-	sleep 1
-	send Enter
+	send "$1" Enter
 }
 
+# Tab Tab Enter = Cancel/Back button on menu-style pages.
+# Dialog 1.3 (RHEL 9) tab order from menu area: Tab→Extra(Next), Tab Tab→Cancel(Back).
 send_tab_tab_enter() {
-	send Tab Tab
-	sleep 1
-	send Enter
+	send Tab Tab Enter
 }
 
 send_tab_tab_tab_enter() {
-	send Tab Tab Tab
-	sleep 1
-	send Enter
+	send Tab Tab Tab Enter
 }
 
 # Clear a dialog inputbox field (send End + 25 Backspaces).

@@ -1,4 +1,17 @@
-# Code that all scripts need.  Ensure this script does not create any std output.
+# =============================================================================
+# INTENT:      Shared functions and setup for all ABA scripts.
+#              Provides: color output, config normalize/verify, IP math,
+#              run_once, ensure_* tool installers, cluster state helpers
+#              (ADR-007), HTTP probing, TUI validation, CLI tool management.
+# CALLED BY:   Every script via 'source scripts/include_all.sh'
+# CWD:         Varies (caller's working directory)
+# REQUIRES:    Nothing (self-contained)
+# PRODUCES:    No stdout (only function definitions and variable setup)
+# SIDE EFFECTS: Sets ARCH, SUDO, sources ~/.aba/config if present
+# IDEMPOTENT:  Yes (safe to source multiple times via _INCLUDE_ALL_LOADED guard)
+# ENV:         DEBUG_ABA (optional), ABA_TTY_FD (optional), PLAIN_OUTPUT (optional)
+# =============================================================================
+# Ensure this script does not create any std output.
 # Add any arg1 to turn off the below Error trap
 
 # Strict mode:
@@ -200,6 +213,11 @@ aba_abort() {
         exit 1
 }
 
+# Non-fatal error (like aba_abort but does NOT exit)
+aba_error() {
+	echo_red "[ABA] Error: $*" >&2
+}
+
 aba_warning() {
         local prefix="Warning"
 	local newline=
@@ -241,8 +259,6 @@ aba_warning() {
 	for line in "$@"; do
 		echo_$col "[ABA] ${indent}${line}" >&2
 	done
-
-	sleep 1
 }
 
 #aba_warning() {
@@ -314,44 +330,103 @@ _vm_annotation() {
 	EOF
 }
 
+# Select which VM hosts to operate on based on workers=/masters= args.
+# Sets the caller's $hosts variable. Defaults to all VMs (workers + masters).
+_select_vm_hosts() {
+	if [ "${workers:-}" ]; then
+		hosts="$WORKER_NAMES"
+	elif [ "${masters:-}" ]; then
+		hosts="$CP_NAMES"
+	else
+		hosts="${WORKER_NAMES:+$WORKER_NAMES }$CP_NAMES"
+	fi
+	if [ -z "$hosts" ]; then
+		hosts="$CP_NAMES"
+	fi
+	return 0
+}
+
+# Output names of VMs that are currently poweredOn (VMware).
+# Requires: govc, jq, $CLUSTER_NAME, vm_name()
+vmw_running_vms() {
+	local name vm power_state
+	for name in "$@"; do
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		power_state=$(govc vm.info -json "$vm" 2>/dev/null | jq -r '.virtualMachines[0].runtime.powerState' || true)
+		if [ "$power_state" = "poweredOn" ]; then
+			echo "$name"
+		fi
+	done
+}
+
+# Output names of VMs that are currently running (KVM).
+# Requires: virsh, $CLUSTER_NAME, $LIBVIRT_URI, vm_name()
+kvm_running_vms() {
+	local name vm _state
+	for name in "$@"; do
+		vm=$(vm_name "$CLUSTER_NAME" "$name")
+		_state=$(virsh -c "$LIBVIRT_URI" domstate "$vm" 2>/dev/null || true)
+		if [ "$_state" = "running" ]; then
+			echo "$name"
+		fi
+	done
+}
+
+# Shared sanitizer for normalize-*-conf() pipelines.  Reads config lines from
+# stdin, cleans them up, and prepends "export " to each line.
+#
+# Steps:
+#   1. Remove full-line comments (lines starting with optional whitespace then #)
+#   2. Delete blank/whitespace-only lines
+#   3. Strip leading whitespace (config files may be indented)
+#   4. Strip trailing whitespace
+#   5. Strip trailing comments outside single-quoted values
+#      e.g. reg_pw='pass#word' # comment  ->  reg_pw='pass#word'
+#      The regex skips over paired single-quote groups so # inside quotes is preserved
+#   6. Strip trailing whitespace again (residue left after comment removal)
+#   7. Prepend "export " to each surviving line
+_normalize_export() {
+	sed -E \
+		-e "s/^\s*#.*//g" \
+		-e '/^[ \t]*$/d' \
+		-e "s/^[ \t]*//g" \
+		-e "s/[ \t]*$//g" \
+		-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
+		-e "s/[ \t]*$//g" \
+		-e "s/^/export /"
+}
+
 normalize-aba-conf() {
 	# Output only the values from aba.conf (with defaults for backwards compat).
 	# Derived/computed values belong in the calling script, not here.
-	# Normalize or sanitize the config file
-	# Remove all chars from lines with <white-space>#<anything>
-	# Remove all white-space lines
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Remove all leading and trailing white-space
-	# Remove all #commends except for pass="b#c" values -> 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/'
-	# Correct ask=? which must be either =1 or = (empty)
-	# Extract machine_network and prefix_length from the CIDR notation
-	# Ensure only one arg after 'export'
-	# Prepend "export "
 	[ ! -s aba.conf ] && echo "ask=true" && return 0  # if aba.conf is missing, output a safe default, "ask=true"
 
-	cat aba.conf | \
+	# Sanitize config, normalize boolean flags (users may write =0/=1/=true/=false),
+	# and split machine_network CIDR into two vars (machine_network + prefix_length).
+	_normalize_export < aba.conf | \
 		sed -E	\
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' | \
-		awk '{print $1}' | \
-		sed	-e "s/^/export /g";
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g'
 
-			#-e 's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	echo 'export verify_conf=${verify_conf:-all}'  # Default undefined/empty to "all"
+	# Resolve derived values immediately — deferred expansion like ${ocp_version%%.*}
+	# breaks when callers use eval "$(normalize-aba-conf)" because the shell expands
+	# the ${} before eval processes the exports.
+	local _ocp_ver
+	_ocp_ver=$(sed -n 's/^[[:space:]]*ocp_version=//p' aba.conf | sed -E 's/[[:space:]]*#.*//; s/[[:space:]]*$//' | head -1)
+
+	# Default verify_conf to "all" if not set or empty in config
+	grep -q '^verify_conf=\S' aba.conf 2>/dev/null || echo "export verify_conf=all"
 
 	[ "${ASK_OVERRIDE:-}" ] && echo export ask= || true  # If -y provided, then override the value of ask= in aba.conf
 	# "true" needed, otherwise this function returns non-zero (error)
 
-	# Derived variable: OCP major version number (e.g. "4" from "4.21.10", "5" from "5.0.3").
+	# Derived variable: OCP major version number (e.g. "4" from "4.21.14", "5" from "5.0.3").
 	# Used for CDN paths (openshift-v4/, openshift-v5/), art-dev repos, registry paths, etc.
-	echo 'export ocp_major=${ocp_version%%.*}'
+	[ "$_ocp_ver" ] && echo "export ocp_major=${_ocp_ver%%.*}"
 }
 
 warn_if_cluster_unstable() {
@@ -366,6 +441,90 @@ warn_if_cluster_unstable() {
 	if oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null \
 		| grep -q True; then
 		aba_warning "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
+	fi
+}
+
+# Check if the cluster install is truly complete (all three success criteria).
+# Returns 0 if ready, 1 if not. Requires oc to be authenticated.
+# Criteria: ClusterVersion Available=True, Progressing=False, no Degraded operators.
+cluster_is_ready() {
+	local _cv_available _cv_progressing _degraded_count
+
+	aba_debug "Running: oc get clusterversion (readiness check)"
+
+	_cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null)
+	[ "$_cv_available" = "True" ] || return 1
+
+	_cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null)
+	[ "$_cv_progressing" = "False" ] || return 1
+
+	_degraded_count=$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null | grep -c "True" || true)
+	[ "$_degraded_count" -eq 0 ] || return 1
+
+	return 0
+}
+
+# Relaxed health check: only verifies the cluster API is reachable and functional.
+# Use for upgrade pre-checks where "Available=True" is sufficient — a cluster with
+# Progressing operators or a flapping Degraded operator can still accept upgrades.
+# Reserve cluster_is_ready() for install-completion detection (strict).
+cluster_is_accessible() {
+	local _cv_available
+
+	aba_debug "Running: oc get clusterversion (accessibility check)"
+
+	_cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null)
+	[ "$_cv_available" = "True" ] || return 1
+
+	return 0
+}
+
+# Auto-detect that a cluster install has completed.
+# If kubeconfig exists but .install-complete is missing, probe the cluster API.
+# If the cluster is ready, create the marker and externalize state.
+# Usage: auto_complete_install <cluster-dir>  (absolute or relative to ABA_ROOT)
+auto_complete_install() {
+	local dir="${1:?usage: auto_complete_install <dir>}"
+	local abs_dir
+
+	# Resolve to absolute path
+	if [[ "$dir" == /* ]]; then
+		abs_dir="$dir"
+	else
+		abs_dir="${ABA_ROOT:-$PWD}/$dir"
+	fi
+
+	# Already completed — nothing to do
+	[[ -f "$abs_dir/.install-complete" ]] && return 0
+
+	# No kubeconfig — cluster was never installed far enough to probe
+	local kc="$abs_dir/iso-agent-based/auth/kubeconfig"
+	[[ -f "$kc" ]] || return 1
+
+	# Probe the cluster with a short timeout
+	local saved_kc="${KUBECONFIG:-}"
+	export KUBECONFIG="$kc"
+
+	# Quick connectivity check — bail fast if API is unreachable
+	oc version --request-timeout=5s >/dev/null 2>&1 || {
+		[[ -n "$saved_kc" ]] && export KUBECONFIG="$saved_kc" || unset KUBECONFIG
+		return 1
+	}
+
+	if cluster_is_ready; then
+		touch "$abs_dir/.install-complete"
+		aba_info "Cluster install completed — created .install-complete marker."
+		# Externalize state if not already done
+		if [[ ! -L "$abs_dir/clusterstate" ]]; then
+			( cd "$abs_dir" && externalize_cluster_state ) || true
+		fi
+	fi
+
+	# Restore KUBECONFIG
+	if [[ -n "$saved_kc" ]]; then
+		export KUBECONFIG="$saved_kc"
+	else
+		unset KUBECONFIG
 	fi
 }
 
@@ -418,43 +577,40 @@ verify-aba-conf() {
 	return $ret
 }
 
+_expand_tilde() {
+	case "$1" in
+		"~/"*) echo "$HOME/${1#\~/}" ;;
+		"~")   echo "$HOME" ;;
+		*)     echo "$1" ;;
+	esac
+}
+
 normalize-mirror-conf()
 {
 	# Output only the values from mirror.conf (with defaults for backwards compat).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
-	# Normalize or sanitize the config file
-	# Ensure any ~/ is masked, e.g. \~/ ('cos ~ may need to be expanded on remote host)
-	# Ensure data_disk has ~ masked in each case of: ^data_dir=$ ^data_disk=~ ^data_disk=  
-	# Ensure reg_ssh_user has a value
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Ensure only one arg after 'export'   # Note that all values are now single string, e.g. single value or comma-sep list (one string)
-	# Prepend "export "
-	# reg_path must not start with a /, if so, remove it
-	# Force tls_verify=true 
-	# Fix reg_path if it a) does not start with / or starts with anything other than space or tab, then prepend a '/'
 
 	grep -q '^reg_vendor=' mirror.conf 2>/dev/null	|| echo export reg_vendor=auto
 
 	[ ! -s mirror.conf ] &&                                                              return 0
 
 	(
-		cat mirror.conf | \
+		# Sanitize config, then:
+		#   - Mask empty/~/whitespace data_dir to \~ (expanded on remote host later)
+		#   - Ensure reg_path starts with / (user convenience: reg_path=mypath -> /mypath)
+		_normalize_export < mirror.conf | \
 			sed -E	\
-				-e "s/^\s*#.*//g" \
-				-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-				-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
-				-e 's/^(data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
-				-e 's#^reg_path=([^/ \t])#reg_path=/\1#g' \
-				| \
-			awk '{print $1}' | \
-			sed	-e "s/^/export /g"
-
-		#echo export tls_verify=true
+				-e 's/^(export data_dir=)([[:space:]].*|#.*|~|$)/\1\\~/' \
+				-e 's#^(export reg_path=)([^/ \t])#\1/\2#g'
 	)
-}
 
-				#-e "s/^reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
-				#-e "s/^#reg_ssh_user=([[:space:]]+|$)/reg_ssh_user=$(whoami) /g" \
+	# Phase 3 (ADR-007): override immutable fields from installed state
+	local _mn
+	_mn=$(basename "$PWD")
+	if [ -s "$HOME/.aba/mirror/$_mn/state.sh" ]; then
+		_state_override_mirror "$_mn"
+	fi
+}
 
 verify-mirror-conf() {
 	[ "$verify_conf" = "off" ] && return 0
@@ -479,7 +635,18 @@ verify-mirror-conf() {
 
 	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker)$' || { echo_red "Error: reg_vendor must be auto, quay, or docker in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker|existing)$' || { echo_red "Error: reg_vendor must be auto, quay, docker, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+
+	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
+	# These chars break install or silently corrupt the password (upstream bug).
+	if [ "$reg_pw" ] && [ "${reg_vendor:-auto}" != "docker" ]; then
+		case "$reg_pw" in
+			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+			*"'"*) echo_red "Error: reg_pw contains a single-quote (') which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+			*'$'*) echo_red "Error: reg_pw contains a dollar sign (\$) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
+		esac
+	fi
 
 	return $ret
 }
@@ -488,40 +655,40 @@ normalize-cluster-conf()
 {
 	# Output only the values from cluster.conf (with defaults for backwards compat).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
-	# Normalize or sanitize the config file
-	# Remove all chars from lines with <white-space>#<anything>
-	# Remove all white-space lines
-	# Remove all leading and trailing white-space
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Extract machine_network and prefix_length from the CIDR notation
-	# Ensure only one arg after 'export'
-	# Prepend "export "
-	# Adjust new int_connection value for compatibility
 
 	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
 
 	[ ! -s cluster.conf ] &&                                                               return 0
 
-	cat cluster.conf | \
+	# Sanitize config, then:
+	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
+	#   - Normalize old int_connection=none to empty (backward compat)
+	_normalize_export < cluster.conf | \
 		sed -E	\
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nprefix_length=#g' \
-			-e 's/^int_connection=none/int_connection= /g' | \
-		awk '{print $1}' | \
-		sed -e "s/^/export /g";
-
-	#	awk -F= '{printf sep $2; sep=","} END {print ""}' ports.conf | sed 's/^/ports=/' | \
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
+			-e 's/^(export )int_connection=none/\1int_connection= /g'
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
 	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
 	# Convert 'port0/1=' to 'ports=' for backwards compatibility
-	#grep -q ^ports= cluster.conf 		|| echo export ports=$(cat cluster.conf | sed -n '/^port[0-9]=/s/.*=//p' | awk '{print $1}' | paste -sd, -)
 	grep -q ^ports= cluster.conf 		|| echo export ports=$(grep -E "^port[01]=\S" cluster.conf | cut -d= -f2 | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
+
+	# Phase 3 (ADR-007): override immutable fields from installed state
+	local _cn _sd_candidate
+	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
+	if [ "$_cn" ]; then
+		for _sd_candidate in "$HOME/.aba/clusters/${_cn}."*; do
+			if [ -s "$_sd_candidate/state.sh" ]; then
+				local _bd_state
+				_bd_state=$(grep '^base_domain=' "$_sd_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
+				[ "$_bd_state" ] && _state_override_cluster "$_cn" "$_bd_state"
+				break
+			fi
+		done
+	fi
 }
 
 # -----------------------------------------------------------------------------
@@ -569,6 +736,192 @@ cidr_host_count() {
 	else
 		echo $(( (1 << (32 - prefix)) - 2 ))
 	fi
+}
+
+# Suggest a sensible starting IP for cluster nodes within a CIDR.
+# Picks network_base + 100 to skip common infra addresses (routers, DNS, DHCP).
+# If the range is too small for +100, falls back to 75% through the usable range.
+# Args: NETWORK_ADDR  PREFIX_LEN
+# Example: suggest_starting_ip 10.0.0.0 20 => 10.0.0.100
+suggest_starting_ip() {
+	local net_addr="$1" prefix="$2"
+	local net_int=$(ip_to_int "$net_addr")
+	local host_count=$(cidr_host_count "$prefix")
+	[ "$host_count" -eq 0 ] && return 1
+	local offset=100
+	[ $offset -gt $host_count ] && offset=$(( host_count * 3 / 4 ))
+	[ $offset -lt 1 ] && offset=1
+	int_to_ip $(( net_int + offset ))
+}
+
+# -----------------------------------------------------------------------------
+# Cluster State Helpers (ADR-007: unified state management)
+# Scripts use these instead of hard-coding ~/.aba/ paths.
+# Convenience symlinks (clusterstate) exist for humans; scripts use these.
+# -----------------------------------------------------------------------------
+
+# Returns path to the external state dir for a cluster.
+# Key is cluster_name.base_domain (e.g. sno.example.com) for global uniqueness.
+# Usage: cluster_state_dir [name [domain]]
+cluster_state_dir() {
+	local name="${1:-${cluster_name:-${CLUSTER_NAME:-}}}"
+	local domain="${2:-${base_domain:-${BASE_DOMAIN:-}}}"
+	[ -z "$name" ] && return 1
+	[ -z "$domain" ] && return 1
+	echo "$HOME/.aba/clusters/$name.$domain"
+}
+
+# Returns path to kubeconfig (prefers external state, falls back to local)
+cluster_kubeconfig() {
+	local _sd
+	_sd=$(cluster_state_dir "$@") || return 1
+	local local_path="iso-agent-based/auth/kubeconfig"
+	if [[ -f "$_sd/kubeconfig" ]]; then
+		echo "$_sd/kubeconfig"
+	elif [[ -f "$local_path" ]]; then
+		echo "$PWD/$local_path"
+	fi
+}
+
+# Check if a cluster has externalized state (installed at least once)
+cluster_is_installed() {
+	local _sd
+	_sd=$(cluster_state_dir "$@") || return 1
+	[[ -s "$_sd/state.sh" ]]
+}
+
+# Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
+# Copies auth, config backups, and creates clusterstate symlink.
+# Must be called from the cluster directory (e.g. ~/aba/sno/).
+# Requires: normalize-aba-conf and normalize-cluster-conf already sourced,
+#           or will source them itself.
+externalize_cluster_state() {
+	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
+	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
+
+	[ -z "${cluster_name:-}" ] && aba_warning "externalize_cluster_state: cluster_name not set" && return 1
+	[ -z "${base_domain:-}" ] && aba_warning "externalize_cluster_state: base_domain not set" && return 1
+
+	local _assets_dir="${ASSETS_DIR:-iso-agent-based}"
+
+	# Derive cluster_type from replica counts
+	local _cluster_type
+	if [ "${num_masters:-3}" = "1" ] && [ "${num_workers:-0}" = "0" ]; then
+		_cluster_type=sno
+	elif [ "${num_workers:-0}" = "0" ]; then
+		_cluster_type=compact
+	else
+		_cluster_type=standard
+	fi
+
+	local _state_dir
+	_state_dir=$(cluster_state_dir "$cluster_name" "$base_domain")
+	mkdir -p "$_state_dir/backup"
+	chmod 700 "$_state_dir"
+	chmod 700 "$(dirname "$_state_dir")"
+
+	# Write state.sh (lowercase vars, sourceable)
+	cat > "$_state_dir/state.sh" <<-EOF
+	cluster_name=$cluster_name
+	base_domain=$base_domain
+	cluster_type=$_cluster_type
+	platform=${platform:-bm}
+	starting_ip=${starting_ip:-}
+	machine_network=${machine_network:-}
+	prefix_length=${prefix_length:-}
+	cp_names="${cp_names:-}"
+	worker_names="${worker_names:-}"
+	mirror_name=${mirror_name:-mirror}
+	installed_from="$PWD"
+	installed_on="$(date -Iseconds)"
+	EOF
+
+	# Copy auth files
+	[ -f "$_assets_dir/auth/kubeconfig" ] && cp -p "$_assets_dir/auth/kubeconfig" "$_state_dir/"
+	[ -f "$_assets_dir/auth/kubeadmin-password" ] && cp -p "$_assets_dir/auth/kubeadmin-password" "$_state_dir/"
+
+	# Backup config files (preserve timestamps for Make)
+	[ -f cluster.conf ] && cp -p cluster.conf "$_state_dir/backup/"
+	[ -f install-config.yaml ] && cp -p install-config.yaml "$_state_dir/backup/"
+	[ -f agent-config.yaml ] && cp -p agent-config.yaml "$_state_dir/backup/"
+	[ -f macs.conf ] && cp -p macs.conf "$_state_dir/backup/"
+
+	# Backup marker/flag files
+	local _flag
+	for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
+		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
+	done
+
+	# Convenience symlink
+	ln -sfn "$_state_dir" clusterstate
+
+	aba_info "Cluster state saved to $_state_dir/"
+}
+
+# Emit export lines that override immutable cluster fields from state.sh.
+# Called at the end of normalize-cluster-conf() so state wins over config.
+# Drift (config != state) triggers a stderr warning for user-visible fields.
+_state_override_cluster() {
+	local _name="$1" _domain="$2"
+	local _state="$HOME/.aba/clusters/$_name.$_domain/state.sh"
+	local _immutable="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
+	local _warn_fields="cluster_name base_domain starting_ip cluster_type platform"
+	local _field _sval _cval
+
+	for _field in $_immutable; do
+		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+		[ -z "$_sval" ] && continue
+		case " $_warn_fields " in
+			*" $_field "*)
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2-)
+				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
+					aba_debug "State: cluster.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
+				fi
+				;;
+		esac
+		echo "export ${_field}=${_sval}"
+	done
+}
+
+# Emit export lines that override immutable mirror fields from state.sh.
+# Called at the end of normalize-mirror-conf() so state wins over config.
+_state_override_mirror() {
+	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
+	local _immutable="reg_host reg_port reg_vendor reg_root reg_user reg_pw"
+	local _field _sval _cval
+
+	for _field in $_immutable; do
+		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+		[ -z "$_sval" ] && continue
+		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
+			aba_debug "State: mirror.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
+		fi
+		echo "export ${_field}=${_sval}"
+	done
+}
+
+# Recreate a deleted cluster directory from externalized state backup.
+# Returns 0 if successfully recreated, 1 if no backup exists.
+# backup/ holds everything needed: configs, markers, macs.conf.
+_recreate_cluster_dir() {
+	local _name="$1" _domain="$2"
+	local _state_dir="$HOME/.aba/clusters/$_name.$_domain"
+	local _backup="$_state_dir/backup"
+
+	[ -s "$_state_dir/state.sh" ] || return 1
+	[ -s "$_backup/cluster.conf" ] || return 1
+
+	aba_info "Recreating cluster directory '$_name' from state backup"
+
+	mkdir -p "$_name"
+	cp -pa "$_backup/." "$_name/"
+	ln -fs ../templates/Makefile.cluster "$_name/Makefile"
+	rm -f "$_name/.init"
+	make -s -C "$_name" init 2>/dev/null || true
+	ln -sfn "$_state_dir" "$_name/clusterstate"
+
+	return 0
 }
 
 verify-cluster-conf() {
@@ -665,7 +1018,10 @@ verify-cluster-conf() {
 	[ "$int_connection" ] && { echo $int_connection | grep -q -E "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
-	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { echo_red "Error: mac_prefix is invalid in cluster.conf: [$mac_prefix]" >&2; ret=1; }
+	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warning -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
+
+	# mac_prefix is required for virtual platforms (VMs need unique MACs)
+	[[ "$platform" == "vmw" || "$platform" == "kvm" ]] && [ -z "$mac_prefix" ] && { aba_warning -p "Error" "mac_prefix is required for platform=$platform in cluster.conf"; ret=1; }
 
 	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
 	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
@@ -680,34 +1036,29 @@ verify-cluster-conf() {
 
 normalize-vmware-conf()
 {
-        # Normalize or sanitize the config file
-	# Determine if ESXi or vCenter
-	# Remove all commends after just ONE "#" ->  's/^(([^"]*"[^"]*")*[^"]*)#.*/\1/' \
-	# Ensure only one arg after 'export'
-	# Prepend "export "
-	# Convert VMW_FOLDER to VC_FOLDER for backwards compat!
-
-	# Removed this line since GOVC_PASSWORD='<my password here>' was getting cut and failing to parse
-	#awk '{print $1}' | \
+	# Determine if ESXi or vCenter and adjust VC_FOLDER accordingly
 
 	[ ! -s vmware.conf ] &&                                                              return 0  # vmware.conf can be empty
 
-        vars=$(cat vmware.conf | \
-		sed -E	\
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" \
-			-e "s/^VMW_FOLDER=/VC_FOLDER=/g" | \
-                sed	-e "s/^/export /g")
+	vars=$(_normalize_export < vmware.conf)
 	eval "$vars"
-	# Detect if ESXi is used and set the VC_FOLDER that ESXi prefers, and ignore GOVC_DATACENTER and GOVC_CLUSTER. 
-	# FIXME: Is this the right place to check?!
+
+	# Temporarily unset datacenter/cluster before ESXi detection.
+	# Template defaults (GOVC_DATACENTER=Datacenter, GOVC_CLUSTER=Cluster) cause
+	# 'govc about' to fail on standalone ESXi where these objects don't exist,
+	# preventing the HostAgent grep from ever matching.
+	local _saved_dc="${GOVC_DATACENTER:-}" _saved_cl="${GOVC_CLUSTER:-}"
+	unset GOVC_DATACENTER GOVC_CLUSTER
+
 	aba_debug "Running: govc about (ESXi detection)"
-        if govc about | grep -q "^API type:.*HostAgent$"; then
+	if govc about 2>/dev/null | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
 		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
 		echo export VC=
 	else
+		# Restore for vCenter path
+		GOVC_DATACENTER="$_saved_dc"
+		GOVC_CLUSTER="$_saved_cl"
 		echo "$vars"
 		echo export VC=1
 		# Resolve $GOVC_DATACENTER and $GOVC_CLUSTER placeholders in GOVC_RESOURCE_POOL.
@@ -723,17 +1074,31 @@ normalize-vmware-conf()
 	fi
 }
 
+# Resolve the resource-pool path used by the vSphere preflight RES-06 check (Phase 2).
+# When GOVC_RESOURCE_POOL is set and non-empty, echo it unchanged - normalize-vmware-conf
+# has already expanded any $GOVC_DATACENTER / $GOVC_CLUSTER placeholders inside the value.
+# When unset or empty, echo the implicit per-cluster default path that vSphere always
+# provisions: /<DC>/host/<Cluster>/Resources. Callers pass the result to
+# `govc object.collect -s "<path>" name` to probe existence.
+#
+# This lives OUTSIDE normalize-vmware-conf because the default-path computation is a
+# DERIVED value; normalize-*-conf helpers emit only file/default VALUES (CLAUDE.md +
+# Phase 1 carry-forward). Placeholder expansion of an explicit value is a separate
+# concern, already handled inside normalize-vmware-conf.
+resolve-default-resource-pool() {
+	if [ -n "${GOVC_RESOURCE_POOL:-}" ]; then
+		echo "$GOVC_RESOURCE_POOL"
+	else
+		echo "/$GOVC_DATACENTER/host/$GOVC_CLUSTER/Resources"
+	fi
+}
+
 normalize-kvm-conf()
 {
 	[ ! -s kvm.conf ] && return 0
 
 	local vars
-	vars=$(cat kvm.conf | \
-		sed -E \
-			-e "s/^\s*#.*//g" \
-			-e '/^[ \t]*$/d' -e "s/^[ \t]*//g" -e "s/[ \t]*$//g" \
-			-e "s/^(([^']*'[^']*')*[^']*)#.*$/\1/" | \
-		sed -e "s/^/export /g")
+	vars=$(_normalize_export < kvm.conf)
 	eval "$vars"
 	echo "$vars"
 
@@ -1309,11 +1674,25 @@ fetch_older_version() {
 }
 
 
+# Escape characters that are special in sed replacement strings.
+# Must be called before interpolating user values into sed 's|...|...|' commands.
+_sed_escape_replacement() {
+	# Order matters: escape \ first (otherwise later escapes get double-escaped).
+	# & → \&  (& means "entire matched text" in sed replacement)
+	# | → \|  (| is our sed delimiter in replace-value-conf)
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/[&|]/\\&/g'
+}
+
 # Replace a value in a conf file, taking care of white-space and optional commented ("#") values
 replace-value-conf() {
 	# -n <string> : name of value to change
 	# -v <string> : new value. If missing, remove the value
 	# -f <files>
+	# -q          : quiet (debug-level messages only)
+	#
+	# Handles single-quoted old values (e.g. reg_pw='p4ssw0rd').
+	# Auto-quotes new values that contain spaces or '#'.
+	# If the caller already pre-quotes (e.g. -v "'password'"), no double-quoting occurs.
 
 	aba_debug "Calling: replace-value-conf() $*"
 
@@ -1352,33 +1731,57 @@ replace-value-conf() {
 		esac
 	done
 
+	# Auto-quote values containing spaces or '#' (unquoted '#' starts a comment in bash).
+	# Skip if the caller already pre-quoted (value starts and ends with single quote).
+	local _write_value="$value"
+	if [ -n "$value" ]; then
+		if [[ "$value" == \'*\' ]]; then
+			# Already single-quoted by caller (e.g. -v "'password'")
+			_write_value="$value"
+		elif [[ "$value" == *[[:space:]]* || "$value" == *"#"* ]]; then
+			_write_value="'$value'"
+		fi
+	fi
+
 	# Step through the files by priority...
 	for f in $files
 	do
 		[ ! -s "$f" ] && continue # Try next file
 
-		aba_debug "Replacing config value [$name] with [$value] in file: $f" >&2
+		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
 
 		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
-		# ... change nothing!
-		if grep -q -E "^$name=$value[[:space:]]*(#.*)?$" $f; then
-			[ "$value" ] && aba_debug "Value ${name}=${value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
+		# ... change nothing!  Uses grep -F (fixed string) so (), [], + etc. in values are not treated as regex.
+		if grep -q -F "${name}=${_write_value}" "$f" && \
+		   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
+			[ "$value" ] && aba_debug "Value ${name}=${_write_value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
 
 			return 0
 		fi
 
 		# Key must exist in file (active or commented out) for sed to work
-		if ! grep -q -E "^[# ]*${name}=" $f; then
+		if ! grep -q -E "^[# ]*${name}=" "$f"; then
 			aba_debug "Key [$name] not found in file $f — skipping" >&2
 			continue
 		fi
 
-		sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${value}\1|g" $f
+		# Escape sed-special chars (&, \, |) in the replacement value
+		local _sed_safe
+		_sed_safe=$(_sed_escape_replacement "$_write_value")
+
+		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
+		# Trailing whitespace + comment is captured in \1 and preserved.
+		# Uses | as sed delimiter (| is forbidden in config values).
+		if grep -q "^[# ]*${name}='" "$f"; then
+			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+		else
+			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_info_ok "Added value ${name}=${value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
 		fi
 
 		return 0
@@ -1676,7 +2079,7 @@ get_ntp_servers() {
 trust_root_ca() {
 	if [ -s $1 ]; then
 		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
-			aba_info "$1 already in system trust"
+			aba_debug "$1 already in system trust"
 		else
 			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
@@ -1759,13 +2162,14 @@ run_once() {
 	local WORK_DIR="${RUN_ONCE_DIR:-$HOME/.aba/runner}"
 	mkdir -p "$WORK_DIR"
 
-	while getopts "swi:cprGFt:eoEW:m:qS" opt; do
+	while getopts "swi:cprAGFt:eoEW:m:qS" opt; do
 		case "$opt" in
 			s) mode="start" ;;
 			w) mode="wait" ;;
 			i) work_id=$OPTARG ;;
 			c) purge=true ;;
 			p) mode="peek" ;;
+			A) mode="active" ;;
 			r) reset=true ;;
 			G) global_clean=true ;;
 			F) global_failed_clean=true ;;
@@ -1807,7 +2211,13 @@ run_once() {
 			fi
 		fi
 
-		rm -rf "$id_dir"
+		# Surgical cleanup: remove runtime/cached state but preserve task identity
+		# Identity files (cmd.sh, cmd, cwd) allow run_once -w to reload and
+		# re-execute a task after TTL expiry without the caller providing a command.
+		rm -f "$id_dir"/{pid,lock,exit}
+		# Rotate logs for one generation of diagnostic history
+		[[ -f "$id_dir/log.out" ]] && mv -f "$id_dir/log.out" "$id_dir/log.out.prev" || true
+		[[ -f "$id_dir/log.err" ]] && mv -f "$id_dir/log.err" "$id_dir/log.err.prev" || true
 	}
 
 	# --- GLOBAL CLEAN ---
@@ -1833,18 +2243,20 @@ run_once() {
 			lockf="$d/lock"
 			if [[ -f "$exitf" ]]; then
 				rc="$(cat "$exitf" 2>/dev/null || echo 1)"
-				if [[ "$rc" -ne 0 ]]; then
-					aba_debug "Cleaning failed task: $id (exit code: $rc)"
-					_kill_id "$id"
-				fi
-			elif [[ -e "$d" ]]; then
-				# Zombie task: directory exists but no exit file.
-				# Caused by SIGKILL, OOM, or machine crash killing the
-				# subshell before it could write the exit file.
-				# Only clean if the lock is free (process is definitely dead).
-				if ( exec 9>>"$lockf" && flock -n 9 ); then
-					aba_debug "Cleaning zombie task: $id (no exit file, lock free)"
-					_kill_id "$id"
+			if [[ "$rc" -ne 0 ]]; then
+				aba_debug "Cleaning failed task: $id (exit code: $rc)"
+				_kill_id "$id"
+				rm -f "$d"/{cmd.sh,cmd,cwd}   # Full clean (like explicit -r)
+			fi
+		elif [[ -e "$d" ]]; then
+			# Zombie task: directory exists but no exit file.
+			# Caused by SIGKILL, OOM, or machine crash killing the
+			# subshell before it could write the exit file.
+			# Only clean if the lock is free (process is definitely dead).
+			if ( exec 9>>"$lockf" && flock -n 9 ); then
+				aba_debug "Cleaning zombie task: $id (no exit file, lock free)"
+				_kill_id "$id"
+				rm -f "$d"/{cmd.sh,cmd,cwd}   # Full clean (like explicit -r)
 				else
 					aba_debug "Skipping task: $id (no exit file, lock held — still running)"
 				fi
@@ -1876,7 +2288,7 @@ run_once() {
 	# Create the task directory
 	mkdir -p "$id_dir"
 	chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
-	
+
 	# --- GET ERROR MODE (stderr) ---
 	if [[ "$mode" == "get_error" ]]; then
 		[[ -f "$log_err_file" ]] && cat "$log_err_file"
@@ -1919,15 +2331,35 @@ run_once() {
 	fi
 
 	# --- RESET/KILL ---
+	# Full clean slate: _kill_id removes runtime state (pid, lock, exit, logs)
+	# but preserves identity files (cmd.sh, cmd, cwd) for TTL re-execution.
+	# Explicit reset also removes identity files -- "forget everything."
 	if [[ "$reset" == true ]]; then
 		_log_history "RESET"
 		_kill_id "$work_id"
+		rm -f "$id_dir"/{cmd.sh,cmd,cwd}
 		return 0
 	fi
 
 	# --- PEEK ---
 	if [[ "$mode" == "peek" ]]; then
 		[[ -f "$exit_file" ]] && return 0 || return 1
+	fi
+
+	# --- ACTIVE (running or completed) ---
+	if [[ "$mode" == "active" ]]; then
+		[[ -f "$exit_file" ]] && return 0
+		# Check if lock is currently held (task running)
+		if [[ -f "$lock_file" ]]; then
+			exec 9>>"$lock_file"
+			if flock -n 9; then
+				exec 9>&-
+				return 1  # lock free — not running
+			fi
+			exec 9>&-
+			return 0  # lock held — running
+		fi
+		return 1  # no lock file — never started
 	fi
 
 	_start_task() {
@@ -1951,6 +2383,13 @@ run_once() {
 		: >"$log_out_file"
 		: >"$log_err_file"
 		rm -f "$exit_file"
+
+		# Normalize whitespace in command args (tabs→spaces, collapse runs)
+		# so that cmd.sh is deterministic regardless of caller formatting
+		local _i
+		for _i in "${!command[@]}"; do
+			command[$_i]="${command[$_i]//$'\t'/ }"
+		done
 
 		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
 		
@@ -2037,18 +2476,26 @@ run_once() {
 			if [[ $exit_code -ge 128 && $exit_code -le 165 ]]; then
 				_log_history "SIGNAL rc=$exit_code (restarting)"
 				aba_debug "Task $work_id was killed by signal (exit $exit_code), restarting..."
-				rm -rf "$id_dir"
-				mkdir -p "$id_dir"
-				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
+				# Surgical cleanup: preserve cmd.sh/cmd/cwd so wait can reload the command
+				rm -f "$id_dir"/{pid,lock,exit}
+				[[ -f "$id_dir/log.out" ]] && mv -f "$id_dir/log.out" "$id_dir/log.out.prev" || true
+				[[ -f "$id_dir/log.err" ]] && mv -f "$id_dir/log.err" "$id_dir/log.err.prev" || true
 				# Fall through to restart logic below
 			fi
 		fi
-		
+
 		if [[ ! -f "$exit_file" ]]; then
 			exec 9>>"$lock_file"
 			if flock -n 9; then
-				# Lock is free => not running => implicitly start (requires command)
+				# Lock is free => not running => implicitly start
 				# Keep FD 9 open -- lock transfers to _start_task's subshell
+				if [[ ${#command[@]} -eq 0 ]]; then
+					# No command on CLI -- try reloading from saved cmd.sh
+					if [[ -f "$id_dir/cmd.sh" ]]; then
+						source "$id_dir/cmd.sh"
+						aba_debug "Reloaded saved command for restart: ${command[*]}"
+					fi
+				fi
 				if [[ ${#command[@]} -eq 0 ]]; then
 					exec 9>&-   # Release lock on error path
 					# Only show internal diagnostic when not in quiet mode;
@@ -2187,6 +2634,20 @@ run_once() {
 
 # --- Catalog Download Helpers ---
 
+# Return space-separated list of major.minor versions needing catalog downloads.
+# Always includes the current ocp_version; adds ocp_version_target's major.minor
+# when it differs (cross-minor upgrade).  Expects ocp_version (and optionally
+# ocp_version_target) to be set in the environment.
+_catalog_versions_to_mirror() {
+	local _cur="${ocp_version%.*}"
+	local _versions=("$_cur")
+	if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+		local _tgt="${ocp_version_target%.*}"
+		[ "$_tgt" != "$_cur" ] && _versions+=("$_tgt")
+	fi
+	echo "${_versions[*]}"
+}
+
 # Download all 3 operator catalogs using run_once, throttled by CATALOG_MAX_PARALLEL
 # Usage: download_all_catalogs <version_short> [ttl_seconds]
 # Example: download_all_catalogs "4.19"          (uses CATALOG_CACHE_TTL from ~/.aba/config)
@@ -2213,8 +2674,9 @@ download_all_catalogs() {
 
 	aba_debug "Starting catalog downloads for OCP $version_short (max_parallel=$max_parallel, TTL: ${ttl}s)"
 
+	# Start: catalog downloads in background (with optional throttle-wait inline).
+	# Wait: wait_for_all_catalogs() below, or download-catalogs-wait.sh (via Makefile)
 	for catalog in "${catalogs[@]}"; do
-		# If at max capacity, wait for the earliest to finish before launching next
 		if (( running >= max_parallel )); then
 			local wait_idx=$(( running - max_parallel ))
 			run_once -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
@@ -2252,8 +2714,7 @@ wait_for_all_catalogs() {
 	
 	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_secs}s)"
 	
-	aba_debug "wait_for_all_catalogs: About to call run_once -w for redhat-operator"
-	
+	# Wait: block for catalogs started by download_all_catalogs() above
 	if ! run_once -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
 		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
 		return 1
@@ -2274,6 +2735,54 @@ wait_for_all_catalogs() {
 	
 	# Must use stderr since stdout may be redirected to YAML file
 	aba_info_ok "All catalog downloads completed for OCP $version_short" >&2
+}
+
+# Copy shipped catalog indexes into .index/ if live versions don't exist yet.
+# Gives the TUI instant operator browsing before background downloads complete.
+_populate_shipped_indexes() {
+	local f target
+	for f in catalogs/*-operator-index-v*; do
+		[[ -s "$f" ]] || continue
+		target=".index/$(basename "$f")"
+		[[ -s "$target" ]] && continue
+		cp "$f" "$target"
+	done
+}
+
+# Prefetch catalog indexes for current and previous minor versions.
+# Called by scripts/prefetch-catalogs.sh and TUI v2 for early background catalog fetching.
+# Requires: ocp_version and/or ocp_channel from aba.conf (or callers set them beforehand).
+aba_prefetch_catalogs() {
+	# Populate .index/ from shipped catalogs (instant fallback for TUI)
+	_populate_shipped_indexes
+
+	local _ver="${ocp_version:-}"
+	local _channel="${ocp_channel:-stable}"
+
+	# If no version set, try to determine latest z for channel
+	if [[ -z "$_ver" ]]; then
+		_ver=$(fetch_latest_z_version "$_channel" "" 2>/dev/null) || return 0
+	fi
+
+	[[ -n "$_ver" ]] || return 0
+
+	# Minor x.y — download_all_catalogs uses catalog:${minor}:* task IDs (not patch z)
+	local _minor="${_ver%.*}"
+
+	download_all_catalogs "$_minor"
+	wait_for_all_catalogs "$_minor" || return 0
+
+	# Previous minor line (same major): x.(y-1)
+	local _major="${_minor%%.*}"
+	local _minor_num="${_minor##*.}"
+	if [[ "$_minor_num" -gt 0 ]]; then
+		local _prev_minor="$_major.$((_minor_num - 1))"
+		local _prev_ver
+		_prev_ver=$(fetch_latest_z_version "$_channel" "$_prev_minor" 2>/dev/null) || true
+		if [[ -n "$_prev_ver" ]]; then
+			download_all_catalogs "${_prev_ver%.*}"
+		fi
+	fi
 }
 
 # --- Aba-facing cleanup ---
@@ -2304,7 +2813,7 @@ wait_for_all_catalogs() {
 _oc_mirror_pin_catalogs_by_digest() {
 	local isc_file="$1"
 	local ocp_ver_major="$2"
-	local digest_isc="imageset-config-digest.yaml"
+	local digest_isc=".imageset-config-digest.yaml"
 	local sed_args=()
 
 	for catalog_name in redhat-operator certified-operator community-operator; do
@@ -2318,7 +2827,7 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 	if [ ${#sed_args[@]} -gt 0 ]; then
 		sed "${sed_args[@]}" "$isc_file" > "$digest_isc"
-		aba_info "Catalog references pinned by digest in $digest_isc (prevents upstream registry contact)" >&2
+		aba_debug "Catalog tags resolved to digests in $digest_isc (ensures air-gap compatibility)"
 		echo "$digest_isc"
 	else
 		aba_debug "No catalog digests found -- using original ISC"
@@ -2437,34 +2946,41 @@ _run_oc_mirror_with_retry() {
 	return 0
 }
 
-# Usage: probe_host <url> [description]
+# Usage: probe_host [--quick] [--any] <url> [description]
 # Returns: 0 if reachable, 1 if not
-# Errors shown naturally by curl to stderr
+#   --any:   accept any HTTP response (including 401); only fail on connection errors
+#   --quick: short timeout, no retries (for interactive/TUI paths)
 #
 # Examples:
 #   probe_host "https://api.openshift.com/"
-#   probe_host "https://registry:8443/health/instance" "Quay registry"
+#   probe_host --quick --any "https://registry:8443/v2/" "registry"
 probe_host() {
-	# --any: accept any HTTP response (including 401); only fail on connection errors
-	local _pf="-f"
-	if [ "${1:-}" = "--any" ]; then _pf=""; shift; fi
+	local _pf="-f" _connect_timeout=5 _max_time=15 _retry=2
+
+	while true; do
+		case "${1:-}" in
+			--any)   _pf=""; shift ;;
+			--quick) _connect_timeout=3; _max_time=5; _retry=0; shift ;;
+			*)       break ;;
+		esac
+	done
+
 	local url="$1"
 	local desc="${2:-$url}"
-	
-	aba_debug "Probing $desc"
-	aba_debug "curl -s ${_pf:+$_pf }--connect-timeout 5 --max-time 15 --retry 2 -ILk $url"
-	
-	# -s: silent (no progress bar)
-	# -f: fail on HTTP errors (4xx, 5xx) — omitted when --any is used
+
+	aba_debug "Probing $desc (timeout=${_connect_timeout}s, retries=$_retry)"
+
+	# -k: skip TLS verification — probe_host checks unknown/untrusted hosts
+	# (e.g. hairpin NAT diagnostics via localhost). Not used for primary verification.
 	if curl -s $_pf \
-		--connect-timeout 5 \
-		--max-time 15 \
-		--retry 2 \
+		--connect-timeout "$_connect_timeout" \
+		--max-time "$_max_time" \
+		--retry "$_retry" \
 		-ILk \
 		"$url" >/dev/null 2>&1; then
 		return 0
 	fi
-	
+
 	return 1
 }
 
@@ -2680,15 +3196,43 @@ validate_ntp_servers() {
 
 # Task IDs (single source of truth)
 # Guard against re-declaration when include_all.sh is sourced multiple times
-if [[ -z "${TASK_OC_MIRROR+x}" ]]; then
-	readonly TASK_OC_MIRROR="cli:install:oc-mirror"
-	readonly TASK_OC="cli:install:oc"
-	readonly TASK_OPENSHIFT_INSTALL="cli:install:openshift-install"
-	readonly TASK_GOVC="cli:install:govc"
-	readonly TASK_BUTANE="cli:install:butane"
-	readonly TASK_QUAY_REG_DOWNLOAD="mirror:reg:download"
-	readonly TASK_QUAY_REG="mirror:reg:install"
+if [[ -z "${TASK_INST_OC_MIRROR+x}" ]]; then
+	# Install task IDs (TASK_INST_* to distinguish from TASK_DL_* download tasks)
+	readonly TASK_INST_OC_MIRROR="cli:install:oc-mirror"
+	readonly TASK_INST_OC="cli:install:oc"
+	readonly TASK_INST_OPENSHIFT_INSTALL="cli:install:openshift-install"
+	readonly TASK_INST_GOVC="cli:install:govc"
+	readonly TASK_INST_BUTANE="cli:install:butane"
+	readonly TASK_INST_QUAY_REG="mirror:reg:install"
+
+	# Download task IDs (TASK_DL_*)
+	readonly TASK_DL_OC_MIRROR="cli:download:oc-mirror"
+	readonly TASK_DL_GOVC="cli:download:govc"
+	readonly TASK_DL_BUTANE="cli:download:butane"
+	readonly TASK_DL_QUAY_REG="mirror:reg:download"
+
+	# Download commands (arrays)
+	CMD_DL_OC=(make -sC cli download-oc)
+	CMD_DL_OC_MIRROR=(make -sC cli download-oc-mirror)
+	CMD_DL_OPENSHIFT_INSTALL=(make -sC cli download-openshift-install)
+	CMD_DL_GOVC=(make -sC cli download-govc)
+	CMD_DL_BUTANE=(make -sC cli download-butane)
+
+	# Install commands (arrays) — plain make, no nesting
+	CMD_INST_OC=(make -sC cli oc)
+	CMD_INST_OC_MIRROR=(make -sC cli oc-mirror)
+	CMD_INST_OPENSHIFT_INSTALL=(make -sC cli openshift-install)
+	CMD_INST_GOVC=(make -sC cli govc)
+	CMD_INST_BUTANE=(make -sC cli butane)
+
+	# Mirror registry commands (arrays)
+	CMD_DL_QUAY_REG=(make -sC mirror download-registries)
+	CMD_INST_QUAY_REG=(make -sC mirror mirror-registry)
 fi
+
+# Download task IDs -- version-dependent (functions, return full ID with version)
+task_dl_oc()                { echo "cli:download:oc:${ocp_version:?ocp_version not set}"; }
+task_dl_openshift_install() { echo "cli:download:openshift-install:${ocp_version:?ocp_version not set}"; }
 
 # Start all CLI tarball downloads (parallel, non-blocking)
 start_all_cli_downloads() {
@@ -2723,13 +3267,14 @@ ensure_sigstore_mirror_config() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
-	# Wait for oc-mirror download to complete before extracting
-	# (cli-download-all.sh starts downloads in background; extracting a
-	#  partially-downloaded tarball causes "gzip: unexpected end of file" errors)
-	# Provide command so run_once can start the download if task was reset
 	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
-	run_once -q -w -i "cli:download:oc-mirror" -- make -sC cli download-oc-mirror
-	run_once -w -m "Installing oc-mirror to ~/bin" -i "$TASK_OC_MIRROR" -- make -sC cli oc-mirror
+	# Liberal bg kick-off (idempotent — fast no-op if already running/done)
+	run_once -i "$TASK_DL_OC_MIRROR" -- "${CMD_DL_OC_MIRROR[@]}"
+	# Targeted fg wait (no command — reloads from cmd.sh)
+	run_once -q -w -i "$TASK_DL_OC_MIRROR"
+
+	run_once -i "$TASK_INST_OC_MIRROR" -- "${CMD_INST_OC_MIRROR[@]}"
+	run_once -w -m "Installing oc-mirror" -i "$TASK_INST_OC_MIRROR"
 }
 
 # Ensure oc CLI is installed in ~/bin
@@ -2738,8 +3283,15 @@ ensure_oc() {
 		aba_debug "ensure_oc: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:oc:${ocp_version}" -- make -sC cli download-oc
-	run_once -w -m "Installing oc to ~/bin" -i "$TASK_OC" -- make -sC cli oc
+	local task_dl
+	task_dl=$(task_dl_oc)
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$task_dl" -- "${CMD_DL_OC[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$task_dl"
+
+	run_once -i "$TASK_INST_OC" -- "${CMD_INST_OC[@]}"
+	run_once -w -m "Installing oc" -i "$TASK_INST_OC"
 }
 
 # Ensure openshift-install is installed in ~/bin
@@ -2748,15 +3300,262 @@ ensure_openshift_install() {
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
 		return 0
 	fi
-	run_once -q -w -i "cli:download:openshift-install:${ocp_version}" -- make -sC cli download-openshift-install
-	run_once -w -m "Installing openshift-install to ~/bin" -i "$TASK_OPENSHIFT_INSTALL" -- make -sC cli openshift-install
+	local task_dl
+	task_dl=$(task_dl_openshift_install)
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$task_dl" -- "${CMD_DL_OPENSHIFT_INSTALL[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$task_dl"
+
+	run_once -i "$TASK_INST_OPENSHIFT_INSTALL" -- "${CMD_INST_OPENSHIFT_INSTALL[@]}"
+	run_once -w -m "Installing openshift-install" -i "$TASK_INST_OPENSHIFT_INSTALL"
+}
+
+# Check if the OCP release image is available in the mirror registry.
+# Pure curl — no skopeo or openshift-install needed.
+# Handles both Docker (Basic auth) and Quay (Bearer token exchange).
+# Two-phase check (run in parallel for speed):
+#   Phase 1: GET /v2/ — verifies connectivity + TLS + credentials
+#   Phase 2: GET /v2/.../manifests/<tag> — verifies the release image exists
+# Requires: ocp_version (from normalize-aba-conf)
+# Requires: reg_host, reg_port, reg_path, regcreds_dir (from normalize-mirror-conf)
+# Returns: 0 if available, 1 if not.
+# Sets: _release_ver, _release_http_code, _release_check_err, _registry_auth_ok
+check_release_image() {
+	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
+	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
+	local _cacert="${regcreds_dir}/rootCA.pem"
+	local _repo="${reg_path#/}/openshift/release-images"
+	local _v2_url="https://$reg_host:$reg_port/v2/"
+	local _manifest_url="https://$reg_host:$reg_port/v2/$_repo/manifests/$_tag"
+	local _accept="Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+
+	_release_ver="$ocp_version"
+	_release_http_code=""
+	_release_check_err=""
+	_registry_auth_ok=false
+
+	local _b64auth _userpass _curl_opts
+	aba_debug "Running: jq -r '.auths[\"$reg_host:$reg_port\"].auth' $_authfile"
+	_b64auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$_authfile" 2>/dev/null)
+
+	# Guard: if pull secret has no entry for this hostname, fail fast with 401.
+	# Without this, base64 -d of "null" produces garbage without a colon, causing
+	# curl -u to prompt interactively for a password — hanging indefinitely (Bug #396).
+	if [ -z "$_b64auth" ] || [ "$_b64auth" = "null" ]; then
+		_release_http_code="401"
+		_release_check_err="no credentials in pull secret for $reg_host:$reg_port"
+		return 1
+	fi
+
+	_userpass=$(echo "$_b64auth" | base64 -d)
+	_curl_opts="--cacert $_cacert --connect-timeout 3 --max-time 10 --retry 1"
+
+	local _td="${TMPDIR:-/tmp}/_aba_cri.$$"
+	mkdir -p "$_td"
+
+	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---
+	aba_debug "Parallel check: Phase 1 ($_v2_url) + Phase 2 ($_manifest_url)"
+
+	curl -sS -o "$_td/p1.body" -w "%{http_code}" \
+		$_curl_opts -H "Authorization: Basic $_b64auth" \
+		"$_v2_url" 2>"$_td/p1.err" > "$_td/p1.code" &
+	local _pid1=$!
+
+	curl -sS -o "$_td/p2.body" -w "%{http_code}" \
+		$_curl_opts -H "Authorization: Basic $_b64auth" \
+		-H "$_accept" \
+		"$_manifest_url" 2>"$_td/p2.err" > "$_td/p2.code" &
+	local _pid2=$!
+
+	wait "$_pid1" "$_pid2" 2>/dev/null || true
+
+	local _p1_code _p2_code
+	_p1_code=$(cat "$_td/p1.code" 2>/dev/null)
+	_p2_code=$(cat "$_td/p2.code" 2>/dev/null)
+
+	aba_debug "Parallel Basic auth results: Phase 1=$_p1_code Phase 2=$_p2_code"
+
+	# --- Fast path: Docker registry where Basic auth works for both ---
+	if [ "$_p1_code" = "200" ]; then
+		_registry_auth_ok=true
+		if [ "$_p2_code" = "200" ]; then
+			rm -rf "$_td"
+			return 0
+		fi
+	fi
+
+	# --- Quay path: both return 401 with Basic, need Bearer token exchange ---
+	# A successful token exchange proves credentials are valid (no separate /v2/ check needed).
+	if [ "$_p1_code" = "401" ]; then
+		local _token_url="https://$reg_host:$reg_port/v2/auth?service=$reg_host:$reg_port&scope=repository:$_repo:pull"
+		aba_debug "Running: curl -s $_curl_opts -u <redacted> $_token_url"
+		local _token
+		_token=$(curl -s $_curl_opts \
+			-u "$_userpass" \
+			"$_token_url" 2>/dev/null \
+			| jq -r '.token // empty' 2>/dev/null)
+
+		if [ -n "$_token" ]; then
+			_registry_auth_ok=true
+			aba_debug "Bearer token obtained — credentials valid, checking manifest"
+			aba_debug "Running: curl -sS -w %{http_code} $_curl_opts -H 'Authorization: Bearer <redacted>' -H '$_accept' $_manifest_url"
+			_p2_code=$(curl -sS -o "$_td/p2.body" -w "%{http_code}" \
+				$_curl_opts \
+				-H "Authorization: Bearer $_token" \
+				-H "$_accept" \
+				"$_manifest_url" 2>"$_td/p2.err") || true
+
+			aba_debug "Bearer manifest result: HTTP $_p2_code"
+			if [ "$_p2_code" = "200" ]; then
+				rm -rf "$_td"
+				return 0
+			fi
+		fi
+	fi
+
+	# --- Failure: extract error details ---
+	if [ "$_registry_auth_ok" = "false" ]; then
+		# Phase 1 failed — report /v2/ error
+		_release_http_code="${_p1_code:-000}"
+		_release_check_err=$(cat "$_td/p1.err" 2>/dev/null)
+		if [ -s "$_td/p1.body" ]; then
+			local _body_err
+			_body_err=$(jq -r '.errors[0].message // empty' "$_td/p1.body" 2>/dev/null)
+			if [ -n "$_body_err" ]; then
+				_release_check_err="$_body_err"
+			elif [ "$_p1_code" != "000" ]; then
+				_release_check_err=$(head -c 200 "$_td/p1.body")
+			fi
+		fi
+	else
+		# Phase 1 passed but Phase 2 failed — report manifest error
+		_release_http_code="${_p2_code:-000}"
+		_release_check_err=$(cat "$_td/p2.err" 2>/dev/null)
+		if [ -s "$_td/p2.body" ]; then
+			local _body_err
+			_body_err=$(jq -r '.errors[0].message // empty' "$_td/p2.body" 2>/dev/null)
+			if [ -n "$_body_err" ]; then
+				_release_check_err="$_body_err"
+			elif [ "$_p2_code" != "000" ]; then
+				_release_check_err=$(head -c 200 "$_td/p2.body")
+			fi
+		fi
+	fi
+
+	rm -rf "$_td"
+	aba_debug "FAILED: auth_ok=$_registry_auth_ok HTTP $_release_http_code — $_release_check_err"
+
+	return 1
+}
+
+# =============================================================================
+# Background task wrappers (for TUI and CLI callers)
+# =============================================================================
+# These wrap run_once() so callers don't need to know task IDs or flags.
+
+# --- Mirror check-image (release image present in registry?) ---
+
+# Start check-image in background (non-blocking)
+aba_mirror_verify_start() {
+	run_once -i "aba:mirror:check-image" -- bash -lc "cd '${ABA_ROOT:-.}' && make -sC mirror check-image"
+}
+
+# Re-trigger after sync/load (invalidate old result, start fresh check)
+aba_mirror_verify_refresh() {
+	run_once -r -i "aba:mirror:check-image" 2>/dev/null || true
+	aba_mirror_verify_start
+}
+
+# Wait for check-image to complete (blocking). For use after sync/load/install.
+aba_mirror_verify_wait() {
+	run_once -q -w -i "aba:mirror:check-image" 2>/dev/null || true
+}
+
+# Get cached exit code (non-blocking, for menu rendering). Echoes exit code.
+aba_mirror_verify_exit() {
+	run_once -E -i "aba:mirror:check-image" 2>/dev/null
+}
+
+# --- Internet connectivity ---
+
+# Start internet check in background (non-blocking)
+aba_inet_check_start() {
+	run_once -i "aba:check:internet" -- \
+		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet"
+}
+
+# Wait for internet check result (blocking)
+aba_inet_check_wait() {
+	run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+}
+
+# Wait and return success/failure (for mode detection)
+aba_inet_check_wait_status() {
+	run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
+}
+
+# Reset cached internet check (use at TUI startup to force a fresh probe)
+aba_inet_check_reset() {
+	run_once -r -i "aba:check:internet"
+	# Also reset per-site caches (300s TTL) so a fresh probe doesn't reuse stale failures
+	run_once -r -i "aba:check:api.openshift.com" 2>/dev/null || true
+	run_once -r -i "aba:check:mirror.openshift.com" 2>/dev/null || true
+	run_once -r -i "aba:check:registry.redhat.io" 2>/dev/null || true
+}
+
+# Re-check internet with TTL cache (returns cached result within TTL seconds)
+aba_inet_check_cached() {
+	local ttl="${1:-30}"
+	run_once -i "aba:check:internet" -t "$ttl" -- \
+		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet" 2>/dev/null
+	# If no result exists yet (first call or after TTL expiry), wait for the check to complete
+	if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
+		run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+	fi
+	run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'
+}
+
+# --- OCP version fetch ---
+
+# Start version fetches for all channels in background (non-blocking).
+# Stable/stable-channel graph data is warmed early; prefetch uses fetch_latest_z_version
+# (shared Cincinnati cache via _fetch_graph_cached) when aba.conf has no ocp_version yet.
+aba_version_fetch_start() {
+	local _ch
+	for _ch in stable fast candidate; do
+		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $_ch"
+	done
+}
+
+# --- ISC generation ---
+
+# Start ISC generation in background (non-blocking)
+# Uses make directly to avoid aba.sh's CLI download side-effects (SIGPIPE race condition)
+aba_isconf_generate_start() {
+	run_once -i "aba:isconf:generate" -- \
+		make -sC "${ABA_ROOT:-.}/mirror" isconf
+}
+
+# --- Cleanup ---
+
+# Clean up failed/stale run_once tasks
+aba_bg_cleanup() {
+	run_once -F 2>/dev/null || true
 }
 
 # Ensure govc is installed in ~/bin
 ensure_govc() {
 	aba_debug "ensure_govc: downloading and installing govc"
-	run_once -q -w -i "cli:download:govc" -- make -sC cli download-govc
-	run_once -w -m "Installing govc to ~/bin" -i "$TASK_GOVC" -- make -sC cli govc
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$TASK_DL_GOVC" -- "${CMD_DL_GOVC[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$TASK_DL_GOVC"
+
+	run_once -i "$TASK_INST_GOVC" -- "${CMD_INST_GOVC[@]}"
+	run_once -w -m "Installing govc" -i "$TASK_INST_GOVC"
 }
 
 ensure_virsh() {
@@ -2766,14 +3565,24 @@ ensure_virsh() {
 # Ensure butane is installed in ~/bin
 ensure_butane() {
 	aba_debug "ensure_butane: downloading and installing butane"
-	run_once -q -w -i "cli:download:butane" -- make -sC cli download-butane
-	run_once -w -m "Installing butane to ~/bin" -i "$TASK_BUTANE" -- make -sC cli butane
+	# Liberal bg kick-off (idempotent)
+	run_once -i "$TASK_DL_BUTANE" -- "${CMD_DL_BUTANE[@]}"
+	# Targeted fg wait
+	run_once -q -w -i "$TASK_DL_BUTANE"
+
+	run_once -i "$TASK_INST_BUTANE" -- "${CMD_INST_BUTANE[@]}"
+	run_once -w -m "Installing butane" -i "$TASK_INST_BUTANE"
 }
 
 # Ensure mirror-registry (Quay) is installed (extracted)
+# Wait: aba.sh starts $TASK_INST_QUAY_REG and $TASK_DL_QUAY_REG in background
 ensure_quay_registry() {
 	aba_debug "ensure_quay_registry: installing mirror-registry"
-	run_once -w -m "Installing mirror-registry" -i "$TASK_QUAY_REG" -- make -sC mirror mirror-registry
+	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
+	run_once -q -w -i "$TASK_DL_QUAY_REG"
+
+	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
+	run_once -w -m "Installing mirror-registry" -i "$TASK_INST_QUAY_REG"
 }
 
 # Get error output from a task (helper for error messages)
@@ -2791,7 +3600,7 @@ is_bundle_mode() {
 
 # Check internet connectivity to required sites
 # Usage: check_internet_connectivity <prefix> [quiet]
-#   prefix: Task ID prefix (e.g., "cli" or "tui")
+#   prefix: Task ID prefix (e.g., "aba" for shared CLI/TUI probes)
 #   quiet:  If "true", suppress checking message (default: false)
 # Returns: 0 if all sites accessible, 1 if any failed
 # Sets global variables: FAILED_SITES, ERROR_DETAILS (for caller to handle)
@@ -2807,12 +3616,12 @@ check_internet_connectivity() {
 		need_check=true
 	fi
 	
-	# Start all three checks in parallel (lightweight curl HEAD requests, 5-min TTL)
+	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
 	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
 	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
 	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
 	
-	# Now wait for all three and check results (quietly, no waiting messages)
+	# Wait: block for the 3 checks started above
 	FAILED_SITES=""
 	ERROR_DETAILS=""
 	

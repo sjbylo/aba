@@ -31,6 +31,33 @@ WKR_MAC_ADDRS_ARRAY=($WKR_MAC_ADDRS)
 
 aba_info "Provisioning VMs to build the cluster ..."
 
+# Pre-flight: verify datastore and network exist before attempting VM creation
+if ! govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1; then
+	aba_abort \
+		"Datastore '$GOVC_DATASTORE' not found." \
+		"Available datastores: $(govc datastore.ls 2>/dev/null | tr '\n' ', ')" \
+		"Fix GOVC_DATASTORE in vmware.conf and try again."
+fi
+if [ "${VC:-}" ]; then
+	if ! govc find / -type Network -name "$GOVC_NETWORK" 2>/dev/null | grep -q .; then
+		aba_abort \
+			"Network '$GOVC_NETWORK' not found." \
+			"Available networks: $(govc ls network/ 2>/dev/null | xargs -I{} basename {} | tr '\n' ', ')" \
+			"Fix GOVC_NETWORK in vmware.conf and try again."
+	fi
+else
+	# ESXi standalone: govc find may not list some port groups (observed
+	# on freshly installed ESXi 7.0.3). host.portgroup.info queries
+	# host config directly and works reliably.
+	# See Troubleshooting.md "ESXi: Network not found" for details.
+	if ! govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1; then
+		aba_abort \
+			"Network '$GOVC_NETWORK' not found." \
+			"Available networks: $(govc host.portgroup.info 2>/dev/null | grep '^Name:' | sed 's/Name: *//' | tr '\n' ', ')" \
+			"Fix GOVC_NETWORK in vmware.conf and try again."
+	fi
+fi
+
 cluster_folder="$VC_FOLDER"
 # If we are accessing vCenter (and not ESXi directly) 
 if [ -n "${VC:-}" ]; then
@@ -43,6 +70,7 @@ if [ -z "${NO_MAC_CHECK:-}" ]; then
 	scripts/check-macs.sh || exit 1
 fi
 
+source scripts/vm-vmw.sh
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
@@ -97,24 +125,10 @@ create_node() {
 		local annotation
 		annotation=$(_vm_annotation "$role")
 
-		cmd="govc vm.create \
-			-annotation='$annotation' \
-			-version vmx-15 \
-			-g rhel8_64Guest \
-			-firmware=efi \
-			-c=$cpu_count \
-			-m=$(( mem_gb * 1024 )) \
-			-net.adapter vmxnet3 \
-			-net.address='$mac' \
-			-disk-datastore=$GOVC_DATASTORE \
-			-iso-datastore=$ISO_DATASTORE \
-			-iso='images/agent-${CLUSTER_NAME}.iso' \
-			-folder='$cluster_folder' \
-			-on=false \
-			$vm_name"
+		vmp_create_vm "$vm_name" "$cpu_count" "$mem_gb" "$mac" \
+			"$GOVC_DATASTORE" "$GOVC_NETWORK" "$cluster_folder" "$nested_hv" "${data_disk:-}"
 
-		aba_debug Running: $cmd
-		eval $cmd  # eval needed for the ''s
+		govc vm.change -vm "$vm_name" -annotation="$annotation"
 
 		for cnt in $(seq 1 $max_ports_per_node); do
 			local sub_idx=$(( idx + cnt ))
@@ -122,53 +136,15 @@ create_node() {
 			aba_info "Adding network interface [$((cnt + 1))/$num_ports_per_node] with mac address: $sub_mac"
 
 			cmd="govc vm.network.add -vm $vm_name -net.adapter vmxnet3 -net.address '$sub_mac'"
-			aba_debug Running: $cmd; eval $cmd  # eval needed for the ''s
+			aba_debug Running: $cmd; eval $cmd
 		done
 
-		cmd="govc device.boot -secure -vm $vm_name"
-		aba_debug Running: $cmd
-		$cmd
-
-		#govc device.boot -secure -vm $vm_name
-
-		cmd="govc vm.change -vm $vm_name \
-			-e disk.enableUUID=TRUE \
-			-cpu-hot-add-enabled=true \
-			-memory-hot-add-enabled=true \
-			-nested-hv-enabled=$nested_hv"
-
-		aba_debug Running: $cmd
-		$cmd
-
-		aba_info "Attaching thin OS disk of size 120GB on [$GOVC_DATASTORE]"
-		cmd="govc vm.disk.create \
-			-vm $vm_name \
-			-name $vm_name/$vm_name \
-			-size 120GB \
-			-thick=false \
-			-ds=$GOVC_DATASTORE"
-
-		aba_debug Running: $cmd
-		$cmd
-
-		if [ -n "${data_disk:-}" ]; then
-			aba_info "Attaching a 2nd thin data disk of size $data_disk GB on [$GOVC_DATASTORE]"
-
-			cmd="govc vm.disk.create \
-				-vm $vm_name \
-				-name $vm_name/${vm_name}_data \
-				-size ${data_disk}GB \
-				-thick=false \
-				-ds=$GOVC_DATASTORE"
-
-			aba_debug Running: $cmd
-			$cmd
-		fi
+		vmp_attach_iso "$vm_name" "$ISO_DATASTORE" "images/agent-${CLUSTER_NAME}.iso" \
+			|| aba_abort "Failed to attach ISO on $vm_name. Check ISO datastore ($ISO_DATASTORE) accessibility."
 
 		if [ -n "${START_VM:-}" ]; then
 			cmd="govc vm.power -on $vm_name"
-
-			aba_debug Running: $cmd
+			aba_debug "Running: $cmd"
 			$cmd
 		fi
 

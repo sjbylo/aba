@@ -1,11 +1,11 @@
-#!/bin/bash 
-# Check if at least one VMs exists
+#!/bin/bash
+# Check if at least one VM exists.
+# Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
 
-
-
 if [ -s vmware.conf ]; then
+	ensure_govc
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER
 else
 	aba_info "vmware.conf file not defined. Run 'aba vmw' to create it if needed"
@@ -17,15 +17,12 @@ if [ ! "$CLUSTER_NAME" ]; then
 		exit 1
 	fi
 	scripts/cluster-config-check.sh
-	eval `scripts/cluster-config.sh || exit 1`
+	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
-# Exit 0 if at least one VMs exist
-for name in $CP_NAMES $WORKER_NAMES; do
-	aba_debug "Running: govc vm.info -json $(vm_name "$CLUSTER_NAME" "$name")"
-	power_state=$(govc vm.info -json "$(vm_name "$CLUSTER_NAME" "$name")" | jq -r '.virtualMachines[0].runtime.powerState')
-	[ "$power_state" != "null" ] && exit 0
-done 
-
-exit 1
-
+source scripts/vm-provider.sh
+vm_provider_load vmw
+# || exit 1 keeps the call in a conditional context so the ERR trap doesn't
+# fire on the expected "no VMs exist" return code (which is a normal result,
+# not a script error).
+vm_exists_any || exit 1

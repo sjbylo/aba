@@ -46,8 +46,8 @@ plan_tests \
     "Setup: calculate older version for upgrade" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
-    "Registry: Quay install and uninstall" \
-    "Registry: Docker install and load" \
+    "Registry: Docker install and verify (custom params)" \
+    "Registry: Quay install and load" \
     "SNO: install cluster" \
     "SNO: day2 configuration" \
     "SNO: day2-ntp from scratch" \
@@ -161,27 +161,39 @@ e2e_run_remote "Verify single dnf batch (no duplicate install)" \
 test_end
 
 # ============================================================================
-# 6. Registry: Quay install -> uninstall (then switch to Docker)
+# 6. Registry: Docker install and verify (smoke test with custom params)
+#    Exercises non-default mirror.conf values: port, user, password, path,
+#    data_dir.  Verifies install + accessibility, then uninstalls immediately.
 # ============================================================================
-test_begin "Registry: Quay install and uninstall"
+test_begin "Registry: Docker install and verify (custom params)"
+
+_DOCKER_PORT=5002
+_DOCKER_USER=e2etester
+_DOCKER_PW='T3st!@#P4ss&*()'
+_DOCKER_PATH=/e2e/mirror
+_DOCKER_DATADIR="~/e2e-mirror-datadir1"
 
 e2e_run_remote "Create mirror.conf on bastion" \
     "cd ~/aba && aba -d mirror mirror.conf"
 e2e_run_remote "Set reg_host to local hostname" \
     "sed -i 's/^reg_host=.*/reg_host=${DIS_HOST}/g' ~/aba/mirror/mirror.conf"
-e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
 
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
-e2e_run_remote "Install Quay registry" \
-    "cd ~/aba && aba -d mirror install"
-e2e_poll_remote 60 5 "Wait for Quay container" \
-    "podman ps | grep quay"
-e2e_run_remote "Verify Quay running" \
-    "podman ps | grep quay"
-e2e_run_remote "Uninstall Quay registry" \
+e2e_run_remote "Install Docker registry (custom port/user/pw/path/data_dir)" \
+    "cd ~/aba && aba -d mirror install --vendor docker --reg-port $_DOCKER_PORT --reg-user $_DOCKER_USER --reg-password '${_DOCKER_PW}' --reg-path $_DOCKER_PATH --data-dir '$_DOCKER_DATADIR'"
+e2e_poll_remote 60 5 "Wait for Docker registry container" \
+    "podman ps | grep registry"
+e2e_run_remote "Verify Docker registry running" \
+    "podman ps | grep registry"
+e2e_run_remote "Verify Docker registry listening on port $_DOCKER_PORT" \
+    "ss -tlnp | grep ':${_DOCKER_PORT} '"
+e2e_run_remote "Verify Docker registry accessible with custom creds" \
+    "cd ~/aba && aba -d mirror verify"
+e2e_run_remote "Uninstall Docker registry (smoke test done)" \
     "cd ~/aba && aba -d mirror uninstall"
-e2e_run_remote "Verify Quay removed" \
-    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0$"
+e2e_run "Assert: Docker registry fully removed on disN" "e2e_assert_registry_removed"
+e2e_run_remote "Remove custom data dir on disN" \
+    "sudo rm -rf $_DOCKER_DATADIR"
 
 # Negative path: load without data/ dir should fail
 e2e_run_remote -q "Remove data dir for must-fail test" \
@@ -194,22 +206,33 @@ e2e_run_remote -q "Restore data dir" \
 test_end
 
 # ============================================================================
-# 7. Registry: install Docker registry and load images
+# 7. Registry: Quay install and load (full pipeline with custom port)
+#    Quay on non-default port exercises the entire air-gapped workflow:
+#    install -> load -> cluster install -> day2 -> upgrade.
 # ============================================================================
-test_begin "Registry: Docker install and load"
+test_begin "Registry: Quay install and load"
 
-e2e_add_to_mirror_cleanup "$PWD/mirror" remote
-e2e_run_remote "Install Docker registry" \
-    "cd ~/aba && aba -d mirror install --vendor docker"
-e2e_poll_remote 60 5 "Wait for Docker registry container" \
-    "podman ps | grep registry"
-e2e_run_remote "Verify Docker registry running" \
-    "podman ps | grep registry"
-e2e_run_remote "Verify Docker registry accessible" \
-    "cd ~/aba && aba -d mirror verify"
+_QUAY_PORT=8448
+e2e_run_remote "Set vendor=quay and reg_port=$_QUAY_PORT for Quay" \
+    "cd ~/aba && aba --dir mirror --vendor quay --reg-port $_QUAY_PORT"
+e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror.conf"
+
+e2e_run_remote "Install Quay registry on port $_QUAY_PORT" \
+    "cd ~/aba && aba -d mirror install"
+e2e_poll_remote 60 5 "Wait for Quay container" \
+    "podman ps | grep quay"
+e2e_run_remote "Verify Quay running" \
+    "podman ps | grep quay"
+e2e_run_remote "Verify Quay listening on custom port $_QUAY_PORT" \
+    "ss -tlnp | grep ':${_QUAY_PORT} '"
+e2e_run_remote "Verify Quay accessible on custom port" \
+    "curl -k -sf https://${DIS_HOST}:${_QUAY_PORT}/health/instance"
+
+e2e_run_remote "Override op_sets in mirror.conf (exercises mirror.conf override)" \
+    "cd ~/aba && sed -i '/^#op_sets=/c\\op_sets=abatest' mirror/mirror.conf"
 
 e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
-e2e_run_remote -r 3 2 "Load images into Docker registry" \
+e2e_run_remote -r 3 2 "Load images into Quay registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
@@ -232,8 +255,7 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_poll_remote 600 30 "Wait for all operators fully available" \
-    "cd ~/aba && lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False\$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO remote
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
@@ -536,7 +558,7 @@ e2e_diag_remote "Show travels app pods" \
 
 # Cleanup: uninstall mesh demo (free resources before upgrade)
 e2e_run_remote "Uninstall service mesh demo" \
-    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./99-uninstall-all-mesh3.sh || true"
+    "cd ~/mesh-demo && export KUBECONFIG=~/aba/$SNO/iso-agent-based/auth/kubeconfig && echo y | ./99-uninstall-all-mesh3.sh"
 e2e_run_remote "Remove mesh demo dir" "rm -rf ~/mesh-demo"
 e2e_run "Remove local mesh demo clone" "rm -rf /tmp/mesh-demo"
 fi
@@ -550,9 +572,12 @@ test_begin "Upgrade: OSUS and cluster upgrade"
 
 # Save the target (newer) version images using --target-version (auto-generates
 # ISC with shortestPath, minVersion=current, maxVersion=target).
+# Force ISC regeneration: earlier tests (mesh, UBI, vote-app) manually appended to the ISC,
+# making it appear "user-edited" (newer than .created). Without this, the save step would
+# preserve the stale mesh-only ISC instead of generating the upgrade ISC with shortestPath.
 e2e_run "Set --target-version for upgrade" \
-    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && \
-     aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) imagesetconf"
+    "cd ~/aba && aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) && \
+     rm -f mirror/data/.created"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
 # The catalog YAML should already exist from the earlier catalogs-wait; verify it.
@@ -568,12 +593,12 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
      fi"
 
 e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
-e2e_run -r 3 2 "Save upgrade images" "aba -d mirror save --retry"
+e2e_run -r 1 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
     "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
-e2e_run_remote -r 3 2 "Load upgrade images" \
+e2e_run_remote -r 1 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
@@ -588,25 +613,17 @@ e2e_run_remote "Apply OSUS day2" \
     "cd ~/aba && aba --dir $SNO day2-osus"
 
 # Wait for all COs to be available (AVAILABLE=True)
-e2e_wait_operators_available $SNO remote
+e2e_wait_cluster_available $SNO remote
 
-# Set the cluster update channel to fast (matching the imageset config)
-_OCP_MAJOR=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}' | cut -d. -f1-2)
-e2e_run_remote "Set update channel to fast-${_OCP_MAJOR}" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade channel fast-${_OCP_MAJOR}'"
+# Channel is now auto-set by 'aba upgrade' based on the live cluster's channel
+# prefix and the target version's major.minor. No manual channel-setting needed.
 
-# Wait until 'oc adm upgrade' lists recommended updates (cluster is healthy and ready)
-e2e_poll_remote 600 30 "Wait for cluster ready to upgrade" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' 2>&1 | grep 'Recommended updates'"
-
-# Re-verify operator health right before triggering -- cluster can degrade between
-# the poll above and the trigger (imagestream reconciliation after mesh/OSUS install)
-e2e_wait_operators_available $SNO remote
-
-e2e_wait_operators_ready $SNO remote
+# Wait up to 30 min for all operators to stabilize before upgrading.
+# Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
+e2e_wait_cluster_ready $SNO remote 1800
 
 e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
-    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
+    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2 --force"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
@@ -632,7 +649,7 @@ e2e_poll_remote 180 10 "Wait for VM to power on" \
     "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
 
 # Wait for API server and operators to stabilize after startup before asserting
-e2e_wait_operators_available $SNO remote
+e2e_wait_cluster_available $SNO remote
 
 # GAP 4: Verify 'aba login' and 'aba shell' set up kubeconfig correctly
 e2e_run_remote "Verify 'aba login' sets kubeconfig" \
@@ -640,7 +657,7 @@ e2e_run_remote "Verify 'aba login' sets kubeconfig" \
 e2e_run_remote "Verify 'aba shell' exports work" \
     "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
 
-e2e_wait_operators_ready $SNO remote
+e2e_wait_cluster_ready $SNO remote
 
 test_end
 
@@ -689,21 +706,18 @@ e2e_run_remote "Clean standard cluster dir" \
 test_end
 
 # ============================================================================
-# End-of-suite cleanup: uninstall Docker registry on disN + verify
+# End-of-suite cleanup: uninstall Quay registry on disN + verify
 # ============================================================================
 test_begin "Cleanup: uninstall registry on disN"
 
-e2e_run_remote "Uninstall Docker registry" \
+e2e_run_remote "Uninstall Quay registry" \
     "cd ~/aba && aba -d mirror uninstall"
-e2e_run_remote "Verify no registry containers" \
-    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
-    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:${_QUAY_PORT}/v2/"
 
 test_end
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-airgapped-local-reg.sh"
-
-exit 0
+exit $_rc

@@ -305,7 +305,8 @@ _e2e_notify_stdin() {
     local subject="$1"
     if [ -n "$NOTIFY_CMD" ]; then
         local _msg="[e2e] $subject $(_e2e_notify_suffix)"
-        $NOTIFY_CMD "$_msg" >/dev/null 2>&1
+        local _suffix; _suffix="$(_e2e_notify_suffix)"
+        { cat; printf "\n%s\n" "$_suffix"; } | $NOTIFY_CMD "$_msg" >/dev/null 2>&1
     else
         cat > /dev/null  # drain stdin
     fi
@@ -486,7 +487,11 @@ suite_end() {
 
     _print_progress
 
-    if [ "$_E2E_FAIL_COUNT" -gt 0 ]; then
+    if [ -n "$_E2E_SUITE_SKIPPED" ] && [ "$_E2E_FAIL_COUNT" -eq 0 ]; then
+        _e2e_summary "$(_e2e_Yellow "========== SKIPPED: $_E2E_SUITE_NAME  ($_total_dur) ==========")"
+        _e2e_notify "SKIPPED: $_E2E_SUITE_NAME ($_total_dur)"
+        return 3
+    elif [ "$_E2E_FAIL_COUNT" -gt 0 ] || [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
         return 1
@@ -584,27 +589,6 @@ test_skip() {
     _e2e_summary "$(_e2e_Yellow "  SKIP: $test_name")"
     _checkpoint_write "$test_name" "SKIP"
     _E2E_CURRENT_TEST=""
-}
-
-# Convenience: wrap a test name + body in begin/end
-run_test() {
-    local test_name="$1"; shift
-
-    # Check checkpoint/resume -- skip if already passed
-    if should_skip_checkpoint "$test_name"; then
-        _E2E_TEST_COUNT=$(( _E2E_TEST_COUNT + 1 ))
-        _checkpoint_write "$test_name" "0"
-        _update_plan "$test_name" "DONE"
-        _e2e_log_and_print "$(_e2e_green "  DONE (resumed): $test_name")"
-        _e2e_summary "$(_e2e_Green "  DONE (resumed): $test_name")"
-        return 0
-    fi
-
-    test_begin "$test_name"
-    local rc=0
-    eval "$@" || rc=$?
-    test_end "$rc"
-    return "$rc"
 }
 
 # --- Checkpoint / Resume ---------------------------------------------------
@@ -799,17 +783,24 @@ e2e_cleanup_mirrors() {
 	local target abs_path _all_ok=1 _cleanup_rc
 	while IFS=' ' read -r target abs_path; do
 		[ -z "$abs_path" ] && continue
-		_e2e_log_and_print "  $target: aba -y -d $abs_path uninstall"
 		_cleanup_rc=0
 		# < /dev/null prevents ssh from consuming the while-read loop's stdin
-		# Only uninstall the registry (stop containers, remove creds). Leave the
-		# directory in place — the pre-suite check uses .available to detect stale
-		# registries, not directory existence.
+		# Registered-only mirrors (reg_vendor=existing) need 'unregister', not 'uninstall'.
 		_essh "$target" \
 			"if [ -d '$abs_path' ] && [ -f '$abs_path/.available' ]; then
-				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
-			elif [ -d '$abs_path' ]; then
-				echo '  (mirror $abs_path already uninstalled -- skipping)'
+				if grep -qs 'reg_vendor=existing' '$abs_path/regcreds/state.sh' 2>/dev/null; then
+					echo '  Externally-managed registry -- using unregister'
+					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister
+				else
+					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
+				fi
+		elif [ -d '$abs_path' ]; then
+			if [ \"\$(basename '$abs_path')\" = mirror ]; then
+				echo '  (preserving pool mirror dir $abs_path)'
+			else
+				echo '  (mirror $abs_path has no .available -- removing orphaned data dir)'
+				rm -rf '$abs_path'
+			fi
 			else
 				echo '  (mirror dir $abs_path does not exist -- skipping)'
 			fi" \
@@ -827,6 +818,66 @@ e2e_cleanup_mirrors() {
 		_e2e_log_and_print "  ERROR: mirror cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
 		return 1
 	fi
+}
+
+# --- Post-Uninstall Assertion -----------------------------------------------
+#
+# Verify that a registry (Quay or Docker) is fully removed on a target host.
+# Checks containers, secrets, systemd units.
+# Use after 'aba -d mirror uninstall' for defense-in-depth.
+#   e2e_assert_registry_removed              # check disN (INTERNAL_BASTION)
+#   e2e_assert_registry_removed local        # check conN (localhost)
+e2e_assert_registry_removed() {
+	local location="${1:-remote}"
+	local _target
+
+	if [ "$location" = "local" ]; then
+		_target="localhost"
+	else
+		_target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+	fi
+
+	local _stale="" _containers
+	if [ "$_target" = "localhost" ]; then
+		_containers=$(podman ps -a --format '{{.Names}}' || true)
+	else
+		_containers=$(_essh "$_target" "podman ps -a --format '{{.Names}}'" || true)
+	fi
+
+	if echo "$_containers" | grep -qE 'quay-app|quay-redis|quay-postgres'; then
+		_stale+="  Quay containers still present on $_target"$'\n'
+	fi
+	if echo "$_containers" | grep -q '^registry$'; then
+		_stale+="  Docker registry container still present on $_target"$'\n'
+	fi
+
+	local _secrets
+	if [ "$_target" = "localhost" ]; then
+		_secrets=$(podman secret ls --format '{{.Name}}' || true)
+	else
+		_secrets=$(_essh "$_target" "podman secret ls --format '{{.Name}}'" || true)
+	fi
+	if echo "$_secrets" | grep -q redis_pass; then
+		_stale+="  redis_pass podman secret still exists on $_target"$'\n'
+	fi
+
+	# systemctl --user may fail if no user session exists (no lingering)
+	local _units
+	if [ "$_target" = "localhost" ]; then
+		_units=$(systemctl --user list-units 'quay-*' --no-legend 2>&1 || true)
+	else
+		_units=$(_essh "$_target" "systemctl --user list-units 'quay-*' --no-legend 2>&1" || true)
+	fi
+	if echo "$_units" | grep -v 'not-found' | grep -q .; then
+		_stale+="  Quay systemd user units still active on $_target"$'\n'
+	fi
+
+	if [ -n "$_stale" ]; then
+		echo "FAIL: Registry NOT fully removed on $_target:"
+		echo "$_stale"
+		return 1
+	fi
+	return 0
 }
 
 # --- Interactive Prompt -----------------------------------------------------
@@ -874,8 +925,13 @@ _interactive_prompt() {
                 continue
                 ;;
             r|R|"")
+                [ -z "$ans" ] && _e2e_log "  Empty input at interactive prompt -- treating as retry"
                 rm -f "$_paused_file"
-                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $cmd"
+                if [[ "$cmd" == *$'\n'* ]]; then
+                    _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $description"
+                else
+                    _e2e_log_and_print "  >> $(_e2e_cyan "Retrying:") $cmd"
+                fi
                 return 2
                 ;;
             s)
@@ -1034,7 +1090,11 @@ e2e_run() {
         _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
         _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"
     fi
-    _e2e_log_and_print "  $(_e2e_dim "$cmd")"
+    if [[ "$cmd" == *$'\n'* ]]; then
+        _e2e_log "  CMD: $cmd"
+    else
+        _e2e_log_and_print "  $(_e2e_dim "$cmd")"
+    fi
     _e2e_summary "  $(_e2e_Dim "$cmd")"
 
     local _step_start
@@ -1082,7 +1142,7 @@ e2e_run() {
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
                     _e2e_summary "  $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
-                    _e2e_notify "RECOVERED: $description (attempt $attempt/$tot_cnt, $_dur)"
+                    _e2e_notify "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "  $(_e2e_green "OK") ($_dur)"
                 _e2e_summary "  $(_e2e_Green "OK ($_dur)")"
@@ -1148,7 +1208,9 @@ e2e_run() {
                 _e2e_log_and_print "  Applied ImagePrunerJobFailed workaround before retry"
 
             attempt=$(( attempt + 1 ))
-            if [ -n "$host" ]; then
+            if [[ "$cmd" == *$'\n'* ]]; then
+                _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $description"
+            elif [ -n "$host" ]; then
                 _e2e_log_and_print "  >> $(_e2e_magenta "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $(_e2e_magenta "$cmd")"
             else
                 _e2e_log_and_print "  >> $(_e2e_cyan "Retrying ($attempt/$tot_cnt) in ${sleep_time}s:") $cmd"
@@ -1237,44 +1299,94 @@ e2e_poll_remote() {
         "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
 }
 
-# --- Operator readiness helpers ---------------------------------------------
+# --- Cluster readiness helpers ------------------------------------------------
 #
-# Reusable wait functions for OpenShift cluster operator stabilization.
-# Both use wall-clock-bounded polling (e2e_poll / e2e_poll_remote).
+# Reusable wait functions for OpenShift cluster stabilization with
+# anti-flapping: the condition must pass STABILITY consecutive times
+# (default 3) before the helper returns success.
+#
+# Two modes:
+#   "available" -- loose: all COs AVAILABLE=True (ignores PROGRESSING/DEGRADED)
+#   "ready"     -- strict: ClusterVersion Available=True, Progressing=False,
+#                  zero Degraded COs (matches core cluster_is_ready())
 #
 # Usage:
-#   e2e_wait_operators_available $SNO           # local, AVAILABLE=True only
-#   e2e_wait_operators_available $SNO remote    # remote (disN)
-#   e2e_wait_operators_ready $SNO remote        # remote, strict 3-column check
+#   e2e_wait_cluster_available $SNO              # local, 10-min timeout
+#   e2e_wait_cluster_available $SNO remote       # remote (disN)
+#   e2e_wait_cluster_ready $SNO                  # local, 30-min timeout
+#   e2e_wait_cluster_ready $SNO remote 2700      # remote, 45-min timeout
 #
 
-# Loose check: all operators have AVAILABLE=True (ignores PROGRESSING/DEGRADED).
-# 10 min timeout, 30s interval.
-e2e_wait_operators_available() {
-	local cluster_dir="$1"
-	local location="${2:-local}"
-	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3}' | tail -n +2 | grep -v '^True\$' | wc -l | grep ^0\$"
+_e2e_wait_cluster_condition() {
+	local mode="$1"
+	local cluster_dir="$2"
+	local location="${3:-local}"
+	local timeout="${4:-1800}"
+	local interval="${5:-30}"
+	local stability="${6:-3}"
+
+	local desc pass_count
+	case "$mode" in
+		available) desc="Wait for all operators available (${stability}x stable)" ;;
+		ready)     desc="Wait for cluster ready (${stability}x stable)" ;;
+		*)         echo "BUG: unknown mode '$mode'"; return 1 ;;
+	esac
+
+	local check_cmd
+	case "$mode" in
+		available)
+			check_cmd="cd ~/aba && lines=\$(aba --dir $cluster_dir run | tail -n +2 | awk 'NR>1{print \$3}'); [ -n \"\$lines\" ] && bad=\$(echo \"\$lines\" | grep -cv '^True\$' || true) && echo \"Unavailable=\$bad\" && [ \"\$bad\" -eq 0 ]"
+			;;
+		ready)
+			check_cmd="cd ~/aba && export KUBECONFIG=\$PWD/$cluster_dir/iso-agent-based/auth/kubeconfig && cv_avail=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' 2>/dev/null) && cv_prog=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].status}' 2>/dev/null) && deg=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null | grep -c True || true) && echo \"Available=\$cv_avail Progressing=\$cv_prog Degraded=\$deg\" && [ \"\$cv_avail\" = True ] && [ \"\$cv_prog\" = False ] && [ \"\$deg\" -eq 0 ]"
+			;;
+	esac
+
+	local stability_loop="
+pass=0
+end=\$((SECONDS + $timeout))
+while [ \$SECONDS -lt \$end ]; do
+	if ( $check_cmd ); then
+		pass=\$((pass + 1))
+		echo \"  [stability \$pass/$stability]\"
+		[ \$pass -ge $stability ] && exit 0
+	else
+		[ \$pass -gt 0 ] && echo \"  [stability reset -> 0/$stability]\"
+		pass=0
+	fi
+	sleep $interval
+done
+echo \"TIMEOUT after ${timeout}s (needed $stability consecutive passes)\"
+exit 1"
 
 	if [ "$location" = "remote" ]; then
-		e2e_poll_remote 600 30 "Wait for all operators available" "$_cmd"
+		e2e_run_remote "$desc (max $((timeout/60))m)" "$stability_loop"
 	else
-		e2e_poll 600 30 "Wait for all operators available" "$_cmd"
+		e2e_run "$desc (max $((timeout/60))m)" "$stability_loop"
 	fi
 }
 
-# Strict check: all operators AVAILABLE=True, PROGRESSING=False, DEGRADED=False.
-# 10 min timeout, 30s interval.
-e2e_wait_operators_ready() {
+# Loose check: all operators AVAILABLE=True (ignores PROGRESSING/DEGRADED).
+# Default: 15-min timeout, 30s interval, 3 consecutive passes.
+e2e_wait_cluster_available() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
-	local _cmd="cd ~/aba && aba --dir $cluster_dir run | tail -n +2 | awk '{print \$3,\$4,\$5}' | tail -n +2 | grep -v '^True False False\$' | wc -l | grep ^0\$"
-
-	if [ "$location" = "remote" ]; then
-		e2e_poll_remote 600 30 "Wait for all operators fully ready" "$_cmd"
-	else
-		e2e_poll 600 30 "Wait for all operators fully ready" "$_cmd"
-	fi
+	local timeout="${3:-900}"
+	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 30 3
 }
+
+# Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
+# Default: 45-min timeout, 30s interval, 3 consecutive passes.
+e2e_wait_cluster_ready() {
+	local cluster_dir="$1"
+	local location="${2:-local}"
+	local timeout="${3:-2700}"
+	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 30 3
+}
+
+# Backward-compat aliases (deprecated -- use e2e_wait_cluster_* instead)
+e2e_wait_operators_available() { e2e_wait_cluster_available "$@"; }
+e2e_wait_operators_ready() { e2e_wait_cluster_ready "$@"; }
 
 # --- e2e_diag ---------------------------------------------------------------
 #
@@ -1855,12 +1967,3 @@ e2e_setup() {
     _e2e_log "  _E2E_INTERACTIVE=${_E2E_INTERACTIVE:-off}"
 }
 
-e2e_teardown() {
-    _e2e_log "=== E2E Teardown ==="
-    _e2e_log "  Log file: $E2E_LOG_FILE"
-
-    # Print final summary if suite was started
-    if [ -n "$_E2E_SUITE_NAME" ]; then
-        suite_end
-    fi
-}

@@ -651,6 +651,12 @@ _BASE_FOLDER="${VC_FOLDER:-/Datacenter/vm/aba-e2e}"
 # Golden VM always goes under aba-e2e/golden (even when VC_FOLDER is e.g. abatesting for pools)
 _VC_PARENT="${_BASE_FOLDER%/*}"
 _GOLDEN_FOLDER="${_VC_PARENT}/aba-e2e/golden"
+# On standalone ESXi, folder paths are flat (/ha-datacenter/vm/) and folder.create is unsupported.
+_IS_ESXI=""
+if _is_esxi; then
+	_IS_ESXI=1
+	_GOLDEN_FOLDER=""
+fi
 _SNAPSHOT_NAME="pool-ready"
 _LOG_DIR="$_INFRA_DIR/logs"
 
@@ -797,8 +803,10 @@ _prepare_golden() {
 
 	echo "  Cloning from template: $_VM_TEMPLATE ..."
 
-	govc folder.create "${_VC_PARENT}/aba-e2e" || true
-	govc folder.create "$_GOLDEN_FOLDER" || true
+	if [ -z "$_IS_ESXI" ]; then
+		govc folder.create "${_VC_PARENT}/aba-e2e" || true
+		govc folder.create "$_GOLDEN_FOLDER" || true
+	fi
 	clone_vm "$_VM_TEMPLATE" "$_GOLDEN_NAME" "$_GOLDEN_FOLDER" "" "no" || return 1
 	_vm_ensure_3nics "$_GOLDEN_NAME" || return 1
 	echo "  Powering on clone '$_GOLDEN_NAME' ..."
@@ -861,7 +869,7 @@ _prepare_golden() {
 		govc vm.power -off "$_GOLDEN_NAME" || true
 	fi
 	govc snapshot.create -vm "$_GOLDEN_NAME" "golden-ready" || return 1
-	_vm_annotate "$_GOLDEN_NAME" "Ready (golden-ready snapshot created)"
+	_vm_annotate "$_GOLDEN_NAME" "Ready (golden-ready snapshot created) | OS: $_RHEL_VER"
 
 	echo "  Golden VM created and snapshotted."
 	echo "=== Phase 0 complete ==="
@@ -929,7 +937,7 @@ for i in "${_POOL_ARRAY[@]}"; do
 	pool_log="$_LOG_DIR/create-pool${i}.log"
 	> "$pool_log"
 
-	govc folder.create "$pool_folder" || true
+	[ -z "$_IS_ESXI" ] && govc folder.create "$pool_folder" || true
 
 	for prefix in con dis; do
 		vm_name="${prefix}${i}"
@@ -1149,7 +1157,7 @@ if [ ${#_snapshot_vms[@]} -gt 0 ]; then
 		(
 			govc snapshot.create -vm "$vm_name" "$_SNAPSHOT_NAME" \
 				|| { echo "ERROR: snapshot $vm_name failed" >&2; exit 1; }
-			_vm_annotate "$vm_name" "Ready (pool-ready snapshot created)"
+			_vm_annotate "$vm_name" "Ready (pool-ready snapshot created) | OS: $_RHEL_VER"
 			echo "  Powering on $vm_name ..."
 			govc vm.power -on "$vm_name"
 		) &

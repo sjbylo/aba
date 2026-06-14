@@ -1,5 +1,19 @@
 #!/bin/bash -e
-# Tar backup script for full OR incremental backup of the repo.  Used to only backup (and copy) the changes since the last backup.
+# INTENT:      Create a tar archive (bundle) of the ABA repo for air-gap transfer
+# CALLED BY:   make tarrepo, make tar, aba bundle, aba tar
+# CWD:         ABA repo root
+# ARGS:        [--inc] incremental backup (based on ~/.aba.previous.backup timestamp)
+#              [--repo] exclude mirror_*.tar files (light bundle — user copies them separately)
+#              [file] output path (default: /tmp/aba-backup-$USER.tar; "-" for stdout)
+# PRODUCES:    tar archive with .bundle marker; ISC locked for disconnected side
+# SIDE EFFECTS:
+#   - Temporarily touches mirror/data/imageset-config.yaml to lock ISC in the tar
+#   - Creates mirror/data/.isc-pinned if ISC was user-edited (bundle-only flag)
+#   - Restores source repo after tar (touch .created, rm .isc-pinned) — user's workflow unaffected
+#   - Removes .aba.conf.seen so user is prompted to edit aba.conf on the disconnected side
+# IDEMPOTENT:  Yes (produces same tar for same inputs; refuses to overwrite existing output)
+# ENV:         None required (sources scripts/include_all.sh)
+#
 # Usage: backup.sh [--inc] [--repo] [file]
 #                   --inc	incremental backup based on the ~/.aba.previous.backup flag file's timestamp
 #                   --repo	exclude all */mirror_*tar files from the archive due to disk space restictions.  Copy them separately, if needed.
@@ -34,6 +48,11 @@ repo_dir=$(basename "$PWD")
 # Assume this script is run via 'make ...' from aba's top level dir
 cd ..  
 
+# If script exits early (crash, Ctrl-C, tar failure): restore source repo to unlocked state.
+# .bundle is a temp marker for tar --transform; .isc-pinned + ISC timestamp must be restored
+# so the user's repo doesn't get stuck in a "locked" state after an interrupted bundle.
+trap 'rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"; [ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"' EXIT
+
 # If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
 
@@ -44,8 +63,16 @@ cd ..
 # vmware only needed on "private" bastion
 #aba/vmware.conf		\
 
-# Add the bundle flag file to the archive so when aba is run again it knows it's a bundle!
-touch "${repo_dir}/.bundle"  # Flag this archive as a bundle
+# The .bundle marker tells aba/TUI that this repo was unpacked from a bundle archive
+# and should operate in disconnected (DISCO) mode. Lifecycle:
+#   1. Created here (touch) — just before building the tar
+#   2. Included in the tar archive
+#   3. Removed from the SOURCE repo after tar completes (see rm -f below)
+#      — the source repo is NOT a bundle, only the tar archive is
+#   4. Appears on the disconnected host when the user unpacks: tar xvf bundle.tar
+# NEVER manually 'touch .bundle' — it only makes sense inside an unpacked bundle
+# where mirror/data/ contains the saved images matching the .index/ digests.
+touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
@@ -60,14 +87,15 @@ file_list=$(find				\
 	"${repo_dir}/others"			\
 	"${repo_dir}/scripts"			\
 	"${repo_dir}/templates"			\
+	"${repo_dir}/tui/v2"			\
 	"${repo_dir}/Makefile"			\
 	"${repo_dir}/README.md"			\
 	"${repo_dir}/VERSION"			\
 	"${repo_dir}/CHANGELOG.md"		\
 	"${repo_dir}/LICENSE"			\
 	"${repo_dir}/Troubleshooting.md"	\
-	"${repo_dir}/mirror"			\
 	"${repo_dir}/.index"			\
+	"${repo_dir}/mirror"			\
 									\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
@@ -185,13 +213,35 @@ fi
 
 out_file_list=$(echo $file_list | cut -c-90)
 
+# Bundle ISC protection: make ISC newer than .created so reg-create-imageset-config.sh
+# will skip regeneration on the disconnected side. Without this, the ISC gets regenerated
+# from local config (which may lack ocp_version_target, etc.) causing "no release images found"
+# during oc-mirror load because the new ISC doesn't match the tar contents.
+# .isc-pinned = user hand-edited the ISC before bundling, so the load side should NOT
+# auto-unlock it (the user's customizations must persist permanently).
+if [ -f "${repo_dir}/mirror/data/imageset-config.yaml" ] && [ -f "${repo_dir}/mirror/data/.created" ]; then
+	if [ "${repo_dir}/mirror/data/imageset-config.yaml" -nt "${repo_dir}/mirror/data/.created" ]; then
+		touch "${repo_dir}/mirror/data/.isc-pinned"
+	else
+		rm -f "${repo_dir}/mirror/data/.isc-pinned"
+	fi
+	touch "${repo_dir}/mirror/data/imageset-config.yaml"
+fi
+
 aba_info "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
 aba_info "Please wait!" >&2
 
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
 ret=$?
-rm -f "${repo_dir}/.bundle"  # We don't want this repo to be labeled as 'bundle', only the tar archive should be
+rm -f "${repo_dir}/.bundle"  # Also cleaned up by EXIT trap, but explicit here for clarity
+
+# Restore source repo after tar: touch .created so it's newer than ISC again.
+# Without this, the user's connected-side repo would stay "locked" and
+# subsequent 'aba save'/'aba sync' would skip ISC regeneration even after config changes.
+[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
+rm -f "${repo_dir}/mirror/data/.isc-pinned"
+
 if [ $ret -ne 0 ]; then
 	echo >&2
 	echo_red "Error: The tar command failed with return code $ret!" >&2

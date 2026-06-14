@@ -26,6 +26,23 @@ _wait_for_cli_downloads() {
 	done
 }
 
+# Defense-in-depth: verify all .tar.gz files in cli/ are not truncated
+_verify_cli_tarballs() {
+	local f fail=0
+	for f in cli/*.tar.gz; do
+		[ -f "$f" ] || continue
+		if ! gzip -t "$f" 2>/dev/null; then
+			aba_info "ERROR: Corrupt tarball detected: $f (truncated or incomplete)" >&2
+			fail=1
+		fi
+	done
+	if [ $fail -ne 0 ]; then
+		aba_info "Refusing to create bundle with corrupt CLI tarballs. Re-download with: make -C cli clean && aba cli" >&2
+		return 1
+	fi
+	aba_debug "All CLI tarballs passed integrity check (gzip -t)"
+}
+
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -225,7 +242,8 @@ if [ "$light_bundle" ]; then
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
 	_wait_for_cli_downloads || exit 1
-	aba_debug "All CLI tarballs downloaded"
+	_verify_cli_tarballs || exit 1
+	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f $bundle_dest_file
@@ -238,13 +256,14 @@ else
 	
 	if files_on_same_device mirror $bundle_dest_file; then
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
+		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
 		aba_warning \
 			"Make sure there is enough free disk space under: $PWD" \
 			"The image-set archive file(s) created by oc-mirror will first be written to" \
 			"aba/mirror/data/mirror_000001.tar, and then a full copy of the Aba repository will be written" \
 			"to the bundle file you specified: $bundle_dest_file" \
-			"Because both files *reside on the same filesystem*, you may temporarily" \
+			"Because both files *reside on the same filesystem* (${_mount_point:-unknown}), you may temporarily" \
 			"need roughly double the required space (or more if you consider the oc-mirror cache). " \
 			">> IMPORTANT: <<" \
 			"If disk space is limited, consider using the '--light' option." \
@@ -267,7 +286,8 @@ else
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
 	_wait_for_cli_downloads || exit 1
-	aba_debug "All CLI tarballs downloaded"
+	_verify_cli_tarballs || exit 1
+	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating install bundle archive ..."
 	rm -f $bundle_dest_file

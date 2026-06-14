@@ -31,6 +31,7 @@ NTP_IP="${NTP_SERVER:-10.0.1.8}"
 
 SNO="$(pool_cluster_name sno)"
 COMPACT="$(pool_cluster_name compact)"
+NAMED_MIRROR="e2e-vmw-mirror"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -79,10 +80,12 @@ e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for VMware" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Override channel to candidate (exercises non-default channel)" \
+    "aba --channel candidate"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: channel=candidate" "grep ^ocp_channel=candidate aba.conf"
 e2e_run "Verify aba.conf: version format" \
     "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
@@ -97,26 +100,28 @@ e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 test_end
 
 # ============================================================================
-# 3. Configure mirror to use local pre-populated registry
+# 3. Configure named mirror to use local pre-populated registry
 # ============================================================================
 test_begin "Setup: configure mirror for local registry"
 
-e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
-e2e_run "Set reg_host to local registry" \
-    "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
-e2e_run "Clear reg_ssh_key (local registry)" \
-    "sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/g' mirror/mirror.conf"
-e2e_run "Clear reg_ssh_user (local registry)" \
-    "sed -i 's/^reg_ssh_user=.*/reg_ssh_user=/g' mirror/mirror.conf"
-e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
+e2e_run "Create named mirror (exercises mirror_name through full pipeline)" \
+    "aba mirror --name $NAMED_MIRROR"
+e2e_run "Assert named mirror directory exists" \
+    "test -d $NAMED_MIRROR && test -f $NAMED_MIRROR/mirror.conf"
+e2e_add_to_mirror_cleanup "$PWD/$NAMED_MIRROR"
 
-e2e_run "Generate pool-registry pull secret via aba" \
-    "printf 'init\np4ssw0rd\n' | aba -d mirror password && cp ~/.aba/mirror/mirror/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
+e2e_run "Set reg_host before generating pull secret (exercises --reg-host)" \
+    "aba -d $NAMED_MIRROR --reg-host ${CON_HOST} --reg-port 8443"
+e2e_run "Generate pool-registry pull secret via aba (keyed to CON_HOST)" \
+    "printf 'init\np4ssw0rd\n' | aba -d $NAMED_MIRROR password && cp ~/.aba/mirror/$NAMED_MIRROR/pull-secret-mirror.json /tmp/pool-reg-pull-secret.json"
 
-e2e_run "Register pool registry" \
-    "aba -d mirror register --pull-secret-mirror /tmp/pool-reg-pull-secret.json --ca-cert $POOL_REG_DIR/certs/ca.crt"
+e2e_run "Register pool registry to named mirror (--reg-host matches pull secret)" \
+    "aba -d $NAMED_MIRROR register --reg-host ${CON_HOST} --reg-port 8443 \
+     --pull-secret-mirror /tmp/pool-reg-pull-secret.json \
+     --ca-cert $POOL_REG_DIR/certs/ca.crt"
 
-e2e_run "Verify mirror registry access" "aba -d mirror verify"
+e2e_run "Verify named mirror registry access" "aba -d $NAMED_MIRROR verify"
+e2e_diag "Show named mirror.conf" "grep -E '^\w' $NAMED_MIRROR/mirror.conf"
 
 test_end
 
@@ -125,7 +130,7 @@ test_end
 # ============================================================================
 test_begin "Setup: sync images to registry"
 
-e2e_run -r 3 2 "Sync images to local registry" "aba -d mirror sync --retry"
+e2e_run -r 3 2 "Sync images to named mirror" "aba -d $NAMED_MIRROR sync --retry"
 
 test_end
 
@@ -141,8 +146,10 @@ e2e_run "Delete any leftover $COMPACT cluster" \
     "_e2e_delete_leftover_cluster $COMPACT"
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
 
-e2e_run "Create compact cluster.conf" \
-    "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) --step cluster.conf"
+e2e_run "Create compact cluster.conf (data_disk, prefixes, named mirror)" \
+    "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) \
+     --data-disk 300 --host-prefix 20 --master-prefix xxx --worker-prefix yyy \
+     --mirror-name $NAMED_MIRROR --step cluster.conf"
 e2e_run "Set mac_prefix for $COMPACT (VMware range, randomized)" \
     "sed -i 's#mac_prefix=.*#mac_prefix=00:50:56:1x:xx:#g' $COMPACT/cluster.conf"
 e2e_diag "Show compact cluster.conf" "grep -E '^\w' $COMPACT/cluster.conf"
@@ -184,17 +191,42 @@ e2e_run "Delete any leftover $SNO cluster" \
     "_e2e_delete_leftover_cluster $SNO"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 
-e2e_run -r 2 10 "Create VMs and start install" \
+e2e_run "Copy SSH key to alternate name (exercises ssh_key_file)" \
+    "cp -f ~/.ssh/id_rsa ~/.ssh/e2e_alt_key && cp -f ~/.ssh/id_rsa.pub ~/.ssh/e2e_alt_key.pub"
+e2e_run "Create SNO cluster.conf with alt SSH key and named mirror" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) \
+     --ssh-key ~/.ssh/e2e_alt_key --mirror-name $NAMED_MIRROR --step cluster.conf"
+e2e_run "Verify ssh_key_file set" "grep 'ssh_key_file=.*e2e_alt_key' $SNO/cluster.conf"
+e2e_run "Verify mirror_name set" "grep 'mirror_name=$NAMED_MIRROR' $SNO/cluster.conf"
+e2e_run -r 2 10 "Install SNO (alt SSH key + named mirror)" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step refresh"
 
-e2e_run -r 2 30 "Wait for install to complete" "aba --dir $SNO mon"
+# Wait for bootstrap only (not full install-complete)
+e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
+    "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
+
+# Wait for cluster to become ready (VMware SNO typically 15-25 min after bootstrap)
+e2e_wait_cluster_ready $SNO local 2100
+
+# EARLY day2: .install-complete does NOT exist yet.
+# day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,
+# externalize state via monitor-install.sh, and proceed with day2 config.
+e2e_run "Verify .install-complete does NOT exist yet" \
+    "[ ! -f $SNO/.install-complete ] || { echo 'ERROR: .install-complete already exists'; false; }"
+e2e_run "Apply day2 EARLY (tests cluster_is_ready gate)" "aba --dir $SNO day2"
+
+# Verify the gate created .install-complete and externalized state
+e2e_run "Verify .install-complete was auto-created by day2 gate" \
+    "[ -f $SNO/.install-complete ] || { echo 'ERROR: day2 did not create .install-complete'; false; }"
+e2e_run "Verify clusterstate symlink exists (state externalized)" \
+    "[ -L $SNO/clusterstate ] || { echo 'ERROR: clusterstate not created'; false; }"
+
+# Finalize: aba mon should complete quickly (cluster already up)
+e2e_run -r 2 30 "Finalize install (aba mon)" "aba --dir $SNO mon"
 
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
-
-e2e_run "Apply day2 configuration (IDMS/ITMS for mirror)" "aba --dir $SNO day2"
 
 test_end
 
@@ -254,8 +286,7 @@ e2e_run "Verify VMs are running" \
     "aba --dir $SNO ls | grep -i poweredOn"
 e2e_poll 300 15 "Wait for SSH after hard power cycle" \
     "aba --dir $SNO ssh --cmd 'hostname'"
-e2e_poll 600 30 "Wait for cluster operators healthy after kill" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators after kill recovery" \
     "aba --dir $SNO run --cmd 'oc get co'"
 
@@ -281,8 +312,7 @@ e2e_poll 300 15 "Wait for cluster API to become reachable after startup" \
 e2e_poll 300 15 "Wait for all nodes Ready after startup" \
     "aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw Ready && ! aba --dir $SNO run --cmd 'oc get nodes --no-headers' | grep -qw NotReady"
 e2e_diag "Show nodes after startup" "aba --dir $SNO run --cmd 'oc get nodes'"
-e2e_poll 600 30 "Wait for all cluster operators available after startup" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators after shutdown/startup" \
     "aba --dir $SNO run --cmd 'oc get co'"
 
@@ -300,15 +330,15 @@ e2e_run "Delete compact cluster if leftover" \
     "_e2e_delete_leftover_cluster $COMPACT"
 e2e_remove_from_cluster_cleanup "$PWD/$COMPACT"
 
-e2e_run "Unregister pool registry" \
-    "aba -d mirror unregister"
+e2e_run "Unregister named mirror" \
+    "aba -d $NAMED_MIRROR unregister"
+e2e_remove_from_mirror_cleanup "$PWD/$NAMED_MIRROR"
+e2e_run "Remove named mirror directory" "rm -rf $NAMED_MIRROR"
 
 test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-vmw-lifecycle.sh"
-
-exit 0
+exit $_rc

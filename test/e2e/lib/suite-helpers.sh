@@ -73,14 +73,18 @@ suite_reapply_config() {
 }
 
 # --- suite_cleanup_oc_mirror_cache [--remote] --------------------------------
-# Remove oc-mirror caches from /root and /home.
+# Remove oc-mirror caches from /root and /home, plus stale temp dirs in /var/tmp.
 # Pass --remote to also clean disN.
 suite_cleanup_oc_mirror_cache() {
 	e2e_run "Remove oc-mirror caches (conN)" \
 		"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+	e2e_run "Remove stale oc-mirror temp dirs >1 day old (conN)" \
+		"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 2>/dev/null | xargs rm -rf"
 	if [ "${1:-}" = "--remote" ]; then
 		e2e_run_remote -q "Remove oc-mirror caches (disN)" \
 			"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+		e2e_run_remote -q "Remove stale oc-mirror temp dirs >1 day old (disN)" \
+			"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 2>/dev/null | xargs rm -rf"
 	fi
 }
 

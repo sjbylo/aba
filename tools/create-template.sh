@@ -33,7 +33,7 @@ CPU=4
 MEM_MB=8192
 SSH_PUBKEY="$HOME/.ssh/id_rsa.pub"
 VC_FOLDER="${VC_FOLDER:-}"
-VM_NETWORK="VM Network"
+VM_NETWORK="${GOVC_NETWORK:-Lab Network}"
 SSH_USER="steve"
 SNAPSHOT_NAME="aba-test"
 NO_PASSWORD=0
@@ -81,7 +81,7 @@ OPTIONS:
   -d, --disk GB           Initial disk size in GB (default: 100)
   -c, --cpu N             Number of CPUs (default: 4)
   -m, --mem MB            Memory in MB (default: 8192)
-  -N, --network NET       Network name for the NIC (default: VM Network)
+  -N, --network NET       Network name for the NIC (default: GOVC_NETWORK or Lab Network)
 
       --iso-datastore DS  Datastore with the RHEL DVD ISO (default: NFS-Shared)
       --iso-path PATH     ISO path on datastore (auto-detected from --rhel if unset)
@@ -856,8 +856,8 @@ finalize() {
 	[ "$FULL_MODE" = 1 ] && _mode="full (standalone)"
 	local _reg="none"
 	[ -n "${SUB_USERNAME:-}" ] && _reg="${SUB_USERNAME}"
-	local _nics="1 (VM Network)"
-	[ "$FULL_MODE" = 1 ] && _nics="2 (VM Network, External Network)"
+	local _nics="1 ($VM_NETWORK)"
+	[ "$FULL_MODE" = 1 ] && _nics="2 ($VM_NETWORK, External Network)"
 
 	local _notes
 	_notes=$(cat <<-NOTESEOF

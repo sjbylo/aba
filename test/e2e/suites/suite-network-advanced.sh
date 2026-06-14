@@ -15,7 +15,7 @@
 #   done
 #
 # VLAN tests use GOVC_NETWORK="Private Network" (VLAN-capable port group).
-# Non-VLAN tests use GOVC_NETWORK="VM Network" (regular lab network).
+# Non-VLAN tests use the pool's default GOVC_NETWORK (from vmware.conf).
 # =============================================================================
 
 set -u
@@ -81,8 +81,8 @@ test_begin "Setup: install aba and configure"
 e2e_run "Remove oc-mirror caches" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Verify / available space > 200GB after reset" \
-    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt 200 ]"
+e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
+    "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
 
 e2e_run "Install aba" "./install"
 
@@ -168,7 +168,7 @@ _net_test() {
         next_hop="$(pool_vlan_gateway)"
         start_ip="$(pool_vlan_node_ip)"
     else
-        govc_network="VM Network"
+        govc_network="${GOVC_NETWORK:?GOVC_NETWORK must be set in vmware.conf}"
         machine_network="$(pool_machine_network)"
         next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
         start_ip="$(pool_node_ip)"
@@ -200,10 +200,10 @@ _net_test() {
         local _vlan_api_vip _vlan_apps_vip
         _vlan_api_vip="$(pool_vlan_api_vip)"
         _vlan_apps_vip="$(pool_vlan_apps_vip)"
-        e2e_run "Set VLAN api_ip=$_vlan_api_vip" \
-            "sed -i \"s/^api_ip=.*/api_ip=$_vlan_api_vip /g\" $cname/cluster.conf"
-        e2e_run "Set VLAN ingress_ip=$_vlan_apps_vip" \
-            "sed -i \"s/^ingress_ip=.*/ingress_ip=$_vlan_apps_vip /g\" $cname/cluster.conf"
+        e2e_run "Set VLAN api_vip=$_vlan_api_vip" \
+            "sed -i \"s/^api_vip=.*/api_vip=$_vlan_api_vip /g\" $cname/cluster.conf"
+        e2e_run "Set VLAN ingress_vip=$_vlan_apps_vip" \
+            "sed -i \"s/^ingress_vip=.*/ingress_vip=$_vlan_apps_vip /g\" $cname/cluster.conf"
     fi
 
     e2e_run "Set ports=$ports" \
@@ -292,7 +292,7 @@ _net_test "VLAN standard: bonding" \
     standard "$_STANDARD_VLAN" 10 "ens160,ens192,ens224" "bond0: .* state UP"
 
 # ============================================================================
-# 11-13. Non-VLAN bonding tests (GOVC_NETWORK="VM Network")
+# 11-13. Non-VLAN bonding tests (GOVC_NETWORK from vmware.conf)
 #         Single-port non-VLAN is already tested by cluster-ops/mirror-sync suites.
 # ============================================================================
 
@@ -327,8 +327,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-network-advanced.sh"
-
-exit 0
+exit $_rc

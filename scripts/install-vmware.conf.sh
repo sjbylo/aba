@@ -6,6 +6,92 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
+# Verify that vSphere objects referenced in vmware.conf actually exist.
+# Called after normalize-vmware-conf has been sourced (VC=1 for vCenter, VC= for ESXi).
+# Runs all checks in parallel; silent on success, reports all failures at once.
+_vmw_verify_objects() {
+	local _tmpdir
+	_tmpdir=$(mktemp -d)
+
+	if [ "$GOVC_DATASTORE" ]; then
+		( govc datastore.info "$GOVC_DATASTORE" >/dev/null 2>&1 \
+			&& echo "ok Datastore '$GOVC_DATASTORE'" > "$_tmpdir/datastore" \
+			|| echo "fail Datastore '$GOVC_DATASTORE' not found" > "$_tmpdir/datastore" ) &
+	fi
+
+	if [ "${ISO_DATASTORE:-}" ]; then
+		( govc datastore.info "$ISO_DATASTORE" >/dev/null 2>&1 \
+			&& echo "ok ISO Datastore '$ISO_DATASTORE'" > "$_tmpdir/iso-datastore" \
+			|| echo "fail ISO Datastore '$ISO_DATASTORE' not found" > "$_tmpdir/iso-datastore" ) &
+	fi
+
+	if [ "$GOVC_NETWORK" ]; then
+		if [ "${VC:-}" ]; then
+			# vCenter: govc find works reliably (vCenter populates the MOB).
+			( [ "$(govc find / -type Network -name "$GOVC_NETWORK" 2>/dev/null)" ] \
+				&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
+				|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
+		else
+			# ESXi standalone: govc find may not list some port groups (observed
+			# on freshly installed ESXi 7.0.3). host.portgroup.info queries
+			# host config directly and works reliably.
+			# See Troubleshooting.md "ESXi: Network not found" for details.
+			( govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1 \
+				&& echo "ok Network '$GOVC_NETWORK'" > "$_tmpdir/network" \
+				|| echo "fail Network (port group) '$GOVC_NETWORK' not found" > "$_tmpdir/network" ) &
+		fi
+	fi
+
+	# Datacenter, Cluster, VC_FOLDER, and Resource Pool are vCenter-only concepts.
+	# On ESXi (VC is empty), skip these checks entirely.
+	if [ "${VC:-}" ]; then
+		if [ "${GOVC_DATACENTER:-}" ]; then
+			( govc datacenter.info "$GOVC_DATACENTER" >/dev/null 2>&1 \
+				&& echo "ok Datacenter '$GOVC_DATACENTER'" > "$_tmpdir/datacenter" \
+				|| echo "fail Datacenter '$GOVC_DATACENTER' not found" > "$_tmpdir/datacenter" ) &
+		fi
+
+		if [ "${GOVC_CLUSTER:-}" ]; then
+			( [ "$(govc find / -type ClusterComputeResource -name "$GOVC_CLUSTER" 2>/dev/null)" ] \
+				&& echo "ok Cluster '$GOVC_CLUSTER'" > "$_tmpdir/cluster" \
+				|| echo "fail Cluster '$GOVC_CLUSTER' not found" > "$_tmpdir/cluster" ) &
+		fi
+
+		if [ "${VC_FOLDER:-}" ]; then
+			( govc folder.info "$VC_FOLDER" >/dev/null 2>&1 \
+				&& echo "ok Folder '$VC_FOLDER'" > "$_tmpdir/folder" \
+				|| echo "info Folder '$VC_FOLDER' does not exist yet (will be created at install time)" > "$_tmpdir/folder" ) &
+		fi
+
+		if [ "${GOVC_RESOURCE_POOL:-}" ]; then
+			( govc pool.info "$GOVC_RESOURCE_POOL" >/dev/null 2>&1 \
+				&& echo "ok Resource pool '$GOVC_RESOURCE_POOL'" > "$_tmpdir/pool" \
+				|| echo "fail Resource pool '$GOVC_RESOURCE_POOL' not found" > "$_tmpdir/pool" ) &
+		fi
+	fi
+
+	wait
+
+	local _err=""
+	for _f in "$_tmpdir"/*; do
+		[ -f "$_f" ] || continue
+		local _line
+		_line=$(cat "$_f")
+		case "$_line" in
+			ok*)   aba_debug "Verified: ${_line#ok }" ;;
+			info*) aba_debug "${_line#info }" ;;
+			fail*) aba_warning "${_line#fail }"; _err=1 ;;
+		esac
+	done
+	rm -rf "$_tmpdir"
+
+	if [ "$_err" ]; then
+		aba_abort "One or more vSphere objects in vmware.conf do not exist. Fix vmware.conf and try again."
+	fi
+
+	return 0
+}
+
 # Needed for $editor and $ask
 source <(normalize-aba-conf)
 
@@ -34,6 +120,8 @@ if [ -s vmware.conf ]; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
 	fi
 
+	_vmw_verify_objects
+
 	aba_debug Govc config file $PWD/vmware.conf ok
 
 	[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf && aba_debug "Saved vmware.conf to ~/.vmware.conf"
@@ -60,6 +148,8 @@ else
 	if ! govc about; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
 	else
+		_vmw_verify_objects
+
 		aba_info "Saving working version of 'vmware.conf' to '~/.vmware.conf'."
 		[ -s vmware.conf ] && cp vmware.conf ~/.vmware.conf
 	fi

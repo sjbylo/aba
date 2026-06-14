@@ -250,13 +250,19 @@ _check_hung() {
 	local _elapsed=$(( SECONDS - _dispatch_time[$pool_num] ))
 	[ "$_elapsed" -lt "${E2E_HUNG_TIMEOUT:-3600}" ] && return
 
-	# Check per-suite summary log (symlink to timestamped file, created by suite_start).
-	# Falls back to tmux pane activity if the summary log doesn't exist yet.
-	local _log_age=""
+	# Use the most recent of: summary log mtime OR tmux window activity.
+	# A long-running single command (e.g. oc-mirror extraction) won't
+	# update the summary log, but the tmux window still receives output.
+	# NOTE: use window_activity, not pane_last_activity -- the latter
+	# doesn't exist in tmux 3.2a (RHEL 8/9 default) and silently returns
+	# empty, causing false HUNG? alerts on long-running silent operations.
+	local _log_age="" _pane_age=""
 	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
-	if [ -z "$_log_age" ]; then
-		# No suite summary log yet -- check tmux pane activity instead
-		_log_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{pane_last_activity}' 2>/dev/null" 2>/dev/null) || _log_age=""
+	_pane_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{window_activity}' 2>/dev/null" 2>/dev/null) || _pane_age=""
+	if [ -n "$_log_age" ] && [ -n "$_pane_age" ]; then
+		[ "$_pane_age" -gt "$_log_age" ] && _log_age="$_pane_age"
+	elif [ -z "$_log_age" ]; then
+		_log_age="$_pane_age"
 	fi
 	[ -z "$_log_age" ] && return
 
@@ -264,11 +270,20 @@ _check_hung() {
 	_now_epoch=$(date +%s)
 	local _idle_secs=$(( _now_epoch - _log_age ))
 	if [ "$_idle_secs" -ge "${E2E_HUNG_TIMEOUT:-3600}" ]; then
+		# Paused suites produce no output by design -- skip hung detection.
+		# Marker file is written by _interactive_prompt (framework.sh); same
+		# signal cmd_status uses for PAUSED state.
+		local _paused=""
+		_paused=$(_ssh_con "$pool_num" "[ -f '/tmp/e2e-paused-${suite}' ] && echo yes" 2>/dev/null) || _paused=""
+		if [ "$_paused" = "yes" ]; then
+			return
+		fi
+
 		_hung_notified[$pool_num]=1
 		local _idle_min=$(( _idle_secs / 60 ))
-		printf "  \033[1;35mWARNING:\033[0m %s on pool %s may be hung (no output for %d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
+		printf "  \033[1;35mHUNG?:\033[0m %s on pool %s -- no output (%d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-			$NOTIFY_CMD "[e2e] HUNG? ${suite} on pool ${pool_num} -- no output for ${_idle_min} min" < /dev/null >/dev/null &
+			$NOTIFY_CMD "[e2e] HUNG?: ${suite} on pool ${pool_num} -- no output (${_idle_min} min)" < /dev/null >/dev/null &
 		fi
 	fi
 }
@@ -322,7 +337,12 @@ _record_result() {
 		_print_box "1;45;97" "${_infra_lines[@]}"
 		# Don't record in _results; append to _work_queue for re-dispatch.
 		# Caller handles _busy_pools unset and log collection.
-		_work_queue+=("$suite")
+		# Guard against duplicates from repeated infra failures.
+		local _already_queued=""
+		for _qi in "${_work_queue[@]:$_queue_idx}"; do
+			[ "$_qi" = "$suite" ] && _already_queued=1 && break
+		done
+		[ -z "$_already_queued" ] && _work_queue+=("$suite")
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 			local _cd_msg=""
 			[ "$_pfc" -ge "$_POOL_INFRA_FAIL_THRESHOLD" ] && _cd_msg=" (pool $pool_num cooldown ${_POOL_COOLDOWN_SECONDS}s)"
@@ -347,6 +367,7 @@ _record_result() {
 	if [ "$rc" -ne 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
 		local _status="FAIL (exit=$rc)"
 		[ "$rc" -eq 3 ] && _status="SKIP"
+		[ "$rc" -eq 5 ] && _status="FAIL (exit=5, orphan VMs or leftover containers)"
 		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null &
 	fi
 }
@@ -389,6 +410,26 @@ _detect_running_and_completed() {
 		fi
 	done
 
+	# Pass 1b: scan pools OUTSIDE CLI_POOL_LIST for running suites.
+	# Prevents duplicate dispatch when multiple dispatchers coexist.
+	local _all_known_pools=""
+	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf" 2>/dev/null) || _all_known_pools=""
+	for _p in $_all_known_pools; do
+		local _is_cli_pool=""
+		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
+		[ -n "$_is_cli_pool" ] && continue
+		local sess_exists=""
+		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		if [ "$sess_exists" = "yes" ]; then
+			local suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			if [ -n "$suite" ]; then
+				_external_running[$suite]="$_p"
+				echo "    con${_p}: $suite running (external pool -- will not duplicate)"
+			fi
+		fi
+	done
+
 	# Pass 2: detect completed suites (.rc files)
 	for _p in $CLI_POOL_LIST; do
 		local rc_files=""
@@ -411,6 +452,31 @@ _detect_running_and_completed() {
 			done <<< "$rc_files"
 		fi
 	done
+}
+
+_is_running_on_external_pool() {
+	local suite="$1"
+	[ -n "${_external_running[$suite]:-}" ]
+}
+
+_refresh_external_running() {
+	local _all_known_pools=""
+	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf" 2>/dev/null) || return 0
+	local -A _new_ext=()
+	for _p in $_all_known_pools; do
+		local _is_cli_pool=""
+		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
+		[ -n "$_is_cli_pool" ] && continue
+		local sess_exists=""
+		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		if [ "$sess_exists" = "yes" ]; then
+			local suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			[ -n "$suite" ] && _new_ext[$suite]="$_p"
+		fi
+	done
+	_external_running=()
+	for _s in "${!_new_ext[@]}"; do _external_running[$_s]="${_new_ext[$_s]}"; done
 }
 
 # --- Force-clean helpers (--fresh / --force) -----------------------------------
@@ -536,10 +602,27 @@ _notify_periodic_status() {
 
 	local _n_ok=0 _n_fail=0 _n_skip=0
 	local _notify_body=""
+
+	# Build set of suites being retried (running or re-queued)
+	local -A _retrying=()
 	for _ns in "${!_busy_pools[@]}"; do
-		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} RUNNING
+		_retrying[${_busy_pools[$_ns]}]=1
+	done
+	for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+		_retrying[${_work_queue[$_qi]}]=1
+	done
+
+	# Show running suites with PAUSED detection
+	for _ns in "${!_busy_pools[@]}"; do
+		local _pool_state="RUNNING"
+		local _pane_line=""
+		_pane_line=$(_ssh_con "$_ns" "tmux capture-pane -t '$_TMUX_SESSION' -p 2>/dev/null | grep -a '.' | tail -1" 2>/dev/null) || _pane_line=""
+		[[ "$_pane_line" == *"[R]etry"* ]] && _pool_state="PAUSED"
+		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} ${_pool_state}
 "
 	done
+
+	# Show completed results; mark stale FAILs that are being retried
 	for _ns in "${!_results[@]}"; do
 		local _nrc="${_results[$_ns]}"
 		local _np="${_result_pool[$_ns]:-?}"
@@ -548,7 +631,13 @@ _notify_periodic_status() {
 "
 			_n_ok=$(( _n_ok + 1 ))
 		elif [ "$_nrc" -eq 3 ] 2>/dev/null; then
+			_notify_body+="  con${_np}: ${_ns} SKIP
+"
 			_n_skip=$(( _n_skip + 1 ))
+		elif [ -n "${_retrying[$_ns]:-}" ]; then
+			_notify_body+="  con${_np}: ${_ns} FAIL(${_nrc})→retry
+"
+			_n_fail=$(( _n_fail + 1 ))
 		else
 			_notify_body+="  con${_np}: ${_ns} FAIL(${_nrc})
 "
@@ -556,7 +645,9 @@ _notify_periodic_status() {
 		fi
 	done
 	local _q_left=$(( ${#_work_queue[@]} - _queue_idx ))
-	local _hdr="[e2e $(date '+%H:%M:%S')] ${#_results[@]} done (${_n_ok}ok ${_n_fail}fail), ${#_busy_pools[@]} running"
+	local _hdr="[e2e $(date '+%H:%M:%S')] ${#_results[@]} done (${_n_ok}ok ${_n_fail}fail"
+	[ "$_n_skip" -gt 0 ] && _hdr+=" ${_n_skip}skip"
+	_hdr+="), ${#_busy_pools[@]} running"
 	[ "$_q_left" -gt 0 ] && _hdr+=", ${_q_left} queued"
 	$NOTIFY_CMD "${_hdr}
 ${_notify_body}" < /dev/null >/dev/null &

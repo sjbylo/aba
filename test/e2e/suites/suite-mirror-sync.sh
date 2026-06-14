@@ -42,6 +42,7 @@ plan_tests \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
     "Bare-metal: ISO simulation" \
+    "Bare-metal: full OOB SNO install" \
     "Cleanup: delete clusters and uninstall mirrors"
 
 suite_begin "mirror-sync"
@@ -56,7 +57,7 @@ test_begin "Setup: install aba and configure"
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
@@ -163,8 +164,7 @@ test_end
 test_begin "Save/Load: roundtrip"
 
 e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
-e2e_run_remote "Verify registry removed" \
-    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"
 
@@ -205,7 +205,7 @@ e2e_run "Verify no active --remove-signatures in config" \
     "! grep -q '^OC_MIRROR_FLAGS=.*--remove-signatures' \$HOME/.aba/config"
 
 e2e_diag "Check oc-mirror cache (local)" \
-    "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*' 2>/dev/null"
+    "sudo find /root/ /home/ -maxdepth 4 -name '.cache' -path '*/.oc-mirror/*'"
 
 test_end
 
@@ -241,8 +241,7 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
@@ -258,6 +257,7 @@ _marker_snap() { echo "--- mirror/ markers ---"; ls -la mirror/.available mirror
 
 e2e_diag "Markers: before uninstall-1" "_marker_snap"
 e2e_run "Uninstall registry" "aba --dir mirror uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-1" "_marker_snap"
 
 e2e_run -r 3 2 "Save and reload images (should install mirror)" "aba --dir mirror save load --retry"
@@ -270,6 +270,7 @@ e2e_diag "Markers: after save-load" "_marker_snap"
 # fresh install with the new configuration.
 e2e_diag "Markers: before uninstall-2" "_marker_snap"
 e2e_run "Uninstall registry before config change" "aba --dir mirror uninstall"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_diag "Markers: after uninstall-2" "_marker_snap"
 
 e2e_run "Set data_dir in mirror.conf" "aba -d mirror --data-dir '~/e2e-mirror-datadir1'"
@@ -278,6 +279,8 @@ e2e_run "Set reg_path=my/path" "aba -d mirror --reg-path my/path"
 e2e_run "Set reg_user=myuser" "aba -d mirror --reg-user myuser"
 e2e_run "Set reg_ssh_user=testy" "aba -d mirror --reg-ssh-user testy"
 e2e_run "Set reg_ssh_key" "aba -d mirror --reg-ssh-key '~/.ssh/testy_rsa'"
+e2e_run "Override ops in mirror.conf (exercises mirror.conf ops override)" \
+    "sed -i '/^#ops=/c\\ops=web-terminal' mirror/mirror.conf"
 e2e_run "Show mirror.conf" "cat mirror/mirror.conf | cut -d'#' -f1 | sed '/^[[:space:]]*$/d'"
 
 e2e_run "Clean mirror working state" "aba -d mirror clean"
@@ -289,8 +292,7 @@ e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --for
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_poll 600 30 "Wait for all operators fully available" \
-    "lines=\$(aba --dir $SNO run | tail -n +2 | awk 'NR>1{print \$3,\$4,\$5}'); [ -n \"\$lines\" ] && echo \"\$lines\" | grep -v '^True False False$' | wc -l | grep ^0\$"
+e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
 e2e_run "Delete cluster" "aba --dir $SNO delete"
@@ -347,10 +349,93 @@ e2e_run "Second aba install (creates ISO, stops for server boot)" \
     "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
 e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
+e2e_run "Clean standard cluster dir (2-step done)" "rm -rf $STANDARD"
+e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
+
+test_end
+
+# ============================================================================
+# 9. Bare-metal: full 3-step OOB SNO install
+#
+#    Full BM install using an out-of-band VMware VM to simulate real hardware.
+#    Uses the extracted vmp_* helpers from scripts/vm-vmw.sh for VM lifecycle.
+#
+#    3-step flow:
+#      1st `aba install` -> agent configs + .bm-message
+#      2nd `aba install` -> ISO          + .bm-nextstep
+#      Upload ISO + create OOB VM + boot
+#      3rd `aba install` -> wait-agent-up + monitor-install
+# ============================================================================
+test_begin "Bare-metal: full OOB SNO install"
+
+SNO_BM="${SNO}"
+_BM_MAC="00:50:56:BE:E0:01"
+
+e2e_run "Ensure platform=bm" "aba --platform bm"
+e2e_run "Clean any leftover $SNO_BM cluster dir" "rm -rf $SNO_BM"
+e2e_add_to_cluster_cleanup "$PWD/$SNO_BM"
+
+e2e_run "Create SNO-BM cluster.conf (reuses SNO DNS records)" \
+    "aba cluster -n $SNO_BM -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run "Write BM MAC to macs.conf" \
+    "echo '$_BM_MAC' > $SNO_BM/macs.conf"
+
+# Phase 1: agent configs
+e2e_run "BM Phase 1: generate agent configs" \
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase1.out && grep 'Check & edit' /tmp/bm3-phase1.out"
+e2e_run "Verify .bm-message exists" "test -f $SNO_BM/.bm-message"
+
+# Phase 2: ISO
+e2e_run "BM Phase 2: generate ISO" \
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase2.out && grep 'Boot your servers' /tmp/bm3-phase2.out"
+e2e_run "Verify ISO created" "ls -l $SNO_BM/iso-agent-based/agent.*.iso"
+
+# OOB VM creation using extracted helpers.
+# e2e_run evals in $HOME/aba (the aba workdir), so scripts/ is directly accessible.
+# Each e2e_run command runs in a subshell; source the helpers inside each one.
+_bm_iso_remote="images/agent-${SNO_BM}.iso"
+_bm_vm_name="${SNO_BM}-master-0"
+
+e2e_run "Destroy leftover OOB VM (if any)" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_destroy '$_bm_vm_name' || true"
+
+e2e_run "Upload BM ISO to datastore" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_upload_iso $SNO_BM/iso-agent-based/agent.*.iso \$GOVC_DATASTORE '$_bm_iso_remote'"
+
+e2e_run "Create OOB VM for BM SNO" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     _folder=\${VC_FOLDER:-}; [ -n \"\${VC:-}\" ] && _folder=\"\$VC_FOLDER/$SNO_BM\"; \
+     [ -n \"\${VC:-}\" ] && scripts/vmw-create-folder.sh \"\$_folder\"; \
+     vmp_create_vm '$_bm_vm_name' 16 32 '$_BM_MAC' \$GOVC_DATASTORE \"\$GOVC_NETWORK\" \"\$_folder\" false"
+
+e2e_run "Attach ISO to OOB VM" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_attach_iso '$_bm_vm_name' \$GOVC_DATASTORE '$_bm_iso_remote'"
+
+e2e_run "Power on OOB VM" \
+    "source scripts/include_all.sh && source <(normalize-vmware-conf) && govc vm.power -on '$_bm_vm_name'"
+
+# Phase 3: monitor install
+e2e_run -r 2 30 "BM Phase 3: monitor cluster install" \
+    "aba --dir $SNO_BM install"
+e2e_run "Show cluster operator status" "aba --dir $SNO_BM run"
+e2e_wait_cluster_ready "$SNO_BM"
+e2e_diag "Show cluster operators" "aba --dir $SNO_BM run --cmd 'oc get co'"
+
+# Cleanup OOB VM
+e2e_run "Destroy OOB VM" \
+    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
+     vmp_destroy '$_bm_vm_name'"
+e2e_run "Remove vCenter folder for BM OOB (if vCenter)" \
+    "source scripts/include_all.sh && source <(normalize-vmware-conf) && \
+     [ -n \"\${VC:-}\" ] && govc object.destroy \"\$VC_FOLDER/$SNO_BM\" || true"
+e2e_run "Clean BM cluster dir" "rm -rf $SNO_BM"
+e2e_remove_from_cluster_cleanup "$PWD/$SNO_BM"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"
-e2e_run_remote "Verify no registry containers on disN" \
-    "podman ps | grep -v -e quay -e CONTAINER | wc -l | grep ^0\$"
+e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
@@ -369,16 +454,16 @@ e2e_run "Delete SNO cluster" \
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \
     "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
+e2e_run "Assert: registry fully removed on disN (docker1)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
     "aba --dir mirror uninstall"
+e2e_run "Assert: registry fully removed on disN (mirror)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir1 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
 e2e_run "Remove e2e-mirror-datadir1 on conN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
-e2e_run_remote "Verify no registry containers on disN" \
-    "podman ps | grep -v -e quay -e registry -e CONTAINER | wc -l | grep ^0\$"
 e2e_run_remote "Verify no leftover mirror data dirs on disN" \
     "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1"
 e2e_run "Verify no leftover mirror data dirs on conN" \
@@ -388,8 +473,6 @@ test_end
 
 # ============================================================================
 
-suite_end
+suite_end; _rc=$?
 
-echo "SUCCESS: suite-mirror-sync.sh"
-
-exit 0
+exit $_rc

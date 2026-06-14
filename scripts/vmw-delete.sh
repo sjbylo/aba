@@ -43,21 +43,16 @@ fi
 
 ask "Delete the above virtual machine(s)" || exit 1
 
+source scripts/vm-vmw.sh
+
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
-	aba_debug "Running: govc vm.info -json $vm"
-	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
-	if [ "$power_state" = "null" ]; then
+	if ! vmp_exists "$vm"; then
 		aba_info "VM $vm does not exist (skipping)"
 		continue
 	fi
-	aba_info "Destroy VM $vm (was $power_state)"
-	exec_cmd="govc vm.destroy $vm"
-	aba_debug "Running: $exec_cmd"
-	$exec_cmd
-	aba_debug "Running: govc vm.info -json $vm (verify)"
-	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
-	[ "$power_state" != "null" ] && aba_abort "VM $vm still exists after destroy (state=$power_state)"
+	aba_info "Destroy VM $vm"
+	vmp_destroy "$vm" || aba_abort "VM $vm still exists after destroy"
 done
 
 if [ "$VC" ]; then
@@ -67,7 +62,7 @@ if [ "$VC" ]; then
 		aba_info "Deleting cluster folder $cluster_folder"
 		exec_cmd="govc object.destroy $cluster_folder"
 		aba_debug "Running: $exec_cmd"
-		$exec_cmd
+		$exec_cmd || true
 	fi
 fi
 

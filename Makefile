@@ -39,12 +39,17 @@ init: aba .init
 ###vmware.conf:
 .PHONY: vmw
 vmw:
-	@$(SCRIPTS)/run-once.sh -w -m "Waiting for govc CLI tool" -i cli:install:govc -- make -sC cli govc
+	@$(SCRIPTS)/run-once.sh -q -w -i cli:download:govc -- make -sC cli download-govc
+	@$(SCRIPTS)/run-once.sh -w -m "Installing govc" -i cli:install:govc -- make -sC cli govc
 	@$(SCRIPTS)/install-vmware.conf.sh #  $(debug)
 
 .PHONY: kvm
 kvm:
 	@$(SCRIPTS)/install-kvm.conf.sh
+
+.PHONY: bm
+bm:
+	#@rm -f vmware.conf kvm.conf  # We should keep those 
 
 #.PHONY: cli
 #cli:  ## Download and install the CLI binaries into ~/bin

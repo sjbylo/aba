@@ -176,7 +176,7 @@ _cleanup_con_registry() {
     local _regcreds="$HOME/.aba/mirror/mirror"
     for _dir in "$_aba_root"; do
         if [ -f "$_dir/mirror/.available" ]; then
-            if [ -f "$_regcreds/state.sh" ] && grep -q 'REG_VENDOR=existing' "$_regcreds/state.sh"; then
+            if [ -f "$_regcreds/state.sh" ] && grep -qi 'reg_vendor=existing' "$_regcreds/state.sh"; then
                 echo "  [cleanup] Found .available + existing registry -- running aba unregister"
                 ( cd "$_dir" && ./aba -y -d mirror unregister ) && _did_uninstall=1 || {
                     echo "  [cleanup] WARNING: aba unregister failed in $_dir (rc=$?)"
@@ -217,6 +217,18 @@ _cleanup_con_registry() {
         echo "  [cleanup] Removing stale registry credentials (~/.aba/mirror/)"
         rm -rf "$HOME/.aba/mirror"
     fi
+
+    # Remove stale oc-mirror temp dirs (>1 day old) from /var/tmp.
+    # oc-mirror's Go containers/image library creates these during catalog pulls
+    # but orphans them on crash/interrupt.
+    local _stale_tmp
+    _stale_tmp=$(find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 2>/dev/null)
+    if [ -n "$_stale_tmp" ]; then
+        local _count
+        _count=$(echo "$_stale_tmp" | wc -l)
+        echo "  [cleanup] Removing $_count stale oc-mirror temp dirs (>1 day old) from /var/tmp"
+        echo "$_stale_tmp" | xargs rm -rf
+    fi
 }
 
 # --- build_and_test_cluster -------------------------------------------------
@@ -241,8 +253,7 @@ build_and_test_cluster() {
     e2e_run "Run post-install checks ($cluster_type)" \
         "aba --dir $cluster_type run"
 
-    e2e_run "Verify cluster operators ($cluster_type)" \
-        "aba --dir $cluster_type cmd 'oc get co'"
+    e2e_wait_cluster_ready $cluster_type
 }
 
 # --- build_and_test_cluster_remote ------------------------------------------
@@ -262,6 +273,5 @@ build_and_test_cluster_remote() {
     e2e_run_remote "Run post-install checks ($cluster_type)" \
         "cd ~/aba && aba --dir $cluster_type run"
 
-    e2e_run_remote "Verify cluster operators ($cluster_type)" \
-        "cd ~/aba && aba --dir $cluster_type cmd 'oc get co'"
+    e2e_wait_cluster_ready $cluster_type remote
 }

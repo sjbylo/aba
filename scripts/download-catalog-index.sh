@@ -15,11 +15,11 @@
 #            version_short:  e.g. "4.21" (major.minor only)
 # PRODUCES:
 #   .index/{catalog}-index-v{ver}                 Sorted operator index (3-column TSV)
-#   .index/.{catalog}-index-v{ver}.done           Completion marker (empty file)
 #   .index/.{catalog}-index-v{ver}.expected-count Expected operator count
 #   .index/.{catalog}-index-v{ver}.digest         Manifest digest (sha256:...) for pinning
 #   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml  Helper YAML for reference
-# IDEMPOTENT: Yes (skips if index + done marker already exist)
+# IDEMPOTENT: run_once() with TTL is the sole gatekeeper -- script always does work when invoked.
+#             Uses atomic rename (.downloading -> final) so consumers never see partial data.
 #
 # INDEX FORMAT (3 columns, whitespace-separated):
 #   <package_name>  <display_name_or_dash>  <default_channel>
@@ -29,16 +29,14 @@
 #   grep "^$op "           => matches by operator name prefix
 #
 # STEPS:
-#   1. Check if index already exists (idempotent early exit)
-#   2. Verify connectivity to registry.redhat.io
-#   3. Pull catalog image (permissive signature policy for unsigned catalogs)
-#   4. Capture manifest digest via podman image inspect (for catalog pinning)
-#   5. Run container, extract /configs directory
-#   6. Parse FBC data: JSON (package.json/catalog.json/index.json) or YAML
-#   7. Sort and write index file
-#   8. Record expected operator count, validate extraction
-#   9. Generate helper YAML for reference
-#  10. Mark completion (.done file)
+#   1. Verify connectivity to registry.redhat.io
+#   2. Pull catalog image (permissive signature policy for unsigned catalogs)
+#   3. Capture manifest digest via podman image inspect (for catalog pinning)
+#   4. Run container, extract /configs directory
+#   5. Parse FBC data: JSON (package.json/catalog.json/index.json) or YAML
+#   6. Sort and write to temp file, validate, atomic rename to final location
+#   7. Record expected operator count
+#   8. Generate helper YAML for reference
 
 # Derive aba root from script location (this script is in scripts/)
 # Use pwd -P to resolve symlinks (important when called via mirror/scripts/ symlink)
@@ -53,19 +51,20 @@ ocp_ver_major="${2:?Usage: $0 <catalog_name> <version_short>}"
 
 aba_debug "Catalog: $catalog_name, version: $ocp_ver_major"
 
-# Prepare container auth
-aba_debug "Creating container auth file"
+# Prepare container auth — regcreds_dir must be set so create-containers-auth.sh
+# merges mirror credentials into ~/.docker/config.json (not overwrites with Red Hat-only)
+export regcreds_dir=$HOME/.aba/mirror/mirror
+aba_debug "Creating container auth file (regcreds_dir=$regcreds_dir)"
 scripts/create-containers-auth.sh >/dev/null || exit 1
 
 # Setup paths - must be run from aba root directory
 mkdir -p .index
 index_file=".index/${catalog_name}-index-v${ocp_ver_major}"
-done_file=".index/.${catalog_name}-index-v${ocp_ver_major}.done"
+tmp_file=".index/.${catalog_name}-index-v${ocp_ver_major}.downloading"
 
 yaml_file="mirror/imageset-config-${catalog_name}-catalog-v${ocp_ver_major}.yaml"
 
 aba_debug "Index file: $index_file"
-aba_debug "Done file: $done_file"
 aba_debug "YAML file: $yaml_file"
 
 # Generate the helper YAML from the index file
@@ -78,24 +77,13 @@ _generate_yaml() {
 	done > "$yaml_file"
 }
 
-# Cleanup on interrupt
-handle_interrupt() {
-	echo_red "Aborting catalog extraction for $catalog_name"
-	[ ! -f "$done_file" ] && rm -f "$index_file" "$done_file"
-	# Clean up container and temp dir
-	podman rm -f "$container_name" >/dev/null 2>&1
-	[ -d "$tmp_dir" ] && rm -rf "$tmp_dir"
-	exit 1
+# Cleanup on exit (catches signals, errors, aba_abort, TUI close — not just INT/TERM)
+_cleanup() {
+	[ -n "${container_name:-}" ] && podman rm -f "$container_name" >/dev/null 2>&1 || true
+	[ -d "${tmp_dir:-}" ] && rm -rf "$tmp_dir"
+	rm -f "${tmp_file:-}"
 }
-trap 'handle_interrupt' INT TERM
-
-# Check if already downloaded
-if [[ -s "$index_file" && -f "$done_file" ]]; then
-	aba_debug "Index already exists and is complete for $catalog_name v$ocp_ver_major"
-	[ -s "$yaml_file" ] || _generate_yaml
-	exit 0
-fi
-aba_debug "Index not found or incomplete - starting extraction"
+trap _cleanup EXIT
 
 # Check connectivity to registry
 aba_debug "Checking connectivity to registry.redhat.io"
@@ -110,10 +98,6 @@ fi
 if ! command -v jq >/dev/null 2>&1; then
 	aba_abort "jq is required but not installed"
 fi
-
-# Initialize
-[ ! -f "$index_file" ] && touch "$index_file"
-rm -f "$done_file"
 
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 container_name="aba-catalog-${catalog_name}-v${ocp_ver_major}-$$"
@@ -132,7 +116,6 @@ echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
 
 aba_info "Pulling operator catalog image: $catalog_url"
 _pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || {
-	rm -rf "$tmp_dir"
 	aba_abort "Failed to pull catalog image: $catalog_url" "$_pull_err"
 }
 
@@ -151,18 +134,16 @@ fi
 # Run container and extract /configs
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
 _run_err=$(podman run -q -d --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
-	rm -rf "$tmp_dir"
 	aba_abort "Failed to start catalog container" "$_run_err"
 }
 
 _cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
-	podman rm -f "$container_name" >/dev/null 2>&1
-	rm -rf "$tmp_dir"
 	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
 }
 
-# Container no longer needed
-podman rm -f "$container_name" >/dev/null 2>&1
+# Container no longer needed (EXIT trap handles cleanup, but remove early to free resources)
+podman rm -f "$container_name" >/dev/null 2>&1 || true
+container_name=""
 
 # Extract operator data from FBC (File-Based Catalog)
 # Each operator directory under /configs can use one of several formats:
@@ -176,7 +157,8 @@ _display_name_from_bundles() {
 	local search_dir="$1"
 	local dn=""
 	while IFS= read -r -d '' f; do
-		local candidate
+		local candidate=""
+		# Newer catalogs: olm.csv.metadata stores displayName directly
 		candidate=$(jq -r '
 			if .schema == "olm.bundle" then
 				(.properties[]? | select(.type=="olm.csv.metadata") | .value.displayName // empty)
@@ -184,6 +166,14 @@ _display_name_from_bundles() {
 				(.properties[]? | select(.type=="olm.csv.metadata") | .value.displayName // empty)
 			else empty end
 		' "$f" 2>/dev/null | head -1)
+		# Older catalogs (<=4.16): CSV is base64-encoded in olm.bundle.object
+		if [ -z "$candidate" ]; then
+			candidate=$(jq -r '
+				select(.schema == "olm.bundle") |
+				.properties[]? | select(.type == "olm.bundle.object") |
+				.value.data
+			' "$f" 2>/dev/null | base64 -d 2>/dev/null | jq -r '.spec.displayName // empty' 2>/dev/null | head -1)
+		fi
 		[ -n "$candidate" ] && dn="$candidate"
 	done < <(find "$search_dir" -name '*.json' -print0 2>/dev/null)
 	echo "$dn"
@@ -210,6 +200,11 @@ _extract_from_json() {
 	# Try display name from the package source file first (single-file catalogs)
 	local display_name=""
 	display_name=$(jq -r 'select(.schema=="olm.bundle") | .properties[]? | select(.type=="olm.csv.metadata") | .value.displayName // empty' "$pkg_src" 2>/dev/null | tail -1)
+
+	# Older catalogs (<=4.16): CSV is base64-encoded in olm.bundle.object
+	if [ -z "$display_name" ]; then
+		display_name=$(jq -r 'select(.schema=="olm.bundle") | .properties[]? | select(.type=="olm.bundle.object") | .value.data' "$pkg_src" 2>/dev/null | base64 -d 2>/dev/null | jq -r '.spec.displayName // empty' 2>/dev/null | tail -1)
+	fi
 
 	# Fall back to recursive search of all bundle files in the directory tree
 	if [ -z "$display_name" ]; then
@@ -289,7 +284,7 @@ for dir in "$tmp_dir/configs"/*/; do
 	fi
 done > "$_raw_file"
 
-sort "$_raw_file" > "$index_file"
+sort "$_raw_file" > "$tmp_file"
 
 # Record expected operator count (exclude internal metadata dirs starting with _)
 expected_count_file=".index/.${catalog_name}-index-v${ocp_ver_major}.expected-count"
@@ -302,9 +297,12 @@ podman rmi "$catalog_url" >/dev/null 2>&1 || true
 find /tmp -maxdepth 1 \( -name 'render-registry-*' -o -name 'render-unpack-*' \) -user "$(id -un)" -mmin +60 -exec rm -rf {} + 2>/dev/null || true
 
 # Validate output
-if [ ! -s "$index_file" ]; then
+if [ ! -s "$tmp_file" ]; then
 	aba_abort "Catalog extraction produced empty index for $catalog_name v$ocp_ver_major"
 fi
+
+# Atomic rename: consumers never see a partial file
+mv "$tmp_file" "$index_file"
 
 op_count=$(wc -l < "$index_file")
 expected_count=0
@@ -324,8 +322,6 @@ if (( skipped_count > 0 )) || { (( expected_count > 0 )) && (( op_count != expec
 	fi
 fi
 
-# Mark completion
-touch "$done_file"
 aba_info_ok "Extracted $catalog_name index v$ocp_ver_major ($op_count operators)"
 
 _generate_yaml

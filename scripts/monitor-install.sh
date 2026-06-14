@@ -1,5 +1,20 @@
-#!/bin/bash 
-# This will run the 'wait-for' command and output next steps after ocp installation
+#!/bin/bash
+# =============================================================================
+# INTENT:      Monitor agent-based OpenShift install and report completion.
+#              On success, externalize cluster state to ~/.aba/clusters/<name>/
+#              (auth, config backups, state.sh) per ADR-007.
+# CALLED BY:   Makefile.cluster (.install-complete, mon targets)
+# CWD:         Cluster directory (e.g. ~/aba/sno/)
+# REQUIRES:    include_all.sh, cluster-config.sh, openshift-install
+# PRODUCES:    ~/.aba/clusters/<name>/state.sh (cluster identity)
+#              ~/.aba/clusters/<name>/kubeconfig, kubeadmin-password (auth)
+#              ~/.aba/clusters/<name>/backup/ (cluster.conf, YAMLs, macs.conf)
+#              clusterstate symlink in cluster dir (human convenience)
+# SIDE EFFECTS: Trusts nothing. Exits non-zero on install failure.
+# IDEMPOTENT:  Yes (re-running overwrites state dir safely)
+# ENV:         CLUSTER_NAME, BASE_DOMAIN, CP_NAMES, WORKER_NAMES (from cluster-config.sh)
+#              platform (from aba.conf via Makefile)
+# =============================================================================
 
 source scripts/include_all.sh
 
@@ -24,7 +39,7 @@ opts=
 
 # Ensure openshift-install is available (wait for background download/install)
 if ! ensure_openshift_install >/dev/null; then
-	error_msg=$(get_task_error "$TASK_OPENSHIFT_INSTALL")
+	error_msg=$(get_task_error "$TASK_INST_OPENSHIFT_INSTALL")
 	aba_abort "Failed to install openshift-install:\n$error_msg"
 fi
 
@@ -59,11 +74,16 @@ if [ $ret -ne 0 ]; then
 fi
 
 aba_info_ok "The cluster has been successfully installed!"
+
+# --- Externalize cluster state (ADR-007) ---
+externalize_cluster_state
+
 aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
 aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
-[ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
-	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
+if [ -f "$regcreds_dir/pull-secret-mirror.json" ]; then
+	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)."
 	aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
+fi
 aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
 aba_info_ok "Run 'aba info' to view this information again."
 aba_info_ok "Run 'aba help' and 'aba -h' for more options."

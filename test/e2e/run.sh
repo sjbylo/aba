@@ -536,9 +536,16 @@ echo ""
 # Check VM readiness and OS changes for each pool
 _POOL_OS_DIR="$_RUN_DIR/.pool-os"
 mkdir -p "$_POOL_OS_DIR"
-_cur_os="${INT_BASTION_RHEL_VER:-rhel8}"
 declare -a _pools_needing_reclone=()
 _need_infra=""
+
+# Per-pool RHEL version from pools.conf (falls back to CLI --os or default)
+declare -A _pool_os_map=()
+_default_os="${INT_BASTION_RHEL_VER:-rhel8}"
+for _p in $CLI_POOL_LIST; do
+	_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+	[ -z "${_pool_os_map[$_p]:-}" ] && _pool_os_map[$_p]="$_default_os"
+done
 
 _vms_ready() {
 	local pool_num="$1"
@@ -567,6 +574,7 @@ if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
 else
 	for _p in $CLI_POOL_LIST; do
 		_pool_os_file="$_POOL_OS_DIR/pool-${_p}"
+		_cur_os="${_pool_os_map[$_p]}"
 		if [ -n "${CLI_RECREATE_VMS:-}" ]; then
 			echo "  Pool $_p: will be recreated (--recreate-vms)"
 			_need_infra=1
@@ -603,13 +611,22 @@ if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; th
 
 		# Destroy ALL VMs in the pool folder (clusters, conN, disN, etc.)
 		echo "  Destroying all VMs in pool $_p folder ..."
-		while IFS= read -r _vm_path; do
-			[ -z "$_vm_path" ] && continue
-			_vm_name="${_vm_path##*/}"
-			echo "  Destroying $_vm_name (OS mismatch) ..."
-			govc vm.power -off "$_vm_path" 2>/dev/null || true
-			govc vm.destroy "$_vm_path" 2>/dev/null || true
-		done < <(govc find "$_pool_folder" -type m 2>/dev/null)
+		if [ -n "${VC_FOLDER:-}" ]; then
+			while IFS= read -r _vm_path; do
+				[ -z "$_vm_path" ] && continue
+				_vm_name="${_vm_path##*/}"
+				echo "  Destroying $_vm_name (OS mismatch) ..."
+				govc vm.power -off "$_vm_path" 2>/dev/null || true
+				govc vm.destroy "$_vm_path" 2>/dev/null || true
+			done < <(govc find "$_pool_folder" -type m 2>/dev/null)
+		else
+			# ESXi: no pool folders, destroy conN/disN by name
+			for _pfx in con dis; do
+				_vm="${_pfx}${_p}"
+				govc vm.power -off "$_vm" 2>/dev/null || true
+				govc vm.destroy "$_vm" 2>/dev/null || true
+			done
+		fi
 	done
 fi
 
@@ -642,12 +659,24 @@ if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_REC
 	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
 	[ -n "${CLI_YES:-}" ]             && _base_infra_flags+=" --yes"
 
-	_pool_csv="${CLI_POOL_LIST// /,}"
-	"$BASH" "$_RUN_DIR/setup-infra.sh" --pool-list "$_pool_csv" $_base_infra_flags 9>&- \
-		|| { echo "FATAL: Infrastructure setup failed" >&2; exit 1; }
+	# Group pools by RHEL version and call setup-infra once per group.
+	# Each group gets its own golden VM (e.g. aba-e2e-golden-rhel8, aba-e2e-golden-rhel10).
+	declare -A _os_pool_groups=()
+	for _p in $CLI_POOL_LIST; do
+		_pos="${_pool_os_map[$_p]}"
+		_os_pool_groups[$_pos]+="${_os_pool_groups[$_pos]:+,}${_p}"
+	done
+
+	for _grp_os in "${!_os_pool_groups[@]}"; do
+		_grp_pools="${_os_pool_groups[$_grp_os]}"
+		echo "  --- RHEL group: $_grp_os (pools: $_grp_pools) ---"
+		INT_BASTION_RHEL_VER="$_grp_os" \
+		"$BASH" "$_RUN_DIR/setup-infra.sh" --pool-list "$_grp_pools" $_base_infra_flags 9>&- \
+			|| { echo "FATAL: Infrastructure setup failed for $_grp_os group (pools: $_grp_pools)" >&2; exit 1; }
+	done
 
 	for _p in $CLI_POOL_LIST; do
-		echo "$_cur_os" > "$_POOL_OS_DIR/pool-${_p}"
+		echo "${_pool_os_map[$_p]}" > "$_POOL_OS_DIR/pool-${_p}"
 	done
 
 	_print_box "1;46;30" "✔  INFRA: Pool VMs ready (pools: $CLI_POOL_LIST)"
@@ -768,6 +797,28 @@ else
 			fi
 		done
 	fi
+
+	# After -V revert, ~/aba may exist (from snapshot) but on the wrong branch.
+	# Ensure all conN hosts are on E2E_GIT_BRANCH.
+	echo ""
+	echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
+	for _p in $CLI_POOL_LIST; do
+		target=$(_con_target "$_p")
+		echo -n "    con${_p}: "
+		_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
+		if [ "$_cur_branch" = "$E2E_GIT_BRANCH" ]; then
+			_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null 2>&1
+			echo "ok (already on $E2E_GIT_BRANCH)"
+		elif [ -n "$_cur_branch" ]; then
+			if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null 2>&1; then
+				echo "switched $_cur_branch -> $E2E_GIT_BRANCH"
+			else
+				echo "FAILED to switch to $E2E_GIT_BRANCH"
+			fi
+		else
+			echo "skipped (no git repo)"
+		fi
+	done
 fi
 
 # =============================================================================
@@ -778,6 +829,7 @@ fi
 
 declare -A _completed=()
 declare -A _busy_pools=()
+declare -A _external_running=()
 declare -a _work_queue=()
 declare -A _results=()
 declare -A _result_pool=()
@@ -950,13 +1002,13 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$E2E_FORCE_RERUN"' EXIT
 
 declare -A _retried=()
 _MAX_RETRIES=2
 _queue_idx=0
 _POLL_MIN=5
-_POLL_MAX=30
+_POLL_MAX=10
 _poll_interval=$_POLL_MIN
 
 if [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; then
@@ -985,6 +1037,24 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		fi
 	done
 
+	# Force-rerun: clear suites from _results so they can be re-dispatched.
+	# Written by `reschedule` CLI; processed before inject queue so the
+	# subsequent inject won't skip the suite as "already passed".
+	if [ -f "$E2E_FORCE_RERUN" ] && [ -s "$E2E_FORCE_RERUN" ]; then
+		mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" 2>/dev/null || true
+	fi
+	if [ -f "${E2E_FORCE_RERUN}.processing" ]; then
+		while IFS= read -r _rr_suite; do
+			[ -z "$_rr_suite" ] && continue
+			if [ -n "${_results[$_rr_suite]:-}" ]; then
+				_old_rc="${_results[$_rr_suite]}"
+				unset '_results[$_rr_suite]'
+				printf "  [%s] RERUN: %s cleared from results (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rr_suite" "$_old_rc"
+			fi
+		done < "${E2E_FORCE_RERUN}.processing"
+		rm -f "${E2E_FORCE_RERUN}.processing"
+	fi
+
 	# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
 	if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
 		mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" 2>/dev/null || true
@@ -993,10 +1063,15 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		_inj_count=0
 		while IFS= read -r _inj_suite; do
 			[ -z "$_inj_suite" ] && continue
+			# Skip if already completed with PASS (exit=0)
+			if [ "${_results[$_inj_suite]:-}" = "0" ]; then
+				printf "  [%s] SKIPPED: %s (already passed)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue
+			fi
 			_already_running=""
 			for _bp in "${!_busy_pools[@]}"; do
 				[ "${_busy_pools[$_bp]}" = "$_inj_suite" ] && _already_running=1 && break
 			done
+			[ -z "$_already_running" ] && _is_running_on_external_pool "$_inj_suite" && _already_running=1
 			[ -n "$_already_running" ] && { printf "  [%s] SKIPPED: %s (running)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
 			_already_queued=""
 			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
@@ -1027,10 +1102,18 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 		free=$(_find_free_pool) || break
 		suite="${_work_queue[$_queue_idx]}"
+		# Skip suites already completed with PASS
+		if [ "${_results[$suite]:-}" = "0" ]; then
+			printf "  [%s] SKIP: %s (already passed)\n" "$(date '+%H:%M:%S')" "$suite"
+			_queue_idx=$(( _queue_idx + 1 )); continue
+		fi
 		_dup=""
 		for _dp in "${!_busy_pools[@]}"; do
 			[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
 		done
+		if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+			_dup=1; _dp="${_external_running[$suite]}"
+		fi
 		if [ -n "$_dup" ]; then
 			printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
 			_queue_idx=$(( _queue_idx + 1 )); continue
@@ -1052,6 +1135,7 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	fi
 	if [ -n "$_has_retryable" ] && _find_free_pool >/dev/null; then
 		_retry_added=0
+		_retry_names=""
 		for _rs in "${!_results[@]}"; do
 			_rrc="${_results[$_rs]}"
 			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
@@ -1060,14 +1144,26 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 				[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
 				unset '_results[$_rs]'; _work_queue+=("$_rs")
 				printf "  [%s] RETRY %d/%d: %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
+				_retry_names="${_retry_names:+$_retry_names, }$_rs"
 				_retry_added=$(( _retry_added + 1 ))
 			fi
 		done
 		if [ "$_retry_added" -gt 0 ]; then
-			[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_added} re-queued" < /dev/null >/dev/null
+			[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_names} (${_retry_added} re-queued)" < /dev/null >/dev/null
 			while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
 				free=$(_find_free_pool) || break
 				suite="${_work_queue[$_queue_idx]}"
+				_dup=""
+				for _dp in "${!_busy_pools[@]}"; do
+					[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
+				done
+				if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+					_dup=1; _dp="${_external_running[$suite]}"
+				fi
+				if [ -n "$_dup" ]; then
+					printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
+					_queue_idx=$(( _queue_idx + 1 )); continue
+				fi
 				_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
 				_queue_idx=$(( _queue_idx + 1 ))
 			done
@@ -1091,6 +1187,12 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			fi
 			echo ""; _prev_status="$_status_line"
 		fi
+	fi
+
+	# Refresh external pool state every ~60s to detect new/finished external suites
+	if [ $(( SECONDS - ${_last_ext_refresh:-0} )) -ge 60 ]; then
+		_refresh_external_running
+		_last_ext_refresh=$SECONDS
 	fi
 
 	# Adaptive polling: short interval after state changes, back off when idle

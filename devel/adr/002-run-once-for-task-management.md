@@ -25,3 +25,12 @@ checks, catalog fetches).
 - No automatic state cleanup on Ctrl-C. `aba reset` is the explicit full
   reset. Failed tasks are cleaned on next `aba` start via `run_once -F`.
 - Only run_once() may access ~/.aba/runner/ -- no hand-rolled locks or PIDs
+
+## Boundary rule (added 2026-06-06)
+
+run_once calls MUST live outside Makefiles -- in shell scripts that wrap Make
+calls. Makefiles contain pure Make: bare curl recipes, file-target dependencies,
+and extraction commands. run_once provides the cross-process coordination layer;
+Make provides the file-dependency layer. Mixing them (run_once inside recipes)
+created a series of bugs where Make's file-target evaluation raced with
+run_once's background processes.

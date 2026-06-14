@@ -1,5 +1,6 @@
 #!/bin/bash
-# Power off the VMs immediately on the KVM host
+# Power off the VMs immediately on the KVM host.
+# Thin shim over the VM provider seam -- see scripts/vm-provider.sh.
 
 source scripts/include_all.sh
 
@@ -17,22 +18,10 @@ if [ ! "$CLUSTER_NAME" ]; then
 fi
 
 source <(normalize-aba-conf)
-
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-if [ "$ask" ]; then
-	echo
-	for name in $CP_NAMES $WORKER_NAMES; do
-		echo "$(vm_name "$CLUSTER_NAME" "$name")"
-	done
-
-	ask "Immediately power down the above virtual machine(s)" || exit 1
-fi
-
-for name in $CP_NAMES $WORKER_NAMES; do
-	exec_cmd="virsh -c $LIBVIRT_URI destroy $(vm_name "$CLUSTER_NAME" "$name")"
-	aba_debug "Running: $exec_cmd"
-	$exec_cmd || true
-done
-
-exit 0
+source scripts/vm-provider.sh
+vm_provider_load kvm
+# || exit 0: vm_kill returns 1 only when user declines the ask prompt.
+# The || suppresses the ERR trap (which would print a spurious "Script error").
+vm_kill || exit 0

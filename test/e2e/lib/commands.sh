@@ -396,6 +396,9 @@ cmd_reschedule() {
 	echo "=== Reschedule: injecting into dispatcher queue ==="
 	local suite
 	for suite in "${suites_to_run[@]}"; do
+		# Clear from _results so the dispatcher won't skip it as "already passed"
+		echo "$suite" >> "$E2E_FORCE_RERUN"
+		# Inject into the work queue (front of queue)
 		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
 			local _existing
 			_existing=$(cat "$E2E_INJECT_QUEUE")

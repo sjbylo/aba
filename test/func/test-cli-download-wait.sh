@@ -88,7 +88,10 @@ fi
 
 section "Test 4: run_once -p (peek) reports correct status"
 
-export RUN_ONCE_DIR="$HOME/.aba/runner-test-cli-wait-$$"
+# Clean up stale dirs from previous interrupted runs
+rm -rf "$HOME/.aba/runner/test-cli-wait-"*
+
+export RUN_ONCE_DIR="$HOME/.aba/runner/test-cli-wait-$$"
 mkdir -p "$RUN_ONCE_DIR"
 cleanup_test_runner() {
 	rm -rf "$RUN_ONCE_DIR"
