@@ -25,7 +25,7 @@ cfm-operator                                            Cloudera Flow Management
 cilium                                                  Cilium                                                       1.15
 cilium-enterprise                                       Isovalent Enterprise for Cilium                              1.16
 cisco-intersight                                        Cisco Intersight                                             stable
-clife                                                   Isovalent Networking for Kubernetes                          1.17
+clife                                                   Isovalent Networking for Kubernetes                          1.18
 cloudbees-ci                                            CloudBees CI                                                 alpha
 cloudcasa-operator                                      CloudCasa Operator                                           stable
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
@@ -65,6 +65,7 @@ fujitsu-enterprise-postgres-operator-with-cg-module     Fujitsu Enterprise Postg
 function-mesh                                           Function Mesh Operator                                       alpha
 gitlab-operator-kubernetes                              GitLab                                                       stable
 gitlab-runner-operator                                  GitLab Runner                                                stable
+google-cloud-cluster-services-for-openshift-telemetry   Google Cloud Cluster Services for Openshift Telemetry agent  alpha
 gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
 habana-ai-operator                                      Intel Gaudi Base Operator                                    stable
 harness-gitops-operator                                 Harness GitOps Operator                                      alpha
@@ -201,7 +202,7 @@ redis-enterprise-operator-cert                          Redis Enterprise Operato
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.30
+scaleops-operator                                       ScaleOps                                                     stable-v1.31
 silicom-sts-operator                                    Silicom STS Operator                                         stable
 smilecdr-operator                                       Smilecdr Operator                                            alpha
 sn-operator                                             StreamNative Operator                                        alpha

@@ -32,12 +32,14 @@ elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Oper
 falcon-operator                                         CrowdStrike Falcon Platform - Operator                       certified-1.0
 fujitsu-enterprise-postgres-operator                    Fujitsu Enterprise Postgres Operator                         stable
 function-mesh                                           Function Mesh Operator                                       alpha
+google-cloud-cluster-services-for-openshift-telemetry   Google Cloud Cluster Services for Openshift Telemetry agent  alpha
 gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
 harness-gitops-operator                                 Harness GitOps Operator                                      alpha
 hazelcast-platform-operator                             Hazelcast Platform Operator                                  alpha
 hcp-terraform-operator                                  HCP Terraform Operator                                       alpha
 hibernation-operator                                    Hibernation Operator                                         release-0.1
 hnas-csi-operator                                       Hitachi NAS CSI Driver Operator                              stable
+hpe-csi-operator                                        HPE CSI Operator for OpenShift                               stable
 hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric CSI Operator for Kubernetes          stable
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 ibm-application-gateway-operator                        IBM Application Gateway Operator                             stable

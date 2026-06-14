@@ -9,6 +9,7 @@
 - **Smart `starting_ip` default** — Compute starting IP from the machine network CIDR instead of using a static placeholder.
 - **Smart catalog refresh** — `tools/refresh-catalog-indexes.sh` now compares the actual operator content digest (not the whole image digest) to detect real operator updates and avoid false re-downloads from base-image security rebuilds.
 - **AI/ML operator set** — New `op_sets=ai` option bundles GPU Operator, Node Feature Discovery, SR-IOV, Kueue, cert-manager, and ServiceMesh for AI/ML workloads.
+- **Cluster config CLI flags** — New `--host-prefix`, `--master-prefix`, and `--worker-prefix` flags for `aba cluster`.
 
 ### Improvements
 
@@ -25,7 +26,10 @@
 - **`run_once` surgical kill** — `_kill_id` preserves `cmd.sh` across TTL expiry instead of killing sibling processes.
 - **Trace file size guard** — Prevent 29GB trace files when stdout is piped.
 - **`aba delete` cleanup** — Now runs `make clean` to remove stale ISO files and build artifacts in addition to deleting VMs.
-- **Upgrade CLI binaries** — `aba -d mirror save` downloads CLI binaries for the target version, with copy instructions for disconnected upgrades.
+- **Upgrade CLI binaries** — `aba -d mirror save` downloads CLI binaries for the target version in parallel (via `run_once`), with copy instructions for disconnected upgrades.
+- **Cluster creation pipeline** — All `cluster.conf` variables (`mac_prefix`, `ssh_key_file`, `mirror_name`, `hostPrefix`, `master_prefix`, `worker_prefix`) now flow correctly through `aba cluster --name` creation.
+- **Bundle ISC protection** — Bundled `imageset-config.yaml` is preserved on the disconnected side until `aba load` completes, preventing ISC regeneration mismatch.
+- **v4.22 operator catalogs** — Shipped catalog indexes updated to include OCP v4.22.
 
 ### Bug Fixes
 
@@ -41,6 +45,13 @@
 - **MAC prefix uppercase** — Fix MAC address prefix generation to use uppercase hex consistently.
 - **TUI auth credential destruction** — Prevent TUI background prefetch from overwriting mirror authentication credentials.
 - **TUI SIGPIPE race** — Prevent race condition in `isconf` background tasks that could cause spurious pipe errors.
+- **Bundle load failure** — Bundled ISC was regenerated from local config on disconnected side (missing `ocp_version_target`), causing "no release images found" during `oc-mirror load`.
+- **Quay `reg_port` ignored** — Mirror-registry install was ignoring custom `reg_port` setting.
+- **`make-bundle.sh` crash** — `local` keyword used outside a function caused bash error on bundle creation.
+- **Upgrade admin-ack** — Improved guidance when `Upgradeable=False` condition blocks upgrade.
+- **Upgrade dry-run** — Always lists available versions; relaxed health check to avoid false blockers.
+- **Mirror symlink breakage** — Re-link mirror symlinks in `setup-cluster.sh` after `cluster.conf` creation updates the mirror path.
+- **Pull secret hostname mismatch** — `aba register` now reconciles pull secret hostname with current registry configuration.
 
 ### Community
 

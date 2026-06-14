@@ -15,6 +15,7 @@ cass-operator                                           DataStax Kubernetes Oper
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
 cilium-enterprise                                       Isovalent Enterprise for Cilium                              1.16
 cisco-intersight                                        Cisco Intersight                                             stable
+clife                                                   Isovalent Networking for Kubernetes                          1.18
 cloudcasa-operator                                      CloudCasa Operator                                           stable
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 cloudnative-pg                                          CloudNativePG                                                stable-v1
@@ -43,6 +44,7 @@ fujitsu-enterprise-postgres-operator                    Fujitsu Enterprise Postg
 function-mesh                                           Function Mesh Operator                                       alpha
 gitlab-operator-kubernetes                              GitLab                                                       stable
 gitlab-runner-operator                                  GitLab Runner                                                stable
+google-cloud-cluster-services-for-openshift-telemetry   Google Cloud Cluster Services for Openshift Telemetry agent  alpha
 gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
 habana-ai-operator                                      Intel Gaudi Base Operator                                    stable
 harness-gitops-operator                                 Harness GitOps Operator                                      alpha
@@ -50,6 +52,7 @@ hazelcast-platform-operator                             Hazelcast Platform Opera
 hcp-terraform-operator                                  HCP Terraform Operator                                       alpha
 hibernation-operator                                    Hibernation Operator                                         release-0.1
 hnas-csi-operator                                       Hitachi NAS CSI Driver Operator                              stable
+hpe-csi-operator                                        HPE CSI Operator for OpenShift                               stable
 hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric CSI Operator for Kubernetes          stable
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 hulft                                                   HULFT10 for Container Platform                               stable
