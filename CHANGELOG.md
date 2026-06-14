@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.0.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.0...HEAD)
+
+---
+
+## [1.1.0](https://github.com/sjbylo/aba/releases/tag/v1.1.0) - 2026-06-15
+
+Major new TUI v2, vSphere preflight, improved upgrade workflow, and reliability improvements
+
 
 ### New Features
 
