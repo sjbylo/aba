@@ -200,7 +200,7 @@ _dispatch_suite() {
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
-	_ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on"
+	_ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null"
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
@@ -223,15 +223,27 @@ _check_pool() {
 		return
 	fi
 
-	local sess_alive=""
-	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_alive=""
+	# Grace period: don't declare a suite dead within 60s of dispatch.
+	# Transient SSH failures or slow runner startup would otherwise cause
+	# a false rc=255 that kills the actually-running suite (death spiral).
+	local _since_dispatch=$(( SECONDS - ${_dispatch_time[$pool_num]:-0} ))
+	local _grace=60
+
+	local sess_alive="" _ssh_rc=0
+	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || { _ssh_rc=$?; sess_alive=""; }
 	if [ "$sess_alive" != "yes" ]; then
+		echo "  DIAG: pool $pool_num tmux check 1 failed (ssh_rc=$_ssh_rc, got='$sess_alive')" >&2
 		sleep 5
-		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_alive=""
+		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || { _ssh_rc=$?; sess_alive=""; }
 		if [ "$sess_alive" = "yes" ]; then
 			return
 		fi
-		echo "  WARNING: Suite '$suite' on con${pool_num} died without writing .rc (killed/crashed)" >&2
+		echo "  DIAG: pool $pool_num tmux check 2 failed (ssh_rc=$_ssh_rc, got='$sess_alive')" >&2
+		if [ "$_since_dispatch" -lt "$_grace" ]; then
+			echo "  NOTE: tmux check failed on con${pool_num} (${_since_dispatch}s since dispatch, grace=${_grace}s) -- will retry" >&2
+			return
+		fi
+		echo "  WARNING: Suite '$suite' on con${pool_num} died without writing .rc (killed/crashed, ${_since_dispatch}s since dispatch)" >&2
 		echo "255"
 		return
 	fi
