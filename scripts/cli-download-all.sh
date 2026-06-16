@@ -109,6 +109,11 @@ do
 	if [[ "$mode" == "reset" ]]; then
 		run_once -r -i "$task_id"
 	elif [[ "$mode" == "wait" ]]; then
+		# Already complete? Skip silently.
+		if run_once -p -i "$task_id"; then
+			aba_debug "CLI download already complete: $tool"
+			continue
+		fi
 		if ! $showed_wait_msg; then
 			aba_info "Ensuring CLI downloads are complete ..."
 			showed_wait_msg=true

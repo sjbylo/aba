@@ -17,7 +17,6 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
-aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
 # Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!

@@ -15,7 +15,6 @@ verify-cluster-conf || exit 1
 
 [ ! "$ntp_servers" ] && aba_abort "Define 'ntp_servers' value in 'aba.conf' to configure NTP" 
 
-aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc butane
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
@@ -303,7 +302,7 @@ fi
 _has_warnings=""
 for host in $nodesIPs; do
 	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc -N sources' 2>/dev/null) || true
-	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}') || true
+	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}' | sort -u) || true
 	if [ -n "$_unreachable" ]; then
 		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
 		_has_warnings=1
