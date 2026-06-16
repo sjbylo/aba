@@ -258,7 +258,7 @@ e2e_run "EC version triggers pre-release warning" \
 	"grep -q 'Pre-release version' /tmp/ec-out.txt"
 
 e2e_run "GA version accepted without warning" \
-	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION 2>&1 | tee /tmp/ga-out.txt && grep -q 'ocp_version=$OCP_VERSION' aba.conf"
+	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION 2>&1 | tee /tmp/ga-out.txt && grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}' | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\$'"
 
 e2e_run_must_fail "GA version does NOT trigger pre-release warning" \
 	"grep 'Pre-release version' /tmp/ga-out.txt"
@@ -311,7 +311,7 @@ e2e_run_must_fail "ISC generation aborts when target < source" \
 # --- Version guard: valid upgrade allowed ---
 
 e2e_run "Set valid upgrade path" \
-	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION && sed -i 's/^.*ocp_version_target=.*/ocp_version_target=${OCP_VERSION_TARGET:-$OCP_VERSION}/' mirror/mirror.conf"
+	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION && _resolved=\$(grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}') && sed -i \"s/^.*ocp_version_target=.*/ocp_version_target=\$_resolved/\" mirror/mirror.conf"
 
 e2e_run "Remove ISC for upgrade test" \
 	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
