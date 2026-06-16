@@ -32,7 +32,8 @@ plan_tests \
 	"cluster.conf validation" \
 	"mirror.conf validation" \
 	"mirror.conf ops/op_sets override" \
-	"cluster.conf CLI flag override"
+	"cluster.conf CLI flag override" \
+	"Pre-release version support (RC/EC)"
 
 suite_begin "config-validation"
 
@@ -231,6 +232,100 @@ e2e_run "Verify starting_ip unchanged" \
 	"grep '^starting_ip=$(pool_sno_ip)' $_OVERRIDE_DIR/cluster.conf"
 
 e2e_run "Clean up override test dir" "rm -rf $_OVERRIDE_DIR"
+
+test_end 0
+
+# ============================================================================
+# 7. Pre-release version support (RC/EC)
+# ============================================================================
+test_begin "Pre-release version support (RC/EC)"
+
+e2e_run "Backup aba.conf and mirror.conf" \
+	"cp aba.conf aba.conf.prerel-bak && cp mirror/mirror.conf mirror/mirror.conf.prerel-bak"
+
+# --- CLI acceptance ---
+
+e2e_run "RC version accepted by --version" \
+	"aba --noask --channel candidate --version 4.22.0-rc.1 2>&1 | tee /tmp/rc-out.txt && grep -q 'ocp_version=4.22.0-rc.1' aba.conf"
+
+e2e_run "RC version triggers pre-release warning" \
+	"grep -q 'Pre-release version' /tmp/rc-out.txt"
+
+e2e_run "EC version accepted by --version" \
+	"aba --noask --channel candidate --version 5.0.0-ec.2 2>&1 | tee /tmp/ec-out.txt && grep -q 'ocp_version=5.0.0-ec.2' aba.conf"
+
+e2e_run "EC version triggers pre-release warning" \
+	"grep -q 'Pre-release version' /tmp/ec-out.txt"
+
+e2e_run "GA version accepted without warning" \
+	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION 2>&1 | tee /tmp/ga-out.txt && grep -q 'ocp_version=$OCP_VERSION' aba.conf"
+
+e2e_run_must_fail "GA version does NOT trigger pre-release warning" \
+	"grep 'Pre-release version' /tmp/ga-out.txt"
+
+# --- Invalid pre-release formats rejected ---
+
+e2e_run_must_fail "Uppercase RC rejected" \
+	"aba --noask --channel candidate --version 4.22.0-RC.1"
+
+e2e_run_must_fail "Missing suffix number rejected" \
+	"aba --noask --channel candidate --version 4.22.0-rc"
+
+e2e_run_must_fail "Dangling dash rejected" \
+	"aba --noask --channel candidate --version 4.22.0-"
+
+# --- ISC generation with RC version ---
+
+e2e_run "Set RC version for ISC test" \
+	"aba --noask --channel candidate --version 4.22.0-rc.1"
+
+e2e_run "Remove existing ISC" \
+	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
+
+e2e_run "Ensure no ocp_version_target" \
+	"sed -i 's/^ocp_version_target=.*/#ocp_version_target=/' mirror/mirror.conf"
+
+e2e_run "Generate ISC with RC version" \
+	"aba -d mirror imagesetconf"
+
+e2e_run "ISC channel is candidate-4.22 (not candidate-4.22.0-rc)" \
+	"grep 'name: candidate-4.22$' mirror/data/imageset-config.yaml"
+
+e2e_run "ISC minVersion is 4.22.0-rc.1 (verbatim)" \
+	"grep 'minVersion: 4.22.0-rc.1' mirror/data/imageset-config.yaml"
+
+e2e_run "ISC maxVersion is 4.22.0-rc.1 (verbatim)" \
+	"grep 'maxVersion: 4.22.0-rc.1' mirror/data/imageset-config.yaml"
+
+# --- Version guard: target < source ---
+
+e2e_run "Set versions for guard test" \
+	"aba --noask --channel candidate --version 4.22.0-rc.1 && sed -i 's/^.*ocp_version_target=.*/ocp_version_target=4.21.18/' mirror/mirror.conf"
+
+e2e_run "Remove ISC for guard test" \
+	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
+
+e2e_run_must_fail "ISC generation aborts when target < source" \
+	"aba -d mirror imagesetconf"
+
+# --- Version guard: valid upgrade allowed ---
+
+e2e_run "Set valid upgrade path" \
+	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION && sed -i 's/^.*ocp_version_target=.*/ocp_version_target=${OCP_VERSION_TARGET:-$OCP_VERSION}/' mirror/mirror.conf"
+
+e2e_run "Remove ISC for upgrade test" \
+	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
+
+e2e_run "ISC generation succeeds with valid upgrade" \
+	"aba -d mirror imagesetconf"
+
+# --- Cleanup ---
+
+e2e_run "Restore aba.conf and mirror.conf" \
+	"cp aba.conf.prerel-bak aba.conf && cp mirror/mirror.conf.prerel-bak mirror/mirror.conf && rm -f aba.conf.prerel-bak mirror/mirror.conf.prerel-bak"
+
+e2e_run "Clean up generated ISC and temp files" \
+	"rm -f mirror/data/imageset-config.yaml mirror/data/.created /tmp/rc-out.txt /tmp/ec-out.txt /tmp/ga-out.txt"
 
 test_end 0
 

@@ -80,7 +80,7 @@ _list_mirror_versions() {
 	local arch
 	arch=$(uname -m)
 	skopeo list-tags "docker://$repo" 2>/dev/null \
-		| grep -oP '"(\d+\.\d+\.\d+)-'"$arch"'"' \
+		| grep -oP '"(\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?)-'"$arch"'"' \
 		| tr -d '"' | sed "s/-${arch}$//" | sort -V
 }
 
@@ -118,8 +118,8 @@ if [ ! "$target_ver" ]; then
 fi
 
 # Validate target version format
-! echo "$target_ver" | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && \
-	aba_abort "Invalid target version format: [$target_ver]. Expected x.y.z (e.g. 4.19.28)"
+! echo "$target_ver" | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && \
+	aba_abort "Invalid target version format: [$target_ver]. Expected x.y.z or x.y.z-suffix.N (e.g. 4.19.28, 4.22.0-rc.1)"
 
 aba_info "Target cluster version:  $target_ver"
 
@@ -270,7 +270,7 @@ if [ ! "$upgrade_already_running" ]; then
 	# Only same-channel upgrades are supported (e.g. stable-4.20 → stable-4.21).
 	# The channel prefix is read from the live cluster — never from config files.
 	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
-	_target_major="${target_ver%.*}"
+	_target_major=$(_ver_minor "$target_ver")
 	if [ -n "$_current_channel" ]; then
 		_channel_prefix="${_current_channel%-*}"
 	else

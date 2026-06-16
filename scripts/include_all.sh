@@ -1507,6 +1507,12 @@ _is_prerelease() {
 	[[ "$1" == *-* ]]
 }
 
+# Extract major.minor from any version string, stripping pre-release suffix.
+# e.g. "4.22.0-rc.1" → "4.22", "5.0.3" → "5.0", "4.20.20" → "4.20"
+_ver_minor() {
+	echo "${1%%-*}" | cut -d. -f1-2
+}
+
 ############################################
 # Fetch latest minor (GA-aware)
 # Returns MAJOR.MINOR (e.g. 4.20)
@@ -2639,10 +2645,10 @@ run_once() {
 # when it differs (cross-minor upgrade).  Expects ocp_version (and optionally
 # ocp_version_target) to be set in the environment.
 _catalog_versions_to_mirror() {
-	local _cur="${ocp_version%.*}"
+	local _cur=$(_ver_minor "$ocp_version")
 	local _versions=("$_cur")
 	if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-		local _tgt="${ocp_version_target%.*}"
+		local _tgt=$(_ver_minor "$ocp_version_target")
 		[ "$_tgt" != "$_cur" ] && _versions+=("$_tgt")
 	fi
 	echo "${_versions[*]}"
@@ -2767,7 +2773,7 @@ aba_prefetch_catalogs() {
 	[[ -n "$_ver" ]] || return 0
 
 	# Minor x.y — download_all_catalogs uses catalog:${minor}:* task IDs (not patch z)
-	local _minor="${_ver%.*}"
+	local _minor=$(_ver_minor "$_ver")
 
 	download_all_catalogs "$_minor"
 	wait_for_all_catalogs "$_minor" || return 0
@@ -2780,7 +2786,7 @@ aba_prefetch_catalogs() {
 		local _prev_ver
 		_prev_ver=$(fetch_latest_z_version "$_channel" "$_prev_minor" 2>/dev/null) || true
 		if [[ -n "$_prev_ver" ]]; then
-			download_all_catalogs "${_prev_ver%.*}"
+			download_all_catalogs "$(_ver_minor "$_prev_ver")"
 		fi
 	fi
 }

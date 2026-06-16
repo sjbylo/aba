@@ -485,14 +485,17 @@ elif [ "$1" = "--light" ]; then
 		# Expand ver to latest, if it's just a point version (x.y)
 		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$ocp_channel" "$ver")
 
-		# Extract only the full major.minor.patch version if present
-		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+		# Extract version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
+		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		[ ! "$ver" ] && aba_abort "failed to look up the$tmp_out version for channel [$chan] after option [$opt $arg]" 
 
-		# ver should now be x.y.z format
-		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "incorrect version format: [$ver] for channel [$chan] after option [$opt $arg]" 
+		# ver should now be x.y.z or x.y.z-prerelease format
+		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$ver] for channel [$chan] after option [$opt $arg]"
+
+		# Warn if pre-release version
+		_is_prerelease "$ver" && aba_warning "Pre-release version '$ver' — not for production use." 
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
@@ -500,7 +503,7 @@ elif [ "$1" = "--light" ]; then
 	aba_debug Downloading operator index for version $ver 
 
 	# Start parallel catalog downloads (uses podman extraction, no oc-mirror dependency)
-	ver_short="${ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+	ver_short=$(_ver_minor "$ver")  # Extract major.minor (e.g., 4.20.8 -> 4.20, 4.22.0-rc.1 -> 4.22)
 	download_all_catalogs "$ver_short"
 
 		shift 2
@@ -525,9 +528,10 @@ elif [ "$1" = "--light" ]; then
 			;;
 		esac
 		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver")
-		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
-		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
+		_is_prerelease "$tgt_ver" && aba_warning "Pre-release target version '$tgt_ver' — not for production use."
 		# Ensure the placeholder exists in mirror.conf (older templates may lack it)
 		if ! grep -q "^[# ]*ocp_version_target=" "$WORK_DIR/mirror.conf"; then
 			echo "#ocp_version_target=" >> "$WORK_DIR/mirror.conf"
@@ -1561,9 +1565,14 @@ fi
 		# Exit loop if release version exists
 		if [ "$target_ver" ]; then
 			aba_debug "Validating user input: target_ver=[$target_ver]"
-			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+$"; then
+			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$"; then
+				# Pre-release: accept without Cincinnati validation (RC/EC not in update graph)
+				if _is_prerelease "$target_ver"; then
+					aba_warning "Pre-release version '$target_ver' — not for production use."
+					break
+				fi
 				# Validate x.y.z using Cincinnati graph (cached)
-				minor="${target_ver%.*}"  # 4.18.10 → 4.18
+				minor=$(_ver_minor "$target_ver")
 				aba_debug "Detected x.y.z format, extracting minor: $minor"
 				
 				# Fetch all versions for this channel-minor (may fail if minor doesn't exist)
@@ -1598,8 +1607,8 @@ fi
 					target_ver=""  # Reset to loop again
 				fi
 			else
-				aba_debug "Invalid format: $target_ver (not x.y or x.y.z)"
-				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10 or 4.18)." >&2
+				aba_debug "Invalid format: $target_ver (not x.y or x.y.z or x.y.z-pre.N)"
+				echo_red "Invalid input. Enter a valid OpenShift version (e.g., 4.18.10, 4.18, or 4.22.0-rc.1)." >&2
 				target_ver=""  # Reset to loop again
 			fi
 		fi
@@ -1653,7 +1662,7 @@ scripts/cli-download-all.sh
 # Fetch the operator indexes (in the background to save time).
 # Use new helper function for parallel catalog downloads (runs in background)
 # NOTE: catalogs use podman extraction (no oc-mirror dependency)
-ocp_ver_short="${target_ver%.*}"  # Extract major.minor (e.g., 4.20.8 -> 4.20)
+ocp_ver_short=$(_ver_minor "$target_ver")  # Extract major.minor (e.g., 4.20.8 -> 4.20, 4.22.0-rc.1 -> 4.22)
 download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them
 # (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)

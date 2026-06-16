@@ -15,8 +15,8 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-# Extract major.minor version (e.g., 4.20.8 -> 4.20)
-ocp_ver_short="${ocp_version%.*}"
+# Extract major.minor version (e.g., 4.20.8 -> 4.20, 4.22.0-rc.1 -> 4.22)
+ocp_ver_short=$(_ver_minor "$ocp_version")
 
 # Download all catalogs in parallel (TTL from ~/.aba/config)
 download_all_catalogs "$ocp_ver_short"

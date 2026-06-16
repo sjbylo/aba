@@ -1005,8 +1005,10 @@ echo $$ > "$E2E_DISPATCHER_PID"
 trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$E2E_FORCE_RERUN"' EXIT
 
 declare -A _retried=()
+declare -A _pool_dead_count=()
 _MAX_RETRIES=2
 _queue_idx=0
+_DEAD_THRESHOLD=3
 _POLL_MIN=5
 _POLL_MAX=10
 _poll_interval=$_POLL_MIN
@@ -1026,8 +1028,20 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 		local_suite="${_busy_pools[$_p]}"
 		rc=$(_check_pool "$_p" "$local_suite")
 		# Hung detection runs in parent shell so _hung_notified persists
-		[ -z "$rc" ] && _check_hung "$_p" "$local_suite"
+		[ -z "$rc" ] && { unset '_pool_dead_count[$_p]'; _check_hung "$_p" "$local_suite"; }
 		if [ -n "$rc" ]; then
+			# rc=255 (no .rc file + no tmux session) can be a false positive from
+			# transient SSH failures.  Require _DEAD_THRESHOLD consecutive 255s
+			# before accepting it; any other rc is trusted immediately.
+			if [ "$rc" = "255" ]; then
+				_pool_dead_count[$_p]=$(( ${_pool_dead_count[$_p]:-0} + 1 ))
+				if [ "${_pool_dead_count[$_p]}" -lt "$_DEAD_THRESHOLD" ]; then
+					echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]}/$_DEAD_THRESHOLD -- not killing yet" >&2
+					continue
+				fi
+				echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]} >= $_DEAD_THRESHOLD -- accepting rc=255" >&2
+			fi
+			unset '_pool_dead_count[$_p]'
 			_record_result "$local_suite" "$rc"
 			_collect_pool_logs "$_p"
 			_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
