@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>runbook-test-execution-report</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+  h1 { color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }
+  h2 { color: #333; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin-top: 30px; }
+  h3 { color: #555; margin-top: 24px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background: #f5f5f5; font-weight: bold; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: "Courier New", monospace; font-size: 0.9em; }
+  pre { background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 4px; padding: 12px 16px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  blockquote { border-left: 4px solid #1a73e8; margin: 16px 0; padding: 8px 16px; background: #f0f7ff; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  strong { color: #333; }
+</style>
+</head>
+<body>
+<h1>Runbook Test Execution Report</h1>
+<p><strong>Runbook:</strong> Upgrade OCP 4.18 → 4.19 and Migrate to ABA / oc-mirror
+<strong>Test Date:</strong> 2026-05-02
+<strong>Architecture:</strong> x86_64 (runbook targets s390x; test validates workflow on x86)</p>
+<hr />
+<h2>Test Environment</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Host</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Connected Workstation</td>
+<td>bastion</td>
+<td>RHEL 9.7, internet access, ABA source repo</td>
+</tr>
+<tr>
+<td>Internal Bastion (disconnected)</td>
+<td>registry.example.com</td>
+<td>RHEL 9.7, no internet, Docker registry :5000</td>
+</tr>
+<tr>
+<td>SNO Cluster</td>
+<td>sno4.example.com</td>
+<td>VMware VM, 16 vCPU, 32 GB RAM</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Source OCP Version</td>
+<td>4.18.38 (latest stable-4.18)</td>
+</tr>
+<tr>
+<td>Target OCP Version</td>
+<td>4.19.28 (latest stable-4.19)</td>
+</tr>
+<tr>
+<td>Registry Vendor</td>
+<td>Docker v2, port 5000</td>
+</tr>
+<tr>
+<td>Old reg_path</td>
+<td><code>/ocp4/openshift4</code></td>
+</tr>
+<tr>
+<td>New reg_path</td>
+<td><code>/ocp/openshift</code></td>
+</tr>
+<tr>
+<td>Operators Mirrored</td>
+<td>web-terminal, devworkspace-operator</td>
+</tr>
+<tr>
+<td>ABA Version</td>
+<td>1.0.1 (build 20260426220357)</td>
+</tr>
+<tr>
+<td>oc-mirror Version</td>
+<td>4.21.0</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Phase 0 — Set Up "Existing" Environment</h2>
+<p><strong>Objective:</strong> Simulate a pre-existing OCP 4.18 cluster with Docker :5000 mirror, then move ABA aside to replicate a customer without ABA.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Action</th>
+<th>Result</th>
+<th>Duration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>Install fresh ABA on bastion, configure for 4.18.38</td>
+<td>OK — <code>aba --channel stable --version 4.18 --platform bm</code></td>
+<td>~10s</td>
+</tr>
+<tr>
+<td>0.2</td>
+<td>Configure mirror for Docker :5000 at <code>/ocp4/openshift4</code></td>
+<td>OK — edited <code>mirror.conf</code></td>
+<td>~1s</td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>Generate ISC and save images</td>
+<td>OK — 19 GB tar (<code>mirror_000001.tar</code>)</td>
+<td>~15 min</td>
+</tr>
+<tr>
+<td>0.4</td>
+<td>Create bundle and transfer to registry host</td>
+<td>OK — piped via <code>aba tar --out -</code> to SSH</td>
+<td>~20 min</td>
+</tr>
+<tr>
+<td>0.5</td>
+<td>Install Docker :5000 on registry host</td>
+<td>OK — <code>aba -d mirror install</code></td>
+<td>~40s</td>
+</tr>
+<tr>
+<td>0.6</td>
+<td>Load images into registry</td>
+<td>OK — <code>aba -d mirror load</code>, 380 release images</td>
+<td>~10 min</td>
+</tr>
+<tr>
+<td>0.7</td>
+<td>Create and install SNO 4.18.38</td>
+<td>OK — <code>aba -d sno4 install</code>, all COs healthy</td>
+<td>~50 min</td>
+</tr>
+<tr>
+<td>0.8</td>
+<td>Move ABA aside (<code>~/aba-original</code>, <code>~/.aba-original</code>)</td>
+<td>OK — registry and cluster remain operational</td>
+<td>~1s</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Verification:</strong></p>
+<ul>
+<li><code>oc get clusterversion</code> → 4.18.38, Available=True</li>
+<li><code>oc get nodes</code> → sno4 Ready</li>
+<li><code>skopeo list-tags docker://registry.example.com:5000/ocp4/openshift4/openshift/release-images</code> → <code>4.18.38-x86_64</code></li>
+</ul>
+<hr />
+<h2>Phase 1 — Connected Workstation: Save (Runbook Steps 1-6)</h2>
+<p><strong>Objective:</strong> Follow runbook steps 1-6 on the bastion (connected workstation).</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Runbook Step</th>
+<th>Action</th>
+<th>Result</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.1</td>
+<td>Step 1</td>
+<td>Install fresh ABA</td>
+<td>OK</td>
+<td>Reused existing git clone</td>
+</tr>
+<tr>
+<td>1.2</td>
+<td>Step 2</td>
+<td>Configure for 4.19.28</td>
+<td>OK</td>
+<td><strong>Finding:</strong> <code>--domain</code> should be <code>--base-domain</code></td>
+</tr>
+<tr>
+<td>1.3</td>
+<td>Step 3</td>
+<td>Add operators</td>
+<td>OK</td>
+<td><code>ops=web-terminal,devworkspace-operator</code> in <code>aba.conf</code></td>
+</tr>
+<tr>
+<td>1.4</td>
+<td>Step 4</td>
+<td>Generate ISC, add 4.18 channel</td>
+<td>OK</td>
+<td><code>aba -d mirror imagesetconf</code>, then manual edit</td>
+</tr>
+<tr>
+<td>1.5</td>
+<td>Step 5</td>
+<td>Save images</td>
+<td>OK — 40 GB tar, 380 release + 10 operator images</td>
+<td>~35 min</td>
+</tr>
+<tr>
+<td>1.6</td>
+<td>Step 6</td>
+<td>Create transfer bundle</td>
+<td><strong>Issue:</strong> <code>aba tar --out /tmp/...</code> failed — <code>/tmp</code> on root partition (70 GB) ran out of space. <strong>Workaround:</strong> piped directly via <code>aba tar --out - | ssh registry 'tar xf - -C ~'</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Findings:</strong></p>
+<ol>
+<li><code>**--domain</code> flag does not exist** — correct flag is <code>--base-domain</code>. Runbook updated.</li>
+<li><strong>Disk space for bundle creation</strong> — <code>/tmp</code> or small root partitions can't hold the bundle. Runbook should note using a path on a partition with sufficient space.</li>
+</ol>
+<hr />
+<h2>Phase 2 — Disconnected Bastion: Load + Day2 + Upgrade (Runbook Steps 7-13)</h2>
+<p><strong>Objective:</strong> Follow runbook steps 7-13 on registry (disconnected bastion).</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Runbook Step</th>
+<th>Action</th>
+<th>Result</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.1</td>
+<td>Step 7</td>
+<td>Extract bundle, install ABA</td>
+<td>OK</td>
+<td><code>./install</code></td>
+</tr>
+<tr>
+<td>2.2</td>
+<td>Step 8</td>
+<td>Register existing Docker :5000</td>
+<td>OK</td>
+<td><code>aba -d mirror register --reg-host ... --ca-cert ... --pull-secret-mirror ...</code></td>
+</tr>
+<tr>
+<td>2.3</td>
+<td>Step 8b</td>
+<td>Set <code>reg_path=/ocp/openshift</code></td>
+<td>OK</td>
+<td>Edited <code>mirror/mirror.conf</code></td>
+</tr>
+<tr>
+<td>2.4</td>
+<td>Step 8c</td>
+<td>Verify registry</td>
+<td>OK</td>
+<td><code>aba -d mirror verify</code> — auth successful</td>
+</tr>
+<tr>
+<td>2.5</td>
+<td>Step 9</td>
+<td>Load images</td>
+<td>OK — images pushed to <code>/ocp/openshift</code> path</td>
+<td>~10 min</td>
+</tr>
+<tr>
+<td>2.6</td>
+<td>Step 10</td>
+<td>Create cluster directory</td>
+<td>OK</td>
+<td><code>aba cluster --name sno4 --type sno --starting-ip &lt;ip&gt; --step cluster.conf</code></td>
+</tr>
+<tr>
+<td>2.7</td>
+<td>Step 10b</td>
+<td>Place kubeconfig</td>
+<td>OK</td>
+<td><code>mkdir -p sno4/iso-agent-based/auth &amp;&amp; cp ...</code></td>
+</tr>
+<tr>
+<td>2.8</td>
+<td>Step 11</td>
+<td>Authenticate and verify</td>
+<td>OK</td>
+<td><code>. &lt;(aba shell)</code> + <code>oc get clusterversion</code></td>
+</tr>
+<tr>
+<td>2.9</td>
+<td>Step 12</td>
+<td>Run <code>aba day2</code></td>
+<td>OK — IDMS, ITMS, CatalogSource, CA trust, signatures all applied</td>
+<td>~5 min</td>
+</tr>
+<tr>
+<td>2.10</td>
+<td>Step 13</td>
+<td>Trigger upgrade</td>
+<td><strong>Finding:</strong> <code>oc adm upgrade --to 4.19.28</code> fails in disconnected — must use <code>--to-image</code> with local digest + <code>--force</code></td>
+<td>~50 min</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Findings:</strong></p>
+<ol>
+<li><code>**oc adm upgrade --to</code> fails disconnected** — cannot reach <code>api.openshift.com</code> for the update graph. Must use <code>--to-image=registry:5000/ocp/openshift/openshift/release-images@sha256:&lt;digest&gt; --allow-explicit-upgrade --force</code>. Runbook updated.</li>
+<li><code>**iso-agent-based/auth/</code> directory not created by <code>--step cluster.conf</code>** — requires manual <code>mkdir -p</code>. Enhancement opportunity for ABA.</li>
+<li><strong>Control plane briefly unreachable during upgrade</strong> — expected behavior during kube-apiserver and etcd restarts. Monitoring showed "Unable to apply: control plane is down" for ~4 minutes. Self-resolved.</li>
+</ol>
+<hr />
+<h2>Phase 3 — Post-Upgrade Verification</h2>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Command</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cluster version</td>
+<td><code>oc get clusterversion</code></td>
+<td><strong>4.19.28</strong>, Available=True, Progressing=False</td>
+</tr>
+<tr>
+<td>Node</td>
+<td><code>oc get nodes</code></td>
+<td>sno4 Ready, v1.32.13</td>
+</tr>
+<tr>
+<td>Cluster operators</td>
+<td><code>oc get co</code></td>
+<td>All 33 at 4.19.28, none Degraded</td>
+</tr>
+<tr>
+<td>IDMS (new)</td>
+<td><code>oc get imagedigestmirrorset</code></td>
+<td><code>idms-release-0</code>, <code>idms-operator-0</code> present</td>
+</tr>
+<tr>
+<td>IDMS (old)</td>
+<td><code>oc get imagedigestmirrorset</code></td>
+<td><code>image-digest-mirror</code> (from original install) still present</td>
+</tr>
+<tr>
+<td>CatalogSource</td>
+<td><code>oc get catalogsource -n openshift-marketplace</code></td>
+<td><code>redhat-operators</code> → <code>registry.example.com</code>, READY</td>
+</tr>
+<tr>
+<td>PackageManifest</td>
+<td><code>oc get packagemanifest</code></td>
+<td><code>web-terminal</code>, <code>devworkspace-operator</code> visible</td>
+</tr>
+<tr>
+<td>Upgrade history</td>
+<td><code>oc get clusterversion -o jsonpath='{..history[*].version}'</code></td>
+<td><code>4.19.28 4.18.38</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>All checks passed.</strong></p>
+<hr />
+<h2>Registry State After Upgrade</h2>
+<pre><code>registry.example.com:5000
+├── /ocp4/openshift4/openshift/release-images   → 4.18.38-x86_64 (OLD, untouched)
+└── /ocp/openshift/openshift/release-images     → 4.18.38-x86_64, 4.19.28-x86_64 (NEW)
+</code></pre>
+<p>Both paths coexist. Old images remain available for rollback if needed.</p>
+<hr />
+<h2>Runbook Changes Applied</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Change</th>
+<th>Runbook Section</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>--domain</code> → <code>--base-domain</code></td>
+<td>Step 2</td>
+<td><strong>Bug</strong> — command would fail</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Use <code>--to-image</code> with local digest + <code>--force</code> instead of <code>--to</code></td>
+<td>Step 13</td>
+<td><strong>Bug</strong> — upgrade would fail in disconnected</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Show how to get release image digest from local mirror</td>
+<td>Step 13</td>
+<td><strong>Enhancement</strong> — critical for disconnected use</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Replace all <code>oc</code>/<code>KUBECONFIG</code> commands with ABA equivalents: <code>aba run --cmd</code> for one-off commands, <code>. &lt;(aba shell)</code> + raw <code>oc</code> for multi-command sequences</td>
+<td>Steps 11-13, verification, rollback, troubleshooting</td>
+<td><strong>Enhancement</strong> — dog-fooding, cleaner UX</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Note about <code>iso-agent-based/auth/</code> dir not auto-created</td>
+<td>Step 10</td>
+<td><strong>Enhancement</strong> — documents current behavior, flags future ABA improvement</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Note about bundle disk space on small partitions</td>
+<td>Step 6</td>
+<td><strong>Enhancement</strong> — practical guidance</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Proposed ABA Improvement</h2>
+<p><code>**aba cluster --step cluster.conf</code> should auto-create <code>iso-agent-based/auth/</code>.**</p>
+<p>Currently, <code>aba cluster --name &lt;name&gt; --step cluster.conf</code> creates the cluster directory and <code>cluster.conf</code> but does NOT create <code>iso-agent-based/auth/</code>. This directory is only created during the full <code>install</code> step. For the upgrade use case (where you're configuring ABA for an <em>existing</em> cluster, not installing a new one), users must manually <code>mkdir -p</code> before placing their kubeconfig.</p>
+<p><strong>Suggestion:</strong> Have <code>create-cluster-conf.sh</code> (or the <code>cluster.conf</code> Makefile target) also run <code>mkdir -p iso-agent-based/auth</code> so the directory is always present. This is backward-compatible and eliminates the <code>mkdir -p</code> step in the runbook.</p>
+<hr />
+<h2>Timing Summary</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Duration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Phase 0 — Set up existing environment</td>
+<td>~1.5 hours</td>
+</tr>
+<tr>
+<td>Phase 1 — Connected save (2 releases + operators)</td>
+<td>~1.5 hours</td>
+</tr>
+<tr>
+<td>Phase 2 — Transfer + load + day2 + upgrade</td>
+<td>~1.5 hours</td>
+</tr>
+<tr>
+<td>Phase 3 — Verification</td>
+<td>~5 minutes</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~4.5 hours</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Conclusion</h2>
+<p>The runbook workflow is validated end-to-end on x86_64. The core path separation strategy (<code>/ocp4/openshift4</code> old vs <code>/ocp/openshift</code> new) works correctly. IDMS and existing mirror rules coexist without conflict. The upgrade from 4.18.38 to 4.19.28 completed successfully with all cluster operators healthy.</p>
+<p>Two critical bugs were found and fixed (wrong CLI flag, wrong upgrade command for disconnected). The dog-fooding pass replaces all raw <code>oc</code>/<code>KUBECONFIG</code> usage with ABA's own <code>aba run --cmd</code>, <code>. &lt;(aba shell)</code>, and <code>. &lt;(aba login)</code>.</p>
+<hr />
+<p><em>ABA 1.0.1 | oc-mirror v2 | x86_64 test for s390x runbook | May 2026</em></p>
+</body>
+</html>

@@ -31,7 +31,6 @@ if [ "$int_connection" ]; then
 	exit 0
 fi
 
-aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
 aba_info "Accessing the cluster ..."
