@@ -855,7 +855,7 @@ _cluster_page_basics() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$_basics_msg" 0 62 8 \
+			--menu "$_basics_msg" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
