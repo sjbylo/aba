@@ -23,7 +23,7 @@
 ABA_VERSION=1.1.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260617141427
+ABA_BUILD=20260617231649
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -470,6 +470,12 @@ elif [ "$1" = "--light" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
 		arg=$2
 		ver=$arg
+		# Reject obvious format errors immediately (before any network lookups)
+		# Valid: x.y.z, x.y.z-suffix.N, x.y (short form), "latest", "l", "previous", "p"
+		if ! [[ "$arg" =~ ^[0-9]+\.[0-9]+(\.[0-9]+(-[a-z]+\.[0-9]+)?)?$ ]] && \
+		   ! [[ "$arg" =~ ^(latest|l|previous|p)$ ]]; then
+			aba_abort "incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
+		fi
 		[ ! "$chan" ] && chan=$ocp_channel  # Prioritize the $chan var (from above) or fetch from aba.conf file
 		tmp_out=
 		case "$arg" in
@@ -490,10 +496,13 @@ elif [ "$1" = "--light" ]; then
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
 
 		# As far as possible, always ensure there is a valid value in aba.conf
-		[ ! "$ver" ] && aba_abort "failed to look up the$tmp_out version for channel [$chan] after option [$opt $arg]" 
+		if [ ! "$ver" ]; then
+			local _err_msg="incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
+			[ "$tmp_out" ] && _err_msg="failed to look up the ${tmp_out}version for channel [$chan] after option [$opt $arg]"
+			aba_abort "$_err_msg"
+		fi
 
-		# ver should now be x.y.z or x.y.z-prerelease format
-		! echo $ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$ver] for channel [$chan] after option [$opt $arg]"
+		# ver should now be x.y.z or x.y.z-prerelease format (guaranteed by early validation)
 
 		# Warn if pre-release version
 		_is_prerelease "$ver" && aba_warning "Pre-release version '$ver' — not for production use." 
