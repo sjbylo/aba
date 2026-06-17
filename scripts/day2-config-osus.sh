@@ -11,6 +11,7 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_display="${mirror_name:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -187,10 +188,10 @@ aba_info "Adding mirror registry CA cert to registry config ..."
 
 if [ -s "$regcreds_dir/rootCA.pem" ]; then
         ca_cert="$(cat "$regcreds_dir/rootCA.pem" | sed ':a;N;$!ba;s/\n/\\n/g')"
-        aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
+        aba_info "Using root CA file at $regcreds_display/rootCA.pem"
 	kubectl patch configmap registry-config -n openshift-config --type='merge' -p '{"data":{"updateservice-registry":"'"$ca_cert"'"}}'
 else
-	aba_abort "No root CA file found at $regcreds_dir/rootCA.pem.  Is the mirror registry available?"
+	aba_abort "No root CA file found at $regcreds_display/rootCA.pem.  Is the mirror registry available?"
 fi
 
 #####################

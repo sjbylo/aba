@@ -16,6 +16,7 @@ aba_debug "Starting: $0 $*"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+export regcreds_display="regcreds"
 
 pull_secret_file="$1"
 ca_cert_file="$2"
@@ -80,12 +81,12 @@ fi
 mkdir -p "$regcreds_dir"
 
 # Copy pull secret (validated above to contain reg_host:reg_port)
-aba_info "Copying pull secret to $regcreds_dir/pull-secret-mirror.json"
+aba_info "Copying pull secret to $regcreds_display/pull-secret-mirror.json"
 cp "$pull_secret_file" "$regcreds_dir/pull-secret-mirror.json"
 chmod 600 "$regcreds_dir/pull-secret-mirror.json"
 
 # Copy CA cert
-aba_info "Copying CA cert to $regcreds_dir/rootCA.pem"
+aba_info "Copying CA cert to $regcreds_display/rootCA.pem"
 cp "$ca_cert_file" "$regcreds_dir/rootCA.pem"
 chmod 644 "$regcreds_dir/rootCA.pem"
 
@@ -99,9 +100,9 @@ reg_host=$reg_host
 reg_port=$reg_port
 reg_installed_at="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
-aba_info "Saved registry state to $regcreds_dir/state.sh"
+aba_info "Saved registry state to $regcreds_display/state.sh"
 
 echo
 aba_info_ok "Existing registry registered: $reg_host:$reg_port"
-aba_info "Credentials stored in: $regcreds_dir/"
+aba_info "Credentials stored in: $regcreds_display/"
 aba_info "Run 'aba -d $(basename $PWD) verify' to confirm connectivity."

@@ -17,6 +17,7 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)  # used to check int_connection value
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_display="${mirror_name:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -84,7 +85,7 @@ cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
 if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
 	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
-	aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
+	aba_info "Using root CA file at $regcreds_display/rootCA.pem"
 
 	aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
 	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -

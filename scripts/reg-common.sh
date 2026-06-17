@@ -42,6 +42,7 @@ reg_load_config() {
 	source <(normalize-aba-conf)
 	source <(normalize-mirror-conf)
 	export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+	export regcreds_display="regcreds"
 
 	verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 	verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
@@ -432,7 +433,7 @@ reg_post_install() {
 	if [ ! "$reg_user" ]; then reg_user=init; fi
 
 	# Generate pull secret from template (uses enc_password, reg_host, reg_port)
-	aba_info "Generating $regcreds_dir/pull-secret-mirror.json"
+	aba_info "Generating $regcreds_display/pull-secret-mirror.json"
 	export enc_password
 	enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)
 	scripts/j2 ./templates/pull-secret-mirror.json.j2 > "$regcreds_dir/pull-secret-mirror.json"
@@ -451,7 +452,7 @@ reg_post_install() {
 	reg_fw_opened=${_reg_fw_opened:-}
 	reg_installed_at="$(date '+%Y-%m-%d %H:%M:%S')"
 	EOF
-	aba_info "Saved registry state to $regcreds_dir/state.sh"
+	aba_info "Saved registry state to $regcreds_display/state.sh"
 
 	# Backup mirror.conf + marker files for dir recreation (ADR-007)
 	mkdir -p "$regcreds_dir/backup"

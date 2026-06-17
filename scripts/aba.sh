@@ -25,8 +25,9 @@ ABA_VERSION=1.1.0
 # Build timestamp (updated by build/pre-commit-checks.sh)
 ABA_BUILD=20260615000042
 
-# Sanity check build timestamp
+# Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
+echo -n "$ABA_VERSION" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+" || { echo "ABA_VERSION in $0 is corrupt [$ABA_VERSION]! Must be semver (e.g. 1.1.0). Fix and try again." >&2 && exit 1; }
 echo -n $ABA_BUILD | grep -qE "^[0-9]{14}$" || { echo "ABA_BUILD in $0 is incorrect [$ABA_BUILD]! Fix the format to YYYYMMDDhhmmss and try again!" >&2 && exit 1; }
 
 # Map uname -m to OpenShift architecture names (s390x/ppc64le stay as-is)

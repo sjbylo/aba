@@ -9,6 +9,7 @@ source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_display="${mirror_name:-mirror}/regcreds"
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
@@ -40,6 +41,7 @@ else
 	check_release_image || aba_abort \
 		"Cannot access the release image for OpenShift v$ocp_version (HTTP ${_release_http_code:-?})" \
 		"${_release_check_err:+Error: $_release_check_err}" \
+		"${_release_check_extra[@]}" \
 		"Run 'aba -d mirror verify' for detailed diagnostics."
 fi
 

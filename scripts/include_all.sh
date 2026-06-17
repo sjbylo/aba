@@ -2089,7 +2089,7 @@ trust_root_ca() {
 		else
 			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
-			aba_info "Cert '$regcreds_dir/rootCA.pem' updated in system trust"
+			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
 	else
 		aba_info "No $1 cert file found" 
@@ -3326,7 +3326,7 @@ ensure_openshift_install() {
 # Requires: ocp_version (from normalize-aba-conf)
 # Requires: reg_host, reg_port, reg_path, regcreds_dir (from normalize-mirror-conf)
 # Returns: 0 if available, 1 if not.
-# Sets: _release_ver, _release_http_code, _release_check_err, _registry_auth_ok
+# Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
 	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
@@ -3339,6 +3339,7 @@ check_release_image() {
 	_release_ver="$ocp_version"
 	_release_http_code=""
 	_release_check_err=""
+	_release_check_extra=()
 	_registry_auth_ok=false
 
 	local _b64auth _userpass _curl_opts
@@ -3351,6 +3352,20 @@ check_release_image() {
 	if [ -z "$_b64auth" ] || [ "$_b64auth" = "null" ]; then
 		_release_http_code="401"
 		_release_check_err="no credentials in pull secret for $reg_host:$reg_port"
+		# Show what the pull secret actually contains to reveal hostname mismatches
+		local _available_hosts
+		_available_hosts=$(jq -r '.auths | keys[]' "$_authfile" 2>/dev/null | paste -sd ', ')
+		if [ -n "$_available_hosts" ]; then
+			_release_check_extra+=("Pull secret has credentials for: $_available_hosts")
+			# Suggest fix if there's exactly one entry on the same port
+			local _same_port
+			_same_port=$(jq -r ".auths | keys[] | select(endswith(\":$reg_port\"))" "$_authfile" 2>/dev/null)
+			if [ -n "$_same_port" ] && [ "$(echo "$_same_port" | wc -l)" -eq 1 ]; then
+				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")
+			fi
+		fi
+		_release_check_extra+=("Config: ${mirror_name:-mirror}/mirror.conf (reg_host=$reg_host)")
+		_release_check_extra+=("Pull secret: ${regcreds_display:-$regcreds_dir}/pull-secret-mirror.json")
 		return 1
 	fi
 
