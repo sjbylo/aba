@@ -15,6 +15,14 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 # =============================================================================
+# Global state: mirror recheck flag
+# =============================================================================
+# Set true on startup (initial mirror probe) and by _invalidate_mirror_cache()
+# after mirror-changing actions. The menu loop waits for the background check
+# only when this is true, then resets it.
+_TUI_NEED_MIRROR_RECHECK=true
+
+# =============================================================================
 # Logging
 # =============================================================================
 
@@ -770,64 +778,43 @@ mirror_state_label() {
 }
 
 # Invalidate mirror verify and kick off a fresh background check.
-# Called after sync, save, load, or install operations.
+# Called after sync, load, install, or uninstall operations.
 # Non-blocking: the check runs in background while the user reads results.
+# Also sets _TUI_NEED_MIRROR_RECHECK so the menu loop re-probes on next draw.
 _invalidate_mirror_cache() {
+	_TUI_NEED_MIRROR_RECHECK=true
 	aba_mirror_verify_refresh
 }
 
-# Offer to run day2 on installed clusters after a mirror load/sync.
+# Inform user about day2 after mirror load/sync.
+# Shows only clusters that use this mirror (int_connection unset = mirror mode).
 # Must be called AFTER confirm_and_execute returns (not from a post_cmd_hook)
 # to avoid nested execution and confusing dialog ordering.
 _offer_day2_after_mirror_update() {
-	local _clusters
-	_clusters=$(list_installed_clusters)
-	[[ -z "$_clusters" ]] && return 0
+	local _cl _list="" _int_conn
 
-	local _count=0 _list="" _cl
-	for _cl in $_clusters; do
-		_count=$(( _count + 1 ))
-		_list="${_list}\n  • $(cluster_display_name "$_cl")"
+	for _cl in $(list_installed_clusters); do
+		# Check if cluster uses the mirror (int_connection empty = mirror mode)
+		_int_conn=$(
+			int_connection=""
+			# shellcheck disable=SC1090
+			source <(cd "$ABA_ROOT/$_cl" && normalize-cluster-conf) 2>/dev/null || true
+			echo "${int_connection:-}"
+		)
+		[[ -n "$_int_conn" ]] && continue
+		_list="${_list}\n  - $(cluster_display_name "$_cl")"
 	done
 
-	if [[ $_count -eq 1 ]]; then
-		_cl=$(echo "$_clusters" | head -1)
-		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
-			--yes-label "Yes, apply now" \
-			--no-label "No, later" \
-			--yesno "Mirror updated successfully.\n\n\
-Your cluster $(cluster_display_name "$_cl") needs updated\n\
-OperatorHub configuration to use the new images.\n\n\
-Run 'Configure OperatorHub' (aba day2) now?" 0 0
-		[[ $? -ne 0 ]] && return 0
-		confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $(cluster_display_name "$_cl")"
-	else
-		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
-			--yes-label "Yes, apply to all" \
-			--no-label "No, later" \
-			--extra-button --extra-label "Select..." \
-			--yesno "Mirror updated successfully.\n\n\
-$_count cluster(s) need updated OperatorHub configuration:$_list\n\n\
-Run 'Configure OperatorHub' (aba day2) now?" 0 0
-		local _rc=$?
-		case $_rc in
-			0)
-				for _cl in $_clusters; do
-					confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $(cluster_display_name "$_cl")"
-					[[ $? -ne 0 ]] && break
-				done
-				;;
-			3)
-				# "Select..." — let user pick via the existing Day-2 menu workflow
-				select_installed_cluster "Configure OperatorHub" "Select cluster to configure:"
-				[[ $? -ne 0 ]] && return 0
-				confirm_and_execute "aba --dir $SELECTED_CLUSTER day2" "Configure OperatorHub: $SELECTED_CLUSTER_DISPLAY"
-				;;
-			*)
-				return 0
-				;;
-		esac
-	fi
+	[[ -z "$_list" ]] && return 0
+
+	dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+		--msgbox "Mirror updated successfully.\n\n\
+Installed clusters using this mirror:$_list\n\n\
+Run 'aba day2' on those clusters, if you have:\n\
+  - Added or changed operators\n\
+  - Updated the OCP release image\n\n\
+CLI:  aba --dir <cluster> day2\n\
+TUI:  Cluster > Day-2 > Configure OperatorHub" 0 0
 }
 
 # Is a cluster configured? (cluster.conf exists in given dir)

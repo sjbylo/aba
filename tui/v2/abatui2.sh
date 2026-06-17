@@ -484,26 +484,18 @@ _conno_main() {
 	# Separators (space tags) visually group mirror, transfer, and cluster ops.
 	local default_item="$TUI2_CONNO_TAG_VIEW_ISC"
 
-	# --- Menu state recheck optimization ---
-	# IMPORTANT: _conno_need_recheck controls whether expensive state checks
-	# (aba_mirror_verify_wait, mirror_available, tui_cluster_menu_flags) run
-	# before redrawing the menu. Set to "true" on first entry and after any
-	# action that can change mirror/cluster state. Actions that only touch
-	# config files or display info (Settings, Help, View ISC, Select Operators,
-	# Rerun Wizard, Save, Bundle) set it to "false" — avoiding a blocking
-	# pause on every menu redraw.
-	local _conno_need_recheck=true
-
+	# --- Menu loop: no per-action flag assignments needed ---
+	# _TUI_NEED_MIRROR_RECHECK is set only by _invalidate_mirror_cache()
+	# (called automatically after sync, load, install, uninstall via
+	# confirm_and_execute post-hook). The background check starts immediately
+	# after the action, so by the time the user presses OK and the menu
+	# redraws, the check is usually already complete.
 	while :; do
-		# Only re-probe internet when state may have changed (same gate as mirror/cluster checks).
-		# Internet status is external — it can't change due to TUI actions like Settings or View ISC.
-		if [[ "$_conno_need_recheck" == "true" ]]; then
-			if aba_inet_check_cached 120; then
-				_TUI_INET="yes"
-			else
-				_TUI_INET="no"
-			fi
+		# Internet: runs independently on 120s TTL cache (fast when warm)
+		if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking connectivity..." 3 35
 		fi
+		if aba_inet_check_cached 120; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
 		local items=()
 
@@ -529,48 +521,34 @@ _conno_main() {
 			bndl_label="$TUI2_LABEL_BUNDLE $TUI2_STATUS_NO_INTERNET"
 		fi
 
-		# Only run expensive state checks when a previous action may have
-		# changed mirror/cluster state. Skipping these eliminates the blocking
-		# pause after harmless actions like Settings or View ISC.
-		if [[ "$_conno_need_recheck" == "true" ]]; then
-			# Wait for any in-flight mirror verify before computing labels.
+		# Mirror recheck: only when _invalidate_mirror_cache fired after a
+		# mirror-changing action (sync, load, install, uninstall).
+		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
+			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+				dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking mirror..." 3 30
+			fi
 			aba_mirror_verify_wait
-
-			if mirror_available && _mirror_has_release_image; then
-				mirr_avail=false
-				mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
-				# Mirror has release image → sync was successful
-				if [[ "$sync_avail" == "true" ]]; then
-					sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
-				fi
-			elif mirror_available; then
-				mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
-			fi
-
-			# Save status: tar archives exist in mirror/data/
-			if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
-				save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
-			fi
-
-			# Cluster operations — Install uses unified gate; grey Day-2 until clusters exist.
-			tui_cluster_menu_flags CONNO
-		else
-			# Reuse cached mirror state from last check
-			if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
-				if _mirror_has_release_image; then
-					mirr_avail=false
-					mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
-					if [[ "$sync_avail" == "true" ]]; then
-						sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
-					fi
-				else
-					mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
-				fi
-			fi
-			if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
-				save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
-			fi
+			_TUI_NEED_MIRROR_RECHECK=false
 		fi
+
+		# Refresh mirror labels from cached state (non-blocking)
+		if mirror_available && _mirror_has_release_image; then
+			mirr_avail=false
+			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
+			if [[ "$sync_avail" == "true" ]]; then
+				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			fi
+		elif mirror_available; then
+			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
+		fi
+
+		# Save status: tar archives exist in mirror/data/
+		if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
+			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
+		fi
+
+		# Cluster flags (instant — marker file checks only)
+		tui_cluster_menu_flags CONNO
 
 		local inst_label="${_CLUSTER_INST_LABEL}"
 		local day2_label="$TUI2_LABEL_DAY2"
@@ -666,13 +644,11 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" && mirror_install
+					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && mirror_install
 				fi
 			else
 				mirror_install
 			fi
-			# RECHECK: may have installed/uninstalled mirror registry
-			_conno_need_recheck=true
 			;;
 		"$TUI2_CONNO_TAG_SAVE")
 			if [[ "$_TUI_INET" == "no" ]]; then
@@ -680,8 +656,6 @@ Navigation:
 			else
 				mirror_save
 			fi
-			# NO RECHECK: save only writes archive files to disk
-			_conno_need_recheck=false
 			;;
 	"$TUI2_CONNO_TAG_PREP_UPGRADE")
 		if [[ "$_TUI_INET" == "no" ]]; then
@@ -689,8 +663,6 @@ Navigation:
 		else
 			mirror_prep_upgrade
 		fi
-		# NO RECHECK: only writes archive files to disk
-		_conno_need_recheck=false
 		;;
 	"$TUI2_CONNO_TAG_SYNC")
 		if [[ "$_TUI_INET" == "no" ]]; then
@@ -704,13 +676,9 @@ Navigation:
 			else
 				mirror_sync
 			fi
-			# RECHECK: sync pushes images into registry (changes check-image result)
-			_conno_need_recheck=true
 			;;
 			"$TUI2_CONNO_TAG_VIEW_ISC")
 				mirror_view_isc "false"
-				# NO RECHECK: only edits a config file
-				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_OPERATORS")
 				if [[ "$ops_avail" == "false" ]]; then
@@ -718,8 +686,6 @@ Navigation:
 				else
 					mirror_select_operators
 				fi
-				# NO RECHECK: only edits operator selection lists
-				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_BUNDLE")
 				if [[ "$bndl_avail" == "false" ]]; then
@@ -727,8 +693,6 @@ Navigation:
 				else
 					mirror_create_bundle
 				fi
-				# NO RECHECK: bundle only writes a tar to disk
-				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_INSTALL")
 				tui_install_cluster_gate CONNO
@@ -736,8 +700,6 @@ Navigation:
 				0) cluster_install_flow ;;
 				3) ;;  # gate already invoked cluster_install_flow after sync
 				esac
-				# RECHECK: may have created/installed a cluster
-				_conno_need_recheck=true
 				;;
 			"$TUI2_CONNO_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -745,24 +707,16 @@ Navigation:
 				else
 					cluster_day2_menu
 				fi
-				# RECHECK: day2 sub-menu may delete clusters or change state
-				_conno_need_recheck=true
 				;;
 			"$TUI2_CONNO_TAG_SETTINGS")
 				_tui_settings_menu
-				# NO RECHECK: only changes config values (ask, reg_vendor, retry)
-				_conno_need_recheck=false
 				;;
 			"$TUI2_CONNO_TAG_ADVANCED")
 				tui_advanced_menu
-				# RECHECK: advanced menu may uninstall mirror or delete clusters
-				_conno_need_recheck=true
 				;;
 			"$TUI2_CONNO_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-				# NO RECHECK: wizard only changes channel/version/platform in aba.conf
-				_conno_need_recheck=false
 				;;
 		esac
 	done

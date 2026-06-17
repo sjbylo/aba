@@ -487,7 +487,7 @@ _mirror_op_confirm() {
 mirror_save() {
 	tui_log "Action: Save Images"
 	_mirror_op_confirm "$TUI2_LABEL_SAVE" || return 1
-	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE" _invalidate_mirror_cache
+	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE"
 	local rc=$?
 	return $rc
 }
@@ -558,8 +558,7 @@ Proceed?" 0 0
 
 	confirm_and_execute \
 		"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
-		"Prepare Upgrade: ${_current_ver} → ${_target_ver}" \
-		_invalidate_mirror_cache
+		"Prepare Upgrade: ${_current_ver} → ${_target_ver}"
 	local rc=$?
 
 	if [[ $rc -eq 0 ]]; then
