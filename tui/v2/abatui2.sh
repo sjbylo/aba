@@ -215,7 +215,7 @@ OP_SET_ADDED=()
 # Restore basket from aba.conf (config files = single source of truth)
 # Handles both ops= (comma-separated operators) and op_sets= (comma-separated set names)
 # Validates each operator against the catalog index for the current OCP version
-_ver_short="${ocp_version%.*}"
+_ver_short=$(_ver_minor "$ocp_version")
 
 # Restore individual operators from ops=
 if [[ -n "${ops:-}" ]]; then

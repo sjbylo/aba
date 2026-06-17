@@ -1490,8 +1490,8 @@ _resolve_minor_to_patch() {
 	local _ver="$1"
 	local _channel="${2:-stable}"
 
-	# Already x.y.z? Return as-is
-	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	# Already x.y.z or x.y.z-rc.N? Return as-is
+	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 		echo "$_ver"
 		return 0
 	fi
