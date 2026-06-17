@@ -268,28 +268,6 @@ aba
 
 Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
 
-#### Pre-release versions (RC / EC)
-
-ABA supports installing OpenShift Release Candidates (RC) and Engineering Candidates (EC) for testing purposes:
-
-```bash
-aba --channel candidate --version 4.22.0-rc.1
-aba --channel candidate --version 5.0.0-ec.3
-```
-
-Or set directly in `aba.conf`:
-
-```
-ocp_channel=candidate
-ocp_version=4.22.0-rc.1
-```
-
-- Pre-release format: `X.Y.Z-rc.N` (release candidate) or `X.Y.Z-ec.N` (engineering candidate). The suffix must be lowercase.
-- Use the `candidate` channel for pre-release versions.
-- ABA shows a warning: `Pre-release version '…' — not for production use.`
-- EC versions automatically download CLI tools from the `ocp-dev-preview/` CDN path.
-- Pre-release versions work with `aba save`, `aba bundle`, `aba load`, and cluster install — the same workflow as GA versions.
-
 **TUI (Text User Interface):** For a guided wizard experience:
 
 ```bash
@@ -1516,6 +1494,28 @@ scripts/listopdeps.sh 4.18 odf-operator
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 ```
 
+## Pre-release Versions (RC / EC)
+
+ABA supports installing OpenShift Release Candidates (RC) and Engineering Candidates (EC) for testing purposes:
+
+```bash
+aba --channel candidate --version 4.22.0-rc.1
+aba --channel candidate --version 5.0.0-ec.3
+```
+
+Or set directly in `aba.conf`:
+
+```
+ocp_channel=candidate
+ocp_version=4.22.0-rc.1
+```
+
+- Pre-release format: `X.Y.Z-rc.N` (release candidate) or `X.Y.Z-ec.N` (engineering candidate). The suffix must be lowercase.
+- Use the `candidate` channel for pre-release versions.
+- ABA shows a warning: `Pre-release version '…' — not for production use.`
+- EC versions automatically download CLI tools from the `ocp-dev-preview/` CDN path.
+- Pre-release versions follow the same workflow as GA versions — no special steps required.
+
 ## Uninstalling ABA
 
 Run on the disconnected bastion:
@@ -1591,6 +1591,12 @@ See `scripts/reg-install-docker.sh` and `scripts/reg-install.sh` for details.
 ---
 
 ### Configuration
+
+## Q: Can I install a pre-release (RC or EC) version of OpenShift?
+
+**Yes.** Use `--channel candidate --version X.Y.Z-rc.N` (or `-ec.N`). See [Pre-release Versions (RC / EC)](#pre-release-versions-rc--ec) in Advanced Topics for details.
+
+---
 
 ## Q: Can bonds and/or VLAN be configured on my nodes?
 
