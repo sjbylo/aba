@@ -3489,8 +3489,10 @@ aba_mirror_verify_refresh() {
 }
 
 # Wait for check-image to complete (blocking). For use after sync/load/install.
+# Uses -S (skip validation) because _invalidate_mirror_cache already started a
+# fresh check — re-running it would add a redundant 4-5s delay.
 aba_mirror_verify_wait() {
-	run_once -q -w -i "aba:mirror:check-image" 2>/dev/null || true
+	run_once -q -w -S -i "aba:mirror:check-image" 2>/dev/null || true
 }
 
 # Get cached exit code (non-blocking, for menu rendering). Echoes exit code.
@@ -3530,9 +3532,10 @@ aba_inet_check_cached() {
 	local ttl="${1:-30}"
 	run_once -i "aba:check:internet" -t "$ttl" -- \
 		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet" 2>/dev/null
-	# If no result exists yet (first call or after TTL expiry), wait for the check to complete
+	# If no result exists yet (first call or after TTL expiry), wait for the check to complete.
+	# Uses -S: TTL already ensures freshness — self-healing validation is redundant here.
 	if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
-		run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+		run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
 	fi
 	run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'
 }
