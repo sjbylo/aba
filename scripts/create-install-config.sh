@@ -42,6 +42,7 @@ aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_display="${mirror_name:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 [ "$platform" = "vmw" ] && source <(normalize-vmware-conf)  # vSphere values needed for install-config.yaml
 [ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
@@ -135,23 +136,34 @@ if [ "$use_mirror" ]; then
 	aba_info "Validating credentials of mirror registry ..."
 
 	if [ -s "$regcreds_dir/pull-secret-mirror.json" ]; then
+		# Early check: does the pull secret have credentials for the configured reg_host?
+		_ps_auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$regcreds_dir/pull-secret-mirror.json" 2>/dev/null)
+		if [ -z "$_ps_auth" ] || [ "$_ps_auth" = "null" ]; then
+			_ps_hosts=$(jq -r '.auths | keys[]' "$regcreds_dir/pull-secret-mirror.json" 2>/dev/null | paste -sd ', ')
+			aba_warning \
+				"Pull secret has no credentials for $reg_host:$reg_port" \
+				"Pull secret contains: ${_ps_hosts:-(empty)}" \
+				"Check that reg_host/reg_port in ${mirror_name:-mirror}/mirror.conf match your registry" \
+				"Pull secret: $regcreds_display/pull-secret-mirror.json"
+		fi
+
 		export pull_secret=$(cat "$regcreds_dir/pull-secret-mirror.json") 
 
-		aba_info Using mirror registry pull secret file at "$regcreds_dir/pull-secret-mirror.json" to access registry at: $reg_host
+		aba_info "Using mirror registry pull secret file at $regcreds_display/pull-secret-mirror.json to access registry at: $reg_host"
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	elif [ -s "$regcreds_dir/pull-secret-full.json" ]; then
 		export pull_secret=$(cat "$regcreds_dir/pull-secret-full.json") 
 
-		aba_info Using mirror registry pull secret file at "$regcreds_dir/pull-secret-full.json" to access registry at: $reg_host
+		aba_info "Using mirror registry pull secret file at $regcreds_display/pull-secret-full.json to access registry at: $reg_host"
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
 		aba_warning -p Attention \
 			"Expected to find mirror credentials but found none!" \
-			"No pull secret files found in directory: $regcreds_dir" \
+			"No pull secret files found in directory: $regcreds_display/" \
 			"A mirror registry has NOT been installed or configured!  See: aba mirror --help"
 
 		show_mirror_missing_err=1
@@ -160,7 +172,7 @@ if [ "$use_mirror" ]; then
 	# ... we also, need a root CA... if using our own registry.
 	if [ -s "$regcreds_dir/rootCA.pem" ]; then
 		export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
-		aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
+		aba_info "Using root CA file at $regcreds_display/rootCA.pem"
 	else
 		# Only show this warning IF there is no internet connection?
 		# Or, only show if proxy is NOT being used?
@@ -169,7 +181,7 @@ if [ "$use_mirror" ]; then
 		#else
 		# Should check accessibility to registry.redhat.io?
 			aba_warning -p Attention \
-				"Root CA file missing: $regcreds_dir/rootCA.pem" \
+				"Root CA file missing: $regcreds_display/rootCA.pem" \
 				"No mirror registry available!" \
 				"No value: additionalTrustBundle will be added to install-config.yaml"
 

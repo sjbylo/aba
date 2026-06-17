@@ -36,6 +36,7 @@ aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+export regcreds_display="regcreds"
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
@@ -82,7 +83,7 @@ if [ -s "$regcreds_dir/rootCA.pem" ]; then
 	aba_debug "Installing root CA certificate"
 	trust_root_ca "$regcreds_dir/rootCA.pem" # FIXME: Is this required here since the rootCA.pem is installed after reg install?
 else
-	aba_warning "No $regcreds_dir/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+	aba_warning "No $regcreds_display/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
 [ ! "$data_dir" ] && data_dir=\~
