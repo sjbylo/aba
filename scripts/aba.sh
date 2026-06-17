@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=20260617141158
+ABA_VERSION=1.1.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260615000042
+ABA_BUILD=20260617141427
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
