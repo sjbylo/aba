@@ -268,6 +268,28 @@ aba
 
 Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
 
+#### Pre-release versions (RC / EC)
+
+ABA supports installing OpenShift Release Candidates (RC) and Engineering Candidates (EC) for testing purposes:
+
+```bash
+aba --channel candidate --version 4.22.0-rc.1
+aba --channel candidate --version 5.0.0-ec.3
+```
+
+Or set directly in `aba.conf`:
+
+```
+ocp_channel=candidate
+ocp_version=4.22.0-rc.1
+```
+
+- Pre-release format: `X.Y.Z-rc.N` (release candidate) or `X.Y.Z-ec.N` (engineering candidate). The suffix must be lowercase.
+- Use the `candidate` channel for pre-release versions.
+- ABA shows a warning: `Pre-release version '…' — not for production use.`
+- EC versions automatically download CLI tools from the `ocp-dev-preview/` CDN path.
+- Pre-release versions work with `aba save`, `aba bundle`, `aba load`, and cluster install — the same workflow as GA versions.
+
 **TUI (Text User Interface):** For a guided wizard experience:
 
 ```bash
@@ -437,7 +459,7 @@ aba bundle \
     --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_
 ```
 
-- This generates several 10 GB archive files named `ocp_mycluster_4.17.16_aa|ab|ac...` etc.
+- This generates several 10 GB archive files named `ocp_mycluster_4.22.1_aa|ab|ac...` etc.
 - The OpenShift version can be set to the most recent previous point version (`--version p`) or to the latest (`--version l`).
 - `--op-sets` refers to predefined sets of operators (run `aba show-op-sets` to list them). Create your own operator set file in `aba/templates/` if needed.
 - `--ops` adds individual operators.
@@ -449,20 +471,20 @@ aba bundle \
 After the bundle is created, verify the files:
 
 ```
-cat ocp_mycluster_4.17.16_* | tar tvf -
-cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt
+cat ocp_mycluster_4.22.1_* | tar tvf -
+cksum ocp_mycluster_4.22.1_* | tee CHECKSUM.txt
 ```
 
 Copy the files to your RHEL 8/9 bastion in the disconnected environment. Verify integrity:
 
 ```
-cksum ocp_mycluster_4.17.16_*
+cksum ocp_mycluster_4.22.1_*
 ```
 
 If valid, extract and install:
 
 ```
-cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
+cat /path/to/ocp_mycluster_4.22.1_* | tar xvf -
 cd aba
 ./install
 aba         # Follow the instructions
@@ -953,7 +975,7 @@ aba day2-osus
 1. On the *connected workstation*, set the target version and save the upgrade images:
 
 ```bash
-aba -d mirror --target-version 4.21.11 save
+aba -d mirror --target-version 4.22.1 save
 ```
 
 This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images.
@@ -965,7 +987,7 @@ This automatically configures the ImageSetConfiguration with `shortestPath`, `mi
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
-aba -d <cluster name> upgrade --to 4.21.11     # Perform the upgrade
+aba -d <cluster name> upgrade --to 4.22.1      # Perform the upgrade
 ```
 
 Or upgrade OpenShift via the Console or CLI in the usual way.
@@ -987,7 +1009,7 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 1. On the *connected bastion*, set the target version and sync directly to the registry:
 
 ```bash
-aba -d mirror --target-version 4.21.11 sync
+aba -d mirror --target-version 4.22.1 sync
 ```
 
 2. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
@@ -995,7 +1017,7 @@ aba -d mirror --target-version 4.21.11 sync
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
-aba -d <cluster name> upgrade --to 4.21.11     # Perform the upgrade
+aba -d <cluster name> upgrade --to 4.22.1      # Perform the upgrade
 ```
 
 Or upgrade OpenShift via the Console or CLI in the usual way.
