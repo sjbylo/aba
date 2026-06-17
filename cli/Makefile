@@ -264,11 +264,30 @@ $(openshift_install_file):
 	@echo [ABA] Downloading $(openshift_install_url)/$(openshift_install_file)
 	$(call atomic-download,$(openshift_install_url)/$(openshift_install_file),$(openshift_install_url)/sha256sum.txt)
 
-# oc-mirror pin: stable-4.21 is intentional -- new oc-mirror versions must be tested before adoption.
-# Hardcoded to openshift-v4 (NOT parameterized) because oc-mirror is version-independent
-# and must be well-tested before any upgrade. The --no-version download path also requires
-# this URL to work without ocp_version being set.
-oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.21
+# oc-mirror download URL.
+# oc-mirror is a version-independent tool — a single binary works with any OCP release.
+# We pin to a tested stable channel rather than deriving from ocp_version, because
+# oc-mirror must be well-tested before adoption.
+#
+# Logic:
+#   - EC (engineering candidate): use the exact dev-preview path for that version
+#     (EC builds may bundle an oc-mirror with unreleased features needed for that EC)
+#   - OCP 5.x (non-EC): use stable-5.0 (first stable 5.x channel)
+#   - OCP 4.x (non-EC): use stable-4.22 (tested, known-good)
+#   - No version set: fall back to stable-4.22 (safe default for --no-version path)
+#
+# When a new oc-mirror version is tested and validated, bump the pin here.
+ifneq ($(ocp_version),)
+  ifneq ($(findstring -ec.,$(ocp_version)),)
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp-dev-preview/$(ocp_version)
+  else ifeq ($(ocp_major),5)
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v5/$(arch)/clients/ocp/stable-5.0
+  else
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
+  endif
+else
+  oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
+endif
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz:
