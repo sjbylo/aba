@@ -354,9 +354,9 @@ TUI2_MSG_PULL_SECRET_FOUND="Pull secret found at:\n\n  %s\n"
 TUI2_MSG_PULL_SECRET_PASTE="Paste your pull secret JSON:"
 TUI2_MSG_PULL_SECRET_EMPTY="No pull secret entered."
 TUI2_MSG_PULL_SECRET_INVALID="Invalid JSON. Please try again."
-TUI2_MSG_VERSION_ENTRY="Enter version (x.y.z):"
+TUI2_MSG_VERSION_ENTRY="Enter version (x.y.z or x.y.z-rc.N):"
 TUI2_MSG_VERSION_MENU="Select OpenShift version (%s channel):"
-TUI2_MSG_VERSION_MANUAL_PROMPT="Cannot fetch versions automatically.\n\nEnter OpenShift version manually (x.y.z):"
+TUI2_MSG_VERSION_MANUAL_PROMPT="Cannot fetch versions automatically.\n\nEnter OpenShift version manually (x.y.z or x.y.z-rc.N):"
 TUI2_MSG_VERSION_FETCH_FAIL="Cannot fetch version data (no internet?).\n\nUsing existing version: %s"
 
 # =============================================================================

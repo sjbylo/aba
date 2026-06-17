@@ -587,7 +587,8 @@ resume_from_conf() {
 	
 	log "Initializing global arrays in resume_from_conf"
 	
-	local _ver_short="${OCP_VERSION%.*}"
+	local _ver_short
+	_ver_short=$(_ver_minor "$OCP_VERSION")
 
 	if [[ -n "${ops:-}" ]]; then
 		log "Restoring ops from aba.conf: $ops"
@@ -1157,9 +1158,10 @@ Try:
   • Or enter a different version" 0 0 || true
 						# Loop continues
 					fi
-				elif [[ "$OCP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-					# x.y.z format - validate using Cincinnati graph (cached)
-					local minor="${OCP_VERSION%.*}"  # 4.18.10 → 4.18
+			elif [[ "$OCP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+				# x.y.z or x.y.z-rc.N format - validate using Cincinnati graph (cached)
+				local minor
+				minor=$(_ver_minor "$OCP_VERSION")  # 4.18.10 → 4.18, 4.21.0-rc.3 → 4.21
 					log "Detected x.y.z format, validating: $OCP_VERSION (minor: $minor)"
 					dialog --backtitle "$(ui_backtitle)" --infobox "Verifying $OCP_VERSION in $OCP_CHANNEL channel..." 5 80
 					
@@ -1286,7 +1288,8 @@ Try again." 0 0 || true
 		0)
 		# Yes/Next - User confirmed, now start background downloads
 		log "User confirmed version selection, starting background downloads"
-		local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
+		local version_short
+		version_short=$(_ver_minor "$OCP_VERSION")  # 4.20.8 -> 4.20, 4.21.0-rc.3 -> 4.21
 		
 		# Now that ocp_version is in aba.conf, download ALL CLIs (needs version)
 		log "Starting all CLI downloads (aba.conf now has ocp_version)"
@@ -1923,7 +1926,7 @@ add_set_to_basket() {
 		[[ -z "$op" ]] && continue
 
 		# Validate operator exists in catalog index for the current OCP version
-		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/*-index-v${OCP_VERSION%.*} 2>/dev/null; then
+		if grep -q "^$op[[:space:]]" "$ABA_ROOT"/.index/*-index-v$(_ver_minor "$OCP_VERSION") 2>/dev/null; then
 			log "Adding operator from set: $op (validated in catalog)"
 			OP_BASKET["$op"]=1
 			((added++))
@@ -1953,7 +1956,8 @@ select_operators() {
 	run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
 	
 	# Ensure catalog indexes are available for operator sets AND search
-	local version_short="${OCP_VERSION%.*}"  # 4.20.8 -> 4.20
+	local version_short
+	version_short=$(_ver_minor "$OCP_VERSION")  # 4.20.8 -> 4.20, 4.21.0-rc.3 -> 4.21
 	log "Checking catalog indexes for version ${version_short}..."
 
 	# Populate .index/ from shipped catalogs if missing
@@ -2269,7 +2273,7 @@ image synchronization process." 0 0 || true
 				[[ -n "${seen_ops[$op_name]:-}" ]] && continue
 				seen_ops["$op_name"]=1
 				echo "$line"
-			done < <(cat "$ABA_ROOT"/.index/*-index-v${OCP_VERSION%.*} 2>/dev/null)
+			done < <(cat "$ABA_ROOT"/.index/*-index-v$(_ver_minor "$OCP_VERSION") 2>/dev/null)
 		)
 		
 		# Now progressively filter by each search term

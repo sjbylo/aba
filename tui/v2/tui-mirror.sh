@@ -519,17 +519,20 @@ mirror_prep_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
 			continue
 		fi
-		if ! [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		if ! [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"Invalid version format: '$_target_ver'\n\nExpected: X.Y.Z (e.g. 4.21.16)" 0 0
+				"Invalid version format: '$_target_ver'\n\nExpected: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.16 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
 
 		# Reject downgrade or same-version (only upgrades make sense here)
-		if [[ "$_current_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		if [[ "$_current_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 			local _cur_major _cur_minor _cur_patch _tgt_major _tgt_minor _tgt_patch
-			IFS='.' read -r _cur_major _cur_minor _cur_patch <<< "$_current_ver"
-			IFS='.' read -r _tgt_major _tgt_minor _tgt_patch <<< "$_target_ver"
+			# Strip pre-release suffix before arithmetic (e.g. 4.21.0-rc.3 → 4.21.0)
+			local _cur_clean="${_current_ver%%-*}"
+			local _tgt_clean="${_target_ver%%-*}"
+			IFS='.' read -r _cur_major _cur_minor _cur_patch <<< "$_cur_clean"
+			IFS='.' read -r _tgt_major _tgt_minor _tgt_patch <<< "$_tgt_clean"
 			local _cur_num=$(( _cur_major * 1000000 + _cur_minor * 1000 + _cur_patch ))
 			local _tgt_num=$(( _tgt_major * 1000000 + _tgt_minor * 1000 + _tgt_patch ))
 			if [[ $_tgt_num -le $_cur_num ]]; then
@@ -796,7 +799,8 @@ mirror_select_operators() {
 
 	tui_log "Action: Select Operators"
 
-	local version_short="${ocp_version%.*}"
+	local version_short
+	version_short=$(_ver_minor "$ocp_version")
 
 	# Ensure catalogs are available
 	if ! tui_ensure_catalogs_ready "$version_short"; then
@@ -1110,7 +1114,8 @@ _operator_view_basket() {
 		return
 	fi
 
-	local version_short="${ocp_version%.*}"
+	local version_short
+	version_short=$(_ver_minor "$ocp_version")
 	local items=()
 	local op display_name line
 	for op in $(echo "${!OP_BASKET[@]}" | tr ' ' '\n' | sort); do

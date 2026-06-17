@@ -2214,7 +2214,7 @@ _day2_upgrade() {
 		[[ "$line" =~ Versions\ in\ mirror ]] && _in_list=1 && continue
 		[[ $_in_list -eq 0 ]] && continue
 		local ver
-		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?' | head -1)
 		[[ -n "$ver" ]] && _versions+=("$ver")
 	done <<< "$_versions_raw"
 
@@ -2223,7 +2223,7 @@ _day2_upgrade() {
 	if [[ ${#_versions[@]} -gt 0 ]]; then
 		while IFS= read -r v; do
 			_sorted+=("$v")
-		done < <(printf '%s\n' "${_versions[@]}" | sort -t. -k1,1nr -k2,2nr -k3,3nr | uniq)
+		done < <(printf '%s\n' "${_versions[@]}" | sort -V -r | uniq)
 	fi
 
 	if [[ ${#_sorted[@]} -eq 0 ]]; then
@@ -2291,7 +2291,7 @@ _day2_upgrade() {
 			if [[ "$choice" == "M" ]]; then
 				# Fall through to manual entry below
 				:
-			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 				confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $choice" \
 					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
 				return
@@ -2302,7 +2302,7 @@ _day2_upgrade() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
 			--ok-label "Upgrade" \
 			--cancel-label "$TUI2_BTN_BACK" \
-			--inputbox "Enter target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Format: X.Y.Z, e.g. 4.21.15)" 0 0 "" \
+			--inputbox "Enter target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Format: X.Y.Z or X.Y.Z-rc.N, e.g. 4.21.15 or 4.22.0-rc.1)" 0 0 "" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
 
@@ -2312,8 +2312,8 @@ _day2_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
 			continue
 		fi
-		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z (e.g. 4.21.15)" 0 0
+		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.15 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
 		confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $target_ver" \

@@ -102,7 +102,8 @@ direct_wizard() {
 					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null)
 				fi
 				if [[ "$_ps_ver" == *.*.* ]]; then
-					local _cat_ver="${_ps_ver%.*}"
+					local _cat_ver
+					_cat_ver=$(_ver_minor "$_ps_ver")
 					tui_log "Starting redhat-operator catalog for $_cat_ver"
 					run_once -i "catalog:${_cat_ver}:redhat-operator" -- \
 						"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$_cat_ver"
@@ -130,9 +131,9 @@ direct_wizard() {
 							--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
 							10 50 || { step="channel"; continue; }
 
-						_ver_short="${ocp_version%.*}"
-						# Save config early: catalog downloads need pull_secret_file from aba.conf
-						_direct_save_config
+					_ver_short=$(_ver_minor "$ocp_version")
+					# Save config early: catalog downloads need pull_secret_file from aba.conf
+					_direct_save_config
 					if [[ "$_TUI_MODE" != "DIRECT" ]]; then
 						tui_log "Starting catalog downloads for OpenShift $_ver_short"
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
@@ -364,7 +365,7 @@ _direct_version() {
 		fi
 		while :; do
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
-				--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "" \
+				--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "" \
 				2>"$_TUI_TMP"
 			local man_rc=$?
 			if [[ $man_rc -ne 0 ]]; then
@@ -374,7 +375,7 @@ _direct_version() {
 			ocp_version=$(<"$_TUI_TMP")
 			ocp_version="${ocp_version##[[:space:]]}"
 			ocp_version="${ocp_version%%[[:space:]]}"
-			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
 				return
@@ -396,7 +397,7 @@ _direct_version() {
 				ocp_version=""
 			else
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Invalid version format.\n\nExpected: x.y or x.y.z (e.g. 4.18 or 4.18.10)" 0 0
+					"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
 			fi
 		done
 		return
@@ -456,10 +457,10 @@ _direct_version() {
 				p) ocp_version="$previous" ;;
 				o) ocp_version="$older" ;;
 				m)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
-						--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "${ocp_version:-$latest}" \
-						2>"$_TUI_TMP"
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
+					--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${ocp_version:-$latest}" \
+					2>"$_TUI_TMP"
 					if [[ $? -ne 0 ]]; then
 						DIALOG_RC="repeat"
 						return
@@ -467,27 +468,27 @@ _direct_version() {
 					ocp_version=$(<"$_TUI_TMP")
 					ocp_version="${ocp_version##[[:space:]]}"
 					ocp_version="${ocp_version%%[[:space:]]}"
-					if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+				if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+					break
+				elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+					# x.y format — resolve to latest z-stream
+					local _input_minor="$ocp_version"
+					tui_log "Resolving $ocp_version to latest z-stream"
+					dlg --backtitle "$(ui_backtitle)" --infobox \
+						"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+					local _resolved=""
+					if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
+						ocp_version="$_resolved"
+						tui_log "Resolved $_input_minor to $ocp_version"
 						break
-					elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
-						# x.y format — resolve to latest z-stream
-						local _input_minor="$ocp_version"
-						tui_log "Resolving $ocp_version to latest z-stream"
-						dlg --backtitle "$(ui_backtitle)" --infobox \
-							"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
-						local _resolved=""
-						if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
-							ocp_version="$_resolved"
-							tui_log "Resolved $_input_minor to $ocp_version"
-							break
-						fi
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
-						ocp_version=""
-					else
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid version format.\n\nExpected: x.y or x.y.z (e.g. 4.18 or 4.18.10)" 0 0
 					fi
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
+					ocp_version=""
+				else
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
+				fi
 				done
 				;;
 			esac
@@ -501,7 +502,9 @@ _direct_version() {
 • Latest: most recent release in the channel
 • Previous: one release back (good for stability)
 • Older: two releases back
-• Manual: enter specific version (x.y or x.y.z)"
+• Manual: enter specific version (x.y, x.y.z, or x.y.z-rc.N)
+
+Pre-release versions (e.g. 4.22.0-rc.1) can be entered manually."
 			DIALOG_RC="repeat"
 			;;
 		3)
@@ -571,7 +574,7 @@ _direct_operators_step() {
 	local _cat_ver="${1:-}"
 
 	if [[ -z "$_cat_ver" ]]; then
-		_cat_ver="${ocp_version%.*}"
+		_cat_ver=$(_ver_minor "$ocp_version")
 	fi
 	tui_log "DIRECT wizard: operator selection ($_cat_ver)"
 
@@ -640,7 +643,7 @@ _direct_operators() {
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
 			1) mirror_select_operators ;;
-			2) _operator_search "${ocp_version%.*}" ;;
+			2) _operator_search "$(_ver_minor "$ocp_version")" ;;
 			esac
 			DIALOG_RC="next"
 			;;
