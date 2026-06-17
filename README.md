@@ -264,7 +264,7 @@ aba
 - See all available releases at: [https://github.com/sjbylo/aba/releases](https://github.com/sjbylo/aba/releases)
 - Check your installed version: `aba version`
 - Show available OpenShift versions: `aba ocp-versions`
-- Show available operator sets: `aba show-op-sets`
+- Show available operator sets: `aba show-op-sets` (includes `ocp`, `odf`, `virt`, `ai`, `mesh3`, and more)
 
 Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
 
@@ -293,12 +293,15 @@ ocp_version=4.22.0-rc.1
 **TUI (Text User Interface):** For a guided wizard experience:
 
 ```bash
-abatui      # Interactive wizard — full workflow.
+abatui             # Interactive wizard — auto-detects mode
+abatui --direct    # Force direct-from-internet mode
+abatui --disco     # Force fully disconnected mode
+abatui --conno     # Force partially disconnected mode
 ```
 
 The `abatui` command is installed to your `$PATH` alongside `aba` and can be run from any directory within the ABA repository.
 
-The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), operator selection, mirror configuration, image sync/save/load, bundle creation, cluster installation (wizard for name, type, platform, networking, interfaces), Day-2 operations, and cluster lifecycle management.
+The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror configuration (local or remote registry), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
 
 Requires `dialog` package (`dnf install dialog`). Internet access is needed for connected modes; fully disconnected mode works offline with a bundle.
 
@@ -1191,14 +1194,21 @@ aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
 1. Edit `mycluster/cluster.conf` and set the connection type:
 
 ```
-int_connection=direct      # Nodes pull from the Internet directly
+int_connection=direct      # Nodes pull from the Internet directly (no proxy needed)
 ```
 
-or:
+or, if your nodes require a proxy:
 
 ```
 int_connection=proxy       # Nodes pull via your HTTP proxy
+http_proxy=http://proxy.example.com:3128
+https_proxy=http://proxy.example.com:3128
+no_proxy=.example.com,.lan,10.0.0.0/8
 ```
+
+If `http_proxy`/`https_proxy`/`no_proxy` are not set in `cluster.conf`, ABA uses the corresponding environment variables from the bastion host, where you run the `aba` or `abatui` commands.
+
+> **proxy vs direct:** Use `proxy` when cluster nodes cannot reach public registries (`quay.io`, `registry.redhat.io`) without an HTTP proxy. Use `direct` only when nodes have unrestricted internet access. In both modes, no mirror registry is required — images are pulled from public Red Hat registries.
 
 1. Install the cluster:
 
