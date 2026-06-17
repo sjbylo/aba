@@ -693,23 +693,13 @@ _direct_action_menu() {
 	tui_log "DIRECT action menu"
 	local default_item="$TUI2_DIRECT_TAG_INSTALL"
 
-	# --- Menu state recheck optimization ---
-	# IMPORTANT: _direct_need_recheck controls whether expensive state checks
-	# (tui_cluster_menu_flags) run before redrawing the menu. Set to "true"
-	# on first entry and after actions that can change cluster state. Actions
-	# that only touch config (Settings, Rerun Wizard) set it to "false" —
-	# avoiding unnecessary filesystem scans on every redraw.
-	local _direct_need_recheck=true
-
 	while :; do
 		local items=()
 		local inst_label
 		local day2_label="Day-2 / Cluster Management"
 
-		# Only rescan cluster directories when previous action may have changed state
-		if [[ "$_direct_need_recheck" == "true" ]]; then
-			tui_cluster_menu_flags DIRECT
-		fi
+		# Cluster flags (instant — marker file checks only, no mirror in DIRECT)
+		tui_cluster_menu_flags DIRECT
 		inst_label="${_CLUSTER_INST_LABEL}"
 
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -774,8 +764,6 @@ Navigation:
 				continue ;;
 			"$TUI2_DIRECT_TAG_INSTALL")
 				cluster_install_flow
-				# RECHECK: may have created/installed a cluster
-				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -783,25 +771,17 @@ Navigation:
 				else
 					cluster_day2_menu
 				fi
-				# RECHECK: day2 sub-menu may delete clusters or change state
-				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_SETTINGS")
 				_tui_settings_menu
-				# NO RECHECK: only changes config values (ask, reg_vendor, retry)
-				_direct_need_recheck=false
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
 				tui_advanced_menu
 				[[ "$_TUI_MODE" != "DIRECT" ]] && return 0
-				# RECHECK: advanced menu may delete clusters
-				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-				# NO RECHECK: wizard only changes channel/version/platform in aba.conf
-				_direct_need_recheck=false
 				;;
 		esac
 	done

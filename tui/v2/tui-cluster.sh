@@ -1956,7 +1956,7 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Uninstall the mirror registry on: ${_unreg_host}\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
-				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry"
+				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry" _invalidate_mirror_cache
 				;;
 			"F")
 				cluster_monitor
