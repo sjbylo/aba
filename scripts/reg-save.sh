@@ -65,15 +65,14 @@ mkdir -p data
 avail=$(df -m data | awk '{print $4}' | tail -1)
 aba_debug "Available disk space: $avail MB"
 
-# Minimum 20GB for base platform
+# Stark warning if very low (incremental saves may still succeed, so don't abort)
 if [ $avail -lt 20500 ]; then
-	aba_abort "Not enough disk space available under $PWD/data (only $avail MB)" \
-		"At least 20GB is required for the base OpenShift platform alone" \
-		"Operators require additional 40-400GB of space"
-fi
-
-# Warning for operators (if less than 50GB available)
-if [ $avail -lt 51250 ]; then
+	aba_warning "Very low disk space under $PWD/data (only $avail MB free)" \
+		"A first-time save requires at least 20GB for the base platform alone" \
+		"Operators require additional 40-400GB of space" \
+		"Incremental saves may succeed with less space"
+	echo >&2
+elif [ $avail -lt 51250 ]; then
 	aba_warning "Less than 50GB of space available under $PWD/data (only $avail MB)" \
 		"Operator images require between ~40 to ~400GB of disk space!"
 	echo >&2
