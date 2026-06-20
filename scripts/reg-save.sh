@@ -11,14 +11,6 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-# Check internet connection to the registries oc-mirror pulls from
-aba_info "Checking Internet access to registry.redhat.io"
-
-if ! curl -sILk --connect-timeout 10 --max-time 15 --retry 2 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
-	aba_abort "Cannot access https://registry.redhat.io/" \
-		"Access to registry.redhat.io is required to save images to disk."
-fi
-
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value
 ##[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
@@ -33,6 +25,9 @@ source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration validated"
+
+# Pre-flight: verify internet access and pull secret before proceeding
+require_internet_and_pull_secret
 
 # Still downloading?
 export PLAIN_OUTPUT=1
