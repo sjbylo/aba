@@ -58,8 +58,8 @@ podman pull -q "$catalog_url" >/dev/null 2>&1 || die "Failed to pull $catalog_ur
 
 # ── Extract /configs ─────────────────────────────────────────────────
 info "Extracting catalog data ..."
-podman run -q -d --name "$container_name" "$catalog_url" >/dev/null 2>&1 \
-	|| die "Failed to start container"
+podman create -q --name "$container_name" "$catalog_url" >/dev/null 2>&1 \
+	|| die "Failed to create container"
 podman cp "$container_name:/configs" "$tmp_dir/configs" 2>/dev/null \
 	|| die "Failed to copy /configs from container"
 podman rm -f "$container_name" >/dev/null 2>&1
