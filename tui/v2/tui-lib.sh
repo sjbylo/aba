@@ -639,9 +639,10 @@ _exec_in_tui() {
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
 
-	# Run post-command hook (non-blocking background work while user reads results)
-	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
-		tui_log "Running post-command hook: $post_cmd_hook"
+	# Run post-command hook unconditionally — mirror state is uncertain after
+	# any attempt (even failed ones), so always recheck.
+	if [[ -n "$post_cmd_hook" ]]; then
+		tui_log "Running post-command hook: $post_cmd_hook (exit_code=$exit_code)"
 		"$post_cmd_hook"
 	fi
 
@@ -717,9 +718,10 @@ _exec_in_terminal() {
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
 
-	# Run post-command hook (non-blocking background work while user reads output)
-	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
-		tui_log "Running post-command hook: $post_cmd_hook"
+	# Run post-command hook unconditionally — mirror state is uncertain after
+	# any attempt (even failed ones), so always recheck.
+	if [[ -n "$post_cmd_hook" ]]; then
+		tui_log "Running post-command hook: $post_cmd_hook (exit_code=$exit_code)"
 		"$post_cmd_hook"
 	fi
 

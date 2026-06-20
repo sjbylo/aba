@@ -443,17 +443,16 @@ _detect_mode() {
 		_TUI_INET="no"
 		tui_log "Internet check failed: FAILED_SITES=[$FAILED_SITES]"
 
-		# Show detailed error so user knows which sites are unreachable
-		local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"
-		dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
-			--no-collapse \
-			--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
-
-		# After showing error, check if we can fall back to DISCO
+		# Check if we can operate in DISCO mode (no internet but payload ready)
 		if [[ -f "$ABA_ROOT/aba.conf" ]] && _validate_payload; then
 			_TUI_MODE="DISCO"
 			tui_log "Mode detected: DISCO (offline, payload ready)"
 		else
+			# No fallback possible — show detailed error and exit
+			local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"
+			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
+				--no-collapse \
+				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
 			clear
 			exit 1
 		fi
@@ -717,6 +716,7 @@ Navigation:
 			"$TUI2_CONNO_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+				_invalidate_mirror_cache
 				;;
 		esac
 	done
