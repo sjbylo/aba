@@ -27,6 +27,9 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+# Pre-flight: verify internet access and pull secret before proceeding
+require_internet_and_pull_secret
+
 # Be sure a download has started ..
 aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
@@ -35,28 +38,13 @@ if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
 fi
 aba_debug "oc-mirror is ready"
 
-# This is a pull secret for RH registry
+# Check for mirror-specific pull secret override
 pull_secret_mirror_file=pull-secret-mirror.json
-aba_debug "Checking pull secret files: $pull_secret_mirror_file or $pull_secret_file"
-
 if [ -s $pull_secret_mirror_file ]; then
 	aba_info Using $pull_secret_mirror_file ...
 	aba_debug "Using mirror-specific pull secret"
 elif [ -s $pull_secret_file ]; then
 	aba_debug "Using default pull secret: $pull_secret_file"
-	:
-else
-	aba_abort \
-		"The pull secret file '$pull_secret_file' does not exist!" \
-		"Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
-fi
-
-# Check internet connection to the registries oc-mirror pulls from
-aba_info "Checking Internet access to registry.redhat.io"
-
-if ! curl -sILk --connect-timeout 10 --max-time 15 --retry 2 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
-	aba_abort "Cannot access https://registry.redhat.io/" \
-		"Access to registry.redhat.io is required to sync images to your registry."
 fi
 
 export reg_url=https://$reg_host:$reg_port

@@ -3677,3 +3677,50 @@ check_internet_connectivity() {
 	# Return status
 	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
 }
+
+# Pre-flight check for commands that require internet + pull secret (save, sync).
+# Checks both conditions and reports ALL issues at once so the user can fix everything in one pass.
+# Usage: require_internet_and_pull_secret
+# Requires: $pull_secret_file set (from normalize-aba-conf)
+require_internet_and_pull_secret() {
+	local errors=()
+	local has_internet=true
+
+	# Check internet (quick probe, 5s timeout)
+	if ! curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
+		has_internet=false
+		errors+=("No internet access (cannot reach registry.redhat.io)")
+	fi
+
+	# Check pull secret
+	if [ ! -s "$pull_secret_file" ]; then
+		errors+=("Pull secret not found at $pull_secret_file")
+	elif ! grep -q registry.redhat.io "$pull_secret_file"; then
+		errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
+	elif ! jq empty "$pull_secret_file" 2>/dev/null; then
+		errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
+	fi
+
+	# All good
+	[ ${#errors[@]} -eq 0 ] && return 0
+
+	# Report all issues
+	if [ ${#errors[@]} -eq 1 ]; then
+		if [ "$has_internet" = "false" ]; then
+			aba_abort "${errors[0]}" \
+				"The 'save' and 'sync' commands require a connected host with internet access."
+		else
+			aba_abort "${errors[0]}" \
+				"Fetch your pull secret from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" \
+				"and save it to $pull_secret_file"
+		fi
+	else
+		aba_abort "Cannot proceed — the following issues must be resolved:" \
+			"  1. ${errors[0]}" \
+			"  2. ${errors[1]}" \
+			"" \
+			"The 'save' and 'sync' commands require a connected host with internet access." \
+			"Fetch your pull secret from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" \
+			"and save it to $pull_secret_file"
+	fi
+}
