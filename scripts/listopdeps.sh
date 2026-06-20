@@ -50,7 +50,7 @@ fi
 
 existing_id=$(podman ps -a | grep registry.redhat.io/redhat/$catalog-index:v$version | awk '{print $1}')
 if [ ! "$existing_id" ]; then
-	podman run -q --replace -d --name redhat-catalog registry.redhat.io/redhat/$catalog-index:v$version >/dev/null|| exit 1
+	podman create -q --replace --name redhat-catalog registry.redhat.io/redhat/$catalog-index:v$version >/dev/null|| exit 1
 fi
 
 podman cp redhat-catalog:/configs configs-$catalog-$version

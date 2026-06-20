@@ -103,6 +103,11 @@ catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 container_name="aba-catalog-${catalog_name}-v${ocp_ver_major}-$$"
 tmp_dir=$(mktemp -d)
 
+# Sweep stale aba-catalog-* containers from previous interrupted runs
+podman ps -a --format '{{.Names}}' | grep '^aba-catalog-' | while read -r _stale; do
+	podman rm -f "$_stale" >/dev/null 2>&1
+done
+
 aba_debug "catalog_url=$catalog_url"
 aba_debug "container_name=$container_name"
 aba_debug "tmp_dir=$tmp_dir"
@@ -133,8 +138,8 @@ fi
 
 # Run container and extract /configs
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
-_run_err=$(podman run -q -d --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
-	aba_abort "Failed to start catalog container" "$_run_err"
+_run_err=$(podman create -q --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
+	aba_abort "Failed to create catalog container" "$_run_err"
 }
 
 _cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
