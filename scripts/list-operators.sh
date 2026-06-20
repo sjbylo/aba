@@ -49,7 +49,7 @@ command -v jq     >/dev/null 2>&1 || die "jq is required"
 
 # ── Setup ────────────────────────────────────────────────────────────
 container_name="list-ops-${catalog}-v${ocp_ver}-$$"
-tmp_dir=$(mktemp -d)
+tmp_dir=$(mktemp -d /tmp/.aba-list-ops-XXXXXX)
 trap 'podman rm -f "$container_name" >/dev/null 2>&1; rm -rf "$tmp_dir"' EXIT INT TERM
 
 # ── Pull image ───────────────────────────────────────────────────────
@@ -170,8 +170,4 @@ for dir in "$tmp_dir/configs"/*/; do
 	fi
 done | sort
 
-# ── Cleanup image ────────────────────────────────────────────────────
-podman rmi "$catalog_url" >/dev/null 2>&1 || true
-
-op_count=$(podman images -q "$catalog_url" 2>/dev/null | wc -l)  # should be 0
 success "Done. Catalog: $catalog v$ocp_ver"
