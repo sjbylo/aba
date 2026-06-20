@@ -1750,9 +1750,11 @@ replace-value-conf() {
 	fi
 
 	# Step through the files by priority...
+	local _first_file=
 	for f in $files
 	do
 		[ ! -s "$f" ] && continue # Try next file
+		[ ! "$_first_file" ] && _first_file="$f"
 
 		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
 
@@ -1793,7 +1795,18 @@ replace-value-conf() {
 		return 0
 	done
 
-	return 1 # Key not found in any file (or files do not exist)
+	# Key not found in any file — append to the first valid file
+	if [ "$_first_file" ] && [ "$value" ]; then
+		echo "${name}=${_write_value}" >> "$_first_file"
+		if [ ! "$quiet" ]; then
+			aba_info_ok "Added value ${name}=${_write_value} to file $_first_file" >&2
+		else
+			aba_debug "Added value ${name}=${_write_value} to file $_first_file"
+		fi
+		return 0
+	fi
+
+	return 1 # Files do not exist or no value to write
 }
 
 output_table() {
