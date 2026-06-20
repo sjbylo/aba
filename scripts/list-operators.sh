@@ -1,22 +1,25 @@
 #!/bin/bash
-# Standalone replacement for: oc-mirror list operators --catalog <url>
+# list-operators.sh -- List all operators in a Red Hat operator catalog
 #
-# Lists all operators in a Red Hat operator catalog, including display names.
-# Uses podman to pull the catalog image and extract FBC (File-Based Catalog) data.
-# No oc-mirror dependency required.
+# INTENT:    Standalone replacement for "oc-mirror list operators --catalog <url>".
+#            Pulls the catalog image, extracts FBC metadata, and lists operators
+#            with display names and default channels. No oc-mirror dependency.
+# CALLED BY: User (CLI), TUI operator browser
+# CWD:       Any (uses podman credentials from ~/.docker/config.json)
+# REQUIRES:  podman, jq, curl; container auth for registry.redhat.io
+# ARGS:      <ocp_version> [catalog_name]
+#            ocp_version:   e.g. "4.21" (major.minor only)
+#            catalog_name:  redhat-operator (default) | certified-operator | community-operator
+# PRODUCES:  stdout -- 3-column whitespace-padded table:
+#              PACKAGE_NAME   DISPLAY_NAME   DEFAULT_CHANNEL
+# SIDE EFFECTS: Catalog image remains in podman graph storage (cache for future runs).
+# IDEMPOTENT: Yes (read-only extraction, no state files)
 #
-# Usage: list-operators.sh <version>  [catalog]
+# Usage: list-operators.sh <version> [catalog]
 # Example:
 #   list-operators.sh 4.21
 #   list-operators.sh 4.21 certified-operator
 #   list-operators.sh 4.21 community-operator
-#
-# Output (3 columns, whitespace-padded):
-#   PACKAGE_NAME   DISPLAY_NAME   DEFAULT_CHANNEL
-#
-# Requirements: podman, jq, curl
-# Auth: uses existing podman/container credentials for registry.redhat.io
-#       (podman login registry.redhat.io, or ~/.docker/config.json)
 
 set -eo pipefail
 

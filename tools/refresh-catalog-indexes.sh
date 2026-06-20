@@ -8,6 +8,8 @@
 # CWD:       ABA repo root
 # REQUIRES:  podman, jq, curl; container auth for registry.redhat.io
 # PRODUCES:  catalogs/{catalog}-index-v{ver} for each supported OCP version
+# SIDE EFFECTS: Catalog images remain in podman graph storage (cache for future runs).
+# IDEMPOTENT: Yes (re-running overwrites catalogs/ with fresh data)
 #
 # Usage:
 #   tools/refresh-catalog-indexes.sh [--commit]

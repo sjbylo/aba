@@ -18,6 +18,9 @@
 #   .index/.{catalog}-index-v{ver}.expected-count Expected operator count
 #   .index/.{catalog}-index-v{ver}.digest         Manifest digest (sha256:...) for pinning
 #   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml  Helper YAML for reference
+# SIDE EFFECTS: Catalog image remains in podman graph storage (cache for future runs).
+#               Sweeps stale temp dirs (.aba-catalog-*, render-*) older than 24h at startup.
+#               Sweeps stale aba-catalog-* containers from previous interrupted runs.
 # IDEMPOTENT: run_once() with TTL is the sole gatekeeper -- script always does work when invoked.
 #             Uses atomic rename (.downloading -> final) so consumers never see partial data.
 #
