@@ -79,6 +79,7 @@ e2e_run "Verify fields are empty" \
 	 grep '^ntp_servers=$' aba.conf"
 
 # With ask=false (noask), auto-detect should succeed without aborting
+e2e_run "Clean stale e2eauto dir if present" "rm -rf e2eauto"
 e2e_run "Non-interactive: auto-detect succeeds (ask=false)" \
 	"aba cluster -n e2eauto -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
