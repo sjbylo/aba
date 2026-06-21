@@ -514,7 +514,17 @@ elif [ "$1" = "--light" ]; then
 		opt=$1
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
-		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $opt"
+		# If no value (or "none"), clear the target version from mirror.conf
+		if [[ "$2" =~ ^- || -z "$2" || "$2" = "none" ]]; then
+			[[ "${2:-}" = "none" ]] && shift
+			if ! grep -q "^[# ]*ocp_version_target=" "$WORK_DIR/mirror.conf"; then
+				echo "#ocp_version_target=" >> "$WORK_DIR/mirror.conf"
+			fi
+			replace-value-conf -n ocp_version_target -v "" -f $WORK_DIR/mirror.conf
+			aba_info "Upgrade target version cleared from mirror.conf"
+			shift
+			continue
+		fi
 		arg=$2
 		tgt_ver=$arg
 		[ ! "$chan" ] && chan=$ocp_channel
