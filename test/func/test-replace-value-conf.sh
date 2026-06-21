@@ -279,8 +279,8 @@ _test_idem "idempotent: simple value already set" \
 _test_idem "idempotent: value with trailing comment" \
 	"a=yyy  # comment" "a" "yyy"
 
-_test_idem "idempotent: empty value already empty" \
-	"a=" "a" ""
+_test_idem "idempotent: empty value already commented out" \
+	"#a=oldval" "a" ""
 
 # =========================================================================
 echo "--- Multi-key file (only target key changes) ---"

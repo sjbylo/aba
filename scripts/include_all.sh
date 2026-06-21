@@ -1791,38 +1791,50 @@ replace-value-conf() {
 
 		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
 
-		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
-		# ... change nothing!  Uses grep -F (fixed string) so (), [], + etc. in values are not treated as regex.
-		if grep -q -F "${name}=${_write_value}" "$f" && \
-		   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
-			[ "$value" ] && aba_debug "Value ${name}=${_write_value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
-
-			return 0
+		# Idempotency: if the file already has the desired state, skip the write.
+		# Uses grep -F (fixed string) first so regex chars in values (e.g. passwords) don't cause false matches.
+		if [ "$value" ]; then
+			if grep -q -F "${name}=${_write_value}" "$f" && \
+			   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
+				aba_debug "Value ${name}=${_write_value} already exists in file $f"
+				return 0
+			fi
+		else
+			# Empty value means "comment out" — check if already commented
+			if grep -q -E "^[#[:space:]]*${name}=" "$f" && ! grep -q "^${name}=" "$f"; then
+				aba_debug "Value ${name} is already commented out in file $f"
+				return 0
+			fi
 		fi
 
 		# Key must exist in file (active or commented out) for sed to work
-		if ! grep -q -E "^[# ]*${name}=" "$f"; then
+		if ! grep -q -E "^[#[:space:]]*${name}=" "$f"; then
 			aba_debug "Key [$name] not found in file $f — skipping" >&2
 			continue
 		fi
 
-		# Escape sed-special chars (&, \, |) in the replacement value
-		local _sed_safe
-		_sed_safe=$(_sed_escape_replacement "$_write_value")
+		if [ "$value" ]; then
+			# Escape sed-special chars (&, \, |) in the replacement value
+			local _sed_safe
+			_sed_safe=$(_sed_escape_replacement "$_write_value")
 
-		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
-		# Trailing whitespace + comment is captured in \1 and preserved.
-		# Uses | as sed delimiter (| is forbidden in config values).
-		if grep -q "^[# ]*${name}='" "$f"; then
-			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+			# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
+			# Trailing whitespace + comment is captured in \1 and preserved.
+			# Uses | as sed delimiter (| is forbidden in config values).
+			if grep -q -E "^[#[:space:]]*${name}='" "$f"; then
+				sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+			else
+				sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+			fi
 		else
-			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+			# Empty value: comment out the line (preserve existing value for easy revert)
+			sed -i --follow-symlinks "s|^\([#[:space:]]*\)\?${name}=|#${name}=|" "$f"
 		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Commenting out ${name} in file $f" >&2 
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Commenting out ${name} in file $f"
 		fi
 
 		return 0
