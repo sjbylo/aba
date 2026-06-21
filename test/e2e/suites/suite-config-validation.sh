@@ -76,7 +76,8 @@ e2e_run "Verify fields are empty" \
 	 grep '^next_hop_address=$' aba.conf && \
 	 grep '^ntp_servers=$' aba.conf"
 
-e2e_run_must_fail "First run aborts after auto-detecting values" \
+# With ask=false (noask), auto-detect should succeed without aborting
+e2e_run "Non-interactive: auto-detect succeeds (ask=false)" \
 	"aba cluster -n e2eauto -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 e2e_run "Verify domain was auto-detected" \
@@ -90,10 +91,21 @@ e2e_run "Verify next_hop_address was auto-detected" \
 e2e_run "Verify ntp_servers was auto-detected" \
 	"grep -E '^ntp_servers=.+' aba.conf"
 
-e2e_run "Second run succeeds with auto-detected values" \
-	"aba cluster -n e2eauto -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
-
 e2e_run "Clean up auto-detect cluster dir" "rm -rf e2eauto"
+
+# With ask=true (interactive mode), auto-detect should abort after writing values
+e2e_run "Re-clear auto-detectable fields for ask=true test" \
+	"sed -i 's/^domain=.*/domain=/' aba.conf && \
+	 sed -i 's/^machine_network=.*/machine_network=/' aba.conf && \
+	 sed -i 's/^dns_servers=.*/dns_servers=/' aba.conf && \
+	 sed -i 's/^next_hop_address=.*/next_hop_address=/' aba.conf && \
+	 sed -i 's/^ntp_servers=.*/ntp_servers=/' aba.conf && \
+	 sed -i 's/^ask=.*/ask=true/' aba.conf"
+
+e2e_run_must_fail "Interactive: auto-detect aborts (ask=true)" \
+	"aba cluster -n e2eauto2 -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+
+e2e_run "Clean up ask=true test artifacts" "rm -rf e2eauto2"
 e2e_run "Restore aba.conf" "cp aba.conf.autodetect-bak aba.conf && rm -f aba.conf.autodetect-bak"
 
 test_end 0
