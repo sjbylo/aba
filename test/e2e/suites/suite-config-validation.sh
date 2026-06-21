@@ -62,6 +62,8 @@ test_begin "Auto-detect network values"
 
 e2e_run "Backup aba.conf" "cp aba.conf aba.conf.autodetect-bak"
 
+e2e_run "Remove stale auto-detect cluster dirs" "rm -rf e2eauto e2eauto2"
+
 e2e_run "Clear auto-detectable fields" \
 	"sed -i 's/^domain=.*/domain=/' aba.conf && \
 	 sed -i 's/^machine_network=.*/machine_network=/' aba.conf && \
