@@ -29,6 +29,24 @@ aba_debug "Configuration validated"
 # Pre-flight: verify internet access and pull secret before proceeding
 require_internet_and_pull_secret
 
+# Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
+aba_info "Verifying release image availability for v${ocp_version} ..."
+if ! verify_release_version_exists "$ocp_version"; then
+	aba_abort \
+		"Release version $ocp_version not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+		"This version may not have been released yet, or the channel may be wrong." \
+		"Use 'aba ocp-versions' to list available versions."
+fi
+if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	aba_info "Verifying release image availability for upgrade target v${ocp_version_target} ..."
+	if ! verify_release_version_exists "$ocp_version_target"; then
+		aba_abort \
+			"Upgrade target version $ocp_version_target not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+			"This version may not have been released yet, or the channel may be wrong." \
+			"Use 'aba ocp-versions' to list available versions."
+	fi
+fi
+
 # Still downloading?
 export PLAIN_OUTPUT=1
 aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"

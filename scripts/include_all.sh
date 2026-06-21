@@ -1680,6 +1680,39 @@ fetch_older_version() {
 }
 
 
+############################################
+# Verify a release version exists in the Cincinnati graph.
+# Used as a pre-flight before oc-mirror to avoid wasted time on non-existent versions.
+# Args:
+#	$1 = version (e.g. 4.22.2 or 4.22.0-rc.1)
+#	$2 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
+# Returns: 0 if version found, 1 if not
+############################################
+verify_release_version_exists() {
+	local ver="${1:-}"
+	local channel="${2:-${ocp_channel:-fast}}"
+
+	[[ -z "$ver" ]] && return 1
+
+	# Extract minor (e.g. 4.22 from 4.22.2 or 4.22.0-rc.1)
+	local minor="${ver%.*}"
+	[[ "$ver" == *-* ]] && minor="${ver%%-*}" && minor="${minor%.*}"
+
+	# Pre-release versions (rc/ec) only exist in candidate channel
+	if [[ "$ver" == *-rc.* || "$ver" == *-ec.* ]]; then
+		channel="candidate"
+	fi
+
+	local all_versions
+	all_versions=$(_fetch_graph_cached "$channel" "$minor" 2>/dev/null | jq -r '.nodes[].version' 2>/dev/null) || return 1
+
+	if echo "$all_versions" | grep -qxF "$ver"; then
+		return 0
+	fi
+
+	return 1
+}
+
 # Escape characters that are special in sed replacement strings.
 # Must be called before interpolating user values into sed 's|...|...|' commands.
 _sed_escape_replacement() {
