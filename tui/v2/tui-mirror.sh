@@ -545,6 +545,9 @@ mirror_prep_upgrade() {
 		items+=("p" "Previous  ($_previous)")
 	fi
 	items+=("m" "Manual entry (x.y or x.y.z)")
+	if [[ -n "$_existing_target" ]]; then
+		items+=("c" "Clear target (disable upgrade mode)")
+	fi
 
 	# Version picker loop
 	while :; do
@@ -563,6 +566,13 @@ mirror_prep_upgrade() {
 			t) _target_ver="$_existing_target" ;;
 			l) _target_ver="$_latest" ;;
 			p) _target_ver="$_previous" ;;
+		c)
+			sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" "$ABA_ROOT/mirror/mirror.conf"
+			tui_kick_isconf_regen
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"\nUpgrade target cleared.\n\nMirror will no longer include upgrade images." 0 0
+			return 0
+			;;
 		m)
 			while :; do
 				dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
@@ -603,6 +613,10 @@ mirror_prep_upgrade() {
 
 		break
 	done
+
+	# Set target version and kick off ISC regeneration in background (while user reads dialog)
+	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
+	tui_kick_isconf_regen
 
 	# Confirm before proceeding
 	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
