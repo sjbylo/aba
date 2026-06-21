@@ -2020,7 +2020,7 @@ get_next_hop() {
 	# Validate IPv4
 	echo "${gw:-}" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || gw=
 
-	echo "${gw:-10.0.0.1}"
+	echo "${gw:-}"
 }
 
 # Get machine network (CIDR of the chosen install interface)
@@ -2064,7 +2064,7 @@ get_machine_network() {
 	# Validate CIDR
 	echo "${net:-}" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' || net=
 
-	echo "${net:-10.0.0.0/20}"
+	echo "${net:-}"
 }
 
 
@@ -2114,7 +2114,7 @@ get_dns_servers() {
 	# Validate IPv4 list
 	echo "${dns:-}" | grep -q -E '^([0-9]{1,3}(\.[0-9]{1,3}){3})(,([0-9]{1,3}(\.[0-9]{1,3}){3}))*$' || dns=
 
-	echo "${dns:-8.8.8.8,1.1.1.1}"
+	echo "${dns:-}"
 }
 
 # Get NTP servers (comma-separated)
