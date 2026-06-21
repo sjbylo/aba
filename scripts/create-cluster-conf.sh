@@ -1,5 +1,12 @@
 #!/usr/bin/bash 
-# Script to set up the cluster.conf file
+# INTENT:    Ensure cluster.conf exists and has populated network fields
+# CALLED BY: Makefile.cluster (cluster.conf target), aba CLI (--step cluster.conf)
+# CWD:       Cluster directory (e.g. ~/aba/sno/)
+# REQUIRES:  aba.conf (sourced via normalize-aba-conf), network access for auto-detection
+# PRODUCES:  cluster.conf (new or updated), updates aba.conf with detected network values
+# SIDE EFFECTS: Writes to aba.conf (network fields), may abort if ask=true and values were auto-detected
+# IDEMPOTENT: Yes -- only fills empty fields, never overwrites user-set values
+# ENV:       ASK_OVERRIDE (suppresses abort), name/type/starting_ip (for new clusters)
 
 source scripts/include_all.sh
 
@@ -15,24 +22,9 @@ if [ ! "$ocp_version" ]; then
 	exit 1
 fi
 
-# jinja2 module is needed
-scripts/install-rpms.sh internal
-
-[ -s cluster.conf ] && exit 0
-
-##declare -A shortcuts  # Need to declare just in case the shortcuts.conf file is not available
-##[ -s ../shortcuts.conf ] && source ../shortcuts.conf  # Values can be set in this file for testing 
-
-name=standard
-type=standard
-
-. <(process_args $*)
-
-aba_debug "Creating cluster directory for [$name] of type [$type]"
-
+# --- Auto-detect empty network values in aba.conf (ALWAYS runs) ---
 # Network values are optional in aba.conf (e.g. bundle workflow) but mandatory
-# for cluster.conf.  Auto-detect any missing values and write them into aba.conf,
-# then abort so the user can review before proceeding.
+# for cluster.conf.  Auto-detect any missing values and write them into aba.conf.
 _filled=0
 if [ ! "$domain" ]; then
 	v=$(get_domain) && [ "$v" ] && replace-value-conf -q -n domain -v "$v" -f aba.conf && domain="$v"
@@ -68,14 +60,53 @@ if [ $_filled -gt 0 ]; then
 	fi
 	aba_info "$_filled network value(s) were auto-detected and written to aba.conf."
 fi
-# If auto-detection failed for any values, tell the user which ones
+
+# --- For existing cluster.conf: fill empty network fields from aba.conf, then exit ---
+if [ -s cluster.conf ]; then
+	# Save aba.conf values (just auto-detected or already set)
+	_aba_mn="$machine_network"
+	_aba_pl="${prefix_length:-}"
+	_aba_dns="$dns_servers"
+	_aba_gw="$next_hop_address"
+	_aba_ntp="$ntp_servers"
+
+	# Load cluster.conf values into memory
+	source <(normalize-cluster-conf)
+
+	# Fill only empty fields in cluster.conf (non-destructive)
+	[ ! "$machine_network" ] && [ "$_aba_mn" ] && replace-value-conf -q -n machine_network -v "${_aba_mn}/${_aba_pl}" -f cluster.conf
+	[ ! "$dns_servers" ]     && [ "$_aba_dns" ] && replace-value-conf -q -n dns_servers -v "$_aba_dns" -f cluster.conf
+	[ ! "$next_hop_address" ] && [ "$_aba_gw" ] && replace-value-conf -q -n next_hop_address -v "$_aba_gw" -f cluster.conf
+	[ ! "$ntp_servers" ]     && [ "$_aba_ntp" ] && replace-value-conf -q -n ntp_servers -v "$_aba_ntp" -f cluster.conf
+
+	# NTP fallback: only direct-connected clusters can reach public NTP (UDP 123 not proxied)
+	if [ ! "$ntp_servers" ] && [ "$int_connection" = "direct" ]; then
+		replace-value-conf -q -n ntp_servers -v "pool.ntp.org" -f cluster.conf
+	fi
+
+	exit 0
+fi
+
+# --- New cluster: everything below is for creating a fresh cluster.conf ---
+
+# jinja2 module is needed for template rendering
+scripts/install-rpms.sh internal
+
+# If auto-detection failed for any mandatory values, tell the user which ones
 _missing=0
 [ ! "$domain" ]			&& { echo_red "Error: 'domain' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
 [ ! "$machine_network" ]	&& { echo_red "Error: 'machine_network' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
 [ ! "$dns_servers" ]		&& { echo_red "Error: 'dns_servers' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
 [ ! "$next_hop_address" ]	&& { echo_red "Error: 'next_hop_address' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
-[ ! "$ntp_servers" ]		&& { echo_red "Error: 'ntp_servers' could not be detected. Set it in aba.conf." >&2; _missing=$((_missing+1)); }
+# ntp_servers is not mandatory -- clusters can work without NTP if clocks are synced
 [ $_missing -gt 0 ] && aba_abort "$_missing network value(s) could not be auto-detected. Set them in aba.conf."
+
+name=standard
+type=standard
+
+. <(process_args $*)
+
+aba_debug "Creating cluster directory for [$name] of type [$type]"
 
 # If not already set, set reasonable defaults
 # Note: VMware mac address range for VMs is 00:50:56:00:00:00 to 00:50:56:3F:FF:FF 
@@ -101,6 +132,11 @@ fi
 [ ! "$worker_mem" ]		&& export worker_mem=10
 [ ! "$int_connection" ]		&& export int_connection=
 [ ! "$data_disk" ]		&& export data_disk=500
+
+# NTP fallback: only direct-connected clusters can reach public NTP (UDP 123 not proxied)
+if [ ! "$ntp_servers" ] && [ "$int_connection" = "direct" ]; then
+	export ntp_servers="pool.ntp.org"
+fi
 
 # Now, need to create cluster.conf
 export cluster_name=$name

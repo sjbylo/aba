@@ -185,16 +185,11 @@ _persist_cluster_draft() {
 _cluster_generate_defaults() {
 	local _conf="$ABA_ROOT/$cl_name/cluster.conf"
 
-	# If config already exists, just load it
-	if [[ -f "$_conf" ]]; then
-		_cluster_load_conf "$_conf"
-		tui_log "Loaded existing cluster.conf for '$cl_name'"
-		return 0
-	fi
-
-	# Build the generation command
+	# Always call core -- handles both new and existing cluster.conf.
+	# For new: renders from template with auto-detected values.
+	# For existing: fills empty network fields from aba.conf.
 	local _cmd="aba cluster --name $cl_name --type $cl_type --platform $cl_platform --step cluster.conf --yes"
-	tui_log "Generating defaults: $_cmd"
+	tui_log "Generating/refreshing defaults: $_cmd"
 
 	# Run it (fast ~2s) — fully detached from TUI's terminal/dialog
 	local _gen_rc=0
@@ -206,10 +201,10 @@ _cluster_generate_defaults() {
 		return 1
 	fi
 
-	# Load the generated config into form fields
+	# Load the (now-populated) config into form fields
 	if [[ -f "$_conf" ]]; then
 		_cluster_load_conf "$_conf"
-		tui_log "Generated and loaded cluster.conf defaults"
+		tui_log "Loaded cluster.conf for '$cl_name'"
 	fi
 }
 
@@ -657,13 +652,12 @@ cluster_install_flow() {
 		fi
 	fi
 
-	# Auto-detect defaults when no cluster.conf exists yet
+	# Pre-fill from aba.conf when no cluster.conf exists yet (core will auto-detect
+	# network values when _cluster_generate_defaults calls aba cluster --step cluster.conf)
 	if [[ "$_draft_loaded" == "false" ]]; then
-		# Pre-fill from sourced aba.conf variables, fallback to auto-detect
 		cl_network="${machine_network:-}"
 		# Recombine prefix_length (normalize-aba-conf splits "10.0.0.0/24" into two vars)
 		[[ -n "${prefix_length:-}" && -n "$cl_network" && "$cl_network" != */* ]] && cl_network="${cl_network}/${prefix_length}"
-		[[ -z "$cl_network" ]] && cl_network=$(get_machine_network 2>/dev/null) || true
 		cl_dns="${dns_servers:-}"
 		cl_gateway="${next_hop_address:-}"
 		cl_ntp="${ntp_servers:-}"
@@ -684,13 +678,6 @@ cluster_install_flow() {
 			kvm) cl_ports="enp1s0" ;;
 		esac
 	fi
-
-	# Auto-detect empty network values (whether new or existing cluster.conf)
-	[[ -z "$cl_dns" ]] && cl_dns=$(get_dns_servers 2>/dev/null) || true
-	cl_dns=$(filter_disco_values "$cl_dns")
-	[[ -z "$cl_gateway" ]] && cl_gateway=$(get_next_hop 2>/dev/null) || true
-	[[ -z "$cl_ntp" ]] && cl_ntp=$(get_ntp_servers 2>/dev/null) || true
-	cl_ntp=$(filter_disco_values "$cl_ntp")
 
 	# Sanitize cl_connection for the current TUI mode.
 	# DIRECT: only "direct" and "proxy" are valid.

@@ -114,6 +114,73 @@ e2e_run "Restore aba.conf" "cp aba.conf.autodetect-bak aba.conf && rm -f aba.con
 test_end 0
 
 # ============================================================================
+# 2b. Existing cluster.conf: fill empty network fields
+# ============================================================================
+test_begin "Existing cluster.conf: fill empty network fields"
+
+e2e_run "Create a cluster.conf with populated values" \
+	"aba cluster -n e2eexist -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+
+e2e_run "Verify initial machine_network is set" \
+	"grep -E '^machine_network=.+' e2eexist/cluster.conf"
+
+e2e_run "Blank out network fields in cluster.conf" \
+	"sed -i 's/^machine_network=.*/machine_network=/' e2eexist/cluster.conf && \
+	 sed -i 's/^dns_servers=.*/dns_servers=/' e2eexist/cluster.conf && \
+	 sed -i 's/^next_hop_address=.*/next_hop_address=/' e2eexist/cluster.conf && \
+	 sed -i 's/^ntp_servers=.*/ntp_servers=/' e2eexist/cluster.conf"
+
+e2e_run "Verify fields are now empty" \
+	"grep '^machine_network=$' e2eexist/cluster.conf && \
+	 grep '^dns_servers=$' e2eexist/cluster.conf && \
+	 grep '^next_hop_address=$' e2eexist/cluster.conf"
+
+e2e_run "Re-run --step cluster.conf fills empty fields from aba.conf" \
+	"aba cluster -n e2eexist -t sno --step cluster.conf --yes"
+
+e2e_run "Verify machine_network re-populated" \
+	"grep -E '^machine_network=.+' e2eexist/cluster.conf"
+e2e_run "Verify dns_servers re-populated" \
+	"grep -E '^dns_servers=.+' e2eexist/cluster.conf"
+e2e_run "Verify next_hop_address re-populated" \
+	"grep -E '^next_hop_address=.+' e2eexist/cluster.conf"
+
+e2e_run "Clean up e2eexist" "rm -rf e2eexist"
+
+test_end 0
+
+# ============================================================================
+# 2c. NTP fallback for int_connection=direct only
+# ============================================================================
+test_begin "NTP fallback for int_connection=direct only"
+
+e2e_run "Backup aba.conf" "cp aba.conf aba.conf.ntp-bak"
+
+e2e_run "Clear ntp_servers in aba.conf" \
+	"sed -i 's/^ntp_servers=.*/ntp_servers=/' aba.conf"
+
+# With -I direct: if get_ntp_servers() returns empty, pool.ntp.org is used as fallback.
+# On hosts with chrony, get_ntp_servers() finds local NTP, so we also verify it has SOME value.
+e2e_run "Create cluster with -I direct" \
+	"aba cluster -n e2entp -t sno --starting-ip $(pool_sno_ip) -I direct --step cluster.conf"
+e2e_run "Verify ntp_servers has a value in cluster.conf" \
+	"grep -E '^ntp_servers=.+' e2entp/cluster.conf"
+
+e2e_run "Clean up e2entp" "rm -rf e2entp"
+
+# Without -I (mirror mode): pool.ntp.org fallback must NOT appear.
+# If chrony-detected NTP appears, that's fine -- just not the public fallback.
+e2e_run "Create cluster without -I flag (mirror mode)" \
+	"aba cluster -n e2entp2 -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run "Verify ntp_servers is NOT exactly pool.ntp.org (the direct-only fallback)" \
+	"! grep '^ntp_servers=pool\\.ntp\\.org' e2entp2/cluster.conf"
+
+e2e_run "Clean up e2entp2" "rm -rf e2entp2"
+e2e_run "Restore aba.conf" "cp aba.conf.ntp-bak aba.conf && rm -f aba.conf.ntp-bak"
+
+test_end 0
+
+# ============================================================================
 # 3. cluster.conf validation
 # ============================================================================
 test_begin "cluster.conf validation"
