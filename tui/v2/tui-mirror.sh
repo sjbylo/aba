@@ -501,45 +501,104 @@ mirror_prep_upgrade() {
 
 	local _current_ver="${ocp_version:-unknown}"
 	local _target_ver
+	local _existing_target=""
+	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+		_existing_target=$(grep '^ocp_version_target=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+	fi
 
-	# Input loop: re-prompt on invalid input, ESC exits to caller
+	# Fetch available versions for the current channel (reuse cached data)
+	local _channel="${ocp_channel:-fast}"
+	run_once -p -i "ocp:${_channel}:latest_version" 2>/dev/null || {
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"$(printf "$TUI2_MSG_VERSION_FETCHING" "$_channel")" 0 0
+		run_once -q -w -S -i "ocp:${_channel}:latest_version" 2>/dev/null || \
+			run_once -i "ocp:${_channel}:latest_version" -- \
+				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $_channel"
+		run_once -q -w -S -i "ocp:${_channel}:latest_version_previous" 2>/dev/null || \
+			run_once -i "ocp:${_channel}:latest_version_previous" -- \
+				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $_channel"
+	}
+
+	local _latest _previous
+	_latest=$(run_once -o -i "ocp:${_channel}:latest_version" 2>/dev/null)
+	_previous=$(run_once -o -i "ocp:${_channel}:latest_version_previous" 2>/dev/null)
+
+	# Build menu items — show all valid upgrade versions (deduplicated)
+	local items=() _default_tag="m"
+
+	# Existing target from mirror.conf — validate against graph before showing
+	if [[ -n "$_existing_target" ]]; then
+		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
+			items+=("t" "Current target ($_existing_target)")
+			_default_tag="t"
+		else
+			# Invalid target — show it marked as unavailable so user knows
+			items+=("t" "Current target ($_existing_target) [NOT IN CHANNEL]")
+			_default_tag="l"
+		fi
+	fi
+	if [[ -n "$_latest" && "$_latest" != "$_existing_target" ]]; then
+		items+=("l" "Latest    ($_latest)")
+		[[ "$_default_tag" == "m" ]] && _default_tag="l"
+	fi
+	if [[ -n "$_previous" && "$_previous" != "$_existing_target" && "$_previous" != "$_latest" ]]; then
+		items+=("p" "Previous  ($_previous)")
+	fi
+	items+=("m" "Manual entry (x.y or x.y.z)")
+
+	# Version picker loop
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
-			--ok-label "Next" \
+			--default-item "$_default_tag" \
+			--ok-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_CANCEL" \
-			--inputbox "\nCurrent installed version: ${_current_ver}\n\nEnter target upgrade version:\n(e.g. 4.21.16)" \
-			0 0 "" \
+			--menu "Select target upgrade version ($_channel channel):\n\nCurrent installed: ${_current_ver}" 0 0 0 \
+			"${items[@]}" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
 
-		_target_ver=$(<"$_TUI_TMP")
-		_target_ver=$(echo "$_target_ver" | tr -d ' ')
+		local _choice
+		_choice=$(<"$_TUI_TMP")
+		case "$_choice" in
+			t) _target_ver="$_existing_target" ;;
+			l) _target_ver="$_latest" ;;
+			p) _target_ver="$_previous" ;;
+		m)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
+					--inputbox "Enter target version (x.y, x.y.z, or x.y.z-rc.N):" \
+					0 0 "${_existing_target}" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				_target_ver=$(<"$_TUI_TMP")
+				_target_ver=$(echo "$_target_ver" | tr -d ' ')
+				if [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+					break
+				elif [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+					dlg --backtitle "$(ui_backtitle)" --infobox \
+						"Resolving $_target_ver to latest z-stream..." 0 0
+					local _resolved=""
+					if _resolved=$(_resolve_minor_to_patch "$_target_ver" "$_channel"); then
+						_target_ver="$_resolved"
+						break
+					fi
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Could not resolve $_target_ver in $_channel channel." 0 0
+				else
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N" 0 0
+				fi
+			done
+			[[ -z "$_target_ver" ]] && continue
+			;;
+		esac
 
-		if [[ -z "$_target_ver" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
-			continue
-		fi
-		if ! [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+		# Verify version exists in Cincinnati graph (fast check before long oc-mirror run)
+		dlg --backtitle "$(ui_backtitle)" --infobox "Verifying ${_target_ver} exists in ${_channel} channel..." 0 0
+		if ! verify_release_version_exists "$_target_ver" "$_channel"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"Invalid version format: '$_target_ver'\n\nExpected: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.16 or 4.22.0-rc.1)" 0 0
+				"Version $_target_ver not found in '$_channel' channel.\n\nThis version may not have been released yet.\nCheck the channel or try a different version." 0 0
 			continue
-		fi
-
-		# Reject downgrade or same-version (only upgrades make sense here)
-		if [[ "$_current_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
-			local _cur_major _cur_minor _cur_patch _tgt_major _tgt_minor _tgt_patch
-			# Strip pre-release suffix before arithmetic (e.g. 4.21.0-rc.3 → 4.21.0)
-			local _cur_clean="${_current_ver%%-*}"
-			local _tgt_clean="${_target_ver%%-*}"
-			IFS='.' read -r _cur_major _cur_minor _cur_patch <<< "$_cur_clean"
-			IFS='.' read -r _tgt_major _tgt_minor _tgt_patch <<< "$_tgt_clean"
-			local _cur_num=$(( _cur_major * 1000000 + _cur_minor * 1000 + _cur_patch ))
-			local _tgt_num=$(( _tgt_major * 1000000 + _tgt_minor * 1000 + _tgt_patch ))
-			if [[ $_tgt_num -le $_cur_num ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Target version '$_target_ver' must be higher than current version '$_current_ver'.\n\nDowngrades and same-version are not supported." 0 0
-				continue
-			fi
 		fi
 
 		break
