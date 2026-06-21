@@ -637,6 +637,17 @@ e2e_add_to_cluster_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Path must be valid on the remote host, not the local conN.
+		# Suites create clusters with "cd ~/aba && aba cluster -n NAME" on disN,
+		# so the remote path is always ~<remote_user>/aba/<cluster_dir_name>.
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -662,6 +673,15 @@ e2e_remove_from_cluster_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Must match the path transformation in e2e_add_to_cluster_cleanup
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -738,6 +758,15 @@ e2e_add_to_mirror_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Path must be valid on the remote host, not the local conN.
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -761,6 +790,15 @@ e2e_remove_from_mirror_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Must match the path transformation in e2e_add_to_mirror_cleanup
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
