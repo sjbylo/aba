@@ -657,7 +657,7 @@ cluster_install_flow() {
 		fi
 	fi
 
-	# Auto-detect defaults only when no cluster.conf exists yet (before page 1 generates one)
+	# Auto-detect defaults when no cluster.conf exists yet
 	if [[ "$_draft_loaded" == "false" ]]; then
 		# Pre-fill from sourced aba.conf variables, fallback to auto-detect
 		cl_network="${machine_network:-}"
@@ -665,13 +665,8 @@ cluster_install_flow() {
 		[[ -n "${prefix_length:-}" && -n "$cl_network" && "$cl_network" != */* ]] && cl_network="${cl_network}/${prefix_length}"
 		[[ -z "$cl_network" ]] && cl_network=$(get_machine_network 2>/dev/null) || true
 		cl_dns="${dns_servers:-}"
-		[[ -z "$cl_dns" ]] && cl_dns=$(get_dns_servers 2>/dev/null) || true
-		cl_dns=$(filter_disco_values "$cl_dns")
 		cl_gateway="${next_hop_address:-}"
-		[[ -z "$cl_gateway" ]] && cl_gateway=$(get_next_hop 2>/dev/null) || true
 		cl_ntp="${ntp_servers:-}"
-		[[ -z "$cl_ntp" ]] && cl_ntp=$(get_ntp_servers 2>/dev/null) || true
-		cl_ntp=$(filter_disco_values "$cl_ntp")
 
 		# Smart guess VIPs from DNS (if base domain available)
 		if [[ -n "$cl_domain" ]]; then
@@ -689,6 +684,13 @@ cluster_install_flow() {
 			kvm) cl_ports="enp1s0" ;;
 		esac
 	fi
+
+	# Auto-detect empty network values (whether new or existing cluster.conf)
+	[[ -z "$cl_dns" ]] && cl_dns=$(get_dns_servers 2>/dev/null) || true
+	cl_dns=$(filter_disco_values "$cl_dns")
+	[[ -z "$cl_gateway" ]] && cl_gateway=$(get_next_hop 2>/dev/null) || true
+	[[ -z "$cl_ntp" ]] && cl_ntp=$(get_ntp_servers 2>/dev/null) || true
+	cl_ntp=$(filter_disco_values "$cl_ntp")
 
 	# Sanitize cl_connection for the current TUI mode.
 	# DIRECT: only "direct" and "proxy" are valid.
