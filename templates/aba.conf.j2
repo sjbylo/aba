@@ -16,15 +16,15 @@ op_sets=			# Optional: Comma-separated operator sets, such as: op_sets=odf,virt,
 ops=				# Optional: Comma-separated individual operator names such as: ops=web-terminal,devworkspace-operator
 				# If needed, fetch operator names from the files: mirror/imageset-config-*.yaml, generate by: aba catalog
 
-# *If you know then*, set the following important values for your disconnected network.
-# When a cluster is created, these values will be included - and can be overridden - in the cluster’s cluster.conf file.
+# Set the following values for the target network, if known.
+# If left empty, they will be auto-detected when installing a cluster on the target network.
+# These values can also be overridden later in the cluster's cluster.conf file.
 
-domain={{ domain }}		# Base domain for your disconnected OpenShift cluster.
-machine_network={{ machine_network }}	# Network segment (CIDR format) where OpenShift will be installed.
-dns_servers={{ dns_servers }}		# DNS server IPs (comma-separated).
-next_hop_address={{ next_hop_address }}	# Default gateway IP for your private network.
-ntp_servers={{ ntp_servers }}		# Important: NTP servers or hostnames (comma-separated). Needed if server clocks aren't synced.
-				# Note: The above 5 values can be overridden later in 'cluster.conf'.
+domain={{ domain }}		# Base domain for OpenShift. Auto-detected at aba.conf creation.
+machine_network=		# Network address where OpenShift will be installed. Auto-detected at cluster creation.
+dns_servers=			# DNS server IPs (comma-separated). Auto-detected at cluster creation.
+next_hop_address=		# Default gateway IP for the target network. Auto-detected at cluster creation.
+ntp_servers=			# NTP servers or hostnames (comma-separated). Auto-detected at cluster creation.
 
 # Other settings
 

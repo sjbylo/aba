@@ -275,20 +275,12 @@ BUILD_COMMAND=
 
 # Init aba.conf
 if [ ! -s $ABA_ROOT/aba.conf ]; then
-	aba_debug Adding network values to $ABA_ROOT/aba.conf
+	aba_debug Creating $ABA_ROOT/aba.conf
 
-	# Determine resonable defaults for ...
+	# Auto-detect domain only (needed by mirror.conf). Other network values deferred to cluster creation.
 	export domain=$(get_domain)
-	export machine_network=$(get_machine_network)
-	export dns_servers=$(get_dns_servers)
-	export next_hop_address=$(get_next_hop)
-	export ntp_servers=$(get_ntp_servers)
 
 	aba_debug domain:		$domain
-	aba_debug machine_network:	$machine_network
-	aba_debug dns_servers:		$dns_servers
-	aba_debug next_hop_address:	$next_hop_address
-	aba_debug ntp_servers:		$ntp_servers
 
 	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
@@ -1722,7 +1714,7 @@ fi
 # Allow edit of aba.conf
 
 if [ ! -f .aba.conf.seen ]; then
-	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform type, base domain & net addresses, dns & ntp etc (if known)"; then
+	if edit_file aba.conf "Edit aba.conf to set global values, e.g. platform type & base domain. Network values will be auto-detected at cluster install if not set here"; then
 		# If edited/seen, no need to ask again.
 		touch .aba.conf.seen
 	else
