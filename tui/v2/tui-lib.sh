@@ -786,11 +786,8 @@ mirror_state_label() {
 _invalidate_mirror_cache() {
 	_TUI_NEED_MIRROR_RECHECK=true
 	aba_mirror_verify_refresh
-	# Pre-warm internet check (TTL likely expired during long mirror operation).
-	# Reset + start in background — no wait. Menu loop finds it ready.
-	run_once -r -i "aba:check:internet" 2>/dev/null || true
-	run_once -i "aba:check:internet" -- \
-		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet" 2>/dev/null || true
+	# Internet check uses TTL (aba_inet_check_cached) — no reset needed here.
+	# The menu loop re-triggers automatically if >120s elapsed.
 }
 
 # Inform user about day2 after mirror load/sync.

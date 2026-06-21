@@ -151,7 +151,7 @@ disco_main() {
 		# Mirror recheck: only when _invalidate_mirror_cache fired
 		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
 			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
-				dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking mirror..." 3 30
+				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
 			fi
 			aba_mirror_verify_wait
 			_TUI_NEED_MIRROR_RECHECK=false
