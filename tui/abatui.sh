@@ -2238,7 +2238,7 @@ image synchronization process." 0 0 || true
 				log "After set selection - Basket count: ${#OP_BASKET[@]}"
 				log "Basket contents: ${!OP_BASKET[*]}"
 				log "Active sets: ${!OP_SET_ADDED[*]}"
-				default_item="$action"  # Keep cursor on Select Operator Sets
+				default_item=3  # Focus "View/Edit Basket" after set selection
 				;;
 
 			2)
@@ -2396,7 +2396,7 @@ image synchronization process." 0 0 || true
 				
 				log "After search update, basket has ${#OP_BASKET[@]} operators"
 				log "Basket contents (sorted): $(printf '%s\n' "${!OP_BASKET[@]}" | sort | paste -sd, -)"
-				default_item="$action"  # Keep cursor on Search Operator Names
+				default_item=3  # Focus "View/Edit Basket" after search
 				;;
 
 			3)

@@ -896,10 +896,12 @@ Selected operators will be included in the ImageSet config."
 			1) _operator_sets "$version_short"
 			   _OP_BASKET_DIRTY=true
 			   _persist_operator_basket
+			   default_item=3
 			   ;;
 			2) _operator_search "$version_short"
 			   _OP_BASKET_DIRTY=true
 			   _persist_operator_basket
+			   default_item=3
 			   ;;
 			3) _operator_view_basket
 			   _OP_BASKET_DIRTY=true
