@@ -317,17 +317,19 @@ clear
 # Mode Detection
 # =============================================================================
 # Three modes:
-#   DISCO  — Disconnected: arrived via bundle, no internet. Install registry from archives.
-#   CONNO  — Connected with mirror: has a mirror registry (internet optional).
+#   DISCO  — Disconnected: no internet, payload ready (arrived via bundle or post-load state).
+#            Install registry from archives or use already-running mirror.
+#   CONNO  — Connected with mirror: has internet, uses a mirror registry.
 #            The mirror serves images to clusters over local network.
 #   DIRECT — Direct from internet: no mirror, pull images directly from Red Hat.
+#            User switches to DIRECT from the CONNO action menu.
 #
 # Detection priority:
 #   1. --disco/--conno/--direct CLI flags (forced mode)
 #   2. .bundle file present → DISCO (or ask if internet also available)
-#   3. No .bundle + internet → ask user: mirror or direct
-#   4. No .bundle + no internet + mirror ready → DISCO (post-load state)
-#   5. No .bundle + no internet + no mirror → dead end (need bundle transfer)
+#   3. No .bundle + internet → CONNO (default to mirror workflow)
+#   4. No .bundle + no internet + payload valid → DISCO (post-load state)
+#   5. No .bundle + no internet + no payload → dead end (error + exit)
 
 # Validate that the repo has sufficient payload to operate offline (bundle equivalent).
 # Minimum "bundle": aba.conf + CLI tools + registry install files (Quay/Docker) + ISC config.
