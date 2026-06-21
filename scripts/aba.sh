@@ -514,13 +514,10 @@ elif [ "$1" = "--light" ]; then
 		opt=$1
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
-		# If no value (or "none"), clear the target version from mirror.conf
+		# If no value (or "none"), comment out the target version in mirror.conf (preserves old value)
 		if [[ "$2" =~ ^- || -z "$2" || "$2" = "none" ]]; then
 			[[ "${2:-}" = "none" ]] && shift
-			if ! grep -q "^[# ]*ocp_version_target=" "$WORK_DIR/mirror.conf"; then
-				echo "#ocp_version_target=" >> "$WORK_DIR/mirror.conf"
-			fi
-			replace-value-conf -n ocp_version_target -v "" -f $WORK_DIR/mirror.conf
+			sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" "$WORK_DIR/mirror.conf"
 			aba_info "Upgrade target version cleared from mirror.conf"
 			shift
 			continue
@@ -544,10 +541,6 @@ elif [ "$1" = "--light" ]; then
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
 		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
 		_is_prerelease "$tgt_ver" && aba_warning "Pre-release target version '$tgt_ver' — not for production use."
-		# Ensure the placeholder exists in mirror.conf (older templates may lack it)
-		if ! grep -q "^[# ]*ocp_version_target=" "$WORK_DIR/mirror.conf"; then
-			echo "#ocp_version_target=" >> "$WORK_DIR/mirror.conf"
-		fi
 		replace-value-conf -n ocp_version_target -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
