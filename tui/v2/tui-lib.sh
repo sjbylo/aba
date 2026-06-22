@@ -1288,6 +1288,8 @@ select_cluster() {
 			[[ -f "$ABA_ROOT/$dir/.install-complete" ]] && continue
 			# Skip clusters that haven't started installing (no kubeconfig)
 			[[ ! -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]] && continue
+			# Skip clusters that were shut down (can't be actively monitored)
+			[[ -f "$ABA_ROOT/$dir/.shutdown.log" ]] && continue
 		fi
 		display=$(cluster_display_name "$dir")
 		# Annotate status so the user sees cluster state at a glance
@@ -1503,7 +1505,7 @@ _resolve_minor_to_patch() {
 # Reset and restart ISC generation in background (non-blocking)
 tui_kick_isconf_regen() {
 	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-	(cd "$ABA_ROOT" && aba_isconf_generate_start) &
+	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&- &
 }
 
 # Gate Install Cluster menu action: prompts for mirror/registry prep when needed.

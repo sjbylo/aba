@@ -1330,6 +1330,16 @@ _cluster_page_iface() {
 				local raw=$(<"$_TUI_TMP")
 				# Normalize: convert commas/spaces to newlines, trim empty lines and whitespace
 				cl_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
+				# Validate MAC format (XX:XX:XX:XX:XX:XX)
+				local _bad_macs
+				_bad_macs=$(echo "$cl_macs" | grep -vE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || true)
+				if [[ -n "$_bad_macs" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid MAC address(es):\n\n${_bad_macs}\n\nExpected format: XX:XX:XX:XX:XX:XX" 0 0 || true
+					cl_macs=""
+					rm -f "$_mac_edit"
+					continue
+				fi
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
 			fi
 			rm -f "$_mac_edit"
@@ -1873,8 +1883,8 @@ U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
-E - Reset Execution Mode: Clears your 'Always TUI' or 'Always Terminal'\n\
-    preference for this session.\n\n\
+E - Reset Execution Mode (only shown when set): Clears your\n\
+    'Always TUI' or 'Always Terminal' preference for this session.\n\n\
 X/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
