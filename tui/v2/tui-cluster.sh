@@ -367,7 +367,7 @@ _configure_vmw_form() {
 							"Invalid hostname/IP.\n\nExpected: FQDN or IP (e.g. vcenter.lab.com, 10.0.1.5)." 0 0
 						continue
 					fi
-					replace-value-conf -q -n GOVC_URL -v "$v_url" -f "$conf_path"
+					replace-value-conf -q -n GOVC_URL -v "'$v_url'" -f "$conf_path"
 				fi
 				;;
 			N)
@@ -375,7 +375,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_user" || continue
-					replace-value-conf -q -n GOVC_USERNAME -v "$v_user" -f "$conf_path"
+					replace-value-conf -q -n GOVC_USERNAME -v "'$v_user'" -f "$conf_path"
 				fi
 				;;
 			P)
@@ -388,7 +388,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_datastore=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_datastore" || continue
-					replace-value-conf -q -n GOVC_DATASTORE -v "$v_datastore" -f "$conf_path"
+					replace-value-conf -q -n GOVC_DATASTORE -v "'$v_datastore'" -f "$conf_path"
 				fi
 				;;
 			W)
@@ -404,7 +404,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_datacenter=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_datacenter" || continue
-					replace-value-conf -q -n GOVC_DATACENTER -v "$v_datacenter" -f "$conf_path"
+					replace-value-conf -q -n GOVC_DATACENTER -v "'$v_datacenter'" -f "$conf_path"
 				fi
 				;;
 			L)
@@ -412,7 +412,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_cluster=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_cluster" || continue
-					replace-value-conf -q -n GOVC_CLUSTER -v "$v_cluster" -f "$conf_path"
+					replace-value-conf -q -n GOVC_CLUSTER -v "'$v_cluster'" -f "$conf_path"
 				fi
 				;;
 			F)
@@ -420,7 +420,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_folder=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_folder" || continue
-					replace-value-conf -q -n VC_FOLDER -v "$v_folder" -f "$conf_path"
+					replace-value-conf -q -n VC_FOLDER -v "'$v_folder'" -f "$conf_path"
 				fi
 				;;
 			I)
@@ -1353,6 +1353,17 @@ ${_conn_help}
 					continue
 				fi
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
+				# Warn if count doesn't match expected nodes
+				local _mac_count _expected_nodes
+				_mac_count=$(echo "$cl_macs" | wc -l)
+				case "$cl_type" in
+					sno) _expected_nodes=1 ;; compact) _expected_nodes=3 ;;
+					standard) _expected_nodes=$(( 3 + ${cl_workers:-2} )) ;; *) _expected_nodes=1 ;;
+				esac
+				if [[ $_mac_count -ne $_expected_nodes ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Warning: $_mac_count MAC(s) entered, but $cl_type needs $_expected_nodes (one per node)." 0 0 || true
+				fi
 			fi
 			rm -f "$_mac_edit"
 			;;
