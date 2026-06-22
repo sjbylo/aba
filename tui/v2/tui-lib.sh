@@ -1099,7 +1099,7 @@ _tui_settings_menu_reg_vendor() {
 }
 
 _tui_settings_menu_retry() {
-	local current="${_TUI_RETRY_COUNT:-2}"
+	local current="${_TUI_RETRY_COUNT:-1}"
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
 		--inputbox "Oc-mirror retry count for this session (0 = omit --retry):" 0 0 "$current" \
 		2>"$_TUI_TMP"
@@ -1170,7 +1170,7 @@ _tui_settings_menu() {
 				*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
 			esac
 			local retry_display
-			local rc_val="${_TUI_RETRY_COUNT:-2}"
+			local rc_val="${_TUI_RETRY_COUNT:-1}"
 			case "$rc_val" in
 				0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
 				*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;

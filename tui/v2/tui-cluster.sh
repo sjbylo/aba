@@ -1365,12 +1365,12 @@ _cluster_page_vm() {
 	while :; do
 		local items=()
 		items+=("C" "Master CPUs:    ${cl_master_cpu:-(not set)}")
-		items+=("R" "Master Memory:  ${cl_master_mem:-(not set)} GB")
+		items+=("R" "Master Memory:  ${cl_master_mem:+"${cl_master_mem} GB"}${cl_master_mem:-(not set)}")
 		if [[ "$cl_type" == "standard" ]]; then
 			items+=("W" "Worker CPUs:    ${cl_worker_cpu:-(not set)}")
-			items+=("E" "Worker Memory:  ${cl_worker_mem:-(not set)} GB")
+			items+=("E" "Worker Memory:  ${cl_worker_mem:+"${cl_worker_mem} GB"}${cl_worker_mem:-(not set)}")
 		fi
-		items+=("D" "Data disk:      ${cl_disk:-(not set)} GB")
+		items+=("D" "Data disk:      ${cl_disk:+"${cl_disk} GB"}${cl_disk:-(not set)}")
 		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VM" \
