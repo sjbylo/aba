@@ -313,6 +313,7 @@ _configure_vmw_form() {
 	v_url="${GOVC_URL:-}"
 	v_user="${GOVC_USERNAME:-}"
 	v_pass="${GOVC_PASSWORD:-}"
+	[[ "$v_pass" == "<"*">" ]] && v_pass=""
 	v_datastore="${GOVC_DATASTORE:-}"
 	v_network="${GOVC_NETWORK:-}"
 	v_datacenter="${GOVC_DATACENTER:-}"
@@ -621,6 +622,9 @@ cluster_install_flow() {
 		_cl_platform="${platform:-bm}"
 		_CL_STATE_INIT=true
 	fi
+
+	# Always refresh platform from aba.conf (may have changed via Advanced menu)
+	_cl_platform="${platform:-bm}"
 
 	# Local aliases for readability (reference the globals)
 	local cl_name="$_cl_name"

@@ -684,8 +684,8 @@ _persist_operator_basket() {
 	fi
 
 	if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
-		replace-value-conf -q -n ops     -v "" -f aba.conf
-		replace-value-conf -q -n op_sets -v "" -f aba.conf
+		replace-value-conf -q -n ops     -v "" -f "$ABA_ROOT/aba.conf"
+		replace-value-conf -q -n op_sets -v "" -f "$ABA_ROOT/aba.conf"
 		tui_log "Persisted empty operator basket to aba.conf"
 	else
 		# Generate sorted operator list for dedup comparison
@@ -724,8 +724,8 @@ _persist_operator_basket() {
 			} > "$custom_set_file"
 		fi
 
-		replace-value-conf -q -n ops     -v ""               -f aba.conf
-		replace-value-conf -q -n op_sets -v "$custom_set_name" -f aba.conf
+		replace-value-conf -q -n ops     -v ""               -f "$ABA_ROOT/aba.conf"
+		replace-value-conf -q -n op_sets -v "$custom_set_name" -f "$ABA_ROOT/aba.conf"
 		tui_log "Persisted ${#OP_BASKET[@]} operators as op_sets=$custom_set_name"
 	fi
 
