@@ -984,6 +984,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			esac
 		fi
 		replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
+		platform="$cl_platform"
 		tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
 		;;
 		W)
@@ -2212,7 +2213,9 @@ _day2_ssh() {
 
 	cd "$ABA_ROOT"
 	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
-	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&- || true
+	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&-
+	local _ssh_rc=$?
+	[[ $_ssh_rc -ne 0 ]] && echo -e "\n\e[31mSSH failed (exit code $_ssh_rc)\e[0m"
 
 	echo
 	read -rp "Press ENTER to return to TUI..."

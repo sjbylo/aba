@@ -384,7 +384,7 @@ mirror_install() {
 • Local: installs on this host (Quay or Docker registry)
 • Remote: installs on another host via SSH
 
-After installation, use 'Save' or 'Sync' to populate it with images."
+After installation, use 'Save', 'Sync', or 'Load' to populate it with images."
 				continue
 				;;
 			0) ;;
