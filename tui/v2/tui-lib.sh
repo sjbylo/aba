@@ -164,7 +164,7 @@ _valid_port_names() {
 _TUI_TMP=$(mktemp)
 
 _tui_cleanup() {
-	rm -f "$_TUI_TMP" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
+	rm -f "$_TUI_TMP" "${_TUI_TMP}.edit" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
 	tui_log "TUI v2 exited"
 }
 trap '_tui_cleanup' EXIT
