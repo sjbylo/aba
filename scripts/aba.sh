@@ -1143,7 +1143,7 @@ if [ "$cur_target" ]; then
 		;;
 		shell)
 			_cn=$(basename "$PWD")
-			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
+			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			echo "export KUBECONFIG=$_kc"

@@ -2036,7 +2036,7 @@ cluster_day2_menu() {
 			2)
 				show_help "$TUI2_HELP_TITLE_DAY2" \
 "Configuration:
-• Resources: applies all Day-2 config (IDMS, CatalogSources, OperatorHub, etc.)
+• Configure OperatorHub: applies Day-2 config (IDMS, CatalogSources, OperatorHub, etc.)
 • NTP: configures Network Time Protocol on all cluster nodes
 • OSUS: installs the OpenShift Update Service operator for upgrades
 
