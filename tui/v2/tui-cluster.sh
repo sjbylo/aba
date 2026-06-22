@@ -1182,6 +1182,16 @@ _cluster_page_iface() {
 	if [[ -z "$cl_connection" ]]; then
 		[[ "$_TUI_MODE" == "DIRECT" ]] && cl_connection="direct" || cl_connection="mirror"
 	fi
+	# Build connection help text based on available options in this mode
+	local _conn_help
+	case "$_TUI_MODE" in
+		DIRECT) _conn_help="  - proxy: from public registries via HTTP proxy
+  - direct: from public registries with direct internet" ;;
+		DISCO)  _conn_help="  - mirror: from the local mirror registry" ;;
+		*)      _conn_help="  - mirror: from the local mirror registry (default)
+  - proxy: from public registries via HTTP proxy
+  - direct: from public registries with direct internet" ;;
+	esac
 	while :; do
 		local conn_display=""
 		case "$cl_connection" in
@@ -1242,9 +1252,7 @@ _cluster_page_iface() {
 • VLAN: optional 802.1Q VLAN tag
 
 • Image source: where the cluster pulls container images from
-  - mirror: from the local mirror registry (default)
-  - proxy: from public registries via HTTP proxy
-  - direct: from public registries with direct internet
+${_conn_help}
 
 • MACs (bare-metal only): paste one or more MAC addresses per node
   Ensures each node gets the correct IP via mac address mapping."
