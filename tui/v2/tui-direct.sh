@@ -438,6 +438,7 @@ _direct_version() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
 		--default-item "$_default_ver_tag" \
+		--default-button ok \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \

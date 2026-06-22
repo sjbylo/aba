@@ -599,22 +599,25 @@ _conno_main() {
 				show_help "$TUI2_HELP_TITLE_CONNO" \
 "Partially disconnected mode with a mirror registry. Full ABA workflow:
 
-Mirror operations:
-  • Install Mirror — set up registry (local or remote)
+Mirror:
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
-
-Transfer (uses oc-mirror):
+  • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
-  • Save — mirror-to-disk (m2d): download images to local archive
-  • Load — disk-to-mirror (d2m): load saved images into registry
-  • Install Bundle — create a portable bundle (tar) for USB transfer
 
-Cluster operations:
+Transfer:
+  • Bundle — create a portable bundle (tar) for USB transfer
+  • Save — mirror-to-disk (m2d): download images to local archive
+  • Prepare Upgrade — prepare upgrade images for transfer
+
+Cluster:
   • Install Cluster — configure, review, and provision OpenShift
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
-Use 'Advanced' to switch modes or manage platform settings.
+Advanced:
+  • Configure — adjust settings (retry, editor, ask mode)
+  • Rerun Wizard — re-run the initial setup wizard
+  • Advanced — switch modes, uninstall, reset
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons

@@ -687,7 +687,7 @@ cluster_install_flow() {
 		if [[ "$_TUI_MODE" == "DIRECT" ]]; then
 			[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
 		elif [[ "$_TUI_MODE" == "DISCO" ]]; then
-			[[ "$cl_connection" == "direct" ]] && cl_connection="mirror"
+			[[ "$cl_connection" != "mirror" ]] && cl_connection="mirror"
 		fi
 	}
 	_apply_mode_connection
@@ -908,8 +908,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			local input
 			input=$(<"$_TUI_TMP")
 			if [[ -n "$input" ]]; then
-				# DNS label: start with letter, end with letter/digit, max 63 chars
-				if [[ ${#input} -gt 63 || ! "$input" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+				if ! aba cluster --name "$input" --validate >/dev/null 2>&1; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"$TUI2_MSG_INVALID_CLUSTER_NAME" 0 0 || true
 					continue
@@ -940,12 +939,12 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				[[ $? -ne 0 ]] && break
 				local dom_input
 				dom_input=$(<"$_TUI_TMP")
-				if [[ -n "$dom_input" && ! "$dom_input" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+				if [[ -n "$dom_input" && ! "$dom_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
 					continue
 				fi
-				[[ -n "$dom_input" ]] && cl_domain="$dom_input"
+				[[ -n "$dom_input" ]] && cl_domain="${dom_input,,}"
 				break
 			done
 			;;

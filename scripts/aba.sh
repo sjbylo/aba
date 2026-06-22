@@ -899,6 +899,7 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		if [ "$cur_target" = "cluster" -o "$cur_target" = "mirror" ]; then
+			[[ "$cur_target" = "cluster" ]] && { _valid_cluster_name "$2" || aba_abort "--name: invalid cluster name '$2'"; }
 			BUILD_COMMAND="$BUILD_COMMAND name='$2'"
 		else
 			aba_abort "option $1 requires target 'cluster' or 'mirror'.  See aba cluster -h or aba mirror -h"
@@ -1012,6 +1013,9 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--dry-run" ]; then
 		upgrade_dry_run="--dry-run"
 		shift
+	elif [ "$1" = "--validate" ]; then
+		_cli_validate_only=true
+		shift
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift
@@ -1066,6 +1070,12 @@ _ensure_hv_ready() {
 
 if [ "$cur_target" ]; then
 	aba_debug cur_target=$cur_target
+
+	# --validate: validate name and exit (no side effects)
+	if [ "$_cli_validate_only" ] && [ "$cur_target" = "cluster" ]; then
+		_valid_cluster_name "$_CLI_CLUSTER_NAME"
+		exit $?
+	fi
 
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup

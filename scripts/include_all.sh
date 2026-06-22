@@ -924,6 +924,28 @@ _recreate_cluster_dir() {
 	return 0
 }
 
+# Validate a cluster name: DNS label rules + reserved ABA directory names.
+# Returns 0 if valid, 1 if invalid (error on stderr).
+_valid_cluster_name() {
+	local name="$1"
+	[ -z "$name" ] && echo_red "Error: cluster name is empty" >&2 && return 1
+
+	if [[ ${#name} -gt 63 || ! "$name" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		echo_red "Error: invalid cluster name '$name' — must be a DNS label (lowercase letters, digits, hyphens; start with letter; max 63 chars)" >&2
+		return 1
+	fi
+
+	# Reserved ABA directories that must never be used as cluster names
+	case "$name" in
+		mirror|scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel)
+			echo_red "Error: '$name' is a reserved ABA directory name — choose a different cluster name" >&2
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
 verify-cluster-conf() {
 	[ "$verify_conf" = "off" ] && return 0
 	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1

@@ -14,7 +14,8 @@ type=standard
 
 . <(process_args $*)
 
-[ ! "$name" ] && aba_abort "Error: cluster name misssing!" 
+[ ! "$name" ] && aba_abort "Error: cluster name missing!" 
+_valid_cluster_name "$name" || exit 1
 
 if [ ! -d "$name" ]; then
 	mkdir $name
