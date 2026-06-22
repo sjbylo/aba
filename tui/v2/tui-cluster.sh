@@ -519,7 +519,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_uri=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_uri" || continue
-					replace-value-conf -q -n LIBVIRT_URI -v "$k_uri" -f "$conf_path"
+					replace-value-conf -q -n LIBVIRT_URI -v "'$k_uri'" -f "$conf_path"
 				fi
 				;;
 			S)
@@ -527,7 +527,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_pool=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_pool" || continue
-					replace-value-conf -q -n KVM_STORAGE_POOL -v "$k_pool" -f "$conf_path"
+					replace-value-conf -q -n KVM_STORAGE_POOL -v "'$k_pool'" -f "$conf_path"
 				fi
 				;;
 			N)
@@ -535,7 +535,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_network=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_network" || continue
-					replace-value-conf -q -n KVM_NETWORK -v "$k_network" -f "$conf_path"
+					replace-value-conf -q -n KVM_NETWORK -v "'$k_network'" -f "$conf_path"
 				fi
 				;;
 			B)
@@ -543,7 +543,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_boot=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_boot" || continue
-					replace-value-conf -q -n KVM_BOOT_ARGS -v "$k_boot" -f "$conf_path"
+					replace-value-conf -q -n KVM_BOOT_ARGS -v "'$k_boot'" -f "$conf_path"
 				fi
 				;;
 			G)
@@ -1427,65 +1427,65 @@ _cluster_page_vm() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			C)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
-						--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_master_cpu="$val"
-				break
-			done
+		C)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
+					--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 4 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 4." 0 0 || true
+					continue
+				fi
+			cl_master_cpu="$val"
+			break
+		done
+		;;
+	R)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
+					--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 16 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 16 GB." 0 0 || true
+					continue
+				fi
+			cl_master_mem="$val"
+			break
+		done
 			;;
-		R)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
-						--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_master_mem="$val"
-				break
-			done
-			;;
-		W)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
-						--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_worker_cpu="$val"
-				break
-			done
-			;;
-		E)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
-						--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_worker_mem="$val"
-				break
-			done
+	W)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
+					--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 2 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 2." 0 0 || true
+					continue
+				fi
+			cl_worker_cpu="$val"
+			break
+		done
+		;;
+	E)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
+					--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 8 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 8 GB." 0 0 || true
+					continue
+				fi
+			cl_worker_mem="$val"
+			break
+		done
 			;;
 		D)
 			while :; do
