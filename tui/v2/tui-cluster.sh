@@ -1358,7 +1358,7 @@ _cluster_page_iface() {
 _cluster_page_vm() {
 	local default_item="C"
 	local mac_info=""
-	if [[ -f "$ABA_ROOT/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/macs.conf" 2>/dev/null; then
+	if [[ -f "$ABA_ROOT/$cl_name/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/$cl_name/macs.conf" 2>/dev/null; then
 		mac_info=" (from macs.conf)"
 	fi
 
@@ -2241,8 +2241,6 @@ _day2_upgrade() {
 			local items=()
 			local idx=0
 			for v in "${_sorted[@]}"; do
-				local tag
-				tag=$(echo "${v}" | cut -d. -f1-2)
 				if [[ $idx -eq 0 ]]; then
 					items+=("$v" "(newest)")
 				else

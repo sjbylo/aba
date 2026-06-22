@@ -607,7 +607,7 @@ _exec_in_tui() {
 	local post_cmd_hook="${3:-}"
 
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
-	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
+	if [[ "$cmd" =~ [\`\$\;\|\>\<]|'&&' ]]; then
 		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
 		dlg --backtitle "$(ui_backtitle)" --msgbox \
 			"Command blocked: contains invalid characters.\n\nThis is a safety check to prevent command injection." 0 0
@@ -683,7 +683,7 @@ _exec_in_terminal() {
 	local post_cmd_hook="${3:-}"
 
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
-	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
+	if [[ "$cmd" =~ [\`\$\;\|\>\<]|'&&' ]]; then
 		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
 		echo "ERROR: Command blocked — contains invalid characters."
 		read -rp "Press ENTER to return to TUI..."
@@ -1184,7 +1184,7 @@ Registry Type:
 
 Retry Count:
   How many times to retry failed oc-mirror operations.
-  OFF = no retries, 2 or 8 = retry that many times."
+  0 = no retries, or set any count (default: 1)."
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
