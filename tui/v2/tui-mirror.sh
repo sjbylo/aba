@@ -262,7 +262,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				if [[ $? -eq 0 ]]; then
 					m_path=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_path" || continue
-					if [[ -n "$m_path" ]] && ! _valid_abs_path "$m_path"; then
+					if [[ -n "$m_path" && "$m_path" != /* ]]; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid image path.\n\nMust start with / (e.g. /ocp4/openshift4)." 0 0
 						continue
