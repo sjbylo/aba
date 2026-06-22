@@ -360,7 +360,7 @@ do
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		if [ ! "$cur_target" ]; then
 			cat $ABA_ROOT/others/help-aba.txt
-		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" ]; then
+		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" -o "$cur_target" = "install" -o "$cur_target" = "uninstall" -o "$cur_target" = "verify" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
 		elif [ "$cur_target" = "cluster" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
@@ -799,7 +799,7 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--editor" -o "$1" = "-e" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		editor="$2"
-		replace-value-conf -n editor -v $editor -f $ABA_ROOT/aba.conf
+		replace-value-conf -n editor -v "$editor" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--pull-secret" -o "$1" = "-S" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -807,11 +807,13 @@ elif [ "$1" = "--light" ]; then
 		shift 2
 	elif [ "$1" = "--vmware" -o "$1" = "--vmw" -o "$1" = "-V" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ -s "$2" ] && cp "$2" vmware.conf
+		[ -s "$2" ] || aba_abort "file not found or empty: $2"
+		cp "$2" vmware.conf
 		shift 2
 	elif [ "$1" = "--kvm" -o "$1" = "-K" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[ -s "$2" ] && cp "$2" kvm.conf
+		[ -s "$2" ] || aba_abort "file not found or empty: $2"
+		cp "$2" kvm.conf
 		shift 2
 	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
@@ -928,10 +930,10 @@ elif [ "$1" = "--light" ]; then
 			BUILD_COMMAND="$BUILD_COMMAND retry='$2'"
 			aba_debug "Adding retry=$2 to BUILD_COMMAND"
 			shift 2
-		# In all other cases, use '3' 
+		# In all other cases, use default of 3
 		else
-			BUILD_COMMAND="$BUILD_COMMAND retry=2"  # FIXME: Also confusing, similar to --name
-			aba_debug Setting $1 to 3 
+			BUILD_COMMAND="$BUILD_COMMAND retry=3"
+			aba_debug "Adding retry=3 (default) to BUILD_COMMAND"
 			shift
 		fi
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
