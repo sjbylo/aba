@@ -1297,6 +1297,8 @@ select_cluster() {
 			display="$display (shut down)"
 		elif [[ -f "$ABA_ROOT/$dir/.install-complete" ]]; then
 			display="$display (installed)"
+		elif [[ -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]]; then
+			display="$display (installing)"
 		fi
 		# Show dir name only when it differs from the cluster name prefix
 		if [[ "$display" != "$dir"* ]]; then
@@ -1418,7 +1420,7 @@ offer_editor() {
 	case "$choice" in
 		1)
 			clear
-			${EDITOR:-vi} "$filepath"
+			${EDITOR:-vi} "$filepath" {ABA_TUI_FLOCK_FD}>&-
 			;;
 		2)
 			dlg --backtitle "$(ui_backtitle)" --title "$title" \
