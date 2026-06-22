@@ -845,6 +845,7 @@ list_cluster_dirs() {
 		dir="${dir%/cluster.conf}"
 		dir="${dir##*/}"
 		[[ "$dir" == "mirror" || "$dir" == "templates" ]] && continue
+		[[ "$dir" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || continue
 		dirs+=("$dir")
 	done
 	if [[ ${#dirs[@]} -eq 0 ]]; then

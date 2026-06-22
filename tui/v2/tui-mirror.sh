@@ -828,12 +828,14 @@ mirror_view_isc() {
 				E)
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
 						--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
-						--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
-					if [[ $? -eq 0 ]]; then
+				--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
 						cp "$_TUI_TMP" "$isconf_file"
 						tui_log "ISC saved by user"
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"$TUI2_MSG_ISC_SAVED" 0 0 || true
+					fi
 					fi
 					;;
 				R)
