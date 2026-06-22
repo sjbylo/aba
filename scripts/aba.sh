@@ -489,7 +489,7 @@ elif [ "$1" = "--light" ]; then
 
 		# As far as possible, always ensure there is a valid value in aba.conf
 		if [ ! "$ver" ]; then
-			local _err_msg="incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
+			_err_msg="incorrect version format '$arg' — expected X.Y.Z or X.Y.Z-suffix.N (e.g. 4.22.0, 5.0.0-ec.2)"
 			[ "$tmp_out" ] && _err_msg="failed to look up the ${tmp_out}version for channel [$chan] after option [$opt $arg]"
 			aba_abort "$_err_msg"
 		fi
@@ -741,6 +741,7 @@ elif [ "$1" = "--light" ]; then
 		shift 
 	elif [ "$1" = "--platform" -o "$1" = "-p" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
+		case "$2" in vmw|kvm|bm) ;; *) aba_abort "invalid platform '$2' (use: vmw, kvm, bm)" ;; esac
 		replace-value-conf -n platform -v "$2" -f $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--op-sets" -o "$1" = "-P" ]; then
@@ -1025,7 +1026,7 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1100,6 +1101,10 @@ if [ "$cur_target" ]; then
 	esac
 
 	case $cur_target in
+		tui)
+			cd "$ABA_ROOT" || exit 1
+			exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
+		;;
 		ssh)
 			trap - ERR  # No need for this anymore
 			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"

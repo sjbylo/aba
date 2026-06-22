@@ -625,7 +625,7 @@ verify-mirror-conf() {
 
 	####[ ! "$reg_ssh_user" ] && echo_red "Error: reg_ssh_user not defined!" >&2 && ret=1   # This should never happen as the user name (whoami) is added above if its empty.
 
-	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is reprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
+	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is deprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
 
 	REGEX_ABS_PATH='^(~(/([A-Za-z0-9._-]+(/)?)*|$)|/([A-Za-z0-9._-]+(/)?)*$)'
 
