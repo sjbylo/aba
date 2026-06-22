@@ -99,7 +99,11 @@ else
 		bundle_dest_file=$bundle_dest_file/ocp-bundle	# Correct the output location as it needs to be a file
 	fi
 	aba_info "An install bundle file will be generated and saved to disk using the following parameters:" >&2
-	bundle_dest_file="$bundle_dest_file-$ocp_version.tar"
+	if [[ "$bundle_dest_file" == *.tar ]]; then
+		bundle_dest_file="${bundle_dest_file%.tar}-$ocp_version.tar"
+	else
+		bundle_dest_file="$bundle_dest_file-$ocp_version.tar"
+	fi
 	aba_debug "Final bundle destination: $bundle_dest_file"
 
 	# Sanity write check 

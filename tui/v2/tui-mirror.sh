@@ -555,7 +555,7 @@ mirror_prep_upgrade() {
 			--default-item "$_default_tag" \
 			--ok-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_CANCEL" \
-			--menu "Select target upgrade version ($_channel channel):\n\nCurrent installed: ${_current_ver}" 0 0 0 \
+			--menu "Select target upgrade version ($_channel channel):\n\nCurrent configured: ${_current_ver}" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
