@@ -1103,7 +1103,7 @@ _operator_sets() {
 					line="${line#"${line%%[![:space:]]*}"}"     # Trim leading whitespace
 					line="${line%"${line##*[![:space:]]}"}"     # Trim trailing whitespace
 					[[ -z "$line" ]] && continue
-					if grep -q "^$line[[:space:]]" "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
+					if awk -v name="$line" '$1 == name {found=1; exit} END {exit !found}' "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
 						OP_BASKET["$line"]=$(( ${OP_BASKET[$line]:-0} + 1 ))
 					fi
 				done < "$sf"
@@ -1356,6 +1356,7 @@ mirror_create_bundle() {
 
 	local bundle_path
 	bundle_path=$(<"$_TUI_TMP")
+	bundle_path="${bundle_path/#\~/$HOME}"
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	[[ -d "$bundle_path" ]] && bundle_path="$bundle_path/ocp-bundle"
 	bundle_path="${bundle_path%.tar}"
