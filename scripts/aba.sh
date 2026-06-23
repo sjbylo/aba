@@ -1241,7 +1241,28 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		delete)
-			make -s init
+			# Kill any running openshift-install monitoring this cluster
+			_oi_pids=""
+			for _pid in $(pgrep -f "openshift-install.*agent.*wait-for" 2>/dev/null); do
+				[ "$(readlink /proc/$_pid/cwd 2>/dev/null)" = "$PWD" ] && _oi_pids="$_oi_pids $_pid"
+			done
+			_oi_pids="${_oi_pids# }"
+			if [ "$_oi_pids" ]; then
+				aba_info "Stopping active install monitor (PID:$_oi_pids)"
+				kill $_oi_pids 2>/dev/null || true
+				sleep 1
+				kill -9 $_oi_pids 2>/dev/null || true
+			fi
+
+			# Ensure scripts/templates symlinks exist (may be corrupted or missing)
+			if [ ! -L scripts ] || [ ! -L templates ]; then
+				rm -rf scripts templates 2>/dev/null
+				ln -sfn ../scripts scripts 2>/dev/null || true
+				ln -sfn ../templates templates 2>/dev/null || true
+			fi
+			# init may fail on corrupted state — non-fatal for delete
+			make -s init 2>/dev/null || aba_warning "Cluster .init failed — proceeding with best-effort delete."
+
 			source <(normalize-aba-conf)
 			case "$platform" in
 				vmw|kvm)
@@ -1256,7 +1277,7 @@ if [ "$cur_target" ]; then
 					;;
 			esac
 			# Clean generated artifacts so next install starts fresh from current config
-			make -s clean
+			make -s clean 2>/dev/null || true
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
