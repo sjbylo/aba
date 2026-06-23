@@ -860,7 +860,8 @@ externalize_cluster_state() {
 
 # Emit export lines that override immutable cluster fields from state.sh.
 # Called at the end of normalize-cluster-conf() so state wins over config.
-# Drift (config != state) triggers a stderr warning for user-visible fields.
+# Drift (config != state) triggers a visible warning — cluster.conf should
+# NOT be edited for immutable fields after install.  Delete cluster first.
 _state_override_cluster() {
 	local _name="$1" _domain="$2"
 	local _state="$HOME/.aba/clusters/$_name.$_domain/state.sh"
@@ -875,7 +876,9 @@ _state_override_cluster() {
 			*" $_field "*)
 				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2-)
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-					aba_debug "State: cluster.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
+					aba_warning \
+						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
+						"Using installed value. To change, run 'aba delete' first, then edit cluster.conf."
 				fi
 				;;
 		esac
@@ -885,6 +888,8 @@ _state_override_cluster() {
 
 # Emit export lines that override immutable mirror fields from state.sh.
 # Called at the end of normalize-mirror-conf() so state wins over config.
+# Drift (config != state) triggers a visible warning — mirror.conf should
+# NOT be edited after install.  Uninstall first, then change mirror.conf.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
 	local _immutable="reg_host reg_port reg_vendor reg_root reg_user reg_pw"
@@ -895,7 +900,9 @@ _state_override_mirror() {
 		[ -z "$_sval" ] && continue
 		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-			aba_debug "State: mirror.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
+			aba_warning \
+				"mirror.conf has '${_field}=${_cval}' but installed registry has '${_field}=${_sval}'." \
+				"Using installed value. To change, run 'aba uninstall' first, then edit mirror.conf."
 		fi
 		echo "export ${_field}=${_sval}"
 	done
