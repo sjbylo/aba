@@ -221,9 +221,9 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				if [[ $? -eq 0 ]]; then
 					m_host=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_host" || continue
-					if [[ -n "$m_host" ]] && ! _valid_fqdn "$m_host" && ! _valid_ip "$m_host"; then
+					if [[ -n "$m_host" ]] && ! _valid_fqdn "$m_host"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid hostname.\n\nMust be a valid FQDN (e.g. registry.example.com) or IP address." 0 0
+							"Invalid hostname.\n\nMust be a valid FQDN (e.g. registry.example.com).\nIP addresses are not supported (TLS certificates require hostnames)." 0 0
 						continue
 					fi
 					replace-value-conf -q -n reg_host -v "$m_host" -f "$mcf"

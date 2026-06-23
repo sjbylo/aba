@@ -44,8 +44,13 @@ if [ "$reg_host" ] && [ "$reg_port" ]; then
 			# Unambiguous: pull secret has exactly one entry. Use it.
 			# Common case: template defaulted to one name, pull secret was generated
 			# for the registry's canonical hostname. Both point to the same registry.
-			_inferred_host="${_ps_keys%%:*}"
-			_inferred_port="${_ps_keys##*:}"
+			if [[ "$_ps_keys" == *:* ]]; then
+				_inferred_host="${_ps_keys%%:*}"
+				_inferred_port="${_ps_keys##*:}"
+			else
+				_inferred_host="$_ps_keys"
+				_inferred_port="443"
+			fi
 			aba_info "Pull secret is keyed to '$_ps_keys' (mirror.conf had '$reg_host:$reg_port')."
 			aba_info "Updating mirror.conf to match pull secret."
 			sed -i "s/^reg_host=.*/reg_host=$_inferred_host/" mirror.conf
@@ -62,8 +67,13 @@ if [ "$reg_host" ] && [ "$reg_port" ]; then
 	fi
 elif [ "$_ps_count" -eq 1 ]; then
 	# No reg_host/reg_port in mirror.conf at all -- infer from the single pull secret entry.
-	reg_host="${_ps_keys%%:*}"
-	reg_port="${_ps_keys##*:}"
+	if [[ "$_ps_keys" == *:* ]]; then
+		reg_host="${_ps_keys%%:*}"
+		reg_port="${_ps_keys##*:}"
+	else
+		reg_host="$_ps_keys"
+		reg_port="443"
+	fi
 	sed -i "s/^reg_host=.*/reg_host=$reg_host/" mirror.conf
 	sed -i "s/^reg_port=.*/reg_port=$reg_port/" mirror.conf
 	aba_info "Inferred reg_host=$reg_host reg_port=$reg_port (from pull secret)"
