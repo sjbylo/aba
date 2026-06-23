@@ -464,8 +464,8 @@ e2e_run "Drift: state.sh reg_host overrides drifted mirror.conf" \
 e2e_run "Drift: state.sh reg_port overrides drifted mirror.conf" \
 	"cd ~/aba/$_P3_NAME && bash -c 'source ../scripts/include_all.sh noerr; eval \"\$(normalize-mirror-conf)\"; test \"\$reg_port\" = \"5000\"'"
 
-e2e_run "Drift: debug message emitted on stderr for reg_host" \
-	"cd ~/aba/$_P3_NAME && bash -c 'export DEBUG_ABA=1; source ../scripts/include_all.sh noerr; normalize-mirror-conf 2>/tmp/e2e-drift-stderr.txt >/dev/null; grep -q \"reg_host=drift.example.com differs\" /tmp/e2e-drift-stderr.txt'"
+e2e_run "Drift: warning message emitted on stderr for reg_host" \
+	"cd ~/aba/$_P3_NAME && bash -c 'source ../scripts/include_all.sh noerr; normalize-mirror-conf 2>/tmp/e2e-drift-stderr.txt >/dev/null; grep -q \"differs.*reg_host=drift.example.com.*(installed: original.example.com)\" /tmp/e2e-drift-stderr.txt'"
 
 e2e_run "Drift: no debug message when config matches state" \
 	"cd ~/aba/$_P3_NAME && cat > mirror.conf <<'CONF'
@@ -476,7 +476,7 @@ CONF
 bash -c 'export DEBUG_ABA=1; source ../scripts/include_all.sh noerr; normalize-mirror-conf 2>/tmp/e2e-drift-stderr2.txt >/dev/null; ! grep -q differs /tmp/e2e-drift-stderr2.txt'"
 
 e2e_run -q "Cleanup drift test" \
-	"cd ~/aba && rm -rf $_P3_NAME && rm -rf $_P3_STATE && rm -f /tmp/e2e-drift-stderr.txt /tmp/e2e-drift-stderr2.txt"
+	"cd ~/aba && rm -rf $_P3_NAME && rm -rf $_P3_STATE && rm -f /tmp/e2e-drift-stderr.txt /tmp/e2e-drift-stderr2.txt /tmp/.aba-\$USER/drift.*"
 
 test_end
 

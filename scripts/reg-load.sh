@@ -98,7 +98,7 @@ aba_debug "data/ directory exists"
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
 echo
-aba_info "Using oc-mirror version $(oc-mirror version 2>&1 | grep 'environment version:' | sed 's/.*environment version: //' | cut -d. -f1-3 | sed 's/\(-[0-9]*\).*/\1/')"
+aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 

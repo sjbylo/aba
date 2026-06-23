@@ -1611,12 +1611,7 @@ fi
 		if [ "$target_ver" ]; then
 			aba_debug "Validating user input: target_ver=[$target_ver]"
 			if echo "$target_ver" | grep -E -q "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$"; then
-				# Pre-release: accept without Cincinnati validation (RC/EC not in update graph)
-				if _is_prerelease "$target_ver"; then
-					aba_warning "Pre-release version '$target_ver' — not for production use."
-					break
-				fi
-				# Validate x.y.z using Cincinnati graph (cached)
+				# Validate version against Cincinnati graph (includes pre-release on candidate channel)
 				minor=$(_ver_minor "$target_ver")
 				aba_debug "Detected x.y.z format, extracting minor: $minor"
 				
@@ -1626,6 +1621,7 @@ fi
 					aba_debug "Successfully fetched version list ($(echo "$all_versions" | wc -l) versions)"
 					if echo "$all_versions" | grep -qx "$target_ver"; then
 						aba_debug "Version $target_ver validated successfully"
+						_is_prerelease "$target_ver" && aba_warning "Pre-release version '$target_ver' — not for production use."
 						break
 					else
 						aba_debug "Version $target_ver not found in version list"
@@ -1661,7 +1657,6 @@ fi
 		[ "$channel_ver" ] && or_s="or $channel_ver (l)atest "
 		[ "$channel_ver_prev" ] && or_p="or $channel_ver_prev (p)revious "
 
-		#aba_info -n "Enter x.y.z or x.y version $or_s$or_p$or_ret(<version>/l/p/Enter) [$default_ver]: "
 		aba_info -n "Enter x.y.z or x.y version $or_s$or_p(<version>/l/p/Enter) [$default_ver]: "
 		read target_ver
 
