@@ -43,8 +43,10 @@ else
 	fi
 fi
 
+_existing_conf=false
 if [ -s cluster.conf ]; then
-	aba_info "Using existing '$name/cluster.conf'."
+	_existing_conf=true
+	aba_debug "Found existing '$name/cluster.conf' — applying CLI values."
 else
 	aba_info "Creating '$name/cluster.conf' file for cluster type '$type'."
 fi
@@ -58,6 +60,22 @@ $exec_cmd
 # Apply any CLI-passed values to cluster.conf (only writes if value differs).
 # Handles the case where cluster.conf already existed and
 # create-cluster-conf.sh exited early ([ -s cluster.conf ] && exit 0).
+
+# Map --type to num_masters/num_workers for existing clusters
+if [ "$type" ] && [ -z "$num_masters" ]; then
+	case "$type" in
+		sno)      num_masters=1; num_workers=0 ;;
+		compact)  num_masters=3; num_workers=0 ;;
+		standard) num_masters=3; num_workers=${num_workers:-2} ;;
+	esac
+fi
+
+# Track whether anything was updated for user feedback
+_updated=""
+[ "$num_masters" ]       && _updated="${_updated}num_masters=$num_masters "
+[ "$num_workers" ]       && _updated="${_updated}num_workers=$num_workers "
+[ "$int_connection" ]    && _updated="${_updated}int_connection=$int_connection "
+
 [ "$int_connection" ]    && replace-value-conf -q -n int_connection    -v "$int_connection"    -f cluster.conf
 [ "$api_vip" ]           && replace-value-conf -q -n api_vip           -v "$api_vip"           -f cluster.conf
 [ "$ingress_vip" ]       && replace-value-conf -q -n ingress_vip       -v "$ingress_vip"       -f cluster.conf
@@ -72,6 +90,8 @@ $exec_cmd
 [ "$vlan" ]              && replace-value-conf -q -n vlan              -v "$vlan"              -f cluster.conf
 [ "$ssh_key_file" ]      && replace-value-conf -q -n ssh_key_file      -v "$ssh_key_file"      -f cluster.conf
 [ "$mirror_name" ]       && replace-value-conf -q -n mirror_name       -v "$mirror_name"       -f cluster.conf
+
+[ "$_updated" ] && $_existing_conf && aba_info "Updated $name/cluster.conf: ${_updated% }"
 
 # Re-link mirror/regcreds/mirror.conf to match the final mirror_name in cluster.conf.
 # This is necessary because .init (above) ran before cluster.conf existed, so it
@@ -102,7 +122,7 @@ fi
 
 # Let's be explicit, only run make if there is a given target, e.g. 'install' or 'iso' etc
 if [ "$target" ]; then
-	aba_info "Targeting step: $target in dir: $PWD" >&2
+	aba_debug "Targeting step: $target in dir: $PWD"
 	exec_cmd="make -s $target"
 	aba_debug "Running: $exec_cmd (in $PWD)"
 	$exec_cmd
