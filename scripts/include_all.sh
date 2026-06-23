@@ -878,7 +878,7 @@ _state_override_cluster() {
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 					aba_warning \
 						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
-						"Using installed value. To change, run 'aba delete' first, then edit cluster.conf."
+						"Using installed value. If needed, run 'aba -d $_name delete' before changing cluster.conf."
 				fi
 				;;
 		esac
@@ -902,7 +902,7 @@ _state_override_mirror() {
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 			aba_warning \
 				"mirror.conf has '${_field}=${_cval}' but installed registry has '${_field}=${_sval}'." \
-				"Using installed value. To change, run 'aba uninstall' first, then edit mirror.conf."
+				"Using installed value. If needed, run 'aba -d $(basename "$PWD") uninstall' before changing mirror.conf."
 		fi
 		echo "export ${_field}=${_sval}"
 	done
