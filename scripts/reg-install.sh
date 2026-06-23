@@ -23,6 +23,8 @@ if [ "$vendor" = "auto" ]; then
 		*)             vendor=quay ;;
 	esac
 	aba_info "reg_vendor=auto resolved to '$vendor' for architecture $arch"
+	# Write resolved vendor back to mirror.conf so config matches installed state
+	replace-value-conf -q -n reg_vendor -v "$vendor" -f mirror.conf
 fi
 
 # Persist resolved vendor for uninstall and status display
