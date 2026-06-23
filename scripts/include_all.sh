@@ -534,7 +534,7 @@ verify-aba-conf() {
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
 	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
@@ -890,22 +890,30 @@ _state_override_cluster() {
 # Called at the end of normalize-mirror-conf() so state wins over config.
 # Drift (config != state) triggers a visible warning — mirror.conf should
 # NOT be edited after install.  Uninstall first, then change mirror.conf.
+# Warning is shown once per process to avoid noisy repeated output.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
 	local _immutable="reg_host reg_port reg_vendor reg_root reg_user reg_pw"
-	local _field _sval _cval
+	local _field _sval _cval _drifted=""
 
 	for _field in $_immutable; do
 		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
 		[ -z "$_sval" ] && continue
 		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-			aba_warning \
-				"mirror.conf has '${_field}=${_cval}' but installed registry has '${_field}=${_sval}'." \
-				"Using installed value. If needed, run 'aba -d $(basename "$PWD") uninstall' before changing mirror.conf."
+			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
 		fi
 		echo "export ${_field}=${_sval}"
 	done
+
+	# Show drift warning once per aba invocation (file flag using parent PID)
+	if [ -n "$_drifted" ] && [ ! -f "/tmp/.aba-$USER/drift.$$" ]; then
+		mkdir -p "/tmp/.aba-$USER"
+		touch "/tmp/.aba-$USER/drift.$$"
+		aba_warning \
+			"mirror.conf differs from installed registry: $_drifted" \
+			"Using installed values. To change, run 'aba -d $(basename "$PWD") uninstall' first, then edit mirror.conf."
+	fi
 }
 
 # Recreate a deleted cluster directory from externalized state backup.
@@ -1393,16 +1401,20 @@ aba_wait_show() (
 	return "$_rc"
 )
 
-# Function to check if a version is greater than another version
+# Check if version1 is strictly greater than version2 (semver-aware).
+# sort -V puts pre-release suffixes above bare versions (wrong for semver);
+# the -zzz trick makes GA sort after its pre-release siblings.
 is_version_greater() {
-    local version1=$1
-    local version2=$2
+	local version1=$1
+	local version2=$2
 
-    # Sort the versions
-    local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" | sort -V | tr "\n" "|")
+	local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" \
+		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
+		| sort -V \
+		| sed 's/-zzz$//' \
+		| tr "\n" "|")
 
-    # Check if version1 is the last one in the sorted list
-     [[ "$sorted_versions" != "$version1|$version2|" ]]
+	[[ "$sorted_versions" != "$version1|$version2|" ]]
 }
 
 longest_line() {
@@ -1415,6 +1427,10 @@ longest_line() {
     } END {
         print max
     }'
+}
+
+oc_mirror_version() {
+	oc-mirror version --output json 2>/dev/null | jq -r '.clientVersion.gitVersion' | cut -d- -f1
 }
 
 files_on_same_device() {
@@ -1595,10 +1611,12 @@ _fetch_graph_cached() {
 }
 
 ############################################
-# Fetch GA versions in channel-minor (sorted)
+# Fetch all versions in channel-minor (semver-sorted: ec < rc < GA)
 # Args:
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
+# sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver).
+# The -zzz trick tags GA versions so they sort after their pre-release siblings.
 ############################################
 fetch_all_versions() {
 	local channel="${1:-stable}"
@@ -1607,33 +1625,44 @@ fetch_all_versions() {
 	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
-		| grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
-		| sort -V
+		| grep "^${minor}\." \
+		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
+		| sort -V \
+		| sed 's/-zzz$//'
 }
 
 ############################################
-# Fetch latest GA version (best-effort fallback)
-# Strategy:
-#	1) latest minor (GA-aware) -> latest z
-#	2) if no GA nodes found, try previous minor
+# Fetch latest version (includes pre-release on candidate channel)
+# Uses two data sources:
+#   - CDN release.txt: discovers the "recommended" minor (e.g. 4.22)
+#   - Cincinnati graph: provides the actual version list per channel-minor
+# On candidate, the CDN may lag behind Cincinnati — newer pre-release minors
+# (e.g. 5.0) exist in the graph but aren't advertised by the CDN. Discovery
+# via fetch_latest_prerelease_version() bridges this gap.
 ############################################
 fetch_latest_version() {
 	local channel="${1:-stable}"
-	local minor v prev
+	local minor v prev prerel
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
 
 	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
-	if [[ -n "$v" ]]; then
-		echo "$v"
-		return 0
+	if [[ -z "$v" ]]; then
+		prev="$(_prev_minor "$minor")"
+		[[ -n "$prev" ]] || { echo ""; return 0; }
+		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	fi
 
-	prev="$(_prev_minor "$minor")"
-	[[ -n "$prev" ]] || { echo ""; return 0; }
+	# On candidate, a newer pre-release may exist on a higher minor
+	if [[ "$channel" = "candidate" && -n "$v" ]]; then
+		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
+		if [[ -n "$prerel" ]] && is_version_greater "$prerel" "$v"; then
+			echo "$prerel"
+			return 0
+		fi
+	fi
 
-	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	[[ -n "$v" ]] && echo "$v"
 	return 0
 }
@@ -1670,6 +1699,7 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
+# On candidate: if latest is pre-release from higher minor, "previous" is the GA latest.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
@@ -1677,6 +1707,16 @@ fetch_previous_version() {
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
+
+	# On candidate, if a newer pre-release exists, "previous" is the CDN GA latest
+	if [[ "$channel" = "candidate" ]]; then
+		local prerel ga_latest
+		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
+		if [[ -n "$prerel" ]]; then
+			ga_latest="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
+			[[ -n "$ga_latest" ]] && { echo "$ga_latest"; return 0; }
+		fi
+	fi
 
 	prev="$(_prev_minor "$minor")"
 	[[ -n "$prev" ]] || { echo ""; return 0; }
@@ -1708,6 +1748,41 @@ fetch_older_version() {
 	return 0
 }
 
+
+############################################
+# Fetch latest pre-release version (candidate channel only).
+# Discovery is needed because the CDN release.txt only advertises one "recommended"
+# minor (e.g. 4.22), while newer pre-release minors (e.g. 5.0) exist only in the
+# Cincinnati graph. Cincinnati requires a specific channel-minor pair — there is no
+# "give me all minors" query. So we probe: try next minor (4.23), then next major.0 (5.0).
+# Returns the latest pre-release version or empty string.
+############################################
+fetch_latest_prerelease_version() {
+	local channel="${1:-candidate}"
+	local minor v next_minor next_major
+
+	minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || return 0
+
+	# Try next minor in same major (e.g. 4.22 → 4.23)
+	local x="${minor%%.*}" y="${minor#*.}"
+	next_minor="${x}.$((y + 1))"
+	v="$(fetch_all_versions "$channel" "$next_minor" 2>/dev/null | tail -n1)"
+	if [[ -n "$v" ]] && _is_prerelease "$v"; then
+		echo "$v"
+		return 0
+	fi
+
+	# Try next major.0 (e.g. 4.22 → 5.0)
+	next_major="$((x + 1)).0"
+	v="$(fetch_all_versions "$channel" "$next_major" 2>/dev/null | tail -n1)"
+	if [[ -n "$v" ]] && _is_prerelease "$v"; then
+		echo "$v"
+		return 0
+	fi
+
+	return 0
+}
 
 ############################################
 # Verify a release version exists in the Cincinnati graph.

@@ -96,7 +96,7 @@ elif [ $avail -lt 51250 ]; then
 	echo >&2
 fi
 
-aba_info "Using oc-mirror version $(oc-mirror version 2>&1 | grep 'environment version:' | sed 's/.*environment version: //' | cut -d. -f1-3 | sed 's/\(-[0-9]*\).*/\1/')"
+aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
 aba_warning \

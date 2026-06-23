@@ -1496,7 +1496,7 @@ _resolve_minor_to_patch() {
 	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
 		local _resolved
 		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null)
-		if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 			echo "$_resolved"
 			return 0
 		fi
