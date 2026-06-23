@@ -1,12 +1,12 @@
 #!/bin/bash
 # list-operators.sh -- List all operators in a Red Hat operator catalog
 #
-# INTENT:    Standalone replacement for "oc-mirror list operators --catalog <url>".
+# INTENT:    Replacement for "oc-mirror list operators --catalog <url>".
 #            Pulls the catalog image, extracts FBC metadata, and lists operators
 #            with display names and default channels. No oc-mirror dependency.
-# CALLED BY: User (CLI), TUI operator browser
-# CWD:       Any (uses podman credentials from ~/.docker/config.json)
-# REQUIRES:  podman, jq, curl; container auth for registry.redhat.io
+# CALLED BY: make list-operators, aba list-operators, TUI operator browser
+# CWD:       ABA repo root
+# REQUIRES:  podman, jq; container auth for registry.redhat.io
 # ARGS:      <ocp_version> [catalog_name]
 #            ocp_version:   e.g. "4.21" (major.minor only)
 #            catalog_name:  redhat-operator (default) | certified-operator | community-operator
@@ -22,16 +22,17 @@
 #   list-operators.sh 4.21 community-operator
 
 set -eo pipefail
+source scripts/include_all.sh
 
-# ── Colours (disabled if not a terminal) ─────────────────────────────
+# ── Local output helpers (tool-specific [INFO]/[OK]/[ERROR] style) ────
 if [ -t 1 ]; then
-	RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
+	_LO_RED='\033[0;31m'; _LO_GREEN='\033[0;32m'; _LO_BLUE='\033[0;34m'; _LO_NC='\033[0m'
 else
-	RED=''; GREEN=''; BLUE=''; NC=''
+	_LO_RED=''; _LO_GREEN=''; _LO_BLUE=''; _LO_NC=''
 fi
-info()    { echo -e "${BLUE}[INFO]${NC} $*" >&2; }
-success() { echo -e "${GREEN}[OK]${NC} $*"   >&2; }
-die()     { echo -e "${RED}[ERROR]${NC} $*"   >&2; exit 1; }
+info()    { echo -e "${_LO_BLUE}[INFO]${_LO_NC} $*" >&2; }
+success() { echo -e "${_LO_GREEN}[OK]${_LO_NC} $*"   >&2; }
+die()     { echo -e "${_LO_RED}[ERROR]${_LO_NC} $*"   >&2; exit 1; }
 
 # ── Parse arguments ──────────────────────────────────────────────────
 usage() {
@@ -52,7 +53,7 @@ command -v jq     >/dev/null 2>&1 || die "jq is required"
 
 # ── Setup ────────────────────────────────────────────────────────────
 container_name="list-ops-${catalog}-v${ocp_ver}-$$"
-tmp_dir=$(mktemp -d /tmp/.aba-list-ops-XXXXXX)
+tmp_dir=$(mktemp -d "$ABA_TMP/list-ops-XXXXXX")
 trap 'podman rm -f "$container_name" >/dev/null 2>&1; rm -rf "$tmp_dir"' EXIT INT TERM
 
 # ── Pull image ───────────────────────────────────────────────────────

@@ -173,7 +173,7 @@ trap '_tui_cleanup' EXIT
 # Dialog appearance (nmtui-like styling — same as v1)
 # =============================================================================
 
-_TUI_DIALOGRC="${TMPDIR:-/tmp}/.dialogrc-v2.$$"
+_TUI_DIALOGRC="$ABA_TMP/dialogrc-v2.$$"
 export DIALOGRC="$_TUI_DIALOGRC"
 
 cat > "$_TUI_DIALOGRC" <<'EOF'

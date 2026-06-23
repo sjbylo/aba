@@ -24,10 +24,10 @@ aba_info "Verifying SSH access to $reg_ssh_user@$reg_host ..."
 
 _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 
-flag_file=/tmp/.$(whoami).$RANDOM
-rm -f $flag_file
+flag_file="$ABA_TMP/flag.$RANDOM"
+rm -f "$flag_file"
 
-if ! $_ssh touch $flag_file; then
+if ! $_ssh "mkdir -p $ABA_TMP && touch $flag_file"; then
 	aba_abort \
 		"Cannot SSH to '$reg_ssh_user@$reg_host' using key '$reg_ssh_key'" \
 		"Tested with command: ssh -i $reg_ssh_key $reg_ssh_user@$reg_host" \
@@ -74,7 +74,7 @@ aba_info "Using registry root dir on remote: $reg_root"
 reg_open_firewall --ssh
 
 # --- Vendor-specific install ---
-remote_dir="/tmp/aba-reg-install-$$"
+remote_dir="$ABA_TMP/reg-install-$$"
 $_ssh "mkdir -p $remote_dir"
 trap '$_ssh "rm -rf $remote_dir" 2>/dev/null' EXIT
 

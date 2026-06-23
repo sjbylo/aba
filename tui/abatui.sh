@@ -165,7 +165,9 @@ log "Dependencies installed/verified"
 # Dialog appearance configuration (nmtui-like styling)
 # -----------------------------------------------------------------------------
 # Enable colors and set dialog options for a cleaner look
-export DIALOGRC="${TMPDIR:-/tmp}/.dialogrc.$$"
+ABA_TMP="/tmp/.aba-${USER:-$(id -un)}"
+mkdir -p "$ABA_TMP"
+export DIALOGRC="$ABA_TMP/dialogrc.$$"
 cat > "$DIALOGRC" <<'EOF'
 # Dialog color configuration for a professional nmtui-like appearance
 use_colors = ON
@@ -3238,7 +3240,7 @@ Use 'Run in Terminal' if you need to interact with the command." 0 0 || true
 summary_apply() {
 	log "Entering summary_apply"
 	# DEBUG: Write directly to file to bypass log() function
-	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] Entering summary_apply, LOG_FILE=$LOG_FILE" >> /tmp/aba-tui-debug.log
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] Entering summary_apply, LOG_FILE=$LOG_FILE" >> $ABA_TMP/tui-debug.log
 	
 	# Create custom operator-set file if basket is not empty
 	local custom_set_name=""
@@ -3343,14 +3345,14 @@ summary_apply() {
 	# Reset ensures regeneration if user changes operators and comes back
 	log "Resetting and starting background task: make -sC mirror isconf"
 	# DEBUG: Write directly to file
-	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to reset isconf task" >> /tmp/aba-tui-debug.log
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to reset isconf task" >> $ABA_TMP/tui-debug.log
 	run_once -r -i "tui:isconf:generate"
 	# Small delay to ensure reset completes
 	sleep 0.2
-	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to start isconf task" >> /tmp/aba-tui-debug.log
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] About to start isconf task" >> $ABA_TMP/tui-debug.log
 	run_once -i "tui:isconf:generate" -- make -sC "$ABA_ROOT/mirror" isconf >/dev/null 2>&1
-	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] isconf task started, checking directory..." >> /tmp/aba-tui-debug.log
-	ls -la ~/.aba/runner/tui:isconf:generate/ >> /tmp/aba-tui-debug.log 2>&1
+	echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] isconf task started, checking directory..." >> $ABA_TMP/tui-debug.log
+	ls -la ~/.aba/runner/tui:isconf:generate/ >> $ABA_TMP/tui-debug.log 2>&1
 	log "ImageSet config generation started in background"
 	
 	# Now show action menu - what to do next?

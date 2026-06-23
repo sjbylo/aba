@@ -163,11 +163,11 @@ reg_verify_localhost() {
 
 	# SSH flag-file trick: SSH to reg_host and create a temp file. If the file
 	# does NOT appear on localhost, reg_host reaches a remote machine by mistake.
-	local flag_file="/tmp/.$(whoami).$RANDOM"
+	local flag_file="$ABA_TMP/flag.$RANDOM"
 	rm -f "$flag_file"
 
 	local remote_hostname
-	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "touch $flag_file && hostname" 2>/dev/null); then
+	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file && hostname" 2>/dev/null); then
 		if [ ! -f "$flag_file" ]; then
 			aba_abort \
 				"Registry configured for *local* install (reg_ssh_key is not defined)." \

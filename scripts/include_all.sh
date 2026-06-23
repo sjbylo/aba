@@ -37,6 +37,10 @@ export ARCH=$(uname -m)
 # Source user overrides (e.g. OC_MIRROR_IMAGE_TIMEOUT) if present
 [[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 
+# Per-user temp directory for all ABA internal temp files (flag files, caches, debug logs)
+ABA_TMP="/tmp/.aba-${USER:-$(id -un)}"
+mkdir -p "$ABA_TMP"
+
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
 # ===========================
@@ -907,9 +911,8 @@ _state_override_mirror() {
 	done
 
 	# Show drift warning once per aba invocation (file flag using parent PID)
-	if [ -n "$_drifted" ] && [ ! -f "/tmp/.aba-$USER/drift.$$" ]; then
-		mkdir -p "/tmp/.aba-$USER"
-		touch "/tmp/.aba-$USER/drift.$$"
+	if [ -n "$_drifted" ] && [ ! -f "$ABA_TMP/drift.$$" ]; then
+		touch "$ABA_TMP/drift.$$"
 		aba_warning \
 			"mirror.conf differs from installed registry: $_drifted" \
 			"Using installed values. To change, run 'aba -d $(basename "$PWD") uninstall' first, then edit mirror.conf."
@@ -3534,7 +3537,7 @@ check_release_image() {
 	_userpass=$(echo "$_b64auth" | base64 -d)
 	_curl_opts="--cacert $_cacert --connect-timeout 3 --max-time 10 --retry 1"
 
-	local _td="${TMPDIR:-/tmp}/_aba_cri.$$"
+	local _td="$ABA_TMP/cri.$$"
 	mkdir -p "$_td"
 
 	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---

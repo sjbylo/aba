@@ -1022,7 +1022,8 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 #### Root Access
 
-- ABA requires root access, either directly or via passwordless sudo. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
+- ABA runs as a normal (non-root) user and only invokes `sudo` for system-level operations (e.g. installing RPMs, configuring firewall rules, managing libvirt VMs). Alternatively, ABA can run entirely as root if preferred.
+- Passwordless sudo is required for non-root operation. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
 
 #### Registry Storage
 

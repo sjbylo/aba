@@ -19,7 +19,7 @@ reg_check_quay_resources
 # (The generic DNS/SSH check is already done by reg_verify_localhost above.)
 # Ensure a test key pair exists so the installer can SSH to localhost.
 # flag_file is local to reg_verify_localhost(), so define it here for the SSH touch test below.
-flag_file="/tmp/.$(whoami).$RANDOM"
+flag_file="$ABA_TMP/flag.$RANDOM"
 rm -f "$flag_file"
 temp_aba_key=~/.ssh/aba_check_ssh
 temp_aba_pub_key=~/.ssh/aba_check_ssh.pub

@@ -70,7 +70,7 @@ echo ""
 echo "=== Test 4: Stale temp dirs swept at startup ==="
 
 # Plant a fake stale dir with old timestamp (>24h)
-stale_dir="/tmp/.aba-catalog-STALETEST"
+stale_dir="$ABA_TMP/catalog-STALETEST"
 mkdir -p "$stale_dir"
 touch -d "2 days ago" "$stale_dir"
 
@@ -95,7 +95,7 @@ echo ""
 # ── Test 5: fresh dirs are NOT swept ─────────────────────────────────
 echo "=== Test 5: Fresh temp dirs are NOT swept ==="
 
-fresh_dir="/tmp/.aba-catalog-FRESHTEST"
+fresh_dir="$ABA_TMP/catalog-FRESHTEST"
 mkdir -p "$fresh_dir"
 
 scripts/download-catalog-index.sh "$catalog" "$ocp_ver_major"

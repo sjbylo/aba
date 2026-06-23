@@ -104,13 +104,13 @@ fi
 
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
 container_name="aba-catalog-${catalog_name}-v${ocp_ver_major}-$$"
-tmp_dir=$(mktemp -d /tmp/.aba-catalog-XXXXXX)
+tmp_dir=$(mktemp -d "$ABA_TMP/catalog-XXXXXX")
 
 # Sweep stale containers and temp dirs from previous interrupted runs
 podman ps -a --format '{{.Names}}' | grep '^aba-catalog-' | while read -r _stale; do
 	podman rm -f "$_stale" >/dev/null 2>&1
 done
-find /tmp -maxdepth 1 \( -name '.aba-catalog-*' -o -name '.aba-list-ops-*' -o -name 'render-registry-*' -o -name 'render-unpack-*' \) -user "$(id -un)" -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+find "$ABA_TMP" -maxdepth 1 \( -name 'catalog-*' -o -name 'list-ops-*' -o -name 'render-registry-*' -o -name 'render-unpack-*' \) -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
 
 aba_debug "catalog_url=$catalog_url"
 aba_debug "container_name=$container_name"
