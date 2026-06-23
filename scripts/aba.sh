@@ -909,14 +909,16 @@ elif [ "$1" = "--light" ]; then
 		shift 2
 	elif [ "$1" = "--type" -o "$1" = "-t" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		# If there's another arg and it's an expected cluster type, accept it, otherwise error.
 		if echo "$2" | grep -qE "^sno$|^compact$|^standard$"; then
-			if [ "$cur_target" = "cluster" ]; then
-				BUILD_COMMAND="$BUILD_COMMAND type='$2'"
-				shift 2
-			else
-				aba_abort "can only use option $1 after target 'cluster'.  See aba cluster -h" 
-			fi
+			# Map type to num_masters/num_workers (works for existing cluster.conf or new creation)
+			case "$2" in
+				sno)      _set_cluster_conf num_masters 1 "$1"; _set_cluster_conf num_workers 0 "$1" ;;
+				compact)  _set_cluster_conf num_masters 3 "$1"; _set_cluster_conf num_workers 0 "$1" ;;
+				standard) _set_cluster_conf num_masters 3 "$1"; _set_cluster_conf num_workers 2 "$1" ;;
+			esac
+			# Forward type for new cluster creation (template selection)
+			[ "$cur_target" = "cluster" ] && BUILD_COMMAND="$BUILD_COMMAND type='$2'"
+			shift 2
 		else
 			aba_abort "missing or incorrect argument (sno|compact|standard) after option $1" 
 		fi
