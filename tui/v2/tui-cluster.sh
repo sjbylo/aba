@@ -2224,6 +2224,27 @@ _day2_ssh() {
 	read -rp "Press ENTER to return to TUI..."
 }
 
+# Pre-flight: check for upgrade gates that require manual acknowledgment.
+# Shows gate info in a TUI dialog so the user can review and decide.
+# Returns 0=proceed, 1=cancel.  This prevents --yes (progressbox mode)
+# from silently bypassing the Upgradeable=False safety gate.
+_upgrade_preflight_check() {
+	local cluster_dir="$1"
+	local _adm_out
+
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking upgrade prerequisites..." 0 0
+	_adm_out=$(cd "$ABA_ROOT/$cluster_dir" && oc --kubeconfig ./kubeconfig adm upgrade 2>&1) || true
+
+	if echo "$_adm_out" | grep -q "Upgradeable=False"; then
+		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Gate Detected" \
+			--yes-label "Continue" --no-label "Cancel" \
+			--defaultno \
+			--yesno "The cluster reports Upgradeable=False.\nThis may require admin acknowledgment before upgrading.\n\nReview the details and only continue if you have\nresolved any required actions:\n\n$_adm_out" 0 0
+		return $?
+	fi
+	return 0
+}
+
 # --- Upgrade cluster ---
 _day2_upgrade() {
 	if ! select_installed_cluster "$TUI2_TITLE_DAY2_UPGRADE" "Select cluster to upgrade:"; then
@@ -2317,6 +2338,7 @@ _day2_upgrade() {
 				# Fall through to manual entry below
 				:
 			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+				_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 				confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $choice" \
 					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
 				return
@@ -2341,6 +2363,15 @@ _day2_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.15 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
+		# Reject downgrades/same-version with a friendly dialog
+		local _cur_ver
+		_cur_ver=$(aba --dir "$SELECTED_CLUSTER" version 2>/dev/null || echo "")
+		if [[ "$_cur_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] && ! is_version_greater "$target_ver" "$_cur_ver"; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Cannot upgrade: version '$target_ver' is not higher than current '$_cur_ver'." 0 0
+			continue
+		fi
+		_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 		confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $target_ver" \
 			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
 		return
