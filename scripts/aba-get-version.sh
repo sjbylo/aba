@@ -24,7 +24,7 @@ export PATH=$PWD/bin:$PATH
 ############
 # Determine OpenShift version 
 
-export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+export tmp_dir=$(mktemp -d "$ABA_TMP/ver-XXXX")
 
 aba_info -n "Looking up OpenShift release versions ..."
 

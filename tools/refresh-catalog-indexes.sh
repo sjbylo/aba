@@ -93,7 +93,7 @@ mkdir -p "$CATALOGS_DIR" "$INDEX_DIR"
 # (containing /configs + /tmp/cache). Layers 0-3 are shared base infrastructure.
 # Same content = same SHA-256 layer digest, regardless of base image changes.
 MAX_PARALLEL=4
-NEEDS_DOWNLOAD_DIR=$(mktemp -d /tmp/.aba-catalog-refresh-XXXXXX)
+NEEDS_DOWNLOAD_DIR=$(mktemp -d "$ABA_TMP/catalog-refresh-XXXXXX")
 trap "rm -rf '$NEEDS_DOWNLOAD_DIR'" EXIT
 
 echo "=== Phase 1: Checking for upstream content changes (${MAX_PARALLEL} parallel) ==="

@@ -75,15 +75,15 @@ verify_binary() {
 }
 
 # Save original state to restore at the end
-SAVED_OC=$(ls ~/bin/oc 2>/dev/null && cp -p ~/bin/oc /tmp/.aba-test-oc-backup 2>/dev/null; echo ok)
-SAVED_OI=$(ls ~/bin/openshift-install 2>/dev/null && cp -p ~/bin/openshift-install /tmp/.aba-test-oi-backup 2>/dev/null; echo ok)
+SAVED_OC=$(ls ~/bin/oc 2>/dev/null && cp -p ~/bin/oc "$ABA_TMP/test-oc-backup" 2>/dev/null; echo ok)
+SAVED_OI=$(ls ~/bin/openshift-install 2>/dev/null && cp -p ~/bin/openshift-install "$ABA_TMP/test-oi-backup" 2>/dev/null; echo ok)
 
 cleanup() {
 	echo ""
 	echo "Restoring original binaries..."
-	[ -f /tmp/.aba-test-oc-backup ] && cp -p /tmp/.aba-test-oc-backup ~/bin/oc 2>/dev/null
-	[ -f /tmp/.aba-test-oi-backup ] && cp -p /tmp/.aba-test-oi-backup ~/bin/openshift-install 2>/dev/null
-	rm -f /tmp/.aba-test-oc-backup /tmp/.aba-test-oi-backup
+	[ -f "$ABA_TMP/test-oc-backup" ] && cp -p "$ABA_TMP/test-oc-backup" ~/bin/oc 2>/dev/null
+	[ -f "$ABA_TMP/test-oi-backup" ] && cp -p "$ABA_TMP/test-oi-backup" ~/bin/openshift-install 2>/dev/null
+	rm -f "$ABA_TMP/test-oc-backup" "$ABA_TMP/test-oi-backup"
 }
 trap cleanup EXIT
 
@@ -144,14 +144,14 @@ run_once -r -i "cli:download:oc:${OCP_VER}" 2>/dev/null || true
 run_once -r -i "cli:install:oc" 2>/dev/null || true
 
 # Process A: make download-oc (downloads both rhel8+rhel9)
-make -C cli download-oc >/tmp/.aba-test-dl-A.log 2>&1 &
+make -C cli download-oc >"$ABA_TMP/test-dl-A.log" 2>&1 &
 pid_a=$!
 
 # Tiny delay so A's run_once registers first, then B hits the same ID
 sleep 0.3
 
 # Process B: make ~/bin/oc (triggers $(local_oc_tar_file) + extracts)
-make -C cli ~/bin/oc >/tmp/.aba-test-dl-B.log 2>&1 &
+make -C cli ~/bin/oc >"$ABA_TMP/test-dl-B.log" 2>&1 &
 pid_b=$!
 
 echo "  Process A (download-oc): PID $pid_a"
@@ -199,7 +199,7 @@ else
 	test_fail "Installed binary SHA mismatch (corruption): bin=$sha_bin tarball=$sha_ref"
 fi
 
-rm -f /tmp/.aba-test-dl-A.log /tmp/.aba-test-dl-B.log
+rm -f "$ABA_TMP/test-dl-A.log" "$ABA_TMP/test-dl-B.log"
 
 # ──────────────────────────────────────────────────────────────────────
 section "Test 3: Stale run_once state — tarball deleted, state says done"
