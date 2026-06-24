@@ -687,12 +687,12 @@ elif [ "$1" = "--light" ]; then
 		gw_ip=
 		if [[ -n $1 && $1 != -* && $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 			gw_ip=$1
+			shift
 		fi
 	#	if [ "$1" ] && ! echo "$1" | grep -q "^-"; then
 	#		gw_ip=$(echo $1 | grep -Eo '^([0-9]{1,3}\.){3}[0-9]{1,3}$')
 	#	fi
 		replace-value-conf -n next_hop_address -v "$gw_ip" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
-		shift 
 	elif [ "$1" = "--api-vip" -o "$1" = "-A" ]; then
 		_flag="$1"
 		api_vip=
