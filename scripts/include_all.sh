@@ -915,6 +915,12 @@ _state_override_cluster() {
 				fi
 				;;
 		esac
+		# state.sh may store machine_network as CIDR (10.0.0.0/20); split it
+		if [ "$_field" = "machine_network" ] && [[ "$_sval" == */* ]]; then
+			echo "export machine_network=${_sval%/*}"
+			echo "export prefix_length=${_sval#*/}"
+			continue
+		fi
 		echo "export ${_field}=${_sval}"
 	done
 }
@@ -1919,7 +1925,7 @@ replace-value-conf() {
 		elif [[ "$value" == *"'"* ]]; then
 			# Single quote in an unquoted value cannot be safely auto-quoted
 			aba_abort "Value for [$name] contains a single quote which cannot be stored safely. Use the pre-quoted form: -v \"'value'\""
-		elif [[ "$value" =~ [^a-zA-Z0-9_./:@,=+%-] ]]; then
+		elif [[ "$value" =~ [^a-zA-Z0-9_./:@,=+%~-] ]]; then
 			_write_value="'$value'"
 		fi
 	fi

@@ -429,8 +429,8 @@ _test_replace "glob chars in value auto-quoted and survives sourcing" \
 _test_replace "redirect chars in value auto-quoted and survives sourcing" \
 	"a=old" "a" "a>b<c" "a>b<c"
 
-_test_replace "tilde at start auto-quoted (no expansion)" \
-	"a=old" "a" "~/mirrors" "~/mirrors"
+_test_replace "tilde at start NOT quoted (bash expands on source)" \
+	"a=old" "a" "~/mirrors" "$HOME/mirrors"
 
 _test_replace "complex raw value with multiple metachars" \
 	"a=old" "a" 'P@$$!#^&|=w0rd' 'P@$$!#^&|=w0rd'
