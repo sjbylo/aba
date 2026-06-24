@@ -391,10 +391,12 @@ show_help() {
 # Config files are sourced by bash — unescaped single quotes corrupt them.
 # Usage:  _tui_reject_squote "$value" || continue
 _tui_reject_squote() {
-	[[ "$1" != *"'"* ]] && return 0
-	dlg --backtitle "$(ui_backtitle)" --msgbox \
-		"Input cannot contain single-quote (') characters.\n\nPlease re-enter without single quotes." 0 0
-	return 1
+	if [[ "$1" == *"'"* || "$1" == *'`'* || "$1" == *'$'* || "$1" == *'\\'* ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Input cannot contain shell metacharacters: ' \` \$ \\\\\n\nPlease re-enter without these characters." 0 0
+		return 1
+	fi
+	return 0
 }
 
 # Generic password prompt: hidden input, double entry, match check.
