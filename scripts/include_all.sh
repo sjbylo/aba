@@ -1864,12 +1864,8 @@ replace-value-conf() {
 				shift 2
 				;;
 			-v)
-				if [[ -z "$2" || "$2" =~ ^- ]]; then
-					local value=
-				else
-					local value="$2"
-					shift
-				fi
+				shift
+				local value="$1"
 				shift
 				;;
 			-f)
