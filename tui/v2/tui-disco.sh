@@ -349,6 +349,15 @@ disco_load_images() {
 disco_reset() {
 	tui_log "DISCO: Reset to connected mode"
 
+	# Pre-check: verify internet is reachable before offering the switch
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking internet connectivity..." 0 0
+	if ! check_internet_connectivity "aba" quiet 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --title "Cannot Switch" \
+			--msgbox "Internet is not available.\n\nConnected mode requires access to registry.redhat.io\nand other Red Hat sites.\n\nRestore internet connectivity and try again." 0 0
+		tui_log "DISCO: switch to connected mode blocked — no internet"
+		return 0
+	fi
+
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_RESET" \
 			--yes-label "$TUI2_BTN_SWITCH" \
