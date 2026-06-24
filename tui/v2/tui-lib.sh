@@ -1508,7 +1508,7 @@ _resolve_minor_to_patch() {
 # Reset and restart ISC generation in background (non-blocking)
 tui_kick_isconf_regen() {
 	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&- &
+	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
 }
 
 # Gate Install Cluster menu action: prompts for mirror/registry prep when needed.

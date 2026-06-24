@@ -17,6 +17,11 @@ vendor="${REG_VENDOR_OVERRIDE:-$(resolved_reg_vendor)}"
 
 aba_debug "Resolved registry vendor: $vendor (reg_vendor=${reg_vendor:-auto})"
 
+case "$vendor" in
+	quay|docker|existing) ;;
+	*) aba_abort "Unknown registry vendor '$vendor'. Valid values: quay, docker, existing" ;;
+esac
+
 # "existing" = externally managed registry; nothing to install
 if [ "$vendor" = "existing" ]; then
 	aba_debug "Registry vendor is 'existing' -- skipping install (externally managed)"

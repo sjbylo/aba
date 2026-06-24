@@ -1680,21 +1680,7 @@ _cluster_execute() {
 
 	tui_log "Installing cluster ($install_step): $cmd"
 
-	# Clean stale artifacts if connection mode changed (prevents mirror refs in DIRECT etc.)
 	local cluster_dir="$ABA_ROOT/$cl_name"
-	if [[ -f "$cluster_dir/cluster.conf" ]]; then
-		local _old_conn
-		_old_conn=$(source <(cd "$cluster_dir" && normalize-cluster-conf) 2>/dev/null && echo "$int_connection")
-		[[ -z "$_old_conn" ]] && _old_conn="mirror"
-		local _new_conn="$cl_connection"
-		if [[ -z "$_new_conn" ]]; then
-			[[ "$_TUI_MODE" == "DIRECT" ]] && _new_conn="direct" || _new_conn="mirror"
-		fi
-		if [[ "$_old_conn" != "$_new_conn" ]]; then
-			tui_log "Connection mode changed ($cluster_dir): $_old_conn -> $_new_conn, cleaning stale artifacts"
-			rm -f "$cluster_dir/install-config.yaml" "$cluster_dir/.init" "$cluster_dir/.configured" 2>/dev/null
-		fi
-	fi
 
 	# Write macs.conf if MACs were entered (bare-metal)
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
@@ -2167,7 +2153,7 @@ _day2_status() {
 	output_file=$(mktemp)
 
 	local kc
-	kc=$(cd "$ABA_ROOT/$cl_dir" && cluster_kubeconfig 2>/dev/null) || kc=""
+	kc=$(cd "$ABA_ROOT/$cl_dir" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || kc=""
 	[ -z "$kc" ] && kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
 	trap : INT
 	{
@@ -2241,6 +2227,7 @@ _upgrade_preflight_check() {
 
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking upgrade prerequisites..." 0 0
 	_adm_out=$(cd "$ABA_ROOT/$cluster_dir" && \
+		source <(normalize-cluster-conf) 2>/dev/null && \
 		_kc=$(cluster_kubeconfig 2>/dev/null) && \
 		oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
 

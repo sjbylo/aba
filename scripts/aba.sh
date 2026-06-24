@@ -122,6 +122,7 @@ while [ $i -le $# ]; do
 				WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
 			else
 				# Skip subsequent --dir/-d and their values
+				echo "[ABA] Warning: ignoring duplicate $arg (only the first --dir/-d is used)" >&2
 				i=$((i + 1))
 			fi
 			;;
@@ -358,13 +359,15 @@ do
 	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
-		if [ ! "$cur_target" ]; then
+		# Peek at next arg if no target yet (allows "aba --help cluster")
+		_ht="${cur_target:-$2}"
+		if [ ! "$_ht" ]; then
 			cat $ABA_ROOT/others/help-aba.txt
-		elif [ "$cur_target" = "mirror" -o "$cur_target" = "save" -o "$cur_target" = "load" -o "$cur_target" = "sync" -o "$cur_target" = "register" -o "$cur_target" = "unregister" -o "$cur_target" = "install" -o "$cur_target" = "uninstall" -o "$cur_target" = "verify" ]; then
+		elif [ "$_ht" = "mirror" -o "$_ht" = "save" -o "$_ht" = "load" -o "$_ht" = "sync" -o "$_ht" = "register" -o "$_ht" = "unregister" -o "$_ht" = "install" -o "$_ht" = "uninstall" -o "$_ht" = "verify" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
-		elif [ "$cur_target" = "cluster" ]; then
+		elif [ "$_ht" = "cluster" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
-		elif [ "$cur_target" = "bundle" ]; then
+		elif [ "$_ht" = "bundle" ]; then
 			cat $ABA_ROOT/others/help-bundle.txt
 		else
 			# If some other target, then show the main help
@@ -642,6 +645,7 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--base-domain" -o "$1" = "--domain" -o "$1" = "-b" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
 		#domain=$(echo "$2" | grep -Eo '([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}')
+		domain=""
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
 		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
@@ -1030,6 +1034,10 @@ elif [ "$1" = "--light" ]; then
 	else
 		if echo "$1" | grep -q "^-"; then
 			aba_abort "$(basename $0): Error: no such option $1" 
+		elif [ "$cur_target" ]; then
+			# cur_target already set — additional positionals are make arguments
+			BUILD_COMMAND="$BUILD_COMMAND $1"
+			aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
 		else
 			cur_target=$1
 
@@ -1043,7 +1051,6 @@ elif [ "$1" = "--light" ]; then
 					aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND 
 					;;
 			esac
-			#fi
 		fi
 		shift 
 	fi
@@ -1232,7 +1239,7 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (start)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit 0
+			$ABA_ROOT/scripts/${HV}-start.sh workers=$workers masters=$masters || exit $?
 			exit
 		;;
 		stop)
@@ -1249,7 +1256,7 @@ if [ "$cur_target" ]; then
 			exec_cmd="make -s init"
 			aba_debug "Running: $exec_cmd (kill)"
 			$exec_cmd
-			$ABA_ROOT/scripts/${HV}-kill.sh || exit 0
+			$ABA_ROOT/scripts/${HV}-kill.sh || exit $?
 			exit
 		;;
 		delete)

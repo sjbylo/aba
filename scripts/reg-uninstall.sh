@@ -77,7 +77,9 @@ _is_remote=
 _podman_ps=""
 if [ "$reg_ssh_key" ]; then
 	_is_remote=1
-	_podman_ps=$(ssh -F $ssh_conf_file $reg_ssh_user@$reg_host "podman ps -a --format '{{.Names}}'" 2>/dev/null || true)
+	if ! _podman_ps=$(ssh -F $ssh_conf_file $reg_ssh_user@$reg_host "podman ps -a --format '{{.Names}}'" 2>&1); then
+		aba_abort "Cannot reach registry host $reg_host via SSH. Check connectivity and SSH key.\n  Output: $_podman_ps"
+	fi
 else
 	_podman_ps=$(podman ps -a --format '{{.Names}}' 2>/dev/null || true)
 fi
@@ -114,16 +116,17 @@ _location="localhost"
 [ "$_is_remote" ] && _location="$reg_ssh_user@$reg_host"
 
 if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall this registry"; then
-	if [ -d "$regcreds_dir" ]; then
-		rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
-	fi
-
 	if [ "$_is_remote" ]; then
 		_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 		case "$vendor" in
 			docker)
 				aba_info "Removing Docker registry container and data on $reg_host ..."
-				$_ssh "podman rm -f registry; $SUDO rm -rf $reg_root" || true
+				$_ssh "podman rm -f registry; $SUDO rm -rf $reg_root" || \
+					aba_warning "Remote Docker cleanup returned non-zero (container may not have existed)"
+				# Verify container is gone
+				if $_ssh "podman ps -a --format '{{.Names}}'" 2>/dev/null | grep -q '^registry$'; then
+					aba_abort "Failed to remove Docker registry container on $reg_host"
+				fi
 				;;
 			quay)
 				ensure_quay_registry
@@ -136,7 +139,12 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 		case "$vendor" in
 			docker)
 				aba_info "Removing Docker registry container and data ..."
-				podman rm -f registry || true
+				podman rm -f registry || \
+					aba_warning "Docker container removal returned non-zero (container may not have existed)"
+				# Verify container is gone
+				if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^registry$'; then
+					aba_abort "Failed to remove Docker registry container"
+				fi
 				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
 				;;
 			quay)
@@ -151,6 +159,11 @@ else
 	exit 1
 fi
 
-rm -rf "${regcreds_dir:?}/"*
+# Back up credentials (after successful uninstall) then clear them
+if [ -d "$regcreds_dir" ]; then
+	rm -rf "${regcreds_dir}.bk" && mv "$regcreds_dir" "${regcreds_dir}.bk"
+else
+	rm -rf "${regcreds_dir:?}/"*
+fi
 
 aba_info_ok "Registry uninstall successful"

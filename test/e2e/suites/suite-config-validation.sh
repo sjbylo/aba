@@ -33,7 +33,8 @@ plan_tests \
 	"mirror.conf validation" \
 	"mirror.conf ops/op_sets override" \
 	"cluster.conf CLI flag override" \
-	"Pre-release version support (RC/EC)"
+	"Pre-release version support (RC/EC)" \
+	"Make regen: install-config.yaml tracks int_connection"
 
 suite_begin "config-validation"
 
@@ -408,6 +409,59 @@ e2e_run "Restore aba.conf and mirror.conf" \
 
 e2e_run "Clean up generated ISC and temp files" \
 	"rm -f mirror/data/imageset-config.yaml mirror/data/.created /tmp/rc-out.txt /tmp/ec-out.txt /tmp/ga-out.txt"
+
+test_end 0
+
+# ============================================================================
+# 8. Make dependency: install-config.yaml regenerated on int_connection change
+# ============================================================================
+test_begin "Make regen: install-config.yaml tracks int_connection"
+
+_REGEN_DIR="e2e-regen-test"
+
+e2e_run "Backup aba.conf" "cp aba.conf aba.conf.regen-bak"
+
+e2e_run "Skip DNS checks for synthetic cluster" \
+	"sed -i 's/^#*verify_conf=.*/verify_conf=conf/' aba.conf"
+
+e2e_run "Create SNO cluster dir with int_connection=direct" \
+	"rm -rf $_REGEN_DIR && aba cluster -n $_REGEN_DIR -t sno --starting-ip $(pool_sno_ip) -I direct --step cluster.conf"
+
+e2e_run "Generate install-config.yaml (direct mode)" \
+	"cd $_REGEN_DIR && make install-config.yaml"
+
+e2e_run "Direct mode: no additionalTrustBundle" \
+	"! grep -q 'additionalTrustBundle' $_REGEN_DIR/install-config.yaml"
+
+e2e_run "Direct mode: no ImageDigestSources" \
+	"! grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
+
+e2e_run "Change int_connection to mirror mode (sed)" \
+	"sleep 1 && sed -i 's/^int_connection=direct/#int_connection=/' $_REGEN_DIR/cluster.conf"
+
+e2e_run "Regenerate install-config.yaml (mirror mode)" \
+	"cd $_REGEN_DIR && make install-config.yaml"
+
+e2e_run "Mirror mode: has additionalTrustBundle" \
+	"grep -q 'additionalTrustBundle' $_REGEN_DIR/install-config.yaml"
+
+e2e_run "Mirror mode: has ImageDigestSources" \
+	"grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
+
+e2e_run "Change back to direct (sed)" \
+	"sleep 1 && sed -i 's/^#*int_connection=.*/int_connection=direct/' $_REGEN_DIR/cluster.conf"
+
+e2e_run "Regenerate install-config.yaml (direct again)" \
+	"cd $_REGEN_DIR && make install-config.yaml"
+
+e2e_run "Direct mode (round 2): no additionalTrustBundle" \
+	"! grep -q 'additionalTrustBundle' $_REGEN_DIR/install-config.yaml"
+
+e2e_run "Direct mode (round 2): no ImageDigestSources" \
+	"! grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
+
+e2e_run "Restore aba.conf" "cp aba.conf.regen-bak aba.conf && rm -f aba.conf.regen-bak"
+e2e_run "Clean up regen test dir" "rm -rf $_REGEN_DIR"
 
 test_end 0
 
