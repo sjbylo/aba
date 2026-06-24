@@ -2411,10 +2411,14 @@ _day2_startup() {
 	fi
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	local _start_msg="This will power on the cluster VMs."
+	local _plat
+	_plat=$(grep '^platform=' "$ABA_ROOT/aba.conf" 2>/dev/null | cut -d= -f2)
+	[[ "$_plat" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Start cluster '$cl_display'?\n\nThis will power on the cluster VMs." 0 0
+		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"
