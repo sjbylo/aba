@@ -310,16 +310,8 @@ _TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
 # Values: "auto", "quay", "docker"
 _TUI_REG_VENDOR="auto"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-	# Read reg_vendor directly from mirror.conf to reflect user's configured intent.
-	# normalize-mirror-conf would return the resolved/installed value from state.sh.
-	_raw_vendor=$(grep '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
-	case "${_raw_vendor,,}" in
-		quay)   _TUI_REG_VENDOR="quay" ;;
-		docker) _TUI_REG_VENDOR="docker" ;;
-		auto)   _TUI_REG_VENDOR="auto" ;;
-		*)      _TUI_REG_VENDOR="auto" ;;
-	esac
-	unset _raw_vendor
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+	_TUI_REG_VENDOR="${reg_vendor:-auto}"
 fi
 
 ui_backtitle() {
@@ -1153,14 +1145,10 @@ _tui_settings_summary() {
 _tui_settings_menu() {
 	local default_item="1"
 	while :; do
-		# Refresh reg_vendor from file (may have changed in Mirror Config form)
+		# Refresh reg_vendor from mirror.conf (may have changed in Mirror Config form)
 		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-			local _rv
-			_rv=$(grep '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
-			case "${_rv,,}" in
-				quay|docker) _TUI_REG_VENDOR="${_rv,,}" ;;
-				*) _TUI_REG_VENDOR="auto" ;;
-			esac
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			_TUI_REG_VENDOR="${reg_vendor:-auto}"
 		fi
 
 		# Current auto-answer display (ON = skip prompts, OFF = ask user)

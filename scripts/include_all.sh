@@ -646,7 +646,7 @@ verify-mirror-conf() {
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	if [ "$reg_pw" ] && [ "${reg_vendor:-auto}" != "docker" ]; then
+	if [ "$reg_pw" ] && [ "$(resolved_reg_vendor)" != "docker" ]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
 			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
@@ -656,6 +656,20 @@ verify-mirror-conf() {
 	fi
 
 	return $ret
+}
+
+# Resolve reg_vendor to the actual registry type for this host.
+# User intent (auto/quay/docker/existing) stays in mirror.conf unchanged.
+# This function is the ONLY place where "auto" is resolved to a concrete vendor.
+resolved_reg_vendor() {
+	local vendor="${reg_vendor:-auto}"
+	if [ "$vendor" = "auto" ]; then
+		case "$(uname -m)" in
+			aarch64|arm64) vendor=docker ;;
+			*)             vendor=quay ;;
+		esac
+	fi
+	echo "$vendor"
 }
 
 normalize-cluster-conf()
@@ -912,7 +926,7 @@ _state_override_cluster() {
 # Warning is shown once per process to avoid noisy repeated output.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
-	local _immutable="reg_host reg_port reg_vendor reg_root reg_user reg_pw"
+	local _immutable="reg_host reg_port reg_root reg_user reg_pw"
 	local _field _sval _cval _drifted=""
 
 	for _field in $_immutable; do
@@ -2256,11 +2270,11 @@ get_ntp_servers() {
 
 
 trust_root_ca() {
-	if [ -s $1 ]; then
-		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
+	if [ -s "$1" ]; then
+		if $SUDO diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
+			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
 			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
