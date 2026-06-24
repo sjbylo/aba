@@ -682,7 +682,7 @@ normalize-cluster-conf()
 
 	# Phase 3 (ADR-007): override immutable fields from installed state
 	local _cn _sd_candidate
-	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
+	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | sed 's/[[:space:]]*#.*//' | cut -d= -f2 | xargs)
 	if [ "$_cn" ]; then
 		for _sd_candidate in "$HOME/.aba/clusters/${_cn}."*; do
 			if [ -s "$_sd_candidate/state.sh" ]; then
@@ -878,7 +878,7 @@ _state_override_cluster() {
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
-				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2-)
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 					aba_warning \
 						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
