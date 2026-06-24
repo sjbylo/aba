@@ -1137,7 +1137,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local dns_val
 					dns_val=$(<"$_TUI_TMP")
-					dns_val=$(echo "$dns_val" | tr -s ' ,' ',' | sed 's/^,//; s/,$//')
+					dns_val=$(echo "$dns_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
 					if [[ -n "$dns_val" ]] && ! _valid_ip_list "$dns_val"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid DNS entry.\n\nExpected: comma-separated IP addresses (e.g. 10.0.1.8,10.0.1.9)." 0 0 || true
@@ -1172,7 +1172,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local ntp_val
 					ntp_val=$(<"$_TUI_TMP")
-					ntp_val=$(echo "$ntp_val" | tr -s ' ,' ',' | sed 's/^,//; s/,$//')
+					ntp_val=$(echo "$ntp_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
 					if [[ -n "$ntp_val" ]] && ! _valid_ip_or_host_list "$ntp_val"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid NTP entry.\n\nExpected: comma-separated IPs or hostnames\n(e.g. 10.0.1.8,ntp.lab.local)" 0 0 || true
