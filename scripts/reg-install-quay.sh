@@ -86,7 +86,9 @@ fi
 # $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
 # $reg_pw is quoted to preserve special characters (e.g. " ! @ #).
 # shellcheck disable=SC2086
-./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_hostport" $reg_root_opts --initPassword "$reg_pw"
+if ! ./mirror-registry install -v --initUser "$reg_user" --quayHostname "$reg_hostport" $reg_root_opts --initPassword "$reg_pw"; then
+	aba_abort "Quay mirror-registry install failed. Check the output above for details."
+fi
 
 reg_post_install "$reg_root/quay-rootCA/rootCA.pem" quay
 

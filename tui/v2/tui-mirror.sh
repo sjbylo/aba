@@ -628,6 +628,7 @@ Proceed?" 0 0
 	# Persist target version and kick off ISC regeneration after user confirmed
 	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
 	tui_kick_isconf_regen
+	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	confirm_and_execute \
 		"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
@@ -1388,7 +1389,10 @@ mirror_create_bundle() {
 			--yes-label "$TUI2_BTN_LIGHT_BUNDLE" \
 			--no-label "$TUI2_BTN_FULL_BUNDLE" \
 			--yesno "$TUI2_MSG_BUNDLE_LIGHT_CONFIRM" 0 0
-		if [[ $? -eq 0 ]]; then
+		local _bundle_rc=$?
+		if [[ $_bundle_rc -eq 255 ]]; then
+			return 1
+		elif [[ $_bundle_rc -eq 0 ]]; then
 			light_flag="--light"
 		else
 			# Full bundle on same device — warn about disk space

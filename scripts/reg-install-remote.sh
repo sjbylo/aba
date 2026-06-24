@@ -119,11 +119,13 @@ case "$vendor" in
 		aba_info "Copying mirror-registry tarball to remote host ..."
 		$_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 
+		# printf '%q' safely escapes all shell metacharacters for remote evaluation
+		_escaped_pw=$(printf '%q' "$reg_pw")
 		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword '\$_reg_pw' $reg_root_opts"
 
 		aba_info "Extracting and installing Quay registry on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword *** $reg_root_opts"
-		if ! $_ssh "export _reg_pw='$reg_pw' && $cmd"; then
+		if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then
 			aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
 				"Check the output above for details."
 		fi
