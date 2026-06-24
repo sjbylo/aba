@@ -614,11 +614,7 @@ mirror_prep_upgrade() {
 		break
 	done
 
-	# Set target version and kick off ISC regeneration in background (while user reads dialog)
-	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
-	tui_kick_isconf_regen
-
-	# Confirm before proceeding
+	# Confirm before persisting any state
 	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
 		--yes-label "Save Upgrade Images" \
 		--no-label "$TUI2_BTN_CANCEL" \
@@ -628,6 +624,10 @@ mirror_prep_upgrade() {
   3. Download upgrade images (${_current_ver} → ${_target_ver})\n\n\
 Proceed?" 0 0
 	[[ $? -ne 0 ]] && return 1
+
+	# Persist target version and kick off ISC regeneration after user confirmed
+	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
+	tui_kick_isconf_regen
 
 	confirm_and_execute \
 		"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
