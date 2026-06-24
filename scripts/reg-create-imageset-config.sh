@@ -58,14 +58,12 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 	export ocp_version_target="${ocp_version_target:-}"
 	export tgt_major=""
 	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-		# Guard: target must be >= source (upgrades only, not downgrades)
-		_min_ver="${ocp_version%%-*}"
-		_max_ver="${ocp_version_target%%-*}"
-		if [ "$(printf '%s\n%s\n' "$_min_ver" "$_max_ver" | sort -V | head -1)" != "$_min_ver" ]; then
-			aba_abort \
-				"ocp_version_target ($ocp_version_target) is lower than ocp_version ($ocp_version)." \
-				"The target version must be higher than the source version (upgrade path)." \
-				"To mirror only '$ocp_version', remove or comment out 'ocp_version_target' in mirror.conf."
+		# Guard: target must be > source (upgrades only, not downgrades)
+		if ! is_version_greater "$ocp_version_target" "$ocp_version"; then
+			# Stale target — silently comment it out and proceed without upgrade mode
+			aba_warning "ocp_version_target ($ocp_version_target) is lower than ocp_version ($ocp_version) — ignoring."
+			sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" mirror.conf 2>/dev/null || true
+			ocp_version_target=""
 		fi
 		export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
 		aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"
