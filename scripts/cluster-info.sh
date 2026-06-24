@@ -5,16 +5,23 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-[ ! -d iso-agent-based/auth ] && echo_red "Cluster not ready!" && exit 1
-
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
-pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)
-kc=$(ls $PWD/iso-agent-based/auth/kubeconfig 2>/dev/null)
+# Resolve kubeconfig (prefer externalized state, fall back to local)
+kc=$(cluster_kubeconfig)
+[ -z "$kc" ] && echo_red "Cluster not ready! Cannot find kubeconfig." && exit 1
+
+# Resolve kubeadmin password (externalized or local)
+_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
+if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
+	pw=$(cat "$_sd/kubeadmin-password")
+else
+	pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)
+fi
 
 cat <<END
 [ABA] To access the cluster as the system:admin user when using 'oc', run

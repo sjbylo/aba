@@ -1103,11 +1103,14 @@ if [ "$cur_target" ]; then
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
 		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue)
-			if [[ ! -f .install-complete && -f iso-agent-based/auth/kubeconfig ]]; then
+			_cn=$(basename "$PWD")
+			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
+			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			if [[ ! -f .install-complete && -n "$_kc" ]]; then
 				auto_complete_install "$PWD" 2>/dev/null || true
 			fi
 			# If still not marked after auto-detect, warn and ask
-			if [[ ! -f .install-complete && -f iso-agent-based/auth/kubeconfig ]]; then
+			if [[ ! -f .install-complete && -n "$_kc" ]]; then
 				aba_warning "Cluster has not completed installation."
 				ask "Cluster has not completed installation, continue anyway" || exit 1
 			fi
@@ -1152,7 +1155,11 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		getco)
-			OC="oc --kubeconfig iso-agent-based/auth/kubeconfig"
+			_cn=$(basename "$PWD")
+			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
+			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
+			OC="oc --kubeconfig $_kc"
 			aba_debug "Running: $OC get clusterversion"
 			$OC get clusterversion
 			echo

@@ -5,17 +5,26 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-[ ! -d iso-agent-based ] && aba_abort "Cluster not installed!  Try running 'aba clean; aba' to install this cluster!"
+source <(normalize-cluster-conf)
+
+# Resolve kubeconfig (prefer externalized state, fall back to local)
+_kc=$(cluster_kubeconfig)
+if [ -z "$_kc" ]; then
+	aba_abort "Cluster not installed! Cannot find kubeconfig. Try running 'aba clean; aba' to install this cluster!"
+fi
+export KUBECONFIG="$_kc"
+
+# Refresh kubeconfig from backup if local auth dir exists (ensures cert-based auth)
+if [ -f iso-agent-based/auth.backup/kubeconfig ]; then
+	mkdir -p iso-agent-based/auth
+	cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
+	export KUBECONFIG="$PWD/iso-agent-based/auth/kubeconfig"
+fi
 
 #aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
-unset KUBECONFIG
-# Use the actual kubeconfig used after the cluster was installed, in case it was overwritten
-[ -f iso-agent-based/auth.backup/kubeconfig ] || aba_abort "Missing kubeconfig backup at iso-agent-based/auth.backup/kubeconfig!"
-cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
-
-server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
+server_url=$(grep " server: " "$KUBECONFIG" | awk '{print $NF}' | head -1)
 cluster_name=$(echo $server_url| grep -o -E '(([a-zA-Z](-?[a-zA-Z0-9])*)\.)+[a-zA-Z]{2,}:[0-9]{2,}' | sed "s/^api\.//g")
 server_url=${server_url}/
 
@@ -58,7 +67,7 @@ if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 	fi
 fi
 
-OC="oc --kubeconfig $PWD/iso-agent-based/auth/kubeconfig"
+OC="oc --kubeconfig $KUBECONFIG"
 
 _cluster_startup_oc_get_nodes() {
 	exec_cmd="$OC get nodes"

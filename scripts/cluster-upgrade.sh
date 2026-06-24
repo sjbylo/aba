@@ -51,11 +51,12 @@ source <(normalize-mirror-conf)
 # Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
 scripts/create-containers-auth.sh --load >/dev/null
 
-# Preflight: kubeconfig
-export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig
-if [ ! -f "$KUBECONFIG" ]; then
-	aba_abort "kubeconfig not found at $KUBECONFIG. Place your kubeconfig there first."
+# Preflight: kubeconfig (prefer externalized state, fall back to local)
+KUBECONFIG=$(cluster_kubeconfig)
+if [ -z "$KUBECONFIG" ]; then
+	aba_abort "kubeconfig not found. Expected at ~/.aba/clusters/$cluster_name.$base_domain/kubeconfig or iso-agent-based/auth/kubeconfig"
 fi
+export KUBECONFIG
 
 # Preflight: cluster access
 aba_info "Checking cluster access ..."
