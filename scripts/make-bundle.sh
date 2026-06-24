@@ -94,9 +94,9 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_info "An install bundle will be generated and written to *standard output* (stdout) using the following parameters:" >&2
 else
 	aba_debug "Bundle destination: file on disk"
-	if [ -d $bundle_dest_file ]; then
+	if [ -d "$bundle_dest_file" ]; then
 		aba_debug "Destination is directory, appending default filename"
-		bundle_dest_file=$bundle_dest_file/ocp-bundle	# Correct the output location as it needs to be a file
+		bundle_dest_file="$bundle_dest_file/ocp-bundle"	# Correct the output location as it needs to be a file
 	fi
 	aba_info "An install bundle file will be generated and saved to disk using the following parameters:" >&2
 	if [[ "$bundle_dest_file" == *.tar ]]; then
@@ -108,8 +108,8 @@ else
 
 	# Sanity write check 
 	aba_debug "Testing write permissions to $bundle_dest_file"
-	! echo write test > $bundle_dest_file.tmp && aba_abort "Cannot write to $bundle_dest_file"
-	rm -f $bundle_dest_file.tmp
+	! echo write test > "$bundle_dest_file.tmp" && aba_abort "Cannot write to $bundle_dest_file"
+	rm -f "$bundle_dest_file.tmp"
 	aba_debug "Write test successful"
 fi
 
@@ -133,10 +133,10 @@ if [ "$force" ]; then
 		aba_debug "mirror/data directory is empty or doesn't exist"
 	fi
 
-	if [ -f $bundle_dest_file ]; then
+	if [ -f "$bundle_dest_file" ]; then
 		aba_debug "Deleting existing bundle file: $bundle_dest_file"
 		aba_warning "Deleting existing bundle file: $bundle_dest_file (--force set)" >&2
-		rm -f $bundle_dest_file
+		rm -f "$bundle_dest_file"
 		aba_debug "Bundle file deleted"
 	else
 		aba_debug "No existing bundle file to delete"
@@ -215,7 +215,7 @@ if [ "$bundle_dest_file" = "-" ]; then
 fi
 
 aba_debug "Checking if bundle file already exists: $bundle_dest_file"
-if [ -s $bundle_dest_file ]; then
+if [ -s "$bundle_dest_file" ]; then
 	aba_debug "Bundle file exists, prompting user for overwrite confirmation"
 	aba_warning "File $bundle_dest_file already exists!" 
 	ask "The file will be overwirtten. Continue anyway" || exit 1
@@ -250,7 +250,7 @@ if [ "$light_bundle" ]; then
 	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating *light* install bundle archive ..."
-	rm -f $bundle_dest_file
+	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
 	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
@@ -258,7 +258,7 @@ else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
 	aba_debug "Creating FULL bundle (including image-set archives)"
 	
-	if files_on_same_device mirror $bundle_dest_file; then
+	if files_on_same_device mirror "$bundle_dest_file"; then
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
 		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
@@ -294,7 +294,7 @@ else
 	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating install bundle archive ..."
-	rm -f $bundle_dest_file
+	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tar out=$bundle_dest_file"
 	make tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files. 
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
