@@ -23,7 +23,7 @@
 
 printf 'Initializing ABA TUI v2...\n'
 printf '  [ ] Loading modules\n'
-printf '  [ ] Checking connectivity\n'
+printf '  [ ] Please wait...\n'
 printf '  [ ] Checking packages\n'
 printf '  [ ] Loading config\n'
 
@@ -151,7 +151,7 @@ aba_inet_check_start
 tui_log "Kicking off background mirror verify"
 aba_mirror_verify_start
 
-_tick "Checking connectivity"
+_tick "Please wait..."
 
 # Auto-install required packages if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
@@ -494,7 +494,7 @@ _conno_main() {
 	while :; do
 		# Internet: runs independently on 120s TTL cache (fast when warm)
 		if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
-			dlg --backtitle "$(ui_backtitle)" --infobox "Checking connectivity..." 3 35
+			dlg --backtitle "$(ui_backtitle)" --infobox "Please wait..." 3 25
 		fi
 		if aba_inet_check_cached 120; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
