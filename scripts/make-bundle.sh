@@ -179,7 +179,7 @@ if [ -d mirror/data ]; then
 			echo_red "         Image set archive file(s) also exist." >&2
 			echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/data" >&2
 			echo_red "         Or, use a fresh Aba repo and try again!" >&2
-			ask "         Files will be overwirtten. Continue anyway" >&2 || exit 1
+			ask "         Files will be overwritten. Continue anyway" >&2 || exit 1
 			aba_debug "User confirmed to continue with existing files"
 		else
 			aba_debug "No conflicting files found"
@@ -218,7 +218,7 @@ aba_debug "Checking if bundle file already exists: $bundle_dest_file"
 if [ -s "$bundle_dest_file" ]; then
 	aba_debug "Bundle file exists, prompting user for overwrite confirmation"
 	aba_warning "File $bundle_dest_file already exists!" 
-	ask "The file will be overwirtten. Continue anyway" || exit 1
+	ask "The file will be overwritten. Continue anyway" || exit 1
 	aba_debug "User confirmed to overwrite existing bundle"
 else
 	aba_debug "Bundle file does not exist, proceeding"
