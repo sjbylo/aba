@@ -2161,7 +2161,9 @@ _day2_status() {
 	local output_file
 	output_file=$(mktemp)
 
-	local kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
+	local kc
+	kc=$(cd "$ABA_ROOT/$cl_dir" && cluster_kubeconfig 2>/dev/null) || kc=""
+	[ -z "$kc" ] && kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
 	trap : INT
 	{
 		echo "═══ Cluster Operators ($cl_display) ═══"
