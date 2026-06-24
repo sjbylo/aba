@@ -18,11 +18,11 @@ set -e
 
 # Clear network values so the bundle is portable to any environment
 cp aba.conf ~/aba.conf.bk
-replace-value-conf -n domain		-v -f aba.conf
-replace-value-conf -n machine_network	-v -f aba.conf
-replace-value-conf -n dns_servers	-v -f aba.conf
-replace-value-conf -n next_hop_address	-v -f aba.conf
-replace-value-conf -n ntp_servers	-v -f aba.conf
+replace-value-conf -n domain		-v '' -f aba.conf
+replace-value-conf -n machine_network	-v '' -f aba.conf
+replace-value-conf -n dns_servers	-v '' -f aba.conf
+replace-value-conf -n next_hop_address	-v '' -f aba.conf
+replace-value-conf -n ntp_servers	-v '' -f aba.conf
 
 echo
 cat aba.conf

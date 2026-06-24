@@ -387,7 +387,7 @@ e2e_run "Set versions for guard test" \
 e2e_run "Remove ISC for guard test" \
 	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
 
-e2e_run_must_fail "ISC generation aborts when target < source" \
+e2e_run "ISC generation warns and ignores when target < source" \
 	"aba -d mirror imagesetconf"
 
 # --- Version guard: valid upgrade allowed ---

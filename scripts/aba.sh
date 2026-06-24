@@ -748,7 +748,7 @@ elif [ "$1" = "--light" ]; then
 		# If no arg after --op-sets
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf -n op_sets -v -f $ABA_ROOT/aba.conf
+			replace-value-conf -n op_sets -v '' -f $ABA_ROOT/aba.conf
 			shift
 		else
 			shift
@@ -772,7 +772,7 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--ops" -o "$1" = "-O" ]; then
 		if [[ "$2" =~ ^- || -z "$2" ]]; then
 			# Remove value
-			replace-value-conf -n ops -v  -f $ABA_ROOT/aba.conf
+			replace-value-conf -n ops -v '' -f $ABA_ROOT/aba.conf
 			shift
 		else
 			shift
@@ -1288,6 +1288,13 @@ if [ "$cur_target" ]; then
 					aba_abort "Unknown platform '$platform' in aba.conf"
 					;;
 			esac
+			# Clean up externalized state (~/.aba/clusters/<name>.<domain>/)
+			source <(normalize-cluster-conf) 2>/dev/null || true
+			_del_sd=$(cluster_state_dir "${cluster_name:-}" "${base_domain:-}")
+			if [ "$_del_sd" ] && [ -d "$_del_sd" ]; then
+				rm -rf "$_del_sd"
+				aba_info "Removed cluster state: $_del_sd"
+			fi
 			# Clean generated artifacts so next install starts fresh from current config
 			make -s clean 2>/dev/null || true
 			# --force: remove the entire cluster directory (for clean re-creation)

@@ -373,6 +373,9 @@ _BM_MAC="00:50:56:BE:E0:01"
 
 e2e_run "Ensure platform=bm" "aba --platform bm"
 e2e_run "Clean any leftover $SNO_BM cluster dir" "rm -rf $SNO_BM"
+# The previous VMware SNO install (test 6) leaves state.sh behind after aba delete.
+# _state_override_cluster would override platform=bm with platform=vmw from stale state.
+e2e_run -q "Clean stale cluster state" "rm -rf ~/.aba/clusters/${SNO_BM}.$(pool_domain)"
 e2e_add_to_cluster_cleanup "$PWD/$SNO_BM"
 
 e2e_run "Create SNO-BM cluster.conf (reuses SNO DNS records)" \
