@@ -579,8 +579,8 @@ mirror_prep_upgrade() {
 					--inputbox "Enter target version (x.y, x.y.z, or x.y.z-rc.N):" \
 					0 0 "${_existing_target}" \
 					2>"$_TUI_TMP"
-				[[ $? -ne 0 ]] && break
-				_target_ver=$(<"$_TUI_TMP")
+			[[ $? -ne 0 ]] && { _target_ver=""; break; }
+			_target_ver=$(<"$_TUI_TMP")
 				_target_ver=$(echo "$_target_ver" | tr -d ' ')
 				if [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 					break
