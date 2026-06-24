@@ -974,25 +974,31 @@ Selected operators will be included in the ImageSet config."
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			1) local _pre_count=${#OP_BASKET[@]}
+			1) local _pre_hash _post_hash
+			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
 			   _operator_sets "$version_short"
-			   if [[ ${#OP_BASKET[@]} -ne $_pre_count ]]; then
+			   _post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
+			   if [[ "$_pre_hash" != "$_post_hash" ]]; then
 			   	_OP_BASKET_DIRTY=true
 			   	_persist_operator_basket
 			   fi
 			   default_item=3
 			   ;;
-			2) local _pre_count=${#OP_BASKET[@]}
+			2) local _pre_hash _post_hash
+			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
 			   _operator_search "$version_short"
-			   if [[ ${#OP_BASKET[@]} -ne $_pre_count ]]; then
+			   _post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
+			   if [[ "$_pre_hash" != "$_post_hash" ]]; then
 			   	_OP_BASKET_DIRTY=true
 			   	_persist_operator_basket
 			   fi
 			   default_item=3
 			   ;;
-			3) local _pre_count=${#OP_BASKET[@]}
+			3) local _pre_hash _post_hash
+			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
 			   _operator_view_basket
-			   if [[ ${#OP_BASKET[@]} -ne $_pre_count ]]; then
+			   _post_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
+			   if [[ "$_pre_hash" != "$_post_hash" ]]; then
 			   	_OP_BASKET_DIRTY=true
 			   	_persist_operator_basket
 			   fi
