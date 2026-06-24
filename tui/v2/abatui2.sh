@@ -540,6 +540,7 @@ _conno_main() {
 				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
 			fi
 		elif mirror_available; then
+			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
 		fi
 
