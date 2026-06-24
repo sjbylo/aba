@@ -10667,8 +10667,9 @@ fi
 
 ---
 
-## Bug #516: Settings menu shows stale registry vendor after mirror config change
+## Bug #516: Settings menu shows stale registry vendor after mirror config change — FIXED
 
+**Status:** FIXED (2026-06-24, commit `857f905b`) — refresh `_TUI_REG_VENDOR` from file on loop  
 **Severity:** Low (UX inconsistency)
 **Component:** TUI v2 — Settings menu vs Mirror Config form
 **Files:** `tui/v2/tui-lib.sh` (lines 1151-1265), `tui/v2/tui-mirror.sh` (lines 274-280)
