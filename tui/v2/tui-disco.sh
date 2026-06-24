@@ -115,12 +115,12 @@ Restart the TUI after copying archives." \
 
 	if ! mirror_available; then
 		tui_log "DISCO wizard: auto-running mirror_install"
-		mirror_install || return 1
+		mirror_install
 	fi
 
 	if mirror_available && ! _mirror_has_release_image; then
 		tui_log "DISCO wizard: auto-running disco_load_images"
-		disco_load_images || return 1
+		disco_load_images
 	fi
 
 	return 0
