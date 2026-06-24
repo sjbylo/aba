@@ -98,8 +98,7 @@ if [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 	_avail_found=
 	while IFS= read -r v; do
 		[ -z "$v" ] && continue
-		higher_v=$(printf '%s\n%s' "$current_ver" "$v" | sort -V | tail -1)
-		if [ "$higher_v" = "$v" ] && [ "$v" != "$current_ver" ]; then
+		if is_version_greater "$v" "$current_ver"; then
 			aba_info "  $v"
 			_avail_found=1
 		fi
@@ -160,10 +159,9 @@ if [ "$cv_progressing" = "True" ]; then
 	fi
 fi
 
-# Version comparison: check target > current using sort -V (skip in dry-run to show available list)
+# Version comparison: check target > current (skip in dry-run to show available list)
 if [ ! "$opt_dry_run" ]; then
-	higher=$(printf '%s\n%s' "$current_ver" "$target_ver" | sort -V | tail -1)
-	if [ "$higher" != "$target_ver" ]; then
+	if ! is_version_greater "$target_ver" "$current_ver"; then
 		aba_abort "Target version $target_ver is not higher than current version $current_ver"
 	fi
 fi
@@ -206,8 +204,7 @@ if [ "$opt_dry_run" ]; then
 	_avail_found=
 	while IFS= read -r v; do
 		[ -z "$v" ] && continue
-		higher_v=$(printf '%s\n%s' "$current_ver" "$v" | sort -V | tail -1)
-		if [ "$higher_v" = "$v" ] && [ "$v" != "$current_ver" ]; then
+		if is_version_greater "$v" "$current_ver"; then
 			marker=""
 			[ "$v" = "$target_ver" ] && marker=" ← target"
 			aba_info "  $v$marker"
