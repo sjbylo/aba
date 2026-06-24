@@ -36,12 +36,17 @@ scripts/cli-install-all.sh --wait oc
 
 aba_info "Accessing the cluster ..."
 
+# Resolve kubeconfig if not already set
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
+
+# Fast fail if cluster API is unreachable
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
+
 aba_debug "Running: oc whoami --request-timeout=20s"
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
-	if [ ! "$KUBECONFIG" ]; then
-		_kc=$(cluster_kubeconfig 2>/dev/null)
-		[ -n "$_kc" ] && export KUBECONFIG="$_kc"
-	fi
 	aba_debug "Running: oc whoami (with KUBECONFIG=$KUBECONFIG)"
 	if ! oc whoami >/dev/null; then
 		aba_warning "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
