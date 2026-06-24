@@ -1622,7 +1622,6 @@ fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
 
-	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
 		| grep "^${minor}\." \
