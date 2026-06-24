@@ -1899,14 +1899,27 @@ replace-value-conf() {
 		esac
 	done
 
-	# Auto-quote values containing spaces or '#' (unquoted '#' starts a comment in bash).
+	# Auto-quote values that contain shell metacharacters so they survive sourcing.
+	# Safe unquoted: alphanumeric, dot, slash, colon, @, comma, equals, plus, hyphen, percent, underscore.
+	# Everything else gets single-quoted. Only single-quote (') cannot be stored.
+	#
+	# NOTE ON PASSWORDS: replace-value-conf can store ANY character except '.
+	# However, Quay's mirror-registry installer has ADDITIONAL restrictions:
+	#   backtick (`), double-quote ("), single-quote ('), dollar ($)
+	# all break the Quay install (upstream bug — Ansible doesn't escape them).
+	# Those are enforced separately in verify-mirror-conf(), NOT here.
+	# Docker registry has no such limitation.
+	#
 	# Skip if the caller already pre-quoted (value starts and ends with single quote).
 	local _write_value="$value"
 	if [ -n "$value" ]; then
 		if [[ "$value" == \'*\' ]]; then
 			# Already single-quoted by caller (e.g. -v "'password'")
 			_write_value="$value"
-		elif [[ "$value" == *[[:space:]]* || "$value" == *"#"* ]]; then
+		elif [[ "$value" == *"'"* ]]; then
+			# Single quote in an unquoted value cannot be safely auto-quoted
+			aba_abort "Value for [$name] contains a single quote which cannot be stored safely. Use the pre-quoted form: -v \"'value'\""
+		elif [[ "$value" =~ [^a-zA-Z0-9_./:@,=+%-] ]]; then
 			_write_value="'$value'"
 		fi
 	fi

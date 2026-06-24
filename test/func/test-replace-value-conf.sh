@@ -250,7 +250,7 @@ _test_replace "caller-pre-quoted password replaces template default" \
 	"reg_pw='p4ssw0rd'			# Registry password." "reg_pw" "'s3cure!'" "s3cure!"
 
 _test_replace "password with special chars: @!^&*()+" \
-	"reg_pw='old'" "reg_pw" "'p@ss!w^rd&*()+'" "p@ss!w^rd&*()+'"
+	"reg_pw='old'" "reg_pw" "'p@ss!w^rd&*()+'" "p@ss!w^rd&*()+"
 
 # =========================================================================
 echo "--- Idempotency ---"
@@ -355,7 +355,7 @@ _test_multi_file_skip
 echo "--- Error cases (return code 1) ---"
 # =========================================================================
 
-_test_rc "key not found in file" 1 \
+_test_rc "key not found in file appends (upsert)" 0 \
 	"a=xxx" "nonexistent" "val"
 
 _test_rc "missing file" 1 \
@@ -387,8 +387,59 @@ _test_replace "very long value (200 chars)" \
 _test_replace "value with pipe char (sed delimiter)" \
 	"a=old" "a" "x|y" "x|y"
 
-_test_replace_raw "pipe in value does not corrupt file" \
-	"a=old" "a" "x|y" "a=x|y"
+_test_replace_raw "pipe in value is auto-quoted" \
+	"a=old" "a" "x|y" "a='x|y'"
+
+_test_replace "dollar in value auto-quoted and survives sourcing" \
+	"a=old" "a" '$HOME/path' '$HOME/path'
+
+_test_replace_raw "dollar in value writes single-quoted" \
+	"a=old" "a" '$HOME/path' "a='\$HOME/path'"
+
+_test_replace "backtick in value auto-quoted and survives sourcing" \
+	"a=old" "a" 'x`id`y' 'x`id`y'
+
+_test_replace "ampersand in value auto-quoted and survives sourcing" \
+	"a=old" "a" "x&y" "x&y"
+
+_test_replace "semicolon in value auto-quoted and survives sourcing" \
+	"a=old" "a" "x;y" "x;y"
+
+_test_replace_raw "shell metachar values are single-quoted in file" \
+	"a=old" "a" 'run&bg' "a='run&bg'"
+
+_test_replace "backslash in value auto-quoted and survives sourcing" \
+	"a=old" "a" 'path\to\file' 'path\to\file'
+
+_test_replace "double-quote in value auto-quoted and survives sourcing" \
+	"a=old" "a" 'say "hello"' 'say "hello"'
+
+_test_replace "exclamation in value auto-quoted and survives sourcing" \
+	"a=old" "a" "alert!" "alert!"
+
+_test_replace "parens in value auto-quoted and survives sourcing" \
+	"a=old" "a" "func()" "func()"
+
+_test_replace "brackets in value auto-quoted and survives sourcing" \
+	"a=old" "a" "arr[0]" "arr[0]"
+
+_test_replace "glob chars in value auto-quoted and survives sourcing" \
+	"a=old" "a" "*.txt" "*.txt"
+
+_test_replace "redirect chars in value auto-quoted and survives sourcing" \
+	"a=old" "a" "a>b<c" "a>b<c"
+
+_test_replace "tilde at start auto-quoted (no expansion)" \
+	"a=old" "a" "~/mirrors" "~/mirrors"
+
+_test_replace "complex raw value with multiple metachars" \
+	"a=old" "a" 'P@$$!#^&|=w0rd' 'P@$$!#^&|=w0rd'
+
+_test_replace "plain value stays unquoted" \
+	"a=old" "a" "simple-value_123" "simple-value_123"
+
+_test_replace_raw "plain value not quoted in file" \
+	"a=old" "a" "simple.host:8443/path" "a=simple.host:8443/path"
 
 _test_replace "consecutive replacements" \
 	"a=first" "a" "second" "second"
@@ -428,11 +479,10 @@ _test_consecutive_quoted() {
 _test_consecutive_quoted
 
 # =========================================================================
-echo "--- Dangerous characters (verify they DO break things) ---"
+echo "--- Single-quote is the only dangerous char inside single-quoted values ---"
 # =========================================================================
-# These chars are documented as forbidden in config passwords: "'\`$
-# Additional chars that break sed or bash: & \ %
-# Each test verifies the char actually causes corruption or wrong values.
+# With auto-quoting, only single-quote breaks (it terminates the quoting).
+# All other special chars are safe inside single-quoted config values.
 
 _test_dangerous_char() {
 	local test_name="$1" initial="$2" name="$3" new_value="$4"
@@ -481,30 +531,30 @@ _test_dangerous_char_prequoted() {
 	fi
 }
 
-# -- Documented forbidden chars for passwords: "'\`$ --
+# -- Only single-quote is genuinely dangerous inside single-quoted values --
 
-_test_dangerous_char_prequoted 'password with double-quote "' \
-	"reg_pw='old'" "reg_pw" 'pass"word'
-
-_test_dangerous_char_prequoted "password with single-quote '" \
+_test_dangerous_char_prequoted "password with single-quote ' (pre-quoted)" \
 	"reg_pw='old'" "reg_pw" "pass'word"
 
-_test_dangerous_char_prequoted 'password with backtick `' \
-	"reg_pw='old'" "reg_pw" 'pass`word'
+# Non-pre-quoted value with single-quote must be REJECTED (not written to file)
+_test_squote_rejected() {
+	local conf="$_tmp/test-$RANDOM.conf"
+	echo "x=old" > "$conf"
 
-_test_dangerous_char_prequoted 'password with dollar $' \
-	"reg_pw='old'" "reg_pw" 'pass$word'
+	# Run in subshell because aba_abort calls exit 1
+	local rc=0
+	(replace-value-conf -q -n x -v "it's broken" -f "$conf") 2>/dev/null || rc=$?
 
-# -- Additional chars that break sed --
-
-_test_dangerous_char_prequoted 'password with ampersand &' \
-	"reg_pw='old'" "reg_pw" 'pass&word'
-
-_test_dangerous_char_prequoted 'password with backslash \' \
-	"reg_pw='old'" "reg_pw" 'pass\word'
-
-_test_dangerous_char_prequoted 'password with percent % (sed delimiter)' \
-	"reg_pw='old'" "reg_pw" 'pass%word'
+	# Must reject (non-zero exit) AND leave file unchanged
+	local content
+	content=$(cat "$conf")
+	if [[ $rc -ne 0 && "$content" == "x=old" ]]; then
+		test_pass "single-quote in raw value REJECTED (not written)"
+	else
+		test_fail "single-quote in raw value REJECTED" "rc=$rc, file=[$content] (should be unchanged)"
+	fi
+}
+_test_squote_rejected
 
 # -- Chars that are SAFE inside single quotes (should NOT be dangerous) --
 
@@ -526,6 +576,24 @@ _test_safe_char() {
 		test_fail "$test_name" "expected [$raw_password], got [$actual] (rc=$rc, file: $(cat "$conf"))"
 	fi
 }
+
+_test_safe_char 'password with double-quote " (pre-quoted)' \
+	"reg_pw='old'" "reg_pw" 'pass"word'
+
+_test_safe_char 'password with backtick ` (pre-quoted)' \
+	"reg_pw='old'" "reg_pw" 'pass`word'
+
+_test_safe_char 'password with dollar $ (pre-quoted)' \
+	"reg_pw='old'" "reg_pw" 'pass$word'
+
+_test_safe_char 'password with ampersand & (pre-quoted)' \
+	"reg_pw='old'" "reg_pw" 'pass&word'
+
+_test_safe_char 'password with backslash \ (pre-quoted)' \
+	"reg_pw='old'" "reg_pw" 'pass\word'
+
+_test_safe_char 'password with percent % (pre-quoted)' \
+	"reg_pw='old'" "reg_pw" 'pass%word'
 
 _test_safe_char "password with # is safe" \
 	"reg_pw='old'" "reg_pw" "PQa5iSjbbq#bfE8!"
