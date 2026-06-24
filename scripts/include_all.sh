@@ -674,9 +674,6 @@ normalize-cluster-conf()
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
-	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
-	# Convert 'port0/1=' to 'ports=' for backwards compatibility
-	grep -q ^ports= cluster.conf 		|| echo export ports=$(grep -E "^port[01]=\S" cluster.conf | cut -d= -f2 | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 
@@ -1044,8 +1041,6 @@ verify-cluster-conf() {
 	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
 
 	# The next few values are all optional
-	#[ "$port0" ] && ! echo $port0 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port0 is invalid in cluster.conf: [$port0]" >&2; ret=1; }
-	#[ "$port1" ] && ! echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
 	if [ ! -n $ports ]; then
 		echo_red "Error: ports value is missing in cluster.conf" >&2
 		ret=1;
