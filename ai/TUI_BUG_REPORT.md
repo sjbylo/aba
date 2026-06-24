@@ -2727,8 +2727,9 @@ fi
 
 ---
 
-## Bug #306: "Install Mirror" bypasses reinstall confirmation when mirror is installed but not verified
+## Bug #306: "Install Mirror" bypasses reinstall confirmation when mirror is installed but not verified — FIXED
 
+**Status:** FIXED (2026-06-24, commit `bd1bc2e5`) — added `mirr_avail=false` in elif branch  
 **Severity:** Low (UX confusion — user enters install wizard for already-installed mirror)
 **Location:** `tui/v2/abatui2.sh` lines 538-547, 558-567 (status logic) and lines 662-671 (action handler)
 **Commit range:** Present since CONNO menu status annotations were added
@@ -6040,9 +6041,9 @@ bundle_path="${bundle_path/#\~/$HOME}"
 
 ---
 
-## Bug #405 — `_tui_reject_squote` insufficient: allows backtick/dollar/backslash injection in config fields
+## Bug #405 — `_tui_reject_squote` insufficient: allows backtick/dollar/backslash injection in config fields — FIXED
 
-**Status:** NEW  
+**Status:** FIXED (2026-06-24, commit `0803b0fa`) — now rejects `` ` ``, `$`, `\` in addition to `'`  
 **Severity:** MEDIUM — shell injection via config sourcing (requires unusual input values)  
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-lib.sh`, `_tui_reject_squote()` + all callers)
@@ -6317,9 +6318,9 @@ The TUI sets `set -o pipefail` globally (abatui2.sh line 39). With pipefail, the
 
 ---
 
-## Bug #413 — Bundle path input not validated (no `_tui_reject_squote`, no path check)
+## Bug #413 — Bundle path input not validated (no `_tui_reject_squote`, no path check) — FIXED
 
-**Status:** NEW  
+**Status:** FIXED (2026-06-24, commit `0e379c40`) — added `_tui_reject_squote` before path use  
 **Severity:** MEDIUM — Command quoting breakage via crafted bundle path  
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-mirror.sh`, lines 1262-1266)
@@ -10288,8 +10289,9 @@ fi
 
 ---
 
-## Bug #509: Operator set swap (same basket size) bypasses dirty detection — ISC not regenerated
+## Bug #509: Operator set swap (same basket size) bypasses dirty detection — ISC not regenerated — FIXED
 
+**Status:** FIXED (2026-06-24, commit `92a191b0`) — uses md5sum of sorted keys instead of count  
 **File:** `tui/v2/tui-mirror.sh`
 **Lines:** 977-982
 **Severity:** MEDIUM
@@ -10377,8 +10379,9 @@ but content changes — same failure mode.
 
 ---
 
-## Bug #511: Upgrade manual version entry — Cancel after invalid input shows spurious "not found" error
+## Bug #511: Upgrade manual version entry — Cancel after invalid input shows spurious "not found" error — FIXED
 
+**Status:** FIXED (2026-06-24, commit `0ecf8ee7`) — clear `_target_ver` on Cancel  
 **File:** `tui/v2/tui-mirror.sh`
 **Lines:** 576-603
 **Severity:** LOW
@@ -10428,8 +10431,9 @@ Or more defensively, check for validity BEFORE the verification step:
 
 ---
 
-## Bug #512: `mirror_prep_upgrade` persists target version BEFORE user confirms save
+## Bug #512: `mirror_prep_upgrade` persists target version BEFORE user confirms save — FIXED
 
+**Status:** FIXED (2026-06-24, commit `34a22134`) — moved config write after confirmation dialog  
 **File:** `tui/v2/tui-mirror.sh`
 **Lines:** 617-630
 **Severity:** MEDIUM
@@ -10566,8 +10570,9 @@ For the platform toggle (513a), defer the `replace-value-conf` to `_persist_clus
 
 ---
 
-## Bug #514: MAC address validation error clears ALL previously valid addresses
+## Bug #514: MAC address validation error clears ALL previously valid addresses — FIXED
 
+**Status:** FIXED (2026-06-24, commit `2d4aabe6`) — removed `cl_macs=""` on validation failure  
 **Severity:** Low-Medium (data loss on edit)
 **Component:** TUI v2 — cluster wizard page 3 (interface config)
 **File:** `tui/v2/tui-cluster.sh`, line 1352
@@ -10625,8 +10630,9 @@ fi
 
 ---
 
-## Bug #515: Day-2 "Startup" dialog says "power on VMs" for bare-metal clusters
+## Bug #515: Day-2 "Startup" dialog says "power on VMs" for bare-metal clusters — FIXED
 
+**Status:** FIXED (2026-06-24, commit `04d4a030`) — checks platform before showing message  
 **Severity:** Cosmetic
 **Component:** TUI v2 — Day-2 lifecycle menu
 **File:** `tui/v2/tui-cluster.sh`, line 2407
