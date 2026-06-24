@@ -1355,7 +1355,6 @@ ${_conn_help}
 				if [[ -n "$_bad_macs" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid MAC address(es):\n\n${_bad_macs}\n\nExpected format: XX:XX:XX:XX:XX:XX" 0 0 || true
-					cl_macs=""
 					rm -f "$_mac_edit"
 					continue
 				fi
