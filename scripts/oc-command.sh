@@ -21,6 +21,8 @@ _kc=$(cluster_kubeconfig 2>/dev/null)
 [ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 export KUBECONFIG="$_kc"
 
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
+
 aba_info "Running command: oc $cmd" >&2
 aba_debug "Running: oc $cmd"
 eval oc $cmd

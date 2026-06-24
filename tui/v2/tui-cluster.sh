@@ -2230,10 +2230,12 @@ _day2_ssh() {
 # from silently bypassing the Upgradeable=False safety gate.
 _upgrade_preflight_check() {
 	local cluster_dir="$1"
-	local _adm_out
+	local _adm_out _kc
 
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking upgrade prerequisites..." 0 0
-	_adm_out=$(cd "$ABA_ROOT/$cluster_dir" && oc --kubeconfig ./kubeconfig adm upgrade 2>&1) || true
+	_adm_out=$(cd "$ABA_ROOT/$cluster_dir" && \
+		_kc=$(cluster_kubeconfig 2>/dev/null) && \
+		oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
 
 	if echo "$_adm_out" | grep -q "Upgradeable=False"; then
 		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Gate Detected" \
@@ -2365,7 +2367,7 @@ _day2_upgrade() {
 		fi
 		# Reject downgrades/same-version with a friendly dialog
 		local _cur_ver
-		_cur_ver=$(aba --dir "$SELECTED_CLUSTER" version 2>/dev/null || echo "")
+		_cur_ver=$(aba --dir "$SELECTED_CLUSTER" cluster-version 2>/dev/null || echo "")
 		if [[ "$_cur_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] && ! is_version_greater "$target_ver" "$_cur_ver"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
 				"Cannot upgrade: version '$target_ver' is not higher than current '$_cur_ver'." 0 0

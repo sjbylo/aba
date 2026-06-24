@@ -793,6 +793,21 @@ cluster_is_installed() {
 	[[ -s "$_sd/state.sh" ]]
 }
 
+# Quick TCP probe of cluster API (3s timeout).
+# Extracts the server endpoint from the given kubeconfig (or $KUBECONFIG).
+# Returns 0 if reachable, 1 if not. Use before slow oc calls to fail fast.
+cluster_api_reachable() {
+	local _kc="${1:-$KUBECONFIG}"
+	[ -f "$_kc" ] || return 1
+	local _server _host _port
+	_server=$(grep ' server:' "$_kc" | awk '{print $NF}' | head -1)
+	[ -z "$_server" ] && return 1
+	_host=$(echo "$_server" | sed -E 's|https?://||; s|:[0-9]+.*||')
+	_port=$(echo "$_server" | grep -oE ':[0-9]+' | tr -d ':')
+	_port=${_port:-6443}
+	timeout 3 bash -c "</dev/tcp/$_host/$_port" 2>/dev/null
+}
+
 # Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
 # Copies auth, config backups, and creates clusterstate symlink.
 # Must be called from the cluster directory (e.g. ~/aba/sno/).

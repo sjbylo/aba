@@ -146,6 +146,8 @@ if [ ! "$KUBECONFIG" ]; then
 	_kc=$(cluster_kubeconfig 2>/dev/null)
 	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
 fi
+
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 ! oc whoami && aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 warn_if_cluster_unstable

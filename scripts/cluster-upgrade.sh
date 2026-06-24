@@ -58,8 +58,9 @@ if [ -z "$KUBECONFIG" ]; then
 fi
 export KUBECONFIG
 
-# Preflight: cluster access
+# Preflight: cluster access (fast TCP probe, then oc)
 aba_info "Checking cluster access ..."
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 aba_debug "Running: oc whoami --request-timeout='20s'"
 if ! oc whoami --request-timeout='20s' >/dev/null; then
 	aba_abort "Cannot access the cluster. Check KUBECONFIG=$KUBECONFIG"

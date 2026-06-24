@@ -1159,12 +1159,17 @@ if [ "$cur_target" ]; then
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
+			cluster_api_reachable "$_kc" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 			OC="oc --kubeconfig $_kc"
 			aba_debug "Running: $OC get clusterversion"
 			$OC get clusterversion
 			echo
 			aba_debug "Running: $OC get co"
 			$OC get co
+			exit
+		;;
+		cluster-version)
+			$ABA_ROOT/scripts/cluster-version.sh
 			exit
 		;;
 		day2)
