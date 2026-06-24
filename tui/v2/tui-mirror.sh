@@ -1358,6 +1358,7 @@ mirror_create_bundle() {
 
 	local bundle_path
 	bundle_path=$(<"$_TUI_TMP")
+	_tui_reject_squote "$bundle_path" || return 1
 	bundle_path="${bundle_path/#\~/$HOME}"
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	[[ -d "$bundle_path" ]] && bundle_path="$bundle_path/ocp-bundle"
