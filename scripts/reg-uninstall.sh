@@ -64,9 +64,8 @@ if [ ! "$data_dir" ]; then
 fi
 if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 
-# Determine vendor from mirror.conf (reg_vendor is set by normalize-mirror-conf)
-vendor="${reg_vendor:-auto}"
-[ "$vendor" = "auto" ] && vendor="quay"
+# Resolve vendor (handles "auto" → quay/docker based on architecture)
+vendor="$(resolved_reg_vendor)"
 
 ssh_conf_file=~/.aba/ssh.conf
 
