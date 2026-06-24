@@ -123,8 +123,6 @@ fi
 [ ! "$ssh_key_file" ]		&& export ssh_key_file=~/.ssh/id_rsa
 [ ! "$mirror_name" ]		&& export mirror_name=mirror
 [ ! "$ports" ]			&& export ports=ens160
-[ ! "$port0" ]			&& export port0=ens160
-[ ! "$port1" ]			&& export port1=
 [ ! "$vlan" ]			&& export vlan=
 [ ! "$master_cpu_count" ]	&& export master_cpu_count=10
 [ ! "$master_mem" ]		&& export master_mem=20
