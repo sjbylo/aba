@@ -9932,9 +9932,9 @@ Both functions should use the same glob (`mirror_*.tar`) AND the same minimum si
 
 ---
 
-## Bug #497: DIRECT "Use existing" pull secret skips JSON validation
+## Bug #497: DIRECT "Use existing" pull secret skips JSON validation — FIXED
 
-**Status**: NEW (code analysis confirmed)  
+**Status**: FIXED (2026-06-24, commit `8011a9a9`) — added JSON validation before accepting  
 **Severity**: LOW — Corrupt pull secret causes late failure at install time  
 **Component**: TUI (`tui/v2/tui-direct.sh`, line ~220)  
 **Discovered**: 2026-06-23  
@@ -10187,9 +10187,9 @@ replace-value-conf -q -n ntp_servers -v "$_filtered_ntp" -f "$_conf"
 
 ---
 
-## Bug #507: "Prepare Upgrade for Transfer" missing [No internet] label in CONNO menu
+## Bug #507: "Prepare Upgrade for Transfer" missing [No internet] label in CONNO menu — FIXED
 
-**Status**: NEW (code confirmed, live verified)  
+**Status**: FIXED (2026-06-24, commit `9c7549b1`) — added `upg_label` with no-internet suffix  
 **Severity**: LOW — UX inconsistency, handler correctly blocks the action  
 **Component**: TUI (`tui/v2/abatui2.sh`, lines 513-522, 577)  
 **Discovered**: 2026-06-23  
