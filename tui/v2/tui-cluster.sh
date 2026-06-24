@@ -2262,8 +2262,8 @@ _day2_upgrade() {
 
 	# Fetch available versions
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
-	local _versions_raw
-	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
+	local _versions_raw _dry_rc=0
+	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || _dry_rc=$?
 
 	# Parse version lines — only from the "Versions in mirror" list section
 	local _versions=() _in_list=0
@@ -2281,6 +2281,12 @@ _day2_upgrade() {
 		while IFS= read -r v; do
 			_sorted+=("$v")
 		done < <(printf '%s\n' "${_versions[@]}" | sort -V -r | uniq)
+	fi
+
+	if [[ $_dry_rc -ne 0 && ${#_sorted[@]} -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Check Failed" \
+			--msgbox "Failed to query available versions (exit $_dry_rc).\n\nCheck cluster connectivity and credentials.\n\nRaw output:\n${_versions_raw:-(empty)}" 0 0
+		return 1
 	fi
 
 	if [[ ${#_sorted[@]} -eq 0 ]]; then
