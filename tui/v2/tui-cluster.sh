@@ -184,11 +184,14 @@ _persist_cluster_draft() {
 # writes user changes back after every page.
 _cluster_generate_defaults() {
 	local _conf="$ABA_ROOT/$cl_name/cluster.conf"
+	local _was_new=false
+	[[ ! -f "$_conf" ]] && _was_new=true
 
 	# Always call core -- handles both new and existing cluster.conf.
 	# For new: renders from template with auto-detected values.
 	# For existing: fills empty network fields from aba.conf.
 	local _cmd="aba cluster --name $cl_name --type $cl_type --platform $cl_platform --step cluster.conf --yes"
+	[[ -n "$cl_domain" ]] && _cmd+=" --domain $cl_domain"
 	tui_log "Generating/refreshing defaults: $_cmd"
 
 	# Run it (fast ~2s) — fully detached from TUI's terminal/dialog
@@ -201,10 +204,11 @@ _cluster_generate_defaults() {
 		return 1
 	fi
 
-	# Load the (now-populated) config into form fields
-	if [[ -f "$_conf" ]]; then
+	# Only reload for newly created files — for existing files, user's
+	# in-memory values are authoritative (avoids discarding page-1 edits)
+	if [[ "$_was_new" == "true" && -f "$_conf" ]]; then
 		_cluster_load_conf "$_conf"
-		tui_log "Loaded cluster.conf for '$cl_name'"
+		tui_log "Loaded newly-created cluster.conf for '$cl_name'"
 	fi
 }
 
