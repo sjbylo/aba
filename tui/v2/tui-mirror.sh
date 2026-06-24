@@ -1266,6 +1266,9 @@ _operator_view_basket() {
 _ensure_offline_prereqs() {
 	tui_log "Ensuring offline prerequisites are downloaded..."
 
+	# Refresh ocp_version in case user changed it mid-session
+	source <(normalize-aba-conf) 2>/dev/null
+
 	# Peek using the SAME per-tool IDs that ABA core uses
 	local need_download=false
 	run_once -p -i "cli:download:openshift-install:${ocp_version}" 2>/dev/null || need_download=true
