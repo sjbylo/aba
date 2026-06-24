@@ -293,9 +293,10 @@ umask 077
 # Function to display an error message and the last executed command
 show_error() {
 	local exit_code=$?
+	local _safe_cmd="${BASH_COMMAND//-p \'*\'/-p \'***\'}"
 	echo 
 	echo_red "Script error at $(date) in directory $PWD: " >&2
-	echo_red "Error occurred in command: '$BASH_COMMAND'" >&2
+	echo_red "Error occurred in command: '$_safe_cmd'" >&2
 	echo_red "Error code: $exit_code" >&2
 
 	exit $exit_code
