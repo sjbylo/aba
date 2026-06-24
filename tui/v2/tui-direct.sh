@@ -216,7 +216,13 @@ _direct_pull_secret() {
 		[[ $rc -ne 0 ]] && return 1  # Back
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ "$choice" == "U" ]] && return 0
+		if [[ "$choice" == "U" ]]; then
+			if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$ps_file" >/dev/null 2>&1; then
+				return 0
+			fi
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Pull secret file is not valid JSON.\n\nPlease enter a new pull secret." 0 0
+		fi
 	fi
 
 	# Prompt for pull secret
