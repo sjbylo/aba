@@ -511,6 +511,7 @@ _conno_main() {
 		local ops_avail=true bndl_avail=true
 
 		# Internet-dependent items greyed out in offline mode
+		local upg_label="Prepare Upgrade for Transfer"
 		if [[ "$_TUI_INET" == "no" ]]; then
 			save_avail=false
 			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_NO_INTERNET"
@@ -520,6 +521,7 @@ _conno_main() {
 			ops_label="$TUI2_LABEL_OPERATORS $TUI2_STATUS_NO_INTERNET"
 			bndl_avail=false
 			bndl_label="$TUI2_LABEL_BUNDLE $TUI2_STATUS_NO_INTERNET"
+			upg_label="Prepare Upgrade for Transfer $TUI2_STATUS_NO_INTERNET"
 		fi
 
 		# Mirror recheck: only when _invalidate_mirror_cache fired after a
@@ -575,7 +577,7 @@ _conno_main() {
 		"" "──── Transfer ──────────────────────"
 		"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
 		"$TUI2_CONNO_TAG_SAVE"           "$save_label"
-		"$TUI2_CONNO_TAG_PREP_UPGRADE"   "Prepare Upgrade for Transfer"
+		"$TUI2_CONNO_TAG_PREP_UPGRADE"   "$upg_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
