@@ -1153,6 +1153,16 @@ _tui_settings_summary() {
 _tui_settings_menu() {
 	local default_item="1"
 	while :; do
+		# Refresh reg_vendor from file (may have changed in Mirror Config form)
+		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+			local _rv
+			_rv=$(grep '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+			case "${_rv,,}" in
+				quay|docker) _TUI_REG_VENDOR="${_rv,,}" ;;
+				*) _TUI_REG_VENDOR="auto" ;;
+			esac
+		fi
+
 		# Current auto-answer display (ON = skip prompts, OFF = ask user)
 		local ask_display
 		local raw
