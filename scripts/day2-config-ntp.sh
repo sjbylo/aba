@@ -134,7 +134,10 @@ butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
 aba_info "Accessing the cluster ..."
 
-[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
 
 exec_cmd="oc whoami"
 aba_debug "Running: $exec_cmd"

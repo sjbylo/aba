@@ -10,7 +10,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Set defaults
 name=standard
-type=standard
+type=
 
 . <(process_args $*)
 
@@ -48,10 +48,10 @@ if [ -s cluster.conf ]; then
 	_existing_conf=true
 	aba_debug "Found existing '$name/cluster.conf' — applying CLI values."
 else
-	aba_info "Creating '$name/cluster.conf' file for cluster type '$type'."
+	aba_info "Creating '$name/cluster.conf' file for cluster type '${type:-standard}'."
 fi
 
-exec_cmd="scripts/create-cluster-conf.sh name=$name type=$type domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip num_workers=$num_workers num_masters=$num_masters vlan=$vlan ssh_key_file=$ssh_key_file mirror_name=$mirror_name"
+exec_cmd="scripts/create-cluster-conf.sh name=$name type=${type:-standard} domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip num_workers=$num_workers num_masters=$num_masters vlan=$vlan ssh_key_file=$ssh_key_file mirror_name=$mirror_name"
 
 aba_debug "Running: $exec_cmd"
 

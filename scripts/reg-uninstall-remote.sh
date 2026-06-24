@@ -59,7 +59,8 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 					aba_abort "mirror-registry tarball not found in $(pwd). Run 'aba -d mirror uninstall' so the Makefile provides it."
 				fi
 
-				remote_tmp="$ABA_TMP/reg-uninstall-$$"
+				# Use remote user's temp dir — $ABA_TMP is local-user-specific
+			remote_tmp="/tmp/.aba-${reg_ssh_user}/reg-uninstall-$$"
 				$_ssh "mkdir -p $remote_tmp" || aba_abort "Failed to create temp dir on $reg_host"
 				trap '$_ssh "rm -rf $remote_tmp" 2>/dev/null' EXIT
 

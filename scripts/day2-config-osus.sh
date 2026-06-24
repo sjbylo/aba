@@ -142,7 +142,10 @@ _osus_wait_for_csv() {
 #####################
 aba_info "Accessing the cluster ..."
 
-[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
 ! oc whoami && aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 warn_if_cluster_unstable
