@@ -3637,10 +3637,11 @@ Note: Uses `cl_platform` (caller's local via dynamic scoping), NOT `_cl_platform
 
 ---
 
-## Bug #333: "Switch to Connected Mode" from DISCO is impossible when internet is unavailable — user loops back to DISCO
+## Bug #333: "Switch to Connected Mode" from DISCO is impossible when internet is unavailable — user loops back to DISCO — FIXED
 
 **Severity:** MEDIUM
-**File:** `tui/v2/abatui2.sh` (lines 836-845, main loop) + `tui/v2/tui-disco.sh` (`disco_reset()`)
+**Status:** FIXED (2026-06-24) — pre-checks internet before allowing the switch, shows clear message if offline
+**File:** `tui/v2/tui-disco.sh` (`disco_reset()`)
 
 **Description:** When the TUI auto-detects DISCO mode (internet check fails, payload available), the Advanced menu offers "Switch to Connected Mode" (X). If the user selects it:
 1. `disco_reset()` removes `.bundle` and returns 2
@@ -3940,11 +3941,11 @@ Compare with DIRECT→CONNO switch at line 1930 which does `return 0` (permanent
 
 ---
 
-## Bug #342: ~~DUPLICATE of #23~~ `_operator_menu` marks basket dirty on every submenu return, even with no edits
+## Bug #342: ~~FIXED by Bug #509~~ `_operator_menu` marks basket dirty on every submenu return, even with no edits
 
 **Severity:** LOW
-**Status:** OPEN
-**Location:** `tui/v2/tui-mirror.sh` lines 798-810
+**Status:** FIXED (2026-06-24, commit `92a191b0`) — md5sum comparison only sets dirty when basket actually changes
+**Location:** `tui/v2/tui-mirror.sh` lines 977-1004
 
 **Description:** Opening Select Sets, Search, or View Basket always sets `_OP_BASKET_DIRTY=true` and calls `_persist_operator_basket`, even if the user only opened the screen and pressed Back without making changes.
 
@@ -10246,7 +10247,7 @@ fi
 
 ## Bug #508: `_day2_upgrade` dry-run hides errors — empty version list with no diagnostics
 
-**Status**: NEW (code analysis)  
+**Status**: FIXED (2026-06-24, commit `fd95a63f`) — captures exit code, shows distinct error dialog  
 **Severity**: MEDIUM — User gets "No available upgrade versions" with no clue why  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, line 2257)  
 **Discovered**: 2026-06-23
@@ -10632,7 +10633,7 @@ fi
 
 ## Bug #515: Day-2 "Startup" dialog says "power on VMs" for bare-metal clusters — FIXED
 
-**Status:** FIXED (2026-06-24, commit `04d4a030`) — checks platform before showing message  
+**Status:** FIXED (2026-06-24, commit `cdc2525a`) — uses normalize-aba-conf for platform detection  
 **Severity:** Cosmetic
 **Component:** TUI v2 — Day-2 lifecycle menu
 **File:** `tui/v2/tui-cluster.sh`, line 2407
