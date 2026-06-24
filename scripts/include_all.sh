@@ -501,8 +501,10 @@ auto_complete_install() {
 	# Already completed — nothing to do
 	[[ -f "$abs_dir/.install-complete" ]] && return 0
 
-	# No kubeconfig — cluster was never installed far enough to probe
-	local kc="$abs_dir/iso-agent-based/auth/kubeconfig"
+	# Find kubeconfig — check externalized state first, then local path
+	local kc
+	kc=$(cd "$abs_dir" && cluster_kubeconfig 2>/dev/null) || true
+	[[ -z "$kc" ]] && kc="$abs_dir/iso-agent-based/auth/kubeconfig"
 	[[ -f "$kc" ]] || return 1
 
 	# Probe the cluster with a short timeout
@@ -849,7 +851,7 @@ externalize_cluster_state() {
 
 	# Backup marker/flag files
 	local _flag
-	for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
+	for _flag in .install-complete .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
 		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
 	done
 
