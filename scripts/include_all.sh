@@ -694,18 +694,14 @@ normalize-cluster-conf()
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 
-	# Phase 3 (ADR-007): override immutable fields from installed state
-	local _cn _sd_candidate
-	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | sed 's/[[:space:]]*#.*//' | cut -d= -f2 | xargs)
-	if [ "$_cn" ]; then
-		for _sd_candidate in "$HOME/.aba/clusters/${_cn}."*; do
-			if [ -s "$_sd_candidate/state.sh" ]; then
-				local _bd_state
-				_bd_state=$(grep '^base_domain=' "$_sd_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
-				[ "$_bd_state" ] && _state_override_cluster "$_cn" "$_bd_state"
-				break
-			fi
-		done
+	# Phase 3 (ADR-007): override immutable fields from installed state.
+	# Only apply if this cluster dir has the 'clusterstate' symlink — it points
+	# directly to the correct ~/.aba/clusters/<name>.<domain>/ directory.
+	if [ -L clusterstate ] && [ -s clusterstate/state.sh ]; then
+		local _cn _bd
+		_cn=$(grep '^cluster_name=' clusterstate/state.sh 2>/dev/null | head -1 | cut -d= -f2)
+		_bd=$(grep '^base_domain=' clusterstate/state.sh 2>/dev/null | head -1 | cut -d= -f2)
+		[ "$_cn" ] && [ "$_bd" ] && _state_override_cluster "$_cn" "$_bd"
 	fi
 }
 
