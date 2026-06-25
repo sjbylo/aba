@@ -978,7 +978,8 @@ This automatically configures the ImageSetConfiguration with `shortestPath`, `mi
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
-aba -d <cluster name> upgrade --to 4.22.1      # Perform the upgrade
+aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in mirror (e.g. 4.21.4 → 4.21.20)
+aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
 Or upgrade OpenShift via the Console or CLI in the usual way.
@@ -1008,7 +1009,8 @@ aba -d mirror --target-version 4.22.1 sync
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
-aba -d <cluster name> upgrade --to 4.22.1      # Perform the upgrade
+aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in mirror (e.g. 4.21.4 → 4.21.20)
+aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
 Or upgrade OpenShift via the Console or CLI in the usual way.
@@ -1307,7 +1309,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
 | `aba day2-ntp`                  | Configure cluster NTP                                         |
 | `aba day2-osus`                 | Configure OpenShift Update Service                            |
-| `aba upgrade --to <ver>`        | Upgrade cluster via local mirror. `--dry-run` lists versions. |
+| `aba upgrade [--to <ver>]`      | Upgrade cluster via local mirror. Auto-detects latest z-stream if `--to` omitted. `--dry-run` lists versions. |
 | `aba shutdown`                  | Gracefully shut down a cluster. `--wait` waits for power-off. |
 | `aba startup`                   | Gracefully start up a cluster                                 |
 | `aba rescue`                    | Recover a cluster (uncordon nodes, approve pending CSRs)      |
