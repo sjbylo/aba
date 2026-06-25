@@ -419,6 +419,7 @@ test_begin "ESXi: stale GOVC_DATACENTER/GOVC_CLUSTER cleared (Bug #618)"
 
 # Always uses the explicit ESXi config (~/.vmware.conf.esxi) so the test works
 # regardless of whether run.sh was invoked with -v esxi or -v vcenter.
+e2e_run "Ensure govc installed" "make -sC cli govc"
 e2e_run "Copy ESXi vmware.conf" "cp -v ~/.vmware.conf.esxi vmware.conf"
 
 e2e_run "Verify stale GOVC_DATACENTER/GOVC_CLUSTER cleared on ESXi" \
