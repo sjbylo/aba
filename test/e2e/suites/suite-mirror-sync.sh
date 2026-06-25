@@ -397,8 +397,9 @@ _bm_iso_remote="images/agent-${SNO_BM}.iso"
 _bm_vm_name="${SNO_BM}-master-0"
 
 e2e_run "Destroy leftover OOB VM (if any)" \
-    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
-     vmp_destroy '$_bm_vm_name' || true"
+    "set -a; source ~/.vmware.conf; set +a; \
+     govc vm.power -off -force '$_bm_vm_name' || true; \
+     govc vm.destroy '$_bm_vm_name' || true"
 
 e2e_run "Upload BM ISO to datastore" \
     "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
