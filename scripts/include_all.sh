@@ -1138,7 +1138,7 @@ normalize-vmware-conf()
 		# and ABA expands it to the absolute path openshift-install requires.
 		# ${var//pattern/replacement} replaces all occurrences of pattern in var.
 		# The \$ in the pattern matches a literal '$' character.
-		if [ -n "$GOVC_RESOURCE_POOL" ]; then
+		if [ -n "${GOVC_RESOURCE_POOL:-}" ]; then
 			local _rp="${GOVC_RESOURCE_POOL//\$GOVC_DATACENTER/$GOVC_DATACENTER}"
 			_rp="${_rp//\$GOVC_CLUSTER/$GOVC_CLUSTER}"
 			echo "export GOVC_RESOURCE_POOL='$_rp'"
