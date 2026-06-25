@@ -1123,6 +1123,9 @@ normalize-vmware-conf()
 	if govc about 2>/dev/null | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
 		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
+		# Explicitly clear vCenter-only vars so any inherited exports are overwritten (Bug #618)
+		echo "export GOVC_DATACENTER="
+		echo "export GOVC_CLUSTER="
 		echo export VC=
 	else
 		# Restore for vCenter path
