@@ -981,7 +981,7 @@ Selected operators will be included in the ImageSet config."
 			   	_OP_BASKET_DIRTY=true
 			   	_persist_operator_basket
 			   fi
-			   default_item=3
+			   [[ ${#OP_BASKET[@]} -gt 0 ]] && default_item=3
 			   ;;
 			2) local _pre_hash _post_hash
 			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
@@ -991,7 +991,7 @@ Selected operators will be included in the ImageSet config."
 			   	_OP_BASKET_DIRTY=true
 			   	_persist_operator_basket
 			   fi
-			   default_item=3
+			   [[ ${#OP_BASKET[@]} -gt 0 ]] && default_item=3
 			   ;;
 			3) local _pre_hash _post_hash
 			   _pre_hash=$(printf '%s\n' "${!OP_BASKET[@]}" | sort | md5sum)
@@ -1004,18 +1004,18 @@ Selected operators will be included in the ImageSet config."
 			   ;;
 			4)
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket is already empty." 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket is already empty.\n " 0 0
 				else
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLEAR_BASKET" \
 						--yes-label "Clear" --no-label "$TUI2_BTN_CANCEL" \
-						--yesno "Remove all ${#OP_BASKET[@]} operators from basket?" 0 0
+						--yesno "Remove all ${#OP_BASKET[@]} operators from basket?\n " 0 0
 					if [[ $? -eq 0 ]]; then
 						OP_BASKET=()
 						OP_SET_ADDED=()
 						_OP_BASKET_DIRTY=true
 						_persist_operator_basket
 						tui_log "Basket cleared"
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared." 0 0
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared.\n " 0 0
 					fi
 				fi
 				;;
@@ -1066,9 +1066,7 @@ _operator_sets() {
 		[[ -n "$k" ]] && _newly_selected["$k"]=1
 	done < "$_TUI_TMP"
 
-	# Remove sets that were previously added but are now unchecked
-	# Uses ref-counting: decrement instead of unset, so shared operators
-	# remain in the basket as long as at least one set still contains them
+	# Remove operators from sets that were unchecked
 	local prev_set
 	for prev_set in "${!OP_SET_ADDED[@]}"; do
 		if [[ -z "${_newly_selected[$prev_set]:-}" ]]; then
@@ -1078,17 +1076,11 @@ _operator_sets() {
 				while IFS= read -r line; do
 					[[ "$line" =~ ^[[:space:]]*# ]] && continue
 					[[ -z "$line" ]] && continue
-					line="${line%%#*}"                          # Strip inline comment
-					line="${line#"${line%%[![:space:]]*}"}"     # Trim leading whitespace
-					line="${line%"${line##*[![:space:]]}"}"     # Trim trailing whitespace
+					line="${line%%#*}"
+					line="${line#"${line%%[![:space:]]*}"}"
+					line="${line%"${line##*[![:space:]]}"}"
 					[[ -z "$line" ]] && continue
-					local _count=${OP_BASKET[$line]:-0}
-					_count=$(( _count - 1 ))
-					if [[ $_count -le 0 ]]; then
-						unset 'OP_BASKET[$line]'
-					else
-						OP_BASKET["$line"]=$_count
-					fi
+					unset 'OP_BASKET[$line]'
 				done < "$sf"
 			fi
 			unset 'OP_SET_ADDED[$prev_set]'
@@ -1096,28 +1088,26 @@ _operator_sets() {
 		fi
 	done
 
-	# Add newly selected sets (increment ref-count for each operator)
+	# Add operators from all checked sets (always, even if previously added)
 	local new_set
 	for new_set in "${!_newly_selected[@]}"; do
-		if [[ -z "${OP_SET_ADDED[$new_set]:-}" ]]; then
-			local sf="$ABA_ROOT/templates/operator-set-$new_set"
-			if [[ -f "$sf" ]]; then
-				local line
-				while IFS= read -r line; do
-					[[ "$line" =~ ^[[:space:]]*# ]] && continue
-					[[ -z "$line" ]] && continue
-					line="${line%%#*}"                          # Strip inline comment
-					line="${line#"${line%%[![:space:]]*}"}"     # Trim leading whitespace
-					line="${line%"${line##*[![:space:]]}"}"     # Trim trailing whitespace
-					[[ -z "$line" ]] && continue
-					if awk -v name="$line" '$1 == name {found=1; exit} END {exit !found}' "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
-						OP_BASKET["$line"]=$(( ${OP_BASKET[$line]:-0} + 1 ))
-					fi
-				done < "$sf"
-			fi
-			OP_SET_ADDED["$new_set"]=1
-			tui_log "Added operator set: $new_set"
+		local sf="$ABA_ROOT/templates/operator-set-$new_set"
+		if [[ -f "$sf" ]]; then
+			local line
+			while IFS= read -r line; do
+				[[ "$line" =~ ^[[:space:]]*# ]] && continue
+				[[ -z "$line" ]] && continue
+				line="${line%%#*}"
+				line="${line#"${line%%[![:space:]]*}"}"
+				line="${line%"${line##*[![:space:]]}"}"
+				[[ -z "$line" ]] && continue
+				if awk -v name="$line" '$1 == name {found=1; exit} END {exit !found}' "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
+					OP_BASKET["$line"]=1
+				fi
+			done < "$sf"
 		fi
+		OP_SET_ADDED["$new_set"]=1
+		tui_log "Added operator set: $new_set"
 	done
 	tui_log "After set selection — basket: ${#OP_BASKET[@]}, sets: ${!OP_SET_ADDED[*]}"
 }
@@ -1257,6 +1247,7 @@ _operator_view_basket() {
 			tui_log "Removed from basket: $op"
 		fi
 	done
+
 	tui_log "Basket after edit: ${#OP_BASKET[@]} operators"
 }
 

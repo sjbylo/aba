@@ -483,7 +483,8 @@ _conno_main() {
 	# Items that are unavailable get "[reason]" appended to their label
 	# and show a msgbox when selected (greyed-out pattern).
 	# Separators (space tags) visually group mirror, transfer, and cluster ops.
-	local default_item="$TUI2_CONNO_TAG_VIEW_ISC"
+	local default_item=""
+	_TUI_ISC_UPDATED=${_TUI_ISC_UPDATED:-false}
 
 	# --- Menu loop: no per-action flag assignments needed ---
 	# _TUI_NEED_MIRROR_RECHECK is set only by _invalidate_mirror_cache()
@@ -558,6 +559,16 @@ _conno_main() {
 		local day2_label="$TUI2_LABEL_DAY2"
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 			day2_label="$TUI2_LABEL_DAY2 $TUI2_STATUS_INSTALL_CLUSTER"
+		fi
+
+		# Smart focus: last assignment wins = highest priority (read bottom-to-top)
+		if [[ -z "$default_item" ]]; then
+			default_item="$TUI2_CONNO_TAG_VIEW_ISC"
+			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];           then default_item="$TUI2_CONNO_TAG_DAY2"; fi
+			if _mirror_has_release_image;                            then default_item="$TUI2_CONNO_TAG_INSTALL"; fi
+			if mirror_available && ! _mirror_has_release_image;      then default_item="$TUI2_CONNO_TAG_SYNC"; fi
+			if ! mirror_available;                                   then default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"; fi
+			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_VIEW_ISC"; fi
 		fi
 
 		# Dynamic menu title with mirror state
@@ -656,12 +667,14 @@ Navigation:
 			else
 				mirror_install
 			fi
+			default_item=""
 			;;
 		"$TUI2_CONNO_TAG_SAVE")
 			if [[ "$_TUI_INET" == "no" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
 			else
 				mirror_save
+				default_item=""
 			fi
 			;;
 	"$TUI2_CONNO_TAG_PREP_UPGRADE")
@@ -683,15 +696,18 @@ Navigation:
 			else
 				mirror_sync
 			fi
+			default_item=""
 			;;
 			"$TUI2_CONNO_TAG_VIEW_ISC")
 				mirror_view_isc "false"
+				_TUI_ISC_UPDATED=false
 				;;
 			"$TUI2_CONNO_TAG_OPERATORS")
 				if [[ "$ops_avail" == "false" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
 				else
 					mirror_select_operators
+					default_item=""
 				fi
 				;;
 			"$TUI2_CONNO_TAG_BUNDLE")
@@ -704,8 +720,8 @@ Navigation:
 			"$TUI2_CONNO_TAG_INSTALL")
 				tui_install_cluster_gate CONNO
 				case "$?" in
-				0) cluster_install_flow ;;
-				3) ;;  # gate already invoked cluster_install_flow after sync
+				0) cluster_install_flow; default_item="" ;;
+				3) default_item="" ;;
 				esac
 				;;
 			"$TUI2_CONNO_TAG_DAY2")
@@ -720,11 +736,13 @@ Navigation:
 				;;
 			"$TUI2_CONNO_TAG_ADVANCED")
 				tui_advanced_menu
+				default_item=""
 				;;
 			"$TUI2_CONNO_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
 				_invalidate_mirror_cache
+				default_item=""
 				;;
 		esac
 	done

@@ -139,6 +139,11 @@ _persist_cluster_draft() {
 	replace-value-conf -q -n base_domain      -v "$cl_domain"      -f "$_conf"
 	replace-value-conf -q -n machine_network  -v "$cl_network"     -f "$_conf"
 	replace-value-conf -q -n starting_ip      -v "$cl_starting_ip" -f "$_conf"
+	# SNO doesn't use VIPs — clear them to avoid warnings
+	if [[ "$cl_type" == "sno" ]]; then
+		cl_api_vip=""
+		cl_ingress_vip=""
+	fi
 	replace-value-conf -q -n api_vip          -v "$cl_api_vip"     -f "$_conf"
 	replace-value-conf -q -n ingress_vip      -v "$cl_ingress_vip" -f "$_conf"
 	replace-value-conf -q -n dns_servers      -v "$cl_dns"         -f "$_conf"
@@ -690,12 +695,16 @@ cluster_install_flow() {
 	# Sanitize cl_connection for the current TUI mode.
 	# DIRECT: only "direct" and "proxy" are valid.
 	# DISCO: only "mirror" is valid (no internet).
-	# CONNO: all three (mirror/proxy/direct) are valid — don't override.
 	_apply_mode_connection() {
 		if [[ "$_TUI_MODE" == "DIRECT" ]]; then
 			[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
 		elif [[ "$_TUI_MODE" == "DISCO" ]]; then
 			[[ "$cl_connection" != "mirror" ]] && cl_connection="mirror"
+		elif [[ "$_TUI_MODE" == "CONNO" ]]; then
+			# Mirror has priority when available and synced
+			if mirror_available && _mirror_has_release_image; then
+				cl_connection="mirror"
+			fi
 		fi
 	}
 	_apply_mode_connection
