@@ -279,7 +279,7 @@ abatui --conno     # Force partially disconnected mode
 
 The `abatui` command is installed to your `$PATH` alongside `aba` and can be run from any directory within the ABA repository.
 
-The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror configuration (local or remote registry), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
+The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror installation (local or remote Quay/Docker), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
 
 Requires `dialog` package (`dnf install dialog`). Internet access is needed for connected modes; fully disconnected mode works offline with a bundle.
 
@@ -1012,6 +1012,61 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 [Back to top](#quick-start)
 
+## Cluster Shutdown & Startup
+
+### Graceful Shutdown
+
+```bash
+aba shutdown          # Cordon, drain, and shut down all nodes
+aba shutdown --wait   # Same, but wait until all VMs are powered off
+```
+
+- Cordons all nodes (marks them unschedulable)
+- Drains all pods from worker nodes
+- Shuts down every node via SSH (falls back to `oc debug` if SSH is unavailable)
+- Shows certificate expiry warnings — never leave a cluster shut down beyond the certificate renewal window
+- With `--wait`: polls VMware/KVM until all VMs are powered off (bare-metal skips this)
+
+### Startup
+
+```bash
+aba startup           # Power on VMs, uncordon nodes, approve CSRs, wait for Ready
+```
+
+- Powers on all cluster VMs (bare-metal: prompts you to power on servers manually)
+- Waits for the cluster API to become reachable
+- Uncordons all nodes and approves any pending CSRs
+- Waits for all nodes to reach `Ready` state and all cluster operators to become available
+
+### Rescue (Lost kubeconfig / Forgotten Password)
+
+```bash
+aba rescue
+```
+
+Use `aba rescue` when you have **lost the kubeconfig** or **forgotten the kubeadmin password** and cannot access the cluster through normal means. It works by:
+
+1. SSHing into the first control-plane node (rendezvous IP) using the cluster SSH key
+2. Using the node's local recovery kubeconfig (`localhost-recovery.kubeconfig`)
+3. Uncordoning any nodes that are `SchedulingDisabled`
+4. Approving any pending CSRs
+
+After rescue completes, the cluster should be operational again. You can then retrieve credentials from `~/.aba/clusters/<name>/` or regenerate them.
+
+### VM-Level Power Commands
+
+These commands control VMs directly without performing any OpenShift-level drain or cordon:
+
+| Command | Description |
+|---------|-------------|
+| `aba start` | Power on all cluster VMs |
+| `aba stop` | Guest shutdown (VMware Tools / QEMU agent) — no drain |
+| `aba poweroff` / `aba kill` | Immediate power off — no drain, no guest shutdown |
+
+> **Tip:** Prefer `aba shutdown` / `aba startup` for routine maintenance. Use `aba stop`/`aba start` only when you need quick VM-level power cycling without the full graceful workflow.
+
+[Back to top](#quick-start)
+
 # Prerequisites
 
 <!-- perma-link: Red Hat Developers blog, Oct 2025 -->
@@ -1135,6 +1190,8 @@ After configuring these prerequisites, run `aba` to start the workflow.
 ## Partially Disconnected Prerequisites
 
 In a *partially disconnected environment*, the *connected bastion* has limited (or proxy-based) Internet access.
+
+> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `int_connection=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/networking/configuring-a-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
 
 #### Connected Bastion
 

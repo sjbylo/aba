@@ -239,10 +239,11 @@ dlg() {
 			continue
 		fi
 		if [[ "$next_is_text" == "true" ]]; then
+			# Prepend \n for consistent spacing below title (all dialog types)
+			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
+				arg="\n$arg"
+			fi
 			if [[ "$has_menu" == "true" ]]; then
-				if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
-					arg="\n$arg"
-				fi
 				arg="${arg}\n\n(Navigate: Arrow keys, Tab, SPACE, ESC)"
 				dims_after_text=3
 			fi
@@ -1509,6 +1510,7 @@ _resolve_minor_to_patch() {
 tui_kick_isconf_regen() {
 	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
 	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
+	_TUI_ISC_UPDATED=true
 }
 
 # Gate Install Cluster menu action: prompts for mirror/registry prep when needed.
