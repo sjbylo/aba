@@ -296,7 +296,7 @@ e2e_add_to_cluster_cleanup "$PWD/$COMPACT" remote
 e2e_run_remote "Set explicit non-default DNS (exercises dns_servers)" \
     "cd ~/aba && aba --dns $(pool_dns_server) 8.8.4.4"
 e2e_run_remote "Set explicit gateway (exercises next_hop_address)" \
-    "cd ~/aba && aba --gateway-ip \$(ip route | awk '/default/{print \$3; exit}')"
+    "cd ~/aba && aba --gateway-ip 10.0.0.1"
 e2e_run_remote "Create compact cluster.conf with explicit VIPs" \
     "cd ~/aba && aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) \
      --api-vip $(pool_api_vip) --ingress-vip $(pool_apps_vip) --step cluster.conf"

@@ -33,7 +33,8 @@ plan_tests \
 	"mirror.conf validation" \
 	"mirror.conf ops/op_sets override" \
 	"cluster.conf CLI flag override" \
-	"Pre-release version support (RC/EC)"
+	"Pre-release version support (RC/EC)" \
+	"ESXi: stale GOVC_DATACENTER/GOVC_CLUSTER cleared (Bug #618)"
 
 suite_begin "config-validation"
 
@@ -410,6 +411,33 @@ e2e_run "Clean up generated ISC and temp files" \
 	"rm -f mirror/data/imageset-config.yaml mirror/data/.created /tmp/rc-out.txt /tmp/ec-out.txt /tmp/ga-out.txt"
 
 test_end 0
+
+# ============================================================================
+# 8. ESXi: stale GOVC_DATACENTER/GOVC_CLUSTER cleared (Bug #618)
+# ============================================================================
+test_begin "ESXi: stale GOVC_DATACENTER/GOVC_CLUSTER cleared (Bug #618)"
+
+# This test only runs if the pool's vmware.conf connects to ESXi (not vCenter).
+# The fix ensures that inherited GOVC_DATACENTER/GOVC_CLUSTER exports are
+# explicitly cleared when ESXi is detected, preventing "datacenter not found" errors.
+e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
+
+e2e_run "Verify ESXi and test stale var clearing" \
+	"source scripts/include_all.sh && \
+	 export GOVC_DATACENTER=StaleTestDC GOVC_CLUSTER=StaleTestCluster && \
+	 source <(normalize-vmware-conf) && \
+	 if [ \"\$VC\" ]; then \
+	   echo 'Pool uses vCenter — skipping ESXi-specific assertion (GOVC_DATACENTER='\$GOVC_DATACENTER')'; \
+	 else \
+	   echo 'ESXi detected — checking stale vars cleared'; \
+	   [ -z \"\$GOVC_DATACENTER\" ] || { echo \"FAIL: GOVC_DATACENTER='\$GOVC_DATACENTER' (expected empty)\"; exit 1; }; \
+	   [ -z \"\$GOVC_CLUSTER\" ] || { echo \"FAIL: GOVC_CLUSTER='\$GOVC_CLUSTER' (expected empty)\"; exit 1; }; \
+	   echo 'PASS: GOVC_DATACENTER and GOVC_CLUSTER are empty'; \
+	 fi"
+
+e2e_run -q "Remove vmware.conf" "rm -f vmware.conf"
+
+test_end
 
 # ============================================================================
 
