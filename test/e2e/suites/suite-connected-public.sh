@@ -101,6 +101,14 @@ e2e_run "Verify no proxy block in direct mode" \
 e2e_run "Verify public registry references" \
     "grep registry.redhat.io $SNO/install-config.yaml || grep quay.io $SNO/install-config.yaml"
 
+# Direct mode: ~/.docker/config.json must have ONLY Red Hat credentials (no mirror)
+e2e_run "Pull secret: registry.redhat.io present (direct mode)" \
+    "jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
+e2e_run "Pull secret: quay.io present (direct mode)" \
+    "jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
+e2e_run "Pull secret: NO mirror registry in config.json (direct mode)" \
+    "! jq -e '.auths | keys[] | select(test(\":[0-9]+$\"))' ~/.docker/config.json"
+
 test_end
 
 # ============================================================================
