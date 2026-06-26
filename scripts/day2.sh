@@ -374,5 +374,7 @@ fi
 # Apply user-provided custom manifests (if any)
 apply_custom_manifests
 
+aba_info_ok "Day-2 configuration completed successfully."
+
 exit 0
 
