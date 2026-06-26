@@ -1265,7 +1265,6 @@ _cluster_page_iface() {
 		case "$rc" in
 			3) return 0 ;;  # Next (Extra button)
 			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
-
 "• Ports: network port names (e.g. ens160, ens1f0)
   Multiple ports create a bond (e.g. ens1f0,ens1f1)
 
