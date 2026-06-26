@@ -246,11 +246,29 @@ text stays on one line and the input field is wide enough for long values.
 
 ---
 
+## Finding 6: Literal vs real newlines — cannot mix styles
+
+Dialog changes its text interpretation when literal `\n` (two-char) and real `$'\n'`
+newlines are mixed in the same text:
+- Text with ONLY literal `\n` → dialog interprets `\n` as line breaks (correct)
+- Text with ONLY real `$'\n'` → dialog interprets them as line breaks (correct)
+- Text with BOTH → dialog misbehaves: real newlines become spaces, only literal
+  `\n` is treated as line breaks. Multi-line text collapses into a single paragraph.
+
+This was discovered when appending literal `\n ` to the splash screen (which uses
+real newlines). The ASCII art collapsed into a single block.
+
+**Fix**: detect which newline style the text uses and append the matching style:
+- Text contains real `$'\n'` → append `$'\n '` (real newline + space)
+- Text uses only literal `\n` → append `\n ` (literal)
+
 ## Recommended `dlg()` Wrapper Logic
 
-For `--msgbox`, `--yesno`, `--inputbox`, and `--passwordbox`:
+For `--msgbox`, `--yesno`, `--inputbox`:
 1. Prepend `\n` (already done — leading blank line)
-2. Append `\n ` if text doesn't already end with `\n ` (trailing blank line before buttons)
+2. Detect newline style: if text contains real `$'\n'`, append `$'\n '` (real);
+   otherwise append literal `\n `. Never mix styles.
+3. Skip if text already ends with `\n ` (literal or real)
 
-Skip for: `--infobox`, `--gauge`, `--menu`, `--checklist`, `--radiolist`, `--textbox`,
-`--editbox`, `--mixedform`.
+Skip entirely (no text modification): `--infobox`, `--gauge`, `--menu`,
+`--checklist`, `--radiolist`, `--textbox`, `--editbox`, `--mixedform`.

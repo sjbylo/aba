@@ -248,11 +248,18 @@ dlg() {
 			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
 				arg="\n$arg"
 			fi
-			# Append \n<space> for trailing blank line before buttons.
-			# dialog ignores bare \n for height; the space forces the line to render.
+			# Append trailing blank line before buttons.
+			# dialog ignores bare trailing newlines for height; the space forces the
+			# line to render.  Use the same newline style as the text: literal \n for
+			# texts using literal \n sequences, real $'\n' for texts with real newlines
+			# (e.g. splash screen).  Mixing styles causes dialog to misbehave.
 			# Only for types with buttons — skip infobox/mixedform/menus.
 			if [[ "$_add_trailing" == "true" && "$arg" != *'\n ' && "$arg" != *$'\n ' ]]; then
-				arg="$arg\n "
+				if [[ "$arg" == *$'\n'* ]]; then
+					arg="$arg"$'\n '
+				else
+					arg="$arg\n "
+				fi
 			fi
 			if [[ "$has_menu" == "true" ]]; then
 				arg="${arg}\n\n(Navigate: Arrow keys, Tab, SPACE, ESC)"
