@@ -401,7 +401,7 @@ TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\n
 # Messages — Execution / Exit
 # =============================================================================
 
-TUI2_MSG_CONFIRM_EXIT="\nExit ABA TUI?\n "
+TUI2_MSG_CONFIRM_EXIT="\nExit ABA TUI?"
 TUI2_MSG_EXIT_HELP="Navigation:\n\n• Press ESC to go back to the previous menu\n• In a wizard, ESC returns to the main menu\n• At the main menu, ESC offers to exit the TUI\n• Press ESC again on the exit dialog to quit immediately\n\nConfiguration is only saved when you complete actions."
 TUI2_MSG_EXEC_MODE="Choose execution mode:"
 TUI2_MSG_EDITOR_PROMPT="How would you like to edit?\n\n  %s"

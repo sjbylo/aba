@@ -471,7 +471,7 @@ _mirror_op_confirm() {
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 6 40
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 0 0
 			fi
 			continue
 		fi
@@ -832,7 +832,7 @@ mirror_view_isc() {
 				R)
 					dlg --backtitle "$(ui_backtitle)" --title "Confirm Regenerate" \
 						--yes-label "Regenerate" --no-label "Cancel" \
-						--yesno "\nThis will discard any manual edits and regenerate the\nImageSet Config from current aba settings\n(version, channel, operators).\n\nAre you sure?" 11 60
+						--yesno "\nThis will discard any manual edits and regenerate the\nImageSet Config from current aba settings\n(version, channel, operators).\n\nAre you sure?" 0 0
 					if [[ $? -eq 0 ]]; then
 						# Touch .created so the script's guard sees it as newer than
 						# the ISC and triggers regeneration — keeps ISC in place
@@ -1004,18 +1004,18 @@ Selected operators will be included in the ImageSet config."
 			   ;;
 			4)
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket is already empty.\n " 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket is already empty." 0 0
 				else
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLEAR_BASKET" \
 						--yes-label "Clear" --no-label "$TUI2_BTN_CANCEL" \
-						--yesno "Remove all ${#OP_BASKET[@]} operators from basket?\n " 0 0
+						--yesno "Remove all ${#OP_BASKET[@]} operators from basket?" 0 0
 					if [[ $? -eq 0 ]]; then
 						OP_BASKET=()
 						OP_SET_ADDED=()
 						_OP_BASKET_DIRTY=true
 						_persist_operator_basket
 						tui_log "Basket cleared"
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared.\n " 0 0
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared." 0 0
 					fi
 				fi
 				;;
@@ -1347,7 +1347,7 @@ mirror_create_bundle() {
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 6 40
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 0 0
 			fi
 			continue
 		fi
