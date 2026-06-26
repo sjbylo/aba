@@ -232,11 +232,6 @@ e2e_run_remote "Override op_sets in mirror.conf (exercises mirror.conf override)
     "cd ~/aba && sed -i '/^#op_sets=/c\\op_sets=abatest' mirror/mirror.conf"
 
 e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
-
-# Hide RH pull secret before load to simulate true air-gap (disN has no RH creds)
-e2e_run_remote -q "Hide RH pull secret for disco load test" \
-    "test -f ~/.pull-secret.json && mv ~/.pull-secret.json ~/.pull-secret.json.e2e-bak || true"
-
 e2e_run_remote -r 3 2 "Load images into Quay registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
@@ -250,10 +245,6 @@ e2e_run_remote "Pull secret: NO quay.io (disco mode)" \
     "! jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
 e2e_run_remote "Pull secret: NO cloud.openshift.com (disco mode)" \
     "! jq -e '.auths[\"cloud.openshift.com\"]' ~/.docker/config.json"
-
-# Restore RH pull secret for subsequent tests that may need it
-e2e_run_remote -q "Restore RH pull secret" \
-    "test -f ~/.pull-secret.json.e2e-bak && mv ~/.pull-secret.json.e2e-bak ~/.pull-secret.json || true"
 
 test_end
 
