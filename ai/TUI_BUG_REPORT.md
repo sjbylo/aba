@@ -170,6 +170,7 @@
 ---
 
 ## Bug #12: ~~FEATURE REQUEST~~ No proxy configuration fields in TUI cluster wizard
+**Status:** FEATURE REQUEST
 **Severity:** ~~MEDIUM~~ — Feature request, not a bug
 **Steps to reproduce:**
 1. Start TUI → Install Cluster
@@ -221,6 +222,7 @@
 ---
 
 ## Bug #17: Forced `--conno`/`--disco`/`--direct` flags skip sanity checks
+**Status:** OPEN
 **File:** `tui/v2/abatui2.sh` lines 298-308
 **Severity:** LOW — Safety bypass
 **Steps to reproduce:**
@@ -286,6 +288,7 @@
 | 598 | `verify-cluster-conf` uses unquoted `$ports` variable | LOW | YES - code |
 
 ## Bug #18: TUI progressbox appears frozen during long waits (openshift-install wait-for)
+**Status:** LOW RISK
 **File:** `tui/v2/tui-lib.sh` lines 615-621 (pipeline to progressbox)
 **Severity:** LOW — UX issue (downgraded after re-validation)
 **Steps to reproduce:**
@@ -369,6 +372,7 @@
 ---
 
 ## Bug #10 — ~~UPDATED: NOT A BUG~~
+**Status:** NOT A BUG
 The Advanced menu does NOT have `--help-button` in its dialog call, so exit code 2 cannot occur from dialog's Help button. The `[[ $rc -ne 0 ]] && return 0` catch-all correctly handles all non-zero codes. Downgraded from "bug" to "non-issue".
 
 ---
@@ -401,7 +405,7 @@ The Advanced menu does NOT have `--help-button` in its dialog call, so exit code
 ## Bug #42: Cannot delete a cluster during install via TUI (progressbox blocks all input)
 **File:** `tui/v2/tui-lib.sh` line 615
 **Severity:** LOW — UX issue (downgraded from HIGH after re-validation)
-**Status:** **MOSTLY INVALID** — Ctrl+C works in progressbox mode; user can choose "Run in Terminal" mode for full control.
+**Status:** INVALID — Ctrl+C works in progressbox mode; user can choose "Run in Terminal" mode for full control.
 
 **Original claim:** `trap : INT` disables Ctrl+C, trapping the user in the progressbox.
 
@@ -422,7 +426,7 @@ The Advanced menu does NOT have `--help-button` in its dialog call, so exit code
 ## Bug #44: ~~DESIGN LIMITATION~~ `_exec_in_tui` can report "Success" when child process was externally killed
 **File:** `tui/v2/tui-lib.sh`
 **Severity:** ~~MEDIUM~~ — DESIGN LIMITATION
-**Status:** DESIGN LIMITATION — This is an inherent limitation of `dialog --progressbox`. The exit code comes from `PIPESTATUS[0]` which reflects the bash pipe, not the external signal. Detecting external kills would require process monitoring beyond what dialog provides.
+**Status:** BY DESIGN — This is an inherent limitation of `dialog --progressbox`. The exit code comes from `PIPESTATUS[0]` which reflects the bash pipe, not the external signal. Detecting external kills would require process monitoring beyond what dialog provides.
 **Verified:** YES — Observed via TUI (killed `openshift-install` process, TUI showed "Success")
 **Steps to reproduce:**
 1. Start a long-running command via TUI (e.g., Install Cluster)
@@ -462,7 +466,7 @@ The Advanced menu does NOT have `--help-button` in its dialog call, so exit code
 ## Bug #57: ~~LOW RISK~~ "Reset ABA" in Advanced menu returns to main loop with stale state
 **File:** `tui/v2/tui-cluster.sh` line 1840
 **Severity:** LOW — Edge case. After full reset, user should restart TUI. In-memory state becomes stale but next menu redraw would detect missing configs.
-**Status:** Known limitation — duplicate of #77. Would require `exit 0` after reset (forcing TUI restart).
+**Status:** DUPLICATE of Bug #77 — Would require `exit 0` after reset (forcing TUI restart).
 **Verified:** Code review only
 **Steps to reproduce:**
 1. Start TUI in CONNO mode with a mirror installed and clusters configured
@@ -486,6 +490,7 @@ The Advanced menu does NOT have `--help-button` in its dialog call, so exit code
 ---
 
 ## Bug #79b: ~~FIXED~~ Internet check (aba_inet_check_cached) systematically fails after TTL expiry with `set -o pipefail`
+**Status:** FIXED
 
 > **Note:** Numbered #79b to avoid collision with Bug #79 above (copy-paste error in verify-cluster-conf). This is a DIFFERENT bug found in Session 2.
 
@@ -500,6 +505,7 @@ The Advanced menu does NOT have `--help-button` in its dialog call, so exit code
 **Verified**: YES — via CLI test simulating the `run_once` flow and via TUI observation.
 
 ## Bug #94: Mirror config edits saved immediately even if user cancels
+**Status:** OPEN
 
 **Severity**: LOW — user expectation issue
 
@@ -514,7 +520,7 @@ The Advanced menu does NOT have `--help-button` in its dialog call, so exit code
 ## Bug #99: ~~CORE ABA BUG~~ `--ntp`/`--dns`/`--gateway` flags target wrong `cluster.conf` when used with `--name`
 
 **Severity**: ~~MEDIUM~~ — CORE ABA BUG (not TUI)
-**Status:** CORE ABA BUG — This is in `scripts/aba.sh` (CLI flag handling), not the TUI. Outside scope of TUI fixes.
+**Status:** OPEN — This is in `scripts/aba.sh` (CLI flag handling), not the TUI. Outside scope of TUI fixes.
 
 **Location**: `scripts/aba.sh` lines 630, 642, 654 (and similar flag handlers)
 
@@ -533,6 +539,7 @@ Note: This is a core ABA bug exposed through the TUI's generated command. The TU
 **Verified**: YES — observed during SNO installation: `aba.conf` updated correctly, `sno/cluster.conf` retained old NTP value.
 
 ## Bug #104: ~~FEATURE REQUEST~~ EUS channel missing from TUI channel selection
+**Status:** FEATURE REQUEST
 
 **Severity**: ~~MEDIUM~~ — Feature request
 
@@ -556,6 +563,7 @@ Users who need EUS (required for certain upgrade paths and longer support cycles
 ---
 
 ## Bug #107: Direct script invocations bypass make dependency tracking
+**Status:** OPEN
 
 **Severity**: LOW (architectural — no immediate user impact but breaks invariants)
 
@@ -679,7 +687,7 @@ Top 10 DISCO show-stoppers re-validated against current code:
 
 **Severity**: ~~MEDIUM~~ — CORE ABA BEHAVIOR (not TUI)
 **File:** `tui/v2/tui-cluster.sh`
-**Status:** CORE ABA BEHAVIOR — `aba cluster` auto-detects network settings and exits non-zero on first run to prompt user review. This is core ABA behavior, not a TUI bug. The TUI correctly shows the failure and lets the user retry.
+**Status:** NOT A BUG — `aba cluster` auto-detects network settings and exits non-zero on first run to prompt user review. This is core ABA behavior, not a TUI bug. The TUI correctly shows the failure and lets the user retry.
 
 **Verified:** YES — observed during interactive testing.
 
@@ -698,7 +706,7 @@ Top 10 DISCO show-stoppers re-validated against current code:
 ## Bug #280: ~~CORE ABA BUG~~ "Uninstall Mirror" option hidden from Advanced menu when `.available` marker is removed
 **File:** `tui/v2/tui-cluster.sh` (menu gated by `.available`)
 **Severity:** ~~HIGH~~ — CORE ABA BUG (downstream of #283)
-**Status:** CORE ABA BUG — The TUI correctly shows "Uninstall" when `.available` exists. The root cause is Bug #283: `reg-uninstall.sh` falsely reports success, causing Makefile to remove `.available` prematurely. Fix belongs in core ABA uninstall scripts.
+**Status:** OPEN — The TUI correctly shows "Uninstall" when `.available` exists. The root cause is Bug #283: `reg-uninstall.sh` falsely reports success, causing Makefile to remove `.available` prematurely. Fix belongs in core ABA uninstall scripts.
 **Downstream of:** Bug #283 — `.available` is only removed by Makefile targets AFTER `reg-uninstall.sh` exits 0. This bug can only occur when Bug #283 triggers (uninstall falsely reports success while registry is still running), causing the Makefile to remove `.available` prematurely.
 **Steps to reproduce:**
 1. Have a running Quay registry on the host
@@ -720,7 +728,7 @@ Top 10 DISCO show-stoppers re-validated against current code:
 ## Bug #283: ~~CORE ABA BUG~~ TUI uninstall reports "Command completed successfully" when actual registry still running
 **File:** `scripts/reg-uninstall.sh`
 **Severity:** ~~HIGH~~ — CORE ABA BUG (not TUI)
-**Status:** ADDRESSED (commits 193cd237, 0122cf8a, 43fa7131) — Multi-pronged fix: (1) reg_vendor=auto is resolved and written back to mirror.conf at install time (43fa7131), so config always matches state; (2) drift detection escalated to aba_warning (193cd237) so users see if they edit mirror.conf post-install; (3) fallback path (state.sh missing) correctly defaults to quay and probes containers+data dirs. The original scenario (mirror.conf wrong vendor) is now prevented at the source.
+**Status:** FIXED (commits 193cd237, 0122cf8a, 43fa7131) — Multi-pronged fix: (1) reg_vendor=auto is resolved and written back to mirror.conf at install time (43fa7131), so config always matches state; (2) drift detection escalated to aba_warning (193cd237) so users see if they edit mirror.conf post-install; (3) fallback path (state.sh missing) correctly defaults to quay and probes containers+data dirs. The original scenario (mirror.conf wrong vendor) is now prevented at the source.
 **Previously:** PARTIALLY FIXED (2026-05-26) — fallback probes `podman ps -a` and data directory existence.
 **Steps to reproduce:**
 1. Have a Quay registry running but with missing state (`~/.aba/` deleted)
@@ -742,7 +750,7 @@ Top 10 DISCO show-stoppers re-validated against current code:
 ## Bug #284: ~~DOWNSTREAM OF #283~~ Stale `state.sh` overrides user's `mirror.conf` vendor selection after uninstall
 **File:** `scripts/include_all.sh` `_state_override_mirror()`
 **Severity:** ~~HIGH~~ — Downstream consequence of Bug #283
-**Status:** ADDRESSED (commit 193cd237) — `_state_override_mirror()` now shows a visible `aba_warning` when state.sh and mirror.conf disagree, telling the user to uninstall first. If state.sh survives after uninstall, the user will see the drift warning on next operation. Uninstall scripts DO remove state.sh (`rm -rf "${regcreds_dir:?}/"*`); survival means uninstall didn't complete cleanly.
+**Status:** FIXED (commit 193cd237) — `_state_override_mirror()` now shows a visible `aba_warning` when state.sh and mirror.conf disagree, telling the user to uninstall first. If state.sh survives after uninstall, the user will see the drift warning on next operation. Uninstall scripts DO remove state.sh (`rm -rf "${regcreds_dir:?}/"*`); survival means uninstall didn't complete cleanly.
 **Steps to reproduce:**
 1. Previously install a Quay registry (state.sh records `reg_vendor=quay`)
 2. Uninstall mirror — state.sh survives at `~/.aba/mirror/mirror/state.sh`
@@ -834,6 +842,7 @@ fi
 ---
 
 ## Bug #311: Stale "mirror ready"/"synced" status after mirror uninstall + reinstall
+**Status:** OPEN
 
 **Severity:** HIGH
 **File:** `scripts/include_all.sh` (`aba_mirror_verify_exit` → `run_once -E -i "aba:mirror:check-image"`)
@@ -1006,7 +1015,6 @@ Compare with DIRECT→CONNO switch at line 1930 which does `return 0` (permanent
 **Status:** FIXED in commit ea58e012 — normalizes legacy `none` to empty on load
 
 **Severity:** LOW
-**Status:** ACTIVE
 **Component:** `tui/v2/tui-cluster.sh` — `_cluster_load_conf()` line 99, `_apply_mode_connection()` lines 697-703
 
 **Description:** Older versions of ABA used `int_connection=none` in `cluster.conf` to mean "use mirror" (no direct internet). The core `normalize-cluster-conf` function (in `scripts/include_all.sh` line 654) converts `none` to empty. However, the TUI's `_cluster_load_conf` reads the raw `cluster.conf` file directly, so `cl_connection` is set to the literal string "none".
@@ -1040,7 +1048,7 @@ Or normalize at the end of the function.
 ## Bug #352 — DISCO auto-wizard failure or ESC exits TUI without confirmation (no way to reach menu)
 
 **Severity:** HIGH
-**Status:** ACTIVE
+**Status:** OPEN
 **Component:** `tui/v2/tui-disco.sh` — `_disco_bundle_wizard_gate()`, `disco_main()`, `tui/v2/abatui2.sh` main loop (lines 837-844)
 
 **Description:** When the TUI enters DISCO mode with `.bundle` present, `_disco_bundle_wizard_gate()` automatically triggers mirror install and image load. If ANY of these operations fail (non-zero exit from `aba load`) or the user presses ESC at any point during the auto-wizard, the entire TUI exits without confirmation. The user cannot reach the DISCO main menu.
@@ -1089,6 +1097,7 @@ Or in `abatui2.sh`, handle non-2 return from `disco_main` by re-prompting instea
 ---
 
 ## ~~Bug #353~~: INVALID — Catalog digest mismatch was caused by flawed testing methodology
+**Status:** INVALID
 **Severity:** NOT A BUG
 **Category:** Testing error, not an ABA defect
 
@@ -1105,7 +1114,7 @@ Or in `abatui2.sh`, handle non-2 return from `disco_main` by re-prompting instea
 **Severity:** Medium (UX)
 **File:** `scripts/include_all.sh` (lines 1328-1331), `tui/v2/tui-lib.sh` (line 626)
 **Found:** 2026-06-03 (hackathon, Day-2 operations testing)
-**Status:** NEW
+**Status:** OPEN
 
 **Description:**
 When a command runs inside the TUI's progressbox (`_exec_in_tui`), it sets `PLAIN_OUTPUT=1` which disables the TTY spinner in `aba_wait_show`. The non-TTY fallback uses `printf` without newlines to accumulate progress ticks on a single line (e.g., `[ABA] Waiting for X (max 6m) ... 0s 11s 21s ...`). The final newline is only emitted when the wait completes.
@@ -1255,7 +1264,7 @@ When a users host resolver does not have the cluster DNS records (but the cluste
 
 ## Bug #374: `reg-save.sh` instructs user to copy target-version CLIs before download completes
 
-**Status:** NEW (unverified — code inspection only)
+**Status:** OPEN (unverified — code inspection only)
 
 **Severity:** LOW — Only affects manual file-copy workflow; `aba bundle`/`aba tar` correctly wait via `_wait_for_cli_downloads`
 
@@ -1278,7 +1287,7 @@ The issue: `reg-save.sh` does NOT wait for the target-version CLI downloads to c
 
 ## Bug #379: TUI Upgrade shows versions from mirror but OSUS graph may not have a direct upgrade path
 
-**Status:** NEW (verified via TUI on conno - upgrade from 4.20.20 to 4.20.23 failed)
+**Status:** OPEN (verified via TUI on conno - upgrade from 4.20.20 to 4.20.23 failed)
 
 **Severity:** MEDIUM — User follows TUI guidance but upgrade fails
 
@@ -1303,7 +1312,7 @@ The OSUS update graph only has a direct edge from 4.20.20 -> 4.20.22, not 4.20.2
 
 ## Bug #380: TUI progress box appears frozen during upgrade wait — no visible progress for up to 10 minutes
 
-**Status:** NEW (verified via TUI on conno - progress box shows no movement after "Upgrade command accepted")
+**Status:** OPEN (verified via TUI on conno - progress box shows no movement after "Upgrade command accepted")
 
 **Severity:** LOW — Cosmetic/UX, upgrade continues correctly in background
 
@@ -1323,7 +1332,7 @@ The aba_wait_show function detects it is NOT on a TTY (because dialog --programb
 
 ## Bug #381: Upgrade to intermediate graph version (4.20.22) fails — signature not included by oc-mirror
 
-**Status:** NEW (verified via TUI on conno - upgrade from 4.20.20 to 4.20.22 accepted but fails signature verification)
+**Status:** OPEN (verified via TUI on conno - upgrade from 4.20.20 to 4.20.22 accepted but fails signature verification)
 
 **Severity:** HIGH — Cluster upgrade is blocked, user has no workaround from TUI
 
@@ -1355,7 +1364,7 @@ The cluster cannot verify the 4.20.22 release image without its signature, so th
 
 ## Bug #382: cluster-upgrade.sh shows misleading "admin acknowledgment" message when actual failure is signature verification
 
-**Status:** NEW (verified via TUI on conno - upgrade 4.20.20 -> 4.20.22 shows wrong diagnosis)
+**Status:** OPEN (verified via TUI on conno - upgrade 4.20.20 -> 4.20.22 shows wrong diagnosis)
 
 **Severity:** MEDIUM — User is misled into thinking AdminAck is the problem when it is actually missing release signatures
 
@@ -1381,7 +1390,7 @@ The script's diagnostic message points the user toward admin ack, but the real p
 
 ## Bug #383: VMware/KVM config form saves changes immediately — cancelling leaves partial state
 
-**Status:** NEW (confirmed via code review - same pattern as Bug #94)
+**Status:** OPEN (confirmed via code review - same pattern as Bug #94)
 
 **Severity:** LOW — user expectation issue (same class as Bug #94 for mirror config)
 
@@ -1607,8 +1616,7 @@ replace-value-conf -q -n KVM_NETWORK -v "'$k_network'" -f "$conf_path"
 
 **Status:** FIXED in commit 89fae839 (Bug #485 — updated help text to match actual toggle cycle)
 
-**Status:** NEW  
-**Severity:** LOW — cosmetic/documentation bug in TUI help  
+**Severity:** LOW — cosmetic/documentation bug in TUI help
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-lib.sh`, line 1121)
 
@@ -1676,8 +1684,7 @@ fi
 
 **Status:** FIXED in commit 31ca4a19 — added `{ABA_TUI_FLOCK_FD}>&-` to close FD before backgrounding
 
-**Status:** NEW  
-**Severity:** LOW — could prevent new TUI launch until ISC generation completes  
+**Severity:** LOW — could prevent new TUI launch until ISC generation completes
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-lib.sh`)
 
@@ -1715,8 +1722,8 @@ tui_kick_isconf_regen() {
 
 ## Bug #401 — `cluster_delete` does not warn when deleting an installing cluster
 
-**Status:** NEW  
-**Severity:** LOW — UX issue, not a data loss bug (aba delete handles running installs)  
+**Status:** OPEN
+**Severity:** LOW — UX issue, not a data loss bug (aba delete handles running installs)
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`)
 
@@ -1752,8 +1759,7 @@ is a TUI UX issue, not a functional bug.
 
 **Status:** FIXED — removed both dead constants from `tui-strings2.sh` (same fix as Bug #343)
 
-**Status:** NEW  
-**Severity:** TRIVIAL — dead code, no runtime impact  
+**Severity:** TRIVIAL — dead code, no runtime impact
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-strings2.sh`)
 
@@ -1780,8 +1786,8 @@ Either remove the unused constants or rename them if they're intended for future
 
 ## Bug #403 — Ctrl-C during command output review silently exits TUI (no confirmation)
 
-**Status:** NEW  
-**Severity:** LOW — UX inconsistency, no data loss  
+**Status:** OPEN
+**Severity:** LOW — UX inconsistency, no data loss
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-lib.sh`)
 
@@ -1819,8 +1825,7 @@ or interrupted operations. This is purely a UX consistency issue.
 
 **Status:** FIXED in commit ea58e012 — `${bundle_path/#\~/$HOME}` applied immediately after input
 
-**Status:** NEW  
-**Severity:** MEDIUM — creates wrong directories, command fails silently  
+**Severity:** MEDIUM — creates wrong directories, command fails silently
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-mirror.sh`, `mirror_create_bundle()`)
 
@@ -1914,8 +1919,8 @@ Bug #397 covers the OUTPUT side (inconsistent quoting). This bug covers the INPU
 
 ## Bug #406 — ISC editing in TUI allows malformed YAML saves without validation
 
-**Status:** NEW  
-**Severity:** MEDIUM — can corrupt `imageset-config.yaml`, causing opaque `oc-mirror` failures  
+**Status:** OPEN
+**Severity:** MEDIUM — can corrupt `imageset-config.yaml`, causing opaque `oc-mirror` failures
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-mirror.sh`, `mirror_view_isc()` lines 756-764)
 
@@ -2028,8 +2033,7 @@ fi
 
 **Status:** FIXED in commit ea58e012 — replaced grep with awk exact-match on `$1`
 
-**Status:** NEW  
-**Severity:** LOW — Rare false positives for operators with regex metacharacters  
+**Severity:** LOW — Rare false positives for operators with regex metacharacters
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-mirror.sh`, line 1012)
 
@@ -2167,8 +2171,8 @@ Validate the bundle path with `_tui_reject_squote` and `_valid_abs_path` before 
 
 ## Bug #414 — VMware config form shows rejected value in menu display after `_tui_reject_squote`
 
-**Status:** NEW  
-**Severity:** LOW — Cosmetic UX confusion, no data corruption  
+**Status:** OPEN
+**Severity:** LOW — Cosmetic UX confusion, no data corruption
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, lines 360-427 in `_configure_vmw_form`)
 
@@ -2200,8 +2204,8 @@ After rejection, restore the in-memory variable to its previous value, or defer 
 
 ## Bug #415 — `_configure_vmw_form` ignores `~/.vmware.conf` on fresh init (Advanced path)
 
-**Status:** NEW  
-**Severity:** LOW — User must reconfigure VMware when using Advanced → Platform Settings after reset  
+**Status:** OPEN
+**Severity:** LOW — User must reconfigure VMware when using Advanced → Platform Settings after reset
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, lines 310-312)
 
@@ -2292,8 +2296,8 @@ Reject cluster names that collide with existing ABA directories. At minimum: "mi
 
 ## Bug #417 — Pull secret "Use existing" bypasses JSON validation without warning
 
-**Status:** NEW  
-**Severity:** LOW-MEDIUM — User proceeds with invalid pull secret, later operations fail  
+**Status:** OPEN
+**Severity:** LOW-MEDIUM — User proceeds with invalid pull secret, later operations fail
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-direct.sh`, lines 199-218)
 
@@ -2463,8 +2467,7 @@ The `mirror_prep_upgrade()` function (line 529-540) HAS downgrade validation, bu
 
 **Status:** NOT A BUG — showing the password in status output is intentional (same as `aba info` on the CLI)
 
-**Status:** VERIFIED (live test 2026-06-14)  
-**Severity:** LOW — Security/UX concern; password visible to shoulder-surfers  
+**Severity:** LOW — Security/UX concern; password visible to shoulder-surfers
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, `_day2_status`)
 
@@ -2488,8 +2491,7 @@ Either mask the password (show `***`) or omit it from the status display. The us
 
 **Status:** FIXED — help text updated from "Resources" to "Configure OperatorHub"
 
-**Status:** VERIFIED (live TUI test 2026-06-14)  
-**Severity:** LOW — Help text says "Resources" but menu says "Configure OperatorHub"  
+**Severity:** LOW — Help text says "Resources" but menu says "Configure OperatorHub"
 **Found:** 2026-06-14 (live TUI test)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, line 2051)
 
@@ -2521,8 +2523,7 @@ Update the help text string at `tui-cluster.sh` line 2051.
 
 **Status:** FIXED in commit 89fae839 (Bug #315 — same fix as Bug #384)
 
-**Status:** NEW (code review)  
-**Severity:** LOW — Display bug: "(from macs.conf)" hint rarely shows for bare-metal  
+**Severity:** LOW — Display bug: "(from macs.conf)" hint rarely shows for bare-metal
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, line ~1372)
 
@@ -2581,8 +2582,7 @@ Change `:-2` to `:-1` at lines 1111 and 1182 for consistency, or remove the fall
 
 **Status:** FIXED in commit 7312797d (Bug #469 — help text rewritten to match actual menu)
 
-**Status:** VERIFIED (live TUI test)  
-**Severity:** LOW — Help text misleads users about available menu items  
+**Severity:** LOW — Help text misleads users about available menu items
 **Found:** 2026-06-14 (live TUI test + code review)  
 **Component:** TUI v2 (`tui/v2/abatui2.sh`, lines 620-643)
 
@@ -2671,8 +2671,8 @@ Don't persist `platform` to `aba.conf` until the user presses "Continue" (OK) in
 
 ## Bug #426 — Mirror config form allows clearing required fields to empty (no validation)
 
-**Status:** NEW (code review)  
-**Severity:** LOW — Could cause confusing install failures later  
+**Status:** OPEN (code review)
+**Severity:** LOW — Could cause confusing install failures later
 **Found:** 2026-06-14 (code review)  
 **Component:** TUI v2 (`tui/v2/tui-mirror.sh`, lines 221-241)
 
@@ -2927,8 +2927,8 @@ fi
 
 ## Bug #432 — Operator basket silently loses operators when catalog index files are missing for current version
 
-**Status:** NEW (code review)  
-**Severity:** MEDIUM — Silent data loss, user may not realize operators were dropped  
+**Status:** OPEN (code review)
+**Severity:** MEDIUM — Silent data loss, user may not realize operators were dropped
 **Found:** 2026-06-14 (code review of `tui/v2/abatui2.sh` lines 221-231)  
 **Component:** TUI v2 (`tui/v2/abatui2.sh`, lines 227-228)
 
@@ -2980,8 +2980,7 @@ Or simpler: only validate if at least one index file exists.
 
 **Status:** FIXED in commit fe5f8bde — added `platform="$cl_platform"` after the persist call
 
-**Status:** NEW (code review)  
-**Severity:** MEDIUM — Stale platform display in backtitle/settings, potential wrong defaults  
+**Severity:** MEDIUM — Stale platform display in backtitle/settings, potential wrong defaults
 **Found:** 2026-06-14 (code review of `tui/v2/tui-cluster.sh` line 994)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, line 994)
 
@@ -3017,8 +3016,7 @@ platform="$cl_platform"
 
 ## Bug #434 — ~~NOT A BUG~~ Cluster wizard VM resource fields (CPU, memory) can be cleared to empty
 
-**Status:** NEW (code review)  
-**Severity:** LOW — Allows empty values persisted to cluster.conf  
+**Severity:** LOW — Allows empty values persisted to cluster.conf
 **Found:** 2026-06-14 (code review of `tui/v2/tui-cluster.sh` lines 1427-1492)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, `_cluster_page_vm`)
 
@@ -3040,14 +3038,14 @@ Actually: empty input does NOT overwrite the variable (the `[[ -n "$val" ]]` gua
 
 **Correction:** This is actually NOT a bug — empty input is silently ignored (keeps previous value). The user sees no error but also no reset. This is a UX quirk, not a functional bug.
 
-**Status:** DOWNGRADED TO UX QUIRK — removed from active bug count.
+**Status:** LOW RISK — removed from active bug count.
 
 ---
 
 ## Bug #435 — Cluster wizard allows empty `ports` field on vmw/kvm platforms
 
-**Status:** NEW (code review)  
-**Severity:** LOW — No upfront validation, fails at install time  
+**Status:** OPEN (code review)
+**Severity:** LOW — No upfront validation, fails at install time
 **Found:** 2026-06-14 (code review of `tui/v2/tui-cluster.sh` lines 1274-1288)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, `_cluster_page_iface`)
 
@@ -3364,8 +3362,7 @@ echo "$reg_host" | grep -q -E '^([A-Za-z0-9.-]+\.[A-Za-z]{1,}|[0-9]{1,3}(\.[0-9]
 
 **Status:** FIXED in commit fe5f8bde — help text now says "Save, Sync, or Load"
 
-**Status:** NEW (code review + live observation)  
-**Severity:** LOW — Help text incomplete for DISCO users  
+**Severity:** LOW — Help text incomplete for DISCO users
 **Found:** 2026-06-14 (code review of `tui/v2/tui-mirror.sh` line 387)  
 **Component:** TUI v2 (`tui/v2/tui-mirror.sh`, line 387)
 
@@ -3401,8 +3398,7 @@ Either make the Help text mode-aware (check `$_TUI_MODE`) or mention all three o
 
 **Status:** FIXED in commit 89fae839 (Bug #318 — removed dead `local tag` and its assignment)
 
-**Status:** NEW (code review)  
-**Severity:** COSMETIC — dead code, no functional impact  
+**Severity:** COSMETIC — dead code, no functional impact
 **Found:** 2026-06-14 (code review of `tui/v2/tui-cluster.sh` line 2256)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, line 2256)
 
@@ -3609,7 +3605,7 @@ fi
 
 ## Bug #448 — oc-mirror version display shows empty string (wrong grep pattern for oc-mirror v2)
 
-**Status:** LIVE VERIFIED on conno — `oc-mirror version 2>&1 | grep 'environment version:'` produces empty output  
+**Status:** OPEN — live verified on conno — `oc-mirror version 2>&1 | grep 'environment version:'` produces empty output
 **Severity:** LOW — Cosmetic (empty version in info message)  
 **Found:** 2026-06-17 (CLI verification)  
 **Live verified:** 2026-06-18 — confirmed on conno: `oc-mirror version` outputs `GitVersion:"4.21.0-202605260453..."` format. Correct extraction: `grep -oP 'GitVersion:"\K[^"]+'` → `4.21.0-202605260453.p2.g994deeb...`  
@@ -3651,7 +3647,7 @@ aba_info "Using oc-mirror version $(oc-mirror version --short 2>&1 | tail -1 | s
 
 ## Bug #449 — `_resolve_minor_to_patch` rejects pre-release versions from `fetch_latest_z_version`
 
-**Status:** NEW — Code analysis (unverified — requires candidate channel with RC as latest)  
+**Status:** OPEN — Code analysis (unverified — requires candidate channel with RC as latest)
 **Severity:** MEDIUM — Blocks "x.y" version input on candidate channel  
 **Found:** 2026-06-17 (code analysis)  
 **Component:** TUI v2 (`tui/v2/tui-lib.sh`, `_resolve_minor_to_patch()`, line 1495)
@@ -3686,7 +3682,7 @@ if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+
 
 ## Bug #450 — `fetch_all_versions` returns wrong minor versions (no minor filter, no pre-release)
 
-**Status:** LIVE VERIFIED on conno — `fetch_all_versions candidate 5.0` returns `4.22.0, 4.22.1` (wrong minor, no pre-release)  
+**Status:** OPEN — live verified on conno — `fetch_all_versions candidate 5.0` returns `4.22.0, 4.22.1` (wrong minor, no pre-release)
 **Severity:** HIGH — Silent wrong version resolution  
 **Found:** 2026-06-17 (CLI verification)  
 **Live verified:** 2026-06-18 — Cincinnati graph for `candidate-5.0` contains `5.0.0-ec.{0..3}` (pre-release only in 5.0.x), but `grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'` filters them all out, leaving only `4.22.0` and `4.22.1` (wrong minor bleed from graph).  
@@ -3732,7 +3728,7 @@ steve@conno:aba$ aba --channel candidate --version 5.0
 
 ## Bug #451 — `aba --version x.y` resolution uses stale graph data (no minor filter applied to results)
 
-**Status:** LIVE VERIFIED on conno — `fetch_all_versions candidate 5.0` returns `4.22.0, 4.22.1` (wrong minor!)  
+**Status:** OPEN — live verified on conno — `fetch_all_versions candidate 5.0` returns `4.22.0, 4.22.1` (wrong minor!)
 **Severity:** HIGH — Incorrect version resolution in TUI wizard  
 **Found:** 2026-06-17 (code analysis + CLI verification)  
 **Live verified:** 2026-06-18 — `_fetch_graph_cached candidate 5.0 | jq .nodes[].version` shows mix of 4.22.x-rc/ec and 5.0.0-ec.0, but after GA-only filter, only `4.22.0` and `4.22.1` survive (no 5.0.x). User asking for `--version 5.0` gets `4.22.1`.  
@@ -3769,7 +3765,7 @@ fi
 
 ## Bug #452 — Version wizard shows "Latest (4.22.1)" BELOW "Current (5.0.0-ec.3)" on candidate channel
 
-**Status:** NEW — LIVE VERIFIED in TUI on conno  
+**Status:** OPEN — live verified in TUI on conno
 **Severity:** LOW — UX confusion (misleading label)  
 **Found:** 2026-06-17 (TUI live verification)  
 **Component:** TUI v2 (`tui/v2/tui-direct.sh`, `_direct_version()`, line 352-436)  
@@ -3927,8 +3923,8 @@ This forces a fresh `check-image` against the newly configured version.
 
 ## Bug #456 — `aba --channel X --version Y.Z` uses wrong channel for version resolution
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** MEDIUM — Wrong version resolution affects both `--version` and `--target-version`  
+**Status:** OPEN — live verified on conno
+**Severity:** MEDIUM — Wrong version resolution affects both `--version` and `--target-version`
 **Found:** 2026-06-18 (code analysis + live verification)  
 **Component:** Core ABA (`scripts/aba.sh`, lines 493 AND 540)
 
@@ -3986,7 +3982,7 @@ Should also use `"$chan"` instead of `"$ocp_channel"`.
 
 ## Bug #458 — TUI wizard manual version entry skips channel validation
 
-**Status:** NEW — LIVE VERIFIED on conno  
+**Status:** OPEN — live verified on conno
 **Severity:** LOW — Unlikely in practice but can cause downstream failures  
 **Found:** 2026-06-18 (live TUI testing)  
 **Component:** TUI v2 (`tui/v2/tui-direct.sh`, line 471)
@@ -4028,7 +4024,7 @@ After accepting a manually-entered version, check if it's a pre-release and warn
 
 ## Bug #457 — ~~FIXED~~ `--retry` without argument: comment says 3, code sets 2, debug says 3
 
-**Status:** NEW — VERIFIED via code analysis  
+**Status:** OPEN — verified via code analysis
 **Severity:** TRIVIAL — Cosmetic inconsistency, actual retry=2 works fine  
 **Found:** 2026-06-18 (code analysis)  
 **Component:** Core ABA (`scripts/aba.sh`, lines 935-938)
@@ -4062,8 +4058,7 @@ Align all three to the same value (probably 2 based on what the code does).
 
 **Status:** FIXED — added `sed 's/[[:space:]]*#.*//'` to strip inline comments
 
-**Status:** CONFIRMED via code analysis  
-**Severity:** MEDIUM — Broken kubeconfig path if cluster.conf has inline comments  
+**Severity:** MEDIUM — Broken kubeconfig path if cluster.conf has inline comments
 **Found:** 2026-06-18 (code analysis)  
 **Component:** Core ABA (`scripts/aba.sh`, line 1134, `shell` command)
 
@@ -4143,8 +4138,7 @@ if [ -d "$bundle_dest_file" ]; then
 
 **Status:** FIXED — changed label from "Current installed" to "Current configured"
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW — Misleading label (cosmetic, non-blocking)  
+**Severity:** LOW — Misleading label (cosmetic, non-blocking)
 **Found:** 2026-06-18 (live TUI testing)  
 **Component:** TUI v2 (Prepare Upgrade for Transfer dialog)
 
@@ -4216,8 +4210,8 @@ tui) exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@" ;;
 
 ## Bug #463 — RC version + stable channel produces confusing "no release images found" error
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW-MEDIUM — Confusing error message  
+**Status:** OPEN — live verified on conno
+**Severity:** LOW-MEDIUM — Confusing error message
 **Found:** 2026-06-18 (live testing)  
 **Component:** Core ABA (`scripts/aba.sh` version acceptance + `reg-sync.sh`)
 
@@ -4338,8 +4332,8 @@ Alternatively, add a check at the start of `aba delete` that warns if an install
 
 ## Bug #466 — `ocp-versions` display hides pre-release versions from candidate channel
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW — Cosmetic, but candidate channel misrepresented  
+**Status:** OPEN — live verified on conno
+**Severity:** LOW — Cosmetic, but candidate channel misrepresented
 **Found:** 2026-06-19 (live testing)  
 **Component:** Core ABA (`scripts/include_all.sh`, `fetch_all_versions` function)
 
@@ -4368,8 +4362,8 @@ Manifestation of Bug #450's pre-release filter. Fix Bug #450 and this display is
 
 ## Bug #467 — `aba --version x.y.z` accepts non-existent versions without network validation
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW-MEDIUM — User won't discover the error until sync/save fails  
+**Status:** OPEN — live verified on conno
+**Severity:** LOW-MEDIUM — User won't discover the error until sync/save fails
 **Found:** 2026-06-19 (live CLI testing)  
 **Component:** Core ABA (`scripts/aba.sh`, `--version` flag parsing)
 
@@ -4398,8 +4392,7 @@ After the format validation passes for a full x.y.z version, optionally probe th
 
 **Status:** FIXED — `_valid_cluster_name` called before embedding name in BUILD_COMMAND (plus #319 validates in setup-cluster.sh)
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** MEDIUM — Shell injection via crafted name, arg-split with spaces, path traversal with slashes  
+**Severity:** MEDIUM — Shell injection via crafted name, arg-split with spaces, path traversal with slashes
 **Found:** 2026-06-19 (live CLI testing)  
 **Component:** Core ABA (`scripts/aba.sh`, `--name` flag)
 
@@ -4446,8 +4439,7 @@ fi
 
 **Status:** FIXED — help text updated to match actual CONNO menu sections (Mirror, Transfer, Cluster, Advanced)
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW — Help text misleads users about menu organization  
+**Severity:** LOW — Help text misleads users about menu organization
 **Found:** 2026-06-19 (code review + live TUI)  
 **Component:** TUI v2 (`tui/v2/abatui2.sh`, CONNO mode help, line ~598)
 
@@ -4542,8 +4534,8 @@ Change "reprecated" to "deprecated".
 
 ## Bug #472 — `aba --channel eus` accepted but bare "eus" is not a valid Cincinnati channel
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW-MEDIUM — Silently stores invalid channel, fails on next version lookup  
+**Status:** OPEN — live verified on conno
+**Severity:** LOW-MEDIUM — Silently stores invalid channel, fails on next version lookup
 **Found:** 2026-06-19 (live CLI testing)  
 **Component:** Core ABA (`scripts/aba.sh`, `--channel` flag, line ~455)
 
@@ -4588,8 +4580,7 @@ Either:
 
 **Status:** FIXED — strips existing `.tar` suffix before appending `-$ocp_version.tar`
 
-**Status:** LIVE VERIFIED on conno  
-**Severity:** LOW — Confusing filename, user must use base name without .tar  
+**Severity:** LOW — Confusing filename, user must use base name without .tar
 **Found:** 2026-06-19 (live CLI testing)  
 **Component:** Core ABA (`scripts/make-bundle.sh`, line 102)
 
@@ -4627,7 +4618,7 @@ fi
 
 ## Bug #477: `aba cluster --starting-ip 999.999.999.999` accepted (invalid octets, CLI)
 
-**Status**: NEW  
+**Status:** OPEN  
 **Severity**: Low (format-only validation, caught downstream but with confusing error)  
 **Component**: CLI (`scripts/aba.sh`)  
 **Discovered**: 2026-06-19  
@@ -4660,7 +4651,7 @@ Use `_valid_ip` for the check (after sourcing include_all.sh), or add octet rang
 
 ## Bug #486: TUI mirror verify cache not invalidated when `ocp_version` changes via CLI
 
-**Status**: NEW  
+**Status:** OPEN  
 **Severity**: MEDIUM — Misleading UI status  
 **Component**: TUI startup + CLI (`scripts/include_all.sh`, `tui/v2/tui-lib.sh`)  
 **Discovered**: 2026-06-23  
@@ -4697,7 +4688,7 @@ Either:
 
 ## Bug #488: `_upgrade_preflight_check` uses non-existent `./kubeconfig` path (uncommitted code)
 
-**Status**: CONFIRMED (committed in 9e024a6)  
+**Status:** FIXED (committed in 9e024a6)  
 **Severity**: HIGH — Upgrade safety gate is COMPLETELY NON-FUNCTIONAL  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, line 2236)  
 **Discovered**: 2026-06-23  
@@ -4736,7 +4727,7 @@ _adm_out=$(oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
 
 ## Bug #489: `aba --version X.Y.Z-rc.N` does not auto-set channel to `candidate`
 
-**Status**: NEW  
+**Status:** OPEN  
 **Severity**: LOW — Configuration mismatch  
 **Component**: CLI (`scripts/aba.sh`, `--version` handler)  
 **Discovered**: 2026-06-23  
@@ -4768,7 +4759,7 @@ The mismatch may cause Cincinnati API lookups to fail or return wrong results si
 
 ## Bug #490: Sync confirmation shows misleading version range from stale ISC
 
-**Status**: NEW  
+**Status:** OPEN  
 **Severity**: MEDIUM — Misleading UI  
 **Component**: TUI (`tui/v2/tui-mirror.sh`, `_mirror_op_confirm()` line ~432)  
 **Discovered**: 2026-06-23  
@@ -4805,7 +4796,7 @@ Either:
 
 ## Bug #491: `aba --type sno cluster --name X` fails due to arg ordering dependency
 
-**Status**: NEW  
+**Status:** OPEN  
 **Severity**: LOW — Confusing error message  
 **Component**: CLI (`scripts/aba.sh`, `_set_cluster_conf()` line ~344)  
 **Discovered**: 2026-06-23  
@@ -4839,7 +4830,7 @@ Either accept `--type` before `cluster` target (delay evaluation), OR show a cle
 
 ## Bug #492: `aba --channel eus` accepted without validation (still open)
 
-**Status**: CONFIRMED STILL OPEN (re-verifying Bug #472)  
+**Status:** OPEN (re-verifying Bug #472)  
 **Severity**: LOW  
 **Component**: CLI (`scripts/aba.sh`)  
 **Discovered**: 2026-06-23  
@@ -4853,7 +4844,7 @@ Bug #472 was reported previously. Re-verified on 2026-06-23 that it's still open
 
 ## Bug #493: `_day2_status()` uses hardcoded `iso-agent-based/auth/kubeconfig` path (TUI)
 
-**Status**: FIXED (commit pending)  
+**Status:** FIXED (commit pending)  
 **Severity**: HIGH — Day-2 Status display is broken for installed clusters  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, line ~2164)  
 **Discovered**: 2026-06-23  
@@ -4890,7 +4881,7 @@ kc=$(cd "$ABA_ROOT/$cl_dir" && cluster_kubeconfig "$cluster_name" "$base_domain"
 
 ## Bug #495: Bundle+internet dialog ESC/Help destructively removes .bundle marker
 
-**Status**: NEW (code analysis confirmed)  
+**Status:** OPEN (code analysis confirmed)  
 **Severity**: MEDIUM — Data loss (bundle marker), forces unintended mode switch  
 **Component**: TUI (`tui/v2/abatui2.sh`, lines 410-426)  
 **Discovered**: 2026-06-23  
@@ -4931,7 +4922,7 @@ fi
 
 ## Bug #496: DISCO light-bundle first-run exits TUI entirely (no retry)
 
-**Status**: NEW (code analysis confirmed)  
+**Status:** OPEN (code analysis confirmed)  
 **Severity**: MEDIUM — Poor UX, forces TUI restart  
 **Component**: TUI (`tui/v2/tui-disco.sh`, lines 99-109)  
 **Discovered**: 2026-06-23  
@@ -4965,7 +4956,7 @@ where the user can use "Load Images" (which has the Check again loop).
 
 ## Bug #498: ESC on Light/Full bundle dialog proceeds with full bundle instead of canceling
 
-**Status**: NEW  
+**Status:** OPEN  
 **Severity**: MEDIUM — Unintended long-running operation (full bundle with doubled disk usage)  
 **Component**: TUI (`tui/v2/tui-mirror.sh`, `mirror_create_bundle()`, lines ~1380-1395)  
 **Discovered**: 2026-06-23  
@@ -5016,7 +5007,7 @@ This is the THIRD instance of "ESC on yesno treated as No" (see also #495, and t
 
 ## Bug #500: DIRECT mode help text mentions "Monitor Cluster" which doesn't exist in menu
 
-**Status**: NEW (code confirmed)  
+**Status:** OPEN (code confirmed)  
 **Severity**: LOW — Help text misleading  
 **Component**: TUI (`tui/v2/tui-direct.sh`, line 738)  
 **Discovered**: 2026-06-23  
@@ -5043,7 +5034,7 @@ Update help text to match actual menu items or remove the "Monitor Cluster" line
 
 ## Bug #501: CONNO wizard cancel exits TUI silently (no error dialog)
 
-**Status**: NEW (code confirmed)  
+**Status:** OPEN (code confirmed)  
 **Severity**: LOW — Poor UX on first run only  
 **Component**: TUI (`tui/v2/abatui2.sh`, `_conno_main()`, line 477)  
 **Discovered**: 2026-06-23  
@@ -5070,7 +5061,7 @@ to offer the wizard again instead of silently exiting.
 
 ## Bug #502: TUI title bar shows stale version/channel after external aba.conf changes
 
-**Status**: NEW (live reproduced)  
+**Status:** OPEN (live reproduced)  
 **Severity**: MEDIUM — Misleading display, wrong version shown in multiple places  
 **Component**: TUI (`tui/v2/abatui2.sh`, `tui/v2/tui-lib.sh` `ui_backtitle()`)  
 **Discovered**: 2026-06-23  
@@ -5107,7 +5098,7 @@ source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
 
 ## Bug #503: Wizard version picker shows "Current" from previous channel (may not exist in new channel)
 
-**Status**: NEW (live reproduced)  
+**Status:** OPEN (live reproduced)  
 **Severity**: LOW — Misleading option, could lead to sync error if selected  
 **Component**: TUI (`tui/v2/tui-direct.sh`, version picker)  
 **Discovered**: 2026-06-23  
@@ -5137,7 +5128,7 @@ or validate the selected version against the channel's graph before proceeding.
 
 ## Bug #504: Platform ✓ checkmark only verifies config file existence, not connection
 
-**Status**: NEW (live reproduced)  
+**Status:** OPEN (live reproduced)  
 **Severity**: LOW — Misleading UI indicator  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 807-814)  
 **Discovered**: 2026-06-23  
@@ -5175,7 +5166,7 @@ Either:
 
 ## Bug #499: mirror_has_archives() vs _validate_payload() inconsistent glob+size checks
 
-**Status**: NEW (code analysis confirmed)  
+**Status:** OPEN (code analysis confirmed)  
 **Severity**: MEDIUM — Can land user in DISCO mode then immediately exit TUI  
 **Component**: TUI (`tui/v2/tui-lib.sh` + `tui/v2/abatui2.sh`)  
 **Discovered**: 2026-06-23  
@@ -5207,7 +5198,7 @@ Both functions should use the same glob (`mirror_*.tar`) AND the same minimum si
 
 ## Bug #505: `filter_disco_values()` is dead code — DISCO mode NTP/DNS never filtered
 
-**Status**: NEW (code analysis confirmed)  
+**Status:** OPEN (code analysis confirmed)  
 **Severity**: MEDIUM — Public DNS/NTP entries (8.8.8.8, time.google.com) pass through to cluster.conf in DISCO mode  
 **Component**: TUI (`tui/v2/tui-lib.sh`, lines 43-66)  
 **Discovered**: 2026-06-23  
@@ -5474,6 +5465,7 @@ This ensures the config is only modified when the user actually commits to the o
 ---
 
 ## Bug #513: Platform config forms and toggles persist changes before wizard Cancel — no rollback
+**Status:** OPEN
 
 **Severity:** Medium (data corruption on cancel)
 **Component:** TUI v2 — cluster wizard, VMware/KVM config forms
@@ -5686,6 +5678,7 @@ fi
 ---
 
 ## Bug #517: "Always TUI/Terminal" doesn't skip mode dialog on retry within same command
+**Status:** OPEN
 
 **Severity:** Low (UX annoyance)
 **Component:** TUI v2 — confirm_and_execute retry logic
@@ -5869,6 +5862,7 @@ _adm_out=$(oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
 ---
 
 ## Bug #521: `ntp_servers=compact` data corruption — cluster type value written to NTP field
+**Status:** OPEN
 
 **Severity:** Medium (data corruption in cluster.conf — observed, root cause uncertain)
 **Component:** TUI v2 — cluster wizard persistence / `_persist_cluster_draft()`
@@ -6261,6 +6255,7 @@ TUI shows: "No installed clusters found."    — WRONG
 ---
 
 ## Bug #527: `$ABA_TMP` consolidation uses local user's path on remote hosts
+**Status:** LOW RISK
 
 **Severity:** Low (functional but creates confusingly-named dirs on remote hosts)
 **Component:** Core — `scripts/reg-install-remote.sh`, `scripts/reg-uninstall-remote.sh`
@@ -6297,7 +6292,7 @@ $_ssh "mkdir -p $remote_tmp"
 
 **Severity:** Low (UX annoyance, not functional)
 **Component:** TUI v2 — `confirm_and_execute()` in `tui/v2/tui-lib.sh`
-**Status:** Partially fixed — works for subsequent `confirm_and_execute` calls, but retry within the SAME call still shows the dialog
+**Status:** OPEN — partially fixed — works for subsequent `confirm_and_execute` calls, but retry within the SAME call still shows the dialog
 
 ### Updated analysis
 
@@ -6324,7 +6319,7 @@ done
 
 ## Bug #530: `--gateway`/`-g` always shifts after flag even when no IP consumed — eats next argument
 
-**Status**: FIXED (commit c0030371)
+**Status:** FIXED (commit c0030371)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 684-695)
 **Discovered**: 2026-06-24
@@ -6345,7 +6340,7 @@ Silent argument loss. `aba --gateway --type sno cluster` would interpret `--type
 
 ## Bug #531: `--excl-platform false` double-shifts, eats next token
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 790-798)
 **Discovered**: 2026-06-24
@@ -6366,7 +6361,7 @@ The argument immediately following `--excl-platform false` is silently discarded
 
 ## Bug #532: `--op-sets`/`--ops` clear passes `-f` as value to replace-value-conf
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 751, 775)
 **Discovered**: 2026-06-24
@@ -6387,7 +6382,7 @@ Instead of clearing the operator sets, the config file gets the literal string `
 
 ## Bug #533: VM start/kill scripts use `|| exit 0` — failure appears successful
 
-**Status**: FIXED (commit pending)
+**Status:** FIXED (commit pending)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 1235, 1252)
 **Discovered**: 2026-06-24
@@ -6408,7 +6403,7 @@ Users see "success" even when VMs failed to start or stop. In automated workflow
 
 ## Bug #534: Last positional overwrites cur_target — `aba delete cluster` runs `cluster` not `delete`
 
-**Status**: FIXED (commit pending)
+**Status:** FIXED (commit pending)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, line 1034)
 **Discovered**: 2026-06-24
@@ -6429,7 +6424,7 @@ Commands with two positional words execute the wrong target. `aba delete cluster
 
 ## Bug #535: Second `-d`/`--dir` discards next argument silently
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 123-126)
 **Discovered**: 2026-06-24
@@ -6450,7 +6445,7 @@ Silent argument loss. Complex command lines with a duplicated `--dir` flag will 
 
 ## Bug #536: `--domain` invalid input keeps old value, no error shown
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 642-647)
 **Discovered**: 2026-06-24
@@ -6471,7 +6466,7 @@ The user believes they changed the domain but the config file still has the old 
 
 ## Bug #537: Help before target shows wrong help text
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: CLI (`scripts/aba.sh`, lines 360-372)
 **Discovered**: 2026-06-24
@@ -6496,7 +6491,7 @@ Users who naturally type `aba --help cluster` get the wrong help text, leading t
 
 ## Bug #538: Early `-n`/`--name` has no validation of value
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 133-138)
 **Discovered**: 2026-06-24
@@ -6517,7 +6512,7 @@ Users can create clusters with invalid or dangerous names via CLI, potentially o
 
 ## Bug #539: Help routing missing for delete, day2, upgrade, start subcommands
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, help routing)
 **Discovered**: 2026-06-24
@@ -6538,7 +6533,7 @@ Users cannot discover available options for these subcommands through the standa
 
 ## Bug #540: `--validate` only works for cluster target, ignored elsewhere
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, `--validate` flag)
 **Discovered**: 2026-06-24
@@ -6559,7 +6554,7 @@ Users who rely on `--validate` for non-cluster targets get a false sense of secu
 
 ## Bug #541: `--validate` doesn't prevent prior flags from writing config
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, `--validate` flag)
 **Discovered**: 2026-06-24
@@ -6580,7 +6575,7 @@ Flags are processed left-to-right and `replace-value-conf` is called immediately
 
 ## Bug #542: Pre-cluster config flags silently skip non-existent cluster.conf
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, config flag handlers)
 **Discovered**: 2026-06-24
@@ -6601,7 +6596,7 @@ Users set config flags before creating a cluster, believe the values are saved, 
 
 ## Bug #543: `--pull-secret`/`-S` has no file existence check
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 804-807)
 **Discovered**: 2026-06-24
@@ -6622,7 +6617,7 @@ A typo in the pull secret path silently writes a non-existent path to config. Th
 
 ## Bug #544: `--out` path unquoted dirname
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, line 434)
 **Discovered**: 2026-06-24
@@ -6643,7 +6638,7 @@ Bundle creation with `--out "/path/with spaces/bundle.tar"` fails or writes to t
 
 ## Bug #545: `bundle` command uses unquoted eval
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 1137-1138)
 **Discovered**: 2026-06-24
@@ -6664,7 +6659,7 @@ Potential command injection if bundle paths or arguments contain shell-special c
 
 ## Bug #546: `--cmd` only takes one token
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 1024-1029)
 **Discovered**: 2026-06-24
@@ -6685,7 +6680,7 @@ Users must carefully quote `--cmd` arguments. Unquoted multi-word commands silen
 
 ## Bug #547: `--dns`/`--ntp` consumes trailing positional as value
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 657-683)
 **Discovered**: 2026-06-24
@@ -6706,7 +6701,7 @@ Users who place `--dns` or `--ntp` immediately before the target lose the target
 
 ## Bug #548: Silent exit 0 when only config flags given
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, line 1348)
 **Discovered**: 2026-06-24
@@ -6727,7 +6722,7 @@ Users believe the command did something beyond setting config values. No feedbac
 
 ## Bug #549: `--version` flag requires value instead of showing ABA version
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, `--version` flag)
 **Discovered**: 2026-06-24
@@ -6748,7 +6743,7 @@ Users expecting standard CLI behavior (`--version` shows program version) get an
 
 ## Bug #550: install failure (exit 1) doesn't stop CLI execution
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 203-209)
 **Discovered**: 2026-06-24
@@ -6769,7 +6764,7 @@ A failed install (missing deps, broken state) leads to cascading failures in sub
 
 ## Bug #551: Missing `-v` quoting in replace-value-conf calls
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 456, 502, 544, 770, 781)
 **Discovered**: 2026-06-24
@@ -6790,7 +6785,7 @@ Config values with spaces or special characters are corrupted during write. Affe
 
 ## Bug #552: `--data-disk-gb`, `--num-workers`, `--num-masters` weak missing-arg handling
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, numeric flag handlers)
 **Discovered**: 2026-06-24
@@ -6815,7 +6810,7 @@ No check for `$# -gt 0` or `[[ -n "$2" ]]` before shifting and assigning.
 
 ## Bug #553: `reg-install-quay.sh` mirror-registry install exit code never checked
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-install-quay.sh`, lines 89-91)
 **Discovered**: 2026-06-24
@@ -6836,7 +6831,7 @@ A failed registry install leaves a half-configured registry. Subsequent `mirror 
 
 ## Bug #554: `reg-uninstall.sh` fallback Docker path uses `|| true`, reports success on failure
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 126, 139-140, 154-156)
 **Discovered**: 2026-06-24
@@ -6857,7 +6852,7 @@ Users told "uninstall successful" while registry containers are still running. S
 
 ## Bug #555: `reg-uninstall.sh` credentials moved to `.bk` BEFORE uninstall — no restore on failure
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 117-119)
 **Discovered**: 2026-06-24
@@ -6878,7 +6873,7 @@ Failed uninstall leaves the system without credentials. The registry is still ru
 
 ## Bug #556: `reg-uninstall.sh` SSH probe errors suppressed — empty result treated as "no registry"
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 80-82, 108-110)
 **Discovered**: 2026-06-24
@@ -6899,7 +6894,7 @@ Remote registry uninstall is silently skipped when the remote host is unreachabl
 
 ## Bug #557: `reg-install-remote.sh` password expansion in double-quoted SSH command breaks on `!` `"` `'`
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-install-remote.sh`, line 126)
 **Discovered**: 2026-06-24
@@ -6920,7 +6915,7 @@ Users with special characters in their registry password see cryptic SSH or auth
 
 ## Bug #558: `reg-install.sh` vendor dispatch has no validation of vendor override
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-install.sh`, line 30)
 **Discovered**: 2026-06-24
@@ -6945,7 +6940,7 @@ A corrupted or manually-edited `mirror.conf` with `vendor=arbitrary` causes an u
 
 ## Bug #559: `reg-uninstall.sh` fallback forces `ask=1`, breaks automation/CI
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-uninstall.sh`, line 73)
 **Discovered**: 2026-06-24
@@ -6966,7 +6961,7 @@ CI pipelines and scripted uninstall workflows hang waiting for interactive input
 
 ## Bug #560: `reg-uninstall.sh` credentials backup creates window where regcreds/ is empty
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 117-119)
 **Discovered**: 2026-06-24
@@ -6987,7 +6982,7 @@ Race condition in concurrent operations. Low probability in normal use, but poss
 
 ## Bug #561: `reg-uninstall.sh` multiple unquoted SSH variables
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 80, 102, 122, 126)
 **Discovered**: 2026-06-24
@@ -7008,7 +7003,7 @@ Unlikely to trigger in normal use (SSH hostnames rarely have spaces), but violat
 
 ## Bug #562: `reg-uninstall.sh` unnecessary eval with unquoted args in Quay fallback
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 130-132)
 **Discovered**: 2026-06-24
@@ -7029,7 +7024,7 @@ If any argument to the eval'd command contains shell metacharacters, they are in
 
 ## Bug #563: `reg-uninstall.sh` fallback never calls `reg_close_firewall`
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-uninstall.sh`, lines 53-111)
 **Discovered**: 2026-06-24
@@ -7050,7 +7045,7 @@ Firewall rules leak after fallback uninstall. The registry port (typically 8443)
 
 ## Bug #564: `reg-install-remote.sh` unguarded glob `mirror-registry-*.tar.gz`
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-install-remote.sh`, line 120)
 **Discovered**: 2026-06-24
@@ -7071,7 +7066,7 @@ When the mirror-registry tarball is missing, the error message shows the literal
 
 ## Bug #565: `reg-install-remote.sh` unquoted `$reg_root` in remote commands
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-install-remote.sh`, lines 66, 70)
 **Discovered**: 2026-06-24
@@ -7092,7 +7087,7 @@ Failure when registry root path contains spaces. Defensive coding concern.
 
 ## Bug #566: `reg-install-remote.sh` SSH failure silently skips stale detection
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-install-remote.sh`, lines 95-97)
 **Discovered**: 2026-06-24
@@ -7113,7 +7108,7 @@ Installing a second registry on top of an existing one, causing port conflicts a
 
 ## Bug #567: `reg-install-quay.sh` unquoted paths `$temp_aba_key`, `$HOME/.ssh/quay_installer`
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-install-quay.sh`, lines 27-35)
 **Discovered**: 2026-06-24
@@ -7134,7 +7129,7 @@ Failure when home directory path contains spaces. Unlikely on Linux but possible
 
 ## Bug #568: `reg-install.sh` and `reg-uninstall.sh` hardcoded `scripts/` paths assume CWD has symlink
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/reg-install.sh` and `scripts/reg-uninstall.sh`, line 8)
 **Discovered**: 2026-06-24
@@ -7155,7 +7150,7 @@ Scripts fail with "file not found" when invoked from unexpected directories. Nor
 
 ## Bug #569: `setup-cluster.sh` mirror relink after cd — `normalize-cluster-conf` reads wrong `./cluster.conf`
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: MEDIUM
 **Component**: Core (`scripts/setup-cluster.sh`, lines 101-106)
 **Discovered**: 2026-06-24
@@ -7180,7 +7175,7 @@ Cluster configuration from the wrong directory is loaded, potentially mixing set
 
 ## Bug #570: ESC treated as "Full bundle" on same-filesystem prompt
 
-**Status**: NEW (code analysis)
+**Status:** OPEN (code analysis)
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 1386-1406)
 **Discovered**: 2026-06-24
@@ -7201,7 +7196,7 @@ Users who press ESC to cancel the bundle dialog inadvertently start a full bundl
 
 ## Bug #572: Bundle prereqs use stale `ocp_version` (not re-sourced)
 
-**Status**: FIXED (commit c0030371)
+**Status:** FIXED (commit c0030371)
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 1310-1313)
 **Discovered**: 2026-06-24
@@ -7222,7 +7217,7 @@ Bundle created for wrong OCP version. If the user upgraded from 4.20 to 4.21 and
 
 ## Bug #573: ISC regen is async before upgrade save — race condition
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — `run_once -q -w` wait at line 631 ensures ISC generation completes before save proceeds
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 629-634)
 **Discovered**: 2026-06-24
@@ -7247,7 +7242,7 @@ Upgrade save may package the wrong set of images — either missing new-version 
 
 ## Bug #574: ESC on light/full bundle dialog not distinguished from "No"
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — ESC (rc=255) now returns 1 (cancel) at line 1384, distinct from No button which goes to full bundle
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 1386-1392)
 **Discovered**: 2026-06-24
@@ -7268,7 +7263,7 @@ UX confusion — pressing ESC should cancel the operation entirely, but instead 
 
 ## Bug #575: Silent no-op when Install Cluster gate fails or cancels
 
-**Status**: NEW (code analysis)
+**Status:** OPEN — gate failure (rc=1) falls through case at line 274 with no user feedback
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-disco.sh`, lines 272-277)
 **Discovered**: 2026-06-24
@@ -7289,7 +7284,7 @@ Users click "Install Cluster," nothing happens, and they don't know why. They ma
 
 ## Bug #576: Mirror config Continue skips validation for review/local modes
 
-**Status**: NEW (code analysis)
+**Status:** LOW RISK — individual fields validated inline during editing; Continue path only lacks hostname-required check for non-remote modes
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 194-202)
 **Discovered**: 2026-06-24
@@ -7310,7 +7305,7 @@ Users in review/local modes can proceed with invalid mirror configurations, caus
 
 ## Bug #577: Operator search/basket edit breaks ref-count
 
-**Status**: NEW (code analysis)
+**Status:** INVALID — code refactored to flat OP_BASKET hash map with md5sum change detection; ref-counting no longer exists
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 1194-1203, 1254-1260)
 **Discovered**: 2026-06-24
@@ -7331,7 +7326,7 @@ Operator basket becomes inconsistent with set membership. ISC regeneration may i
 
 ## Bug #578: `mkdir -p` failure silently skips same-device bundle UX
 
-**Status**: NEW (code analysis)
+**Status:** LOW RISK — if mkdir fails, stat returns empty and same-device check is skipped; rare in practice
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 1375-1382)
 **Discovered**: 2026-06-24
@@ -7352,7 +7347,7 @@ Bundle creation proceeds without the same-device hardlink optimization, potentia
 
 ## Bug #579: ISC wait loop may time out too early (5s)
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — hardcoded 5s timeout replaced with `run_once -q -w` which blocks until task completes
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 763-772)
 **Discovered**: 2026-06-24
@@ -7373,7 +7368,7 @@ Stale ISC used for mirror save/sync, resulting in missing images in the mirror. 
 
 ## Bug #580: Bundle creation doesn't ensure operator basket/ISC flushed
 
-**Status**: NEW (code analysis)
+**Status:** LOW RISK — basket persisted immediately after every change (lines 982, 992, 1002); always flushed before user reaches bundle
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-mirror.sh`, lines 1307-1436)
 **Discovered**: 2026-06-24
@@ -7394,7 +7389,7 @@ Bundle created with wrong operator set. Air-gapped environment gets a bundle mis
 
 ## Bug #581: Stale `$?` used for cluster gate result
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — `case "$?"` used immediately after `tui_install_cluster_gate` with no intervening commands
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-disco.sh`, lines 273-274)
 **Discovered**: 2026-06-24
@@ -7419,7 +7414,7 @@ The gate check is effectively bypassed — it always appears to pass regardless 
 
 ## Bug #582: Review page mirror display uses stale `reg_host`/`reg_port` locals
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — review page now re-sources `normalize-mirror-conf` at display time (line 1586) for fresh values
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1575-1579, 1592-1594)
 **Discovered**: 2026-06-24
@@ -7440,7 +7435,7 @@ Users confirm a configuration showing the wrong mirror registry details. The act
 
 ## Bug #583: `cluster_kubeconfig` called without sourcing `normalize-cluster-conf`
 
-**Status**: FIXED (commit pending)
+**Status:** FIXED — both calls (lines 2164 and 2239) now `source <(normalize-cluster-conf)` before `cluster_kubeconfig`
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 2170-2171, 2243-2245)
 **Discovered**: 2026-06-24
@@ -7461,7 +7456,7 @@ Wrong kubeconfig path returned — operations run against the wrong cluster or f
 
 ## Bug #584: Install wizard ignores cancel from `confirm_and_execute`
 
-**Status**: INVALID (by design — comment at line 1710 explains: wizard always exits to main menu after execute stage)
+**Status:** BY DESIGN — wizard exits to main menu after execute stage regardless of outcome (comment at line 1710 documents this)
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1712-1732, 764-767)
 **Discovered**: 2026-06-24
@@ -7482,7 +7477,7 @@ After canceling, the user sees post-install status updates and cleanup for an in
 
 ## Bug #585: False-positive artifact cleanup when normalize fails
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — artifact cleanup logic no longer exists in the install preparation path
 **Severity**: HIGH
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1687-1695)
 **Discovered**: 2026-06-24
@@ -7507,7 +7502,7 @@ Cluster configuration files are deleted when the normalization step has a transi
 
 ## Bug #586: ESC treated as Skip on platform config gate
 
-**Status**: NEW (code analysis)
+**Status:** OPEN — case `*` at line 292 catches both ESC (255) and Skip/No (1) identically, returning 0 without distinction
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 287-289)
 **Discovered**: 2026-06-24
@@ -7528,7 +7523,7 @@ Users who press ESC to cancel accidentally skip platform configuration, leading 
 
 ## Bug #587: Post-review failures return to edit pages, not review
 
-**Status**: NEW (code analysis)
+**Status:** NEEDS LIVE TEST — no explicit page-jump-back logic visible in current code; behavior depends on how confirm_and_execute failure propagates
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1668-1677, 1707, 769-776)
 **Discovered**: 2026-06-24
@@ -7549,7 +7544,7 @@ Poor UX — users who made one small mistake must click through multiple wizard 
 
 ## Bug #588: `_check_platform_config` uses wrong paths (cluster dir not `ABA_ROOT`)
 
-**Status**: NEW (code analysis)
+**Status:** FIXED — function now checks `$dir/vmware.conf`, `vmware.conf` (CWD/ABA_ROOT), and `$HOME/.vmware.conf` (line 1744)
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1748-1756)
 **Discovered**: 2026-06-24
@@ -7570,7 +7565,7 @@ Platform config check always fails for new clusters (no config file in their dir
 
 ## Bug #589: `_platform_config_missing` doesn't verify config after form
 
-**Status**: NEW (code analysis)
+**Status:** OPEN — after calling `_configure_vmw_form`/`_configure_kvm_form` (line 1772), no return code check or file-existence verification
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1776-1780)
 **Discovered**: 2026-06-24
@@ -7591,7 +7586,7 @@ User cancels the platform config form but the wizard proceeds as if configuratio
 
 ## Bug #590: Upgrade preflight silently passes when `oc adm upgrade` fails
 
-**Status**: NEW (code analysis)
+**Status:** OPEN — line 2241 uses `|| true` so command failure is swallowed; preflight returns 0 if output lacks "Upgradeable=False"
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 2243-2254)
 **Discovered**: 2026-06-24
@@ -7612,7 +7607,7 @@ Users proceed to upgrade a cluster that isn't ready (not healthy, unreachable, o
 
 ## Bug #591: Upgrade version parse continues past list end
 
-**Status**: NEW (code analysis)
+**Status:** LOW RISK — parser uses strict version regex that won't match non-version output; unlikely to produce phantom versions
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 2268-2276, 2286-2290)
 **Discovered**: 2026-06-24
@@ -7633,7 +7628,7 @@ Phantom version numbers appear in the upgrade picker. Selecting a phantom versio
 
 ## Bug #592: Manual upgrade skips downgrade check when cluster-version fails
 
-**Status**: NEW (code analysis)
+**Status:** OPEN — line 2380 regex condition skips check entirely when `_cur_ver` is empty (cluster unreachable)
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 2382-2388)
 **Discovered**: 2026-06-24
@@ -7654,7 +7649,7 @@ Users can accidentally initiate a cluster downgrade, which OpenShift does not su
 
 ## Bug #593: Unquoted variables in eval/aba command construction
 
-**Status**: NEW (code analysis)
+**Status:** LOW RISK — `$cl_name` is DNS-label validated (no spaces/special chars) and `_exec_in_tui` has metacharacter guard at line 625
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 193-199, 1547, 1679)
 **Discovered**: 2026-06-24
@@ -7675,7 +7670,7 @@ Cluster names or domains with unusual characters cause command parsing failures.
 
 ## Bug #594: CWD changed without restore in `_day2_status`
 
-**Status**: NEW (code analysis)
+**Status:** NOT A BUG — `cd "$ABA_ROOT"` at line 2171 sets CWD to project root, the expected CWD for all TUI operations
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 2173-2196)
 **Discovered**: 2026-06-24
@@ -7696,7 +7691,7 @@ After viewing day-2 status, other wizard pages or menu operations may read wrong
 
 ## Bug #595: Global mirror config leaked on Interfaces page
 
-**Status**: NEW (code analysis)
+**Status:** OPEN — `source <(normalize-mirror-conf)` at line 1221 injects `reg_host`, `reg_port` into function scope without `local`
 **Severity**: MEDIUM
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1211-1213)
 **Discovered**: 2026-06-24
@@ -7717,7 +7712,7 @@ Cluster configuration pages after the Interfaces page may display or use mirror 
 
 ## Bug #596 — `verify-cluster-conf` error message says "aba.conf" instead of "cluster.conf" for dns_servers
 
-**Status:** VERIFIED on conno (live)
+**Status:** OPEN — error message at line 1079 says "cluster.conf" but the `[ ! -n $ports ]` check is unquoted making it always true
 **Severity:** LOW — Cosmetic/misleading error message
 **Found:** 2026-06-24 (code review + live test)
 **Component:** Core ABA (`scripts/include_all.sh`, line 1077)
@@ -7751,7 +7746,7 @@ Line 1077 in `include_all.sh`: change `aba.conf` to `cluster.conf` in the error 
 
 ## Bug #597 — TUI returns to main menu after `aba reset --force` with stale state
 
-**Status:** VERIFIED (code review)
+**Status:** OPEN — `confirm_and_execute` then `return 0` (line 1937) exits advanced menu back to caller with stale in-memory config
 **Severity:** MEDIUM — TUI continues with stale config after destructive reset
 **Found:** 2026-06-24 (code review)
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, line 1928-1929)
@@ -7776,7 +7771,7 @@ Users who reset ABA via the TUI and then try to perform operations without resta
 
 ## Bug #598 — `verify-cluster-conf` uses unquoted `$ports` variable
 
-**Status:** VERIFIED (code review)
+**Status:** OPEN — `[ ! -n $ports ]` at line 1078 is unquoted; when empty, expands to `[ ! -n ]` which is always true
 **Severity:** LOW — Coding style violation, potential edge case
 **Found:** 2026-06-24 (code review)
 **Component:** Core ABA (`scripts/include_all.sh`, line 1082)
@@ -7834,7 +7829,7 @@ The typo "reprecated" (should be "deprecated") has been corrected. `grep -r 'rep
 
 ## Bug #601 — `aba --version X.Y --channel <chan>` resolves version using wrong channel
 
-**Status:** FAIL (confirmed)
+**Status:** OPEN — line 488 uses `$ocp_channel` (from aba.conf) instead of `$chan` (from --channel flag) for x.y expansion
 **Severity:** MEDIUM — Silent wrong behavior
 **Found:** 2026-06-25 (live testing on conno)
 **Component:** Core ABA (`scripts/aba.sh`, lines 462-514)
@@ -7878,7 +7873,7 @@ aba --channel candidate --version 4.20  # Works correctly
 
 ## Bug #602 — Day-2 menu label says "after mirror load/sync" in DIRECT mode
 
-**Status:** FAIL (cosmetic)
+**Status:** OPEN — "Configure OperatorHub (after mirror load/sync)" label at line 2055 not conditioned on mode
 **Severity:** LOW — Cosmetic/misleading
 **Found:** 2026-06-25 (live TUI testing on conno)
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, line 2047)
@@ -7902,7 +7897,7 @@ In DIRECT mode, the label should be mode-appropriate, e.g. "Configure OperatorHu
 
 ## Bug #603 — `aba --ntp` accepts any string without validation
 
-**Status:** FAIL (confirmed)
+**Status:** OPEN — while loop (line 682) accumulates values but no format validation (hostname/IP) on each `$2`
 **Severity:** MEDIUM — Silently accepts garbage values
 **Found:** 2026-06-25 (live CLI testing on conno)
 **Component:** Core ABA (`scripts/aba.sh`, lines 676-687)
@@ -7933,7 +7928,7 @@ NTP values should be validated (at minimum: valid hostname or IP address format)
 
 ## Bug #604 — Inconsistent IP validation across CLI flags
 
-**Status:** FAIL (confirmed)
+**Status:** OPEN — `--gateway-ip` (line 692) only checks regex format without octet-range check; `--api-vip` (line 704) does full octet validation
 **Severity:** MEDIUM — Some flags validate octets, others don't
 **Found:** 2026-06-25 (code review)
 **Component:** Core ABA (`scripts/aba.sh`)
@@ -7972,7 +7967,7 @@ Bug #23 reported that `_operator_menu` set `_OP_BASKET_DIRTY=true` unconditional
 
 ## Bug #606 — TUI: Install wizard doesn't pre-check `.install-complete` before full walkthrough
 
-**Status:** CONFIRMED (verified via TUI)
+**Status:** OPEN — wizard starts full multi-page flow without checking if cluster is already installed
 **Severity:** Medium (UX — user goes through 4-page wizard only to fail at the end)
 **Found:** 2026-06-25 (TUI testing on conno)
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`)
@@ -8003,7 +7998,7 @@ Add a check in `_cluster_page_basics` when rc=3 (Next), or at the top of `_clust
 
 ## Bug #607 — CLI: `--target-version` z-stream resolution uses `$ocp_channel` instead of `$chan`
 
-**Status:** CONFIRMED (code review)
+**Status:** OPEN — line 542 uses `$ocp_channel` for `fetch_latest_z_version` instead of `$chan` from `--channel` flag
 **Severity:** Medium (wrong upgrade version resolved)
 **Found:** 2026-06-25 (code review)
 **Component:** CLI (`scripts/aba.sh`, line 542)
@@ -8030,7 +8025,7 @@ Related to Bug #601 (same class of bug — argument ordering dependency).
 
 ## Bug #608 — TUI: Delete Cluster help text says "removes the cluster directory" but it doesn't
 
-**Status:** CONFIRMED (live verification)
+**Status:** OPEN — help text (line 1835) says "removes the cluster directory" but `aba delete` only removes directory with `--force`
 **Severity:** Low (misleading help text, not functional bug)
 **Found:** 2026-06-25 (TUI testing via tmux)
 **Component:** TUI (`tui/v2/tui-cluster.sh`, `cluster_delete` function)
@@ -8066,7 +8061,7 @@ After `aba delete`, the directory still exists with `cluster.conf` preserved.
 
 ## Bug #609 — TUI: Inconsistent default channel fallback in `mirror_prep_upgrade`
 
-**Status:** CONFIRMED (code review)
+**Status:** LOW RISK — `${ocp_channel:-fast}` at line 509 uses "fast" as fallback, but `ocp_channel` is always sourced from aba.conf before this point
 **Severity:** Low (edge case — `ocp_channel` is usually set from aba.conf)
 **Found:** 2026-06-25 (code review)
 **Component:** TUI (`tui/v2/tui-mirror.sh`, line 510)
@@ -8096,7 +8091,7 @@ Low — `ocp_channel` is typically always set from `aba.conf`. However, the inco
 
 ## Bug #610 — Regression: `mirror_prep_upgrade` no longer rejects downgrades/same-version
 
-**Status:** CONFIRMED (code review + LIVE VERIFIED twice via tmux)
+**Status:** OPEN — no version comparison between `_current_ver` and `_target_ver` before confirmation dialog at line 617
 **Severity:** Medium (user can prepare downgrade images, wasting time and storage)
 **Found:** 2026-06-25 (code review during DISCO workflow testing)
 **Live verified:** 2026-06-25 — entered "4.20.18" as target from "4.20.20", TUI accepted it and showed confirmation "Download upgrade images (4.20.20 → 4.20.18)"
@@ -8155,9 +8150,9 @@ Tested on conno host via tmux "tui-debugging" session:
 
 ## Bug #611 — TUI: Wizard shows unconfirmed version in "Current" option after declining
 
+**Status:** NOT A BUG — `_direct_version()` has no confirmation dialog; "Current" shows previously-selected in-memory version which is correct wizard navigation
 **Severity:** Medium (cosmetic / UX confusion)
 **Component:** `tui/v2/tui-direct.sh`, `_direct_version()`
-**Status:** NEW — verified live 2026-06-25
 
 ### Description
 
@@ -8197,9 +8192,9 @@ Tested on conno host via tmux "tui-debugging" session:
 
 ## Bug #612 — TUI: Reserved cluster name gives misleading "Invalid DNS label" error
 
+**Status:** OPEN — TUI shows generic `TUI2_MSG_INVALID_CLUSTER_NAME` on all `--validate` failures; doesn't surface the "reserved name" error from `_valid_cluster_name`
 **Severity:** Low (UX / error message quality)
 **Component:** `tui/v2/tui-cluster.sh`, cluster name input; `tui/v2/tui-strings2.sh`
-**Status:** NEW — verified live 2026-06-25
 
 ### Description
 
@@ -8243,7 +8238,8 @@ Tested on conno host via tmux "tui-debugging" session:
 
 ## Bug #613 — TUI: Invalid MAC addresses kept in memory after validation warning
 
-**Status**: NEW (code review)  
+**Status:** OPEN — `cl_macs` assigned at line 1360 before validation; on failure, `continue` leaves invalid value in memory
+
 **Severity**: MEDIUM — Invalid MACs can be persisted to `macs.conf` if user doesn't re-enter  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1349-1360)  
 **Discovered**: 2026-06-25
@@ -8293,7 +8289,7 @@ fi
 
 ## Bug #614 — TUI: Wizard "Next" button (Extra button) not reachable via keyboard Tab cycling
 
-**Status**: NEW (live reproduced)  
+**Status:** BY DESIGN — `dialog --extra-button` Tab cycling is a known dialog(1) utility limitation; can't be fixed in ABA code
 **Severity**: HIGH — Wizard pages cannot be advanced via keyboard in some dialog versions  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, wizard pages 1-4)  
 **Discovered**: 2026-06-25
@@ -8344,7 +8340,7 @@ Consider one of:
 
 ## Bug #615 — TUI: Cluster wizard accepts starting IP outside machine network without validation
 
-**Status:** CONFIRMED (LIVE VERIFIED via tmux)
+**Status:** OPEN — no subnet containment check between `starting_ip` and `machine_network` in the wizard flow
 **Severity:** Medium (cluster install will fail later with confusing errors)
 **Found:** 2026-06-25 (live testing DIRECT mode cluster wizard)
 **Live verified:** 2026-06-25 — Set machine_network=192.168.2.0/24, starting_ip=10.0.0.100 (completely different subnet), wizard advanced to Interfaces page without any warning or validation error
@@ -8395,7 +8391,7 @@ Add a validation block before `return 0` on the "Next" path (rc=3) in `_cluster_
 
 ## Bug #616 — TUI: ESC in DIRECT/DISCO mode (entered from CONNO) exits entire TUI instead of returning to CONNO
 
-**Status:** CONFIRMED (LIVE VERIFIED via tmux)
+**Status:** OPEN — ESC at line 758 triggers `confirm_quit` → `exit 0`; no mechanism to return to calling CONNO mode
 **Severity:** Medium (user loses entire TUI session unexpectedly)
 **Found:** 2026-06-25 (live testing mode switch CONNO → DIRECT)
 **Live verified:** 2026-06-25 — Switched from CONNO to DIRECT via Advanced → Switch to Fully Connected. Pressed ESC in DIRECT menu → "Confirm Exit" dialog appeared. Confirmed → entire TUI exited with exit summary.
@@ -8461,7 +8457,7 @@ fi
 
 ## Bug #617 — TUI: VMware/ESXi password input overly restricts valid characters ($, `, ")
 
-**Status:** CONFIRMED (code review)
+**Status:** OPEN — `_tui_prompt_password` rejects `$`, `` ` ``, `"` for Quay compatibility, but is also used for vSphere passwords (line 391) which have no such restriction
 **Severity:** Medium (blocks users with valid vSphere passwords containing $, `, or ")
 **Found:** 2026-06-25 (code review of `_tui_prompt_password`)
 **Component:** TUI (`tui/v2/tui-lib.sh` lines 399-449, `tui/v2/tui-cluster.sh` line 386)
@@ -8590,7 +8586,9 @@ This ensures any previously-exported GOVC_DATACENTER/GOVC_CLUSTER values are ove
 
 ## Bug #620 — Core: verify-cluster-conf silently accepts empty `ports` due to unquoted variable
 
-- **Status**: CONFIRMED (verified on conno)
+**Status:** OPEN — verified on conno
+
+- **Status:** OPEN (verified on conno)
 - **Severity**: Medium (validation bypass — empty ports in cluster.conf not caught)
 - **Component**: `scripts/include_all.sh` → `verify-cluster-conf()`
 - **Found by**: Code review + CLI verification
@@ -8642,7 +8640,9 @@ if [ -z "$ports" ]; then
 
 ## Bug #621 — Core: `aba bundle --out` command injection via `eval` with unquoted variables
 
-- **Status**: CONFIRMED (code review + CLI verification)
+**Status:** OPEN — code review + CLI verification
+
+- **Status:** OPEN (code review + CLI verification)
 - **Severity**: High (command injection — local privilege escalation via crafted path)
 - **Component**: `scripts/aba.sh` line 1145
 - **Found by**: Code review
@@ -8707,7 +8707,9 @@ Also quote `$(dirname "$1")` on line 437.
 
 ## Bug #622 — TUI: `_configure_vmw_form` password clearing uses glob that could match real passwords
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Low (unlikely edge case — password would need to match `<*>` glob)
 - **Component**: `tui/v2/tui-cluster.sh` line 320
 - **Found by**: Code review
@@ -8739,7 +8741,9 @@ Or match the specific placeholder text that `vmware.conf` uses.
 
 ## Bug #623 — Core/TUI: CLI accepts `eus` channel but TUI does not offer it
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Low (UX inconsistency — users must use CLI for EUS channel)
 - **Component**: `scripts/aba.sh` lines 444-461 vs `tui/v2/tui-direct.sh` `_direct_channel`
 - **Found by**: Code review
@@ -8775,7 +8779,9 @@ Add EUS to the TUI channel selection:
 
 ## Bug #624 — TUI: No support for `register`/`unregister` — forces CLI for existing external registries
 
-- **Status**: CONFIRMED (code review + manual verification)
+**Status:** OPEN — code review + manual verification
+
+- **Status:** OPEN (code review + manual verification)
 - **Severity**: Medium (missing feature — users cannot use TUI for a documented core workflow)
 - **Component**: `tui/v2/abatui2.sh` (CONNO menu), `tui/v2/tui-disco.sh` (DISCO menu)
 - **Found by**: Code review + TUI testing
@@ -8820,7 +8826,9 @@ Also add "Unregister" option to allow disconnecting from an external registry.
 
 ## Docbug #625 — README overstates TUI capabilities (claims "complete workflow")
 
-- **Status**: FIXED (changed wording to "mirror installation (local or remote Quay/Docker)")
+**Status:** FIXED — changed wording to "mirror installation (local or remote Quay/Docker; ")
+
+- **Status:** FIXED (changed wording to "mirror installation (local or remote Quay/Docker)")
 - **Severity**: Low (misleading documentation)
 - **Component**: `README.md` line 282
 - **Found by**: Documentation review
@@ -8843,7 +8851,9 @@ Or change "mirror configuration (local or remote registry)" to "mirror installat
 
 ## Docbug #626 — README: No documentation section for shutdown/startup/rescue workflow
 
-- **Status**: FIXED (added "Cluster Shutdown & Startup" section to README)
+**Status:** FIXED — added "Cluster Shutdown & Startup" section to README
+
+- **Status:** FIXED (added "Cluster Shutdown & Startup" section to README)
 - **Severity**: Low (missing documentation section)
 - **Component**: `README.md`
 - **Found by**: Documentation review
@@ -8882,7 +8892,9 @@ aba rescue             # Uncordon nodes, approve pending CSRs (use after startup
 
 ## Docbug #627 — README: No documentation about bastion-level proxy for ABA operations
 
-- **Status**: FIXED (added proxy note in "Partially Disconnected Prerequisites" section)
+**Status:** FIXED — added proxy note in "Partially Disconnected Prerequisites" section
+
+- **Status:** FIXED (added proxy note in "Partially Disconnected Prerequisites" section)
 - **Severity**: Low (missing documentation)
 - **Component**: `README.md`
 - **Found by**: Documentation review
@@ -8912,7 +8924,9 @@ Add a note in the "Partially Disconnected Prerequisites" section:
 
 ## Docbug #628 — README: "Uninstalling ABA" section omits cluster deletion step
 
-- **Status**: CONFIRMED (documentation review)
+**Status:** OPEN — documentation review
+
+- **Status:** OPEN (documentation review)
 - **Severity**: Medium (data loss / orphan VMs)
 - **Component**: `README.md` lines 1520-1531
 - **Found by**: Documentation review
@@ -8952,7 +8966,9 @@ Or at minimum, add a warning: "**Warning:** If you have running clusters install
 
 ## Bug #629 — Core: VLAN validation uses bare `vlan` instead of `$vlan`
 
-- **Status**: INVALID (false positive — bash `[[ ]]` treats bare words in `-ge`/`-le` as variable names)
+**Status:** INVALID — false positive — bash `[[ ]]` treats bare words in `-ge`/`-le` as variable names
+
+- **Status:** INVALID (false positive — bash `[[ ]]` treats bare words in `-ge`/`-le` as variable names)
 - **Severity**: ~~High~~ N/A
 - **Component**: `scripts/include_all.sh` (`verify-cluster-conf`)
 - **Found by**: Code review
@@ -8973,7 +8989,9 @@ Change `vlan -ge 1 && vlan -le 4094` to `$vlan -ge 1 && $vlan -le 4094`.
 
 ## Bug #630 — Core: `cluster-upgrade.sh` OSUS fallback does not check exit code
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: High
 - **Component**: `scripts/cluster-upgrade.sh` ~lines 310-318
 - **Found by**: Code review
@@ -8994,7 +9012,9 @@ Check `$_image_cmd` exit code; abort if both `--to` and `--to-image` fail.
 
 ## Bug #631 — Core: `cluster-upgrade.sh` channel change not error-checked
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `scripts/cluster-upgrade.sh` ~lines 281-285
 - **Found by**: Code review
@@ -9011,7 +9031,9 @@ If `oc adm upgrade channel` fails (e.g. RBAC or invalid channel), the upgrade pr
 
 ## Bug #632 — Core: `replace-value-conf` updates only first matching file
 
-- **Status**: INVALID (intentional behavior — "Step through the files by priority" design)
+**Status:** INVALID — intentional behavior — "Step through the files by priority" design
+
+- **Status:** INVALID (intentional behavior — "Step through the files by priority" design)
 - **Severity**: ~~Medium~~ N/A
 - **Component**: `scripts/include_all.sh` (`replace-value-conf`)
 - **Found by**: Code review
@@ -9028,7 +9050,9 @@ The loop returns after the first successful `sed`; later files are never process
 
 ## Bug #633 — Core: `reg-create-imageset-config.sh` no error checks; premature `.created` stamp
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `scripts/reg-create-imageset-config.sh` ~lines 76-81
 - **Found by**: Code review
@@ -9045,7 +9069,9 @@ Exit codes from `j2` and `add-operators-to-imageset.sh` are ignored; `touch data
 
 ## Bug #634 — Core: `create-cluster-conf.sh` ignores `verify-aba-conf` failure
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `scripts/create-cluster-conf.sh` ~line 17
 - **Found by**: Code review
@@ -9062,7 +9088,9 @@ Invalid `aba.conf` (e.g. `platform=bogus`) doesn't stop cluster.conf creation. T
 
 ## Bug #635 — Core: `aba.sh --ntp` accepts arbitrary invalid values
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `scripts/aba.sh` ~lines 676-687
 - **Found by**: Code review
@@ -9079,7 +9107,9 @@ No validation on the NTP argument before writing to config.
 
 ## Bug #636 — Core: `aba.sh --gateway-ip` lacks octet-range validation
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `scripts/aba.sh` ~lines 688-699
 - **Found by**: Code review
@@ -9096,7 +9126,9 @@ Regex accepts format but doesn't check octets ≤255 (unlike `--api-vip`/`--ingr
 
 ## Bug #637 — Core: `cluster-upgrade.sh` uses `grep -P` (GNU Perl regex, not portable)
 
-- **Status**: CONFIRMED (code review) — works on RHEL 8/9 (supported platforms); only affects exotic environments
+**Status:** OPEN — code review; works on RHEL 8/9 (supported platforms); only affects exotic environments
+
+- **Status:** OPEN (code review) — works on RHEL 8/9 (supported platforms); only affects exotic environments
 - **Severity**: Low (portability concern only — not a bug on supported platforms)
 - **Component**: `scripts/cluster-upgrade.sh` ~lines 84-86
 - **Found by**: Code review
@@ -9113,7 +9145,9 @@ On hosts without Perl-regex grep (s390x, ppc64le BusyBox environments), `aba upg
 
 ## Bug #638 — Core: ADR-007 state restore picks first arbitrary glob match
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Low
 - **Component**: `scripts/aba.sh` ~lines 98-100
 - **Found by**: Code review
@@ -9130,7 +9164,9 @@ If two clusters share the same basename (e.g. `sno.lab.local` and `sno.example.c
 
 ## Bug #639 — Core: ADR-007 cluster-dir recreation masks `make init` failure
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `scripts/aba.sh` ~lines 103-107
 - **Found by**: Code review
@@ -9147,7 +9183,9 @@ When recreating a cluster directory from externalized state, a failed `make init
 
 ## Bug #640 — TUI: ISC generation failure reported as success (return 0)
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `tui/v2/tui-mirror.sh` ~line 762
 - **Found by**: Code review
@@ -9164,7 +9202,9 @@ Error path shows dialog but `return 0` instead of non-zero.
 
 ## Bug #641 — TUI: DISCO auto-wizard swallows mirror install/load failures
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Medium
 - **Component**: `tui/v2/tui-disco.sh` lines 116-124
 - **Found by**: Code review
@@ -9181,7 +9221,9 @@ Return codes from `mirror_install` and `disco_load_images` are ignored; `_disco_
 
 ## Bug #642 — TUI: Operator search grep treats `-` prefixed queries as options
 
-- **Status**: VERIFIED (TUI testing on conno — searched for "-e", got "No operators matching '-e' found" instead of matches)
+**Status:** OPEN — TUI testing on conno — searched for "-e", got "No operators matching '-e' found" instead of matches
+
+- **Status:** VERIFIED (TUI testing on conno — searched for "-e", got "No operators matching '-e' found" instead of matches)
 - **Severity**: Medium
 - **Component**: `tui/v2/tui-mirror.sh` lines 1161-1165
 - **Found by**: Code review
@@ -9202,7 +9244,9 @@ Change to `grep -hiF -- "$query"`.
 
 ## Bug #643 — TUI: Command injection guard does not block bare `&&`
 
-- **Status**: INVALID (false positive — `'&&'` in bash `[[ =~ ]]` matches literal `&&`, quotes are not part of matched text)
+**Status:** INVALID — false positive — `'&&'` in bash `[[ =~ ]]` matches literal `&&`, quotes are not part of matched text
+
+- **Status:** INVALID (false positive — `'&&'` in bash `[[ =~ ]]` matches literal `&&`, quotes are not part of matched text)
 - **Severity**: ~~Medium~~ N/A
 - **Component**: `tui/v2/tui-lib.sh` line 604
 - **Found by**: Code review
@@ -9223,7 +9267,9 @@ Change `'&&'` to `&&` in the regex pattern (or `\&\&`).
 
 ## Bug #644 — TUI: Cluster wizard allows Next with empty base domain
 
-- **Status**: VERIFIED (TUI on conno: cleared domain in aba.conf, started wizard, "Base domain: (not set)" → pressed Next → proceeded to page 2 without error)
+**Status:** OPEN — TUI on conno: cleared domain in aba.conf, started wizard, "Base domain: (not set; " → pressed Next → proceeded to page 2 without error)
+
+- **Status:** VERIFIED (TUI on conno: cleared domain in aba.conf, started wizard, "Base domain: (not set)" → pressed Next → proceeded to page 2 without error)
 - **Severity**: Medium
 - **Component**: `tui/v2/tui-cluster.sh` lines 894-895, 942-956
 - **Found by**: Code review
@@ -9240,7 +9286,9 @@ No required-field check on base domain before page 1 advances.
 
 ## Bug #645 — TUI: Mid-wizard cluster rename leaves orphan directory
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Low
 - **Component**: `tui/v2/tui-cluster.sh` lines 910-938, 185-212
 - **Found by**: Code review
@@ -9257,7 +9305,9 @@ Rename only updates in-memory state; old directory is never cleaned up.
 
 ## Bug #646 — TUI: Operator menu Back bypasses empty-basket warning
 
-- **Status**: CONFIRMED (code review)
+**Status:** OPEN — code review
+
+- **Status:** OPEN (code review)
 - **Severity**: Low
 - **Component**: `tui/v2/tui-mirror.sh` lines 945-966
 - **Found by**: Code review
@@ -9274,7 +9324,9 @@ Empty-basket confirmation only fires on Done (rc=3), not on Back (1|255).
 
 ## Bug #647 — TUI: "mirror installed" status shown for registered (external) mirrors
 
-- **Status**: VERIFIED (TUI on conno shows "Status: mirror installed" for a registered Quay mirror)
+**Status:** OPEN — TUI on conno shows "Status: mirror installed" for a registered Quay mirror
+
+- **Status:** VERIFIED (TUI on conno shows "Status: mirror installed" for a registered Quay mirror)
 - **Severity**: Low (misleading UX label)
 - **Component**: `tui/v2/tui-lib.sh` line 772 (`mirror_state_label()`)
 - **Found by**: TUI testing + code review
@@ -9295,7 +9347,9 @@ Check `regcreds/state.sh` for `reg_vendor=existing` and show "mirror registered"
 
 ## Bug #648 — TUI: "Uninstall Mirror" fails for registered mirrors
 
-- **Status**: VERIFIED (CLI on conno tmux — `aba -d mirror uninstall` shows "externally-managed registry" error)
+**Status:** OPEN — CLI on conno tmux — `aba -d mirror uninstall` shows "externally-managed registry" error
+
+- **Status:** VERIFIED (CLI on conno tmux — `aba -d mirror uninstall` shows "externally-managed registry" error)
 - **Severity**: Medium (TUI action fails with error instead of offering correct action)
 - **Component**: `tui/v2/tui-cluster.sh` line 1975
 - **Found by**: Code review
@@ -9316,7 +9370,9 @@ Before running uninstall, check `reg_vendor` from `state.sh`. If `existing`, run
 
 ## Bug #649 — Core: `reg_vendor` missing from `_state_override_mirror` immutable list
 
-- **Status**: VERIFIED (TUI on conno shows "Registry Type: Docker" in Settings for a registered Quay mirror; `resolved_reg_vendor()` returns "docker" instead of "existing")
+**Status:** OPEN — TUI on conno shows "Registry Type: Docker" in Settings for a registered Quay mirror; `resolved_reg_vendor(; ` returns "docker" instead of "existing")
+
+- **Status:** VERIFIED (TUI on conno shows "Registry Type: Docker" in Settings for a registered Quay mirror; `resolved_reg_vendor()` returns "docker" instead of "existing")
 - **Severity**: Low (functional impact mitigated by direct state.sh checks in uninstall scripts, but causes confusing TUI display)
 - **Component**: `scripts/include_all.sh` line 931 (`_state_override_mirror`)
 - **Found by**: Testing registered mirror workflow on conno
@@ -9351,7 +9407,9 @@ local _immutable="reg_host reg_port reg_root reg_user reg_pw reg_vendor"
 
 ## Bug #650 — TUI: Platform toggle in cluster wizard writes to aba.conf immediately (before wizard completes)
 
-- **Status**: VERIFIED (tested on conno tmux: toggled vmw→kvm, pressed Back to cancel, aba.conf still shows kvm)
+**Status:** OPEN — tested on conno tmux: toggled vmw→kvm, pressed Back to cancel, aba.conf still shows kvm
+
+- **Status:** VERIFIED (tested on conno tmux: toggled vmw→kvm, pressed Back to cancel, aba.conf still shows kvm)
 - **Severity**: Medium (persistent config change from a cancelled wizard)
 - **Component**: `tui/v2/tui-cluster.sh` line 990
 - **Found by**: Code review + TUI testing
@@ -9376,7 +9434,9 @@ Remove the immediate `replace-value-conf` call from the platform toggle case. In
 
 ## Bug #651 — Core: `--ntp` flag accepts arbitrary values without validation
 
-- **Status**: VERIFIED (CLI on conno: `aba cluster --name test --ntp "not-a-host!!!!"` — accepted without error)
+**Status:** OPEN — CLI on conno: `aba cluster --name test --ntp "not-a-host!!!!"` — accepted without error
+
+- **Status:** VERIFIED (CLI on conno: `aba cluster --name test --ntp "not-a-host!!!!"` — accepted without error)
 - **Severity**: Low (misconfiguration caught later at cluster install time, not at input time)
 - **Component**: `scripts/aba.sh` lines 676-687
 - **Found by**: Code review + CLI testing
@@ -9397,7 +9457,9 @@ Add hostname/IP validation regex similar to `--dns` validation, but also accept 
 
 ## Bug #652 — Core: `--gateway-ip` and `--starting-ip` regex allows invalid octets > 255
 
-- **Status**: VERIFIED (CLI on conno: `aba cluster --name test --gateway-ip 999.999.999.999` — accepted without error)
+**Status:** OPEN — CLI on conno: `aba cluster --name test --gateway-ip 999.999.999.999` — accepted without error
+
+- **Status:** VERIFIED (CLI on conno: `aba cluster --name test --gateway-ip 999.999.999.999` — accepted without error)
 - **Severity**: Low (caught by later validation, but confusing at input time)
 - **Component**: `scripts/aba.sh` lines 688-695 (gateway), 871-878 (starting-ip)
 - **Found by**: Code review + CLI testing
@@ -9418,7 +9480,9 @@ Use a function to validate each octet: split on `.`, check each part is numeric 
 
 ## Bug #653 — Core: `--data-disk-gb` with no argument aborts instead of clearing value
 
-- **Status**: VERIFIED (CLI on conno: `aba cluster --name testdisk --data-disk-gb` → "Error: argument invalid [] after option --data-disk-gb")
+**Status:** OPEN — CLI on conno: `aba cluster --name testdisk --data-disk-gb` → "Error: argument invalid [] after option --data-disk-gb"
+
+- **Status:** VERIFIED (CLI on conno: `aba cluster --name testdisk --data-disk-gb` → "Error: argument invalid [] after option --data-disk-gb")
 - **Severity**: Low (help says `[<size>]` implying optional, but code requires a numeric argument)
 - **Component**: `scripts/aba.sh` lines 880-886
 - **Found by**: Code review + CLI testing
@@ -9460,7 +9524,9 @@ Use the same pattern as `--vlan`: check if `$2` exists and doesn't start with `-
 
 ## Bug #654: TUI "Install locally" fails due to env var inheritance of reg_ssh_key
 
-- **Status**: VERIFIED (reproduced on conno via TUI + direct CLI testing)
+**Status:** OPEN — reproduced on conno via TUI + direct CLI testing
+
+- **Status:** VERIFIED (reproduced on conno via TUI + direct CLI testing)
 - **Severity**: Medium (local mirror install via TUI always fails if mirror was previously configured for remote)
 - **Component**: `tui/v2/tui-mirror.sh` lines 28-346, `scripts/reg-install.sh` line 32
 - **Found by**: TUI testing + code tracing
@@ -9523,7 +9589,9 @@ grep -q "^reg_ssh_key=" mirror.conf 2>/dev/null || unset reg_ssh_key
 
 ## Bug #655: `make-bundle.sh` typo "Deleteing" in user-visible warning
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — typo in user-visible message)
 - **Component**: `scripts/make-bundle.sh` line 129
 - **Found by**: Code review
@@ -9550,7 +9618,9 @@ Change "Deleteing" to "Deleting".
 
 ## Bug #656: `make-bundle.sh` bundle output message missing `[ABA]` prefix
 
-- **Status**: VERIFIED (code review — confirmed by FIXME comment in source)
+**Status:** OPEN — code review — confirmed by FIXME comment in source
+
+- **Status:** VERIFIED (code review — confirmed by FIXME comment in source)
 - **Severity**: Low (cosmetic — inconsistent output formatting)
 - **Component**: `scripts/make-bundle.sh` lines 119-120
 - **Found by**: Code review
@@ -9585,7 +9655,9 @@ aba_info "Bundle output file = $bundle_dest_file" >&2
 
 ## Bug #657: TUI Day-2 menu missing "Rescue" option
 
-- **Status**: VERIFIED (code review — `aba rescue` exists as CLI but not in TUI Day-2 menu)
+**Status:** OPEN — code review — `aba rescue` exists as CLI but not in TUI Day-2 menu
+
+- **Status:** VERIFIED (code review — `aba rescue` exists as CLI but not in TUI Day-2 menu)
 - **Severity**: Medium (feature gap — users must use CLI for cluster rescue)
 - **Component**: `tui/v2/tui-cluster.sh` lines 2036-2110 (`cluster_day2_menu`)
 - **Found by**: Code review + cross-referencing with `aba.sh` command list
@@ -9626,7 +9698,9 @@ With a `_day2_rescue` function similar to `_day2_shutdown`.
 
 ## Bug #658: `cluster-rescue.sh` uses spaces instead of tabs for indentation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (coding style violation — spaces on lines 23-26, tabs everywhere else)
 - **Component**: `scripts/cluster-rescue.sh` lines 23-26
 - **Found by**: Code review
@@ -9655,7 +9729,9 @@ Replace the 8 spaces with a single tab on lines 23-26.
 
 ## Bug #659: `verify-config.sh` line 73 — typo "endpoiont" AND wrong label "Ingress" (should be "API")
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — typo + misleading label in error message)
 - **Component**: `scripts/verify-config.sh` line 73
 - **Found by**: Code review
@@ -9694,7 +9770,9 @@ aba_abort "API endpoint: api_vip must be defined for this cluster configuration!
 
 ## Bug #660: `verify-config.sh` line 79 — typo "endpoiont"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — typo in info message)
 - **Component**: `scripts/verify-config.sh` line 79
 - **Found by**: Code review
@@ -9724,7 +9802,9 @@ aba_info "Ingress endpoint: ingress_vip=$ingress_vip is defined"
 
 ## Bug #661: `tui-disco.sh` inconsistent indentation throughout
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (coding style — violates "tabs for indentation" rule)
 - **Component**: `tui/v2/tui-disco.sh` multiple locations
 - **Found by**: Code review
@@ -9748,7 +9828,9 @@ Normalize all indentation in `disco_main()` to use consistent tab depth matching
 
 ## Bug #662: `abatui2.sh` CONNO menu — inconsistent indentation in case statement
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (coding style)
 - **Component**: `tui/v2/abatui2.sh` lines 648-700+
 - **Found by**: Code review
@@ -9772,7 +9854,9 @@ Normalize all case items in the CONNO menu to consistent 2-tab indentation.
 
 ## Bug #663: `tui-cluster.sh` `tui_advanced_menu()` — inconsistent indentation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (coding style)
 - **Component**: `tui/v2/tui-cluster.sh` lines 1844-2030
 - **Found by**: Code review
@@ -9796,7 +9880,9 @@ Normalize indentation within `tui_advanced_menu()`.
 
 ## Bug #664: `cluster-startup.sh` uses file existence instead of `platform` variable
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (violates architecture rule — file presence must not infer settings)
 - **Component**: `scripts/cluster-startup.sh` line 36
 - **Found by**: Code review
@@ -9826,7 +9912,9 @@ if [ "$platform" = "bm" ] || [ -z "$platform" ]; then
 
 ## Bug #665: `cluster-graceful-shutdown.sh` uses file existence instead of `platform` variable
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (same violation as Bug #664)
 - **Component**: `scripts/cluster-graceful-shutdown.sh` line 280
 - **Found by**: Code review
@@ -9855,7 +9943,9 @@ if [ "$wait" ] && { [ "$platform" = "vmw" ] || [ "$platform" = "kvm" ]; }; then
 
 ## Bug #666: `tui-direct.sh` `version)` case block has inconsistent indentation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style)
 - **Component**: `tui/v2/tui-direct.sh` lines 125-148
 - **Found by**: Code review
@@ -9876,7 +9966,9 @@ Align `version)` to the same indentation level as the other case arms (one tab f
 
 ## Bug #667: `reg-save.sh` dead code — `r=1` variable set but never used
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (dead code)
 - **Component**: `scripts/reg-save.sh` line 17
 - **Found by**: Code review
@@ -9907,7 +9999,9 @@ Remove `r=1 &&` from the line.
 
 ## Bug #668: `reg-load.sh` uses raw `echo "[ABA]..."` instead of `aba_info`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistency)
 - **Component**: `scripts/reg-load.sh` line 30
 - **Found by**: Code review
@@ -9936,7 +10030,9 @@ Replace `echo "[ABA] ..."` with `aba_info "..."`.
 
 ## Bug #669: `reg-verify.sh` uses deprecated `-o` operator in test
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated syntax)
 - **Component**: `scripts/reg-verify.sh` line 20
 - **Found by**: Code review
@@ -9962,7 +10058,9 @@ if [ ! "$reg_host" ] || [ ! "$reg_port" ]; then
 
 ## Bug #670: `reg-verify.sh` unquoted variable in `echo` command
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style, minor functional risk)
 - **Component**: `scripts/reg-verify.sh` line 52
 - **Found by**: Code review
@@ -9989,7 +10087,9 @@ Line 52:
 
 ## Bug #671: `create-agent-config.sh` uses `((current_ip++))` — violates coding standard
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (latent — `current_ip` is always a large number for IP addresses, but violates project rule)
 - **Component**: `scripts/create-agent-config.sh` line 74
 - **Found by**: Code review
@@ -10017,7 +10117,9 @@ Line 74:
 
 ## Bug #672: `create-agent-config.sh` trailing whitespace on empty line
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style violation)
 - **Component**: `scripts/create-agent-config.sh` line 8
 - **Found by**: Code review
@@ -10034,7 +10136,9 @@ Remove the trailing space on line 8.
 
 ## Bug #673: `reg-create-imageset-config.sh` uses deprecated `-o` operator
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated syntax)
 - **Component**: `scripts/reg-create-imageset-config.sh` line 53
 - **Found by**: Code review
@@ -10060,7 +10164,9 @@ Line 53:
 
 ## Bug #674: `create-install-config.sh` multiple deprecated `-a`/`-o` operators
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated syntax, recurring pattern)
 - **Component**: `scripts/create-install-config.sh` lines 57, 76, 96, 230, 235
 - **Found by**: Code review
@@ -10088,7 +10194,9 @@ Replace with `&&` / `||` between separate test commands, e.g.:
 
 ## Docbug #675: README Command Reference — broken markdown table cell for `aba cluster`
 
-- **Status**: VERIFIED (visual inspection)
+**Status:** OPEN — visual inspection
+
+- **Status:** VERIFIED (visual inspection)
 - **Severity**: Medium (renders incorrectly for users)
 - **Component**: `README.md` line 1293
 - **Found by**: Documentation review
@@ -10115,7 +10223,9 @@ Escape the pipe characters inside the command cell:
 
 ## Docbug #676: README — missing commands in Command Reference table
 
-- **Status**: VERIFIED (documentation review)
+**Status:** OPEN — documentation review
+
+- **Status:** VERIFIED (documentation review)
 - **Severity**: Low (user convenience)
 - **Component**: `README.md` lines 1269-1350 (Command Reference)
 - **Found by**: Documentation review
@@ -10140,7 +10250,9 @@ Add entries to the appropriate Command Reference tables:
 
 ## Docbug #677: README — "Using an Existing Registry" section is too brief
 
-- **Status**: VERIFIED (documentation review)
+**Status:** OPEN — documentation review
+
+- **Status:** VERIFIED (documentation review)
 - **Severity**: Medium (users need more guidance)
 - **Component**: `README.md` lines 1123-1141
 - **Found by**: Documentation review
@@ -10165,7 +10277,9 @@ Expand the section with a "Requirements" subsection and troubleshooting notes.
 
 ## Docbug #678: README — duplicate perma-link comment
 
-- **Status**: VERIFIED (documentation review)
+**Status:** OPEN — documentation review
+
+- **Status:** VERIFIED (documentation review)
 - **Severity**: Low (cosmetic)
 - **Component**: `README.md` lines 402-403
 - **Found by**: Documentation review
@@ -10184,7 +10298,9 @@ Two identical perma-link comments appear consecutively. Only one is needed.
 
 ## Bug #679: `day2.sh` uses deprecated `-a` operator
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated syntax)
 - **Component**: `scripts/day2.sh` line 93
 - **Found by**: Code review
@@ -10210,7 +10326,9 @@ if [ -s "$regcreds_dir/rootCA.pem" ] && [ ! "$cm_existing" ]; then
 
 ## Bug #680: `day2.sh` unnecessary `$(echo ...)` for string assignment
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style)
 - **Component**: `scripts/day2.sh` line 224
 - **Found by**: Code review
@@ -10236,7 +10354,9 @@ latest_working_dir="mirror/data/working-dir"
 
 ## Bug #681: `day2.sh` uses `echo_red` instead of `aba_warning`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistency)
 - **Component**: `scripts/day2.sh` line 264
 - **Found by**: Code review
@@ -10268,7 +10388,9 @@ aba_warning "CatalogSource file does not exist: [$f]"
 
 ## Bug #682: `day2.sh` indentation uses spaces instead of tabs
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style violation)
 - **Component**: `scripts/day2.sh` lines 277-280
 - **Found by**: Code review
@@ -10286,7 +10408,9 @@ Lines 277-280 — indentation does not follow the tab convention used by the res
 
 ## Bug #683: Systemic: all `process_args $*` calls use unquoted `$*`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (latent — arguments with spaces would be mishandled)
 - **Component**: 9 scripts across `scripts/`
 - **Found by**: Code review
@@ -10324,7 +10448,9 @@ Note: `process_args` itself may need to handle `"$@"` properly — verify the fu
 
 ## Bug #684: `include_all.sh` color echo functions use spaces instead of tabs
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — violates coding standard)
 - **Component**: `scripts/include_all.sh` lines 50-131
 - **Found by**: Code review
@@ -10346,7 +10472,9 @@ Convert all spaces to tabs in lines 50-131.
 
 ## Bug #685: `include_all.sh` `aba_debug()` uses spaces instead of tabs
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — violates coding standard)
 - **Component**: `scripts/include_all.sh` lines 164-197
 - **Found by**: Code review
@@ -10364,7 +10492,9 @@ Same as Bug #684 — editor was likely set to spaces when this function was writ
 
 ## Bug #686: `include_all.sh` mixed spaces/tabs in `aba_abort()` and `aba_warning()`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — violates coding standard)
 - **Component**: `scripts/include_all.sh` lines 217, 226
 - **Found by**: Code review
@@ -10383,7 +10513,9 @@ Copy-paste or editor inconsistency. Mixing spaces and tabs within the same funct
 
 ## Bug #687: `include_all.sh` deprecated `-a` operator in `verify-aba-conf()` and `verify-cluster-conf()`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated POSIX syntax, but functional)
 - **Component**: `scripts/include_all.sh` lines 540, 1000
 - **Found by**: Code review
@@ -10410,7 +10542,9 @@ Replace with `&&`:
 
 ## Bug #688: `include_all.sh` deprecated `-o` operator in `confirm()` and `edit_file()`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated POSIX syntax, but functional)
 - **Component**: `scripts/include_all.sh` lines 1239-1240, 1252
 - **Found by**: Code review
@@ -10438,7 +10572,9 @@ Replace with `||` in separate `[ ]` tests or use `[[ ]]`:
 
 ## Bug #689: `include_all.sh` unquoted variables in `verify-aba-conf()` and `verify-mirror-conf()`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (latent — values unlikely to contain glob characters, but violates best practices)
 - **Component**: `scripts/include_all.sh` lines 547-549, 553, 630, 639, 641, 643
 - **Found by**: Code review
@@ -10469,7 +10605,9 @@ Quote all variables: `echo "$var" | grep ...` or use `printf '%s\n' "$var" | gre
 
 ## Bug #690: `include_all.sh` `_run_oc_mirror_with_retry()` uses `echo_red` instead of `aba_warning`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging — same pattern as Bug #681)
 - **Component**: `scripts/include_all.sh` lines 3136, 3147
 - **Found by**: Code review
@@ -10490,7 +10628,9 @@ This bypasses the `[ABA]` prefix convention and `aba_warning`'s multi-line forma
 
 ## Bug #691: `include_all.sh` `run_once()` global-failed-clean block — severely inconsistent indentation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — code works, but indentation is misleading)
 - **Component**: `scripts/include_all.sh` lines 2455-2474
 - **Found by**: Code review
@@ -10518,7 +10658,9 @@ The code is functionally correct but the visual structure is misleading.
 
 ## Bug #692: TUI missing "Register" option for existing external registries
 
-- **Status**: VERIFIED (code review + CLI test)
+**Status:** OPEN — code review + CLI test
+
+- **Status:** VERIFIED (code review + CLI test)
 - **Severity**: Medium (feature gap — users must fall back to CLI)
 - **Component**: `tui/v2/tui-mirror.sh`, `tui/v2/abatui2.sh`
 - **Found by**: Code review + TUI testing
@@ -10551,7 +10693,9 @@ Then call `aba -d mirror register`.
 
 ## Bug #693: `tui-mirror.sh` `mirror_prep_upgrade()` inconsistent indentation in case block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic)
 - **Component**: `tui/v2/tui-mirror.sh` lines 569-603
 - **Found by**: Code review
@@ -10565,7 +10709,9 @@ The `c)` and `m)` case items at lines 569 and 576 use one fewer tab than the `t)
 
 ## Bug #694: `tui-mirror.sh` `mirror_view_isc()` — broken indentation in E) and O) case blocks
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic)
 - **Component**: `tui/v2/tui-mirror.sh` lines 822-830, 857-864
 - **Found by**: Code review
@@ -10579,7 +10725,9 @@ The `E)` case block has `--editbox` at 4 tabs but the `if [[ $? -eq 0 ]]` at 4 t
 
 ## Bug #695: `abatui2.sh` CONNO menu Transfer section indentation mismatch
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic)
 - **Component**: `tui/v2/abatui2.sh` lines 577-580
 - **Found by**: Code review
@@ -10593,7 +10741,9 @@ In the `items+=()` array for the CONNO menu, the "Transfer" section (lines 577-5
 
 ## Bug #696: `tui-cluster.sh` `tui_advanced_menu()` Danger Zone items indentation mismatch
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic)
 - **Component**: `tui/v2/tui-cluster.sh` lines 1878-1882
 - **Found by**: Code review
@@ -10607,7 +10757,9 @@ The Danger Zone section in `tui_advanced_menu()` uses one tab of indentation (li
 
 ## Bug #697: `make-bundle.sh` case block uses spaces instead of tabs
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — violates coding standard)
 - **Component**: `scripts/make-bundle.sh` lines 48-70
 - **Found by**: Code review
@@ -10621,7 +10773,9 @@ The `case "$1" in` block for argument parsing uses 2-space indentation instead o
 
 ## Bug #698: `make-bundle.sh` typo "Deleteing" and FIXME "MNIssing"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic)
 - **Component**: `scripts/make-bundle.sh` lines 119, 129
 - **Found by**: Code review
@@ -10636,7 +10790,9 @@ The `case "$1" in` block for argument parsing uses 2-space indentation instead o
 
 ## Bug #699: `make-bundle.sh` deprecated `-a` and `-o` operators
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated POSIX syntax)
 - **Component**: `scripts/make-bundle.sh` lines 127, 174
 - **Found by**: Code review
@@ -10653,7 +10809,9 @@ L174: [ -s mirror/data/imageset-config.yaml -o -f mirror/mirror.conf -o "$image_
 
 ## Bug #700: `make-bundle.sh` uses `echo_red` and `echo_magenta` for user-facing messages
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging)
 - **Component**: `scripts/make-bundle.sh` lines 179-181, 236-238
 - **Found by**: Code review
@@ -10670,7 +10828,9 @@ Line 120 uses raw `echo "Bundle output file = ..."` without `[ABA]` prefix (alre
 
 ## Bug #701: `aba.sh` systemic use of deprecated `-o` and `-a` operators (60+ instances)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated POSIX syntax, but functional)
 - **Component**: `scripts/aba.sh` — throughout argument parsing (lines 41-959) and logic (lines 1362-1691)
 - **Found by**: Code review
@@ -10697,7 +10857,9 @@ Replace with `||` / `&&` in separate `[ ]` tests, or use `[[ ]]` with `||` / `&&
 
 ## Bug #702: `aba.sh` typo "synchonized" in partially-disconnected prompt
 
-- **Status**: VERIFIED (TUI testing + code review)
+**Status:** OPEN — TUI testing + code review
+
+- **Status:** VERIFIED (TUI testing + code review)
 - **Severity**: Low (cosmetic — user-facing typo)
 - **Component**: `scripts/aba.sh` line 1858
 - **Found by**: TUI testing on conno
@@ -10720,7 +10882,9 @@ Typo in the string literal at `scripts/aba.sh:1858`.
 
 ## Bug #703: `download-catalog-index.sh` uses `read` without `-r` flag
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — operator names don't typically contain backslashes)
 - **Component**: `scripts/download-catalog-index.sh` line 232
 - **Found by**: Code review
@@ -10738,7 +10902,9 @@ Typo in the string literal at `scripts/aba.sh:1858`.
 
 ## Bug #704: `backup.sh` deprecated `-o` operator
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated POSIX syntax)
 - **Component**: `scripts/backup.sh` line 57
 - **Found by**: Code review
@@ -10754,7 +10920,9 @@ L57: [ ! -f ~/.aba.previous.backup -o ! "$inc" ]
 
 ## Bug #705: `backup.sh` typo "transfering" (should be "transferring")
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — user-facing typo)
 - **Component**: `scripts/backup.sh` lines 176, 195
 - **Found by**: Code review
@@ -10768,7 +10936,9 @@ Both instances say "After transfering the install bundle" — should be "After t
 
 ## Bug #706: `backup.sh` uses `echo_magenta`/`echo_cyan` for user-facing messages
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging)
 - **Component**: `scripts/backup.sh` lines 155-160, 168, 189
 - **Found by**: Code review
@@ -10782,7 +10952,9 @@ Uses `echo_magenta` and `echo_cyan` for important user-facing messages instead o
 
 ## Bug #707: Deprecated `-o`/`-a` operators widespread across scripts/ (beyond aba.sh)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (deprecated POSIX syntax — works but fragile with special values)
 - **Component**: Multiple scripts under `scripts/`
 - **Found by**: Code review (systemic grep)
@@ -10819,7 +10991,9 @@ Total: ~85 instances across the codebase. Replace with `] && [` (for `-a`) or `]
 
 ## Bug #708: `day2.sh` uses `echo_red` for error messages
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging)
 - **Component**: `scripts/day2.sh` lines 264, 283
 - **Found by**: Code review
@@ -10835,7 +11009,9 @@ Uses `echo_red "Error: ..."` for error messages instead of `aba_warning` or `aba
 
 ## Bug #709: `day2.sh` mixed indentation in CatalogSource case block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — indentation)
 - **Component**: `scripts/day2.sh` lines 277-279
 - **Found by**: Code review
@@ -10849,7 +11025,9 @@ The case patterns use 4 leading spaces + 3 tabs instead of just 3 tabs. All surr
 
 ## Bug #710: `verify-config.sh` typo "endpoiont" (should be "endpoint")
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — user-facing typo)
 - **Component**: `scripts/verify-config.sh` lines 73, 79
 - **Found by**: Code review
@@ -10866,7 +11044,9 @@ Both should say "endpoint".
 
 ## Bug #711: `reg-load.sh` has un-commented `set -x` debug flag (unlike reg-save/reg-sync)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — passes `y` as first arg enables shell tracing in production)
 - **Component**: `scripts/reg-load.sh` line 29
 - **Found by**: Code review (cross-script comparison)
@@ -10888,7 +11068,9 @@ Comment out the line to match `reg-save.sh` and `reg-sync.sh`.
 
 ## Bug #712: `reg-load.sh` uses raw `echo "[ABA]..."` instead of `aba_info`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging)
 - **Component**: `scripts/reg-load.sh` line 30
 - **Found by**: Code review
@@ -10902,7 +11084,9 @@ L30 uses `echo "[ABA] Attempting $try_tot times..."` while the equivalent line i
 
 ## Bug #713: `vmw-create.sh` typo "hirerachy" (should be "hierarchy")
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — code comment)
 - **Component**: `scripts/vmw-create.sh` line 65
 - **Found by**: Code review
@@ -10912,7 +11096,9 @@ L30 uses `echo "[ABA] Attempting $try_tot times..."` while the equivalent line i
 
 ## Bug #714: `cluster-rescue.sh` uses spaces instead of tabs for indentation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — coding style)
 - **Component**: `scripts/cluster-rescue.sh` lines 23-26
 - **Found by**: Code review
@@ -10926,7 +11112,9 @@ Lines 23-26 (SSH/SCP commands) use 8 spaces for indentation instead of tabs. All
 
 ## Docbug #715: README broken markdown table in Cluster Commands
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (renders incorrectly — users see garbled table)
 - **Component**: `README.md` line 1293
 - **Found by**: Documentation review
@@ -10946,7 +11134,9 @@ Should escape or reformat to avoid the pipe character inside the table cell.
 
 ## Docbug #716: README numbered list renders as four "1." items
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — confusing numbering)
 - **Component**: `README.md` lines 1223, 1230, 1249, 1258
 - **Found by**: Documentation review
@@ -10960,7 +11150,9 @@ The "Connected Installation" steps section has four items all numbered `1.` inst
 
 ## Docbug #717: README TUI description overstates "complete workflow"
 
-- **Status**: VERIFIED (code review + TUI testing)
+**Status:** OPEN — code review + TUI testing
+
+- **Status:** VERIFIED (code review + TUI testing)
 - **Severity**: Low (inaccurate documentation)
 - **Component**: `README.md` line 282
 - **Found by**: Documentation review + Bug #692
@@ -10976,7 +11168,9 @@ But the TUI is missing the "Register existing registry" workflow (Bug #692). Use
 
 ## Bug #718: `check-macs.sh` uses spaces instead of tabs (entire file)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — coding style)
 - **Component**: `scripts/check-macs.sh` (72 indented lines, all spaces)
 - **Found by**: Code review
@@ -10990,7 +11184,9 @@ The entire file uses 8-space indentation instead of tabs. This is the only scrip
 
 ## Bug #719: `monitor-install.sh` uses spaces instead of tabs in associative array
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — coding style)
 - **Component**: `scripts/monitor-install.sh` lines 56-62
 - **Found by**: Code review
@@ -11004,7 +11200,9 @@ The `declare -A wait_for_exit_reasons` associative array uses 4-space indentatio
 
 ## Bug #720: `monitor-install.sh` uses `echo_red`/`echo_yellow` for error messages
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging)
 - **Component**: `scripts/monitor-install.sh` lines 47, 68-71
 - **Found by**: Code review
@@ -11018,7 +11216,9 @@ Uses `echo_yellow "[ABA] Running: ..."` and `echo_red "[ABA] Something went wron
 
 ## Bug #721: `generate-image.sh` uses `echo_cyan`/`echo_yellow` for user messages
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging)
 - **Component**: `scripts/generate-image.sh` lines 31, 34, 37, 103
 - **Found by**: Code review
@@ -11032,7 +11232,9 @@ Uses `echo_cyan "Cluster configuration"` and `echo_yellow "[ABA] Running: ..."` 
 
 ## Bug #722: `generate-image.sh` comment typo "avalable" (should be "available")
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — comment typo)
 - **Component**: `scripts/generate-image.sh` line 119
 - **Found by**: Code review
@@ -11046,7 +11248,9 @@ Comment says "the built in 'additionalNTPSources' feature is not avalable" — s
 
 ## Bug #723: `install-rpms.sh` typo "occured" (should be "occurred")
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — user-facing typo)
 - **Component**: `scripts/install-rpms.sh` line 33
 - **Found by**: Code review
@@ -11060,7 +11264,9 @@ Comment says "the built in 'additionalNTPSources' feature is not avalable" — s
 
 ## Bug #724: Systemic use of `echo_red`/`echo_yellow`/`echo_cyan`/`echo_magenta` instead of `aba_info`/`aba_warning`/`aba_abort`
 
-- **Status**: VERIFIED (code review — systemic grep)
+**Status:** OPEN — code review — systemic grep
+
+- **Status:** VERIFIED (code review — systemic grep)
 - **Severity**: Low (inconsistent logging — bypasses `[ABA]` prefix)
 - **Component**: Multiple scripts under `scripts/`
 - **Found by**: Code review
@@ -11090,7 +11296,9 @@ Total: ~112 instances across 20+ scripts. These bypass the `[ABA]` prefix conven
 
 ## Bug #725: `make-bundle.sh` typos: "behand", "Deleteing", "reuqired", "MNIssing"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — typos in user-facing messages and comments)
 - **Component**: `scripts/make-bundle.sh` lines 81, 119, 129, 287
 - **Found by**: Code review
@@ -11108,7 +11316,9 @@ Multiple typos in `make-bundle.sh`:
 
 ## Bug #726: `make-bundle.sh` L120 raw `echo` for user-facing bundle output path
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (inconsistent logging — `echo` instead of `aba_info`)
 - **Component**: `scripts/make-bundle.sh` line 120
 - **Found by**: Code review
@@ -11122,7 +11332,9 @@ Line 120: `echo "Bundle output file = $bundle_dest_file" >&2` uses raw `echo` in
 
 ## Bug #727: `make-bundle.sh` mixed indentation in arg-parsing block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — style violation)
 - **Component**: `scripts/make-bundle.sh` lines 47-70
 - **Found by**: Code review
@@ -11136,7 +11348,9 @@ The `while`/`case` argument parsing block at lines 47-70 uses 2-space indentatio
 
 ## Bug #728: `cluster-config.sh` potential divide-by-zero on line 99
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — arithmetic error)
 - **Component**: `scripts/cluster-config.sh` line 99
 - **Found by**: Code review
@@ -11154,7 +11368,9 @@ If `$CP_REPLICAS` is empty or 0 (which can happen if the validation on line 151 
 
 ## Bug #729: `cluster-config.sh` uses spaces for indentation in `distribute_macs()` function
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — style violation)
 - **Component**: `scripts/cluster-config.sh` lines 28-57
 - **Found by**: Code review
@@ -11168,7 +11384,9 @@ The `distribute_macs()` function uses 4-space indentation throughout (lines 28-5
 
 ## Bug #730: `add-operators-to-imageset.sh` mixed indentation on line 166
 
-- **Status**: VERIFIED (code review — `cat -A`)
+**Status:** OPEN — code review — `cat -A`
+
+- **Status:** VERIFIED (code review — `cat -A`)
 - **Severity**: Low (cosmetic — style violation)
 - **Component**: `scripts/add-operators-to-imageset.sh` line 166
 - **Found by**: Code review
@@ -11186,7 +11404,9 @@ Confirmed with `cat -A`. All other indentation in the file uses tabs.
 
 ## Bug #731: `create-containers-auth.sh` line 62 indentation with spaces instead of tab
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — style violation)
 - **Component**: `scripts/create-containers-auth.sh` line 62
 - **Found by**: Code review
@@ -11204,7 +11424,9 @@ This contrasts with the surrounding code which uses tabs.
 
 ## Bug #732: `create-cluster-conf.sh` lines 20 and 156 — `echo_red` without `>&2` redirect
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — error message goes to stdout)
 - **Component**: `scripts/create-cluster-conf.sh` lines 20, 156
 - **Found by**: Code review
@@ -11225,7 +11447,9 @@ In contrast, lines 97-100 correctly use `>&2`. Should use `aba_abort` instead.
 
 ## Bug #733: `cluster-config.sh` extensive use of backticks instead of `$()`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style — deprecated syntax)
 - **Component**: `scripts/cluster-config.sh` lines 74, 78, 82, 86, 90, 94, 113, 117, 124, 128, 138
 - **Found by**: Code review
@@ -11243,7 +11467,9 @@ Backticks are deprecated in favor of `$()`. Backticks don't nest, are harder to 
 
 ## Bug #734: `day2-config-osus.sh` line 23 — typo "Signatires"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — typo in comment)
 - **Component**: `scripts/day2-config-osus.sh` line 23
 - **Found by**: Code review
@@ -11257,7 +11483,9 @@ Comment reads `# Stop processing (CatalogSources and Signatires etc)` — should
 
 ## Bug #735: `|| exit 1` inside `$()` does NOT propagate to parent — 7 scripts affected
 
-- **Status**: VERIFIED (code review — confirmed pattern)
+**Status:** OPEN — code review — confirmed pattern
+
+- **Status:** VERIFIED (code review — confirmed pattern)
 - **Severity**: Medium-High (functional — error silently swallowed)
 - **Component**: 5 scripts with incorrect error handling pattern
 - **Found by**: Code review
@@ -11301,7 +11529,9 @@ Here `|| exit 1` is OUTSIDE `$()`, so if eval (or the quoted output) fails, the 
 
 ## Bug #736: `configure-pxe.sh` line 2 — typo "nuse"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — typo in comment)
 - **Component**: `scripts/configure-pxe.sh` line 2
 - **Found by**: Code review
@@ -11315,7 +11545,9 @@ Comment reads `# Create PXE env (not in nuse)` — should be "not in use".
 
 ## Bug #737: `tui-disco.sh` and `tui-direct.sh` inconsistent indentation throughout case blocks
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — style violation)
 - **Component**: `tui/v2/tui-disco.sh`, `tui/v2/tui-direct.sh`, `tui/v2/abatui2.sh`
 - **Found by**: Code review
@@ -11338,7 +11570,9 @@ While not functionally broken, the inconsistency makes the code harder to read a
 
 ## Bug #738: `include_all.sh` `aba-track()` function uses spaces for indentation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — style violation)
 - **Component**: `scripts/include_all.sh` lines 2048-2064
 - **Found by**: Code review
@@ -11352,7 +11586,9 @@ The `aba-track()` function on lines 2048-2064 uses 4-space indentation instead o
 
 ## Bug #739: Unquoted `$*` in `process_args` calls across 9 scripts
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (quoting — functionally safe due to `process_args` regex guard)
 - **Component**: 9 scripts
 - **Found by**: Code review
@@ -11379,7 +11615,9 @@ Should be changed to `. <(process_args "$@")` for consistency with bash best pra
 
 ## Bug #740: `reg-uninstall.sh` line 73 — comment says "respect -y flag" but code doesn't
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — `-y` flag ignored in fallback path)
 - **Component**: `scripts/reg-uninstall.sh` line 73
 - **Found by**: Code review
@@ -11407,7 +11645,9 @@ This preserves the safety prompt for interactive use while respecting the explic
 
 ## Bug #741: Systemic `read` without `-r` flag across multiple scripts
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic/best-practice — backslash interpretation in `read`)
 - **Component**: Multiple scripts (systemic)
 - **Found by**: Code review
@@ -11440,7 +11680,9 @@ important because the password field could contain backslashes.
 
 ## Bug #742: `reg-existing-create-pull-secret.sh` uses `echo` to encode password (process table exposure)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (security best-practice)
 - **Component**: `scripts/reg-existing-create-pull-secret.sh` line 19, `scripts/reg-common.sh` line 438
 - **Found by**: Code review
@@ -11467,7 +11709,9 @@ Replace `echo -n "..."` with `printf '%s' "..."` in both locations.
 
 ## Bug #743: `vmw-create.sh` line 65 typo "hirerachy" → "hierarchy"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — comment typo)
 - **Component**: `scripts/vmw-create.sh` line 65
 - **Found by**: Code review
@@ -11485,7 +11729,9 @@ scripts/vmw-create-folder.sh "$cluster_folder"  # This will create a folder hire
 
 ## Bug #744: `eval "$(scripts/cluster-config.sh)" || exit 1` silently loses exit code (~17 scripts)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — error propagation failure)
 - **Component**: Multiple scripts (systemic)
 - **Found by**: Code review
@@ -11524,7 +11770,9 @@ This ensures the exit code is checked BEFORE eval'ing any output.
 
 ## Bug #745: `let` usage is fragile under `set -e` (4 scripts)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (latent — `let` returns exit code 1 when expression evaluates to 0)
 - **Component**: Multiple scripts
 - **Found by**: Code review
@@ -11560,7 +11808,9 @@ i=$(( i + 1 ))
 
 ## Bug #746: `reg-save.sh` dead variable `r=1` on line 17
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — unused variable)
 - **Component**: `scripts/reg-save.sh` line 17
 - **Found by**: Code review
@@ -11579,7 +11829,9 @@ a leftover from a removed retry-loop implementation.
 
 ## Bug #747: `generate-image.sh` line 43 — `eval "$config || exit 1"` has `|| exit 1` inside eval string
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: HIGH (functional — incorrect error handling in ISO generation)
 - **Component**: `scripts/generate-image.sh` line 43
 - **Found by**: Code review
@@ -11626,7 +11878,9 @@ practice the wrong-pattern on line 43 is only reached when line 26 succeeds.
 
 ## Bug #748: `generate-image.sh` line 119 — typo "avalable" → "available"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — comment typo)
 - **Component**: `scripts/generate-image.sh` line 119
 - **Found by**: Code review
@@ -11644,7 +11898,9 @@ practice the wrong-pattern on line 43 is only reached when line 26 succeeds.
 
 ## Bug #749: `backup.sh` line 176 typo "transfering" → "transferring"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — user-facing message typo)
 - **Component**: `scripts/backup.sh` line 176
 - **Found by**: Code review
@@ -11662,7 +11918,9 @@ aba_info "After transfering the install bundle file and the image set archive fi
 
 ## Bug #750: `day2.sh` lines 77-83 — `else` branch is unreachable dead code
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — dead code)
 - **Component**: `scripts/day2.sh` lines 77-83
 - **Found by**: Code review
@@ -11698,7 +11956,9 @@ it's always true at this point).
 
 ## Bug #751: Wrong variable/file names in validation error messages (3 instances)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — misleading error messages lead user to "fix" the wrong setting)
 - **Component**: `scripts/include_all.sh` lines 572, 1013, 1073
 - **Found by**: Code review
@@ -11730,7 +11990,9 @@ Fix: `"Error: dns_servers is invalid in cluster.conf [$dns_servers]"`
 
 ## Bug #752: `aba-get-version.sh` line 32 — typo "Cannot access https://access mirror.openshift.com/"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic — misleading error URL)
 - **Component**: `scripts/aba-get-version.sh` line 32
 - **Found by**: Code review
@@ -11757,7 +12019,9 @@ Also note: the message includes the redundant "Error:" prefix which `aba_abort` 
 
 ## Bug #753: `reg-common.sh` state.sh — Docker registry passwords with single quotes break uninstall
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — state.sh becomes unparseable, blocking uninstall)
 - **Component**: `scripts/reg-common.sh` lines 442-454
 - **Found by**: Code review
@@ -11797,7 +12061,9 @@ Or extend the Quay-only password validation in `verify-mirror-conf` to also cove
 
 ## Bug #754: TUI v2 does not check for `dialog` binary before first use
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (edge case — `dialog` is installed by `./install` required packages)
 - **Component**: `tui/v2/abatui2.sh`
 - **Found by**: Code review
@@ -11826,7 +12092,9 @@ command -v dialog >/dev/null 2>&1 || { echo "FATAL: 'dialog' not installed. Run:
 
 ## Bug #755: `aba-get-version.sh` leaks temp directory (no cleanup)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (resource leak — temp dir never removed)
 - **Component**: `scripts/aba-get-version.sh` line 27
 - **Found by**: Code review
@@ -11853,7 +12121,9 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 ## Bug #756: `cluster-config.sh` — unquoted `$WORKER_REPLICAS` causes bash error when empty
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (bash syntax error on malformed/missing install-config.yaml)
 - **Component**: `scripts/cluster-config.sh` lines 123, 157
 - **Found by**: Code review
@@ -11886,7 +12156,9 @@ Or reorder so the validation block runs first.
 
 ## Bug #757: `cluster-config.sh` — divide-by-zero risk in `PORTS_PER_NODE` calculation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (only hits with corrupt agent-config.yaml; control plane replicas are always >= 1)
 - **Component**: `scripts/cluster-config.sh` line 99
 - **Found by**: Code review
@@ -11916,7 +12188,9 @@ Or reorder so validation runs before the arithmetic.
 
 ## Bug #758: `cluster-config.sh` — unquoted output lines produce malformed exports
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (values from YAML are typically space-free; breaks with unusual hostnames)
 - **Component**: `scripts/cluster-config.sh` lines 76, 80, 84, 88
 - **Found by**: Code review
@@ -11945,7 +12219,9 @@ echo "export CLUSTER_NAME=\"$CLUSTER_NAME\""
 
 ## Bug #759: `create-agent-config.sh` — space indentation in functions (should be tabs)
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (violates project coding style)
 - **Component**: `scripts/create-agent-config.sh` lines 23-99
 - **Found by**: Code review
@@ -11963,7 +12239,9 @@ Convert spaces to tabs within these function bodies.
 
 ## Bug #760: `create-agent-config.sh` — typo "genrated"
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (typo in code comment)
 - **Component**: `scripts/create-agent-config.sh` line 160
 - **Found by**: Code review
@@ -11979,7 +12257,9 @@ Convert spaces to tabs within these function bodies.
 
 ## Bug #761: `reg-verify.sh` — dots in `$reg_host` treated as regex wildcards
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (false-positive match unlikely in practice, but technically incorrect)
 - **Component**: `scripts/reg-verify.sh` line 48
 - **Found by**: Code review
@@ -12010,7 +12290,9 @@ if ! echo "$mirrors" | grep -q "^${_escaped_host}:${reg_port}$"; then
 
 ## Bug #762: `tui-disco.sh` — inconsistent indentation in menu items array
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (incorrect indentation level)
 - **Component**: `tui/v2/tui-disco.sh` lines 195-198
 - **Found by**: Code review
@@ -12038,7 +12320,9 @@ Align all items to 3 tabs inside the array assignment.
 
 ## Bug #763: `cluster-config.sh` — backtick usage throughout
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (style — backticks work but `$()` is preferred for readability and nesting)
 - **Component**: `scripts/cluster-config.sh` lines 74, 78, 82, 86, 90, 94, 113, 117, 124, 128, 138
 - **Found by**: Code review
@@ -12062,7 +12346,9 @@ Replace all backtick command substitutions with `$(...)`.
 
 ## Bug #764: `create-install-config.sh` — unquoted `$ssh_key_file` in multiple operations
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (SSH key paths rarely contain spaces, but breaks if they do)
 - **Component**: `scripts/create-install-config.sh` lines 220, 224, 226
 - **Found by**: Code review
@@ -12091,7 +12377,9 @@ export ssh_key_pub=$(cat "$ssh_key_file.pub")
 
 ## Bug #765: `install` script — `is_repo_available()` uses deprecated `-a` test operator and unquoted `$0`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic + fragile with unusual `$0` values)
 - **Component**: `install` lines 110, 115
 - **Found by**: Code review
@@ -12128,7 +12416,9 @@ is_repo_available() {
 
 ## Bug #766: `day2-config-osus.sh` — redundant duplicate `cincinnati-operator` check
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (dead code — inner `if` identical to outer `if`)
 - **Component**: `scripts/day2-config-osus.sh` lines 156-164
 - **Found by**: Code review
@@ -12176,7 +12466,9 @@ fi
 
 ## Bug #767: `day2-config-osus.sh` — space indentation in mirror registry CA block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (violates project tab-only indentation style)
 - **Component**: `scripts/day2-config-osus.sh` lines 195-196
 - **Found by**: Code review
@@ -12202,7 +12494,9 @@ Replace leading spaces with tabs on lines 195-196.
 
 ## Bug #768: `make-bundle.sh` — doubled word "standard standard" in comment
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (typo in code comment)
 - **Component**: `scripts/make-bundle.sh` line 92
 - **Found by**: Code review
@@ -12226,7 +12520,9 @@ Replace leading spaces with tabs on lines 195-196.
 
 ## Bug #769: `day2-config-ntp.sh` — triple-redundant butane installation
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (dead code — two of three installation paths are unreachable)
 - **Component**: `scripts/day2-config-ntp.sh` lines 18, 115, 118-130
 - **Found by**: Code review
@@ -12260,7 +12556,9 @@ command -v butane >/dev/null || aba_abort "butane not found despite cli-install.
 
 ## Bug #770: `day2.sh` — unnecessary `$(echo ...)` for literal string assignment
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (wasteful — spawns a subshell for a literal string)
 - **Component**: `scripts/day2.sh` line 224
 - **Found by**: Code review
@@ -12286,7 +12584,9 @@ subshell wrapper.
 
 ## Bug #771: `tui-cluster.sh` — inconsistent indentation within `case "$choice"` block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (mixed 1-tab and 2-tab indentation for case labels)
 - **Component**: `tui/v2/tui-cluster.sh` lines 909-989
 - **Found by**: Code review
@@ -12321,7 +12621,9 @@ Align all case labels and their bodies to a consistent indentation level
 
 ## Bug #772: `let` used for arithmetic instead of `$(( ))` — same risk as `(( var++ ))`
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — `let expr` returns exit code 1 when result is 0, crashing under ERR trap)
 - **Component**: Multiple scripts (systemic)
 - **Found by**: Code review
@@ -12363,7 +12665,9 @@ i=$(( i + pause ))
 
 ## Bug #773: `day2.sh` — always-true conditional wrapping 140-line block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (misleading code — conditional can never be false)
 - **Component**: `scripts/day2.sh` lines 224, 228
 - **Found by**: Code review
@@ -12402,7 +12706,9 @@ was replaced with a literal but the conditional was not removed.
 
 ## Bug #774: Duplicate word "the the" in two scripts
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (typo in code comment)
 - **Component**: `scripts/create-install-config.sh` line 65, `scripts/create-agent-config.sh` line 105
 - **Found by**: Code review
@@ -12426,7 +12732,9 @@ Both files contain the same comment with a doubled word:
 
 ## Bug #775: `day2.sh` — space indentation in CatalogSource `case` block
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Cosmetic (violates project tab-only indentation style)
 - **Component**: `scripts/day2.sh` lines 277-280
 - **Found by**: Code review
@@ -12455,7 +12763,9 @@ Replace mixed indentation with 3 tabs (matching the surrounding code).
 
 ## Bug #776: `aba.sh` — broken indentation in `--debug` and `--light` elif blocks
 
-- **Status**: VERIFIED (code review)
+**Status:** OPEN — code review
+
+- **Status:** VERIFIED (code review)
 - **Severity**: Low (cosmetic/confusing — functionally correct since bash ignores indentation)
 - **Component**: `scripts/aba.sh` lines 391-397
 - **Found by**: Code review
@@ -12494,6 +12804,8 @@ Re-indent to match the surrounding pattern:
 
 ## Bug #777: `tui-cluster.sh` — inconsistent indentation in Day-2 menu case block
 
+**Status:** OPEN — cosmetic indentation inconsistency still present in tui-cluster.sh Day-2 menu case block
+
 **Severity:** Cosmetic (code review)
 **Component:** TUI — `tui/v2/tui-cluster.sh`
 **Symptom:**
@@ -12529,6 +12841,8 @@ Align all menu items and case handlers to match surrounding indentation.
 
 ## Bug #778: `verify-config.sh` — deprecated `-a` operator in test conditionals
 
+**Status:** OPEN — deprecated `-a` on lines 34, 35, 39 and `-o` on line 97 still present
+
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/verify-config.sh`
 **Symptom:**
@@ -12558,6 +12872,8 @@ Use `[[ ]]` with `&&`/`||`, or chain separate `[ ]` tests. Quote variables.
 
 ## Bug #779: `verify-config.sh` — typo "endpoiont" (two instances)
 
+**Status:** OPEN — "endpoiont" typo still present on lines 73 and 79
+
 **Severity:** Cosmetic (typo, user-facing)
 **Component:** Core — `scripts/verify-config.sh`
 **Symptom:**
@@ -12576,6 +12892,8 @@ s/endpoiont/endpoint/g
 
 ## Bug #780: `verify-config.sh` — unquoted `$actual_ip_of_api` in `replace-value-conf`
 
+**Status:** LOW RISK — unquoted vars on lines 69 and 89 confirmed; IP addresses won't contain spaces in practice
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/verify-config.sh`
 **Symptom:**
@@ -12593,6 +12911,8 @@ Quote the variables: `-v "$actual_ip_of_api"`.
 
 
 ## Bug #781: `init.sh` — unquoted `$PREFIX` in `source` and `cp` commands
+
+**Status:** LOW RISK — unquoted `$PREFIX` on lines 6 and 10; PREFIX is hardcoded `/opt/aba` (no spaces)
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/init.sh`
@@ -12613,6 +12933,8 @@ Quote: `source "$PREFIX/scripts/include_all.sh"`.
 
 
 ## Bug #782: `wait-agent-up.sh` — `eval` with unquoted `$@` in `cluster-config.sh` call
+
+**Status:** OPEN — `eval $(scripts/cluster-config.sh $@ || exit 1)` pattern still present on line 12
 
 **Severity:** Medium (code review, functional risk)
 **Component:** Core — `scripts/wait-agent-up.sh`
@@ -12635,6 +12957,8 @@ Use `eval "$(scripts/cluster-config.sh "$@")" || exit 1` and quote variables.
 
 
 ## Bug #783: `oc-command.sh` — `eval oc $cmd` allows arbitrary command injection
+
+**Status:** LOW RISK — `eval oc $cmd` still on line 28; operator tool only, not user-facing web service
 
 **Severity:** Medium (code review, security risk)
 **Component:** Core — `scripts/oc-command.sh`
@@ -12662,6 +12986,8 @@ Or better: pass arguments as an array.
 
 ## Bug #784: `check-cluster-installed.sh` — raw `echo_red` instead of `aba_abort`
 
+**Status:** OPEN — `echo_red` still used on lines 9-10 instead of `aba_abort`
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/check-cluster-installed.sh`
 **Symptom:**
@@ -12682,6 +13008,8 @@ Use `aba_abort "This cluster has already been deployed..."`.
 
 ## Bug #785: `cluster-info.sh` — raw `echo_red` for error message
 
+**Status:** OPEN — `echo_red` still used on line 16 instead of `aba_abort`
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/cluster-info.sh`
 **Symptom:**
@@ -12697,6 +13025,8 @@ Use `aba_abort`.
 
 ## Bug #786: `configure-pxe.sh` — typo "nuse" in comment
 
+**Status:** OPEN — "not in nuse" typo still present on line 2
+
 **Severity:** Cosmetic (typo)
 **Component:** Core — `scripts/configure-pxe.sh`
 **Symptom:**
@@ -12709,6 +13039,8 @@ Line 2: `# Create PXE env (not in nuse)` — "nuse" should be "use".
 
 
 ## Bug #787: `add-operators-to-imageset.sh` — space indentation on line 166
+
+**Status:** OPEN — mixed spaces+tabs on line 166 still present
 
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/add-operators-to-imageset.sh`
@@ -12726,6 +13058,8 @@ Use consistent tab indentation.
 
 
 ## Bug #788: `add-operators-to-imageset.sh` — `eval` to expand array is fragile
+
+**Status:** LOW RISK — `eval echo '${'$catalog'[@]}'` on line 284; works for operator names in practice
 
 **Severity:** Low (code review, functional risk)
 **Component:** Core — `scripts/add-operators-to-imageset.sh`
@@ -12747,6 +13081,8 @@ list="${list_ref[@]}"
 
 ## Bug #789: `add-operators-to-imageset.sh` — unquoted `$op_sets` in `echo` pipe
 
+**Status:** LOW RISK — unquoted `$op_sets` still present; operator set names don't contain glob chars
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/add-operators-to-imageset.sh`
 **Symptom:**
@@ -12762,6 +13098,8 @@ Quote: `echo "$op_sets"`, `echo "$ops"`.
 
 
 ## Bug #790: `vmw-create.sh` — `eval $cmd` with unquoted variable for govc command
+
+**Status:** OPEN — `eval $cmd` with unquoted variable still present on line 139
 
 **Severity:** Medium (code review, functional risk)
 **Component:** Core — `scripts/vmw-create.sh`
@@ -12791,6 +13129,8 @@ govc vm.network.add -vm "$vm_name" -net.adapter vmxnet3 -net.address "$sub_mac"
 
 ## Bug #791: `verify-release-image.sh` — unquoted `$openshift_install_mirror` in file test
 
+**Status:** LOW RISK — unquoted `$openshift_install_mirror` on lines 51 and 69; path constructed from safe values
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/verify-release-image.sh`
 **Symptom:**
@@ -12811,6 +13151,8 @@ Quote: `[ ! -x "$openshift_install_mirror" ]`.
 
 ## Bug #792: `install-pull-secret.sh` — unquoted `$pull_secret_file` in file test and grep
 
+**Status:** LOW RISK — unquoted `$pull_secret_file` on lines 16, 18, 20; paths unlikely to contain spaces
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/install-pull-secret.sh`
 **Symptom:**
@@ -12829,6 +13171,8 @@ Quote all instances: `"$pull_secret_file"`.
 
 ## Bug #793: `reg-create-imageset-config.sh` — deprecated `-o` operator and unquoted vars
 
+**Status:** DUPLICATE — instance of Bug #707; deprecated `-o` still present on line 53
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/reg-create-imageset-config.sh`
 **Symptom:**
@@ -12845,6 +13189,8 @@ Replace `-o` with `||` pattern, quote variables.
 
 
 ## Bug #794: `ssh-rendezvous.sh` — deprecated `-a` operator and unquoted variables
+
+**Status:** OPEN — deprecated `-a` on line 8 and unquoted `$ssh_key_file`, `$ip`, `$*` on lines 22-25
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/ssh-rendezvous.sh`
@@ -12864,6 +13210,8 @@ Quote variables and use `"$@"` instead of `$*`.
 
 
 ## Bug #795: `monitor-bootstrap.sh` — `eval` with unquoted `$@` in `cluster-config.sh` call
+
+**Status:** OPEN — `eval $(scripts/cluster-config.sh $@ || exit 1)` on line 12; echo_yellow/echo_red on L32, L52-53
 
 **Severity:** Medium (code review, functional risk)
 **Component:** Core — `scripts/monitor-bootstrap.sh`
@@ -12890,6 +13238,8 @@ replace raw color functions with `aba_info`/`aba_warning`/`aba_abort`.
 
 ## Bug #796: `monitor-bootstrap.sh` — space indentation in associative array
 
+**Status:** OPEN — 4-space indentation in `declare -A wait_for_exit_reasons` on lines 40-47
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/monitor-bootstrap.sh`
 **Symptom:**
@@ -12909,6 +13259,8 @@ Use tab indentation.
 
 
 ## Bug #797: `aba-get-version.sh` — multiple deprecated patterns
+
+**Status:** OPEN — backticks (L41), `which` (L46), `expr` (L41), UUOC (L36,43), unquoted vars throughout
 
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/aba-get-version.sh`
@@ -12935,6 +13287,8 @@ remove commented-out code.
 
 ## Bug #798: `vmw-upload.sh` — deprecated backticks in `eval` call
 
+**Status:** OPEN — backtick eval on line 22 still present
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/vmw-upload.sh`
 **Symptom:**
@@ -12953,6 +13307,8 @@ Use `eval "$(scripts/cluster-config.sh)" || exit 1` and `aba_info`.
 
 
 ## Bug #799: `reg-existing-create-pull-secret.sh` — `read` without `-r` flag
+
+**Status:** OPEN — `read -p` (L13) and `read -sp` (L16) both missing `-r` flag
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/reg-existing-create-pull-secret.sh`
@@ -12974,6 +13330,8 @@ Add `-r` flag: `read -rp "..."`.
 
 ## Bug #800: `ask.sh` — unquoted `$@` in function call
 
+**Status:** OPEN — `ask $@` on line 8 instead of `ask "$@"`
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/ask.sh`
 **Symptom:**
@@ -12990,6 +13348,8 @@ message contains spaces, this would cause word splitting.
 
 ## Bug #801: `check-macs.sh` — space indentation throughout entire file
 
+**Status:** OPEN — 8-space indentation used throughout instead of tabs
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/check-macs.sh`
 **Symptom:**
@@ -13005,6 +13365,8 @@ Convert all indentation from spaces to tabs.
 
 ## Bug #802: `ensure-cli.sh` — space indentation throughout entire file
 
+**Status:** OPEN — 4-space indentation in case block (lines 13-53)
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/ensure-cli.sh`
 **Symptom:**
@@ -13018,6 +13380,8 @@ Convert indentation from spaces to tabs.
 
 
 ## Bug #803: `vmw-create.sh` — typo "hirerachy" in comment
+
+**Status:** OPEN — "hirerachy" typo still present on line 65
 
 **Severity:** Cosmetic (typo)
 **Component:** Core — `scripts/vmw-create.sh`
@@ -13033,6 +13397,8 @@ Line 65: `scripts/vmw-create-folder.sh "$cluster_folder"  # This will create a f
 
 
 ## Bug #804: `tui-cluster.sh` — inconsistent indentation in `_day2_upgrade` DISCO case
+
+**Status:** OPEN — indentation inconsistency in `_day2_upgrade` DISCO case block still present
 
 **Severity:** Cosmetic (code review)
 **Component:** TUI — `tui/v2/tui-cluster.sh`
@@ -13062,6 +13428,8 @@ Align `DISCO)` to match `CONNO)` at 3-tab with 4-tab body.
 
 ## Bug #805: `install-pull-secret.sh` — FIXME comment suggests script may be redundant
 
+**Status:** OPEN — FIXME on line 3 still present; script only validates, doesn't install
+
 **Severity:** Low (code review, documentation)
 **Component:** Core — `scripts/install-pull-secret.sh`
 **Symptom:**
@@ -13079,6 +13447,8 @@ behavior is correct by design.
 
 
 ## Bug #806: `aba-get-version.sh` — script appears mostly abandoned
+
+**Status:** OPEN — lines 56-86 commented out; interactive selection loop disabled
 
 **Severity:** Low (code review, maintenance)
 **Component:** Core — `scripts/aba-get-version.sh`
@@ -13099,6 +13469,8 @@ Either restore the interactive functionality, rename to clarify its role
 
 
 ## Bug #807: `. <(echo $* | tr " " "\n")` pattern — code injection via sourcing user input
+
+**Status:** OPEN — pattern still present in vmw-start.sh:10, vmw-stop.sh:10, kvm-start.sh:10, kvm-stop.sh:10
 
 **Severity:** Medium (code review, security/robustness)
 **Component:** Core — `scripts/vmw-start.sh`, `vmw-stop.sh`, `kvm-start.sh`, `kvm-stop.sh`
@@ -13128,6 +13500,8 @@ argument parsing.
 
 ## Bug #808: `vmw-delete.sh` — deprecated backticks in `eval` call
 
+**Status:** OPEN — backtick eval on line 21 still present
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/vmw-delete.sh`
 **Symptom:**
@@ -13148,6 +13522,8 @@ Use `eval "$(scripts/cluster-config.sh)" || exit 1` and quote variables.
 
 ## Bug #809: `kvm-upload.sh` — raw `echo_red` instead of `aba_abort`
 
+**Status:** OPEN — `echo_red` on line 34 instead of `aba_abort`
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/kvm-upload.sh`
 **Symptom:**
@@ -13163,6 +13539,8 @@ Use `aba_abort "ISO file failed to upload to KVM host!"`.
 
 ## Bug #810: `vmw-upload.sh` — raw `echo` for user-facing message
 
+**Status:** OPEN — raw `echo Uploading image ...` with unquoted vars on line 30
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/vmw-upload.sh`
 **Symptom:**
@@ -13177,6 +13555,8 @@ Use `aba_info "Uploading image ..."`.
 
 
 ## Bug #811: `reg-existing-create-pull-secret.sh` — password visible in process table
+
+**Status:** LOW RISK — `echo -n` on line 19; bash `echo` is a builtin so not visible in process table in practice
 
 **Severity:** Medium (security, code review)
 **Component:** Core — `scripts/reg-existing-create-pull-secret.sh`
@@ -13197,6 +13577,8 @@ Use `printf '%s' "$reg_user:$reg_pw" | base64 -w0` which is always a builtin.
 
 
 ## Bug #812: `listopdeps.sh` — multiple deprecated patterns and suppressed stderr
+
+**Status:** OPEN — `which podman &>/dev/null` on line 36, unquoted vars, UUOC still present
 
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/listopdeps.sh`
@@ -13223,6 +13605,8 @@ Use `command -v`, quote variables, remove unnecessary `cat`.
 
 ## Bug #813: `cluster-config-check.sh` — deprecated `-o` operator and unquoted vars
 
+**Status:** OPEN — `[ ! -s $ICONF -o ! -s $ACONF ]` on line 14
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/cluster-config-check.sh`
 **Symptom:**
@@ -13239,6 +13623,8 @@ Use `[[ ! -s "$ICONF" ]] || [[ ! -s "$ACONF" ]]`.
 
 ## Bug #814: `download-catalog-index.sh` — `read` without `-r` in `_extract_from_yaml`
 
+**Status:** FIXED — line 195 now uses `read -r pkg def_ch`
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/download-catalog-index.sh`
 **Symptom:**
@@ -13254,6 +13640,8 @@ Use `read -r pkg def_ch < <(...)`.
 
 
 ## Bug #815: TUI missing "Register External Mirror" option — CLI-only workflow
+
+**Status:** FEATURE REQUEST — TUI has no "Register existing registry" option; CLI `aba register` works; enhancement not a defect
 
 **Severity:** Medium (TUI feature gap, functional test)
 **Component:** TUI — `tui/v2/tui-mirror.sh`
@@ -13295,6 +13683,8 @@ from common locations), then call `aba --dir mirror register ...`.
 
 ## Bug #816: `reg-register.sh` — `sed -i` used instead of `replace-value-conf`
 
+**Status:** OPEN — `sed -i` on lines 56-57 and 77-78 instead of `replace-value-conf`
+
 **Severity:** Low (code review, inconsistency)
 **Component:** Core — `scripts/reg-register.sh`
 **Symptom:**
@@ -13315,6 +13705,8 @@ Use `replace-value-conf -q -n reg_host -v "$_inferred_host" -f mirror.conf`.
 
 
 ## Bug #817: `reg-register.sh` — `state.sh` values not quoted
+
+**Status:** OPEN — `reg_host=$reg_host` and `reg_port=$reg_port` written unquoted in state.sh on lines 108-110; missing `reg_user`/`reg_pw` fields
 
 **Severity:** Low (code review, robustness)
 **Component:** Core — `scripts/reg-register.sh`
@@ -13349,6 +13741,8 @@ fields that don't apply to external registries).
 
 ## Bug #818: `reg-save.sh` / `reg-load.sh` / `reg-sync.sh` — backticks and unquoted variables
 
+**Status:** OPEN — backtick `` `expr $1 + 1` `` still present in reg-save.sh:17, reg-load.sh:30, reg-sync.sh:16
+
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/reg-save.sh`, `scripts/reg-load.sh`, `scripts/reg-sync.sh`
 **Symptom:**
@@ -13380,6 +13774,8 @@ Replace backticks with `$(...)`, use `$(( ))` instead of `expr`, and quote varia
 
 ## Bug #819: `make-bundle.sh` — `echo_red`/`echo_cyan`/`echo_magenta` instead of `aba_info`/`aba_warning`/`aba_abort`
 
+**Status:** OPEN — `echo_red` (L179-181), `echo_magenta` (L236-238) still present
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/make-bundle.sh`
 **Symptom:**
@@ -13389,6 +13785,8 @@ of standard ABA logging. Instance of Bug #724.
 
 
 ## Bug #820: `make-bundle.sh` — unquoted `$dest` in file tests and `$file_list` in `tar`
+
+**Status:** LOW RISK — unquoted `$dest` and `$file_list` still present; paths unlikely to contain spaces in practice
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/make-bundle.sh`
@@ -13401,6 +13799,8 @@ word-split for tar arguments). However, paths containing spaces would break.
 
 
 ## Bug #821: `generate-image.sh` — `eval "$config || exit 1"` is broken
+
+**Status:** OPEN — `eval "$config || exit 1"` still present on line 43; `|| exit 1` executes inside eval context
 
 **Severity:** Medium (functional risk)
 **Component:** Core — `scripts/generate-image.sh`
@@ -13432,6 +13832,8 @@ And quote all variable expansions.
 
 ## Bug #822: `create-agent-config.sh` — space indentation throughout
 
+**Status:** OPEN — 2/4-space indentation used in functions (lines 22-99) instead of tabs
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/create-agent-config.sh`
 **Symptom:**
@@ -13455,6 +13857,8 @@ Convert to tab indentation. Quote variables. Use `current_ip=$((current_ip + 1))
 
 ## Bug #823: `create-install-config.sh` — deprecated `-o` and `-a` operators + unquoted vars
 
+**Status:** OPEN — deprecated `-o` (L57, 96) and `-a` (L76, 230, 235) still present
+
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/create-install-config.sh`
 **Symptom:**
@@ -13475,6 +13879,8 @@ Use `[[ ]]` with `&&`/`||`, quote all variables, use `jq . "$pull_secret_file"`.
 
 ## Bug #824: `setup-mirror.sh` / `setup-cluster.sh` — `. <(process_args $*)` with unquoted `$*`
 
+**Status:** LOW RISK — unquoted `$*` in `. <(process_args $*)` on setup-mirror.sh:13 and setup-cluster.sh:15; ABA args never have spaces
+
 **Severity:** Low (code review, robustness)
 **Component:** Core — `scripts/setup-mirror.sh` L13, `scripts/setup-cluster.sh` L15,
                  `scripts/create-cluster-conf.sh` (same pattern)
@@ -13494,6 +13900,8 @@ Quote `$*`: `. <(process_args "$@")` (or `"$*"`).
 
 ## Bug #825: `reg-verify.sh` — unquoted `$mirrors` in `echo` (line 52)
 
+**Status:** LOW RISK — unquoted `$mirrors` still present on line 52; hostnames won't glob-match in practice
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/reg-verify.sh`
 **Symptom:**
@@ -13507,6 +13915,8 @@ Quote: `$(echo "$mirrors" | tr '\n' ' ')`.
 
 
 ## Bug #826: README.md — broken markdown table row for `aba cluster` command
+
+**Status:** FIXED — line 1305 now uses escaped pipes: `<sno\|compact\|standard>`
 
 **Severity:** Cosmetic (Docbug)
 **Component:** Documentation — `README.md`
@@ -13534,6 +13944,8 @@ use backticks to wrap the whole value.
 
 ## Bug #827: README.md — no documentation section for the TUI v2 features
 
+**Status:** OPEN — TUI mentioned in passing but no dedicated section explaining navigation, modes, settings, or execution modes
+
 **Severity:** Low (Docbug, documentation gap)
 **Component:** Documentation — `README.md`
 **Symptom:**
@@ -13552,6 +13964,8 @@ The only TUI-specific doc is `ai/TUI_NAVIGATION_WITH_TMUX_HOWTO.md` (internal).
 
 ## Bug #828: README.md — no mention of `aba --verify` or `verify_conf` setting
 
+**Status:** FIXED — README now has "Controlling validation with `verify_conf`" section (line 648) and examples
+
 **Severity:** Low (Docbug, documentation gap)
 **Component:** Documentation — `README.md`
 **Symptom:**
@@ -13568,6 +13982,8 @@ skip them without reading the source.
 
 ## Bug #829: README.md — `aba -d mirror password` undocumented
 
+**Status:** OPEN — listed in Command Reference (L1295) and mentioned at L1153 but no detailed usage docs
+
 **Severity:** Low (Docbug)
 **Component:** Documentation — `README.md`
 **Symptom:**
@@ -13582,6 +13998,8 @@ documentation anywhere in the README explaining:
 
 
 ## Bug #830: `create-agent-config.sh` — `((current_ip++))` crash risk under `set -e`
+
+**Status:** OPEN — `((current_ip++))` still present on line 74; violates project arithmetic rule (latent — IP values never 0)
 
 **Severity:** Low (functional risk, code review)
 **Component:** Core — `scripts/create-agent-config.sh`
@@ -13598,6 +14016,8 @@ project rule explicitly bans `(( var++ ))`. Should use:
 
 
 ## Bug #831: `cluster-config.sh` — pervasive deprecated patterns
+
+**Status:** OPEN — 11+ backtick instances (L74-138), `expr` (L99), space indentation, echo_red all present
 
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/cluster-config.sh`
@@ -13635,6 +14055,8 @@ to tab indentation.
 
 ## Bug #832: `generate-image.sh` — raw `echo_yellow` for user-facing message
 
+**Status:** OPEN — `echo_yellow` (L103) and `echo_cyan` (L31, L34, L37) still used instead of `aba_info`
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/generate-image.sh`
 **Symptom:**
@@ -13648,6 +14070,8 @@ Line 31: `echo_cyan "Cluster configuration"` — same pattern (Bug #724).
 
 
 ## Bug #833: `check-version-mismatch.sh` — UUOC, unquoted vars, raw `echo_red`
+
+**Status:** OPEN — `cat $f | yaml2json` UUOC (L38-40), `echo_red` (L44-51), space indentation (L20-23) all still present
 
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/check-version-mismatch.sh`
@@ -13673,6 +14097,8 @@ Quote variables, use `aba_warning`, eliminate UUOC, use tab indentation.
 
 ## Bug #834: `reset-gate.sh` — `read` without `-r`, deprecated `-o` operator
 
+**Status:** OPEN — `read yn` (L10) missing `-r` and deprecated `-o` (L11) both present
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/reset-gate.sh`
 **Symptom:**
@@ -13687,6 +14113,8 @@ Use `read -r yn` and `[[ "$yn" == [yY] ]]`.
 
 
 ## Bug #835: `add_ntp_ignition_to_iso.sh` — unquoted vars, UUOC
+
+**Status:** OPEN — unquoted `$iso_dir` (L22, L26, L49, L53) and UUOC `cat $iso_dir/chrony.conf | base64` (L36) still present
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/add_ntp_ignition_to_iso.sh`
@@ -13710,6 +14138,8 @@ Quote all `"$iso_dir"` expansions. Use `base64 -w 0 < "$iso_dir/chrony.conf"`.
 
 ## Bug #836: `install-govc.sh` — `which` instead of `command -v`
 
+**Status:** OPEN — `which govc >/dev/null 2>&1` on line 3
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/install-govc.sh`
 **Symptom:**
@@ -13722,6 +14152,8 @@ Use `command -v govc >/dev/null 2>&1`.
 
 
 ## Bug #837: `kvm-create.sh` — `let i=$i+1` arithmetic
+
+**Status:** OPEN — `let i=$i+1` still present on line 137; violates project arithmetic rule
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/kvm-create.sh`
@@ -13737,6 +14169,8 @@ Use `i=$((i + 1))`.
 
 
 ## Bug #838: `vmw-create-folder.sh` — unquoted variables throughout
+
+**Status:** OPEN — unquoted `$vc_folder` (L14, 19, 25, 30, 34) and `$0` (L4)
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/vmw-create-folder.sh`
@@ -13756,6 +14190,8 @@ Quote all variables: `"$vc_folder"`, `"$0"`, etc.
 
 ## Bug #839: `create-mirror-conf.sh` — deprecated `-o` operator
 
+**Status:** DUPLICATE — `[ ! "$ocp_version" -o ! "$domain" ]` on line 17; instance of Bug #707 (systemic `-o` usage)
+
 **Severity:** Low (code review)
 **Component:** Core — `scripts/create-mirror-conf.sh`
 **Symptom:**
@@ -13770,6 +14206,8 @@ Use `[[ -z "$ocp_version" || -z "$domain" ]]`. Quote `$(basename "$PWD")`.
 
 
 ## Bug #840: `reg-install-quay.sh` — unquoted variables in SSH and file ops
+
+**Status:** LOW RISK — unquoted SSH vars still present; values are hostnames/paths without spaces in practice
 
 **Severity:** Low (code review)
 **Component:** Core — `scripts/reg-install-quay.sh`
@@ -13788,6 +14226,8 @@ Quote all variables in SSH commands and file operations.
 
 ## Bug #841: `reg-unregister.sh` — unquoted `$(basename $PWD)` in error msg
 
+**Status:** LOW RISK — unquoted `$(basename $PWD)` on line 24; dir names won't have spaces in ABA
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/reg-unregister.sh`
 **Symptom:**
@@ -13800,6 +14240,8 @@ Use `$(basename "$PWD")`.
 
 
 ## Bug #842: `install-vmware.conf.sh` — unquoted `aba_debug` args, unquoted vars
+
+**Status:** OPEN — unquoted multi-word args to `aba_debug` (L103, 113, 117, 125) and `aba_info` (L131, 146) still present
 
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/install-vmware.conf.sh`
@@ -13823,6 +14265,8 @@ Quote all `aba_debug`/`aba_info` arguments:
 
 ## Bug #843: `install-kvm.conf.sh` — same unquoted `aba_debug`/`aba_info` pattern
 
+**Status:** OPEN — unquoted args to `aba_debug` (L58, 61, 66, 74) and `aba_info` (L80, 103); also `sed -i` (L91-92) instead of `replace-value-conf`
+
 **Severity:** Low (code review, systemic)
 **Component:** Core — `scripts/install-kvm.conf.sh`
 **Symptom:**
@@ -13841,6 +14285,8 @@ Quote all `aba_debug`/`aba_info` arguments. Use `replace-value-conf` instead of
 
 
 ## Bug #844: `kvm-create.sh` — `2>/dev/null` used to suppress `virsh destroy` error
+
+**Status:** LOW RISK — `virsh destroy ... 2>/dev/null || true` on L134; cosmetic in core scripts
 
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/kvm-create.sh`
@@ -13863,6 +14309,8 @@ rules are stricter.
 
 ## Bug #845: `vmw-create-folder.sh` — `govc folder.create` stderr suppressed
 
+**Status:** OPEN — `govc folder.create $vc_folder >/dev/null 2>&1` on line 30 suppresses both stdout and stderr
+
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/vmw-create-folder.sh`
 **Symptom:**
@@ -13877,6 +14325,8 @@ At minimum, keep stderr visible: `govc folder.create "$vc_folder" >/dev/null`.
 
 
 ## Bug #846: `cli-download-all.sh` — calls undefined `aba_warn` function
+
+**Status:** OPEN — `aba_warn` (L127) used instead of `aba_warning`; emits "command not found" when triggered
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/cli-download-all.sh`
@@ -13894,6 +14344,8 @@ Change `aba_warn` to `aba_warning`.
 
 ## Bug #847: `include_all.sh` — unquoted `$ports` in verify-cluster-conf
 
+**Status:** OPEN — `[ ! -n $ports ]` on line 1078; when `$ports` is empty, evaluates incorrectly as `[ ! -n ]` (always false)
+
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/include_all.sh`
 **Symptom:**
@@ -13909,6 +14361,8 @@ Use `[ -z "$ports" ]` or `[ ! -n "$ports" ]`.
 
 
 ## Bug #848: `download-catalog-index.sh` — skipped-file reporting is dead code
+
+**Status:** OPEN — `rm -rf "$tmp_dir"` (L303) deletes `$_skipped_file` before it is read (L317); warnings never fire
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/download-catalog-index.sh`
@@ -13927,6 +14381,8 @@ file outside of `$tmp_dir`.
 
 ## Bug #849: `include_all.sh` — `((++running))` violates arithmetic rule
 
+**Status:** OPEN — `(( ++running ))` on line 2898 violates project arithmetic convention; should be `running=$(( running + 1 ))`
+
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/include_all.sh`
 **Symptom:**
@@ -13942,6 +14398,8 @@ Use `running=$(( running + 1 ))`.
 
 
 ## Bug #850: `include_all.sh` — verify functions use wrong config name in error
+
+**Status:** OPEN — line 1073 `verify-cluster-conf()` says "aba.conf" in error but validates `cluster.conf`; line 1013 says "machine_network" instead of "prefix_length"
 
 **Severity:** Minor (code review)
 **Component:** Core — `scripts/include_all.sh`
@@ -13960,6 +14418,8 @@ Correct the error messages to reference the right config file/variable.
 
 ## Bug #851: `include_all.sh` — deprecated `-a`/`-o` operators in multiple locations
 
+**Status:** OPEN — deprecated `-a` (L540, L1000) and `-o` (L1239-1240, L1252) all still present
+
 **Severity:** Moderate (code review, systemic)
 **Component:** Core — `scripts/include_all.sh`
 **Symptom:**
@@ -13976,6 +14436,8 @@ Replace with `[[ ... && ... ]]` or `[[ ... || ... ]]`.
 
 ## Bug #852: `include_all.sh` — `let` arithmetic in `try_cmd()`
 
+**Status:** OPEN — `let pause=$pause+$backoff` (L1298) and `let count=$count+1` (L1299) still present; `let` can fail under `set -e`
+
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/include_all.sh`
 **Symptom:**
@@ -13990,6 +14452,8 @@ Replace with `pause=$(( pause + backoff ))` and `count=$(( count + 1 ))`.
 
 
 ## Bug #853: `backup.sh` — deprecated `-o`, echo_* usage, typos
+
+**Status:** OPEN — deprecated `-o` (L57), echo_magenta/cyan/red, "transfering" typo (L176, 195) all still present
 
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/backup.sh`
@@ -14010,6 +14474,8 @@ Replace deprecated operators and raw color functions. Fix typos.
 
 ## Bug #854: `day2-config-osus.sh` — deprecated `-o`, echo_* usage
 
+**Status:** OPEN — deprecated `-o` (L274), `echo_yellow` (L232), `echo_white` (L181), "Signatires" typo (L23) all still present
+
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/day2-config-osus.sh`
 **Symptom:**
@@ -14028,6 +14494,8 @@ indentation.
 
 
 ## Bug #855: `vmw-create.sh` — `eval $cmd` with unquoted govc command
+
+**Status:** DUPLICATE — same issue as Bug #790; `eval $cmd` on line 139
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/vmw-create.sh`
@@ -14048,6 +14516,8 @@ command strings for `eval`.
 
 ## Bug #856: `cluster-upgrade.sh` — unquoted command execution
 
+**Status:** OPEN — `$upgrade_cmd` (L326) and `$_image_cmd` (L331) executed unquoted; word-splitting risk on image refs
+
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/cluster-upgrade.sh`
 **Symptom:**
@@ -14062,6 +14532,8 @@ Use arrays or proper quoting for command construction.
 
 
 ## Bug #857: `monitor-install.sh` / `monitor-bootstrap.sh` — unquoted vars, echo_*
+
+**Status:** OPEN — `echo_yellow`/`echo_red` still used in both scripts (monitor-install.sh L47, 68-71; monitor-bootstrap.sh L32, 52-53)
 
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/monitor-install.sh`, `scripts/monitor-bootstrap.sh`
@@ -14083,6 +14555,8 @@ indentation to use tabs.
 
 ## Bug #858: `cluster-rescue.sh` — unquoted SSH paths, space indentation
 
+**Status:** OPEN — unquoted `$ssh_key_file`, `$ip`, `$(basename $0)` (L23-26); 8-space indentation (L23-26); `eval $(cluster-config.sh $@)` (L15) all still present
+
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/cluster-rescue.sh`
 **Symptom:**
@@ -14099,6 +14573,8 @@ Quote all variable expansions. Fix indentation to use tabs.
 
 ## Bug #859: `include_all.sh` — `verify_release_version_exists()` edge case
 
+**Status:** LOW RISK — `${ver%.*}` on line 1836 still yields `4` for input `4.22`; function documents three-segment input (e.g. `4.22.2`) and is called with full versions in practice
+
 **Severity:** Functional (edge case, code review)
 **Component:** Core — `scripts/include_all.sh`
 **Symptom:**
@@ -14113,6 +14589,7 @@ Use `_ver_minor()` helper for consistent minor version extraction.
 
 
 ## Bug #860: `include_all.sh` — dead/unused code
+**Status:** LOW RISK
 
 **Severity:** Cosmetic (code review)
 **Component:** Core — `scripts/include_all.sh`
@@ -14133,6 +14610,7 @@ Remove dead code. Remove unused variables.
 ---
 
 ## Bug #861: TUI DISCO mode — wizard auto-runs mirror_install even when registry is running but `.available` marker missing
+**Status:** OPEN
 
 **Severity:** Moderate (UX — TUI exits unexpectedly in DISCO mode)
 **Component:** TUI v2 — `tui-disco.sh` `_disco_bundle_wizard_gate()` line 116
@@ -14159,6 +14637,7 @@ Before auto-running `mirror_install`, add a secondary check: probe the registry 
 ---
 
 ## Bug #862: TUI DISCO mode — disk-full causes cascade of `command not found` errors when `exec` fails
+**Status:** LOW RISK
 
 **Severity:** Low (environmental — but poor error handling)
 **Component:** TUI v2 startup path, `scripts/aba.sh` line 214
@@ -14179,6 +14658,7 @@ Add a disk space check early in the TUI startup (e.g., after `ABA_ROOT` is set).
 ---
 
 ## Bug #863: TUI cluster install summary — "Mirror: (none — direct install)" shown in Partially Disconnected mode
+**Status:** LOW RISK
 
 **Severity:** Cosmetic (UX confusion — misleading mode/mirror combination in summary)
 **Component:** TUI v2 — `tui-cluster.sh` cluster install confirmation dialog
@@ -14203,6 +14683,7 @@ Either:
 ---
 
 ## Bug #864: TUI Day-2 menu — no "Rescue" option despite `aba rescue` being a documented CLI command
+**Status:** FEATURE REQUEST
 
 **Severity:** Medium (missing TUI feature — users must exit TUI for cluster rescue)
 **Component:** TUI v2 — `tui-cluster.sh` `cluster_day2_menu()` (duplicate of Bug #624 aspect)
@@ -14221,6 +14702,7 @@ Add a "Rescue cluster (recover after shutdown)" menu item in the Lifecycle secti
 ---
 
 ## Bug #865: `vm-kvm.sh` — `vmp_power_on` and `vmp_power_off` swallow all failures
+**Status:** OPEN
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/vm-kvm.sh` lines 45-60
@@ -14237,6 +14719,7 @@ Mirror VMware pattern: add `vmp_is_on "$vm" && return 0` guard before start; rem
 ---
 
 ## Bug #866: `vm-vmw.sh` — `vmp_create_vm` has no intermediate error checks between govc steps
+**Status:** OPEN
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/vm-vmw.sh` lines 113-151
@@ -14253,6 +14736,7 @@ Check each `govc` command's return code; on failure, attempt cleanup (`govc vm.d
 ---
 
 ## Bug #867: `reg-install-docker.sh` — `podman run` exit code not checked
+**Status:** OPEN
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/reg-install-docker.sh` lines 84-97
@@ -14271,6 +14755,7 @@ Add `|| aba_abort "Failed to start registry container"` after `podman run`. Cons
 ---
 
 ## Bug #868: `reg-uninstall-quay.sh` — fragile cleanup chain for ansible runner container
+**Status:** OPEN
 
 **Severity:** Functional (code review)
 **Component:** Core — `scripts/reg-uninstall-quay.sh` lines 30-32
@@ -14287,6 +14772,7 @@ Use `podman rm -f ansible_runner_instance || true` (force-remove handles both ru
 ---
 
 ## Bug #869: `list-operators.sh` — `read` only processes first package from multi-package catalogs
+**Status:** OPEN
 
 **Severity:** Functional (edge case, code review)
 **Component:** Core — `scripts/list-operators.sh` lines 109, 130
@@ -14303,6 +14789,7 @@ Loop over all jq/awk output lines instead of reading a single line.
 ---
 
 ## Bug #870: `list-operators.sh` — YAML display-name fallback is dead code
+**Status:** OPEN
 
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/list-operators.sh` lines 125-153
@@ -14319,6 +14806,7 @@ When the YAML grep finds no display name, call `_display_name_from_bundles "$dir
 ---
 
 ## Bug #871: `vm-kvm.sh` / `vm-vmw.sh` — `_vmw_vm_json` stderr suppression causes false "VM not found"
+**Status:** OPEN
 
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/vm-vmw.sh` line 22, `scripts/vm-kvm.sh` line 23
@@ -14335,6 +14823,7 @@ Remove stderr suppression on VM state queries. Check exit code first; only inter
 ---
 
 ## Bug #872: `preflight-check.sh` — unquoted `$host` inside `bash -c` creates injection risk
+**Status:** OPEN
 
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/preflight-check.sh` line 75
@@ -14351,6 +14840,7 @@ Validate hostnames before use (e.g., `grep -qE '^[A-Za-z0-9._-]+$'`), or pass ho
 ---
 
 ## Bug #873: `preflight-check.sh` — `grep -oP` requires PCRE (not portable)
+**Status:** OPEN
 
 **Severity:** Moderate (code review)
 **Component:** Core — `scripts/preflight-check.sh` line 142
@@ -14469,6 +14959,7 @@ Add setup steps documenting `aba vmw` (interactive vCenter configuration) and `a
 ---
 
 ## Bug #880: TUI DISCO mode — Back/Cancel during auto-run wizard exits TUI instead of showing action menu
+**Status:** OPEN
 
 **Severity:** Moderate (UX — user loses TUI session, must restart)
 **Component:** TUI v2 — `tui-disco.sh` `_disco_bundle_wizard_gate()` lines 116-126
@@ -14500,6 +14991,7 @@ return 0
 ---
 
 ## Bug #881: `reg-install-quay.sh` — stale `ansible_runner_instance` container blocks reinstall
+**Status:** OPEN
 
 **Severity:** Moderate (Functional — install fails, requires manual intervention)
 **Component:** Core ABA — `scripts/reg-install-quay.sh` line 89
@@ -14536,6 +15028,7 @@ Note: This is NOT manual Quay lifecycle management — it's cleaning up the *ins
 ---
 
 ## Bug #882: `reg-verify.sh` — message uses old command shorthands (`aba sync`, `aba save/load`)
+**Status:** OPEN
 
 **Severity:** Low (Cosmetic — misleading user guidance)
 **Component:** Core ABA — `scripts/reg-verify.sh` line 69
@@ -14562,6 +15055,7 @@ Change line 69 of `scripts/reg-verify.sh`:
 ---
 
 ## Bug #883: TUI mirror config — vendor change doesn't auto-adjust port
+**Status:** OPEN
 
 **Severity:** Low (UX — user must manually fix port)
 **Component:** TUI v2 — `tui-mirror.sh` mirror config dialog
@@ -14581,6 +15075,7 @@ When the vendor is changed, auto-update the port to the default for that vendor:
 ---
 
 ## Bug #884: TUI terminal mode — "Press R to retry" requires Enter (misleading prompt)
+**Status:** LOW RISK
 
 **Severity:** Low (UX — confusing interaction)
 **Component:** TUI v2 — `tui-lib.sh` `_exec_in_terminal()` line 737
@@ -14616,6 +15111,7 @@ Option 1 is better UX.
 ---
 
 ## Bug #888: TUI Day-2 menu — separator items with empty tags are selectable, cause menu refresh
+**Status:** OPEN
 
 **Severity:** Medium (UX — confusing behavior when navigating Day-2 menu)
 **Component:** TUI v2 — `tui-cluster.sh` `cluster_day2_menu()` (lines 2055-2066)
@@ -14643,6 +15139,7 @@ Alternatively, in the case statement handling the menu choice, add:
 ---
 
 ## Bug #885: TUI wizard — VMware platform selection doesn't prompt for vCenter config when ~/.vmware.conf missing
+**Status:** OPEN
 
 **Severity:** Medium (UX — user must manually configure VMware later, wizard gives no guidance)
 **Component:** TUI v2 — wizard flow in `abatui2.sh`
@@ -14665,6 +15162,7 @@ After platform selection, if `platform=vmw` and `~/.vmware.conf` does not exist 
 ---
 
 ## Bug #886: TUI DISCO mode — menu cursor always defaults to "View ISC", makes it impossible to select other items
+**Status:** OPEN
 
 **Severity:** High (UX — navigating DISCO action menu is extremely difficult)
 **Component:** TUI v2 — `tui-disco.sh` DISCO action menu
@@ -14697,6 +15195,7 @@ local default_item="$TUI2_DISCO_TAG_INSTALL_REG"
 ---
 
 ## Bug #887: TUI Platform Settings — selecting a platform immediately applies it (no confirmation)
+**Status:** OPEN
 
 **Severity:** Medium (UX — accidental platform switch has no undo)
 **Component:** TUI v2 — `tui-cluster.sh` Advanced → Platform Settings (lines 1958-1972)
@@ -14717,6 +15216,7 @@ Add a confirmation dialog before changing the platform: "Change platform from vm
 ---
 
 ## Bug #889: Core — `aba upgrade` fails on conditional updates (missing --allow-not-recommended)
+**Status:** OPEN
 
 **Severity:** High (functional — upgrade fails when version is a conditional update)
 **Component:** Core — `scripts/cluster-upgrade.sh` lines 264-334
@@ -14756,6 +15256,7 @@ Or alternatively, always add `--allow-not-recommended` to the `--to` command whe
 ---
 
 ## Bug #890: TUI — Upgrade Gate dialog uses --defaultno, easy to accidentally cancel
+**Status:** LOW RISK
 
 **Severity:** Low (UX — easy to accidentally cancel the upgrade gate)
 **Component:** TUI v2 — `tui-cluster.sh` `_upgrade_preflight_check` line 2246
@@ -14778,6 +15279,7 @@ Either:
 ---
 
 ## Bug #891: TUI Wizard — Channel change shows stale versions from previous channel
+**Status:** OPEN
 
 **Severity:** High (functional — user selects "stable" but sees candidate channel versions)
 **Component:** TUI v2 — `tui-direct.sh` / `abatui2.sh` wizard version picker
@@ -14809,6 +15311,7 @@ Ensure the version step reads the channel selection from the wizard's current st
 ---
 
 ## Bug #892: TUI — "aba register" workflow missing from TUI (CLI-only)
+**Status:** FEATURE REQUEST
 
 **Severity:** Medium (UX gap — common workflow requires CLI)
 **Component:** TUI v2 — all mode menus
@@ -14827,6 +15330,7 @@ Add a "Register External Mirror" option to the CONNO main menu (alongside "Insta
 ---
 
 ## Bug #893: TUI — Platform config form creates config file from template even on Cancel
+**Status:** OPEN
 
 **Severity:** Medium (UX — false "configured" status after canceling config form)
 **Component:** TUI v2 — `tui-cluster.sh` `_configure_vmw_form` line 314 / `_configure_kvm_form` line 485
@@ -14863,6 +15367,7 @@ Either:
 ---
 
 ## Bug #894: TUI — "Run in Terminal" mode double-prompts user for shutdown/startup/delete (pre-confirmed by TUI dialog)
+**Status:** LOW RISK
 
 **Severity:** Low (UX annoyance — user confirms in TUI dialog, then CLI asks again)
 **Component:** TUI v2 — `tui-lib.sh` `_exec_in_terminal` / `tui-cluster.sh` `_day2_shutdown`, `_day2_startup`
@@ -14904,6 +15409,7 @@ Option 3: The specific Day-2 functions (`_day2_shutdown`, `_day2_startup`) appen
 ---
 
 ## Bug #895: TUI — Cluster status view shows `Upgradeable=False` but no explanation visible without scrolling
+**Status:** LOW RISK
 
 **Severity:** Low (UX — critical info requires scrolling)
 **Component:** TUI v2 — `tui-cluster.sh` `_day2_status`
@@ -14926,6 +15432,8 @@ Consider reorganizing the status view to put the upgrade status section at the t
 ---
 
 ## Bug #896: Docbug — README.md missing TUI v2 documentation section
+
+**Status:** FIXED — README now has a full TUI section (lines 273-288) with launch commands, mode flags, navigation tips, and workflow coverage
 
 **Severity:** Medium (documentation gap — users don't know TUI exists or how to use it)
 **Component:** README.md
@@ -14977,6 +15485,7 @@ tui)
 ---
 
 ## Bug #898: TUI — `aba register` workflow has no TUI equivalent
+**Status:** DUPLICATE — same as Bug #892
 
 **Severity:** Medium (missing TUI feature — users must drop to CLI for register workflow)
 **Component:** TUI v2 (all files under `tui/v2/`)
@@ -14994,6 +15503,7 @@ Add a "Register External Registry" option to the main menu (CONNO mode) or Advan
 ---
 
 ## Bug #899: TUI — No way to cancel/interrupt a running operation from within the TUI
+**Status:** FEATURE REQUEST
 
 **Severity:** Low (UX limitation — users must wait or kill the TUI externally)
 **Component:** `tui/v2/tui-lib.sh` (progressbox execution)
@@ -15111,7 +15621,7 @@ Replace `exit 0` with `return 0` (or `break` from the menu loop) in `tui-direct.
 **Component:** `tui/v2/tui-direct.sh` (325–327, 113), `tui/v2/abatui2.sh` (477, 827–846)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace — needs live verification
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15125,7 +15635,7 @@ By contrast, "Rerun Wizard" uses `direct_wizard || true` — ESC there correctly
 **Component:** `tui/v2/abatui2.sh` (781–784)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15137,7 +15647,7 @@ Main menus show `confirm_quit()` on ESC; the splash/welcome screen does not — 
 **Component:** `tui/v2/tui-strings2.sh` (405)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15149,7 +15659,7 @@ Main menus show `confirm_quit()` on ESC; the splash/welcome screen does not — 
 **Component:** `tui/v2/tui-lib.sh` (648–652)
 **Found:** 2026-06-26 (code review)
 **Verified:** Needs live verification
-**Status:** NEW — unverified
+**Status:** OPEN — unverified
 
 ### Description
 
@@ -15161,7 +15671,7 @@ Main menus show `confirm_quit()` on ESC; the splash/welcome screen does not — 
 **Component:** `tui/v2/tui-cluster.sh` (698–710, 741, 945)
 **Found:** 2026-06-26 (code review — confirmed by 4 independent reviews)
 **Verified:** Code trace — needs live verification
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15189,7 +15699,7 @@ TUI v2 always uses `$ABA_ROOT/mirror/mirror.conf`, checks `$ABA_ROOT/mirror/.ava
 **Component:** `tui/v2/tui-cluster.sh` (927–934)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15201,7 +15711,7 @@ Pressing OK with an empty cluster name field skips validation and keeps the old 
 **Component:** `tui/v2/tui-lib.sh` (1357–1360)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15213,7 +15723,7 @@ Pressing OK with an empty cluster name field skips validation and keeps the old 
 **Component:** `tui/v2/tui-cluster.sh` (959–964, 1562)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15225,7 +15735,7 @@ Base domain only validates when non-empty. Review page falls back to `example.co
 **Component:** `tui/v2/abatui2.sh` (203–207)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15237,7 +15747,7 @@ Base domain only validates when non-empty. Review page falls back to `example.co
 **Component:** `tui/v2/tui-cluster.sh` (134–165, 742–764)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15249,7 +15759,7 @@ Base domain only validates when non-empty. Review page falls back to `example.co
 **Component:** `tui/v2/tui-direct.sh` (652–654)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15261,7 +15771,7 @@ DIRECT action menu → Search Operator Names calls `_operator_search` directly i
 **Component:** `tui/v2/tui-mirror.sh` (1032–1039)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15273,7 +15783,7 @@ DIRECT action menu → Search Operator Names calls `_operator_search` directly i
 **Component:** `tui/v2/abatui2.sh` (218–231, 251–253)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15285,7 +15795,7 @@ On startup, operators from `aba.conf` are skipped if not found in catalog index 
 **Component:** `tui/v2/abatui2.sh` (387–397 vs 448–460)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15297,7 +15807,7 @@ Auto-detected DISCO mode validates offline payload presence. Forced mode via `--
 **Component:** `tui/v2/tui-mirror.sh` (54, 86, 194–229)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15309,7 +15819,7 @@ FQDN validation only runs when the user edits the Hostname field. Pressing Conti
 **Component:** `tui/v2/tui-lib.sh` (985–989), `tui/v2/tui-cluster.sh` (1887–1890)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15321,7 +15831,7 @@ FQDN validation only runs when the user edits the Hostname field. Pressing Conti
 **Component:** `scripts/cluster-startup.sh` (17–22)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace — needs live verification
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15333,7 +15843,7 @@ After resolving kubeconfig via `cluster_kubeconfig()` (prefers externalized stat
 **Component:** `scripts/create-cluster-conf.sh` (77)
 **Found:** 2026-06-26 (code review — confirmed by 3 independent reviews)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15345,7 +15855,7 @@ Writes `machine_network=10.0.0.0/` (invalid CIDR) when `aba.conf` has IP-only `m
 **Component:** `scripts/cluster-version.sh` (17)
 **Found:** 2026-06-26 (code review — confirmed by 3 independent reviews)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15357,7 +15867,7 @@ Writes `machine_network=10.0.0.0/` (invalid CIDR) when `aba.conf` has IP-only `m
 **Component:** `scripts/reg-sync.sh` (~31)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace — needs live verification
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15369,7 +15879,7 @@ New `require_internet_and_pull_secret` checks global `pull_secret_file` from `ab
 **Component:** `scripts/day2.sh` (~39–46)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace — needs live verification
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15381,7 +15891,7 @@ Kubeconfig resolved via `cluster_kubeconfig` only when `$KUBECONFIG` is unset. I
 **Component:** `scripts/include_all.sh` (normalize-cluster-conf)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15393,7 +15903,7 @@ Legacy `cluster.conf` files with only `port0=`/`port1=` and no `ports=` now get 
 **Component:** `scripts/include_all.sh` (_state_override_mirror)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15405,7 +15915,7 @@ If user edits `reg_vendor` in `mirror.conf` after install (quay→docker), insta
 **Component:** `scripts/reg-sync.sh` (95, 107–110), `scripts/reg-load.sh` (90, 107–109), `scripts/reg-save.sh` (108)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15417,7 +15927,7 @@ All three scripts set `reg_root=$data_dir/quay-install` unconditionally. Docker 
 **Component:** `scripts/day2.sh` (196–213)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15429,7 +15939,7 @@ Custom manifest failures increment `failure_count` but function always returns 0
 **Component:** `scripts/create-cluster-conf.sh` (~54–87)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15441,7 +15951,7 @@ When `ask=true` and aba.conf auto-detect fills values, script exits 1 before the
 **Component:** `scripts/aba.sh` (~1113–1115, ~1157–1166)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15453,7 +15963,7 @@ When `ask=true` and aba.conf auto-detect fills values, script exits 1 before the
 **Component:** `scripts/include_all.sh` (~944–946)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15465,7 +15975,7 @@ Drift flag file uses `$$` inside process-substitution subshell. Each subshell ge
 **Component:** `scripts/reg-uninstall.sh` (159–164)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15477,7 +15987,7 @@ Else branch runs `rm -rf` on glob when directory doesn't exist. With nullglob of
 **Component:** `scripts/include_all.sh` (3882–3891)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** NEW
+**Status:** OPEN
 
 ### Description
 
@@ -15489,6 +15999,8 @@ When 3+ issues exist, only two are shown in abort message.
 
 ## Docbug #D01: `int_connection` empty = use mirror never explained
 
+**Status:** OPEN — README only documents `direct` and `proxy` values; no mention that leaving `int_connection` empty routes through the mirror
+
 **Severity:** High
 **Component:** README.md — Connected Installation, Customizing Install Config
 **Found:** 2026-06-26 (README review — confirmed by 2 independent reviews)
@@ -15498,6 +16010,8 @@ When 3+ issues exist, only two are shown in abort message.
 README documents `int_connection=direct` and `int_connection=proxy` but never explains that DISCO/CONNO clusters should leave `int_connection` empty to use the local mirror. Users in disconnected modes may set direct/proxy incorrectly.
 
 ## Docbug #D02: Misleading proxy guidance in Partially Disconnected Prerequisites
+
+**Status:** OPEN — line 1206 still tells partially disconnected users to "set `int_connection=proxy`" which is misleading for CONNO
 
 **Severity:** High
 **Component:** README.md (lines 1204–1206)
@@ -15509,6 +16023,8 @@ Tells users to set `int_connection=proxy` in the partially disconnected section.
 
 ## Docbug #D03: `~/.vmware.conf` and `~/.kvm.conf` not documented
 
+**Status:** OPEN — README has no mention of `~/.vmware.conf` or `~/.kvm.conf` persistent templates
+
 **Severity:** High
 **Component:** README.md — Common Requirements, Air-Gapped Prerequisites
 **Found:** 2026-06-26 (README review — confirmed by 2 reviews)
@@ -15518,6 +16034,8 @@ Tells users to set `int_connection=proxy` in the partially disconnected section.
 README only documents ABA repo-level `vmware.conf`/`kvm.conf`. The `~/.vmware.conf`/`~/.kvm.conf` persistent templates (used by install scripts and TUI) and their role in bundles/air-gapped deploys are undocumented.
 
 ## Docbug #D04: FAQ uses wrong flag `-s cluster.conf`
+
+**Status:** OPEN — line 1813 still shows `-s cluster.conf` where `-s` means `--step`, not a config path
 
 **Severity:** Medium
 **Component:** README.md (line 1813)
@@ -15529,6 +16047,8 @@ Recovery FAQ step uses `aba cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf`
 
 ## Docbug #D05: `--monitor-timeout` documented but not implemented
 
+**Status:** OPEN — `--monitor-timeout` listed on line 694 as a runtime flag but not implemented in any script
+
 **Severity:** Medium
 **Component:** README.md — Customizing Install Configuration
 **Found:** 2026-06-26 (README review)
@@ -15538,6 +16058,8 @@ Recovery FAQ step uses `aba cluster -n sno -t sno -i 10.0.1.202 -s cluster.conf`
 Listed as an upgrade flag but does not exist anywhere in the codebase.
 
 ## Docbug #D06: Command Reference missing ~10 important commands
+
+**Status:** OPEN — `aba rescue` now in table but still missing: `aba vmw`, `aba kvm`, `aba install`, `aba iso`, `aba version`, `aba getco`, `aba cluster-version`
 
 **Severity:** Medium
 **Component:** README.md — Command Reference
@@ -15549,6 +16071,8 @@ Missing: `aba vmw`, `aba kvm`, `aba install`, `aba iso`, `aba -d mirror clean`, 
 
 ## Docbug #D07: CONNO/DISCO/DIRECT mode names not mapped to TUI flags
 
+**Status:** FIXED — TUI section (lines 277-279) now maps `--direct`/`--disco`/`--conno` to their full mode names
+
 **Severity:** Medium
 **Component:** README.md — Choose Your Path
 **Found:** 2026-06-26 (README review)
@@ -15558,6 +16082,8 @@ Missing: `aba vmw`, `aba kvm`, `aba install`, `aba iso`, `aba -d mirror clean`, 
 TUI flags `--conno`, `--disco`, `--direct` are documented but never mapped to README section names (Connected/Partially Disconnected/Air-Gapped).
 
 ## Docbug #D08: OSUS section thin on prerequisites and setup steps
+
+**Status:** LOW RISK — OSUS section now has prerequisites and full upgrade workflow; minor gaps (graph-image details) unlikely to confuse users
 
 **Severity:** Medium
 **Component:** README.md — Cluster Updates (OSUS)
@@ -15569,6 +16095,8 @@ Missing: graph-image mirroring prereqs, UpdateService CR, policy engine URI, `ab
 
 ## Docbug #D09: NTP documentation lacks Day-0 vs Day-2 distinction
 
+**Status:** LOW RISK — NTP section is brief but `ntp_servers` documented in aba.conf table, pre-flight checks NTP, `aba day2-ntp` in command reference; info exists but scattered
+
 **Severity:** Medium
 **Component:** README.md — Synchronize NTP
 **Found:** 2026-06-26 (README review)
@@ -15578,6 +16106,8 @@ Missing: graph-image mirroring prereqs, UpdateService CR, policy engine URI, `ab
 Only ~3 lines. Missing: `ntp_servers` in `aba.conf` for install-time NTP, `aba day2-ntp` for Day-2 MachineConfig, preflight NTP reachability check.
 
 ## Docbug #D10: VLAN/bond configuration lacks concrete examples
+
+**Status:** OPEN — FAQ explains the concept but provides no `ports=`/`vlan=` syntax examples or CLI flag usage
 
 **Severity:** Medium
 **Component:** README.md — FAQ
@@ -15589,6 +16119,8 @@ FAQ mentions bonds/VLAN possible but gives no example of `ports=ens1f0,ens2f0` o
 
 ## Docbug #D11: Bare-metal end-to-end workflow fragmented
 
+**Status:** FEATURE REQUEST — all bare-metal info exists but spread across sections; a consolidated walkthrough would be a doc enhancement
+
 **Severity:** Medium
 **Component:** README.md — Installing a Cluster
 **Found:** 2026-06-26 (README review)
@@ -15598,6 +16130,8 @@ FAQ mentions bonds/VLAN possible but gives no example of `ports=ens1f0,ens2f0` o
 `macs.conf`, ISO generation, and `aba mon` scattered across sections. No single bare-metal walkthrough.
 
 ## Docbug #D12: "ABA requires root access" contradicts Common Requirements
+
+**Status:** NOT A BUG — line 213 says "requires root access, either directly or via passwordless sudo" which is consistent with line 1092's sudo explanation
 
 **Severity:** Medium
 **Component:** README.md (line 213 vs 1092)
