@@ -23,7 +23,7 @@
 ABA_VERSION=1.1.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260617231649
+ABA_BUILD=20260626165529
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1126,8 +1126,8 @@ if [ "$cur_target" ]; then
 
 	case $cur_target in
 		tui)
-			cd "$ABA_ROOT" || exit 1
-			exec "$ABA_ROOT/tui/v2/abatui2.sh" "$@"
+			echo "Please run 'abatui' (without a space) to launch the TUI." >&2
+			exit 1
 		;;
 		ssh)
 			trap - ERR  # No need for this anymore
