@@ -40,11 +40,6 @@ fi
 
 aba_info "Attempting to access the cluster ... "
 
-# Refresh kubeconfig from backup if local auth dir exists (ensures cert-based auth)
-if [ -f iso-agent-based/auth.backup/kubeconfig ]; then
-	mkdir -p iso-agent-based/auth
-	cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
-fi
 OC="oc --kubeconfig=$KUBECONFIG"
 
 aba_debug "Running: $OC whoami"

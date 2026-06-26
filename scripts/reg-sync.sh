@@ -27,8 +27,9 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
-# Pre-flight: verify internet access and pull secret before proceeding
-require_internet_and_pull_secret
+# Pre-flight: verify internet access and pull secret before proceeding.
+# Pass mirror-specific pull secret as fallback for hosts without a global pull secret.
+require_internet_and_pull_secret "$regcreds_dir/pull-secret-mirror.json"
 
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
 aba_info "Verifying release image availability for v${ocp_version} ..."
