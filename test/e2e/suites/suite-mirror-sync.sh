@@ -288,6 +288,14 @@ e2e_diag "Markers: before sync" "_marker_snap"
 e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
+# Connected mode: ~/.docker/config.json must have BOTH mirror AND Red Hat credentials
+e2e_run "Pull secret: mirror registry present in config.json" \
+    "jq -e '.auths[\"${DIS_HOST}:8443\"]' ~/.docker/config.json"
+e2e_run "Pull secret: registry.redhat.io present (connected mode)" \
+    "jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
+e2e_run "Pull secret: quay.io present (connected mode)" \
+    "jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
+
 e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"

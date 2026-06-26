@@ -236,6 +236,16 @@ e2e_run_remote -r 3 2 "Load images into Quay registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
+# Fully disconnected: ~/.docker/config.json must have ONLY mirror credentials
+e2e_run_remote "Pull secret: mirror registry present in config.json" \
+    "jq -e '.auths[\"${DIS_HOST}:${_QUAY_PORT}\"]' ~/.docker/config.json"
+e2e_run_remote "Pull secret: NO registry.redhat.io (disco mode)" \
+    "! jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
+e2e_run_remote "Pull secret: NO quay.io (disco mode)" \
+    "! jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
+e2e_run_remote "Pull secret: NO cloud.openshift.com (disco mode)" \
+    "! jq -e '.auths[\"cloud.openshift.com\"]' ~/.docker/config.json"
+
 test_end
 
 # ============================================================================
