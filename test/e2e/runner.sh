@@ -753,6 +753,12 @@ _cleanup_dis() {
 			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
 		done
 	done
+	# disN must never have a Red Hat pull secret (true air-gap invariant)
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		_essh "$_uhost" "rm -f ~/.pull-secret.json" 2>&1
+	done
+
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 
