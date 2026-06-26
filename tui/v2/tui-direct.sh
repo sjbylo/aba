@@ -70,7 +70,7 @@ direct_wizard() {
 			--title "Resume Configuration" \
 			--yes-label "Continue" \
 			--no-label "Reconfigure" \
-			--yesno "$_resume_summary" 14 50
+			--yesno "$_resume_summary" 0 0
 		local _resume_rc=$?
 		if [[ $_resume_rc -eq 0 ]]; then
 			if _direct_config_complete; then

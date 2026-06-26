@@ -219,6 +219,10 @@ EOF
 # dlg — wrapper that adds consistent styling:
 #   - Pads --title with spaces: "Foo" → " Foo "
 #   - Prepends \n to the prompt/message text (empty line below title)
+#   - Appends \n<space> to msgbox/yesno/inputbox text (blank line before buttons);
+#     dialog ignores bare trailing \n for height, the space forces the line to render.
+#     Skipped for menus and mixedform.
+#   - Infobox text is NOT modified (no buttons, compact spinners with fixed sizes)
 #   - For menu/radiolist/checklist: replaces menu-height=0 with the actual
 #     item count so dialog sizes the box to fit all items (no scrollbar)
 dlg() {
@@ -227,6 +231,7 @@ dlg() {
 	local next_is_text=false
 	local has_menu=false
 	local menu_type=""
+	local _add_trailing=false
 	local dims_after_text=0
 	local height_idx=-1
 	local width_val=""
@@ -242,6 +247,12 @@ dlg() {
 			# Prepend \n for consistent spacing below title (all dialog types)
 			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
 				arg="\n$arg"
+			fi
+			# Append \n<space> for trailing blank line before buttons.
+			# dialog ignores bare \n for height; the space forces the line to render.
+			# Only for types with buttons — skip infobox/mixedform/menus.
+			if [[ "$_add_trailing" == "true" && "$arg" != *'\n ' && "$arg" != *$'\n ' ]]; then
+				arg="$arg\n "
 			fi
 			if [[ "$has_menu" == "true" ]]; then
 				arg="${arg}\n\n(Navigate: Arrow keys, Tab, SPACE, ESC)"
@@ -269,7 +280,9 @@ dlg() {
 				next_is_text=true; has_menu=true; menu_type="menu" ;;
 			--radiolist|--checklist)
 				next_is_text=true; has_menu=true; menu_type="checklist" ;;
-			--msgbox|--yesno|--inputbox|--infobox|--mixedform)
+			--msgbox|--yesno|--inputbox)
+				next_is_text=true; _add_trailing=true ;;
+			--mixedform)
 				next_is_text=true ;;
 		esac
 		args+=("$arg")
