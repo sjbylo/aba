@@ -7,19 +7,12 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-cluster-conf)
 
-# Resolve kubeconfig (prefer externalized state, fall back to local)
+# Resolve kubeconfig (prefer externalized state under ~/.aba/, fall back to local)
 _kc=$(cluster_kubeconfig)
 if [ -z "$_kc" ]; then
 	aba_abort "Cluster not installed! Cannot find kubeconfig. Try running 'aba clean; aba' to install this cluster!"
 fi
 export KUBECONFIG="$_kc"
-
-# Refresh kubeconfig from backup if local auth dir exists (ensures cert-based auth)
-if [ -f iso-agent-based/auth.backup/kubeconfig ]; then
-	mkdir -p iso-agent-based/auth
-	cp iso-agent-based/auth.backup/kubeconfig iso-agent-based/auth/kubeconfig
-	export KUBECONFIG="$PWD/iso-agent-based/auth/kubeconfig"
-fi
 
 #aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc

@@ -3885,9 +3885,11 @@ check_internet_connectivity() {
 
 # Pre-flight check for commands that require internet + pull secret (save, sync).
 # Checks both conditions and reports ALL issues at once so the user can fix everything in one pass.
-# Usage: require_internet_and_pull_secret
+# Usage: require_internet_and_pull_secret [fallback_pull_secret]
 # Requires: $pull_secret_file set (from normalize-aba-conf)
+# Args:     $1 (optional) — fallback pull secret path (e.g. mirror-specific pull secret for sync)
 require_internet_and_pull_secret() {
+	local fallback_ps="${1:-}"
 	local errors=()
 	local has_internet=true
 
@@ -3897,13 +3899,17 @@ require_internet_and_pull_secret() {
 		errors+=("No internet access (cannot reach registry.redhat.io)")
 	fi
 
-	# Check pull secret
-	if [ ! -s "$pull_secret_file" ]; then
+	# Check pull secret (global, then fallback)
+	if [ -s "$pull_secret_file" ]; then
+		if ! grep -q registry.redhat.io "$pull_secret_file"; then
+			errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
+		elif ! jq empty "$pull_secret_file" 2>/dev/null; then
+			errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
+		fi
+	elif [ -n "$fallback_ps" ] && [ -s "$fallback_ps" ]; then
+		aba_debug "Global pull secret not found; using fallback: $fallback_ps"
+	else
 		errors+=("Pull secret not found at $pull_secret_file")
-	elif ! grep -q registry.redhat.io "$pull_secret_file"; then
-		errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
-	elif ! jq empty "$pull_secret_file" 2>/dev/null; then
-		errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
 	fi
 
 	# All good
