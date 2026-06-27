@@ -114,13 +114,20 @@ Restart the TUI after copying archives." \
 	fi
 
 	if ! mirror_available; then
-		tui_log "DISCO wizard: auto-running mirror_install"
-		mirror_install
+		# Registry may be running even though the marker file is missing (e.g. disk-full lost it).
+		# Probe the actual registry before attempting a re-install.
+		if _mirror_has_release_image; then
+			tui_log "DISCO wizard: marker missing but registry responds — recreating .available"
+			touch "$ABA_ROOT/mirror/.available"
+		else
+			tui_log "DISCO wizard: auto-running mirror_install"
+			mirror_install || true
+		fi
 	fi
 
 	if mirror_available && ! _mirror_has_release_image; then
 		tui_log "DISCO wizard: auto-running disco_load_images"
-		disco_load_images
+		disco_load_images || true
 	fi
 
 	return 0
