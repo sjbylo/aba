@@ -121,31 +121,29 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 BREADCRUMB
 
 # Verify connectivity after saving state.
-# Both branches abort — the localhost check is purely diagnostic to
-# distinguish a firewall hairpin issue from a truly unreachable registry.
-# Aborting is correct because oc-mirror/sync also need the FQDN to work.
+# Report diagnostic facts without guessing the cause — network setups vary widely
+# (NAT, VPN, multi-homed, hairpin). Aborting is correct because oc-mirror/sync need the FQDN.
 if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
 	-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
-	if curl -k -fsSL --connect-timeout 10 "https://localhost:$reg_port/v2/" \
-		-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
-		# Registry IS running but the host can't reach its own FQDN — hairpin NAT issue
-		aba_abort \
-			"Registry at $reg_url is not reachable, but localhost:$reg_port responds." \
-			"This is a firewall hairpin issue — the host cannot connect to its own FQDN." \
-			"Fix with: sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT" \
-			"Also try: sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD" \
-			"Credentials have been saved. After fixing networking, run: aba -d $(basename "$PWD") verify"
-	else
-		# Neither FQDN nor localhost responds — something more fundamental is wrong
-		aba_abort \
-			"Registry at $reg_url is not reachable after starting." \
-			"The container is running but network connectivity failed." \
-			"Common causes:" \
-			"  - Firewall is blocking port $reg_port" \
-			"  - nftables NOTRACK rules interfere with podman networking" \
-			"  - FORWARD chain has a DROP/REJECT policy" \
-			"Try: sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT" \
-			"Also try: sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD" \
-			"Credentials have been saved. After fixing networking, run: aba -d $(basename "$PWD") verify"
-	fi
+	_local_ips=$(hostname -I 2>/dev/null | xargs)
+	_localhost_ok="no"
+	curl -k -fsSL --connect-timeout 10 "https://localhost:$reg_port/v2/" \
+		-u "$reg_user:$reg_pw" >/dev/null 2>&1 && _localhost_ok="yes"
+	_ip_is_local="no"
+	echo "$_local_ips" | grep -qw "${fqdn_ip:-}" 2>/dev/null && _ip_is_local="yes"
+
+	aba_abort \
+		"Registry installed but not reachable via FQDN." \
+		"" \
+		"  FQDN:         $reg_host → ${fqdn_ip:-unresolved}" \
+		"  Localhost:     localhost:$reg_port responds: $_localhost_ok" \
+		"  Local IPs:    $_local_ips" \
+		"  IP is local:  $_ip_is_local" \
+		"" \
+		"Common causes:" \
+		"  - DNS points to a different host (update DNS or set 'reg_ssh_key' in mirror.conf for remote install)" \
+		"  - Firewall hairpin (sudo nft flush chain ip raw PREROUTING && sudo nft flush chain ip raw OUTPUT)" \
+		"  - Firewall blocking port $reg_port (sudo iptables -P FORWARD ACCEPT && sudo iptables -F FORWARD)" \
+		"" \
+		"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 fi

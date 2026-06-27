@@ -142,11 +142,7 @@ reg_detect_existing() {
 
 # --- reg_verify_localhost -----------------------------------------------------
 # For local installs: verify that reg_host resolves to this machine's IP.
-# Also uses an SSH flag-file trick to detect when reg_host unexpectedly
-# reaches a remote machine (catches cases where IP matches a local interface
-# but SSH still lands elsewhere, or vice versa).
-# The IP mismatch check is a warning (NAT/LB setups are common), but the
-# SSH flag-file check aborts since it positively confirms a remote host.
+# Uses SSH flag-file trick first (definitive), falls back to IP check.
 # Requires: fqdn_ip (call reg_check_fqdn first)
 reg_verify_localhost() {
 	local local_ips
@@ -154,31 +150,44 @@ reg_verify_localhost() {
 
 	aba_info "Verifying FQDN '$reg_host' (IP: $fqdn_ip) reaches this localhost ..."
 
-	if ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
-		aba_warning \
-			"$reg_host resolves to $fqdn_ip which is not found on any local network interface." \
-			"Ignore this warning if expected, e.g. when $fqdn_ip is an external/NAT IP."
-		sleep 1
-	fi
-
-	# SSH flag-file trick: SSH to reg_host and create a temp file. If the file
-	# does NOT appear on localhost, reg_host reaches a remote machine by mistake.
+	# SSH flag-file trick: definitive test. SSH to reg_host and create a temp
+	# file. If the file appears locally, reg_host IS this host (NAT/LB is fine).
+	# If the file doesn't appear, reg_host reaches a different machine.
 	local flag_file="$ABA_TMP/flag.$RANDOM"
 	rm -f "$flag_file"
+	local _ssh_confirmed=""
 
 	local remote_hostname
 	if remote_hostname=$(ssh -F "$ssh_conf_file" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file && hostname" 2>/dev/null); then
-		if [ ! -f "$flag_file" ]; then
+		if [ -f "$flag_file" ]; then
+			rm -f "$flag_file"
+			aba_info "Confirmed: '$reg_host' reaches this localhost via SSH."
+			_ssh_confirmed="local"
+		else
 			aba_abort \
 				"Registry configured for *local* install (reg_ssh_key is not defined)." \
 				"But $reg_host resolves to $fqdn_ip, which reaches remote host [$remote_hostname] via SSH!" \
 				"Options:" \
 				"1. Update DNS so '$reg_host' resolves to this localhost '$(hostname -s)'." \
 				"2. Set 'reg_ssh_key' in mirror.conf for remote installation."
-		else
-			rm -f "$flag_file"
-			aba_info "SSH access to localhost via '$reg_host' is working."
 		fi
+	fi
+
+	# Fallback: if SSH couldn't confirm, check whether the IP is on a local interface.
+	# The IP may still route here via NAT or load balancer — prompt the user.
+	if [ -z "$_ssh_confirmed" ] && ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
+		aba_warning \
+			"$reg_host resolves to $fqdn_ip which is not found on any local network interface." \
+			"This host's IPs: $(echo $local_ips | xargs | tr ' ' ', ')" \
+			"This may be fine if $fqdn_ip reaches this host via NAT or a load balancer." \
+			"Could not verify via SSH — unable to confirm automatically."
+		echo
+		ask "Continue installing on this host anyway (e.g. NAT/LB in use)" || \
+			aba_abort \
+				"Install cancelled. To fix:" \
+				"  - If $fqdn_ip should route here (NAT/LB), ensure the network path works and re-run." \
+				"  - Otherwise, update DNS so '$reg_host' resolves to this host, or" \
+				"  - Set 'reg_ssh_key' in mirror.conf to install on the remote host ($fqdn_ip) instead."
 	fi
 }
 
