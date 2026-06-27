@@ -432,8 +432,26 @@ _mirror_op_confirm() {
 	if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
 		_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
 	fi
+
+	# Pre-flight: validate target version exists in the configured channel
+	# Catches stale targets left from a previous channel (e.g. set on fast, switched to stable)
 	if [[ -n "$_target" && "$_target" != "$_ver" ]]; then
-		_ver="${_ver} → ${_target}"
+		if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
+				--yes-label "Clear Target" --no-label "Cancel" \
+				--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
+			if [[ $? -eq 0 ]]; then
+				replace-value-conf -q -n ocp_version_target -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+				ocp_version_target=""
+				_target=""
+				tui_kick_isconf_regen
+				tui_log "Cleared stale upgrade target (not in $_chan channel)"
+			else
+				return 1
+			fi
+		fi
+		# Only show upgrade range if target is still valid (not cleared above)
+		[[ -n "$_target" ]] && _ver="${_ver} → ${_target}"
 	fi
 	local _op_count=${#OP_BASKET[@]}
 	local _op_preview=""
