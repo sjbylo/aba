@@ -89,10 +89,33 @@ fi
 aba_info "Adding mirror registry CA to cluster trust store"
 aba_debug "Running: oc get cm registry-config -n openshift-config"
 cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
-# If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
-if [ -s "$regcreds_dir/rootCA.pem" ] && [ ! "$cm_existing" ]; then
+# Detect cert mismatch: registry was reinstalled with new CA but cluster has the old one.
+_cert_changed=""
+_existing_bundle=""
+if [ -s "$regcreds_dir/rootCA.pem" ] && [ "$cm_existing" ]; then
+	_cm_key="${reg_host}..${reg_port}"
+	_existing_bundle=$(oc get cm registry-config -n openshift-config -o go-template='{{index .data "'"$_cm_key"'"}}' 2>/dev/null || true)
+	# Compare the base64 body (unique per cert) to check if the new cert is already in the bundle
+	_new_cert_body=$(grep -v '^-' "$regcreds_dir/rootCA.pem" | tr -d '[:space:]')
+	_bundle_body=$(echo "$_existing_bundle" | grep -v '^-' | tr -d '[:space:]')
+	if [ -n "$_new_cert_body" ] && [ -n "$_bundle_body" ] && \
+	   ! echo "$_bundle_body" | grep -qF "$_new_cert_body"; then
+		_local_fp=$(openssl x509 -noout -fingerprint -in "$regcreds_dir/rootCA.pem" 2>/dev/null || true)
+		aba_warning "Registry CA has changed. Appending new CA to the cluster trust bundle." \
+			"New CA:  $_local_fp"
+		_cert_changed=1
+	fi
+fi
+if [ -s "$regcreds_dir/rootCA.pem" ] && { [ ! "$cm_existing" ] || [ "$_cert_changed" ]; }; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
-	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
+	if [ "$_cert_changed" ] && [ -n "$_existing_bundle" ]; then
+		# Append new cert to existing bundle so both old and new CAs are trusted
+		export additional_trust_bundle="${_existing_bundle}
+$(cat "$regcreds_dir/rootCA.pem")"
+		aba_info "Appending new CA to existing trust bundle"
+	else
+		export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
+	fi
 	aba_info "Using root CA file at $regcreds_display/rootCA.pem"
 
 	aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"

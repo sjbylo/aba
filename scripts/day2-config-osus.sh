@@ -281,7 +281,20 @@ fi
 POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}")"
 aba_info_ok "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 
+# Ensure the cluster channel matches what was mirrored (ocp_channel from aba.conf).
+# OpenShift defaults to stable-X.Y at install time, but images/graph may have been
+# mirrored from a different channel (e.g. candidate). Without this, oc adm upgrade
+# queries the wrong channel and OSUS returns an empty graph.
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
+aba_debug "Cluster channel: $CH"
+_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+_expected_channel="${ocp_channel}-${_ocp_ver_major}"
+if [ "$CH" != "$_expected_channel" ]; then
+	aba_info "Cluster channel ($CH) does not match mirrored channel ($_expected_channel)"
+	aba_info "Setting cluster channel: $CH → $_expected_channel"
+	oc adm upgrade channel "$_expected_channel"
+	CH="$_expected_channel"
+fi
 aba_debug CH=$CH
 
 _osus_check_graph_available() {
