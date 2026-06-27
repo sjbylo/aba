@@ -567,7 +567,8 @@ mirror_prep_upgrade() {
 			l) _target_ver="$_latest" ;;
 			p) _target_ver="$_previous" ;;
 			c)
-				sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" "$ABA_ROOT/mirror/mirror.conf"
+				replace-value-conf -q -n ocp_version_target -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+				ocp_version_target=""
 				tui_kick_isconf_regen
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"\nUpgrade target cleared.\n\nMirror will no longer include upgrade images." 0 0
@@ -614,30 +615,50 @@ mirror_prep_upgrade() {
 		break
 	done
 
-	# Confirm before persisting any state
-	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
-		--yes-label "Save Upgrade Images" \
-		--no-label "$TUI2_BTN_CANCEL" \
-		--yesno "\nThis will:\n\n\
+	# Choose sync vs save
+	local _upg_method=""
+	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade" \
+		--cancel-label "$TUI2_BTN_CANCEL" \
+		--ok-label "$TUI2_BTN_SELECT" \
+		--menu "\nThis will:\n\n\
   1. Set target version to ${_target_ver}\n\
   2. Regenerate the ImageSet Config (if not user-edited)\n\
   3. Download upgrade images (${_current_ver} → ${_target_ver})\n\n\
-Proceed?" 0 0
+How do you want to mirror the upgrade images?" 0 0 0 \
+		"1" "Sync to registry (direct)" \
+		"2" "Save to tar files (for transfer)" \
+		2>"$_TUI_TMP"
 	[[ $? -ne 0 ]] && return 1
+	_upg_method=$(<"$_TUI_TMP")
 
 	# Persist target version and kick off ISC regeneration after user confirmed
 	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
 	tui_kick_isconf_regen
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
-	confirm_and_execute \
-		"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
-		"Prepare Upgrade: ${_current_ver} → ${_target_ver}"
-	local rc=$?
-
-	if [[ $rc -eq 0 ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
-			--msgbox "\nUpgrade images saved successfully.\n\n\
+	local rc=0
+	case "$_upg_method" in
+		1)
+			confirm_and_execute \
+				"aba --dir mirror --target-version $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
+				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
+			rc=$?
+			if [[ $rc -eq 0 ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
+					--msgbox "\nUpgrade images synced to registry.\n\n\
+Next steps:\n\n\
+  1. Run Day-2 to apply changes (D)\n\
+  2. Upgrade cluster (D → U)\n" 0 0
+			fi
+			;;
+		2)
+			confirm_and_execute \
+				"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
+				"Prepare Upgrade: ${_current_ver} → ${_target_ver}"
+			rc=$?
+			if [[ $rc -eq 0 ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
+					--msgbox "\nUpgrade images saved successfully.\n\n\
 To upgrade a disconnected cluster:\n\n\
   1. Copy these files to the internal host:\n\
      • mirror/data/imageset-config.yaml\n\
@@ -647,7 +668,9 @@ To upgrade a disconnected cluster:\n\n\
      • Load images (L)\n\
      • Day-2 → Configure OperatorHub (D → R)\n\
      • Day-2 → Upgrade (D → U)\n" 0 0
-	fi
+			fi
+			;;
+	esac
 
 	return $rc
 }

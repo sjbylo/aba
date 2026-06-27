@@ -60,9 +60,9 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
 		# Guard: target must be > source (upgrades only, not downgrades)
 		if ! is_version_greater "$ocp_version_target" "$ocp_version"; then
-			# Stale target — silently comment it out and proceed without upgrade mode
+			# Stale target — clear it and proceed without upgrade mode
 			aba_warning "ocp_version_target ($ocp_version_target) is lower than ocp_version ($ocp_version) — ignoring."
-			sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" mirror.conf 2>/dev/null || true
+			replace-value-conf -q -n ocp_version_target -v "" -f mirror.conf
 			ocp_version_target=""
 		fi
 		export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)

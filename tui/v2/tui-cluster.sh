@@ -701,8 +701,8 @@ cluster_install_flow() {
 		elif [[ "$_TUI_MODE" == "DISCO" ]]; then
 			[[ "$cl_connection" != "mirror" ]] && cl_connection="mirror"
 		elif [[ "$_TUI_MODE" == "CONNO" ]]; then
-			# Mirror has priority when available and synced
-			if mirror_available && _mirror_has_release_image; then
+			# Default to mirror when available, but never override an explicit user choice
+			if [[ -z "$cl_connection" ]] && mirror_available && _mirror_has_release_image; then
 				cl_connection="mirror"
 			fi
 		fi
@@ -1872,9 +1872,6 @@ tui_advanced_menu() {
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
 			adv_items+=("F" "Monitor Cluster Installation (re-attach)")
 		fi
-		if [[ -n "$_TUI_EXEC_MODE" ]]; then
-			adv_items+=("E" "Reset Execution Mode (currently: $_TUI_EXEC_MODE)")
-		fi
 		# Mode switches (normally auto-detected; here for manual override)
 		adv_items+=("" "──── Switch Mode ───────────────────")
 		case "$_TUI_MODE" in
@@ -1915,8 +1912,6 @@ U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
-E - Reset Execution Mode (only shown when set): Clears your\n\
-    'Always TUI' or 'Always Terminal' preference for this session.\n\n\
 X/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
@@ -1990,11 +1985,6 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				;;
 			"F")
 				cluster_monitor
-				;;
-			"E")
-				_TUI_EXEC_MODE=""
-				tui_log "Execution mode preference reset"
-				dlg --backtitle "$(ui_backtitle)" --msgbox "Execution mode reset.\n\nYou will be asked to choose TUI or Terminal for each command." 0 0
 				;;
 			"X")
 				case "$_TUI_MODE" in

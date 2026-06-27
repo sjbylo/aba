@@ -348,7 +348,14 @@ ui_backtitle() {
 	# Build title progressively — only show sections with real data
 	local text="ABA TUI v2"
 	[ -n "$mode_display" ] && text="$text  |  $mode_display"
-	[ -n "$ch" ] && [ -n "$ver" ] && text="$text  |  $ch $ver"
+	if [[ -n "$ch" && -n "$ver" ]]; then
+		local _tgt="${ocp_version_target:-}"
+		if [[ -n "$_tgt" && "$_tgt" != "$ver" ]]; then
+			text="$text  |  $ch $ver → $_tgt"
+		else
+			text="$text  |  $ch $ver"
+		fi
+	fi
 
 	local cols=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
 	local pad=$(( (cols - ${#text}) / 2 ))
@@ -524,28 +531,11 @@ _format_cmd_display() {
 	printf '%s' "$out"
 }
 
-# Session-scoped execution mode preference (empty = ask every time)
-_TUI_EXEC_MODE="${_TUI_EXEC_MODE:-}"
-
 confirm_and_execute() {
 	local cmd="$1"
 	local title="${2:-Confirm Execution}"
 	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
-
-	# If user previously chose "always", skip the picker but retain retry loop
-	if [[ -n "$_TUI_EXEC_MODE" ]]; then
-		tui_log "Using remembered exec mode: $_TUI_EXEC_MODE"
-		while :; do
-			case "$_TUI_EXEC_MODE" in
-				tui)      _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
-				terminal) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
-			esac
-			local exec_rc=$?
-			[[ $exec_rc -eq 2 ]] && continue
-			return $exec_rc
-		done
-	fi
 
 	local default_item="1"
 	while :; do
@@ -556,31 +546,24 @@ confirm_and_execute() {
 			--extra-button --extra-label "Command" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
-			"1" "Run in TUI" \
+			"1" "Run in TUI (auto-answer)" \
 			"2" "Run in Terminal" \
-			"3" "Always TUI (this session)" \
-			"4" "Always Terminal (this session)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_EXEC" \
-"• Run in TUI
+"• Run in TUI (auto-answer)
   - Command runs inside dialog interface
-  - Auto-answer (-y) is always enabled
+  - All prompts are auto-answered with defaults (-y)
   - Output shown live in progressbox
   - Scrollable output review after completion
 
 • Run in Terminal
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
-  - Press ENTER to return to TUI
-
-• Always TUI / Always Terminal
-  - Remembers your choice for this session
-  - Skips this dialog for all subsequent commands
-  - Reset via Advanced > Reset Execution Mode"
+  - Press ENTER to return to TUI"
 				continue
 				;;
 			3)
@@ -602,12 +585,6 @@ confirm_and_execute() {
 		case "$choice" in
 			1) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
 			2) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
-			3) _TUI_EXEC_MODE="tui"
-			   tui_log "Exec mode set to: always TUI"
-			   _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
-			4) _TUI_EXEC_MODE="terminal"
-			   tui_log "Exec mode set to: always Terminal"
-			   _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
 		esac
 		local exec_rc=$?
 		[[ $exec_rc -eq 2 ]] && continue

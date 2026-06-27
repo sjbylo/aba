@@ -1952,9 +1952,9 @@ replace-value-conf() {
 				return 0
 			fi
 		else
-			# Empty value means "comment out" — check if already commented
-			if grep -q -E "^[#[:space:]]*${name}=" "$f" && ! grep -q "^${name}=" "$f"; then
-				aba_debug "Value ${name} is already commented out in file $f"
+			# Empty value means "clear" — check if already empty
+			if grep -q -E "^${name}=$" "$f" || grep -q -E "^${name}=[[:space:]]*#" "$f"; then
+				aba_debug "Value ${name} is already empty in file $f"
 				return 0
 			fi
 		fi
@@ -1965,28 +1965,23 @@ replace-value-conf() {
 			continue
 		fi
 
-		if [ "$value" ]; then
-			# Escape sed-special chars (&, \, |) in the replacement value
-			local _sed_safe
-			_sed_safe=$(_sed_escape_replacement "$_write_value")
+		# Escape sed-special chars (&, \, |) in the replacement value
+		local _sed_safe
+		_sed_safe=$(_sed_escape_replacement "$_write_value")
 
-			# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
-			# Trailing whitespace + comment is captured in \1 and preserved.
-			# Uses | as sed delimiter (| is forbidden in config values).
-			if grep -q -E "^[#[:space:]]*${name}='" "$f"; then
-				sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
-			else
-				sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
-			fi
+		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
+		# Trailing whitespace + comment is captured in \1 and preserved.
+		# Uses | as sed delimiter (| is forbidden in config values).
+		if grep -q -E "^[#[:space:]]*${name}='" "$f"; then
+			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		else
-			# Empty value: comment out the line (preserve existing value for easy revert)
-			sed -i --follow-symlinks "s|^\([#[:space:]]*\)\?${name}=|#${name}=|" "$f"
+			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Commenting out ${name} in file $f" >&2 
+			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Clearing ${name} in file $f" >&2 
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Commenting out ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Clearing ${name} in file $f"
 		fi
 
 		return 0

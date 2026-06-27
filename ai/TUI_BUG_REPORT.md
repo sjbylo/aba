@@ -842,7 +842,7 @@ fi
 ---
 
 ## Bug #311: Stale "mirror ready"/"synced" status after mirror uninstall + reinstall
-**Status:** OPEN
+**Status:** FIXED — `aba_mirror_verify_refresh` added to `reg-uninstall.sh` (commit 26ef7ce)
 
 **Severity:** HIGH
 **File:** `scripts/include_all.sh` (`aba_mirror_verify_exit` → `run_once -E -i "aba:mirror:check-image"`)
@@ -1332,7 +1332,7 @@ The aba_wait_show function detects it is NOT on a TTY (because dialog --programb
 
 ## Bug #381: Upgrade to intermediate graph version (4.20.22) fails — signature not included by oc-mirror
 
-**Status:** OPEN (verified via TUI on conno - upgrade from 4.20.20 to 4.20.22 accepted but fails signature verification)
+**Status:** NOT A BUG — oc-mirror limitation (does not include intermediate graph signatures); nothing for ABA to fix
 
 **Severity:** HIGH — Cluster upgrade is blocked, user has no workaround from TUI
 
@@ -3470,9 +3470,9 @@ Either:
 
 ---
 
-## Bug #445 — ~~DUPLICATE OF Bug #287~~ Advanced menu Help text mentions "E - Reset Execution Mode" even when option is hidden
+## Bug #445 — ~~FIXED~~ Advanced menu Help text mentions "E - Reset Execution Mode" even when option is hidden
 
-**Status:** DUPLICATE of Bug #287 (same issue: Advanced Help text documents "E" when option is conditionally hidden)  
+**Status:** FIXED (2026-06-27) — "Reset Execution Mode" option, help text, and handler all removed. The entire `_TUI_EXEC_MODE` remembering mechanism was removed; the execution mode dialog now always shows "Run in TUI (auto-answer)" / "Run in Terminal".  
 **Severity:** COSMETIC — misleading Help text  
 **Found:** 2026-06-14 (live TUI verification)  
 **Component:** TUI v2 (`tui/v2/tui-cluster.sh`, `tui_advanced_menu()`, lines 1880-1895)
@@ -3505,12 +3505,13 @@ When the user has NOT set an execution mode preference yet, "E" is invisible in 
 
 Minor UX confusion — user sees a Help entry for an invisible option.
 
-### Suggested fix
+### Resolution (2026-06-27)
 
-Either:
-1. Make Help text dynamic (skip E description if `$_TUI_EXEC_MODE` is empty), OR
-2. Always show "E" in the menu but grey/disable it when no mode is set, OR
-3. Add a note in Help: "E appears only after choosing 'Always TUI' or 'Always Terminal'"
+None of the suggested fixes were needed. The entire "Always TUI / Always Terminal" feature was removed because it added complexity for minimal value (just pressing Enter again is easy enough). This eliminated:
+- `_TUI_EXEC_MODE` variable and all remembering logic in `confirm_and_execute()`
+- "Always TUI (this session)" and "Always Terminal (this session)" menu options
+- "E - Reset Execution Mode" in Advanced menu (item, help text, and handler)
+- "Run in TUI" renamed to "Run in TUI (auto-answer)" to clarify that defaults are auto-given
 
 ---
 
@@ -15290,7 +15291,7 @@ Either:
 ---
 
 ## Bug #891: TUI Wizard — Channel change shows stale versions from previous channel
-**Status:** OPEN
+**Status:** FIXED — normalize change now re-fetches versions when channel changes; verified on conno
 
 **Severity:** High (functional — user selects "stable" but sees candidate channel versions)
 **Component:** TUI v2 — `tui-direct.sh` / `abatui2.sh` wizard version picker
@@ -15677,6 +15678,7 @@ Main menus show `confirm_quit()` on ESC; the splash/welcome screen does not — 
 `_exec_in_tui` pipes `bash -c "$tui_cmd"` into `dialog --progressbox`. If the user closes the progressbox with ESC before the command finishes, the child process may continue running with no TUI feedback.
 
 ## Bug #906: TUI — CONNO mode silently overrides user's image source selection
+**Status:** FIXED — `_apply_mode_connection` now checks `[[ -z "$cl_connection" ]]` before defaulting to mirror
 
 **Severity:** High
 **Component:** `tui/v2/tui-cluster.sh` (698–710, 741, 945)
@@ -15837,6 +15839,7 @@ FQDN validation only runs when the user edits the Hostname field. Pressing Conti
 `_CLUSTER_DAY2_AVAIL` is true when any `cluster.conf` exists, not when a cluster is installed. Refresh Cluster for an uncreated cluster fails at CLI level.
 
 ## Bug #919: Core — `cluster-startup.sh` overrides externalized kubeconfig with stale local backup
+**Status:** FIXED — already fixed in prior commit
 
 **Severity:** High
 **Component:** `scripts/cluster-startup.sh` (17–22)
@@ -15878,7 +15881,7 @@ Writes `machine_network=10.0.0.0/` (invalid CIDR) when `aba.conf` has IP-only `m
 **Component:** `scripts/reg-sync.sh` (~31)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace — needs live verification
-**Status:** OPEN
+**Status:** NOT A BUG — `require_internet_and_pull_secret` already accepts a fallback pull secret arg; `reg-sync.sh` passes `$regcreds_dir/pull-secret-mirror.json` as fallback (line 32), which is checked at line 3914 of `include_all.sh` when global pull secret is missing
 
 ### Description
 
@@ -16151,4 +16154,41 @@ FAQ mentions bonds/VLAN possible but gives no example of `ports=ens1f0,ens2f0` o
 ### Description
 
 Line 213 says "root access required"; Common Requirements correctly says "normal user with passwordless sudo."
+
+---
+
+## Bug #933: `replace-value-conf` "comment out" behavior causes stale variables in TUI — NOT A BUG (design reverted)
+
+**Status:** NOT A BUG — design decision reverted (2026-06-27). Commit `3532e595` introduced "comment out on empty" behavior; reverted back to "clear to empty" (`val=`).
+**Severity:** MEDIUM — stale `ocp_version_target` persisted in TUI after clearing, showing wrong upgrade target in backtitle/status
+**Found:** 2026-06-27 (TUI testing)
+**Component:** Core (`scripts/include_all.sh`, `replace-value-conf()`)
+
+### Problem
+
+Commit `3532e595` changed `replace-value-conf` to comment out lines (`#val=old`) instead of clearing them (`val=`) when called with an empty value. The intent was to let users see what the old value was.
+
+This caused stale variables in the TUI: `_normalize_export()` strips `#`-prefixed lines (outputs nothing), so after commenting out `ocp_version_target=4.22.2` → `#ocp_version_target=4.22.2`, the TUI's in-memory `$ocp_version_target` retained the old value until process restart.
+
+### Why a systemic `_normalize_export` fix was rejected
+
+We considered making `_normalize_export` emit `export var=` for commented-out assignments (`#var=val`). This would have fixed the stale-variable problem globally. **However, config files mix two syntactically identical patterns:**
+
+1. **Template examples** (should NOT be cleared): `#http_proxy=http://10.0.1.8:3128`, `#reg_ssh_key=~/.ssh/id_rsa`
+2. **User-disabled values** (should be cleared): `#ocp_version_target=4.22.2`
+
+Emitting `export http_proxy=` for template examples would **wipe working proxy settings** from the environment — a breaking change. There is no syntactic way to distinguish the two patterns.
+
+### Resolution
+
+Reverted to original "clear" behavior: empty value writes `name=` (not `#name=old`). This means:
+- `_normalize_export` outputs `export name=` which correctly clears the variable
+- Users can't see what the old value was (minor UX trade-off, acceptable)
+- No stale variables in long-lived processes (TUI)
+
+Also replaced all raw `sed` comment-out patterns with `replace-value-conf -v ""`:
+- `scripts/aba.sh` (ocp_version_target)
+- `scripts/reg-create-imageset-config.sh` (stale ocp_version_target)
+- `tui/v2/tui-mirror.sh` (TUI clear target)
+- `scripts/create-cluster-conf.sh` (SNO api_vip/ingress_vip)
 
