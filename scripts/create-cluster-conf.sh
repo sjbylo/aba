@@ -74,7 +74,7 @@ if [ -s cluster.conf ]; then
 	source <(normalize-cluster-conf)
 
 	# Fill only empty fields in cluster.conf (non-destructive)
-	[ ! "$machine_network" ] && [ "$_aba_mn" ] && replace-value-conf -q -n machine_network -v "${_aba_mn}/${_aba_pl}" -f cluster.conf
+	[ ! "$machine_network" ] && [ "$_aba_mn" ] && [ -n "$_aba_pl" ] && replace-value-conf -q -n machine_network -v "${_aba_mn}/${_aba_pl}" -f cluster.conf
 	[ ! "$dns_servers" ]     && [ "$_aba_dns" ] && replace-value-conf -q -n dns_servers -v "$_aba_dns" -f cluster.conf
 	[ ! "$next_hop_address" ] && [ "$_aba_gw" ] && replace-value-conf -q -n next_hop_address -v "$_aba_gw" -f cluster.conf
 	[ ! "$ntp_servers" ]     && [ "$_aba_ntp" ] && replace-value-conf -q -n ntp_servers -v "$_aba_ntp" -f cluster.conf

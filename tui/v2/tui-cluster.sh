@@ -924,14 +924,18 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 			[[ $? -ne 0 ]] && break
 			local input
 			input=$(<"$_TUI_TMP")
-			if [[ -n "$input" ]]; then
-				if ! aba cluster --name "$input" --validate >/dev/null 2>&1; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"$TUI2_MSG_INVALID_CLUSTER_NAME" 0 0 || true
-					continue
-				fi
+			if [[ -z "$input" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Cluster name cannot be empty." 0 0 || true
+				continue
 			fi
-			[[ -n "$input" ]] && cl_name="$input"
+			local _name_err
+			if ! _name_err=$(aba cluster --name "$input" --validate 2>&1); then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"${_name_err:-$TUI2_MSG_INVALID_CLUSTER_NAME}" 0 0 || true
+				continue
+			fi
+			cl_name="$input"
 			# Warn if cluster is already installed
 			if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
@@ -1356,16 +1360,18 @@ ${_conn_help}
 			if [[ $? -eq 0 ]]; then
 				local raw=$(<"$_TUI_TMP")
 				# Normalize: convert commas/spaces to newlines, trim empty lines and whitespace
-				cl_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
+				local _new_macs
+				_new_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
 				# Validate MAC format (XX:XX:XX:XX:XX:XX)
 				local _bad_macs
-				_bad_macs=$(echo "$cl_macs" | grep -vE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || true)
+				_bad_macs=$(echo "$_new_macs" | grep -vE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || true)
 				if [[ -n "$_bad_macs" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid MAC address(es):\n\n${_bad_macs}\n\nExpected format: XX:XX:XX:XX:XX:XX" 0 0 || true
 					rm -f "$_mac_edit"
 					continue
 				fi
+				cl_macs="$_new_macs"
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
 				# Warn if count doesn't match expected nodes
 				local _mac_count _expected_nodes
