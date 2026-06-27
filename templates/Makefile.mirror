@@ -35,8 +35,13 @@ else
 endif
 MR_TARBALL := mirror-registry-$(MR_ARCH).tar.gz
 
-# Quay mirror-registry binary is not available for arm64; use Docker registry instead.
-ifeq ($(arch),aarch64)
+# Determine registry prerequisite based on vendor and architecture.
+# Docker registry needs only the lightweight Docker image; Quay needs the full mirror-registry tarball.
+# arm64 always uses Docker (Quay binary not available for that architecture).
+_REG_VENDOR := $(shell grep '^reg_vendor=' mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*\#.*//')
+ifeq ($(_REG_VENDOR),docker)
+  _REGISTRY_PREREQ := docker-reg-image.tgz
+else ifeq ($(arch),aarch64)
   _REGISTRY_PREREQ := docker-reg-image.tgz
 else
   _REGISTRY_PREREQ := mirror-registry
