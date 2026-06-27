@@ -166,4 +166,7 @@ else
 	rm -rf "${regcreds_dir:?}/"*
 fi
 
+# Invalidate cached mirror-verify result so TUI doesn't show stale "mirror ready"
+aba_mirror_verify_refresh
+
 aba_info_ok "Registry uninstall successful"

@@ -15215,43 +15215,54 @@ Add a confirmation dialog before changing the platform: "Change platform from vm
 
 ---
 
-## Bug #889: Core — `aba upgrade` fails on conditional updates (missing --allow-not-recommended)
+## Bug #889: Core — `aba upgrade` fails on conditional updates — no clear message
 **Status:** OPEN
 
-**Severity:** High (functional — upgrade fails when version is a conditional update)
-**Component:** Core — `scripts/cluster-upgrade.sh` lines 264-334
+**Severity:** High (functional — upgrade fails with confusing output)
+**Component:** Core — `scripts/cluster-upgrade.sh` lines 326-334
 **Found:** 2026-06-26 (verified via TUI on conno, upgrading sno 4.20.20 → 4.20.23)
+
+### Design decision
+
+**ABA MUST NEVER use `--allow-not-recommended`.** Conditional updates carry known risks
+that require explicit human judgment. ABA must surface the reason clearly and abort —
+the user can run the upgrade manually if they accept the risk.
 
 ### Description
 
-When upgrading a cluster via `aba upgrade --to 4.20.23`, the upgrade fails with:
+When upgrading a cluster via `aba upgrade --to 4.20.23`, the upgrade fails because
+the target is a "conditional update". The current error handling (line 332) calls
+`aba_abort` which dumps the raw upgrade command, while line 327 echoes the FULL
+`oc adm upgrade` output — including the suggestion to use `--allow-not-recommended`
+which ABA should never do.
+
+The user sees a wall of text and a confusing suggestion instead of a clear explanation.
+
+### Current behavior
 
 ```
 error: the update 4.20.23 is not one of the recommended updates, but is available as a conditional update.
 To accept the Recommended=False risk and to proceed with update use --allow-not-recommended.
   Reason: ControlPlaneStatusGreyIcon
   Message: Control plane status indicator remains grey and never shows green...
+[ABA] Upgrade command failed (exit=1): oc adm upgrade --to 4.20.23
 ```
 
-The `cluster-upgrade.sh` script uses `oc adm upgrade --to $target_ver` when OSUS is active (line 266), but does not handle the case where the target version is a "conditional update" — requiring `--allow-not-recommended`. The error fallback on line 328 only checks for "cannot refresh available updates" (OSUS graph unavailable), not for the "not one of the recommended updates" error.
+### Expected behavior
 
-### Root Cause
-
-In `scripts/cluster-upgrade.sh`:
-- Line 266: `upgrade_cmd="oc adm upgrade --to $target_ver $opt_force"` — no `--allow-not-recommended` flag
-- Line 328: Only handles "cannot refresh available updates" error; does not handle "conditional update" / "not one of the recommended updates" error
+```
+[ABA] Version 4.20.23 is a conditional update with known risks:
+[ABA]   Reason: ControlPlaneStatusGreyIcon
+[ABA]   Message: Control plane status indicator remains grey...
+[ABA] ABA does not support conditional updates. To proceed manually:
+[ABA]   oc adm upgrade --to 4.20.23 --allow-not-recommended
+```
 
 ### Fix
 
-Add a fallback case on line 328 for conditional updates:
-
-```bash
-elif [ $_upgrade_rc -ne 0 ] && echo "$_upgrade_out" | grep -q "not one of the recommended updates"; then
-    aba_warning "Target is a conditional update — retrying with --allow-not-recommended"
-    $upgrade_cmd --allow-not-recommended
-```
-
-Or alternatively, always add `--allow-not-recommended` to the `--to` command when `--force` is specified.
+Add an `elif` case (before the generic abort) that detects "not one of the recommended
+updates", extracts the Reason/Message lines, shows them in a clean ABA-formatted
+message, and exits — without using `--allow-not-recommended` itself.
 
 ---
 
