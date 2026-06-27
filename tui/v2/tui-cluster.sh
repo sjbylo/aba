@@ -2236,10 +2236,14 @@ _upgrade_preflight_check() {
 		oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
 
 	if echo "$_adm_out" | grep -q "Upgradeable=False"; then
+		local _wrapped _header _text
+		_wrapped=$(echo "$_adm_out" | fold -s -w 72 | sed 's/$/\\n/' | tr -d '\n')
+		_header="The cluster reports Upgradeable=False.\nThis may require admin acknowledgment before upgrading.\n\nReview the details and only continue if you have\nresolved any required actions:\n\n"
+		_text="${_header}${_wrapped}"
 		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Gate Detected" \
 			--yes-label "Continue" --no-label "Cancel" \
 			--defaultno \
-			--yesno "The cluster reports Upgradeable=False.\nThis may require admin acknowledgment before upgrading.\n\nReview the details and only continue if you have\nresolved any required actions:\n\n$_adm_out" 0 0
+			--yesno "$_text" 0 0
 		return $?
 	fi
 	return 0
