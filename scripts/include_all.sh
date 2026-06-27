@@ -569,7 +569,7 @@ verify-aba-conf() {
 	# Check for ip addr
 	[ "$machine_network" ] && ! echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
 	# Check for number between 0 and 32
-	[ "$prefix_length" ] && ! echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
+	[ "$prefix_length" ] && ! echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' && { echo_red "Error: prefix_length is invalid in aba.conf [$prefix_length]" >&2; ret=1; }
 	# Check for comma separated list of either IPs or domains/hostnames
 	[ "$ntp_servers" ] && ! echo $ntp_servers | grep -q -E '^([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b)(,([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b))*$' && \
 			{ echo_red "Error: ntp_servers is invalid in aba.conf [$ntp_servers]" >&2; ret=1; }
@@ -766,6 +766,14 @@ suggest_starting_ip() {
 	[ $offset -gt $host_count ] && offset=$(( host_count * 3 / 4 ))
 	[ $offset -lt 1 ] && offset=1
 	int_to_ip $(( net_int + offset ))
+}
+
+# Validate an IPv4 address: format + octet range (0-255).
+# Returns 0 if valid, 1 if invalid.
+_valid_ipv4() {
+	local ip="$1"
+	[[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+	(( BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255 ))
 }
 
 # -----------------------------------------------------------------------------
@@ -1010,7 +1018,7 @@ verify-cluster-conf() {
 
 	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
-	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
+	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: prefix_length is invalid in cluster.conf [$prefix_length]" >&2; ret=1; }
 
 	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
@@ -1070,15 +1078,12 @@ verify-cluster-conf() {
 	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 	PERL_DNS_IP_REGEX='^(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3}(?:,(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3})*$'
 	#! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
-	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
+	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
 
 	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
 
-	# The next few values are all optional
-	if [ ! -n $ports ]; then
-		echo_red "Error: ports value is missing in cluster.conf" >&2
-		ret=1;
-	else
+	# The next few values are all optional — only validate if set
+	if [ -n "${ports:-}" ]; then
 		[[ $ports =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]] || { echo_red "Error: ports list is invalid in cluster.conf: [$ports]" >&2; ret=1; }
 	fi
 

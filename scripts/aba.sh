@@ -136,6 +136,9 @@ while [ $i -le $# ]; do
 			# can target the correct cluster.conf
 			i=$((i + 1))
 			_CLI_CLUSTER_NAME="${!i}"
+			# Basic validation before include_all.sh is sourced (full check in --name handler later)
+			[[ -z "$_CLI_CLUSTER_NAME" ]] && echo "Error: missing value after --name/-n" >&2 && exit 1
+			[[ ! "$_CLI_CLUSTER_NAME" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]] && echo "Error: invalid cluster name '$_CLI_CLUSTER_NAME'" >&2 && exit 1
 			new_args+=("$arg" "$_CLI_CLUSTER_NAME")
 			;;
 
@@ -661,26 +664,23 @@ elif [ "$1" = "--light" ]; then
 	elif [ "$1" = "--dns" -o "$1" = "-N" ]; then
 		# If arg missing remove from aba.conf
 		dns_ips=""
-		##while [ "$2" ] && ! echo "$2" | grep -q -e "^-"; do
-		while [[ -n $2 && $2 != -* ]]; do  # no need for grep
-			# Skip invalid values (ip)
-			if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-				[ "$dns_ips" ] && dns_ips="$dns_ips,$2" || dns_ips="$2"
-			else
-				aba_abort "skipping invalid IP address [$2]"
-			fi
+		while [[ -n $2 && $2 != -* ]]; do
+			_valid_ipv4 "$2" || aba_abort "invalid DNS server IP [$2] — expected valid IPv4 (octets 0-255)"
+			[ "$dns_ips" ] && dns_ips="$dns_ips,$2" || dns_ips="$2"
 			shift
 		done
 		replace-value-conf -n dns_servers -v "$dns_ips" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 
 	elif [ "$1" = "--ntp" -o "$1" = "-T" ]; then
 		# If arg missing remove from aba.conf
-		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip addr
+		# Check arg after --ntp, if "empty" then remove value from aba.conf, otherwise add valid ip/hostname
 		ntp_vals=""
-		# While there is a valid arg...
-		#while [ "$2" ] && ! echo "$2" | grep -q -e "^-"
-		while [[ -n $2 && $2 != -* ]]; do  # no need for grep
-			[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
+		while [[ -n $2 && $2 != -* ]]; do
+			if [[ "$2" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+				[ "$ntp_vals" ] && ntp_vals="$ntp_vals,$2" || ntp_vals="$2"
+			else
+				aba_abort "invalid NTP server [$2] — must be a hostname or IP address"
+			fi
 			shift	
 		done
 		replace-value-conf -n ntp_servers -v "$ntp_vals" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
@@ -689,7 +689,8 @@ elif [ "$1" = "--light" ]; then
 		# If arg missing remove from aba.conf
 		shift 
 		gw_ip=
-		if [[ -n $1 && $1 != -* && $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+		if [[ -n $1 && $1 != -* ]]; then
+			_valid_ipv4 "$1" || aba_abort "invalid gateway IP [$1] — expected valid IPv4 (octets 0-255)"
 			gw_ip=$1
 			shift
 		fi
@@ -701,16 +702,8 @@ elif [ "$1" = "--light" ]; then
 		_flag="$1"
 		api_vip=
 		if [[ -n $2 && $2 != -* ]]; then
-			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-				IFS=. read -r o1 o2 o3 o4 <<< "$2"
-				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
-					api_vip=$2
-				else
-					aba_abort "invalid IPv4 address [$2]" 
-				fi
-			else
-				aba_abort "argument invalid [$2] after option: $_flag" 
-			fi
+			_valid_ipv4 "$2" || aba_abort "invalid IPv4 address [$2] after option: $_flag"
+			api_vip=$2
 			shift
 		fi
 		_set_cluster_conf api_vip "$api_vip" "$_flag"
@@ -719,16 +712,8 @@ elif [ "$1" = "--light" ]; then
 		_flag="$1"
 		ingress_vip=
 		if [[ -n $2 && $2 != -* ]]; then
-			if [[ $2 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-				IFS=. read -r o1 o2 o3 o4 <<< "$2"
-				if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 )); then
-					ingress_vip=$2
-				else
-					aba_abort "invalid IPv4 address [$2]" 
-				fi
-			else
-				aba_abort "argument invalid [$2] after option: $_flag" 
-			fi
+			_valid_ipv4 "$2" || aba_abort "invalid IPv4 address [$2] after option: $_flag"
+			ingress_vip=$2
 			shift
 		fi
 		_set_cluster_conf ingress_vip "$ingress_vip" "$_flag"
@@ -870,11 +855,8 @@ elif [ "$1" = "--light" ]; then
 		shift 2
 	elif [ "$1" = "--starting-ip" -o "$1" = "-i" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
-		if echo "$2" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			_set_cluster_conf starting_ip "$2" "$1"
-		else
-			aba_abort "argument invalid [$2] after option $1" 
-		fi
+		_valid_ipv4 "$2" || aba_abort "invalid starting IP [$2] — expected valid IPv4 (octets 0-255)"
+		_set_cluster_conf starting_ip "$2" "$1"
 		shift 2
 
 	elif [ "$1" = "--data-disk-gb" -o "$1" = "--data-disk" ]; then
