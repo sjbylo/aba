@@ -157,8 +157,11 @@ if ! scripts/j2 templates/cluster.conf.j2 > cluster.conf; then
 	exit 1
 fi
 
-# For sno, ensure these values are commented out as they are not needed!
-[ "$type" = "sno" ] && sed -E -i -e "s/^api_vip=[^ \t]*/#api_vip=not-required/g" -e "s/^ingress_vip=[^ \t]*/#ingress_vip=not-required/g" cluster.conf
+# For sno, clear VIPs as they are not needed
+if [ "$type" = "sno" ]; then
+	replace-value-conf -q -n api_vip -v "" -f cluster.conf
+	replace-value-conf -q -n ingress_vip -v "" -f cluster.conf
+fi
 
 edit_file cluster.conf "Edit the cluster.conf file to set all the required parameters for OpenShift installation" #### don't want error here, just stop || exit 1
 

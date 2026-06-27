@@ -520,10 +520,10 @@ elif [ "$1" = "--light" ]; then
 		opt=$1
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
-		# If no value (or "none"), comment out the target version in mirror.conf (preserves old value)
+		# If no value (or "none"), clear the target version in mirror.conf
 		if [[ "$2" =~ ^- || -z "$2" || "$2" = "none" ]]; then
 			[[ "${2:-}" = "none" ]] && shift
-			sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" "$WORK_DIR/mirror.conf"
+			replace-value-conf -q -n ocp_version_target -v "" -f "$WORK_DIR/mirror.conf"
 			aba_info "Upgrade target version cleared from mirror.conf"
 			shift
 			continue
