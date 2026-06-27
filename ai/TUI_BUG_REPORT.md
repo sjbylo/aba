@@ -5679,7 +5679,7 @@ fi
 ---
 
 ## Bug #517: "Always TUI/Terminal" doesn't skip mode dialog on retry within same command
-**Status:** OPEN
+**Status:** FIXED — _TUI_EXEC_MODE and "Always" options removed entirely (commit 7d3f95b6); dialog always shows both choices
 
 **Severity:** Low (UX annoyance)
 **Component:** TUI v2 — confirm_and_execute retry logic
@@ -5863,7 +5863,7 @@ _adm_out=$(oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
 ---
 
 ## Bug #521: `ntp_servers=compact` data corruption — cluster type value written to NTP field
-**Status:** OPEN
+**Status:** FIXED — variable scoping fixed by TUI v2 refactoring; all cl_* vars are properly local; verified NTP values correct on conno
 
 **Severity:** Medium (data corruption in cluster.conf — observed, root cause uncertain)
 **Component:** TUI v2 — cluster wizard persistence / `_persist_cluster_draft()`
@@ -6293,7 +6293,7 @@ $_ssh "mkdir -p $remote_tmp"
 
 **Severity:** Low (UX annoyance, not functional)
 **Component:** TUI v2 — `confirm_and_execute()` in `tui/v2/tui-lib.sh`
-**Status:** OPEN — partially fixed — works for subsequent `confirm_and_execute` calls, but retry within the SAME call still shows the dialog
+**Status:** FIXED — _TUI_EXEC_MODE removed entirely (commit 7d3f95b6); no "Always" option exists anymore
 
 ### Updated analysis
 
@@ -14611,7 +14611,7 @@ Remove dead code. Remove unused variables.
 ---
 
 ## Bug #861: TUI DISCO mode — wizard auto-runs mirror_install even when registry is running but `.available` marker missing
-**Status:** OPEN
+**Status:** FIXED — gate now probes registry via _mirror_has_release_image before auto-installing; recreates .available marker if registry responds
 
 **Severity:** Moderate (UX — TUI exits unexpectedly in DISCO mode)
 **Component:** TUI v2 — `tui-disco.sh` `_disco_bundle_wizard_gate()` line 116
@@ -14960,7 +14960,7 @@ Add setup steps documenting `aba vmw` (interactive vCenter configuration) and `a
 ---
 
 ## Bug #880: TUI DISCO mode — Back/Cancel during auto-run wizard exits TUI instead of showing action menu
-**Status:** OPEN
+**Status:** FIXED — mirror_install and disco_load_images in gate now use || true so failures drop to action menu instead of exiting TUI
 
 **Severity:** Moderate (UX — user loses TUI session, must restart)
 **Component:** TUI v2 — `tui-disco.sh` `_disco_bundle_wizard_gate()` lines 116-126
