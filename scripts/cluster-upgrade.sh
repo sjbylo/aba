@@ -329,6 +329,11 @@ if [ ! "$upgrade_already_running" ]; then
 		aba_warning "OSUS update graph unavailable — falling back to --to-image with digest"
 		aba_debug "Running: $_image_cmd"
 		eval "$_image_cmd"
+	elif [ $_upgrade_rc -ne 0 ] && echo "$_upgrade_out" | grep -q "not one of the recommended updates"; then
+		echo "$_upgrade_out" | grep -E "  Reason:|  Message:" >&2
+		aba_abort "Version $target_ver is a conditional update with known risks (see above)." \
+			"Review the risks, then proceed manually if acceptable:" \
+			"  oc adm upgrade --to $target_ver --allow-not-recommended"
 	elif [ $_upgrade_rc -ne 0 ]; then
 		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd"
 	fi
