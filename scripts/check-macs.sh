@@ -7,7 +7,7 @@ aba_debug "Starting: $0 $*"
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
-	eval "$(scripts/cluster-config.sh || exit 1)"
+	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
 CP_MAC_ADDR_ARRAY=($CP_MAC_ADDRS)

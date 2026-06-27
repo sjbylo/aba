@@ -109,6 +109,11 @@ using images from the local mirror registry. The workflow:
 - Target must be strictly higher than current version.
 - Release image must exist in the local mirror (verified via `skopeo inspect`).
 - The `--force` flag is passed through to `oc adm upgrade` when specified.
+- ABA MUST NOT use `--allow-not-recommended`. Conditional updates carry known
+  risks that require explicit human judgment. If a target version is a conditional
+  update, ABA surfaces the reason/message and aborts. The user can run the upgrade
+  manually with `oc adm upgrade --to <ver> --allow-not-recommended` if they
+  accept the risk.
 
 ### Cluster deletion (`aba delete`)
 
