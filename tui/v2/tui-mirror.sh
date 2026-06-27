@@ -435,7 +435,8 @@ _mirror_op_confirm() {
 
 	# Pre-flight: validate target version exists in the configured channel
 	# Catches stale targets left from a previous channel (e.g. set on fast, switched to stable)
-	if [[ -n "$_target" && "$_target" != "$_ver" ]]; then
+	# Skip on DISCO — no internet to query Cincinnati, and the bundle already has the images.
+	if [[ "$_TUI_MODE" != "DISCO" && -n "$_target" && "$_target" != "$_ver" ]]; then
 		if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
 				--yes-label "Clear Target" --no-label "Cancel" \
@@ -628,6 +629,27 @@ mirror_prep_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
 				"Version $_target_ver not found in '$_channel' channel.\n\nThis version may not have been released yet.\nCheck the channel or try a different version." 0 0
 			continue
+		fi
+
+		# Validate upgrade path: source version must exist in the target channel.
+		local _tgt_minor="${_target_ver%.*}"
+		[[ "$_target_ver" == *-* ]] && _tgt_minor="${_target_ver%%-*}" && _tgt_minor="${_tgt_minor%.*}"
+		if [[ "$_tgt_minor" != "${_current_ver%.*}" ]]; then
+			local _tgt_channel="${_channel}-${_tgt_minor}"
+			dlg --backtitle "$(ui_backtitle)" --infobox "Verifying upgrade path: ${_current_ver} in ${_tgt_channel}..." 0 0
+			local _graph_vers _lowest
+			_graph_vers=$(curl -sf "https://api.openshift.com/api/upgrades_info/graph?channel=${_tgt_channel}&arch=${ARCH:-amd64}" 2>/dev/null \
+				| jq -r '.nodes[].version' 2>/dev/null) || true
+			if [[ -n "$_graph_vers" ]] && ! echo "$_graph_vers" | grep -qxF "$_current_ver"; then
+				_lowest=$(echo "$_graph_vers" | sort -V | head -1)
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Not Available" --msgbox \
+					"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
+Version ${_current_ver} is not in channel ${_tgt_channel}.\n\
+Lowest entry point: ${_lowest:-unknown}\n\n\
+You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first.\n\n\
+Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_path/" 0 0
+				continue
+			fi
 		fi
 
 		break

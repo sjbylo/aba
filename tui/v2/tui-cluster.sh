@@ -2060,7 +2060,7 @@ cluster_day2_menu() {
 			"T" "Graceful cluster startup" \
 			"" "──── Cleanup ──────────────────────" \
 			"C" "Clean (remove artifacts, retry install)" \
-			"K" "Delete cluster" \
+			"D" "Delete cluster" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -2109,7 +2109,7 @@ Navigation:
 			G) _day2_shutdown ;;
 			T) _day2_startup ;;
 			C) _day2_clean ;;
-			K) _day2_delete ;;
+			D) _day2_delete ;;
 		esac
 	done
 }
