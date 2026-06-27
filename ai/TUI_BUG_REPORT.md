@@ -4534,7 +4534,7 @@ Change "reprecated" to "deprecated".
 
 ## Bug #472 — `aba --channel eus` accepted but bare "eus" is not a valid Cincinnati channel
 
-**Status:** OPEN — live verified on conno
+**Status:** NOT A BUG — bare `eus` is a valid short channel name; ABA internally appends `-X.Y` when querying Cincinnati (same as stable/fast/candidate)
 **Severity:** LOW-MEDIUM — Silently stores invalid channel, fails on next version lookup
 **Found:** 2026-06-19 (live CLI testing)  
 **Component:** Core ABA (`scripts/aba.sh`, `--channel` flag, line ~455)
@@ -4618,7 +4618,7 @@ fi
 
 ## Bug #477: `aba cluster --starting-ip 999.999.999.999` accepted (invalid octets, CLI)
 
-**Status:** OPEN  
+**Status:** FIXED — _valid_ipv4() rejects octets > 255 in --starting-ip  
 **Severity**: Low (format-only validation, caught downstream but with confusing error)  
 **Component**: CLI (`scripts/aba.sh`)  
 **Discovered**: 2026-06-19  
@@ -4830,7 +4830,7 @@ Either accept `--type` before `cluster` target (delay evaluation), OR show a cle
 
 ## Bug #492: `aba --channel eus` accepted without validation (still open)
 
-**Status:** OPEN (re-verifying Bug #472)  
+**Status:** NOT A BUG — duplicate of #472; bare eus is a valid short channel name  
 **Severity**: LOW  
 **Component**: CLI (`scripts/aba.sh`)  
 **Discovered**: 2026-06-23  
@@ -6491,7 +6491,7 @@ Users who naturally type `aba --help cluster` get the wrong help text, leading t
 
 ## Bug #538: Early `-n`/`--name` has no validation of value
 
-**Status:** OPEN (code analysis)
+**Status:** FIXED — early --name handler validates DNS label format
 **Severity**: MEDIUM
 **Component**: CLI (`scripts/aba.sh`, lines 133-138)
 **Discovered**: 2026-06-24
@@ -6915,7 +6915,7 @@ Users with special characters in their registry password see cryptic SSH or auth
 
 ## Bug #558: `reg-install.sh` vendor dispatch has no validation of vendor override
 
-**Status:** OPEN (code analysis)
+**Status:** FIXED — vendor allowlist already exists in reg-install.sh (case statement lines 20-23)
 **Severity**: HIGH
 **Component**: Core (`scripts/reg-install.sh`, line 30)
 **Discovered**: 2026-06-24
@@ -7897,7 +7897,7 @@ In DIRECT mode, the label should be mode-appropriate, e.g. "Configure OperatorHu
 
 ## Bug #603 — `aba --ntp` accepts any string without validation
 
-**Status:** OPEN — while loop (line 682) accumulates values but no format validation (hostname/IP) on each `$2`
+**Status:** FIXED — --ntp now validates hostname/IP format
 **Severity:** MEDIUM — Silently accepts garbage values
 **Found:** 2026-06-25 (live CLI testing on conno)
 **Component:** Core ABA (`scripts/aba.sh`, lines 676-687)
@@ -7928,7 +7928,7 @@ NTP values should be validated (at minimum: valid hostname or IP address format)
 
 ## Bug #604 — Inconsistent IP validation across CLI flags
 
-**Status:** OPEN — `--gateway-ip` (line 692) only checks regex format without octet-range check; `--api-vip` (line 704) does full octet validation
+**Status:** FIXED — all IP-accepting CLI flags now use _valid_ipv4() with octet-range check
 **Severity:** MEDIUM — Some flags validate octets, others don't
 **Found:** 2026-06-25 (code review)
 **Component:** Core ABA (`scripts/aba.sh`)
@@ -8192,7 +8192,7 @@ Tested on conno host via tmux "tui-debugging" session:
 
 ## Bug #612 — TUI: Reserved cluster name gives misleading "Invalid DNS label" error
 
-**Status:** OPEN — TUI shows generic `TUI2_MSG_INVALID_CLUSTER_NAME` on all `--validate` failures; doesn't surface the "reserved name" error from `_valid_cluster_name`
+**Status:** FIXED — TUI shows specific error from _valid_cluster_name instead of generic message
 **Severity:** Low (UX / error message quality)
 **Component:** `tui/v2/tui-cluster.sh`, cluster name input; `tui/v2/tui-strings2.sh`
 
@@ -8238,7 +8238,7 @@ Tested on conno host via tmux "tui-debugging" session:
 
 ## Bug #613 — TUI: Invalid MAC addresses kept in memory after validation warning
 
-**Status:** OPEN — `cl_macs` assigned at line 1360 before validation; on failure, `continue` leaves invalid value in memory
+**Status:** FIXED — MAC validation now assigns to cl_macs only after passing checks
 
 **Severity**: MEDIUM — Invalid MACs can be persisted to `macs.conf` if user doesn't re-enter  
 **Component**: TUI (`tui/v2/tui-cluster.sh`, lines 1349-1360)  
@@ -8586,7 +8586,7 @@ This ensures any previously-exported GOVC_DATACENTER/GOVC_CLUSTER values are ove
 
 ## Bug #620 — Core: verify-cluster-conf silently accepts empty `ports` due to unquoted variable
 
-**Status:** OPEN — verified on conno
+**Status:** FIXED — quoted $ports variable; empty ports now correctly skipped
 
 - **Status:** OPEN (verified on conno)
 - **Severity**: Medium (validation bypass — empty ports in cluster.conf not caught)
@@ -9088,7 +9088,7 @@ Invalid `aba.conf` (e.g. `platform=bogus`) doesn't stop cluster.conf creation. T
 
 ## Bug #635 — Core: `aba.sh --ntp` accepts arbitrary invalid values
 
-**Status:** OPEN — code review
+**Status:** FIXED — duplicate of #603; --ntp validates hostname/IP format
 
 - **Status:** OPEN (code review)
 - **Severity**: Medium
@@ -9107,7 +9107,7 @@ No validation on the NTP argument before writing to config.
 
 ## Bug #636 — Core: `aba.sh --gateway-ip` lacks octet-range validation
 
-**Status:** OPEN — code review
+**Status:** FIXED — _valid_ipv4() rejects octets > 255 in --gateway-ip
 
 - **Status:** OPEN (code review)
 - **Severity**: Medium
@@ -9434,7 +9434,7 @@ Remove the immediate `replace-value-conf` call from the platform toggle case. In
 
 ## Bug #651 — Core: `--ntp` flag accepts arbitrary values without validation
 
-**Status:** OPEN — CLI on conno: `aba cluster --name test --ntp "not-a-host!!!!"` — accepted without error
+**Status:** FIXED — duplicate of #603; --ntp validates hostname/IP format
 
 - **Status:** VERIFIED (CLI on conno: `aba cluster --name test --ntp "not-a-host!!!!"` — accepted without error)
 - **Severity**: Low (misconfiguration caught later at cluster install time, not at input time)
@@ -9457,7 +9457,7 @@ Add hostname/IP validation regex similar to `--dns` validation, but also accept 
 
 ## Bug #652 — Core: `--gateway-ip` and `--starting-ip` regex allows invalid octets > 255
 
-**Status:** OPEN — CLI on conno: `aba cluster --name test --gateway-ip 999.999.999.999` — accepted without error
+**Status:** FIXED — _valid_ipv4() helper validates all IP-accepting CLI flags
 
 - **Status:** VERIFIED (CLI on conno: `aba cluster --name test --gateway-ip 999.999.999.999` — accepted without error)
 - **Severity**: Low (caught by later validation, but confusing at input time)
@@ -11956,7 +11956,7 @@ it's always true at this point).
 
 ## Bug #751: Wrong variable/file names in validation error messages (3 instances)
 
-**Status:** OPEN — code review
+**Status:** FIXED — corrected 3 error message strings (prefix_length, dns_servers file ref)
 
 - **Status:** VERIFIED (code review)
 - **Severity**: Medium (functional — misleading error messages lead user to "fix" the wrong setting)
@@ -15699,7 +15699,7 @@ TUI v2 always uses `$ABA_ROOT/mirror/mirror.conf`, checks `$ABA_ROOT/mirror/.ava
 **Component:** `tui/v2/tui-cluster.sh` (927–934)
 **Found:** 2026-06-26 (code review)
 **Verified:** Code trace
-**Status:** OPEN
+**Status:** FIXED — empty cluster name rejected with feedback dialog
 
 ### Description
 
@@ -15843,7 +15843,7 @@ After resolving kubeconfig via `cluster_kubeconfig()` (prefers externalized stat
 **Component:** `scripts/create-cluster-conf.sh` (77)
 **Found:** 2026-06-26 (code review — confirmed by 3 independent reviews)
 **Verified:** Code trace
-**Status:** OPEN
+**Status:** FIXED — prefix_length non-empty guard before CIDR composition
 
 ### Description
 
