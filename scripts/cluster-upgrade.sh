@@ -268,20 +268,37 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$_image_cmd"
 	fi
 
-	# Pre-flight: check for upgrade blockers that require manual admin action.
-	# The output of 'oc adm upgrade' contains gate-specific instructions and links
-	# that the user must follow — ABA cannot auto-apply these (the patch varies per gate).
-	_adm_upgrade_out=$(oc adm upgrade 2>&1) || true
-	if echo "$_adm_upgrade_out" | grep -q "Upgradeable=False"; then
-		echo
-		aba_warning "The cluster reports Upgradeable=False." \
-			"This may require an admin acknowledgment before upgrading." \
-			"Review the output below and follow any instructions or links:"
-		echo
-		echo "$_adm_upgrade_out"
-		echo
-		ask "Continue with upgrade (only if you have resolved the above)" || exit 1
+	# Pre-flight: check ClusterVersion conditions using structured JSON.
+	# Don't hardcode reasons — just check status and report reason/message verbatim.
+	_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
+	if [ -n "$_cv_json" ]; then
+		_cv_failing=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Failing" and .status=="True") | .reason // "unknown"' 2>/dev/null) || true
+		if [ -n "$_cv_failing" ]; then
+			_cv_fail_msg=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Failing") | .message // ""' 2>/dev/null) || true
+			aba_warning "Cluster is reporting Failing=$_cv_failing" \
+				"$_cv_fail_msg"
+		fi
+
+		_cv_upgradeable=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .reason // "unknown"' 2>/dev/null) || true
+		if [ -n "$_cv_upgradeable" ]; then
+			_cv_upg_msg=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .message // ""' 2>/dev/null) || true
+			echo
+			aba_warning "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)" \
+				"$_cv_upg_msg" \
+				"" \
+				"ABA cannot resolve this automatically." \
+				"Review the message above and follow any referenced documentation."
+			echo
+			ask "Continue with upgrade (only if you have resolved the above)" || exit 1
+		fi
 	fi
+
+	# Pre-flight: check if target version is an available upgrade.
+	# Uses structured JSON from oc adm upgrade — no string grepping.
+	_available_versions=$(oc adm upgrade -o json 2>/dev/null \
+		| jq -r '.availableUpdates[]?.version // empty' 2>/dev/null) || true
+	_conditional_versions=$(oc adm upgrade -o json 2>/dev/null \
+		| jq -r '.conditionalUpdates[]?.release.version // empty' 2>/dev/null) || true
 
 	# Ensure the cluster's update channel matches the target version's major.minor.
 	# Only same-channel upgrades are supported (e.g. stable-4.20 → stable-4.21).
@@ -303,21 +320,50 @@ if [ ! "$upgrade_already_running" ]; then
 		_channel_changed=1
 	fi
 
-	# When OSUS is active and the channel just changed, wait for the CVO to
-	# refresh available updates from the new channel's graph before proceeding.
-	if [ "$_channel_changed" ] && [ "$osus_upstream" ]; then
+	# When the channel changed, re-fetch available updates from the new channel.
+	if [ "$_channel_changed" ]; then
 		aba_info "Waiting for update graph to refresh after channel change ..."
 		_graph_ok=""
 		for _try in $(seq 1 12); do
-			if oc adm upgrade 2>&1 | grep -q "$target_ver"; then
+			_available_versions=$(oc adm upgrade -o json 2>/dev/null \
+				| jq -r '.availableUpdates[]?.version // empty' 2>/dev/null) || true
+			_conditional_versions=$(oc adm upgrade -o json 2>/dev/null \
+				| jq -r '.conditionalUpdates[]?.release.version // empty' 2>/dev/null) || true
+			if echo "$_available_versions" | grep -qxF "$target_ver"; then
+				_graph_ok=1
+				break
+			fi
+			if echo "$_conditional_versions" | grep -qxF "$target_ver"; then
 				_graph_ok=1
 				break
 			fi
 			sleep 5
 		done
-		if [ -z "$_graph_ok" ]; then
-			aba_warning "Target $target_ver not yet visible in update graph after 60s — proceeding anyway (will fall back to --to-image if needed)"
+	else
+		# No channel change — check immediately
+		if echo "$_available_versions" | grep -qxF "$target_ver"; then
+			_graph_ok=1
+		elif echo "$_conditional_versions" | grep -qxF "$target_ver"; then
+			_graph_ok=1
 		fi
+	fi
+
+	# Validate that the target is reachable before attempting the upgrade
+	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+		_all_available=$(echo "$_available_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
+		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
+		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
+			"${_all_available:+Available upgrades: $_all_available}" \
+			"${_all_conditional:+Conditional upgrades: $_all_conditional}" \
+			"${_all_available:- No upgrades found — the upgrade may require intermediate versions.}" \
+			"Check the upgrade path: oc adm upgrade" \
+			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+	fi
+
+	# If no OSUS graph, fall back to --to-image (disconnected without OSUS)
+	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
+		aba_info "No local update graph (OSUS) — using --to-image with digest"
+		upgrade_cmd="$_image_cmd"
 	fi
 
 	# Execute upgrade
@@ -325,17 +371,9 @@ if [ ! "$upgrade_already_running" ]; then
 	aba_debug "Running: $upgrade_cmd"
 	_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
 	echo "$_upgrade_out"
-	if [ $_upgrade_rc -ne 0 ] && echo "$_upgrade_out" | grep -q "cannot refresh available updates"; then
-		aba_warning "OSUS update graph unavailable — falling back to --to-image with digest"
-		aba_debug "Running: $_image_cmd"
-		eval "$_image_cmd"
-	elif [ $_upgrade_rc -ne 0 ] && echo "$_upgrade_out" | grep -q "not one of the recommended updates"; then
-		echo "$_upgrade_out" | grep -E "  Reason:|  Message:" >&2
-		aba_abort "Version $target_ver is a conditional update with known risks (see above)." \
-			"Review the risks, then proceed manually if acceptable:" \
-			"  oc adm upgrade --to $target_ver --allow-not-recommended"
-	elif [ $_upgrade_rc -ne 0 ]; then
-		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd"
+	if [ $_upgrade_rc -ne 0 ]; then
+		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
+			"Check: oc adm upgrade"
 	fi
 
 	aba_info_ok "Upgrade command accepted by cluster"
@@ -363,14 +401,26 @@ fi
 if [ "$_wait_rc" -ne 0 ]; then
 	aba_warning "Upgrade has not started progressing after 5 minutes."
 	echo
-	_stall_out=$(oc adm upgrade 2>&1) || true
-	echo "$_stall_out"
-	echo
-	if echo "$_stall_out" | grep -q "ReleaseAccepted=False\|AdminAckRequired"; then
-		aba_info "The cluster may require an admin acknowledgment before upgrading."
-		aba_info "Review the messages above and the referenced documentation link."
-		aba_info "If needed, --force can bypass precondition checks (use with caution)."
+	# Report blocking conditions using structured JSON
+	_stall_json=$(oc get clusterversion version -o json 2>/dev/null) || true
+	if [ -n "$_stall_json" ]; then
+		_stall_conditions=$(echo "$_stall_json" | jq -r '
+			.status.conditions[] |
+			select((.type=="Failing" and .status=="True") or
+			       (.type=="Upgradeable" and .status=="False") or
+			       (.type=="ReleaseAccepted" and .status=="False")) |
+			"\(.type)=\(.status) (\(.reason // "unknown")): \(.message // "")"
+		' 2>/dev/null) || true
+		if [ -n "$_stall_conditions" ]; then
+			aba_warning "Blocking conditions detected:"
+			echo "$_stall_conditions" | while IFS= read -r _cond; do
+				aba_info "  $_cond"
+			done
+			echo
+		fi
 	fi
+	oc adm upgrade 2>&1 || true
+	echo
 	aba_info "Check with: aba -d $(basename "$PWD") run --cmd 'oc adm upgrade'"
 	exit 1
 fi
