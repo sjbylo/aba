@@ -13,11 +13,11 @@ source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # Pull secret file exists
-if [ -s $pull_secret_file ]; then
+if [ -s "$pull_secret_file" ]; then
 	# ... contains expected registry
-	if grep -q registry.redhat.io $pull_secret_file; then
+	if grep -q registry.redhat.io "$pull_secret_file"; then
 		# ... is the correct json format
-		if jq empty $pull_secret_file; then
+		if jq empty "$pull_secret_file"; then
 			aba_info "Valid Red Hat pull secret found at $pull_secret_file"
 
 			exit 0

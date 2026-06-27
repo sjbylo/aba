@@ -5,7 +5,7 @@ source scripts/include_all.sh
 
 aba_debug "Running: $0 $* at $(date) in dir: $PWD"
 
-. <(process_args $*)
+. <(process_args "$@")
 
 # Only prompt about deletion if VMs exist from a previous install.
 # On fresh install, no VMs exist — just proceed to create.

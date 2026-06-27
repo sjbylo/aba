@@ -537,20 +537,20 @@ auto_complete_install() {
 
 verify-aba-conf() {
 	[ "$verify_conf" = "off" ] && return 0
-	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
+	[ -f aba.conf ] && [ ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
 	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
-	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo $platform    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo "$ocp_channel" | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo "$platform"    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
-		echo $op_sets | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
+		echo "$op_sets" | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
 		for f in $(echo $op_sets | tr , " ")
 		do
 			[ "$f" = "all" ] && continue # Skip checking this since 'all' means all operators
@@ -1005,7 +1005,7 @@ _valid_cluster_name() {
 
 verify-cluster-conf() {
 	[ "$verify_conf" = "off" ] && return 0
-	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
+	[ -f cluster.conf ] && [ ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
 	local ret=0
@@ -1241,8 +1241,8 @@ ask() {
 	# Return default response, 0
 	[ ! "$yn" ] && return 0
 
-	[ "$def_response" == "y" ] && [ "$yn" == "y" -o "$yn" == "Y" ] && return 0
-	[ "$def_response" == "n" ] && [ "$yn" == "n" -o "$yn" == "N" ] && return 0
+	[ "$def_response" == "y" ] && { [ "$yn" == "y" ] || [ "$yn" == "Y" ]; } && return 0
+	[ "$def_response" == "n" ] && { [ "$yn" == "n" ] || [ "$yn" == "N" ]; } && return 0
 
 	# return "non-default" response 
 	return 1
@@ -1300,8 +1300,8 @@ try_cmd() {
 		[ ! "$quiet" ] && aba_info Pausing $pause seconds ...
 		sleep $pause
 
-		let pause=$pause+$backoff
-		let count=$count+1
+		pause=$(( pause + backoff ))
+		count=$(( count + 1 ))
 
 		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
 		echo cmd $* >>.cmd.out 
@@ -2900,7 +2900,7 @@ download_all_catalogs() {
 
 		run_once -i "catalog:${version_short}:${catalog}" -t "$ttl" -- \
 			scripts/download-catalog-index.sh "$catalog" "$version_short"
-		(( ++running ))
+		running=$(( running + 1 ))
 	done
 
 	aba_debug "Catalog download tasks started (max_parallel=$max_parallel)"
@@ -3138,7 +3138,7 @@ _run_oc_mirror_with_retry() {
 
 		try=$(( try + 1 ))
 		if [ $try -le $try_tot ]; then
-			echo_red "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
+			aba_warning "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
 
@@ -3149,7 +3149,7 @@ _run_oc_mirror_with_retry() {
 		aba_warning \
 			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
 			"View https://status.redhat.com/ for any current issues or planned maintenance."
-		[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
+		[ $try_tot -eq 1 ] && aba_warning "         Consider using the --retry option!" >&2
 
 		return 1
 	fi

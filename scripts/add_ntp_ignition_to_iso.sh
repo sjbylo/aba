@@ -19,11 +19,11 @@ aba_info "Adding NTP server to early bootstrap ignition: $ntp_servers"
 
 #arch=$(uname -m)
 iso_dir=iso-agent-based
-coreos-installer iso ignition show $iso_dir/agent.$ARCH.iso > $iso_dir/tmp.ign
+coreos-installer iso ignition show "$iso_dir/agent.$ARCH.iso" > "$iso_dir/tmp.ign"
 
 # Do not use tr -d "[:space:]", since that also deleted newlines which are needed for read to work for the last line!
 # Want to keep a record of chrony.conf for debugging
-cat > $iso_dir/chrony.conf << EOF
+cat > "$iso_dir/chrony.conf" << EOF
 $(echo "$ntp_servers" | tr -d "[ \t]" | tr ',' '\n' | while read item; do echo "server ${item} iburst"; done)
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
@@ -33,7 +33,7 @@ EOF
 
 aba_debug "Created ntp conf file: $iso_dir/chrony.conf"
 
-export CHRONY_CONF_BASE64=$(cat $iso_dir/chrony.conf | base64 -w 0)
+export CHRONY_CONF_BASE64=$(base64 -w 0 < "$iso_dir/chrony.conf")
 
 jq '.storage.files += [{
   "group": {},
@@ -46,9 +46,9 @@ jq '.storage.files += [{
     "source": "data:text/plain;charset=utf-8;base64,'$CHRONY_CONF_BASE64'"
   },
   "mode": 420
-}]' $iso_dir/tmp.ign > $iso_dir/custom_ign.ign
+}]' "$iso_dir/tmp.ign" > "$iso_dir/custom_ign.ign"
 
 aba_debug "Created ignition file: $iso_dir/custom_ign.ign"
 
-coreos-installer iso ignition embed -fi $iso_dir/custom_ign.ign $iso_dir/agent.$ARCH.iso
+coreos-installer iso ignition embed -fi "$iso_dir/custom_ign.ign" "$iso_dir/agent.$ARCH.iso"
 

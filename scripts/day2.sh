@@ -90,7 +90,7 @@ aba_info "Adding mirror registry CA to cluster trust store"
 aba_debug "Running: oc get cm registry-config -n openshift-config"
 cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
 # If installed from mirror reg. and trust CA missing (cm/registry-config) does not exist...
-if [ -s "$regcreds_dir/rootCA.pem" -a ! "$cm_existing" ]; then
+if [ -s "$regcreds_dir/rootCA.pem" ] && [ ! "$cm_existing" ]; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
 	export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
 	aba_info "Using root CA file at $regcreds_display/rootCA.pem"
@@ -221,7 +221,7 @@ apply_custom_manifests() {
 # mirror/data/working-dir/cluster-resources/itms-oc-mirror.yaml
 # ls mirror/data/working-dir/cluster-resources/{idms,itms}*yaml
 
-latest_working_dir=$(echo mirror/data/working-dir) 
+latest_working_dir="mirror/data/working-dir"
 
 ns=openshift-marketplace
 

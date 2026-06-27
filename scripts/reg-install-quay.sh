@@ -24,22 +24,22 @@ rm -f "$flag_file"
 temp_aba_key=~/.ssh/aba_check_ssh
 temp_aba_pub_key=~/.ssh/aba_check_ssh.pub
 
-if [ ! -s $temp_aba_key ]; then
+if [ ! -s "$temp_aba_key" ]; then
 	if [ ! -w ~/.ssh ]; then
 		aba_warning "Cannot write to ~/.ssh to check SSH connectivity! The Quay installer will likely fail."
 		sleep 2
 	else
 		aba_debug "Creating test ssh key: $temp_aba_key"
-		ssh-keygen -t rsa -f $temp_aba_key -N '' >/dev/null
-		chmod 600 $temp_aba_key $temp_aba_pub_key
-		cat $temp_aba_pub_key >> ~/.ssh/authorized_keys
+		ssh-keygen -t rsa -f "$temp_aba_key" -N '' >/dev/null
+		chmod 600 "$temp_aba_key" "$temp_aba_pub_key"
+		cat "$temp_aba_pub_key" >> ~/.ssh/authorized_keys
 	fi
 fi
 
-if [ -s $temp_aba_key ]; then
-	if ! ssh -F $ssh_conf_file -i $temp_aba_key $reg_host touch $flag_file >/dev/null 2>&1; then
+if [ -s "$temp_aba_key" ]; then
+	if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" "$reg_host" touch "$flag_file" >/dev/null 2>&1; then
 		aba_warning "SSH to '$reg_host' failed -- trying localhost instead ..."
-		if ! ssh -F $ssh_conf_file -i $temp_aba_key localhost touch $flag_file >/dev/null 2>&1; then
+		if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" localhost touch "$flag_file" >/dev/null 2>&1; then
 			aba_abort \
 				"For local Quay installation, SSH must work to localhost. The Quay installer requires this." \
 				"Failed command: ssh -i $temp_aba_key localhost" \

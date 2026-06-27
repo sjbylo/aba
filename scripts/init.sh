@@ -3,11 +3,11 @@
 
 PREFIX=/opt/aba
 
-source $PREFIX/scripts/include_all.sh
+source "$PREFIX/scripts/include_all.sh"
 
 aba_debug "Starting: $0 $*"
 
-cp $PREFIX/templates/aba.conf .
+cp "$PREFIX/templates/aba.conf" .
 mkdir -p mirror #FIXME: this might change
 
 # Initial prep for interactive mode: unset ocp_version and ocp_channel

@@ -323,12 +323,12 @@ if [ ! "$upgrade_already_running" ]; then
 	# Execute upgrade
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
-	_upgrade_out=$($upgrade_cmd 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
+	_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
 	echo "$_upgrade_out"
 	if [ $_upgrade_rc -ne 0 ] && echo "$_upgrade_out" | grep -q "cannot refresh available updates"; then
 		aba_warning "OSUS update graph unavailable — falling back to --to-image with digest"
 		aba_debug "Running: $_image_cmd"
-		$_image_cmd
+		eval "$_image_cmd"
 	elif [ $_upgrade_rc -ne 0 ]; then
 		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd"
 	fi

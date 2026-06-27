@@ -192,10 +192,10 @@ disco_main() {
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
-		"" "──── Advanced ──────────────────────"
-		"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
-		"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
-		"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
+			"" "──── Advanced ──────────────────────"
+			"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
+			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_MENU" \
@@ -230,14 +230,14 @@ Navigation:
   • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
-		1|255)
-			# ESC or Exit button: always confirm quit, regardless of how we got here
-			if confirm_quit; then
-				clear
-				_show_v2_exit_summary
-				exit 0
-			fi
-			continue
+			1|255)
+				# ESC or Exit button: always confirm quit, regardless of how we got here
+				if confirm_quit; then
+					clear
+					_show_v2_exit_summary
+					exit 0
+				fi
+				continue
 				;;
 			0) ;;
 		esac
@@ -269,13 +269,13 @@ Navigation:
 					disco_load_images
 				fi
 				;;
-	"$TUI2_DISCO_TAG_INSTALL")
-		tui_install_cluster_gate DISCO
-		case "$?" in
-		0) cluster_install_flow ;;
-		3) ;;
-		esac
-		;;
+			"$TUI2_DISCO_TAG_INSTALL")
+				tui_install_cluster_gate DISCO
+				case "$?" in
+				0) cluster_install_flow ;;
+				3) ;;
+				esac
+				;;
 			"$TUI2_DISCO_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \

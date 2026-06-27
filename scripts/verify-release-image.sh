@@ -48,7 +48,7 @@ fi
 # Extract openshift-install binary from the mirror, if not already.  Use this binary to install OpenShift.
 # Version+host+port in the filename ensures a version change triggers re-extraction.
 openshift_install_mirror="./openshift-install-mirror-${ocp_version}-${reg_host}-${reg_port}"
-if [ ! -x $openshift_install_mirror ]; then
+if [ ! -x "$openshift_install_mirror" ]; then
 	# HACK
 	cat > .idms.yaml <<-END
 	apiVersion: config.openshift.io/v1
@@ -66,7 +66,7 @@ if [ ! -x $openshift_install_mirror ]; then
 	exec_cmd="oc adm release extract --idms-file=.idms.yaml --command=openshift-install $reg_host:$reg_port$reg_path/openshift/release-images$release_sha --insecure=true"
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd || true
-	[ -x openshift-install ] && mv openshift-install $openshift_install_mirror
+	[ -x openshift-install ] && mv openshift-install "$openshift_install_mirror"
 	# Now use the one in CWD # [ -s openshift-install ] && mv openshift-install ~/bin
 	rm -f .idms.yaml
 else

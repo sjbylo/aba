@@ -31,7 +31,7 @@ aba_info "Uploading image ${iso_src} to ${KVM_HOST}:${iso_dest}"
 ssh -F ~/.aba/ssh.conf "${KVM_HOST}" "$SUDO rm -f '${iso_dest}'" 2>/dev/null || true
 
 if ! scp -F ~/.aba/ssh.conf "$iso_src" "${KVM_HOST}:${iso_dest}"; then
-	echo_red "ISO file failed to upload to KVM host!"
+	aba_abort "ISO file failed to upload to KVM host!"
 	exit 1
 fi
 

@@ -566,41 +566,41 @@ mirror_prep_upgrade() {
 			t) _target_ver="$_existing_target" ;;
 			l) _target_ver="$_latest" ;;
 			p) _target_ver="$_previous" ;;
-		c)
-			sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" "$ABA_ROOT/mirror/mirror.conf"
-			tui_kick_isconf_regen
-			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"\nUpgrade target cleared.\n\nMirror will no longer include upgrade images." 0 0
-			return 0
-			;;
-		m)
-			while :; do
-				dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
-					--inputbox "Enter target version (x.y, x.y.z, or x.y.z-rc.N):" \
-					0 0 "${_existing_target}" \
-					2>"$_TUI_TMP"
-			[[ $? -ne 0 ]] && { _target_ver=""; break; }
-			_target_ver=$(<"$_TUI_TMP")
-				_target_ver=$(echo "$_target_ver" | tr -d ' ')
-				if [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
-					break
-				elif [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"Resolving $_target_ver to latest z-stream..." 0 0
-					local _resolved=""
-					if _resolved=$(_resolve_minor_to_patch "$_target_ver" "$_channel"); then
-						_target_ver="$_resolved"
+			c)
+				sed -i --follow-symlinks "s|^\(ocp_version_target=\)|#\1|" "$ABA_ROOT/mirror/mirror.conf"
+				tui_kick_isconf_regen
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"\nUpgrade target cleared.\n\nMirror will no longer include upgrade images." 0 0
+				return 0
+				;;
+			m)
+				while :; do
+					dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade for Transfer" \
+						--inputbox "Enter target version (x.y, x.y.z, or x.y.z-rc.N):" \
+						0 0 "${_existing_target}" \
+						2>"$_TUI_TMP"
+					[[ $? -ne 0 ]] && { _target_ver=""; break; }
+					_target_ver=$(<"$_TUI_TMP")
+					_target_ver=$(echo "$_target_ver" | tr -d ' ')
+					if [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 						break
+					elif [[ "$_target_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
+						dlg --backtitle "$(ui_backtitle)" --infobox \
+							"Resolving $_target_ver to latest z-stream..." 0 0
+						local _resolved=""
+						if _resolved=$(_resolve_minor_to_patch "$_target_ver" "$_channel"); then
+							_target_ver="$_resolved"
+							break
+						fi
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Could not resolve $_target_ver in $_channel channel." 0 0
+					else
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"Invalid format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N" 0 0
 					fi
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Could not resolve $_target_ver in $_channel channel." 0 0
-				else
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N" 0 0
-				fi
-			done
-			[[ -z "$_target_ver" ]] && continue
-			;;
+				done
+				[[ -z "$_target_ver" ]] && continue
+				;;
 		esac
 
 		# Verify version exists in Cincinnati graph (fast check before long oc-mirror run)
@@ -819,14 +819,14 @@ mirror_view_isc() {
 				E)
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
 						--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
-				--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
-				if [[ $? -eq 0 ]]; then
-					if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
-						cp "$_TUI_TMP" "$isconf_file"
-						tui_log "ISC saved by user"
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"$TUI2_MSG_ISC_SAVED" 0 0 || true
-					fi
+						--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
+					if [[ $? -eq 0 ]]; then
+						if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
+							cp "$_TUI_TMP" "$isconf_file"
+							tui_log "ISC saved by user"
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"$TUI2_MSG_ISC_SAVED" 0 0 || true
+						fi
 					fi
 					;;
 				R)
@@ -854,15 +854,15 @@ mirror_view_isc() {
 					fi
 					;;
 				O)
-				if [[ "$_excl_plat" == "true" ]]; then
-					replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-					tui_log "Settings: excl_platform=false (all images)"
-				else
-					replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-					tui_log "Settings: excl_platform=true (operators only)"
-				fi
-				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
-				;;
+					if [[ "$_excl_plat" == "true" ]]; then
+						replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+						tui_log "Settings: excl_platform=false (all images)"
+					else
+						replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+						tui_log "Settings: excl_platform=true (operators only)"
+					fi
+					tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+					;;
 			esac
 		done
 	fi

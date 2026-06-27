@@ -20,7 +20,7 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 
 scripts/cli-install-all.sh --wait oc
 
-# Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
+# Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then
 	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
 	aba_info "OpenShift Update Service is not needed — the cluster can reach update channels directly."

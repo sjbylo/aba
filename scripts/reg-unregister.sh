@@ -21,7 +21,7 @@ if [ -s "$regcreds_dir/state.sh" ]; then
 	if [ "${reg_vendor:-}" != "existing" ]; then
 		aba_abort \
 			"This registry was installed by ABA (vendor=$reg_vendor)." \
-			"Use 'aba -d $(basename $PWD) uninstall' to remove it."
+			"Use 'aba -d $(basename "$PWD") uninstall' to remove it."
 	fi
 fi
 

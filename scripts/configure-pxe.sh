@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create PXE env (not in nuse)
+# Create PXE env (not in use)
 
 source scripts/include_all.sh
 

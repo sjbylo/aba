@@ -104,7 +104,7 @@ _missing=0
 name=standard
 type=standard
 
-. <(process_args $*)
+. <(process_args "$@")
 
 aba_debug "Creating cluster directory for [$name] of type [$type]"
 

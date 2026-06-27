@@ -12,7 +12,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 name=standard
 type=
 
-. <(process_args $*)
+. <(process_args "$@")
 
 [ ! "$name" ] && aba_abort "Error: cluster name missing!" 
 _valid_cluster_name "$name" || exit 1

@@ -122,14 +122,14 @@ direct_wizard() {
 				*) return 1 ;;
 			esac
 			;;
-			version)
-				_direct_version
-				case "$DIALOG_RC" in
-					next)
-						dlg --backtitle "$(ui_backtitle)" \
-							--title "Confirm Configuration" \
-							--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
-							10 50 || { step="channel"; continue; }
+		version)
+			_direct_version
+			case "$DIALOG_RC" in
+				next)
+					dlg --backtitle "$(ui_backtitle)" \
+						--title "Confirm Configuration" \
+						--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
+						10 50 || { step="channel"; continue; }
 
 					_ver_short=$(_ver_minor "$ocp_version")
 					# Save config early: catalog downloads need pull_secret_file from aba.conf
@@ -140,13 +140,13 @@ direct_wizard() {
 						# Start registry download early (shared task ID with aba.sh)
 						run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
 					fi
-						step="platform"
-						;;
-					back) step="channel" ;;
-					repeat) ;;
-					*) return 1 ;;
-				esac
-				;;
+					step="platform"
+					;;
+				back) step="channel" ;;
+				repeat) ;;
+				*) return 1 ;;
+			esac
+			;;
 		platform)
 			_direct_platform
 			case "$DIALOG_RC" in
@@ -464,40 +464,40 @@ _direct_version() {
 				p) ocp_version="$previous" ;;
 				o) ocp_version="$older" ;;
 				m)
-			while :; do
-				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
-					--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${ocp_version:-$latest}" \
-					2>"$_TUI_TMP"
-					if [[ $? -ne 0 ]]; then
-						DIALOG_RC="repeat"
-						return
-					fi
-					ocp_version=$(<"$_TUI_TMP")
-					ocp_version="${ocp_version##[[:space:]]}"
-					ocp_version="${ocp_version%%[[:space:]]}"
-				if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
-					break
-				elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
-					# x.y format — resolve to latest z-stream
-					local _input_minor="$ocp_version"
-					tui_log "Resolving $ocp_version to latest z-stream"
-					dlg --backtitle "$(ui_backtitle)" --infobox \
-						"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
-					local _resolved=""
-					if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
-						ocp_version="$_resolved"
-						tui_log "Resolved $_input_minor to $ocp_version"
-						break
-					fi
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
-					ocp_version=""
-				else
-					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
-				fi
-				done
-				;;
+					while :; do
+						dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
+							--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${ocp_version:-$latest}" \
+							2>"$_TUI_TMP"
+						if [[ $? -ne 0 ]]; then
+							DIALOG_RC="repeat"
+							return
+						fi
+						ocp_version=$(<"$_TUI_TMP")
+						ocp_version="${ocp_version##[[:space:]]}"
+						ocp_version="${ocp_version%%[[:space:]]}"
+						if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+							break
+						elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+							# x.y format — resolve to latest z-stream
+							local _input_minor="$ocp_version"
+							tui_log "Resolving $ocp_version to latest z-stream"
+							dlg --backtitle "$(ui_backtitle)" --infobox \
+								"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+							local _resolved=""
+							if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
+								ocp_version="$_resolved"
+								tui_log "Resolved $_input_minor to $ocp_version"
+								break
+							fi
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
+							ocp_version=""
+						else
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
+						fi
+					done
+					;;
 			esac
 			tui_log "Selected version: $ocp_version"
 			DIALOG_RC="next"
