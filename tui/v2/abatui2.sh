@@ -585,10 +585,10 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
-		"" "──── Transfer ──────────────────────"
-		"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
-		"$TUI2_CONNO_TAG_SAVE"           "$save_label"
-		"$TUI2_CONNO_TAG_PREP_UPGRADE"   "$upg_label"
+			"" "──── Transfer ──────────────────────"
+			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
+			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
+			"$TUI2_CONNO_TAG_PREP_UPGRADE"   "$upg_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
@@ -677,17 +677,17 @@ Navigation:
 				default_item=""
 			fi
 			;;
-	"$TUI2_CONNO_TAG_PREP_UPGRADE")
-		if [[ "$_TUI_INET" == "no" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-		else
-			mirror_prep_upgrade
-		fi
-		;;
-	"$TUI2_CONNO_TAG_SYNC")
-		if [[ "$_TUI_INET" == "no" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-		elif ! mirror_available; then
+		"$TUI2_CONNO_TAG_PREP_UPGRADE")
+			if [[ "$_TUI_INET" == "no" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_prep_upgrade
+			fi
+			;;
+		"$TUI2_CONNO_TAG_SYNC")
+			if [[ "$_TUI_INET" == "no" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			elif ! mirror_available; then
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
 				if [[ $? -eq 0 ]]; then
@@ -698,52 +698,52 @@ Navigation:
 			fi
 			default_item=""
 			;;
-			"$TUI2_CONNO_TAG_VIEW_ISC")
-				mirror_view_isc "false"
-				_TUI_ISC_UPDATED=false
-				;;
-			"$TUI2_CONNO_TAG_OPERATORS")
-				if [[ "$ops_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-				else
-					mirror_select_operators
-					default_item=""
-				fi
-				;;
-			"$TUI2_CONNO_TAG_BUNDLE")
-				if [[ "$bndl_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-				else
-					mirror_create_bundle
-				fi
-				;;
-			"$TUI2_CONNO_TAG_INSTALL")
-				tui_install_cluster_gate CONNO
-				case "$?" in
-				0) cluster_install_flow; default_item="" ;;
-				3) default_item="" ;;
-				esac
-				;;
-			"$TUI2_CONNO_TAG_DAY2")
-				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
-				else
-					cluster_day2_menu
-				fi
-				;;
-			"$TUI2_CONNO_TAG_SETTINGS")
-				_tui_settings_menu
-				;;
-			"$TUI2_CONNO_TAG_ADVANCED")
-				tui_advanced_menu
+		"$TUI2_CONNO_TAG_VIEW_ISC")
+			mirror_view_isc "false"
+			_TUI_ISC_UPDATED=false
+			;;
+		"$TUI2_CONNO_TAG_OPERATORS")
+			if [[ "$ops_avail" == "false" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_select_operators
 				default_item=""
-				;;
-			"$TUI2_CONNO_TAG_RECONFIGURE")
-				direct_wizard || true
-				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-				_invalidate_mirror_cache
-				default_item=""
-				;;
+			fi
+			;;
+		"$TUI2_CONNO_TAG_BUNDLE")
+			if [[ "$bndl_avail" == "false" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_create_bundle
+			fi
+			;;
+		"$TUI2_CONNO_TAG_INSTALL")
+			tui_install_cluster_gate CONNO
+			case "$?" in
+			0) cluster_install_flow; default_item="" ;;
+			3) default_item="" ;;
+			esac
+			;;
+		"$TUI2_CONNO_TAG_DAY2")
+			if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
+			else
+				cluster_day2_menu
+			fi
+			;;
+		"$TUI2_CONNO_TAG_SETTINGS")
+			_tui_settings_menu
+			;;
+		"$TUI2_CONNO_TAG_ADVANCED")
+			tui_advanced_menu
+			default_item=""
+			;;
+		"$TUI2_CONNO_TAG_RECONFIGURE")
+			direct_wizard || true
+			source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+			_invalidate_mirror_cache
+			default_item=""
+			;;
 		esac
 	done
 }

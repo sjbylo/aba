@@ -9,17 +9,17 @@ trap - ERR  # We don't want to catch on error. error handling added below.
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
-	eval $(scripts/cluster-config.sh $@ || exit 1)
+	eval "$(scripts/cluster-config.sh "$@")" || exit 1
 fi
 
-[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
-cat $ASSETS_DIR/rendezvousIP | grep -E -q "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$" || exit 0 # Ignore if not an IP
+[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+grep -E -q "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$" "$ASSETS_DIR/rendezvousIP" || exit 0 # Ignore if not an IP
 
 aba_info =================================================================================
 
 # Wait for the Agent port to become alive on the rendezvous node0...
 if [ ! -f .install-complete ]; then
-	AGENT_IP=$(cat $ASSETS_DIR/rendezvousIP)
+	AGENT_IP=$(cat "$ASSETS_DIR/rendezvousIP")
 	AGENT_PORT=8090
 	agent_url="http://$AGENT_IP:$AGENT_PORT/"
 

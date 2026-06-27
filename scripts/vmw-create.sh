@@ -62,7 +62,7 @@ cluster_folder="$VC_FOLDER"
 # If we are accessing vCenter (and not ESXi directly) 
 if [ -n "${VC:-}" ]; then
 	cluster_folder="$VC_FOLDER/$CLUSTER_NAME"
-	scripts/vmw-create-folder.sh "$cluster_folder"  # This will create a folder hirerachy, if needed
+	scripts/vmw-create-folder.sh "$cluster_folder"  # This will create a folder hierarchy, if needed
 fi
 
 # Check for mac collisions? 
@@ -148,7 +148,7 @@ create_node() {
 			$cmd
 		fi
 
-		let i=$i+1
+		i=$(( i + 1 ))
 	done
 }
 

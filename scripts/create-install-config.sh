@@ -54,7 +54,7 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 #to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
 if [ "$platform" = "bm" ]; then
 	to_output=$(normalize-cluster-conf | sed -E -e "s/^export //g" -e 's/^(mac_prefix|master_cpu_count|master_mem|worker_cpu_count|worker_mem|data_disk)=.*//g')
-elif [ "$platform" = "vmw" -o "$platform" = "kvm" ]; then
+elif [ "$platform" = "vmw" ] || [ "$platform" = "kvm" ]; then
 	to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
 fi
 echo
@@ -73,7 +73,7 @@ export image_content_sources=
 aba_debug rendezvous_ip: $starting_ip
 
 # Change the default of bare-metal host prefix
-if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
+if [ "$platform" = "bm" ] && [ $hostPrefix -eq 23 ]; then
 	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers"
 	export hostPrefix=22
 fi
@@ -93,10 +93,10 @@ if [ "$int_connection" = "direct" ]; then
 	use_mirror=
 elif [ "$int_connection" = "proxy" ]; then
 	# Else, if proxy is otherwise set, e.g. to 1 or true
-	if [ "$http_proxy" -o "$https_proxy" ]; then
+	if [ "$http_proxy" ] || [ "$https_proxy" ]; then
 		# This means we will do an ONLINE install, using the public Red Hat registry. 
 		if [ -s $pull_secret_file ]; then
-			export pull_secret=$(cat $pull_secret_file | jq .)
+			export pull_secret=$(jq . "$pull_secret_file")
 			aba_info "Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry."
 		else
 			aba_abort \
@@ -217,22 +217,22 @@ if [ ! "$pull_secret" ]; then
 fi
 
 # Check for ssh key files 
-if [ -s $ssh_key_file.pub ]; then
+if [ -s "$ssh_key_file.pub" ]; then
 	aba_info Using existing ssh key files: $ssh_key_file ... 
 else
 	aba_info "Creating ssh key files for $ssh_key_file ..."
-	ssh-keygen -t rsa -f $ssh_key_file -N ''
+	ssh-keygen -t rsa -f "$ssh_key_file" -N ''
 fi
-export ssh_key_pub=$(cat $ssh_key_file.pub) 
+export ssh_key_pub=$(cat "$ssh_key_file.pub")
 
 
 # Check the private registry is defined, if it's in use
-if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
+if [ "$additional_trust_bundle" ] && [ "$pull_secret" ]; then
 	[ ! "$reg_host" ] && aba_abort "registry host value: reg_host is not defined in mirror.conf!"
 fi
 
 # Check that the release image is available in the private registry
-if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
+if [ "$additional_trust_bundle" ] && [ "$image_content_sources" ]; then
 	scripts/create-containers-auth.sh --load || exit 1
 	scripts/verify-release-image.sh
 fi

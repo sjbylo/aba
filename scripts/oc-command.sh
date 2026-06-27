@@ -25,5 +25,5 @@ cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. 
 
 aba_info "Running command: oc $cmd" >&2
 aba_debug "Running: oc $cmd"
-eval oc $cmd
+eval "oc $cmd"
 

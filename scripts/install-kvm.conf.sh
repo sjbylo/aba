@@ -55,15 +55,15 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 [ "$platform" != "kvm" ] && \
 	aba_info "To set the platform value in aba.conf run: 'aba -p kvm' and run: 'aba kvm'." && rm -f kvm.conf && exit 0
 
-aba_debug Checking for $PWD/kvm.conf file ..
+aba_debug "Checking for $PWD/kvm.conf file .."
 
 if [ -s kvm.conf ]; then
-	aba_debug kvm.conf exists, test it...
+	aba_debug "kvm.conf exists, test it..."
 
 	ensure_virsh
 	source <(normalize-kvm-conf)
 
-	aba_debug Checking kvm config file: $PWD/kvm.conf
+	aba_debug "Checking kvm config file: $PWD/kvm.conf"
 
 	if ! virsh -c "$LIBVIRT_URI" version >/dev/null 2>&1; then
 		aba_abort "Cannot connect to libvirt at $LIBVIRT_URI.  Please edit $PWD/kvm.conf and try again!"
@@ -71,13 +71,13 @@ if [ -s kvm.conf ]; then
 
 	_kvm_verify_objects
 
-	aba_debug KVM config file $PWD/kvm.conf ok
+	aba_debug "KVM config file $PWD/kvm.conf ok"
 
 	[ ! -s ~/.kvm.conf ] && cp kvm.conf ~/.kvm.conf && aba_debug "Saved kvm.conf to ~/.kvm.conf"
 
 	exit 0
 else
-	aba_info kvm.conf exists but is empty ...
+	aba_info "kvm.conf exists but is empty ..."
 
 	if [ -s ~/.kvm.conf ]; then
 		aba_info "Copying kvm.conf from '~/.kvm.conf' to $PWD/kvm.conf"
@@ -100,7 +100,7 @@ else
 	ensure_virsh
 	source <(normalize-kvm-conf)
 
-	aba_info Checking kvm config file: $PWD/kvm.conf
+	aba_info "Checking kvm config file: $PWD/kvm.conf"
 	aba_debug "Running: virsh -c $LIBVIRT_URI version"
 	if ! virsh -c "$LIBVIRT_URI" version; then
 		aba_abort "Cannot connect to libvirt at $LIBVIRT_URI.  Please edit $PWD/kvm.conf and try again!"

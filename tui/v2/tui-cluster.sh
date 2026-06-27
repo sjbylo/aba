@@ -916,41 +916,41 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-	N)
-		while :; do
-			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NAME" \
-				--inputbox "$TUI2_MSG_CLUSTER_NAME_PROMPT" 0 0 "$cl_name" \
-				2>"$_TUI_TMP"
-			[[ $? -ne 0 ]] && break
-			local input
-			input=$(<"$_TUI_TMP")
-			if [[ -z "$input" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Cluster name cannot be empty." 0 0 || true
-				continue
-			fi
-			local _name_err
-			if ! _name_err=$(aba cluster --name "$input" --validate 2>&1); then
-				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"${_name_err:-$TUI2_MSG_INVALID_CLUSTER_NAME}" 0 0 || true
-				continue
-			fi
-			cl_name="$input"
-			# Warn if cluster is already installed
-			if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
-					--yes-label "Continue" --no-label "Back" \
-					--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
-				[[ $? -ne 0 ]] && continue
-			fi
-			# Silently load existing cluster.conf if present
-			if [[ -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
-				_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
-				_apply_mode_connection
-				tui_log "Loaded existing cluster.conf for '$cl_name'"
-			fi
-			break
-		done
+		N)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NAME" \
+					--inputbox "$TUI2_MSG_CLUSTER_NAME_PROMPT" 0 0 "$cl_name" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local input
+				input=$(<"$_TUI_TMP")
+				if [[ -z "$input" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Cluster name cannot be empty." 0 0 || true
+					continue
+				fi
+				local _name_err
+				if ! _name_err=$(aba cluster --name "$input" --validate 2>&1); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"${_name_err:-$TUI2_MSG_INVALID_CLUSTER_NAME}" 0 0 || true
+					continue
+				fi
+				cl_name="$input"
+				# Warn if cluster is already installed
+				if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+						--yes-label "Continue" --no-label "Back" \
+						--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
+					[[ $? -ne 0 ]] && continue
+				fi
+				# Silently load existing cluster.conf if present
+				if [[ -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
+					_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
+					_apply_mode_connection
+					tui_log "Loaded existing cluster.conf for '$cl_name'"
+				fi
+				break
+			done
 			;;
 		D)
 			while :; do
@@ -969,41 +969,41 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				break
 			done
 			;;
-	T)
-		# Toggle: sno → compact → standard → sno
-		case "$cl_type" in
-			sno) cl_type="compact" ;;
-			compact) cl_type="standard"; [[ "$cl_workers" == "0" || -z "$cl_workers" ]] && cl_workers="2" ;;
-			standard) cl_type="sno" ;;
-		esac
-		tui_log "Toggled type to: $cl_type"
-		;;
-	P)
-		# Toggle: bm → vmw → kvm → bm
-		# Only update port default if user hasn't manually edited it
-		local _prev_default=""
-		case "$cl_platform" in
-			bm)  _prev_default="" ;;
-			vmw) _prev_default="ens160" ;;
-			kvm) _prev_default="enp1s0" ;;
-		esac
-		case "$cl_platform" in
-			bm)  cl_platform="vmw" ;;
-			vmw) cl_platform="kvm" ;;
-			kvm) cl_platform="bm" ;;
-		esac
-		# Update ports only if still at the previous platform's default
-		if [[ "$cl_ports" == "$_prev_default" ]]; then
-			case "$cl_platform" in
-				vmw) cl_ports="ens160" ;;
-				kvm) cl_ports="enp1s0" ;;
-				bm)  cl_ports="" ;;
+		T)
+			# Toggle: sno → compact → standard → sno
+			case "$cl_type" in
+				sno) cl_type="compact" ;;
+				compact) cl_type="standard"; [[ "$cl_workers" == "0" || -z "$cl_workers" ]] && cl_workers="2" ;;
+				standard) cl_type="sno" ;;
 			esac
-		fi
-		replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
-		platform="$cl_platform"
-		tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
-		;;
+			tui_log "Toggled type to: $cl_type"
+			;;
+		P)
+			# Toggle: bm → vmw → kvm → bm
+			# Only update port default if user hasn't manually edited it
+			local _prev_default=""
+			case "$cl_platform" in
+				bm)  _prev_default="" ;;
+				vmw) _prev_default="ens160" ;;
+				kvm) _prev_default="enp1s0" ;;
+			esac
+			case "$cl_platform" in
+				bm)  cl_platform="vmw" ;;
+				vmw) cl_platform="kvm" ;;
+				kvm) cl_platform="bm" ;;
+			esac
+			# Update ports only if still at the previous platform's default
+			if [[ "$cl_ports" == "$_prev_default" ]]; then
+				case "$cl_platform" in
+					vmw) cl_ports="ens160" ;;
+					kvm) cl_ports="enp1s0" ;;
+					bm)  cl_ports="" ;;
+				esac
+			fi
+			replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
+			platform="$cl_platform"
+			tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
+			;;
 		W)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_COUNT" \
@@ -1889,11 +1889,11 @@ tui_advanced_menu() {
 				adv_items+=("X" "Switch to Connected Mode")
 				;;
 		esac
-	adv_items+=("" "──── Danger Zone ───────────────────")
-	if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
-		adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
-	fi
-	adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
+		adv_items+=("" "──── Danger Zone ───────────────────")
+		if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
+			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
+		fi
+		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
@@ -2068,7 +2068,7 @@ cluster_day2_menu() {
 			"U" "Upgrade cluster (beta)" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
-		"" "──── Cleanup ──────────────────────" \
+			"" "──── Cleanup ──────────────────────" \
 			"C" "Clean (remove artifacts, retry install)" \
 			"K" "Delete cluster" \
 			2>"$_TUI_TMP"
@@ -2116,9 +2116,9 @@ Navigation:
 			S) _day2_status ;;
 			H) _day2_ssh ;;
 			U) _day2_upgrade ;;
-		G) _day2_shutdown ;;
-		T) _day2_startup ;;
-		C) _day2_clean ;;
+			G) _day2_shutdown ;;
+			T) _day2_startup ;;
+			C) _day2_clean ;;
 			K) _day2_delete ;;
 		esac
 	done
@@ -2296,9 +2296,9 @@ _day2_upgrade() {
 			CONNO)
 				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
 				;;
-	DISCO)
-		_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
-		;;
+			DISCO)
+				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
+				;;
 			*)
 				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."
 				;;

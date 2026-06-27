@@ -45,28 +45,28 @@ _verify_cli_tarballs() {
 
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --out)
-	bundle_dest_file=$2
-	aba_debug "Argument: --out=$bundle_dest_file"
-	shift 2
-	;;
-    --force)
-      force=1
-      aba_debug "Argument: --force (will delete existing files)"
-      shift
-      ;;
-    --light)
-      light_bundle=1
-      aba_debug "Argument: --light (exclude image-set archives)"
-      shift
-      ;;
-    *)
-	bundle_dest_file="$1"
-	aba_debug "Argument: bundle_dest_file=$bundle_dest_file"
-      shift
-      ;;
-  esac
+	case "$1" in
+		--out)
+			bundle_dest_file=$2
+			aba_debug "Argument: --out=$bundle_dest_file"
+			shift 2
+			;;
+		--force)
+			force=1
+			aba_debug "Argument: --force (will delete existing files)"
+			shift
+			;;
+		--light)
+			light_bundle=1
+			aba_debug "Argument: --light (exclude image-set archives)"
+			shift
+			;;
+		*)
+			bundle_dest_file="$1"
+			aba_debug "Argument: bundle_dest_file=$bundle_dest_file"
+			shift
+			;;
+	esac
 done
 
 aba_debug "Options: bundle_dest_file=$bundle_dest_file force=$force light_bundle=$light_bundle"
@@ -78,7 +78,7 @@ fi
 
 aba_debug "Config: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE"
 
-# This will have been completed behand, but just in case!
+# This will have been completed beforehand, but just in case!
 aba_debug "Installing required RPMs from templates/rpms-external.txt"
 install_rpms $(cat templates/rpms-external.txt) || exit 1
 
@@ -89,7 +89,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 
 if [ "$bundle_dest_file" = "-" ]; then
-	# Be sure the standard standard output of this command is ONLY tar output and nothing else!
+	# Be sure the standard output of this command is ONLY tar output and nothing else!
 	aba_debug "Bundle destination: stdout (streaming tar output)"
 	aba_info "An install bundle will be generated and written to *standard output* (stdout) using the following parameters:" >&2
 else
@@ -116,7 +116,7 @@ fi
 echo >&2
 normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
 #aba_info "Bundle output file = $bundle_dest_file" >&2
-# FIXME MNIssing [ABA]
+# FIXME Missing [ABA]
 echo "Bundle output file = $bundle_dest_file" >&2
 echo >&2
 
@@ -124,9 +124,9 @@ echo >&2
 if [ "$force" ]; then
 {
 	aba_debug "Force flag set - cleaning existing files"
-	if [ -d mirror/data -a "$(ls mirror/data 2>/dev/null)" ]; then
+	if [ -d mirror/data ] && [ "$(ls mirror/data 2>/dev/null)" ]; then
 		aba_debug "Deleting existing mirror/data directory contents"
-		aba_warning "Deleteing all files under aba/mirror/data! (--force set)" >&2
+		aba_warning "Deleting all files under aba/mirror/data! (--force set)" >&2
 		rm -rf mirror/data
 		aba_debug "mirror/data directory removed"
 	else
@@ -171,7 +171,7 @@ if [ -d mirror/data ]; then
 		ls mirror/data/mirror_*\.tar >/dev/null 2>&1 && image_set_files_exist=1
 		aba_debug "Image-set archive files exist: ${image_set_files_exist:-no}"
 
-		if [ -s mirror/data/imageset-config.yaml -o -f mirror/mirror.conf -o "$image_set_files_exist" ]; then
+		if [ -s mirror/data/imageset-config.yaml ] || [ -f mirror/mirror.conf ] || [ "$image_set_files_exist" ]; then
 			aba_debug "Repository appears to be in use - prompting user"
 			aba_warning "This repo is already in use!  Modified files exist under: mirror/data"
 			echo -n "         " >&2;  ls mirror/data >&2
@@ -284,7 +284,7 @@ else
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
 	aba_debug "Calling: make -C mirror save retry=2"
-	make -C mirror save retry=2		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
+	make -C mirror save retry=2		    		# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
 	
 	aba_info "Ensuring all CLI installation files are downloaded..."

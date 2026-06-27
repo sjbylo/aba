@@ -50,7 +50,7 @@ mkdir -p data
 #   This allows users to customize the ISC and run 'aba save' or 'aba sync' again without losing edits.
 if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imageset-config.yaml -nt data/.created ]; then
 	aba_debug "Generating new imageset-config.yaml"
-	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
+	{ [ ! "$ocp_channel" ] || [ ! "$ocp_version" ]; } && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 

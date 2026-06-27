@@ -103,7 +103,7 @@ _vsphere_parse_govc_url() {
 # Returns 0 on success; on failure emits one aba_warning, bumps _preflight_errors, returns 1.
 _vsphere_probe_tcp() {
 	local host port
-	read host port < <(_vsphere_parse_govc_url "$GOVC_URL")
+	read -r host port < <(_vsphere_parse_govc_url "$GOVC_URL")
 	if timeout 3 bash -c "echo >/dev/tcp/$host/$port 2>/dev/null"; then
 		aba_info_ok "$_vsphere_label: TCP reachable ($host:$port)"
 		return 0
@@ -129,7 +129,7 @@ _vsphere_probe_tls() {
 	esac
 
 	local host port
-	read host port < <(_vsphere_parse_govc_url "$GOVC_URL")
+	read -r host port < <(_vsphere_parse_govc_url "$GOVC_URL")
 
 	# Belt-and-suspenders: rely on -verify_return_error exit code AND the stderr line.
 	local tls_out tls_rc=0

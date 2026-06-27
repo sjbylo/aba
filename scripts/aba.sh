@@ -1837,7 +1837,7 @@ fi
 echo
 echo "Partially Disconnected"
 echo_white "A mirror registry can be synchronized directly from the Internet, allowing OpenShift to be installed from the mirrored content."
-if ask "Install OpenShift from a mirror registry that is synchonized directly from the Internet"; then
+if ask "Install OpenShift from a mirror registry that is synchronized directly from the Internet"; then
 
 	echo 
 	echo_yellow "Instructions for synchronizing images directly from the Internet to a mirror registry"

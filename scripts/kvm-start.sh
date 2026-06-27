@@ -6,7 +6,7 @@ source scripts/include_all.sh
 
 aba_debug "Running: $0 $*" >&2
 
-. <(process_args $*)
+. <(process_args "$@")
 . <(echo $* | tr " " "\n")
 
 if [ -s kvm.conf ]; then

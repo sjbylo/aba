@@ -1,8 +1,8 @@
 #!/bin/bash 
 
 usage="\
-$(basename $0) lists operator dependencies
-Usage: $(basename $0) [-hc] <version> <operator name> [catalog name]
+$(basename "$0") lists operator dependencies
+Usage: $(basename "$0") [-hc] <version> <operator name> [catalog name]
    <version>       is OpenShift version.  Ex: 4.18
    <operator name> is Operator name.  Ex: odf-operator
 Options:
@@ -33,7 +33,7 @@ if ! echo "$version" | grep -q -E "^[0-9]\.[0-9]+$"; then
 	exit 1
 fi
 
-! which podman &>/dev/null && echo "Please install podman!" >&2 && exit 1
+! command -v podman >/dev/null 2>&1 && echo "Please install podman!" >&2 && exit 1
 
 [ ! "$1" ] && echo "Error: Operator missing" && echo && echo "$usage" >&2 && exit 1
 operator=$1
@@ -44,7 +44,7 @@ catalog=redhat-operator
 
 if [ "$clean" ]; then
 	existing_id=$(podman ps -a | grep registry.redhat.io/redhat/$catalog-index:v$version | awk '{print $1}')
-	[ "$existing_id" ] && podman stop $existing_id >/dev/null && sleep 1 && podman rm $existing_id >/dev/null
+	[ "$existing_id" ] && podman stop "$existing_id" >/dev/null && sleep 1 && podman rm "$existing_id" >/dev/null
 	rm -rf configs-$version
 fi
 
@@ -55,5 +55,5 @@ fi
 
 podman cp redhat-catalog:/configs configs-$catalog-$version
 
-cat configs-$catalog-$version/$operator/catalog.json | jq -r 'select(.package=="'$operator'") | .properties[] | select(.type=="olm.package.required") | .value.packageName' 2>/dev/null| sort | uniq 
+jq -r 'select(.package=="'"$operator"'") | .properties[] | select(.type=="olm.package.required") | .value.packageName' "configs-$catalog-$version/$operator/catalog.json" 2>/dev/null| sort | uniq
 

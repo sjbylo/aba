@@ -100,7 +100,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 [ "$platform" != "vmw" ] && \
 	aba_info "To set the platform value in aba.conf run: 'aba -p vmw' and run: 'aba vmw'." && rm -f vmware.conf && exit 0
 
-aba_debug Checking for $PWD/vmware.conf file ..
+aba_debug "Checking for $PWD/vmware.conf file .."
 
 if [ -d ~/.govmomi/sessions ]; then
 	aba_debug "Deleting existing govc sessions in ~/.govmomi/sessions"
@@ -110,11 +110,11 @@ else
 fi
 
 if [ -s vmware.conf ]; then
-	aba_debug vmware.conf exists, test it...
+	aba_debug "vmware.conf exists, test it..."
 
 	source <(normalize-vmware-conf)
 
-	aba_debug Checking govc config file: $PWD/vmware.conf
+	aba_debug "Checking govc config file: $PWD/vmware.conf"
 
 	if ! govc about >/dev/null 2>&1; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
@@ -122,13 +122,13 @@ if [ -s vmware.conf ]; then
 
 	_vmw_verify_objects
 
-	aba_debug Govc config file $PWD/vmware.conf ok
+	aba_debug "Govc config file $PWD/vmware.conf ok"
 
 	[ ! -s ~/.vmware.conf ] && cp vmware.conf ~/.vmware.conf && aba_debug "Saved vmware.conf to ~/.vmware.conf"
 
 	exit 0
 else
-	aba_info vmware.conf exists but is empty ...
+	aba_info "vmware.conf exists but is empty ..."
 
 	if [ -s ~/.vmware.conf ]; then
 		aba_info "Copying vmware.conf from '~/.vmware.conf' to $PWD/vmware.conf"
@@ -143,7 +143,7 @@ else
 
 	source <(normalize-vmware-conf)
 
-	aba_info Checking govc config file: $PWD/vmware.conf
+	aba_info "Checking govc config file: $PWD/vmware.conf"
 	aba_debug "Running: govc about"
 	if ! govc about; then
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 

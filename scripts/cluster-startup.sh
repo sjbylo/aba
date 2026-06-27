@@ -125,7 +125,7 @@ check_and_approve_csrs() {
 		fi
 
 		sleep $pause
-		let i=$i+$pause
+		i=$(( i + pause ))
 		[ $i -gt 3600 ] && exit 0  # Try for ~1 hour
 	done
 }

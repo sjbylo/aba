@@ -13,7 +13,7 @@ verify-cluster-conf || exit 1
 
 # Resolve kubeconfig (prefer externalized state, fall back to local)
 kc=$(cluster_kubeconfig)
-[ -z "$kc" ] && echo_red "Cluster not ready! Cannot find kubeconfig." && exit 1
+[ -z "$kc" ] && aba_abort "Cluster not ready! Cannot find kubeconfig."
 
 # Resolve kubeadmin password (externalized or local)
 _sd=$(cluster_state_dir 2>/dev/null) || _sd=""

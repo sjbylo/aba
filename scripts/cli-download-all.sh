@@ -124,7 +124,7 @@ do
 		if ! run_once -q -w -i "$task_id"; then
 			# govc download failure is non-fatal for non-vmw platforms
 			if [[ "$tool" == "govc" && "${platform:-}" != "vmw" ]]; then
-				aba_warn "govc failed to download — ignoring since platform != vmw."
+				aba_warning "govc failed to download — ignoring since platform != vmw."
 			else
 				aba_error "Download failed for $tool"
 				exit 1

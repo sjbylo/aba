@@ -59,7 +59,7 @@ elif [ -s $regcreds_dir/pull-secret-mirror.json ]; then
 	cp $regcreds_dir/pull-secret-mirror.json ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
 		aba_debug "Copying $regcreds_dir/pull-secret-mirror.json to $XDG_RUNTIME_DIR/containers/auth.json" 
-	       cp $regcreds_dir/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
+		cp $regcreds_dir/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
 	fi
 
 # Only use the Red Hat pull secret file

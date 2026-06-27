@@ -12,7 +12,7 @@ if [ ! "$1" = "--exec" ]; then
 
 	if [ ! "$CLUSTER_NAME" ]; then
 		scripts/cluster-config-check.sh
-		eval $(scripts/cluster-config.sh $@ || exit 1)
+		eval "$(scripts/cluster-config.sh "$@")" || exit 1
 	fi
 
 	# This will run locally and will copy and exec the rescue script (below)
@@ -20,10 +20,10 @@ if [ ! "$1" = "--exec" ]; then
 
 	ip=$(cat $ASSETS_DIR/rendezvousIP)
 
-        ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip mkdir -p scripts
-        scp -F ~/.aba/ssh.conf -i $ssh_key_file scripts/include_all.sh core@$ip:scripts
-        scp -F ~/.aba/ssh.conf -i $ssh_key_file $0 core@$ip:
-        ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip -- sudo bash $(basename $0) --exec
+	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip mkdir -p scripts
+	scp -F ~/.aba/ssh.conf -i $ssh_key_file scripts/include_all.sh core@$ip:scripts
+	scp -F ~/.aba/ssh.conf -i $ssh_key_file $0 core@$ip:
+	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip -- sudo bash $(basename $0) --exec
 
 
 	exit $?
