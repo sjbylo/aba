@@ -23,7 +23,7 @@
 ABA_VERSION=1.1.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260626165529
+ABA_BUILD=20260627105417
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
