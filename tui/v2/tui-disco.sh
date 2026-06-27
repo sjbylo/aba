@@ -133,7 +133,7 @@ Restart the TUI after copying archives." \
 disco_main() {
 	tui_log "Entering DISCO mode action menu"
 	_disco_bundle_wizard_gate || return 1
-	local default_item="$TUI2_DISCO_TAG_VIEW_ISC"
+	local default_item="$TUI2_DISCO_TAG_INSTALL_REG"
 
 	# --- Menu loop: no per-action flag assignments needed ---
 	# _TUI_NEED_MIRROR_RECHECK is set only by _invalidate_mirror_cache()
