@@ -15163,7 +15163,7 @@ After platform selection, if `platform=vmw` and `~/.vmware.conf` does not exist 
 ---
 
 ## Bug #886: TUI DISCO mode — menu cursor always defaults to "View ISC", makes it impossible to select other items
-**Status:** OPEN
+**Status:** FIXED — initial default_item changed from VIEW_ISC to INSTALL_REG
 
 **Severity:** High (UX — navigating DISCO action menu is extremely difficult)
 **Component:** TUI v2 — `tui-disco.sh` DISCO action menu
