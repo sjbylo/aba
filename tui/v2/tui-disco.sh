@@ -104,8 +104,8 @@ Place mirror_*.tar files in:\n\
 (Older docs referred to mirror/save/ — that layout is folded into mirror/data/.)\n\n\
 Restart the TUI after copying archives." \
 			0 0
-		tui_log "DISCO wizard: missing image archives — returning"
-		return 1
+		tui_log "DISCO wizard: missing image archives — dropping to action menu"
+		return 0
 	fi
 
 	if [[ "${_TUI_DISCO_FROM_CONNO:-false}" == "true" ]]; then
@@ -114,15 +114,8 @@ Restart the TUI after copying archives." \
 	fi
 
 	if ! mirror_available; then
-		# Registry may be running even though the marker file is missing (e.g. disk-full lost it).
-		# Probe the actual registry before attempting a re-install.
-		if _mirror_has_release_image; then
-			tui_log "DISCO wizard: marker missing but registry responds — recreating .available"
-			touch "$ABA_ROOT/mirror/.available"
-		else
-			tui_log "DISCO wizard: auto-running mirror_install"
-			mirror_install || true
-		fi
+		tui_log "DISCO wizard: auto-running mirror_install"
+		mirror_install || true
 	fi
 
 	if mirror_available && ! _mirror_has_release_image; then

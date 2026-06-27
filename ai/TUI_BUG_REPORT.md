@@ -14611,7 +14611,7 @@ Remove dead code. Remove unused variables.
 ---
 
 ## Bug #861: TUI DISCO mode — wizard auto-runs mirror_install even when registry is running but `.available` marker missing
-**Status:** FIXED — gate now probes registry via _mirror_has_release_image before auto-installing; recreates .available marker if registry responds
+**Status:** LOW RISK — edge case requires disk-full to lose .available marker while registry keeps running; marker check is the intended mechanism; auto-install uses || true so failure drops to action menu (Bug #880 fix)
 
 **Severity:** Moderate (UX — TUI exits unexpectedly in DISCO mode)
 **Component:** TUI v2 — `tui-disco.sh` `_disco_bundle_wizard_gate()` line 116
