@@ -15216,7 +15216,7 @@ Add a confirmation dialog before changing the platform: "Change platform from vm
 ---
 
 ## Bug #889: Core — `aba upgrade` fails on conditional updates — no clear message
-**Status:** OPEN
+**Status:** FIXED — detect conditional update, surface Reason/Message, abort with manual command
 
 **Severity:** High (functional — upgrade fails with confusing output)
 **Component:** Core — `scripts/cluster-upgrade.sh` lines 326-334
