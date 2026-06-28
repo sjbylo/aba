@@ -548,6 +548,7 @@ confirm_and_execute() {
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
 			"1" "Run in TUI (auto-answer)" \
 			"2" "Run in Terminal" \
+			"3" "Run in Terminal (auto-answer)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -563,6 +564,11 @@ confirm_and_execute() {
 • Run in Terminal
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
+  - Press ENTER to return to TUI
+
+• Run in Terminal (auto-answer)
+  - Command runs in real terminal with full output
+  - Prompts are auto-answered with defaults (-y)
   - Press ENTER to return to TUI"
 				continue
 				;;
@@ -585,6 +591,11 @@ confirm_and_execute() {
 		case "$choice" in
 			1) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
 			2) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
+			3)
+				local _auto_cmd="$cmd"
+				[[ "$_auto_cmd" != *" --yes"* && "$_auto_cmd" != *" -y "* && "$_auto_cmd" != *" -y" ]] && _auto_cmd="$_auto_cmd --yes"
+				_exec_in_terminal "$_auto_cmd" "$title" "$post_cmd_hook"
+				;;
 		esac
 		local exec_rc=$?
 		[[ $exec_rc -eq 2 ]] && continue
