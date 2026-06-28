@@ -294,11 +294,12 @@ if [ ! "$upgrade_already_running" ]; then
 	fi
 
 	# Pre-flight: check if target version is an available upgrade.
-	# Uses structured JSON from oc adm upgrade — no string grepping.
-	_available_versions=$(oc adm upgrade -o json 2>/dev/null \
-		| jq -r '.availableUpdates[]?.version // empty' 2>/dev/null) || true
-	_conditional_versions=$(oc adm upgrade -o json 2>/dev/null \
-		| jq -r '.conditionalUpdates[]?.release.version // empty' 2>/dev/null) || true
+	# Parse text output of 'oc adm upgrade' (oc <4.18 lacks -o json for this subcommand).
+	_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || true
+	_available_versions=$(echo "$_upgrade_text" \
+		| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+	_conditional_versions=$(echo "$_upgrade_text" \
+		| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
 
 	# Ensure the cluster's update channel matches the target version's major.minor.
 	# Only same-channel upgrades are supported (e.g. stable-4.20 → stable-4.21).
@@ -325,10 +326,11 @@ if [ ! "$upgrade_already_running" ]; then
 		aba_info "Waiting for update graph to refresh after channel change ..."
 		_graph_ok=""
 		for _try in $(seq 1 12); do
-			_available_versions=$(oc adm upgrade -o json 2>/dev/null \
-				| jq -r '.availableUpdates[]?.version // empty' 2>/dev/null) || true
-			_conditional_versions=$(oc adm upgrade -o json 2>/dev/null \
-				| jq -r '.conditionalUpdates[]?.release.version // empty' 2>/dev/null) || true
+			_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || true
+			_available_versions=$(echo "$_upgrade_text" \
+				| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+			_conditional_versions=$(echo "$_upgrade_text" \
+				| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
 			if echo "$_available_versions" | grep -qxF "$target_ver"; then
 				_graph_ok=1
 				break
