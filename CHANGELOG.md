@@ -1,10 +1,10 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.0...HEAD)
 
-Upgrade robustness, RC/EC pre-release support, TUI hardening, and 80+ bug fixes
+Upgrade robustness, RC/EC pre-release support, TUI hardening, catalog performance, and 80+ bug fixes
 
 ### New Features
 
-- **RC/EC pre-release version support** — Full support for pre-release OpenShift versions (e.g. `4.22.0-rc.1`, `5.0.0-ec.2`). CLI tools download from `ocp-dev-preview/` paths; TUI wizard and menus handle pre-release version strings correctly.
+- **RC/EC pre-release version support** — Full support for pre-release OpenShift versions (e.g. `4.22.0-rc.1`, `4.23.0-ec.2`). CLI tools download from `ocp-dev-preview/` paths; TUI wizard and menus handle pre-release version strings correctly.
 - **Network auto-detection** — DNS, gateway, and machine network auto-detected at cluster creation time from the host's active interface, instead of at `aba.conf` creation. Existing `cluster.conf` files also get auto-detected values when missing.
 - **`aba cluster-version`** — Quick TCP probe to check if a cluster's API is reachable, plus display the cluster's current version without a full `oc` login.
 - **Pre-flight version check** — Validate that the source OpenShift version exists in the target channel's Cincinnati graph before running `oc-mirror save/sync`, preventing wasted time on impossible upgrade paths.
@@ -32,6 +32,8 @@ Upgrade robustness, RC/EC pre-release support, TUI hardening, and 80+ bug fixes
 - **Dynamic vSphere label** — Preflight dialog dynamically shows "ESXi" or "vSphere" based on detected platform.
 - **README documentation** — Expanded TUI section, added proxy mode documentation, RC/EC pre-release docs, and fixed broken table/commands.
 - **Kubeadmin password masked** — `show_error()` output masks the kubeadmin password to prevent accidental exposure in logs.
+- **Catalog download performance** — Skopeo content-layer digest probe (~1s) skips the full podman pull + extract pipeline (~15s/catalog) when catalog data hasn't changed. Repeat `aba mirror isconf` drops from ~39s to ~1.3s. Works across all architectures (amd64, s390x, arm64, ppc64le).
+- **Catalog image cleanup** — Catalog container images removed after extraction, saving ~1-2 GB per catalog on disk.
 
 ### Bug Fixes
 
