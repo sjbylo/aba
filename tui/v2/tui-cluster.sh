@@ -2159,12 +2159,32 @@ _day2_status() {
 	local kc
 	kc=$(cd "$ABA_ROOT/$cl_dir" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || kc=""
 	[ -z "$kc" ] && kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
+
+	# Quick TCP probe of the API server before running oc commands (avoids minutes of timeouts)
+	local _api_host _api_port _api_up=true
+	_api_host=$(KUBECONFIG="$kc" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null \
+		| sed 's|https\?://||; s|/.*||')
+	_api_port="${_api_host##*:}"
+	_api_host="${_api_host%%:*}"
+	if [[ -n "$_api_host" ]]; then
+		if ! timeout 3 bash -c "echo >/dev/tcp/$_api_host/${_api_port:-6443}" 2>/dev/null; then
+			_api_up=false
+		fi
+	fi
+
 	trap : INT
 	{
+	if [[ "$_api_up" == "false" ]]; then
+		echo "═══ Cluster API Unreachable ($cl_display) ═══"
+		echo ""
+		echo "Cannot connect to API server at ${_api_host}:${_api_port:-6443}"
+		echo "The cluster may be shut down or the network is unreachable."
+		echo ""
+	else
 		echo "═══ Cluster Operators ($cl_display) ═══"
 		echo ""
 		cd "$ABA_ROOT"
-		KUBECONFIG="$kc" oc get co --request-timeout=5s 2>&1 || echo "(Cluster API unreachable — is the cluster shut down?)"
+		KUBECONFIG="$kc" oc get co --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 		echo ""
 		echo "═══ Nodes ($cl_display) ═══"
 		echo ""
@@ -2176,10 +2196,11 @@ _day2_status() {
 			| awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print}' \
 			|| echo "(Cluster API unreachable)"
 		echo ""
-	echo "═══ Upgrade Status ($cl_display) ═══"
-	echo ""
-	KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
-	echo ""
+		echo "═══ Upgrade Status ($cl_display) ═══"
+		echo ""
+		KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
+		echo ""
+	fi
 	echo "═══ Cluster Info ($cl_display) ═══"
 	echo ""
 	aba --dir "$cl_dir" info 2>&1 || echo "(Unable to retrieve cluster info)"

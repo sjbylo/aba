@@ -229,7 +229,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				;;
 			P)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry port:" 0 40 "$m_port" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "\nRegistry port:" 10 50 "$m_port" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_port=$(<"$_TUI_TMP")
 					if [[ -n "$m_port" ]] && ! _valid_port "$m_port"; then
@@ -241,7 +241,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				fi
 				;;
 			U)
-				dlg --backtitle "$(ui_backtitle)" --inputbox "Registry username:" 0 40 "$m_user" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "\nRegistry username:" 10 50 "$m_user" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_user" || continue
@@ -295,6 +295,24 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 							"Invalid directory path.\n\nMust start with / or ~ (e.g. ~/quay-mirror)." 0 0
 						continue
 					fi
+					# Writability check (local only — remote checked at install time)
+					if [[ "$_variant" != "remote" && -n "$m_datadir" ]]; then
+						local _exp="${m_datadir/#\~\//$HOME/}"
+						[[ "$_exp" == "~" ]] && _exp="$HOME"
+						if [[ -d "$_exp" ]]; then
+							if [[ ! -w "$_exp" ]]; then
+								dlg --backtitle "$(ui_backtitle)" --msgbox \
+									"Directory not writable:\n\n  $m_datadir\n\nPlease choose a different path or fix permissions." 0 0
+								continue
+							fi
+						elif mkdir -p "$_exp" 2>/dev/null; then
+							rmdir "$_exp" 2>/dev/null || true
+						else
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Cannot create directory:\n\n  $m_datadir\n\nCheck the path is valid and you have write permission." 0 0
+							continue
+						fi
+					fi
 					replace-value-conf -q -n data_dir -v "$m_datadir" -f "$mcf"
 				fi
 				;;
@@ -302,7 +320,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 				if [[ "$_variant" != "remote" ]]; then
 					continue
 				fi
-				dlg --backtitle "$(ui_backtitle)" --inputbox "SSH username:" 0 40 "$m_ssh_user" 2>"$_TUI_TMP"
+				dlg --backtitle "$(ui_backtitle)" --inputbox "\nSSH username:" 10 50 "$m_ssh_user" 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					m_ssh_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$m_ssh_user" || continue
@@ -840,8 +858,9 @@ mirror_view_isc() {
 
 		local _isc_items=("V" "View (read-only)")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
-		_isc_items+=("R" "Force regenerate (from aba settings)")
 		_isc_items+=("O" "Select Operators")
+		_isc_items+=("" "──── Advanced ──────────────────────")
+		_isc_items+=("R" "Force regenerate (from aba settings)")
 		# Toggle: exclude release images (operators only)
 		local _excl_label
 		if [[ "$_excl_plat" == "true" ]]; then
@@ -864,7 +883,8 @@ mirror_view_isc() {
 
 			local choice
 			choice=$(<"$_TUI_TMP")
-			[[ -n "$choice" ]] && default_item="$choice"
+			# Skip separator items (empty tag)
+			[[ -z "$choice" ]] && continue
 
 			case "$choice" in
 				V|E)
