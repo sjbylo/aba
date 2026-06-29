@@ -2,8 +2,7 @@
 # =============================================================================
 # TUI v2 — Mirror Operations (save, sync, bundle, operators, ISC)
 # =============================================================================
-# Adapted from v1 tui/abatui.sh handle_action_* functions.
-# Provides mirror-related menu actions for CONNO mode.
+# Mirror-related menu actions for CONNO mode.
 #
 # Usage: source tui/v2/tui-mirror.sh
 

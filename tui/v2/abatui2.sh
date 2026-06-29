@@ -3,7 +3,7 @@
 # ABA TUI v2 — Complete ABA Installer (DISCO / CONNO / DIRECT)
 # =============================================================================
 # Entry point: mode detection, routing, CONNO action menu.
-# Complete replacement for v1 (tui/abatui.sh).
+# Main TUI entry point.
 #
 # Design decisions:
 #   - NO 'set -e': dialog returns non-zero by design (1=Cancel, 2=Help, 3=Extra).

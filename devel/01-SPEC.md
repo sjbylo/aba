@@ -34,7 +34,7 @@ flowchart TD
   or dispatches directly to a script. Requires root or passwordless sudo.
 - **`make -C <dir> <target>`**: Every workflow must remain directly invocable via
   Make. The `aba` CLI is convenience; Make is the foundation.
-- **TUI** (`tui/abatui.sh`): Interactive wizard. Sources `include_all.sh` but
+- **TUI** (`tui/v2/abatui2.sh`): Interactive wizard. Sources `include_all.sh` but
   must never call `aba_abort` or `exit` from functions (kills the dialog UI).
 
 ### Dispatch: Make-backed vs script-backed
@@ -460,7 +460,7 @@ re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
 ## Script Calling Rules
 
 1. Scripts under `scripts/` are called ONLY via Make targets or `aba` CLI
-2. `$ABA_ROOT` is used only by `aba.sh` and `abatui.sh`; all other scripts use
+2. `$ABA_ROOT` is used only by `aba.sh` and `abatui2.sh`; all other scripts use
    relative paths
 3. Scripts that `cd` from `$0` must resolve symlinks:
    `SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"`

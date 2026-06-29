@@ -29,7 +29,7 @@
 #   These match what ensure_*() functions wait on.
 #
 # Callers (9+): aba.sh, include_all.sh, Makefile (tar/tarrepo), cli/Makefile,
-#   reg-save.sh, make-bundle.sh, tui/abatui.sh, cli-install-all.sh
+#   reg-save.sh, make-bundle.sh, tui/v2/abatui2.sh, cli-install-all.sh
 # ──────────────────────────────────────────────────────────────────────
 
 # Ensure we're in aba root (script is in scripts/ subdirectory)
