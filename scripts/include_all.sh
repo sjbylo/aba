@@ -2890,7 +2890,7 @@ download_all_catalogs() {
 	for catalog in "${catalogs[@]}"; do
 		if (( running >= max_parallel )); then
 			local wait_idx=$(( running - max_parallel ))
-			run_once -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
+			run_once -S -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
 		fi
 
 		run_once -i "catalog:${version_short}:${catalog}" -t "$ttl" -- \
@@ -2926,19 +2926,21 @@ wait_for_all_catalogs() {
 	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_secs}s)"
 	
 	# Wait: block for catalogs started by download_all_catalogs() above
-	if ! run_once -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
+	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
+	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
+	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
 		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
-	if ! run_once -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
+	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
 		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "certified-operator catalog ready"
 	
-	if ! run_once -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
+	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
 		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
