@@ -838,17 +838,19 @@ mirror_view_isc() {
 		source <(normalize-aba-conf) 2>/dev/null
 		_excl_plat="${excl_platform:-false}"
 
-		local _isc_items=("V" "View (read-only)" "E" "Edit")
+		local _isc_items=("V" "View (read-only)")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
 		_isc_items+=("R" "Force regenerate (from aba settings)")
-		# Toggle: process operators only (skip release images)
+		_isc_items+=("O" "Select Operators")
+		# Toggle: exclude release images (operators only)
 		local _excl_label
 		if [[ "$_excl_plat" == "true" ]]; then
-			_excl_label="Operators Only: \Z1ON\Zn (release images excluded)"
+			_excl_label="Exclude Release: \Z1ON\Zn (release images excluded)"
 		else
-			_excl_label="Operators Only: \Z2OFF\Zn (all images included)"
+			_excl_label="Exclude Release: \Z2OFF\Zn (all images included)"
 		fi
-		_isc_items+=("O" "$_excl_label")
+		_isc_items+=("X" "$_excl_label")
+		_isc_items+=("E" "Edit (advanced)")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -915,17 +917,20 @@ mirror_view_isc() {
 						fi
 					fi
 					;;
-				O)
-					if [[ "$_excl_plat" == "true" ]]; then
-						replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-						tui_log "Settings: excl_platform=false (all images)"
-					else
-						replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
-						tui_log "Settings: excl_platform=true (operators only)"
-					fi
-					tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
-					;;
-			esac
+			O)
+				mirror_select_operators
+				;;
+			X)
+				if [[ "$_excl_plat" == "true" ]]; then
+					replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_platform=false (all images)"
+				else
+					replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_platform=true (operators only)"
+				fi
+				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+				;;
+		esac
 		done
 	fi
 	return 0
