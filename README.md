@@ -1562,7 +1562,7 @@ ABA supports installing OpenShift Release Candidates (RC) and Engineering Candid
 
 ```bash
 aba --channel candidate --version 4.22.0-rc.1
-aba --channel candidate --version 5.0.0-ec.3
+aba --channel candidate --version 4.23.0-ec.3
 ```
 
 Or set directly in `aba.conf`:
