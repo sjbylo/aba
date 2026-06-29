@@ -1349,9 +1349,9 @@ e2e_poll_remote() {
 #                  zero Degraded COs (matches core cluster_is_ready())
 #
 # Usage:
-#   e2e_wait_cluster_available $SNO              # local, 10-min timeout
+#   e2e_wait_cluster_available $SNO              # local, 15-min timeout
 #   e2e_wait_cluster_available $SNO remote       # remote (disN)
-#   e2e_wait_cluster_ready $SNO                  # local, 30-min timeout
+#   e2e_wait_cluster_ready $SNO                  # local, 45-min timeout
 #   e2e_wait_cluster_ready $SNO remote 2700      # remote, 45-min timeout
 #
 
@@ -1405,21 +1405,21 @@ exit 1"
 }
 
 # Loose check: all operators AVAILABLE=True (ignores PROGRESSING/DEGRADED).
-# Default: 15-min timeout, 30s interval, 3 consecutive passes.
+# Default: 15-min timeout, 10s interval, 2 consecutive passes.
 e2e_wait_cluster_available() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
 	local timeout="${3:-900}"
-	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 30 3
+	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 10 2
 }
 
 # Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
-# Default: 45-min timeout, 30s interval, 3 consecutive passes.
+# Default: 45-min timeout, 10s interval, 2 consecutive passes.
 e2e_wait_cluster_ready() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
 	local timeout="${3:-2700}"
-	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 30 3
+	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 10 2
 }
 
 # Backward-compat aliases (deprecated -- use e2e_wait_cluster_* instead)
