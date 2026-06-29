@@ -546,22 +546,16 @@ confirm_and_execute() {
 			--extra-button --extra-label "Command" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
-			"1" "Run in TUI (auto-answer)" \
-			"2" "Run in Terminal" \
-			"3" "Run in Terminal (auto-answer)" \
+			"1" "Run in Terminal" \
+			"2" "Run in Terminal (auto-answer)" \
+			"3" "Run in TUI (auto-answer)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_EXEC" \
-"• Run in TUI (auto-answer)
-  - Command runs inside dialog interface
-  - All prompts are auto-answered with defaults (-y)
-  - Output shown live in progressbox
-  - Scrollable output review after completion
-
-• Run in Terminal
+"• Run in Terminal
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
   - Press ENTER to return to TUI
@@ -569,7 +563,13 @@ confirm_and_execute() {
 • Run in Terminal (auto-answer)
   - Command runs in real terminal with full output
   - Prompts are auto-answered with defaults (-y)
-  - Press ENTER to return to TUI"
+  - Press ENTER to return to TUI
+
+• Run in TUI (auto-answer)
+  - Command runs inside dialog interface
+  - All prompts are auto-answered with defaults (-y)
+  - Output shown live in progressbox
+  - Scrollable output review after completion"
 				continue
 				;;
 			3)
@@ -589,13 +589,13 @@ confirm_and_execute() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			1) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
-			2) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
-			3)
+			1) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
+			2)
 				local _auto_cmd="$cmd"
 				[[ "$_auto_cmd" != *" --yes"* && "$_auto_cmd" != *" -y "* && "$_auto_cmd" != *" -y" ]] && _auto_cmd="$_auto_cmd --yes"
 				_exec_in_terminal "$_auto_cmd" "$title" "$post_cmd_hook"
 				;;
+			3) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
 		esac
 		local exec_rc=$?
 		[[ $exec_rc -eq 2 ]] && continue
