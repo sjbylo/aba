@@ -115,6 +115,12 @@ source scripts/include_all.sh
 # by design, the ERR trap must be disabled or every Back press crashes the TUI.
 trap - ERR
 
+# Suppress config drift warnings during startup splash screen.
+# tui-lib.sh runs normalize-mirror-conf at source time (top-level code, line ~333)
+# which triggers _state_override_mirror -> aba_warning. Must be set BEFORE sourcing.
+# ABA_SUPPRESS_WARNINGS is checked by aba_warning() in include_all.sh.
+export ABA_SUPPRESS_WARNINGS=1
+
 # Source TUI v2 modules
 source "$ABA_ROOT/tui/v2/tui-strings2.sh"
 source "$ABA_ROOT/tui/v2/tui-lib.sh"
@@ -307,6 +313,9 @@ fi
 
 # Wait for internet check to complete (this is the slow part)
 aba_inet_check_wait
+
+# Re-enable warnings now that startup is complete
+unset ABA_SUPPRESS_WARNINGS
 
 printf '  Ready.\n'
 unset -f _tick

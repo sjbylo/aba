@@ -223,6 +223,9 @@ aba_error() {
 }
 
 aba_warning() {
+	# TUI sets ABA_SUPPRESS_WARNINGS during startup splash to keep it clean
+	[[ "${ABA_SUPPRESS_WARNINGS:-}" == "1" ]] && return 0
+
         local prefix="Warning"
 	local newline=
 	local col=red
