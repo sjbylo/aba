@@ -25,7 +25,7 @@
 # aba.sh:_ensure_hv_ready, but as a single grep-able decision.
 vm_provider_load() {
 	local platform=$1
-	# Relative path: per project invariant, scripts other than aba.sh/abatui.sh
+	# Relative path: per project invariant, scripts other than aba.sh/abatui2.sh
 	# never depend on $ABA_ROOT. cwd already contains scripts/ (same place this
 	# file and include_all.sh were sourced from).
 	case "$platform" in
