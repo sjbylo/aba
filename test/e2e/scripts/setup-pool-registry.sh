@@ -107,6 +107,16 @@ _pool_registry_gc() {
         docker.io/library/registry:latest \
         garbage-collect --delete-untagged /etc/distribution/config.yml >/dev/null 2>&1
     podman start "$CONTAINER_NAME" >/dev/null
+
+    # Wait for registry to be healthy after restart (avoids oc-mirror race)
+    local _i
+    for _i in $(seq 1 30); do
+        if curl -sfk -o /dev/null -u "${REG_USER}:${REG_PW}" "https://${reg_host}:${REG_PORT}/v2/"; then
+            break
+        fi
+        sleep 2
+    done
+
     echo "  GC complete -- $(du -sh "${POOL_REG_DIR}/data" | awk '{print $1}') in data dir"
 }
 
