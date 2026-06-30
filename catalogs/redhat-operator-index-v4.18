@@ -75,7 +75,7 @@ mtr-operator                                            Migration Toolkit for Ru
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.10
 multiarch-tuning-operator                               Multiarch Tuning Operator                                    stable
 multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.11
-multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.7
+multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.8
 nbde-tang-server                                        NBDE Tang Server                                             stable
 netobserv-operator                                      Network Observability                                        stable
 nfd                                                     Node Feature Discovery Operator                              stable

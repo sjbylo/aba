@@ -28,6 +28,7 @@ CATALOGS_DIR="catalogs"
 INDEX_DIR=".index"
 CATALOGS=(redhat-operator certified-operator community-operator)
 MIN_OPERATORS=50
+MIN_OPERATORS_PRERELEASE=10
 DEPTH=6
 
 do_commit=false
@@ -41,10 +42,11 @@ while [[ $# -gt 0 ]]; do
 		-y|--yes) do_yes=true; shift ;;
 		-h|--help)
 			echo "Usage: $0 [--force] [-y] [--commit]"
-			echo "  --force    re-download all catalogs even if already present"
+			echo "  --force    bypass drift-check safety gate"
 			echo "  -y|--yes   skip confirmation prompts"
 			echo "  --commit   git add + commit + push updated catalogs/"
-			echo "Covers the latest ${DEPTH} GA minor versions from the stable channel."
+			echo "Covers the latest ${DEPTH} GA minor versions from the stable channel"
+			echo "plus any pre-release catalogs for the immediate next minor."
 			exit 0
 			;;
 		*) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -73,7 +75,48 @@ detect_versions() {
 	printf '%s\n' "${versions[@]}" | sort -V
 }
 
-echo "=== Detecting supported OCP versions (last ${DEPTH} GA minors) ==="
+_next_minor() {
+	local minor="$1"
+	local x y
+	x="${minor%%.*}"
+	y="${minor#*.}"
+	[[ "$y" =~ ^[0-9]+$ ]] || return 1
+	echo "${x}.$((y + 1))"
+}
+
+# Detect pre-release catalog versions by probing the registry for the
+# immediate next minor beyond the latest GA. Checks both the in-sequence
+# next (e.g. 4.23) and the next major (e.g. 5.0) for the boundary case.
+detect_prerelease_versions() {
+	local latest_ga="$1"
+	local prerelease=()
+
+	# Candidate 1: in-sequence next minor (e.g. 4.22 → 4.23)
+	local next
+	next=$(_next_minor "$latest_ga")
+
+	# Candidate 2: next major version .0 (e.g. 4.x → 5.0)
+	local major="${latest_ga%%.*}"
+	local next_major="$((major + 1)).0"
+
+	local candidate
+	for candidate in "$next" "$next_major"; do
+		[[ -n "$candidate" ]] || continue
+		# Skip if it's already a GA version (already covered by detect_versions)
+		if fetch_all_versions "stable" "$candidate" 2>/dev/null | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+			continue
+		fi
+		# Probe the registry: does the catalog tag exist?
+		local probe_ref="docker://registry.redhat.io/redhat/redhat-operator-index:v${candidate}"
+		if skopeo inspect --raw "$probe_ref" &>/dev/null; then
+			prerelease+=("$candidate")
+		fi
+	done
+
+	printf '%s\n' "${prerelease[@]}"
+}
+
+echo "=== Detecting supported OCP versions (last ${DEPTH} GA minors + pre-release) ==="
 mapfile -t VERSIONS < <(detect_versions)
 
 if [[ ${#VERSIONS[@]} -eq 0 ]]; then
@@ -81,7 +124,22 @@ if [[ ${#VERSIONS[@]} -eq 0 ]]; then
 	exit 1
 fi
 
-echo "Found versions: ${VERSIONS[*]}"
+echo "Found GA versions: ${VERSIONS[*]}"
+
+# Detect pre-release versions (immediate next minor beyond latest GA)
+latest_ga="${VERSIONS[-1]}"
+mapfile -t PRERELEASE_VERSIONS < <(detect_prerelease_versions "$latest_ga")
+declare -A IS_PRERELEASE
+
+if [[ ${#PRERELEASE_VERSIONS[@]} -gt 0 ]]; then
+	echo "Found pre-release: ${PRERELEASE_VERSIONS[*]}"
+	for _pv in "${PRERELEASE_VERSIONS[@]}"; do
+		VERSIONS+=("$_pv")
+		IS_PRERELEASE["$_pv"]=1
+	done
+else
+	echo "No pre-release catalogs detected"
+fi
 echo ""
 
 mkdir -p "$CATALOGS_DIR" "$INDEX_DIR"
@@ -147,13 +205,6 @@ _check_content_change() {
 	local remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
 	local _label
 	printf -v _label "%-18s  v%-5s" "$catalog" "$ver"
-
-	# --force: always re-download
-	if [[ "$do_force" == true ]]; then
-		touch "${NEEDS_DOWNLOAD_DIR}/${catalog}:${ver}"
-		echo "  ${_label} DOWNLOAD (--force)"
-		return
-	fi
 
 	# No local index file: must download
 	if [[ ! -s "$index" ]]; then
@@ -226,33 +277,61 @@ if [[ ${#needs_download[@]} -gt 0 && "$do_yes" != true ]]; then
 	fi
 fi
 
-# Phase 1b: Download catalogs that changed (sequential -- podman can't overlap well)
+# Phase 1b: Download catalogs that changed (parallel, MAX_PARALLEL at a time)
 failed=()
 downloaded=0
 
 if [[ ${#needs_download[@]} -gt 0 ]]; then
 	echo ""
-	echo "=== Downloading ${#needs_download[@]} catalog(s) ==="
-	for entry in "${needs_download[@]}"; do
-		catalog="${entry%%:*}"
-		ver="${entry#*:}"
-		remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
-		layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
-		#local _label
+	echo "=== Downloading ${#needs_download[@]} catalog(s) (${MAX_PARALLEL} parallel) ==="
+
+	DOWNLOAD_RESULTS_DIR=$(mktemp -d "$ABA_TMP/catalog-dl-results-XXXXXX")
+
+	_download_one() {
+		local catalog="$1" ver="$2" results_dir="$3"
+		local remote_ref="docker://registry.redhat.io/redhat/${catalog}-index:v${ver}"
+		local layer_digest_file="${INDEX_DIR}/.${catalog}-index-v${ver}.content-layer-digest"
+		local _label
 		printf -v _label "%-18s  v%-5s" "$catalog" "$ver"
 
 		echo "  ${_label} ..."
 		if scripts/download-catalog-index.sh "$catalog" "$ver"; then
 			# Save content layer digest for future change detection
+			local cld
 			cld=$(_get_content_layer_digest "$remote_ref") || cld=""
 			[[ -n "$cld" ]] && echo "$cld" > "$layer_digest_file"
 			echo "  ${_label} OK"
-			downloaded=$((downloaded + 1))
+			touch "${results_dir}/ok:${catalog}:${ver}"
 		else
 			echo "  ${_label} FAIL" >&2
-			failed+=("${catalog}:${ver}")
+			touch "${results_dir}/fail:${catalog}:${ver}"
+		fi
+	}
+
+	running=0
+	for entry in "${needs_download[@]}"; do
+		catalog="${entry%%:*}"
+		ver="${entry#*:}"
+		_download_one "$catalog" "$ver" "$DOWNLOAD_RESULTS_DIR" &
+		running=$((running + 1))
+		if (( running >= MAX_PARALLEL )); then
+			wait -n 2>/dev/null || true
+			running=$((running - 1))
 		fi
 	done
+	wait
+
+	# Collect results
+	for marker in "${DOWNLOAD_RESULTS_DIR}"/ok:*; do
+		[[ -f "$marker" ]] || continue
+		downloaded=$((downloaded + 1))
+	done
+	for marker in "${DOWNLOAD_RESULTS_DIR}"/fail:*; do
+		[[ -f "$marker" ]] || continue
+		entry="${marker##*/fail:}"
+		failed+=("$entry")
+	done
+	rm -rf "$DOWNLOAD_RESULTS_DIR"
 fi
 
 echo ""
@@ -304,12 +383,17 @@ fi
 
 if [[ ${#drift_errors[@]} -gt 0 ]]; then
 	echo ""
-	echo "ERROR: ${#drift_errors[@]} catalog(s) differ by >${MAX_DRIFT}% in both size and line count:" >&2
-	printf "  %s\n" "${drift_errors[@]}" >&2
-	echo ""
-	echo "This may indicate a corrupted download or unexpected upstream change." >&2
-	echo "Investigate before updating catalogs/. Use --force to override." >&2
-	exit 1
+	if [[ "$do_force" == true ]]; then
+		echo "WARNING: ${#drift_errors[@]} catalog(s) differ by >${MAX_DRIFT}% (overridden by --force):" >&2
+		printf "  %s\n" "${drift_errors[@]}" >&2
+	else
+		echo "ERROR: ${#drift_errors[@]} catalog(s) differ by >${MAX_DRIFT}% in both size and line count:" >&2
+		printf "  %s\n" "${drift_errors[@]}" >&2
+		echo ""
+		echo "This may indicate a corrupted download or unexpected upstream change." >&2
+		echo "Investigate before updating catalogs/. Use --force to override." >&2
+		exit 1
+	fi
 fi
 
 # Phase 2: Verify all downloaded catalogs
@@ -328,8 +412,11 @@ for ver in "${VERSIONS[@]}"; do
 		fi
 
 		count=$(wc -l < "$index")
-		if (( count < MIN_OPERATORS )); then
-			echo "  FAIL: ${catalog} v${ver} has only ${count} operators (min: ${MIN_OPERATORS})" >&2
+		# Pre-release catalogs may have fewer operators initially
+		_min_ops=$MIN_OPERATORS
+		[[ -n "${IS_PRERELEASE[$ver]:-}" ]] && _min_ops=$MIN_OPERATORS_PRERELEASE
+		if (( count < _min_ops )); then
+			echo "  FAIL: ${catalog} v${ver} has only ${count} operators (min: ${_min_ops})" >&2
 			verify_failed+=("${catalog}:${ver}")
 			continue
 		fi
