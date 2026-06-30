@@ -72,7 +72,7 @@ analytics-operator                                      Observability Analytics 
 annotationlab                                           NLPLab                                                       alpha
 apicast-community-operator                              APIcast                                                      stable
 apicurio-api-controller                                 Apicurio API Controller                                      0.x
-apicurio-registry-3                                     Apicurio Registry 3                                          3.2.x
+apicurio-registry-3                                     Apicurio Registry 3                                          3.x
 apicurio-registry                                       Apicurio Registry Operator                                   2.x
 apicurito                                               API Designer                                                 latest
 apimatic-kubernetes-operator                            APIMatic Operator                                            alpha
@@ -143,6 +143,7 @@ grafana-operator                                        Grafana Operator        
 group-sync-operator                                     Group Sync Operator                                          alpha
 hawtio-operator                                         Hawtio Operator                                              stable-v1
 hedvig-operator                                         Hedvig Operator                                              stable
+hermes-operator                                         Hermes Operator                                              stable
 hive-operator                                           Hive for Red Hat OpenShift                                   alpha
 horreum-operator                                        Horreum                                                      alpha
 hyperfoil-bundle                                        Hyperfoil                                                    alpha
@@ -215,11 +216,13 @@ observability-operator                                  Observability Operator  
 oci-ccm-operator                                        oci-ccm-operator                                             alpha
 odf-node-recovery-operator                              ODF Node Recovery Operator                                   alpha
 odoo-operator                                           Odoo Operator                                                alpha
+openclaw-operator                                       OpenClaw Operator                                            stable
 opendatahub-operator                                    Open Data Hub Operator                                       fast
 openebs                                                 OpenEBS                                                      alpha
 openshift-node-upgrade-mutex-operator                   OpenShift Node Upgrade Mutex Operator                        alpha
 openshift-qiskit-operator                               QiskitPlayground                                             alpha
 opentelemetry-operator                                  Community OpenTelemetry Operator                             alpha
+paperclip-operator                                      Paperclip Operator                                           stable
 patch-operator                                          Patch Operator                                               alpha
 patterns-operator                                       Validated Patterns Operator                                  fast
 pcc-operator                                            Prisma Cloud Compute Operator                                stable
@@ -229,6 +232,7 @@ percona-server-mongodb-operator                         Percona Distribution for
 percona-server-mysql-operator                           Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator                         Percona Operator for MySQL based on Percona XtraDB Cluster   stable
 proactive-node-scaling-operator                         Proactive Node Scaling Operator                              alpha
+project-onboarding-operator                             Project Onboarding                                           stable
 project-quay                                            Quay                                                         stable-3.17
 prometheus-exporter-operator                            Prometheus Exporter Operator                                 alpha
 prometheus                                              Prometheus Operator                                          beta

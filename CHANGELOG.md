@@ -1,4 +1,16 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.2...HEAD)
+
+---
+
+## [1.1.2](https://github.com/sjbylo/aba/releases/tag/v1.1.2) - 2026-07-01
+
+Operator catalog refresh
+
+
+### Improvements
+
+- **Pre-release operator catalogs** — `tools/refresh-catalog-indexes.sh` now auto-detects and downloads pre-release catalogs (4.23, 5.0) by probing `registry.redhat.io` for the immediate next minor version beyond the latest GA release. Pre-release catalogs are always re-downloaded (content changes frequently) and use a relaxed operator threshold (`MIN_OPERATORS_PRERELEASE=10`).
+- **Updated shipped catalog indexes** — Refreshed all operator catalog indexes; added 4.23 and 5.0 pre-release catalogs for TUI operator browsing.
 
 ---
 

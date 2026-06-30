@@ -1,0 +1,54 @@
+3scale-operator                                         Red Hat Integration - 3scale                                 threescale-2.13
+advanced-cluster-management                             Advanced Cluster Management for Kubernetes                   release-2.17
+amq7-interconnect-operator                              Red Hat Integration - AMQ Interconnect                       1.10.x
+amq-broker-rhel8                                        Red Hat Integration - AMQ Broker for RHEL 8 (Multiarch)      7.12.x
+amq-broker-rhel9                                        Red Hat Integration - AMQ Broker for RHEL 9 (Multiarch)      7.14.x
+amq-streams-console                                     Streams for Apache Kafka Console                             stable
+amq-streams-proxy                                       Streams for Apache Kafka Proxy                               stable
+amq-streams                                             Streams for Apache Kafka                                     stable
+ansible-cloud-addons-operator                           Ansible Cloud Addons                                         stable-2.5-cluster-scoped
+apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.14
+apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
+authorino-operator                                      Red Hat - Authorino Operator                                 stable
+bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable
+bamoe-kogito-operator                                   IBM BAMOE Kogito Operator                                    8.x
+businessautomation-operator                             Business Automation                                          stable
+cincinnati-operator                                     OpenShift Update Service                                     v1
+container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.17
+cryostat-operator                                       Red Hat build of Cryostat                                    stable
+datagrid                                                Data Grid                                                    stable
+devworkspace-operator                                   DevWorkspace Operator                                        fast
+dpu-network-operator                                    DPU Network Operator                                         stable
+eap                                                     JBoss EAP                                                    stable
+fence-agents-remediation                                Fence Agents Remediation Operator                            stable
+jws-operator                                            WebServer                                                    alpha
+kiali-ossm                                              Kiali Operator                                               stable
+kubevirt-hyperconverged                                 OpenShift Virtualization                                     stable
+logic-operator                                          OpenShift Serverless Logic Operator                          stable
+logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
+machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
+mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.0
+mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
+mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.8
+multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.17
+node-healthcheck-operator                               Node Health Check Operator                                   stable
+node-maintenance-operator                               Node Maintenance Operator                                    stable
+node-observability-operator                             Node Observability Operator                                  alpha
+openshift-custom-metrics-autoscaler-operator            Custom Metrics Autoscaler                                    stable
+openshift-pipelines-operator-rh                         Red Hat OpenShift Pipelines                                  latest
+openshift-secondary-scheduler-operator                  Secondary Scheduler Operator for Red Hat OpenShift           stable
+quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.17
+quay-operator                                           Red Hat Quay                                                 stable-3.17
+red-hat-hawtio-operator                                 HawtIO Operator                                              v2
+rhpam-kogito-operator                                   RHPAM Kogito Operator                                        7.x
+rh-service-binding-operator                             Service Binding Operator                                     stable
+rhsso-operator                                          Red Hat Single Sign-On Operator                              stable
+run-once-duration-override-operator                     Run Once Duration Override Operator                          stable
+self-node-remediation                                   Self Node Remediation Operator                               stable
+serverless-operator                                     Red Hat OpenShift Serverless                                 stable
+servicemeshoperator3                                    Red Hat OpenShift Service Mesh 3                             stable
+service-registry-operator                               Red Hat build of Apicurio Registry                           2.x
+skupper-netobs-operator                                 Red Hat Service Interconnect Network Observer                stable-2
+skupper-operator                                        Red Hat Service Interconnect                                 stable-2
+tang-operator                                           NBDE Tang Server                                             alpha
+web-terminal                                            Web Terminal                                                 fast

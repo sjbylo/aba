@@ -3,7 +3,7 @@ accuknox-operator-certified                             Accuknox Operator       
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
 aic-operator                                            AIC Operator                                                 alpha
 aikit-operator                                          Intel® oneAPI AI Analytics Toolkit Operator                 alpha
-airlock-microgateway                                    Airlock Microgateway                                         5.0
+airlock-microgateway                                    Airlock Microgateway                                         5.1.0-alpha1
 aiu-operator                                            AIU Operator                                                 stable-v2.4
 alloy                                                   Alloy                                                        alpha
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
@@ -20,6 +20,7 @@ appdynamics-operator                                    AppDynamics Operator for
 appian-operator                                         Appian operator                                              alpha
 app-insights-operator                                   Randoli Agent                                                stable
 aqua-operator-certified                                 Aqua Security Operator                                       2022.4
+axera-operator                                          Axera Microsegmentation & NDR                                alpha
 cass-operator                                           DataStax Kubernetes Operator for Apache Cassandra            stable
 ccm-node-agent-dcap-operator                            CCM Node Agent DCAP Operator                                 alpha
 ccm-node-agent-operator                                 CCM Node Agent Operator                                      alpha
@@ -35,7 +36,7 @@ cloud-native-postgresql                                 EDB Postgres for Kuberne
 cnfv-operator                                           CloudNFV                                                     alpha
 cockroachdb-certified                                   CockroachDB Public Operator                                  stable
 coherence-operator                                      Coherence Kubernetes Operator                                stable
-confluent-for-kubernetes                                Confluent for Kubernetes                                     3.2
+confluent-for-kubernetes                                Confluent for Kubernetes                                     3.3
 conjur-follower-operator                                Conjur Enterprise Follower Operator                          stable
 coroot-operator                                         Coroot                                                       stable
 couchbase-enterprise-certified                          Couchbase Operator                                           stable
@@ -51,7 +52,6 @@ digitalai-release-operator                              Digital.ai Release      
 dxoperator                                              DxOperator V1 Legacy                                         alpha
 dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
-eda-k8s-operator                                        eda-openshift-operator                                       stable
 edb-hcp-operator                                        EDB Postgres AI                                              alpha
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
@@ -67,9 +67,10 @@ fujitsu-enterprise-postgres-operator-with-cg-module     Fujitsu Enterprise Postg
 function-mesh                                           Function Mesh Operator                                       alpha
 gitlab-operator-kubernetes                              GitLab                                                       stable
 gitlab-runner-operator                                  GitLab Runner                                                stable
-google-cloud-cluster-services-for-openshift-telemetry   Google Cloud Cluster Services for Openshift Telemetry agent  alpha
+google-cloud-cluster-services-for-openshift-telemetry   Cluster Services for OpenShift Telemetry                     alpha
 gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
 habana-ai-operator                                      Intel Gaudi Base Operator                                    stable
+hammu-platform                                          Hammu Platform                                               alpha
 harness-gitops-operator                                 Harness GitOps Operator                                      alpha
 hazelcast-platform-operator                             Hazelcast Platform Operator                                  alpha
 hcp-terraform-operator                                  HCP Terraform Operator                                       alpha
@@ -174,7 +175,7 @@ nginx-ingress-operator                                  Nginx Ingress Operator  
 nim-operator-certified                                  The NVIDIA NIM Operator for Kubernetes                       stable
 nspc-operator                                           NEC Storage Plug-in for Containers                           stable
 nutanixcsioperator                                      Nutanix CSI Operator                                         stable-3.x
-nvidia-maintenance-operator                             NVIDIA Maintenance Operator                                  v0.2
+nvidia-maintenance-operator                             NVIDIA Maintenance Operator                                  stable
 nvidia-network-operator                                 NVIDIA Network Operator                                      stable
 nxiq-operator-certified                                 Nexus IQ Operator                                            stable
 nxrm-operator-certified                                 Nexus Repository Operator                                    stable
@@ -202,7 +203,8 @@ redis-enterprise-operator-cert                          Redis Enterprise Operato
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.31
+scaleops-operator                                       ScaleOps                                                     stable-v1.32
+seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 silicom-sts-operator                                    Silicom STS Operator                                         stable
 smilecdr-operator                                       Smilecdr Operator                                            alpha
 sn-operator                                             StreamNative Operator                                        alpha
@@ -238,9 +240,9 @@ tigera-operator                                         Tigera Operator v1.38   
 timemachine-operator                                    Time Machine Operator                                        alpha
 trident-operator                                        NetApp Trident                                               stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
-uma-operator                                            DX APM Universal Monitoring Agent                            beta
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     beta
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    stable
+uma-operator                                            DX APM Universal Monitoring Agent                            stable
+uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     stable
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable

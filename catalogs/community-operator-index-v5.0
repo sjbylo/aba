@@ -66,7 +66,6 @@ ack-ssm-controller                                      AWS Controllers for Kube
 ack-wafv2-controller                                    AWS Controllers for Kubernetes - Amazon WAFV2                alpha
 aerospike-kubernetes-operator                           Aerospike Kubernetes Operator                                stable
 airflow-helm-operator                                   Airflow Helm Operator                                        alpha
-alloydb-omni-operator                                   AlloyDB Omni Operator                                        stable
 alvearie-imaging-ingestion                              Alvearie Imaging Ingestion Operator                          alpha
 analytics-operator                                      Observability Analytics                                      alpha
 annotationlab                                           NLPLab                                                       alpha
@@ -83,10 +82,8 @@ arkmq-org-broker-operator                               ArkMQ Operator          
 assisted-service-operator                               Infrastructure Operator for Red Hat OpenShift                alpha
 attune                                                  Attune                                                       stable
 authorino-operator                                      Authorino Operator                                           stable
-automotive-dev-operator                                 CentOS Automotive Suite                                      alpha
 automotive-infra                                        Automotive-CI                                                alpha
 aws-efs-operator                                        AWS EFS Operator                                             stable
-aws-neuron-operator                                     Aws Neuron Operator                                          Fast
 awss3-operator-registry                                 AWS S3 Operator                                              alpha
 azure-service-operator                                  Azure Service Operator                                       stable
 beegfs-csi-driver-operator                              BeeGFS CSI Driver                                            stable
@@ -95,17 +92,14 @@ camel-karavan-operator                                  Camel Karavan Operator  
 camel-k                                                 Camel K Operator                                             stable-v2
 camel-monitor-operator                                  Camel Monitor Operator                                       stable-v0
 cass-operator-community                                 DataStax Kubernetes Operator for Apache Cassandra            stable
-cat-facts-operator                                      Cat Facts Operator                                           stable
 cert-manager                                            cert-manager                                                 stable
 cert-utils-operator                                     Cert Utils Operator                                          alpha
 clickhouse                                              Altinity® Kubernetes Operator for ClickHouse®              latest
 cluster-aas-operator                                    Cluster as a service operator                                alpha
 cluster-impairment-operator                             cluster-impairment-operator                                  beta
 cluster-manager                                         Cluster Manager                                              stable
-clusterpulse                                            ClusterPulse                                                 fast-v1
 cockroachdb                                             CockroachDB Helm Operator                                    stable-v6.x
 codeflare-operator                                      CodeFlare Operator                                           alpha
-coherence-operator                                      Coherence Kubernetes Operator                                stable
 community-kubevirt-hyperconverged                       KubeVirt HyperConverged Cluster Operator                     stable
 community-trivy-operator                                Community Trivy Operator                                     stable
 community-windows-machine-config-operator               Community Windows Machine Config Operator                    preview
@@ -115,15 +109,13 @@ datadog-operator                                        Datadog Operator        
 datatrucker-operator                                    DataTrucker.IO                                               alpha
 dbaas-operator                                          OpenShift Database Access Operator                           stable
 debezium-operator                                       Debezium Operator                                            debezium-latest
-dell-csm-operator                                       Dell Container Storage Modules                               stable
 deployment-validation-operator                          Deployment Validation Operator                               alpha
 devopsinabox                                            Devops-in-a-box                                              alpha
 dns-operator                                            DNS Operator                                                 stable
 dynatrace-operator                                      Dynatrace Operator                                           alpha
 eclipse-amlen-operator                                  eclipse-amlen-operator                                       alpha
 eclipse-che                                             Eclipse Che                                                  stable
-ecr-secret-operator                                     ECR Secret Operator                                          alpha
-edp-keycloak-operator                                   EDP Keycloak Operator                                        stable
+edp-keycloak-operator                                   EDP Keycloak Operator                                        alpha
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 egressip-ipam-operator                                  Egressip Ipam Operator                                       alpha
 ember-csi-community-operator                            Ember CSI Operator                                           beta
@@ -133,12 +125,9 @@ external-secrets-operator                               External Secrets Operato
 fence-agents-remediation                                Fence Agents Remediation Operator - Community Edition        stable
 flink-kubernetes-operator                               Flink Kubernetes Operator                                    alpha
 flux                                                    Flux                                                         stable
-flux-operator                                           Flux Operator                                                stable
 fossul-operator                                         Fossul Operator                                              alpha
 fqdn-egress-operator                                    FQDN Egress Operator                                         stable
 github-arc-operator                                     github-arc-operator                                          alpha
-gitlab-operator-kubernetes                              GitLab                                                       stable
-gitlab-runner-operator                                  GitLab Runner                                                stable
 gitops-primer                                           gitops-primer                                                alpha
 gitwebhook-operator                                     GitWebhook operator                                          alpha
 global-load-balancer-operator                           Global Load Balancer Operator                                alpha
@@ -147,44 +136,30 @@ group-sync-operator                                     Group Sync Operator     
 hawtio-operator                                         Hawtio Operator                                              stable-v1
 hedvig-operator                                         Hedvig Operator                                              stable
 hermes-operator                                         Hermes Operator                                              stable
-hive-operator                                           Hive for Red Hat OpenShift                                   alpha
 horreum-operator                                        Horreum                                                      alpha
 hyperfoil-bundle                                        Hyperfoil                                                    alpha
-ibm-block-csi-operator-community                        IBM block storage CSI driver operator                        stable
 ibmcloud-operator                                       IBM Cloud Operator                                           stable
 ibm-security-verify-access-operator                     IBM Security Verify Access Operator                          stable
 ibm-spectrum-scale-csi-operator                         IBM Spectrum Scale CSI Plugin Operator                       stable
-infinispan                                              Infinispan Operator                                          stable
 integrity-shield-operator                               K8s Integrity Shield                                         alpha-0.3.3
 ipfs-operator                                           IPFS Operator                                                alpha
 istio-workspace-operator                                Istio Workspace                                              alpha
 jaeger                                                  Community Jaeger Operator                                    stable
 jhipster-online-operator                                JHipster Online Operator                                     alpha
-jumpstarter-operator                                    Jumpstarter Operator                                         alpha
-jupyter-notebook-validator-operator                     Jupyter Notebook Validator Operator                          stable
 k8gb                                                    k8gb                                                         alpha
 kairos-operator                                         Kairos Operator                                              stable
 keda                                                    [DEPRECATED] KEDA                                            alpha
 keepalived-operator                                     Keepalived Operator                                          alpha
-kepler-operator                                         Kepler                                                       alpha
 keycloak-operator                                       Keycloak Operator                                            fast
 keycloak-permissions-operator                           Keycloak Permissions Operator                                alpha
 klusterlet                                              Klusterlet                                                   stable
 kogito-operator                                         Kogito                                                       1.x
-koku-metrics-operator                                   Koku Metrics Operator                                        beta
 konveyor-operator                                       Konveyor Operator                                            alpha
 korrel8r                                                Korrel8r                                                     stable
-kruize-operator                                         Kruize Operator                                              alpha
-kuadrant-operator                                       Kuadrant Operator                                            stable
-kubebrowser                                             KubeBrowser Operator                                         alpha
 kubecost                                                Kubecost                                                     alpha
-kube-green                                              kube-green                                                   alpha
-kubernaut-operator                                      Kubernaut Operator                                           candidate-v1
 kubernetes-imagepuller-operator                         Kubernetes Image Puller Operator                             stable
 kubeturbo                                               Kubeturbo Operator                                           stable
-kubevirt-wol                                            Kubevirt Wake on Lan                                         stable-v0
 l5-operator                                             L5 Operator                                                  alpha
-layer7-operator                                         Layer7 Operator                                              preview
 lbconfig-operator                                       External Load-Balancer Configuration Operator                beta
 lib-bucket-provisioner                                  lib-bucket-provisioner                                       alpha
 limitador-operator                                      Limitador                                                    stable
@@ -200,9 +175,7 @@ microcks                                                Microcks Operator       
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-operator                                        MongoDB Operator                                             alpha
 move2kube-operator                                      Konveyor Move2Kube                                           stable
-multicluster-global-hub-operator                        Multicluster Global Hub Operator                             release-1.7
 multicluster-operators-subscription                     Multicluster Subscription Operator                           release-2.5
-multi-nic-cni-operator                                  multi-nic-cni-operator                                       stable
 must-gather-operator                                    Must Gather Operator                                         alpha
 namespace-configuration-operator                        Namespace Configuration Operator                             alpha
 ncn-operator                                            ncn-operator                                                 betav1
@@ -211,7 +184,6 @@ ndmspc-operator                                         NdmSpc operator         
 neuvector-community-operator                            NeuVector Operator                                           beta
 nexus-operator                                          EDP Nexus Operator                                           alpha
 nexus-operator-m88i                                     Nexus Operator                                               alpha
-nfs-provisioner-operator                                NFS Provisioner Operator                                     alpha
 nlp-server                                              nlp-server                                                   alpha
 node-discovery-operator                                 node-discovery-operator                                      alpha
 node-healthcheck-operator                               Node Health Check Operator - Community Edition               stable
@@ -223,39 +195,27 @@ oci-ccm-operator                                        oci-ccm-operator        
 ocp-kea-dhcp                                            Kea DHCP Operator                                            alpha
 odoo-operator                                           Odoo Operator                                                alpha
 openclaw-operator                                       OpenClaw Operator                                            stable
-opendatahub-operator                                    Open Data Hub Operator                                       fast-3
 openebs                                                 OpenEBS                                                      alpha
-openshift-integration-operator                          OpenShift Integration Operator                               candidate-v0
 openshift-node-upgrade-mutex-operator                   OpenShift Node Upgrade Mutex Operator                        alpha
 openshift-qiskit-operator                               QiskitPlayground                                             alpha
 opentelemetry-operator                                  Community OpenTelemetry Operator                             alpha
 paperclip-operator                                      Paperclip Operator                                           stable
 patch-operator                                          Patch Operator                                               alpha
-patterns-operator                                       Validated Patterns Operator                                  fast
 pcc-operator                                            Prisma Cloud Compute Operator                                stable
 pelorus-operator                                        Pelorus Operator                                             alpha
-percona-postgresql-operator                             Percona Operator for PostgreSQL                              stable
-percona-server-mongodb-operator                         Percona Distribution for MongoDB Operator                    stable
-percona-server-mysql-operator                           Percona Operator for MySQL based on Percona Server for MySQL stable
-percona-xtradb-cluster-operator                         Percona Operator for MySQL based on Percona XtraDB Cluster   stable
+percona-xtradb-cluster-operator                         Percona XtraDB Cluster Operator                              stable
 proactive-node-scaling-operator                         Proactive Node Scaling Operator                              alpha
-project-onboarding-operator                             Project Onboarding                                           stable
-project-quay                                            Quay                                                         stable-3.17
 prometheus-exporter-operator                            Prometheus Exporter Operator                                 alpha
 prometheus                                              Prometheus Operator                                          beta
 prometurbo                                              Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 pulp-operator                                           Pulp Project                                                 beta
-rabbitmq-cluster-operator                               RabbitMQ-cluster-operator                                    stable
-rabbitmq-messaging-topology-operator                    rabbitmq-messaging-topology-operator                         stable
 redis-operator                                          Redis Operator                                               stable
 redkey-operator                                         Redkey Operator                                              stable
 reportportal-operator                                   reportportal-operator                                        alpha
 resource-locker-operator                                Resource Locker Operator                                     alpha
 rhoas-operator                                          OpenShift Application Services (RHOAS)                       beta
 ripsaw                                                  benchmark-operator                                           alpha
-rsct-operator                                           RSCT Operator for IBM Power Systems                          alpha
-sailoperator                                            Sail Operator                                                stable
 sap-commerce-operator                                   SAP Commerce Operator                                        alpha
 sap-data-intelligence-observer-operator                 SAP Data Intelligence 3 - Observer Operator                  stable
 sap-hana-express-operator                               SAP Hana Express Operator                                    stable
@@ -265,19 +225,14 @@ service-binding-operator                                Service Binding Operator
 sigstore-helm-operator                                  sigstore                                                     alpha
 silicom-sts-operator                                    Silicom STS Operator                                         alpha
 skupper-operator                                        Skupper                                                      stable
-slurm-operator                                          Slurm Operator                                               release-1.0
 snapscheduler                                           SnapScheduler                                                stable
-sn-operator                                             StreamNative Operator                                        alpha
 socmmd                                                  socmmd                                                       stable
 sonar-operator                                          EDP Sonar Operator                                           alpha
 sonataflow-operator                                     SonataFlow Operator                                          stable
-sosivio                                                 Sosivio | Predictive Troubleshooting for Kubernetes          stable
 sosreport-operator                                      sosreport-operator                                           alpha
 spark-helm-operator                                     Spark Helm Operator                                          alpha
 special-resource-operator                               Special Resource Operator                                    alpha
-stackgres-community                                     StackGres                                                    stable
-stolostron-engine                                       Stolostron Engine                                            community-0.8
-stolostron                                              Stolostron                                                   community-0.8
+storage-based-remediation                               Storage-Based Remediation - Community Edition                stable
 strimzi-kafka-operator                                  Strimzi                                                      stable
 susql-operator                                          SusQL                                                        alpha
 syndesis                                                Syndesis Operator                                            latest
@@ -286,16 +241,12 @@ tagger                                                  Tagger                  
 tempo-operator                                          Community Tempo Operator                                     alpha
 tf-controller                                           Weave GitOps Terraform Controller                            stable
 tidb-operator                                           TiDB Operator                                                stable
-trident-operator                                        NetApp Trident                                               stable
 trustify-operator                                       Trustify Operator                                            alpha
 ucs-ci-solutions-operator                               UCS-CI-Solutions-Operator                                    alpha
 universal-crossplane                                    Upbound Universal Crossplane (UXP)                           stable
 varnish-operator                                        Varnish Operator                                             alpha
 vault-config-operator                                   Vault Config Operator                                        alpha
 verticadb-operator                                      VerticaDB Operator                                           v2-stable
-victoriametrics-operator                                VictoriaMetrics Operator                                     beta
-virt-git-sync                                           VirtGitSync Operator                                         alpha
-visionone-containersecurity                             Trend Vision One™ Container Security                       stable
 volume-expander-operator                                Volume Expander Operator                                     alpha
 wandb-operator                                          Weights & Biases Operator                                    stable
 windup-operator                                         Windup Operator                                              alpha

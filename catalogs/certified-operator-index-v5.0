@@ -1,93 +1,55 @@
 abinitio-runtime-operator                               Co>Operating System Runtime Operator                         stable
+accuknox-operator-certified                             Accuknox Operator                                            stable
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
 airlock-microgateway                                    Airlock Microgateway                                         5.1.0-alpha1
 aiu-operator                                            AIU Operator                                                 stable-v2.3
-alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
-amd-gpu-operator                                        amd-gpu-operator                                             alpha
 anzograph-operator                                      Altair Graph Lakehouse Operator                              stable
 anzo-operator                                           Altair Graph Studio Operator                                 stable
 anzounstructured-operator                               Altair Graph Studio Unstructured Operator                    stable
 apelocal-csi                                            ApeLocal CSI Driver                                          stable
+appdynamics-cloud-operator                              Cisco AppDynamics Cloud Operator                             alpha
 appdynamics-operator                                    AppDynamics Operator for Kubernetes                          alpha
-appian-operator                                         Appian operator                                              alpha
 aqua-operator-certified                                 Aqua Security Operator                                       2022.4
 axera-operator                                          Axera Microsegmentation & NDR                                alpha
 cass-operator                                           DataStax Kubernetes Operator for Apache Cassandra            stable
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
 cilium-enterprise                                       Isovalent Enterprise for Cilium                              1.16
-cisco-intersight                                        Cisco Intersight                                             stable
-clife                                                   Isovalent Networking for Kubernetes                          1.18
-cloudcasa-operator                                      CloudCasa Operator                                           stable
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
-cloudnative-pg                                          CloudNativePG                                                stable-v1
-cloud-native-postgresql                                 EDB Postgres for Kubernetes                                  fast
 coherence-operator                                      Coherence Kubernetes Operator                                stable
-confluent-for-kubernetes                                Confluent for Kubernetes                                     3.3
 conjur-follower-operator                                Conjur Enterprise Follower Operator                          stable
-couchbase-enterprise-certified                          Couchbase Operator                                           stable
+coroot-operator                                         Coroot                                                       stable
 cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.14
-crunchy-postgres-operator                               Crunchy Postgres for Kubernetes                              v5
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified                              Datadog Operator                                             stable
-dell-csm-operator-certified                             Dell Container Storage Modules                               stable
 digitalai-deploy-operator                               Digital.ai Deploy                                            stable-v24.3
 digitalai-release-operator                              Digital.ai Release                                           stable-v24.3
-dxoperator                                              DxOperator V1 Legacy                                         alpha
-dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
-edb-hcp-operator                                        EDB Postgres AI                                              stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
-f5-ai-security-operator                                 F5 AI Security Operator                                      stable
-f5-bigip-ctlr-operator                                  F5 Container Ingress Services                                stable
 falcon-operator                                         CrowdStrike Falcon Platform - Operator                       certified-1.0
 fujitsu-enterprise-postgres-operator                    Fujitsu Enterprise Postgres Operator                         stable
 function-mesh                                           Function Mesh Operator                                       alpha
-gitlab-operator-kubernetes                              GitLab                                                       stable
-gitlab-runner-operator                                  GitLab Runner                                                stable
-google-cloud-cluster-services-for-openshift-telemetry   Cluster Services for OpenShift Telemetry                     alpha
-gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
-habana-ai-operator                                      Intel Gaudi Base Operator                                    stable
 hammu-platform                                          Hammu Platform                                               alpha
 harness-gitops-operator                                 Harness GitOps Operator                                      alpha
 hazelcast-platform-operator                             Hazelcast Platform Operator                                  alpha
 hcp-terraform-operator                                  HCP Terraform Operator                                       alpha
 hibernation-operator                                    Hibernation Operator                                         release-0.1
 hnas-csi-operator                                       Hitachi NAS CSI Driver Operator                              stable
-hpe-csi-operator                                        HPE CSI Operator for OpenShift                               stable
 hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric CSI Operator for Kubernetes          stable
-hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
-hulft                                                   HULFT10 for Container Platform                               stable
-iax-webhook-router                                      ITRS Analytics Webhook Router                                stable
 ibm-application-gateway-operator                        IBM Application Gateway Operator                             stable
-ibm-block-csi-operator                                  IBM block storage CSI driver operator                        stable
-ibm-data-reporter-operator                              IBM Data Reporter Operator                                   stable
-ibm-metrics-operator                                    IBM Metrics Operator                                         stable
 ibm-security-verify-access-operator                     IBM Verify Identity Access Operator                          stable
-ibm-storage-odf-operator                                IBM Storage ODF operator                                     stable-v1.9
-infinibox-operator-certified                            InfiniBox CSI Driver - Operator                              stable
 infoscale-dr-manager                                    InfoScale™ DR Manager                                      fast
 infoscale-licensing-operator                            InfoScale™ Licensing Operator                              fast
 infoscale-sds-operator                                  InfoScale™ SDS Operator                                    fast
 instana-agent-operator                                  Instana Agent Operator                                       stable
-intel-device-plugins-operator                           Intel Device Plugins Operator                                stable
-intel-tdx-dcap-operator                                 Intel TDX DCAP Operator                                      alpha
-ipm-controller                                          Intel® Infrastructure Power Manager                         stable
-k10-kasten-operator-rhmp                                Veeam Kasten                                                 stable
-k8s-triliovault                                         Trilio for Kubernetes                                        5.3.x
-kedify-agent-helm-operator                              kedify-agent-helm-operator                                   stable
+keysight-loadcore-agents                                Keysight LoadCore Agents Operator                            alpha
 kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
-kubecost-operator                                       Kubecost                                                     stable
-kubedb-installer                                        KubeDB by AppsCode                                           stable
+kubemq-operator-marketplace                             Kubemq Enterprise Operator                                   alpha
 kubeturbo-certified                                     Kubeturbo Operator                                           stable
-kurrentdb-operator                                      KurrentDB Operator                                           stable-v1
 lightbits-operator                                      Lightbits Operator                                           alpha
-linstor-operator                                        LINSTOR Operator                                             stable-v2
 mariadb-enterprise-operator                             MariaDB Enterprise Operator                                  stable
 mediation-openstack-operator                            Turbonomic OpenStack Probe Operator                          stable
-minio-minkms-operator                                   Minio AIStor Key management System (KMS)                     stable
-minio-object-store-operator                             MinIO AIStor                                                 stable
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-enterprise                                      MongoDB Enterprise Operator                                  stable
 mongodb-kubernetes                                      MongoDB Controllers for Kubernetes                           stable
@@ -101,65 +63,29 @@ nginx-gateway-fabric                                    NGINX Gateway Fabric    
 nginx-ingress-operator                                  Nginx Ingress Operator                                       alpha
 nim-operator-certified                                  The NVIDIA NIM Operator for Kubernetes                       stable
 nspc-operator                                           NEC Storage Plug-in for Containers                           stable
-nutanixcsioperator                                      Nutanix CSI Operator                                         stable-3.x
 nvidia-maintenance-operator                             NVIDIA Maintenance Operator                                  stable
-nvidia-network-operator                                 NVIDIA Network Operator                                      stable
 nxiq-operator-certified                                 Nexus IQ Operator                                            stable
+oci-capi-autoscaling-operator                           OCI CAPI Autoscaling Operator                                stable
 odigos-operator                                         Odigos Operator                                              alpha
 open-liberty-certified                                  Open Liberty                                                 v1.6
 openshiftartifactoryha-operator                         JFrog Artifactory Enterprise Operator                        alpha
-openshift-fusion-access-operator                        Fusion Access for SAN                                        stable-v1
-operator-certification-operator                         Operator Certification Operator                              alpha
-percona-postgresql-operator-certified                   Percona Operator for PostgreSQL                              stable
-percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
-percona-server-mysql-operator-certified                 Percona Operator for MySQL based on Percona Server for MySQL stable
-percona-xtradb-cluster-operator-certified               Percona Operator for MySQL based on Percona XtraDB Cluster   stable
-pg4k-pgd                                                EDB Postgres Distributed for Kubernetes                      stable
-portworx-certified                                      Portworx Enterprise                                          stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha
-rbln-npu-operator                                       RBLN operator                                                stable
-redis-enterprise-operator-cert                          Redis Enterprise Operator                                    production
 runtime-component-operator-certified                    Runtime Component                                            v1.6
-runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 simplyblock-operator                                    Simplyblock Operator                                         alpha
-spyre-operator                                          IBM Spyre Operator                                           stable-v1.3
 sriov-fec                                               SRIOV-FEC Operator for Intel vRAN Boost Accelerators         stable
-stackable-airflow-operator                              Stackable Operator for Apache Airflow                        stable
-stackable-commons-operator                              Stackable Commons Operator                                   stable
-stackable-druid-operator                                Stackable Operator for Apache Druid                          stable
-stackable-hbase-operator                                Stackable Operator for Apache HBase                          stable
-stackable-hdfs-operator                                 Stackable Operator for Apache Hadoop HDFS                    stable
-stackable-hive-operator                                 Stackable Operator for Apache Hive                           stable
-stackable-kafka-operator                                Stackable Operator for Apache Kafka                          stable
-stackable-listener-operator                             Stackable Listener Operator                                  stable
-stackable-nifi-operator                                 Stackable Operator for Apache NiFi                           stable
-stackable-opa-operator                                  Stackable Operator for the Open Policy Agent                 stable
-stackable-opensearch-operator                           Stackable Operator for OpenSearch                            stable
-stackable-secret-operator                               Stackable Secret Operator                                    stable
-stackable-spark-operator                                Stackable Operator for Apache Spark                          stable
-stackable-superset-operator                             Stackable Operator for Apache Superset                       stable
-stackable-trino-operator                                Stackable Operator for Trino                                 stable
-stackable-zookeeper-operator                            Stackable Operator for Apache ZooKeeper                      stable
-stackgres-certified                                     StackGres                                                    stable
-strategy-operator                                       Strategy Customer Managed Cloud                              stable-v1
-sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Collection Helm Operator               alpha
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
 tawon-operator                                          Tawon                                                        alpha
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.8
-tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
-trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
-victoriametrics-operator                                VictoriaMetrics Operator                                     beta
-visionone-containersecurity                             TrendAI Vision One Container Security                        stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
