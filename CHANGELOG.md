@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.1...HEAD)
+
+---
+
+## [1.1.1](https://github.com/sjbylo/aba/releases/tag/v1.1.1) - 2026-06-30
+
+Upgrade robustness, RC/EC pre-release support, catalog performance, TUI hardening, and 80+ bug fixes
+
 
 Upgrade robustness, RC/EC pre-release support, TUI hardening, catalog performance, and 80+ bug fixes
 
