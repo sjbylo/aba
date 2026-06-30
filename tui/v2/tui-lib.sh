@@ -634,7 +634,8 @@ _exec_in_tui() {
 
 	trap : INT
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
-	{ echo "Executing: $cmd"; echo; PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
+	# Unset KUBECONFIG so child resolves it from the cluster dir, not stale TUI state
+	{ echo "Executing: $cmd"; echo; KUBECONFIG= PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
 		sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--progressbox $box_height $box_width
@@ -714,8 +715,9 @@ _exec_in_terminal() {
 	local _term_interrupted=false
 	trap '_term_interrupted=true' INT
 
+	# Unset KUBECONFIG so child resolves it from the cluster dir, not stale TUI state
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
-	bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
+	KUBECONFIG= bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
 	local exit_code=$?
 
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
