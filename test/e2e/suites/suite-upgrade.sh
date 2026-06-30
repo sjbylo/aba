@@ -39,7 +39,8 @@ plan_tests \
     "ISC: user-edited ISC is preserved (not overwritten)" \
     "Flag: --target-version from cluster dir via symlink" \
     "Upgrade: --dry-run output" \
-    "Upgrade: preflight rejects same version"
+    "Upgrade: preflight rejects same version" \
+    "Upgrade: invalid version format rejected"
 
 suite_begin "upgrade"
 
@@ -342,6 +343,22 @@ test_begin "Upgrade: preflight rejects same version"
 # The version comparison logic is unit-tested via the script's internal checks.
 e2e_run_must_fail "Upgrade without kubeconfig fails" \
     "cd ~/aba && aba -d ${SNO} upgrade --to 4.19.0"
+
+test_end
+
+# ============================================================================
+# 11. Upgrade: invalid version format rejected
+# ============================================================================
+test_begin "Upgrade: invalid version format rejected"
+
+e2e_run_must_fail "Non-semver version is rejected" \
+    "cd ~/aba && aba -d ${SNO} upgrade --to not-a-version"
+
+e2e_run_must_fail "Partial version (major.minor only) is rejected" \
+    "cd ~/aba && aba -d ${SNO} upgrade --to 4.21"
+
+e2e_run_must_fail "Empty --to argument is rejected" \
+    "cd ~/aba && aba -d ${SNO} upgrade --to ''"
 
 test_end
 
