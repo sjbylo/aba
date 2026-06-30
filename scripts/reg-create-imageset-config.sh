@@ -68,20 +68,21 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 		export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
 
 		# Validate upgrade path: source version must exist in the target channel graph.
-		# e.g. 4.20.27 exists in candidate-4.21 but NOT in candidate-5.0.
-		if [ "$ocp_ver_major" != "$tgt_major" ]; then
-			_tgt_channel="${ocp_channel}-${tgt_major}"
-			_graph_versions=$(curl -sf "https://api.openshift.com/api/upgrades_info/graph?channel=${_tgt_channel}&arch=${ARCH:-amd64}" 2>/dev/null \
-				| jq -r '.nodes[].version' 2>/dev/null) || true
-			if [ -n "$_graph_versions" ] && ! echo "$_graph_versions" | grep -qxF "$ocp_version"; then
-				_lowest=$(echo "$_graph_versions" | sort -V | head -1)
-				aba_abort \
-					"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
-					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
-					"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
-					"" \
-					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
-			fi
+		# Covers both same-minor (z-stream) and cross-minor upgrades.
+		_path_diag=""
+		if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+			: # path OK
+		else
+			_src="${_path_diag%%|*}"
+			_rest="${_path_diag#*|}"
+			_tgt_channel="${_rest%%|*}"
+			_lowest="${_rest##*|}"
+			aba_abort \
+				"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+				"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
+				"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
+				"" \
+				"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 		fi
 
 		aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"

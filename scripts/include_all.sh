@@ -1827,6 +1827,55 @@ fetch_latest_prerelease_version() {
 }
 
 ############################################
+# Verify that an upgrade path exists from current → target in the Cincinnati graph.
+# Checks that the current version appears as a node in the target channel's graph.
+# Works for both same-minor (z-stream) and cross-minor upgrades.
+# Args:
+#	$1 = current version (e.g. 4.21.4)
+#	$2 = target version (e.g. 4.22.1 or 4.21.20)
+#	$3 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
+# Output (on failure):
+#	Prints diagnostic to stderr: "current_ver|target_channel|lowest_entry"
+# Returns: 0 if path exists (current found in target channel), 1 if not
+############################################
+verify_upgrade_path_exists() {
+	local current_ver="${1:-}"
+	local target_ver="${2:-}"
+	local channel="${3:-${ocp_channel:-fast}}"
+
+	[[ -z "$current_ver" || -z "$target_ver" ]] && return 1
+
+	# Extract target minor (e.g. 4.22 from 4.22.1 or 4.22.0-rc.1)
+	local tgt_minor="${target_ver%.*}"
+	[[ "$target_ver" == *-* ]] && tgt_minor="${target_ver%%-*}" && tgt_minor="${tgt_minor%.*}"
+
+	local tgt_channel="${channel}-${tgt_minor}"
+
+	# Pre-release targets only exist in candidate channel
+	if [[ "$target_ver" == *-rc.* || "$target_ver" == *-ec.* ]]; then
+		tgt_channel="candidate-${tgt_minor}"
+	fi
+
+	local graph_versions
+	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null \
+		| jq -r '.nodes[].version' 2>/dev/null) || return 0
+
+	# If graph is empty/unreachable, don't block — let later checks handle it
+	[[ -z "$graph_versions" ]] && return 0
+
+	if echo "$graph_versions" | grep -qxF "$current_ver"; then
+		return 0
+	fi
+
+	# Output diagnostic for callers to format their own error message
+	local lowest
+	lowest=$(echo "$graph_versions" | sort -V | head -1)
+	echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
+
+	return 1
+}
+
+############################################
 # Verify a release version exists in the Cincinnati graph.
 # Used as a pre-flight before oc-mirror to avoid wasted time on non-existent versions.
 # Args:
