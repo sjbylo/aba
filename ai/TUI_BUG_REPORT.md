@@ -16192,3 +16192,932 @@ Also replaced all raw `sed` comment-out patterns with `replace-value-conf -v ""`
 - `tui/v2/tui-mirror.sh` (TUI clear target)
 - `scripts/create-cluster-conf.sh` (SNO api_vip/ingress_vip)
 
+
+---
+
+## Bug #930: TUI — Help dialog scroll corrupts terminal rendering, displaces all dialog boxes to the right
+**Status:** OPEN
+
+**Severity:** High (UX — TUI becomes unusable, requires restart)
+**Component:** TUI v2 — `show_help` / dialog `--msgbox` scrolling
+**Found:** 2026-06-28 (live TUI testing on conno in tui-debugging tmux session)
+
+### Description
+
+On the splash screen, pressing Help (Tab Tab Enter) shows a help dialog. Scrolling down in the help text (using Down arrow keys) causes the dialog box to shift to the far right side of the screen. After dismissing the help dialog with Enter, the entire TUI (including the splash screen) remains displaced to the right — roughly 80+ columns offset. The TUI is unusable without restarting.
+
+### Reproduction
+
+1. Launch TUI: `abatui2.sh`
+2. On splash screen, Tab to Help, press Enter
+3. Scroll down in help text with Down arrow (10+ presses)
+4. Press Enter to dismiss help
+5. **Result:** Splash screen and all subsequent dialogs are rendered far to the right
+
+### Root Cause (suspected)
+
+Dialog's `--msgbox` with scrollable text may not properly reset terminal cursor position after scrolling. The tmux pane captures show the dialog rendered with ~80 column horizontal offset. This may be a `dialog` rendering bug with `--scrolltext` or related to backtitle width calculation after scroll.
+
+
+### Update (2026-06-28)
+
+The rendering displacement is NOT limited to the Help dialog scroll. It also occurs during normal wizard navigation, specifically after the operator catalog count display. The offset persists for the entire TUI session — ALL subsequent dialogs are displaced to the right. The TUI requires a full restart to recover. This makes extended TUI sessions very difficult.
+
+Tested on conno with tmux session 130x45. The displacement appears to grow with each dialog transition that involves the operator catalog display.
+
+
+### Resolution (2026-06-28)
+
+**Status changed to: NOT A BUG** — The rendering displacement was caused by tmux auto-resizing the pane to match a larger attached terminal (244x65 instead of the requested 130x45). Dialog rendering was correct for the actual pane dimensions. The `ui_backtitle` function uses `tput cols` which returns the actual terminal width. When the pane was properly sized (120x40), rendering was correct. The horizontal displacement in captures was simply dialog centering on a wide terminal.
+
+
+---
+
+## Bug #931: reg-create-imageset-config.sh — stale target cleared but code falls through to validate empty target
+**Status:** OPEN
+
+**Severity:** Medium (code crash / confusing error message)
+**Component:** Core — `scripts/reg-create-imageset-config.sh` lines 60-88
+**Found:** 2026-06-28 (code review of main..HEAD diff)
+
+### Description
+
+When `ocp_version_target` is lower than `ocp_version` (stale from a previous config), the guard at lines 62-67 correctly clears it and warns. However, it does NOT exit the outer `if` block (`if [ "$ocp_version_target" ] && ...` at line 60). Execution falls through to:
+
+1. **Line 68:** `tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)` → empty string (since `ocp_version_target=""`)
+2. **Line 72:** `if [ "$ocp_ver_major" != "$tgt_major" ]` → `"4.20" != ""` → TRUE
+3. **Line 73:** `_tgt_channel="${ocp_channel}-"` → e.g. `"stable-"` (invalid channel URL)
+4. **Line 74:** `curl` fetches invalid Cincinnati URL → empty `_graph_versions`
+5. **Line 76:** `[ -n "" ]` fails, so no abort — but proceeds to:
+6. **Line 87:** Prints `"Upgrade mode: 4.20.20 → (channel stable-, shortestPath)"` with empty target
+
+### Fix
+
+After clearing `ocp_version_target=""` at line 66, the block should immediately exit:
+```bash
+ocp_version_target=""
+# Fall through — tgt_major stays "" and the template renders without upgrade mode
+```
+
+Either add a guard (e.g. `[[ -z "$ocp_version_target" ]] || { ... }`) around lines 68-87, or restructure the block with an `else` clause after the stale-target `fi` at line 67.
+
+
+---
+
+## Test Flow Results — Hackathon 2026-06-28
+
+### CONNO Mode (sno.example.com) — PASS
+- Mirror install (Docker, local conno.example.com:8443) — PASS
+- Mirror sync (OCP 4.20.20 + cincinnati-operator) — PASS (193 release + 5 operator images)
+- SNO cluster install — PASS (full install, all operators available)
+- Day-2 OperatorHub — PASS (IDMS, ITMS, CatalogSource, signatures)
+- Day-2 NTP — PASS (chrony applied, NTP synced to 10.0.1.8)
+- Day-2 OSUS — PASS (update-service-operator.v5.0.3, graph available)
+- Cluster Status view — PASS (all operators available, OSUS route correct)
+- Cluster Delete — PASS (VM destroyed, state removed)
+- TUI menu state transitions — correct (labels update after install/sync/delete)
+
+### DIRECT Mode (sno4-ext.example.com) — PASS (Phase 1)
+- Mode switch via Advanced → Switch to Fully Connected — PASS
+- Cluster wizard with Internet-facing network (192.168.2.0/24) — PASS
+- ISO generation and VM creation (Ext Network) — PASS
+- Agent alive (Phase 1 target) — PASS
+
+### ESC Behavior — PASS
+- ESC from Day-2 menu → back to main menu — correct
+- Double ESC → main menu + exit confirmation — correct
+- Cancel exit → stays at main menu — correct
+
+### Help Text Review — PASS
+- CONNO mode help — accurate and complete
+- DIRECT mode help — accurate and complete
+- Day-2 menu help — accurate and complete
+
+
+## Bug #616 — VERIFIED LIVE: ESC in DIRECT mode (entered from CONNO) shows "Exit TUI" instead of returning to CONNO
+
+**Status**: OPEN — VERIFIED LIVE on conno (2026-06-28)
+
+**Severity**: Medium
+
+**Component**: `tui/v2/tui-direct.sh` lines 753-759, `tui/v2/tui-disco.sh` lines 236-242
+
+**Reproduction**:
+1. Start TUI in CONNO mode
+2. Navigate to Advanced → "Switch to Fully Connected" (DIRECT)
+3. Press ESC on the DIRECT mode action menu
+4. TUI shows "Exit ABA TUI?" confirmation instead of returning to CONNO
+
+**Root cause**: Both `_direct_action_menu()` and `disco_main()` use `exit 0` on ESC confirmation, which kills the entire TUI process. They should use `return 0` when entered as a sub-mode from CONNO (since `direct_main || true` / `disco_main || true` is called from `tui_advanced_menu`).
+
+**Expected**: ESC should return to the CONNO action menu (the parent mode that called the sub-mode).
+
+**Fix**: In both `tui-direct.sh` and `tui-disco.sh`, the ESC handler should check if the mode was entered from CONNO (e.g., using `_TUI_DISCO_FROM_CONNO` or a similar flag for DIRECT) and `return 0` instead of `exit 0`.
+
+
+### DISCO Mode (sno.example.com via bundle) — PASS (Phase 1)
+- Bundle creation (full, 24GB tar) — PASS
+- Bundle unpacking + `./install` — PASS
+- TUI detects bundle + internet → offers Disconnected/Connected choice — PASS
+- Bundle summary dialog (version, operators, archives, registry installers, CLI tools) — PASS
+- Auto mirror install (Quay, local conno.example.com:8443) — PASS
+- Auto image load (193 release + 4 operator images, 23m40s) — PASS
+- DISCO action menu (correct registry/load status labels) — PASS
+- Cluster wizard in DISCO mode — PASS
+- DNS validation correctly catches IP mismatch (10.0.0.100 vs 10.0.1.201) — PASS (correct behavior)
+- VM creation on Lab Network — PASS
+- Agent alive (Phase 1 target) — PASS
+
+### Bug #616 — VERIFIED LIVE
+- Confirmed: ESC in DIRECT mode (entered from CONNO) shows "Exit ABA TUI?" instead of returning to CONNO
+- Both `tui-direct.sh` and `tui-disco.sh` use `exit 0` instead of `return 0` when entered as sub-modes
+
+### Verified Behaviors (NOT bugs)
+- Stale cluster directory (after delete) still shows in "Monitor/Refresh" menus — correct (cluster.conf still exists)
+- Day-2 menu options (OperatorHub, OSUS) shown in DIRECT mode — cosmetic concern (Bug #602 exists)
+
+
+### DISCO Mode Full Lifecycle — PASS
+- Cluster install to full completion — PASS
+- Auto Day-2 prompt after install — PASS (great UX)
+- Day-2 OperatorHub in DISCO (default catalogs disabled, mirror CA added, IDMS/ITMS/CatalogSource/signatures applied) — PASS
+- Cluster delete — PASS
+- Mirror uninstall from Advanced menu — PASS
+- Exit TUI from DISCO mode — clean exit
+
+---
+
+## Bug #934: TUI reports "Cluster installed successfully" after `openshift-install` is killed — false success
+
+**Status:** OPEN — VERIFIED LIVE on conno (2026-06-28)
+
+**Severity:** HIGH (misleading success, creates `.install-complete` marker for broken cluster)
+
+**Component:** TUI — `tui/v2/tui-lib.sh` `_exec_in_tui()` line ~630
+
+### Description
+
+When `openshift-install agent wait-for install-complete` is externally killed (SIGTERM), the TUI progressbox closes and reports **"Success"** (green title). It then shows the "Cluster installed successfully! Run Configure OperatorHub?" prompt. The `.install-complete` marker is created even though the cluster never actually finished installing.
+
+### Reproduction
+
+1. Start cluster install via TUI (CONNO mode)
+2. While `openshift-install agent wait-for install-complete` is running, kill the process: `kill <pid>`
+3. TUI shows `\Z2Success\Zn` dialog with OK button
+4. After pressing OK, shows "Cluster sno.example.com installed successfully! Run Configure OperatorHub?"
+5. The cluster selector shows "(installed)" even though the cluster is broken
+
+### Root Cause
+
+`_exec_in_tui()` captures exit code via `PIPESTATUS[0]` from a 4-stage pipeline. When the child process receives SIGTERM, the pipeline behavior depends on how bash propagates the signal. The exit code detection appears unreliable for signal-killed subprocesses — `exit_code` ends up as 0 even though `openshift-install` exited with signal 15 (exit 143).
+
+Additionally, the `aba` wrapper script's `--step install` may mark `.install-complete` based on the ISO/VM creation steps completing, rather than verifying `openshift-install` exit code.
+
+### Impact
+
+- False positive: user thinks cluster is installed, proceeds to Day-2 operations that fail
+- Day-2 menu shows cluster as "(installed)" when it's actually broken
+- Requires manual investigation to discover the install didn't complete
+
+### Fix
+
+1. In `_exec_in_tui()`: verify `PIPESTATUS[0]` correctly captures signal exits. May need to capture exit code to a file inside the subshell rather than relying on `PIPESTATUS` across the pipeline
+2. In the cluster install flow: verify `.install-complete` was not created by `openshift-install` if the process was signaled
+3. Consider checking cluster API reachability before showing the "installed successfully" prompt
+
+---
+
+## Bug #935: TUI cluster wizard does not validate gateway (next_hop_address) reachability
+
+**Status:** OPEN — VERIFIED LIVE on conno (2026-06-28)
+
+**Severity:** Medium (leads to unreachable cluster VMs, wasted install time)
+
+**Component:** TUI — `tui/v2/tui-cluster.sh` page 2 (network config)
+
+### Description
+
+The cluster wizard accepts any IP for the gateway (next_hop_address) without checking if it actually exists on the network. When the gateway is unreachable, the cluster VMs can only communicate with hosts on their own subnet — any host outside the subnet (including the machine running `openshift-install`) cannot reach the VMs.
+
+### Reproduction
+
+1. In TUI cluster wizard, set `machine_network=10.0.1.0/24` and `gateway=10.0.1.1`
+2. Install cluster — ISO is generated with these network values in agent-config.yaml
+3. VM boots successfully, gets IP 10.0.1.201
+4. But if the gateway 10.0.1.1 doesn't exist, the VM cannot communicate with any host outside its /24 subnet
+5. `openshift-install agent wait-for install-complete` runs on conno (10.0.0.10/20) — outside the /24 — so it can never reach the VM
+
+### Impact
+
+- 40+ minutes wasted waiting for install that will never succeed
+- The "Agent not detected" and "Cannot access Rendezvous Host" messages don't clearly indicate a gateway problem
+- User must investigate manually to discover the root cause
+
+### Suggested Fix
+
+Add a pre-flight validation step (before ISO creation) that:
+1. Pings the gateway to verify it responds
+2. If gateway doesn't respond, warns the user: "Gateway X.X.X.X is not reachable. Continue anyway?"
+3. Also verify that the machine running `openshift-install` is within the cluster's `machine_network` subnet, or can route to it via the gateway
+
+---
+
+## Test Flow Results — Hackathon 2026-06-28 (Session 2)
+
+### CONNO Mode SNO Install (sno.example.com, 4.22.2) — FAIL
+- Mirror already installed and synced from Session 1 — PASS
+- Cluster wizard (name/type/platform/network) via TUI — PASS
+- ISO generation, VM creation, power on — PASS
+- `openshift-install agent wait-for install-complete` — FAIL (gateway unreachable, VM isolated)
+- Kill install process — TUI reports false "Success" — BUG #934
+- Delete cluster via TUI — PASS
+- Gateway validation missing — BUG #935
+
+
+---
+
+## Bug #936: DOCBUG — `aba vmw` and `aba kvm` missing from command reference table
+
+- **Status:** OPEN
+- **Severity:** Low (documentation gap)
+- **Component:** README.md — Command Quick Reference
+- **Verified:** Yes (via TUI hackathon, checked README and Makefile)
+
+### Description
+
+The `aba vmw` and `aba kvm` commands (interactive VMware/KVM configuration wizards) are mentioned in the Prerequisites section:
+> "Run `aba vmw` for interactive vCenter/ESXi configuration"
+> "Run `aba kvm` for interactive configuration"
+
+But they are NOT listed in any of the Command Quick Reference tables (General, Mirror, Cluster, VM, Bundle, or Utilities). Users might not discover these commands exist.
+
+### Suggested Fix
+
+Add to the Utilities command reference table:
+| `aba vmw` | Interactive vCenter/ESXi configuration wizard |
+| `aba kvm` | Interactive KVM/libvirt configuration wizard |
+
+---
+
+## Bug #937: DOCBUG — `aba version` missing from command reference table
+
+- **Status:** OPEN
+- **Severity:** Low (documentation gap)
+- **Component:** README.md — Command Quick Reference
+- **Verified:** Yes
+
+### Description
+
+`aba version` is mentioned in the text at line 267 ("Check your installed version: `aba version`") but is NOT listed in any Command Quick Reference table.
+
+### Suggested Fix
+
+Add to the Utilities command reference table:
+| `aba version` | Show installed ABA version |
+
+---
+
+## Bug #938: Core — `--op-sets` with all invalid set names sets op_sets="-f"
+
+- **Status:** OPEN
+- **Severity:** Medium (variant of Bug #532, but different trigger)
+- **Component:** CLI — `scripts/aba.sh` line ~759
+- **Verified:** Via code review (verified by reading `replace-value-conf` argument parsing)
+
+### Description
+
+Bug #532 was partially fixed: the "clear" case (`$2` missing) now correctly uses `replace-value-conf -n op_sets -v '' -f`. However, a variant remains:
+
+If `aba --op-sets nonexistent_set` is run and the set file `templates/operator-set-nonexistent_set` does NOT exist, the while loop warns but does not add the name to `op_set_list`. When ALL provided sets are invalid, `op_set_list` remains empty.
+
+Then line ~759 runs:
+```bash
+replace-value-conf -n op_sets -v $op_set_list -f $ABA_ROOT/aba.conf
+```
+
+Since `$op_set_list` is unquoted and empty, this expands to:
+```bash
+replace-value-conf -n op_sets -v -f /home/steve/aba/aba.conf
+```
+
+`replace-value-conf` interprets `-f` as the value for `-v`, setting `op_sets=-f` in aba.conf.
+
+### Suggested Fix
+
+Quote the variable: `replace-value-conf -n op_sets -v "$op_set_list" -f $ABA_ROOT/aba.conf`
+
+Or add a guard:
+```bash
+if [ -z "$op_set_list" ]; then
+    aba_warning "No valid operator sets found — op_sets unchanged"
+else
+    replace-value-conf -n op_sets -v "$op_set_list" -f $ABA_ROOT/aba.conf
+fi
+```
+
+---
+
+## Bug #939: TUI — "Prepare Upgrade" accepts same-version as upgrade target (no-op upgrade)
+
+**Found:** 2026-06-28
+**Component:** TUI (tui-mirror.sh — `mirror_prep_upgrade`)
+**Severity:** Medium
+**Status:** Open — verified via TUI
+
+### Steps to Reproduce
+
+1. Cluster running 4.22.2, mirror has 4.22.2 synced, channel=fast
+2. CONNO main menu → "U" (Prepare Upgrade)
+3. Version picker shows: Latest (4.22.2), Previous (4.21.21), Manual entry
+4. Select "Latest (4.22.2)" — same version as current
+
+### Expected
+
+The TUI should reject selecting the same version as the current configured version. A message like "Target version must be higher than current version 4.22.2" should appear.
+
+### Actual
+
+The TUI proceeds to the confirmation screen: "Download upgrade images (4.22.2 → 4.22.2)" — preparing to "upgrade" to the same version. This is a no-op that wastes time syncing/saving images that are already present.
+
+### Root Cause
+
+`mirror_prep_upgrade()` does not compare the selected target version against `ocp_version` before proceeding. The version picker offers "Latest" from the channel API, which can be the same as the currently installed version when the mirror is already at the latest.
+
+### Suggested Fix
+
+After version selection, add a guard:
+```bash
+if [[ "$_target_ver" == "$ocp_version" ]]; then
+    dlg --msgbox "Target version $_target_ver is the same as current. No upgrade needed." 0 0
+    continue
+fi
+```
+
+Also consider filtering the version list to only show versions higher than `ocp_version`.
+
+---
+
+## Bug #940: TUI — "Prepare Upgrade" version picker shows "Previous" as a downgrade version
+
+**Found:** 2026-06-28
+**Component:** TUI (tui-mirror.sh — `mirror_prep_upgrade`)
+**Severity:** Low
+**Status:** Open — verified via TUI
+
+### Steps to Reproduce
+
+1. Cluster on 4.22.2, channel=fast
+2. CONNO main menu → "U" (Prepare Upgrade)
+3. Version picker shows: Previous (4.21.21)
+
+### Expected
+
+"Previous" in an upgrade context should either be hidden or shown with a warning that it cannot be used as an upgrade target (it's a downgrade).
+
+### Actual
+
+"Previous (4.21.21)" is shown as if it were a valid upgrade target. Selecting it would fail later when `is_version_greater` rejects the downgrade, but the UX is confusing — the user expects all shown versions to be valid upgrade targets.
+
+### Suggested Fix
+
+Filter the version picker to only show versions greater than `ocp_version`. If no versions are available, show a message like "No upgrade versions available in the fast-4.22 channel."
+
+---
+
+## Bug #942: TUI — "Prepare Upgrade" uses stale cached channel after CLI edit of aba.conf
+
+**Found:** 2026-06-28
+**Component:** TUI (tui-mirror.sh — `mirror_prep_upgrade`)
+**Severity:** Low
+**Status:** Open — verified via TUI
+
+### Steps to Reproduce
+
+1. TUI started with `ocp_channel=fast` in `aba.conf`
+2. User changes channel via CLI: `replace-value-conf -n ocp_channel -v candidate -f aba.conf`
+3. TUI → Prepare Upgrade → Manual entry → enter "4.22.3" (exists in candidate, not in fast)
+
+### Expected
+
+The TUI should validate against the current `aba.conf` value (candidate), accepting 4.22.3.
+
+### Actual
+
+The TUI validates against the cached "fast" channel and rejects 4.22.3: "Version 4.22.3 not found in 'fast' channel."
+
+### Root Cause
+
+The TUI sources `normalize-aba-conf` at startup and caches `ocp_channel` in shell variables. `mirror_prep_upgrade()` uses the cached `$ocp_channel` variable for the version picker and validation. The TUI doesn't re-read `aba.conf` when entering Prepare Upgrade.
+
+### Workaround
+
+Use "Rerun Wizard" (W) in the TUI to change the channel, which re-reads config.
+
+### Suggested Fix
+
+Re-source `normalize-aba-conf` at the beginning of `mirror_prep_upgrade()` to pick up external changes.
+
+---
+
+## Bug #941: TUI — Confusing error message when selecting a downgrade version in "Prepare Upgrade"
+
+**Found:** 2026-06-28
+**Component:** TUI (tui-mirror.sh — `mirror_prep_upgrade`)
+**Severity:** Medium
+**Status:** Open — verified via TUI
+
+### Steps to Reproduce
+
+1. Cluster on 4.22.2, channel=fast
+2. CONNO main menu → "U" (Prepare Upgrade)
+3. Select "Previous (4.21.21)"
+
+### Expected
+
+A clear message: "Cannot downgrade from 4.22.2 to 4.21.21. Downgrades are not supported."
+
+### Actual
+
+Shows "Upgrade Path Not Available" dialog with confusing text:
+- "Cannot upgrade directly from 4.22.2 to 4.21.21"
+- "Version 4.22.2 is not in channel fast-4.21"
+- "Lowest entry point: 4.20.0"
+- "You need to upgrade to at least 4.20.0 first"
+
+The last line suggests upgrading to 4.20.0 — which is LOWER than the current 4.22.2. The message is technically about the cross-major channel check but makes no sense in a downgrade context.
+
+### Root Cause
+
+The code runs the cross-major upgrade path check (which queries the fast-4.21 channel) BEFORE checking if the target is a simple downgrade. The channel check produces a confusing message because it wasn't designed for the downgrade case.
+
+### Suggested Fix
+
+Check `is_version_greater "$_target_ver" "$ocp_version"` FIRST before the cross-major channel check. If the target is lower, show a simple "downgrades are not supported" message.
+
+---
+
+## Bug #943: TUI/Core — Changing channel in wizard + sync + day2 does not update cluster channel (requires separate day2-osus)
+
+**Found:** 2026-06-28
+**Component:** TUI/Core (upgrade workflow gap)
+**Severity:** Medium
+**Status:** Open — verified via TUI
+
+### Steps to Reproduce
+
+1. Cluster on 4.22.2, originally installed with fast channel, OSUS configured with fast-4.22
+2. User reruns wizard → changes channel from fast to candidate
+3. User syncs images (4.22.3 now in mirror)
+4. User runs Day-2 → Configure OperatorHub (aba day2)
+5. User tries Day-2 → Upgrade cluster
+6. Dry-run shows 4.22.3 as available (check from mirror, not cluster graph)
+7. Upgrade fails: "Version 4.22.3 is not an available upgrade from 4.22.2"
+
+### Root Cause
+
+When the channel changes in `aba.conf`, the user must run `day2-osus` separately to update the cluster's channel. The regular `aba day2` command does NOT update the cluster channel — it only refreshes IDMS/ITMS, catalogs, and signatures.
+
+The cluster was still on `fast-4.22` (set by the original OSUS run) while the mirror now has `candidate-4.22` images. The local OSUS graph for `fast-4.22` doesn't include 4.22.3.
+
+### UX Gap
+
+After syncing with a changed channel, the TUI's "Mirror updated" dialog says to run `aba day2`, not `aba day2-osus`. The user follows the instructions but the upgrade still fails because the cluster channel wasn't updated.
+
+### Suggested Fix
+
+Option A: `aba day2` should detect if the cluster channel doesn't match `ocp_channel` in `aba.conf` and automatically update it (or at least warn).
+
+Option B: The post-sync dialog should mention running day2-osus when OSUS is installed and the channel changed.
+
+Option C: `aba upgrade` could detect channel mismatch and offer to fix it before proceeding.
+
+---
+
+## Bug #944: CRITICAL Core — `cluster-upgrade.sh` uses `oc adm upgrade -o json` which does not exist in oc 4.22
+
+**Found:** 2026-06-28
+**Component:** Core (scripts/cluster-upgrade.sh lines 297-301)
+**Severity:** Critical — **all upgrades are broken**
+**Status:** Open — verified on conno with oc 4.22.3
+
+### Steps to Reproduce
+
+1. Install cluster on 4.22.2, sync 4.22.3, run day2, configure OSUS
+2. `oc adm upgrade` shows 4.22.3 as available (text output works fine)
+3. `aba upgrade --to 4.22.3` → fails: "Version 4.22.3 is not an available upgrade from 4.22.2"
+
+### Root Cause
+
+`cluster-upgrade.sh` lines 297-301 use `oc adm upgrade -o json` to parse available upgrade versions:
+
+```bash
+_available_versions=$(oc adm upgrade -o json 2>/dev/null \
+    | jq -r '.availableUpdates[]?.version // empty' 2>/dev/null) || true
+```
+
+But `oc adm upgrade` does NOT support the `-o` flag in oc 4.22.x (and likely other versions). Running it produces:
+
+```
+error: unknown shorthand flag: 'o' in -o
+```
+
+The `2>/dev/null` hides this error silently, and `|| true` swallows the exit code. Result: `_available_versions` is always empty, so the upgrade target is never found in the graph check.
+
+This makes **ALL cluster upgrades via `aba upgrade` fail**, even when the target version IS available according to `oc adm upgrade`.
+
+### Impact
+
+- Every `aba upgrade --to X.Y.Z` fails with "not an available upgrade"
+- The TUI upgrade flow is completely broken
+- The `--dry-run` mode also fails (uses the same code path) — **but** the TUI's dry-run at line 2261 of `tui-cluster.sh` parses the "Versions in mirror" section, which comes from a DIFFERENT code path that doesn't use `-o json`. So the version picker works, but the actual upgrade doesn't.
+
+### Suggested Fix
+
+Replace `oc adm upgrade -o json` with text parsing of `oc adm upgrade` output:
+
+```bash
+_available_versions=$(oc adm upgrade 2>/dev/null \
+    | awk '/VERSION/{found=1; next} found && /^[[:space:]]*[0-9]/{print $1}') || true
+```
+
+Or check if `-o json` is supported first and fall back to text parsing.
+
+---
+
+## Bug #945: TUI — "Upgrade cluster" does not warn when upgrade was not primed via "Prepare Upgrade"
+
+**Found:** 2026-06-28
+**Component:** TUI (tui-cluster.sh — `_day2_upgrade`)
+**Severity:** Medium
+**Status:** Open — verified via TUI
+
+### Problem
+
+A user can navigate to Day-2 → "Upgrade cluster" without ever having used "Prepare Upgrade" (U) from the main menu. If the user changed the base version via the wizard instead of setting `ocp_version_target`, the ISC is generated without `graph: true` or `shortestPath: true`, and the upgrade images may not include the proper upgrade graph data.
+
+The incorrect flow is:
+1. Wizard → change channel/version to the TARGET version (sets `ocp_version`)
+2. Sync → syncs the target as the BASE, not as an upgrade target
+3. Day-2 → Upgrade → fails or produces unpredictable results
+
+The correct flow is:
+1. Keep `ocp_version` at the current installed version
+2. Main menu → "Prepare Upgrade" (U) → sets `ocp_version_target`
+3. Sync/Save → includes upgrade graph data (`graph: true`, `shortestPath: true`)
+4. Day-2 → OperatorHub → applies new IDMS/ITMS
+5. Day-2 → Upgrade → works
+
+### Suggested Fix
+
+In `_day2_upgrade()`, before querying available versions, check if `ocp_version_target` is set in `mirror.conf`. If not, show a warning:
+
+```
+"No upgrade has been prepared yet.
+
+To upgrade, first use 'Prepare Upgrade' (U) from the main menu
+to select a target version and sync the upgrade images.
+
+Continue anyway?"
+```
+
+This prevents the user from bypassing the proper upgrade preparation flow and wasting time on an upgrade that will fail.
+
+---
+
+## Bug #947: TUI — "Prepare Upgrade" offers current version as "Previous" upgrade target
+
+**Found:** 2026-06-29
+**Component:** TUI (`tui/v2/tui-mirror.sh` — `mirror_prep_upgrade`)
+**Severity:** Medium (confusing UX, could lead to no-op sync)
+**Status:** Open — verified via TUI on bastion (fast 4.21.21)
+
+### Steps to Reproduce
+
+1. `aba.conf` has `ocp_version=4.21.21`, `ocp_channel=fast`
+2. CONNO main menu → "U" (Prepare Upgrade)
+3. Version picker shows:
+   - `l  Latest    (4.22.2)`
+   - `p  Previous  (4.21.21)`
+   - `m  Manual entry`
+
+### Expected
+
+"Previous" should not offer 4.21.21 when the current configured version IS 4.21.21. Either:
+- Hide "Previous" entirely when it equals `ocp_version`
+- Only show versions higher than `ocp_version`
+- Show it greyed out: `Previous (4.21.21) [current version]`
+
+### Impact
+
+Selecting "Previous" would set `ocp_version_target=4.21.21` which equals `ocp_version`, resulting in a no-op upgrade that wastes time syncing/saving images already present.
+
+### Suggested Fix
+
+After fetching the previous version, compare it against `ocp_version`. If equal (or lower), omit it from the picker or show a warning.
+
+---
+
+## Bug #946: Core — `aba reset -f` claims registry is still running when nothing is running
+
+**Found:** 2026-06-29
+**Component:** Core — `aba reset` / `scripts/aba-reset.sh`
+**Severity:** Low (misleading messages, no functional impact)
+**Status:** Open
+
+### Steps to Reproduce
+
+1. No registry running (`podman ps` is empty), no credentials (`~/.aba/mir*` does not exist)
+2. Run `aba reset -f`
+3. Output shows:
+   ```
+   [ABA] Note: registry is still running and can be managed via 'aba -d mirror uninstall'.
+   [ABA] Note: registry is still running. Credentials in ~/.aba/mirror/ are untouched.
+   ```
+
+### Expected
+
+If no registry container is running and no credentials directory exists, these messages should not appear.
+
+### Root Cause (suspected)
+
+The "registry is still running" check likely tests for a marker file (e.g. `mirror/.available`) or directory existence, not whether the registry container/process is actually alive. The marker may survive even after the registry is gone.
+
+### Suggested Fix
+
+Check actual registry state before printing the message — e.g. `podman ps --filter name=quay -q` or similar container probe, not just file existence.
+
+---
+
+## Bug #948: TUI — "Graceful Cluster Startup" dialog text is too minimal
+
+**Found:** 2026-06-30
+**Component:** TUI (`tui/v2/tui-cluster.sh` — startup confirmation dialog)
+**Severity:** Low (UX improvement)
+**Status:** Open — backlog
+
+### Current
+
+```
+Start cluster 'sno.example.com'?
+
+This will power on the cluster VMs.
+```
+
+### Problem
+
+"Power on the cluster VMs" undersells what startup does. Cluster startup is more like bringing the cluster out of hibernation — it powers on VMs, waits for the API to become reachable, verifies cluster operators are healthy, and confirms the cluster is fully operational. The dialog should set the right expectation.
+
+### Suggested Improvement
+
+```
+Start cluster 'sno.example.com'?
+
+This will bring the cluster out of hibernation:
+power on VMs, wait for the API, and verify
+all cluster operators are healthy.
+
+This may take several minutes.
+```
+
+---
+
+## Bug #947: TUI — "Prepare Upgrade" offers current version as "Previous" upgrade target
+
+**Found:** 2026-06-29 (hackathon)
+**Component:** TUI (`tui/v2/tui-cluster.sh` — Prepare Upgrade)
+**Severity:** Low (cosmetic/confusing)
+**Status:** Open — backlog
+
+### Current
+
+When the current version in `aba.conf` is `4.21.21`, the "Prepare Upgrade" version picker offers `Previous (4.21.21)` as a selectable target — the same version already configured.
+
+### Problem
+
+Offering the current version as an upgrade target is confusing and pointless.
+
+### Expected
+
+The "Previous" entry should be filtered out (or greyed out) when it matches the currently configured version.
+
+---
+
+## Bug #948: TUI — "Graceful Cluster Startup" dialog text is too minimal
+
+**Found:** 2026-06-29 (hackathon)
+**Component:** TUI (`tui/v2/tui-cluster.sh` — Graceful Cluster Startup)
+**Severity:** Low (cosmetic)
+**Status:** Open — backlog
+
+### Current
+
+The dialog text for "Graceful Cluster Startup" only mentions powering on servers.
+
+### Problem
+
+Cluster startup is more like bringing a cluster out of hibernation — it involves waiting for nodes, operators, and workloads to stabilize, not just VM power-on.
+
+### Expected
+
+Update the dialog text to better reflect the full startup/un-hibernate process.
+
+---
+
+## Bug #949: TUI — "Prepare Upgrade" hangs when catalogs not yet downloaded
+
+**Found:** 2026-06-30 (hackathon)
+**Component:** TUI (`tui/v2/tui-cluster.sh` — Prepare Upgrade)
+**Severity:** Medium (UX — appears frozen)
+**Status:** Open — backlog
+
+### Current
+
+When the user opens the "Prepare Upgrade" dialog and the operator catalog for the target version has not yet been downloaded, the TUI appears to hang with no feedback while catalogs are being pulled in the background.
+
+### Problem
+
+No "please wait" or progress indicator is shown during catalog download. The user sees a frozen dialog and may think the TUI has crashed. Catalog downloads can take minutes on slow connections.
+
+### Expected
+
+Show a "Downloading operator catalogs... Please wait." gauge or infobox while the catalog pull is in progress, similar to the ISC generation wait dialog.
+
+---
+
+## Bug #952: TUI — "Load images to mirror" dialog doesn't show upgrade target version
+
+**Found:** 2026-06-30 (hackathon)
+**Component:** TUI (`tui/v2/tui-mirror.sh` — load confirmation dialog)
+**Severity:** Medium (misleading — user can't tell if upgrade images are included)
+**Status:** Open — backlog
+
+### Current
+
+When `ocp_version_target` is set in `mirror.conf` (e.g. upgrade from 4.22.1 to 4.22.2), the "Load images to mirror" confirmation dialog only shows:
+```
+OCP: 4.22.1 (stable)
+Operators (1): cincinnati-operator
+Continue?
+```
+
+### Problem
+
+The user has no indication that upgrade images (4.22.1 → 4.22.2) are included in the load. They see only the base version and may not realize the archive contains upgrade content.
+
+### Expected
+
+When an upgrade target is configured, the dialog should show:
+```
+OCP: 4.22.1 → 4.22.2 (stable, upgrade)
+Operators (1): cincinnati-operator
+Continue?
+```
+
+---
+
+## Bug #951: TUI — "Load images to mirror" shows "(loaded)" even when new upgrade images are pending
+
+**Found:** 2026-06-30 (hackathon)
+**Component:** TUI (`tui/v2/abatui2.sh` or `tui/v2/tui-mirror.sh` — main menu status)
+**Severity:** Medium (misleading status — user may skip loading)
+**Status:** Open — backlog
+
+### Current
+
+After an initial `aba load`, the TUI main menu shows `L  Load images to mirror (loaded)`. If the user later prepares an upgrade (saving new tar archives with `--target-version`), the status still shows `(loaded)` because the initial load completed.
+
+### Problem
+
+The `(loaded)` status doesn't account for new/pending tar archives that arrived after the initial load. The user may think everything is loaded and skip the load step, missing the upgrade images entirely.
+
+### Expected
+
+The status should detect whether there are unloaded tar archives in `mirror/data/` (e.g. by comparing timestamps or sequence numbers of `mirror_*.tar` against the last load marker) and show something like `(new images available)` or clear the `(loaded)` status when new archives are present.
+
+---
+
+## Bug #953: Core — Stale catalog digest files on disco host cause load failure (OCPBUGS-81712 workaround)
+
+**Found:** 2026-06-30 (hackathon)
+**Component:** Core (`scripts/include_all.sh` — `_oc_mirror_pin_catalogs_by_digest`, `scripts/backup.sh`)
+**Severity:** High (blocks upgrade workflow on disconnected hosts)
+**Status:** Open — backlog
+
+### Root cause
+
+oc-mirror v2 resolves catalog tags at runtime, contacting registry.redhat.io even during disk-to-mirror load (OCPBUGS-81712). ABA works around this by pinning catalogs to digests in a generated `.imageset-config-digest.yaml`. However:
+
+1. `backup.sh` includes `.index/` digest files in the install bundle
+2. These digest files become stale on the disco host (created at bundle time, never updated)
+3. When the user prepares an upgrade on conno (new catalog digest), then copies the archive to disco, the load side pins to the OLD stale digest from `.index/` instead of the correct digest that matches the archive
+4. oc-mirror can't find the old digest in the archive → tries registry.redhat.io → fails on disconnected host
+
+### Fix (three parts)
+
+**A. Make `imageset-config-digest.yaml` visible and portable:**
+- Rename `data/.imageset-config-digest.yaml` → `data/imageset-config-digest.yaml` (remove leading `.`)
+- This file is generated at save/sync time with the CORRECT digest matching the archive
+- It gets copied alongside the archive by `scp mirror/data/* disco:aba/mirror/data/`
+
+**B. Rename `working-dir/` → `.working-dir/`:**
+- `mirror/data/working-dir/` is an oc-mirror internal directory (large, should not be transferred)
+- Renaming to `.working-dir/` hides it from `*` glob, so `scp mirror/data/*` copies only the right files
+- Update all oc-mirror invocations to use `--workspace .working-dir` (or equivalent flag)
+
+**C. Exclude digest files from `backup.sh`:**
+- `.index/*.digest` and `.index/*.content-layer-digest` are connected-host caching artifacts
+- They have no purpose on the disconnected host and cause stale-digest bugs
+- Remove them from the bundle/backup file list
+
+**D. Load path: prefer transferred digest ISC:**
+- During load, check if `data/imageset-config-digest.yaml` exists (arrived from conno)
+- If yes, use it directly (correct digest, matches archive)
+- If no, fall back to generating from local `.index/` digests (existing behavior, backward compatible)
+
+### Result
+
+User workflow for disconnected upgrade becomes:
+```
+# On conno (connected):
+aba --dir mirror --target-version 4.22.2 save
+
+# Copy to disco:
+scp mirror/data/* disco:aba/mirror/data/
+
+# On disco (disconnected):
+aba --dir mirror load
+aba day2
+aba upgrade --to 4.22.2
+```
+
+No extra hidden files to remember. `scp mirror/data/*` captures everything needed.
+
+---
+
+## Bug #950: TUI — Advanced menu missing "Mirror uninstall" option
+
+**Found:** 2026-06-30 (hackathon)
+**Component:** TUI (`tui/v2/tui-main.sh` — Advanced menu)
+**Severity:** Medium (missing functionality)
+**Status:** Open — backlog
+
+### Current
+
+The Advanced menu shows:
+```
+P  Platform Settings (bm)
+    ──── Switch Mode ────
+X  Switch to Fully Connected (direct)
+Z  Switch to Fully Disconnected
+    ──── Danger Zone ────
+R  Reset ABA (full clean — returns to initial state)
+```
+
+### Problem
+
+There is no "Mirror uninstall" option in the Advanced menu. On a disconnected host with a mirror registry installed, the user has no TUI path to uninstall the mirror — they must drop to CLI and run `aba uninstall`. This is a significant gap since the mirror is a core component managed through the TUI.
+
+### Expected
+
+The Advanced menu (or a suitable submenu) should include an option to uninstall the mirror registry (equivalent to `aba uninstall`), with an appropriate confirmation dialog warning that this will remove the registry, its data, and all mirrored images.
+
+---
+
+## Bug #948: Core — `reg-install-remote.sh` creates literal `$HOME` directory on remote host
+
+**Found:** 2026-06-30 (hackathon)
+**Component:** Core (`scripts/reg-install-remote.sh`, line 117)
+**Severity:** Medium (creates junk directory, quay_installer keypair may land in wrong location)
+**Status:** Open — backlog
+
+### Evidence
+
+```
+[steve@dis3 ~]$ ll
+total 0
+drwxrwxr-x. 3 steve steve 18 Jun 23 07:03 '$HOME'
+[steve@dis3 ~]$ ll '$HOME' -a
+drwx------. 2 steve steve   77 Jun 23 07:03 .ssh
+```
+
+A literal directory named `$HOME` (with the dollar sign) exists in the home directory, containing a `.ssh` subdirectory.
+
+### Root cause
+
+Line 117 of `reg-install-remote.sh`:
+
+```bash
+$_ssh "if [ ! -s \\\$HOME/.ssh/quay_installer ]; then mkdir -p \\\$HOME/.ssh && chmod 700 \\\$HOME/.ssh && ssh-keygen -t ed25519 -f \\\$HOME/.ssh/quay_installer -N '' >/dev/null && cat \\\$HOME/.ssh/quay_installer.pub >> \\\$HOME/.ssh/authorized_keys; fi"
+```
+
+The `\\\$HOME` in a double-quoted string evaluates as:
+- Local shell: `\\` → `\`, `\$` → `$` → sends `\$HOME` to remote
+- Remote shell: `\$HOME` → literal string `$HOME` (backslash escapes the dollar)
+
+This creates `$HOME/.ssh/` as a literal path instead of expanding `$HOME` to `/home/steve`.
+
+### Fix
+
+Replace `\\\$HOME` with `\$HOME` (single backslash) so the local shell passes `$HOME` to the remote shell, which expands it correctly. Or better: use `~` which is simpler and avoids the quoting maze entirely.
+
+---
