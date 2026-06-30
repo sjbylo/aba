@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.2...HEAD)
+
+---
+
+## [1.1.2](https://github.com/sjbylo/aba/releases/tag/v1.1.2) - 2026-07-01
+
+Operator catalog refresh
+
 
 ### Improvements
 
