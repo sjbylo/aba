@@ -17052,6 +17052,42 @@ aba upgrade --to 4.22.2
 
 No extra hidden files to remember. `scp mirror/data/*` captures everything needed.
 
+### Design questions to resolve
+
+1. **Should the digest ISC become the primary ISC?**
+   - Currently we maintain two files: `imageset-config.yaml` (tag-based, user-facing) and `.imageset-config-digest.yaml` (digest-pinned, hidden).
+   - Could the digest-pinned ISC *be* the official ISC? If so, the user copies one file and it just works. The tag-based version becomes an intermediate/template.
+   - Trade-off: the digest ISC is less human-readable (sha256 digests instead of `:v4.22` tags). Users who edit the ISC manually need the tag version.
+   - Possible approach: show the tag-based ISC in the TUI/editor, but always generate and use the digest version for oc-mirror operations. Only the digest version needs to travel to disco.
+
+2. **Where should `working-dir/` live?**
+   - Currently `mirror/data/working-dir/` — inside the same directory as the archive and ISC. This is problematic because:
+     - It's large (GBs of oc-mirror cache/state)
+     - Users accidentally copy it when doing `scp mirror/data/* disco:...`
+     - It's not portable — it's host-specific oc-mirror state
+   - Options:
+     - **a)** Rename to `.working-dir/` (hidden from `*` glob, minimal change)
+     - **b)** Move to `mirror/.working-dir/` (one level up, out of `data/`)
+     - **c)** Move to `~/.aba/mirror/<name>/working-dir/` (externalized state, like clusters)
+     - **d)** Move to a location under `data_dir` (the user-configured large storage path)
+   - Option (a) is simplest but `scp -r mirror/data/` would still copy it. Option (b) or (c) cleanly separates portable data from host state.
+   - Note: `day2.sh` needs `working-dir/` for IDMS/ITMS/CatalogSource files. If moved, a symlink or config variable would be needed.
+
+3. **What should `scp mirror/data/*` copy?**
+   - After the fix, `mirror/data/` should contain ONLY portable files:
+     - `imageset-config.yaml` (user's ISC, tag-based)
+     - `imageset-config-digest.yaml` (digest-pinned ISC for air-gap)
+     - `mirror_*.tar` (archive)
+   - Everything else (working-dir, .created marker, etc.) should be hidden or moved elsewhere.
+
+4. **Should `backup.sh` / `aba bundle` include `.index/` digest files?**
+   - No. These are connected-host caching artifacts. They become stale on disco and caused this exact bug.
+   - The digest ISC (generated at save time) is the only file that should carry digest info to disco.
+
+### Interim fix (implemented)
+
+Copy instructions in CLI output, TUI dialog, and README now mention `.imageset-config-digest.yaml` as a required file for disconnected upgrades. This is a documentation workaround until the structural changes above are implemented.
+
 ---
 
 ## Bug #950: TUI — Advanced menu missing "Mirror uninstall" option
@@ -17119,5 +17155,38 @@ This creates `$HOME/.ssh/` as a literal path instead of expanding `$HOME` to `/h
 ### Fix
 
 Replace `\\\$HOME` with `\$HOME` (single backslash) so the local shell passes `$HOME` to the remote shell, which expands it correctly. Or better: use `~` which is simpler and avoids the quoting maze entirely.
+
+---
+
+## Bug #954 — Housekeeping: Remove stale `oc_mirror_version` comments and tidy `aba.conf` template
+
+- **Severity**: Low (cosmetic / documentation hygiene)
+- **Component**: `aba.conf` template
+- **Status**: BACKLOG
+
+### Description
+
+The `aba.conf` template contains a large commented-out block for `oc_mirror_version=v2` with notes that are now obsolete (v2 is the only supported version, v1 is gone). This block should be removed entirely:
+
+```
+#oc_mirror_version=v2            # Use version 2 of oc-mirror (v1 is deprecated and unsupported).
+                                # Key v2 notes (as of Feb 2025):
+                                # - v2 handles dependencies differently — include all required operators manually.
+                                #   Example: 'web-terminal' requires 'devworkspace-operator' (included in op. set file: 'templates/operator-set-ocp').
+                                # - Copy both the image set YAML and TAR files to the bastion (v2 needs the YAML to load images).
+                                # - Error reporting differs; verify mirrored operators in Quay. Use '--retry' for retries on failure.
+                                # Reference docs:
+                                # https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/disconnected_environments/mirroring-in-disconnected-environments#about-installing-oc-mirror-v2
+                                # and:
+                                # https://docs.openshift.com/container-platform/4.17/disconnected/mirroring/about-installing-oc-mirror-v2.html#oc-mirror-troubleshooting-v2_about-installing-oc-mirror-v2
+```
+
+Additionally, review the entire `aba.conf` template for other stale comments, outdated references, or sections that can be tidied up.
+
+### Action
+
+1. Remove the entire `oc_mirror_version` commented block (lines 45-54 in current `aba.conf`).
+2. Scan for other stale/outdated comments and tidy.
+3. Update the template file (likely under `templates/`) as well as any existing `aba.conf` in the repo.
 
 ---
