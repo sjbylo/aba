@@ -96,7 +96,7 @@ _cluster_load_conf() {
 			ntp_servers)      cl_ntp="$val" ;;
 			ports)            cl_ports="$val" ;;
 			vlan)             cl_vlan="$val" ;;
-			int_connection)   cl_connection="$val" ;;
+			int_connection)   cl_connection="$val"; [[ "$cl_connection" == "none" ]] && cl_connection="" ;;
 			mac_prefix)       cl_mac_template="$val" ;;
 			num_masters)      _nm="$val" ;;
 			num_workers)      _nw="$val" ;;
@@ -139,6 +139,11 @@ _persist_cluster_draft() {
 	replace-value-conf -q -n base_domain      -v "$cl_domain"      -f "$_conf"
 	replace-value-conf -q -n machine_network  -v "$cl_network"     -f "$_conf"
 	replace-value-conf -q -n starting_ip      -v "$cl_starting_ip" -f "$_conf"
+	# SNO doesn't use VIPs — clear them to avoid warnings
+	if [[ "$cl_type" == "sno" ]]; then
+		cl_api_vip=""
+		cl_ingress_vip=""
+	fi
 	replace-value-conf -q -n api_vip          -v "$cl_api_vip"     -f "$_conf"
 	replace-value-conf -q -n ingress_vip      -v "$cl_ingress_vip" -f "$_conf"
 	replace-value-conf -q -n dns_servers      -v "$cl_dns"         -f "$_conf"
@@ -184,17 +189,15 @@ _persist_cluster_draft() {
 # writes user changes back after every page.
 _cluster_generate_defaults() {
 	local _conf="$ABA_ROOT/$cl_name/cluster.conf"
+	local _was_new=false
+	[[ ! -f "$_conf" ]] && _was_new=true
 
-	# If config already exists, just load it
-	if [[ -f "$_conf" ]]; then
-		_cluster_load_conf "$_conf"
-		tui_log "Loaded existing cluster.conf for '$cl_name'"
-		return 0
-	fi
-
-	# Build the generation command
+	# Always call core -- handles both new and existing cluster.conf.
+	# For new: renders from template with auto-detected values.
+	# For existing: fills empty network fields from aba.conf.
 	local _cmd="aba cluster --name $cl_name --type $cl_type --platform $cl_platform --step cluster.conf --yes"
-	tui_log "Generating defaults: $_cmd"
+	[[ -n "$cl_domain" ]] && _cmd+=" --domain $cl_domain"
+	tui_log "Generating/refreshing defaults: $_cmd"
 
 	# Run it (fast ~2s) — fully detached from TUI's terminal/dialog
 	local _gen_rc=0
@@ -206,10 +209,11 @@ _cluster_generate_defaults() {
 		return 1
 	fi
 
-	# Load the generated config into form fields
-	if [[ -f "$_conf" ]]; then
+	# Only reload for newly created files — for existing files, user's
+	# in-memory values are authoritative (avoids discarding page-1 edits)
+	if [[ "$_was_new" == "true" && -f "$_conf" ]]; then
 		_cluster_load_conf "$_conf"
-		tui_log "Generated and loaded cluster.conf defaults"
+		tui_log "Loaded newly-created cluster.conf for '$cl_name'"
 	fi
 }
 
@@ -318,6 +322,7 @@ _configure_vmw_form() {
 	v_url="${GOVC_URL:-}"
 	v_user="${GOVC_USERNAME:-}"
 	v_pass="${GOVC_PASSWORD:-}"
+	[[ "$v_pass" == "<"*">" ]] && v_pass=""
 	v_datastore="${GOVC_DATASTORE:-}"
 	v_network="${GOVC_NETWORK:-}"
 	v_datacenter="${GOVC_DATACENTER:-}"
@@ -371,7 +376,7 @@ _configure_vmw_form() {
 							"Invalid hostname/IP.\n\nExpected: FQDN or IP (e.g. vcenter.lab.com, 10.0.1.5)." 0 0
 						continue
 					fi
-					replace-value-conf -q -n GOVC_URL -v "$v_url" -f "$conf_path"
+					replace-value-conf -q -n GOVC_URL -v "'$v_url'" -f "$conf_path"
 				fi
 				;;
 			N)
@@ -379,7 +384,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_user=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_user" || continue
-					replace-value-conf -q -n GOVC_USERNAME -v "$v_user" -f "$conf_path"
+					replace-value-conf -q -n GOVC_USERNAME -v "'$v_user'" -f "$conf_path"
 				fi
 				;;
 			P)
@@ -392,7 +397,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_datastore=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_datastore" || continue
-					replace-value-conf -q -n GOVC_DATASTORE -v "$v_datastore" -f "$conf_path"
+					replace-value-conf -q -n GOVC_DATASTORE -v "'$v_datastore'" -f "$conf_path"
 				fi
 				;;
 			W)
@@ -408,7 +413,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_datacenter=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_datacenter" || continue
-					replace-value-conf -q -n GOVC_DATACENTER -v "$v_datacenter" -f "$conf_path"
+					replace-value-conf -q -n GOVC_DATACENTER -v "'$v_datacenter'" -f "$conf_path"
 				fi
 				;;
 			L)
@@ -416,7 +421,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_cluster=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_cluster" || continue
-					replace-value-conf -q -n GOVC_CLUSTER -v "$v_cluster" -f "$conf_path"
+					replace-value-conf -q -n GOVC_CLUSTER -v "'$v_cluster'" -f "$conf_path"
 				fi
 				;;
 			F)
@@ -424,7 +429,7 @@ _configure_vmw_form() {
 				if [[ $? -eq 0 ]]; then
 					v_folder=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_folder" || continue
-					replace-value-conf -q -n VC_FOLDER -v "$v_folder" -f "$conf_path"
+					replace-value-conf -q -n VC_FOLDER -v "'$v_folder'" -f "$conf_path"
 				fi
 				;;
 			I)
@@ -523,7 +528,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_uri=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_uri" || continue
-					replace-value-conf -q -n LIBVIRT_URI -v "$k_uri" -f "$conf_path"
+					replace-value-conf -q -n LIBVIRT_URI -v "'$k_uri'" -f "$conf_path"
 				fi
 				;;
 			S)
@@ -531,7 +536,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_pool=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_pool" || continue
-					replace-value-conf -q -n KVM_STORAGE_POOL -v "$k_pool" -f "$conf_path"
+					replace-value-conf -q -n KVM_STORAGE_POOL -v "'$k_pool'" -f "$conf_path"
 				fi
 				;;
 			N)
@@ -539,7 +544,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_network=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_network" || continue
-					replace-value-conf -q -n KVM_NETWORK -v "$k_network" -f "$conf_path"
+					replace-value-conf -q -n KVM_NETWORK -v "'$k_network'" -f "$conf_path"
 				fi
 				;;
 			B)
@@ -547,7 +552,7 @@ _configure_kvm_form() {
 				if [[ $? -eq 0 ]]; then
 					k_boot=$(<"$_TUI_TMP")
 					_tui_reject_squote "$k_boot" || continue
-					replace-value-conf -q -n KVM_BOOT_ARGS -v "$k_boot" -f "$conf_path"
+					replace-value-conf -q -n KVM_BOOT_ARGS -v "'$k_boot'" -f "$conf_path"
 				fi
 				;;
 			G)
@@ -627,6 +632,9 @@ cluster_install_flow() {
 		_CL_STATE_INIT=true
 	fi
 
+	# Always refresh platform from aba.conf (may have changed via Advanced menu)
+	_cl_platform="${platform:-bm}"
+
 	# Local aliases for readability (reference the globals)
 	local cl_name="$_cl_name"
 	local cl_domain="$_cl_domain"
@@ -657,21 +665,15 @@ cluster_install_flow() {
 		fi
 	fi
 
-	# Auto-detect defaults only when no cluster.conf exists yet (before page 1 generates one)
+	# Pre-fill from aba.conf when no cluster.conf exists yet (core will auto-detect
+	# network values when _cluster_generate_defaults calls aba cluster --step cluster.conf)
 	if [[ "$_draft_loaded" == "false" ]]; then
-		# Pre-fill from sourced aba.conf variables, fallback to auto-detect
 		cl_network="${machine_network:-}"
 		# Recombine prefix_length (normalize-aba-conf splits "10.0.0.0/24" into two vars)
 		[[ -n "${prefix_length:-}" && -n "$cl_network" && "$cl_network" != */* ]] && cl_network="${cl_network}/${prefix_length}"
-		[[ -z "$cl_network" ]] && cl_network=$(get_machine_network 2>/dev/null) || true
 		cl_dns="${dns_servers:-}"
-		[[ -z "$cl_dns" ]] && cl_dns=$(get_dns_servers 2>/dev/null) || true
-		cl_dns=$(filter_disco_values "$cl_dns")
 		cl_gateway="${next_hop_address:-}"
-		[[ -z "$cl_gateway" ]] && cl_gateway=$(get_next_hop 2>/dev/null) || true
 		cl_ntp="${ntp_servers:-}"
-		[[ -z "$cl_ntp" ]] && cl_ntp=$(get_ntp_servers 2>/dev/null) || true
-		cl_ntp=$(filter_disco_values "$cl_ntp")
 
 		# Smart guess VIPs from DNS (if base domain available)
 		if [[ -n "$cl_domain" ]]; then
@@ -693,12 +695,16 @@ cluster_install_flow() {
 	# Sanitize cl_connection for the current TUI mode.
 	# DIRECT: only "direct" and "proxy" are valid.
 	# DISCO: only "mirror" is valid (no internet).
-	# CONNO: all three (mirror/proxy/direct) are valid — don't override.
 	_apply_mode_connection() {
 		if [[ "$_TUI_MODE" == "DIRECT" ]]; then
 			[[ "$cl_connection" != "proxy" ]] && cl_connection="direct"
 		elif [[ "$_TUI_MODE" == "DISCO" ]]; then
-			[[ "$cl_connection" == "direct" ]] && cl_connection="mirror"
+			[[ "$cl_connection" != "mirror" ]] && cl_connection="mirror"
+		elif [[ "$_TUI_MODE" == "CONNO" ]]; then
+			# Default to mirror when available, but never override an explicit user choice
+			if [[ -z "$cl_connection" ]] && mirror_available && _mirror_has_release_image; then
+				cl_connection="mirror"
+			fi
 		fi
 	}
 	_apply_mode_connection
@@ -855,7 +861,7 @@ _cluster_page_basics() {
 			--default-button ok \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$_basics_msg" 0 62 8 \
+			--menu "$_basics_msg" 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -910,38 +916,41 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-	N)
-		while :; do
-			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NAME" \
-				--inputbox "$TUI2_MSG_CLUSTER_NAME_PROMPT" 0 0 "$cl_name" \
-				2>"$_TUI_TMP"
-			[[ $? -ne 0 ]] && break
-			local input
-			input=$(<"$_TUI_TMP")
-			if [[ -n "$input" ]]; then
-				# DNS label: start with letter, end with letter/digit, max 63 chars
-				if [[ ${#input} -gt 63 || ! "$input" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		N)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_NAME" \
+					--inputbox "$TUI2_MSG_CLUSTER_NAME_PROMPT" 0 0 "$cl_name" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local input
+				input=$(<"$_TUI_TMP")
+				if [[ -z "$input" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"$TUI2_MSG_INVALID_CLUSTER_NAME" 0 0 || true
+						"Cluster name cannot be empty." 0 0 || true
 					continue
 				fi
-			fi
-			[[ -n "$input" ]] && cl_name="$input"
-			# Warn if cluster is already installed
-			if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
-					--yes-label "Continue" --no-label "Back" \
-					--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
-				[[ $? -ne 0 ]] && continue
-			fi
-			# Silently load existing cluster.conf if present
-			if [[ -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
-				_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
-				_apply_mode_connection
-				tui_log "Loaded existing cluster.conf for '$cl_name'"
-			fi
-			break
-		done
+				local _name_err
+				if ! _name_err=$(aba cluster --name "$input" --validate 2>&1); then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"${_name_err:-$TUI2_MSG_INVALID_CLUSTER_NAME}" 0 0 || true
+					continue
+				fi
+				cl_name="$input"
+				# Warn if cluster is already installed
+				if [[ -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --title "Cluster Already Installed" \
+						--yes-label "Continue" --no-label "Back" \
+						--yesno "Cluster '$cl_name' is already installed.\n\nUse Day-2 menu for operations on installed clusters.\nContinuing will overwrite the cluster configuration.\n\nContinue anyway?" 0 0
+					[[ $? -ne 0 ]] && continue
+				fi
+				# Silently load existing cluster.conf if present
+				if [[ -f "$ABA_ROOT/$cl_name/cluster.conf" ]]; then
+					_cluster_load_conf "$ABA_ROOT/$cl_name/cluster.conf"
+					_apply_mode_connection
+					tui_log "Loaded existing cluster.conf for '$cl_name'"
+				fi
+				break
+			done
 			;;
 		D)
 			while :; do
@@ -951,49 +960,50 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 				[[ $? -ne 0 ]] && break
 				local dom_input
 				dom_input=$(<"$_TUI_TMP")
-				if [[ -n "$dom_input" && ! "$dom_input" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+				if [[ -n "$dom_input" && ! "$dom_input" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
 						"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
 					continue
 				fi
-				[[ -n "$dom_input" ]] && cl_domain="$dom_input"
+				[[ -n "$dom_input" ]] && cl_domain="${dom_input,,}"
 				break
 			done
 			;;
-	T)
-		# Toggle: sno → compact → standard → sno
-		case "$cl_type" in
-			sno) cl_type="compact" ;;
-			compact) cl_type="standard"; [[ "$cl_workers" == "0" || -z "$cl_workers" ]] && cl_workers="2" ;;
-			standard) cl_type="sno" ;;
-		esac
-		tui_log "Toggled type to: $cl_type"
-		;;
-	P)
-		# Toggle: bm → vmw → kvm → bm
-		# Only update port default if user hasn't manually edited it
-		local _prev_default=""
-		case "$cl_platform" in
-			bm)  _prev_default="" ;;
-			vmw) _prev_default="ens160" ;;
-			kvm) _prev_default="enp1s0" ;;
-		esac
-		case "$cl_platform" in
-			bm)  cl_platform="vmw" ;;
-			vmw) cl_platform="kvm" ;;
-			kvm) cl_platform="bm" ;;
-		esac
-		# Update ports only if still at the previous platform's default
-		if [[ "$cl_ports" == "$_prev_default" ]]; then
-			case "$cl_platform" in
-				vmw) cl_ports="ens160" ;;
-				kvm) cl_ports="enp1s0" ;;
-				bm)  cl_ports="" ;;
+		T)
+			# Toggle: sno → compact → standard → sno
+			case "$cl_type" in
+				sno) cl_type="compact" ;;
+				compact) cl_type="standard"; [[ "$cl_workers" == "0" || -z "$cl_workers" ]] && cl_workers="2" ;;
+				standard) cl_type="sno" ;;
 			esac
-		fi
-		replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
-		tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
-		;;
+			tui_log "Toggled type to: $cl_type"
+			;;
+		P)
+			# Toggle: bm → vmw → kvm → bm
+			# Only update port default if user hasn't manually edited it
+			local _prev_default=""
+			case "$cl_platform" in
+				bm)  _prev_default="" ;;
+				vmw) _prev_default="ens160" ;;
+				kvm) _prev_default="enp1s0" ;;
+			esac
+			case "$cl_platform" in
+				bm)  cl_platform="vmw" ;;
+				vmw) cl_platform="kvm" ;;
+				kvm) cl_platform="bm" ;;
+			esac
+			# Update ports only if still at the previous platform's default
+			if [[ "$cl_ports" == "$_prev_default" ]]; then
+				case "$cl_platform" in
+					vmw) cl_ports="ens160" ;;
+					kvm) cl_ports="enp1s0" ;;
+					bm)  cl_ports="" ;;
+				esac
+			fi
+			replace-value-conf -q -n platform -v "$cl_platform" -f "$ABA_ROOT/aba.conf"
+			platform="$cl_platform"
+			tui_log "Toggled platform to: $cl_platform (ports: ${cl_ports:-(empty)})"
+			;;
 		W)
 				while :; do
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_COUNT" \
@@ -1140,6 +1150,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local dns_val
 					dns_val=$(<"$_TUI_TMP")
+					dns_val=$(echo "$dns_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
 					if [[ -n "$dns_val" ]] && ! _valid_ip_list "$dns_val"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid DNS entry.\n\nExpected: comma-separated IP addresses (e.g. 10.0.1.8,10.0.1.9)." 0 0 || true
@@ -1174,6 +1185,7 @@ _cluster_page_network() {
 					[[ $? -ne 0 ]] && break
 					local ntp_val
 					ntp_val=$(<"$_TUI_TMP")
+					ntp_val=$(echo "$ntp_val" | tr -s ' \t,' ',' | sed 's/^,//; s/,$//')
 					if [[ -n "$ntp_val" ]] && ! _valid_ip_or_host_list "$ntp_val"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid NTP entry.\n\nExpected: comma-separated IPs or hostnames\n(e.g. 10.0.1.8,ntp.lab.local)" 0 0 || true
@@ -1194,6 +1206,16 @@ _cluster_page_iface() {
 	if [[ -z "$cl_connection" ]]; then
 		[[ "$_TUI_MODE" == "DIRECT" ]] && cl_connection="direct" || cl_connection="mirror"
 	fi
+	# Build connection help text based on available options in this mode
+	local _conn_help
+	case "$_TUI_MODE" in
+		DIRECT) _conn_help="  - proxy: from public registries via HTTP proxy
+  - direct: from public registries with direct internet" ;;
+		DISCO)  _conn_help="  - mirror: from the local mirror registry" ;;
+		*)      _conn_help="  - mirror: from the local mirror registry (default)
+  - proxy: from public registries via HTTP proxy
+  - direct: from public registries with direct internet" ;;
+	esac
 	while :; do
 		local conn_display=""
 		case "$cl_connection" in
@@ -1247,16 +1269,13 @@ _cluster_page_iface() {
 		case "$rc" in
 			3) return 0 ;;  # Next (Extra button)
 			2) show_help "$TUI2_TITLE_CLUSTER_IFACE" \
-
 "• Ports: network port names (e.g. ens160, ens1f0)
   Multiple ports create a bond (e.g. ens1f0,ens1f1)
 
 • VLAN: optional 802.1Q VLAN tag
 
 • Image source: where the cluster pulls container images from
-  - mirror: from the local mirror registry (default)
-  - proxy: from public registries via HTTP proxy
-  - direct: from public registries with direct internet
+${_conn_help}
 
 • MACs (bare-metal only): paste one or more MAC addresses per node
   Ensures each node gets the correct IP via mac address mapping."
@@ -1316,9 +1335,9 @@ _cluster_page_iface() {
 			# DISCO: only "mirror" is valid (no internet)
 			if [[ "$cl_connection" != "mirror" ]]; then
 				cl_connection="mirror"
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"In disconnected mode only \"mirror\" is available as an image source." 0 0 || true
 			fi
-			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"In disconnected mode only \"mirror\" is available as an image source." 0 0 || true
 		else
 			# CONNO: Toggle mirror → proxy → direct → mirror
 			case "$cl_connection" in
@@ -1341,8 +1360,30 @@ _cluster_page_iface() {
 			if [[ $? -eq 0 ]]; then
 				local raw=$(<"$_TUI_TMP")
 				# Normalize: convert commas/spaces to newlines, trim empty lines and whitespace
-				cl_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
+				local _new_macs
+				_new_macs=$(echo "$raw" | tr ',; ' '\n' | sed '/^$/d' | tr -d ' \t')
+				# Validate MAC format (XX:XX:XX:XX:XX:XX)
+				local _bad_macs
+				_bad_macs=$(echo "$_new_macs" | grep -vE '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || true)
+				if [[ -n "$_bad_macs" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Invalid MAC address(es):\n\n${_bad_macs}\n\nExpected format: XX:XX:XX:XX:XX:XX" 0 0 || true
+					rm -f "$_mac_edit"
+					continue
+				fi
+				cl_macs="$_new_macs"
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
+				# Warn if count doesn't match expected nodes
+				local _mac_count _expected_nodes
+				_mac_count=$(echo "$cl_macs" | wc -l)
+				case "$cl_type" in
+					sno) _expected_nodes=1 ;; compact) _expected_nodes=3 ;;
+					standard) _expected_nodes=$(( 3 + ${cl_workers:-2} )) ;; *) _expected_nodes=1 ;;
+				esac
+				if [[ $_mac_count -ne $_expected_nodes ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Warning: $_mac_count MAC(s) entered, but $cl_type needs $_expected_nodes (one per node)." 0 0 || true
+				fi
 			fi
 			rm -f "$_mac_edit"
 			;;
@@ -1369,19 +1410,22 @@ _cluster_page_iface() {
 _cluster_page_vm() {
 	local default_item="C"
 	local mac_info=""
-	if [[ -f "$ABA_ROOT/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/macs.conf" 2>/dev/null; then
+	if [[ -f "$ABA_ROOT/$cl_name/macs.conf" ]] && grep -qE '^[^#]' "$ABA_ROOT/$cl_name/macs.conf" 2>/dev/null; then
 		mac_info=" (from macs.conf)"
 	fi
 
 	while :; do
 		local items=()
+		local _mem_disp="${cl_master_mem:+${cl_master_mem} GB}"; _mem_disp="${_mem_disp:-(not set)}"
+		local _disk_disp="${cl_disk:+${cl_disk} GB}"; _disk_disp="${_disk_disp:-(not set)}"
 		items+=("C" "Master CPUs:    ${cl_master_cpu:-(not set)}")
-		items+=("R" "Master Memory:  ${cl_master_mem:-(not set)} GB")
+		items+=("R" "Master Memory:  $_mem_disp")
 		if [[ "$cl_type" == "standard" ]]; then
+			local _wmem_disp="${cl_worker_mem:+${cl_worker_mem} GB}"; _wmem_disp="${_wmem_disp:-(not set)}"
 			items+=("W" "Worker CPUs:    ${cl_worker_cpu:-(not set)}")
-			items+=("E" "Worker Memory:  ${cl_worker_mem:-(not set)} GB")
+			items+=("E" "Worker Memory:  $_wmem_disp")
 		fi
-		items+=("D" "Data disk:      ${cl_disk:-(not set)} GB")
+		items+=("D" "Data disk:      $_disk_disp")
 		items+=("A" "MAC template:   ${cl_mac_template:-(auto)}${mac_info}")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_VM" \
@@ -1417,65 +1461,65 @@ _cluster_page_vm() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			C)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
-						--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_master_cpu="$val"
-				break
-			done
+		C)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_CPU" \
+					--inputbox "$TUI2_MSG_VM_MASTER_CPU_PROMPT" 0 0 "$cl_master_cpu" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 4 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 4." 0 0 || true
+					continue
+				fi
+			cl_master_cpu="$val"
+			break
+		done
+		;;
+	R)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
+					--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 16 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 16 GB." 0 0 || true
+					continue
+				fi
+			cl_master_mem="$val"
+			break
+		done
 			;;
-		R)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_MASTER_MEM" \
-						--inputbox "$TUI2_MSG_VM_MASTER_MEM_PROMPT" 0 0 "$cl_master_mem" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_master_mem="$val"
-				break
-			done
-			;;
-		W)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
-						--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_worker_cpu="$val"
-				break
-			done
-			;;
-		E)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
-						--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
-						2>"$_TUI_TMP"
-					[[ $? -ne 0 ]] && break
-					local val=$(<"$_TUI_TMP")
-					if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]]; }; then
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Must be a positive number." 0 0 || true
-						continue
-					fi
-				cl_worker_mem="$val"
-				break
-			done
+	W)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_CPU" \
+					--inputbox "$TUI2_MSG_VM_WORKER_CPU_PROMPT" 0 0 "$cl_worker_cpu" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 2 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 2." 0 0 || true
+					continue
+				fi
+			cl_worker_cpu="$val"
+			break
+		done
+		;;
+	E)
+			while :; do
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_WORKER_MEM" \
+					--inputbox "$TUI2_MSG_VM_WORKER_MEM_PROMPT" 0 0 "$cl_worker_mem" \
+					2>"$_TUI_TMP"
+				[[ $? -ne 0 ]] && break
+				local val=$(<"$_TUI_TMP")
+				if [[ -n "$val" ]] && { [[ ! "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 8 ]]; }; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Must be at least 8 GB." 0 0 || true
+					continue
+				fi
+			cl_worker_mem="$val"
+			break
+		done
 			;;
 		D)
 			while :; do
@@ -1650,21 +1694,7 @@ _cluster_execute() {
 
 	tui_log "Installing cluster ($install_step): $cmd"
 
-	# Clean stale artifacts if connection mode changed (prevents mirror refs in DIRECT etc.)
 	local cluster_dir="$ABA_ROOT/$cl_name"
-	if [[ -f "$cluster_dir/cluster.conf" ]]; then
-		local _old_conn
-		_old_conn=$(source <(cd "$cluster_dir" && normalize-cluster-conf) 2>/dev/null && echo "$int_connection")
-		[[ -z "$_old_conn" ]] && _old_conn="mirror"
-		local _new_conn="$cl_connection"
-		if [[ -z "$_new_conn" ]]; then
-			[[ "$_TUI_MODE" == "DIRECT" ]] && _new_conn="direct" || _new_conn="mirror"
-		fi
-		if [[ "$_old_conn" != "$_new_conn" ]]; then
-			tui_log "Connection mode changed ($cluster_dir): $_old_conn -> $_new_conn, cleaning stale artifacts"
-			rm -f "$cluster_dir/install-config.yaml" "$cluster_dir/.init" "$cluster_dir/.configured" 2>/dev/null
-		fi
-	fi
 
 	# Write macs.conf if MACs were entered (bare-metal)
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
@@ -1842,9 +1872,6 @@ tui_advanced_menu() {
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
 			adv_items+=("F" "Monitor Cluster Installation (re-attach)")
 		fi
-		if [[ -n "$_TUI_EXEC_MODE" ]]; then
-			adv_items+=("E" "Reset Execution Mode (currently: $_TUI_EXEC_MODE)")
-		fi
 		# Mode switches (normally auto-detected; here for manual override)
 		adv_items+=("" "──── Switch Mode ───────────────────")
 		case "$_TUI_MODE" in
@@ -1859,11 +1886,11 @@ tui_advanced_menu() {
 				adv_items+=("X" "Switch to Connected Mode")
 				;;
 		esac
-	adv_items+=("" "──── Danger Zone ───────────────────")
-	if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
-		adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
-	fi
-	adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
+		adv_items+=("" "──── Danger Zone ───────────────────")
+		if [[ "${_CLUSTER_DAY2_AVAIL}" == "true" ]]; then
+			adv_items+=("W" "Refresh Cluster (recreate VMs, new install)")
+		fi
+		adv_items+=("R" "Reset ABA (full clean — returns to initial state)")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_ADVANCED" \
 			--default-item "$default_item" \
@@ -1885,8 +1912,6 @@ U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
-E - Reset Execution Mode: Clears your 'Always TUI' or 'Always Terminal'\n\
-    preference for this session.\n\n\
 X/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
@@ -1956,15 +1981,10 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 					--yes-label "Uninstall" --no-label "$TUI2_BTN_CANCEL" \
 					--yesno "Uninstall the mirror registry on: ${_unreg_host}\n\nThis will remove the registry and its data.\nImages will need to be re-synced after reinstall." 0 0
 				[[ $? -ne 0 ]] && continue
-				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry"
+				confirm_and_execute "aba --dir mirror uninstall" "Uninstall Mirror Registry" _invalidate_mirror_cache
 				;;
 			"F")
 				cluster_monitor
-				;;
-			"E")
-				_TUI_EXEC_MODE=""
-				tui_log "Execution mode preference reset"
-				dlg --backtitle "$(ui_backtitle)" --msgbox "Execution mode reset.\n\nYou will be asked to choose TUI or Terminal for each command." 0 0
 				;;
 			"X")
 				case "$_TUI_MODE" in
@@ -2038,9 +2058,9 @@ cluster_day2_menu() {
 			"U" "Upgrade cluster (beta)" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
-		"" "──── Cleanup ──────────────────────" \
+			"" "──── Cleanup ──────────────────────" \
 			"C" "Clean (remove artifacts, retry install)" \
-			"K" "Delete cluster" \
+			"D" "Delete cluster" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -2048,7 +2068,7 @@ cluster_day2_menu() {
 			2)
 				show_help "$TUI2_HELP_TITLE_DAY2" \
 "Configuration:
-• Resources: applies all Day-2 config (IDMS, CatalogSources, OperatorHub, etc.)
+• Configure OperatorHub: applies Day-2 config (IDMS, CatalogSources, OperatorHub, etc.)
 • NTP: configures Network Time Protocol on all cluster nodes
 • OSUS: installs the OpenShift Update Service operator for upgrades
 
@@ -2086,10 +2106,10 @@ Navigation:
 			S) _day2_status ;;
 			H) _day2_ssh ;;
 			U) _day2_upgrade ;;
-		G) _day2_shutdown ;;
-		T) _day2_startup ;;
-		C) _day2_clean ;;
-			K) _day2_delete ;;
+			G) _day2_shutdown ;;
+			T) _day2_startup ;;
+			C) _day2_clean ;;
+			D) _day2_delete ;;
 		esac
 	done
 }
@@ -2136,13 +2156,35 @@ _day2_status() {
 	local output_file
 	output_file=$(mktemp)
 
-	local kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
+	local kc
+	kc=$(cd "$ABA_ROOT/$cl_dir" && source <(normalize-cluster-conf) 2>/dev/null && cluster_kubeconfig 2>/dev/null) || kc=""
+	[ -z "$kc" ] && kc="$ABA_ROOT/$cl_dir/iso-agent-based/auth/kubeconfig"
+
+	# Quick TCP probe of the API server before running oc commands (avoids minutes of timeouts)
+	local _api_host _api_port _api_up=true
+	_api_host=$(KUBECONFIG="$kc" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null \
+		| sed 's|https\?://||; s|/.*||')
+	_api_port="${_api_host##*:}"
+	_api_host="${_api_host%%:*}"
+	if [[ -n "$_api_host" ]]; then
+		if ! timeout 3 bash -c "echo >/dev/tcp/$_api_host/${_api_port:-6443}" 2>/dev/null; then
+			_api_up=false
+		fi
+	fi
+
 	trap : INT
 	{
+	if [[ "$_api_up" == "false" ]]; then
+		echo "═══ Cluster API Unreachable ($cl_display) ═══"
+		echo ""
+		echo "Cannot connect to API server at ${_api_host}:${_api_port:-6443}"
+		echo "The cluster may be shut down or the network is unreachable."
+		echo ""
+	else
 		echo "═══ Cluster Operators ($cl_display) ═══"
 		echo ""
 		cd "$ABA_ROOT"
-		KUBECONFIG="$kc" oc get co --request-timeout=5s 2>&1 || echo "(Cluster API unreachable — is the cluster shut down?)"
+		KUBECONFIG="$kc" oc get co --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
 		echo ""
 		echo "═══ Nodes ($cl_display) ═══"
 		echo ""
@@ -2154,10 +2196,11 @@ _day2_status() {
 			| awk '{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print}' \
 			|| echo "(Cluster API unreachable)"
 		echo ""
-	echo "═══ Upgrade Status ($cl_display) ═══"
-	echo ""
-	KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
-	echo ""
+		echo "═══ Upgrade Status ($cl_display) ═══"
+		echo ""
+		KUBECONFIG="$kc" oc adm upgrade --request-timeout=5s 2>&1 || echo "(Cluster API unreachable)"
+		echo ""
+	fi
 	echo "═══ Cluster Info ($cl_display) ═══"
 	echo ""
 	aba --dir "$cl_dir" info 2>&1 || echo "(Unable to retrieve cluster info)"
@@ -2191,10 +2234,40 @@ _day2_ssh() {
 
 	cd "$ABA_ROOT"
 	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
-	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&- || true
+	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&-
+	local _ssh_rc=$?
+	[[ $_ssh_rc -ne 0 ]] && echo -e "\n\e[31mSSH failed (exit code $_ssh_rc)\e[0m"
 
 	echo
 	read -rp "Press ENTER to return to TUI..."
+}
+
+# Pre-flight: check for upgrade gates that require manual acknowledgment.
+# Shows gate info in a TUI dialog so the user can review and decide.
+# Returns 0=proceed, 1=cancel.  This prevents --yes (progressbox mode)
+# from silently bypassing the Upgradeable=False safety gate.
+_upgrade_preflight_check() {
+	local cluster_dir="$1"
+	local _adm_out _kc
+
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking upgrade prerequisites..." 0 0
+	_adm_out=$(cd "$ABA_ROOT/$cluster_dir" && \
+		source <(normalize-cluster-conf) 2>/dev/null && \
+		_kc=$(cluster_kubeconfig 2>/dev/null) && \
+		oc --kubeconfig "$_kc" adm upgrade 2>&1) || true
+
+	if echo "$_adm_out" | grep -q "Upgradeable=False"; then
+		local _wrapped _header _text
+		_wrapped=$(echo "$_adm_out" | fold -s -w 72 | sed 's/$/\\n/' | tr -d '\n')
+		_header="The cluster reports Upgradeable=False.\nThis may require admin acknowledgment before upgrading.\n\nReview the details and only continue if you have\nresolved any required actions:\n\n"
+		_text="${_header}${_wrapped}"
+		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Gate Detected" \
+			--yes-label "Continue" --no-label "Cancel" \
+			--defaultno \
+			--yesno "$_text" 0 0
+		return $?
+	fi
+	return 0
 }
 
 # --- Upgrade cluster ---
@@ -2205,8 +2278,8 @@ _day2_upgrade() {
 
 	# Fetch available versions
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
-	local _versions_raw
-	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
+	local _versions_raw _dry_rc=0
+	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || _dry_rc=$?
 
 	# Parse version lines — only from the "Versions in mirror" list section
 	local _versions=() _in_list=0
@@ -2214,7 +2287,7 @@ _day2_upgrade() {
 		[[ "$line" =~ Versions\ in\ mirror ]] && _in_list=1 && continue
 		[[ $_in_list -eq 0 ]] && continue
 		local ver
-		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?' | head -1)
 		[[ -n "$ver" ]] && _versions+=("$ver")
 	done <<< "$_versions_raw"
 
@@ -2223,7 +2296,13 @@ _day2_upgrade() {
 	if [[ ${#_versions[@]} -gt 0 ]]; then
 		while IFS= read -r v; do
 			_sorted+=("$v")
-		done < <(printf '%s\n' "${_versions[@]}" | sort -t. -k1,1nr -k2,2nr -k3,3nr | uniq)
+		done < <(printf '%s\n' "${_versions[@]}" | sort -V -r | uniq)
+	fi
+
+	if [[ $_dry_rc -ne 0 && ${#_sorted[@]} -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Check Failed" \
+			--msgbox "Failed to query available versions (exit $_dry_rc).\n\nCheck cluster connectivity and credentials.\n\nRaw output:\n${_versions_raw:-(empty)}" 0 0
+		return 1
 	fi
 
 	if [[ ${#_sorted[@]} -eq 0 ]]; then
@@ -2232,9 +2311,9 @@ _day2_upgrade() {
 			CONNO)
 				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
 				;;
-	DISCO)
-		_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
-		;;
+			DISCO)
+				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
+				;;
 			*)
 				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."
 				;;
@@ -2252,8 +2331,6 @@ _day2_upgrade() {
 			local items=()
 			local idx=0
 			for v in "${_sorted[@]}"; do
-				local tag
-				tag=$(echo "${v}" | cut -d. -f1-2)
 				if [[ $idx -eq 0 ]]; then
 					items+=("$v" "(newest)")
 				else
@@ -2291,7 +2368,8 @@ _day2_upgrade() {
 			if [[ "$choice" == "M" ]]; then
 				# Fall through to manual entry below
 				:
-			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+				_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 				confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $choice" \
 					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
 				return
@@ -2302,7 +2380,7 @@ _day2_upgrade() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
 			--ok-label "Upgrade" \
 			--cancel-label "$TUI2_BTN_BACK" \
-			--inputbox "Enter target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Format: X.Y.Z, e.g. 4.21.15)" 0 0 "" \
+			--inputbox "Enter target version for $SELECTED_CLUSTER_DISPLAY:\n\n(Format: X.Y.Z or X.Y.Z-rc.N, e.g. 4.21.15 or 4.22.0-rc.1)" 0 0 "" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
 
@@ -2312,10 +2390,19 @@ _day2_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox "No version entered." 0 0
 			continue
 		fi
-		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z (e.g. 4.21.15)" 0 0
+		if ! [[ "$target_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.15 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
+		# Reject downgrades/same-version with a friendly dialog
+		local _cur_ver
+		_cur_ver=$(aba --dir "$SELECTED_CLUSTER" cluster-version 2>/dev/null || echo "")
+		if [[ "$_cur_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] && ! is_version_greater "$target_ver" "$_cur_ver"; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Cannot upgrade: version '$target_ver' is not higher than current '$_cur_ver'." 0 0
+			continue
+		fi
+		_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 		confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $target_ver" \
 			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
 		return
@@ -2345,10 +2432,13 @@ _day2_startup() {
 	fi
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	local _start_msg="This will power on the cluster VMs."
+	source <(normalize-aba-conf) 2>/dev/null || true
+	[[ "$platform" == "bm" ]] && _start_msg="This will wait for bare-metal servers to come online."
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_STARTUP" \
 		--yes-label "Start" --no-label "$TUI2_BTN_CANCEL" \
-		--yesno "Start cluster '$cl_display'?\n\nThis will power on the cluster VMs." 0 0
+		--yesno "Start cluster '$cl_display'?\n\n$_start_msg" 0 0
 	[[ $? -ne 0 ]] && return 0
 
 	confirm_and_execute "aba --dir $SELECTED_CLUSTER startup" "$TUI2_TITLE_DAY2_STARTUP: $cl_display"

@@ -288,6 +288,14 @@ e2e_diag "Markers: before sync" "_marker_snap"
 e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -r 3 2 "Sync images with testy user config (should install mirror)" "aba --dir mirror sync --retry"
 
+# Connected mode: ~/.docker/config.json must have BOTH mirror AND Red Hat credentials
+e2e_run "Pull secret: mirror registry present in config.json" \
+    "jq -e '.auths[\"${DIS_HOST}:8443\"]' ~/.docker/config.json"
+e2e_run "Pull secret: registry.redhat.io present (connected mode)" \
+    "jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
+e2e_run "Pull secret: quay.io present (connected mode)" \
+    "jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
+
 e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --force; fi"
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
@@ -397,8 +405,9 @@ _bm_iso_remote="images/agent-${SNO_BM}.iso"
 _bm_vm_name="${SNO_BM}-master-0"
 
 e2e_run "Destroy leftover OOB VM (if any)" \
-    "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
-     vmp_destroy '$_bm_vm_name' || true"
+    "set -a; source ~/.vmware.conf; set +a; \
+     govc vm.power -off -force '$_bm_vm_name' || true; \
+     govc vm.destroy '$_bm_vm_name' || true"
 
 e2e_run "Upload BM ISO to datastore" \
     "source scripts/include_all.sh && source scripts/vm-vmw.sh && source <(normalize-vmware-conf) && \
@@ -431,7 +440,7 @@ e2e_run "Destroy OOB VM" \
 e2e_run "Remove vCenter folder for BM OOB (if vCenter)" \
     "source scripts/include_all.sh && source <(normalize-vmware-conf) && \
      [ -n \"\${VC:-}\" ] && govc object.destroy \"\$VC_FOLDER/$SNO_BM\" || true"
-e2e_run "Clean BM cluster dir" "rm -rf $SNO_BM"
+e2e_run "Delete BM cluster (state + dir)" "aba -y --dir $SNO_BM delete --force"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO_BM"
 
 e2e_run "Uninstall remote registry" "aba --dir mirror uninstall"

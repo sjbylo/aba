@@ -24,10 +24,11 @@ aba_info "Verifying SSH access to $reg_ssh_user@$reg_host ..."
 
 _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 
-flag_file=/tmp/.$(whoami).$RANDOM
-rm -f $flag_file
+# Use /tmp/ directly — $ABA_TMP is user-specific and remote user may differ
+flag_file="/tmp/.aba-ssh-probe-${reg_ssh_user}.$$.$RANDOM"
+rm -f "$flag_file"
 
-if ! $_ssh touch $flag_file; then
+if ! $_ssh "touch $flag_file"; then
 	aba_abort \
 		"Cannot SSH to '$reg_ssh_user@$reg_host' using key '$reg_ssh_key'" \
 		"Tested with command: ssh -i $reg_ssh_key $reg_ssh_user@$reg_host" \
@@ -74,7 +75,9 @@ aba_info "Using registry root dir on remote: $reg_root"
 reg_open_firewall --ssh
 
 # --- Vendor-specific install ---
-remote_dir="/tmp/aba-reg-install-$$"
+# Use remote user's temp dir — $ABA_TMP is local-user-specific and may differ
+remote_tmp="/tmp/.aba-${reg_ssh_user}"
+remote_dir="$remote_tmp/reg-install-$$"
 $_ssh "mkdir -p $remote_dir"
 trap '$_ssh "rm -rf $remote_dir" 2>/dev/null' EXIT
 
@@ -111,16 +114,18 @@ case "$vendor" in
 
 		# mirror-registry's internal Ansible needs quay_installer to SSH back to
 		# the same host. The binary creates the keypair but doesn't authorize it.
-		$_ssh "if [ ! -s \\\$HOME/.ssh/quay_installer ]; then mkdir -p \\\$HOME/.ssh && chmod 700 \\\$HOME/.ssh && ssh-keygen -t ed25519 -f \\\$HOME/.ssh/quay_installer -N '' >/dev/null && cat \\\$HOME/.ssh/quay_installer.pub >> \\\$HOME/.ssh/authorized_keys; fi"
+		$_ssh "if [ ! -s ~/.ssh/quay_installer ]; then mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/quay_installer -N '' >/dev/null && cat ~/.ssh/quay_installer.pub >> ~/.ssh/authorized_keys; fi"
 
 		aba_info "Copying mirror-registry tarball to remote host ..."
 		$_scp mirror-registry-*.tar.gz "$_target:$remote_dir/"
 
+		# printf '%q' safely escapes all shell metacharacters for remote evaluation
+		_escaped_pw=$(printf '%q' "$reg_pw")
 		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword '\$_reg_pw' $reg_root_opts"
 
 		aba_info "Extracting and installing Quay registry on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword *** $reg_root_opts"
-		if ! $_ssh "export _reg_pw='$reg_pw' && $cmd"; then
+		if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then
 			aba_abort "Quay mirror-registry install failed on remote host $reg_host." \
 				"Check the output above for details."
 		fi

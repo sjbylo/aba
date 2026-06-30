@@ -38,16 +38,20 @@ if [[ "$_have_all" == true ]]; then
 	for _ver in "${_versions_to_wait[@]}"; do
 		download_all_catalogs "$_ver" >/dev/null 2>&1 || true
 	done
-	aba_info_ok "All operator catalogs ready for OCP ${_versions_to_wait[*]}"
-	exit 0
 fi
 
 # Wait: catalogs started by download_all_catalogs() in include_all.sh
+# Skip run_once validation when all catalog files already exist -- validation
+# re-runs the full download command (podman pull + extract), adding ~40s overhead.
+# When files are missing (_have_all=false), validation still runs and self-heals.
+_skip_val=""
+[[ "$_have_all" == true ]] && _skip_val="-S"
+
 for _ver in "${_versions_to_wait[@]}"; do
 	for catalog in redhat-operator certified-operator community-operator; do
 		task_id="catalog:${_ver}:${catalog}"
 
-		if ! run_once -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then
+		if ! run_once $_skip_val -w -m "Waiting for ${catalog} catalog v${_ver}" -i "$task_id"; then
 			error_output=$(run_once -e -i "$task_id" | head -20)
 			aba_abort "Failed to download ${catalog} catalog for OCP ${_ver}" \
 				"Error details from download task:" \

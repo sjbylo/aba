@@ -18,7 +18,7 @@ if [ ! "$CLUSTER_NAME" ]; then
 		exit 0
 	fi
 	scripts/cluster-config-check.sh
-	eval `scripts/cluster-config.sh || exit 1`
+	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
 source <(normalize-aba-conf)  # Fetch the 'ask' param

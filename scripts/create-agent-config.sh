@@ -71,7 +71,7 @@ generate_ip_array() {
       break
     fi
     ip_array+=("$(from_numeric "$current_ip")")
-    ((current_ip++))
+    current_ip=$(( current_ip + 1 ))
   done
 
   echo "${ip_array[@]}"
@@ -102,7 +102,7 @@ replace_hash_with_random_hex() {
 mac_prefix=$(replace_hash_with_random_hex "$mac_prefix")
 
 
-# Set the rendezvous_ip to the the first master's ip
+# Set the rendezvous_ip to the first master's ip
 num_nodes=$(( num_masters + num_workers ))
 if ! echo $starting_ip | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 	aba_abort "Starting IP address value: starting_ip [$starting_ip] is missing or invalid. Should be an IP address from within your machine CIDR ($machine_network/$prefix_length)."
@@ -157,7 +157,7 @@ if [[ -s macs.conf ]]; then
 	fi
 else
 	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
-	# Note, double (or more of) the number of mac addresses are genrated in case port bonding is required (ports and vlan in cluster.conf)
+	# Note, double (or more of) the number of mac addresses are generated in case port bonding is required (ports and vlan in cluster.conf)
 
 	mac_list=$(
 		for ((i=1; i <= num_nodes * num_ports; i++)); do

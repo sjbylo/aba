@@ -5,7 +5,7 @@
 source scripts/include_all.sh 
 trap - ERR
 
-[ -f aba.conf -a ! -L aba.conf ] && aba_abort "Only run this command in a 'cluster directory'.  See: aba cluster --help"
+[ -f aba.conf ] && [ ! -L aba.conf ] && aba_abort "Only run this command in a 'cluster directory'.  See: aba cluster --help"
 [ ! -f cluster.conf ] && aba_abort "This directory ($PWD) is not yet initialized as a cluster directory!  See: aba cluster --help"
 
 aba_debug "Starting: $0 $* from $PWD"
@@ -19,9 +19,9 @@ ip=$(cat iso-agent-based/rendezvousIP)
 
 if [ "$*" ]; then
 	aba_info "Running: ssh -i $ssh_key_file core@$ip -- $*"
-	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip -- $*
+	ssh -F ~/.aba/ssh.conf -i "$ssh_key_file" core@"$ip" -- "$@"
 else
 	aba_info "Running: ssh -i $ssh_key_file core@$ip"
-	ssh -F ~/.aba/ssh.conf -i $ssh_key_file core@$ip
+	ssh -F ~/.aba/ssh.conf -i "$ssh_key_file" core@"$ip"
 fi
 

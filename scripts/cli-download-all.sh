@@ -29,7 +29,7 @@
 #   These match what ensure_*() functions wait on.
 #
 # Callers (9+): aba.sh, include_all.sh, Makefile (tar/tarrepo), cli/Makefile,
-#   reg-save.sh, make-bundle.sh, tui/abatui.sh, cli-install-all.sh
+#   reg-save.sh, make-bundle.sh, tui/v2/abatui2.sh, cli-install-all.sh
 # ──────────────────────────────────────────────────────────────────────
 
 # Ensure we're in aba root (script is in scripts/ subdirectory)
@@ -109,6 +109,11 @@ do
 	if [[ "$mode" == "reset" ]]; then
 		run_once -r -i "$task_id"
 	elif [[ "$mode" == "wait" ]]; then
+		# Already complete? Skip silently.
+		if run_once -p -i "$task_id"; then
+			aba_debug "CLI download already complete: $tool"
+			continue
+		fi
 		if ! $showed_wait_msg; then
 			aba_info "Ensuring CLI downloads are complete ..."
 			showed_wait_msg=true
@@ -119,7 +124,7 @@ do
 		if ! run_once -q -w -i "$task_id"; then
 			# govc download failure is non-fatal for non-vmw platforms
 			if [[ "$tool" == "govc" && "${platform:-}" != "vmw" ]]; then
-				aba_warn "govc failed to download — ignoring since platform != vmw."
+				aba_warning "govc failed to download — ignoring since platform != vmw."
 			else
 				aba_error "Download failed for $tool"
 				exit 1

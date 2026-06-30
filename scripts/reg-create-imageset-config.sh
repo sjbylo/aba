@@ -50,7 +50,7 @@ mkdir -p data
 #   This allows users to customize the ISC and run 'aba save' or 'aba sync' again without losing edits.
 if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imageset-config.yaml -nt data/.created ]; then
 	aba_debug "Generating new imageset-config.yaml"
-	[ ! "$ocp_channel" -o ! "$ocp_version" ] && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
+	{ [ ! "$ocp_channel" ] || [ ! "$ocp_version" ]; } && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
@@ -58,7 +58,33 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 	export ocp_version_target="${ocp_version_target:-}"
 	export tgt_major=""
 	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+		# Guard: target must be > source (upgrades only, not downgrades)
+		if ! is_version_greater "$ocp_version_target" "$ocp_version"; then
+			# Stale target — clear it and proceed without upgrade mode
+			aba_warning "ocp_version_target ($ocp_version_target) is lower than ocp_version ($ocp_version) — ignoring."
+			replace-value-conf -q -n ocp_version_target -v "" -f mirror.conf
+			ocp_version_target=""
+		fi
 		export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
+
+		# Validate upgrade path: source version must exist in the target channel graph.
+		# Covers both same-minor (z-stream) and cross-minor upgrades.
+		_path_diag=""
+		if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+			: # path OK
+		else
+			_src="${_path_diag%%|*}"
+			_rest="${_path_diag#*|}"
+			_tgt_channel="${_rest%%|*}"
+			_lowest="${_rest##*|}"
+			aba_abort \
+				"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+				"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
+				"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
+				"" \
+				"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+		fi
+
 		aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"
 	fi
 

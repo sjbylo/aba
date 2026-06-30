@@ -15,7 +15,6 @@ verify-cluster-conf || exit 1
 
 [ ! "$ntp_servers" ] && aba_abort "Define 'ntp_servers' value in 'aba.conf' to configure NTP" 
 
-aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc butane
 
 ntp_servers=$(echo "$ntp_servers" | tr -d "[:space:]" | tr ',' ' ')
@@ -135,7 +134,12 @@ butane .99-worker-chrony-conf-override.bu -o 99-worker-chrony-conf-override.yaml
 
 aba_info "Accessing the cluster ..."
 
-[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
+
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 
 exec_cmd="oc whoami"
 aba_debug "Running: $exec_cmd"
@@ -303,7 +307,7 @@ fi
 _has_warnings=""
 for host in $nodesIPs; do
 	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc -N sources' 2>/dev/null) || true
-	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}') || true
+	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}' | sort -u) || true
 	if [ -n "$_unreachable" ]; then
 		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
 		_has_warnings=1

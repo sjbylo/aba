@@ -27,7 +27,7 @@ build/pre-commit-checks.sh --skip-version
 
 ## Architecture (quick reference)
 
-- **Entry points**: `aba` CLI (`scripts/aba.sh`), `make -C <dir> <target>`, TUI (`tui/abatui.sh`)
+- **Entry points**: `aba` CLI (`scripts/aba.sh`), `make -C <dir> <target>`, TUI (`tui/v2/abatui2.sh`)
 - **Config as truth**: `aba.conf`, `mirror.conf`, `cluster.conf` -- CLI flags write to config, scripts read from config
 - **Key abstractions**: `run_once()` (task dedup), `normalize*()` (config defaults), `ensure_*()` (tool install), marker files (lifecycle state)
 - **State**: `~/.aba/` (external state), marker files (in-tree state), `~/.aba/runner/` (run_once only)
@@ -39,7 +39,7 @@ Read `devel/01-SPEC.md` for the full architecture. Read `devel/adr/` for design 
 1. Scripts under `scripts/` are called only via Make targets or `aba` CLI -- never directly
 2. Makefiles own marker files (.init, .available, etc.) -- scripts must not create/remove them
 3. After `mirror load` or `mirror sync` on a running cluster, run `aba day2`
-4. `$ABA_ROOT` is only for `aba.sh` and `abatui.sh` -- all other scripts use relative paths
+4. `$ABA_ROOT` is only for `aba.sh` and `abatui2.sh` -- all other scripts use relative paths
 5. `normalize*()` outputs only config values/defaults -- never derived/computed values
 6. `aba bundle --out -` keeps stdout as pure tar -- all messages to stderr
 

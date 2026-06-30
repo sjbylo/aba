@@ -69,6 +69,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Custom Manifests for Day-2](#custom-manifests-for-day-2)
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
   - [Cluster Updates (OSUS)](#cluster-updates-osus)
+  - [Cluster Shutdown & Startup](#cluster-shutdown--startup)
 - [Prerequisites](#prerequisites)
   - [Common Requirements](#common-requirements)
   - [Air-Gapped Prerequisites](#air-gapped-prerequisites)
@@ -83,8 +84,9 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Prompt Control](#prompt-control)
   - [User Configuration](#user-configuration)
   - [How Make Drives ABA](#how-make-drives-aba)
-  - [Operator Dependencies](#operator-dependencies)
+  - [Externalized State (`~/.aba/`)](#externalized-state-aba)
   - [Installing RPMs](#installing-rpms)
+  - [Pre-release Versions (RC / EC)](#pre-release-versions-rc--ec)
   - [Installing from the Dev Branch](#installing-from-the-dev-branch)
   - [Uninstalling ABA](#uninstalling-aba)
 - [FAQ](#faq)
@@ -236,9 +238,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.1.0.tar.gz
-tar xzf v1.1.0.tar.gz
-cd aba-1.1.0
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.1.1.tar.gz
+tar xzf v1.1.1.tar.gz
+cd aba-1.1.1
 ./install
 aba
 ```
@@ -246,7 +248,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.1.0 https://github.com/sjbylo/aba.git
+git clone --branch v1.1.1 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -264,19 +266,24 @@ aba
 - See all available releases at: [https://github.com/sjbylo/aba/releases](https://github.com/sjbylo/aba/releases)
 - Check your installed version: `aba version`
 - Show available OpenShift versions: `aba ocp-versions`
-- Show available operator sets: `aba show-op-sets`
+- Show available operator sets: `aba show-op-sets` (includes `ocp`, `odf`, `virt`, `ai`, `mesh3`, and more)
 
 Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
 
 **TUI (Text User Interface):** For a guided wizard experience:
 
 ```bash
-abatui      # Interactive wizard — full workflow.
+abatui             # Interactive wizard — auto-detects mode
+abatui --direct    # Force direct-from-internet mode
+abatui --disco     # Force fully disconnected mode
+abatui --conno     # Force partially disconnected mode
 ```
 
 The `abatui` command is installed to your `$PATH` alongside `aba` and can be run from any directory within the ABA repository.
 
-The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), operator selection, mirror configuration, image sync/save/load, bundle creation, cluster installation (wizard for name, type, platform, networking, interfaces), Day-2 operations, and cluster lifecycle management.
+The TUI covers the complete workflow: mode selection (partially disconnected, fully disconnected, or direct), channel/version/platform wizard, operator selection, mirror installation (local or remote Quay/Docker), image sync/save/load, bundle creation, cluster installation (multi-page wizard for name, type, platform, networking, interfaces, VM resources), Day-2 operations, and cluster lifecycle management (delete, monitor, shell).
+
+Navigate using `Tab`, `Enter`, arrow keys, `Space` (to toggle selections), and `Escape` (to go back or quit). Menu items have single-key shortcuts shown as highlighted letters.
 
 Requires `dialog` package (`dnf install dialog`). Internet access is needed for connected modes; fully disconnected mode works offline with a bundle.
 
@@ -437,7 +444,7 @@ aba bundle \
     --out - | split -b 10G - /path/to/your/large/portable/media/ocp_mycluster_
 ```
 
-- This generates several 10 GB archive files named `ocp_mycluster_4.17.16_aa|ab|ac...` etc.
+- This generates several 10 GB archive files named `ocp_mycluster_4.22.1_aa|ab|ac...` etc.
 - The OpenShift version can be set to the most recent previous point version (`--version p`) or to the latest (`--version l`).
 - `--op-sets` refers to predefined sets of operators (run `aba show-op-sets` to list them). Create your own operator set file in `aba/templates/` if needed.
 - `--ops` adds individual operators.
@@ -449,20 +456,20 @@ aba bundle \
 After the bundle is created, verify the files:
 
 ```
-cat ocp_mycluster_4.17.16_* | tar tvf -
-cksum ocp_mycluster_4.17.16_* | tee CHECKSUM.txt
+cat ocp_mycluster_4.22.1_* | tar tvf -
+cksum ocp_mycluster_4.22.1_* | tee CHECKSUM.txt
 ```
 
 Copy the files to your RHEL 8/9 bastion in the disconnected environment. Verify integrity:
 
 ```
-cksum ocp_mycluster_4.17.16_*
+cksum ocp_mycluster_4.22.1_*
 ```
 
 If valid, extract and install:
 
 ```
-cat /path/to/ocp_mycluster_4.17.16_* | tar xvf -
+cat /path/to/ocp_mycluster_4.22.1_* | tar xvf -
 cd aba
 ./install
 aba         # Follow the instructions
@@ -679,12 +686,12 @@ Use `aba -D iso` for debug output.
 >
 > Most CLI flags (e.g. `--base-domain`, `--dns`, `--platform`, `--reg-host`) simply **write their values into the appropriate config file**. You can always achieve the same result by editing the file directly. This design also means:
 > - **Bundle portability** — config files travel inside the install bundle, so the disconnected bastion gets the exact settings without re-typing flags.
-> - **Idempotency** — re-run any command without remembering which flags you used last time. Instead of `aba --channel stable --version 4.19 --platform bm --base-domain example.com --dns 10.0.1.1 --op-sets ocp mirror sync`, you run that once to set up, then every subsequent invocation is just `aba -d mirror sync` or `aba sync`.
+> - **Idempotency** — re-run any command without remembering which flags you used last time. Instead of `aba --channel stable --version 4.19 --platform bm --base-domain example.com --dns 10.0.1.1 --op-sets ocp -d mirror sync`, you run that once to set up, then every subsequent invocation is just `aba -d mirror sync`.
 > - **Multiple entry points** — both `aba` CLI and raw `make` targets read the same config files.
 > - **Auditability** — `cat aba.conf` shows the main settings at a glance. Some runtime state (credentials, markers, `~/.aba/config` overrides) lives elsewhere, but the core environment configuration is always in these files.
 >
 > A few flags are **runtime-only** (per-invocation choices that do not modify any config file):
-> `-d` (directory), `-D` (debug), `-y` (suppress prompts for this run), `--light`, `--retry`, `--force`, `--out`, `--step`, `--cmd`, `--help`, and the upgrade flags (`--to`, `--dry-run`, `--monitor-timeout`, `--skip-day2`).
+> `-d` (directory), `-D` (debug), `-y` (suppress prompts for this run), `--light`, `--retry`, `--force`, `--out`, `--step`, `--cmd`, `--help`, and the upgrade flags (`--to`, `--dry-run`, `--skip-day2`).
 
 > **Tip — Per-mirror operator override:** Set `op_sets=` and/or `ops=` in `mirror.conf` to override global values for that specific mirror. Useful for different operators per team or enclave.
 
@@ -734,7 +741,13 @@ data:
   message: "Hello from Day-0 custom manifests"
 EOF
 
-aba iso
+aba iso                    # Regenerate the ISO with embedded manifests
+```
+
+After installing the cluster and waiting for it to come up, verify the manifest was applied:
+
+```bash
+. <(aba shell)
 oc get configmap bootstrap-config -n openshift-config
 ```
 
@@ -822,7 +835,7 @@ aba -d mirror sync
 For fully disconnected (save to disk, transfer, load):
 ```
 aba -d mirror save    # on the connected workstation
-# Transfer mirror/data/imageset-config.yaml and mirror/data/mirror_*.tar to the bastion
+# Transfer mirror/data/imageset-config.yaml, mirror/data/.imageset-config-digest.yaml, and mirror/data/mirror_*.tar to the bastion
 aba -d mirror load    # on the internal bastion
 ```
 
@@ -948,24 +961,33 @@ aba day2-osus
 
 ### Updating a cluster in a fully disconnected environment
 
+> **Important — channel must cover both versions:**
+> The OpenShift channel configured in `aba.conf` (`ocp_channel`) must contain both your *current* cluster version and the *target* upgrade version in its upgrade graph.
+> - **Z-stream** (e.g. 4.21.4 → 4.21.20): the `stable` channel for that minor version covers this automatically.
+> - **Cross-minor** (e.g. 4.21.x → 4.22.1): set `ocp_channel=stable` (or `fast`), which includes upgrade paths from the previous minor version.
+> - **Pre-release** (e.g. → 4.23.0-ec.2): use `ocp_channel=candidate`.
+>
+> If the channel does not include the current version as a valid starting point, the upgrade path will not be available — even if the target version's images are mirrored.
+
 #### Using `--target-version`
 
 1. On the *connected workstation*, set the target version and save the upgrade images:
 
 ```bash
-aba -d mirror --target-version 4.21.11 save
+aba -d mirror --target-version 4.22.1 save
 ```
 
 This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images.
 
-2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
+2. Copy to the *internal bastion*: `aba/mirror/data/imageset-config.yaml`, `aba/mirror/data/.imageset-config-digest.yaml`, and `aba/mirror/data/mirror_000001.tar`.
 3. On the bastion: `aba -d mirror load`
 4. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
 5. Upgrade the cluster:
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
-aba -d <cluster name> upgrade --to 4.21.11     # Perform the upgrade
+aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in mirror (e.g. 4.21.4 → 4.21.20)
+aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
 Or upgrade OpenShift via the Console or CLI in the usual way.
@@ -975,19 +997,22 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 1. Edit `aba/aba.conf` on the *connected workstation* to add operators/operator sets, then run `aba -d mirror save`.
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
-2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
+2. Copy to the *internal bastion*: `aba/mirror/data/imageset-config.yaml`, `aba/mirror/data/.imageset-config-digest.yaml`, and `aba/mirror/data/mirror_000001.tar`.
 3. On the bastion: `aba -d mirror load`
 4. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
 5. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
 
 ### Updating a cluster in a partially disconnected environment
 
+> **Important — channel must cover both versions:**
+> The channel in `aba.conf` must contain both your current cluster version and the target version in its upgrade graph. See the note in [Updating a cluster in a fully disconnected environment](#updating-a-cluster-in-a-fully-disconnected-environment) for details.
+
 #### Using `--target-version`
 
 1. On the *connected bastion*, set the target version and sync directly to the registry:
 
 ```bash
-aba -d mirror --target-version 4.21.11 sync
+aba -d mirror --target-version 4.22.1 sync
 ```
 
 2. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
@@ -995,7 +1020,8 @@ aba -d mirror --target-version 4.21.11 sync
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
-aba -d <cluster name> upgrade --to 4.21.11     # Perform the upgrade
+aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in mirror (e.g. 4.21.4 → 4.21.20)
+aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
 Or upgrade OpenShift via the Console or CLI in the usual way.
@@ -1009,6 +1035,61 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 [Back to top](#quick-start)
 
+## Cluster Shutdown & Startup
+
+### Graceful Shutdown
+
+```bash
+aba shutdown          # Cordon, drain, and shut down all nodes
+aba shutdown --wait   # Same, but wait until all VMs are powered off
+```
+
+- Cordons all nodes (marks them unschedulable)
+- Drains all pods from worker nodes
+- Shuts down every node via SSH (falls back to `oc debug` if SSH is unavailable)
+- Shows certificate expiry warnings — never leave a cluster shut down beyond the certificate renewal window
+- With `--wait`: polls VMware/KVM until all VMs are powered off (bare-metal skips this)
+
+### Startup
+
+```bash
+aba startup           # Power on VMs, uncordon nodes, approve CSRs, wait for Ready
+```
+
+- Powers on all cluster VMs (bare-metal: prompts you to power on servers manually)
+- Waits for the cluster API to become reachable
+- Uncordons all nodes and approves any pending CSRs
+- Waits for all nodes to reach `Ready` state and all cluster operators to become available
+
+### Rescue (Lost kubeconfig / Forgotten Password)
+
+```bash
+aba rescue
+```
+
+Use `aba rescue` when you have **lost the kubeconfig** or **forgotten the kubeadmin password** and cannot access the cluster through normal means. It works by:
+
+1. SSHing into the first control-plane node (rendezvous IP) using the cluster SSH key
+2. Using the node's local recovery kubeconfig (`localhost-recovery.kubeconfig`)
+3. Uncordoning any nodes that are `SchedulingDisabled`
+4. Approving any pending CSRs
+
+After rescue completes, the cluster should be operational again. You can then retrieve credentials from `~/.aba/clusters/<name>/` or regenerate them.
+
+### VM-Level Power Commands
+
+These commands control VMs directly without performing any OpenShift-level drain or cordon:
+
+| Command | Description |
+|---------|-------------|
+| `aba start` | Power on all cluster VMs |
+| `aba stop` | Guest shutdown (VMware Tools / QEMU agent) — no drain |
+| `aba poweroff` / `aba kill` | Immediate power off — no drain, no guest shutdown |
+
+> **Tip:** Prefer `aba shutdown` / `aba startup` for routine maintenance. Use `aba stop`/`aba start` only when you need quick VM-level power cycling without the full graceful workflow.
+
+[Back to top](#quick-start)
+
 # Prerequisites
 
 <!-- perma-link: Red Hat Developers blog, Oct 2025 -->
@@ -1019,7 +1100,8 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 #### Root Access
 
-- ABA requires root access, either directly or via passwordless sudo. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
+- ABA runs as a normal (non-root) user and only invokes `sudo` for system-level operations (e.g. installing RPMs, configuring firewall rules, managing libvirt VMs). Alternatively, ABA can run entirely as root if preferred.
+- Passwordless sudo is required for non-root operation. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
 
 #### Registry Storage
 
@@ -1054,8 +1136,8 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
   MACs are assigned top-to-bottom, grouped by host — for example, with 2 bonded ports per node, the first 2 MACs go to host 1, the next 2 to host 2, and so on.
   The file format is flexible — MACs can appear anywhere on each line (surrounding text is ignored).
   Without `macs.conf` (the default), MACs are generated from the `mac_prefix` template in `cluster.conf`.
-- **VMware**: Ensure sufficient [vCenter privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs — set values in `vmware.conf`. See the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
-- **KVM/libvirt**: Passwordless SSH from the bastion to the KVM host is required. Configure connection URI, storage pool, and bridge network in `kvm.conf`.
+- **VMware**: Ensure sufficient [vCenter privileges](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/installing_on_vmware_vsphere/installer-provisioned-infrastructure#installation-vsphere-installer-infra-requirements_ipi-vsphere-installation-reqs). ABA uses [govc](https://github.com/vmware/govmomi/tree/main/govc) to create and manage VMs. Run `aba vmw` for interactive vCenter/ESXi configuration, or edit `vmware.conf` directly. See the [OpenShift documentation](https://docs.openshift.com/container-platform/latest).
+- **KVM/libvirt**: Passwordless SSH from the bastion to the KVM host is required. Run `aba kvm` for interactive configuration, or edit `kvm.conf` directly to set the connection URI, storage pool, and bridge network.
 
 <!-- perma-link: Red Hat Developers blog, Oct 2025 -->
 <a id="existing-registry-prerequisites"></a>
@@ -1132,6 +1214,8 @@ After configuring these prerequisites, run `aba` to start the workflow.
 
 In a *partially disconnected environment*, the *connected bastion* has limited (or proxy-based) Internet access.
 
+> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `int_connection=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/networking/configuring-a-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
+
 #### Connected Bastion
 
 - RHEL 8 or 9 with access to both the Internet and the disconnected environment.
@@ -1169,16 +1253,23 @@ aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
 1. Edit `mycluster/cluster.conf` and set the connection type:
 
 ```
-int_connection=direct      # Nodes pull from the Internet directly
+int_connection=direct      # Nodes pull from the Internet directly (no proxy needed)
 ```
 
-or:
+or, if your nodes require a proxy:
 
 ```
 int_connection=proxy       # Nodes pull via your HTTP proxy
+http_proxy=http://proxy.example.com:3128
+https_proxy=http://proxy.example.com:3128
+no_proxy=.example.com,.lan,10.0.0.0/8
 ```
 
-1. Install the cluster:
+If `http_proxy`/`https_proxy`/`no_proxy` are not set in `cluster.conf`, ABA uses the corresponding environment variables from the bastion host, where you run the `aba` or `abatui` commands.
+
+> **proxy vs direct:** Use `proxy` when cluster nodes cannot reach public registries (`quay.io`, `registry.redhat.io`) without an HTTP proxy. Use `direct` only when nodes have unrestricted internet access. In both modes, no mirror registry is required — images are pulled from public Red Hat registries.
+
+2. Install the cluster:
 
 ```
 cd mycluster
@@ -1187,7 +1278,7 @@ aba install
 
 For bare-metal, ABA generates the ISO for you to boot your servers. For VMware/KVM, installation is fully automated.
 
-1. Access the cluster:
+3. Access the cluster:
 
 ```
 . <(aba shell)
@@ -1222,14 +1313,14 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 
 | Command                         | Description                                                   |
 | ------------------------------- | ------------------------------------------------------------- |
-| `aba cluster --name --type <sno | compact                                                       |
+| `aba cluster --name <name> --type <sno\|compact\|standard>` | Create cluster directory and configure |
 | `aba info`                      | Display kubeadmin password and cluster information            |
 | `aba login`                     | Display `oc login` command. Use: `. <(aba login)`             |
 | `aba shell`                     | Display kubeconfig export. Use: `. <(aba shell)`              |
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
 | `aba day2-ntp`                  | Configure cluster NTP                                         |
 | `aba day2-osus`                 | Configure OpenShift Update Service                            |
-| `aba upgrade --to <ver>`        | Upgrade cluster via local mirror. `--dry-run` lists versions. |
+| `aba upgrade [--to <ver>]`      | Upgrade cluster via local mirror. Auto-detects latest z-stream if `--to` omitted. `--dry-run` lists versions. |
 | `aba shutdown`                  | Gracefully shut down a cluster. `--wait` waits for power-off. |
 | `aba startup`                   | Gracefully start up a cluster                                 |
 | `aba rescue`                    | Recover a cluster (uncordon nodes, approve pending CSRs)      |
@@ -1246,7 +1337,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba ls`       | List cluster VMs and their state                         |
 | `aba create`   | Create cluster VMs. Use `--start` to also power them on. |
 | `aba start`    | Power on all cluster VMs                                 |
-| `aba stop`     | Gracefully shut down VMs (guest shutdown)                |
+| `aba stop`     | Guest shutdown VMs (no OpenShift drain/cordon)           |
 | `aba poweroff` | Power off VMs immediately                                |
 | `aba kill`     | Same as `poweroff`                                       |
 | `aba refresh`  | Delete, re-create, and start VMs (reinstalls cluster)    |
@@ -1271,7 +1362,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | Command               | Description                                                        |
 | --------------------- | ------------------------------------------------------------------ |
 | `aba`                 | Interactive mode — guides you through the workflow                 |
-| `abatui`              | TUI wizard — full guided workflow                                  |
+| `abatui`              | TUI wizard — full guided workflow (`--direct`, `--disco`, `--conno`) |
 | `aba ocp-versions`    | Show a table of latest OpenShift versions per channel              |
 | `aba show-op-sets`    | List available operator sets and their descriptions                |
 | `aba -d cli download` | Download all required CLI tools                                    |
@@ -1396,7 +1487,7 @@ Tested on Mac M1 (`arm64`). Caveats: installing *Mirror Registry for Red Hat Ope
 
 ## Sigstore Signature Handling
 
-ABA installs a per-user `[registries.d](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md)` configuration at `~/.config/containers/registries.d/aba-sigstore.yaml` that controls sigstore OCI signature fetching during mirroring.
+ABA installs a per-user [registries.d](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) configuration at `~/.config/containers/registries.d/aba-sigstore.yaml` that controls sigstore OCI signature fetching during mirroring.
 
 By default, sigstore is **enabled** for OpenShift release images (`quay.io/openshift-release-dev`) and Red Hat images (`registry.redhat.io`), and **disabled** for everything else (to avoid failures from unsigned operator images).
 
@@ -1406,7 +1497,7 @@ By default, sigstore is **enabled** for OpenShift release images (`quay.io/opens
 > To disable signature verification, see [How to disable container image signature verification](https://access.redhat.com/solutions/7047477).
 
 To customise, edit `~/.config/containers/registries.d/aba-sigstore.yaml`.
-For full details, see `[containers-registries.d(5)](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md)` and the [Red Hat container signing documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/building_running_and_managing_containers/assembly_signing-container-images_building-running-and-managing-containers).
+For full details, see [containers-registries.d(5)](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md) and the [Red Hat container signing documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/building_running_and_managing_containers/assembly_signing-container-images_building-running-and-managing-containers).
 
 ## Prompt Control
 
@@ -1463,14 +1554,6 @@ ABA uses `make` to define and process all dependencies. Because of this, ABA usu
 
 `make` tracks file dependencies and only re-runs steps when inputs change, a natural fit for ABA's multi-stage workflow (configure, mirror, install).
 
-## Operator Dependencies
-
-List an operator's dependencies:
-
-```
-scripts/listopdeps.sh 4.18 odf-operator
-```
-
 ## Installing RPMs
 
 - The *bastion* must be able to install required RPM packages.
@@ -1484,6 +1567,28 @@ scripts/listopdeps.sh 4.18 odf-operator
 bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
 ```
 
+## Pre-release Versions (RC / EC)
+
+ABA supports installing OpenShift Release Candidates (RC) and Engineering Candidates (EC) for testing purposes:
+
+```bash
+aba --channel candidate --version 4.22.0-rc.1
+aba --channel candidate --version 4.23.0-ec.3
+```
+
+Or set directly in `aba.conf`:
+
+```
+ocp_channel=candidate
+ocp_version=4.22.0-rc.1
+```
+
+- Pre-release format: `X.Y.Z-rc.N` (release candidate) or `X.Y.Z-ec.N` (engineering candidate). The suffix must be lowercase.
+- Use the `candidate` channel for pre-release versions.
+- ABA shows a warning: `Pre-release version '…' — not for production use.`
+- EC versions automatically download CLI tools from the `ocp-dev-preview/` CDN path.
+- Pre-release versions follow the same workflow as GA versions — no special steps required.
+
 ## Uninstalling ABA
 
 Run on the disconnected bastion:
@@ -1494,15 +1599,19 @@ aba -d mirror uninstall    # Uninstall the registry if installed by ABA
 aba -d mirror unregister   # Or, deregister an existing registry (removes creds only)
 cd ..
 rm -rf aba
-sudo rm $(which aba) $(which abatui)
+sudo rm -f "$(which aba)" "$(which abatui 2>/dev/null)"
+rm -rf ~/.aba              # Remove externalized state (kubeconfigs, cache, runner state, logs)
 ```
 
 Run on the workstation or laptop:
 
 ```
 rm -rf aba
-sudo rm $(which aba) $(which abatui)
+sudo rm -f "$(which aba)" "$(which abatui 2>/dev/null)"
+rm -rf ~/.aba              # Remove externalized state
 ```
+
+> **Warning:** `~/.aba/` contains externalized cluster state (kubeconfigs, passwords, registry credentials), runner locks, cache, and logs. Back up `~/.aba/clusters/` before removing — you will need the kubeconfig and kubeadmin password to access any running clusters. It survives `aba reset` and must be removed separately for a full uninstall.
 
 To re-install ABA, see [Install ABA](#install-aba).
 
@@ -1560,6 +1669,12 @@ See `scripts/reg-install-docker.sh` and `scripts/reg-install.sh` for details.
 
 ### Configuration
 
+## Q: Can I install a pre-release (RC or EC) version of OpenShift?
+
+**Yes.** Use `--channel candidate --version X.Y.Z-rc.N` (or `-ec.N`). See [Pre-release Versions (RC / EC)](#pre-release-versions-rc--ec) in Advanced Topics for details.
+
+---
+
 ## Q: Can bonds and/or VLAN be configured on my nodes?
 
 **Yes.** Configure bonds and/or VLAN in `cluster.conf`. If you list more than one network interface in `ports` (comma-separated), ABA creates a bond. If you provide a `vlan` tag, ABA configures VLAN. Both can be used together.
@@ -1593,7 +1708,7 @@ Note that `oc-mirror` maintains its own image cache (by default under `~/.oc-mir
 
 A **CatalogSource** is an OpenShift resource that tells OperatorHub where to find the operator catalog index image in your mirror registry. Without it, OperatorHub cannot discover or install mirrored operators.
 
-`oc-mirror` generates CatalogSource files (named `cs-*-index*.yaml`) automatically when it mirrors operator images. If you see `aba day2` warn about missing CatalogSource files, it means your `imageset-config.yaml` includes operators but the CatalogSource files were not generated — typically because `aba sync` or `aba save/load` has not yet been run with operators configured.
+`oc-mirror` generates CatalogSource files (named `cs-*-index*.yaml`) automatically when it mirrors operator images. If you see `aba day2` warn about missing CatalogSource files, it means your `imageset-config.yaml` includes operators but the CatalogSource files were not generated — typically because `aba -d mirror sync` or `aba -d mirror save`/`aba -d mirror load` has not yet been run with operators configured.
 
 **To fix:** Follow the steps in [Adding Operators to the Mirror Registry](#adding-operators-to-the-mirror-registry), then re-run `aba day2`.
 
@@ -1667,11 +1782,11 @@ Note: The Quay mirror registry is supported by Red Hat but the Docker Registry i
 
 ---
 
-## Q: `aba load` fails with "network is unreachable" in an air-gapped environment
+## Q: `aba -d mirror load` fails with "network is unreachable" in an air-gapped environment
 
-Known `oc-mirror v2` issue where load incorrectly contacts the source registry.
+Known `oc-mirror v2` issue where load incorrectly contacts the source registry. ABA has implemented a permanent workaround by using manifests instead of tags for image references, which avoids the network lookup entirely.
 
-**Workaround:**
+**Manual workaround** (if you still encounter this with older ABA versions):
 
 ```
 aba -d mirror clean                            # Clear oc-mirror working state

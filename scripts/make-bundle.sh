@@ -45,28 +45,28 @@ _verify_cli_tarballs() {
 
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --out)
-	bundle_dest_file=$2
-	aba_debug "Argument: --out=$bundle_dest_file"
-	shift 2
-	;;
-    --force)
-      force=1
-      aba_debug "Argument: --force (will delete existing files)"
-      shift
-      ;;
-    --light)
-      light_bundle=1
-      aba_debug "Argument: --light (exclude image-set archives)"
-      shift
-      ;;
-    *)
-	bundle_dest_file="$1"
-	aba_debug "Argument: bundle_dest_file=$bundle_dest_file"
-      shift
-      ;;
-  esac
+	case "$1" in
+		--out)
+			bundle_dest_file=$2
+			aba_debug "Argument: --out=$bundle_dest_file"
+			shift 2
+			;;
+		--force)
+			force=1
+			aba_debug "Argument: --force (will delete existing files)"
+			shift
+			;;
+		--light)
+			light_bundle=1
+			aba_debug "Argument: --light (exclude image-set archives)"
+			shift
+			;;
+		*)
+			bundle_dest_file="$1"
+			aba_debug "Argument: bundle_dest_file=$bundle_dest_file"
+			shift
+			;;
+	esac
 done
 
 aba_debug "Options: bundle_dest_file=$bundle_dest_file force=$force light_bundle=$light_bundle"
@@ -78,7 +78,7 @@ fi
 
 aba_debug "Config: aba.conf ask=$ask ASK_OVERRIDE=$ASK_OVERRIDE"
 
-# This will have been completed behand, but just in case!
+# This will have been completed beforehand, but just in case!
 aba_debug "Installing required RPMs from templates/rpms-external.txt"
 install_rpms $(cat templates/rpms-external.txt) || exit 1
 
@@ -89,30 +89,34 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 
 if [ "$bundle_dest_file" = "-" ]; then
-	# Be sure the standard standard output of this command is ONLY tar output and nothing else!
+	# Be sure the standard output of this command is ONLY tar output and nothing else!
 	aba_debug "Bundle destination: stdout (streaming tar output)"
 	aba_info "An install bundle will be generated and written to *standard output* (stdout) using the following parameters:" >&2
 else
 	aba_debug "Bundle destination: file on disk"
-	if [ -d $bundle_dest_file ]; then
+	if [ -d "$bundle_dest_file" ]; then
 		aba_debug "Destination is directory, appending default filename"
-		bundle_dest_file=$bundle_dest_file/ocp-bundle	# Correct the output location as it needs to be a file
+		bundle_dest_file="$bundle_dest_file/ocp-bundle"	# Correct the output location as it needs to be a file
 	fi
 	aba_info "An install bundle file will be generated and saved to disk using the following parameters:" >&2
-	bundle_dest_file="$bundle_dest_file-$ocp_version.tar"
+	if [[ "$bundle_dest_file" == *.tar ]]; then
+		bundle_dest_file="${bundle_dest_file%.tar}-$ocp_version.tar"
+	else
+		bundle_dest_file="$bundle_dest_file-$ocp_version.tar"
+	fi
 	aba_debug "Final bundle destination: $bundle_dest_file"
 
 	# Sanity write check 
 	aba_debug "Testing write permissions to $bundle_dest_file"
-	! echo write test > $bundle_dest_file.tmp && aba_abort "Cannot write to $bundle_dest_file"
-	rm -f $bundle_dest_file.tmp
+	! echo write test > "$bundle_dest_file.tmp" && aba_abort "Cannot write to $bundle_dest_file"
+	rm -f "$bundle_dest_file.tmp"
 	aba_debug "Write test successful"
 fi
 
 echo >&2
 normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
 #aba_info "Bundle output file = $bundle_dest_file" >&2
-# FIXME MNIssing [ABA]
+# FIXME Missing [ABA]
 echo "Bundle output file = $bundle_dest_file" >&2
 echo >&2
 
@@ -120,19 +124,19 @@ echo >&2
 if [ "$force" ]; then
 {
 	aba_debug "Force flag set - cleaning existing files"
-	if [ -d mirror/data -a "$(ls mirror/data 2>/dev/null)" ]; then
+	if [ -d mirror/data ] && [ "$(ls mirror/data 2>/dev/null)" ]; then
 		aba_debug "Deleting existing mirror/data directory contents"
-		aba_warning "Deleteing all files under aba/mirror/data! (--force set)" >&2
+		aba_warning "Deleting all files under aba/mirror/data! (--force set)" >&2
 		rm -rf mirror/data
 		aba_debug "mirror/data directory removed"
 	else
 		aba_debug "mirror/data directory is empty or doesn't exist"
 	fi
 
-	if [ -f $bundle_dest_file ]; then
+	if [ -f "$bundle_dest_file" ]; then
 		aba_debug "Deleting existing bundle file: $bundle_dest_file"
 		aba_warning "Deleting existing bundle file: $bundle_dest_file (--force set)" >&2
-		rm -f $bundle_dest_file
+		rm -f "$bundle_dest_file"
 		aba_debug "Bundle file deleted"
 	else
 		aba_debug "No existing bundle file to delete"
@@ -167,7 +171,7 @@ if [ -d mirror/data ]; then
 		ls mirror/data/mirror_*\.tar >/dev/null 2>&1 && image_set_files_exist=1
 		aba_debug "Image-set archive files exist: ${image_set_files_exist:-no}"
 
-		if [ -s mirror/data/imageset-config.yaml -o -f mirror/mirror.conf -o "$image_set_files_exist" ]; then
+		if [ -s mirror/data/imageset-config.yaml ] || [ -f mirror/mirror.conf ] || [ "$image_set_files_exist" ]; then
 			aba_debug "Repository appears to be in use - prompting user"
 			aba_warning "This repo is already in use!  Modified files exist under: mirror/data"
 			echo -n "         " >&2;  ls mirror/data >&2
@@ -175,7 +179,7 @@ if [ -d mirror/data ]; then
 			echo_red "         Image set archive file(s) also exist." >&2
 			echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/data" >&2
 			echo_red "         Or, use a fresh Aba repo and try again!" >&2
-			ask "         Files will be overwirtten. Continue anyway" >&2 || exit 1
+			ask "         Files will be overwritten. Continue anyway" >&2 || exit 1
 			aba_debug "User confirmed to continue with existing files"
 		else
 			aba_debug "No conflicting files found"
@@ -211,10 +215,10 @@ if [ "$bundle_dest_file" = "-" ]; then
 fi
 
 aba_debug "Checking if bundle file already exists: $bundle_dest_file"
-if [ -s $bundle_dest_file ]; then
+if [ -s "$bundle_dest_file" ]; then
 	aba_debug "Bundle file exists, prompting user for overwrite confirmation"
 	aba_warning "File $bundle_dest_file already exists!" 
-	ask "The file will be overwirtten. Continue anyway" || exit 1
+	ask "The file will be overwritten. Continue anyway" || exit 1
 	aba_debug "User confirmed to overwrite existing bundle"
 else
 	aba_debug "Bundle file does not exist, proceeding"
@@ -246,7 +250,7 @@ if [ "$light_bundle" ]; then
 	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating *light* install bundle archive ..."
-	rm -f $bundle_dest_file
+	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
 	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
@@ -254,7 +258,7 @@ else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
 	aba_debug "Creating FULL bundle (including image-set archives)"
 	
-	if files_on_same_device mirror $bundle_dest_file; then
+	if files_on_same_device mirror "$bundle_dest_file"; then
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
 		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
@@ -280,7 +284,7 @@ else
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
 	aba_debug "Calling: make -C mirror save retry=2"
-	make -C mirror save retry=2		    		# Pull reuqired release (and possibly operator) images.  Retry on failure.
+	make -C mirror save retry=2		    		# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
 	
 	aba_info "Ensuring all CLI installation files are downloaded..."
@@ -290,7 +294,7 @@ else
 	aba_debug "All CLI tarballs downloaded and verified"
 	
 	aba_info "Creating install bundle archive ..."
-	rm -f $bundle_dest_file
+	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tar out=$bundle_dest_file"
 	make tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files. 
 	aba_debug "Full bundle created successfully: $bundle_dest_file"

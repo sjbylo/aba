@@ -42,6 +42,7 @@ aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_display="${mirror_name:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 [ "$platform" = "vmw" ] && source <(normalize-vmware-conf)  # vSphere values needed for install-config.yaml
 [ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
@@ -53,7 +54,7 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 #to_output=$(normalize-cluster-conf | sed -e "s/^export //g" | paste -d '  ' - - - | column -t --output-separator " | ")
 if [ "$platform" = "bm" ]; then
 	to_output=$(normalize-cluster-conf | sed -E -e "s/^export //g" -e 's/^(mac_prefix|master_cpu_count|master_mem|worker_cpu_count|worker_mem|data_disk)=.*//g')
-elif [ "$platform" = "vmw" -o "$platform" = "kvm" ]; then
+elif [ "$platform" = "vmw" ] || [ "$platform" = "kvm" ]; then
 	to_output=$(normalize-cluster-conf | sed -e "s/^export //g")
 fi
 echo
@@ -72,7 +73,7 @@ export image_content_sources=
 aba_debug rendezvous_ip: $starting_ip
 
 # Change the default of bare-metal host prefix
-if [ "$platform" = "bm" -a $hostPrefix -eq 23 ]; then
+if [ "$platform" = "bm" ] && [ $hostPrefix -eq 23 ]; then
 	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers"
 	export hostPrefix=22
 fi
@@ -92,10 +93,10 @@ if [ "$int_connection" = "direct" ]; then
 	use_mirror=
 elif [ "$int_connection" = "proxy" ]; then
 	# Else, if proxy is otherwise set, e.g. to 1 or true
-	if [ "$http_proxy" -o "$https_proxy" ]; then
+	if [ "$http_proxy" ] || [ "$https_proxy" ]; then
 		# This means we will do an ONLINE install, using the public Red Hat registry. 
 		if [ -s $pull_secret_file ]; then
-			export pull_secret=$(cat $pull_secret_file | jq .)
+			export pull_secret=$(jq . "$pull_secret_file")
 			aba_info "Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry."
 		else
 			aba_abort \
@@ -135,23 +136,34 @@ if [ "$use_mirror" ]; then
 	aba_info "Validating credentials of mirror registry ..."
 
 	if [ -s "$regcreds_dir/pull-secret-mirror.json" ]; then
+		# Early check: does the pull secret have credentials for the configured reg_host?
+		_ps_auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$regcreds_dir/pull-secret-mirror.json" 2>/dev/null)
+		if [ -z "$_ps_auth" ] || [ "$_ps_auth" = "null" ]; then
+			_ps_hosts=$(jq -r '.auths | keys[]' "$regcreds_dir/pull-secret-mirror.json" 2>/dev/null | paste -sd ', ')
+			aba_warning \
+				"Pull secret has no credentials for $reg_host:$reg_port" \
+				"Pull secret contains: ${_ps_hosts:-(empty)}" \
+				"Check that reg_host/reg_port in ${mirror_name:-mirror}/mirror.conf match your registry" \
+				"Pull secret: $regcreds_display/pull-secret-mirror.json"
+		fi
+
 		export pull_secret=$(cat "$regcreds_dir/pull-secret-mirror.json") 
 
-		aba_info Using mirror registry pull secret file at "$regcreds_dir/pull-secret-mirror.json" to access registry at: $reg_host
+		aba_info "Using mirror registry pull secret file at $regcreds_display/pull-secret-mirror.json to access registry at: $reg_host"
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	elif [ -s "$regcreds_dir/pull-secret-full.json" ]; then
 		export pull_secret=$(cat "$regcreds_dir/pull-secret-full.json") 
 
-		aba_info Using mirror registry pull secret file at "$regcreds_dir/pull-secret-full.json" to access registry at: $reg_host
+		aba_info "Using mirror registry pull secret file at $regcreds_display/pull-secret-full.json to access registry at: $reg_host"
 
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
 		aba_warning -p Attention \
 			"Expected to find mirror credentials but found none!" \
-			"No pull secret files found in directory: $regcreds_dir" \
+			"No pull secret files found in directory: $regcreds_display/" \
 			"A mirror registry has NOT been installed or configured!  See: aba mirror --help"
 
 		show_mirror_missing_err=1
@@ -160,7 +172,7 @@ if [ "$use_mirror" ]; then
 	# ... we also, need a root CA... if using our own registry.
 	if [ -s "$regcreds_dir/rootCA.pem" ]; then
 		export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem") 
-		aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
+		aba_info "Using root CA file at $regcreds_display/rootCA.pem"
 	else
 		# Only show this warning IF there is no internet connection?
 		# Or, only show if proxy is NOT being used?
@@ -169,7 +181,7 @@ if [ "$use_mirror" ]; then
 		#else
 		# Should check accessibility to registry.redhat.io?
 			aba_warning -p Attention \
-				"Root CA file missing: $regcreds_dir/rootCA.pem" \
+				"Root CA file missing: $regcreds_display/rootCA.pem" \
 				"No mirror registry available!" \
 				"No value: additionalTrustBundle will be added to install-config.yaml"
 
@@ -205,22 +217,22 @@ if [ ! "$pull_secret" ]; then
 fi
 
 # Check for ssh key files 
-if [ -s $ssh_key_file.pub ]; then
+if [ -s "$ssh_key_file.pub" ]; then
 	aba_info Using existing ssh key files: $ssh_key_file ... 
 else
 	aba_info "Creating ssh key files for $ssh_key_file ..."
-	ssh-keygen -t rsa -f $ssh_key_file -N ''
+	ssh-keygen -t rsa -f "$ssh_key_file" -N ''
 fi
-export ssh_key_pub=$(cat $ssh_key_file.pub) 
+export ssh_key_pub=$(cat "$ssh_key_file.pub")
 
 
 # Check the private registry is defined, if it's in use
-if [ "$additional_trust_bundle" -a "$pull_secret" ]; then
+if [ "$additional_trust_bundle" ] && [ "$pull_secret" ]; then
 	[ ! "$reg_host" ] && aba_abort "registry host value: reg_host is not defined in mirror.conf!"
 fi
 
 # Check that the release image is available in the private registry
-if [ "$additional_trust_bundle" -a "$image_content_sources" ]; then
+if [ "$additional_trust_bundle" ] && [ "$image_content_sources" ]; then
 	scripts/create-containers-auth.sh --load || exit 1
 	scripts/verify-release-image.sh
 fi

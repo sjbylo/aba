@@ -16,11 +16,12 @@ aba_debug "Starting: $0 vendor=$vendor $*"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+export regcreds_display="regcreds"
 
 # No verify-aba-conf — uninstall uses state.sh, not aba.conf values
 
 if [ ! -s "$regcreds_dir/state.sh" ]; then
-	aba_abort "No registry state found in $regcreds_dir/state.sh"
+	aba_abort "No registry state found in $regcreds_display/state.sh"
 fi
 
 source "$regcreds_dir/state.sh"
@@ -58,7 +59,8 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 					aba_abort "mirror-registry tarball not found in $(pwd). Run 'aba -d mirror uninstall' so the Makefile provides it."
 				fi
 
-				remote_tmp="/tmp/aba-reg-uninstall-$$"
+				# Use remote user's temp dir — $ABA_TMP is local-user-specific
+			remote_tmp="/tmp/.aba-${reg_ssh_user}/reg-uninstall-$$"
 				$_ssh "mkdir -p $remote_tmp" || aba_abort "Failed to create temp dir on $reg_host"
 				trap '$_ssh "rm -rf $remote_tmp" 2>/dev/null' EXIT
 

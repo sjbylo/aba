@@ -37,6 +37,10 @@ export ARCH=$(uname -m)
 # Source user overrides (e.g. OC_MIRROR_IMAGE_TIMEOUT) if present
 [[ -f "$HOME/.aba/config" ]] && source "$HOME/.aba/config"
 
+# Per-user temp directory for all ABA internal temp files (flag files, caches, debug logs)
+ABA_TMP="/tmp/.aba-${USER:-$(id -un)}"
+mkdir -p "$ABA_TMP"
+
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
 # ===========================
@@ -219,6 +223,9 @@ aba_error() {
 }
 
 aba_warning() {
+	# TUI sets ABA_SUPPRESS_WARNINGS during startup splash to keep it clean
+	[[ "${ABA_SUPPRESS_WARNINGS:-}" == "1" ]] && return 0
+
         local prefix="Warning"
 	local newline=
 	local col=red
@@ -289,9 +296,10 @@ umask 077
 # Function to display an error message and the last executed command
 show_error() {
 	local exit_code=$?
+	local _safe_cmd="${BASH_COMMAND//-p \'*\'/-p \'***\'}"
 	echo 
 	echo_red "Script error at $(date) in directory $PWD: " >&2
-	echo_red "Error occurred in command: '$BASH_COMMAND'" >&2
+	echo_red "Error occurred in command: '$_safe_cmd'" >&2
 	echo_red "Error code: $exit_code" >&2
 
 	exit $exit_code
@@ -497,8 +505,10 @@ auto_complete_install() {
 	# Already completed — nothing to do
 	[[ -f "$abs_dir/.install-complete" ]] && return 0
 
-	# No kubeconfig — cluster was never installed far enough to probe
-	local kc="$abs_dir/iso-agent-based/auth/kubeconfig"
+	# Find kubeconfig — check externalized state first, then local path
+	local kc
+	kc=$(cd "$abs_dir" && cluster_kubeconfig 2>/dev/null) || true
+	[[ -z "$kc" ]] && kc="$abs_dir/iso-agent-based/auth/kubeconfig"
 	[[ -f "$kc" ]] || return 1
 
 	# Probe the cluster with a short timeout
@@ -530,20 +540,20 @@ auto_complete_install() {
 
 verify-aba-conf() {
 	[ "$verify_conf" = "off" ] && return 0
-	[ -f aba.conf -a ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
+	[ -f aba.conf ] && [ ! -s aba.conf ] && echo_red "$PWD/aba.conf file is empty!" && return 1
 	[ ! -s aba.conf ] && return 0
 
 	local ret=0
-	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+	local REGEX_VERSION='[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?'
 	local REGEX_BASIC_DOMAIN='^[A-Za-z0-9.-]+\.[A-Za-z]{1,}$'
 
-	echo $ocp_version | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo $ocp_channel | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
-	echo $platform    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
+	echo "$ocp_version" | grep -q -E $REGEX_VERSION || { echo_red "Error: ocp_version incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo "$ocp_channel" | grep -q -E "fast|stable|candidate|eus" || { echo_red "Error: ocp_channel incorrectly set or missing in aba.conf.  Run aba or aba --help" >&2; ret=1; }
+	echo "$platform"    | grep -q -E "bm|vmw|kvm" || { echo_red "Error: platform incorrectly set or missing in aba.conf: [$platform]" >&2; ret=1; }
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
-		echo $op_sets | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
+		echo "$op_sets" | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
 		for f in $(echo $op_sets | tr , " ")
 		do
 			[ "$f" = "all" ] && continue # Skip checking this since 'all' means all operators
@@ -562,7 +572,7 @@ verify-aba-conf() {
 	# Check for ip addr
 	[ "$machine_network" ] && ! echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
 	# Check for number between 0 and 32
-	[ "$prefix_length" ] && ! echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' && { echo_red "Error: machine_network is invalid in aba.conf" >&2; ret=1; }
+	[ "$prefix_length" ] && ! echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' && { echo_red "Error: prefix_length is invalid in aba.conf [$prefix_length]" >&2; ret=1; }
 	# Check for comma separated list of either IPs or domains/hostnames
 	[ "$ntp_servers" ] && ! echo $ntp_servers | grep -q -E '^([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b)(,([A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b))*$' && \
 			{ echo_red "Error: ntp_servers is invalid in aba.conf [$ntp_servers]" >&2; ret=1; }
@@ -625,7 +635,7 @@ verify-mirror-conf() {
 
 	####[ ! "$reg_ssh_user" ] && echo_red "Error: reg_ssh_user not defined!" >&2 && ret=1   # This should never happen as the user name (whoami) is added above if its empty.
 
-	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is reprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
+	[ "$reg_root" ] && [ ! "$data_dir" ] &&  echo_red "Error: 'reg_root' is deprecated. Use 'data_dir' instead in 'mirror/mirror.conf'" >&2 && ret=1 
 
 	REGEX_ABS_PATH='^(~(/([A-Za-z0-9._-]+(/)?)*|$)|/([A-Za-z0-9._-]+(/)?)*$)'
 
@@ -639,7 +649,7 @@ verify-mirror-conf() {
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	if [ "$reg_pw" ] && [ "${reg_vendor:-auto}" != "docker" ]; then
+	if [ "$reg_pw" ] && [ "$(resolved_reg_vendor)" != "docker" ]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
 			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
@@ -649,6 +659,20 @@ verify-mirror-conf() {
 	fi
 
 	return $ret
+}
+
+# Resolve reg_vendor to the actual registry type for this host.
+# User intent (auto/quay/docker/existing) stays in mirror.conf unchanged.
+# This function is the ONLY place where "auto" is resolved to a concrete vendor.
+resolved_reg_vendor() {
+	local vendor="${reg_vendor:-auto}"
+	if [ "$vendor" = "auto" ]; then
+		case "$(uname -m)" in
+			aarch64|arm64) vendor=docker ;;
+			*)             vendor=quay ;;
+		esac
+	fi
+	echo "$vendor"
 }
 
 normalize-cluster-conf()
@@ -670,24 +694,17 @@ normalize-cluster-conf()
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
-	grep -q ^port0= cluster.conf 		|| echo export port0=eth0
-	# Convert 'port0/1=' to 'ports=' for backwards compatibility
-	grep -q ^ports= cluster.conf 		|| echo export ports=$(grep -E "^port[01]=\S" cluster.conf | cut -d= -f2 | awk '{print $1}' | paste -sd, -)
 	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
 	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
 
-	# Phase 3 (ADR-007): override immutable fields from installed state
-	local _cn _sd_candidate
-	_cn=$(grep '^cluster_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | xargs)
-	if [ "$_cn" ]; then
-		for _sd_candidate in "$HOME/.aba/clusters/${_cn}."*; do
-			if [ -s "$_sd_candidate/state.sh" ]; then
-				local _bd_state
-				_bd_state=$(grep '^base_domain=' "$_sd_candidate/state.sh" 2>/dev/null | head -1 | cut -d= -f2)
-				[ "$_bd_state" ] && _state_override_cluster "$_cn" "$_bd_state"
-				break
-			fi
-		done
+	# Phase 3 (ADR-007): override immutable fields from installed state.
+	# Only apply if this cluster dir has the 'clusterstate' symlink — it points
+	# directly to the correct ~/.aba/clusters/<name>.<domain>/ directory.
+	if [ -L clusterstate ] && [ -s clusterstate/state.sh ]; then
+		local _cn _bd
+		_cn=$(grep '^cluster_name=' clusterstate/state.sh 2>/dev/null | head -1 | cut -d= -f2)
+		_bd=$(grep '^base_domain=' clusterstate/state.sh 2>/dev/null | head -1 | cut -d= -f2)
+		[ "$_cn" ] && [ "$_bd" ] && _state_override_cluster "$_cn" "$_bd"
 	fi
 }
 
@@ -754,6 +771,14 @@ suggest_starting_ip() {
 	int_to_ip $(( net_int + offset ))
 }
 
+# Validate an IPv4 address: format + octet range (0-255).
+# Returns 0 if valid, 1 if invalid.
+_valid_ipv4() {
+	local ip="$1"
+	[[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+	(( BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255 ))
+}
+
 # -----------------------------------------------------------------------------
 # Cluster State Helpers (ADR-007: unified state management)
 # Scripts use these instead of hard-coding ~/.aba/ paths.
@@ -788,6 +813,21 @@ cluster_is_installed() {
 	local _sd
 	_sd=$(cluster_state_dir "$@") || return 1
 	[[ -s "$_sd/state.sh" ]]
+}
+
+# Quick TCP probe of cluster API (3s timeout).
+# Extracts the server endpoint from the given kubeconfig (or $KUBECONFIG).
+# Returns 0 if reachable, 1 if not. Use before slow oc calls to fail fast.
+cluster_api_reachable() {
+	local _kc="${1:-$KUBECONFIG}"
+	[ -f "$_kc" ] || return 1
+	local _server _host _port
+	_server=$(grep ' server:' "$_kc" | awk '{print $NF}' | head -1)
+	[ -z "$_server" ] && return 1
+	_host=$(echo "$_server" | sed -E 's|https?://||; s|:[0-9]+.*||')
+	_port=$(echo "$_server" | grep -oE ':[0-9]+' | tr -d ':')
+	_port=${_port:-6443}
+	timeout 3 bash -c "</dev/tcp/$_host/$_port" 2>/dev/null
 }
 
 # Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
@@ -848,7 +888,7 @@ externalize_cluster_state() {
 
 	# Backup marker/flag files
 	local _flag
-	for _flag in .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
+	for _flag in .install-complete .init .preflight-done .bm-message .bm-nextstep .autopoweroff .autoupload .autorefresh .auto-agent-up .bootstrap-complete; do
 		[ -f "$_flag" ] && cp -p "$_flag" "$_state_dir/backup/"
 	done
 
@@ -860,7 +900,8 @@ externalize_cluster_state() {
 
 # Emit export lines that override immutable cluster fields from state.sh.
 # Called at the end of normalize-cluster-conf() so state wins over config.
-# Drift (config != state) triggers a stderr warning for user-visible fields.
+# Drift (config != state) triggers a visible warning — cluster.conf should
+# NOT be edited for immutable fields after install.  Delete cluster first.
 _state_override_cluster() {
 	local _name="$1" _domain="$2"
 	local _state="$HOME/.aba/clusters/$_name.$_domain/state.sh"
@@ -873,32 +914,51 @@ _state_override_cluster() {
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
-				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2-)
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-					aba_debug "State: cluster.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
+					aba_warning \
+						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
+						"Using installed value. If needed, run 'aba -d $_name delete' before changing cluster.conf."
 				fi
 				;;
 		esac
+		# state.sh may store machine_network as CIDR (10.0.0.0/20); split it
+		if [ "$_field" = "machine_network" ] && [[ "$_sval" == */* ]]; then
+			echo "export machine_network=${_sval%/*}"
+			echo "export prefix_length=${_sval#*/}"
+			continue
+		fi
 		echo "export ${_field}=${_sval}"
 	done
 }
 
 # Emit export lines that override immutable mirror fields from state.sh.
 # Called at the end of normalize-mirror-conf() so state wins over config.
+# Drift (config != state) triggers a visible warning — mirror.conf should
+# NOT be edited after install.  Uninstall first, then change mirror.conf.
+# Warning is shown once per process to avoid noisy repeated output.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
-	local _immutable="reg_host reg_port reg_vendor reg_root reg_user reg_pw"
-	local _field _sval _cval
+	local _immutable="reg_host reg_port reg_root reg_user reg_pw"
+	local _field _sval _cval _drifted=""
 
 	for _field in $_immutable; do
 		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
 		[ -z "$_sval" ] && continue
 		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-			aba_debug "State: mirror.conf ${_field}=${_cval} differs from installed state ${_field}=${_sval} — using installed value"
+			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
 		fi
 		echo "export ${_field}=${_sval}"
 	done
+
+	# Show drift warning once per aba invocation (file flag using parent PID)
+	if [ -n "$_drifted" ] && [ ! -f "$ABA_TMP/drift.$$" ]; then
+		touch "$ABA_TMP/drift.$$"
+		aba_warning \
+			"mirror.conf differs from installed registry: $_drifted" \
+			"Using installed values. To change, run 'aba -d $(basename "$PWD") uninstall' first, then edit mirror.conf."
+	fi
 }
 
 # Recreate a deleted cluster directory from externalized state backup.
@@ -924,9 +984,31 @@ _recreate_cluster_dir() {
 	return 0
 }
 
+# Validate a cluster name: DNS label rules + reserved ABA directory names.
+# Returns 0 if valid, 1 if invalid (error on stderr).
+_valid_cluster_name() {
+	local name="$1"
+	[ -z "$name" ] && echo_red "Error: cluster name is empty" >&2 && return 1
+
+	if [[ ${#name} -gt 63 || ! "$name" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+		echo_red "Error: invalid cluster name '$name' — must be a DNS label (lowercase letters, digits, hyphens; start with letter; max 63 chars)" >&2
+		return 1
+	fi
+
+	# Reserved ABA directories that must never be used as cluster names
+	case "$name" in
+		mirror|scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel)
+			echo_red "Error: '$name' is a reserved ABA directory name — choose a different cluster name" >&2
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
 verify-cluster-conf() {
 	[ "$verify_conf" = "off" ] && return 0
-	[ -f cluster.conf -a ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
+	[ -f cluster.conf ] && [ ! -s cluster.conf ] && echo_red "$PWD/cluster.conf file is empty!" && return 1
 	[ ! -s cluster.conf ] && return 0
 
 	local ret=0
@@ -939,7 +1021,7 @@ verify-cluster-conf() {
 
 	# Note that machine_network is split into machine_network (ip) and prefix_length (4 bit number).
 	echo $machine_network | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
-	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: machine_network is invalid in cluster.conf" >&2; ret=1; }
+	echo $prefix_length | grep -q -E '^([0-9]|[1-2][0-9]|3[0-2])$' || { echo_red "Error: prefix_length is invalid in cluster.conf [$prefix_length]" >&2; ret=1; }
 
 	if [ "$starting_ip" = "ADD-IP-ADDR-HERE" ]; then
 		echo_red "Warning: Starting IP address needs to be set in $PWD/cluster.conf.  Try using --starting-ip option." >&2
@@ -999,23 +1081,18 @@ verify-cluster-conf() {
 	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 	PERL_DNS_IP_REGEX='^(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3}(?:,(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3})*$'
 	#! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
-	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in aba.conf [$dns_servers]" >&2; ret=1; }
+	[ "$dns_servers" ] && ! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
 
 	echo $next_hop_address | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo_red "Error: next_hop_address is invalid in cluster.conf" >&2; ret=1; }
 
-	# The next few values are all optional
-	#[ "$port0" ] && ! echo $port0 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port0 is invalid in cluster.conf: [$port0]" >&2; ret=1; }
-	#[ "$port1" ] && ! echo $port1 | grep -q -E '^[a-zA-Z0-9_.-]+$' && { echo_red "Error: port1 is invalid in cluster.conf: [$port1]" >&2; ret=1; }
-	if [ ! -n $ports ]; then
-		echo_red "Error: ports value is missing in cluster.conf" >&2
-		ret=1;
-	else
+	# The next few values are all optional — only validate if set
+	if [ -n "${ports:-}" ]; then
 		[[ $ports =~ ^[a-zA-Z0-9_.-]+(,[a-zA-Z0-9_.-]+)*$ ]] || { echo_red "Error: ports list is invalid in cluster.conf: [$ports]" >&2; ret=1; }
 	fi
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 
-	[ "$int_connection" ] && { echo $int_connection | grep -q -E "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
+	[ "$int_connection" ] && { echo "$int_connection" | grep -qxE "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
 	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warning -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
@@ -1024,10 +1101,10 @@ verify-cluster-conf() {
 	[[ "$platform" == "vmw" || "$platform" == "kvm" ]] && [ -z "$mac_prefix" ] && { aba_warning -p "Error" "mac_prefix is required for platform=$platform in cluster.conf"; ret=1; }
 
 	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
-	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
+	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_mem]" >&2; ret=1; }
 
 	[ "$worker_cpu_count" ] && ! echo $worker_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_cpu_count is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
-	[ "$worker_mem" ] && ! echo $worker_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_cpu_count]" >&2; ret=1; }
+	[ "$worker_mem" ] && ! echo $worker_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: worker_mem is invalid in cluster.conf: [$worker_mem]" >&2; ret=1; }
 
 	[ "$data_disk" ] && ! echo $data_disk | grep -q -E '^[0-9]+$' && { echo_red "Error: data_disk is invalid in cluster.conf: [$data_disk]" >&2; ret=1; }
 
@@ -1054,6 +1131,9 @@ normalize-vmware-conf()
 	if govc about 2>/dev/null | grep -q "^API type:.*HostAgent$"; then
 		echo "$vars" | sed -e "s#VC_FOLDER.*#VC_FOLDER=/ha-datacenter/vm#g" -e "/GOVC_DATACENTER/d" -e "/GOVC_CLUSTER/d"
 		echo "$vars" | grep -q "VC_FOLDER" || echo "export VC_FOLDER=/ha-datacenter/vm"
+		# Explicitly clear vCenter-only vars so any inherited exports are overwritten (Bug #618)
+		echo "export GOVC_DATACENTER="
+		echo "export GOVC_CLUSTER="
 		echo export VC=
 	else
 		# Restore for vCenter path
@@ -1066,7 +1146,7 @@ normalize-vmware-conf()
 		# and ABA expands it to the absolute path openshift-install requires.
 		# ${var//pattern/replacement} replaces all occurrences of pattern in var.
 		# The \$ in the pattern matches a literal '$' character.
-		if [ -n "$GOVC_RESOURCE_POOL" ]; then
+		if [ -n "${GOVC_RESOURCE_POOL:-}" ]; then
 			local _rp="${GOVC_RESOURCE_POOL//\$GOVC_DATACENTER/$GOVC_DATACENTER}"
 			_rp="${_rp//\$GOVC_CLUSTER/$GOVC_CLUSTER}"
 			echo "export GOVC_RESOURCE_POOL='$_rp'"
@@ -1164,8 +1244,8 @@ ask() {
 	# Return default response, 0
 	[ ! "$yn" ] && return 0
 
-	[ "$def_response" == "y" ] && [ "$yn" == "y" -o "$yn" == "Y" ] && return 0
-	[ "$def_response" == "n" ] && [ "$yn" == "n" -o "$yn" == "N" ] && return 0
+	[ "$def_response" == "y" ] && { [ "$yn" == "y" ] || [ "$yn" == "Y" ]; } && return 0
+	[ "$def_response" == "n" ] && { [ "$yn" == "n" ] || [ "$yn" == "N" ]; } && return 0
 
 	# return "non-default" response 
 	return 1
@@ -1223,8 +1303,8 @@ try_cmd() {
 		[ ! "$quiet" ] && aba_info Pausing $pause seconds ...
 		sleep $pause
 
-		let pause=$pause+$backoff
-		let count=$count+1
+		pause=$(( pause + backoff ))
+		count=$(( count + 1 ))
 
 		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
 		echo cmd $* >>.cmd.out 
@@ -1364,16 +1444,20 @@ aba_wait_show() (
 	return "$_rc"
 )
 
-# Function to check if a version is greater than another version
+# Check if version1 is strictly greater than version2 (semver-aware).
+# sort -V puts pre-release suffixes above bare versions (wrong for semver);
+# the -zzz trick makes GA sort after its pre-release siblings.
 is_version_greater() {
-    local version1=$1
-    local version2=$2
+	local version1=$1
+	local version2=$2
 
-    # Sort the versions
-    local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" | sort -V | tr "\n" "|")
+	local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" \
+		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
+		| sort -V \
+		| sed 's/-zzz$//' \
+		| tr "\n" "|")
 
-    # Check if version1 is the last one in the sorted list
-     [[ "$sorted_versions" != "$version1|$version2|" ]]
+	[[ "$sorted_versions" != "$version1|$version2|" ]]
 }
 
 longest_line() {
@@ -1386,6 +1470,10 @@ longest_line() {
     } END {
         print max
     }'
+}
+
+oc_mirror_version() {
+	oc-mirror version --output json 2>/dev/null | jq -r '.clientVersion.gitVersion' | cut -d- -f1
 }
 
 files_on_same_device() {
@@ -1507,6 +1595,12 @@ _is_prerelease() {
 	[[ "$1" == *-* ]]
 }
 
+# Extract major.minor from any version string, stripping pre-release suffix.
+# e.g. "4.22.0-rc.1" → "4.22", "5.0.3" → "5.0", "4.20.20" → "4.20"
+_ver_minor() {
+	echo "${1%%-*}" | cut -d. -f1-2
+}
+
 ############################################
 # Fetch latest minor (GA-aware)
 # Returns MAJOR.MINOR (e.g. 4.20)
@@ -1560,45 +1654,57 @@ _fetch_graph_cached() {
 }
 
 ############################################
-# Fetch GA versions in channel-minor (sorted)
+# Fetch all versions in channel-minor (semver-sorted: ec < rc < GA)
 # Args:
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
+# sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver).
+# The -zzz trick tags GA versions so they sort after their pre-release siblings.
 ############################################
 fetch_all_versions() {
 	local channel="${1:-stable}"
 	local minor="$2"
 
-	set -o pipefail
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
-		| grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
-		| sort -V
+		| grep "^${minor}\." \
+		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
+		| sort -V \
+		| sed 's/-zzz$//'
 }
 
 ############################################
-# Fetch latest GA version (best-effort fallback)
-# Strategy:
-#	1) latest minor (GA-aware) -> latest z
-#	2) if no GA nodes found, try previous minor
+# Fetch latest version (includes pre-release on candidate channel)
+# Uses two data sources:
+#   - CDN release.txt: discovers the "recommended" minor (e.g. 4.22)
+#   - Cincinnati graph: provides the actual version list per channel-minor
+# On candidate, the CDN may lag behind Cincinnati — newer pre-release minors
+# (e.g. 5.0) exist in the graph but aren't advertised by the CDN. Discovery
+# via fetch_latest_prerelease_version() bridges this gap.
 ############################################
 fetch_latest_version() {
 	local channel="${1:-stable}"
-	local minor v prev
+	local minor v prev prerel
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
 
 	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
-	if [[ -n "$v" ]]; then
-		echo "$v"
-		return 0
+	if [[ -z "$v" ]]; then
+		prev="$(_prev_minor "$minor")"
+		[[ -n "$prev" ]] || { echo ""; return 0; }
+		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	fi
 
-	prev="$(_prev_minor "$minor")"
-	[[ -n "$prev" ]] || { echo ""; return 0; }
+	# On candidate, a newer pre-release may exist on a higher minor
+	if [[ "$channel" = "candidate" && -n "$v" ]]; then
+		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
+		if [[ -n "$prerel" ]] && is_version_greater "$prerel" "$v"; then
+			echo "$prerel"
+			return 0
+		fi
+	fi
 
-	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	[[ -n "$v" ]] && echo "$v"
 	return 0
 }
@@ -1635,6 +1741,7 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
+# On candidate: if latest is pre-release from higher minor, "previous" is the GA latest.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
@@ -1642,6 +1749,16 @@ fetch_previous_version() {
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
+
+	# On candidate, if a newer pre-release exists, "previous" is the CDN GA latest
+	if [[ "$channel" = "candidate" ]]; then
+		local prerel ga_latest
+		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
+		if [[ -n "$prerel" ]]; then
+			ga_latest="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
+			[[ -n "$ga_latest" ]] && { echo "$ga_latest"; return 0; }
+		fi
+	fi
 
 	prev="$(_prev_minor "$minor")"
 	[[ -n "$prev" ]] || { echo ""; return 0; }
@@ -1673,6 +1790,123 @@ fetch_older_version() {
 	return 0
 }
 
+
+############################################
+# Fetch latest pre-release version (candidate channel only).
+# Discovery is needed because the CDN release.txt only advertises one "recommended"
+# minor (e.g. 4.22), while newer pre-release minors (e.g. 5.0) exist only in the
+# Cincinnati graph. Cincinnati requires a specific channel-minor pair — there is no
+# "give me all minors" query. So we probe: try next minor (4.23), then next major.0 (5.0).
+# Returns the latest pre-release version or empty string.
+############################################
+fetch_latest_prerelease_version() {
+	local channel="${1:-candidate}"
+	local minor v next_minor next_major
+
+	minor="$(fetch_latest_minor_version "$channel")"
+	[[ -n "$minor" ]] || return 0
+
+	# Try next minor in same major (e.g. 4.22 → 4.23)
+	local x="${minor%%.*}" y="${minor#*.}"
+	next_minor="${x}.$((y + 1))"
+	v="$(fetch_all_versions "$channel" "$next_minor" 2>/dev/null | tail -n1)"
+	if [[ -n "$v" ]] && _is_prerelease "$v"; then
+		echo "$v"
+		return 0
+	fi
+
+	# Try next major.0 (e.g. 4.22 → 5.0)
+	next_major="$((x + 1)).0"
+	v="$(fetch_all_versions "$channel" "$next_major" 2>/dev/null | tail -n1)"
+	if [[ -n "$v" ]] && _is_prerelease "$v"; then
+		echo "$v"
+		return 0
+	fi
+
+	return 0
+}
+
+############################################
+# Verify that an upgrade path exists from current → target in the Cincinnati graph.
+# Checks that the current version appears as a node in the target channel's graph.
+# Works for both same-minor (z-stream) and cross-minor upgrades.
+# Args:
+#	$1 = current version (e.g. 4.21.4)
+#	$2 = target version (e.g. 4.22.1 or 4.21.20)
+#	$3 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
+# Output (on failure):
+#	Prints diagnostic to stderr: "current_ver|target_channel|lowest_entry"
+# Returns: 0 if path exists (current found in target channel), 1 if not
+############################################
+verify_upgrade_path_exists() {
+	local current_ver="${1:-}"
+	local target_ver="${2:-}"
+	local channel="${3:-${ocp_channel:-fast}}"
+
+	[[ -z "$current_ver" || -z "$target_ver" ]] && return 1
+
+	# Extract target minor (e.g. 4.22 from 4.22.1 or 4.22.0-rc.1)
+	local tgt_minor="${target_ver%.*}"
+	[[ "$target_ver" == *-* ]] && tgt_minor="${target_ver%%-*}" && tgt_minor="${tgt_minor%.*}"
+
+	local tgt_channel="${channel}-${tgt_minor}"
+
+	# Pre-release targets only exist in candidate channel
+	if [[ "$target_ver" == *-rc.* || "$target_ver" == *-ec.* ]]; then
+		tgt_channel="candidate-${tgt_minor}"
+	fi
+
+	local graph_versions
+	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null \
+		| jq -r '.nodes[].version' 2>/dev/null) || return 0
+
+	# If graph is empty/unreachable, don't block — let later checks handle it
+	[[ -z "$graph_versions" ]] && return 0
+
+	if echo "$graph_versions" | grep -qxF "$current_ver"; then
+		return 0
+	fi
+
+	# Output diagnostic for callers to format their own error message
+	local lowest
+	lowest=$(echo "$graph_versions" | sort -V | head -1)
+	echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
+
+	return 1
+}
+
+############################################
+# Verify a release version exists in the Cincinnati graph.
+# Used as a pre-flight before oc-mirror to avoid wasted time on non-existent versions.
+# Args:
+#	$1 = version (e.g. 4.22.2 or 4.22.0-rc.1)
+#	$2 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
+# Returns: 0 if version found, 1 if not
+############################################
+verify_release_version_exists() {
+	local ver="${1:-}"
+	local channel="${2:-${ocp_channel:-fast}}"
+
+	[[ -z "$ver" ]] && return 1
+
+	# Extract minor (e.g. 4.22 from 4.22.2 or 4.22.0-rc.1)
+	local minor="${ver%.*}"
+	[[ "$ver" == *-* ]] && minor="${ver%%-*}" && minor="${minor%.*}"
+
+	# Pre-release versions (rc/ec) only exist in candidate channel
+	if [[ "$ver" == *-rc.* || "$ver" == *-ec.* ]]; then
+		channel="candidate"
+	fi
+
+	local all_versions
+	all_versions=$(_fetch_graph_cached "$channel" "$minor" 2>/dev/null | jq -r '.nodes[].version' 2>/dev/null) || return 1
+
+	if echo "$all_versions" | grep -qxF "$ver"; then
+		return 0
+	fi
+
+	return 1
+}
 
 # Escape characters that are special in sed replacement strings.
 # Must be called before interpolating user values into sed 's|...|...|' commands.
@@ -1707,12 +1941,8 @@ replace-value-conf() {
 				shift 2
 				;;
 			-v)
-				if [[ -z "$2" || "$2" =~ ^- ]]; then
-					local value=
-				else
-					local value="$2"
-					shift
-				fi
+				shift
+				local value="$1"
 				shift
 				;;
 			-f)
@@ -1731,36 +1961,58 @@ replace-value-conf() {
 		esac
 	done
 
-	# Auto-quote values containing spaces or '#' (unquoted '#' starts a comment in bash).
+	# Auto-quote values that contain shell metacharacters so they survive sourcing.
+	# Safe unquoted: alphanumeric, dot, slash, colon, @, comma, equals, plus, hyphen, percent, underscore.
+	# Everything else gets single-quoted. Only single-quote (') cannot be stored.
+	#
+	# NOTE ON PASSWORDS: replace-value-conf can store ANY character except '.
+	# However, Quay's mirror-registry installer has ADDITIONAL restrictions:
+	#   backtick (`), double-quote ("), single-quote ('), dollar ($)
+	# all break the Quay install (upstream bug — Ansible doesn't escape them).
+	# Those are enforced separately in verify-mirror-conf(), NOT here.
+	# Docker registry has no such limitation.
+	#
 	# Skip if the caller already pre-quoted (value starts and ends with single quote).
 	local _write_value="$value"
 	if [ -n "$value" ]; then
 		if [[ "$value" == \'*\' ]]; then
 			# Already single-quoted by caller (e.g. -v "'password'")
 			_write_value="$value"
-		elif [[ "$value" == *[[:space:]]* || "$value" == *"#"* ]]; then
+		elif [[ "$value" == *"'"* ]]; then
+			# Single quote in an unquoted value cannot be safely auto-quoted
+			aba_abort "Value for [$name] contains a single quote which cannot be stored safely. Use the pre-quoted form: -v \"'value'\""
+		elif [[ "$value" =~ [^a-zA-Z0-9_./:@,=+%~-] ]]; then
 			_write_value="'$value'"
 		fi
 	fi
 
 	# Step through the files by priority...
+	local _first_file=
 	for f in $files
 	do
 		[ ! -s "$f" ] && continue # Try next file
+		[ ! "$_first_file" ] && _first_file="$f"
 
 		aba_debug "Replacing config value [$name] with [$_write_value] in file: $f" >&2
 
-		# If value already in file (along with the optional, expected chars after the value, e.g. space/tab/# or EOL), then
-		# ... change nothing!  Uses grep -F (fixed string) so (), [], + etc. in values are not treated as regex.
-		if grep -q -F "${name}=${_write_value}" "$f" && \
-		   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
-			[ "$value" ] && aba_debug "Value ${name}=${_write_value} already exists in file $f" || aba_debug "Value ${name} is already undefined in file $f"
-
-			return 0
+		# Idempotency: if the file already has the desired state, skip the write.
+		# Uses grep -F (fixed string) first so regex chars in values (e.g. passwords) don't cause false matches.
+		if [ "$value" ]; then
+			if grep -q -F "${name}=${_write_value}" "$f" && \
+			   grep -q "^${name}=${_write_value}[[:space:]]*\(#.*\)\?$" "$f"; then
+				aba_debug "Value ${name}=${_write_value} already exists in file $f"
+				return 0
+			fi
+		else
+			# Empty value means "clear" — check if already empty
+			if grep -q -E "^${name}=$" "$f" || grep -q -E "^${name}=[[:space:]]*#" "$f"; then
+				aba_debug "Value ${name} is already empty in file $f"
+				return 0
+			fi
 		fi
 
 		# Key must exist in file (active or commented out) for sed to work
-		if ! grep -q -E "^[# ]*${name}=" "$f"; then
+		if ! grep -q -E "^[#[:space:]]*${name}=" "$f"; then
 			aba_debug "Key [$name] not found in file $f — skipping" >&2
 			continue
 		fi
@@ -1772,22 +2024,33 @@ replace-value-conf() {
 		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
 		# Trailing whitespace + comment is captured in \1 and preserved.
 		# Uses | as sed delimiter (| is forbidden in config values).
-		if grep -q "^[# ]*${name}='" "$f"; then
+		if grep -q -E "^[#[:space:]]*${name}='" "$f"; then
 			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		else
 			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Undefining value ${name} in file $f" >&2 
+			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Clearing ${name} in file $f" >&2 
 		else
-			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Undefining value ${name} in file $f"
+			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Clearing ${name} in file $f"
 		fi
 
 		return 0
 	done
 
-	return 1 # Key not found in any file (or files do not exist)
+	# Key not found in any file — append to the first valid file
+	if [ "$_first_file" ] && [ "$value" ]; then
+		echo "${name}=${_write_value}" >> "$_first_file"
+		if [ ! "$quiet" ]; then
+			aba_info_ok "Added value ${name}=${_write_value} to file $_first_file" >&2
+		else
+			aba_debug "Added value ${name}=${_write_value} to file $_first_file"
+		fi
+		return 0
+	fi
+
+	return 1 # Files do not exist or no value to write
 }
 
 output_table() {
@@ -1956,7 +2219,7 @@ get_next_hop() {
 	# Validate IPv4
 	echo "${gw:-}" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || gw=
 
-	echo "${gw:-10.0.0.1}"
+	echo "${gw:-}"
 }
 
 # Get machine network (CIDR of the chosen install interface)
@@ -2000,7 +2263,7 @@ get_machine_network() {
 	# Validate CIDR
 	echo "${net:-}" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' || net=
 
-	echo "${net:-10.0.0.0/20}"
+	echo "${net:-}"
 }
 
 
@@ -2050,7 +2313,7 @@ get_dns_servers() {
 	# Validate IPv4 list
 	echo "${dns:-}" | grep -q -E '^([0-9]{1,3}(\.[0-9]{1,3}){3})(,([0-9]{1,3}(\.[0-9]{1,3}){3}))*$' || dns=
 
-	echo "${dns:-8.8.8.8,1.1.1.1}"
+	echo "${dns:-}"
 }
 
 # Get NTP servers (comma-separated)
@@ -2077,13 +2340,13 @@ get_ntp_servers() {
 
 
 trust_root_ca() {
-	if [ -s $1 ]; then
-		if $SUDO diff $1 /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
+	if [ -s "$1" ]; then
+		if $SUDO diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			$SUDO install -m 644 $1 /etc/pki/ca-trust/source/anchors/ 
+			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/ 
 			$SUDO update-ca-trust extract
-			aba_info "Cert '$regcreds_dir/rootCA.pem' updated in system trust"
+			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
 	else
 		aba_info "No $1 cert file found" 
@@ -2639,10 +2902,10 @@ run_once() {
 # when it differs (cross-minor upgrade).  Expects ocp_version (and optionally
 # ocp_version_target) to be set in the environment.
 _catalog_versions_to_mirror() {
-	local _cur="${ocp_version%.*}"
+	local _cur=$(_ver_minor "$ocp_version")
 	local _versions=("$_cur")
 	if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-		local _tgt="${ocp_version_target%.*}"
+		local _tgt=$(_ver_minor "$ocp_version_target")
 		[ "$_tgt" != "$_cur" ] && _versions+=("$_tgt")
 	fi
 	echo "${_versions[*]}"
@@ -2679,12 +2942,12 @@ download_all_catalogs() {
 	for catalog in "${catalogs[@]}"; do
 		if (( running >= max_parallel )); then
 			local wait_idx=$(( running - max_parallel ))
-			run_once -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
+			run_once -S -q -w -i "catalog:${version_short}:${catalogs[$wait_idx]}"
 		fi
 
 		run_once -i "catalog:${version_short}:${catalog}" -t "$ttl" -- \
 			scripts/download-catalog-index.sh "$catalog" "$version_short"
-		(( ++running ))
+		running=$(( running + 1 ))
 	done
 
 	aba_debug "Catalog download tasks started (max_parallel=$max_parallel)"
@@ -2715,19 +2978,21 @@ wait_for_all_catalogs() {
 	aba_debug "wait_for_all_catalogs: Called for OCP $version_short (timeout: ${timeout_secs}s)"
 	
 	# Wait: block for catalogs started by download_all_catalogs() above
-	if ! run_once -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
+	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
+	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
+	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
 		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
 	
-	if ! run_once -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
+	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
 		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "certified-operator catalog ready"
 	
-	if ! run_once -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
+	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
 		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
 		return 1
 	fi
@@ -2767,7 +3032,7 @@ aba_prefetch_catalogs() {
 	[[ -n "$_ver" ]] || return 0
 
 	# Minor x.y — download_all_catalogs uses catalog:${minor}:* task IDs (not patch z)
-	local _minor="${_ver%.*}"
+	local _minor=$(_ver_minor "$_ver")
 
 	download_all_catalogs "$_minor"
 	wait_for_all_catalogs "$_minor" || return 0
@@ -2780,7 +3045,7 @@ aba_prefetch_catalogs() {
 		local _prev_ver
 		_prev_ver=$(fetch_latest_z_version "$_channel" "$_prev_minor" 2>/dev/null) || true
 		if [[ -n "$_prev_ver" ]]; then
-			download_all_catalogs "${_prev_ver%.*}"
+			download_all_catalogs "$(_ver_minor "$_prev_ver")"
 		fi
 	fi
 }
@@ -2922,7 +3187,7 @@ _run_oc_mirror_with_retry() {
 
 		try=$(( try + 1 ))
 		if [ $try -le $try_tot ]; then
-			echo_red "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
+			aba_warning "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
 
@@ -2933,7 +3198,7 @@ _run_oc_mirror_with_retry() {
 		aba_warning \
 			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
 			"View https://status.redhat.com/ for any current issues or planned maintenance."
-		[ $try_tot -eq 1 ] && echo_red "         Consider using the --retry option!" >&2
+		[ $try_tot -eq 1 ] && aba_warning "         Consider using the --retry option!" >&2
 
 		return 1
 	fi
@@ -3320,7 +3585,7 @@ ensure_openshift_install() {
 # Requires: ocp_version (from normalize-aba-conf)
 # Requires: reg_host, reg_port, reg_path, regcreds_dir (from normalize-mirror-conf)
 # Returns: 0 if available, 1 if not.
-# Sets: _release_ver, _release_http_code, _release_check_err, _registry_auth_ok
+# Sets: _release_ver, _release_http_code, _release_check_err, _release_check_extra[], _registry_auth_ok
 check_release_image() {
 	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
@@ -3333,6 +3598,7 @@ check_release_image() {
 	_release_ver="$ocp_version"
 	_release_http_code=""
 	_release_check_err=""
+	_release_check_extra=()
 	_registry_auth_ok=false
 
 	local _b64auth _userpass _curl_opts
@@ -3345,13 +3611,27 @@ check_release_image() {
 	if [ -z "$_b64auth" ] || [ "$_b64auth" = "null" ]; then
 		_release_http_code="401"
 		_release_check_err="no credentials in pull secret for $reg_host:$reg_port"
+		# Show what the pull secret actually contains to reveal hostname mismatches
+		local _available_hosts
+		_available_hosts=$(jq -r '.auths | keys[]' "$_authfile" 2>/dev/null | paste -sd ', ')
+		if [ -n "$_available_hosts" ]; then
+			_release_check_extra+=("Pull secret has credentials for: $_available_hosts")
+			# Suggest fix if there's exactly one entry on the same port
+			local _same_port
+			_same_port=$(jq -r ".auths | keys[] | select(endswith(\":$reg_port\"))" "$_authfile" 2>/dev/null)
+			if [ -n "$_same_port" ] && [ "$(echo "$_same_port" | wc -l)" -eq 1 ]; then
+				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")
+			fi
+		fi
+		_release_check_extra+=("Config: ${mirror_name:-mirror}/mirror.conf (reg_host=$reg_host)")
+		_release_check_extra+=("Pull secret: ${regcreds_display:-$regcreds_dir}/pull-secret-mirror.json")
 		return 1
 	fi
 
 	_userpass=$(echo "$_b64auth" | base64 -d)
 	_curl_opts="--cacert $_cacert --connect-timeout 3 --max-time 10 --retry 1"
 
-	local _td="${TMPDIR:-/tmp}/_aba_cri.$$"
+	local _td="$ABA_TMP/cri.$$"
 	mkdir -p "$_td"
 
 	# --- Fire Phase 1 (/v2/) and Phase 2 (manifest) in parallel with Basic auth ---
@@ -3468,8 +3748,10 @@ aba_mirror_verify_refresh() {
 }
 
 # Wait for check-image to complete (blocking). For use after sync/load/install.
+# Uses -S (skip validation) because _invalidate_mirror_cache already started a
+# fresh check — re-running it would add a redundant 4-5s delay.
 aba_mirror_verify_wait() {
-	run_once -q -w -i "aba:mirror:check-image" 2>/dev/null || true
+	run_once -q -w -S -i "aba:mirror:check-image" 2>/dev/null || true
 }
 
 # Get cached exit code (non-blocking, for menu rendering). Echoes exit code.
@@ -3509,9 +3791,10 @@ aba_inet_check_cached() {
 	local ttl="${1:-30}"
 	run_once -i "aba:check:internet" -t "$ttl" -- \
 		bash -lc "source '${ABA_ROOT:-.}/scripts/include_all.sh' && check_internet_connectivity aba quiet" 2>/dev/null
-	# If no result exists yet (first call or after TTL expiry), wait for the check to complete
+	# If no result exists yet (first call or after TTL expiry), wait for the check to complete.
+	# Uses -S: TTL already ensures freshness — self-healing validation is redundant here.
 	if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
-		run_once -q -w -i "aba:check:internet" 2>/dev/null || true
+		run_once -q -w -S -i "aba:check:internet" 2>/dev/null || true
 	fi
 	run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'
 }
@@ -3652,4 +3935,57 @@ check_internet_connectivity() {
 	
 	# Return status
 	[[ -z "$FAILED_SITES" ]] && return 0 || return 1
+}
+
+# Pre-flight check for commands that require internet + pull secret (save, sync).
+# Checks both conditions and reports ALL issues at once so the user can fix everything in one pass.
+# Usage: require_internet_and_pull_secret [fallback_pull_secret]
+# Requires: $pull_secret_file set (from normalize-aba-conf)
+# Args:     $1 (optional) — fallback pull secret path (e.g. mirror-specific pull secret for sync)
+require_internet_and_pull_secret() {
+	local fallback_ps="${1:-}"
+	local errors=()
+	local has_internet=true
+
+	# Check internet (quick probe, 5s timeout)
+	if ! curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
+		has_internet=false
+		errors+=("No internet access (cannot reach registry.redhat.io)")
+	fi
+
+	# Check pull secret (global, then fallback)
+	if [ -s "$pull_secret_file" ]; then
+		if ! grep -q registry.redhat.io "$pull_secret_file"; then
+			errors+=("Pull secret at $pull_secret_file does not contain registry.redhat.io credentials")
+		elif ! jq empty "$pull_secret_file" 2>/dev/null; then
+			errors+=("Pull secret at $pull_secret_file has invalid JSON syntax")
+		fi
+	elif [ -n "$fallback_ps" ] && [ -s "$fallback_ps" ]; then
+		aba_debug "Global pull secret not found; using fallback: $fallback_ps"
+	else
+		errors+=("Pull secret not found at $pull_secret_file")
+	fi
+
+	# All good
+	[ ${#errors[@]} -eq 0 ] && return 0
+
+	# Report all issues
+	if [ ${#errors[@]} -eq 1 ]; then
+		if [ "$has_internet" = "false" ]; then
+			aba_abort "${errors[0]}" \
+				"The 'save' and 'sync' commands require a connected host with internet access."
+		else
+			aba_abort "${errors[0]}" \
+				"Fetch your pull secret from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" \
+				"and save it to $pull_secret_file"
+		fi
+	else
+		aba_abort "Cannot proceed — the following issues must be resolved:" \
+			"  1. ${errors[0]}" \
+			"  2. ${errors[1]}" \
+			"" \
+			"The 'save' and 'sync' commands require a connected host with internet access." \
+			"Fetch your pull secret from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" \
+			"and save it to $pull_secret_file"
+	fi
 }

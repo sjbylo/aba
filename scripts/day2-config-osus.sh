@@ -11,16 +11,16 @@ umask 077
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_display="${mirror_name:-mirror}/regcreds"
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
-aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
-# Stop processing (CatalogSources and Signatires etc) if this cluster is a connected cluster!
+# Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
 if [ "$int_connection" ]; then
 	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
 	aba_info "OpenShift Update Service is not needed — the cluster can reach update channels directly."
@@ -142,7 +142,12 @@ _osus_wait_for_csv() {
 #####################
 aba_info "Accessing the cluster ..."
 
-[ ! "$KUBECONFIG" ] && [ -s iso-agent-based/auth/kubeconfig ] && export KUBECONFIG=$PWD/iso-agent-based/auth/kubeconfig # Can also apply this script to non-aba clusters!
+if [ ! "$KUBECONFIG" ]; then
+	_kc=$(cluster_kubeconfig 2>/dev/null)
+	[ -n "$_kc" ] && export KUBECONFIG="$_kc"
+fi
+
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 ! oc whoami && aba_abort "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 warn_if_cluster_unstable
@@ -188,10 +193,10 @@ aba_info "Adding mirror registry CA cert to registry config ..."
 
 if [ -s "$regcreds_dir/rootCA.pem" ]; then
         ca_cert="$(cat "$regcreds_dir/rootCA.pem" | sed ':a;N;$!ba;s/\n/\\n/g')"
-        aba_info "Using root CA file at $regcreds_dir/rootCA.pem"
+        aba_info "Using root CA file at $regcreds_display/rootCA.pem"
 	kubectl patch configmap registry-config -n openshift-config --type='merge' -p '{"data":{"updateservice-registry":"'"$ca_cert"'"}}'
 else
-	aba_abort "No root CA file found at $regcreds_dir/rootCA.pem.  Is the mirror registry available?"
+	aba_abort "No root CA file found at $regcreds_display/rootCA.pem.  Is the mirror registry available?"
 fi
 
 #####################
@@ -276,7 +281,20 @@ fi
 POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}")"
 aba_info_ok "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 
+# Ensure the cluster channel matches what was mirrored (ocp_channel from aba.conf).
+# OpenShift defaults to stable-X.Y at install time, but images/graph may have been
+# mirrored from a different channel (e.g. candidate). Without this, oc adm upgrade
+# queries the wrong channel and OSUS returns an empty graph.
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
+aba_debug "Cluster channel: $CH"
+_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+_expected_channel="${ocp_channel}-${_ocp_ver_major}"
+if [ "$CH" != "$_expected_channel" ]; then
+	aba_info "Cluster channel ($CH) does not match mirrored channel ($_expected_channel)"
+	aba_info "Setting cluster channel: $CH → $_expected_channel"
+	oc adm upgrade channel "$_expected_channel"
+	CH="$_expected_channel"
+fi
 aba_debug CH=$CH
 
 _osus_check_graph_available() {

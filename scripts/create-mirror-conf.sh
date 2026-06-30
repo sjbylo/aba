@@ -14,7 +14,7 @@ source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 # $domain is used as input in below j2 command
-if [ ! "$ocp_version" -o ! "$domain" ]; then
+if [ ! "$ocp_version" ] || [ ! "$domain" ]; then
 	# Should never reach here due to other var verification
 	aba_abort \
 		"Values 'domain' and/or 'ocp_version' missing in aba/aba.conf." \

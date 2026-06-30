@@ -104,8 +104,8 @@ Place mirror_*.tar files in:\n\
 (Older docs referred to mirror/save/ — that layout is folded into mirror/data/.)\n\n\
 Restart the TUI after copying archives." \
 			0 0
-		tui_log "DISCO wizard: missing image archives — returning"
-		return 1
+		tui_log "DISCO wizard: missing image archives — dropping to action menu"
+		return 0
 	fi
 
 	if [[ "${_TUI_DISCO_FROM_CONNO:-false}" == "true" ]]; then
@@ -115,12 +115,12 @@ Restart the TUI after copying archives." \
 
 	if ! mirror_available; then
 		tui_log "DISCO wizard: auto-running mirror_install"
-		mirror_install || return 1
+		mirror_install || true
 	fi
 
 	if mirror_available && ! _mirror_has_release_image; then
 		tui_log "DISCO wizard: auto-running disco_load_images"
-		disco_load_images || return 1
+		disco_load_images || true
 	fi
 
 	return 0
@@ -133,18 +133,13 @@ Restart the TUI after copying archives." \
 disco_main() {
 	tui_log "Entering DISCO mode action menu"
 	_disco_bundle_wizard_gate || return 1
-	local default_item="$TUI2_DISCO_TAG_VIEW_ISC"
+	local default_item="$TUI2_DISCO_TAG_INSTALL_REG"
 
-	# --- Menu state recheck optimization ---
-	# IMPORTANT: _disco_need_recheck controls whether expensive state checks
-	# (aba_mirror_verify_wait, mirror_available, tui_cluster_menu_flags) run
-	# before redrawing the menu. Set to "true" on first entry and after any
-	# action that can change mirror/cluster state. Actions that only display
-	# info (View ISC, Help) set it to "false" — avoiding a blocking pause.
-	local _disco_need_recheck=true
-
+	# --- Menu loop: no per-action flag assignments needed ---
+	# _TUI_NEED_MIRROR_RECHECK is set only by _invalidate_mirror_cache()
+	# (called automatically after load, install, uninstall via
+	# confirm_and_execute post-hook).
 	while :; do
-		# Build menu items with dynamic status labels (matching CONNO style)
 		local items=()
 		local reg_label="$TUI2_LABEL_INSTALL_REGISTRY"
 		local load_label="$TUI2_LABEL_LOAD"
@@ -153,37 +148,29 @@ disco_main() {
 		local reg_avail=true
 		local load_avail=true
 
-		# Only run expensive state checks when a previous action may have
-		# changed mirror/cluster state. Skipping these eliminates the blocking
-		# pause after harmless actions like View ISC.
-		if [[ "$_disco_need_recheck" == "true" ]]; then
+		# Mirror recheck: only when _invalidate_mirror_cache fired
+		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
+			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
+			fi
 			aba_mirror_verify_wait
-
-			if mirror_available; then
-				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
-				reg_avail=false
-				if _mirror_has_release_image; then
-					load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
-				fi
-			else
-				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
-				load_avail=false
-			fi
-
-			tui_cluster_menu_flags DISCO
-		else
-			# Reuse cached state — just recompute labels from marker files (fast)
-			if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
-				reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
-				reg_avail=false
-				if _mirror_has_release_image; then
-					load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
-				fi
-			else
-				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
-				load_avail=false
-			fi
+			_TUI_NEED_MIRROR_RECHECK=false
 		fi
+
+		# Refresh registry/load labels from cached state (non-blocking)
+		if mirror_available; then
+			reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
+			reg_avail=false
+			if _mirror_has_release_image; then
+				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
+			fi
+		else
+			load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_INSTALL_REGISTRY"
+			load_avail=false
+		fi
+
+		# Cluster flags (instant — marker file checks only)
+		tui_cluster_menu_flags DISCO
 
 		local day2_label="$TUI2_LABEL_DAY2"
 		local inst_label="${_CLUSTER_INST_LABEL}"
@@ -197,6 +184,9 @@ disco_main() {
 		local _mstate
 		_mstate="$(mirror_state_label)"
 		local disco_menu_msg="Status: ${_mstate}"
+		if [[ -n "${ocp_version_target:-}" && "${ocp_version_target}" != "${ocp_version:-}" ]]; then
+			disco_menu_msg+="  |  upgrade target: ${ocp_version_target}"
+		fi
 
 		items+=(
 			"" "──── Registry ──────────────────────"
@@ -205,10 +195,10 @@ disco_main() {
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
-		"" "──── Advanced ──────────────────────"
-		"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
-		"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
-		"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
+			"" "──── Advanced ──────────────────────"
+			"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
+			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_MENU" \
@@ -243,14 +233,14 @@ Navigation:
   • ESC — go back (sub-menu → parent menu, main menu → exit)"
 				continue
 				;;
-		1|255)
-			# ESC or Exit button: always confirm quit, regardless of how we got here
-			if confirm_quit; then
-				clear
-				_show_v2_exit_summary
-				exit 0
-			fi
-			continue
+			1|255)
+				# ESC or Exit button: always confirm quit, regardless of how we got here
+				if confirm_quit; then
+					clear
+					_show_v2_exit_summary
+					exit 0
+				fi
+				continue
 				;;
 			0) ;;
 		esac
@@ -265,13 +255,11 @@ Navigation:
 					dlg --backtitle "$(ui_backtitle)" --yesno \
 						"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 					if [[ $? -eq 0 ]]; then
-						confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" && disco_install_reg
+						confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Registry" _invalidate_mirror_cache && disco_install_reg
 					fi
 				else
 					disco_install_reg
 				fi
-				# RECHECK: may have installed/uninstalled registry
-				_disco_need_recheck=true
 				;;
 			"$TUI2_DISCO_TAG_LOAD")
 				if [[ "$load_avail" == "false" ]]; then
@@ -283,18 +271,14 @@ Navigation:
 				else
 					disco_load_images
 				fi
-				# RECHECK: load pushes images into registry (changes check-image result)
-				_disco_need_recheck=true
 				;;
-		"$TUI2_DISCO_TAG_INSTALL")
-			tui_install_cluster_gate DISCO
-			case "$?" in
-			0) cluster_install_flow ;;
-			3) ;;
-			esac
-			# RECHECK: may have created/installed a cluster
-			_disco_need_recheck=true
-			;;
+			"$TUI2_DISCO_TAG_INSTALL")
+				tui_install_cluster_gate DISCO
+				case "$?" in
+				0) cluster_install_flow ;;
+				3) ;;
+				esac
+				;;
 			"$TUI2_DISCO_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -302,25 +286,17 @@ Navigation:
 				else
 					cluster_day2_menu
 				fi
-				# RECHECK: day2 sub-menu may delete clusters or change state
-				_disco_need_recheck=true
 				;;
-		"$TUI2_DISCO_TAG_SETTINGS")
-			_tui_settings_menu
-			# NO RECHECK: only changes config values (ask, reg_vendor, retry)
-			_disco_need_recheck=false
-			;;
-		"$TUI2_DISCO_TAG_ADVANCED")
-			tui_advanced_menu
-			local _adv_rc=$?
-			# RECHECK: advanced menu may uninstall registry or delete clusters
-			_disco_need_recheck=true
-			[[ $_adv_rc -eq 2 ]] && return 2
-			;;
+	"$TUI2_DISCO_TAG_SETTINGS")
+		_tui_settings_menu
+		;;
+	"$TUI2_DISCO_TAG_ADVANCED")
+		tui_advanced_menu
+		local _adv_rc=$?
+		[[ $_adv_rc -eq 2 ]] && return 2
+		;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_view_isc "true"
-				# NO RECHECK: only views/edits a config file
-				_disco_need_recheck=false
 				;;
 	esac
 done
@@ -375,6 +351,15 @@ disco_load_images() {
 
 disco_reset() {
 	tui_log "DISCO: Reset to connected mode"
+
+	# Pre-check: verify internet is reachable before offering the switch
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nChecking internet connectivity..." 0 0
+	if ! check_internet_connectivity "aba" quiet 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --title "Cannot Switch" \
+			--msgbox "Internet is not available.\n\nConnected mode requires access to registry.redhat.io\nand other Red Hat sites.\n\nRestore internet connectivity and try again." 0 0
+		tui_log "DISCO: switch to connected mode blocked — no internet"
+		return 0
+	fi
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_RESET" \

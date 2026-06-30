@@ -24,7 +24,7 @@ export PATH=$PWD/bin:$PATH
 ############
 # Determine OpenShift version 
 
-export tmp_dir=$(mktemp -d /tmp/.aba.$(whoami).XXXX)
+export tmp_dir=$(mktemp -d "$ABA_TMP/ver-XXXX")
 
 aba_info -n "Looking up OpenShift release versions ..."
 
@@ -33,14 +33,14 @@ if ! curl --connect-timeout 10 --retry 8 -sL https://mirror.openshift.com/pub/op
 fi
 
 ## Get the latest stable OpenShift version number, e.g. 4.14.6
-stable_ver=$(cat $tmp_dir/.release.txt | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
+stable_ver=$(grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" "$tmp_dir/.release.txt" | awk '{print $2}')
 default_ver=$stable_ver
 
 # Extract the previous stable point version, e.g. 4.13.23
 major_ver=$(echo $stable_ver | grep ^[0-9] | cut -d\. -f1)
-stable_ver_point=`expr $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1`
+stable_ver_point=$(( $(echo $stable_ver | grep ^[0-9] | cut -d\. -f2) - 1 ))
 [ "$stable_ver_point" ] && \
-	stable_ver_prev=$(cat $tmp_dir/.release.txt| grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" | tail -n 1)
+	stable_ver_prev=$(grep -oE "${major_ver}\.${stable_ver_point}\.[0-9]+" "$tmp_dir/.release.txt" | tail -n 1)
 
 # Determine any already installed tool versions
 which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")

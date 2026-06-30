@@ -1,34 +1,38 @@
 #!/bin/bash
-# Standalone replacement for: oc-mirror list operators --catalog <url>
+# list-operators.sh -- List all operators in a Red Hat operator catalog
 #
-# Lists all operators in a Red Hat operator catalog, including display names.
-# Uses podman to pull the catalog image and extract FBC (File-Based Catalog) data.
-# No oc-mirror dependency required.
+# INTENT:    Replacement for "oc-mirror list operators --catalog <url>".
+#            Pulls the catalog image, extracts FBC metadata, and lists operators
+#            with display names and default channels. No oc-mirror dependency.
+# CALLED BY: make list-operators, aba list-operators, TUI operator browser
+# CWD:       ABA repo root
+# REQUIRES:  podman, jq; container auth for registry.redhat.io
+# ARGS:      <ocp_version> [catalog_name]
+#            ocp_version:   e.g. "4.21" (major.minor only)
+#            catalog_name:  redhat-operator (default) | certified-operator | community-operator
+# PRODUCES:  stdout -- 3-column whitespace-padded table:
+#              PACKAGE_NAME   DISPLAY_NAME   DEFAULT_CHANNEL
+# SIDE EFFECTS: Catalog image remains in podman graph storage (cache for future runs).
+# IDEMPOTENT: Yes (read-only extraction, no state files)
 #
-# Usage: list-operators.sh <version>  [catalog]
+# Usage: list-operators.sh <version> [catalog]
 # Example:
 #   list-operators.sh 4.21
 #   list-operators.sh 4.21 certified-operator
 #   list-operators.sh 4.21 community-operator
-#
-# Output (3 columns, whitespace-padded):
-#   PACKAGE_NAME   DISPLAY_NAME   DEFAULT_CHANNEL
-#
-# Requirements: podman, jq, curl
-# Auth: uses existing podman/container credentials for registry.redhat.io
-#       (podman login registry.redhat.io, or ~/.docker/config.json)
 
 set -eo pipefail
+source scripts/include_all.sh
 
-# ── Colours (disabled if not a terminal) ─────────────────────────────
+# ── Local output helpers (tool-specific [INFO]/[OK]/[ERROR] style) ────
 if [ -t 1 ]; then
-	RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
+	_LO_RED='\033[0;31m'; _LO_GREEN='\033[0;32m'; _LO_BLUE='\033[0;34m'; _LO_NC='\033[0m'
 else
-	RED=''; GREEN=''; BLUE=''; NC=''
+	_LO_RED=''; _LO_GREEN=''; _LO_BLUE=''; _LO_NC=''
 fi
-info()    { echo -e "${BLUE}[INFO]${NC} $*" >&2; }
-success() { echo -e "${GREEN}[OK]${NC} $*"   >&2; }
-die()     { echo -e "${RED}[ERROR]${NC} $*"   >&2; exit 1; }
+info()    { echo -e "${_LO_BLUE}[INFO]${_LO_NC} $*" >&2; }
+success() { echo -e "${_LO_GREEN}[OK]${_LO_NC} $*"   >&2; }
+die()     { echo -e "${_LO_RED}[ERROR]${_LO_NC} $*"   >&2; exit 1; }
 
 # ── Parse arguments ──────────────────────────────────────────────────
 usage() {
@@ -49,7 +53,7 @@ command -v jq     >/dev/null 2>&1 || die "jq is required"
 
 # ── Setup ────────────────────────────────────────────────────────────
 container_name="list-ops-${catalog}-v${ocp_ver}-$$"
-tmp_dir=$(mktemp -d)
+tmp_dir=$(mktemp -d "$ABA_TMP/list-ops-XXXXXX")
 trap 'podman rm -f "$container_name" >/dev/null 2>&1; rm -rf "$tmp_dir"' EXIT INT TERM
 
 # ── Pull image ───────────────────────────────────────────────────────
@@ -58,8 +62,8 @@ podman pull -q "$catalog_url" >/dev/null 2>&1 || die "Failed to pull $catalog_ur
 
 # ── Extract /configs ─────────────────────────────────────────────────
 info "Extracting catalog data ..."
-podman run -q -d --name "$container_name" "$catalog_url" >/dev/null 2>&1 \
-	|| die "Failed to start container"
+podman create -q --name "$container_name" "$catalog_url" >/dev/null 2>&1 \
+	|| die "Failed to create container"
 podman cp "$container_name:/configs" "$tmp_dir/configs" 2>/dev/null \
 	|| die "Failed to copy /configs from container"
 podman rm -f "$container_name" >/dev/null 2>&1
@@ -170,8 +174,4 @@ for dir in "$tmp_dir/configs"/*/; do
 	fi
 done | sort
 
-# ── Cleanup image ────────────────────────────────────────────────────
-podman rmi "$catalog_url" >/dev/null 2>&1 || true
-
-op_count=$(podman images -q "$catalog_url" 2>/dev/null | wc -l)  # should be 0
 success "Done. Catalog: $catalog v$ocp_ver"

@@ -3,7 +3,7 @@
 # ABA TUI v2 — Complete ABA Installer (DISCO / CONNO / DIRECT)
 # =============================================================================
 # Entry point: mode detection, routing, CONNO action menu.
-# Complete replacement for v1 (tui/abatui.sh).
+# Main TUI entry point.
 #
 # Design decisions:
 #   - NO 'set -e': dialog returns non-zero by design (1=Cancel, 2=Help, 3=Extra).
@@ -23,7 +23,7 @@
 
 printf 'Initializing ABA TUI v2...\n'
 printf '  [ ] Loading modules\n'
-printf '  [ ] Checking connectivity\n'
+printf '  [ ] Please wait...\n'
 printf '  [ ] Checking packages\n'
 printf '  [ ] Loading config\n'
 
@@ -115,6 +115,12 @@ source scripts/include_all.sh
 # by design, the ERR trap must be disabled or every Back press crashes the TUI.
 trap - ERR
 
+# Suppress config drift warnings during startup splash screen.
+# tui-lib.sh runs normalize-mirror-conf at source time (top-level code, line ~333)
+# which triggers _state_override_mirror -> aba_warning. Must be set BEFORE sourcing.
+# ABA_SUPPRESS_WARNINGS is checked by aba_warning() in include_all.sh.
+export ABA_SUPPRESS_WARNINGS=1
+
 # Source TUI v2 modules
 source "$ABA_ROOT/tui/v2/tui-strings2.sh"
 source "$ABA_ROOT/tui/v2/tui-lib.sh"
@@ -151,7 +157,7 @@ aba_inet_check_start
 tui_log "Kicking off background mirror verify"
 aba_mirror_verify_start
 
-_tick "Checking connectivity"
+_tick "Please wait..."
 
 # Auto-install required packages if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
@@ -215,7 +221,7 @@ OP_SET_ADDED=()
 # Restore basket from aba.conf (config files = single source of truth)
 # Handles both ops= (comma-separated operators) and op_sets= (comma-separated set names)
 # Validates each operator against the catalog index for the current OCP version
-_ver_short="${ocp_version%.*}"
+_ver_short=$(_ver_minor "$ocp_version")
 
 # Restore individual operators from ops=
 if [[ -n "${ops:-}" ]]; then
@@ -308,6 +314,9 @@ fi
 # Wait for internet check to complete (this is the slow part)
 aba_inet_check_wait
 
+# Re-enable warnings now that startup is complete
+unset ABA_SUPPRESS_WARNINGS
+
 printf '  Ready.\n'
 unset -f _tick
 sleep 0.3
@@ -317,17 +326,19 @@ clear
 # Mode Detection
 # =============================================================================
 # Three modes:
-#   DISCO  — Disconnected: arrived via bundle, no internet. Install registry from archives.
-#   CONNO  — Connected with mirror: has a mirror registry (internet optional).
+#   DISCO  — Disconnected: no internet, payload ready (arrived via bundle or post-load state).
+#            Install registry from archives or use already-running mirror.
+#   CONNO  — Connected with mirror: has internet, uses a mirror registry.
 #            The mirror serves images to clusters over local network.
 #   DIRECT — Direct from internet: no mirror, pull images directly from Red Hat.
+#            User switches to DIRECT from the CONNO action menu.
 #
 # Detection priority:
 #   1. --disco/--conno/--direct CLI flags (forced mode)
 #   2. .bundle file present → DISCO (or ask if internet also available)
-#   3. No .bundle + internet → ask user: mirror or direct
-#   4. No .bundle + no internet + mirror ready → DISCO (post-load state)
-#   5. No .bundle + no internet + no mirror → dead end (need bundle transfer)
+#   3. No .bundle + internet → CONNO (default to mirror workflow)
+#   4. No .bundle + no internet + payload valid → DISCO (post-load state)
+#   5. No .bundle + no internet + no payload → dead end (error + exit)
 
 # Validate that the repo has sufficient payload to operate offline (bundle equivalent).
 # Minimum "bundle": aba.conf + CLI tools + registry install files (Quay/Docker) + ISC config.
@@ -443,17 +454,16 @@ _detect_mode() {
 		_TUI_INET="no"
 		tui_log "Internet check failed: FAILED_SITES=[$FAILED_SITES]"
 
-		# Show detailed error so user knows which sites are unreachable
-		local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"
-		dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
-			--no-collapse \
-			--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
-
-		# After showing error, check if we can fall back to DISCO
+		# Check if we can operate in DISCO mode (no internet but payload ready)
 		if [[ -f "$ABA_ROOT/aba.conf" ]] && _validate_payload; then
 			_TUI_MODE="DISCO"
 			tui_log "Mode detected: DISCO (offline, payload ready)"
 		else
+			# No fallback possible — show detailed error and exit
+			local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"
+			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
+				--no-collapse \
+				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
 			clear
 			exit 1
 		fi
@@ -482,28 +492,21 @@ _conno_main() {
 	# Items that are unavailable get "[reason]" appended to their label
 	# and show a msgbox when selected (greyed-out pattern).
 	# Separators (space tags) visually group mirror, transfer, and cluster ops.
-	local default_item="$TUI2_CONNO_TAG_VIEW_ISC"
+	local default_item=""
+	_TUI_ISC_UPDATED=${_TUI_ISC_UPDATED:-false}
 
-	# --- Menu state recheck optimization ---
-	# IMPORTANT: _conno_need_recheck controls whether expensive state checks
-	# (aba_mirror_verify_wait, mirror_available, tui_cluster_menu_flags) run
-	# before redrawing the menu. Set to "true" on first entry and after any
-	# action that can change mirror/cluster state. Actions that only touch
-	# config files or display info (Settings, Help, View ISC, Select Operators,
-	# Rerun Wizard, Save, Bundle) set it to "false" — avoiding a blocking
-	# pause on every menu redraw.
-	local _conno_need_recheck=true
-
+	# --- Menu loop: no per-action flag assignments needed ---
+	# _TUI_NEED_MIRROR_RECHECK is set only by _invalidate_mirror_cache()
+	# (called automatically after sync, load, install, uninstall via
+	# confirm_and_execute post-hook). The background check starts immediately
+	# after the action, so by the time the user presses OK and the menu
+	# redraws, the check is usually already complete.
 	while :; do
-		# Only re-probe internet when state may have changed (same gate as mirror/cluster checks).
-		# Internet status is external — it can't change due to TUI actions like Settings or View ISC.
-		if [[ "$_conno_need_recheck" == "true" ]]; then
-			if aba_inet_check_cached 120; then
-				_TUI_INET="yes"
-			else
-				_TUI_INET="no"
-			fi
+		# Internet: runs independently on 120s TTL cache (fast when warm)
+		if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --infobox "Please wait..." 3 25
 		fi
+		if aba_inet_check_cached 120; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
 		local items=()
 
@@ -518,6 +521,11 @@ _conno_main() {
 		local ops_avail=true bndl_avail=true
 
 		# Internet-dependent items greyed out in offline mode
+		local upg_label="Prepare Upgrade"
+		local _upg_target=""
+		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+			_upg_target=$(grep '^ocp_version_target=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+		fi
 		if [[ "$_TUI_INET" == "no" ]]; then
 			save_avail=false
 			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_NO_INTERNET"
@@ -527,50 +535,40 @@ _conno_main() {
 			ops_label="$TUI2_LABEL_OPERATORS $TUI2_STATUS_NO_INTERNET"
 			bndl_avail=false
 			bndl_label="$TUI2_LABEL_BUNDLE $TUI2_STATUS_NO_INTERNET"
+			upg_label="Prepare Upgrade $TUI2_STATUS_NO_INTERNET"
+		elif [[ -n "$_upg_target" && "$_upg_target" != "${ocp_version:-}" ]]; then
+			upg_label="Prepare Upgrade [→ ${_upg_target}]"
 		fi
 
-		# Only run expensive state checks when a previous action may have
-		# changed mirror/cluster state. Skipping these eliminates the blocking
-		# pause after harmless actions like Settings or View ISC.
-		if [[ "$_conno_need_recheck" == "true" ]]; then
-			# Wait for any in-flight mirror verify before computing labels.
+		# Mirror recheck: only when _invalidate_mirror_cache fired after a
+		# mirror-changing action (sync, load, install, uninstall).
+		if [[ "$_TUI_NEED_MIRROR_RECHECK" == "true" ]]; then
+			if ! run_once -p -i "aba:mirror:check-image" 2>/dev/null; then
+				dlg --backtitle "$(ui_backtitle)" --infobox "Checking mirror..." 3 30
+			fi
 			aba_mirror_verify_wait
-
-			if mirror_available && _mirror_has_release_image; then
-				mirr_avail=false
-				mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
-				# Mirror has release image → sync was successful
-				if [[ "$sync_avail" == "true" ]]; then
-					sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
-				fi
-			elif mirror_available; then
-				mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
-			fi
-
-			# Save status: tar archives exist in mirror/data/
-			if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
-				save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
-			fi
-
-			# Cluster operations — Install uses unified gate; grey Day-2 until clusters exist.
-			tui_cluster_menu_flags CONNO
-		else
-			# Reuse cached mirror state from last check
-			if [[ -f "$ABA_ROOT/mirror/.available" ]]; then
-				if _mirror_has_release_image; then
-					mirr_avail=false
-					mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
-					if [[ "$sync_avail" == "true" ]]; then
-						sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
-					fi
-				else
-					mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
-				fi
-			fi
-			if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
-				save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
-			fi
+			_TUI_NEED_MIRROR_RECHECK=false
 		fi
+
+		# Refresh mirror labels from cached state (non-blocking)
+		if mirror_available && _mirror_has_release_image; then
+			mirr_avail=false
+			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
+			if [[ "$sync_avail" == "true" ]]; then
+				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			fi
+		elif mirror_available; then
+			mirr_avail=false
+			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
+		fi
+
+		# Save status: tar archives exist in mirror/data/
+		if [[ "$save_avail" == "true" ]] && ls "$ABA_ROOT"/mirror/data/mirror_*.tar &>/dev/null; then
+			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_SAVED"
+		fi
+
+		# Cluster flags (instant — marker file checks only)
+		tui_cluster_menu_flags CONNO
 
 		local inst_label="${_CLUSTER_INST_LABEL}"
 		local day2_label="$TUI2_LABEL_DAY2"
@@ -578,10 +576,23 @@ _conno_main() {
 			day2_label="$TUI2_LABEL_DAY2 $TUI2_STATUS_INSTALL_CLUSTER"
 		fi
 
+		# Smart focus: last assignment wins = highest priority (read bottom-to-top)
+		if [[ -z "$default_item" ]]; then
+			default_item="$TUI2_CONNO_TAG_VIEW_ISC"
+			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];           then default_item="$TUI2_CONNO_TAG_DAY2"; fi
+			if _mirror_has_release_image;                            then default_item="$TUI2_CONNO_TAG_INSTALL"; fi
+			if mirror_available && ! _mirror_has_release_image;      then default_item="$TUI2_CONNO_TAG_SYNC"; fi
+			if ! mirror_available;                                   then default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"; fi
+			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_VIEW_ISC"; fi
+		fi
+
 		# Dynamic menu title with mirror state
 		local _mstate
 		_mstate="$(mirror_state_label)"
 		local conno_menu_msg="Status: ${_mstate}"
+		if [[ -n "${ocp_version_target:-}" && "${ocp_version_target}" != "${ocp_version:-}" ]]; then
+			conno_menu_msg+="  |  upgrade target: ${ocp_version_target}"
+		fi
 
 		# Mirror state is already shown via color-coded label (green/yellow/red)
 		local mirror_warn=""
@@ -592,10 +603,10 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
-		"" "──── Transfer ──────────────────────"
-		"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
-		"$TUI2_CONNO_TAG_SAVE"           "$save_label"
-		"$TUI2_CONNO_TAG_PREP_UPGRADE"   "Prepare Upgrade for Transfer"
+			"" "──── Transfer ──────────────────────"
+			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
+			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
+			"$TUI2_CONNO_TAG_PREP_UPGRADE"   "$upg_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
@@ -620,22 +631,25 @@ _conno_main() {
 				show_help "$TUI2_HELP_TITLE_CONNO" \
 "Partially disconnected mode with a mirror registry. Full ABA workflow:
 
-Mirror operations:
-  • Install Mirror — set up registry (local or remote)
+Mirror:
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
-
-Transfer (uses oc-mirror):
+  • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
-  • Save — mirror-to-disk (m2d): download images to local archive
-  • Load — disk-to-mirror (d2m): load saved images into registry
-  • Install Bundle — create a portable bundle (tar) for USB transfer
 
-Cluster operations:
+Transfer:
+  • Bundle — create a portable bundle (tar) for USB transfer
+  • Save — mirror-to-disk (m2d): download images to local archive
+  • Prepare Upgrade — set target version and sync or save upgrade images
+
+Cluster:
   • Install Cluster — configure, review, and provision OpenShift
   • Day-2 — post-install config (resources, NTP, update service, etc.)
 
-Use 'Advanced' to switch modes or manage platform settings.
+Advanced:
+  • Configure — adjust settings (retry, editor, ask mode)
+  • Rerun Wizard — re-run the initial setup wizard
+  • Advanced — switch modes, uninstall, reset
 
 Navigation:
   • Arrow keys / Tab — move between items and buttons
@@ -666,36 +680,32 @@ Navigation:
 				dlg --backtitle "$(ui_backtitle)" --yesno \
 					"$TUI2_MSG_MIRROR_REINSTALL" 0 0
 				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" && mirror_install
+					confirm_and_execute "aba --dir mirror uninstall" "Uninstall Existing Mirror" _invalidate_mirror_cache && mirror_install
 				fi
 			else
 				mirror_install
 			fi
-			# RECHECK: may have installed/uninstalled mirror registry
-			_conno_need_recheck=true
+			default_item=""
 			;;
 		"$TUI2_CONNO_TAG_SAVE")
 			if [[ "$_TUI_INET" == "no" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
 			else
 				mirror_save
+				default_item=""
 			fi
-			# NO RECHECK: save only writes archive files to disk
-			_conno_need_recheck=false
 			;;
-	"$TUI2_CONNO_TAG_PREP_UPGRADE")
-		if [[ "$_TUI_INET" == "no" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-		else
-			mirror_prep_upgrade
-		fi
-		# NO RECHECK: only writes archive files to disk
-		_conno_need_recheck=false
-		;;
-	"$TUI2_CONNO_TAG_SYNC")
-		if [[ "$_TUI_INET" == "no" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-		elif ! mirror_available; then
+		"$TUI2_CONNO_TAG_PREP_UPGRADE")
+			if [[ "$_TUI_INET" == "no" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_prep_upgrade
+			fi
+			;;
+		"$TUI2_CONNO_TAG_SYNC")
+			if [[ "$_TUI_INET" == "no" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			elif ! mirror_available; then
 				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
 					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then images will be synced.\n\nContinue?" 0 0
 				if [[ $? -eq 0 ]]; then
@@ -704,66 +714,54 @@ Navigation:
 			else
 				mirror_sync
 			fi
-			# RECHECK: sync pushes images into registry (changes check-image result)
-			_conno_need_recheck=true
+			default_item=""
 			;;
-			"$TUI2_CONNO_TAG_VIEW_ISC")
-				mirror_view_isc "false"
-				# NO RECHECK: only edits a config file
-				_conno_need_recheck=false
-				;;
-			"$TUI2_CONNO_TAG_OPERATORS")
-				if [[ "$ops_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-				else
-					mirror_select_operators
-				fi
-				# NO RECHECK: only edits operator selection lists
-				_conno_need_recheck=false
-				;;
-			"$TUI2_CONNO_TAG_BUNDLE")
-				if [[ "$bndl_avail" == "false" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-				else
-					mirror_create_bundle
-				fi
-				# NO RECHECK: bundle only writes a tar to disk
-				_conno_need_recheck=false
-				;;
-			"$TUI2_CONNO_TAG_INSTALL")
-				tui_install_cluster_gate CONNO
-				case "$?" in
-				0) cluster_install_flow ;;
-				3) ;;  # gate already invoked cluster_install_flow after sync
-				esac
-				# RECHECK: may have created/installed a cluster
-				_conno_need_recheck=true
-				;;
-			"$TUI2_CONNO_TAG_DAY2")
-				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
-				else
-					cluster_day2_menu
-				fi
-				# RECHECK: day2 sub-menu may delete clusters or change state
-				_conno_need_recheck=true
-				;;
-			"$TUI2_CONNO_TAG_SETTINGS")
-				_tui_settings_menu
-				# NO RECHECK: only changes config values (ask, reg_vendor, retry)
-				_conno_need_recheck=false
-				;;
-			"$TUI2_CONNO_TAG_ADVANCED")
-				tui_advanced_menu
-				# RECHECK: advanced menu may uninstall mirror or delete clusters
-				_conno_need_recheck=true
-				;;
-			"$TUI2_CONNO_TAG_RECONFIGURE")
-				direct_wizard || true
-				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-				# NO RECHECK: wizard only changes channel/version/platform in aba.conf
-				_conno_need_recheck=false
-				;;
+		"$TUI2_CONNO_TAG_VIEW_ISC")
+			mirror_view_isc "false"
+			_TUI_ISC_UPDATED=false
+			;;
+		"$TUI2_CONNO_TAG_OPERATORS")
+			if [[ "$ops_avail" == "false" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_select_operators
+				default_item=""
+			fi
+			;;
+		"$TUI2_CONNO_TAG_BUNDLE")
+			if [[ "$bndl_avail" == "false" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
+			else
+				mirror_create_bundle
+			fi
+			;;
+		"$TUI2_CONNO_TAG_INSTALL")
+			tui_install_cluster_gate CONNO
+			case "$?" in
+			0) cluster_install_flow; default_item="" ;;
+			3) default_item="" ;;
+			esac
+			;;
+		"$TUI2_CONNO_TAG_DAY2")
+			if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_CLUSTERS" 0 0
+			else
+				cluster_day2_menu
+			fi
+			;;
+		"$TUI2_CONNO_TAG_SETTINGS")
+			_tui_settings_menu
+			;;
+		"$TUI2_CONNO_TAG_ADVANCED")
+			tui_advanced_menu
+			default_item=""
+			;;
+		"$TUI2_CONNO_TAG_RECONFIGURE")
+			direct_wizard || true
+			source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
+			_invalidate_mirror_cache
+			default_item=""
+			;;
 		esac
 	done
 }

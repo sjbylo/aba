@@ -163,7 +163,7 @@ if [ "$ops" -o "$op_sets" ]; then
 		fi
 	done
 
-    	if [ "$catalog_file_errors" ]; then
+	if [ "$catalog_file_errors" ]; then
 		aba_abort \
 			"Cannot add required operators to the image-set config file!" \
 			"Your options are:" \
@@ -183,7 +183,7 @@ aba_info "Adding operators to the image-set config file ..."  >&2
 
 
 # 'all' is a special operator set which allows all operators to be downloaded!  The below "operators->catalog" entry will enable all op.
-if echo $op_sets | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
+if echo "$op_sets" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
 	aba_info_ok "Adding all redhat-operator operators to your image-set config file!" >&2
 	cat <<-END >> "$OUTPUT_FILE"
 	  operators:
@@ -201,7 +201,7 @@ community_operator=()
 # Step though all the operator sets and determine which catalog they exist in,
 # with priority order: redhat-operator, certified-operator, community-operator
 # Operator names are selected from the catalogs in the above catalog order.
-for op_set_name in $(echo $op_sets | tr "," " ")
+for op_set_name in $(echo "$op_sets" | tr "," " ")
 do
 	declare -A op_set_array
 
@@ -245,7 +245,7 @@ if [ "$ops" ]; then
 	echo >&2
 	aba_info -n "$op_set_name: " >&2 # Keep as aba_info
 
-	for op in $(echo $ops | tr "," " ")
+	for op in $(echo "$ops" | tr "," " ")
 	do
 		echo_white -n "$op " >&2 # Keep as echo_
 

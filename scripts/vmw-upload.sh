@@ -19,7 +19,7 @@ fi
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
-	eval `scripts/cluster-config.sh || exit 1`
+	eval "$(scripts/cluster-config.sh)" || exit 1
 fi
 
 [ ! "$ISO_DATASTORE" ] && ISO_DATASTORE=$GOVC_DATASTORE

@@ -24,7 +24,7 @@ trap - ERR  # We don't want to catch on error. error handling added below.
 
 if [ ! "$CLUSTER_NAME" ]; then
 	scripts/cluster-config-check.sh
-	eval $(scripts/cluster-config.sh $@ || exit 1)
+	eval "$(scripts/cluster-config.sh "$@")" || exit 1
 fi
 
 aba_info "================================================================================="
@@ -32,7 +32,7 @@ aba_info "======================================================================
 opts=
 [ "$DEBUG_ABA" ] && opts="--log-level debug"
 
-[ ! -f $ASSETS_DIR/rendezvousIP ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
+[ ! -f "$ASSETS_DIR/rendezvousIP" ] && aba_abort "Error: $ASSETS_DIR/rendezvousIP file missing.  Run 'aba iso' to create it."
 
 [ "$no_proxy" ] && no_proxy="$(cat $ASSETS_DIR/rendezvousIP),$no_proxy"   # Needed since we're using the IP address to access
 [ "$no_proxy" ] && aba_debug "Using: no_proxy=$no_proxy  opts=$opts"

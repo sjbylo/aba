@@ -8,6 +8,8 @@ trap - ERR
 
 aba_debug "Starting: $0 $* from $PWD"
 
+source <(normalize-cluster-conf)
+
 [ ! "$1" ] && cmd="get co" || cmd="$*"
 
 echo "$cmd" | grep -q "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command if needed
@@ -15,9 +17,13 @@ echo "$cmd" | grep -q "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix comm
 #aba_info "Downloading CLI installation binaries"
 #scripts/cli-install-all.sh --wait oc
 
-export KUBECONFIG=iso-agent-based/auth/kubeconfig
+_kc=$(cluster_kubeconfig 2>/dev/null)
+[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
+export KUBECONFIG="$_kc"
+
+cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 
 aba_info "Running command: oc $cmd" >&2
 aba_debug "Running: oc $cmd"
-eval oc $cmd
+eval "oc $cmd"
 

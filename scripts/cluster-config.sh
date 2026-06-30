@@ -26,34 +26,34 @@ yaml2json()
 
 # This fn() prints the macs out on a per node basis, just for display purposes
 distribute_macs() {
-    local macs="$1"
-    local nodes="$2"
-    local prefix="$3"
+	local macs="$1"
+	local nodes="$2"
+	local prefix="$3"
 
-    # Convert string to array
-    local mac_array=($macs)
-    local -a addr
-    for ((i=0; i<nodes; i++)); do
-        addr[i]=""
-    done
+	# Convert string to array
+	local mac_array=($macs)
+	local -a addr
+	for ((i=0; i<nodes; i++)); do
+		addr[i]=""
+	done
 
-    ports=$(( ${#mac_array[@]} / nodes ))
+	ports=$(( ${#mac_array[@]} / nodes ))
 
-    # Distribute MACs column-wise
-    for ((i=0; i<${#mac_array[@]}; i++)); do
-        pidx=$(( i % ports ))
-        idx=$(( i % nodes ))
-        if [ -z "${addr[pidx]}" ]; then
-            addr[pidx]="${mac_array[i]}"
-        else
-            addr[pidx]="${addr[pidx]} ${mac_array[i]}"
-        fi
-    done
+	# Distribute MACs column-wise
+	for ((i=0; i<${#mac_array[@]}; i++)); do
+		pidx=$(( i % ports ))
+		idx=$(( i % nodes ))
+		if [ -z "${addr[pidx]}" ]; then
+			addr[pidx]="${mac_array[i]}"
+		else
+			addr[pidx]="${addr[pidx]} ${mac_array[i]}"
+		fi
+	done
 
-    # Print result
-    for ((i=0; i<ports; i++)); do
-        echo "export ${prefix}MAC_ADDR$((i+1))=\"${addr[i]}\""
-    done
+	# Print result
+	for ((i=0; i<ports; i++)); do
+		echo "export ${prefix}MAC_ADDR$((i+1))=\"${addr[i]}\""
+	done
 }
 
 export MANIFEST_SRC_DIR=.
@@ -62,36 +62,36 @@ ICONF=$MANIFEST_SRC_DIR/install-config.yaml
 ACONF=$MANIFEST_SRC_DIR/agent-config.yaml  
 
 # If the files don't exist, nothing to do but exit!
-if [ ! -s $ICONF -o ! -s $ACONF ]; then
+if [ ! -s "$ICONF" ] || [ ! -s "$ACONF" ]; then
 	aba_abort \
 		"One of the files $ICONF and/or $ACONF does not exist." \
 		"Cannot parse cluster configuration. Are you running this in your 'cluster' directory? Try 'aba -d mycluster agentconf'"
 fi
 
-ICONF_TMP=$(cat $ICONF | yaml2json)
-ACONF_TMP=$(cat $ACONF | yaml2json)
+ICONF_TMP=$(yaml2json < "$ICONF")
+ACONF_TMP=$(yaml2json < "$ACONF")
 
-CLUSTER_NAME=`echo "$ICONF_TMP" | jq -r .metadata.name`
+CLUSTER_NAME=$(echo "$ICONF_TMP" | jq -r .metadata.name)
 echo "$CLUSTER_NAME" | grep -q "null" && CLUSTER_NAME=
 echo export CLUSTER_NAME=$CLUSTER_NAME
 
-BASE_DOMAIN=`echo "$ICONF_TMP" | jq -r .baseDomain`
+BASE_DOMAIN=$(echo "$ICONF_TMP" | jq -r .baseDomain)
 echo "$BASE_DOMAIN" | grep -q "null" && BASE_DOMAIN=
 echo export BASE_DOMAIN=$BASE_DOMAIN
 
-RENDEZVOUSIP=`echo "$ACONF_TMP" | jq -r '.rendezvousIP'`
+RENDEZVOUSIP=$(echo "$ACONF_TMP" | jq -r '.rendezvousIP')
 echo "$RENDEZVOUSIP" | grep -q "null" && RENDEZVOUSIP=
 echo export RENDEZVOUSIP=$RENDEZVOUSIP 
 
-CP_REPLICAS=`echo "$ICONF_TMP" | jq -r .controlPlane.replicas`
+CP_REPLICAS=$(echo "$ICONF_TMP" | jq -r .controlPlane.replicas)
 echo "$CP_REPLICAS" | grep -q "null" && CP_REPLICAS=
 echo export CP_REPLICAS=$CP_REPLICAS
 
-CP_NAMES=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" )| .hostname'`
+CP_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" )| .hostname')
 echo "$CP_NAMES" | grep -q "null" && CP_NAMES=
 echo export CP_NAMES=\"$CP_NAMES\"
 
-CP_MAC_ADDRS=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress'`
+CP_MAC_ADDRS=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .interfaces[].macAddress')
 echo "$CP_MAC_ADDRS" | grep -q "null" && CP_MAC_ADDRS=
 echo export CP_MAC_ADDRS=\"$CP_MAC_ADDRS\"
 
@@ -110,22 +110,22 @@ distribute_macs "$CP_MAC_ADDRS" $CP_REPLICAS "CP_"
 ### echo "$CP_MAC_ADDR_2ND" | grep -q "null" && CP_MAC_ADDR_2ND=
 ### [ "$CP_MAC_ADDR_2ND" ] && echo export CP_MAC_ADDR_2ND=\"$CP_MAC_ADDR_2ND\"
 
-CP_IP_ADDRESSES=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .networkConfig.interfaces[0].ipv4.address[0].ip'`
+CP_IP_ADDRESSES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "master" ) | .networkConfig.interfaces[0].ipv4.address[0].ip')
 echo "$CP_IP_ADDRESSES" | grep -q "null" && CP_IP_ADDRESSES=
 echo export CP_IP_ADDRESSES=\"$CP_IP_ADDRESSES\"
 
-WORKER_REPLICAS=`echo "$ICONF_TMP" | jq -r .compute[0].replicas`
+WORKER_REPLICAS=$(echo "$ICONF_TMP" | jq -r .compute[0].replicas)
 echo "$WORKER_REPLICAS" | grep -q "null" && WORKER_REPLICAS=
 echo export WORKER_REPLICAS=$WORKER_REPLICAS
 
 err=
 
 if [ $WORKER_REPLICAS -ne 0 ]; then
-	WORKER_NAMES=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .hostname'`
+	WORKER_NAMES=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .hostname')
 	echo "$WORKER_NAMES" | grep -q "null" && WORKER_NAMES=
 	echo export WORKER_NAMES=\"$WORKER_NAMES\"
 
-	WKR_MAC_ADDRS=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[].macAddress'`
+	WKR_MAC_ADDRS=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" )| .interfaces[].macAddress')
 	echo "$WKR_MAC_ADDRS" | grep -q "null" && WKR_MAC_ADDRS=
 	echo export WKR_MAC_ADDRS=\"$WKR_MAC_ADDRS\"
 
@@ -135,7 +135,7 @@ if [ $WORKER_REPLICAS -ne 0 ]; then
 	#echo "$WKR_MAC_ADDR_2ND" | grep -q "null" && WKR_MAC_ADDR_2ND=
 	#[ "$WKR_MAC_ADDR_2ND" ] && echo export WKR_MAC_ADDR_2ND=\"$WKR_MAC_ADDR_2ND\"
 
-	WKR_IP_ADDR=`echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" ) | .networkConfig.interfaces[0].ipv4.address[0].ip'`
+	WKR_IP_ADDR=$(echo "$ACONF_TMP" | jq -r '.hosts[] | select( .role == "worker" ) | .networkConfig.interfaces[0].ipv4.address[0].ip')
 	echo "$WKR_IP_ADDR" | grep -q "null" && WKR_IP_ADDR=
 	echo export WKR_IP_ADDR=\"$WKR_IP_ADDR\"
 

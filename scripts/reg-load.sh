@@ -27,7 +27,7 @@ aba_debug "Starting: $0 $*"
 
 try_tot=1  # def. value
 [ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && echo "[ABA] Attempting $try_tot times to load the images into the registry."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=$(( $1 + 1 )) && echo "[ABA] Attempting $try_tot times to load the images into the registry."    # If the retry value exists and it's a number
 aba_debug "try_tot=$try_tot"
 
 umask 077
@@ -36,6 +36,7 @@ aba_debug "Loading configuration files"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+export regcreds_display="regcreds"
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
@@ -82,7 +83,7 @@ if [ -s "$regcreds_dir/rootCA.pem" ]; then
 	aba_debug "Installing root CA certificate"
 	trust_root_ca "$regcreds_dir/rootCA.pem" # FIXME: Is this required here since the rootCA.pem is installed after reg install?
 else
-	aba_warning "No $regcreds_dir/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+	aba_warning "No $regcreds_display/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
 [ ! "$data_dir" ] && data_dir=\~
@@ -97,6 +98,7 @@ aba_debug "data/ directory exists"
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
 echo
+aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 echo
 
