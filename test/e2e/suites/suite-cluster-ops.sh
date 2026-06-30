@@ -587,9 +587,10 @@ e2e_run -q "Skip DNS for ISO test" "aba --verify conf"
 e2e_run "Generate ISO with version A (\$_VER_A)" \
 	"aba --dir e2e-test-iso-verchg iso"
 
-# Switch ocp_version back to the original (previous) version
-e2e_run "Change ocp_version back to original ($OCP_VERSION)" \
-	"aba --channel $TEST_CHANNEL --version $OCP_VERSION"
+# Switch ocp_version back to the pinned version from suite start — avoids channel
+# drift if a new z-stream was published during the suite run (e.g. p=4.21.20→4.21.21).
+e2e_run "Change ocp_version back to original ($_ocp_version)" \
+	"aba --channel $_ocp_channel --version $_ocp_version"
 
 _VER_B=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
 
