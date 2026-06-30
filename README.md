@@ -835,7 +835,7 @@ aba -d mirror sync
 For fully disconnected (save to disk, transfer, load):
 ```
 aba -d mirror save    # on the connected workstation
-# Transfer mirror/data/imageset-config.yaml and mirror/data/mirror_*.tar to the bastion
+# Transfer mirror/data/imageset-config.yaml, mirror/data/.imageset-config-digest.yaml, and mirror/data/mirror_*.tar to the bastion
 aba -d mirror load    # on the internal bastion
 ```
 
@@ -979,7 +979,7 @@ aba -d mirror --target-version 4.22.1 save
 
 This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images.
 
-2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
+2. Copy to the *internal bastion*: `aba/mirror/data/imageset-config.yaml`, `aba/mirror/data/.imageset-config-digest.yaml`, and `aba/mirror/data/mirror_000001.tar`.
 3. On the bastion: `aba -d mirror load`
 4. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
 5. Upgrade the cluster:
@@ -997,7 +997,7 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 
 1. Edit `aba/aba.conf` on the *connected workstation* to add operators/operator sets, then run `aba -d mirror save`.
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
-2. Copy `aba/mirror/data/imageset-config.yaml` and `aba/mirror/data/mirror_000001.tar` to the *internal bastion*.
+2. Copy to the *internal bastion*: `aba/mirror/data/imageset-config.yaml`, `aba/mirror/data/.imageset-config-digest.yaml`, and `aba/mirror/data/mirror_000001.tar`.
 3. On the bastion: `aba -d mirror load`
 4. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
 5. Add operators or upgrade OpenShift via the Console or CLI in the usual way.

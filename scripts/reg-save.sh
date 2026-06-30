@@ -149,6 +149,7 @@ if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; the
 	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_version_target})."
 	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
 	aba_info_ok "  mirror/data/imageset-config.yaml"
+	aba_info_ok "  mirror/data/.imageset-config-digest.yaml  (required for air-gap catalog pinning)"
 	aba_info_ok "  mirror/data/mirror_*.tar"
 	aba_info_ok "  cli/openshift-*-${ocp_version_target}*  (matching CLI binaries for target version)"
 	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"
