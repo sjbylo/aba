@@ -718,6 +718,7 @@ Next steps:\n\n\
 To upgrade a disconnected cluster:\n\n\
   1. Copy these files to the internal host:\n\
      • mirror/data/imageset-config.yaml\n\
+     • mirror/data/.imageset-config-digest.yaml\n\
      • mirror/data/mirror_*.tar\n\
      • cli/openshift-*-<version>*  (matching CLI binaries for target version)\n\n\
   2. On the internal host TUI:\n\
