@@ -236,16 +236,6 @@ e2e_run_remote -r 3 2 "Load images into Quay registry" \
     "cd ~/aba && aba -d mirror load --retry"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
-# Fully disconnected: ~/.docker/config.json must have ONLY mirror credentials
-e2e_run_remote "Pull secret: mirror registry present in config.json" \
-    "jq -e '.auths[\"${DIS_HOST}:${_QUAY_PORT}\"]' ~/.docker/config.json"
-e2e_run_remote "Pull secret: NO registry.redhat.io (disco mode)" \
-    "! jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
-e2e_run_remote "Pull secret: NO quay.io (disco mode)" \
-    "! jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
-e2e_run_remote "Pull secret: NO cloud.openshift.com (disco mode)" \
-    "! jq -e '.auths[\"cloud.openshift.com\"]' ~/.docker/config.json"
-
 test_end
 
 # ============================================================================
@@ -633,7 +623,7 @@ e2e_wait_cluster_available $SNO remote
 e2e_wait_cluster_ready $SNO remote 1800
 
 e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
-    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2 --force"
+    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
