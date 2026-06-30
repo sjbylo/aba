@@ -17002,6 +17002,7 @@ The status should detect whether there are unloaded tar archives in `mirror/data
 **Component:** Core (`scripts/include_all.sh` — `_oc_mirror_pin_catalogs_by_digest`, `scripts/backup.sh`)
 **Severity:** High (blocks upgrade workflow on disconnected hosts)
 **Status:** Open — backlog
+**Related:** Bug #958 (upgrade pack would eliminate this by bundling the correct digest ISC)
 
 ### Root cause
 
@@ -17155,6 +17156,206 @@ This creates `$HOME/.ssh/` as a literal path instead of expanding `$HOME` to `/h
 ### Fix
 
 Replace `\\\$HOME` with `\$HOME` (single backslash) so the local shell passes `$HOME` to the remote shell, which expands it correctly. Or better: use `~` which is simpler and avoids the quoting maze entirely.
+
+---
+
+## Bug #959 — Upgrade with `--allow-explicit-upgrade` bypasses admin acknowledgment gates
+
+- **Severity**: High (safety — user has no chance to review required upgrade gates/decisions)
+- **Component**: Core (`scripts/cluster-upgrade.sh`)
+- **Status**: BACKLOG
+- **Related**: Bug #889 (conditional update gate handling)
+
+### Description
+
+In disconnected environments without OSUS, ABA uses `--allow-explicit-upgrade` to force the upgrade because the cluster has no local update graph. This bypasses the cluster's own upgrade validation, meaning:
+
+1. **Admin acknowledgment gates are never shown to the user.** Cross-minor upgrades (e.g. 4.21 → 4.22) often have breaking changes or deprecations that require explicit admin review and acceptance.
+2. **The upgrade proceeds without any user decision point.** The user has no opportunity to review conditions, acknowledge risks, or decline.
+3. **The `oc` warning appears but ABA provides no context** — the user sees `"You have used --allow-explicit-upgrade for the update to proceed anyway"` with no explanation of why or what gates were skipped.
+
+### Expected behavior
+
+Before triggering the upgrade, ABA should:
+
+1. **Query available admin acknowledgment gates** — Check `oc adm upgrade` output and/or the `ClusterVersion` resource for any required acknowledgments (e.g. `AdminAckRequired` condition, `conditionalUpdates` with risks).
+2. **Present gates to the user** — Display the required acknowledgments clearly:
+   ```
+   [ABA] This upgrade requires the following admin acknowledgments:
+   [ABA]   - Kubernetes API removals in 4.22 (beta APIs removed)
+   [ABA]   - etcd encryption changes
+   [ABA] Review: https://docs.openshift.com/...
+   [ABA] Acknowledge and proceed? [y/N]
+   ```
+3. **STOP and let the human decide.** Do NOT auto-acknowledge gates. Gates are a human-only decision — ABA must never override them without explicit user permission, even in `--yes` / auto-answer mode.
+4. **If the user acknowledges** — They apply the required acks manually (or ABA applies them only after explicit per-gate confirmation). Then the user re-runs the upgrade.
+
+### Notes
+
+- ABA already has some gate handling (Bug #889 — `AdminAckRequired` in `cluster-upgrade.sh`), but it may auto-apply acks without user review.
+- The pre-flight `verify_upgrade_path_exists()` validates the *path* exists, but not the *conditions/gates* along that path.
+- In TUI mode, a dialog listing the gates with a confirm/cancel would be ideal.
+- This is a safety issue: the user should always have the chance to make an informed decision before a potentially breaking upgrade.
+
+---
+
+## Bug #958 — FEATURE REQUEST: "Upgrade pack" — single-file transfer for disconnected upgrades
+
+- **Severity**: Feature Request (major UX improvement for disconnected upgrade workflow)
+- **Component**: Core (new `aba pack` / `aba save --pack`), TUI (`tui-mirror.sh`)
+- **Status**: BACKLOG
+- **Related**: Bug #953 (stale digest files on disco), Bug #955 (CLI download attempts in DISCO mode), Bug #956 (aba.conf version mismatch after load), Bug #957 (CLI binaries missing from copy instructions)
+
+### Description
+
+Today, after `aba save` for a disconnected upgrade, the user must manually copy 4-5 files from different locations to the disco host. This is error-prone: users forget the digest ISC (#953), forget CLI binaries (#957), and `aba.conf` drifts (#956).
+
+### Proposed solution
+
+Create a single archive ("upgrade pack") containing everything needed for the upgrade:
+
+- `mirror_*.tar` (oc-mirror output)
+- `imageset-config.yaml` + `.imageset-config-digest.yaml`
+- Target version CLI binaries (`openshift-install`, `oc`)
+- Metadata file with version, channel, and architecture (so `aba.conf` auto-updates on disco side)
+
+**Connected side:**
+```
+$ aba save --to 4.22.2
+... saves images ...
+[ABA] Creating upgrade package: mirror/data/upgrade-pack-4.22.2.tar.gz
+[ABA] Copy this ONE file to the disconnected host and run: aba upgrade-load
+```
+
+**Disconnected side:**
+```
+$ aba upgrade-load upgrade-pack-4.22.2.tar.gz
+[ABA] Unpacking upgrade package...
+[ABA] Updating aba.conf: version 4.21.15 → 4.22.2 (from package metadata)
+[ABA] Installing CLI binaries for 4.22.2...
+[ABA] Loading images into registry...
+[ABA] Done! Run: aba day2 → aba upgrade --to 4.22.2
+```
+
+**TUI integration:**
+- "Prepare Upgrade for Transfer" creates the pack automatically
+- "Load Upgrade" on disco side unpacks and loads it
+
+### Implementation
+
+Simple `tar` wrapper around files that `reg-save.sh` already produces. New script/make target, estimated ~50-80 lines. The pack eliminates all the related bugs by making the transfer atomic.
+
+### Notes
+
+- The initial `aba bundle` already does this for first install — this is the upgrade equivalent
+- Could optionally auto-create the pack at the end of `aba save` (with a flag to disable)
+- Solves bugs #953, #955, #956, #957 in one shot for the upgrade workflow
+
+---
+
+## Bug #957 — Upgrade copy instructions should include CLI binaries for target version
+
+- **Severity**: Medium (user hits "version mismatch" or missing CLI errors on disco host)
+- **Component**: Core (`scripts/reg-save.sh`), TUI (`tui/v2/tui-mirror.sh`), docs (`README.md`)
+- **Status**: BACKLOG
+- **Related**: Bug #955 (CLI download fails in DISCO mode), Bug #956 (version mismatch), Bug #958 (upgrade pack eliminates manual copy entirely)
+
+### Description
+
+When upgrading across minor versions (e.g. 4.21 → 4.22) in a disconnected workflow, the user needs to copy the **target version CLI binaries** (`openshift-install`, `oc`) to the disco host alongside the tar + ISC. Without the correct CLIs, cluster install fails with version mismatch errors (see Bug #955).
+
+The initial bundle includes everything (CLIs + images), so the user doesn't think about it. But on a subsequent upgrade, the user only copies the new tar + ISC and forgets the CLIs.
+
+### Current state
+
+`reg-save.sh` already shows copy instructions after saving:
+```
+[ABA] To upgrade a disconnected cluster, copy to the internal host:
+[ABA]   mirror/data/imageset-config.yaml
+[ABA]   mirror/data/.imageset-config-digest.yaml
+[ABA]   mirror/data/mirror_*.tar
+[ABA]   cli/openshift-*-<target-version>* (matching CLI binaries for target version)
+[ABA]   Then run: aba load → aba day2 → aba upgrade --to <version>
+```
+
+The CLI line was added recently but needs to be verified it's present and clear in all places:
+1. `reg-save.sh` CLI output -- verify present
+2. TUI "Upgrade Images Ready" dialog -- verify present
+3. `README.md` disconnected upgrade instructions -- verify present
+4. `reg-sync.sh` -- N/A (sync goes direct to registry, no transfer needed)
+
+### Fix
+
+Audit all copy instruction locations and ensure CLI binaries are explicitly mentioned, especially for cross-minor upgrades. Consider making the message conditional: only mention CLIs when the target version is a different minor than the current version (z-stream upgrades within the same minor don't need new CLIs).
+
+---
+
+## Bug #956 — DISCO mode: `aba.conf` version mismatch after `aba load` causes "mirror not loaded" status
+
+- **Severity**: Medium (confusing UX, blocks cluster install on disco host)
+- **Component**: Core (`scripts/reg-load.sh`, `aba.conf`)
+- **Status**: BACKLOG
+- **Related**: Bug #955 (wrong CLIs downloaded due to stale version), Bug #958 (upgrade pack auto-updates aba.conf via metadata)
+
+### Description
+
+When a user transfers a payload (tar + ISC) from a connected host to a disconnected host, the `aba.conf` on the disco host may have a different OCP version than what's in the payload. After `aba load` succeeds, the registry contains the correct images, but `aba.conf` still has the old version. This causes:
+
+- TUI shows "mirror not loaded" / "no release image"
+- `aba verify` reports the mirror is incomplete
+- Cluster install fails with "release image not found"
+
+### Fix
+
+At `aba load` time, parse `imageset-config.yaml` to extract the version and channel. If they differ from `aba.conf`, auto-update `aba.conf` and inform the user:
+
+```
+[ABA] Updating aba.conf: version 4.21.15 → 4.22.1 (from imageset-config.yaml)
+[ABA] Updating aba.conf: channel stable → fast (from imageset-config.yaml)
+```
+
+This ensures `aba.conf` is correct after load, so status checks, verify, and cluster install all work.
+
+No changes needed for `aba day2` -- it reads from mirror data and the cluster, not `aba.conf` version.
+
+---
+
+## Bug #955 — DISCO mode: CLI download attempts should be blocked with a clear error
+
+- **Severity**: Medium (poor UX, wastes time, confusing error cascade)
+- **Component**: Core (`scripts/cli-download-all.sh`, `scripts/verify-release-image.sh`, Makefiles)
+- **Status**: BACKLOG
+- **Related**: Bug #957 (CLI binaries in copy instructions), Bug #958 (upgrade pack includes CLIs automatically)
+
+### Description
+
+When running `aba cluster --name sno --step install` on a disconnected (DISCO) host, ABA attempts to download CLI binaries (`oc`, `openshift-install`) from `mirror.openshift.com`. This obviously fails because the host has no internet. The resulting error cascade is long and confusing:
+
+```
+[ABA] Ensuring CLI downloads are complete ...
+[ABA] Error: Download failed for oc
+[ABA] openshift-client-linux-amd64-rhel9-4.20.20.tar.gz not available (404)
+[ABA] Downloading https://mirror.openshift.com/pub/openshift-v4/...
+[ABA] Download failed for openshift-client-linux-amd64-rhel9-4.20.20.tar.gz
+[ABA] Retrying download ...
+[ABA] Download failed ...
+...
+[ABA] Error: The OpenShift version set in 'aba.conf' does not match the version of the 'openshift-install' CLI.
+[ABA]        Please run 'aba -d cli clean install' to refresh the CLIs and try again.
+```
+
+In DISCO mode, downloads cannot succeed. ABA should detect that it's in DISCO mode (no internet / bundle workflow) and:
+1. **Skip download attempts entirely**
+2. **Show a clear message** like: `[ABA] Error: CLI binaries not found. In disconnected mode, CLIs must be included in the bundle or copied manually.`
+3. **Not suggest `aba -d cli clean install`** which also cannot work without internet
+
+This is also related to the version mismatch problem (Bug #954 discusses `aba.conf` version drift on disco hosts) — the version in `aba.conf` on disco was 4.20.20 but the mirrored images were for a different version, so even if downloads could work, they'd download the wrong version.
+
+### Expected behavior
+
+On a DISCO host, if required CLI binaries are missing:
+- Fail fast with: `[ABA] Error: Required CLI binaries not found for OCP <version>. In disconnected mode, ensure the bundle includes CLI binaries or copy them manually from the connected host.`
+- No download attempts, no retries, no misleading "refresh CLIs" suggestion
 
 ---
 
