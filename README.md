@@ -961,6 +961,14 @@ aba day2-osus
 
 ### Updating a cluster in a fully disconnected environment
 
+> **Important — channel must cover both versions:**
+> The OpenShift channel configured in `aba.conf` (`ocp_channel`) must contain both your *current* cluster version and the *target* upgrade version in its upgrade graph.
+> - **Z-stream** (e.g. 4.21.4 → 4.21.20): the `stable` channel for that minor version covers this automatically.
+> - **Cross-minor** (e.g. 4.21.x → 4.22.1): set `ocp_channel=stable` (or `fast`), which includes upgrade paths from the previous minor version.
+> - **Pre-release** (e.g. → 4.23.0-ec.2): use `ocp_channel=candidate`.
+>
+> If the channel does not include the current version as a valid starting point, the upgrade path will not be available — even if the target version's images are mirrored.
+
 #### Using `--target-version`
 
 1. On the *connected workstation*, set the target version and save the upgrade images:
@@ -995,6 +1003,9 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 5. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
 
 ### Updating a cluster in a partially disconnected environment
+
+> **Important — channel must cover both versions:**
+> The channel in `aba.conf` must contain both your current cluster version and the target version in its upgrade graph. See the note in [Updating a cluster in a fully disconnected environment](#updating-a-cluster-in-a-fully-disconnected-environment) for details.
 
 #### Using `--target-version`
 
