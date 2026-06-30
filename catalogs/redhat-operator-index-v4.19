@@ -1,5 +1,6 @@
 3scale-operator                                         Red Hat Integration - 3scale                                 threescale-2.16
-advanced-cluster-management                             Advanced Cluster Management for Kubernetes                   release-2.16
+advanced-cluster-management                             Advanced Cluster Management for Kubernetes                   release-2.17
+agent-sandbox-operator                                  Red Hat build of Agent Sandbox                               preview-0.9
 amq7-interconnect-operator                              Red Hat Integration - AMQ Interconnect                       1.10.x
 amq-broker-rhel8                                        Red Hat Integration - AMQ Broker for RHEL 8 (Multiarch)      7.12.x
 amq-broker-rhel9                                        Red Hat Integration - AMQ Broker for RHEL 9 (Multiarch)      7.14.x
@@ -73,8 +74,8 @@ mtc-operator                                            Migration Toolkit for Co
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.11
 multiarch-tuning-operator                               Multiarch Tuning Operator                                    stable
-multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.11
-multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.7
+multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.17
+multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.8
 netobserv-operator                                      Network Observability                                        stable
 nfd                                                     Node Feature Discovery Operator                              stable
 node-healthcheck-operator                               Node Health Check Operator                                   stable
@@ -114,7 +115,7 @@ rhacs-operator                                          Advanced Cluster Securit
 rhbk-operator                                           Red Hat build of Keycloak Operator                           stable-v26.6
 rhcl-operator                                           Red Hat Connectivity Link                                    stable
 rhdh                                                    Red Hat Developer Hub Operator                               fast
-rhods-operator                                          Red Hat OpenShift AI                                         stable
+rhods-operator                                          Red Hat OpenShift AI                                         stable-3.x
 rhods-prometheus-operator                               Prometheus Operator                                          beta
 rhpam-kogito-operator                                   RHPAM Kogito Operator                                        7.x
 rh-service-binding-operator                             Service Binding Operator                                     stable
