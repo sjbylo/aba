@@ -689,6 +689,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 
 	# Persist target version and kick off ISC regeneration after user confirmed
 	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
+	ocp_version_target="$_target_ver"
 	tui_kick_isconf_regen
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
