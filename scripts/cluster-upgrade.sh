@@ -301,16 +301,29 @@ if [ ! "$upgrade_already_running" ]; then
 	_conditional_versions=$(echo "$_upgrade_text" \
 		| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
 
-	# Ensure the cluster's update channel matches the target version's major.minor.
-	# Only same-channel upgrades are supported (e.g. stable-4.20 → stable-4.21).
-	# The channel prefix is read from the live cluster — never from config files.
+	# Ensure the cluster's update channel matches what was mirrored.
+	# The ISC (imageset-config.yaml) is the source of truth — it contains
+	# the channel used for save/sync (e.g. fast-4.22). On disconnected hosts
+	# aba.conf may still have the original install channel (e.g. stable),
+	# not the upgrade channel, so we read from the ISC instead.
 	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
 	_target_major=$(_ver_minor "$target_ver")
-	if [ -n "$_current_channel" ]; then
+
+	# Read channel from ISC (what was actually mirrored)
+	_isc_file="../${mirror_name}/data/imageset-config.yaml"
+	_isc_channel=""
+	if [ -f "$_isc_file" ]; then
+		_isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
+	fi
+	if [ -n "$_isc_channel" ]; then
+		_channel_prefix="${_isc_channel%-*}"
+		aba_debug "Channel from ISC: $_isc_channel (prefix: $_channel_prefix)"
+	elif [ -n "$_current_channel" ]; then
 		_channel_prefix="${_current_channel%-*}"
+		aba_debug "No ISC channel found — using cluster channel prefix: $_channel_prefix"
 	else
 		_channel_prefix="${ocp_channel:-stable}"
-		aba_warning "No update channel set on cluster — using '$_channel_prefix' from aba.conf"
+		aba_warning "No update channel set on cluster or ISC — using '$_channel_prefix' from aba.conf"
 	fi
 	_required_channel="${_channel_prefix}-${_target_major}"
 	_channel_changed=""
