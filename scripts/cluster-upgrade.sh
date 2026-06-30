@@ -257,15 +257,12 @@ if [ ! "$upgrade_already_running" ]; then
 	mirror_image_by_digest="$reg_host:$reg_port$reg_path/openshift/release-images@$digest"
 
 	# When OSUS is active, use --to <version> which lets the CVO validate
-	# the upgrade path via the local graph.  No --allow-explicit-upgrade needed.
-	# Fall back to --to-image if the OSUS graph is unreachable (503, timeout).
-	_image_cmd="oc adm upgrade --to-image=$mirror_image_by_digest --allow-explicit-upgrade $opt_force"
-
+	# the upgrade path via the local graph, including admin ack gates.
 	if [ "$osus_upstream" ]; then
 		aba_info "Local update graph detected: $osus_upstream"
 		upgrade_cmd="oc adm upgrade --to $target_ver $opt_force"
 	else
-		upgrade_cmd="$_image_cmd"
+		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest $opt_force"
 	fi
 
 	# Pre-flight: check ClusterVersion conditions using structured JSON.
@@ -375,10 +372,22 @@ if [ ! "$upgrade_already_running" ]; then
 			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	fi
 
-	# If no OSUS graph, fall back to --to-image (disconnected without OSUS)
+	# If no OSUS graph, warn and require explicit user permission.
+	# Without OSUS the cluster has no update graph, so OpenShift cannot
+	# validate the upgrade path or enforce admin acknowledgment gates.
+	# We must get user consent before adding --allow-explicit-upgrade.
 	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
-		aba_info "No local update graph (OSUS) — using --to-image with digest"
-		upgrade_cmd="$_image_cmd"
+		echo
+		aba_warning "No local update graph (OSUS) detected." \
+			"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
+			"" \
+			"It is strongly recommended to configure OSUS before upgrading:" \
+			"  aba day2" \
+			"" \
+			"If you proceed, the upgrade will bypass OpenShift's update graph validation."
+		echo
+		ask "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
+		upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
 	fi
 
 	# Execute upgrade
