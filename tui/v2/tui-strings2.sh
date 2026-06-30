@@ -169,7 +169,6 @@ TUI2_CONNO_TAG_OPERATORS="O"
 TUI2_CONNO_TAG_BUNDLE="B"
 TUI2_CONNO_TAG_INSTALL="I"
 TUI2_CONNO_TAG_DAY2="D"
-TUI2_CONNO_TAG_MONITOR="W"
 TUI2_CONNO_TAG_DELETE="K"
 TUI2_CONNO_TAG_ADVANCED="A"
 TUI2_CONNO_TAG_RECONFIGURE="W"
@@ -185,7 +184,6 @@ TUI2_CONNO_TAG_SETTINGS="C"
 TUI2_DIRECT_TAG_INSTALL="I"
 TUI2_DIRECT_TAG_DAY2="D"
 TUI2_DIRECT_TAG_DELETE="K"
-TUI2_DIRECT_TAG_MONITOR="W"
 TUI2_DIRECT_TAG_ADVANCED="A"
 TUI2_DIRECT_TAG_RECONFIGURE="W"
 TUI2_DIRECT_TAG_SWITCH_MIRROR="M"
@@ -262,7 +260,7 @@ TUI2_MSG_PLATFORM_CONFIG_MISSING="%s configuration not found.\n\nExpected: %s\nR
 # Prompt / Message Text — Mirror / ISC
 # =============================================================================
 
-TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration...\n\nPlease wait."
+TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration (operator catalogs may also be refreshed, if needed).\n\nPlease wait."
 TUI2_MSG_ISC_NOT_FOUND="ImageSet configuration file not found.\n\nFile: %s"
 TUI2_MSG_ISC_SAVED="ImageSet configuration saved.\n\nABA will not overwrite your edits.\nUse 'Reset' to revert to auto-generated."
 TUI2_MSG_ISC_RESET="ImageSet configuration reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
@@ -354,9 +352,9 @@ TUI2_MSG_PULL_SECRET_FOUND="Pull secret found at:\n\n  %s\n"
 TUI2_MSG_PULL_SECRET_PASTE="Paste your pull secret JSON:"
 TUI2_MSG_PULL_SECRET_EMPTY="No pull secret entered."
 TUI2_MSG_PULL_SECRET_INVALID="Invalid JSON. Please try again."
-TUI2_MSG_VERSION_ENTRY="Enter version (x.y.z):"
+TUI2_MSG_VERSION_ENTRY="Enter version (x.y.z or x.y.z-rc.N):"
 TUI2_MSG_VERSION_MENU="Select OpenShift version (%s channel):"
-TUI2_MSG_VERSION_MANUAL_PROMPT="Cannot fetch versions automatically.\n\nEnter OpenShift version manually (x.y.z):"
+TUI2_MSG_VERSION_MANUAL_PROMPT="Cannot fetch versions automatically.\n\nEnter OpenShift version manually (x.y.z or x.y.z-rc.N):"
 TUI2_MSG_VERSION_FETCH_FAIL="Cannot fetch version data (no internet?).\n\nUsing existing version: %s"
 
 # =============================================================================
@@ -403,7 +401,7 @@ TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\n
 # Messages — Execution / Exit
 # =============================================================================
 
-TUI2_MSG_CONFIRM_EXIT="\nExit ABA TUI?\n"
+TUI2_MSG_CONFIRM_EXIT="\nExit ABA TUI?"
 TUI2_MSG_EXIT_HELP="Navigation:\n\n• Press ESC to go back to the previous menu\n• In a wizard, ESC returns to the main menu\n• At the main menu, ESC offers to exit the TUI\n• Press ESC again on the exit dialog to quit immediately\n\nConfiguration is only saved when you complete actions."
 TUI2_MSG_EXEC_MODE="Choose execution mode:"
 TUI2_MSG_EDITOR_PROMPT="How would you like to edit?\n\n  %s"

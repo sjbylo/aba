@@ -1,4 +1,90 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.1...HEAD)
+
+---
+
+## [1.1.1](https://github.com/sjbylo/aba/releases/tag/v1.1.1) - 2026-06-30
+
+Upgrade robustness, RC/EC pre-release support, catalog performance, TUI hardening, and 80+ bug fixes
+
+
+Upgrade robustness, RC/EC pre-release support, TUI hardening, catalog performance, and 80+ bug fixes
+
+### New Features
+
+- **RC/EC pre-release version support** — Full support for pre-release OpenShift versions (e.g. `4.22.0-rc.1`, `4.23.0-ec.2`). CLI tools download from `ocp-dev-preview/` paths; TUI wizard and menus handle pre-release version strings correctly.
+- **Network auto-detection** — DNS, gateway, and machine network auto-detected at cluster creation time from the host's active interface, instead of at `aba.conf` creation. Existing `cluster.conf` files also get auto-detected values when missing.
+- **`aba cluster-version`** — Quick TCP probe to check if a cluster's API is reachable, plus display the cluster's current version without a full `oc` login.
+- **Pre-flight version check** — Validate that the source OpenShift version exists in the target channel's Cincinnati graph before running `oc-mirror save/sync`, preventing wasted time on impossible upgrade paths.
+- **Upgrade version picker** — TUI upgrade menu queries available versions from the mirror registry and validates them against the Cincinnati upgrade graph before allowing selection.
+- **Auto-detect upgrade target from mirror** — `aba upgrade` automatically detects the target version from mirrored release images when no `--to` is specified.
+- **Semver-aware version resolution** — Version comparisons and resolution now handle pre-release suffixes (`-rc.N`, `-ec.N`) correctly throughout the codebase.
+- **Config drift detection** — Warn when `mirror.conf` or `cluster.conf` values diverge from the installed state (e.g. `reg_host` changed after registry install).
+- **`--target-version none`** — Clear the upgrade target version via CLI (`aba --target-version none`) or TUI ("Clear target" option in the upgrade picker).
+- **Dynamic oc-mirror URL** — Download URL and version displayed during mirror operations; adapts to the installed OCP version.
+
+### Improvements
+
+- **Structured upgrade pre-flight checks** — Replace brittle string-grepping of `oc adm upgrade` output with structured `ClusterVersion` condition checks (`Failing`, `Upgradeable`, `Progressing`) and `availableUpdates` JSON validation. Clear, actionable error messages with links to Red Hat documentation.
+- **Day-2 CA certificate handling** — Detect when the registry CA certificate has changed and append the new CA to the cluster trust bundle (preserving the old CA), preventing `ImagePullBackOff` after registry reinstall.
+- **Cluster channel auto-alignment** — `aba day2` automatically sets the cluster's update channel to match `ocp_channel` from `aba.conf`, fixing OSUS graph mismatches when mirrored channel differs from cluster default.
+- **Registry SSH pre-flight** — Quay install pre-flight now verifies SSH to localhost, auto-starting `sshd` and configuring keys if SSH fails.
+- **TUI upgrade gate dialog** — Word-wrap `oc adm upgrade` output in the upgrade gate dialog for readability; auto-size dialog dimensions.
+- **TUI performance** — Eliminate 4-5 second pause on menu return by refactoring mirror recheck to avoid redundant registry probes.
+- **Input validation hardening** — 15+ input validation bugs fixed across core scripts and TUI (metacharacter escaping, path validation, format checks).
+- **Upgrade safety** — TUI pre-flight gate check rejects downgrades and validates upgrade path before proceeding.
+- **Validate upgrade target** — Validate upgrade target version against the channel's Cincinnati graph before `oc-mirror save/sync` operations.
+- **Minimum disk reduced** — Minimum disk space requirement reduced from 200 GB to 150 GB.
+- **Combined pre-flight** — Internet connectivity and pull-secret checks combined into a single pre-flight for save/sync operations.
+- **Disk-space warning** — Disk-space check during `reg-save` changed from abort to warning, allowing the user to proceed.
+- **Dynamic vSphere label** — Preflight dialog dynamically shows "ESXi" or "vSphere" based on detected platform.
+- **README documentation** — Expanded TUI section, added proxy mode documentation, RC/EC pre-release docs, and fixed broken table/commands.
+- **Kubeadmin password masked** — `show_error()` output masks the kubeadmin password to prevent accidental exposure in logs.
+- **Catalog download performance** — Skopeo content-layer digest probe (~1s) skips the full podman pull + extract pipeline (~15s/catalog) when catalog data hasn't changed. Repeat `aba mirror isconf` drops from ~39s to ~1.3s. Works across all architectures (amd64, s390x, arm64, ppc64le).
+- **Catalog image cleanup** — Catalog container images removed after extraction, saving ~1-2 GB per catalog on disk.
+
+### Bug Fixes
+
+- **ESXi variable leak (Bug #618)** — Clear inherited `GOVC_DATACENTER` and `GOVC_CLUSTER` on standalone ESXi detection, preventing `govc` failures when switching between vCenter and ESXi targets.
+- **State override robustness** — State override uses `clusterstate` symlink instead of glob matching, preventing stale state leaks.
+- **`replace-value-conf` hardening** — Multiple fixes: auto-quote shell metacharacters, handle tilde in values, correct `-v ''` (empty value) behavior, upsert mode for new keys, comment-out on empty value instead of clearing.
+- **Security: config input injection (Bug #405)** — Block backtick, dollar sign, and backslash in TUI config inputs to prevent shell injection.
+- **Robust `aba delete` (Bugs #317, #465, #470)** — Kill orphaned monitor processes, handle corrupted state directories, clean stale ISO files.
+- **`--type` flag (Bug #313)** — `--type` flag now updates existing `cluster.conf` instead of being ignored.
+- **Atomic Docker image save** — `docker-reg-image.tgz` saved atomically to prevent corruption from interrupted writes.
+- **Catalog container leak** — Prevent catalog containers from leaking as running processes after index extraction.
+- **Skip Quay tarball for Docker** — Skip Quay tarball extraction when `reg_vendor=docker`.
+- **Auth backup override (Bug #919)** — Fix `auth.backup` override that could overwrite valid credentials during sync preflight.
+- **Conditional update gate (Bug #889)** — Handle `AdminAckRequired` and other conditional update gates in `cluster-upgrade.sh`.
+- **DNS/NTP normalization** — Normalize space-separated and tab-separated DNS/NTP input to commas.
+- **Pull secret JSON validation (Bug #497)** — Validate JSON format when using an existing pull secret file.
+- **DISCO wizard gate (Bugs #571, #880)** — Wizard stays open when install is cancelled; gate drops correctly to action menu on failure.
+- **DISCO menu cursor (Bug #886)** — Menu cursor starts on correct item (View ISC) instead of Install Registry.
+- **Internet pre-check (Bug #333)** — Pre-check internet connectivity before allowing DISCO-to-Connected mode switch.
+- **Upgrade dry-run error (Bug #508)** — Show actual error message when upgrade dry-run fails instead of generic failure.
+- **Registry vendor refresh (Bug #516)** — Refresh registry vendor from `mirror.conf` in TUI Settings menu.
+- **Operator basket detection (Bug #509)** — Detect operator basket content changes, not just size.
+- **Upgrade target persistence (Bug #512)** — Don't persist upgrade target version before user confirms.
+- **MAC validation (Bug #514)** — Don't clear all MACs on single validation error.
+- **Upgrade cancel (Bug #511)** — Clear target version on Cancel in upgrade manual entry.
+- **Day-2 platform message (Bug #515)** — Show platform-appropriate message in Day-2 Startup.
+- **Mirror reinstall dialog (Bug #306)** — Show reinstall dialog when mirror is installed but unverified.
+- **Bundle path validation (Bug #413)** — Validate bundle path rejects single quotes.
+- **Page-1 edits (Bug #506)** — Preserve page-1 wizard edits across `_cluster_generate_defaults` regeneration.
+- **Externalized cluster support (Bugs #524, #526)** — `_day2_status()` and related functions use `cluster_kubeconfig()` for externalized clusters.
+- **Config comment stripping (Bugs #523, #519)** — Strip inline comments in cluster config drift detection.
+- **Install-complete marker (Bug #528)** — Back up `.install-complete` marker and check externalized kubeconfig in auto-detect.
+- **Pipefail leak (Bug #525)** — Remove `pipefail` leak from `fetch_all_versions()`.
+- **Mirror reg port (Bugs #479, #441)** — Fix mirror registry port parsing; TUI rejects IP address for `reg_host`.
+- **VM resources display** — VM resources page shows memory and disk values with correct units.
+- **ISC stale cache** — Eliminate stale mirror cache after failed operations and wizard version changes.
+- **Dialog spacing** — Consistent dialog spacing via smart `\n<space>` wrapper in `dlg()`.
+- **`show_help` blank line (Bug #936)** — Blank line in help text no longer breaks the Interfaces page.
+- **`aba tui` guard** — Prevent calling `aba tui` directly (use `abatui` instead).
+- **Gateway shift bug** — Fix gateway IP shift when switching between cluster configurations.
+- **Stale `ocp_version` in bundle** — Fix stale OCP version in bundle prerequisites.
+- **ISC regeneration visibility** — ISC regeneration errors now visible to the user instead of silently swallowed.
+- **`run_once` TUI fix** — Skip `run_once` self-healing validation for TUI background checks.
+- **Pull-secret diagnostics** — Improved pull-secret mismatch diagnostics with user-facing paths.
 
 ---
 

@@ -14,18 +14,21 @@ for _arg in "$@"; do
 done
 [ "$1" = "wait=1" ] && wait=1 && shift
 
-[ ! -s iso-agent-based/auth/kubeconfig ] && aba_abort "Cannot find iso-agent-based/auth/kubeconfig file!"
-
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
+# Resolve kubeconfig (prefer externalized state, fall back to local)
+_kc=$(cluster_kubeconfig)
+[ -z "$_kc" ] && aba_abort "Cannot find kubeconfig for this cluster! Expected at ~/.aba/clusters/$cluster_name.$base_domain/kubeconfig or iso-agent-based/auth/kubeconfig"
+export KUBECONFIG="$_kc"
+
 #aba_info "Ensuring CLI binaries are installed"
 scripts/cli-install-all.sh --wait oc
 
-server_url=$(cat iso-agent-based/auth/kubeconfig | grep " server: " | awk '{print $NF}' | head -1)
+server_url=$(grep " server: " "$KUBECONFIG" | awk '{print $NF}' | head -1)
 
 aba_info Checking cluster ...
 # Or use: timeout 3 bash -c "</dev/tcp/host/6443"
@@ -37,15 +40,11 @@ fi
 
 aba_info "Attempting to access the cluster ... "
 
-# Refresh kubeconfig
-unset KUBECONFIG
-# Use the actual kubeconfig used after the cluster was installed, in case it was overwritten
-cp iso-agent-based/auth.backup/kubeconfig  iso-agent-based/auth/kubeconfig
-OC="oc --kubeconfig=iso-agent-based/auth/kubeconfig"
+OC="oc --kubeconfig=$KUBECONFIG"
 
 aba_debug "Running: $OC whoami"
 if ! $OC whoami >/dev/null; then
-	echo_red "Error: Cannot access the cluster using iso-agent-based/auth/kubeconfig file!" >&2
+	echo_red "Error: Cannot access the cluster using KUBECONFIG=$KUBECONFIG" >&2
 
 	exit 1
 fi

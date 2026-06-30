@@ -9,7 +9,7 @@ endif
 TEMPLATES = templates
 SCRIPTS   = scripts
 name     ?= standard	# def. cluster name
-type     ?= standard	# def. cluster type
+type     ?=		# cluster type (sno|compact|standard), empty = use existing or template default
 #light    ?=		# by def. do not create light install bundle
 MIRROR_CMDS := save load sync verify
 

@@ -17,7 +17,7 @@ export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
-if [ ! "$reg_host" -o ! "$reg_port" ]; then
+if [ ! "$reg_host" ] || [ ! "$reg_port" ]; then
 	aba_abort "No registry is configured in: mirror/mirror.conf.  Run: 'aba -d mirror mirror.conf' and edit the mirror.conf file."
 fi
 
@@ -49,7 +49,7 @@ if ! echo "$mirrors" | grep -q "^$reg_host:$reg_port$"; then
 	aba_warning \
 		"Values in mirror.conf do not match the values in pull secret: regcreds/pull-secret-mirror.json!" \
 		"Value in mirror.conf: $reg_host:$reg_port" \
-		"Value in pull-secret-mirror.json: $(echo $mirrors | tr '\n' ' ')" \
+		"Value in pull-secret-mirror.json: $(echo "$mirrors" | tr '\n' ' ')" \
 		"Mirror authentication/verification may fail.  Fix the issue and try again!"
 	sleep 1
 fi

@@ -68,6 +68,7 @@ integration_tests=(
 	test/func/test-tui-v2-02-basket.sh
 	test/func/test-tui-v2-03-actions.sh
 	test/func/test-tui-v2-04-isconf.sh
+	test/func/test-catalog-temp-cleanup.sh
 )
 
 passed=0

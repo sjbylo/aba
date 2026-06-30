@@ -11,18 +11,10 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $*"
 
-# Check internet connection to the registries oc-mirror pulls from
-aba_info "Checking Internet access to registry.redhat.io"
-
-if ! curl -sILk --connect-timeout 10 --max-time 15 --retry 2 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
-	aba_abort "Cannot access https://registry.redhat.io/" \
-		"Access to registry.redhat.io is required to save images to disk."
-fi
-
 # Script called with args "debug" and/or "retry"
 try_tot=1  # def. value
 ##[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=`expr $1 + 1` && aba_info "Attempting $try_tot times to save the images to disk."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && r=1 && try_tot=$(( $1 + 1 )) && aba_info "Attempting $try_tot times to save the images to disk."    # If the retry value exists and it's a number
 aba_debug "try_tot=$try_tot"
 
 umask 077
@@ -33,6 +25,39 @@ source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration validated"
+
+# Pre-flight: verify internet access and pull secret before proceeding
+require_internet_and_pull_secret
+
+# Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
+aba_info "Verifying release image availability for v${ocp_version} ..."
+if ! verify_release_version_exists "$ocp_version"; then
+	aba_abort \
+		"Release version $ocp_version not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+		"This version may not have been released yet, or the channel may be wrong." \
+		"Use 'aba ocp-versions' to list available versions."
+fi
+if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	aba_info "Verifying release image availability for upgrade target v${ocp_version_target} ..."
+	if ! verify_release_version_exists "$ocp_version_target"; then
+		aba_abort \
+			"Upgrade target version $ocp_version_target not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+			"This version may not have been released yet, or the channel may be wrong." \
+			"Use 'aba ocp-versions' to list available versions."
+	fi
+	# Fail fast: verify upgrade path exists before starting downloads
+	_path_diag=""
+	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
+		_lowest="${_path_diag##*|}"
+		aba_abort \
+			"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
+			"You need to upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
+			"" \
+			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+	fi
+fi
 
 # Still downloading?
 export PLAIN_OUTPUT=1
@@ -70,20 +95,20 @@ mkdir -p data
 avail=$(df -m data | awk '{print $4}' | tail -1)
 aba_debug "Available disk space: $avail MB"
 
-# Minimum 20GB for base platform
+# Stark warning if very low (incremental saves may still succeed, so don't abort)
 if [ $avail -lt 20500 ]; then
-	aba_abort "Not enough disk space available under $PWD/data (only $avail MB)" \
-		"At least 20GB is required for the base OpenShift platform alone" \
-		"Operators require additional 40-400GB of space"
-fi
-
-# Warning for operators (if less than 50GB available)
-if [ $avail -lt 51250 ]; then
+	aba_warning "Very low disk space under $PWD/data (only $avail MB free)" \
+		"A first-time save requires at least 20GB for the base platform alone" \
+		"Operators require additional 40-400GB of space" \
+		"Incremental saves may succeed with less space"
+	echo >&2
+elif [ $avail -lt 51250 ]; then
 	aba_warning "Less than 50GB of space available under $PWD/data (only $avail MB)" \
 		"Operator images require between ~40 to ~400GB of disk space!"
 	echo >&2
 fi
 
+aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
 aba_warning \
@@ -124,6 +149,7 @@ if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; the
 	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_version_target})."
 	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
 	aba_info_ok "  mirror/data/imageset-config.yaml"
+	aba_info_ok "  mirror/data/.imageset-config-digest.yaml  (required for air-gap catalog pinning)"
 	aba_info_ok "  mirror/data/mirror_*.tar"
 	aba_info_ok "  cli/openshift-*-${ocp_version_target}*  (matching CLI binaries for target version)"
 	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"

@@ -13,20 +13,14 @@ source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
 # REG_VENDOR_OVERRIDE lets Makefile backward-compat aliases force a specific vendor
-vendor="${REG_VENDOR_OVERRIDE:-${reg_vendor:-auto}}"
+vendor="${REG_VENDOR_OVERRIDE:-$(resolved_reg_vendor)}"
 
-# Resolve "auto": Quay if available for this architecture, else Docker
-if [ "$vendor" = "auto" ]; then
-	arch=$(uname -m)
-	case "$arch" in
-		aarch64|arm64) vendor=docker ;;
-		*)             vendor=quay ;;
-	esac
-	aba_info "reg_vendor=auto resolved to '$vendor' for architecture $arch"
-fi
+aba_debug "Resolved registry vendor: $vendor (reg_vendor=${reg_vendor:-auto})"
 
-# Persist resolved vendor for uninstall and status display
-echo "$vendor" > .reg_vendor
+case "$vendor" in
+	quay|docker|existing) ;;
+	*) aba_abort "Unknown registry vendor '$vendor'. Valid values: quay, docker, existing" ;;
+esac
 
 # "existing" = externally managed registry; nothing to install
 if [ "$vendor" = "existing" ]; then

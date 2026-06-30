@@ -107,12 +107,12 @@ msg=
 [ ! "$quiet" ] && printf "\n${_B}ABA Installer${_N}\n\n" >&2
 
 is_repo_available() {
-	[ -s ./scripts/aba.sh -a -x ./scripts/aba.sh ] && return 0
+	[ -s ./scripts/aba.sh ] && [ -x ./scripts/aba.sh ] && return 0
 	# If curl is used...
-	[ "$0" = "--" -o "$0" = "bash" ] && return 1
+	[ "$0" = "--" ] || [ "$0" = "bash" ] && return 1
 
 	# We must have the repo, cd into it...
-	cd $(dirname $0)
+	cd "$(dirname "$0")"
 	return 0
 }
 

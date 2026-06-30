@@ -173,7 +173,7 @@ if [ "$dest" != "-" ]; then
 		aba_info "Also transfer the image set archive file(s), for example, with:"
 		aba_info " cp mirror/data/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		aba_info "After transfering the install bundle file and the image set archive file(s) to your internal bastion"
+		aba_info "After transferring the install bundle file and the image set archive file(s) to your internal bastion"
 		aba_info "extract them into your home directory and"
 		aba_info "then move the image set archive file(s) into the aba/mirror/data/ directory & continue by installing & running 'aba', for example, with the commands:"
 		aba_info "  tar xvf $(basename $dest)"
@@ -192,7 +192,7 @@ if [ "$dest" != "-" ]; then
 		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
 		aba_info " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
 		echo
-		aba_info "After transfering the install bundle file to your internal bastion"
+		aba_info "After transferring the install bundle file to your internal bastion"
 		aba_info "extract it into your home directory and"
 		aba_info "then continue by installing & running 'aba', for example, with the commands:"
 		aba_info "  tar xvf $(basename $dest)"

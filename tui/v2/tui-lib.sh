@@ -15,6 +15,14 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 # =============================================================================
+# Global state: mirror recheck flag
+# =============================================================================
+# Set true on startup (initial mirror probe) and by _invalidate_mirror_cache()
+# after mirror-changing actions. The menu loop waits for the background check
+# only when this is true, then resets it.
+_TUI_NEED_MIRROR_RECHECK=true
+
+# =============================================================================
 # Logging
 # =============================================================================
 
@@ -156,7 +164,7 @@ _valid_port_names() {
 _TUI_TMP=$(mktemp)
 
 _tui_cleanup() {
-	rm -f "$_TUI_TMP" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
+	rm -f "$_TUI_TMP" "${_TUI_TMP}.edit" "${_TUI_DIALOGRC:-}" "${_ABA_TUI_PID_FILE:-}"
 	tui_log "TUI v2 exited"
 }
 trap '_tui_cleanup' EXIT
@@ -165,7 +173,7 @@ trap '_tui_cleanup' EXIT
 # Dialog appearance (nmtui-like styling — same as v1)
 # =============================================================================
 
-_TUI_DIALOGRC="${TMPDIR:-/tmp}/.dialogrc-v2.$$"
+_TUI_DIALOGRC="$ABA_TMP/dialogrc-v2.$$"
 export DIALOGRC="$_TUI_DIALOGRC"
 
 cat > "$_TUI_DIALOGRC" <<'EOF'
@@ -211,6 +219,10 @@ EOF
 # dlg — wrapper that adds consistent styling:
 #   - Pads --title with spaces: "Foo" → " Foo "
 #   - Prepends \n to the prompt/message text (empty line below title)
+#   - Appends \n<space> to msgbox/yesno/inputbox text (blank line before buttons);
+#     dialog ignores bare trailing \n for height, the space forces the line to render.
+#     Skipped for menus and mixedform.
+#   - Infobox text is NOT modified (no buttons, compact spinners with fixed sizes)
 #   - For menu/radiolist/checklist: replaces menu-height=0 with the actual
 #     item count so dialog sizes the box to fit all items (no scrollbar)
 dlg() {
@@ -219,6 +231,7 @@ dlg() {
 	local next_is_text=false
 	local has_menu=false
 	local menu_type=""
+	local _add_trailing=false
 	local dims_after_text=0
 	local height_idx=-1
 	local width_val=""
@@ -231,10 +244,24 @@ dlg() {
 			continue
 		fi
 		if [[ "$next_is_text" == "true" ]]; then
-			if [[ "$has_menu" == "true" ]]; then
-				if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
-					arg="\n$arg"
+			# Prepend \n for consistent spacing below title (all dialog types)
+			if [[ "$arg" != "\n"* && "$arg" != $'\n'* ]]; then
+				arg="\n$arg"
+			fi
+			# Append trailing blank line before buttons.
+			# dialog ignores bare trailing newlines for height; the space forces the
+			# line to render.  Use the same newline style as the text: literal \n for
+			# texts using literal \n sequences, real $'\n' for texts with real newlines
+			# (e.g. splash screen).  Mixing styles causes dialog to misbehave.
+			# Only for types with buttons — skip infobox/mixedform/menus.
+			if [[ "$_add_trailing" == "true" && "$arg" != *'\n ' && "$arg" != *$'\n ' ]]; then
+				if [[ "$arg" == *$'\n'* ]]; then
+					arg="$arg"$'\n '
+				else
+					arg="$arg\n "
 				fi
+			fi
+			if [[ "$has_menu" == "true" ]]; then
 				arg="${arg}\n\n(Navigate: Arrow keys, Tab, SPACE, ESC)"
 				dims_after_text=3
 			fi
@@ -260,7 +287,9 @@ dlg() {
 				next_is_text=true; has_menu=true; menu_type="menu" ;;
 			--radiolist|--checklist)
 				next_is_text=true; has_menu=true; menu_type="checklist" ;;
-			--msgbox|--yesno|--inputbox|--infobox|--mixedform)
+			--msgbox|--yesno|--inputbox)
+				next_is_text=true; _add_trailing=true ;;
+			--mixedform)
 				next_is_text=true ;;
 		esac
 		args+=("$arg")
@@ -302,16 +331,8 @@ _TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
 # Values: "auto", "quay", "docker"
 _TUI_REG_VENDOR="auto"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-	# Read reg_vendor directly from mirror.conf to reflect user's configured intent.
-	# normalize-mirror-conf would return the resolved/installed value from state.sh.
-	_raw_vendor=$(grep '^reg_vendor=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
-	case "${_raw_vendor,,}" in
-		quay)   _TUI_REG_VENDOR="quay" ;;
-		docker) _TUI_REG_VENDOR="docker" ;;
-		auto)   _TUI_REG_VENDOR="auto" ;;
-		*)      _TUI_REG_VENDOR="auto" ;;
-	esac
-	unset _raw_vendor
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+	_TUI_REG_VENDOR="${reg_vendor:-auto}"
 fi
 
 ui_backtitle() {
@@ -327,7 +348,14 @@ ui_backtitle() {
 	# Build title progressively — only show sections with real data
 	local text="ABA TUI v2"
 	[ -n "$mode_display" ] && text="$text  |  $mode_display"
-	[ -n "$ch" ] && [ -n "$ver" ] && text="$text  |  $ch $ver"
+	if [[ -n "$ch" && -n "$ver" ]]; then
+		local _tgt="${ocp_version_target:-}"
+		if [[ -n "$_tgt" && "$_tgt" != "$ver" ]]; then
+			text="$text  |  $ch $ver → $_tgt"
+		else
+			text="$text  |  $ch $ver"
+		fi
+	fi
 
 	local cols=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
 	local pad=$(( (cols - ${#text}) / 2 ))
@@ -383,10 +411,12 @@ show_help() {
 # Config files are sourced by bash — unescaped single quotes corrupt them.
 # Usage:  _tui_reject_squote "$value" || continue
 _tui_reject_squote() {
-	[[ "$1" != *"'"* ]] && return 0
-	dlg --backtitle "$(ui_backtitle)" --msgbox \
-		"Input cannot contain single-quote (') characters.\n\nPlease re-enter without single quotes." 0 0
-	return 1
+	if [[ "$1" == *"'"* || "$1" == *'`'* || "$1" == *'$'* || "$1" == *'\\'* ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox \
+			"Input cannot contain shell metacharacters: ' \` \$ \\\\\n\nPlease re-enter without these characters." 0 0
+		return 1
+	fi
+	return 0
 }
 
 # Generic password prompt: hidden input, double entry, match check.
@@ -501,28 +531,11 @@ _format_cmd_display() {
 	printf '%s' "$out"
 }
 
-# Session-scoped execution mode preference (empty = ask every time)
-_TUI_EXEC_MODE="${_TUI_EXEC_MODE:-}"
-
 confirm_and_execute() {
 	local cmd="$1"
 	local title="${2:-Confirm Execution}"
 	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
-
-	# If user previously chose "always", skip the picker but retain retry loop
-	if [[ -n "$_TUI_EXEC_MODE" ]]; then
-		tui_log "Using remembered exec mode: $_TUI_EXEC_MODE"
-		while :; do
-			case "$_TUI_EXEC_MODE" in
-				tui)      _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
-				terminal) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
-			esac
-			local exec_rc=$?
-			[[ $exec_rc -eq 2 ]] && continue
-			return $exec_rc
-		done
-	fi
 
 	local default_item="1"
 	while :; do
@@ -533,31 +546,30 @@ confirm_and_execute() {
 			--extra-button --extra-label "Command" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
-			"1" "Run in TUI" \
-			"2" "Run in Terminal" \
-			"3" "Always TUI (this session)" \
-			"4" "Always Terminal (this session)" \
+			"1" "Run in Terminal" \
+			"2" "Run in Terminal (auto-answer)" \
+			"3" "Run in TUI (auto-answer)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_EXEC" \
-"• Run in TUI
-  - Command runs inside dialog interface
-  - Auto-answer (-y) is always enabled
-  - Output shown live in progressbox
-  - Scrollable output review after completion
-
-• Run in Terminal
+"• Run in Terminal
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
   - Press ENTER to return to TUI
 
-• Always TUI / Always Terminal
-  - Remembers your choice for this session
-  - Skips this dialog for all subsequent commands
-  - Reset via Advanced > Reset Execution Mode"
+• Run in Terminal (auto-answer)
+  - Command runs in real terminal with full output
+  - Prompts are auto-answered with defaults (-y)
+  - Press ENTER to return to TUI
+
+• Run in TUI (auto-answer)
+  - Command runs inside dialog interface
+  - All prompts are auto-answered with defaults (-y)
+  - Output shown live in progressbox
+  - Scrollable output review after completion"
 				continue
 				;;
 			3)
@@ -577,14 +589,13 @@ confirm_and_execute() {
 		[[ -n "$choice" ]] && default_item="$choice"
 
 		case "$choice" in
-			1) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
-			2) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
-			3) _TUI_EXEC_MODE="tui"
-			   tui_log "Exec mode set to: always TUI"
-			   _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
-			4) _TUI_EXEC_MODE="terminal"
-			   tui_log "Exec mode set to: always Terminal"
-			   _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
+			1) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
+			2)
+				local _auto_cmd="$cmd"
+				[[ "$_auto_cmd" != *" --yes"* && "$_auto_cmd" != *" -y "* && "$_auto_cmd" != *" -y" ]] && _auto_cmd="$_auto_cmd --yes"
+				_exec_in_terminal "$_auto_cmd" "$title" "$post_cmd_hook"
+				;;
+			3) _exec_in_tui "$cmd" "$title" "$post_cmd_hook" ;;
 		esac
 		local exec_rc=$?
 		[[ $exec_rc -eq 2 ]] && continue
@@ -599,7 +610,7 @@ _exec_in_tui() {
 	local post_cmd_hook="${3:-}"
 
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
-	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
+	if [[ "$cmd" =~ [\`\$\;\|\>\<]|'&&' ]]; then
 		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
 		dlg --backtitle "$(ui_backtitle)" --msgbox \
 			"Command blocked: contains invalid characters.\n\nThis is a safety check to prevent command injection." 0 0
@@ -623,7 +634,8 @@ _exec_in_tui() {
 
 	trap : INT
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
-	{ echo "Executing: $cmd"; echo; PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
+	# Unset KUBECONFIG so child resolves it from the cluster dir, not stale TUI state
+	{ echo "Executing: $cmd"; echo; KUBECONFIG= PLAIN_OUTPUT=1 ASK_OVERRIDE=1 bash -c "$tui_cmd" {ABA_TUI_FLOCK_FD}>&- 2>&1; } | tee "$output_file" | \
 		sed -u -r 's/\x1B\[[0-9;]*[mK]//g' | \
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--progressbox $box_height $box_width
@@ -631,9 +643,10 @@ _exec_in_tui() {
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
 
-	# Run post-command hook (non-blocking background work while user reads results)
-	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
-		tui_log "Running post-command hook: $post_cmd_hook"
+	# Run post-command hook unconditionally — mirror state is uncertain after
+	# any attempt (even failed ones), so always recheck.
+	if [[ -n "$post_cmd_hook" ]]; then
+		tui_log "Running post-command hook: $post_cmd_hook (exit_code=$exit_code)"
 		"$post_cmd_hook"
 	fi
 
@@ -674,7 +687,7 @@ _exec_in_terminal() {
 	local post_cmd_hook="${3:-}"
 
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
-	if [[ "$cmd" =~ [\`\$\;]|'&&'|'||'|'>>'|'<<' ]]; then
+	if [[ "$cmd" =~ [\`\$\;\|\>\<]|'&&' ]]; then
 		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
 		echo "ERROR: Command blocked — contains invalid characters."
 		read -rp "Press ENTER to return to TUI..."
@@ -702,16 +715,18 @@ _exec_in_terminal() {
 	local _term_interrupted=false
 	trap '_term_interrupted=true' INT
 
+	# Unset KUBECONFIG so child resolves it from the cluster dir, not stale TUI state
 	# Close flock fd so child processes (e.g. conmon) don't inherit and hold the TUI lock
-	bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
+	KUBECONFIG= bash -c "$cmd" {ABA_TUI_FLOCK_FD}>&-
 	local exit_code=$?
 
 	# Restore global TUI INT handler (trap - INT would reset to SIG_DFL)
 	trap 'exit 0' HUP TERM INT
 
-	# Run post-command hook (non-blocking background work while user reads output)
-	if [[ -n "$post_cmd_hook" && $exit_code -eq 0 ]]; then
-		tui_log "Running post-command hook: $post_cmd_hook"
+	# Run post-command hook unconditionally — mirror state is uncertain after
+	# any attempt (even failed ones), so always recheck.
+	if [[ -n "$post_cmd_hook" ]]; then
+		tui_log "Running post-command hook: $post_cmd_hook (exit_code=$exit_code)"
 		"$post_cmd_hook"
 	fi
 
@@ -770,64 +785,45 @@ mirror_state_label() {
 }
 
 # Invalidate mirror verify and kick off a fresh background check.
-# Called after sync, save, load, or install operations.
+# Called after sync, load, install, or uninstall operations.
 # Non-blocking: the check runs in background while the user reads results.
+# Also sets _TUI_NEED_MIRROR_RECHECK so the menu loop re-probes on next draw.
 _invalidate_mirror_cache() {
+	_TUI_NEED_MIRROR_RECHECK=true
 	aba_mirror_verify_refresh
+	# Internet check uses TTL (aba_inet_check_cached) — no reset needed here.
+	# The menu loop re-triggers automatically if >120s elapsed.
 }
 
-# Offer to run day2 on installed clusters after a mirror load/sync.
+# Inform user about day2 after mirror load/sync.
+# Shows only clusters that use this mirror (int_connection unset = mirror mode).
 # Must be called AFTER confirm_and_execute returns (not from a post_cmd_hook)
 # to avoid nested execution and confusing dialog ordering.
 _offer_day2_after_mirror_update() {
-	local _clusters
-	_clusters=$(list_installed_clusters)
-	[[ -z "$_clusters" ]] && return 0
+	local _cl _list="" _int_conn
 
-	local _count=0 _list="" _cl
-	for _cl in $_clusters; do
-		_count=$(( _count + 1 ))
-		_list="${_list}\n  • $(cluster_display_name "$_cl")"
+	for _cl in $(list_installed_clusters); do
+		# Check if cluster uses the mirror (int_connection empty = mirror mode)
+		_int_conn=$(
+			int_connection=""
+			# shellcheck disable=SC1090
+			source <(cd "$ABA_ROOT/$_cl" && normalize-cluster-conf) 2>/dev/null || true
+			echo "${int_connection:-}"
+		)
+		[[ -n "$_int_conn" ]] && continue
+		_list="${_list}\n  - $(cluster_display_name "$_cl")"
 	done
 
-	if [[ $_count -eq 1 ]]; then
-		_cl=$(echo "$_clusters" | head -1)
-		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
-			--yes-label "Yes, apply now" \
-			--no-label "No, later" \
-			--yesno "Mirror updated successfully.\n\n\
-Your cluster $(cluster_display_name "$_cl") needs updated\n\
-OperatorHub configuration to use the new images.\n\n\
-Run 'Configure OperatorHub' (aba day2) now?" 0 0
-		[[ $? -ne 0 ]] && return 0
-		confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $(cluster_display_name "$_cl")"
-	else
-		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
-			--yes-label "Yes, apply to all" \
-			--no-label "No, later" \
-			--extra-button --extra-label "Select..." \
-			--yesno "Mirror updated successfully.\n\n\
-$_count cluster(s) need updated OperatorHub configuration:$_list\n\n\
-Run 'Configure OperatorHub' (aba day2) now?" 0 0
-		local _rc=$?
-		case $_rc in
-			0)
-				for _cl in $_clusters; do
-					confirm_and_execute "aba --dir $_cl day2" "Configure OperatorHub: $(cluster_display_name "$_cl")"
-					[[ $? -ne 0 ]] && break
-				done
-				;;
-			3)
-				# "Select..." — let user pick via the existing Day-2 menu workflow
-				select_installed_cluster "Configure OperatorHub" "Select cluster to configure:"
-				[[ $? -ne 0 ]] && return 0
-				confirm_and_execute "aba --dir $SELECTED_CLUSTER day2" "Configure OperatorHub: $SELECTED_CLUSTER_DISPLAY"
-				;;
-			*)
-				return 0
-				;;
-		esac
-	fi
+	[[ -z "$_list" ]] && return 0
+
+	dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+		--msgbox "Mirror updated successfully.\n\n\
+Installed clusters using this mirror:$_list\n\n\
+Run 'aba day2' on those clusters, if you have:\n\
+  - Added or changed operators\n\
+  - Updated the OCP release image\n\n\
+CLI:  aba --dir <cluster> day2\n\
+TUI:  Cluster > Day-2 > Configure OperatorHub" 0 0
 }
 
 # Is a cluster configured? (cluster.conf exists in given dir)
@@ -854,6 +850,7 @@ list_cluster_dirs() {
 		dir="${dir%/cluster.conf}"
 		dir="${dir##*/}"
 		[[ "$dir" == "mirror" || "$dir" == "templates" ]] && continue
+		[[ "$dir" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || continue
 		dirs+=("$dir")
 	done
 	if [[ ${#dirs[@]} -eq 0 ]]; then
@@ -1108,7 +1105,7 @@ _tui_settings_menu_reg_vendor() {
 }
 
 _tui_settings_menu_retry() {
-	local current="${_TUI_RETRY_COUNT:-2}"
+	local current="${_TUI_RETRY_COUNT:-1}"
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
 		--inputbox "Oc-mirror retry count for this session (0 = omit --retry):" 0 0 "$current" \
 		2>"$_TUI_TMP"
@@ -1159,6 +1156,12 @@ _tui_settings_summary() {
 _tui_settings_menu() {
 	local default_item="1"
 	while :; do
+		# Refresh reg_vendor from mirror.conf (may have changed in Mirror Config form)
+		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+			source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
+			_TUI_REG_VENDOR="${reg_vendor:-auto}"
+		fi
+
 		# Current auto-answer display (ON = skip prompts, OFF = ask user)
 		local ask_display
 		local raw
@@ -1179,7 +1182,7 @@ _tui_settings_menu() {
 				*)      reg_display="Registry Type: \Z6Auto\Zn" ;;
 			esac
 			local retry_display
-			local rc_val="${_TUI_RETRY_COUNT:-2}"
+			local rc_val="${_TUI_RETRY_COUNT:-1}"
 			case "$rc_val" in
 				0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
 				*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;
@@ -1193,7 +1196,7 @@ Registry Type:
 
 Retry Count:
   How many times to retry failed oc-mirror operations.
-  OFF = no retries, 2 or 8 = retry that many times."
+  0 = no retries, or set any count (default: 1)."
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
@@ -1297,6 +1300,8 @@ select_cluster() {
 			[[ -f "$ABA_ROOT/$dir/.install-complete" ]] && continue
 			# Skip clusters that haven't started installing (no kubeconfig)
 			[[ ! -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]] && continue
+			# Skip clusters that were shut down (can't be actively monitored)
+			[[ -f "$ABA_ROOT/$dir/.shutdown.log" ]] && continue
 		fi
 		display=$(cluster_display_name "$dir")
 		# Annotate status so the user sees cluster state at a glance
@@ -1304,6 +1309,8 @@ select_cluster() {
 			display="$display (shut down)"
 		elif [[ -f "$ABA_ROOT/$dir/.install-complete" ]]; then
 			display="$display (installed)"
+		elif [[ -f "$ABA_ROOT/$dir/iso-agent-based/auth/kubeconfig" ]]; then
+			display="$display (installing)"
 		fi
 		# Show dir name only when it differs from the cluster name prefix
 		if [[ "$display" != "$dir"* ]]; then
@@ -1425,7 +1432,7 @@ offer_editor() {
 	case "$choice" in
 		1)
 			clear
-			${EDITOR:-vi} "$filepath"
+			${EDITOR:-vi} "$filepath" {ABA_TUI_FLOCK_FD}>&-
 			;;
 		2)
 			dlg --backtitle "$(ui_backtitle)" --title "$title" \
@@ -1490,8 +1497,8 @@ _resolve_minor_to_patch() {
 	local _ver="$1"
 	local _channel="${2:-stable}"
 
-	# Already x.y.z? Return as-is
-	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	# Already x.y.z or x.y.z-rc.N? Return as-is
+	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 		echo "$_ver"
 		return 0
 	fi
@@ -1500,7 +1507,7 @@ _resolve_minor_to_patch() {
 	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
 		local _resolved
 		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null)
-		if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 			echo "$_resolved"
 			return 0
 		fi
@@ -1512,7 +1519,8 @@ _resolve_minor_to_patch() {
 # Reset and restart ISC generation in background (non-blocking)
 tui_kick_isconf_regen() {
 	run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-	(cd "$ABA_ROOT" && aba_isconf_generate_start) &
+	(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
+	_TUI_ISC_UPDATED=true
 }
 
 # Gate Install Cluster menu action: prompts for mirror/registry prep when needed.

@@ -70,7 +70,7 @@ direct_wizard() {
 			--title "Resume Configuration" \
 			--yes-label "Continue" \
 			--no-label "Reconfigure" \
-			--yesno "$_resume_summary" 14 50
+			--yesno "$_resume_summary" 0 0
 		local _resume_rc=$?
 		if [[ $_resume_rc -eq 0 ]]; then
 			if _direct_config_complete; then
@@ -102,7 +102,8 @@ direct_wizard() {
 					_ps_ver=$(run_once -o -i "ocp:stable:latest_version" 2>/dev/null)
 				fi
 				if [[ "$_ps_ver" == *.*.* ]]; then
-					local _cat_ver="${_ps_ver%.*}"
+					local _cat_ver
+					_cat_ver=$(_ver_minor "$_ps_ver")
 					tui_log "Starting redhat-operator catalog for $_cat_ver"
 					run_once -i "catalog:${_cat_ver}:redhat-operator" -- \
 						"$ABA_ROOT/scripts/download-catalog-index.sh" redhat-operator "$_cat_ver"
@@ -121,31 +122,31 @@ direct_wizard() {
 				*) return 1 ;;
 			esac
 			;;
-			version)
-				_direct_version
-				case "$DIALOG_RC" in
-					next)
-						dlg --backtitle "$(ui_backtitle)" \
-							--title "Confirm Configuration" \
-							--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
-							10 50 || { step="channel"; continue; }
+		version)
+			_direct_version
+			case "$DIALOG_RC" in
+				next)
+					dlg --backtitle "$(ui_backtitle)" \
+						--title "Confirm Configuration" \
+						--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nProceed with this configuration?" \
+						10 50 || { step="channel"; continue; }
 
-						_ver_short="${ocp_version%.*}"
-						# Save config early: catalog downloads need pull_secret_file from aba.conf
-						_direct_save_config
+					_ver_short=$(_ver_minor "$ocp_version")
+					# Save config early: catalog downloads need pull_secret_file from aba.conf
+					_direct_save_config
 					if [[ "$_TUI_MODE" != "DIRECT" ]]; then
 						tui_log "Starting catalog downloads for OpenShift $_ver_short"
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
 						# Start registry download early (shared task ID with aba.sh)
 						run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
 					fi
-						step="platform"
-						;;
-					back) step="channel" ;;
-					repeat) ;;
-					*) return 1 ;;
-				esac
-				;;
+					step="platform"
+					;;
+				back) step="channel" ;;
+				repeat) ;;
+				*) return 1 ;;
+			esac
+			;;
 		platform)
 			_direct_platform
 			case "$DIALOG_RC" in
@@ -215,7 +216,13 @@ _direct_pull_secret() {
 		[[ $rc -ne 0 ]] && return 1  # Back
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ "$choice" == "U" ]] && return 0
+		if [[ "$choice" == "U" ]]; then
+			if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$ps_file" >/dev/null 2>&1; then
+				return 0
+			fi
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"Pull secret file is not valid JSON.\n\nPlease enter a new pull secret." 0 0
+		fi
 	fi
 
 	# Prompt for pull secret
@@ -364,7 +371,7 @@ _direct_version() {
 		fi
 		while :; do
 			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
-				--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "" \
+				--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "" \
 				2>"$_TUI_TMP"
 			local man_rc=$?
 			if [[ $man_rc -ne 0 ]]; then
@@ -374,7 +381,7 @@ _direct_version() {
 			ocp_version=$(<"$_TUI_TMP")
 			ocp_version="${ocp_version##[[:space:]]}"
 			ocp_version="${ocp_version%%[[:space:]]}"
-			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
 				return
@@ -396,7 +403,7 @@ _direct_version() {
 				ocp_version=""
 			else
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Invalid version format.\n\nExpected: x.y or x.y.z (e.g. 4.18 or 4.18.10)" 0 0
+					"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
 			fi
 		done
 		return
@@ -437,6 +444,7 @@ _direct_version() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \
 		--default-item "$_default_ver_tag" \
+		--default-button ok \
 		--no-cancel \
 		--extra-button --extra-label "$TUI2_BTN_BACK" \
 		--help-button \
@@ -456,40 +464,40 @@ _direct_version() {
 				p) ocp_version="$previous" ;;
 				o) ocp_version="$older" ;;
 				m)
-				while :; do
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
-						--inputbox "Enter OpenShift version (x.y or x.y.z):" 0 0 "${ocp_version:-$latest}" \
-						2>"$_TUI_TMP"
-					if [[ $? -ne 0 ]]; then
-						DIALOG_RC="repeat"
-						return
-					fi
-					ocp_version=$(<"$_TUI_TMP")
-					ocp_version="${ocp_version##[[:space:]]}"
-					ocp_version="${ocp_version%%[[:space:]]}"
-					if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-						break
-					elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
-						# x.y format — resolve to latest z-stream
-						local _input_minor="$ocp_version"
-						tui_log "Resolving $ocp_version to latest z-stream"
-						dlg --backtitle "$(ui_backtitle)" --infobox \
-							"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
-						local _resolved=""
-						if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
-							ocp_version="$_resolved"
-							tui_log "Resolved $_input_minor to $ocp_version"
-							break
+					while :; do
+						dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION_MANUAL" \
+							--inputbox "Enter OpenShift version (x.y, x.y.z, or x.y.z-rc.N):" 0 0 "${ocp_version:-$latest}" \
+							2>"$_TUI_TMP"
+						if [[ $? -ne 0 ]]; then
+							DIALOG_RC="repeat"
+							return
 						fi
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
-						ocp_version=""
-					else
-						dlg --backtitle "$(ui_backtitle)" --msgbox \
-							"Invalid version format.\n\nExpected: x.y or x.y.z (e.g. 4.18 or 4.18.10)" 0 0
-					fi
-				done
-				;;
+						ocp_version=$(<"$_TUI_TMP")
+						ocp_version="${ocp_version##[[:space:]]}"
+						ocp_version="${ocp_version%%[[:space:]]}"
+						if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+							break
+						elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+							# x.y format — resolve to latest z-stream
+							local _input_minor="$ocp_version"
+							tui_log "Resolving $ocp_version to latest z-stream"
+							dlg --backtitle "$(ui_backtitle)" --infobox \
+								"Resolving $ocp_version to latest z-stream...\n\nPlease wait..." 0 0
+							local _resolved=""
+							if _resolved=$(_resolve_minor_to_patch "$_input_minor" "$ocp_channel"); then
+								ocp_version="$_resolved"
+								tui_log "Resolved $_input_minor to $ocp_version"
+								break
+							fi
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Version not found: $_input_minor\nChannel: $ocp_channel\n\nNo releases found for this minor version." 0 0
+							ocp_version=""
+						else
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Invalid version format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N (e.g. 4.18, 4.18.10, or 4.22.0-rc.1)" 0 0
+						fi
+					done
+					;;
 			esac
 			tui_log "Selected version: $ocp_version"
 			DIALOG_RC="next"
@@ -501,7 +509,9 @@ _direct_version() {
 • Latest: most recent release in the channel
 • Previous: one release back (good for stability)
 • Older: two releases back
-• Manual: enter specific version (x.y or x.y.z)"
+• Manual: enter specific version (x.y, x.y.z, or x.y.z-rc.N)
+
+Pre-release versions (e.g. 4.22.0-rc.1) can be entered manually."
 			DIALOG_RC="repeat"
 			;;
 		3)
@@ -571,7 +581,7 @@ _direct_operators_step() {
 	local _cat_ver="${1:-}"
 
 	if [[ -z "$_cat_ver" ]]; then
-		_cat_ver="${ocp_version%.*}"
+		_cat_ver=$(_ver_minor "$ocp_version")
 	fi
 	tui_log "DIRECT wizard: operator selection ($_cat_ver)"
 
@@ -640,7 +650,7 @@ _direct_operators() {
 			choice=$(<"$_TUI_TMP")
 			case "$choice" in
 			1) mirror_select_operators ;;
-			2) _operator_search "${ocp_version%.*}" ;;
+			2) _operator_search "$(_ver_minor "$ocp_version")" ;;
 			esac
 			DIALOG_RC="next"
 			;;
@@ -690,23 +700,13 @@ _direct_action_menu() {
 	tui_log "DIRECT action menu"
 	local default_item="$TUI2_DIRECT_TAG_INSTALL"
 
-	# --- Menu state recheck optimization ---
-	# IMPORTANT: _direct_need_recheck controls whether expensive state checks
-	# (tui_cluster_menu_flags) run before redrawing the menu. Set to "true"
-	# on first entry and after actions that can change cluster state. Actions
-	# that only touch config (Settings, Rerun Wizard) set it to "false" —
-	# avoiding unnecessary filesystem scans on every redraw.
-	local _direct_need_recheck=true
-
 	while :; do
 		local items=()
 		local inst_label
 		local day2_label="Day-2 / Cluster Management"
 
-		# Only rescan cluster directories when previous action may have changed state
-		if [[ "$_direct_need_recheck" == "true" ]]; then
-			tui_cluster_menu_flags DIRECT
-		fi
+		# Cluster flags (instant — marker file checks only, no mirror in DIRECT)
+		tui_cluster_menu_flags DIRECT
 		inst_label="${_CLUSTER_INST_LABEL}"
 
 		if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -771,8 +771,6 @@ Navigation:
 				continue ;;
 			"$TUI2_DIRECT_TAG_INSTALL")
 				cluster_install_flow
-				# RECHECK: may have created/installed a cluster
-				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then
@@ -780,25 +778,17 @@ Navigation:
 				else
 					cluster_day2_menu
 				fi
-				# RECHECK: day2 sub-menu may delete clusters or change state
-				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_SETTINGS")
 				_tui_settings_menu
-				# NO RECHECK: only changes config values (ask, reg_vendor, retry)
-				_direct_need_recheck=false
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
 				tui_advanced_menu
 				[[ "$_TUI_MODE" != "DIRECT" ]] && return 0
-				# RECHECK: advanced menu may delete clusters
-				_direct_need_recheck=true
 				;;
 			"$TUI2_DIRECT_TAG_RECONFIGURE")
 				direct_wizard || true
 				source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-				# NO RECHECK: wizard only changes channel/version/platform in aba.conf
-				_direct_need_recheck=false
 				;;
 		esac
 	done

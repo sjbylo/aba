@@ -18,6 +18,7 @@ source <(normalize-aba-conf)
 # from silently overwriting ~/.docker/config.json and destroying mirror credentials.
 if [[ -z "${regcreds_dir:-}" ]]; then
 	export regcreds_dir=$HOME/.aba/mirror/mirror
+	export regcreds_display="${regcreds_display:-mirror/regcreds}"
 	aba_debug "regcreds_dir was unset, defaulting to $regcreds_dir"
 fi
 
@@ -58,7 +59,7 @@ elif [ -s $regcreds_dir/pull-secret-mirror.json ]; then
 	cp $regcreds_dir/pull-secret-mirror.json ~/.containers/auth.json
 	if [[ "$XDG_RUNTIME_DIR" == /* ]]; then
 		aba_debug "Copying $regcreds_dir/pull-secret-mirror.json to $XDG_RUNTIME_DIR/containers/auth.json" 
-	       cp $regcreds_dir/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
+		cp $regcreds_dir/pull-secret-mirror.json $XDG_RUNTIME_DIR/containers/auth.json || true
 	fi
 
 # Only use the Red Hat pull secret file
@@ -73,6 +74,6 @@ elif [ -s $pull_secret_file ]; then
 
 else
 	echo 
-	aba_abort "Aborting! Pull secret file(s) missing: '$pull_secret_file', '${regcreds_dir}/pull-secret-mirror.json' and/or '${regcreds_dir}/pull-secret-full.json'" >&2 
+	aba_abort "Aborting! Pull secret file(s) missing: '$pull_secret_file', '${regcreds_display:-regcreds}/pull-secret-mirror.json' and/or '${regcreds_display:-regcreds}/pull-secret-full.json'" >&2 
 fi
 

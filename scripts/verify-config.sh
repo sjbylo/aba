@@ -31,12 +31,12 @@ export rendezvous_ip=$starting_ip
 # Checking for invalid config 
 
 SNO=
-[ $num_masters -eq 1 -a $num_workers -eq 0 ] && SNO=1 && aba_info "Configuration is for Single Node Openshift (SNO) ..."
-[ $num_masters -ne 1 -a $num_masters -ne 3 ] && aba_abort "number of masters can only be 1 or 3!"
+[ "$num_masters" -eq 1 ] && [ "$num_workers" -eq 0 ] && SNO=1 && aba_info "Configuration is for Single Node Openshift (SNO) ..."
+[ "$num_masters" -ne 1 ] && [ "$num_masters" -ne 3 ] && aba_abort "number of masters can only be 1 or 3!"
 
 aba_info "Master count: $num_masters is valid"
 
-if [ $num_masters -eq 1 -a $num_workers -ne 0 ]; then
+if [ "$num_masters" -eq 1 ] && [ "$num_workers" -ne 0 ]; then
 	aba_abort "number of workers must be 0 if number of masters is 1 (SNO)!"
 fi
 
@@ -66,17 +66,17 @@ if [ ! "$SNO" ]; then
 			aba_warning -p Attention \
 				"inserting actual IP address ($actual_ip_of_api) into cluster.conf" \
 				"Please verify this is correct! If not, edit cluster.conf file and try again!" 
-			replace-value-conf -n api_vip -v $actual_ip_of_api cluster.conf
+			replace-value-conf -n api_vip -v "$actual_ip_of_api" cluster.conf
 			sleep 1
 			api_vip=$actual_ip_of_api
 		else
-			aba_abort "Ingress endpoiont: api_vip must be defined for this cluster configuration!" 
+			aba_abort "Ingress endpoint: api_vip must be defined for this cluster configuration!" 
 		fi
 	fi
 
 	# If ingress_vip is defined and an IP address
 	if [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-		aba_info "Ingress endpoiont: ingress_vip=$ingress_vip is defined"
+		aba_info "Ingress endpoint: ingress_vip=$ingress_vip is defined"
 	else
 		# If ingress_vip not defined or an IP address
 		if [ ! "$actual_ip_of_ingress" ]; then
@@ -86,7 +86,7 @@ if [ ! "$SNO" ]; then
 			aba_warning -p Attention \
 				"inserting actual IP address ($actual_ip_of_ingress) into cluster.conf" \
 				"Please verify this is correct! If not, edit cluster.conf file and try again!"
-			replace-value-conf -n ingress_vip -v $actual_ip_of_ingress cluster.conf
+			replace-value-conf -n ingress_vip -v "$actual_ip_of_ingress" cluster.conf
 			sleep 1
 			ingress_vip=$actual_ip_of_ingress
 		else
@@ -94,7 +94,7 @@ if [ ! "$SNO" ]; then
 		fi
 	fi
 else
-	[ "$api_vip" -o "$ingress_vip" ] && \
+	[ "$api_vip" ] || [ "$ingress_vip" ] && \
 		aba_warning "Cluster endpoints: api_vip and ingress_vip are not required for single-node (SNO) configuration, they will be ignored."
 fi
 

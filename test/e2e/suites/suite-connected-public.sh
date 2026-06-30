@@ -34,7 +34,8 @@ plan_tests \
     "Proxy mode: create SNO config" \
     "Proxy mode: verify install-config.yaml" \
     "Proxy mode: install SNO cluster" \
-    "Day2 NTP: change to con host (hostname + IP)" \
+    "Day2 NTP: change to con host + lab NTP" \
+    "Upgrade: dry-run on connected cluster" \
     "Proxy mode: verify and delete" \
     "Direct+mirror mode: config verification" \
     "Proxy-only mode: verify without direct internet" \
@@ -100,6 +101,14 @@ e2e_run "Verify no proxy block in direct mode" \
     "! grep httpProxy $SNO/install-config.yaml"
 e2e_run "Verify public registry references" \
     "grep registry.redhat.io $SNO/install-config.yaml || grep quay.io $SNO/install-config.yaml"
+
+# Direct mode: ~/.docker/config.json must have ONLY Red Hat credentials (no mirror)
+e2e_run "Pull secret: registry.redhat.io present (direct mode)" \
+    "jq -e '.auths[\"registry.redhat.io\"]' ~/.docker/config.json"
+e2e_run "Pull secret: quay.io present (direct mode)" \
+    "jq -e '.auths[\"quay.io\"]' ~/.docker/config.json"
+e2e_run "Pull secret: NO mirror registry in config.json (direct mode)" \
+    "! jq -e '.auths | keys[] | select(test(\":[0-9]+$\"))' ~/.docker/config.json"
 
 test_end
 
@@ -182,6 +191,27 @@ e2e_run -r 5 10 "Verify at least 1 synced NTP source" \
 
 e2e_run -r 3 10 "Verify NTP sync status is Normal" \
     "aba --dir $SNO ssh --cmd 'chronyc tracking' | grep -E 'Leap status\s+: Normal'"
+
+test_end
+
+# ============================================================================
+# 6c. Upgrade: dry-run smoke test (connected cluster, no mirror)
+# ============================================================================
+# Verify 'aba upgrade --dry-run' doesn't crash on a connected cluster that has
+# no mirror registry configured. It should either report versions or exit
+# gracefully with a meaningful error -- not a bash syntax error.
+test_begin "Upgrade: dry-run on connected cluster"
+
+e2e_run "Verify aba upgrade --dry-run handles no-mirror gracefully" "
+    output=\$(aba -d $SNO upgrade --dry-run 2>&1) && rc=0 || rc=\$?
+    echo \"\$output\"
+    echo \"Exit code: \$rc\"
+    # Must not crash with a bash/syntax error (exit 2 = bash error)
+    [ \$rc -ne 2 ] || { echo 'FAIL: got bash syntax error'; false; }
+    # Must produce meaningful output (not empty)
+    [ -n \"\$output\" ] || { echo 'FAIL: empty output'; false; }
+    echo 'Graceful handling: OK'
+"
 
 test_end
 

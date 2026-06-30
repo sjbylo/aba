@@ -10,7 +10,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 name=
 
-. <(process_args $*)
+. <(process_args "$@")
 
 [ ! "$name" ] && aba_abort "Error: mirror name missing! Usage: aba mirror --name <name>"
 

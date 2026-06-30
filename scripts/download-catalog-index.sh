@@ -8,17 +8,23 @@
 #            Pinning").
 # CALLED BY: download-catalogs-start.sh via run_once (never directly by user)
 # CWD:       ABA repo root (resolved from script location via symlink-safe pwd -P)
-# REQUIRES:  podman, jq, curl; container auth (via create-containers-auth.sh);
+# REQUIRES:  podman, jq, curl, skopeo; container auth (via create-containers-auth.sh);
 #            internet access to registry.redhat.io
 # ARGS:      <catalog_name> <version_short>
 #            catalog_name:   redhat-operator | certified-operator | community-operator
 #            version_short:  e.g. "4.21" (major.minor only)
 # PRODUCES:
-#   .index/{catalog}-index-v{ver}                 Sorted operator index (3-column TSV)
-#   .index/.{catalog}-index-v{ver}.expected-count Expected operator count
-#   .index/.{catalog}-index-v{ver}.digest         Manifest digest (sha256:...) for pinning
-#   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml  Helper YAML for reference
-# IDEMPOTENT: run_once() with TTL is the sole gatekeeper -- script always does work when invoked.
+#   .index/{catalog}-index-v{ver}                        Sorted operator index (3-column TSV)
+#   .index/.{catalog}-index-v{ver}.expected-count        Expected operator count
+#   .index/.{catalog}-index-v{ver}.digest                Manifest digest (sha256:...) for pinning
+#   .index/.{catalog}-index-v{ver}.content-layer-digest  Content layer digest for change detection
+#   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml Helper YAML for reference
+# SIDE EFFECTS: Catalog image is removed after extraction (no longer cached).
+#               Sweeps stale temp dirs (.aba-catalog-*, render-*) older than 24h at startup.
+#               Sweeps stale aba-catalog-* containers from previous interrupted runs.
+# IDEMPOTENT: Yes — checks content layer digest before downloading. If the remote
+#             catalog data layer hasn't changed and the local index exists, exits 0
+#             immediately (~2s probe vs ~15s full download).
 #             Uses atomic rename (.downloading -> final) so consumers never see partial data.
 #
 # INDEX FORMAT (3 columns, whitespace-separated):
@@ -100,8 +106,81 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 catalog_url="registry.redhat.io/redhat/${catalog_name}-index:v${ocp_ver_major}"
+remote_ref="docker://${catalog_url}"
+content_layer_file=".index/.${catalog_name}-index-v${ocp_ver_major}.content-layer-digest"
+
+# Resolve manifest list → arch-specific manifest → extract content layer digest.
+# FBC catalog images have a stable 5-layer structure: layers[0-3] are shared base
+# infrastructure, layers[-1] is the only catalog-specific layer (contains /configs).
+# Same content = same SHA-256 digest, even if the base image is rebuilt for security.
+_get_content_layer_digest() {
+	local _ref="$1"
+
+	# Resolve manifest list to host architecture ($ARCH set by include_all.sh)
+	local _arch_digest _manifest _layer_count
+	_arch_digest=$(skopeo inspect --raw "$_ref" 2>/dev/null | \
+		jq -r '.manifests[]? | select(.platform.architecture=="'"${ARCH:-amd64}"'") | .digest')
+
+	if [[ -z "$_arch_digest" ]]; then
+		# Not a manifest list (single-arch image) — get layers directly
+		_manifest=$(skopeo inspect --raw "$_ref" 2>/dev/null)
+		_layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
+		if [[ "${_layer_count:-0}" -ge 4 ]]; then
+			echo "$_manifest" | jq -r '.layers[-1].digest'
+			return 0
+		fi
+		return 1
+	fi
+
+	# Get arch-specific manifest
+	local _base_ref="${_ref%:*}"
+	_manifest=$(skopeo inspect --raw "${_base_ref}@${_arch_digest}" 2>/dev/null)
+	_layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
+	if [[ -z "$_layer_count" ]] || [[ "$_layer_count" -lt 4 ]]; then
+		return 1
+	fi
+	echo "$_manifest" | jq -r '.layers[-1].digest'
+}
+
+# DESIGN: Why skopeo content-layer probe instead of podman layer caching?
+#
+# Podman has layer caching: if we kept the image on disk, `podman pull` would only
+# download changed layers. But even with a fully-cached pull, the full pipeline
+# (pull + create + cp + parse) still takes ~8-13s because podman must fetch the
+# remote manifest, diff every layer, create a container, and extract /configs.
+# Podman also can't distinguish "base image rebuilt for CVE" from "catalog data
+# actually changed" — both produce a new image digest, forcing a re-extract+parse
+# even when the operator list is identical.
+#
+# The skopeo probe checks only the content layer digest (~1s metadata fetch).
+# If the FBC data layer hasn't changed, we skip pull, create, extract, AND parse.
+# When it HAS changed, we fall through to the full download — same as before.
+#
+# We also `podman rmi` after extraction to avoid ~1-2GB/catalog disk waste.
+# With the skopeo fast-path, there's no benefit to keeping images as a local cache.
+#
+# Net effect: repeat runs go from ~15s to ~1s per catalog (3 catalogs = ~3s vs ~45s).
+
+# Fast-path: if local index exists and remote content layer hasn't changed, skip download.
+# Probe is ~2s (metadata only) vs ~15s for full podman pull + extract.
+if [[ -s "$index_file" && -f "$content_layer_file" ]]; then
+	_stored_cld=$(< "$content_layer_file")
+	_remote_cld=$(_get_content_layer_digest "$remote_ref") || _remote_cld=""
+	if [[ -n "$_remote_cld" && "$_remote_cld" == "$_stored_cld" ]]; then
+		aba_debug "Content layer unchanged for $catalog_name v$ocp_ver_major — skipping download"
+		exit 0
+	fi
+	aba_debug "Content layer changed or probe failed — proceeding with download"
+fi
+
 container_name="aba-catalog-${catalog_name}-v${ocp_ver_major}-$$"
-tmp_dir=$(mktemp -d)
+tmp_dir=$(mktemp -d "$ABA_TMP/catalog-XXXXXX")
+
+# Sweep stale containers and temp dirs from previous interrupted runs
+podman ps -a --format '{{.Names}}' | grep '^aba-catalog-' | while read -r _stale; do
+	podman rm -f "$_stale" >/dev/null 2>&1
+done
+find "$ABA_TMP" -maxdepth 1 \( -name 'catalog-*' -o -name 'list-ops-*' -o -name 'render-registry-*' -o -name 'render-unpack-*' \) -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
 
 aba_debug "catalog_url=$catalog_url"
 aba_debug "container_name=$container_name"
@@ -133,17 +212,20 @@ fi
 
 # Run container and extract /configs
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
-_run_err=$(podman run -q -d --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
-	aba_abort "Failed to start catalog container" "$_run_err"
+_run_err=$(podman create -q --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
+	aba_abort "Failed to create catalog container" "$_run_err"
 }
 
 _cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
 	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
 }
 
-# Container no longer needed (EXIT trap handles cleanup, but remove early to free resources)
+# Container and image no longer needed — we've extracted the catalog data.
+# Image is removed to save ~1-2GB/catalog disk; the skopeo fast-path (above)
+# makes local image caching unnecessary.  See DESIGN comment above.
 podman rm -f "$container_name" >/dev/null 2>&1 || true
 container_name=""
+podman rmi "$catalog_url" >/dev/null 2>&1 || true
 
 # Extract operator data from FBC (File-Based Catalog)
 # Each operator directory under /configs can use one of several formats:
@@ -290,11 +372,8 @@ sort "$_raw_file" > "$tmp_file"
 expected_count_file=".index/.${catalog_name}-index-v${ocp_ver_major}.expected-count"
 find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | wc -l > "$expected_count_file"
 
-# Cleanup temp dir and container image
+# Cleanup temp dir
 rm -rf "$tmp_dir"
-podman rmi "$catalog_url" >/dev/null 2>&1 || true
-# Podman leaves render-registry-* and render-unpack-* dirs in /tmp if interrupted
-find /tmp -maxdepth 1 \( -name 'render-registry-*' -o -name 'render-unpack-*' \) -user "$(id -un)" -mmin +60 -exec rm -rf {} + 2>/dev/null || true
 
 # Validate output
 if [ ! -s "$tmp_file" ]; then
@@ -323,6 +402,13 @@ if (( skipped_count > 0 )) || { (( expected_count > 0 )) && (( op_count != expec
 fi
 
 aba_info_ok "Extracted $catalog_name index v$ocp_ver_major ($op_count operators)"
+
+# Save content layer digest for future change detection (fast-path early exit)
+_new_cld=$(_get_content_layer_digest "$remote_ref") || _new_cld=""
+if [[ -n "$_new_cld" ]]; then
+	echo "$_new_cld" > "$content_layer_file"
+	aba_debug "Saved content layer digest: $_new_cld"
+fi
 
 _generate_yaml
 aba_info "Generated $yaml_file for reference"

@@ -27,7 +27,7 @@ source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
 aba_ocp_ver=$ocp_version
-aba_ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
+aba_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 aba_ocp_channel=$ocp_channel-$aba_ocp_ver_major
 
 # Check imageset config. Skip if auto-generated (.created newer than the yaml).
@@ -35,9 +35,9 @@ f=data/imageset-config.yaml
 dir=$(dirname "$f")
 [ "$dir/.created" -nt "$f" ] && exit 0
 
-om_ocp_min_ver=$(cat $f | yaml2json | jq -r .mirror.platform.channels[0].minVersion)
-om_ocp_max_ver=$(cat $f | yaml2json | jq -r .mirror.platform.channels[0].maxVersion)
-om_ocp_channel=$(cat $f | yaml2json | jq -r .mirror.platform.channels[0].name)
+om_ocp_min_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].minVersion)
+om_ocp_max_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].maxVersion)
+om_ocp_channel=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].name)
 
 if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
 	echo

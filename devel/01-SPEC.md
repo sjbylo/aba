@@ -34,7 +34,7 @@ flowchart TD
   or dispatches directly to a script. Requires root or passwordless sudo.
 - **`make -C <dir> <target>`**: Every workflow must remain directly invocable via
   Make. The `aba` CLI is convenience; Make is the foundation.
-- **TUI** (`tui/abatui.sh`): Interactive wizard. Sources `include_all.sh` but
+- **TUI** (`tui/v2/abatui2.sh`): Interactive wizard. Sources `include_all.sh` but
   must never call `aba_abort` or `exit` from functions (kills the dialog UI).
 
 ### Dispatch: Make-backed vs script-backed
@@ -109,6 +109,11 @@ using images from the local mirror registry. The workflow:
 - Target must be strictly higher than current version.
 - Release image must exist in the local mirror (verified via `skopeo inspect`).
 - The `--force` flag is passed through to `oc adm upgrade` when specified.
+- ABA MUST NOT use `--allow-not-recommended`. Conditional updates carry known
+  risks that require explicit human judgment. If a target version is a conditional
+  update, ABA surfaces the reason/message and aborts. The user can run the upgrade
+  manually with `oc adm upgrade --to <ver> --allow-not-recommended` if they
+  accept the risk.
 
 ### Cluster deletion (`aba delete`)
 
@@ -173,6 +178,21 @@ loading of `vmware.conf` / `kvm.conf`.
 `OC_MIRROR_FLAGS`, `OC_MIRROR_PIN_CATALOGS`, `ABA_CACHE_TTL`). Sourced by
 `include_all.sh` at startup. Re-sourced on each retry iteration during long
 mirror operations so live edits take effect.
+
+### Network auto-detection
+
+`create-cluster-conf.sh` auto-detects empty network fields whenever it runs
+(both new and existing clusters):
+
+1. Empty fields in `aba.conf` are filled by `get_domain()`, `get_machine_network()`,
+   `get_dns_servers()`, `get_next_hop()`, `get_ntp_servers()`.
+2. If `ask=true` (interactive), the script aborts after detection so the user can review.
+3. For existing `cluster.conf`: empty network fields are filled from the now-populated `aba.conf`.
+4. Detection functions return empty on failure (no hardcoded fallbacks except
+   `get_domain()` → `example.com`).
+5. NTP uses `pool.ntp.org` only for `int_connection=direct` (UDP 123 not proxied).
+
+The TUI delegates entirely to core for auto-detection (no in-memory detection).
 
 ---
 
@@ -440,7 +460,7 @@ re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
 ## Script Calling Rules
 
 1. Scripts under `scripts/` are called ONLY via Make targets or `aba` CLI
-2. `$ABA_ROOT` is used only by `aba.sh` and `abatui.sh`; all other scripts use
+2. `$ABA_ROOT` is used only by `aba.sh` and `abatui2.sh`; all other scripts use
    relative paths
 3. Scripts that `cd` from `$0` must resolve symlinks:
    `SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"`

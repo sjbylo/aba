@@ -33,7 +33,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 ABA_ROOT="$(pwd)"
 
 # --- Source shared TUI constants (dialog titles, menu IDs) ---
-source "$ABA_ROOT/tui/tui-strings.sh"
+source "$ABA_ROOT/tui/v2/tui-strings2.sh"
 
 # --- Parse test runner flags (before sourcing scripts consume them) ---
 TUI_SLOW=0
@@ -45,7 +45,7 @@ done
 
 # --- Config ---
 SESSION="${SESSION:-tui-test}"
-TUI_CMD="${TUI_CMD:-tui/abatui.sh}"
+TUI_CMD="${TUI_CMD:-tui/v2/abatui2.sh}"
 TIMEOUT="${TIMEOUT:-30}"
 POLL_INTERVAL="${POLL_INTERVAL:-1}"
 

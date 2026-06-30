@@ -134,7 +134,7 @@ create_node() {
 			virsh -c "$LIBVIRT_URI" destroy "$vm_name" 2>/dev/null || true
 		fi
 
-		let i=$i+1
+		i=$(( i + 1 ))
 	done
 }
 

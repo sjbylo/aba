@@ -13,7 +13,7 @@ aba_debug "Starting: $0 $*"
 
 try_tot=1  # def. value
 #[ "$1" == "y" ] && set -x && shift  # If the debug flag is "y"
-[ "$1" ] && [ $1 -gt 0 ] && try_tot=`expr $1 + 1` && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
+[ "$1" ] && [ $1 -gt 0 ] && try_tot=$(( $1 + 1 )) && aba_info "Attempting $try_tot times to sync the images to the registry."    # If the retry value exists and it's a number
 aba_debug "try_tot=$try_tot"
 
 umask 077
@@ -27,6 +27,40 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+# Pre-flight: verify internet access and pull secret before proceeding.
+# Pass mirror-specific pull secret as fallback for hosts without a global pull secret.
+require_internet_and_pull_secret "$regcreds_dir/pull-secret-mirror.json"
+
+# Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
+aba_info "Verifying release image availability for v${ocp_version} ..."
+if ! verify_release_version_exists "$ocp_version"; then
+	aba_abort \
+		"Release version $ocp_version not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+		"This version may not have been released yet, or the channel may be wrong." \
+		"Use 'aba ocp-versions' to list available versions."
+fi
+if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	aba_info "Verifying release image availability for upgrade target v${ocp_version_target} ..."
+	if ! verify_release_version_exists "$ocp_version_target"; then
+		aba_abort \
+			"Upgrade target version $ocp_version_target not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+			"This version may not have been released yet, or the channel may be wrong." \
+			"Use 'aba ocp-versions' to list available versions."
+	fi
+	# Fail fast: verify upgrade path exists before starting downloads
+	_path_diag=""
+	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
+		_lowest="${_path_diag##*|}"
+		aba_abort \
+			"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
+			"You need to upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
+			"" \
+			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+	fi
+fi
+
 # Be sure a download has started ..
 aba_debug "Ensuring oc-mirror is available"
 if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
@@ -35,28 +69,13 @@ if ! PLAIN_OUTPUT=1 ensure_oc_mirror; then
 fi
 aba_debug "oc-mirror is ready"
 
-# This is a pull secret for RH registry
+# Check for mirror-specific pull secret override
 pull_secret_mirror_file=pull-secret-mirror.json
-aba_debug "Checking pull secret files: $pull_secret_mirror_file or $pull_secret_file"
-
 if [ -s $pull_secret_mirror_file ]; then
 	aba_info Using $pull_secret_mirror_file ...
 	aba_debug "Using mirror-specific pull secret"
 elif [ -s $pull_secret_file ]; then
 	aba_debug "Using default pull secret: $pull_secret_file"
-	:
-else
-	aba_abort \
-		"The pull secret file '$pull_secret_file' does not exist!" \
-		"Download it from https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
-fi
-
-# Check internet connection to the registries oc-mirror pulls from
-aba_info "Checking Internet access to registry.redhat.io"
-
-if ! curl -sILk --connect-timeout 10 --max-time 15 --retry 2 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
-	aba_abort "Cannot access https://registry.redhat.io/" \
-		"Access to registry.redhat.io is required to sync images to your registry."
 fi
 
 export reg_url=https://$reg_host:$reg_port
@@ -94,6 +113,7 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
 echo
+aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)

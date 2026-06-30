@@ -270,20 +270,31 @@ _cleanup_test_artifact_dirs() {
 # NOTE: VC_FOLDER from pools.conf already includes the pool path
 #       (e.g. /Datacenter/vm/aba-e2e/pool2) -- do NOT append /pool${POOL_NUM}.
 _verify_no_orphan_vms() {
-	[ -z "${VC_FOLDER:-}" ] && return 0
 	local _govc="${_FRAMEWORK_BIN}/govc"
 	if [ ! -x "$_govc" ]; then
 		echo ""
-		echo "  FATAL: VC_FOLDER is set ($VC_FOLDER) but govc not found at $_govc"
-		echo "  Cannot verify whether orphan VMs exist. Refusing to continue."
+		echo "  FATAL: govc not found at $_govc -- cannot check for orphan VMs."
+		echo "  Refusing to continue."
 		return 1
 	fi
 
 	# conN and disN are pool infrastructure VMs, not orphans
 	local _known="con${POOL_NUM} dis${POOL_NUM}"
-	local _all_vms
-	_all_vms=$("$_govc" find "$VC_FOLDER" -type m) || _all_vms=""
-	[ -z "$_all_vms" ] && echo "  No VMs in $VC_FOLDER" && return 0
+	local _all_vms="" _esxi_mode=""
+
+	# Try vCenter folder scan first (works when govc talks to vCenter)
+	if [ -n "${VC_FOLDER:-}" ]; then
+		_all_vms=$("$_govc" find "$VC_FOLDER" -type m 2>/dev/null) || _all_vms=""
+	fi
+
+	# Fallback for ESXi: VC_FOLDER path doesn't exist on ESXi hosts.
+	# Scan all VMs and filter by pool naming convention.
+	if [ -z "$_all_vms" ]; then
+		_esxi_mode=1
+		_all_vms=$("$_govc" find / -type m 2>/dev/null) || _all_vms=""
+	fi
+
+	[ -z "$_all_vms" ] && echo "  No VMs found (checked ${VC_FOLDER:-/})" && return 0
 
 	local _real_orphans=""
 	while IFS= read -r _ovm; do
@@ -295,13 +306,29 @@ _verify_no_orphan_vms() {
 			[ "$_vmname" = "$_k" ] && _is_infra=1 && break
 		done
 		[ -n "$_is_infra" ] && continue
+
+		# ESXi mode: shared host has VMs from all pools — only consider this pool's VMs.
+		# Cluster names: e2e-<type><POOL_NUM> (type is [a-z-]+, no digits).
+		# VM names: bare (e2e-sno4) or with suffix (e2e-sno4-master-0).
+		# Regex anchors pool number after the type name, avoiding false positives
+		# like e2e-compact1-master3 matching pool 3 (the 3 is the node index, not pool).
+		if [ -n "$_esxi_mode" ]; then
+			if ! [[ "$_vmname" =~ ^e2e-[a-z-]+${POOL_NUM}($|-) ]]; then
+				continue
+			fi
+		fi
+
 		_real_orphans="${_real_orphans}${_real_orphans:+$'\n'}$_ovm"
 	done <<< "$_all_vms"
 
-	[ -z "$_real_orphans" ] && echo "  No orphan VMs in $VC_FOLDER" && return 0
+	if [ -z "$_real_orphans" ]; then
+		[ -n "$_esxi_mode" ] && echo "  No orphan VMs (ESXi scan, pool ${POOL_NUM})" && return 0
+		echo "  No orphan VMs in $VC_FOLDER" && return 0
+	fi
 
-	# Safety: only auto-destroy if VC_FOLDER is an aba-e2e pool folder
-	if [[ "$VC_FOLDER" != */aba-e2e/pool* ]]; then
+	# Safety: on vCenter, only auto-destroy if VC_FOLDER is an aba-e2e pool folder.
+	# On ESXi, the naming convention filter (e2e-*N-*) is the safety gate.
+	if [ -z "$_esxi_mode" ] && [[ "$VC_FOLDER" != */aba-e2e/pool* ]]; then
 		echo ""
 		echo "  FATAL: Orphan VMs found but VC_FOLDER ($VC_FOLDER) is not an aba-e2e pool folder."
 		echo "  Refusing to auto-destroy. Delete manually:"
@@ -313,7 +340,8 @@ _verify_no_orphan_vms() {
 	fi
 
 	echo ""
-	echo "  WARNING: Orphan VMs found in $VC_FOLDER -- cleaning up ..."
+	local _scope="${VC_FOLDER:-ESXi host}"
+	echo "  WARNING: Orphan VMs found in ${_scope} -- cleaning up ..."
 	local _cleanup_failed=""
 	while IFS= read -r _ovm; do
 		[ -z "$_ovm" ] && continue
@@ -324,11 +352,13 @@ _verify_no_orphan_vms() {
 			_cleanup_failed=1
 			continue
 		fi
-		# Remove the parent folder if it's a cluster subfolder (e.g. /pool3/e2e-sno3/)
-		local _parent
-		_parent=$(dirname "$_ovm")
-		if [ "$_parent" != "$VC_FOLDER" ]; then
-			"$_govc" object.destroy "$_parent" 2>/dev/null || true
+		# Remove the parent folder if it's a cluster subfolder (vCenter only)
+		if [ -z "$_esxi_mode" ]; then
+			local _parent
+			_parent=$(dirname "$_ovm")
+			if [ "$_parent" != "$VC_FOLDER" ]; then
+				"$_govc" object.destroy "$_parent" 2>/dev/null || true
+			fi
 		fi
 	done <<< "$_real_orphans"
 
@@ -723,6 +753,12 @@ _cleanup_dis() {
 			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
 		done
 	done
+	# disN must never have a Red Hat pull secret (true air-gap invariant)
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		_essh "$_uhost" "rm -f ~/.pull-secret.json" 2>&1
+	done
+
 	# Remove stale CA trust anchors from previous registry installs
 	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 

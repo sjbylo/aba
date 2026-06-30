@@ -143,6 +143,11 @@ sync_extras() {
 		done
 	fi
 
+	# Always deploy ESXi config so ESXi-specific tests work regardless of -v flag
+	if [ -f "$HOME/.vmware.conf.esxi" ] && [ "$_vf" != "$HOME/.vmware.conf.esxi" ]; then
+		_escp "$HOME/.vmware.conf.esxi" "${target}:~/.vmware.conf.esxi"
+	fi
+
 	# Push corrected Makefile + template to disN after snapshot reverts.
 	# Pool-ready snapshots pre-date the cli:download:govc fallback fix;
 	# without --dev the ABA source tree is never re-synced, so we push

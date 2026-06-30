@@ -10,10 +10,10 @@ source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
 
-read -p "Enter username [init]: " reg_user
+read -rp "Enter username [init]: " reg_user
 [ ! "$reg_user" ] && reg_user=init 
 
-read -sp "Enter password: " reg_pw
+read -rsp "Enter password: " reg_pw
 echo
 
 export enc_password=$(echo -n "$reg_user:$reg_pw" | base64 -w0)

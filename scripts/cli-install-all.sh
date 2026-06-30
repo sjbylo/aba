@@ -47,6 +47,7 @@ if [ "$ro_opt" != "-r" ]; then
 	done
 fi
 
+showed_msg=false
 for item in $(make --no-print-directory -sC cli out-install-all)
 do
 	# If a filter was given, skip tools not in the list
@@ -55,10 +56,24 @@ do
 		continue
 	fi
 
+	task_id="cli:install:$item"
+
+	# In wait mode, peek first — skip silently if already complete
+	if [[ "$ro_opt" == *"-w"* ]]; then
+		if run_once -p -i "$task_id"; then
+			aba_debug "CLI install already complete: $item"
+			continue
+		fi
+		if ! $showed_msg; then
+			aba_info "Ensuring CLI binaries are installed"
+			showed_msg=true
+		fi
+	fi
+
 	aba_debug "$out: item=$item"
-	aba_debug "run_once $ro_opt -i \"cli:install:$item\" -- make -sC cli $item"
+	aba_debug "run_once $ro_opt -i \"$task_id\" -- make -sC cli $item"
 	# Start: CLI install in background. Wait: ensure_oc(), ensure_openshift_install() etc in include_all.sh
-	run_once $ro_opt -i "cli:install:$item" -- make -sC cli $item
+	run_once $ro_opt -i "$task_id" -- make -sC cli $item
 done
 
 exit 0

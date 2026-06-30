@@ -102,6 +102,13 @@ platform := $(strip $(shell echo $(platform)))
 # OCP major version (e.g. "4" from "4.21.10") for CDN paths (openshift-v4/, openshift-v5/, etc.)
 ocp_major := $(firstword $(subst ., ,$(ocp_version)))
 
+# EC (engineering candidate) versions live under ocp-dev-preview/ on the CDN
+ifneq ($(findstring -ec.,$(ocp_version)),)
+  ocp_client_dir := ocp-dev-preview
+else
+  ocp_client_dir := ocp
+endif
+
 # Atomic download with retry: curl→tmp, verify sha256, retry once on ANY failure, mv→target.
 # Usage: $(call atomic-download,DOWNLOAD_URL,SHA256SUM_URL)
 # Uses $@ as the target name (for tmp file naming and sha256 lookup).
@@ -182,13 +189,13 @@ local_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-$(rhel_ver)-$(ocp_version).t
 local_oc_mirror_tar	:= $(if $(filter rhel9,$(rhel_ver)),oc-mirror.rhel9.tar.gz,oc-mirror.tar.gz)
 
 rhel9_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel9-$(ocp_version).tar.gz
-rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$(rhel9_oc_tar_file)
+rhel9_oc_url      	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/$(ocp_client_dir)/$(ocp_version)/$(rhel9_oc_tar_file)
 
 rhel8_oc_tar_file	:= openshift-client-$(os)-$(ARCH)-rhel8-$(ocp_version).tar.gz
-rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)/$(rhel8_oc_tar_file)
+rhel8_oc_url		:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/$(ocp_client_dir)/$(ocp_version)/$(rhel8_oc_tar_file)
 
 openshift_install_file	:= openshift-install-$(os)-$(ocp_version).tar.gz
-openshift_install_url	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp/$(ocp_version)
+openshift_install_url	:= https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/$(ocp_client_dir)/$(ocp_version)
 
 
 ########################################################################
@@ -257,11 +264,30 @@ $(openshift_install_file):
 	@echo [ABA] Downloading $(openshift_install_url)/$(openshift_install_file)
 	$(call atomic-download,$(openshift_install_url)/$(openshift_install_file),$(openshift_install_url)/sha256sum.txt)
 
-# oc-mirror pin: stable-4.21 is intentional -- new oc-mirror versions must be tested before adoption.
-# Hardcoded to openshift-v4 (NOT parameterized) because oc-mirror is version-independent
-# and must be well-tested before any upgrade. The --no-version download path also requires
-# this URL to work without ocp_version being set.
-oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.21
+# oc-mirror download URL.
+# oc-mirror is a version-independent tool — a single binary works with any OCP release.
+# We pin to a tested stable channel rather than deriving from ocp_version, because
+# oc-mirror must be well-tested before adoption.
+#
+# Logic:
+#   - EC (engineering candidate): use the exact dev-preview path for that version
+#     (EC builds may bundle an oc-mirror with unreleased features needed for that EC)
+#   - OCP 5.x (non-EC): use stable-5.0 (first stable 5.x channel)
+#   - OCP 4.x (non-EC): use stable-4.22 (tested, known-good)
+#   - No version set: fall back to stable-4.22 (safe default for --no-version path)
+#
+# When a new oc-mirror version is tested and validated, bump the pin here.
+ifneq ($(ocp_version),)
+  ifneq ($(findstring -ec.,$(ocp_version)),)
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v$(ocp_major)/$(arch)/clients/ocp-dev-preview/$(ocp_version)
+  else ifeq ($(ocp_major),5)
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v5/$(arch)/clients/ocp/stable-5.0
+  else
+    oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
+  endif
+else
+  oc_mirror_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable-4.22
+endif
 oc_mirror_sha256sum = $(oc_mirror_base_url)/sha256sum.txt
 
 oc-mirror.tar.gz:

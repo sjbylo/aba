@@ -135,7 +135,7 @@ do
 		fi
 
 		# Run cleanup after each successful bundle (separate target)
-		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" cleanup; then
+		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" clean; then
 			echo "WARNING: cleanup failed for $bundle_name -- next run's 00-setup.sh will retry" >&2
 		fi
 	done

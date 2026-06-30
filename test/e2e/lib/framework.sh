@@ -637,6 +637,17 @@ e2e_add_to_cluster_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Path must be valid on the remote host, not the local conN.
+		# Suites create clusters with "cd ~/aba && aba cluster -n NAME" on disN,
+		# so the remote path is always ~<remote_user>/aba/<cluster_dir_name>.
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -662,6 +673,15 @@ e2e_remove_from_cluster_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Must match the path transformation in e2e_add_to_cluster_cleanup
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -738,6 +758,15 @@ e2e_add_to_mirror_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Path must be valid on the remote host, not the local conN.
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -761,6 +790,15 @@ e2e_remove_from_mirror_cleanup() {
 	local target
 	if [ "$location" = "remote" ]; then
 		target="${INTERNAL_BASTION:?INTERNAL_BASTION not set}"
+		# Must match the path transformation in e2e_add_to_mirror_cleanup
+		local _remote_user="${target%%@*}"
+		local _dir_name
+		_dir_name="$(basename "$abs_path")"
+		if [ "$_remote_user" = "root" ]; then
+			abs_path="/root/aba/${_dir_name}"
+		else
+			abs_path="/home/${_remote_user}/aba/${_dir_name}"
+		fi
 	else
 		target="$(whoami)@$(hostname -f)"
 	fi
@@ -1311,9 +1349,9 @@ e2e_poll_remote() {
 #                  zero Degraded COs (matches core cluster_is_ready())
 #
 # Usage:
-#   e2e_wait_cluster_available $SNO              # local, 10-min timeout
+#   e2e_wait_cluster_available $SNO              # local, 15-min timeout
 #   e2e_wait_cluster_available $SNO remote       # remote (disN)
-#   e2e_wait_cluster_ready $SNO                  # local, 30-min timeout
+#   e2e_wait_cluster_ready $SNO                  # local, 45-min timeout
 #   e2e_wait_cluster_ready $SNO remote 2700      # remote, 45-min timeout
 #
 
@@ -1367,21 +1405,21 @@ exit 1"
 }
 
 # Loose check: all operators AVAILABLE=True (ignores PROGRESSING/DEGRADED).
-# Default: 15-min timeout, 30s interval, 3 consecutive passes.
+# Default: 15-min timeout, 10s interval, 2 consecutive passes.
 e2e_wait_cluster_available() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
 	local timeout="${3:-900}"
-	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 30 3
+	_e2e_wait_cluster_condition "available" "$cluster_dir" "$location" "$timeout" 10 2
 }
 
 # Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
-# Default: 45-min timeout, 30s interval, 3 consecutive passes.
+# Default: 45-min timeout, 10s interval, 2 consecutive passes.
 e2e_wait_cluster_ready() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
 	local timeout="${3:-2700}"
-	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 30 3
+	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 10 2
 }
 
 # Backward-compat aliases (deprecated -- use e2e_wait_cluster_* instead)

@@ -12,11 +12,12 @@ aba_debug "Starting: $0 $*"
 source <(normalize-aba-conf)
 source <(normalize-mirror-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+export regcreds_display="regcreds"
 
 # No verify-aba-conf — uninstall uses state.sh, not aba.conf values
 
 if [ ! -s "$regcreds_dir/state.sh" ]; then
-	aba_abort "No Docker registry state found in $regcreds_dir/state.sh"
+	aba_abort "No Docker registry state found in $regcreds_display/state.sh"
 fi
 
 source "$regcreds_dir/state.sh"
