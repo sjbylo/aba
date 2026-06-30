@@ -368,8 +368,8 @@ if [ ! "$upgrade_already_running" ]; then
 		_all_available=$(echo "$_available_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
 		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
 		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
-			"${_all_available:+Available upgrades: $_all_available}" \
-			"${_all_conditional:+Conditional upgrades: $_all_conditional}" \
+			${_all_available:+"Available upgrades: $_all_available"} \
+			${_all_conditional:+"Conditional upgrades: $_all_conditional"} \
 			"${_all_available:- No upgrades found — the upgrade may require intermediate versions.}" \
 			"Check the upgrade path: oc adm upgrade" \
 			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
