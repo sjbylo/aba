@@ -47,6 +47,8 @@ plan_tests \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
     "Upgrade: sync target and aba upgrade" \
+    "Upgrade: negative preflights" \
+    "Upgrade: channel switch to candidate" \
     "Regression: version change re-extracts mirror binary" \
     "Regression: aba iso works after ocp_version change" \
     "Register: --reg-host and --reg-port CLI flags" \
@@ -433,12 +435,86 @@ e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
 e2e_run "Dry-run upgrade" \
     "aba -d $SNO upgrade --to \$(cat /tmp/e2e-upgrade-target) --dry-run"
 
-e2e_run -r 3 2 "Trigger and verify upgrade" "
+e2e_run -r 3 2 "Trigger and verify upgrade (integrated day2)" "
     target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --skip-day2 --force
+    aba -d $SNO upgrade --to \$target --force
     desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
     echo \"Desired version: \$desired  (target: \$target)\"
     [ \"\$desired\" = \"\$target\" ]
+"
+
+test_end
+
+# ============================================================================
+# 12b. Upgrade: negative preflights (live cluster)
+# ============================================================================
+# Cluster is upgrading to upgrade_target. Wait for it to complete, then test
+# that invalid upgrade requests are rejected gracefully.
+test_begin "Upgrade: negative preflights"
+
+e2e_poll 1800 30 "Wait for upgrade to complete" "
+    target=\$(cat /tmp/e2e-upgrade-target)
+    status=\$(aba -d $SNO run --cmd 'oc adm upgrade')
+    echo \"\$status\" | tail -5
+    echo \"\$status\" | grep -q \"Cluster version is \$target\"
+"
+
+e2e_run "Same version exits cleanly (idempotent)" "
+    target=\$(cat /tmp/e2e-upgrade-target)
+    output=\$(aba -d $SNO upgrade --to \$target 2>&1)
+    echo \"\$output\"
+    echo \"\$output\" | grep -q 'already at version'
+"
+
+e2e_run_must_fail "Lower version than current is rejected" \
+    "aba -d $SNO upgrade --to 4.0.0"
+
+e2e_run_must_fail "Invalid version format is rejected" \
+    "aba -d $SNO upgrade --to not-a-version"
+
+e2e_run_must_fail "Unreachable version is rejected" \
+    "aba -d $SNO upgrade --to 99.99.99"
+
+test_end
+
+# ============================================================================
+# 12c. Upgrade: channel switch to candidate
+# ============================================================================
+# Verify that ABA handles channel changes correctly. Switch the cluster to the
+# "candidate" channel prefix and confirm the cluster reports the new channel.
+test_begin "Upgrade: channel switch to candidate"
+
+e2e_run "Get current channel and version" "
+    channel=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.spec.channel}' | tail -1)
+    echo \"Current channel: \$channel\"
+    echo \$channel > /tmp/e2e-original-channel
+    ver_minor=\$(echo \$channel | grep -oP '[0-9]+\\.[0-9]+')
+    echo \$ver_minor > /tmp/e2e-ver-minor
+"
+
+e2e_run "Switch cluster channel to candidate" "
+    ver_minor=\$(cat /tmp/e2e-ver-minor)
+    aba -d $SNO run --cmd \"oc adm upgrade channel candidate-\$ver_minor\"
+"
+
+e2e_run "Verify channel is now candidate" "
+    ver_minor=\$(cat /tmp/e2e-ver-minor)
+    channel=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.spec.channel}' | tail -1)
+    echo \"Channel after switch: \$channel\"
+    [ \"\$channel\" = \"candidate-\$ver_minor\" ]
+"
+
+e2e_run "Dry-run upgrade on candidate channel" "
+    aba -d $SNO upgrade --dry-run 2>&1 | tee /tmp/e2e-candidate-dryrun
+    echo '--- dry-run output above ---'
+"
+
+e2e_run "Restore original channel" "
+    orig=\$(cat /tmp/e2e-original-channel)
+    aba -d $SNO run --cmd \"oc adm upgrade channel \$orig\"
+    channel=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.spec.channel}' | tail -1)
+    echo \"Restored channel: \$channel\"
+    [ \"\$channel\" = \"\$orig\" ]
 "
 
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
