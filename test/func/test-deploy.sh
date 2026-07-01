@@ -167,6 +167,18 @@ grep -qE '^[[:space:]]*deploy\)' "$REPO_ROOT/scripts/aba.sh" && test_pass "aba.s
 grep -q 'scripts/deploy.sh' "$REPO_ROOT/scripts/aba.sh" && test_pass "deploy) arm invokes deploy.sh" || test_fail "arm target" "no deploy.sh call"
 grep -q 'aba deploy' "$REPO_ROOT/others/help-aba.txt" && test_pass "help-aba.txt documents 'aba deploy'" || test_fail "help" "not documented"
 
+# --- Test 8: arg-parsing hardening --------------------------------------------
+echo "--- arg-parsing hardening ---"
+grep -q 'requires a value' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy validates --site/--cluster values (no infinite loop on missing value)" \
+	|| test_fail "value check" "missing --site/--cluster value guard"
+grep -q 'unknown option' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy rejects unknown flags (a typo'd --dry-run is not silently ignored)" \
+	|| test_fail "unknown flag" "no --* rejection"
+grep -q '"$home/$site"' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "cluster auto-detect falls back to the site payload (works before import)" \
+	|| test_fail "detect fallback" "no site-payload fallback in _detect_cluster"
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo

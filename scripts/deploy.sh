@@ -38,8 +38,6 @@ export INFO_ABA=1
 deploy_run() {
 	local aba_home="$1" site_dir="$2" cluster="$3" platform="$4"
 
-	[ -n "$cluster" ] || aba_abort "aba deploy: no cluster specified (set cluster_name in deploy.conf or use --cluster <name>)."
-
 	# Run (or, in dry-run, preview) one pipeline step. run_once -S makes the step
 	# run exactly once across invocations, so a re-run skips completed steps.
 	_step() {
@@ -62,13 +60,24 @@ deploy_run() {
 		return 0
 	}
 
-	aba_info "Deploying: site='$site_dir' cluster='$cluster' platform='${platform:-unknown}'"
+	aba_info "Deploying from site '$site_dir' ..."
 
-	# 1-4: configs first (so nothing re-templates over them), then mirror, then ISO.
-	_step config-import  "Importing site configuration"                  "$aba_home/scripts/config-import.sh" import "$site_dir"
-	_step mirror-install "Installing/connecting the mirror registry"     make -C "$aba_home/mirror" install
-	_step mirror-load    "Loading images into the mirror registry"       make -C "$aba_home/mirror" load
-	_step iso            "Generating the agent-based ISO"                make -C "$aba_home/$cluster" iso
+	# Config import FIRST so nothing re-templates over the imported files, and so the
+	# cluster dir + aba.conf exist before we resolve the cluster and platform.
+	_step config-import "Importing site configuration" "$aba_home/scripts/config-import.sh" import "$site_dir"
+
+	# Resolve cluster + platform from the imported/available configs (read-only, so
+	# this is also correct in dry-run). Detecting AFTER import means a bring-your-own
+	# -configs deploy works with just a site payload, and hypervisor clusters take the
+	# 'make install' path instead of the bare-metal pause.
+	[ -n "$cluster" ]  || cluster="$(_detect_cluster "$aba_home" "$site_dir")"
+	[ -n "$platform" ] || platform="$(cd "$aba_home" && _detect_platform)"
+	[ -n "$cluster" ] || aba_abort "aba deploy: no cluster specified and none found (set cluster_name in deploy.conf or use --cluster <name>)."
+	aba_info "Cluster '$cluster' (platform ${platform:-unknown})"
+
+	_step mirror-install "Installing/connecting the mirror registry"  make -C "$aba_home/mirror" install
+	_step mirror-load    "Loading images into the mirror registry"    make -C "$aba_home/mirror" load
+	_step iso            "Generating the agent-based ISO"             make -C "$aba_home/$cluster" iso
 
 	# Node boot gate. Hypervisors boot automatically; anything else (bare metal or
 	# unknown) pauses once after the ISO so the operator can boot the node(s).
@@ -81,7 +90,9 @@ deploy_run() {
 			aba_info_ok "ISO ready. Boot your node(s) from the ISO, then re-run 'aba deploy' to continue."
 			return 0
 		else
-			rm -f "$_await"
+			# Marker present: boot was already prompted. Latch (keep the marker) and
+			# continue, so any re-run proceeds to the run_once-guarded monitor/day2
+			# steps rather than pausing again.
 			aba_info "Resuming after node boot; continuing to installation monitoring ..."
 		fi
 	fi
@@ -102,17 +113,24 @@ deploy_run() {
 	return 0
 }
 
-# _detect_cluster <aba_home>: echo the single cluster dir (a subdir with
-# cluster.conf), or "" if none / abort if more than one.
+# _detect_cluster <aba_home> <site_dir>: echo the single cluster dir name (a
+# subdir with cluster.conf), or "" if none / abort if more than one. Looks in the
+# aba tree first, then falls back to the site payload (config-import materializes
+# it into the tree).
 _detect_cluster() {
-	local home="$1" d name found=""
-	for d in "$home"/*/; do
-		[ -d "$d" ] || continue
-		[ -f "$d/cluster.conf" ] || continue
-		name="$(basename "$d")"
-		case "$name" in mirror|site|helm) continue ;; esac
-		[ -z "$found" ] || aba_abort "aba deploy: multiple clusters found; pick one with --cluster <name> or cluster_name in deploy.conf."
-		found="$name"
+	local home="$1" site="$2" base d name found=""
+	for base in "$home" "$home/$site" "$site"; do
+		[ -d "$base" ] || continue
+		for d in "$base"/*/; do
+			[ -d "$d" ] || continue
+			[ -f "$d/cluster.conf" ] || continue
+			name="$(basename "$d")"
+			case "$name" in mirror|site|helm) continue ;; esac
+			[ "$found" = "$name" ] && continue
+			[ -z "$found" ] || aba_abort "aba deploy: multiple clusters found; pick one with --cluster <name> or cluster_name in deploy.conf."
+			found="$name"
+		done
+		[ -n "$found" ] && break
 	done
 	echo "$found"
 }
@@ -136,15 +154,15 @@ _cluster="${cluster_name:-}"
 
 while [ "$1" ]; do
 	case "$1" in
-		--site)    _site="$2"; shift 2 ;;
-		--cluster) _cluster="$2"; shift 2 ;;
+		--site)    [ -n "$2" ] || aba_abort "aba deploy: --site requires a value"; _site="$2"; shift 2 ;;
+		--cluster) [ -n "$2" ] || aba_abort "aba deploy: --cluster requires a value"; _cluster="$2"; shift 2 ;;
 		--dry-run) export ABA_DEPLOY_DRY_RUN=1; shift ;;
-		import)    shift ;;   # tolerate a stray verb
+		import)    shift ;;   # tolerate a stray leading verb
+		--*)       aba_abort "aba deploy: unknown option '$1' (see 'aba deploy --help')." ;;
 		*)         shift ;;
 	esac
 done
 
-[ -n "$_cluster" ] || _cluster="$(_detect_cluster "$aba_home")"
-_platform="$(_detect_platform)"
-
-deploy_run "$aba_home" "$_site" "$_cluster" "$_platform"
+# cluster + platform are resolved inside deploy_run, after config-import has
+# materialized the cluster dir and aba.conf.
+deploy_run "$aba_home" "$_site" "$_cluster" ""
