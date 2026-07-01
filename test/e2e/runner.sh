@@ -888,6 +888,11 @@ _pre_suite_cleanup() {
 	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
 	echo "  Purged oc-mirror caches"
 
+	# Prune dangling/unused podman images (can accumulate 60GB+ over repeated suite runs)
+	podman image prune -af || true
+	sudo podman image prune -af || true
+	echo "  Pruned unused podman images"
+
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
 		[ -f "$cleanup_file" ] || continue
 		found=1
