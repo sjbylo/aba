@@ -132,6 +132,41 @@ mkdir -p "$_empty"
 [ $? -ne 0 ] && test_pass "source with no recognized configs aborts (non-zero)" \
 	|| test_fail "empty source" "expected non-zero exit"
 
+# --- Test group 6: directory payloads are backed up on re-import (no data loss)
+echo "--- directory payload backup ---"
+printf 'PRECIOUS\n' > "$_dest/mycluster/day2-custom-manifests/10-first/precious.yaml"
+printf 'apiVersion: v1\nkind: ConfigMap\nchanged: yes\n' > "$_site/mycluster/day2-custom-manifests/10-first/app.yaml"
+( config_import_apply "$_site" "$_dest" ) >/dev/null 2>&1
+if [ -f "$_dest/mycluster/day2-custom-manifests.backup/10-first/precious.yaml" ]; then
+	test_pass "existing day2-custom-manifests backed up to .backup on re-import"
+else
+	test_fail "day2 dir backup" "precious.yaml not preserved in .backup"
+fi
+
+# --- Test group 7: pin never creates empty trigger files or touches other clusters
+echo "--- pin no-create + scoping ---"
+_dest2="$_tmp/aba2"
+_site2="$_tmp/site2"
+mkdir -p "$_dest2" "$_site2/c1"
+printf 'name=c1\n'                              > "$_site2/c1/cluster.conf"
+printf 'apiVersion: v1\nkind: InstallConfig\n'  > "$_site2/c1/install-config.yaml"
+( config_import_apply "$_site2" "$_dest2" ) >/dev/null 2>&1
+if [ ! -e "$_dest2/mirror/mirror.conf" ]; then
+	test_pass "pin does not inject an empty mirror/mirror.conf when the payload has none"
+else
+	test_fail "no-create mirror.conf" "empty mirror.conf injected"
+fi
+# a pre-existing UNRELATED cluster must not be re-stamped when importing c1
+mkdir -p "$_dest2/prod"
+printf 'name=prod\n'  > "$_dest2/prod/cluster.conf"
+printf 'IC\n'        > "$_dest2/prod/install-config.yaml"
+touch -d '2 minutes ago' "$_dest2/prod/install-config.yaml"
+_bm=$(stat -c %Y "$_dest2/prod/install-config.yaml")
+( config_import_apply "$_site2" "$_dest2" ) >/dev/null 2>&1
+_am=$(stat -c %Y "$_dest2/prod/install-config.yaml")
+[ "$_bm" = "$_am" ] && test_pass "importing c1 does not re-stamp the unrelated cluster prod/" \
+	|| test_fail "pin scoping" "prod/install-config.yaml mtime changed ($_bm -> $_am)"
+
 # --- Test group 5: CLI dispatch wiring (aba config import <dir>) --------------
 echo "--- dispatch wiring ---"
 grep -q '|config|' scripts/aba.sh \

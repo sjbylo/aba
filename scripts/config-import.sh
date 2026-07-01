@@ -44,7 +44,19 @@ config_import_apply() {
 		aba_info "imported ${t#"$dest"/}"
 	}
 
-	local copied=0 f d name
+	local copied=0 f d name imported=""
+
+	# Replace a directory payload byte-for-byte, backing up any existing target to
+	# *.backup first (mirrors _cp_verbatim's backup behavior for files).
+	_cp_dir_verbatim() {
+		local s="$1" t="$2"
+		mkdir -p "$(dirname "$t")"
+		if [ -e "$t" ]; then
+			rm -rf -- "$t.backup"
+			mv -- "$t" "$t.backup"
+		fi
+		cp -a -- "$s" "$t"
+	}
 
 	# Top-level aba configs
 	for f in aba.conf vmware.conf kvm.conf; do
@@ -73,43 +85,47 @@ config_import_apply() {
 		[ -f "$d/install-config.yaml" ] && { _cp_verbatim "$d/install-config.yaml" "$dest/$name/install-config.yaml"; copied=$((copied + 1)); }
 		[ -f "$d/agent-config.yaml" ]   && { _cp_verbatim "$d/agent-config.yaml"   "$dest/$name/agent-config.yaml";   copied=$((copied + 1)); }
 		[ -f "$d/macs.conf" ]           && { _cp_verbatim "$d/macs.conf"           "$dest/$name/macs.conf";           copied=$((copied + 1)); }
-		if [ -d "$d/day2-custom-manifests" ]; then
-			mkdir -p "$dest/$name"
-			rm -rf -- "$dest/$name/day2-custom-manifests"
-			cp -a -- "$d/day2-custom-manifests" "$dest/$name/day2-custom-manifests"
-			copied=$((copied + 1))
-		fi
+		[ -d "$d/day2-custom-manifests" ] && { _cp_dir_verbatim "$d/day2-custom-manifests" "$dest/$name/day2-custom-manifests"; copied=$((copied + 1)); }
+		imported="$imported $name"
 	done
 
 	# Optional helm charts payload (opaque passthrough, no regeneration guard)
-	if [ -d "$src/helm" ]; then
-		rm -rf -- "$dest/helm"
-		cp -a -- "$src/helm" "$dest/helm"
-	fi
+	[ -d "$src/helm" ] && _cp_dir_verbatim "$src/helm" "$dest/helm"
 
 	[ "$copied" -gt 0 ] || aba_abort "config import: no recognized config files found under $src"
 
 	# --- pin regeneration guards ---------------------------------------------
-	# Every copy above has an mtime of 'now'. On filesystems with second-level
-	# mtime granularity, "protected file newer than trigger" is not guaranteed by
-	# copy order alone, so we age the TRIGGER files by a minute and re-stamp the
-	# PROTECTED files to 'now', making the strict "-nt" guards deterministic.
+	# Every copy above has an mtime of 'now'. On second-granularity filesystems,
+	# "protected file newer than trigger" is not guaranteed by copy order alone, so
+	# we age the TRIGGER files ~1 minute and re-stamp the PROTECTED files to 'now'.
+	# Only files imported this run are touched, and no absent file is created.
 
-	# ISC: reg-create-imageset-config.sh regenerates unless imageset-config.yaml
-	# is strictly newer than data/.created - so keep the imported ISC pinned.
+	# Best-effort: age an EXISTING file ~1 minute into the past (portable, no-create).
+	_age_past() {
+		touch -c -d '1 minute ago' "$1" 2>/dev/null && return 0
+		local ts
+		ts="$(date -d '1 minute ago' +%Y%m%d%H%M.%S 2>/dev/null || date -v-1M +%Y%m%d%H%M.%S 2>/dev/null || true)"
+		[ -n "$ts" ] && touch -c -t "$ts" "$1" 2>/dev/null
+		return 0
+	}
+
+	# ISC: reg-create-imageset-config.sh regenerates unless imageset-config.yaml is
+	# strictly newer than data/.created - so keep the imported ISC pinned. .created
+	# must exist for the guard, so create it (empty marker) before aging it.
 	if [ -f "$dest/mirror/data/imageset-config.yaml" ]; then
-		touch -d '1 minute ago' "$dest/mirror/data/.created" 2>/dev/null || : > "$dest/mirror/data/.created"
+		[ -f "$dest/mirror/data/.created" ] || : > "$dest/mirror/data/.created"
+		_age_past "$dest/mirror/data/.created"
 		touch "$dest/mirror/data/imageset-config.yaml"
 	fi
 
-	# install-config.yaml / agent-config.yaml: make regenerates them if they are
-	# older than their prerequisites cluster.conf or mirror.conf - so keep them newest.
-	for d in "$dest"/*/; do
-		[ -d "$d" ] || continue
-		name="$(basename "$d")"
-		case "$name" in mirror|helm) continue ;; esac
+	# install-config.yaml / agent-config.yaml: make regenerates them if they are older
+	# than their prerequisites cluster.conf or mirror.conf - so keep them newest. Scope
+	# strictly to the clusters imported this run (never mutate other clusters' state).
+	for name in $imported; do
+		d="$dest/$name"
 		if [ -f "$d/install-config.yaml" ] || [ -f "$d/agent-config.yaml" ]; then
-			touch -d '1 minute ago' "$d/cluster.conf" "$dest/mirror/mirror.conf" 2>/dev/null || true
+			_age_past "$d/cluster.conf"
+			_age_past "$dest/mirror/mirror.conf"
 			[ -f "$d/install-config.yaml" ] && touch "$d/install-config.yaml"
 			[ -f "$d/agent-config.yaml" ]   && touch "$d/agent-config.yaml"
 		fi
