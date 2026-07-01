@@ -35,6 +35,7 @@ digitalai-release-operator                              Digital.ai Release      
 dxoperator                                              DxOperator V1 Legacy                                         alpha
 dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
+eda-k8s-operator                                        eda-openshift-operator                                       6.0
 edb-hcp-operator                                        EDB Postgres AI                                              stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable

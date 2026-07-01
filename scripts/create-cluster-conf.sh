@@ -34,8 +34,8 @@ if [ ! "$machine_network" ]; then
 	v=$(get_machine_network) && [ "$v" ] && replace-value-conf -q -n machine_network -v "$v" -f aba.conf && machine_network="$v"
 	# Split CIDR into machine_network (IP) + prefix_length for the cluster.conf template
 	if [[ "$machine_network" == */* ]]; then
-		export prefix_length="${machine_network#*/}"
-		machine_network="${machine_network%/*}"
+		export prefix_length="${machine_network#*/}"      # CIDR prefix (10.0.0.0/24 → 24)
+		machine_network="${machine_network%/*}"           # IP part (10.0.0.0/24 → 10.0.0.0)
 	fi
 	[ "$machine_network" ] && { aba_info "Auto-detected machine_network=$machine_network/$prefix_length"; _filled=$((_filled+1)); }
 fi

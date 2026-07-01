@@ -62,13 +62,13 @@ _display_name_adds_info() {
 	local op_name="$1" display_name="$2"
 
 	# Normalize op name: strip common suffixes, hyphens → spaces, lowercase
-	local norm_op="${op_name%-operator-rh}"
-	norm_op="${norm_op%-operator}"
-	norm_op="${norm_op%-rh}"
-	norm_op="${norm_op//-/ }"
-	norm_op="${norm_op,,}"
+	local norm_op="${op_name%-operator-rh}"         # strip "-operator-rh" suffix
+	norm_op="${norm_op%-operator}"                  # strip "-operator" suffix
+	norm_op="${norm_op%-rh}"                        # strip "-rh" suffix
+	norm_op="${norm_op//-/ }"                       # hyphens → spaces
+	norm_op="${norm_op,,}"                          # lowercase
 
-	local norm_dn="${display_name,,}"
+	local norm_dn="${display_name,,}"               # lowercase
 
 	# Filter out noise word "operator" (already stripped from the package
 	# name suffix, but can still appear in the display name)
@@ -79,8 +79,8 @@ _display_name_adds_info() {
 	for word in $norm_dn; do
 		[[ "$word" == "operator" ]] || filtered_dn+="$word "
 	done
-	norm_op="${filtered_op% }"
-	norm_dn="${filtered_dn% }"
+	norm_op="${filtered_op% }"                     # trim trailing space
+	norm_dn="${filtered_dn% }"                     # trim trailing space
 
 	# Redundant if all op-name words appear in the display name
 	local all_found=true

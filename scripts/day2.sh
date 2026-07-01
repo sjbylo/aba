@@ -204,7 +204,7 @@ apply_custom_manifests() {
 	# Apply each file; while+read handles filenames that contain spaces
 	while IFS= read -r manifest_file; do
 		# Show path relative to the custom manifests directory for cleaner output
-		local rel_path="${manifest_file#"$custom_manifest_dir"/}"
+		local rel_path="${manifest_file#"$custom_manifest_dir"/}"  # strip base dir → relative path
 
 		# Verify file is not empty
 		if [ ! -s "$manifest_file" ]; then

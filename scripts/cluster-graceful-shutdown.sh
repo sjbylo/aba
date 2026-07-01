@@ -93,7 +93,7 @@ while IFS=$'\t' read -r _ns _name _b64cert; do
 	[ -z "$_b64cert" ] && continue
 	_enddate=$(echo "$_b64cert" | base64 -d 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null) || continue
 	# _enddate is like "notAfter=Oct  3 12:00:00 2026 GMT"
-	_enddate="${_enddate#notAfter=}"
+	_enddate="${_enddate#notAfter=}"                    # strip "notAfter=" prefix → date string
 	_end_secs=$(date -d "$_enddate" +%s 2>/dev/null) || continue
 	_days=$(( (_end_secs - _now) / 86400 ))
 	if [ "$_days" -lt "$_nearest_days" ]; then
@@ -167,9 +167,9 @@ for _n in $_all_nodes; do
 done
 
 _ssh_available=false
-if [ -n "${ssh_key_file:-}" ] && [ -f "${ssh_key_file/#\~/$HOME}" ] && [ ${#_node_ip[@]} -gt 0 ]; then
+if [ -n "${ssh_key_file:-}" ] && [ -f "${ssh_key_file/#\~/$HOME}" ] && [ ${#_node_ip[@]} -gt 0 ]; then  # expand tilde for -f test
 	_ssh_available=true
-	_ssh_key="${ssh_key_file/#\~/$HOME}"
+	_ssh_key="${ssh_key_file/#\~/$HOME}"                # ~/foo → /home/user/foo
 fi
 
 _shutdown_failed=

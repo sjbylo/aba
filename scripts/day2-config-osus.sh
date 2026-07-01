@@ -270,7 +270,7 @@ END
 _osus_check_policy_engine_uri() {
 	local uri scheme
 	uri=$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}" 2>/dev/null) || return 1
-	scheme="${uri%%:*}"
+	scheme="${uri%%:*}"                            # extract scheme (http or https) from URI
 	test "$scheme" = http -o "$scheme" = https
 }
 

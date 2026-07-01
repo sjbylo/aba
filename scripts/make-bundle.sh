@@ -100,7 +100,7 @@ else
 	fi
 	aba_info "An install bundle file will be generated and saved to disk using the following parameters:" >&2
 	if [[ "$bundle_dest_file" == *.tar ]]; then
-		bundle_dest_file="${bundle_dest_file%.tar}-$ocp_version.tar"
+		bundle_dest_file="${bundle_dest_file%.tar}-$ocp_version.tar"  # strip .tar, append version, re-add .tar
 	else
 		bundle_dest_file="$bundle_dest_file-$ocp_version.tar"
 	fi
