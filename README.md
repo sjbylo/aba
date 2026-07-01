@@ -924,15 +924,63 @@ spec:
 EOF
 ```
 
+### Ordered waves with readiness gates
+
+When `day2-custom-manifests/` contains numbered subdirectories (names starting with a digit, e.g. `10-first/`, `20-second/`), each is treated as a **wave** and applied in **numeric** order, so `2-...` runs before `10-...` (not alphabetically). Any flat files placed directly in `day2-custom-manifests/` are applied first, before the waves.
+
+Drop an optional `.wait` file into a wave directory to pause until a condition is met before the next wave starts. Each non-comment line is passed straight to `oc wait`:
+
+```bash
+mkdir -p day2-custom-manifests/10-first day2-custom-manifests/20-second
+
+# Wave 10 installs a CRD ...
+cat > day2-custom-manifests/10-first/widget-crd.yaml <<EOF
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.example.com
+spec:
+  group: example.com
+  scope: Namespaced
+  names:
+    plural: widgets
+    singular: widget
+    kind: Widget
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+EOF
+
+# ... and we wait for it to be Established before wave 20 creates one
+cat > day2-custom-manifests/10-first/.wait <<EOF
+--for=condition=Established crd/widgets.example.com --timeout=120s
+EOF
+
+cat > day2-custom-manifests/20-second/widget.yaml <<EOF
+apiVersion: example.com/v1
+kind: Widget
+metadata:
+  name: my-widget
+  namespace: default
+EOF
+```
+
+A wait that times out is non-fatal: day2 logs a warning and continues with the next wave.
+
 Run `aba day2` as normal — manifests are applied after oc-mirror resources (IDMS, ITMS, CatalogSources, signatures).
 
 #### Notes
 
 - The `day2-custom-manifests/` directory is optional
-- Files are discovered recursively and applied in alphabetical order by full path
-- Use directory naming prefixes (e.g. `00-namespaces/`, `01-app/`) to control order
+- Without numbered subdirectories, files are discovered recursively and applied in alphabetical order by full path
+- With numbered subdirectories (e.g. `10-first/`, `20-second/`), each is a **wave** applied in numeric order; flat top-level files are applied first
+- An optional `.wait` file in a wave directory runs `oc wait` (one condition per line) before the next wave starts
 - Empty files are skipped with a warning
-- If a manifest fails to apply, day2 continues with the remaining files
+- If a manifest fails to apply, or an `oc wait` times out, day2 logs a warning and continues
 - Manifests are applied **after** the mirror registry is configured, so they can reference mirrored images
 
 ## Synchronize NTP Across Cluster Nodes

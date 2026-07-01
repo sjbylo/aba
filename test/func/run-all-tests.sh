@@ -53,6 +53,7 @@ unit_tests=(
 	test/func/test-resource-pool-resolution.sh
 	test/func/test-cluster-flag-forwarding.sh
 	test/func/test-replace-value-conf.sh
+	test/func/test-day2-waves.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
 )
