@@ -234,11 +234,18 @@ apply_custom_manifests() {
 		# each numbered wave in order, gating on an optional per-wave '.wait' file.
 		aba_info "Applying user-provided custom manifests in waves ..."
 
-		local flat_files
-		flat_files="$(find "$custom_manifest_dir" -mindepth 1 -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
-		if [ -n "$flat_files" ]; then
-			aba_info "Applying top-level manifests before the first wave ..."
-			_apply_manifest_list "$flat_files"
+		# Default group = every manifest NOT inside a numbered wave dir. This keeps
+		# the legacy recursive coverage (flat files AND non-numbered subdirs still
+		# apply), so enabling waves never silently drops other manifests.
+		local default_files wd
+		default_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
+		while IFS= read -r wd; do
+			[ -z "$wd" ] && continue
+			default_files="$(printf '%s\n' "$default_files" | grep -vF "$wd/" || true)"
+		done <<< "$wave_dirs"
+		if [ -n "$default_files" ]; then
+			aba_info "Applying non-wave manifests before the first wave ..."
+			_apply_manifest_list "$default_files"
 		fi
 
 		local wave wave_name wave_files _cond
@@ -254,6 +261,8 @@ apply_custom_manifests() {
 			if [ -f "$wave/.wait" ]; then
 				while IFS= read -r _cond || [ -n "$_cond" ]; do
 					_cond="${_cond%$'\r'}"
+					_cond="${_cond#"${_cond%%[![:space:]]*}"}"   # trim leading whitespace
+					_cond="${_cond%"${_cond##*[![:space:]]}"}"   # trim trailing whitespace
 					[ -z "$_cond" ] && continue
 					case "$_cond" in \#*) continue ;; esac
 					aba_info "Wave $wave_name: waiting for 'oc wait $_cond' ..."

@@ -205,6 +205,29 @@ else
 fi
 _assert_applied "next wave still applied after a wait timeout" "$_LAST_LOG" "b.yaml"
 
+# --- Test G: waved mode still applies non-numbered subdir manifests -----------
+echo "--- waved mode keeps non-wave subdir manifests (no silent drop) ---"
+fxG="$_tmp/clusterG"
+_mk "$fxG/day2-custom-manifests/10-app/app.yaml"
+_mk "$fxG/day2-custom-manifests/base/storageclass.yaml"
+_run_apply "$fxG"
+_assert_applied "waved mode: wave manifest applied"                          "$_LAST_LOG" "app.yaml"
+_assert_applied "waved mode: non-numbered subdir manifest applied (kept)"    "$_LAST_LOG" "storageclass.yaml"
+
+# --- Test H: an indented .wait comment is ignored, not passed to 'oc wait' -----
+echo "--- .wait indented comment ignored ---"
+fxH="$_tmp/clusterH"
+_mk "$fxH/day2-custom-manifests/10-a/a.yaml"
+printf '  # just a comment\n--for=condition=Ready pod/foo\n' > "$fxH/day2-custom-manifests/10-a/.wait"
+_mk "$fxH/day2-custom-manifests/20-b/b.yaml"
+_run_apply "$fxH"
+if grep -q 'wait .*comment' "$_LAST_LOG"; then
+	test_fail ".wait indented comment ignored" "comment was passed to oc wait: $(grep wait "$_LAST_LOG" | tr '\n' '|')"
+else
+	test_pass ".wait indented comment ignored (not passed to oc wait)"
+fi
+grep -q 'wait .*pod/foo' "$_LAST_LOG" && test_pass ".wait real condition still honored" || test_fail ".wait real condition" "pod/foo wait missing"
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo
