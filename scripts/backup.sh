@@ -76,6 +76,10 @@ touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
+# Include the optional site/ payload (from 'aba bundle --complete') when present.
+_site_path=""
+[ -d "${repo_dir}/site" ] && _site_path="${repo_dir}/site"
+
 # All 'find expr' below are by default "and"
 file_list=$(find				\
 	"${repo_dir}/install"			\
@@ -96,6 +100,7 @@ file_list=$(find				\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/.index"			\
 	"${repo_dir}/mirror"			\
+	${_site_path:+"$_site_path"}		\
 									\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\

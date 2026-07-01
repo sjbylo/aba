@@ -55,6 +55,7 @@ unit_tests=(
 	test/func/test-replace-value-conf.sh
 	test/func/test-day2-waves.sh
 	test/func/test-config-import.sh
+	test/func/test-bundle-complete.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
 )

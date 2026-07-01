@@ -401,6 +401,9 @@ elif [ "$1" = "--light" ]; then
 	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
 	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
 	shift
+elif [ "$1" = "--complete" ]; then
+	export opt_complete="--complete"  # if "aba bundle", embed the site/ config payload in the bundle
+	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
 		echo_yellow "Available OpenShift versions:"
@@ -1131,8 +1134,8 @@ if [ "$cur_target" ]; then
 		;;
 		bundle)
 			trap - ERR  # No need for this anymore
-			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
-			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_complete
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_complete
 			exit
 		;;
 		config)

@@ -43,6 +43,47 @@ _verify_cli_tarballs() {
 	aba_debug "All CLI tarballs passed integrity check (gzip -t)"
 }
 
+# _assemble_site <aba_root> <site_dir>
+# Collect the current aba configs into a site/ tree using the same layout that
+# 'aba config import' consumes, so 'aba bundle --complete' can embed one payload
+# carrying configs + helm charts + day2 manifests across the air gap.
+_assemble_site() {
+	local root="$1" site="$2" copied=0 f d name
+	rm -rf -- "$site"
+	mkdir -p "$site"
+
+	for f in aba.conf vmware.conf kvm.conf; do
+		[ -f "$root/$f" ] && { cp -f -- "$root/$f" "$site/$f"; copied=$((copied + 1)); }
+	done
+
+	if [ -f "$root/mirror/mirror.conf" ]; then
+		mkdir -p "$site/mirror"; cp -f -- "$root/mirror/mirror.conf" "$site/mirror/mirror.conf"; copied=$((copied + 1))
+	fi
+	if [ -f "$root/mirror/data/imageset-config.yaml" ]; then
+		mkdir -p "$site/mirror"; cp -f -- "$root/mirror/data/imageset-config.yaml" "$site/mirror/imageset-config.yaml"; copied=$((copied + 1))
+	fi
+
+	# A cluster directory is any subdir holding a cluster.conf (skip mirror/site/helm).
+	for d in "$root"/*/; do
+		[ -d "$d" ] || continue
+		name="$(basename "$d")"
+		case "$name" in mirror|site|helm) continue ;; esac
+		[ -f "$d/cluster.conf" ] || continue
+		mkdir -p "$site/$name"
+		cp -f -- "$d/cluster.conf" "$site/$name/cluster.conf"; copied=$((copied + 1))
+		[ -f "$d/install-config.yaml" ] && cp -f -- "$d/install-config.yaml" "$site/$name/install-config.yaml"
+		[ -f "$d/agent-config.yaml" ]   && cp -f -- "$d/agent-config.yaml"   "$site/$name/agent-config.yaml"
+		[ -f "$d/macs.conf" ]           && cp -f -- "$d/macs.conf"           "$site/$name/macs.conf"
+		[ -d "$d/day2-custom-manifests" ] && cp -a -- "$d/day2-custom-manifests" "$site/$name/day2-custom-manifests"
+	done
+
+	# Optional helm charts payload
+	[ -d "$root/helm" ] && cp -a -- "$root/helm" "$site/helm"
+
+	[ "$copied" -gt 0 ] || aba_warning "bundle --complete: no configs found to embed under $site"
+	return 0
+}
+
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -59,6 +100,11 @@ while [[ $# -gt 0 ]]; do
 		--light)
 			light_bundle=1
 			aba_debug "Argument: --light (exclude image-set archives)"
+			shift
+			;;
+		--complete)
+			complete_bundle=1
+			aba_debug "Argument: --complete (embed site/ config payload)"
 			shift
 			;;
 		*)
@@ -87,6 +133,15 @@ aba_debug "Normalizing and verifying aba.conf"
 source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
+
+# For --complete, assemble the site/ config payload into the repo so backup.sh
+# embeds it in the same tar (one archive carries the mirror AND the configs).
+# Clean it up on exit so a later plain 'aba bundle' is unchanged (no site/).
+if [ "$complete_bundle" ]; then
+	trap 'rm -rf -- "$PWD/site"' EXIT
+	aba_info "Assembling site/ config payload for --complete bundle ..."
+	_assemble_site "$PWD" "$PWD/site"
+fi
 
 if [ "$bundle_dest_file" = "-" ]; then
 	# Be sure the standard output of this command is ONLY tar output and nothing else!
