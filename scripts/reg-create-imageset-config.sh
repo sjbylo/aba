@@ -64,28 +64,30 @@ if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imag
 			aba_warning "ocp_version_target ($ocp_version_target) is lower than ocp_version ($ocp_version) — ignoring."
 			replace-value-conf -q -n ocp_version_target -v "" -f mirror.conf
 			ocp_version_target=""
-		fi
-		export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
-
-		# Validate upgrade path: source version must exist in the target channel graph.
-		# Covers both same-minor (z-stream) and cross-minor upgrades.
-		_path_diag=""
-		if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
-			: # path OK
 		else
-			_src="${_path_diag%%|*}"
-			_rest="${_path_diag#*|}"
-			_tgt_channel="${_rest%%|*}"
-			_lowest="${_rest##*|}"
-			aba_abort \
-				"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
-				"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
-				"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
-				"" \
-				"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
-		fi
+			export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
 
-		aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+			# Validate upgrade path: source version must exist in the target channel graph.
+			# Covers both same-minor (z-stream) and cross-minor upgrades.
+			_path_diag=""
+			if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+				: # path OK
+			else
+				# _path_diag is "src_ver|channel|lowest_ver" — parse pipe-delimited fields
+				_src="${_path_diag%%|*}"                # first field (source version)
+				_rest="${_path_diag#*|}"                # everything after first pipe
+				_tgt_channel="${_rest%%|*}"             # second field (target channel)
+				_lowest="${_rest##*|}"                  # last field (lowest entry point)
+				aba_abort \
+					"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
+					"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
+					"" \
+					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+			fi
+
+			aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+		fi
 	fi
 
 	aba_info "Generating image set configuration: data/imageset-config.yaml ..."
