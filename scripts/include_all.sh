@@ -1857,8 +1857,9 @@ verify_upgrade_path_exists() {
 	fi
 
 	local graph_versions
-	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null \  # strip minor suffix: "stable-4.22" → "stable"
-		| jq -r '.nodes[].version' 2>/dev/null) || return 0
+	# Strip minor suffix from tgt_channel: "stable-4.22" → "stable"
+	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null |
+		jq -r '.nodes[].version' 2>/dev/null) || return 0
 
 	# If graph is empty/unreachable, don't block — let later checks handle it
 	[[ -z "$graph_versions" ]] && return 0

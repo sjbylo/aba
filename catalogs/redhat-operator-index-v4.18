@@ -25,7 +25,7 @@ cluster-logging                                         Red Hat OpenShift Loggin
 cluster-observability-operator                          Cluster Observability Operator                               stable
 clusterresourceoverride                                 ClusterResourceOverride Operator                             stable
 compliance-operator                                     Compliance Operator                                          stable
-container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.16
+container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.17
 costmanagement-metrics-operator                         Cost Management Metrics Operator                             stable
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
@@ -107,8 +107,8 @@ pf-status-relay-operator                                pf-status-relay-operator
 policy-controller-operator                              Policy Controller Operator                                   stable
 power-monitoring-operator                               Power monitoring for Red Hat OpenShift                       tech-preview
 ptp-operator                                            PTP Operator                                                 stable
-quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.16
-quay-operator                                           Red Hat Quay                                                 stable-3.16
+quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.17
+quay-operator                                           Red Hat Quay                                                 stable-3.17
 recipe                                                  Recipe                                                       stable-4.18
 red-hat-camel-k                                         Red Hat Integration - Camel K                                1.10.x
 red-hat-hawtio-operator                                 HawtIO Operator                                              v2
