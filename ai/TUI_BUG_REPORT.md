@@ -17391,3 +17391,559 @@ Additionally, review the entire `aba.conf` template for other stale comments, ou
 3. Update the template file (likely under `templates/`) as well as any existing `aba.conf` in the repo.
 
 ---
+
+## Bug #960 — Core: `reg-create-imageset-config.sh` aborts on stale downgrade target instead of ignoring it
+
+- **Severity**: MEDIUM
+- **Component**: `scripts/reg-create-imageset-config.sh`
+- **Status**: OPEN (code review)
+
+### Description
+
+When `ocp_version_target` in `mirror.conf` is a stale downgrade (lower than `ocp_version`), the guard at lines 62-67 correctly detects and clears it. However, the code falls through to lines 68-86 which still execute within the same `if` block:
+
+```bash
+if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+    if ! is_version_greater "$ocp_version_target" "$ocp_version"; then
+        ocp_version_target=""   # cleared!
+    fi
+    export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)  # empty!
+    verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" ...  # empty target → return 1
+    aba_abort "Cannot upgrade from $ocp_version to ."  # confusing message
+fi
+```
+
+After clearing `ocp_version_target=""`, `tgt_major` becomes empty. `verify_upgrade_path_exists` receives an empty target, returns 1, and `aba_abort` fires with a confusing message like "Cannot upgrade directly from 4.21.22 to .".
+
+### Steps to reproduce
+
+1. Set `ocp_version=4.21.22` in `aba.conf`
+2. Set `ocp_version_target=4.20.20` in `mirror.conf` (stale downgrade)
+3. Run `aba -d mirror sync` or any operation that triggers ISC generation
+4. Script aborts with: "Cannot upgrade directly from 4.21.22 to ." instead of gracefully ignoring the stale target
+
+### Expected behavior
+
+After clearing the stale target, the script should skip the upgrade path validation block entirely (e.g. with `else` on the inner `if`, or early `fi`).
+
+### Actual behavior
+
+Script aborts with confusing error message about upgrading to an empty version.
+
+---
+
+## Bug #961 — TUI: Operator catalog counts change between menu visits
+
+- **Severity**: LOW (cosmetic)
+- **Component**: `tui/v2/tui-mirror.sh` (operator selection)
+- **Status**: OPEN (observed live)
+
+### Description
+
+When entering the "Select Operators" menu, the available catalog counts (redhat-operators, certified-operators, community-operators) differ between the first view and a return visit. For example:
+
+- First view: redhat-operators: 146, certified-operators: 161, community-operators: 289
+- After searching and adding an operator: redhat-operators: 147, certified-operators: 166, community-operators: 293
+
+The catalogs appear to be re-counted each time the menu is shown, and the background catalog download may complete between views, adding newly-available operators.
+
+### Steps to reproduce
+
+1. Open TUI, go through wizard to operator selection
+2. Note catalog counts
+3. Search for and add an operator
+4. Return to operator menu — catalog counts have changed
+
+### Expected behavior
+
+Either counts should be stable within a session, or the UI should indicate "updating..." if catalogs are being refreshed.
+
+### Actual behavior
+
+Counts silently change, which may confuse users into thinking their actions affected the catalogs.
+
+---
+
+## Bug #962 — TUI: Upgrade path error message misleading when current version > lowest entry point
+
+**Severity:** Medium (UX confusion)
+**Status:** New
+**Verified:** Yes — reproduced live in TUI on conno (2026-07-01)
+**Component:** `tui/v2/tui-mirror.sh` (lines 662-667), `scripts/include_all.sh` `verify_upgrade_path_exists()`
+**Also affects:** `scripts/reg-sync.sh`, `scripts/reg-save.sh`, `scripts/reg-create-imageset-config.sh`
+
+### Steps to reproduce
+
+1. Install cluster with OCP 4.21.22 in `fast` channel
+2. Use TUI → Prepare Upgrade → Latest (4.22.2) or manual entry of a cross-minor version
+3. TUI verifies upgrade path and shows error dialog
+
+### Expected behavior
+
+The error message should recognize that the current version (4.21.22) is already higher than the lowest entry point (4.20.0) in the target channel, and provide sensible guidance — e.g. "Version 4.21.22 is not yet in the fast-4.22 upgrade graph. The graph may not include your version yet."
+
+### Actual behavior
+
+The dialog shows:
+
+```
+Cannot upgrade directly from 4.21.22 to 4.22.2.
+Version 4.21.22 is not in channel fast-4.22.
+Lowest entry point: 4.20.0
+You need to upgrade to at least 4.20.0 first.
+```
+
+"You need to upgrade to at least 4.20.0 first" is nonsensical because we're already on 4.21.22 which is ABOVE 4.20.0. The "lowest entry point" in the graph is not the version the user needs to be at — it's just the oldest version in the graph. The issue is that 4.21.22 hasn't been added to the fast-4.22 graph yet.
+
+### Suggested fix
+
+In the error message, check if `current_ver > lowest`: if so, say something like "Version X is not yet recognized in channel Y. Try again later or check the upgrade graph tool." Don't say "upgrade to Z first" when Z < current.
+
+---
+
+## Bug #963 — TUI: Prepare Upgrade "Previous" option shows same version as current
+
+**Severity:** Low (UX confusion)
+**Status:** New
+**Verified:** Yes — observed live in TUI on conno (2026-07-01)
+**Component:** `tui/v2/tui-mirror.sh` — `mirror_prep_upgrade()` version selection dialog
+
+### Steps to reproduce
+
+1. Current OCP version: 4.21.22 (no previous upgrade target set)
+2. TUI → main menu → Prepare Upgrade (U)
+3. Version selection dialog shows:
+   - Latest (4.22.2)
+   - Previous (4.21.22)
+   - Manual entry
+
+### Expected behavior
+
+"Previous" should show a previously configured upgrade target, or be hidden if no different target has been set. Showing the same version as "Current configured" is confusing — it suggests you can "upgrade" to the version you're already running.
+
+### Actual behavior
+
+"Previous (4.21.22)" is shown as an option alongside "Current configured: 4.21.22", making it look like a no-op upgrade is being offered.
+
+### Root cause
+
+In `tui-mirror.sh` line 580, the condition checks `_previous != _existing_target && _previous != _latest` but does NOT check `_previous != _current_ver`. When the second-highest channel version happens to equal the installed version, the duplicate is displayed.
+
+### Suggested fix
+
+Add `&& "$_previous" != "$_current_ver"` to the condition on line 580:
+```bash
+if [[ -n "$_previous" && "$_previous" != "$_existing_target" && "$_previous" != "$_latest" && "$_previous" != "$_current_ver" ]]; then
+```
+
+---
+
+## Bug #964 — TUI: No warning when cluster machine_network doesn't match vmware.conf GOVC_NETWORK
+
+**Severity:** Medium (silent misconfiguration → broken install)
+**Status:** New
+**Verified:** Yes — observed live in TUI on conno (2026-07-01)
+**Component:** `tui/v2/tui-cluster.sh` — cluster wizard summary page
+
+### Steps to reproduce
+
+1. vmware.conf has `GOVC_NETWORK='Lab Network'` (10.0.x.x subnet)
+2. In DIRECT mode, create a new cluster with machine_network=192.168.2.0/24, starting_ip=192.168.2.213, gateway=192.168.2.1
+3. Wizard summary page shows all correct values and allows "Install"
+4. No warning that the VM will be provisioned on 'Lab Network' (wrong subnet) while the IPs are for a different network
+
+### Expected behavior
+
+The wizard should either:
+1. Display the GOVC_NETWORK value in the summary/network page so the user can verify
+2. Warn if the cluster's machine_network doesn't appear to match the ESXi port group
+3. Allow per-cluster GOVC_NETWORK override in the wizard
+
+### Actual behavior
+
+Silent mismatch: cluster.conf says 192.168.2.0/24 but VMs will be created on 'Lab Network' (10.0.x.x). The install would fail because the VMs can't reach the configured gateway.
+
+---
+
+## Bug #965 — TUI: "Uninstall Mirror Registry" now present in Advanced menu (Bug #947/#950 FIXED)
+
+**Severity:** N/A (verification)
+**Status:** FIXED (verified 2026-07-01)
+**Component:** `tui/v2/tui-cluster.sh` — `tui_advanced_menu()`
+
+The "Uninstall Mirror Registry (destructive)" option is now present in the Advanced menu (option U). This was previously reported as Bug #947/950 (missing mirror uninstall in Advanced menu). Confirmed fixed in v1.1.2.
+
+---
+
+## Bug #966 — TUI: DIRECT mode Day-2 menu shows mirror-specific options
+
+**Severity:** Low (UX confusion)
+**Status:** New
+**Verified:** Yes — observed live in TUI on conno (2026-07-01)
+**Component:** `tui/v2/tui-cluster.sh` — Day-2 menu
+
+### Steps to reproduce
+
+1. Switch to DIRECT mode via Advanced → Switch to Fully Connected
+2. Install a cluster in DIRECT mode (no mirror)
+3. Open Day-2 / Cluster Management menu
+
+### Expected behavior
+
+Day-2 menu options should be contextual. In DIRECT mode (no mirror), options like:
+- "R  Configure OperatorHub (after mirror load/sync)"
+- "O  OpenShift Update Service (OSUS)"
+
+...should either be hidden or labeled differently. The OperatorHub config hint "(after mirror load/sync)" is misleading since there's no mirror. OSUS is primarily for disconnected clusters with local update graphs.
+
+### Actual behavior
+
+All Day-2 options are shown identically regardless of mode. Running "Configure OperatorHub" in DIRECT mode would either fail or do nothing useful (no IDMS/ITMS to apply). Running OSUS would install an unnecessary operator.
+
+---
+
+## Bug #967 — TUI: Wizard writes channel/version to aba.conf BEFORE user confirmation
+
+**Severity:** Medium (config corruption on reject)
+**Status:** New
+**Verified:** Yes — reproduced live in TUI on conno (2026-07-01)
+**Component:** `tui/v2/tui-main.sh` or `tui/v2/tui-lib.sh` — wizard channel/version selection
+
+### Steps to reproduce
+
+1. Current config: fast channel, 4.21.22
+2. Rerun Wizard → Reconfigure → Channel: candidate → Version: Latest (5.0.0-ec.3)
+3. Confirm dialog: "Proceed with this configuration?" → Press **No**
+4. Observe the backtitle: "candidate 5.0.0-ec.3" persists even after rejection
+5. Change channel back to "fast" → version selection shows "Current (5.0.0-ec.3)"
+
+### Expected behavior
+
+Pressing "No" on the confirmation dialog should revert all wizard changes. The version and channel should remain at the original values (fast, 4.21.22) and aba.conf should be unchanged.
+
+### Actual behavior
+
+The version (5.0.0-ec.3) and channel (candidate) are written to aba.conf BEFORE the user confirms. When the user presses "No", the changes have already been persisted to disk and to in-memory variables. The wizard loops back but the damage is done — aba.conf now has ocp_version=5.0.0-ec.3.
+
+### Root cause
+
+The wizard writes `replace-value-conf` for channel and version as the selections are made (before the "Confirm Configuration" dialog), rather than buffering the selections and writing only after "Yes" is pressed.
+
+### Impact
+
+If a user is experimenting with different channels/versions and presses "No", their aba.conf gets silently corrupted with the rejected values. This is similar to Bug #338/483 (platform toggle immediately writes aba.conf).
+
+---
+
+## Bug #968 — TUI: ESC on bundle detection dialog deletes `.bundle` file
+
+**Severity:** Medium (UX — accidental mode change)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `tui/v2/abatui2.sh` — lines 425–437
+
+### Description
+
+When `.bundle` exists and internet is also available, the TUI shows a yesno dialog asking whether to use the bundle (DISCO) or connected mode. The code only checks `rc -eq 0` for DISCO; any other exit code (including ESC = 255) falls into the `else` branch, which **deletes `.bundle`** and switches to CONNO mode.
+
+### Expected behavior
+
+ESC should cancel the dialog and return to a safe state without modifying any files.
+
+### Actual behavior
+
+ESC deletes `.bundle`, so on next launch in a connected environment the TUI defaults to CONNO instead of asking again. In a true air-gapped environment (no internet), this is harmless — `_detect_mode` path #4 (no `.bundle` + no internet + valid payload) still enters DISCO mode automatically. The impact is limited to connected-testing scenarios; recovery is trivial (`touch .bundle` or use `--disco` flag).
+
+---
+
+## Bug #969 — TUI: `_day2_status` TCP probe breaks when API URL has no port
+
+**Severity:** Medium (functional failure)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `tui/v2/tui-cluster.sh` — lines 2165–2170
+
+### Description
+
+Host/port are parsed from the kubeconfig server URL using `${var%%:*}` / `${var##*:}`. When the URL is `https://api.cluster.example.com` (no `:6443`), both `_api_host` and `_api_port` become the full hostname. The TCP probe then uses `/dev/tcp/hostname/hostname` which always fails.
+
+### Impact
+
+A healthy API server is falsely reported as "Cluster API Unreachable" and all `oc` status checks are skipped. Also breaks for IPv6 URLs (`https://[2001:db8::1]:6443`) due to multiple colons.
+
+---
+
+## Bug #970 — ~~TUI: `_persist_operator_basket` deletes all custom operator-set templates~~ NOT A BUG
+
+**Severity:** N/A — working as designed
+**Status:** Closed (not a bug)
+**Verified:** Code review (2026-07-01)
+**Component:** `tui/v2/tui-mirror.sh` — lines 798–801
+
+### Description
+
+~~When persisting a new custom basket, the code `rm -f`s every `templates/operator-set-custom-*` file before writing one new file.~~
+
+This is **by design**: `aba.conf` `op_sets=` holds a single value, so only one custom set is active at a time. When the user changes their selection to a different set of operators, the old custom file is replaced by the new one. The code also deduplicates: if an existing custom set matches the new selection exactly, it is reused (no deletion). Only when the selection changes to something genuinely new does the old file get replaced.
+
+---
+
+## Bug #971 — TUI: `select_cluster` no validation of menu index
+
+**Severity:** High (wrong cluster targeted)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `tui/v2/tui-lib.sh` — lines 1345–1346, 1400–1401
+
+### Description
+
+`SELECTED_CLUSTER="${_cl_dirs[$(( selected_idx - 1 ))]}"` with empty or non-numeric `selected_idx` yields `$(( -1 ))`, which in bash selects the **last** element of the array. Day-2 operations (delete, upgrade, shutdown) could target the wrong cluster if the dialog returns an unexpected value.
+
+---
+
+## Bug #972 — TUI: VM resource fields accept empty values
+
+**Severity:** Medium (install failure)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `tui/v2/tui-cluster.sh` — lines 1471–1535
+
+### Description
+
+Validation for Master CPUs, Memory, and Data disk only runs when `[[ -n "$val" ]]`. User can clear a field and proceed; the empty value gets persisted via `_persist_cluster_draft`, causing install failures later.
+
+---
+
+## Bug #973 — Core: False "Upgrade complete" when upgrade failed
+
+**Severity:** High (false positive)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `scripts/cluster-upgrade.sh` — lines 474–477
+
+### Description
+
+Final success detection uses only `desired.version == target` and `Progressing=False`, without checking `Available=True` or a Completed history entry. After a failed or aborted upgrade, CVO can have `desired=target`, `Progressing=False`, `Available=False`/`Failing=True`, and the script still prints "Upgrade complete!"
+
+---
+
+## Bug #974 — Core: Docker remote install password not shell-escaped
+
+**Severity:** High (command injection / broken install)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `scripts/reg-install-remote.sh` — line 212
+
+### Description
+
+Quay install uses `printf '%q'` for `reg_pw` (line 123), but Docker install embeds `'$reg_pw'` via local expansion in a double-quoted SSH string. Characters like `'`, `"`, `` ` ``, `$` in `reg_pw` break the remote command or enable injection. Generated base64 passwords usually avoid these characters, but the inconsistency is fragile.
+
+---
+
+## Bug #975 — Core: Upgrade-path validation silently skipped when graph fetch fails
+
+**Severity:** Medium (silent bypass)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `scripts/include_all.sh` — lines 1860–1864
+
+### Description
+
+`verify_upgrade_path_exists()` returns success (0) when the Cincinnati graph fetch fails or is empty (`|| return 0`). This means `reg-save.sh`, `reg-sync.sh`, and TUI prep-upgrade skip path validation and start long oc-mirror runs that fail later. Contrast with `verify_release_version_exists()` which returns 1 on fetch failure.
+
+---
+
+## Bug #976 — TUI: ESC on platform-config prompt treated as "Skip"
+
+**Severity:** Medium (unexpected behavior)
+**Status:** New
+**Verified:** Code review (2026-07-01)
+**Component:** `tui/v2/tui-cluster.sh` — lines 281–295
+
+### Description
+
+The "Configure VMware/KVM now or skip?" yesno dialog only matches `case 0)` for configure; `*)` catches everything else including ESC (255). Pressing ESC skips platform setup silently and continues the wizard, though install will fail later without the config.
+
+---
+
+## Bug #977 — TUI: Prepare Upgrade allows same-version "upgrade" (target == current)
+
+**Severity:** Medium (wasted time/bandwidth, confusing UX)
+**Status:** New
+**Verified:** Live testing on conno (2026-07-01)
+**Component:** `tui/v2/tui-mirror.sh` — `_prep_upgrade()`, lines 576–604
+
+### Description
+
+When current version is 4.21.22 and `fetch_previous_version()` returns 4.21.22 (because it IS the latest 4.21.z), the "Previous" option in the Prepare Upgrade menu offers 4.21.22 → 4.21.22. This is a no-op upgrade that wastes time and bandwidth.
+
+The same happens with manual entry: entering the same version as `ocp_version` passes all checks (Cincinnati graph validation succeeds because the version exists in the channel). The TUI shows "Download upgrade images (4.21.22 → 4.21.22)" without warning.
+
+**NOTE:** This affects only "Prepare Upgrade" (mirroring flow). The Day-2 "Upgrade Cluster" flow is correctly guarded — `cluster-upgrade.sh` line 99 filters `Versions in mirror (higher than $current_ver)` via `is_version_greater()`, and line 182 explicitly blocks `target <= current` with `aba_abort`.
+
+### Expected behavior
+
+- "Previous" should be hidden when it equals `ocp_version`
+- Manual entry should reject `target == ocp_version` with a message like "Target version is the same as current — nothing to upgrade"
+- Optionally: also block `target < current` with a clear "downgrades are not supported" message before the graph check
+
+### Root cause
+
+Line 580: `_previous` is deduped against `_existing_target` and `_latest`, but not against `_current_ver`.
+Lines 643–695: No semver comparison of `_target_ver` vs `_current_ver` before proceeding.
+
+---
+
+## Bug #978 — ~~TUI: Cluster wizard creates directory even when user cancels (ESC/Back)~~ NOT A BUG
+
+**Severity:** N/A
+**Status:** Closed (by design)
+
+### Description
+
+The cluster directory and `cluster.conf` are created on Page 1 → Next as a persistent draft. If the user exits and re-enters the wizard with the same name, the draft is reloaded from `cluster.conf`. This is intentional — the cluster state is stored in `<cluster>/cluster.conf` and loaded again if needed.
+
+---
+
+## Bug #979 — Core: Graceful shutdown exits 0 when some nodes fail to shut down
+
+**Severity:** High (false success — automation believes cluster is fully down)
+**Status:** New
+**Component:** `scripts/cluster-graceful-shutdown.sh` lines 175–221, 297
+
+### Description
+
+When SSH and `oc debug` both fail for one or more nodes, `_shutdown_failed` is set and a warning is printed, but the script always `exit 0`. Callers/automation (including `aba.sh` shutdown handler) believe the cluster is fully shut down when it is not.
+
+Additionally: cordon/drain run in parallel background jobs and `wait` never checks exit codes. Failed drains leave pods running while shutdown proceeds.
+
+---
+
+## Bug #980 — ~~Core: `day2.sh` skips all mirror integration for `int_connection=proxy`~~ NOT A BUG
+
+**Severity:** N/A
+**Status:** Closed (by design)
+
+### Description
+
+If `int_connection` is set (to `proxy` or `direct`), the cluster was installed WITHOUT a mirror — it pulls from public registries (directly or through a proxy). No IDMS/ITMS/CatalogSources needed. The skip is correct.
+
+---
+
+## Bug #981 — Core: `day2-config-osus.sh` sets OSUS channel from `aba.conf`, not cluster version
+
+**Severity:** High (wrong OSUS graph channel during upgrade prep)
+**Status:** New
+**Component:** `scripts/day2-config-osus.sh` lines 288–296
+
+### Description
+
+`_expected_channel` uses `ocp_version` from `aba.conf` (via `cut -d. -f1-2`), not the cluster's running version from ClusterVersion. During upgrade prep (cluster at 4.21.x, `aba.conf` at 4.22.x), OSUS channel is set to e.g. `fast-4.22` while the cluster is still 4.21.x. Graph endpoint checks and `oc adm upgrade` then query the wrong channel.
+
+---
+
+## Bug #982 — ~~TUI: Re-entering Page 1 (Basics) wipes auto-detected network values~~ NOT A BUG
+
+**Severity:** N/A
+**Status:** Closed (by design)
+
+### Description
+
+On re-entry, the wizard loads all values from `cluster.conf` (the single source of truth). `_cluster_generate_defaults` only fills empty fields on disk (idempotent, never overwrites). `_persist_cluster_draft` writes in-memory values back — which are authoritative since the user explicitly set them. The comment at line 212-213 says: "Only reload for newly created files — for existing files, user's in-memory values are authoritative." If the user cleared a field, persisting empty is what they wanted.
+
+---
+
+## Bug #983 — ~~TUI: Cluster wizard keeps prior cluster's values when renaming to a new name~~ NOT A BUG
+
+**Severity:** N/A
+**Status:** Closed (by design)
+
+### Description
+
+When the user changes the cluster name to a new name (no existing `cluster.conf`), pressing Next on Page 1 calls `_cluster_generate_defaults()` which creates a new `cluster.conf` with auto-detected defaults. Since `_was_new=true`, the reload at line 214 fires and loads the fresh values. The in-memory values from the previous cluster are overwritten. This is the intended "start a config, back out, start another" flow.
+
+---
+
+## Bug #984 — TUI: Day-2 Upgrade manual entry skips guard when cluster API is unreachable
+
+**Severity:** Medium (downgrade possible when cluster is temporarily down)
+**Status:** New
+**Component:** `tui/v2/tui-cluster.sh` lines 2397–2404
+
+### Description
+
+Manual-entry guard at line 2400 is conditional on `_cur_ver` matching a version regex. If `aba cluster-version` returns empty (cluster API unreachable), the `is_version_greater` check is skipped entirely and any version proceeds to `confirm_and_execute`. Core `cluster-upgrade.sh` still aborts on downgrade, but the TUI's friendly dialog never fires.
+
+---
+
+## Bug #985 — TUI: API VIP and Ingress VIP can be set to the same IP address
+
+**Severity:** Medium (install failure or traffic misrouting)
+**Status:** New
+**Component:** `tui/v2/tui-cluster.sh` — `_cluster_page_network()`, lines 1111–1143
+
+### Description
+
+Each VIP is validated as an IP independently. Identical API and Ingress VIPs are allowed. No cross-field duplicate check exists on the Next button. OpenShift compact/standard install will fail or misroute traffic.
+
+---
+
+## Bug #986 — TUI: Bundle+internet dialog "Connected mode" mislabels the workflow
+
+**Severity:** Medium (factual error in decision dialog)
+**Status:** New
+**Component:** `tui/v2/tui-strings2.sh` lines 292, 301; `tui/v2/abatui2.sh` lines 425–437
+
+### Description
+
+When `.bundle` exists and internet is available, the yesno dialog offers "Fully Disconnected" vs "Connected mode", and `TUI2_MSG_BUNDLE_CONNECTED` says "Connected mode — use internet access (mirror or direct)." But choosing it sets `_TUI_MODE="CONNO"` (Partially Disconnected), not DIRECT. There is no mode picker; DIRECT requires Advanced → "Switch to Fully Connected." The button label over-promises.
+
+---
+
+## Bug #987 — TUI: Platform config dialog lists wrong field names
+
+**Severity:** Medium (help accuracy — users can't map dialog to actual config)
+**Status:** New
+**Component:** `tui/v2/tui-cluster.sh` lines 1749–1758
+
+### Description
+
+`_platform_config_missing` tells users VMware needs `vcenter_fqdn, vcenter_user, vcenter_pass, datacenter, datastore, network, folder, cluster`. Actual config keys are `GOVC_URL`, `GOVC_USERNAME`, `GOVC_PASSWORD`, `GOVC_DATACENTER`, `GOVC_DATASTORE`, `GOVC_NETWORK`, `VC_FOLDER`, `GOVC_CLUSTER`. Users cannot map the dialog text to the form they will see.
+
+---
+
+## Bug #988 — TUI: MAC prefix prompt example doesn't match validation
+
+**Severity:** Low (wrong hint causes repeated validation failures)
+**Status:** New
+**Component:** `tui/v2/tui-strings2.sh` line 342; `tui/v2/tui-cluster.sh` lines 1545–1547
+
+### Description
+
+Prompt says `MAC address prefix (e.g. 52:54:00):` (3 octets, no trailing colon). Validation requires 5 octets with trailing colon (`00:50:56:xx:xx:` per `_valid_mac_prefix`). Users following the prompt fail validation.
+
+---
+
+## Bug #989 — Core: CatalogSource readiness failure in background doesn't fail `day2.sh`
+
+**Severity:** Medium (false success)
+**Status:** New
+**Component:** `scripts/day2.sh` lines 325–364, 400–401
+
+### Description
+
+Each CatalogSource waiter runs in a background subshell. On timeout it calls `aba_abort` inside the subshell, which does not stop the parent. Parent `wait` returns and the script prints "Day-2 configuration completed successfully!" even when a CatalogSource never reached READY.
+
+---
+
+## Bug #990 — TUI: `_exec_in_tui` leaves temp files on interrupt
+
+**Severity:** Low (temp file leak in /tmp)
+**Status:** New
+**Component:** `tui/v2/tui-lib.sh` lines 626–676
+
+### Description
+
+`output_file` and `review_file` created with `mktemp` are only removed on the success or failure-textbox paths. If the progressbox pipeline is interrupted or the function returns early, files are orphaned. They are not registered with `_tui_cleanup`.
+
+---
