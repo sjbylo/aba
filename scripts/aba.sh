@@ -321,7 +321,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" config "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -341,6 +341,9 @@ if [ ! "$interactive_mode" ]; then
 fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
+
+# Positional args for subcommands that parse their own (e.g. 'config import <dir>')
+subcmd_args=()
 
 # Write a cluster-conf variable. If cluster.conf exists, write directly.
 # If the target is 'cluster' (creating a new cluster), forward via BUILD_COMMAND.
@@ -1017,14 +1020,19 @@ elif [ "$1" = "--light" ]; then
 		if echo "$1" | grep -q "^-"; then
 			aba_abort "$(basename $0): Error: no such option $1" 
 		elif [ "$cur_target" ]; then
-			# cur_target already set — additional positionals are make arguments
-			BUILD_COMMAND="$BUILD_COMMAND $1"
-			aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
+			# cur_target already set: extra positionals are make args, except for
+			# subcommands that consume their own positional args (config, deploy).
+			if [ "$cur_target" = "config" ] || [ "$cur_target" = "deploy" ]; then
+				subcmd_args+=("$1")
+			else
+				BUILD_COMMAND="$BUILD_COMMAND $1"
+				aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
+			fi
 		else
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|config|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1125,7 +1133,13 @@ if [ "$cur_target" ]; then
 			trap - ERR  # No need for this anymore
 			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
 			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
-			exit 
+			exit
+		;;
+		config)
+			trap - ERR  # No need for this anymore
+			aba_debug "Running: $ABA_ROOT/scripts/config-import.sh ${subcmd_args[*]}"
+			$ABA_ROOT/scripts/config-import.sh "${subcmd_args[@]}"
+			exit
 		;;
 		info)
 			$ABA_ROOT/scripts/cluster-info.sh
