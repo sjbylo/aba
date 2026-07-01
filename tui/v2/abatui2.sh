@@ -227,8 +227,8 @@ _ver_short=$(_ver_minor "$ocp_version")
 if [[ -n "${ops:-}" ]]; then
 	IFS=',' read -r -a _ops_arr <<<"$ops"
 	for _op in "${_ops_arr[@]}"; do
-		_op="${_op##[[:space:]]}"
-		_op="${_op%%[[:space:]]}"
+		_op="${_op##[[:space:]]}"               # trim leading whitespace
+		_op="${_op%%[[:space:]]}"               # trim trailing whitespace
 		[[ -z "$_op" ]] && continue
 		if [[ -n "$_ver_short" ]] && ! grep -q "^${_op}[[:space:]]" "$ABA_ROOT"/.index/*-index-v${_ver_short} 2>/dev/null; then
 			continue
@@ -241,8 +241,8 @@ fi
 if [[ -n "${op_sets:-}" ]]; then
 	IFS=',' read -r -a _set_arr <<<"$op_sets"
 	for _s in "${_set_arr[@]}"; do
-		_s="${_s##[[:space:]]}"
-		_s="${_s%%[[:space:]]}"
+		_s="${_s##[[:space:]]}"                 # trim leading whitespace
+		_s="${_s%%[[:space:]]}"                 # trim trailing whitespace
 		[[ -z "$_s" ]] && continue
 		_sf="$ABA_ROOT/templates/operator-set-$_s"
 		[[ -f "$_sf" ]] || continue
@@ -292,7 +292,7 @@ fi
 
 # Pre-fetch catalog indexes in background (uses ocp_version/ocp_channel from aba.conf)
 _ps_path="${pull_secret_file:-$HOME/.pull-secret.json}"
-_ps_path="${_ps_path/#\~/$HOME}"
+_ps_path="${_ps_path/#\~/$HOME}"                         # ~/foo → /home/user/foo
 if [[ -f "$_ps_path" ]]; then
 	tui_log "Starting background catalog pre-fetch"
 	(aba_prefetch_catalogs >>"$_TUI_LOG_FILE" 2>&1) &
@@ -460,7 +460,7 @@ _detect_mode() {
 			tui_log "Mode detected: DISCO (offline, payload ready)"
 		else
 			# No fallback possible — show detailed error and exit
-			local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"
+			local _err_details="${ERROR_DETAILS//$'\n'/\\n  }"  # replace newlines with \n for dialog
 			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
 				--no-collapse \
 				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
@@ -773,7 +773,7 @@ Navigation:
 # --- Splash screen first (shown once per session, no blocking checks) ---
 _aba_ver=""
 [[ -f "$ABA_ROOT/VERSION" ]] && _aba_ver=$(<"$ABA_ROOT/VERSION")
-_aba_ver="${_aba_ver//[[:space:]]/}"
+_aba_ver="${_aba_ver//[[:space:]]/}"                      # strip all whitespace (incl. trailing newline)
 
 while :; do
 	dlg --backtitle "$(ui_backtitle)" \

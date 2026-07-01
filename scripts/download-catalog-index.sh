@@ -133,7 +133,7 @@ _get_content_layer_digest() {
 	fi
 
 	# Get arch-specific manifest
-	local _base_ref="${_ref%:*}"
+	local _base_ref="${_ref%:*}"                    # strip :tag → registry/repo
 	_manifest=$(skopeo inspect --raw "${_base_ref}@${_arch_digest}" 2>/dev/null)
 	_layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
 	if [[ -z "$_layer_count" ]] || [[ "$_layer_count" -lt 4 ]]; then

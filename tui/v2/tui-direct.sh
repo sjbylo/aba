@@ -46,7 +46,7 @@ _direct_config_complete() {
 	[[ -n "${ocp_channel:-}" ]] || return 1
 	[[ -n "${ocp_version:-}" ]] || return 1
 	local ps_file="${pull_secret_file:-}"
-	ps_file="${ps_file/#\~/$HOME}"
+	ps_file="${ps_file/#\~/$HOME}"                # ~/foo → /home/user/foo
 	[[ -n "$ps_file" && -f "$ps_file" ]] || return 1
 	return 0
 }
@@ -189,7 +189,7 @@ _direct_pull_secret() {
 	tui_log "DIRECT wizard: pull secret"
 
 	local ps_file="${pull_secret_file:-$HOME/.pull-secret.json}"
-	ps_file="${ps_file/#\~/$HOME}"
+	ps_file="${ps_file/#\~/$HOME}"                # ~/foo → /home/user/foo
 
 	# Auto-skip if pull secret already present and valid JSON.
 	# DIALOG_RC="next" so the wizard advances forward; when navigating back
@@ -379,8 +379,8 @@ _direct_version() {
 				return
 			fi
 			ocp_version=$(<"$_TUI_TMP")
-			ocp_version="${ocp_version##[[:space:]]}"
-			ocp_version="${ocp_version%%[[:space:]]}"
+			ocp_version="${ocp_version##[[:space:]]}"    # trim leading whitespace
+			ocp_version="${ocp_version%%[[:space:]]}"    # trim trailing whitespace
 			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
@@ -473,8 +473,8 @@ _direct_version() {
 							return
 						fi
 						ocp_version=$(<"$_TUI_TMP")
-						ocp_version="${ocp_version##[[:space:]]}"
-						ocp_version="${ocp_version%%[[:space:]]}"
+						ocp_version="${ocp_version##[[:space:]]}"  # trim leading whitespace
+						ocp_version="${ocp_version%%[[:space:]]}"  # trim trailing whitespace
 						if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 							break
 						elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then

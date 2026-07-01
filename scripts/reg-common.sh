@@ -386,7 +386,7 @@ reg_ensure_remote_pkgs() {
 		$ssh_cmd "$SUDO dnf install -y $missing" >> .remote_host_check.out 2>&1 || true
 		local still_missing
 		still_missing=$($ssh_cmd "for pkg in $missing; do rpm -q \$pkg >/dev/null 2>&1 || echo \$pkg; done" | tr '\n' ' ')
-		still_missing="${still_missing% }"
+		still_missing="${still_missing% }"  # trim trailing space
 		if [ "$still_missing" ]; then
 			aba_abort "Failed to install on remote host: $still_missing" \
 				"See .remote_host_check.out for details."

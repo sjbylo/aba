@@ -313,10 +313,10 @@ if [ ! "$upgrade_already_running" ]; then
 		_isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
 	fi
 	if [ -n "$_isc_channel" ]; then
-		_channel_prefix="${_isc_channel%-*}"
+		_channel_prefix="${_isc_channel%-*}"                # "stable-4.22" → "stable"
 		aba_debug "Channel from ISC: $_isc_channel (prefix: $_channel_prefix)"
 	elif [ -n "$_current_channel" ]; then
-		_channel_prefix="${_current_channel%-*}"
+		_channel_prefix="${_current_channel%-*}"            # "fast-4.21" → "fast"
 		aba_debug "No ISC channel found — using cluster channel prefix: $_channel_prefix"
 	else
 		_channel_prefix="${ocp_channel:-stable}"

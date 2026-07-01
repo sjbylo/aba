@@ -297,7 +297,7 @@ Press 'Continue' when ready. The mirror will be installed automatically."
 					fi
 					# Writability check (local only — remote checked at install time)
 					if [[ "$_variant" != "remote" && -n "$m_datadir" ]]; then
-						local _exp="${m_datadir/#\~\//$HOME/}"
+						local _exp="${m_datadir/#\~\//$HOME/}"  # ~/foo → /home/user/foo
 						[[ "$_exp" == "~" ]] && _exp="$HOME"
 						if [[ -d "$_exp" ]]; then
 							if [[ ! -w "$_exp" ]]; then
@@ -655,10 +655,11 @@ mirror_prep_upgrade() {
 		if _path_diag=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" 2>&1); then
 			: # path OK
 		else
-			local _src="${_path_diag%%|*}"
-			local _rest="${_path_diag#*|}"
-			local _tgt_channel="${_rest%%|*}"
-			local _lowest="${_rest##*|}"
+			# _path_diag is "src_ver|channel|lowest_ver" — parse pipe-delimited fields
+			local _src="${_path_diag%%|*}"            # first field (source version)
+			local _rest="${_path_diag#*|}"             # everything after first pipe
+			local _tgt_channel="${_rest%%|*}"          # second field (target channel)
+			local _lowest="${_rest##*|}"               # last field (lowest entry point)
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Not Available" --msgbox \
 				"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
 Version ${_current_ver} is not in channel ${_tgt_channel}.\n\
@@ -781,7 +782,7 @@ _persist_operator_basket() {
 			existing_op_list=$(tail -n +2 "$existing_file" | sort | paste -sd, -)
 			if [[ "$new_op_list" == "$existing_op_list" ]]; then
 				found_duplicate=$(basename "$existing_file")
-				found_duplicate=${found_duplicate#operator-set-}
+				found_duplicate=${found_duplicate#operator-set-}  # strip prefix → "custom-20260701-005753"
 				break
 			fi
 		done
@@ -1119,7 +1120,7 @@ _operator_sets() {
 	local set_file set_key display state
 	for set_file in "$ABA_ROOT"/templates/operator-set-*; do
 		[[ -f "$set_file" ]] || continue
-		set_key="${set_file##*operator-set-}"
+		set_key="${set_file##*operator-set-}"          # extract set name from full path
 		display=$(head -n1 "$set_file" 2>/dev/null | sed 's/^# *//' | sed 's/^Name: *//')
 		[[ -z "$display" ]] && display="$set_key"
 		state="off"
@@ -1149,8 +1150,8 @@ _operator_sets() {
 	declare -A _newly_selected=()
 	local k
 	while IFS= read -r k; do
-		k="${k##[[:space:]]}"
-		k="${k%%[[:space:]]}"
+		k="${k##[[:space:]]}"                   # trim leading whitespace
+		k="${k%%[[:space:]]}"                   # trim trailing whitespace
 		[[ -n "$k" ]] && _newly_selected["$k"]=1
 	done < "$_TUI_TMP"
 
@@ -1164,9 +1165,9 @@ _operator_sets() {
 				while IFS= read -r line; do
 					[[ "$line" =~ ^[[:space:]]*# ]] && continue
 					[[ -z "$line" ]] && continue
-					line="${line%%#*}"
-					line="${line#"${line%%[![:space:]]*}"}"
-					line="${line%"${line##*[![:space:]]}"}"
+					line="${line%%#*}"                          # strip inline comment
+					line="${line#"${line%%[![:space:]]*}"}"     # trim leading whitespace
+					line="${line%"${line##*[![:space:]]}"}"     # trim trailing whitespace
 					[[ -z "$line" ]] && continue
 					unset 'OP_BASKET[$line]'
 				done < "$sf"
@@ -1185,9 +1186,9 @@ _operator_sets() {
 			while IFS= read -r line; do
 				[[ "$line" =~ ^[[:space:]]*# ]] && continue
 				[[ -z "$line" ]] && continue
-				line="${line%%#*}"
-				line="${line#"${line%%[![:space:]]*}"}"
-				line="${line%"${line##*[![:space:]]}"}"
+				line="${line%%#*}"                          # strip inline comment
+				line="${line#"${line%%[![:space:]]*}"}"     # trim leading whitespace
+				line="${line%"${line##*[![:space:]]}"}"     # trim trailing whitespace
 				[[ -z "$line" ]] && continue
 				if awk -v name="$line" '$1 == name {found=1; exit} END {exit !found}' "$ABA_ROOT"/.index/*-index-v${version_short} 2>/dev/null; then
 					OP_BASKET["$line"]=1
@@ -1224,10 +1225,10 @@ _operator_search() {
 	local line op_name display_name state
 	declare -A _seen_ops=()
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"
-		line="${line%%[[:space:]]}"
+		line="${line##[[:space:]]}"              # trim leading whitespace
+		line="${line%%[[:space:]]}"              # trim trailing whitespace
 		[[ -z "$line" ]] && continue
-		op_name="${line%%[[:space:]]*}"
+		op_name="${line%%[[:space:]]*}"          # first word = operator name
 		[[ -z "$op_name" ]] && continue
 		[[ -n "${_seen_ops[$op_name]:-}" ]] && continue
 		_seen_ops["$op_name"]=1
@@ -1263,8 +1264,8 @@ _operator_search() {
 	# Build set of what user selected
 	declare -A _SEL=()
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"
-		line="${line%%[[:space:]]}"
+		line="${line##[[:space:]]}"              # trim leading whitespace
+		line="${line%%[[:space:]]}"              # trim trailing whitespace
 		[[ -n "$line" ]] && _SEL["$line"]=1
 	done < "$_TUI_TMP"
 
@@ -1323,8 +1324,8 @@ _operator_view_basket() {
 	declare -A _KEPT=()
 	local line
 	while IFS= read -r line; do
-		line="${line##[[:space:]]}"
-		line="${line%%[[:space:]]}"
+		line="${line##[[:space:]]}"              # trim leading whitespace
+		line="${line%%[[:space:]]}"              # trim trailing whitespace
 		[[ -n "$line" ]] && _KEPT["$line"]=1
 	done < "$_TUI_TMP"
 
@@ -1446,10 +1447,10 @@ mirror_create_bundle() {
 	local bundle_path
 	bundle_path=$(<"$_TUI_TMP")
 	_tui_reject_squote "$bundle_path" || return 1
-	bundle_path="${bundle_path/#\~/$HOME}"
+	bundle_path="${bundle_path/#\~/$HOME}"         # ~/foo → /home/user/foo
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	[[ -d "$bundle_path" ]] && bundle_path="$bundle_path/ocp-bundle"
-	bundle_path="${bundle_path%.tar}"
+	bundle_path="${bundle_path%.tar}"              # strip .tar suffix if present
 
 	# Check same-device for --light option
 	local output_dir
