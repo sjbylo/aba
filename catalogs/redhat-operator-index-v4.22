@@ -66,6 +66,7 @@ metallb-operator                                        MetalLB Operator        
 mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.0
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.12
+multiarch-tuning-operator                               Multiarch Tuning Operator                                    stable
 multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.17
 multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.8
 netobserv-operator                                      Network Observability                                        stable

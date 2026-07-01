@@ -296,7 +296,7 @@ umask 077
 # Function to display an error message and the last executed command
 show_error() {
 	local exit_code=$?
-	local _safe_cmd="${BASH_COMMAND//-p \'*\'/-p \'***\'}"
+	local _safe_cmd="${BASH_COMMAND//-p \'*\'/-p \'***\'}"  # mask password args in error output
 	echo 
 	echo_red "Script error at $(date) in directory $PWD: " >&2
 	echo_red "Error occurred in command: '$_safe_cmd'" >&2
@@ -441,8 +441,8 @@ warn_if_cluster_unstable() {
 	local _co_unavail
 	aba_debug "Running: oc get co --no-headers (cluster stability check)"
 	_co_unavail=$(oc get co --no-headers 2>/dev/null | awk '$3 != "True" { printf "%s ", $1 }')
-	if [ -n "${_co_unavail% }" ]; then
-		aba_warning "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"
+	if [ -n "${_co_unavail% }" ]; then                 # trim trailing space before checking
+		aba_warning "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"  # trim trailing space
 	fi
 
 	aba_debug "Running: oc get mcp (MCP update check)"
@@ -589,7 +589,7 @@ verify-aba-conf() {
 
 _expand_tilde() {
 	case "$1" in
-		"~/"*) echo "$HOME/${1#\~/}" ;;
+		"~/"*) echo "$HOME/${1#\~/}" ;;    # ~/foo → /home/user/foo
 		"~")   echo "$HOME" ;;
 		*)     echo "$1" ;;
 	esac
@@ -924,8 +924,8 @@ _state_override_cluster() {
 		esac
 		# state.sh may store machine_network as CIDR (10.0.0.0/20); split it
 		if [ "$_field" = "machine_network" ] && [[ "$_sval" == */* ]]; then
-			echo "export machine_network=${_sval%/*}"
-			echo "export prefix_length=${_sval#*/}"
+			echo "export machine_network=${_sval%/*}"        # IP part of CIDR
+			echo "export prefix_length=${_sval#*/}"          # prefix part of CIDR
 			continue
 		fi
 		echo "export ${_field}=${_sval}"
@@ -1513,10 +1513,10 @@ ABA_CACHE_TTL="${ABA_CACHE_TTL:-100m}"
 parse_duration() {
 	local val="$1"
 	case "$val" in
-		*d) echo $(( ${val%d} * 86400 )) ;;
-		*h) echo $(( ${val%h} * 3600 )) ;;
-		*m) echo $(( ${val%m} * 60 )) ;;
-		*s) echo $(( ${val%s} )) ;;
+		*d) echo $(( ${val%d} * 86400 )) ;;   # strip "d" suffix, convert days → seconds
+		*h) echo $(( ${val%h} * 3600 )) ;;    # strip "h" suffix, convert hours → seconds
+		*m) echo $(( ${val%m} * 60 )) ;;      # strip "m" suffix, convert minutes → seconds
+		*s) echo $(( ${val%s} )) ;;            # strip "s" suffix
 		*)  echo "$val" ;;
 	esac
 }
@@ -1583,8 +1583,8 @@ _is_ga_version() {
 _prev_minor() {
 	local minor="$1"
 	local x y
-	x="${minor%%.*}"
-	y="${minor#*.}"
+	x="${minor%%.*}"                           # major: "4.21" → "4"
+	y="${minor#*.}"                            # minor: "4.21" → "21"
 	[[ "$y" =~ ^[0-9]+$ ]] || { echo ""; return 0; }
 	(( y > 0 )) || { echo ""; return 0; }
 	echo "${x}.$((y - 1))"
@@ -1807,7 +1807,7 @@ fetch_latest_prerelease_version() {
 	[[ -n "$minor" ]] || return 0
 
 	# Try next minor in same major (e.g. 4.22 → 4.23)
-	local x="${minor%%.*}" y="${minor#*.}"
+	local x="${minor%%.*}" y="${minor#*.}"      # split "4.22" → major "4", minor "22"
 	next_minor="${x}.$((y + 1))"
 	v="$(fetch_all_versions "$channel" "$next_minor" 2>/dev/null | tail -n1)"
 	if [[ -n "$v" ]] && _is_prerelease "$v"; then
@@ -1846,8 +1846,8 @@ verify_upgrade_path_exists() {
 	[[ -z "$current_ver" || -z "$target_ver" ]] && return 1
 
 	# Extract target minor (e.g. 4.22 from 4.22.1 or 4.22.0-rc.1)
-	local tgt_minor="${target_ver%.*}"
-	[[ "$target_ver" == *-* ]] && tgt_minor="${target_ver%%-*}" && tgt_minor="${tgt_minor%.*}"
+	local tgt_minor="${target_ver%.*}"                  # 4.22.1 → 4.22
+	[[ "$target_ver" == *-* ]] && tgt_minor="${target_ver%%-*}" && tgt_minor="${tgt_minor%.*}"  # 4.22.0-rc.1 → 4.22
 
 	local tgt_channel="${channel}-${tgt_minor}"
 
@@ -1857,8 +1857,9 @@ verify_upgrade_path_exists() {
 	fi
 
 	local graph_versions
-	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null \
-		| jq -r '.nodes[].version' 2>/dev/null) || return 0
+	# Strip minor suffix from tgt_channel: "stable-4.22" → "stable"
+	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null |
+		jq -r '.nodes[].version' 2>/dev/null) || return 0
 
 	# If graph is empty/unreachable, don't block — let later checks handle it
 	[[ -z "$graph_versions" ]] && return 0
@@ -1890,8 +1891,8 @@ verify_release_version_exists() {
 	[[ -z "$ver" ]] && return 1
 
 	# Extract minor (e.g. 4.22 from 4.22.2 or 4.22.0-rc.1)
-	local minor="${ver%.*}"
-	[[ "$ver" == *-* ]] && minor="${ver%%-*}" && minor="${minor%.*}"
+	local minor="${ver%.*}"                                 # 4.22.2 → 4.22
+	[[ "$ver" == *-* ]] && minor="${ver%%-*}" && minor="${minor%.*}"  # 4.22.0-rc.1 → 4.22
 
 	# Pre-release versions (rc/ec) only exist in candidate channel
 	if [[ "$ver" == *-rc.* || "$ver" == *-ec.* ]]; then
@@ -2172,7 +2173,7 @@ get_domain() {
 	if [[ -z "${d:-}" ]]; then
 		fqdn=$(hostname -f 2>/dev/null || true)
 		if echo "$fqdn" | grep -q '\.'; then
-			d="${fqdn#*.}"
+			d="${fqdn#*.}"                             # strip hostname → domain (host.example.com → example.com)
 		fi
 	fi
 
@@ -2202,8 +2203,8 @@ get_next_hop() {
 	# 2) No default route: compute network_base+1 from iface CIDR (subnet-aware)
 	if [[ -z "${gw:-}" ]] && [[ -n "${ifc:-}" ]]; then
 		cidr=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
-		ip=${cidr%/*}
-		prefix=${cidr#*/}
+		ip=${cidr%/*}                              # IP from CIDR (10.0.0.5/24 → 10.0.0.5)
+		prefix=${cidr#*/}                          # prefix from CIDR (10.0.0.5/24 → 24)
 
 		if [[ -n "$ip" && -n "$prefix" ]]; then
 			# Convert IP to 32-bit integer, mask to network base, add 1
@@ -2238,8 +2239,8 @@ get_machine_network() {
 	# 2) Fallback: derive from iface IPv4/prefix (if route output not present)
 	if [[ -z "${net:-}" ]] && [[ -n "${ifc:-}" ]]; then
 		cidr=$(ip -o -4 addr show dev "$ifc" 2>/dev/null | awk '{print $4; exit}')
-		ip=${cidr%/*}
-		prefix=${cidr#*/}
+		ip=${cidr%/*}                              # IP from CIDR
+		prefix=${cidr#*/}                          # prefix from CIDR
 
 		# If python3 exists, use it for portable CIDR math
 		if command -v python3 >/dev/null 2>&1; then
@@ -2651,7 +2652,7 @@ run_once() {
 		# so that cmd.sh is deterministic regardless of caller formatting
 		local _i
 		for _i in "${!command[@]}"; do
-			command[$_i]="${command[$_i]//$'\t'/ }"
+			command[$_i]="${command[$_i]//$'\t'/ }"     # tabs → spaces
 		done
 
 		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
@@ -3038,8 +3039,8 @@ aba_prefetch_catalogs() {
 	wait_for_all_catalogs "$_minor" || return 0
 
 	# Previous minor line (same major): x.(y-1)
-	local _major="${_minor%%.*}"
-	local _minor_num="${_minor##*.}"
+	local _major="${_minor%%.*}"                    # "4.22" → "4"
+	local _minor_num="${_minor##*.}"                # "4.22" → "22"
 	if [[ "$_minor_num" -gt 0 ]]; then
 		local _prev_minor="$_major.$((_minor_num - 1))"
 		local _prev_ver
@@ -3117,7 +3118,7 @@ _oc_mirror_decode_exit() {
 	[ $(( code & 8 )) -ne 0 ] && parts="${parts}additional-image "
 	[ $(( code & 16 )) -ne 0 ] && parts="${parts}helm "
 	if [ -n "$parts" ]; then
-		echo "${parts% }"
+		echo "${parts% }"                              # trim trailing space
 	elif [ "$code" -eq 1 ]; then
 		echo "generic/pre-batch"
 	else
@@ -3137,7 +3138,7 @@ _run_oc_mirror_with_retry() {
 		local _config_file
 		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" )
 		if [ "$_config_file" != "imageset-config.yaml" ]; then
-			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"
+			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"  # replace config filename in command
 		fi
 	fi
 
@@ -3590,7 +3591,7 @@ check_release_image() {
 	local _tag="${ocp_version:?ocp_version not set}-$(uname -m)"
 	local _authfile="${regcreds_dir}/pull-secret-mirror.json"
 	local _cacert="${regcreds_dir}/rootCA.pem"
-	local _repo="${reg_path#/}/openshift/release-images"
+	local _repo="${reg_path#/}/openshift/release-images"   # strip leading slash from registry path
 	local _v2_url="https://$reg_host:$reg_port/v2/"
 	local _manifest_url="https://$reg_host:$reg_port/v2/$_repo/manifests/$_tag"
 	local _accept="Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
@@ -3620,7 +3621,7 @@ check_release_image() {
 			local _same_port
 			_same_port=$(jq -r ".auths | keys[] | select(endswith(\":$reg_port\"))" "$_authfile" 2>/dev/null)
 			if [ -n "$_same_port" ] && [ "$(echo "$_same_port" | wc -l)" -eq 1 ]; then
-				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")
+				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")  # strip :port
 			fi
 		fi
 		_release_check_extra+=("Config: ${mirror_name:-mirror}/mirror.conf (reg_host=$reg_host)")

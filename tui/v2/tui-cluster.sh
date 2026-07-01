@@ -73,14 +73,14 @@ _cluster_load_conf() {
 	while IFS= read -r line; do
 		# Skip comments and empty lines
 		[[ "$line" =~ ^[[:space:]]*# ]] && continue
-		[[ -z "${line// /}" ]] && continue
+		[[ -z "${line// /}" ]] && continue            # skip blank lines (spaces only)
 		# Extract key=value (strip inline comments)
-		key="${line%%=*}"
-		val="${line#*=}"
-		val="${val%%#*}"
+		key="${line%%=*}"                             # everything before first '='
+		val="${line#*=}"                              # everything after first '='
+		val="${val%%#*}"                              # strip inline comment
 		# Trim whitespace
-		key="${key#"${key%%[![:space:]]*}"}"; key="${key%"${key##*[![:space:]]}"}"
-		val="${val#"${val%%[![:space:]]*}"}"; val="${val%"${val##*[![:space:]]}"}"
+		key="${key#"${key%%[![:space:]]*}"}"; key="${key%"${key##*[![:space:]]}"}"  # trim key
+		val="${val#"${val%%[![:space:]]*}"}"; val="${val%"${val##*[![:space:]]}"}"  # trim val
 		[[ -z "$key" ]] && continue
 
 		case "$key" in
@@ -121,7 +121,7 @@ _cluster_load_conf() {
 	fi
 
 	# Load macs.conf if it exists alongside cluster.conf
-	local _macs_file="${conf%/*}/macs.conf"
+	local _macs_file="${conf%/*}/macs.conf"        # dir of cluster.conf + /macs.conf
 	if [[ -f "$_macs_file" ]]; then
 		cl_macs="$(< "$_macs_file")"
 	fi
@@ -368,9 +368,9 @@ _configure_vmw_form() {
 					v_url=$(<"$_TUI_TMP")
 					_tui_reject_squote "$v_url" || continue
 					# Strip protocol prefix for validation; govc accepts host, host:port, or https://host forms
-					local _url_host="${v_url#https://}"
-					_url_host="${_url_host%%/*}"
-					_url_host="${_url_host%%:*}"
+					local _url_host="${v_url#https://}"     # strip protocol prefix
+					_url_host="${_url_host%%/*}"        # strip path  (host:port/path → host:port)
+					_url_host="${_url_host%%:*}"        # strip port  (host:port → host)
 					if [[ -n "$_url_host" ]] && ! _valid_fqdn "$_url_host" && ! _valid_ip "$_url_host"; then
 						dlg --backtitle "$(ui_backtitle)" --msgbox \
 							"Invalid hostname/IP.\n\nExpected: FQDN or IP (e.g. vcenter.lab.com, 10.0.1.5)." 0 0
@@ -965,7 +965,7 @@ OpenShift version: ${ocp_version:-?} (channel: ${ocp_channel:-?})"
 						"Invalid base domain.\n\nMust be a valid DNS name (e.g. example.com, lab.internal)." 0 0 || true
 					continue
 				fi
-				[[ -n "$dom_input" ]] && cl_domain="${dom_input,,}"
+				[[ -n "$dom_input" ]] && cl_domain="${dom_input,,}"  # lowercase the domain
 				break
 			done
 			;;
@@ -2164,8 +2164,8 @@ _day2_status() {
 	local _api_host _api_port _api_up=true
 	_api_host=$(KUBECONFIG="$kc" kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null \
 		| sed 's|https\?://||; s|/.*||')
-	_api_port="${_api_host##*:}"
-	_api_host="${_api_host%%:*}"
+	_api_port="${_api_host##*:}"                   # extract port (host:6443 → 6443)
+	_api_host="${_api_host%%:*}"                   # extract host (host:6443 → host)
 	if [[ -n "$_api_host" ]]; then
 		if ! timeout 3 bash -c "echo >/dev/tcp/$_api_host/${_api_port:-6443}" 2>/dev/null; then
 			_api_up=false

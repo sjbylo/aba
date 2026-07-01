@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.1.2
+ABA_VERSION=1.1.3
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260701005234
+ABA_BUILD=20260701114641
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -75,7 +75,7 @@ while [ $i -le $# ]; do
 
 				# Validate directory argument
 				[ -z "$target_dir" ] && echo "Error: directory path expected after option $arg" >&2 && exit 1
-				case "$target_dir" in "~/"*) target_dir="$HOME/${target_dir#\~/}" ;; "~") target_dir="$HOME" ;; esac
+				case "$target_dir" in "~/"*) target_dir="$HOME/${target_dir#\~/}" ;; "~") target_dir="$HOME" ;; esac  # expand tilde
 				# If relative path doesn't exist at CWD, walk up to find it or reach ABA root
 				if [[ "$target_dir" != /* ]] && [ ! -e "$target_dir" ]; then
 					for _up in .. ../.. ../../..; do
@@ -423,7 +423,7 @@ elif [ "$1" = "--light" ]; then
 		printf "  %-12s %s\n" "---" "-----------"
 		for f in "$ABA_ROOT"/templates/operator-set-*; do
 			[ -f "$f" ] || continue
-			set_name="${f##*operator-set-}"
+			set_name="${f##*operator-set-}"   # extract set name from full path
 			# Skip auto-generated custom sets
 			echo "$set_name" | grep -q "^custom-" && continue
 			desc=$(grep "^# Name:" "$f" | head -1 | sed 's/^# Name: *//')
@@ -1247,7 +1247,7 @@ if [ "$cur_target" ]; then
 			for _pid in $(pgrep -f "openshift-install.*agent.*wait-for" 2>/dev/null); do
 				[ "$(readlink /proc/$_pid/cwd 2>/dev/null)" = "$PWD" ] && _oi_pids="$_oi_pids $_pid"
 			done
-			_oi_pids="${_oi_pids# }"
+			_oi_pids="${_oi_pids# }"                         # trim leading space
 			if [ "$_oi_pids" ]; then
 				aba_info "Stopping active install monitor (PID:$_oi_pids)"
 				kill $_oi_pids 2>/dev/null || true

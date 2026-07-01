@@ -50,8 +50,8 @@ if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ];
 	# Fail fast: verify upgrade path exists before starting downloads
 	_path_diag=""
 	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
-		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
-		_lowest="${_path_diag##*|}"
+		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"   # middle field (target channel)
+		_lowest="${_path_diag##*|}"                              # last field (lowest entry point)
 		aba_abort \
 			"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
 			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \

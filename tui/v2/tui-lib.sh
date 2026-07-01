@@ -85,7 +85,7 @@ _valid_ip() {
 _valid_cidr() {
 	local cidr="$1"
 	[[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || return 1
-	local ip="${cidr%/*}" prefix="${cidr#*/}"
+	local ip="${cidr%/*}" prefix="${cidr#*/}"       # split "10.0.0.0/24" → ip + prefix
 	_valid_ip "$ip" || return 1
 	[[ "$prefix" -ge 0 && "$prefix" -le 32 ]] || return 1
 	return 0
@@ -847,8 +847,8 @@ list_cluster_dirs() {
 	local -a dirs=()
 	for dir in "$ABA_ROOT"/*/cluster.conf; do
 		[[ -f "$dir" ]] || continue
-		dir="${dir%/cluster.conf}"
-		dir="${dir##*/}"
+		dir="${dir%/cluster.conf}"                    # strip filename → dir path
+		dir="${dir##*/}"                              # strip parent dirs → basename
 		[[ "$dir" == "mirror" || "$dir" == "templates" ]] && continue
 		[[ "$dir" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || continue
 		dirs+=("$dir")
@@ -896,7 +896,7 @@ _probe_undetected_clusters() {
 
 	local names="${candidates[*]}"
 	dlg --backtitle "$(ui_backtitle)" \
-		--infobox "\nDetecting installation status: ${names// /, }..." 5 55
+		--infobox "\nDetecting installation status: ${names// /, }..." 5 55  # spaces → commas
 	for dir in "${candidates[@]}"; do
 		if [[ ! -f "$ABA_ROOT/$dir/.install-complete" ]]; then
 			auto_complete_install "$dir" >/dev/null 2>&1 || true
@@ -1023,7 +1023,7 @@ _tui_settings_ask_label() {
 	local raw=""
 	raw=$(_tui_abaconf_raw_ask)
 
-	case "${raw,,}" in
+	case "${raw,,}" in                               # lowercase for case-insensitive match
 		""|"true"|"1")
 			echo "Ask every time"
 			;;
@@ -1475,7 +1475,7 @@ _show_v2_exit_summary() {
 				echo "Files created/updated:"
 				shown=1
 			fi
-			echo "  ${f#$ABA_ROOT/}"
+			echo "  ${f#$ABA_ROOT/}"                     # strip ABA_ROOT prefix → relative path
 		fi
 	done
 	if (( shown == 0 )); then
