@@ -362,7 +362,16 @@ _set_cluster_conf() {
 while [ "$*" ] 
 do
 	aba_debug "Args: [$@]"
-	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
+	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
+
+	# Pass-through subcommands: once 'config' or 'deploy' is the target, hand ALL
+	# remaining args (flags included) to that subcommand instead of parsing here.
+	if [ "$cur_target" = "config" ] || [ "$cur_target" = "deploy" ]; then
+		{ [ "$1" = "-h" ] || [ "$1" = "--help" ]; } && { cat $ABA_ROOT/others/help-aba.txt; exit 0; }
+		subcmd_args+=("$1")
+		shift
+		continue
+	fi
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		# Peek at next arg if no target yet (allows "aba --help cluster")
@@ -1035,7 +1044,7 @@ elif [ "$1" = "--complete" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|config|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|config|deploy|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1142,6 +1151,12 @@ if [ "$cur_target" ]; then
 			trap - ERR  # No need for this anymore
 			aba_debug "Running: $ABA_ROOT/scripts/config-import.sh ${subcmd_args[*]}"
 			$ABA_ROOT/scripts/config-import.sh "${subcmd_args[@]}"
+			exit
+		;;
+		deploy)
+			trap - ERR  # No need for this anymore
+			aba_debug "Running: $ABA_ROOT/scripts/deploy.sh ${subcmd_args[*]}"
+			$ABA_ROOT/scripts/deploy.sh "${subcmd_args[@]}"
 			exit
 		;;
 		info)

@@ -870,6 +870,29 @@ Configures OpenShift to use your *internal mirror registry* as the source for Op
 
 > **First time?** If you haven't mirrored any operators yet, see [Adding Operators to the Mirror Registry](#adding-operators-to-the-mirror-registry) first.
 
+## One-command air-gapped deploy
+
+`aba deploy` runs the whole disconnected install as one ordered, resumable pipeline:
+
+```
+config import -> mirror install -> mirror load -> iso -> (boot nodes) -> monitor -> day2
+```
+
+Each step is wrapped so re-running `aba deploy` skips already-completed steps and resumes where it stopped; a failed step halts the pipeline so you can fix it and re-run. On bare metal (where aba cannot boot the nodes) deploy pauses after building the ISO - boot the node(s) from the ISO, then re-run `aba deploy` to resume at install monitoring. Hypervisors (vmw/kvm) boot their VMs automatically.
+
+```bash
+# Preview the plan without running anything:
+aba deploy --dry-run
+
+# Run it (auto-detects the single cluster; imports configs from ./site):
+aba deploy
+
+# Or point at a specific config payload and cluster:
+aba deploy --site /path/to/site --cluster mycluster
+```
+
+Deploy imports its configs with `aba config import` (source-agnostic - the configs may come from `aba bundle --complete`, a human, or CI) and applies day2 including any [waved custom manifests](#ordered-waves-with-readiness-gates). Optional settings live in a `deploy.conf` (see `templates/deploy.conf`).
+
 ## Custom Manifests for Day-2
 
 You can automatically apply your own Kubernetes manifests during `aba day2` by placing them in the `day2-custom-manifests/` directory within your cluster folder.

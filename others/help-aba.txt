@@ -14,6 +14,7 @@ Main commands:
   aba [-d mirror] unregister            # Deregister an existing registry (removes local creds only)
   aba bundle                            # Create a bundle archive file. See 'aba bundle --help'
   aba config import <dir>               # Import prebuilt configs (install-config, agent-config, ISC ...) verbatim
+  aba deploy                            # One-command air-gapped install: config import -> mirror -> iso -> monitor -> day2
   aba cluster                           # Install OpenShift cluster. See 'aba cluster --help'
   aba [-d <cluster>] upgrade --to <ver> # Upgrade a cluster to a target OCP version. See 'aba cluster --help'
 
