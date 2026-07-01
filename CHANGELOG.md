@@ -1,5 +1,11 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.2...HEAD)
 
+Bug fix for upgrade path validation
+
+### Bug Fixes
+
+- **Fix upgrade path validation crash** — Fixed a bash syntax error in `verify_upgrade_path_exists` where a line continuation (`\`) followed by a comment caused a pipe parse error, breaking upgrade path checks in air-gapped mirror workflows.
+
 ---
 
 ## [1.1.2](https://github.com/sjbylo/aba/releases/tag/v1.1.2) - 2026-07-01
