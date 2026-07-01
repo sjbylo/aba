@@ -84,6 +84,17 @@ _assemble_site() {
 	return 0
 }
 
+# _capture_site_isc: re-copy the just-regenerated imageset-config.yaml into the
+# site/ payload so the embedded copy matches the images 'make save' mirrored.
+# Matters with --complete --force, where the ISC is regenerated after assembly.
+_capture_site_isc() {
+	[ "$complete_bundle" ] || return 0
+	[ -f mirror/data/imageset-config.yaml ] || return 0
+	[ -d site ] || return 0
+	mkdir -p site/mirror
+	cp -f -- mirror/data/imageset-config.yaml site/mirror/imageset-config.yaml
+}
+
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -138,6 +149,15 @@ aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_cha
 # embeds it in the same tar (one archive carries the mirror AND the configs).
 # Clean it up on exit so a later plain 'aba bundle' is unchanged (no site/).
 if [ "$complete_bundle" ]; then
+	# Never destroy a pre-existing site/ (it may be the user's own deploy configs):
+	# move it aside to site.backup first, like config-import does for its targets.
+	if [ -e "$PWD/site" ]; then
+		aba_warning "An existing 'site/' directory was found; backing it up to 'site.backup' before assembling the bundle payload."
+		rm -rf -- "$PWD/site.backup"
+		mv -- "$PWD/site" "$PWD/site.backup"
+	fi
+	# Remove only the payload assembled here on exit, so a later plain 'aba bundle'
+	# is unchanged (site.backup is left untouched for the user to recover).
 	trap 'rm -rf -- "$PWD/site"' EXIT
 	aba_info "Assembling site/ config payload for --complete bundle ..."
 	_assemble_site "$PWD" "$PWD/site"
@@ -262,6 +282,7 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "All CLI tarballs downloaded"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
+	_capture_site_isc
 	aba_debug "Calling: make -s tar out=-"
 	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
 
@@ -306,6 +327,7 @@ if [ "$light_bundle" ]; then
 	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f "$bundle_dest_file"
+	_capture_site_isc
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
 	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
@@ -350,6 +372,7 @@ else
 	
 	aba_info "Creating install bundle archive ..."
 	rm -f "$bundle_dest_file"
+	_capture_site_isc
 	aba_debug "Calling: make tar out=$bundle_dest_file"
 	make tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files. 
 	aba_debug "Full bundle created successfully: $bundle_dest_file"

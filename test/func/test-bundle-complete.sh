@@ -142,6 +142,12 @@ grep -q '_assemble_site' scripts/make-bundle.sh \
 grep -q '\${repo_dir}/site' scripts/backup.sh \
 	&& test_pass "backup.sh conditionally includes \${repo_dir}/site" \
 	|| test_fail "backup site path" "backup.sh does not reference repo_dir/site"
+grep -q 'site.backup' scripts/make-bundle.sh \
+	&& test_pass "--complete backs up a pre-existing site/ instead of destroying it" \
+	|| test_fail "site backup" "make-bundle.sh does not preserve an existing site/"
+grep -q '_capture_site_isc' scripts/make-bundle.sh \
+	&& test_pass "--complete re-captures the regenerated ISC into site/ after 'make save' (matches --force)" \
+	|| test_fail "isc recapture" "make-bundle.sh does not re-capture the ISC post-save"
 
 echo
 echo "=== Results: $pass passed, $fail failed ==="
