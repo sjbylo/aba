@@ -81,13 +81,13 @@ _vsphere_warn() {
 # Out: echoes "<host> <port>" on stdout. Callers: read host port < <(_vsphere_parse_govc_url "$GOVC_URL").
 _vsphere_parse_govc_url() {
 	local url="$1"
-	url="${url#http://}"
-	url="${url#https://}"
-	url="${url%%/*}"
+	url="${url#http://}"                       # strip http:// prefix
+	url="${url#https://}"                      # strip https:// prefix
+	url="${url%%/*}"                           # strip path → host:port
 	local h p
 	if [[ "$url" == *:* ]]; then
-		h="${url%:*}"
-		p="${url##*:}"
+		h="${url%:*}"                          # host from host:port
+		p="${url##*:}"                         # port from host:port
 	else
 		h="$url"
 		p=443
@@ -264,7 +264,7 @@ _vsphere_resolve_object() {
 	# portgroups, bare-name resource pools, and any other case where the
 	# user's value matches an object reachable from search_root but not at
 	# the flat-appended path.
-	local leaf="${hint##*/}"
+	local leaf="${hint##*/}"                    # basename (last path component)
 	local find_out find_rc=0
 	if [ -n "$find_type" ]; then
 		find_out=$(govc find "$search_root" -type "$find_type" -name "$leaf" 2>&1) || find_rc=$?

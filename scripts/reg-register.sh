@@ -45,8 +45,8 @@ if [ "$reg_host" ] && [ "$reg_port" ]; then
 			# Common case: template defaulted to one name, pull secret was generated
 			# for the registry's canonical hostname. Both point to the same registry.
 			if [[ "$_ps_keys" == *:* ]]; then
-				_inferred_host="${_ps_keys%%:*}"
-				_inferred_port="${_ps_keys##*:}"
+				_inferred_host="${_ps_keys%%:*}"          # host from "host:port"
+				_inferred_port="${_ps_keys##*:}"          # port from "host:port"
 			else
 				_inferred_host="$_ps_keys"
 				_inferred_port="443"
@@ -68,8 +68,8 @@ if [ "$reg_host" ] && [ "$reg_port" ]; then
 elif [ "$_ps_count" -eq 1 ]; then
 	# No reg_host/reg_port in mirror.conf at all -- infer from the single pull secret entry.
 	if [[ "$_ps_keys" == *:* ]]; then
-		reg_host="${_ps_keys%%:*}"
-		reg_port="${_ps_keys##*:}"
+		reg_host="${_ps_keys%%:*}"                        # host from "host:port"
+		reg_port="${_ps_keys##*:}"                        # port from "host:port"
 	else
 		reg_host="$_ps_keys"
 		reg_port="443"

@@ -91,7 +91,7 @@ _updated=""
 [ "$ssh_key_file" ]      && replace-value-conf -q -n ssh_key_file      -v "$ssh_key_file"      -f cluster.conf
 [ "$mirror_name" ]       && replace-value-conf -q -n mirror_name       -v "$mirror_name"       -f cluster.conf
 
-[ "$_updated" ] && $_existing_conf && aba_info "Updated $name/cluster.conf: ${_updated% }"
+[ "$_updated" ] && $_existing_conf && aba_info "Updated $name/cluster.conf: ${_updated% }"  # trim trailing space
 
 # Re-link mirror/regcreds/mirror.conf to match the final mirror_name in cluster.conf.
 # This is necessary because .init (above) ran before cluster.conf existed, so it

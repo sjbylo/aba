@@ -78,9 +78,9 @@ _vmw_verify_objects() {
 		local _line
 		_line=$(cat "$_f")
 		case "$_line" in
-			ok*)   aba_debug "Verified: ${_line#ok }" ;;
-			info*) aba_debug "${_line#info }" ;;
-			fail*) aba_warning "${_line#fail }"; _err=1 ;;
+			ok*)   aba_debug "Verified: ${_line#ok }" ;;       # strip "ok " prefix
+			info*) aba_debug "${_line#info }" ;;               # strip "info " prefix
+			fail*) aba_warning "${_line#fail }"; _err=1 ;;     # strip "fail " prefix
 		esac
 	done
 	rm -rf "$_tmpdir"
