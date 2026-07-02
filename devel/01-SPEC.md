@@ -237,12 +237,14 @@ this because oc-mirror skips upstream tag resolution for digest references.
    `.index/.{catalog}-index-v{ver}.digest`.
 
 2. **Pin at runtime**: `_run_oc_mirror_with_retry()` calls
-   `_oc_mirror_pin_catalogs_by_digest()` before invoking oc-mirror. This does a
-   single-pass `sed` producing `data/imageset-config-digest.yaml` with tags
-   replaced by digests. The user's `imageset-config.yaml` is never modified.
+   `_oc_mirror_pin_catalogs_by_digest()` before invoking oc-mirror (save/sync only;
+   skipped during load). This does a single-pass `sed` producing
+   `data/imageset-config-digest.yaml` with tags replaced by digests. The user's
+   `imageset-config.yaml` is never modified.
 
 3. **oc-mirror receives**: `--config imageset-config-digest.yaml` instead of the
-   original. The digest file persists alongside the original for debugging.
+   original. The digest file is included in `aba-upgrade.tar` for transfer to
+   disconnected hosts. During load, the transferred digest ISC is used directly.
 
 ### Invariants
 

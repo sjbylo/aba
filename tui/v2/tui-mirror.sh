@@ -692,6 +692,8 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
 	ocp_version_target="$_target_ver"
 	tui_kick_isconf_regen
+	dlg --backtitle "$(ui_backtitle)" --infobox \
+		"Generating ImageSet configuration (operator catalogs\nmay also be refreshed, if needed). Please wait." 5 60
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0
@@ -718,12 +720,11 @@ Next steps:\n\n\
 				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
 					--msgbox "\nUpgrade images saved successfully.\n\n\
 To upgrade a disconnected cluster:\n\n\
-  1. Copy these files to the internal host:\n\
-     • mirror/data/imageset-config.yaml\n\
-     • mirror/data/.imageset-config-digest.yaml\n\
-     • mirror/data/mirror_*.tar\n\
-     • cli/openshift-*-<version>*  (matching CLI binaries for target version)\n\n\
-  2. On the internal host TUI:\n\
+  1. Copy all tar files to the internal host:\n\
+     • mirror/data/*.tar  (images + upgrade bundle with ISC, CLIs, metadata)\n\n\
+  2. On the internal host, place the files in mirror/data/:\n\
+     • cp /transfer-media/*.tar ~/aba/mirror/data/\n\n\
+  3. On the internal host TUI:\n\
      • Load images (L)\n\
      • Day-2 → Configure OperatorHub (D → R)\n\
      • Day-2 → Upgrade (D → U)\n" 0 0

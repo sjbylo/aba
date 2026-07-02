@@ -3079,7 +3079,7 @@ aba_prefetch_catalogs() {
 _oc_mirror_pin_catalogs_by_digest() {
 	local isc_file="$1"
 	local ocp_ver_major="$2"
-	local digest_isc=".imageset-config-digest.yaml"
+	local digest_isc="imageset-config-digest.yaml"
 	local sed_args=()
 
 	for catalog_name in redhat-operator certified-operator community-operator; do
@@ -3132,13 +3132,29 @@ _run_oc_mirror_with_retry() {
 	local base_cmd="$3"
 
 	# Pin catalog tags to digests unless disabled (OC_MIRROR_PIN_CATALOGS=0)
-	if [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
+	# During load (disk2mirror), skip regeneration — use the digest ISC that was
+	# transferred from the connected host. Regenerating from local .index/ files
+	# would use stale digests that don't match the archive (Bug #953).
+	if [ "$action" != "load" ] && [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
 		local _ocp_ver_major
 		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 		local _config_file
 		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" )
 		if [ "$_config_file" != "imageset-config.yaml" ]; then
 			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"  # replace config filename in command
+		fi
+	elif [ "$action" = "load" ]; then
+		# Use the pre-generated digest ISC if it exists (transferred from connected host
+		# via aba-upgrade.tar).
+		if [ -f "data/imageset-config-digest.yaml" ]; then
+			base_cmd="${base_cmd/--config imageset-config.yaml/--config imageset-config-digest.yaml}"
+			aba_info "Using transferred digest ISC for air-gap catalog pinning"
+		else
+			aba_warning "imageset-config-digest.yaml not found in mirror/data/." \
+				"On disconnected hosts, this file is required for catalog pinning." \
+				"Copy it from the connected host or use 'aba save' which creates" \
+				"an upgrade bundle containing it automatically." \
+				"Without it, oc-mirror may try to reach registry.redhat.io and fail."
 		fi
 	fi
 

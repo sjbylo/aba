@@ -367,7 +367,7 @@ e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
@@ -422,7 +422,7 @@ e2e_snapshot_file "acm-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
 
 e2e_run "Transfer archive and config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "acm-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load ACM images" \

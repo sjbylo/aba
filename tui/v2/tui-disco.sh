@@ -49,7 +49,7 @@ Then restart the TUI." 0 0
 	if mirror_has_archives; then
 		_archive_hint="Image archives: mirror_*.tar detected in mirror/data/"
 	else
-		_archive_hint="Image archives: NONE — copy mirror_*.tar from transfer media to mirror/data/"
+		_archive_hint="Image archives: NONE — copy *.tar files from transfer media to mirror/data/"
 	fi
 
 	local min_size=1000000
@@ -99,9 +99,8 @@ Next: the TUI will install a mirror registry and load images\nbefore cluster ins
 	if ! mirror_has_archives; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" --msgbox \
 			"No mirror archive files found.\n\n\
-Place mirror_*.tar files in:\n\
-  $ABA_ROOT/mirror/data/\n\
-(Older docs referred to mirror/save/ — that layout is folded into mirror/data/.)\n\n\
+Place *.tar files (mirror_*.tar + aba-upgrade.tar) in:\n\
+  $ABA_ROOT/mirror/data/\n\n\
 Restart the TUI after copying archives." \
 			0 0
 		tui_log "DISCO wizard: missing image archives — dropping to action menu"
