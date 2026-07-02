@@ -274,6 +274,14 @@ else
 	test_fail "H1 scaffold re-pin" "cluster.conf not re-touched between make init and install touch (init=$_l_init cc=$_l_cc ic=$_l_ic)"
 fi
 
+# H1b: the scaffold touches must be GATED on what was imported ($_src), so a
+# cluster.conf-only import never re-stamps (pins) a pre-existing generated install-config.
+if grep -qE '\[ -f "\$_src/\$_cname/install-config\.yaml" \][[:space:]]*&&[[:space:]]*touch "\$_cname/install-config\.yaml"' "$_ci"; then
+	test_pass "scaffold install-config touch is gated on \$_src (no stale-config pin)"
+else
+	test_fail "H1b scaffold gating" "scaffold touches install-config unconditionally (would pin a stale generated config)"
+fi
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo

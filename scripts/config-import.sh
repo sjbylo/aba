@@ -188,15 +188,17 @@ config_import_apply "$_src" "$PWD"
 # config_import_apply aged cluster.conf into the past, an un-pinned cluster.conf
 # would be older than '.init', so the next 'make ... iso' would re-run
 # create-cluster-conf.sh and then re-template the imported install/agent-config.
-# Touch cluster.conf, then install/agent-config, in that order so each stays
-# newest-in-turn (make only rebuilds on a STRICTLY newer prerequisite).
+# Pin ONLY the files imported verbatim THIS run (checked against $_src), in
+# cluster.conf -> install/agent order so each stays newest-in-turn (make rebuilds
+# only on a STRICTLY newer prerequisite). Files NOT imported are left alone so make
+# can still (re)generate them - e.g. install-config after a cluster.conf-only import.
 for _cname in $_IMPORTED_CLUSTERS; do
 	[ -f "$_cname/cluster.conf" ] || continue
 	[ -e "$_cname/Makefile" ] || ln -fs ../templates/Makefile.cluster "$_cname/Makefile"
 	make -s -C "$_cname" init >/dev/null 2>&1 || aba_warning "config import: 'make init' for cluster '$_cname' reported an issue (continuing)"
-	touch "$_cname/cluster.conf"
-	[ -f "$_cname/install-config.yaml" ] && touch "$_cname/install-config.yaml"
-	[ -f "$_cname/agent-config.yaml" ]   && touch "$_cname/agent-config.yaml"
+	[ -f "$_src/$_cname/cluster.conf" ]        && touch "$_cname/cluster.conf"
+	[ -f "$_src/$_cname/install-config.yaml" ] && touch "$_cname/install-config.yaml"
+	[ -f "$_src/$_cname/agent-config.yaml" ]   && touch "$_cname/agent-config.yaml"
 done
 
 # Validate the imported top-level config; fail with a clear error if invalid.
