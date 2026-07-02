@@ -993,7 +993,11 @@ aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in m
 aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
-Or upgrade OpenShift via the Console or CLI in the usual way.
+> **Alternative upgrade methods:** Once the mirror is loaded and `day2` has been applied, you can also trigger the upgrade via:
+> - **`oc adm upgrade --to <version>`** — standard OpenShift CLI (ensure `aba day2` has been run first)
+> - **OpenShift Console** — if [OSUS](#cluster-updates-osus) is configured, available updates appear in the console for one-click upgrades
+>
+> `aba upgrade` is recommended because it handles `day2` integration and preflight checks automatically.
 
 #### Manual method
 
@@ -1004,7 +1008,7 @@ Or upgrade OpenShift via the Console or CLI in the usual way.
 3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
 4. Load images: `aba -d mirror load`
 5. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
-6. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
+6. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
 
 ### Updating a cluster in a partially disconnected environment
 
@@ -1028,14 +1032,14 @@ aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in m
 aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
-Or upgrade OpenShift via the Console or CLI in the usual way.
+Or use any of the [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment) (Console, `oc adm upgrade`) after running `aba day2`.
 
 #### Manual method
 
 1. Edit `aba/mirror/data/imageset-config.yaml` on the *connected bastion*.
 2. Run: `aba -d mirror sync`
 3. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
-4. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
+4. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
 
 [Back to top](#quick-start)
 
