@@ -319,7 +319,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # When ocp_version is unknown, still download version-independent tools
 # (oc-mirror, butane, govc) via --no-version to save time.
 # Skip for housekeeping commands that never need CLI tools.
-if [ ! "$interactive_mode" ]; then
+if [ ! "$interactive_mode" ] && [ -z "$ABA_DEPLOY_DRY_RUN" ]; then
 	case " $* " in
 		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" config "*|*" --dry-run "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
@@ -367,7 +367,14 @@ do
 	# Pass-through subcommands: once 'config' or 'deploy' is the target, hand ALL
 	# remaining args (flags included) to that subcommand instead of parsing here.
 	if [ "$cur_target" = "config" ] || [ "$cur_target" = "deploy" ]; then
-		{ [ "$1" = "-h" ] || [ "$1" = "--help" ]; } && { cat $ABA_ROOT/others/help-aba.txt; exit 0; }
+		if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+			if [ "$cur_target" = "deploy" ] && [ -f "$ABA_ROOT/others/help-deploy.txt" ]; then
+				cat "$ABA_ROOT/others/help-deploy.txt"
+			else
+				cat "$ABA_ROOT/others/help-aba.txt"
+			fi
+			exit 0
+		fi
 		subcmd_args+=("$1")
 		shift
 		continue
@@ -1155,6 +1162,10 @@ if [ "$cur_target" ]; then
 		;;
 		deploy)
 			trap - ERR  # No need for this anymore
+			# A --dry-run placed BEFORE 'deploy' is consumed by the global flag parser
+			# (as upgrade_dry_run), not by the pass-through interception. Forward it so
+			# 'aba --dry-run deploy' previews instead of running a real, side-effecting deploy.
+			[ -n "$upgrade_dry_run" ] && subcmd_args+=(--dry-run)
 			aba_debug "Running: $ABA_ROOT/scripts/deploy.sh ${subcmd_args[*]}"
 			$ABA_ROOT/scripts/deploy.sh "${subcmd_args[@]}"
 			exit

@@ -1,0 +1,34 @@
+One-command air-gapped deploy
+
+Usage:
+  aba deploy \
+        --site <dir>                          # Directory of configs to import verbatim (default: ./site).
+        --cluster <name>                      # Cluster directory to build (default: auto-detect the single cluster).
+        --dry-run                             # Print the ordered plan only; execute nothing (no side effects).
+        --restart                             # Clear cached step state for a fresh re-deploy (e.g. after a teardown).
+
+  'aba deploy' runs the whole disconnected install as one ordered, resumable pipeline:
+
+    config import -> mirror install -> mirror load -> iso -> (boot nodes) -> monitor -> day2
+
+  Re-running 'aba deploy' skips already-completed steps and resumes where it stopped; a failed step halts the
+  pipeline so you can fix it and re-run. On bare metal (where aba cannot boot the nodes) deploy pauses after
+  building the ISO - boot the node(s) from the ISO, then re-run 'aba deploy' to resume at install monitoring.
+  Hypervisors (vmw/kvm) boot their VMs automatically.
+
+  Optional settings live in a 'deploy.conf' (sourced key=value, like aba.conf): site_dir and cluster_name.
+  See 'templates/deploy.conf'. The env var 'ABA_DEPLOY_DRY_RUN=1' is equivalent to '--dry-run'.
+
+Examples:
+
+  # Preview the plan without running anything:
+  aba deploy --dry-run
+
+  # Run it (auto-detects the single cluster; imports configs from ./site):
+  aba deploy
+
+  # Point at a specific config payload and cluster:
+  aba deploy --site /path/to/site --cluster mycluster
+
+  # Fresh re-deploy after tearing a cluster down:
+  aba deploy --restart
