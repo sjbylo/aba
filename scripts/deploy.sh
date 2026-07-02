@@ -19,10 +19,12 @@
 # DESCRIPTOR: an optional deploy.conf (sourced key=value, like aba.conf) may set
 #           site_dir (configs to import; default 'site') and cluster_name.
 #
-# USAGE:    aba deploy [--site <dir>] [--cluster <name>] [--dry-run]
+# USAGE:    aba deploy [--site <dir>] [--cluster <name>] [--dry-run] [--restart]
 #
 # PREVIEW:  ABA_DEPLOY_DRY_RUN=1 aba deploy   (or --dry-run) prints the plan only.
+# RESTART:  aba deploy --restart clears cached step state for a fresh re-deploy.
 
+_CALLER_PWD="$PWD"   # user's cwd, captured before we cd to the aba root (to resolve a relative --site)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$SCRIPT_DIR/.." || exit 1
 source scripts/include_all.sh
@@ -36,7 +38,7 @@ export INFO_ABA=1
 # (passed explicitly so this stays independent of aba.sh globals). Honors
 # ABA_DEPLOY_DRY_RUN to print the plan without executing anything.
 deploy_run() {
-	local aba_home="$1" site_dir="$2" cluster="$3" platform="$4"
+	local aba_home="$1" site_dir="$2" cluster="$3" platform="$4" site_explicit="$5"
 
 	# Scope run_once state per aba tree (and, once known, per cluster) so deploy state
 	# never collides across trees/clusters that share $HOME/.aba/runner. A fresh
@@ -52,7 +54,8 @@ deploy_run() {
 			return 0
 		fi
 		local task="aba:deploy:$_scope:$id"
-		[ -n "$DEPLOY_RESTART" ] && run_once -r -i "$task" >/dev/null 2>&1   # --restart: force re-run
+		# --restart is handled EAGERLY (all step ids reset up front, below) rather than
+		# here, so an interrupted restart cannot leave later steps cached as succeeded.
 		# run_once -S caches a FAILED step too and would keep returning that cached
 		# failure; reset a previously failed step so a re-run retries it.
 		local prev_exit
@@ -72,13 +75,26 @@ deploy_run() {
 	# when there is no site payload (an already-configured tree deploys in place).
 	# config-import is idempotent (verbatim copy), so it always runs - never cached by
 	# run_once, whose per-tree id could otherwise skip importing a different --site.
-	if [ -n "$ABA_DEPLOY_DRY_RUN" ]; then
-		aba_info "DRY RUN [config-import]: $aba_home/scripts/config-import.sh import $site_dir"
-	elif [ -d "$aba_home/$site_dir" ] || [ -d "$site_dir" ]; then
-		aba_info "==> Importing site configuration"
-		"$aba_home/scripts/config-import.sh" import "$site_dir" || aba_abort "aba deploy: step 'config-import' failed. Fix the problem and re-run 'aba deploy'."
+
+	# A missing EXPLICIT --site (or a deploy.conf site_dir) is a user error: abort in
+	# both real and dry-run mode instead of silently deploying whatever is in the tree.
+	if [ -n "$site_explicit" ] && [ ! -d "$aba_home/$site_dir" ] && [ ! -d "$site_dir" ]; then
+		aba_abort "aba deploy: site directory '$site_dir' not found (from --site or deploy.conf)."
+	fi
+
+	if [ -d "$aba_home/$site_dir" ] || [ -d "$site_dir" ]; then
+		if [ -n "$ABA_DEPLOY_DRY_RUN" ]; then
+			aba_info "DRY RUN [config-import]: $aba_home/scripts/config-import.sh import $site_dir"
+		else
+			aba_info "==> Importing site configuration"
+			"$aba_home/scripts/config-import.sh" import "$site_dir" || aba_abort "aba deploy: step 'config-import' failed. Fix the problem and re-run 'aba deploy'."
+		fi
 	else
-		aba_info "No site payload at '$site_dir' - using the configs already in place."
+		if [ -n "$ABA_DEPLOY_DRY_RUN" ]; then
+			aba_info "DRY RUN: no site payload at '$site_dir' - would deploy the configs already in place"
+		else
+			aba_info "No site payload at '$site_dir' - using the configs already in place."
+		fi
 	fi
 
 	# Resolve cluster + platform from the imported/available configs (read-only, so
@@ -93,10 +109,26 @@ deploy_run() {
 		[ "$_n" -gt 1 ] && aba_abort "aba deploy: multiple clusters found ($(printf '%s' "$_found" | tr '\n' ' ')); pick one with --cluster <name> or cluster_name in deploy.conf."
 		cluster="$(printf '%s' "$_found" | head -1)"
 	fi
-	[ -n "$platform" ] || platform="$(cd "$aba_home" && _detect_platform)"
+	[ -n "$platform" ] || platform="$(_detect_platform "$aba_home" "$site_dir")"
 	[ -n "$cluster" ] || aba_abort "aba deploy: no cluster specified and none found (set cluster_name in deploy.conf or use --cluster <name>)."
 	_scope="$_scope:$cluster"   # scope subsequent steps per cluster too
 	aba_info "Cluster '$cluster' (platform ${platform:-unknown})"
+
+	# Boot marker path (bare-metal pause latch), needed both by --restart below and the boot gate.
+	local _await="$aba_home/$cluster/.aba-deploy-await-boot"
+
+	# --restart: fresh re-deploy. Clear ALL of this deploy's cached step state up front
+	# (not lazily as each step is reached), so an interrupted restart - a failed step or
+	# the bare-metal boot pause returning early - can never leave a later step cached as
+	# succeeded from a previous deployment. Also drop the boot marker so bare metal pauses
+	# exactly once per fresh deploy instead of latching straight through to monitoring.
+	if [ -n "$DEPLOY_RESTART" ] && [ -z "$ABA_DEPLOY_DRY_RUN" ]; then
+		local _s
+		for _s in mirror-install mirror-load iso install monitor day2; do
+			run_once -r -i "aba:deploy:$_scope:$_s" >/dev/null 2>&1
+		done
+		rm -f "$_await"
+	fi
 
 	_step mirror-install "Installing/connecting the mirror registry"  make -C "$aba_home/mirror" install
 	_step mirror-load    "Loading images into the mirror registry"    make -C "$aba_home/mirror" load
@@ -105,7 +137,6 @@ deploy_run() {
 	# Node boot gate. Hypervisors boot automatically; anything else (bare metal or
 	# unknown) pauses once after the ISO so the operator can boot the node(s).
 	if [ "$platform" != "vmw" ] && [ "$platform" != "kvm" ]; then
-		local _await="$aba_home/$cluster/.aba-deploy-await-boot"
 		if [ -n "$ABA_DEPLOY_DRY_RUN" ]; then
 			aba_info "DRY RUN [boot]: pause for manual node boot here, then re-run 'aba deploy' to resume"
 		elif [ ! -f "$_await" ]; then
@@ -157,9 +188,17 @@ _detect_cluster() {
 	done
 }
 
-# _detect_platform: echo the platform (vmw/kvm/bm) from aba.conf, or "".
+# _detect_platform <aba_home> <site_dir>: echo the platform (vmw/kvm or empty) from the
+# first aba.conf found - the aba tree first, then the site payload. The site fallback
+# matches _detect_cluster so a dry-run on a fresh tree + site payload (config-import not
+# yet run) still previews the right pipeline (straight-through vs bare-metal pause).
 _detect_platform() {
-	( source <(normalize-aba-conf) 2>/dev/null; echo "$platform" )
+	local home="$1" site="$2" base
+	for base in "$home" "$home/$site" "$site"; do
+		[ -f "$base/aba.conf" ] || continue
+		( cd "$base" && source <(normalize-aba-conf) 2>/dev/null; echo "$platform" )
+		return 0
+	done
 }
 
 # ---- run (the unit test extracts deploy_run and never reaches here) ----------
@@ -173,19 +212,30 @@ cluster_name=""
 # Descriptor values (if set) become the defaults; CLI flags override below.
 _site="${site_dir:-site}"
 _cluster="${cluster_name:-}"
+# A non-default site_dir from deploy.conf counts as explicit (a missing one must abort,
+# not silently deploy in place); a plain default './site' stays implicit.
+_site_explicit=""
+[ "$_site" != "site" ] && _site_explicit=1
 
 while [ "$1" ]; do
 	case "$1" in
-		--site)    [ -n "$2" ] || aba_abort "aba deploy: --site requires a value"; _site="$2"; shift 2 ;;
-		--cluster) [ -n "$2" ] || aba_abort "aba deploy: --cluster requires a value"; _cluster="$2"; shift 2 ;;
-		--dry-run) export ABA_DEPLOY_DRY_RUN=1; shift ;;
-		--restart) export DEPLOY_RESTART=1; shift ;;   # clear cached step state (fresh re-deploy)
-		import)    shift ;;   # tolerate a stray leading verb
-		--*)       aba_abort "aba deploy: unknown option '$1' (see 'aba deploy --help')." ;;
-		*)         shift ;;
+		--site)       [ -n "$2" ] || aba_abort "aba deploy: --site requires a value"; _site="$2"; _site_explicit=1; shift 2 ;;
+		--cluster)    [ -n "$2" ] || aba_abort "aba deploy: --cluster requires a value"; _cluster="$2"; shift 2 ;;
+		-n|--name)    [ -n "$2" ] || aba_abort "aba deploy: $1 requires a value"; _cluster="$2"; shift 2 ;;   # accept aba's cluster-name syntax
+		--dry-run)    export ABA_DEPLOY_DRY_RUN=1; shift ;;
+		--restart)    export DEPLOY_RESTART=1; shift ;;   # clear cached step state (fresh re-deploy)
+		import)       shift ;;   # tolerate a stray leading verb
+		-*)           aba_abort "aba deploy: unknown option '$1' (see 'aba deploy --help')." ;;
+		*)            aba_abort "aba deploy: unexpected argument '$1' (see 'aba deploy --help')." ;;
 	esac
 done
 
+# Resolve an explicit relative --site against the user's original cwd (not the aba root
+# this script cd'd to); the implicit default './site' stays relative to the aba root.
+if [ -n "$_site_explicit" ]; then
+	case "$_site" in /*) ;; *) _site="$_CALLER_PWD/$_site" ;; esac
+fi
+
 # cluster + platform are resolved inside deploy_run, after config-import has
 # materialized the cluster dir and aba.conf.
-deploy_run "$aba_home" "$_site" "$_cluster" ""
+deploy_run "$aba_home" "$_site" "$_cluster" "" "$_site_explicit"
