@@ -222,6 +222,53 @@ grep -q 'unknown option' "$REPO_ROOT/scripts/deploy.sh" \
 grep -q '"$home/$site"' "$REPO_ROOT/scripts/deploy.sh" \
 	&& test_pass "cluster auto-detect falls back to the site payload (works before import)" \
 	|| test_fail "detect fallback" "no site-payload fallback in _detect_cluster"
+grep -q 'unexpected argument' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy rejects stray positionals (does not silently deploy a different cluster)" \
+	|| test_fail "positional guard" "no '*) abort' in deploy arg loop"
+grep -qE '\-n\|--name\)' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy accepts aba's '-n <name>' cluster syntax" \
+	|| test_fail "name syntax" "no -n/--name handling"
+
+# --- Test 9: --restart is atomic (interrupted restart cannot skip later steps) -
+echo "--- --restart atomicity (interrupted restart -> plain resume) ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1          # run1: full deploy populates cache
+: > "$DEPLOY_LOG"
+( export DEPLOY_RESTART=1 MAKE_FAIL_ON="mirror load"; deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1  # run2: restart aborts at load
+: > "$DEPLOY_LOG"
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1          # run3: plain resume (as the abort tells the user)
+_has "restart-interrupted resume re-runs iso"      "$DEPLOY_LOG" 'mycluster iso'
+_has "restart-interrupted resume re-runs install"  "$DEPLOY_LOG" 'mycluster install'
+_has "restart-interrupted resume re-runs day2"     "$DEPLOY_LOG" 'day2'
+
+# --- Test 9b: --restart clears the bare-metal boot marker (pauses once again) --
+echo "--- --restart clears the boot marker (fresh bm re-deploy) ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1           # pause
+( deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1           # resume -> complete (marker latched)
+: > "$DEPLOY_LOG"
+( DEPLOY_RESTART=1 deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1   # fresh restart
+_has    "bm restart: rebuilds the ISO"                    "$DEPLOY_LOG" 'mycluster iso'
+_hasnot "bm restart: pauses again (no straight-through to monitor)" "$DEPLOY_LOG" 'mycluster mon'
+[ -f "$_root/mycluster/.aba-deploy-await-boot" ] \
+	&& test_pass "bm restart: boot marker re-created at the (single) pause" \
+	|| test_fail "bm restart marker" "marker missing after restart pause"
+
+# --- Test 9c: an explicit --site that does not exist aborts (no silent in-place) -
+echo "--- explicit --site missing -> abort ---"
+_reset_state
+_ES="$_tmp/es.out"
+( deploy_run "$_root" "no-such-site" "mycluster" "bm" 1 ) >"$_ES" 2>&1
+_esrc=$?
+[ "$_esrc" -ne 0 ] && grep -qi 'not found' "$_ES" \
+	&& test_pass "explicit --site to a missing dir aborts (does not deploy in place)" \
+	|| test_fail "explicit --site" "expected abort, got rc=$_esrc: $(tail -1 "$_ES")"
+# a NON-explicit missing site still proceeds in place (abort is gated on explicit)
+: > "$DEPLOY_LOG"
+( deploy_run "$_root" "no-such-site" "mycluster" "bm" "" ) >/dev/null 2>&1
+grep -q 'mirror install' "$DEPLOY_LOG" \
+	&& test_pass "non-explicit missing site still deploys in place (no abort)" \
+	|| test_fail "implicit site" "did not proceed in place"
 
 echo
 echo "=== Results: $pass passed, $fail failed ==="

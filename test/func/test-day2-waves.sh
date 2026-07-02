@@ -236,6 +236,47 @@ _mk "$fxI/day2-custom-manifests/99-postconfig.yaml"
 _run_apply "$fxI"
 _assert_before "wave 10-operators applied before top-level 99-postconfig.yaml (legacy order kept)" "$_LAST_LOG" "op.yaml" "99-postconfig.yaml"
 
+# --- Test J: .wait robustness (trailing comment, bad quotes, unreadable file) --
+echo "--- .wait parsing robustness ---"
+
+# L3: a trailing '# comment' must be stripped, not passed to oc wait as argv.
+fxJ="$_tmp/clusterJ"
+_mk "$fxJ/day2-custom-manifests/10-w/a.yaml"
+printf -- '--for=condition=Ready pod/foo --timeout=5s # wait for foo\n' > "$fxJ/day2-custom-manifests/10-w/.wait"
+_run_apply "$fxJ"
+if grep -q 'wait .*pod/foo' "$_LAST_LOG" && ! grep -q 'wait .*comment' "$_LAST_LOG" && ! grep -q 'wait .*#' "$_LAST_LOG"; then
+	test_pass ".wait trailing '# comment' stripped before oc wait"
+else
+	test_fail ".wait trailing comment" "comment leaked to oc wait: $(grep wait "$_LAST_LOG" | tr '\n' '|')"
+fi
+
+# L2: a line xargs cannot parse (unbalanced quote) is skipped, not run truncated.
+fxK="$_tmp/clusterK"
+_mk "$fxK/day2-custom-manifests/10-w/a.yaml"
+printf -- "--for=condition=Ready pod/foo --timeout=5s'\n" > "$fxK/day2-custom-manifests/10-w/.wait"
+_run_apply "$fxK"
+if grep -q 'apply .*a.yaml' "$_LAST_LOG" && ! grep -q '^oc wait' "$_LAST_LOG"; then
+	test_pass "unbalanced-quote .wait line skipped (oc wait not run with truncated argv)"
+else
+	test_fail ".wait bad quote" "oc wait ran on an unparseable line: $(grep wait "$_LAST_LOG" | tr '\n' '|')"
+fi
+
+# M4: an unreadable .wait must be non-fatal even under 'set -e' (day2.sh is bash -e):
+# the gate is skipped and later waves still apply (no whole-run abort).
+fxL="$_tmp/clusterL"
+_mk "$fxL/day2-custom-manifests/10-w/a.yaml"
+_mk "$fxL/day2-custom-manifests/20-w/b.yaml"
+printf -- '--for=condition=Ready pod/foo\n' > "$fxL/day2-custom-manifests/10-w/.wait"
+chmod 000 "$fxL/day2-custom-manifests/10-w/.wait"
+_LAST_LOG="$_tmp/order-e.log"; : > "$_LAST_LOG"; _erc=0
+( set -e; export OC_LOG="$_LAST_LOG"; cd "$fxL" && apply_custom_manifests ) >/dev/null 2>&1 || _erc=$?
+chmod 644 "$fxL/day2-custom-manifests/10-w/.wait" 2>/dev/null
+if [ "$_erc" -eq 0 ] && grep -q 'apply .*a.yaml' "$_LAST_LOG" && grep -q 'apply .*b.yaml' "$_LAST_LOG"; then
+	test_pass "unreadable .wait is non-fatal under set -e (later waves still apply)"
+else
+	test_fail "M4 unreadable .wait" "run aborted (rc=$_erc) or wave 20 skipped: $(tr '\n' '|' <"$_LAST_LOG")"
+fi
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo

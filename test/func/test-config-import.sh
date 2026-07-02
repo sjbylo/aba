@@ -206,6 +206,74 @@ grep -q 'aba config import' others/help-aba.txt \
 	&& test_pass "help-aba.txt documents 'aba config import'" \
 	|| test_fail "help text" "config import not documented in help-aba.txt"
 
+# --- Test group 6: robustness fixes (partial/malformed payloads) --------------
+echo "--- robustness: validation, error handling, scoped pins ---"
+_mkf() { mkdir -p "$(dirname "$1")"; printf '%s\n' "$2" > "$1"; }
+
+# M5: an invalid/reserved cluster-dir name aborts BEFORE anything is copied.
+_g="$_tmp/g6"; rm -rf "$_g"; _s5="$_g/site"; _d5="$_g/dest"; mkdir -p "$_d5"
+_mkf "$_s5/aba.conf" "ocp_version=NEW"; _mkf "$_s5/alpha/cluster.conf" "x"; _mkf "$_s5/zz.bad/cluster.conf" "x"
+_mkf "$_d5/aba.conf" "ocp_version=ORIG"
+( config_import_apply "$_s5" "$_d5" ) >/dev/null 2>&1
+if grep -q ORIG "$_d5/aba.conf" && [ ! -e "$_d5/aba.conf.backup" ] && [ ! -d "$_d5/alpha" ]; then
+	test_pass "invalid cluster name aborts before any copy (no half-import)"
+else
+	test_fail "M5 pre-validation" "tree mutated before abort"
+fi
+
+# M6: a failed copy aborts loudly instead of reporting success.
+_s6="$_g/site6"; _d6="$_g/dest6"; mkdir -p "$_d6"; _mkf "$_s6/aba.conf" "x"
+: > "$_d6/aba.conf.backup"; chmod 000 "$_d6" 2>/dev/null
+_o6="$( ( config_import_apply "$_s6" "$_d6" ) 2>&1 )"; _r6=$?
+chmod 755 "$_d6" 2>/dev/null
+if [ "$_r6" -ne 0 ] && printf '%s' "$_o6" | grep -qiE 'failed|cannot'; then
+	test_pass "a failed copy aborts (no false 'imported' success)"
+else
+	test_fail "M6 error handling" "silent success on copy failure (rc=$_r6)"
+fi
+
+# M10: a helm-only payload imports successfully (not a false 'no configs' abort).
+_s10="$_g/site10"; _d10="$_g/dest10"; mkdir -p "$_d10"; _mkf "$_s10/helm/values.yaml" "payload"
+_o10="$( ( config_import_apply "$_s10" "$_d10" ) 2>&1 )"; _r10=$?
+if [ "$_r10" -eq 0 ] && grep -q payload "$_d10/helm/values.yaml" && ! printf '%s' "$_o10" | grep -qi 'no recognized'; then
+	test_pass "helm-only payload imports without a false 'no configs' error"
+else
+	test_fail "M10 helm-only" "rc=$_r10 out=$_o10"
+fi
+
+# M2: a partial payload (only macs.conf) must not rewind or re-pin a user's own
+# pre-existing cluster.conf / mirror.conf / install-config.yaml.
+_d2="$_g/dest2"; mkdir -p "$_d2/mirror" "$_d2/sno"
+_mkf "$_d2/mirror/mirror.conf" "m"; _mkf "$_d2/sno/cluster.conf" "c"; _mkf "$_d2/sno/install-config.yaml" "generated"
+touch -d '2 hours ago' "$_d2/sno/install-config.yaml"
+_cc0=$(stat -c %Y "$_d2/sno/cluster.conf"); _mc0=$(stat -c %Y "$_d2/mirror/mirror.conf"); _ic0=$(stat -c %Y "$_d2/sno/install-config.yaml")
+_s2="$_g/site2"; _mkf "$_s2/sno/macs.conf" "aa:bb"
+( config_import_apply "$_s2" "$_d2" ) >/dev/null 2>&1
+if [ "$_cc0" = "$(stat -c %Y "$_d2/sno/cluster.conf")" ] && [ "$_mc0" = "$(stat -c %Y "$_d2/mirror/mirror.conf")" ] && [ "$_ic0" = "$(stat -c %Y "$_d2/sno/install-config.yaml")" ]; then
+	test_pass "partial payload leaves non-imported files' mtimes untouched"
+else
+	test_fail "M2 scoped pins" "non-imported file mtimes were mutated"
+fi
+
+# L6: 'site' and top-level repo entries are reserved cluster names.
+if ! _valid_cluster_name site >/dev/null 2>&1 && ! _valid_cluster_name aba >/dev/null 2>&1; then
+	test_pass "'site' and 'aba' are rejected as cluster names"
+else
+	test_fail "L6 reserved names" "'site'/'aba' accepted as a cluster name"
+fi
+
+# H1: the scaffold re-pins cluster.conf AFTER 'make init' (which creates a fresh
+# .init) and BEFORE the install/agent touches, so the next make does not re-template.
+_ci="$REPO_ROOT/scripts/config-import.sh"
+_l_init=$(grep -n 'make -s -C "\$_cname" init' "$_ci" | head -1 | cut -d: -f1)
+_l_cc=$(grep -n 'touch "\$_cname/cluster.conf"' "$_ci" | head -1 | cut -d: -f1)
+_l_ic=$(grep -n 'touch "\$_cname/install-config.yaml"' "$_ci" | head -1 | cut -d: -f1)
+if [ -n "$_l_init" ] && [ -n "$_l_cc" ] && [ -n "$_l_ic" ] && [ "$_l_init" -lt "$_l_cc" ] && [ "$_l_cc" -lt "$_l_ic" ]; then
+	test_pass "scaffold re-touches cluster.conf after 'make init', before install/agent (H1 guard)"
+else
+	test_fail "H1 scaffold re-pin" "cluster.conf not re-touched between make init and install touch (init=$_l_init cc=$_l_cc ic=$_l_ic)"
+fi
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo
