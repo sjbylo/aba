@@ -256,13 +256,24 @@ apply_custom_manifests() {
 
 			# Optional gate on a wave dir: one 'oc wait' condition per non-comment line
 			# in '.wait'. A failed/timed-out wait is non-fatal so day2 can continue.
-			if [ -d "$entry" ] && [ -f "$entry/.wait" ]; then
+			# Require -r too: day2 runs under 'set -e', so an unreadable '.wait' would
+			# make the loop's input redirect fail and abort the whole day2 run.
+			if [ -d "$entry" ] && [ -f "$entry/.wait" ] && [ ! -r "$entry/.wait" ]; then
+				aba_warning "Wave $entry_name: '.wait' exists but is not readable (skipping gate, continuing)"
+			elif [ -d "$entry" ] && [ -f "$entry/.wait" ]; then
 				while IFS= read -r _cond || [ -n "$_cond" ]; do
 					_cond="${_cond%$'\r'}"
 					_cond="${_cond#"${_cond%%[![:space:]]*}"}"   # trim leading whitespace
+					case "$_cond" in \#*) continue ;; esac         # skip full-line comments first
+					_cond="${_cond%% #*}"                          # strip an unquoted trailing ' # comment'
 					_cond="${_cond%"${_cond##*[![:space:]]}"}"   # trim trailing whitespace
 					[ -z "$_cond" ] && continue
-					case "$_cond" in \#*) continue ;; esac
+					# Reject a line xargs cannot parse (e.g. unbalanced quotes) instead of
+					# running 'oc wait' with a silently truncated argv.
+					if ! printf '%s\n' "$_cond" | xargs >/dev/null 2>&1; then
+						aba_warning "Wave $entry_name: cannot parse .wait line (unbalanced quotes?), skipping: $_cond"
+						continue
+					fi
 					aba_info "Wave $entry_name: waiting for 'oc wait $_cond' ..."
 					aba_debug "Running: oc wait $_cond"
 					# Parse the line with xargs so shell-style quoting in copy-pasted
