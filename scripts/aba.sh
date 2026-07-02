@@ -319,9 +319,9 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # When ocp_version is unknown, still download version-independent tools
 # (oc-mirror, butane, govc) via --no-version to save time.
 # Skip for housekeeping commands that never need CLI tools.
-if [ ! "$interactive_mode" ]; then
+if [ ! "$interactive_mode" ] && [ -z "$ABA_DEPLOY_DRY_RUN" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" config "*|*" --dry-run "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -342,6 +342,9 @@ fi
 
 cur_target=   # Can be 'cluster', 'mirror', 'save', 'load' etc 
 
+# Positional args for subcommands that parse their own (e.g. 'config import <dir>')
+subcmd_args=()
+
 # Write a cluster-conf variable. If cluster.conf exists, write directly.
 # If the target is 'cluster' (creating a new cluster), forward via BUILD_COMMAND.
 # Otherwise abort -- the flag has no valid target.
@@ -359,7 +362,23 @@ _set_cluster_conf() {
 while [ "$*" ] 
 do
 	aba_debug "Args: [$@]"
-	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]" 
+	aba_debug "BUILD_COMMAND=[$BUILD_COMMAND]"
+
+	# Pass-through subcommands: once 'config' or 'deploy' is the target, hand ALL
+	# remaining args (flags included) to that subcommand instead of parsing here.
+	if [ "$cur_target" = "config" ] || [ "$cur_target" = "deploy" ]; then
+		if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+			if [ "$cur_target" = "deploy" ] && [ -f "$ABA_ROOT/others/help-deploy.txt" ]; then
+				cat "$ABA_ROOT/others/help-deploy.txt"
+			else
+				cat "$ABA_ROOT/others/help-aba.txt"
+			fi
+			exit 0
+		fi
+		subcmd_args+=("$1")
+		shift
+		continue
+	fi
 
 	if [ "$1" = "--help" -o "$1" = "-h" ]; then
 		# Peek at next arg if no target yet (allows "aba --help cluster")
@@ -397,6 +416,9 @@ do
 elif [ "$1" = "--light" ]; then
 	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
 	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
+	shift
+elif [ "$1" = "--complete" ]; then
+	export opt_complete="--complete"  # if "aba bundle", embed the site/ config payload in the bundle
 	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
@@ -1017,14 +1039,19 @@ elif [ "$1" = "--light" ]; then
 		if echo "$1" | grep -q "^-"; then
 			aba_abort "$(basename $0): Error: no such option $1" 
 		elif [ "$cur_target" ]; then
-			# cur_target already set — additional positionals are make arguments
-			BUILD_COMMAND="$BUILD_COMMAND $1"
-			aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
+			# cur_target already set: extra positionals are make args, except for
+			# subcommands that consume their own positional args (config, deploy).
+			if [ "$cur_target" = "config" ] || [ "$cur_target" = "deploy" ]; then
+				subcmd_args+=("$1")
+			else
+				BUILD_COMMAND="$BUILD_COMMAND $1"
+				aba_debug Command added: BUILD_COMMAND=$BUILD_COMMAND
+			fi
 		else
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|config|deploy|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1123,9 +1150,25 @@ if [ "$cur_target" ]; then
 		;;
 		bundle)
 			trap - ERR  # No need for this anymore
-			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light
-			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light
-			exit 
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_complete
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_complete
+			exit
+		;;
+		config)
+			trap - ERR  # No need for this anymore
+			aba_debug "Running: $ABA_ROOT/scripts/config-import.sh ${subcmd_args[*]}"
+			$ABA_ROOT/scripts/config-import.sh "${subcmd_args[@]}"
+			exit
+		;;
+		deploy)
+			trap - ERR  # No need for this anymore
+			# A --dry-run placed BEFORE 'deploy' is consumed by the global flag parser
+			# (as upgrade_dry_run), not by the pass-through interception. Forward it so
+			# 'aba --dry-run deploy' previews instead of running a real, side-effecting deploy.
+			[ -n "$upgrade_dry_run" ] && subcmd_args+=(--dry-run)
+			aba_debug "Running: $ABA_ROOT/scripts/deploy.sh ${subcmd_args[*]}"
+			$ABA_ROOT/scripts/deploy.sh "${subcmd_args[@]}"
+			exit
 		;;
 		info)
 			$ABA_ROOT/scripts/cluster-info.sh

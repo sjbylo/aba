@@ -75,13 +75,13 @@ bm:
 .PHONY: tar
 tar:  ## Archive the full repo, e.g. aba tar --out /dev/path/to/thumbdrive. Default output is /tmp/aba-backup.tar. Use --out - to send tar output to stdout. Used by aba bundle.
 	@$(SCRIPTS)/cli-download-all.sh --wait >&2
-	$(SCRIPTS)/backup.sh $(out)
+	$(SCRIPTS)/backup.sh $(complete) $(out)
 
 # Note, the '@' is required for valid tar format output!
 .PHONY: tarrepo
 tarrepo:  ## Archive the repo *excluding* the aba/mirror/mirror_*.tar files. Works in the same way as 'aba tar'.
 	@$(SCRIPTS)/cli-download-all.sh --wait >&2
-	@$(SCRIPTS)/backup.sh --repo $(out)
+	@$(SCRIPTS)/backup.sh --repo $(complete) $(out)
 
 .PHONY: download
 download:  ## Download all required CLI install files without installing. 

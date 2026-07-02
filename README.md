@@ -870,6 +870,32 @@ Configures OpenShift to use your *internal mirror registry* as the source for Op
 
 > **First time?** If you haven't mirrored any operators yet, see [Adding Operators to the Mirror Registry](#adding-operators-to-the-mirror-registry) first.
 
+## One-command air-gapped deploy
+
+`aba deploy` runs the whole disconnected install as one ordered, resumable pipeline:
+
+```
+config import -> mirror install -> mirror load -> iso -> (boot nodes) -> monitor -> day2
+```
+
+Each step is wrapped so re-running `aba deploy` skips already-completed steps and resumes where it stopped; a failed step halts the pipeline so you can fix it and re-run. On bare metal (where aba cannot boot the nodes) deploy pauses after building the ISO - boot the node(s) from the ISO, then re-run `aba deploy` to resume at install monitoring. Hypervisors (vmw/kvm) boot their VMs automatically.
+
+```bash
+# Preview the plan without running anything:
+aba deploy --dry-run
+
+# Run it (auto-detects the single cluster; imports configs from ./site):
+aba deploy
+
+# Or point at a specific config payload and cluster:
+aba deploy --site /path/to/site --cluster mycluster
+
+# Force a fresh re-deploy (clears cached step state, e.g. after tearing a cluster down):
+aba deploy --restart
+```
+
+Deploy imports its configs with `aba config import` (source-agnostic - the configs may come from `aba bundle --complete`, a human, or CI) and applies day2 including any [waved custom manifests](#ordered-waves-with-readiness-gates). Optional settings live in a `deploy.conf` (see `templates/deploy.conf`).
+
 ## Custom Manifests for Day-2
 
 You can automatically apply your own Kubernetes manifests during `aba day2` by placing them in the `day2-custom-manifests/` directory within your cluster folder.
@@ -924,15 +950,63 @@ spec:
 EOF
 ```
 
+### Ordered waves with readiness gates
+
+When `day2-custom-manifests/` contains numbered subdirectories (names starting with a digit, e.g. `10-first/`, `20-second/`), each is treated as a **wave** and applied in **numeric** order, so `2-...` runs before `10-...` (not alphabetically). Any flat files placed directly in `day2-custom-manifests/` are applied at their own sorted position among the waves: a numbered flat file like `05-pre.yaml` runs before `10-first/`, while a non-numbered (letter-named) flat file like `namespace.yaml` sorts after all numbered entries, so it runs after the waves. Prefix a flat file with a number if you need it to run before a given wave.
+
+Drop an optional `.wait` file into a wave directory to pause until a condition is met before the next wave starts. Each non-comment line is passed straight to `oc wait`:
+
+```bash
+mkdir -p day2-custom-manifests/10-first day2-custom-manifests/20-second
+
+# Wave 10 installs a CRD ...
+cat > day2-custom-manifests/10-first/widget-crd.yaml <<EOF
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.example.com
+spec:
+  group: example.com
+  scope: Namespaced
+  names:
+    plural: widgets
+    singular: widget
+    kind: Widget
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+EOF
+
+# ... and we wait for it to be Established before wave 20 creates one
+cat > day2-custom-manifests/10-first/.wait <<EOF
+--for=condition=Established crd/widgets.example.com --timeout=120s
+EOF
+
+cat > day2-custom-manifests/20-second/widget.yaml <<EOF
+apiVersion: example.com/v1
+kind: Widget
+metadata:
+  name: my-widget
+  namespace: default
+EOF
+```
+
+A wait that times out is non-fatal: day2 logs a warning and continues with the next wave.
+
 Run `aba day2` as normal — manifests are applied after oc-mirror resources (IDMS, ITMS, CatalogSources, signatures).
 
 #### Notes
 
 - The `day2-custom-manifests/` directory is optional
-- Files are discovered recursively and applied in alphabetical order by full path
-- Use directory naming prefixes (e.g. `00-namespaces/`, `01-app/`) to control order
+- Without numbered subdirectories, files are discovered recursively and applied in alphabetical order by full path
+- With numbered subdirectories (e.g. `10-first/`, `20-second/`), each is a **wave** applied in numeric order; flat top-level files are applied at their own sorted position among the waves (number-prefix a flat file to run it before a given wave; non-numbered names sort after all waves)
+- An optional `.wait` file in a wave directory runs `oc wait` (one condition per line) before the next wave starts; full-line and trailing `# comments` are ignored, and a line that cannot be parsed (unbalanced quotes) is skipped with a warning
 - Empty files are skipped with a warning
-- If a manifest fails to apply, day2 continues with the remaining files
+- If a manifest fails to apply, or an `oc wait` times out, day2 logs a warning and continues
 - Manifests are applied **after** the mirror registry is configured, so they can reference mirrored images
 
 ## Synchronize NTP Across Cluster Nodes

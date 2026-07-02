@@ -1,0 +1,281 @@
+#!/bin/bash
+# Unit tests for config-import: copy site/ configs VERBATIM into an aba tree and
+# pin regeneration guards so aba never re-templates over the imported files.
+#
+# Guards under test (verified against the real code):
+#   - imageset-config.yaml must be STRICTLY newer than mirror/data/.created
+#     (reg-create-imageset-config.sh skips regen when ISC -nt .created).
+#   - install-config.yaml / agent-config.yaml must be STRICTLY newer than their
+#     Make prerequisites cluster.conf and mirror.conf (Makefile.cluster) so make
+#     treats them as up-to-date and does not regenerate them.
+# Pure filesystem: no oc, no make, no network.
+
+cd "$(dirname "$0")/../.."
+REPO_ROOT="$PWD"
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+pass=0
+fail=0
+FAILURES=""
+
+test_pass() { echo -e "${GREEN}✓ PASS${NC}: $1"; pass=$(( pass + 1 )); }
+test_fail() { echo -e "${RED}✗ FAIL${NC}: $1 -- $2"; fail=$(( fail + 1 )); FAILURES=1; }
+
+_tmp=$(mktemp -d)
+trap 'rm -rf "$_tmp"' EXIT
+
+source scripts/include_all.sh dummy_arg 2>/dev/null
+
+# Load the function under test (config-import.sh guards main behind a source
+# check, but extracting the function keeps the test focused and fast).
+if [ ! -f scripts/config-import.sh ]; then
+	echo "FATAL: scripts/config-import.sh does not exist yet (red)" >&2
+	echo "=== Results: 0 passed, 1 failed ==="
+	exit 1
+fi
+eval "$(sed -n '/^config_import_apply() {/,/^}/p' scripts/config-import.sh)"
+if ! type config_import_apply >/dev/null 2>&1; then
+	echo "FATAL: could not extract config_import_apply() from scripts/config-import.sh" >&2
+	exit 1
+fi
+
+echo
+echo "=== Testing: config_import_apply() ==="
+echo
+
+# --- build a representative site/ fixture -------------------------------------
+_site="$_tmp/site"
+mkdir -p "$_site/mirror" "$_site/mycluster/day2-custom-manifests/10-first"
+printf 'ocp_version=4.19.2\nocp_channel=stable\n'          > "$_site/aba.conf"
+printf 'reg_host=registry.example.com\nreg_port=8443\n'    > "$_site/mirror/mirror.conf"
+printf 'kind: ImageSetConfiguration\napiVersion: v1\n'     > "$_site/mirror/imageset-config.yaml"
+printf 'name=mycluster\ntype=sno\n'                        > "$_site/mycluster/cluster.conf"
+printf 'apiVersion: v1\nkind: InstallConfig\n'             > "$_site/mycluster/install-config.yaml"
+printf 'apiVersion: v1alpha1\nkind: AgentConfig\n'         > "$_site/mycluster/agent-config.yaml"
+printf '52:54:00:aa:bb:cc\n'                               > "$_site/mycluster/macs.conf"
+printf 'apiVersion: v1\nkind: ConfigMap\n'                 > "$_site/mycluster/day2-custom-manifests/10-first/app.yaml"
+
+_dest="$_tmp/aba"
+mkdir -p "$_dest"
+( config_import_apply "$_site" "$_dest" ) >/dev/null 2>&1
+_import_rc=$?
+
+# --- Test group 1: files copied byte-for-byte ---------------------------------
+echo "--- verbatim copy (cmp) ---"
+_cmp() {			# name  src  dest
+	if cmp -s "$2" "$3"; then test_pass "$1"; else test_fail "$1" "content differs (src=$2 dest=$3)"; fi
+}
+_cmp "aba.conf copied verbatim"            "$_site/aba.conf"                       "$_dest/aba.conf"
+_cmp "mirror.conf copied verbatim"         "$_site/mirror/mirror.conf"             "$_dest/mirror/mirror.conf"
+_cmp "imageset-config.yaml copied verbatim" "$_site/mirror/imageset-config.yaml"   "$_dest/mirror/data/imageset-config.yaml"
+_cmp "cluster.conf copied verbatim"        "$_site/mycluster/cluster.conf"         "$_dest/mycluster/cluster.conf"
+_cmp "install-config.yaml copied verbatim" "$_site/mycluster/install-config.yaml"  "$_dest/mycluster/install-config.yaml"
+_cmp "agent-config.yaml copied verbatim"   "$_site/mycluster/agent-config.yaml"    "$_dest/mycluster/agent-config.yaml"
+_cmp "macs.conf copied verbatim"           "$_site/mycluster/macs.conf"            "$_dest/mycluster/macs.conf"
+_cmp "day2 wave manifest copied verbatim"  "$_site/mycluster/day2-custom-manifests/10-first/app.yaml" "$_dest/mycluster/day2-custom-manifests/10-first/app.yaml"
+
+# --- Test group 2: regeneration guards (mtime ordering) -----------------------
+echo "--- regeneration guards (strict mtime) ---"
+if [ "$_dest/mirror/data/imageset-config.yaml" -nt "$_dest/mirror/data/.created" ]; then
+	test_pass "imageset-config.yaml is strictly newer than mirror/data/.created (ISC pinned)"
+else
+	test_fail "ISC pin" "imageset-config.yaml is not newer than .created"
+fi
+if [ "$_dest/mycluster/install-config.yaml" -nt "$_dest/mycluster/cluster.conf" ]; then
+	test_pass "install-config.yaml newer than cluster.conf (no make regen)"
+else
+	test_fail "install-config vs cluster.conf" "not newer"
+fi
+if [ "$_dest/mycluster/install-config.yaml" -nt "$_dest/mirror/mirror.conf" ]; then
+	test_pass "install-config.yaml newer than mirror.conf (no make regen)"
+else
+	test_fail "install-config vs mirror.conf" "not newer"
+fi
+if [ "$_dest/mycluster/agent-config.yaml" -nt "$_dest/mycluster/cluster.conf" ]; then
+	test_pass "agent-config.yaml newer than cluster.conf (no make regen)"
+else
+	test_fail "agent-config vs cluster.conf" "not newer"
+fi
+if [ "$_dest/mycluster/agent-config.yaml" -nt "$_dest/mirror/mirror.conf" ]; then
+	test_pass "agent-config.yaml newer than mirror.conf (no make regen)"
+else
+	test_fail "agent-config vs mirror.conf" "not newer"
+fi
+
+# --- Test group 3: overall success + existing-file backup ---------------------
+echo "--- success + backup ---"
+[ "$_import_rc" -eq 0 ] && test_pass "config_import_apply returns 0 on a valid site" \
+	|| test_fail "import rc" "expected 0 got $_import_rc"
+
+# Re-import over an existing tree: previous install-config should be backed up.
+printf 'apiVersion: v1\nkind: InstallConfig\nCHANGED: yes\n' > "$_site/mycluster/install-config.yaml"
+( config_import_apply "$_site" "$_dest" ) >/dev/null 2>&1
+if [ -f "$_dest/mycluster/install-config.yaml.backup" ]; then
+	test_pass "existing install-config.yaml backed up to .backup on re-import"
+else
+	test_fail "backup on re-import" "no .backup file created"
+fi
+_cmp "re-import overwrites with new content" "$_site/mycluster/install-config.yaml" "$_dest/mycluster/install-config.yaml"
+
+# --- Test group 4: error handling ---------------------------------------------
+echo "--- error handling ---"
+( config_import_apply "$_tmp/does-not-exist" "$_dest" ) >/dev/null 2>&1
+[ $? -ne 0 ] && test_pass "missing source directory aborts (non-zero)" \
+	|| test_fail "missing source" "expected non-zero exit"
+
+_empty="$_tmp/empty-site"
+mkdir -p "$_empty"
+( config_import_apply "$_empty" "$_dest" ) >/dev/null 2>&1
+[ $? -ne 0 ] && test_pass "source with no recognized configs aborts (non-zero)" \
+	|| test_fail "empty source" "expected non-zero exit"
+
+# --- Test group 6: directory payloads are backed up on re-import (no data loss)
+echo "--- directory payload backup ---"
+# Fresh dest with a pre-existing day2 dir; import twice - .backup must keep the ORIGINAL.
+_dd="$_tmp/dirbak"; mkdir -p "$_dd/mycluster/day2-custom-manifests/10-first"
+printf 'PRECIOUS\n' > "$_dd/mycluster/day2-custom-manifests/10-first/precious.yaml"
+( config_import_apply "$_site" "$_dd" ) >/dev/null 2>&1
+( config_import_apply "$_site" "$_dd" ) >/dev/null 2>&1
+if grep -q PRECIOUS "$_dd/mycluster/day2-custom-manifests.backup/10-first/precious.yaml" 2>/dev/null; then
+	test_pass "existing day2-custom-manifests backed up once to .backup (original preserved across re-imports)"
+else
+	test_fail "day2 dir backup" "original precious.yaml not preserved in .backup"
+fi
+
+# --- Test group 7: pin never creates empty trigger files or touches other clusters
+echo "--- pin no-create + scoping ---"
+_dest2="$_tmp/aba2"
+_site2="$_tmp/site2"
+mkdir -p "$_dest2" "$_site2/c1"
+printf 'name=c1\n'                              > "$_site2/c1/cluster.conf"
+printf 'apiVersion: v1\nkind: InstallConfig\n'  > "$_site2/c1/install-config.yaml"
+( config_import_apply "$_site2" "$_dest2" ) >/dev/null 2>&1
+if [ ! -e "$_dest2/mirror/mirror.conf" ]; then
+	test_pass "pin does not inject an empty mirror/mirror.conf when the payload has none"
+else
+	test_fail "no-create mirror.conf" "empty mirror.conf injected"
+fi
+# a pre-existing UNRELATED cluster must not be re-stamped when importing c1
+mkdir -p "$_dest2/prod"
+printf 'name=prod\n'  > "$_dest2/prod/cluster.conf"
+printf 'IC\n'        > "$_dest2/prod/install-config.yaml"
+touch -d '2 minutes ago' "$_dest2/prod/install-config.yaml"
+_bm=$(stat -c %Y "$_dest2/prod/install-config.yaml")
+( config_import_apply "$_site2" "$_dest2" ) >/dev/null 2>&1
+_am=$(stat -c %Y "$_dest2/prod/install-config.yaml")
+[ "$_bm" = "$_am" ] && test_pass "importing c1 does not re-stamp the unrelated cluster prod/" \
+	|| test_fail "pin scoping" "prod/install-config.yaml mtime changed ($_bm -> $_am)"
+
+# --- Test group 8: .backup keeps the ORIGINAL across repeated imports ---------
+echo "--- backup rotation ---"
+_rot="$_tmp/rot"; mkdir -p "$_rot/mycluster"
+printf 'ORIGINAL\n' > "$_rot/mycluster/install-config.yaml"
+( config_import_apply "$_site" "$_rot" ) >/dev/null 2>&1
+( config_import_apply "$_site" "$_rot" ) >/dev/null 2>&1
+grep -q ORIGINAL "$_rot/mycluster/install-config.yaml.backup" 2>/dev/null \
+	&& test_pass "re-import preserves the pre-aba original in .backup (no rotation clobber)" \
+	|| test_fail "backup rotation" "original lost from .backup after two imports"
+
+# --- Test group 9: config import scaffolds the cluster dir (Makefile + init) ---
+echo "--- cluster scaffold wiring ---"
+grep -q 'Makefile.cluster' "$REPO_ROOT/scripts/config-import.sh" \
+	&& test_pass "config import creates the cluster Makefile symlink (make can run)" \
+	|| test_fail "scaffold Makefile" "no Makefile.cluster symlink in config-import.sh"
+grep -qE 'make -s?C? *-?[sC]* *-C "\$_cname" init|make -s -C "\$_cname" init' "$REPO_ROOT/scripts/config-import.sh" \
+	&& test_pass "config import runs 'make init' to create scripts/mirror/aba.conf symlinks" \
+	|| test_fail "scaffold init" "config-import.sh does not run 'make init' on cluster dirs"
+
+# --- Test group 5: CLI dispatch wiring (aba config import <dir>) --------------
+echo "--- dispatch wiring ---"
+grep -q '|config|' scripts/aba.sh \
+	&& test_pass "'config' is in the aba direct-dispatch allow-list" \
+	|| test_fail "allow-list" "config missing from aba.sh direct-dispatch list"
+grep -qE '^[[:space:]]*config\)' scripts/aba.sh \
+	&& test_pass "aba.sh has a 'config)' dispatch arm" \
+	|| test_fail "dispatch arm" "no config) arm in aba.sh"
+grep -q 'scripts/config-import.sh' scripts/aba.sh \
+	&& test_pass "config) arm invokes config-import.sh" \
+	|| test_fail "arm target" "config) does not call config-import.sh"
+grep -q 'subcmd_args' scripts/aba.sh \
+	&& test_pass "config positional args routed via subcmd_args (not BUILD_COMMAND)" \
+	|| test_fail "arg routing" "subcmd_args not wired in aba.sh"
+grep -q 'aba config import' others/help-aba.txt \
+	&& test_pass "help-aba.txt documents 'aba config import'" \
+	|| test_fail "help text" "config import not documented in help-aba.txt"
+
+# --- Test group 6: robustness fixes (partial/malformed payloads) --------------
+echo "--- robustness: validation, error handling, scoped pins ---"
+_mkf() { mkdir -p "$(dirname "$1")"; printf '%s\n' "$2" > "$1"; }
+
+# M5: an invalid/reserved cluster-dir name aborts BEFORE anything is copied.
+_g="$_tmp/g6"; rm -rf "$_g"; _s5="$_g/site"; _d5="$_g/dest"; mkdir -p "$_d5"
+_mkf "$_s5/aba.conf" "ocp_version=NEW"; _mkf "$_s5/alpha/cluster.conf" "x"; _mkf "$_s5/zz.bad/cluster.conf" "x"
+_mkf "$_d5/aba.conf" "ocp_version=ORIG"
+( config_import_apply "$_s5" "$_d5" ) >/dev/null 2>&1
+if grep -q ORIG "$_d5/aba.conf" && [ ! -e "$_d5/aba.conf.backup" ] && [ ! -d "$_d5/alpha" ]; then
+	test_pass "invalid cluster name aborts before any copy (no half-import)"
+else
+	test_fail "M5 pre-validation" "tree mutated before abort"
+fi
+
+# M6: a failed copy aborts loudly instead of reporting success.
+_s6="$_g/site6"; _d6="$_g/dest6"; mkdir -p "$_d6"; _mkf "$_s6/aba.conf" "x"
+: > "$_d6/aba.conf.backup"; chmod 000 "$_d6" 2>/dev/null
+_o6="$( ( config_import_apply "$_s6" "$_d6" ) 2>&1 )"; _r6=$?
+chmod 755 "$_d6" 2>/dev/null
+if [ "$_r6" -ne 0 ] && printf '%s' "$_o6" | grep -qiE 'failed|cannot'; then
+	test_pass "a failed copy aborts (no false 'imported' success)"
+else
+	test_fail "M6 error handling" "silent success on copy failure (rc=$_r6)"
+fi
+
+# M10: a helm-only payload imports successfully (not a false 'no configs' abort).
+_s10="$_g/site10"; _d10="$_g/dest10"; mkdir -p "$_d10"; _mkf "$_s10/helm/values.yaml" "payload"
+_o10="$( ( config_import_apply "$_s10" "$_d10" ) 2>&1 )"; _r10=$?
+if [ "$_r10" -eq 0 ] && grep -q payload "$_d10/helm/values.yaml" && ! printf '%s' "$_o10" | grep -qi 'no recognized'; then
+	test_pass "helm-only payload imports without a false 'no configs' error"
+else
+	test_fail "M10 helm-only" "rc=$_r10 out=$_o10"
+fi
+
+# M2: a partial payload (only macs.conf) must not rewind or re-pin a user's own
+# pre-existing cluster.conf / mirror.conf / install-config.yaml.
+_d2="$_g/dest2"; mkdir -p "$_d2/mirror" "$_d2/sno"
+_mkf "$_d2/mirror/mirror.conf" "m"; _mkf "$_d2/sno/cluster.conf" "c"; _mkf "$_d2/sno/install-config.yaml" "generated"
+touch -d '2 hours ago' "$_d2/sno/install-config.yaml"
+_cc0=$(stat -c %Y "$_d2/sno/cluster.conf"); _mc0=$(stat -c %Y "$_d2/mirror/mirror.conf"); _ic0=$(stat -c %Y "$_d2/sno/install-config.yaml")
+_s2="$_g/site2"; _mkf "$_s2/sno/macs.conf" "aa:bb"
+( config_import_apply "$_s2" "$_d2" ) >/dev/null 2>&1
+if [ "$_cc0" = "$(stat -c %Y "$_d2/sno/cluster.conf")" ] && [ "$_mc0" = "$(stat -c %Y "$_d2/mirror/mirror.conf")" ] && [ "$_ic0" = "$(stat -c %Y "$_d2/sno/install-config.yaml")" ]; then
+	test_pass "partial payload leaves non-imported files' mtimes untouched"
+else
+	test_fail "M2 scoped pins" "non-imported file mtimes were mutated"
+fi
+
+# L6: 'site' and top-level repo entries are reserved cluster names.
+if ! _valid_cluster_name site >/dev/null 2>&1 && ! _valid_cluster_name aba >/dev/null 2>&1; then
+	test_pass "'site' and 'aba' are rejected as cluster names"
+else
+	test_fail "L6 reserved names" "'site'/'aba' accepted as a cluster name"
+fi
+
+# H1: the scaffold re-pins cluster.conf AFTER 'make init' (which creates a fresh
+# .init) and BEFORE the install/agent touches, so the next make does not re-template.
+_ci="$REPO_ROOT/scripts/config-import.sh"
+_l_init=$(grep -n 'make -s -C "\$_cname" init' "$_ci" | head -1 | cut -d: -f1)
+_l_cc=$(grep -n 'touch "\$_cname/cluster.conf"' "$_ci" | head -1 | cut -d: -f1)
+_l_ic=$(grep -n 'touch "\$_cname/install-config.yaml"' "$_ci" | head -1 | cut -d: -f1)
+if [ -n "$_l_init" ] && [ -n "$_l_cc" ] && [ -n "$_l_ic" ] && [ "$_l_init" -lt "$_l_cc" ] && [ "$_l_cc" -lt "$_l_ic" ]; then
+	test_pass "scaffold re-touches cluster.conf after 'make init', before install/agent (H1 guard)"
+else
+	test_fail "H1 scaffold re-pin" "cluster.conf not re-touched between make init and install touch (init=$_l_init cc=$_l_cc ic=$_l_ic)"
+fi
+
+echo
+echo "=== Results: $pass passed, $fail failed ==="
+echo
+
+[ -z "$FAILURES" ] && exit 0 || exit 1

@@ -12,6 +12,9 @@ Usage:
     -f, --force                               # Remove any existing files under mirror/data.
         --light                               # Create *light* bundle, excluding all aba/mirror/data/mirror_*.tar file(s).
                                               # Manual merging of image-set archive file(s) (ISA) required!
+        --complete                            # Embed a site/ config payload (configs, helm charts, day2 manifests)
+                                              # into the bundle so one archive crosses the air gap. Re-apply on the
+                                              # disconnected side with 'aba config import site'.
 
   The 'bundle' command creates an 'install bundle' which is used to install OpenShift in a fully disconnected
   (air-gapped) environment. The 'bundle' command also writes the provided args (channel, version, operators ...)

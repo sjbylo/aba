@@ -178,51 +178,113 @@ apply_custom_manifests() {
 		return 0
 	fi
 
-	# Recursively discover .yaml/.yml files; sort ensures deterministic alphabetical
-	# order so users can control ordering via directory/file naming (e.g. 00-ns/, 01-app/)
-	local found_files
-	found_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
-
-	# Count matched files; grep -c exits 1 on zero matches, so suppress that with || true
-	local file_count
-	file_count="$(printf '%s\n' "$found_files" | grep -c . || true)"
-
-	# If no files found, inform user and return
-	if [ "$file_count" -eq 0 ]; then
-		aba_debug "No custom manifest files (.yaml/.yml) found in $custom_manifest_dir"
-		return 0
-	fi
-
-	# Show what we're doing
-	aba_info "Found $file_count custom manifest file(s) in $custom_manifest_dir"
-	aba_info "Applying user-provided custom manifests ..."
-
-	# Track successes and failures
+	# Track successes and failures across every apply (flat and waved).
 	local success_count=0
 	local failure_count=0
 
-	# Apply each file; while+read handles filenames that contain spaces
-	while IFS= read -r manifest_file; do
-		# Show path relative to the custom manifests directory for cleaner output
-		local rel_path="${manifest_file#"$custom_manifest_dir"/}"  # strip base dir → relative path
+	# Apply a newline-separated, pre-sorted list of manifest files. while+read
+	# handles filenames containing spaces. Failures are non-fatal (logged, counted).
+	_apply_manifest_list() {
+		local _files="$1" manifest_file rel_path
+		[ -z "$_files" ] && return 0
+		while IFS= read -r manifest_file; do
+			[ -z "$manifest_file" ] && continue
+			# Show path relative to the custom manifests dir for cleaner output
+			rel_path="${manifest_file#"$custom_manifest_dir"/}"
 
-		# Verify file is not empty
-		if [ ! -s "$manifest_file" ]; then
-			aba_warning "Skipping empty file: $rel_path"
-			failure_count=$((failure_count + 1))
-			continue
-		fi
+			# Verify file is not empty
+			if [ ! -s "$manifest_file" ]; then
+				aba_warning "Skipping empty file: $rel_path"
+				failure_count=$((failure_count + 1))
+				continue
+			fi
 
-		# Apply the manifest
-		aba_info "oc apply -f $rel_path"
-		aba_debug "Running: oc apply -f $manifest_file"
-		if oc apply -f "$manifest_file"; then
-			success_count=$((success_count + 1))
-		else
-			aba_warning "Failed to apply custom manifest: $rel_path (continuing with other files)"
-			failure_count=$((failure_count + 1))
+			# Apply the manifest
+			aba_info "oc apply -f $rel_path"
+			aba_debug "Running: oc apply -f $manifest_file"
+			if oc apply -f "$manifest_file"; then
+				success_count=$((success_count + 1))
+			else
+				aba_warning "Failed to apply custom manifest: $rel_path (continuing with other files)"
+				failure_count=$((failure_count + 1))
+			fi
+		done <<< "$_files"
+	}
+
+	# Discover numbered "wave" subdirs (names starting with a digit), sorted
+	# NUMERICALLY (sort -V, so 2-foo comes before 10-foo, not lexicographically).
+	local wave_dirs
+	wave_dirs="$(find "$custom_manifest_dir" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' | sort -V)"
+
+	if [ -z "$wave_dirs" ]; then
+		# FLAT / legacy layout: no numbered wave dirs. Apply every .yaml/.yml
+		# recursively in sorted order so users can order via file naming (00-, 01-).
+		local found_files file_count
+		found_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
+		file_count="$(printf '%s\n' "$found_files" | grep -c . || true)"
+		if [ "$file_count" -eq 0 ]; then
+			aba_debug "No custom manifest files (.yaml/.yml) found in $custom_manifest_dir"
+			return 0
 		fi
-	done <<< "$found_files"
+		aba_info "Found $file_count custom manifest file(s) in $custom_manifest_dir"
+		aba_info "Applying user-provided custom manifests ..."
+		_apply_manifest_list "$found_files"
+	else
+		# WAVED layout: numbered wave dirs are present. Apply every top-level entry
+		# (files and dirs) in NUMERIC order (sort -V, so 2- before 10-), which keeps
+		# the legacy relative ordering of non-wave files (e.g. 99-post applies after a
+		# 10-operators wave). A numbered dir is a "wave": after applying it, an optional
+		# per-wave '.wait' file gates the next entry via 'oc wait'. Non-numbered files
+		# and dirs apply at their sorted position, so nothing is dropped.
+		aba_info "Applying user-provided custom manifests in waves ..."
+
+		local entry entry_name entry_files _cond
+		while IFS= read -r entry; do
+			[ -z "$entry" ] && continue
+			entry_name="$(basename "$entry")"
+			if [ -d "$entry" ]; then
+				entry_files="$(find "$entry" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
+			elif [ -f "$entry" ]; then
+				case "$entry" in *.yaml|*.yml) entry_files="$entry" ;; *) continue ;; esac
+			else
+				continue
+			fi
+			if [ -n "$entry_files" ]; then
+				aba_info "Applying: $entry_name"
+				_apply_manifest_list "$entry_files"
+			fi
+
+			# Optional gate on a wave dir: one 'oc wait' condition per non-comment line
+			# in '.wait'. A failed/timed-out wait is non-fatal so day2 can continue.
+			# Require -r too: day2 runs under 'set -e', so an unreadable '.wait' would
+			# make the loop's input redirect fail and abort the whole day2 run.
+			if [ -d "$entry" ] && [ -f "$entry/.wait" ] && [ ! -r "$entry/.wait" ]; then
+				aba_warning "Wave $entry_name: '.wait' exists but is not readable (skipping gate, continuing)"
+			elif [ -d "$entry" ] && [ -f "$entry/.wait" ]; then
+				while IFS= read -r _cond || [ -n "$_cond" ]; do
+					_cond="${_cond%$'\r'}"
+					_cond="${_cond#"${_cond%%[![:space:]]*}"}"   # trim leading whitespace
+					case "$_cond" in \#*) continue ;; esac         # skip full-line comments first
+					_cond="${_cond%% #*}"                          # strip an unquoted trailing ' # comment'
+					_cond="${_cond%"${_cond##*[![:space:]]}"}"   # trim trailing whitespace
+					[ -z "$_cond" ] && continue
+					# Reject a line xargs cannot parse (e.g. unbalanced quotes) instead of
+					# running 'oc wait' with a silently truncated argv.
+					if ! printf '%s\n' "$_cond" | xargs >/dev/null 2>&1; then
+						aba_warning "Wave $entry_name: cannot parse .wait line (unbalanced quotes?), skipping: $_cond"
+						continue
+					fi
+					aba_info "Wave $entry_name: waiting for 'oc wait $_cond' ..."
+					aba_debug "Running: oc wait $_cond"
+					# Parse the line with xargs so shell-style quoting in copy-pasted
+					# 'oc wait --for=jsonpath='\''{...}'\'' ...' examples is honored.
+					if ! printf '%s\n' "$_cond" | xargs -r oc wait; then
+						aba_warning "Wave $entry_name: 'oc wait $_cond' failed or timed out (continuing)"
+					fi
+				done < "$entry/.wait"
+			fi
+		done <<< "$(find "$custom_manifest_dir" -mindepth 1 -maxdepth 1 | sort -V)"
+	fi
 
 	# Show summary
 	if [ $success_count -gt 0 ]; then

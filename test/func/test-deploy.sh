@@ -1,0 +1,277 @@
+#!/bin/bash
+# Unit tests for the 'aba deploy' orchestrator (scripts/deploy.sh).
+#
+# deploy_run() runs the air-gapped install as an ordered, idempotent, resumable
+# pipeline: config import -> mirror install -> mirror load -> iso -> (boot) ->
+# monitor -> day2. Steps are wrapped in run_once -S so a re-run skips completed
+# steps (resume). ABA_DEPLOY_DRY_RUN=1 prints the plan and executes nothing.
+#
+# No real cluster/registry: 'make' is stubbed via a PATH shim and the aba
+# sub-scripts are stubbed under a temp ABA_ROOT; run_once state is isolated via
+# RUN_ONCE_DIR.
+
+cd "$(dirname "$0")/../.."
+REPO_ROOT="$PWD"
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+pass=0
+fail=0
+FAILURES=""
+
+test_pass() { echo -e "${GREEN}✓ PASS${NC}: $1"; pass=$(( pass + 1 )); }
+test_fail() { echo -e "${RED}✗ FAIL${NC}: $1 -- $2"; fail=$(( fail + 1 )); FAILURES=1; }
+
+_tmp=$(mktemp -d)
+trap 'rm -rf "$_tmp"' EXIT
+
+source scripts/include_all.sh dummy_arg 2>/dev/null
+export INFO_ABA=1   # deploy_run uses aba_info (gated on INFO_ABA); enable it for plan capture
+
+if [ ! -f scripts/deploy.sh ]; then
+	echo "FATAL: scripts/deploy.sh does not exist yet (red)" >&2
+	echo "=== Results: 0 passed, 1 failed ==="
+	exit 1
+fi
+eval "$(sed -n '/^deploy_run() {/,/^}/p' scripts/deploy.sh)"
+eval "$(sed -n '/^_detect_cluster() {/,/^}/p' scripts/deploy.sh)"
+eval "$(sed -n '/^_detect_platform() {/,/^}/p' scripts/deploy.sh)"
+if ! type deploy_run >/dev/null 2>&1; then
+	echo "FATAL: could not extract deploy_run() from scripts/deploy.sh" >&2
+	exit 1
+fi
+
+# --- fake ABA_ROOT with stub sub-scripts + PATH-stubbed make ------------------
+_root="$_tmp/aba"
+mkdir -p "$_root/scripts" "$_root/mirror" "$_root/mycluster" "$_root/site" "$_tmp/bin" "$_tmp/runner"
+: > "$_root/mycluster/cluster.conf"
+export ABA_ROOT="$_root"
+export RUN_ONCE_DIR="$_tmp/runner"
+export DEPLOY_LOG="$_tmp/order.log"
+
+cat > "$_root/scripts/config-import.sh" <<'EOF'
+#!/bin/bash
+echo "config-import $*" >> "$DEPLOY_LOG"
+EOF
+cat > "$_root/scripts/day2.sh" <<'EOF'
+#!/bin/bash
+echo "day2 $*" >> "$DEPLOY_LOG"
+EOF
+chmod +x "$_root/scripts/config-import.sh" "$_root/scripts/day2.sh"
+
+cat > "$_tmp/bin/make" <<'EOF'
+#!/bin/bash
+echo "make $*" >> "$DEPLOY_LOG"
+if [ -n "$MAKE_FAIL_ON" ]; then
+	case "$*" in *"$MAKE_FAIL_ON"*) exit 1 ;; esac
+fi
+exit 0
+EOF
+chmod +x "$_tmp/bin/make"
+export PATH="$_tmp/bin:$PATH"
+
+_reset_state() { : > "$DEPLOY_LOG"; rm -rf "$RUN_ONCE_DIR"; mkdir -p "$RUN_ONCE_DIR"; rm -f "$_root/mycluster/.aba-deploy-await-boot"; }
+_line() { grep -n "$2" "$1" 2>/dev/null | head -1 | cut -d: -f1; }        # first line matching $2 in file $1
+_before() {			# name  file  patA  patB
+	local la lb; la="$(_line "$2" "$3")"; lb="$(_line "$2" "$4")"
+	if [ -n "$la" ] && [ -n "$lb" ] && [ "$la" -lt "$lb" ]; then test_pass "$1"; else test_fail "$1" "$3(=$la) not before $4(=$lb)"; fi
+}
+_has() { if grep -q "$3" "$2"; then test_pass "$1"; else test_fail "$1" "missing: $3"; fi; }
+_hasnot() { if grep -q "$3" "$2"; then test_fail "$1" "unexpected: $3"; else test_pass "$1"; fi; }
+
+echo
+echo "=== Testing: aba deploy orchestrator ==="
+echo
+
+# --- Test 1: DRY RUN prints the full ordered plan and executes nothing --------
+echo "--- dry-run plan (bare-metal) ---"
+_reset_state
+_plan="$_tmp/plan-bm.txt"
+( ABA_DEPLOY_DRY_RUN=1 deploy_run "$_root" "site" "mycluster" "bm" ) > "$_plan" 2>&1
+_before "plan: config-import before mirror-install" "$_plan" 'config-import' 'mirror-install'
+_before "plan: mirror-install before mirror-load"   "$_plan" 'mirror-install' 'mirror-load'
+_before "plan: mirror-load before iso"              "$_plan" 'mirror-load' 'iso'
+_before "plan: iso before monitor"                  "$_plan" '\[iso\]' 'monitor'
+_before "plan: monitor before day2"                 "$_plan" 'monitor' 'day2'
+_has    "plan: bare-metal boot pause noted"         "$_plan" 'boot'
+if [ ! -s "$DEPLOY_LOG" ]; then test_pass "dry-run executes nothing (no make/sub-scripts)"; else test_fail "dry-run side effects" "$(tr '\n' '|' <"$DEPLOY_LOG")"; fi
+if [ ! -d "$RUN_ONCE_DIR" ] || [ -z "$(ls -A "$RUN_ONCE_DIR" 2>/dev/null)" ]; then test_pass "dry-run creates no run_once state"; else test_fail "dry-run run_once state" "state created"; fi
+
+# --- Test 2: hypervisor plan uses 'make install' (auto VM boot), no pause -----
+echo "--- dry-run plan (hypervisor) ---"
+_reset_state
+_planv="$_tmp/plan-vmw.txt"
+( ABA_DEPLOY_DRY_RUN=1 deploy_run "$_root" "site" "mycluster" "vmw" ) > "$_planv" 2>&1
+_has "vmw plan: uses 'make ... install' for bring-up" "$_planv" 'install'
+_before "vmw plan: iso before install" "$_planv" '\[iso\]' '\[install\]'
+_before "vmw plan: install before day2" "$_planv" '\[install\]' 'day2'
+
+# --- Test 3: real execution order (hypervisor, straight through) --------------
+echo "--- execution order (vmw) ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_before "exec: config-import first"        "$DEPLOY_LOG" 'config-import' 'mirror install'
+_before "exec: mirror install before load" "$DEPLOY_LOG" 'mirror install' 'mirror load'
+_before "exec: mirror load before iso"     "$DEPLOY_LOG" 'mirror load' 'mycluster iso'
+_before "exec: iso before cluster install" "$DEPLOY_LOG" 'mycluster iso' 'mycluster install'
+_before "exec: cluster install before day2" "$DEPLOY_LOG" 'mycluster install' 'day2'
+
+# --- Test 4: resume - re-run skips the expensive cached steps (run_once -S) ----
+# (config-import is intentionally always-run/idempotent, so assert the costly
+#  make steps run exactly once across two invocations.)
+echo "--- resume (idempotent) ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_iso_n=$(grep -c 'mycluster iso' "$DEPLOY_LOG")
+_mir_n=$(grep -c 'mirror install' "$DEPLOY_LOG")
+if [ "$_iso_n" -eq 1 ] && [ "$_mir_n" -eq 1 ]; then
+	test_pass "re-run skips cached make steps (iso ran ${_iso_n}x, mirror-install ${_mir_n}x across 2 runs)"
+else
+	test_fail "resume" "expected iso=1 mirror-install=1; got iso=$_iso_n mirror-install=$_mir_n"
+fi
+
+# --- Test 5: a failed step halts the pipeline ---------------------------------
+echo "--- failure stops pipeline ---"
+_reset_state
+( MAKE_FAIL_ON="mirror load" deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_drc=$?
+_has    "failure: reached mirror load"        "$DEPLOY_LOG" 'mirror load'
+_hasnot "failure: iso NOT run after failure"  "$DEPLOY_LOG" 'mycluster iso'
+_hasnot "failure: day2 NOT run after failure" "$DEPLOY_LOG" 'day2'
+[ "$_drc" -ne 0 ] && test_pass "deploy_run returns non-zero on step failure" || test_fail "failure rc" "expected non-zero"
+
+# --- Test 6: bare-metal pause then resume -------------------------------------
+echo "--- bare-metal pause/resume ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1
+_has    "bm run 1: iso generated"                 "$DEPLOY_LOG" 'mycluster iso'
+_hasnot "bm run 1: pauses before monitor"         "$DEPLOY_LOG" 'mycluster mon'
+_hasnot "bm run 1: pauses before day2"            "$DEPLOY_LOG" 'day2'
+[ -f "$_root/mycluster/.aba-deploy-await-boot" ] && test_pass "bm run 1: await-boot marker created" || test_fail "bm marker" "no marker"
+( deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1
+_has "bm run 2: resumes into monitor" "$DEPLOY_LOG" 'mycluster mon'
+_has "bm run 2: runs day2 after monitor" "$DEPLOY_LOG" 'day2'
+
+# --- Test 6b: a fixed step retries on re-run (not stuck on cached failure) -----
+echo "--- fix-and-resume (retry a failed step) ---"
+_reset_state
+( MAKE_FAIL_ON="mirror load" deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_hasnot "fix-resume run 1: iso not reached (load failed)" "$DEPLOY_LOG" 'mycluster iso'
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_has "fix-resume run 2: previously-failed load retried, iso reached" "$DEPLOY_LOG" 'mycluster iso'
+_has "fix-resume run 2: pipeline completes through day2"             "$DEPLOY_LOG" 'day2'
+
+# --- Test 6c: --restart forces a fresh re-run of completed steps --------------
+echo "--- --restart re-runs completed steps ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_r1=$(wc -l < "$DEPLOY_LOG")
+( DEPLOY_RESTART=1 deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_r2=$(wc -l < "$DEPLOY_LOG")
+[ "$_r1" -gt 0 ] && [ "$_r2" -gt "$_r1" ] \
+	&& test_pass "--restart clears cached state and re-runs steps: $_r1 -> $_r2" \
+	|| test_fail "--restart" "expected growth; $_r1 -> $_r2"
+
+# --- Test 6d: config-import is skipped when there is no site payload -----------
+echo "--- no site payload: config-import skipped, pipeline proceeds ---"
+_root2="$_tmp/aba2"
+mkdir -p "$_root2/scripts" "$_root2/mirror" "$_root2/standalone"
+: > "$_root2/standalone/cluster.conf"
+cp "$_root/scripts/config-import.sh" "$_root2/scripts/config-import.sh"
+cp "$_root/scripts/day2.sh" "$_root2/scripts/day2.sh"
+_LOG2="$_tmp/order2.log"; : > "$_LOG2"
+( export DEPLOY_LOG="$_LOG2" RUN_ONCE_DIR="$_tmp/runner2"; mkdir -p "$_tmp/runner2"; deploy_run "$_root2" "site" "standalone" "vmw" ) >/dev/null 2>&1
+if grep -q 'config-import' "$_LOG2"; then
+	test_fail "config-import skipped w/o site" "config-import ran despite no site dir"
+else
+	test_pass "config-import skipped when no site payload (deploys in place)"
+fi
+grep -q 'mirror install' "$_LOG2" && test_pass "pipeline proceeds without a site payload" || test_fail "no-site pipeline" "mirror install not reached"
+
+# --- Test 6e: multiple clusters abort with the correct message (finding [5]) ---
+echo "--- multiple clusters -> accurate abort ---"
+_root3="$_tmp/aba3"
+mkdir -p "$_root3/scripts" "$_root3/mirror" "$_root3/c1" "$_root3/c2"
+: > "$_root3/c1/cluster.conf"; : > "$_root3/c2/cluster.conf"
+cp "$_root/scripts/config-import.sh" "$_root3/scripts/config-import.sh"
+cp "$_root/scripts/day2.sh" "$_root3/scripts/day2.sh"
+_ML="$_tmp/ml.out"
+( export DEPLOY_LOG="$_tmp/order3.log" RUN_ONCE_DIR="$_tmp/runner3"; mkdir -p "$_tmp/runner3"; deploy_run "$_root3" "site" "" "vmw" ) >"$_ML" 2>&1
+_mlrc=$?
+[ "$_mlrc" -ne 0 ] && test_pass "multiple clusters aborts (non-zero, not a silent no-op)" || test_fail "multi-cluster abort" "expected non-zero exit"
+grep -qi 'multiple clusters' "$_ML" && test_pass "multi-cluster error is accurate (not the misleading 'none found')" || test_fail "multi-cluster msg" "got: $(tail -1 "$_ML")"
+
+# --- Test 7: CLI dispatch wiring ----------------------------------------------
+echo "--- dispatch wiring ---"
+grep -q '|deploy|' "$REPO_ROOT/scripts/aba.sh" && test_pass "'deploy' in direct-dispatch allow-list" || test_fail "allow-list" "deploy missing"
+grep -qE '^[[:space:]]*deploy\)' "$REPO_ROOT/scripts/aba.sh" && test_pass "aba.sh has a 'deploy)' arm" || test_fail "arm" "no deploy) arm"
+grep -q 'scripts/deploy.sh' "$REPO_ROOT/scripts/aba.sh" && test_pass "deploy) arm invokes deploy.sh" || test_fail "arm target" "no deploy.sh call"
+grep -q 'aba deploy' "$REPO_ROOT/others/help-aba.txt" && test_pass "help-aba.txt documents 'aba deploy'" || test_fail "help" "not documented"
+
+# --- Test 8: arg-parsing hardening --------------------------------------------
+echo "--- arg-parsing hardening ---"
+grep -q 'requires a value' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy validates --site/--cluster values (no infinite loop on missing value)" \
+	|| test_fail "value check" "missing --site/--cluster value guard"
+grep -q 'unknown option' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy rejects unknown flags (a typo'd --dry-run is not silently ignored)" \
+	|| test_fail "unknown flag" "no --* rejection"
+grep -q '"$home/$site"' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "cluster auto-detect falls back to the site payload (works before import)" \
+	|| test_fail "detect fallback" "no site-payload fallback in _detect_cluster"
+grep -q 'unexpected argument' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy rejects stray positionals (does not silently deploy a different cluster)" \
+	|| test_fail "positional guard" "no '*) abort' in deploy arg loop"
+grep -qE '\-n\|--name\)' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "deploy accepts aba's '-n <name>' cluster syntax" \
+	|| test_fail "name syntax" "no -n/--name handling"
+
+# --- Test 9: --restart is atomic (interrupted restart cannot skip later steps) -
+echo "--- --restart atomicity (interrupted restart -> plain resume) ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1          # run1: full deploy populates cache
+: > "$DEPLOY_LOG"
+( export DEPLOY_RESTART=1 MAKE_FAIL_ON="mirror load"; deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1  # run2: restart aborts at load
+: > "$DEPLOY_LOG"
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1          # run3: plain resume (as the abort tells the user)
+_has "restart-interrupted resume re-runs iso"      "$DEPLOY_LOG" 'mycluster iso'
+_has "restart-interrupted resume re-runs install"  "$DEPLOY_LOG" 'mycluster install'
+_has "restart-interrupted resume re-runs day2"     "$DEPLOY_LOG" 'day2'
+
+# --- Test 9b: --restart clears the bare-metal boot marker (pauses once again) --
+echo "--- --restart clears the boot marker (fresh bm re-deploy) ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1           # pause
+( deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1           # resume -> complete (marker latched)
+: > "$DEPLOY_LOG"
+( DEPLOY_RESTART=1 deploy_run "$_root" "site" "mycluster" "bm" ) >/dev/null 2>&1   # fresh restart
+_has    "bm restart: rebuilds the ISO"                    "$DEPLOY_LOG" 'mycluster iso'
+_hasnot "bm restart: pauses again (no straight-through to monitor)" "$DEPLOY_LOG" 'mycluster mon'
+[ -f "$_root/mycluster/.aba-deploy-await-boot" ] \
+	&& test_pass "bm restart: boot marker re-created at the (single) pause" \
+	|| test_fail "bm restart marker" "marker missing after restart pause"
+
+# --- Test 9c: an explicit --site that does not exist aborts (no silent in-place) -
+echo "--- explicit --site missing -> abort ---"
+_reset_state
+_ES="$_tmp/es.out"
+( deploy_run "$_root" "no-such-site" "mycluster" "bm" 1 ) >"$_ES" 2>&1
+_esrc=$?
+[ "$_esrc" -ne 0 ] && grep -qi 'not found' "$_ES" \
+	&& test_pass "explicit --site to a missing dir aborts (does not deploy in place)" \
+	|| test_fail "explicit --site" "expected abort, got rc=$_esrc: $(tail -1 "$_ES")"
+# a NON-explicit missing site still proceeds in place (abort is gated on explicit)
+: > "$DEPLOY_LOG"
+( deploy_run "$_root" "no-such-site" "mycluster" "bm" "" ) >/dev/null 2>&1
+grep -q 'mirror install' "$DEPLOY_LOG" \
+	&& test_pass "non-explicit missing site still deploys in place (no abort)" \
+	|| test_fail "implicit site" "did not proceed in place"
+
+echo
+echo "=== Results: $pass passed, $fail failed ==="
+echo
+
+[ -z "$FAILURES" ] && exit 0 || exit 1

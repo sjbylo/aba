@@ -43,6 +43,58 @@ _verify_cli_tarballs() {
 	aba_debug "All CLI tarballs passed integrity check (gzip -t)"
 }
 
+# _assemble_site <aba_root> <site_dir>
+# Collect the current aba configs into a site/ tree using the same layout that
+# 'aba config import' consumes, so 'aba bundle --complete' can embed one payload
+# carrying configs + helm charts + day2 manifests across the air gap.
+_assemble_site() {
+	local root="$1" site="$2" copied=0 f d name
+	rm -rf -- "$site"
+	mkdir -p "$site"
+
+	for f in aba.conf vmware.conf kvm.conf; do
+		[ -f "$root/$f" ] && { cp -f -- "$root/$f" "$site/$f"; copied=$((copied + 1)); }
+	done
+
+	if [ -f "$root/mirror/mirror.conf" ]; then
+		mkdir -p "$site/mirror"; cp -f -- "$root/mirror/mirror.conf" "$site/mirror/mirror.conf"; copied=$((copied + 1))
+	fi
+	if [ -f "$root/mirror/data/imageset-config.yaml" ]; then
+		mkdir -p "$site/mirror"; cp -f -- "$root/mirror/data/imageset-config.yaml" "$site/mirror/imageset-config.yaml"; copied=$((copied + 1))
+	fi
+
+	# A cluster directory is any subdir holding a cluster.conf (skip mirror/site/helm).
+	for d in "$root"/*/; do
+		[ -d "$d" ] || continue
+		name="$(basename "$d")"
+		case "$name" in mirror|site|helm) continue ;; esac
+		[ -f "$d/cluster.conf" ] || continue
+		mkdir -p "$site/$name"
+		cp -f -- "$d/cluster.conf" "$site/$name/cluster.conf"; copied=$((copied + 1))
+		[ -f "$d/install-config.yaml" ] && cp -f -- "$d/install-config.yaml" "$site/$name/install-config.yaml"
+		[ -f "$d/agent-config.yaml" ]   && cp -f -- "$d/agent-config.yaml"   "$site/$name/agent-config.yaml"
+		[ -f "$d/macs.conf" ]           && cp -f -- "$d/macs.conf"           "$site/$name/macs.conf"
+		[ -d "$d/day2-custom-manifests" ] && cp -a -- "$d/day2-custom-manifests" "$site/$name/day2-custom-manifests"
+	done
+
+	# Optional helm charts payload
+	[ -d "$root/helm" ] && cp -a -- "$root/helm" "$site/helm"
+
+	[ "$copied" -gt 0 ] || aba_warning "bundle --complete: no configs found to embed under $site"
+	return 0
+}
+
+# _capture_site_isc: re-copy the just-regenerated imageset-config.yaml into the
+# site/ payload so the embedded copy matches the images 'make save' mirrored.
+# Matters with --complete --force, where the ISC is regenerated after assembly.
+_capture_site_isc() {
+	[ "$complete_bundle" ] || return 0
+	[ -f mirror/data/imageset-config.yaml ] || return 0
+	[ -d site ] || return 0
+	mkdir -p site/mirror
+	cp -f -- mirror/data/imageset-config.yaml site/mirror/imageset-config.yaml
+}
+
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -59,6 +111,11 @@ while [[ $# -gt 0 ]]; do
 		--light)
 			light_bundle=1
 			aba_debug "Argument: --light (exclude image-set archives)"
+			shift
+			;;
+		--complete)
+			complete_bundle=1
+			aba_debug "Argument: --complete (embed site/ config payload)"
 			shift
 			;;
 		*)
@@ -87,6 +144,30 @@ aba_debug "Normalizing and verifying aba.conf"
 source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
+
+# For --complete, assemble the site/ config payload into the repo so backup.sh
+# embeds it in the same tar (one archive carries the mirror AND the configs).
+# Clean it up on exit so a later plain 'aba bundle' is unchanged (no site/).
+complete_flag=
+if [ "$complete_bundle" ]; then
+	complete_flag="complete=--complete"   # tells 'make tar/tarrepo' -> backup.sh to include site/
+	# Never destroy a pre-existing site/ (it may be the user's own deploy configs):
+	# move it aside, assemble the bundle payload, then RESTORE it on exit so the
+	# user's working tree is left exactly as it was.
+	_user_site_saved=
+	if [ -e "$PWD/site" ]; then
+		aba_warning "An existing 'site/' directory was found; it will be restored after the bundle is written."
+		_user_site_saved="$PWD/.site.aba-bundle-orig.$$"   # unique path, never clobbers a prior save
+		mv -- "$PWD/site" "$_user_site_saved"
+	fi
+	_restore_user_site() {
+		rm -rf -- "$PWD/site"
+		[ "$_user_site_saved" ] && [ -e "$_user_site_saved" ] && mv -- "$_user_site_saved" "$PWD/site"
+	}
+	trap _restore_user_site EXIT
+	aba_info "Assembling site/ config payload for --complete bundle ..."
+	_assemble_site "$PWD" "$PWD/site"
+fi
 
 if [ "$bundle_dest_file" = "-" ]; then
 	# Be sure the standard output of this command is ONLY tar output and nothing else!
@@ -207,8 +288,9 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "All CLI tarballs downloaded"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
+	_capture_site_isc
 	aba_debug "Calling: make -s tar out=-"
-	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
+	make -s tar out=- $complete_flag   # Be sure the output of this command is ONLY tar output!
 
 	aba_debug "Stdout bundle creation complete, exiting"
 	exit
@@ -251,8 +333,9 @@ if [ "$light_bundle" ]; then
 	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f "$bundle_dest_file"
+	_capture_site_isc
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
-	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
+	make tarrepo out="$bundle_dest_file" $complete_flag		# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
 else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
@@ -295,8 +378,9 @@ else
 	
 	aba_info "Creating install bundle archive ..."
 	rm -f "$bundle_dest_file"
+	_capture_site_isc
 	aba_debug "Calling: make tar out=$bundle_dest_file"
-	make tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files. 
+	make tar out="$bundle_dest_file" $complete_flag		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
 
