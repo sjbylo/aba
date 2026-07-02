@@ -261,6 +261,18 @@ else
 	test_fail ".wait bad quote" "oc wait ran on an unparseable line: $(grep wait "$_LAST_LOG" | tr '\n' '|')"
 fi
 
+# L3b: a '#' inside a BALANCED quoted value must be preserved (not treated as a
+# comment and truncated), so the wait line still runs.
+fxM="$_tmp/clusterM"
+_mk "$fxM/day2-custom-manifests/10-w/a.yaml"
+printf -- "--for=condition=Ready --selector='app=web #1' pod/foo\n" > "$fxM/day2-custom-manifests/10-w/.wait"
+_run_apply "$fxM"
+if grep -q 'wait .*app=web #1' "$_LAST_LOG" && ! grep -q 'cannot parse' "$_LAST_LOG"; then
+	test_pass "quoted '#' in a .wait value is preserved (wait not skipped/truncated)"
+else
+	test_fail ".wait quoted-hash" "quoted value truncated or line skipped: $(tr '\n' '|' <"$_LAST_LOG")"
+fi
+
 # M4: an unreadable .wait must be non-fatal even under 'set -e' (day2.sh is bash -e):
 # the gate is skipped and later waves still apply (no whole-run abort).
 fxL="$_tmp/clusterL"

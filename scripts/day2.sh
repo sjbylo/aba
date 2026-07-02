@@ -265,7 +265,13 @@ apply_custom_manifests() {
 					_cond="${_cond%$'\r'}"
 					_cond="${_cond#"${_cond%%[![:space:]]*}"}"   # trim leading whitespace
 					case "$_cond" in \#*) continue ;; esac         # skip full-line comments first
-					_cond="${_cond%% #*}"                          # strip an unquoted trailing ' # comment'
+					# Strip a trailing ' # comment', but ONLY if doing so keeps the line
+					# xargs-parseable; otherwise the '#' is inside a quoted value (e.g. a
+					# selector like --selector='app=web #1') and must be preserved.
+					_stripped="${_cond%% #*}"
+					if [ "$_stripped" != "$_cond" ] && printf '%s\n' "$_stripped" | xargs >/dev/null 2>&1; then
+						_cond="$_stripped"
+					fi
 					_cond="${_cond%"${_cond##*[![:space:]]}"}"   # trim trailing whitespace
 					[ -z "$_cond" ] && continue
 					# Reject a line xargs cannot parse (e.g. unbalanced quotes) instead of
