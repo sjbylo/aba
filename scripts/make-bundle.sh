@@ -157,13 +157,12 @@ if [ "$complete_bundle" ]; then
 	_user_site_saved=
 	if [ -e "$PWD/site" ]; then
 		aba_warning "An existing 'site/' directory was found; it will be restored after the bundle is written."
-		rm -rf -- "$PWD/.site.aba-bundle-orig"
-		mv -- "$PWD/site" "$PWD/.site.aba-bundle-orig"
-		_user_site_saved=1
+		_user_site_saved="$PWD/.site.aba-bundle-orig.$$"   # unique path, never clobbers a prior save
+		mv -- "$PWD/site" "$_user_site_saved"
 	fi
 	_restore_user_site() {
 		rm -rf -- "$PWD/site"
-		[ "$_user_site_saved" ] && [ -e "$PWD/.site.aba-bundle-orig" ] && mv -- "$PWD/.site.aba-bundle-orig" "$PWD/site"
+		[ "$_user_site_saved" ] && [ -e "$_user_site_saved" ] && mv -- "$_user_site_saved" "$PWD/site"
 	}
 	trap _restore_user_site EXIT
 	aba_info "Assembling site/ config payload for --complete bundle ..."
