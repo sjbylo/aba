@@ -228,6 +228,12 @@ grep -q 'unexpected argument' "$REPO_ROOT/scripts/deploy.sh" \
 grep -qE '\-n\|--name\)' "$REPO_ROOT/scripts/deploy.sh" \
 	&& test_pass "deploy accepts aba's '-n <name>' cluster syntax" \
 	|| test_fail "name syntax" "no -n/--name handling"
+grep -qE '_cluster="\$1"' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "a lone positional is taken as the cluster name (aba deploy <cluster>)" \
+	|| test_fail "positional cluster" "bare positional not mapped to --cluster"
+grep -q '_site_cli' "$REPO_ROOT/scripts/deploy.sh" \
+	&& test_pass "only a CLI --site is resolved vs caller cwd (deploy.conf site_dir stays aba-root anchored)" \
+	|| test_fail "site_dir anchoring" "deploy.conf relative site_dir wrongly resolved against caller cwd"
 
 # --- Test 9: --restart is atomic (interrupted restart cannot skip later steps) -
 echo "--- --restart atomicity (interrupted restart -> plain resume) ---"

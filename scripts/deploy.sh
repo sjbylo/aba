@@ -193,11 +193,13 @@ _detect_cluster() {
 # matches _detect_cluster so a dry-run on a fresh tree + site payload (config-import not
 # yet run) still previews the right pipeline (straight-through vs bare-metal pause).
 _detect_platform() {
-	local home="$1" site="$2" base
+	local home="$1" site="$2" base _p
 	for base in "$home" "$home/$site" "$site"; do
 		[ -f "$base/aba.conf" ] || continue
-		( cd "$base" && source <(normalize-aba-conf) 2>/dev/null; echo "$platform" )
-		return 0
+		# Fall through to a later base if this aba.conf sets no platform (empty), so a
+		# tree aba.conf without platform= does not mask a site payload that sets it.
+		_p="$( cd "$base" && source <(normalize-aba-conf) 2>/dev/null; echo "$platform" )"
+		[ -n "$_p" ] && { printf '%s' "$_p"; return 0; }
 	done
 }
 
@@ -212,27 +214,30 @@ cluster_name=""
 # Descriptor values (if set) become the defaults; CLI flags override below.
 _site="${site_dir:-site}"
 _cluster="${cluster_name:-}"
-# A non-default site_dir from deploy.conf counts as explicit (a missing one must abort,
-# not silently deploy in place); a plain default './site' stays implicit.
+# A non-default site_dir counts as explicit (a missing one must abort, not silently
+# deploy in place); a plain default './site' stays implicit. _site_cli tracks whether
+# the value came from the CLI (resolved against the caller's cwd) vs deploy.conf
+# (anchored to the aba root, like the file itself).
 _site_explicit=""
+_site_cli=""
 [ "$_site" != "site" ] && _site_explicit=1
 
 while [ "$1" ]; do
 	case "$1" in
-		--site)       [ -n "$2" ] || aba_abort "aba deploy: --site requires a value"; _site="$2"; _site_explicit=1; shift 2 ;;
+		--site)       [ -n "$2" ] || aba_abort "aba deploy: --site requires a value"; _site="$2"; _site_explicit=1; _site_cli=1; shift 2 ;;
 		--cluster)    [ -n "$2" ] || aba_abort "aba deploy: --cluster requires a value"; _cluster="$2"; shift 2 ;;
 		-n|--name)    [ -n "$2" ] || aba_abort "aba deploy: $1 requires a value"; _cluster="$2"; shift 2 ;;   # accept aba's cluster-name syntax
 		--dry-run)    export ABA_DEPLOY_DRY_RUN=1; shift ;;
 		--restart)    export DEPLOY_RESTART=1; shift ;;   # clear cached step state (fresh re-deploy)
 		import)       shift ;;   # tolerate a stray leading verb
 		-*)           aba_abort "aba deploy: unknown option '$1' (see 'aba deploy --help')." ;;
-		*)            aba_abort "aba deploy: unexpected argument '$1' (see 'aba deploy --help')." ;;
+		*)            [ -z "$_cluster" ] && { _cluster="$1"; shift; } || aba_abort "aba deploy: unexpected argument '$1' (see 'aba deploy --help')." ;;   # a lone positional is the cluster name
 	esac
 done
 
-# Resolve an explicit relative --site against the user's original cwd (not the aba root
-# this script cd'd to); the implicit default './site' stays relative to the aba root.
-if [ -n "$_site_explicit" ]; then
+# Resolve a relative --site given on the CLI against the user's original cwd (not the
+# aba root this script cd'd to). A deploy.conf site_dir stays anchored to the aba root.
+if [ -n "$_site_cli" ]; then
 	case "$_site" in /*) ;; *) _site="$_CALLER_PWD/$_site" ;; esac
 fi
 
