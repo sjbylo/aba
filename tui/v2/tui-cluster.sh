@@ -2312,7 +2312,7 @@ _day2_upgrade() {
 				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
 				;;
 			DISCO)
-				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
+				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/*.tar to this host's mirror/data/\n\n  On this host:\n    3. Load images (L) — unpacks upgrade bundle automatically\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
 				;;
 			*)
 				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."

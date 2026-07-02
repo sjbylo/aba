@@ -80,6 +80,21 @@ else
 	make_ocp_override=""
 fi
 
+# Without internet, don't attempt CLI downloads.
+# CLIs arrive via the aba-upgrade.tar bundle or the original install bundle.
+# Peek at the cached internet-check result (set by TUI startup or aba.sh early init).
+# If a cached result exists and says "no internet", skip.  If no cached result exists,
+# fall through — the download attempt will fail and run_once records the failure.
+if run_once -p -i "aba:check:internet" 2>/dev/null && \
+   ! { run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'; }; then
+	if [[ "$mode" == "wait" ]]; then
+		aba_debug "No internet (cached): checking if CLIs are already installed"
+	elif [[ "$mode" == "start" ]]; then
+		aba_debug "No internet (cached): skipping CLI download initiation"
+		exit 0
+	fi
+fi
+
 aba_debug "Fetching download list from cli/Makefile ($make_list_target)"
 items=$(make --no-print-directory -sC cli "$make_list_target" $make_ocp_override) || {
 	aba_abort "Failed to get download list from cli/Makefile ($make_list_target)"

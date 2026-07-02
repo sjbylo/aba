@@ -144,15 +144,82 @@ if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
+# Ensure all CLI downloads are complete before building upgrade bundle
+scripts/cli-download-all.sh --wait
+
+# Create aba-upgrade.tar containing ISC, digest ISC, CLI tarballs, and metadata.
+# This is always created — for initial installs, the full install bundle is preferred,
+# but having the upgrade bundle alongside doesn't hurt.
+_bundle_ver="${ocp_version_target:-$ocp_version}"
+_bundle_chan="${ocp_channel:-fast}"
+_upgrade_tar="data/aba-upgrade.tar"
+
+aba_info "Creating upgrade bundle: $_upgrade_tar"
+
+# Build the list of files to include (relative to aba root so the tar
+# unpacks correctly from either mirror/ or aba/ — mirror/data/* and cli/*)
+_bundle_files=()
+
+# ISC files (relative to aba root)
+[ -f "data/imageset-config.yaml" ] && _bundle_files+=("mirror/data/imageset-config.yaml")
+[ -f "data/imageset-config-digest.yaml" ] && _bundle_files+=("mirror/data/imageset-config-digest.yaml")
+
+# CLI tarballs for the target version (all rhel variants)
+for _cli_tar in ../cli/openshift-client-linux-*-"${_bundle_ver}"*.tar.gz \
+                ../cli/openshift-install-linux-"${_bundle_ver}"*.tar.gz; do
+	[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
+done
+
+# Also include CLIs for the base version if doing a cross-minor upgrade
+if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	for _cli_tar in ../cli/openshift-client-linux-*-"${ocp_version}"*.tar.gz \
+	                ../cli/openshift-install-linux-"${ocp_version}"*.tar.gz; do
+		[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
+	done
+fi
+
+# Compute digest ISC checksum for integrity validation at load time
+_digest_isc_sha=""
+if [ -f "data/imageset-config-digest.yaml" ]; then
+	_digest_isc_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
+fi
+
+# Create metadata JSON (inside mirror/data/ so it gets packed correctly)
+cat > data/aba-upgrade-metadata.json <<-METADATA
+{
+  "ocp_version": "${_bundle_ver}",
+  "ocp_channel": "${_bundle_chan}",
+  "architecture": "${ARCH:-amd64}",
+  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "digest_isc_sha256": "${_digest_isc_sha}"
+}
+METADATA
+_bundle_files+=("mirror/data/aba-upgrade-metadata.json")
+
+# Create the tar from aba root so paths are correct for unpack from aba root.
+# CWD is mirror/ so aba root is ..
+if ( cd .. && tar cf "mirror/$_upgrade_tar" "${_bundle_files[@]}" ); then
+	_tar_size=$(du -sh "$_upgrade_tar" | awk '{print $1}')
+	aba_info_ok "Upgrade bundle created: $_upgrade_tar ($_tar_size)"
+else
+	aba_warning "Failed to create upgrade bundle ($_upgrade_tar)." \
+		"The image archives (mirror_*.tar) are still valid." \
+		"You can manually copy ISC and CLI files to the disconnected host."
+fi
+rm -f data/aba-upgrade-metadata.json
+
 echo
 if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
 	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_version_target})."
-	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
-	aba_info_ok "  mirror/data/imageset-config.yaml"
-	aba_info_ok "  mirror/data/.imageset-config-digest.yaml  (required for air-gap catalog pinning)"
-	aba_info_ok "  mirror/data/mirror_*.tar"
-	aba_info_ok "  cli/openshift-*-${ocp_version_target}*  (matching CLI binaries for target version)"
-	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"
+	aba_info_ok ""
+	aba_info_ok "Copy all *.tar files from mirror/data/ to the disconnected host:"
+	aba_info_ok "  cp mirror/data/*.tar /transfer-media/"
+	aba_info_ok ""
+	aba_info_ok "  Files: mirror_*.tar (images), aba-upgrade.tar (ISC, CLIs, metadata)"
+	aba_info_ok ""
+	aba_info_ok "On the disconnected host:"
+	aba_info_ok "  cp /transfer-media/*.tar ~/aba/mirror/data/"
+	aba_info_ok "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_version_target}"
 else
 	aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
 	aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."

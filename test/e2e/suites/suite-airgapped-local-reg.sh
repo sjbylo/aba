@@ -319,7 +319,7 @@ e2e_snapshot_file "ubi-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save UBI image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer UBI archive+config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "ubi-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load UBI images" \
@@ -353,7 +353,7 @@ e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
 e2e_run "Transfer vote-app archive+config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
@@ -468,7 +468,7 @@ e2e_snapshot_file "mesh-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 
 e2e_run "Transfer archive and config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "mesh-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load mesh images" \
@@ -516,7 +516,7 @@ EOF"
 e2e_snapshot_file "mesh-demo-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save mesh demo app images" "aba -d mirror save --retry"
 e2e_run "Transfer demo app archive to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load mesh demo app images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -595,7 +595,7 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
 e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 1 2 "Save upgrade images" "aba -d mirror save --retry"
 e2e_run "Transfer upgrade archive+config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 1 2 "Load upgrade images" \

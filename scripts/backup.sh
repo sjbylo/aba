@@ -119,6 +119,8 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/sync/*"				\
 	! -path "${repo_dir}/mirror/save/*"				\
 	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
+	! -name "*.content-layer-digest"				\
+	! -name "*.expected-count"					\
 	! -path "${repo_dir}/test/output.log" 				\
 	! -path "${repo_dir}/bundles*"	 				\
 								\

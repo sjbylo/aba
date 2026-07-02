@@ -71,5 +71,20 @@ Examples of registering an existing (externally-managed) mirror registry:
   Deregister (only removes local credentials, never modifies the external registry):
     aba -d mirror unregister
 
+Upgrade transfer workflow (disconnected):
+
+  On the connected host:
+    aba --dir mirror --target-version 4.22.2 save
+    # Creates mirror_*.tar (images) + aba-upgrade.tar (ISC, CLIs, metadata) in mirror/data/
+
+  Copy all *.tar files to the disconnected host:
+    cp mirror/data/*.tar /transfer-media/    (or scp, rsync, sneakernet)
+
+  On the disconnected host:
+    cp /transfer-media/*.tar ~/aba/mirror/data/
+    aba -d mirror load                  # unpacks upgrade bundle, loads images
+    aba -d <cluster> day2               # configures OperatorHub
+    aba -d <cluster> upgrade --to 4.22.2
+
 The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
 The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 

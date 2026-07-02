@@ -368,7 +368,7 @@ do
 			cat $ABA_ROOT/others/help-aba.txt
 		elif [ "$_ht" = "mirror" -o "$_ht" = "save" -o "$_ht" = "load" -o "$_ht" = "sync" -o "$_ht" = "register" -o "$_ht" = "unregister" -o "$_ht" = "install" -o "$_ht" = "uninstall" -o "$_ht" = "verify" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
-		elif [ "$_ht" = "cluster" ]; then
+		elif [ "$_ht" = "cluster" -o "$_ht" = "upgrade" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
 		elif [ "$_ht" = "bundle" ]; then
 			cat $ABA_ROOT/others/help-bundle.txt
