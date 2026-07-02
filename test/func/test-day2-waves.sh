@@ -228,6 +228,14 @@ else
 fi
 grep -q 'wait .*pod/foo' "$_LAST_LOG" && test_pass ".wait real condition still honored" || test_fail ".wait real condition" "pod/foo wait missing"
 
+# --- Test I: top-level numbered files order by number relative to waves --------
+echo "--- numeric ordering across waves and top-level files ---"
+fxI="$_tmp/clusterI"
+_mk "$fxI/day2-custom-manifests/10-operators/op.yaml"
+_mk "$fxI/day2-custom-manifests/99-postconfig.yaml"
+_run_apply "$fxI"
+_assert_before "wave 10-operators applied before top-level 99-postconfig.yaml (legacy order kept)" "$_LAST_LOG" "op.yaml" "99-postconfig.yaml"
+
 echo
 echo "=== Results: $pass passed, $fail failed ==="
 echo

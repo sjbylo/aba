@@ -230,49 +230,47 @@ apply_custom_manifests() {
 		aba_info "Applying user-provided custom manifests ..."
 		_apply_manifest_list "$found_files"
 	else
-		# WAVED layout: apply top-level flat files first (backward compatible), then
-		# each numbered wave in order, gating on an optional per-wave '.wait' file.
+		# WAVED layout: numbered wave dirs are present. Apply every top-level entry
+		# (files and dirs) in NUMERIC order (sort -V, so 2- before 10-), which keeps
+		# the legacy relative ordering of non-wave files (e.g. 99-post applies after a
+		# 10-operators wave). A numbered dir is a "wave": after applying it, an optional
+		# per-wave '.wait' file gates the next entry via 'oc wait'. Non-numbered files
+		# and dirs apply at their sorted position, so nothing is dropped.
 		aba_info "Applying user-provided custom manifests in waves ..."
 
-		# Default group = every manifest NOT inside a numbered wave dir. This keeps
-		# the legacy recursive coverage (flat files AND non-numbered subdirs still
-		# apply), so enabling waves never silently drops other manifests.
-		local default_files wd
-		default_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
-		while IFS= read -r wd; do
-			[ -z "$wd" ] && continue
-			default_files="$(printf '%s\n' "$default_files" | grep -vF "$wd/" || true)"
-		done <<< "$wave_dirs"
-		if [ -n "$default_files" ]; then
-			aba_info "Applying non-wave manifests before the first wave ..."
-			_apply_manifest_list "$default_files"
-		fi
+		local entry entry_name entry_files _cond
+		while IFS= read -r entry; do
+			[ -z "$entry" ] && continue
+			entry_name="$(basename "$entry")"
+			if [ -d "$entry" ]; then
+				entry_files="$(find "$entry" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
+			elif [ -f "$entry" ]; then
+				case "$entry" in *.yaml|*.yml) entry_files="$entry" ;; *) continue ;; esac
+			else
+				continue
+			fi
+			if [ -n "$entry_files" ]; then
+				aba_info "Applying: $entry_name"
+				_apply_manifest_list "$entry_files"
+			fi
 
-		local wave wave_name wave_files _cond
-		while IFS= read -r wave; do
-			[ -z "$wave" ] && continue
-			wave_name="$(basename "$wave")"
-			wave_files="$(find "$wave" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
-			aba_info "Applying day2 wave: $wave_name"
-			_apply_manifest_list "$wave_files"
-
-			# Optional gate: one 'oc wait' condition per non-comment line in .wait.
-			# A failed/timed-out wait is non-fatal so day2 can continue.
-			if [ -f "$wave/.wait" ]; then
+			# Optional gate on a wave dir: one 'oc wait' condition per non-comment line
+			# in '.wait'. A failed/timed-out wait is non-fatal so day2 can continue.
+			if [ -d "$entry" ] && [ -f "$entry/.wait" ]; then
 				while IFS= read -r _cond || [ -n "$_cond" ]; do
 					_cond="${_cond%$'\r'}"
 					_cond="${_cond#"${_cond%%[![:space:]]*}"}"   # trim leading whitespace
 					_cond="${_cond%"${_cond##*[![:space:]]}"}"   # trim trailing whitespace
 					[ -z "$_cond" ] && continue
 					case "$_cond" in \#*) continue ;; esac
-					aba_info "Wave $wave_name: waiting for 'oc wait $_cond' ..."
+					aba_info "Wave $entry_name: waiting for 'oc wait $_cond' ..."
 					aba_debug "Running: oc wait $_cond"
 					if ! oc wait $_cond; then
-						aba_warning "Wave $wave_name: 'oc wait $_cond' failed or timed out (continuing)"
+						aba_warning "Wave $entry_name: 'oc wait $_cond' failed or timed out (continuing)"
 					fi
-				done < "$wave/.wait"
+				done < "$entry/.wait"
 			fi
-		done <<< "$wave_dirs"
+		done <<< "$(find "$custom_manifest_dir" -mindepth 1 -maxdepth 1 | sort -V)"
 	fi
 
 	# Show summary
