@@ -265,7 +265,9 @@ apply_custom_manifests() {
 					case "$_cond" in \#*) continue ;; esac
 					aba_info "Wave $entry_name: waiting for 'oc wait $_cond' ..."
 					aba_debug "Running: oc wait $_cond"
-					if ! oc wait $_cond; then
+					# Parse the line with xargs so shell-style quoting in copy-pasted
+					# 'oc wait --for=jsonpath='\''{...}'\'' ...' examples is honored.
+					if ! printf '%s\n' "$_cond" | xargs -r oc wait; then
 						aba_warning "Wave $entry_name: 'oc wait $_cond' failed or timed out (continuing)"
 					fi
 				done < "$entry/.wait"
