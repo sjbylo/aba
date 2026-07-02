@@ -165,7 +165,7 @@ if [ "$complete_bundle" ]; then
 		[ "$_user_site_saved" ] && [ -e "$_user_site_saved" ] && mv -- "$_user_site_saved" "$PWD/site"
 	}
 	trap _restore_user_site EXIT
-	aba_info "Assembling site/ config payload for --complete bundle ..."
+	aba_info "Assembling site/ config payload for --complete bundle ..." >&2
 	_assemble_site "$PWD" "$PWD/site"
 fi
 
