@@ -110,21 +110,29 @@ _mk_repo() {			# $1 = fixture name  $2 = 1 to include a site/ payload
 	fi
 	echo "$r"
 }
-_run_backup() {			# $1 = repo root ; echoes tar path
-	local r="$1" out="$_tmp/$(basename "$(dirname "$1")").tar" home="$_tmp/home"
+_run_backup() {			# $1 = repo root ; $2 = optional backup.sh flags ; echoes tar path
+	local r="$1" flags="$2" out="$_tmp/$(basename "$(dirname "$1")").tar" home="$_tmp/home"
 	mkdir -p "$home"
-	( cd "$r" && HOME="$home" bash "$REPO_ROOT/scripts/backup.sh" "$out" ) >/dev/null 2>&1
+	( cd "$r" && HOME="$home" bash "$REPO_ROOT/scripts/backup.sh" $flags "$out" ) >/dev/null 2>&1
 	echo "$out"
 }
 
-_r_site="$(_mk_repo withsite 1)"; _t_site="$(_run_backup "$_r_site")"
+_r_site="$(_mk_repo withsite 1)"; _t_site="$(_run_backup "$_r_site" --complete)"
 if tar tf "$_t_site" 2>/dev/null | grep -q '^aba/site/'; then
-	test_pass "backup.sh embeds aba/site/... when a site/ payload exists"
+	test_pass "backup.sh embeds aba/site/... with --complete when a site/ payload exists"
 else
-	test_fail "site in tar" "aba/site/ not found in bundle tar"
+	test_fail "site in tar" "aba/site/ not found in --complete bundle tar"
 fi
 
-_r_none="$(_mk_repo nosite 0)"; _t_none="$(_run_backup "$_r_none")"
+# Security/no-regression: a plain bundle (NO --complete) must NOT sweep site/ in.
+_r_plain="$(_mk_repo plainsite 1)"; _t_plain="$(_run_backup "$_r_plain")"
+if tar tf "$_t_plain" 2>/dev/null | grep -q '^aba/site/'; then
+	test_fail "plain-bundle site leak" "aba/site/ included WITHOUT --complete (secret-bearing configs leaked)"
+else
+	test_pass "plain 'aba tar'/'aba bundle' excludes site/ (no secret leak without --complete)"
+fi
+
+_r_none="$(_mk_repo nosite 0)"; _t_none="$(_run_backup "$_r_none" --complete)"
 if tar tf "$_t_none" 2>/dev/null | grep -q '^aba/site/'; then
 	test_fail "no-regression" "aba/site/ present in tar without a site/ payload"
 else
@@ -142,9 +150,12 @@ grep -q '_assemble_site' scripts/make-bundle.sh \
 grep -q '\${repo_dir}/site' scripts/backup.sh \
 	&& test_pass "backup.sh conditionally includes \${repo_dir}/site" \
 	|| test_fail "backup site path" "backup.sh does not reference repo_dir/site"
-grep -q 'site.backup' scripts/make-bundle.sh \
-	&& test_pass "--complete backs up a pre-existing site/ instead of destroying it" \
-	|| test_fail "site backup" "make-bundle.sh does not preserve an existing site/"
+grep -q '_restore_user_site' scripts/make-bundle.sh \
+	&& test_pass "--complete preserves and restores a pre-existing user site/ (no data loss)" \
+	|| test_fail "site restore" "make-bundle.sh does not restore an existing site/"
+grep -q 'complete=--complete' scripts/make-bundle.sh \
+	&& test_pass "--complete threads the flag so backup.sh only includes site/ for --complete" \
+	|| test_fail "complete gate" "make-bundle.sh does not thread the --complete flag"
 grep -q '_capture_site_isc' scripts/make-bundle.sh \
 	&& test_pass "--complete re-captures the regenerated ISC into site/ after 'make save' (matches --force)" \
 	|| test_fail "isc recapture" "make-bundle.sh does not re-capture the ISC post-save"

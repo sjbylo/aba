@@ -148,17 +148,24 @@ aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_cha
 # For --complete, assemble the site/ config payload into the repo so backup.sh
 # embeds it in the same tar (one archive carries the mirror AND the configs).
 # Clean it up on exit so a later plain 'aba bundle' is unchanged (no site/).
+complete_flag=
 if [ "$complete_bundle" ]; then
+	complete_flag="complete=--complete"   # tells 'make tar/tarrepo' -> backup.sh to include site/
 	# Never destroy a pre-existing site/ (it may be the user's own deploy configs):
-	# move it aside to site.backup first, like config-import does for its targets.
+	# move it aside, assemble the bundle payload, then RESTORE it on exit so the
+	# user's working tree is left exactly as it was.
+	_user_site_saved=
 	if [ -e "$PWD/site" ]; then
-		aba_warning "An existing 'site/' directory was found; backing it up to 'site.backup' before assembling the bundle payload."
-		rm -rf -- "$PWD/site.backup"
-		mv -- "$PWD/site" "$PWD/site.backup"
+		aba_warning "An existing 'site/' directory was found; it will be restored after the bundle is written."
+		rm -rf -- "$PWD/.site.aba-bundle-orig"
+		mv -- "$PWD/site" "$PWD/.site.aba-bundle-orig"
+		_user_site_saved=1
 	fi
-	# Remove only the payload assembled here on exit, so a later plain 'aba bundle'
-	# is unchanged (site.backup is left untouched for the user to recover).
-	trap 'rm -rf -- "$PWD/site"' EXIT
+	_restore_user_site() {
+		rm -rf -- "$PWD/site"
+		[ "$_user_site_saved" ] && [ -e "$PWD/.site.aba-bundle-orig" ] && mv -- "$PWD/.site.aba-bundle-orig" "$PWD/site"
+	}
+	trap _restore_user_site EXIT
 	aba_info "Assembling site/ config payload for --complete bundle ..."
 	_assemble_site "$PWD" "$PWD/site"
 fi
@@ -284,7 +291,7 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
 	_capture_site_isc
 	aba_debug "Calling: make -s tar out=-"
-	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
+	make -s tar out=- $complete_flag   # Be sure the output of this command is ONLY tar output!
 
 	aba_debug "Stdout bundle creation complete, exiting"
 	exit
@@ -329,7 +336,7 @@ if [ "$light_bundle" ]; then
 	rm -f "$bundle_dest_file"
 	_capture_site_isc
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
-	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
+	make tarrepo out="$bundle_dest_file" $complete_flag		# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
 else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
@@ -374,7 +381,7 @@ else
 	rm -f "$bundle_dest_file"
 	_capture_site_isc
 	aba_debug "Calling: make tar out=$bundle_dest_file"
-	make tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files. 
+	make tar out="$bundle_dest_file" $complete_flag		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
 

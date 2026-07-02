@@ -23,13 +23,15 @@ source scripts/include_all.sh
 aba_debug "Starting: $0 $*"
 
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
-inc= 				# Full backup by default (not incremental) 
-repo_only=			# Also include the data/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
+inc= 				# Full backup by default (not incremental)
+repo_only=			# Also include the data/mirror_*.tar files (for some use-cases it's more efficient to keep them separate)
+complete=			# Only include the site/ config payload when explicitly requested (aba bundle --complete)
 
 while echo "$1" | grep -q ^--[a-z]
 do
-	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
-	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
+	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately.
+	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default.
+	[ "$1" = "--complete" ] && complete=1 && shift	# Include the site/ config payload (only 'aba bundle --complete' passes this).
 done
 
 [ "$1" ] && dest="$1"
@@ -78,7 +80,7 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 
 # Include the optional site/ payload (from 'aba bundle --complete') when present.
 _site_path=""
-[ -d "${repo_dir}/site" ] && _site_path="${repo_dir}/site"
+[ "$complete" ] && [ -d "${repo_dir}/site" ] && _site_path="${repo_dir}/site"
 
 # All 'find expr' below are by default "and"
 file_list=$(find				\
