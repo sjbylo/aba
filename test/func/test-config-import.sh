@@ -134,13 +134,15 @@ mkdir -p "$_empty"
 
 # --- Test group 6: directory payloads are backed up on re-import (no data loss)
 echo "--- directory payload backup ---"
-printf 'PRECIOUS\n' > "$_dest/mycluster/day2-custom-manifests/10-first/precious.yaml"
-printf 'apiVersion: v1\nkind: ConfigMap\nchanged: yes\n' > "$_site/mycluster/day2-custom-manifests/10-first/app.yaml"
-( config_import_apply "$_site" "$_dest" ) >/dev/null 2>&1
-if [ -f "$_dest/mycluster/day2-custom-manifests.backup/10-first/precious.yaml" ]; then
-	test_pass "existing day2-custom-manifests backed up to .backup on re-import"
+# Fresh dest with a pre-existing day2 dir; import twice - .backup must keep the ORIGINAL.
+_dd="$_tmp/dirbak"; mkdir -p "$_dd/mycluster/day2-custom-manifests/10-first"
+printf 'PRECIOUS\n' > "$_dd/mycluster/day2-custom-manifests/10-first/precious.yaml"
+( config_import_apply "$_site" "$_dd" ) >/dev/null 2>&1
+( config_import_apply "$_site" "$_dd" ) >/dev/null 2>&1
+if grep -q PRECIOUS "$_dd/mycluster/day2-custom-manifests.backup/10-first/precious.yaml" 2>/dev/null; then
+	test_pass "existing day2-custom-manifests backed up once to .backup (original preserved across re-imports)"
 else
-	test_fail "day2 dir backup" "precious.yaml not preserved in .backup"
+	test_fail "day2 dir backup" "original precious.yaml not preserved in .backup"
 fi
 
 # --- Test group 7: pin never creates empty trigger files or touches other clusters

@@ -54,8 +54,8 @@ config_import_apply() {
 		local s="$1" t="$2"
 		mkdir -p "$(dirname "$t")"
 		if [ -e "$t" ]; then
-			rm -rf -- "$t.backup"
-			mv -- "$t" "$t.backup"
+			# Back up the original ONCE; later re-imports must not clobber it.
+			if [ -e "$t.backup" ]; then rm -rf -- "$t"; else mv -- "$t" "$t.backup"; fi
 		fi
 		cp -a -- "$s" "$t"
 	}
@@ -83,6 +83,9 @@ config_import_apply() {
 		[ -d "$d" ] || continue
 		name="$(basename "$d")"
 		case "$name" in mirror|helm) continue ;; esac
+		# Reject reserved/invalid names so a malformed payload cannot write into
+		# reserved repo dirs (scripts/, templates/, ...) via a planted cluster.conf.
+		_valid_cluster_name "$name" >/dev/null 2>&1 || aba_abort "config import: invalid or reserved cluster directory name '$name' in the site payload"
 		[ -f "$d/cluster.conf" ]        && { _cp_verbatim "$d/cluster.conf"        "$dest/$name/cluster.conf";        copied=$((copied + 1)); }
 		[ -f "$d/install-config.yaml" ] && { _cp_verbatim "$d/install-config.yaml" "$dest/$name/install-config.yaml"; copied=$((copied + 1)); }
 		[ -f "$d/agent-config.yaml" ]   && { _cp_verbatim "$d/agent-config.yaml"   "$dest/$name/agent-config.yaml";   copied=$((copied + 1)); }
@@ -133,6 +136,7 @@ config_import_apply() {
 		fi
 	done
 
+	_IMPORTED_CLUSTERS="$imported"   # expose to the caller so scaffolding touches only these
 	return 0
 }
 
@@ -156,9 +160,7 @@ config_import_apply "$_src" "$PWD"
 # that 'make init' creates. Without this, 'make -C <cluster> iso' and day2 fail.
 # Re-assert the install/agent-config mtime pin afterwards, since 'make init' may
 # create the cluster's mirror.conf symlink (a regeneration trigger).
-for _cdir in */; do
-	_cname="${_cdir%/}"
-	case "$_cname" in mirror|site|helm) continue ;; esac
+for _cname in $_IMPORTED_CLUSTERS; do
 	[ -f "$_cname/cluster.conf" ] || continue
 	[ -e "$_cname/Makefile" ] || ln -fs ../templates/Makefile.cluster "$_cname/Makefile"
 	make -s -C "$_cname" init >/dev/null 2>&1 || aba_warning "config import: 'make init' for cluster '$_cname' reported an issue (continuing)"
