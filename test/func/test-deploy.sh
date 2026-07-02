@@ -36,6 +36,8 @@ if [ ! -f scripts/deploy.sh ]; then
 	exit 1
 fi
 eval "$(sed -n '/^deploy_run() {/,/^}/p' scripts/deploy.sh)"
+eval "$(sed -n '/^_detect_cluster() {/,/^}/p' scripts/deploy.sh)"
+eval "$(sed -n '/^_detect_platform() {/,/^}/p' scripts/deploy.sh)"
 if ! type deploy_run >/dev/null 2>&1; then
 	echo "FATAL: could not extract deploy_run() from scripts/deploy.sh" >&2
 	exit 1
@@ -43,7 +45,7 @@ fi
 
 # --- fake ABA_ROOT with stub sub-scripts + PATH-stubbed make ------------------
 _root="$_tmp/aba"
-mkdir -p "$_root/scripts" "$_root/mirror" "$_root/mycluster" "$_tmp/bin" "$_tmp/runner"
+mkdir -p "$_root/scripts" "$_root/mirror" "$_root/mycluster" "$_root/site" "$_tmp/bin" "$_tmp/runner"
 : > "$_root/mycluster/cluster.conf"
 export ABA_ROOT="$_root"
 export RUN_ONCE_DIR="$_tmp/runner"
@@ -159,6 +161,46 @@ _hasnot "fix-resume run 1: iso not reached (load failed)" "$DEPLOY_LOG" 'myclust
 ( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
 _has "fix-resume run 2: previously-failed load retried, iso reached" "$DEPLOY_LOG" 'mycluster iso'
 _has "fix-resume run 2: pipeline completes through day2"             "$DEPLOY_LOG" 'day2'
+
+# --- Test 6c: --restart forces a fresh re-run of completed steps --------------
+echo "--- --restart re-runs completed steps ---"
+_reset_state
+( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_r1=$(wc -l < "$DEPLOY_LOG")
+( DEPLOY_RESTART=1 deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
+_r2=$(wc -l < "$DEPLOY_LOG")
+[ "$_r1" -gt 0 ] && [ "$_r2" -gt "$_r1" ] \
+	&& test_pass "--restart clears cached state and re-runs steps: $_r1 -> $_r2" \
+	|| test_fail "--restart" "expected growth; $_r1 -> $_r2"
+
+# --- Test 6d: config-import is skipped when there is no site payload -----------
+echo "--- no site payload: config-import skipped, pipeline proceeds ---"
+_root2="$_tmp/aba2"
+mkdir -p "$_root2/scripts" "$_root2/mirror" "$_root2/standalone"
+: > "$_root2/standalone/cluster.conf"
+cp "$_root/scripts/config-import.sh" "$_root2/scripts/config-import.sh"
+cp "$_root/scripts/day2.sh" "$_root2/scripts/day2.sh"
+_LOG2="$_tmp/order2.log"; : > "$_LOG2"
+( export DEPLOY_LOG="$_LOG2" RUN_ONCE_DIR="$_tmp/runner2"; mkdir -p "$_tmp/runner2"; deploy_run "$_root2" "site" "standalone" "vmw" ) >/dev/null 2>&1
+if grep -q 'config-import' "$_LOG2"; then
+	test_fail "config-import skipped w/o site" "config-import ran despite no site dir"
+else
+	test_pass "config-import skipped when no site payload (deploys in place)"
+fi
+grep -q 'mirror install' "$_LOG2" && test_pass "pipeline proceeds without a site payload" || test_fail "no-site pipeline" "mirror install not reached"
+
+# --- Test 6e: multiple clusters abort with the correct message (finding [5]) ---
+echo "--- multiple clusters -> accurate abort ---"
+_root3="$_tmp/aba3"
+mkdir -p "$_root3/scripts" "$_root3/mirror" "$_root3/c1" "$_root3/c2"
+: > "$_root3/c1/cluster.conf"; : > "$_root3/c2/cluster.conf"
+cp "$_root/scripts/config-import.sh" "$_root3/scripts/config-import.sh"
+cp "$_root/scripts/day2.sh" "$_root3/scripts/day2.sh"
+_ML="$_tmp/ml.out"
+( export DEPLOY_LOG="$_tmp/order3.log" RUN_ONCE_DIR="$_tmp/runner3"; mkdir -p "$_tmp/runner3"; deploy_run "$_root3" "site" "" "vmw" ) >"$_ML" 2>&1
+_mlrc=$?
+[ "$_mlrc" -ne 0 ] && test_pass "multiple clusters aborts (non-zero, not a silent no-op)" || test_fail "multi-cluster abort" "expected non-zero exit"
+grep -qi 'multiple clusters' "$_ML" && test_pass "multi-cluster error is accurate (not the misleading 'none found')" || test_fail "multi-cluster msg" "got: $(tail -1 "$_ML")"
 
 # --- Test 7: CLI dispatch wiring ----------------------------------------------
 echo "--- dispatch wiring ---"
