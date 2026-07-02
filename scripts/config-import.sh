@@ -39,7 +39,9 @@ config_import_apply() {
 	_cp_verbatim() {
 		local s="$1" t="$2"
 		mkdir -p "$(dirname "$t")"
-		[ -s "$t" ] && cp -f -- "$t" "$t.backup"
+		# Back up an existing target only ONCE, so re-imports never overwrite the
+		# user's genuine pre-aba original with a previously-imported copy.
+		[ -s "$t" ] && [ ! -e "$t.backup" ] && cp -f -- "$t" "$t.backup"
 		cp -f -- "$s" "$t"
 		aba_info "imported ${t#"$dest"/}"
 	}
@@ -147,6 +149,22 @@ _src="$(cd "$_src" && pwd -P)"
 
 aba_info "Importing configuration from: $_src"
 config_import_apply "$_src" "$PWD"
+
+# Scaffold each imported cluster dir so 'make'/'aba' can operate on it: config
+# import only copies config files, but a working cluster dir also needs the
+# 'Makefile' symlink and the 'scripts'/'templates'/'mirror'/'aba.conf' symlinks
+# that 'make init' creates. Without this, 'make -C <cluster> iso' and day2 fail.
+# Re-assert the install/agent-config mtime pin afterwards, since 'make init' may
+# create the cluster's mirror.conf symlink (a regeneration trigger).
+for _cdir in */; do
+	_cname="${_cdir%/}"
+	case "$_cname" in mirror|site|helm) continue ;; esac
+	[ -f "$_cname/cluster.conf" ] || continue
+	[ -e "$_cname/Makefile" ] || ln -fs ../templates/Makefile.cluster "$_cname/Makefile"
+	make -s -C "$_cname" init >/dev/null 2>&1 || aba_warning "config import: 'make init' for cluster '$_cname' reported an issue (continuing)"
+	[ -f "$_cname/install-config.yaml" ] && touch "$_cname/install-config.yaml"
+	[ -f "$_cname/agent-config.yaml" ]   && touch "$_cname/agent-config.yaml"
+done
 
 # Validate the imported top-level config; fail with a clear error if invalid.
 if [ -f aba.conf ]; then

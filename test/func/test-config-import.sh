@@ -167,6 +167,25 @@ _am=$(stat -c %Y "$_dest2/prod/install-config.yaml")
 [ "$_bm" = "$_am" ] && test_pass "importing c1 does not re-stamp the unrelated cluster prod/" \
 	|| test_fail "pin scoping" "prod/install-config.yaml mtime changed ($_bm -> $_am)"
 
+# --- Test group 8: .backup keeps the ORIGINAL across repeated imports ---------
+echo "--- backup rotation ---"
+_rot="$_tmp/rot"; mkdir -p "$_rot/mycluster"
+printf 'ORIGINAL\n' > "$_rot/mycluster/install-config.yaml"
+( config_import_apply "$_site" "$_rot" ) >/dev/null 2>&1
+( config_import_apply "$_site" "$_rot" ) >/dev/null 2>&1
+grep -q ORIGINAL "$_rot/mycluster/install-config.yaml.backup" 2>/dev/null \
+	&& test_pass "re-import preserves the pre-aba original in .backup (no rotation clobber)" \
+	|| test_fail "backup rotation" "original lost from .backup after two imports"
+
+# --- Test group 9: config import scaffolds the cluster dir (Makefile + init) ---
+echo "--- cluster scaffold wiring ---"
+grep -q 'Makefile.cluster' "$REPO_ROOT/scripts/config-import.sh" \
+	&& test_pass "config import creates the cluster Makefile symlink (make can run)" \
+	|| test_fail "scaffold Makefile" "no Makefile.cluster symlink in config-import.sh"
+grep -qE 'make -s?C? *-?[sC]* *-C "\$_cname" init|make -s -C "\$_cname" init' "$REPO_ROOT/scripts/config-import.sh" \
+	&& test_pass "config import runs 'make init' to create scripts/mirror/aba.conf symlinks" \
+	|| test_fail "scaffold init" "config-import.sh does not run 'make init' on cluster dirs"
+
 # --- Test group 5: CLI dispatch wiring (aba config import <dir>) --------------
 echo "--- dispatch wiring ---"
 grep -q '|config|' scripts/aba.sh \
