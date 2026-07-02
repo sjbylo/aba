@@ -118,17 +118,19 @@ _before "exec: mirror load before iso"     "$DEPLOY_LOG" 'mirror load' 'mycluste
 _before "exec: iso before cluster install" "$DEPLOY_LOG" 'mycluster iso' 'mycluster install'
 _before "exec: cluster install before day2" "$DEPLOY_LOG" 'mycluster install' 'day2'
 
-# --- Test 4: resume - re-run skips completed steps (run_once -S) --------------
+# --- Test 4: resume - re-run skips the expensive cached steps (run_once -S) ----
+# (config-import is intentionally always-run/idempotent, so assert the costly
+#  make steps run exactly once across two invocations.)
 echo "--- resume (idempotent) ---"
 _reset_state
 ( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
-_n1=$(wc -l < "$DEPLOY_LOG")
 ( deploy_run "$_root" "site" "mycluster" "vmw" ) >/dev/null 2>&1
-_n2=$(wc -l < "$DEPLOY_LOG")
-if [ "$_n1" -gt 0 ] && [ "$_n2" -eq "$_n1" ]; then
-	test_pass "re-run skips completed steps (no re-execution): $_n1 == $_n2"
+_iso_n=$(grep -c 'mycluster iso' "$DEPLOY_LOG")
+_mir_n=$(grep -c 'mirror install' "$DEPLOY_LOG")
+if [ "$_iso_n" -eq 1 ] && [ "$_mir_n" -eq 1 ]; then
+	test_pass "re-run skips cached make steps (iso ran ${_iso_n}x, mirror-install ${_mir_n}x across 2 runs)"
 else
-	test_fail "resume" "expected no growth; first=$_n1 second=$_n2"
+	test_fail "resume" "expected iso=1 mirror-install=1; got iso=$_iso_n mirror-install=$_mir_n"
 fi
 
 # --- Test 5: a failed step halts the pipeline ---------------------------------

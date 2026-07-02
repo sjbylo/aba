@@ -70,8 +70,13 @@ deploy_run() {
 	# Config import FIRST so nothing re-templates over the imported files, and so the
 	# cluster dir + aba.conf exist before we resolve the cluster and platform. Skip it
 	# when there is no site payload (an already-configured tree deploys in place).
-	if [ -d "$aba_home/$site_dir" ] || [ -d "$site_dir" ]; then
-		_step config-import "Importing site configuration" "$aba_home/scripts/config-import.sh" import "$site_dir"
+	# config-import is idempotent (verbatim copy), so it always runs - never cached by
+	# run_once, whose per-tree id could otherwise skip importing a different --site.
+	if [ -n "$ABA_DEPLOY_DRY_RUN" ]; then
+		aba_info "DRY RUN [config-import]: $aba_home/scripts/config-import.sh import $site_dir"
+	elif [ -d "$aba_home/$site_dir" ] || [ -d "$site_dir" ]; then
+		aba_info "==> Importing site configuration"
+		"$aba_home/scripts/config-import.sh" import "$site_dir" || aba_abort "aba deploy: step 'config-import' failed. Fix the problem and re-run 'aba deploy'."
 	else
 		aba_info "No site payload at '$site_dir' - using the configs already in place."
 	fi
