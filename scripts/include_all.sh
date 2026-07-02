@@ -995,9 +995,11 @@ _valid_cluster_name() {
 		return 1
 	fi
 
-	# Reserved ABA directories that must never be used as cluster names
+	# Reserved ABA directory/entry names and subcommands that must never be a cluster name.
+	# 'site' is the well-known config-import/bundle payload dir; 'aba'/'abatui'/'install'
+	# are top-level repo entries; 'config'/'deploy' are aba subcommands.
 	case "$name" in
-		mirror|scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel)
+		mirror|scripts|cli|templates|tui|build|others|test|ai|tools|rpms|images|catalogs|bundles|docs|devel|site|install|aba|abatui|config|deploy)
 			echo_red "Error: '$name' is a reserved ABA directory name — choose a different cluster name" >&2
 			return 1
 			;;
