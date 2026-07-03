@@ -1256,14 +1256,16 @@ ask() {
 	fi
 	read $timer yn
 
-	# Return default response, 0
-	[ ! "$yn" ] && return 0
-
-	[ "$def_response" == "y" ] && { [ "$yn" == "y" ] || [ "$yn" == "Y" ]; } && return 0
-	[ "$def_response" == "n" ] && { [ "$yn" == "n" ] || [ "$yn" == "N" ]; } && return 0
-
-	# return "non-default" response 
-	return 1
+	# Empty input = use default
+	if [ ! "$yn" ]; then
+		[ "$def_response" = "n" ] && return 1 || return 0
+	fi
+	# Explicit yes
+	{ [ "$yn" = "y" ] || [ "$yn" = "Y" ]; } && return 0
+	# Explicit no
+	{ [ "$yn" = "n" ] || [ "$yn" = "N" ]; } && return 1
+	# Unrecognized input, treat as default
+	[ "$def_response" = "n" ] && return 1 || return 0
 }
 
 edit_file() {
