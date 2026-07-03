@@ -155,7 +155,14 @@ e2e_run "Set older version as base, desired as target" "
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
     aba -v \$older &&
     aba -d mirror --target-version \$desired &&
-    echo \"Base: \$older  Target: \$desired\"
+    echo \"Base: \$older  Target: \$desired\" &&
+    echo '--- Verifying config files ---' &&
+    got_ver=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}') &&
+    got_tgt=\$(grep '^ocp_version_target=' mirror/mirror.conf | cut -d= -f2 | awk '{print \$1}') &&
+    echo \"aba.conf ocp_version=\$got_ver  mirror.conf ocp_version_target=\$got_tgt\" &&
+    [ \"\$got_ver\" = \"\$older\" ] || { echo \"FAIL: aba.conf ocp_version=\$got_ver expected \$older\"; exit 1; } &&
+    [ \"\$got_tgt\" = \"\$desired\" ] || { echo \"FAIL: mirror.conf ocp_version_target=\$got_tgt expected \$desired\"; exit 1; } &&
+    echo 'Config files: OK'
 "
 
 e2e_run "Regenerate ISC in upgrade mode" \
@@ -188,6 +195,8 @@ e2e_run "Simulate first upgrade completed (set ocp_version to desired)" "
     cd ~/aba &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
     aba -v \$desired &&
+    got=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}') &&
+    [ \"\$got\" = \"\$desired\" ] || { echo \"FAIL: aba.conf ocp_version=\$got expected \$desired\"; exit 1; } &&
     echo \"Simulated post-upgrade state: ocp_version=\$desired\"
 "
 
@@ -240,7 +249,9 @@ e2e_snapshot_file "upgrade-isc-second" "mirror/data/imageset-config.yaml"
 e2e_run "Restore older version for remaining tests" "
     cd ~/aba &&
     older=\$(cat /tmp/e2e-ocp-version-older) &&
-    aba -v \$older
+    aba -v \$older &&
+    got=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}') &&
+    [ \"\$got\" = \"\$older\" ] || { echo \"FAIL: aba.conf ocp_version=\$got expected \$older\"; exit 1; }
 "
 
 test_end

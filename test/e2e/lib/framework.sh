@@ -1180,7 +1180,14 @@ e2e_run() {
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
                     _e2e_summary "  $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
-                    _e2e_notify "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
+                    (
+                        echo "Suite: $_E2E_SUITE_NAME | attempt $attempt/$tot_cnt | $_dur"
+                        echo "Cmd: $cmd"
+                        echo ""
+                        echo "--- Last 10 lines of output ---"
+                        echo ""
+                        tail -10 "$_cmd_output_file" 2>/dev/null
+                    ) | _e2e_notify_stdin "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "  $(_e2e_green "OK") ($_dur)"
                 _e2e_summary "  $(_e2e_Green "OK ($_dur)")"

@@ -46,9 +46,7 @@ plan_tests \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
-    "Upgrade: sync target and aba upgrade" \
-    "Upgrade: negative preflights" \
-    "Upgrade: channel switch to candidate" \
+    "Setup: delete SNO and sync latest version" \
     "Regression: version change re-extracts mirror binary" \
     "Regression: aba iso works after ocp_version change" \
     "Register: --reg-host and --reg-port CLI flags" \
@@ -113,13 +111,15 @@ e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
-e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 # Operators verified after cluster install (one per catalog).
 # The sync step (below) ensures these are actually in the registry.
 e2e_run "Set test operators" "aba --ops cincinnati-operator nginx-ingress-operator flux"
+e2e_run "Verify aba.conf: ops" "grep '^ops=.*cincinnati-operator' aba.conf"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
@@ -127,7 +127,7 @@ e2e_run "Re-apply ask=false after interactive test" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set test operators (re-apply)" \
     "aba --ops cincinnati-operator nginx-ingress-operator flux"
@@ -308,6 +308,9 @@ e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 # Apply day2 (CatalogSources, IDMS/ITMS, trust CA)
 e2e_run "Apply day2 configuration" "aba --dir $SNO day2"
 
+e2e_run "Verify CatalogSources present after day2" \
+    "aba --dir $SNO run --cmd 'oc get catalogsource -n openshift-marketplace --no-headers' | grep ."
+
 test_end
 
 # ============================================================================
@@ -410,122 +413,36 @@ e2e_run "Restore verify_conf=all" \
 test_end
 
 # ============================================================================
-# 12. Upgrade: sync target version and aba upgrade
+# 12. Setup: delete SNO and sync latest version for regression tests
 # ============================================================================
-# The SNO from test 7 is running the "previous" version.  Sync the "latest"
-# images into the same mirror and upgrade the cluster using 'aba upgrade'.
-test_begin "Upgrade: sync target and aba upgrade"
-
-e2e_run "Resolve latest version for upgrade target" "
-    aba --channel $TEST_CHANNEL --version l
-    upgrade_target=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
-    echo \$upgrade_target > /tmp/e2e-upgrade-target
-    echo \"Upgrade target: \$upgrade_target\"
-"
-
-e2e_run -r 1 2 "Set --target-version and sync upgrade images" "
-    cd ~/aba
-    target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d mirror --target-version \$target
-    aba -d mirror sync --retry
-"
-
-e2e_run "Apply day2 (upgrade mirror resources)" "aba --dir $SNO day2"
-
-e2e_run "Dry-run upgrade" \
-    "aba -d $SNO upgrade --to \$(cat /tmp/e2e-upgrade-target) --dry-run"
-
-e2e_run -r 3 2 "Trigger and verify upgrade (integrated day2)" "
-    target=\$(cat /tmp/e2e-upgrade-target)
-    aba -d $SNO upgrade --to \$target --force
-    desired=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}' | tail -1)
-    echo \"Desired version: \$desired  (target: \$target)\"
-    [ \"\$desired\" = \"\$target\" ]
-"
-
-test_end
-
-# ============================================================================
-# 12b. Upgrade: negative preflights (live cluster)
-# ============================================================================
-# Cluster is upgrading to upgrade_target. Wait for it to complete, then test
-# that invalid upgrade requests are rejected gracefully.
-test_begin "Upgrade: negative preflights"
-
-e2e_poll 1800 30 "Wait for upgrade to complete" "
-    target=\$(cat /tmp/e2e-upgrade-target)
-    status=\$(aba -d $SNO run --cmd 'oc adm upgrade')
-    echo \"\$status\" | tail -5
-    echo \"\$status\" | grep -q \"Cluster version is \$target\"
-"
-
-e2e_run "Same version exits cleanly (idempotent)" "
-    target=\$(cat /tmp/e2e-upgrade-target)
-    output=\$(aba -d $SNO upgrade --to \$target 2>&1)
-    echo \"\$output\"
-    echo \"\$output\" | grep -q 'already at version'
-"
-
-e2e_run_must_fail "Lower version than current is rejected" \
-    "aba -d $SNO upgrade --to 4.0.0"
-
-e2e_run_must_fail "Invalid version format is rejected" \
-    "aba -d $SNO upgrade --to not-a-version"
-
-e2e_run_must_fail "Unreachable version is rejected" \
-    "aba -d $SNO upgrade --to 99.99.99"
-
-test_end
-
-# ============================================================================
-# 12c. Upgrade: channel switch to candidate
-# ============================================================================
-# Verify that ABA handles channel changes correctly. Switch the cluster to the
-# "candidate" channel prefix and confirm the cluster reports the new channel.
-test_begin "Upgrade: channel switch to candidate"
-
-e2e_run "Get current channel and version" "
-    channel=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.spec.channel}' | tail -1)
-    echo \"Current channel: \$channel\"
-    echo \$channel > /tmp/e2e-original-channel
-    ver_minor=\$(echo \$channel | grep -oP '[0-9]+\\.[0-9]+')
-    echo \$ver_minor > /tmp/e2e-ver-minor
-"
-
-e2e_run "Switch cluster channel to candidate" "
-    ver_minor=\$(cat /tmp/e2e-ver-minor)
-    aba -d $SNO run --cmd \"oc adm upgrade channel candidate-\$ver_minor\"
-"
-
-e2e_run "Verify channel is now candidate" "
-    ver_minor=\$(cat /tmp/e2e-ver-minor)
-    channel=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.spec.channel}' | tail -1)
-    echo \"Channel after switch: \$channel\"
-    [ \"\$channel\" = \"candidate-\$ver_minor\" ]
-"
-
-e2e_run "Dry-run upgrade on candidate channel" "
-    aba -d $SNO upgrade --dry-run 2>&1 | tee /tmp/e2e-candidate-dryrun
-    echo '--- dry-run output above ---'
-"
-
-e2e_run "Restore original channel" "
-    orig=\$(cat /tmp/e2e-original-channel)
-    aba -d $SNO run --cmd \"oc adm upgrade channel \$orig\"
-    channel=\$(aba -d $SNO run --cmd 'oc get clusterversion version -o jsonpath={.spec.channel}' | tail -1)
-    echo \"Restored channel: \$channel\"
-    [ \"\$channel\" = \"\$orig\" ]
-"
+# Upgrade testing now lives in suite-airgapped-local-reg (cross-minor upgrade).
+# Here we just need a second version in the mirror for tests 13/14 (binary
+# re-extraction regression tests). Sync the latest z-stream, which is a small
+# incremental delta. Also delete the SNO cluster (no longer needed).
+test_begin "Setup: delete SNO and sync latest version"
 
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
+
+e2e_run "Resolve latest version and set target" "
+    old_ver=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
+    aba --channel fast --version l
+    new_ver=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
+    [ \"\$new_ver\" != \"\$old_ver\" ] || { echo \"FAIL: version did not change (still \$old_ver)\"; exit 1; }
+    aba -d mirror --target-version \$new_ver
+    rm -f mirror/data/.created
+    echo \"Syncing version: \$new_ver (was: \$old_ver)\"
+"
+
+e2e_run -r 1 2 "Sync latest version to mirror" \
+    "aba -d mirror sync --retry"
 
 test_end
 
 # ============================================================================
 # 13. Regression: version change must re-extract mirror binary
 # ============================================================================
-# The upgrade test above changed ocp_version from "previous" to "latest".
+# The sync above changed ocp_version from "previous" to "latest".
 # The mirror binary filename includes the version, so the old binary should
 # NOT be used.  A fresh extraction from the registry must occur.
 # This guards against the regression introduced in 54803e35 where version
@@ -540,7 +457,7 @@ e2e_run "Create throwaway cluster dir for extraction test" \
 	"aba cluster -n e2e-test-extract -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 # The old-version mirror binary should NOT exist in the new cluster dir.
-# _CUR_VER (resolved in test 11) is the pre-upgrade version.
+# _CUR_VER (resolved in test 11) is the pre-sync version.
 _OLD_MIRROR_BIN="openshift-install-mirror-${_CUR_VER}-${_REG_HOST2}-${_REG_PORT2}"
 _NEW_MIRROR_BIN="openshift-install-mirror-${_NEW_VER}-${_REG_HOST2}-${_REG_PORT2}"
 
@@ -550,10 +467,10 @@ e2e_run "Assert old-version mirror binary does not exist" \
 e2e_run "Assert new-version mirror binary does not exist yet" \
 	"test ! -f e2e-test-extract/$_NEW_MIRROR_BIN"
 
-# Run verify-release-image.sh which should extract the new-version binary.
+# Trigger mirror binary extraction via the proper user-facing command.
 e2e_run -q "Skip DNS for extraction test" "aba --verify conf"
 e2e_run "Extract mirror binary for new version" \
-	"cd e2e-test-extract && scripts/verify-release-image.sh"
+	"aba --dir e2e-test-extract install-config.yaml"
 e2e_run -q "Restore full verification" "aba --verify all"
 
 e2e_run "Assert new-version mirror binary was extracted" \
@@ -572,7 +489,7 @@ test_end
 # Full end-to-end: generate ISO with version A, change ocp_version to B, then
 # generate ISO again.  The second 'aba iso' must succeed -- CLIs refresh and
 # the versioned mirror binary is re-extracted automatically.
-# After the upgrade test (12), aba.conf has the "latest" version and the pool
+# After the sync (12), aba.conf has the "latest" version and the pool
 # registry contains both "previous" and "latest" images.
 test_begin "Regression: aba iso works after ocp_version change"
 
@@ -591,6 +508,16 @@ e2e_run "Generate ISO with version A (\$_VER_A)" \
 # drift if a new z-stream was published during the suite run (e.g. p=4.21.20→4.21.21).
 e2e_run "Change ocp_version back to original ($_ocp_version)" \
 	"aba --channel $_ocp_channel --version $_ocp_version"
+
+e2e_run "Align state.sh with version change" "
+    _state=~/.aba/mirror/mirror/state.sh
+    ver=\$(grep ^ocp_version= ~/aba/aba.conf | cut -d= -f2 | awk '{print \$1}')
+    sed -i '/^ocp_version=/d' \$_state
+    echo \"ocp_version=\$ver\" >> \$_state
+    got=\$(grep '^ocp_version=' \$_state | cut -d= -f2)
+    [ \"\$got\" = \"\$ver\" ] || { echo \"FAIL: state.sh ocp_version=\$got expected \$ver\"; exit 1; }
+    echo \"state.sh ocp_version aligned to \$ver: OK\"
+"
 
 _VER_B=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
 
@@ -613,9 +540,18 @@ e2e_run "Assert mirror binary matches changed version" \
 e2e_run "Assert binary reports correct version" \
 	"e2e-test-iso-verchg/$_EXPECTED_BIN version 2>&1 | grep -q '$_VER_B'"
 
-# Restore ocp_version to post-upgrade (latest) for subsequent tests
-e2e_run -q "Restore ocp_version to post-upgrade" \
-	"aba --channel $TEST_CHANNEL --version l"
+# Restore ocp_version to latest for subsequent tests
+e2e_run -q "Restore ocp_version to latest" \
+	"aba --channel fast --version l"
+
+e2e_run -q "Restore state.sh ocp_version" "
+    _state=~/.aba/mirror/mirror/state.sh
+    ver=\$(grep ^ocp_version= ~/aba/aba.conf | cut -d= -f2 | awk '{print \$1}')
+    sed -i '/^ocp_version=/d' \$_state
+    echo \"ocp_version=\$ver\" >> \$_state
+    got=\$(grep '^ocp_version=' \$_state | cut -d= -f2)
+    [ \"\$got\" = \"\$ver\" ] || { echo \"FAIL: state.sh ocp_version=\$got expected \$ver\"; exit 1; }
+"
 
 e2e_run -q "Restore full verification" "aba --verify all"
 

@@ -108,7 +108,9 @@ cat > "$regcreds_dir/state.sh" <<-EOF
 reg_vendor=existing
 reg_host=$reg_host
 reg_port=$reg_port
-reg_installed_at="$(date '+%Y-%m-%d %H:%M:%S')"
+last_action=register
+last_action_at='$(date '+%Y-%m-%d %H:%M:%S')'
+reg_installed_at='$(date '+%Y-%m-%d %H:%M:%S')'
 EOF
 aba_info "Saved registry state to $regcreds_display/state.sh"
 

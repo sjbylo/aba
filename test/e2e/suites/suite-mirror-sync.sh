@@ -68,11 +68,13 @@ e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
-e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
@@ -80,7 +82,7 @@ e2e_run "Re-apply ask=false after interactive test" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
@@ -303,6 +305,8 @@ e2e_run "Show cluster operator status" "aba --dir $SNO run"
 e2e_wait_cluster_ready $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
+e2e_run "Verify CatalogSources present after day2" \
+    "aba --dir $SNO run --cmd 'oc get catalogsource -n openshift-marketplace --no-headers' | grep ."
 e2e_run "Delete cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
@@ -331,6 +335,7 @@ test_end
 test_begin "Bare-metal: ISO simulation"
 
 e2e_run "Set platform=bm" "aba --platform bm"
+e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 
 e2e_run "Remove govc to test download-all" "rm -f cli/govc*"
 e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
@@ -380,6 +385,7 @@ SNO_BM="${SNO}"
 _BM_MAC="00:50:56:BE:E0:01"
 
 e2e_run "Ensure platform=bm" "aba --platform bm"
+e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 e2e_run "Clean any leftover $SNO_BM cluster dir" "rm -rf $SNO_BM"
 e2e_add_to_cluster_cleanup "$PWD/$SNO_BM"
 
@@ -449,6 +455,7 @@ e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
 e2e_run "Restore platform=vmw" "aba --platform vmw"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 
 test_end
 

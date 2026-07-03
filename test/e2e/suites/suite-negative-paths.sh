@@ -63,6 +63,10 @@ e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
 e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 e2e_run "Backup good aba.conf" "cp aba.conf aba.conf.good"
 e2e_run "Ensure mirror dir initialised" "make -sC mirror init"
 
@@ -125,6 +129,7 @@ e2e_run "Verify aba.conf.seen cleaned" "test ! -f .aba.conf.seen"
 e2e_run "Re-install after clean" "./install"
 e2e_run "Reconfigure after clean" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version format after clean" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 e2e_run "Re-init mirror dir" "make -sC mirror init"
 
 test_end 0

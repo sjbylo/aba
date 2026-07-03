@@ -84,8 +84,10 @@ _generate_yaml() {
 }
 
 # Cleanup on exit (catches signals, errors, aba_abort, TUI close — not just INT/TERM)
+# Remove partial image to prevent "layer not known" on next pull (podman#9588, podman#14003)
 _cleanup() {
 	[ -n "${container_name:-}" ] && podman rm -f "$container_name" >/dev/null 2>&1 || true
+	[ -n "${catalog_url:-}" ] && podman rmi "$catalog_url" >/dev/null 2>&1 || true
 	[ -d "${tmp_dir:-}" ] && rm -rf "$tmp_dir"
 	rm -f "${tmp_file:-}"
 }

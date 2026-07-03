@@ -189,16 +189,16 @@ if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
-# After successful load: update aba.conf if the ISC version/channel differs.
-# This ensures status checks, verify, and cluster install all see the correct version.
-if [ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ]; then
-	replace-value-conf -q -n ocp_version -v "$_loaded_ver" -f ../aba.conf
-	aba_info "Updated aba.conf: ocp_version $ocp_version → $_loaded_ver (from imageset-config.yaml)"
+# After successful load: update state.sh with the loaded version.
+# state.sh is the authoritative record of what the mirror actually contains.
+if [ "$_loaded_ver" ]; then
+	replace-value-conf -q -n ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
+	if [ "$_loaded_ver" != "$ocp_version" ]; then
+		aba_info "Mirror state updated: ocp_version $ocp_version → $_loaded_ver"
+	fi
 fi
-if [ "$_loaded_chan" ] && [ "$_loaded_chan" != "$ocp_channel" ]; then
-	replace-value-conf -q -n ocp_channel -v "$_loaded_chan" -f ../aba.conf
-	aba_info "Updated aba.conf: ocp_channel $ocp_channel → $_loaded_chan (from imageset-config.yaml)"
-fi
+replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 
 # Bundle phase complete: unlock ISC so future config changes trigger regeneration.
 # touch .created makes it newer than ISC → reg-create-imageset-config.sh will regenerate.

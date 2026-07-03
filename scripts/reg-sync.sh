@@ -137,6 +137,16 @@ if ! _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
+# After successful sync: update state.sh with the synced version.
+# Use ocp_version_target if set (upgrade sync), otherwise ocp_version (normal sync).
+_synced_ver="${ocp_version_target:-$ocp_version}"
+replace-value-conf -q -n ocp_version -v "$_synced_ver" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+if [ "$_synced_ver" != "$ocp_version" ]; then
+	aba_info "Mirror state updated: ocp_version $ocp_version → $_synced_ver"
+fi
+
 echo
 aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"
 aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
