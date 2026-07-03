@@ -1101,7 +1101,7 @@ if [ "$cur_target" ]; then
 			# If still not marked after auto-detect, warn and ask
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
 				aba_warning "Cluster has not completed installation."
-				ask "Cluster has not completed installation, continue anyway" || exit 1
+				ask -n --auto-yes "Cluster has not completed installation, continue anyway" || exit 1
 			fi
 			;;
 	esac

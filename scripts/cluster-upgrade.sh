@@ -154,7 +154,7 @@ if ! cluster_is_accessible; then
 	aba_warning \
 		"The cluster API is not reachable (ClusterVersion Available != True)." \
 		"To investigate: oc get clusterversion"
-	ask "Continue with upgrade anyway" || exit 1
+	ask -n --auto-yes "Continue with upgrade anyway" || exit 1
 fi
 
 # Idempotency: if an upgrade to the same target is already in progress, fall through to monitoring
@@ -286,7 +286,7 @@ if [ ! "$upgrade_already_running" ]; then
 				"ABA cannot resolve this automatically." \
 				"Review the message above and follow any referenced documentation."
 			echo
-			ask "Continue with upgrade (only if you have resolved the above)" || exit 1
+			ask -n "Continue with upgrade (only if you have resolved the above)" || exit 1
 		fi
 	fi
 
@@ -386,7 +386,7 @@ if [ ! "$upgrade_already_running" ]; then
 			"" \
 			"If you proceed, the upgrade will bypass OpenShift's update graph validation."
 		echo
-		ask "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
+		ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
 		upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
 	fi
 
