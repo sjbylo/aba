@@ -1118,15 +1118,24 @@ e2e_run() {
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
     local _display_host="${host:-$USER@$(hostname -s)}"
+    local _display_cwd="$PWD"
+    if [ -n "$host" ]; then
+        local _ruser="${host%%@*}"
+        if [ "$_ruser" = "root" ]; then
+            _display_cwd="/root/aba"
+        elif [ "$_ruser" != "$host" ]; then
+            _display_cwd="/home/$_ruser/aba"
+        fi
+    fi
 
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_green "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Green "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_green "[$_display_host:$_display_cwd]")"
+        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Green "[$_display_host:$_display_cwd]")"
     else
-        _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$_display_cwd]")"
+        _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$_display_cwd]")"
     fi
     if [[ "$cmd" == *$'\n'* ]]; then
         _e2e_log "  CMD: $cmd"
@@ -1467,12 +1476,21 @@ e2e_diag() {
     local ret=0
 
     local _display_host="${host:-$USER@$(hostname -s)}"
+    local _display_cwd="$PWD"
+    if [ -n "$host" ]; then
+        local _ruser="${host%%@*}"
+        if [ "$_ruser" = "root" ]; then
+            _display_cwd="/root/aba"
+        elif [ "$_ruser" != "$host" ]; then
+            _display_cwd="/home/$_ruser/aba"
+        fi
+    fi
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$_display_cwd]")"
         _e2e_log_and_print "  $(_e2e_dim "$cmd")"
     else
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_white "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_white "$description") $(_e2e_yellow "[$_display_host:$_display_cwd]")"
         _e2e_log_and_print "  $(_e2e_dim "$cmd")"
     fi
 
