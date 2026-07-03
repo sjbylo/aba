@@ -1235,14 +1235,25 @@ ask() {
 	# Default reply is 'yes' (or 'no') and return 0
 	yn_opts="(Y/n)"
 	def_response=y
+	local auto_response=
 	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/N)" && shift
 	[ "$1" == "-y" ] && def_response=y && yn_opts="(Y/n)" && shift
+	# --auto-yes/--auto-no: override the non-interactive (ask=false) answer
+	# independently of the interactive default (-n/-y).  Allows e.g.
+	# "ask -n --auto-yes" = human default N (safe), automation default Y (proceed).
+	[ "$1" == "--auto-yes" ] && auto_response=y && shift
+	[ "$1" == "--auto-no" ] && auto_response=n && shift
 	timer=
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
 	#echo
  	echo_yellow -n "[ABA] $@? $yn_opts: "
-	[ "$ret_default" ] && echo_white "[default: $ret_default]" && return 0
+	if [ "$ret_default" ]; then
+		echo_white "[default: $ret_default]"
+		local effective=${auto_response:-$def_response}
+		[ "$effective" = "n" ] && return 1
+		return 0
+	fi
 	read $timer yn
 
 	# Return default response, 0
