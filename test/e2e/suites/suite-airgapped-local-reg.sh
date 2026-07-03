@@ -56,8 +56,8 @@ plan_tests \
     "Deploy: vote-app with IDMS" \
     "Incremental: mesh operators" \
     "Deploy: service mesh demo" \
-    "Upgrade: cross-minor with admin ack gate" \
     "Lifecycle: shutdown/startup" \
+    "Upgrade: cross-minor with admin ack gate" \
     "Standard: cluster with macs.conf" \
     "Cleanup: uninstall registry on disN"
 
@@ -580,7 +580,36 @@ fi
 test_end
 
 # ============================================================================
-# 14. Upgrade: cross-minor with admin ack gate
+# 14. Lifecycle: shutdown/startup
+# ============================================================================
+test_begin "Lifecycle: shutdown/startup"
+
+e2e_run_remote "Shutdown cluster" \
+    "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
+
+e2e_poll_remote 180 10 "Wait for VM to power off" \
+    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOff"
+
+e2e_run_remote "Startup cluster" \
+    "cd ~/aba && aba --dir $SNO startup --wait"
+
+e2e_poll_remote 180 10 "Wait for VM to power on" \
+    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
+
+# Wait for API server and operators to stabilize after startup before asserting
+e2e_wait_cluster_available $SNO remote
+
+e2e_run_remote "Verify 'aba login' sets kubeconfig" \
+    "cd ~/aba && eval \"\$(aba --dir $SNO login)\" && oc get nodes"
+e2e_run_remote "Verify 'aba shell' exports work" \
+    "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
+
+e2e_wait_cluster_ready $SNO remote
+
+test_end
+
+# ============================================================================
+# 15. Upgrade: cross-minor with admin ack gate
 # ============================================================================
 test_begin "Upgrade: cross-minor with admin ack gate"
 
@@ -651,35 +680,8 @@ sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' | grep 'upgrade is in progress'"
 
-test_end
-
-# ============================================================================
-# 15. Lifecycle: shutdown/startup
-# ============================================================================
-test_begin "Lifecycle: shutdown/startup"
-
-e2e_run_remote "Shutdown cluster" \
-    "cd ~/aba && yes | aba --dir $SNO shutdown --wait"
-
-e2e_poll_remote 180 10 "Wait for VM to power off" \
-    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOff"
-
-e2e_run_remote "Startup cluster" \
-    "cd ~/aba && aba --dir $SNO startup --wait"
-
-e2e_poll_remote 180 10 "Wait for VM to power on" \
-    "cd ~/aba && aba --dir $SNO ls | grep -i poweredOn"
-
-# Wait for API server and operators to stabilize after startup before asserting
-e2e_wait_cluster_available $SNO remote
-
-# GAP 4: Verify 'aba login' and 'aba shell' set up kubeconfig correctly
-e2e_run_remote "Verify 'aba login' sets kubeconfig" \
-    "cd ~/aba && eval \"\$(aba --dir $SNO login)\" && oc get nodes"
-e2e_run_remote "Verify 'aba shell' exports work" \
-    "cd ~/aba && eval \"\$(aba --dir $SNO shell)\" && oc get clusterversion"
-
-e2e_wait_cluster_ready $SNO remote
+# Wait for upgrade to complete before cleanup
+e2e_wait_cluster_ready $SNO remote 2700
 
 test_end
 
@@ -711,8 +713,8 @@ e2e_run_remote "Verify macs.conf created" \
 
 e2e_run_remote "Generate agent configs" \
     "cd ~/aba && aba --dir $STANDARD agentconf"
-e2e_run_remote "Verify agent-config has MACs" \
-    "cd ~/aba && cat $STANDARD/agent-config.yaml | grep -i mac"
+e2e_run_remote "Verify agent-config has MACs from macs.conf" \
+    "cd ~/aba && grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' $STANDARD/agent-config.yaml | grep -q ."
 # Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
 # valid and control plane comes up.  Full operator verification is done on
 # the SNO cluster earlier in this suite.
