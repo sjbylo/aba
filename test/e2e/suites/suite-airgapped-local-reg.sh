@@ -56,7 +56,7 @@ plan_tests \
     "Deploy: vote-app with IDMS" \
     "Incremental: mesh operators" \
     "Deploy: service mesh demo" \
-    "Upgrade: OSUS and cluster upgrade" \
+    "Upgrade: cross-minor with admin ack gate" \
     "Lifecycle: shutdown/startup" \
     "Standard: cluster with macs.conf" \
     "Cleanup: uninstall registry on disN"
@@ -78,23 +78,27 @@ e2e_run "Remove oc-mirror caches (conN)" \
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-# Use OCP_VERSION=p for upgrade testing (we'll reduce version further below)
-e2e_run "Configure aba.conf with previous version" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version p --base-domain $(pool_domain)"
+# Use fast channel for cross-minor upgrade testing.
+# We configure with --version p (N-1), then compute N-2 in the next step
+# and reconfigure with the exact N-2 version. N-2 is installed, then
+# upgraded to N-1 later in the suite.
+e2e_run "Configure aba.conf (fast channel, initial setup)" \
+    "aba --noask --platform vmw --channel fast --version p --base-domain $(pool_domain)"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=fast aba.conf"
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
 e2e_run "Clear NTP (install without NTP, day2-ntp will add it later)" \
     "sed -i 's/^ntp_servers=.*/ntp_servers=/' aba.conf"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
 e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
 e2e_run "Set mirror hostname in mirror.conf" \
@@ -104,25 +108,32 @@ e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 test_end
 
 # ============================================================================
-# 2. Calculate older version for upgrade testing
+# 2. Calculate cross-minor versions for upgrade testing
 # ============================================================================
 test_begin "Setup: calculate older version for upgrade"
 
-e2e_run "Read aba.conf and compute older version" "
-    . aba.conf
-    echo ocp_version=\$ocp_version
-    ocp_version_major=\$(echo \$ocp_version | cut -d. -f1-2)
-    ocp_version_point=\$(echo \$ocp_version | cut -d. -f3)
-    ocp_version_older=\${ocp_version_major}.\$(( ocp_version_point - 1 ))
-    echo ocp_version_older=\$ocp_version_older
+# aba.conf has N-1 (from --version p above). That becomes the upgrade target.
+# Compute N-2 (the install version) using fetch_older_version, then
+# reconfigure aba.conf with the N-2 version.
+e2e_run "Compute cross-minor versions (N-2 install, N-1 upgrade target)" "
+    source scripts/include_all.sh
+    desired=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}')
+    older=\$(fetch_older_version fast)
+    [ -n \"\$desired\" ] || { echo 'FAIL: N-1 version not set in aba.conf'; exit 1; }
+    [ -n \"\$older\" ] || { echo 'FAIL: cannot resolve N-2 version'; exit 1; }
+    older_minor=\$(echo \$older | cut -d. -f1-2)
+    desired_minor=\$(echo \$desired | cut -d. -f1-2)
+    [ \"\$older_minor\" != \"\$desired_minor\" ] || { echo \"FAIL: versions are same minor (\$older vs \$desired)\"; exit 1; }
+    echo \"Install (N-2): \$older  Upgrade target (N-1): \$desired\"
     sudo rm -f /tmp/e2e-ocp-version-desired /tmp/e2e-ocp-version-older
-    echo \$ocp_version > /tmp/e2e-ocp-version-desired
-    echo \$ocp_version_older > /tmp/e2e-ocp-version-older
+    echo \$desired > /tmp/e2e-ocp-version-desired
+    echo \$older > /tmp/e2e-ocp-version-older
 "
 
-e2e_run "Set aba to older version for initial bundle" \
+# Now set aba.conf to the N-2 version for the initial install
+e2e_run "Set aba.conf to N-2 version for install" \
     "aba -v \$(cat /tmp/e2e-ocp-version-older)"
-e2e_run "Verify aba.conf: version matches older" "grep ^ocp_version=\$(cat /tmp/e2e-ocp-version-older) aba.conf"
+e2e_run "Verify aba.conf: version matches N-2" "grep ^ocp_version=\$(cat /tmp/e2e-ocp-version-older) aba.conf"
 
 test_end
 
@@ -269,6 +280,9 @@ test_begin "SNO: day2 configuration"
 e2e_run_remote "Apply day2 config" \
     "cd ~/aba && aba --dir $SNO day2"
 
+e2e_run_remote "Verify CatalogSources present after day2" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get catalogsource -n openshift-marketplace --no-headers' | grep ."
+
 test_end
 
 # ============================================================================
@@ -318,8 +332,8 @@ EOF"
 e2e_snapshot_file "ubi-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save UBI image to disk" \
     "aba -d mirror save --retry"
-e2e_run "Transfer UBI archive+config to internal bastion" \
-    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run "Transfer UBI archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "ubi-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load UBI images" \
@@ -352,8 +366,8 @@ EOF"
 e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
-e2e_run "Transfer vote-app archive+config to internal bastion" \
-    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run "Transfer vote-app archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
@@ -467,8 +481,8 @@ e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 e2e_snapshot_file "mesh-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save mesh operator images" "aba -d mirror save --retry"
 
-e2e_run "Transfer archive and config to internal bastion" \
-    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run "Transfer archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "mesh-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load mesh images" \
@@ -516,7 +530,7 @@ EOF"
 e2e_snapshot_file "mesh-demo-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save mesh demo app images" "aba -d mirror save --retry"
 e2e_run "Transfer demo app archive to internal bastion" \
-    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_run_remote -r 3 2 "Load mesh demo app images" \
     "cd ~/aba && aba -d mirror load --retry"
@@ -566,17 +580,20 @@ fi
 test_end
 
 # ============================================================================
-# 14. Upgrade: OSUS and cluster upgrade
+# 14. Upgrade: cross-minor with admin ack gate
 # ============================================================================
-test_begin "Upgrade: OSUS and cluster upgrade"
+test_begin "Upgrade: cross-minor with admin ack gate"
 
-# Save the target (newer) version images using --target-version (auto-generates
+# Save the target (N-1) version images using --target-version (auto-generates
 # ISC with shortestPath, minVersion=current, maxVersion=target).
 # Force ISC regeneration: earlier tests (mesh, UBI, vote-app) manually appended to the ISC,
 # making it appear "user-edited" (newer than .created). Without this, the save step would
 # preserve the stale mesh-only ISC instead of generating the upgrade ISC with shortestPath.
-e2e_run "Set --target-version for upgrade" \
-    "cd ~/aba && aba -d mirror --target-version \$(cat /tmp/e2e-ocp-version-desired) && \
+e2e_run "Set --target-version for cross-minor upgrade" \
+    "cd ~/aba && desired=\$(cat /tmp/e2e-ocp-version-desired) && \
+     aba -d mirror --target-version \$desired && \
+     got=\$(grep '^ocp_version_target=' mirror/mirror.conf | cut -d= -f2 | awk '{print \$1}') && \
+     [ \"\$got\" = \"\$desired\" ] || { echo \"FAIL: mirror.conf ocp_version_target=\$got expected \$desired\"; exit 1; } && \
      rm -f mirror/data/.created"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
@@ -594,8 +611,8 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
 
 e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 1 2 "Save upgrade images" "aba -d mirror save --retry"
-e2e_run "Transfer upgrade archive+config to internal bastion" \
-    "scp mirror/data/*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run "Transfer upgrade archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 1 2 "Load upgrade images" \
@@ -615,15 +632,20 @@ e2e_run_remote "Apply OSUS day2" \
 # Wait for all COs to be available (AVAILABLE=True)
 e2e_wait_cluster_available $SNO remote
 
-# Channel is now auto-set by 'aba upgrade' based on the live cluster's channel
-# prefix and the target version's major.minor. No manual channel-setting needed.
-
 # Wait up to 30 min for all operators to stabilize before upgrading.
 # Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
 e2e_wait_cluster_ready $SNO remote 1800
 
-e2e_run_remote "Trigger cluster upgrade via aba upgrade" \
+# Cross-minor upgrade: first attempt WITHOUT --force must FAIL.
+# Admin acknowledgment gates (Upgradeable=False) block cross-minor upgrades
+# until the admin explicitly acknowledges API removals. Without --force, oc
+# refuses the upgrade.
+e2e_run_must_fail_remote "Upgrade without --force must fail (admin ack gate)" \
     "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --skip-day2"
+
+# Second attempt WITH --force must PASS -- bypasses admin ack gates.
+e2e_run_remote "Upgrade with --force (bypass admin ack gate)" \
+    "cd ~/aba && aba --dir $SNO upgrade --to $(cat /tmp/e2e-ocp-version-desired) --force --skip-day2"
 
 sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \

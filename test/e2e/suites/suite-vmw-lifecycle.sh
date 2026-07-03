@@ -62,6 +62,7 @@ test_begin "Setup: ensure pre-populated registry"
 e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version resolved" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -96,6 +97,7 @@ e2e_run "Verify vmware.conf (VC_FOLDER or ESXi)" \
     "grep -q ^VC_FOLDER= vmware.conf || grep -q ^GOVC_URL= vmware.conf"
 
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 
 test_end
 
@@ -152,6 +154,7 @@ e2e_run "Create compact cluster.conf (data_disk, prefixes, named mirror)" \
      --mirror-name $NAMED_MIRROR --step cluster.conf"
 e2e_run "Set mac_prefix for $COMPACT (VMware range, randomized)" \
     "sed -i 's#mac_prefix=.*#mac_prefix=00:50:56:1x:xx:#g' $COMPACT/cluster.conf"
+e2e_run "Verify mac_prefix set" "grep '^mac_prefix=00:50:56:1x:xx:' $COMPACT/cluster.conf"
 e2e_diag "Show compact cluster.conf" "grep -E '^\w' $COMPACT/cluster.conf"
 
 e2e_run "Generate ISO for compact cluster" "aba --dir $COMPACT iso"

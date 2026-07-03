@@ -898,23 +898,25 @@ externalize_cluster_state() {
 	aba_info "Cluster state saved to $_state_dir/"
 }
 
-# Emit export lines that override immutable cluster fields from state.sh.
+# Emit export lines for cluster status fields from state.sh.
 # Called at the end of normalize-cluster-conf() so state wins over config.
 # Drift (config != state) triggers a visible warning — cluster.conf should
-# NOT be edited for immutable fields after install.  Delete cluster first.
+# NOT be edited for status fields after install.  Delete cluster first.
 _state_override_cluster() {
 	local _name="$1" _domain="$2"
 	local _state="$HOME/.aba/clusters/$_name.$_domain/state.sh"
-	local _immutable="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
+	local _status="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
 	local _warn_fields="cluster_name base_domain starting_ip cluster_type platform"
 	local _field _sval _cval
 
-	for _field in $_immutable; do
-		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+	source "$_state"
+
+	for _field in $_status; do
+		_sval="${!_field}"
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
-				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/[[:space:]]*#.*//; s/^['\"]//; s/['\"]$//")
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 					aba_warning \
 						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
@@ -924,32 +926,34 @@ _state_override_cluster() {
 		esac
 		# state.sh may store machine_network as CIDR (10.0.0.0/20); split it
 		if [ "$_field" = "machine_network" ] && [[ "$_sval" == */* ]]; then
-			echo "export machine_network=${_sval%/*}"        # IP part of CIDR
-			echo "export prefix_length=${_sval#*/}"          # prefix part of CIDR
+			echo "export machine_network='${_sval%/*}'"      # IP part of CIDR
+			echo "export prefix_length='${_sval#*/}'"        # prefix part of CIDR
 			continue
 		fi
-		echo "export ${_field}=${_sval}"
+		echo "export ${_field}='${_sval}'"
 	done
 }
 
-# Emit export lines that override immutable mirror fields from state.sh.
+# Emit export lines for mirror status fields from state.sh.
 # Called at the end of normalize-mirror-conf() so state wins over config.
 # Drift (config != state) triggers a visible warning — mirror.conf should
 # NOT be edited after install.  Uninstall first, then change mirror.conf.
 # Warning is shown once per process to avoid noisy repeated output.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
-	local _immutable="reg_host reg_port reg_root reg_user reg_pw"
+	local _status="reg_host reg_port reg_root reg_user reg_pw ocp_version last_action last_action_at"
 	local _field _sval _cval _drifted=""
 
-	for _field in $_immutable; do
-		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+	source "$_state"
+
+	for _field in $_status; do
+		_sval="${!_field}"
 		[ -z "$_sval" ] && continue
-		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/[[:space:]]*#.*//; s/^['\"]//; s/['\"]$//")
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
 		fi
-		echo "export ${_field}=${_sval}"
+		echo "export ${_field}='${_sval}'"
 	done
 
 	# Show drift warning once per aba invocation (file flag using parent PID)
@@ -2022,11 +2026,13 @@ replace-value-conf() {
 		local _sed_safe
 		_sed_safe=$(_sed_escape_replacement "$_write_value")
 
-		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
+		# Match old value: single-quoted ('...'), double-quoted ("..."), or unquoted.
 		# Trailing whitespace + comment is captured in \1 and preserved.
 		# Uses | as sed delimiter (| is forbidden in config values).
 		if grep -q -E "^[#[:space:]]*${name}='" "$f"; then
 			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+		elif grep -q -E "^[#[:space:]]*${name}=\"" "$f"; then
+			sed -i --follow-symlinks "s|^[# \t]*${name}=\"[^\"]*\"\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		else
 			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		fi

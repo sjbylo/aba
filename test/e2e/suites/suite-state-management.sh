@@ -73,6 +73,10 @@ e2e_install_aba
 
 e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 test_end
 
@@ -126,7 +130,7 @@ e2e_run "state.sh: reg_ssh_user is set (remote install)" \
 	"grep -q '^reg_ssh_user=' $_STATE_DIR/state.sh"
 
 e2e_run "state.sh: reg_installed_at has timestamp" \
-	"grep -qE '^reg_installed_at=\"[0-9]{4}-' $_STATE_DIR/state.sh"
+	"grep -qE '^reg_installed_at=.[0-9]{4}-' $_STATE_DIR/state.sh"
 
 e2e_run "state.sh: NO uppercase REG_ vars" \
 	"! grep -q '^REG_' $_STATE_DIR/state.sh"
@@ -221,6 +225,8 @@ e2e_run "Re-install aba after reset" "cd ~/aba && ./install"
 
 e2e_run "Reconfigure aba.conf" \
 	"cd ~/aba && aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: platform=vmw after reconfigure" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: version format after reconfigure" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 test_end
 

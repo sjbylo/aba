@@ -23,6 +23,8 @@ yaml2json()
 }
 
 source <(normalize-aba-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
+source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
