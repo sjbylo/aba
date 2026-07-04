@@ -1024,7 +1024,7 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1071,7 +1071,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1091,7 +1091,7 @@ if [ "$cur_target" ]; then
 
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
-		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue)
+		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|unstick)
 			_cn=$(basename "$PWD")
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
@@ -1155,6 +1155,10 @@ if [ "$cur_target" ]; then
 			echo
 			aba_debug "Running: $OC get co"
 			$OC get co
+			exit
+		;;
+		unstick)
+			$ABA_ROOT/scripts/cluster-unstick.sh
 			exit
 		;;
 		cluster-version)
