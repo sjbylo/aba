@@ -430,7 +430,7 @@ e2e_run "Resolve latest version and set target" "
     new_ver=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
     [ \"\$new_ver\" != \"\$old_ver\" ] || { echo \"FAIL: version did not change (still \$old_ver)\"; exit 1; }
     aba -d mirror --target-version \$new_ver
-    rm -f mirror/data/.created
+    aba --force -d mirror imagesetconf
     echo \"Syncing version: \$new_ver (was: \$old_ver)\"
 "
 

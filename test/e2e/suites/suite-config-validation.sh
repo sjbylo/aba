@@ -267,14 +267,11 @@ e2e_run "Set global op_sets=ocp in aba.conf" \
 e2e_run "Override op_sets=acm in mirror.conf" \
 	"echo 'op_sets=acm' >> mirror/mirror.conf"
 
-e2e_run "Remove existing ISC and .created marker" \
-	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
-
 e2e_run "Download catalogs" \
 	"aba -d mirror catalogs-download catalogs-wait"
 
 e2e_run "Generate ISC with mirror.conf override" \
-	"aba -d mirror imagesetconf"
+	"aba --force -d mirror imagesetconf"
 
 e2e_run "Verify ISC contains ACM (from mirror.conf override)" \
 	"grep 'advanced-cluster-management' mirror/data/imageset-config.yaml"
@@ -287,9 +284,6 @@ e2e_run_must_fail "Verify ISC does NOT contain web-terminal (ocp set, should be 
 
 e2e_run "Restore aba.conf and mirror.conf" \
 	"cp aba.conf.bak aba.conf && cp mirror/mirror.conf.bak mirror/mirror.conf && rm -f aba.conf.bak mirror/mirror.conf.bak"
-
-e2e_run "Clean up generated ISC" \
-	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
 
 test_end 0
 
@@ -366,14 +360,11 @@ e2e_run_must_fail "Dangling dash rejected" \
 e2e_run "Set RC version for ISC test" \
 	"aba --noask --channel candidate --version 4.22.0-rc.1"
 
-e2e_run "Remove existing ISC" \
-	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
-
 e2e_run "Ensure no ocp_version_target" \
 	"sed -i 's/^ocp_version_target=.*/#ocp_version_target=/' mirror/mirror.conf"
 
 e2e_run "Generate ISC with RC version" \
-	"aba -d mirror imagesetconf"
+	"aba --force -d mirror imagesetconf"
 
 e2e_run "ISC channel is candidate-4.22 (not candidate-4.22.0-rc)" \
 	"grep 'name: candidate-4.22$' mirror/data/imageset-config.yaml"
@@ -389,30 +380,24 @@ e2e_run "ISC maxVersion is 4.22.0-rc.1 (verbatim)" \
 e2e_run "Set versions for guard test" \
 	"aba --noask --channel candidate --version 4.22.0-rc.1 && sed -i 's/^.*ocp_version_target=.*/ocp_version_target=4.21.18/' mirror/mirror.conf"
 
-e2e_run "Remove ISC for guard test" \
-	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
-
 e2e_run "ISC generation warns and ignores when target < source" \
-	"aba -d mirror imagesetconf"
+	"aba --force -d mirror imagesetconf"
 
 # --- Version guard: valid upgrade allowed ---
 
 e2e_run "Set valid upgrade path" \
 	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION && _resolved=\$(grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}') && sed -i \"s/^.*ocp_version_target=.*/ocp_version_target=\$_resolved/\" mirror/mirror.conf"
 
-e2e_run "Remove ISC for upgrade test" \
-	"rm -f mirror/data/imageset-config.yaml mirror/data/.created"
-
 e2e_run "ISC generation succeeds with valid upgrade" \
-	"aba -d mirror imagesetconf"
+	"aba --force -d mirror imagesetconf"
 
 # --- Cleanup ---
 
 e2e_run "Restore aba.conf and mirror.conf" \
 	"cp aba.conf.prerel-bak aba.conf && cp mirror/mirror.conf.prerel-bak mirror/mirror.conf && rm -f aba.conf.prerel-bak mirror/mirror.conf.prerel-bak"
 
-e2e_run "Clean up generated ISC and temp files" \
-	"rm -f mirror/data/imageset-config.yaml mirror/data/.created /tmp/rc-out.txt /tmp/ec-out.txt /tmp/ga-out.txt"
+e2e_run "Clean up temp files" \
+	"rm -f /tmp/rc-out.txt /tmp/ec-out.txt /tmp/ga-out.txt"
 
 test_end 0
 
