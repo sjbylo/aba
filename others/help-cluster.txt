@@ -47,6 +47,7 @@ Options:
 
 Usage (from a cluster directory):
   aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.
+  aba unstick                             # Bounce pods that aren't fully ready (recovery for stuck installs).
   aba upgrade --to <version>              # Upgrade cluster to target OCP version (disconnected).
   aba shutdown                            # Gracefully shut down the cluster (any platform).
   aba startup                             # Gracefully start up the cluster (any platform).
