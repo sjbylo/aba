@@ -623,7 +623,7 @@ e2e_run "Set --target-version for cross-minor upgrade" \
      aba -d mirror --target-version \$desired && \
      got=\$(grep '^ocp_version_target=' mirror/mirror.conf | cut -d= -f2 | awk '{print \$1}') && \
      [ \"\$got\" = \"\$desired\" ] || { echo \"FAIL: mirror.conf ocp_version_target=\$got expected \$desired\"; exit 1; } && \
-     rm -f mirror/data/.created"
+     aba --force -d mirror imagesetconf"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).
 # The catalog YAML should already exist from the earlier catalogs-wait; verify it.

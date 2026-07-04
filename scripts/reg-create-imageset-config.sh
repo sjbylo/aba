@@ -23,6 +23,8 @@
 
 source scripts/include_all.sh
 
+[ "$1" = "-f" ] && _isc_force=$2 && shift 2
+
 aba_debug "Starting: $0 $*"
 
 umask 077
@@ -43,12 +45,13 @@ mkdir -p data
 # ISC regeneration guard:
 #   Regenerate if: ISC doesn't exist/empty, OR .created is missing, OR ISC is NOT strictly newer than .created.
 #   Skip if: user edited the ISC after generation (ISC is strictly newer than .created).
-#   To force regeneration: rm data/.created (if .created is missing, ISC is always regenerated).
+#   To force regeneration: aba --force -d mirror imagesetconf (or: rm data/.created)
 #   Using "! ISC -nt .created" instead of ".created -nt ISC" so that equal timestamps
 #   also trigger regeneration (needed on platforms like System Z/s390x).
 #   The .created file is touched at the end of each generation cycle.
 #   This allows users to customize the ISC and run 'aba save' or 'aba sync' again without losing edits.
-if [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imageset-config.yaml -nt data/.created ]; then
+if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
+   [ ! -s data/imageset-config.yaml ] || [ ! -f data/.created ] || [ ! data/imageset-config.yaml -nt data/.created ]; then
 	aba_debug "Generating new imageset-config.yaml"
 	{ [ ! "$ocp_channel" ] || [ ! "$ocp_version" ]; } && aba_abort "ocp_channel or ocp_version incorrectly defined in aba.conf"
 
@@ -123,6 +126,6 @@ else
 		fi
 	else
 		aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
-			"To force regeneration: rm mirror/data/.created && aba -d mirror imagesetconf"
+			"To force regeneration: aba --force -d mirror imagesetconf"
 	fi
 fi

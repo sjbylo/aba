@@ -112,7 +112,7 @@ e2e_run "Ensure no ocp_version_target in mirror.conf" \
     "cd ~/aba && sed -i '/^ocp_version_target=/d' mirror/mirror.conf"
 
 e2e_run "Generate ISC without upgrade target" \
-    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && aba -d mirror imagesetconf"
+    "cd ~/aba && aba --force -d mirror imagesetconf"
 
 e2e_run "Verify ISC has single version (minVersion == maxVersion)" "
     cd ~/aba && . aba.conf &&
@@ -166,7 +166,7 @@ e2e_run "Set older version as base, desired as target" "
 "
 
 e2e_run "Regenerate ISC in upgrade mode" \
-    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && aba -d mirror imagesetconf"
+    "cd ~/aba && aba --force -d mirror imagesetconf"
 
 e2e_run "Verify ISC has upgrade channel config" "
     cd ~/aba &&
@@ -205,8 +205,7 @@ e2e_run "Clear previous target" \
 
 e2e_run "Verify ISC normal mode after first upgrade" "
     cd ~/aba &&
-    rm -f mirror/data/imageset-config.yaml mirror/data/.created &&
-    aba -d mirror imagesetconf &&
+    aba --force -d mirror imagesetconf &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
     grep -q \"minVersion: \$desired\" mirror/data/imageset-config.yaml &&
     grep -q \"maxVersion: \$desired\" mirror/data/imageset-config.yaml &&
@@ -230,7 +229,7 @@ e2e_run "Set second upgrade target (desired + simulated next patch)" "
 "
 
 e2e_run "Regenerate ISC for second upgrade" \
-    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && aba -d mirror imagesetconf"
+    "cd ~/aba && aba --force -d mirror imagesetconf"
 
 e2e_run "Verify ISC for second upgrade has correct min/max" "
     cd ~/aba &&
@@ -264,9 +263,8 @@ test_end
 test_begin "ISC: user-edited ISC is preserved (not overwritten)"
 
 e2e_run "Generate a fresh ISC as baseline" \
-    "cd ~/aba && rm -f mirror/data/imageset-config.yaml mirror/data/.created && \
-     sed -i '/^ocp_version_target=/d' mirror/mirror.conf && \
-     aba -d mirror imagesetconf"
+    "cd ~/aba && sed -i '/^ocp_version_target=/d' mirror/mirror.conf && \
+     aba --force -d mirror imagesetconf"
 
 e2e_run "Simulate user editing the ISC" "
     cd ~/aba &&
@@ -296,13 +294,12 @@ e2e_run "Run imagesetconf -- must NOT overwrite user-edited ISC" "
 e2e_run "Verify warning was emitted about preserving user edits" \
     "grep -q 'modified by user' /tmp/e2e-isc-skip-output"
 
-e2e_run "Force regeneration by removing .created" "
+e2e_run "Force regeneration with --force" "
     cd ~/aba &&
-    rm -f mirror/data/.created &&
-    aba -d mirror imagesetconf &&
+    aba --force -d mirror imagesetconf &&
     ! grep -q '# USER EDIT: custom addition' mirror/data/imageset-config.yaml &&
     grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
-    echo 'After removing .created: ISC regenerated with upgrade config' &&
+    echo 'After --force: ISC regenerated with upgrade config' &&
     echo '--- ISC content (force-regenerated) ---' &&
     grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
 "
