@@ -94,9 +94,9 @@ already running, run `aba day2`.
 `aba upgrade` upgrades an already-installed cluster to a target OCP version
 using images from the local mirror registry. The workflow:
 
-1. **Connected side**: `aba --target-version <ver>` writes `ocp_version_target`
+1. **Connected side**: `aba --upgrade-to <ver>` writes `ocp_upgrade_to`
    to `mirror.conf`. `aba imagesetconf` generates a single-channel ISC with
-   `shortestPath: true` spanning `ocp_version` → `ocp_version_target`.
+   `shortestPath: true` spanning `ocp_version` → `ocp_upgrade_to`.
    `aba save` pulls the upgrade images.
 2. **Transfer**: Archive + ISC transferred to disconnected side.
 3. **Disconnected side**: `aba load` pushes upgrade images into the mirror.
@@ -140,7 +140,7 @@ maintains its own `mirror.conf` with site-specific registry settings
 
 The ISC (`mirror/data/imageset-config.yaml`) is the contract between save and load.
 It encodes channel, version range, and operators -- values that may differ between
-connected and disconnected configs (e.g. `ocp_version_target` lives in `mirror.conf`
+connected and disconnected configs (e.g. `ocp_upgrade_to` lives in `mirror.conf`
 which is excluded from bundles). ISC generation is deterministic: same inputs produce
 the same output. The bug only manifests when ISC-affecting config values on the save
 side don't survive the bundle transfer.
@@ -165,7 +165,7 @@ FROM config.
 | File | Scope | Key values |
 |------|-------|------------|
 | `aba.conf` | Global | `ocp_version`, `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
-| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_version_target` (upgrade) |
+| `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_upgrade_to` (upgrade) |
 | `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `starting_ip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
 
 **Read the config variable, not the file existence.** Config files created by ABA

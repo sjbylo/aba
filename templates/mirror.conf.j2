@@ -44,8 +44,8 @@ data_dir=				# Optional: Absolute path to storage for images and temporary files
 #op_sets=				# Override aba.conf op_sets for this mirror only (e.g. op_sets=acm,odf)
 #ops=					# Override aba.conf ops for this mirror only (e.g. ops=web-terminal)
 
-#ocp_version_target=			# Target OCP version for upgrade mirroring (e.g. 4.19.28).
-					# Set via 'aba -d mirror --target-version <version>' or manually.
+#ocp_upgrade_to=			# Target OCP version for upgrade mirroring (e.g. 4.19.28).
+					# Set via 'aba -d mirror --upgrade-to <version>' or manually.
 					# When set, 'aba imagesetconf' generates a single-channel ISC with
 					# shortestPath from aba.conf:ocp_version to this target version.
 					# Leave commented out for normal (non-upgrade) mirroring.

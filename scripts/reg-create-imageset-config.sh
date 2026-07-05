@@ -3,7 +3,7 @@
 # CALLED BY:   mirror/Makefile (data/imageset-config.yaml target)
 # CWD:         mirror/
 # REQUIRES:    aba.conf (ocp_version, ocp_channel, op_sets, ops),
-#              mirror.conf (optional ocp_version_target, op_sets/ops overrides),
+#              mirror.conf (optional ocp_upgrade_to, op_sets/ops overrides),
 #              .index/ catalogs (for operator channel resolution)
 # PRODUCES:    data/imageset-config.yaml, touches data/.created after generation
 # GUARDS:
@@ -58,22 +58,22 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	export ocp_ver_major=$(echo $ocp_version | cut -d. -f1-2)
 
 	# Upgrade mode: export target version variables for the Jinja template
-	export ocp_version_target="${ocp_version_target:-}"
+	export ocp_upgrade_to="${ocp_upgrade_to:-}"
 	export tgt_major=""
-	if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
+	if [ "$ocp_upgrade_to" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 		# Guard: target must be > source (upgrades only, not downgrades)
-		if ! is_version_greater "$ocp_version_target" "$ocp_version"; then
+		if ! is_version_greater "$ocp_upgrade_to" "$ocp_version"; then
 			# Stale target — clear it and proceed without upgrade mode
-			aba_warning "ocp_version_target ($ocp_version_target) is lower than ocp_version ($ocp_version) — ignoring."
-			replace-value-conf -q -n ocp_version_target -v "" -f mirror.conf
-			ocp_version_target=""
+			aba_warning "ocp_upgrade_to ($ocp_upgrade_to) is lower than ocp_version ($ocp_version) — ignoring."
+			replace-value-conf -q -n ocp_upgrade_to -v "" -f mirror.conf
+			ocp_upgrade_to=""
 		else
-			export tgt_major=$(echo "$ocp_version_target" | cut -d. -f1-2)
+			export tgt_major=$(echo "$ocp_upgrade_to" | cut -d. -f1-2)
 
 			# Validate upgrade path: source version must exist in the target channel graph.
 			# Covers both same-minor (z-stream) and cross-minor upgrades.
 			_path_diag=""
-			if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+			if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1); then
 				: # path OK
 			else
 				# _path_diag is "src_ver|channel|lowest_ver" — parse pipe-delimited fields
@@ -82,21 +82,21 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 				_tgt_channel="${_rest%%|*}"             # second field (target channel)
 				_lowest="${_rest##*|}"                  # last field (lowest entry point)
 				aba_abort \
-					"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+					"Cannot upgrade directly from $ocp_version to $ocp_upgrade_to." \
 					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
 					"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
 					"" \
 					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 			fi
 
-			aba_info "Upgrade mode: $ocp_version → $ocp_version_target (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+			aba_info "Upgrade mode: $ocp_version → $ocp_upgrade_to (channel ${ocp_channel}-${tgt_major}, shortestPath)"
 		fi
 	fi
 
 	aba_info "Generating image set configuration: data/imageset-config.yaml ..."
 	[ ! "$excl_platform" ] && aba_info "OpenShift platform release images for 'v$ocp_version', channel '$ocp_channel' and arch '$ARCH' ..."
 
-	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version ocp_version_target=$ocp_version_target
+	aba_debug Values: ARCH=$ARCH ocp_channel=$ocp_channel ocp_version=$ocp_version ocp_upgrade_to=$ocp_upgrade_to
 	scripts/j2 ./templates/imageset-config.yaml.j2 > data/imageset-config.yaml
 	touch data/.created  # In case next line fails!
 
@@ -109,7 +109,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	touch data/.created
 
 	if [ "$tgt_major" ]; then
-		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml (upgrade: $ocp_version → $ocp_version_target, $ocp_channel-$tgt_major, shortestPath, $ARCH)"
+		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml (upgrade: $ocp_version → $ocp_upgrade_to, $ocp_channel-$tgt_major, shortestPath, $ARCH)"
 	else
 		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
 	fi

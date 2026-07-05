@@ -2,7 +2,7 @@
 # Upgrade an OCP cluster to a target version using the local mirror registry.
 # Runs day2 (signatures, IDMS, catalogs), resolves the release digest, and
 # triggers 'oc adm upgrade --to-image' for disconnected environments.
-# Target version resolution: --to flag > mirror.conf:ocp_version_target >
+# Target version resolution: --to flag > mirror.conf:ocp_upgrade_to >
 # auto-detect (highest z-stream in mirror) > error.
 
 [ ! -f scripts/include_all.sh ] && echo "Error: Cluster directory $PWD not yet initialized! See: aba cluster --help" >&2 && exit 1
@@ -110,10 +110,10 @@ if [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 	exit 0
 fi
 
-# Resolve target version: --to flag > mirror.conf:ocp_version_target > auto-detect from mirror > error
+# Resolve target version: --to flag > mirror.conf:ocp_upgrade_to > auto-detect from mirror > error
 if [ ! "$target_ver" ]; then
-	if [ "$ocp_version_target" ]; then
-		target_ver="$ocp_version_target"
+	if [ "$ocp_upgrade_to" ]; then
+		target_ver="$ocp_upgrade_to"
 		aba_info "Using target version from mirror.conf: $target_ver"
 	else
 		# Auto-detect: highest z-stream (same major.minor) version in mirror

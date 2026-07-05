@@ -360,8 +360,8 @@ e2e_run_must_fail "Dangling dash rejected" \
 e2e_run "Set RC version for ISC test" \
 	"aba --noask --channel candidate --version 4.22.0-rc.1"
 
-e2e_run "Ensure no ocp_version_target" \
-	"sed -i 's/^ocp_version_target=.*/#ocp_version_target=/' mirror/mirror.conf"
+e2e_run "Ensure no ocp_upgrade_to" \
+	"sed -i 's/^ocp_upgrade_to=.*/#ocp_upgrade_to=/' mirror/mirror.conf"
 
 e2e_run "Generate ISC with RC version" \
 	"aba --force -d mirror imagesetconf"
@@ -378,7 +378,7 @@ e2e_run "ISC maxVersion is 4.22.0-rc.1 (verbatim)" \
 # --- Version guard: target < source ---
 
 e2e_run "Set versions for guard test" \
-	"aba --noask --channel candidate --version 4.22.0-rc.1 && sed -i 's/^.*ocp_version_target=.*/ocp_version_target=4.21.18/' mirror/mirror.conf"
+	"aba --noask --channel candidate --version 4.22.0-rc.1 && sed -i 's/^.*ocp_upgrade_to=.*/ocp_upgrade_to=4.21.18/' mirror/mirror.conf"
 
 e2e_run "ISC generation warns and ignores when target < source" \
 	"aba --force -d mirror imagesetconf"
@@ -386,7 +386,7 @@ e2e_run "ISC generation warns and ignores when target < source" \
 # --- Version guard: valid upgrade allowed ---
 
 e2e_run "Set valid upgrade path" \
-	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION && _resolved=\$(grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}') && sed -i \"s/^.*ocp_version_target=.*/ocp_version_target=\$_resolved/\" mirror/mirror.conf"
+	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION && _resolved=\$(grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}') && sed -i \"s/^.*ocp_upgrade_to=.*/ocp_upgrade_to=\$_resolved/\" mirror/mirror.conf"
 
 e2e_run "ISC generation succeeds with valid upgrade" \
 	"aba --force -d mirror imagesetconf"

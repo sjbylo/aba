@@ -44,7 +44,7 @@ Upgrade robustness, RC/EC pre-release support, TUI hardening, catalog performanc
 - **Auto-detect upgrade target from mirror** — `aba upgrade` automatically detects the target version from mirrored release images when no `--to` is specified.
 - **Semver-aware version resolution** — Version comparisons and resolution now handle pre-release suffixes (`-rc.N`, `-ec.N`) correctly throughout the codebase.
 - **Config drift detection** — Warn when `mirror.conf` or `cluster.conf` values diverge from the installed state (e.g. `reg_host` changed after registry install).
-- **`--target-version none`** — Clear the upgrade target version via CLI (`aba --target-version none`) or TUI ("Clear target" option in the upgrade picker).
+- **`--upgrade-to none`** — Clear the upgrade target version via CLI (`aba --upgrade-to none`) or TUI ("Clear target" option in the upgrade picker).
 - **Dynamic oc-mirror URL** — Download URL and version displayed during mirror operations; adapts to the installed OCP version.
 
 ### Improvements
@@ -163,7 +163,7 @@ Major new TUI v2, vSphere preflight, improved upgrade workflow, and reliability 
 - **MAC prefix uppercase** — Fix MAC address prefix generation to use uppercase hex consistently.
 - **TUI auth credential destruction** — Prevent TUI background prefetch from overwriting mirror authentication credentials.
 - **TUI SIGPIPE race** — Prevent race condition in `isconf` background tasks that could cause spurious pipe errors.
-- **Bundle load failure** — Bundled ISC was regenerated from local config on disconnected side (missing `ocp_version_target`), causing "no release images found" during `oc-mirror load`.
+- **Bundle load failure** — Bundled ISC was regenerated from local config on disconnected side (missing `ocp_upgrade_to`), causing "no release images found" during `oc-mirror load`.
 - **Quay `reg_port` ignored** — Mirror-registry install was ignoring custom `reg_port` setting.
 - **`make-bundle.sh` crash** — `local` keyword used outside a function caused bash error on bundle creation.
 - **Upgrade admin-ack** — Improved guidance when `Upgradeable=False` condition blocks upgrade.

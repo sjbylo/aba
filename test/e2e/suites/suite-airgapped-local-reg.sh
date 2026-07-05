@@ -613,16 +613,16 @@ test_end
 # ============================================================================
 test_begin "Upgrade: cross-minor with admin ack gate"
 
-# Save the target (N-1) version images using --target-version (auto-generates
+# Save the target (N-1) version images using --upgrade-to (auto-generates
 # ISC with shortestPath, minVersion=current, maxVersion=target).
 # Force ISC regeneration: earlier tests (mesh, UBI, vote-app) manually appended to the ISC,
 # making it appear "user-edited" (newer than .created). Without this, the save step would
 # preserve the stale mesh-only ISC instead of generating the upgrade ISC with shortestPath.
-e2e_run "Set --target-version for cross-minor upgrade" \
+e2e_run "Set --upgrade-to for cross-minor upgrade" \
     "cd ~/aba && desired=\$(cat /tmp/e2e-ocp-version-desired) && \
-     aba -d mirror --target-version \$desired && \
-     got=\$(grep '^ocp_version_target=' mirror/mirror.conf | cut -d= -f2 | awk '{print \$1}') && \
-     [ \"\$got\" = \"\$desired\" ] || { echo \"FAIL: mirror.conf ocp_version_target=\$got expected \$desired\"; exit 1; } && \
+     aba -d mirror --upgrade-to \$desired && \
+     got=\$(grep '^ocp_upgrade_to=' mirror/mirror.conf | cut -d= -f2 | awk '{print \$1}') && \
+     [ \"\$got\" = \"\$desired\" ] || { echo \"FAIL: mirror.conf ocp_upgrade_to=\$got expected \$desired\"; exit 1; } && \
      aba --force -d mirror imagesetconf"
 
 # Append cincinnati-operator to the existing operators packages list (not a new section).

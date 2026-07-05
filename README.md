@@ -969,12 +969,12 @@ aba day2-osus
 >
 > If the channel does not include the current version as a valid starting point, the upgrade path will not be available — even if the target version's images are mirrored.
 
-#### Using `--target-version`
+#### Using `--upgrade-to`
 
 1. On the *connected workstation*, set the target version and save the upgrade images:
 
 ```bash
-aba -d mirror --target-version 4.22.1 save
+aba -d mirror --upgrade-to 4.22.1 save
 ```
 
 This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images. An upgrade bundle (`aba-upgrade.tar`) is also created alongside the image archives, containing the ISC files, CLI binaries for the target version, and metadata.
@@ -1015,12 +1015,12 @@ aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (
 > **Important — channel must cover both versions:**
 > The channel in `aba.conf` must contain both your current cluster version and the target version in its upgrade graph. See the note in [Updating a cluster in a fully disconnected environment](#updating-a-cluster-in-a-fully-disconnected-environment) for details.
 
-#### Using `--target-version`
+#### Using `--upgrade-to`
 
 1. On the *connected bastion*, set the target version and sync directly to the registry:
 
 ```bash
-aba -d mirror --target-version 4.22.1 sync
+aba -d mirror --upgrade-to 4.22.1 sync
 ```
 
 2. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`

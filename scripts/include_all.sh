@@ -2918,14 +2918,14 @@ run_once() {
 # --- Catalog Download Helpers ---
 
 # Return space-separated list of major.minor versions needing catalog downloads.
-# Always includes the current ocp_version; adds ocp_version_target's major.minor
+# Always includes the current ocp_version; adds ocp_upgrade_to's major.minor
 # when it differs (cross-minor upgrade).  Expects ocp_version (and optionally
-# ocp_version_target) to be set in the environment.
+# ocp_upgrade_to) to be set in the environment.
 _catalog_versions_to_mirror() {
 	local _cur=$(_ver_minor "$ocp_version")
 	local _versions=("$_cur")
-	if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-		local _tgt=$(_ver_minor "$ocp_version_target")
+	if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+		local _tgt=$(_ver_minor "$ocp_upgrade_to")
 		[ "$_tgt" != "$_cur" ] && _versions+=("$_tgt")
 	fi
 	echo "${_versions[*]}"
