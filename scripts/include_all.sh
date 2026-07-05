@@ -3164,7 +3164,7 @@ _run_oc_mirror_with_retry() {
 		fi
 	elif [ "$action" = "load" ]; then
 		# Use the pre-generated digest ISC if it exists (transferred from connected host
-		# via aba-upgrade.tar).
+		# via aba-transfer.tar).
 		if [ -f "data/imageset-config-digest.yaml" ]; then
 			base_cmd="${base_cmd/--config imageset-config.yaml/--config imageset-config-digest.yaml}"
 			aba_info "Using transferred digest ISC for air-gap catalog pinning"

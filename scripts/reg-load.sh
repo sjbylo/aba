@@ -43,46 +43,45 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
-# Unpack upgrade bundle if present (contains ISC, digest ISC, CLI tarballs, metadata).
-# This must happen before oc-mirror runs so the correct ISC is in place.
+# Unpack transfer bundle if present (always contains ISC; for upgrades also
+# includes CLI tarballs and metadata).  Created by 'aba save' so that
+# 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
 # Tar paths are relative to aba root (mirror/data/*, cli/*), so unpack from aba root.
-_upgrade_tar="data/aba-upgrade.tar"
-_upgrade_meta_ver=""
-_upgrade_meta_chan=""
-if [ -f "$_upgrade_tar" ]; then
-	aba_info "Found upgrade bundle: $_upgrade_tar"
+_transfer_tar="data/aba-transfer.tar"
+_transfer_meta_ver=""
+_transfer_meta_chan=""
+if [ -f "$_transfer_tar" ]; then
+	aba_info "Found transfer bundle: $_transfer_tar"
 
 	# Unpack from aba root (CWD is mirror/, aba root is ..)
-	if ! ( cd .. && tar xf "mirror/$_upgrade_tar" ); then
-		aba_abort "Failed to unpack upgrade bundle ($_upgrade_tar)." \
+	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
+		aba_abort "Failed to unpack transfer bundle ($_transfer_tar)." \
 			"The file may be corrupt. Re-copy mirror/data/*.tar from the connected host."
 	fi
 
-	# Read and validate metadata (unpacked to mirror/data/ by the tar)
-	if [ -f "data/aba-upgrade-metadata.json" ]; then
-		_upgrade_meta_ver=$(grep '"ocp_version"' data/aba-upgrade-metadata.json | sed 's/.*: *"//; s/".*//')
-		_upgrade_meta_chan=$(grep '"ocp_channel"' data/aba-upgrade-metadata.json | sed 's/.*: *"//; s/".*//')
-		_expected_sha=$(grep '"digest_isc_sha256"' data/aba-upgrade-metadata.json | sed 's/.*: *"//; s/".*//')
+	# Read and validate metadata if present (only created for upgrade saves)
+	if [ -f "data/aba-transfer-metadata.json" ]; then
+		_transfer_meta_ver=$(grep '"ocp_version"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
+		_transfer_meta_chan=$(grep '"ocp_channel"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
+		_expected_sha=$(grep '"digest_isc_sha256"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
 
-		aba_info "Upgrade bundle: OCP ${_upgrade_meta_ver} (${_upgrade_meta_chan})"
+		aba_info "Transfer bundle: OCP ${_transfer_meta_ver} (${_transfer_meta_chan})"
 
 		# Verify digest ISC integrity if checksum is available
 		if [ "$_expected_sha" ] && [ -f "data/imageset-config-digest.yaml" ]; then
 			_actual_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
 			if [ "$_actual_sha" != "$_expected_sha" ]; then
 				aba_abort "imageset-config-digest.yaml checksum mismatch." \
-					"The digest ISC does not match the upgrade bundle metadata." \
+					"The digest ISC does not match the transfer bundle metadata." \
 					"Re-copy mirror/data/*.tar from the connected host."
 			fi
 			aba_debug "Digest ISC checksum verified OK"
 		fi
-	else
-		aba_warning "Upgrade bundle has no metadata file — skipping version/checksum validation."
 	fi
 
-	# Remove the upgrade bundle (small, ephemeral delivery vehicle)
-	rm -f "$_upgrade_tar" data/aba-upgrade-metadata.json
-	aba_info "Upgrade bundle unpacked and removed."
+	# Remove the transfer bundle (small, ephemeral delivery vehicle)
+	rm -f "$_transfer_tar" data/aba-transfer-metadata.json
+	aba_info "Transfer bundle unpacked and removed."
 fi
 
 aba_debug "Ensuring oc-mirror is available"
@@ -168,10 +167,10 @@ base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://
 # Prefer upgrade bundle metadata (explicit), fall back to ISC parsing.
 _loaded_ver=""
 _loaded_chan=""
-if [ "$_upgrade_meta_ver" ]; then
-	_loaded_ver="$_upgrade_meta_ver"
-	_loaded_chan="$_upgrade_meta_chan"
-	aba_debug "Version from upgrade bundle metadata: ver=$_loaded_ver chan=$_loaded_chan"
+if [ "$_transfer_meta_ver" ]; then
+	_loaded_ver="$_transfer_meta_ver"
+	_loaded_chan="$_transfer_meta_chan"
+	aba_debug "Version from transfer bundle metadata: ver=$_loaded_ver chan=$_loaded_chan"
 else
 	_isc_file="data/imageset-config.yaml"
 	if [ -f "$_isc_file" ]; then

@@ -75,7 +75,7 @@ Upgrade transfer workflow (disconnected):
 
   On the connected host:
     aba --dir mirror --upgrade-to 4.22.2 save
-    # Creates mirror_*.tar (images) + aba-upgrade.tar (ISC, CLIs, metadata) in mirror/data/
+    # Creates mirror_*.tar (images) + aba-transfer.tar (ISC, CLIs, metadata) in mirror/data/
 
   Copy all *.tar files to the disconnected host:
     cp mirror/data/*.tar /transfer-media/    (or scp, rsync, sneakernet)

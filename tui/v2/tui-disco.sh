@@ -99,7 +99,7 @@ Next: the TUI will install a mirror registry and load images\nbefore cluster ins
 	if ! mirror_has_archives; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" --msgbox \
 			"No mirror archive files found.\n\n\
-Place *.tar files (mirror_*.tar + aba-upgrade.tar) in:\n\
+Place *.tar files (mirror_*.tar + aba-transfer.tar) in:\n\
   $ABA_ROOT/mirror/data/\n\n\
 Restart the TUI after copying archives." \
 			0 0
