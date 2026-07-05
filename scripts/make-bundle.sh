@@ -115,9 +115,7 @@ fi
 
 echo >&2
 normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
-#aba_info "Bundle output file = $bundle_dest_file" >&2
-# FIXME Missing [ABA]
-echo "Bundle output file = $bundle_dest_file" >&2
+aba_info "Bundle output file = $bundle_dest_file" >&2
 echo >&2
 
 # User requires to clean out any existing files under mirror/data
@@ -173,12 +171,12 @@ if [ -d mirror/data ]; then
 
 		if [ -s mirror/data/imageset-config.yaml ] || [ -f mirror/mirror.conf ] || [ "$image_set_files_exist" ]; then
 			aba_debug "Repository appears to be in use - prompting user"
-			aba_warning "This repo is already in use!  Modified files exist under: mirror/data"
+			aba_warning "This repo is already in use!  Modified files exist under: mirror/data" >&2
 			echo -n "         " >&2;  ls mirror/data >&2
 			[ "$image_set_files_exist" ] && \
-			echo_red "         Image set archive file(s) also exist." >&2
-			echo_red "         Back up any required files and try again with the '--force' flag to delete all existing files under mirror/data" >&2
-			echo_red "         Or, use a fresh Aba repo and try again!" >&2
+			aba_warning "Image set archive file(s) also exist." >&2
+			aba_warning "Back up any required files and try again with '--force' to delete all existing files under mirror/data." \
+				"Or, use a fresh Aba repo and try again!" >&2
 			ask "         Files will be overwritten. Continue anyway" >&2 || exit 1
 			aba_debug "User confirmed to continue with existing files"
 		else
@@ -190,6 +188,9 @@ if [ -d mirror/data ]; then
 else
 	aba_debug "mirror/data directory doesn't exist - fresh installation"
 fi
+
+# Suppress end-of-save hints in reg-save.sh (bundle flow handles its own messaging)
+export _ABA_BUNDLE_MODE=1
 
 # This is a special case where we want to only send the tar repo contents to stdout 
 # so we can do something like: aba bundle ... --out - | ssh host tar xvf - 
@@ -233,14 +234,12 @@ if [ "$light_bundle" ]; then
 	# User wants to create a *light* bundle...
 	aba_debug "Creating LIGHT bundle (excluding image-set archives)"
 
-	echo_magenta "[ABA] A *light* install bundle will be created."
-	echo_magenta "[ABA] Image-set archive file(s) will NOT be included in the bundle and must be transferred separately"
-	echo_magenta "[ABA] to the disconnected environment, then manually moved into the extracted install bundle."
+	aba_info "A *light* install bundle will be created (image-set archives excluded)."
 
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
-	aba_debug "Calling: make -C mirror save retry=2"
-	make -C mirror save retry=2				# Pull required release (and possibly operator) images.  Retry on failure. 
+	aba_debug "Calling: make -s -C mirror save retry=2"
+	make -s -C mirror save retry=2				# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
 	
 	aba_info "Ensuring all CLI installation files are downloaded..."
@@ -252,7 +251,7 @@ if [ "$light_bundle" ]; then
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
-	make tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
+	make -s tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
 else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
@@ -283,8 +282,8 @@ else
 
 	# Create full bundle ... with "aba tar..."
 	aba_info "Pulling images to disk ..."
-	aba_debug "Calling: make -C mirror save retry=2"
-	make -C mirror save retry=2		    		# Pull required release (and possibly operator) images.  Retry on failure.
+	aba_debug "Calling: make -s -C mirror save retry=2"
+	make -s -C mirror save retry=2		    		# Pull required release (and possibly operator) images.  Retry on failure.
 	aba_debug "Mirror save completed"
 	
 	aba_info "Ensuring all CLI installation files are downloaded..."
@@ -296,7 +295,7 @@ else
 	aba_info "Creating install bundle archive ..."
 	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tar out=$bundle_dest_file"
-	make tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files. 
+	make -s tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
 
