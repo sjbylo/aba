@@ -243,7 +243,7 @@ this because oc-mirror skips upstream tag resolution for digest references.
    `imageset-config.yaml` is never modified.
 
 3. **oc-mirror receives**: `--config imageset-config-digest.yaml` instead of the
-   original. The digest file is included in `aba-upgrade.tar` for transfer to
+   original. The digest file is included in `aba-transfer.tar` for transfer to
    disconnected hosts. During load, the transferred digest ISC is used directly.
 
 ### Invariants

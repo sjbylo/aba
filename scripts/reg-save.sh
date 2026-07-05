@@ -144,78 +144,86 @@ if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
-# Ensure all CLI downloads are complete before building upgrade bundle
+# Ensure all CLI downloads are complete before building transfer bundle
 scripts/cli-download-all.sh --wait
 
-# Only create aba-upgrade.tar when actually preparing an upgrade (not in bundle mode)
-if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "${ocp_upgrade_to:-}" ] && is_version_greater "$ocp_upgrade_to" "$ocp_version"; then
+# Create aba-transfer.tar: always includes ISC files so 'cp mirror/data/*.tar'
+# transfers the correct imageset config to the disconnected host.
+# For upgrades: also includes CLI tarballs and metadata.
+# Skipped in bundle mode (aba bundle already packages everything).
+if [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
 
-_bundle_ver="$ocp_upgrade_to"
-_bundle_chan="${ocp_channel:-fast}"
-_upgrade_tar="data/aba-upgrade.tar"
-
-aba_info "Creating upgrade bundle: $_upgrade_tar"
+_transfer_tar="data/aba-transfer.tar"
+_is_upgrade=""
+[ "${ocp_upgrade_to:-}" ] && is_version_greater "$ocp_upgrade_to" "$ocp_version" && _is_upgrade=1
 
 # Build the list of files to include (relative to aba root so the tar
 # unpacks correctly from either mirror/ or aba/ — mirror/data/* and cli/*)
 _bundle_files=()
 
-# ISC files (relative to aba root)
+# ISC files are always included (relative to aba root)
 [ -f "data/imageset-config.yaml" ] && _bundle_files+=("mirror/data/imageset-config.yaml")
 [ -f "data/imageset-config-digest.yaml" ] && _bundle_files+=("mirror/data/imageset-config-digest.yaml")
 
-# CLI tarballs for the upgrade version (all rhel variants)
-for _cli_tar in ../cli/openshift-client-linux-*-"${_bundle_ver}"*.tar.gz \
-                ../cli/openshift-install-linux-"${_bundle_ver}"*.tar.gz; do
-	[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
-done
+if [ "$_is_upgrade" ]; then
+	_bundle_ver="$ocp_upgrade_to"
+	_bundle_chan="${ocp_channel:-fast}"
 
-# Also include CLIs for the base version (cross-minor upgrade)
-for _cli_tar in ../cli/openshift-client-linux-*-"${ocp_version}"*.tar.gz \
-                ../cli/openshift-install-linux-"${ocp_version}"*.tar.gz; do
-	[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
-done
+	# CLI tarballs for the upgrade version (all rhel variants)
+	for _cli_tar in ../cli/openshift-client-linux-*-"${_bundle_ver}"*.tar.gz \
+	                ../cli/openshift-install-linux-"${_bundle_ver}"*.tar.gz; do
+		[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
+	done
 
-# Compute digest ISC checksum for integrity validation at load time
-_digest_isc_sha=""
-if [ -f "data/imageset-config-digest.yaml" ]; then
-	_digest_isc_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
+	# Also include CLIs for the base version (cross-minor upgrade)
+	for _cli_tar in ../cli/openshift-client-linux-*-"${ocp_version}"*.tar.gz \
+	                ../cli/openshift-install-linux-"${ocp_version}"*.tar.gz; do
+		[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
+	done
+
+	# Compute digest ISC checksum for integrity validation at load time
+	_digest_isc_sha=""
+	if [ -f "data/imageset-config-digest.yaml" ]; then
+		_digest_isc_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
+	fi
+
+	# Create metadata JSON (inside mirror/data/ so it gets packed correctly)
+	cat > data/aba-transfer-metadata.json <<-METADATA
+	{
+	  "ocp_version": "${_bundle_ver}",
+	  "ocp_channel": "${_bundle_chan}",
+	  "architecture": "${ARCH:-amd64}",
+	  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+	  "digest_isc_sha256": "${_digest_isc_sha}"
+	}
+	METADATA
+	_bundle_files+=("mirror/data/aba-transfer-metadata.json")
 fi
 
-# Create metadata JSON (inside mirror/data/ so it gets packed correctly)
-cat > data/aba-upgrade-metadata.json <<-METADATA
-{
-  "ocp_version": "${_bundle_ver}",
-  "ocp_channel": "${_bundle_chan}",
-  "architecture": "${ARCH:-amd64}",
-  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "digest_isc_sha256": "${_digest_isc_sha}"
-}
-METADATA
-_bundle_files+=("mirror/data/aba-upgrade-metadata.json")
+aba_info "Creating transfer bundle: $_transfer_tar"
 
 # Create the tar from aba root so paths are correct for unpack from aba root.
 # CWD is mirror/ so aba root is ..
-if ( cd .. && tar cf "mirror/$_upgrade_tar" "${_bundle_files[@]}" ); then
-	_tar_size=$(du -sh "$_upgrade_tar" | awk '{print $1}')
-	aba_info_ok "Upgrade bundle created: $_upgrade_tar ($_tar_size)"
+if ( cd .. && tar cf "mirror/$_transfer_tar" "${_bundle_files[@]}" ); then
+	_tar_size=$(du -sh "$_transfer_tar" | awk '{print $1}')
+	aba_info_ok "Transfer bundle created: $_transfer_tar ($_tar_size)"
 else
-	aba_warning "Failed to create upgrade bundle ($_upgrade_tar)." \
+	aba_warning "Failed to create transfer bundle ($_transfer_tar)." \
 		"The image archives (mirror_*.tar) are still valid." \
 		"You can manually copy ISC and CLI files to the disconnected host."
 fi
-rm -f data/aba-upgrade-metadata.json
+rm -f data/aba-transfer-metadata.json
 
-fi  # end: upgrade bundle creation
+fi  # end: transfer bundle creation
 
 echo >&2
-if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "${ocp_upgrade_to:-}" ] && is_version_greater "$ocp_upgrade_to" "$ocp_version"; then
+if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
 	aba_info_ok ""
 	aba_info_ok "Copy all *.tar files from mirror/data/ to the disconnected host:"
 	aba_info_ok "  cp mirror/data/*.tar /transfer-media/"
 	aba_info_ok ""
-	aba_info_ok "  Files: mirror_*.tar (images), aba-upgrade.tar (ISC, CLIs, metadata)"
+	aba_info_ok "  Files: mirror_*.tar (images), aba-transfer.tar (ISC, CLIs, metadata)"
 	aba_info_ok ""
 	aba_info_ok "On the disconnected host:"
 	aba_info_ok "  cp /transfer-media/*.tar ~/aba/mirror/data/"

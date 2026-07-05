@@ -81,7 +81,7 @@ else
 fi
 
 # Without internet, don't attempt CLI downloads.
-# CLIs arrive via the aba-upgrade.tar bundle or the original install bundle.
+# CLIs arrive via the aba-transfer.tar bundle or the original install bundle.
 # Peek at the cached internet-check result (set by TUI startup or aba.sh early init).
 # If a cached result exists and says "no internet", skip.  If no cached result exists,
 # fall through — the download attempt will fail and run_once records the failure.
