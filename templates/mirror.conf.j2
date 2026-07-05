@@ -4,7 +4,7 @@
 # Set the values according to your existing registry OR the target host where
 # a mirror registry (Quay or Docker) will be installed.
 
-reg_host=registry.{{ domain }}		# FQDN of the registry host (no IP address). Can be local or remote.
+reg_host={{ hostname }}.{{ domain }}		# FQDN of the registry host (no IP address). Can be local or remote.
 					# Ensure a DNS A record resolves to an IP address that allows connections to this host.
 					# If remote, confirm SSH access works from this host
 					# and set 'reg_ssh_key' and 'reg_ssh_user' below accordingly.

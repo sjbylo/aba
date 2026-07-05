@@ -21,7 +21,9 @@ if [ ! "$ocp_version" ] || [ ! "$domain" ]; then
 		"You must set the target version and domain of OpenShift in aba.conf. See the README.md on how to get started!"
 fi
 
-# Input is 'domain' from aba.conf
+# Input is 'domain' from aba.conf, 'hostname' from this host
+export hostname
+hostname=$(hostname -s)
 scripts/j2 templates/mirror.conf.j2 > mirror.conf
 
 if [ "$force" != "yes" ]; then
