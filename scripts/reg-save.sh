@@ -169,15 +169,10 @@ if [ "$_is_upgrade" ]; then
 	_bundle_ver="$ocp_upgrade_to"
 	_bundle_chan="${ocp_channel:-fast}"
 
-	# CLI tarballs for the upgrade version (all rhel variants)
+	# CLI tarballs for the upgrade target version (all rhel variants).
+	# Base version CLIs are already on the disconnected host from the initial install.
 	for _cli_tar in ../cli/openshift-client-linux-*-"${_bundle_ver}"*.tar.gz \
 	                ../cli/openshift-install-linux-"${_bundle_ver}"*.tar.gz; do
-		[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
-	done
-
-	# Also include CLIs for the base version (cross-minor upgrade)
-	for _cli_tar in ../cli/openshift-client-linux-*-"${ocp_version}"*.tar.gz \
-	                ../cli/openshift-install-linux-"${ocp_version}"*.tar.gz; do
 		[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
 	done
 
