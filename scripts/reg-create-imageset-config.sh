@@ -115,6 +115,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	fi
 	[ ! "$ops" ] && [ ! "$op_sets" ] && \
 		aba_info "To add operators, set 'op_sets' or 'ops' in aba.conf, then re-run 'aba save' or 'aba sync'."
+	[ ! "${_ABA_BUNDLE_MODE:-}" ] && \
 	aba_info "For advanced customization, edit mirror/data/imageset-config.yaml directly (your edits will be preserved)."
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"

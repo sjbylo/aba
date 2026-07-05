@@ -91,14 +91,14 @@ aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_cha
 if [ "$bundle_dest_file" = "-" ]; then
 	# Be sure the standard output of this command is ONLY tar output and nothing else!
 	aba_debug "Bundle destination: stdout (streaming tar output)"
-	aba_info "An install bundle will be generated and written to *standard output* (stdout) using the following parameters:" >&2
+	aba_info "Creating install bundle (stdout) with:" >&2
 else
 	aba_debug "Bundle destination: file on disk"
 	if [ -d "$bundle_dest_file" ]; then
 		aba_debug "Destination is directory, appending default filename"
 		bundle_dest_file="$bundle_dest_file/ocp-bundle"	# Correct the output location as it needs to be a file
 	fi
-	aba_info "An install bundle file will be generated and saved to disk using the following parameters:" >&2
+	aba_info "Creating install bundle with:" >&2
 	if [[ "$bundle_dest_file" == *.tar ]]; then
 		bundle_dest_file="${bundle_dest_file%.tar}-$ocp_version.tar"  # strip .tar, append version, re-add .tar
 	else
@@ -114,7 +114,7 @@ else
 fi
 
 echo >&2
-normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" >&2
+normalize-aba-conf | sed "s/^export //g" | grep -E -o "^(ocp_version|pull_secret_file|ocp_channel)=[^[:space:]]*" | sed 's/^/[ABA]   /' >&2
 aba_info "Bundle output file = $bundle_dest_file" >&2
 echo >&2
 
