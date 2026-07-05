@@ -13,7 +13,7 @@ It is a bash project (~100 scripts) orchestrated by Make and a CLI wrapper.
 
 ```bash
 # Install ABA (connected host)
-./install && aba
+./install && aba  # or: abatui
 
 # Run functional tests
 test/func/run-all-tests.sh

@@ -61,7 +61,7 @@ flowchart LR
         Tar --> Transfer["Physical transfer"]
     end
     subgraph disconnected ["Disconnected (no internet)"]
-        Transfer --> Extract["./install + aba"]
+        Transfer --> Extract["./install + aba (or abatui)"]
         Extract --> Load["aba load"]
     end
     Sync --> Install["aba -d cluster install"]
@@ -76,7 +76,7 @@ flowchart LR
    to disk via oc-mirror). `aba tar` or `aba bundle` packages the repo + images
    into a transferable archive. Physically transfer to the disconnected side.
 
-3. **Disconnected**: Extract the bundle, run `./install` + `aba`. `aba load`
+3. **Disconnected**: Extract the bundle, run `./install` + `aba` (or `abatui`). `aba load`
    pushes images from disk into the mirror registry. Then install clusters.
 
 ### day2 operations
