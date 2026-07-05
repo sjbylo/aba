@@ -210,13 +210,13 @@ rm -f ../.bundle data/.isc-pinned
 
 echo
 aba_info_ok "Images loaded successfully into the registry."
-aba_info_ok "The files in mirror/data/ (mirror_*.tar, imageset-config*.yaml) are no longer"
-aba_info_ok "needed and can be safely deleted to free disk space, or backed up before"
-aba_info_ok "copying new upgrade files into mirror/data/."
+aba_info_ok "Files in mirror/data/ (mirror_*.tar) can now be deleted or backed up to free disk space."
 echo
-aba_info_ok "To install OpenShift, from aba's top-level directory run:"
-aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
+if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
+	aba_info_ok "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
+	aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
+	echo
+fi
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
