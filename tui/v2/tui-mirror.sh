@@ -445,7 +445,7 @@ _mirror_op_confirm() {
 	local _ver="${ocp_version:-unknown}"
 	local _chan="${ocp_channel:-stable}"
 	# Show upgrade range if target is set, or detect from ISC maxVersion
-	local _target="${ocp_version_target:-}"
+	local _target="${ocp_upgrade_to:-}"
 	if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
 		_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
 	fi
@@ -459,8 +459,8 @@ _mirror_op_confirm() {
 				--yes-label "Clear Target" --no-label "Cancel" \
 				--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
 			if [[ $? -eq 0 ]]; then
-				replace-value-conf -q -n ocp_version_target -v "" -f "$ABA_ROOT/mirror/mirror.conf"
-				ocp_version_target=""
+				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+				ocp_upgrade_to=""
 				_target=""
 				tui_kick_isconf_regen
 				tui_log "Cleared stale upgrade target (not in $_chan channel)"
@@ -539,7 +539,7 @@ mirror_prep_upgrade() {
 	local _target_ver
 	local _existing_target=""
 	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-		_existing_target=$(grep '^ocp_version_target=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+		_existing_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 	fi
 
 	# Fetch available versions for the current channel (reuse cached data)
@@ -603,8 +603,8 @@ mirror_prep_upgrade() {
 			l) _target_ver="$_latest" ;;
 			p) _target_ver="$_previous" ;;
 			c)
-				replace-value-conf -q -n ocp_version_target -v "" -f "$ABA_ROOT/mirror/mirror.conf"
-				ocp_version_target=""
+				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+				ocp_upgrade_to=""
 				tui_kick_isconf_regen
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"\nUpgrade target cleared.\n\nMirror will no longer include upgrade images." 0 0
@@ -689,8 +689,8 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	_upg_method=$(<"$_TUI_TMP")
 
 	# Persist target version and kick off ISC regeneration after user confirmed
-	replace-value-conf -q -n ocp_version_target -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
-	ocp_version_target="$_target_ver"
+	replace-value-conf -q -n ocp_upgrade_to -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
+	ocp_upgrade_to="$_target_ver"
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
 		"Generating ImageSet configuration (operator catalogs\nmay also be refreshed, if needed). Please wait." 5 60
@@ -700,7 +700,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	case "$_upg_method" in
 		1)
 			confirm_and_execute \
-				"aba --dir mirror --target-version $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
+				"aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
 			rc=$?
 			if [[ $rc -eq 0 ]]; then
@@ -713,7 +713,7 @@ Next steps:\n\n\
 			;;
 		2)
 			confirm_and_execute \
-				"aba --dir mirror --target-version $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
+				"aba --dir mirror --upgrade-to $_target_ver save$(_tui_oc_mirror_retry_suffix)" \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}"
 			rc=$?
 			if [[ $rc -eq 0 ]]; then

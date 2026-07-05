@@ -12,7 +12,7 @@
 #   --reset        Reset download task state (forces re-download on next run).
 #   --no-version   Only start downloads for version-independent tools
 #                  (oc-mirror, butane, govc) — used when ocp_version is unknown.
-#   --target-version <ver>  Download oc + openshift-install for <ver> (parallel).
+#   --upgrade-to <ver>  Download oc + openshift-install for <ver> (parallel).
 #                  Used by reg-save.sh to fetch CLIs for upgrade target version.
 #
 # Optional positional args after the mode flag are tool names to filter on.
@@ -59,7 +59,7 @@ if [ "${1:-}" = "--no-version" ]; then
 	shift
 fi
 
-if [ "${1:-}" = "--target-version" ]; then
+if [ "${1:-}" = "--upgrade-to" ]; then
 	target_ocp_version="$2"
 	shift 2
 fi
@@ -73,7 +73,7 @@ aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
 
 showed_wait_msg=false
 
-# When --target-version is given, override ocp_version for the make calls
+# When --upgrade-to is given, override ocp_version for the make calls
 if [ "$target_ocp_version" ]; then
 	make_ocp_override="ocp_version=$target_ocp_version"
 else

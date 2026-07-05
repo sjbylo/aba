@@ -349,7 +349,7 @@ ui_backtitle() {
 	local text="ABA TUI v2"
 	[ -n "$mode_display" ] && text="$text  |  $mode_display"
 	if [[ -n "$ch" && -n "$ver" ]]; then
-		local _tgt="${ocp_version_target:-}"
+		local _tgt="${ocp_upgrade_to:-}"
 		if [[ -n "$_tgt" && "$_tgt" != "$ver" ]]; then
 			text="$text  |  $ch $ver → $_tgt"
 		else

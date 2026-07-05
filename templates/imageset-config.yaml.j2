@@ -9,10 +9,10 @@ mirror:
     - {{ ARCH }}
 {%- endif %}
     channels:
-{%- if ocp_version_target is defined and ocp_version_target and ocp_version_target != ocp_version %}
+{%- if ocp_upgrade_to is defined and ocp_upgrade_to and ocp_upgrade_to != ocp_version %}
     - name: {{ ocp_channel }}-{{ tgt_major }}
       minVersion: {{ ocp_version }}
-      maxVersion: {{ ocp_version_target }}
+      maxVersion: {{ ocp_upgrade_to }}
       type: ocp
       shortestPath: true
 {%- else %}
@@ -35,6 +35,6 @@ mirror:
 #  helm: {}
 {%- if ops == '' and op_sets == '' %}
 #  operators:
-#  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ tgt_major if (ocp_version_target is defined and ocp_version_target and ocp_version_target != ocp_version) else ocp_ver_major }}
+#  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ tgt_major if (ocp_upgrade_to is defined and ocp_upgrade_to and ocp_upgrade_to != ocp_version) else ocp_ver_major }}
 #    packages:
 {%- endif %}

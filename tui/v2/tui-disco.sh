@@ -183,8 +183,8 @@ disco_main() {
 		local _mstate
 		_mstate="$(mirror_state_label)"
 		local disco_menu_msg="Status: ${_mstate}"
-		if [[ -n "${ocp_version_target:-}" && "${ocp_version_target}" != "${ocp_version:-}" ]]; then
-			disco_menu_msg+="  |  upgrade target: ${ocp_version_target}"
+		if [[ -n "${ocp_upgrade_to:-}" && "${ocp_upgrade_to}" != "${ocp_version:-}" ]]; then
+			disco_menu_msg+="  |  upgrade target: ${ocp_upgrade_to}"
 		fi
 
 		items+=(

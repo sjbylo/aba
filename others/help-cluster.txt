@@ -54,7 +54,7 @@ Usage (from a cluster directory):
 
 Upgrade options:
   aba [-d <cluster>] upgrade
-      --to <version>                      # Target OCP version (e.g. 4.19.28). Falls back to mirror.conf:ocp_version_target.
+      --to <version>                      # Target OCP version (e.g. 4.19.28). Falls back to mirror.conf:ocp_upgrade_to.
       --force                             # Pass --force to oc adm upgrade
       --dry-run                           # Show what would happen without executing
       --skip-day2                         # Don't auto-run day2 even if IDMS is missing
