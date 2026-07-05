@@ -107,14 +107,37 @@ sync_dis_aba() { sync_infra_aba "$@"; }
 
 # Push ABA source tarball to ~/aba on conN (for --dev mode).
 # Overlays on existing ~/aba (never wipes).
+# Deploys to BOTH the target user's ~/aba AND root's ~/aba, because
+# the runner may run as root (-u root) which uses /root/aba/ -- a
+# separate directory from /home/<user>/aba/.
+# Also refreshes ~/bin/aba for both users (installed by ./install).
 # Usage: sync_source <user@host> <tarball_path>
 sync_source() {
 	local target="$1"
 	local tarball="$2"
+	local _user="${target%%@*}"
+	local _host="${target#*@}"
 
-	_essh "$target" "mkdir -p ~/aba" &&
-	_escp "$tarball" "${target}:/tmp/aba-deploy.tar.gz" &&
-	_essh "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"
+	# Upload tarball once to /tmp (accessible by both users)
+	_escp "$tarball" "${target}:/tmp/aba-deploy.tar.gz" || return 1
+
+	# Extract for the deploy user
+	_essh "$target" "mkdir -p ~/aba && tar xzf /tmp/aba-deploy.tar.gz -C ~/aba" || return 1
+
+	# Extract for root too if connected as non-root
+	if [ "$_user" != "root" ]; then
+		_essh "root@${_host}" "mkdir -p ~/aba && tar xzf /tmp/aba-deploy.tar.gz -C ~/aba" || true
+	fi
+
+	# Refresh ~/bin/aba for both users (./install copies scripts/aba.sh there)
+	_essh "$target" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+	if [ "$_user" != "root" ]; then
+		_essh "root@${_host}" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+	fi
+
+	# Cleanup
+	_essh "${target}" "rm -f /tmp/aba-deploy.tar.gz"
+	[ "$_user" != "root" ] && _essh "root@${_host}" "rm -f /tmp/aba-deploy.tar.gz" || true
 }
 
 # Push optional extras: notify.sh, vmware.conf, root essentials.
