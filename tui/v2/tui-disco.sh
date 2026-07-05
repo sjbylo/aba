@@ -45,12 +45,7 @@ Then restart the TUI." 0 0
 
 	local _bv="${ocp_version:-?}"
 	local _bc="${ocp_channel:-?}"
-	local _archive_hint="" _payload_line=""
-	if mirror_has_archives; then
-		_archive_hint="Image archives: mirror_*.tar detected in mirror/data/"
-	else
-		_archive_hint="Image archives: NONE — copy *.tar files from transfer media to mirror/data/"
-	fi
+	local _payload_line=""
 
 	local min_size=1000000
 	local has_quay="" has_docker=""
@@ -84,28 +79,44 @@ Then restart the TUI." 0 0
 		fi
 	fi
 
+	# If no archives, loop until user copies them or exits
+	if ! mirror_has_archives; then
+		while :; do
+			dlg --backtitle "$(ui_backtitle)" --title "Image Archives Needed" \
+				--yes-label "Check Again" \
+				--no-label "Exit" \
+				--yesno \
+				"\nThis is a *light* install bundle — image archives are not included.\n\n\
+Copy the following files from your transfer media to:\n\
+  $ABA_ROOT/mirror/data/\n\n\
+Required files:\n\
+  • mirror_*.tar (image set archives)\n\n\
+Once copied, select 'Check Again'.\n" \
+				0 0
+			local rc=$?
+			if [[ $rc -ne 0 ]]; then
+				tui_log "DISCO wizard: user chose Exit (no archives)"
+				clear
+				exit 0
+			fi
+			# Re-check
+			if mirror_has_archives; then
+				tui_log "DISCO wizard: archives detected after re-check"
+				break
+			fi
+		done
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "ABA Install Bundle" --msgbox \
-		"\nYou are operating from an install bundle.\n\n\
-Disconnected payload summary:\n\
+		"\nDisconnected payload summary:\n\
   • OpenShift version: ${_bv}\n\
   • Update channel: ${_bc}\n\
-  • ${_archive_hint}\n\
+  • Image archives: mirror_*.tar detected in mirror/data/\n\
   • ${_op_summary}\n\
   • ${_payload_line}\n\
-  • CLI tools: included (oc, openshift-install, oc-mirror)\n\n\
-Next: the TUI will install a mirror registry and load images\nbefore cluster install.\n" \
+  • CLI tools: oc, openshift-install, oc-mirror\n\n\
+Next: install mirror registry → load images → install cluster\n" \
 		0 0
-
-	if ! mirror_has_archives; then
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DEAD_END" --msgbox \
-			"No mirror archive files found.\n\n\
-Place *.tar files (mirror_*.tar + aba-transfer.tar) in:\n\
-  $ABA_ROOT/mirror/data/\n\n\
-Restart the TUI after copying archives." \
-			0 0
-		tui_log "DISCO wizard: missing image archives — dropping to action menu"
-		return 0
-	fi
 
 	if [[ "${_TUI_DISCO_FROM_CONNO:-false}" == "true" ]]; then
 		tui_log "DISCO wizard: skipping auto mirror install/load (entered from CONNO menu)."

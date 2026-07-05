@@ -416,7 +416,9 @@ After installation, use 'Save', 'Sync', or 'Load' to populate it with images."
 			1) _mirror_install_local ;;
 			2) _mirror_install_remote ;;
 		esac
-		return $?
+		local exec_rc=$?
+		[[ $exec_rc -eq 0 ]] && return 0
+		# Back from sub-dialog → re-show local/remote choice
 	done
 }
 
