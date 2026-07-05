@@ -176,7 +176,7 @@ fi
 
 if [ "$inc" ]; then
 	aba_info "Writing 'incremental' tar archive of repo to $dest" >&2  # Must use stderr otherwise the tar archive becomes corrupt
-else
+elif [ "$dest" = "-" ]; then
 	aba_info "Writing tar file to $dest" >&2
 fi
 
@@ -197,8 +197,7 @@ if [ -f "${repo_dir}/mirror/data/imageset-config.yaml" ] && [ -f "${repo_dir}/mi
 	touch "${repo_dir}/mirror/data/imageset-config.yaml"
 fi
 
-aba_info "Running: 'tar cf $dest $out_file_list...' from inside $PWD" >&2
-aba_info "Please wait!" >&2
+aba_debug "Running: 'tar cf $dest $out_file_list...' from inside $PWD"
 
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
