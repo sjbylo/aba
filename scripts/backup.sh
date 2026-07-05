@@ -154,10 +154,10 @@ if [ "$repo_only" ]; then
 	#echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
 	#echo_magenta "           To avoid this in future write the full install bundle to *external media* or to a *separate drive*." >&2
 
-	echo_magenta "IMPORTANT: No image-set files are being added to this install bundle (*light bundle*)." >&2
+	echo_magenta "IMPORTANT: No image-set archive files are being added to this *light* install bundle." >&2
 	echo_magenta "           The image-set archive(s) are located at: ${PWD}/${repo_dir}/mirror/data/mirror_*.tar" >&2
 	echo_magenta "           You must copy these archive files to your internal bastion together with the install bundle ($dest)," >&2
-	echo_magenta "           and then combine them there." >&2
+	echo_magenta "           and then combine them again." >&2
 	echo_magenta "           PLEASE READ THE INSTRUCTIONS BELOW CAREFULLY." >&2
 	echo_magenta "           To avoid light bundles in the future, write the full bundle to *external media* or a *separate filesystem*." >&2
 
@@ -182,9 +182,9 @@ if [ "$dest" != "-" ]; then
 		aba_info "  mv mirror_*.tar aba/mirror/data"
 		aba_info "  cd aba"
 		aba_info "  ./install"
-		aba_info "  aba"
+		aba_info "  aba (or run: abatui)"
 		echo
-		aba_info "Run 'aba -h' for all options."
+		aba_info "Run 'aba -h' for all options or see the README.md file."
 		echo
 	else
 		echo
