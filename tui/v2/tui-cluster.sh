@@ -1578,9 +1578,9 @@ _cluster_execute() {
 	# Platform display
 	local _plat_disp="$cl_platform"
 	case "$cl_platform" in
-		bm)  _plat_disp="bm (bare-metal)" ;;
-		vmw) _plat_disp="vmw (VMware/ESXi)" ;;
-		kvm) _plat_disp="kvm (libvirt/KVM)" ;;
+		bm)  _plat_disp="Bare-metal" ;;
+		vmw) _plat_disp="VMware/ESXi" ;;
+		kvm) _plat_disp="Libvirt/KVM" ;;
 	esac
 
 	# Mirror registry name — source mirror.conf for reg_host/reg_port
@@ -1613,7 +1613,7 @@ _cluster_execute() {
 
 	local summary="Review — Confirm before installing:\n\n"
 	summary+="  Cluster:      $fqdn\n"
-	summary+="  Type:         $cl_type ($_nm master, $_nw workers = $total_nodes node$( [[ $total_nodes -ne 1 ]] && echo s))\n"
+	summary+="  Type:         $cl_type$( [[ "$cl_type" == "sno" ]] && echo " (single node)" || echo " ($_nm master, $_nw workers = $total_nodes nodes)")\n"
 	summary+="  Platform:     $_plat_disp\n"
 	summary+="  OpenShift:    ${ocp_version:-?} (${ocp_channel:-?})\n"
 	local _mode_display
@@ -1649,7 +1649,7 @@ _cluster_execute() {
 			summary+="  Worker Mem:   ${cl_worker_mem:-(not set)} GB\n"
 		fi
 		summary+="  Data disk:    ${cl_disk:-(not set)} GB\n"
-		summary+="  MAC prefix:   ${cl_mac_template:-(auto)}\n"
+		summary+="  MAC template: ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
 		local mac_cnt
