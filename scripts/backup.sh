@@ -161,7 +161,7 @@ if [ "$dest" != "-" ]; then
 		aba_info "On your disconnected bastion:" >&2
 		aba_info "  tar xf $(basename $dest)" >&2
 		aba_info "  mv mirror_*.tar aba/mirror/data/" >&2
-		aba_info "  cd aba && ./install && aba" >&2
+		aba_info "  cd aba && ./install && aba (or abatui)" >&2
 		echo >&2
 	else
 		echo >&2
@@ -169,7 +169,7 @@ if [ "$dest" != "-" ]; then
 		echo >&2
 		aba_info "On your disconnected bastion:" >&2
 		aba_info "  tar xf $(basename $dest)" >&2
-		aba_info "  cd aba && ./install && aba" >&2
+		aba_info "  cd aba && ./install && aba (or abatui)" >&2
 		echo >&2
 	fi
 fi

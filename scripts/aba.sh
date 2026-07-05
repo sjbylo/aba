@@ -394,7 +394,7 @@ do
 		export DEBUG_ABA=1
 	export INFO_ABA=1
 	shift 
-elif [ "$1" = "--light" ]; then
+elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
 	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
 	shift
