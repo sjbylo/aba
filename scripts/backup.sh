@@ -148,62 +148,29 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	#echo_magenta "IMPORTANT: NOT ADDING ANY IMAGE SET FILES TO THE INSTALL BUNDLE (*SPLIT BUNDLE*)." >&2
-	#echo_magenta "           The image set archive file(s) are located at $PWD/aba/mirror/data/mirror_*.tar." >&2
-	#echo_magenta "           You will need to copy them to your internal bastion, along with the install bundle file ($dest), and combine them." >&2
-	#echo_magenta "           READ THE BELOW INSTRUCTIONS CAREFULLY!" >&2
-	#echo_magenta "           To avoid this in future write the full install bundle to *external media* or to a *separate drive*." >&2
-
-	echo_magenta "IMPORTANT: No image-set archive files are being added to this *light* install bundle." >&2
-	echo_magenta "           The image-set archive(s) are located at: ${PWD}/${repo_dir}/mirror/data/mirror_*.tar" >&2
-	echo_magenta "           You must copy these archive files to your internal bastion together with the install bundle ($dest)," >&2
-	echo_magenta "           and then combine them again." >&2
-	echo_magenta "           PLEASE READ THE INSTRUCTIONS BELOW CAREFULLY." >&2
-	echo_magenta "           To avoid light bundles in the future, write the full bundle to *external media* or a *separate filesystem*." >&2
-
+	aba_warning "This is a *light* bundle (image-set archives NOT included)." >&2
+	aba_info "Also transfer: ${PWD}/${repo_dir}/mirror/data/mirror_*.tar" >&2
 fi
 
 # If destination is NOT stdout (i.e. if in interactive mode)
 if [ "$dest" != "-" ]; then
 	if [ "$repo_only" ]; then
-		echo
-		echo_cyan "Writing *light* bundle file to $dest ... (to create a full install bundle instead, write the bundle directly to external media)."
-		echo
-		#aba_info "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
-		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
-		aba_info " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
-		aba_info "Also transfer the image set archive file(s), for example, with:"
-		aba_info " cp mirror/data/mirror_*.tar </path/to/your/portable/media/usb-stick/or/thumbdrive>"
-		echo
-		aba_info "After transferring the install bundle file and the image set archive file(s) to your internal bastion"
-		aba_info "extract them into your home directory and"
-		aba_info "then move the image set archive file(s) into the aba/mirror/data/ directory & continue by installing & running 'aba', for example, with the commands:"
-		aba_info "  tar xvf $(basename $dest)"
-		aba_info "  mv mirror_*.tar aba/mirror/data"
-		aba_info "  cd aba"
-		aba_info "  ./install"
-		aba_info "  aba (or run: abatui)"
-		echo
-		aba_info "Run 'aba -h' for all options or see the README.md file."
-		echo
+		echo >&2
+		aba_info "Writing *light* bundle to $dest ..." >&2
+		echo >&2
+		aba_info "On your disconnected bastion:" >&2
+		aba_info "  tar xf $(basename $dest)" >&2
+		aba_info "  mv mirror_*.tar aba/mirror/data/" >&2
+		aba_info "  cd aba && ./install && aba" >&2
+		echo >&2
 	else
-		echo
-		echo_cyan "Writing *all-in-one* install bundle file to $dest ..."
-		echo
-		#aba_info "After the install bundle has been created, transfer it to your *internal bastion* using your chosen method, for example, portable media:"
-		aba_info "Once the installation bundle has been created, copy it to your internal bastion using any suitable transfer method—for example, via portable media:"
-		aba_info " cp $dest </path/to/your/portable/media/usb-stick/or/thumbdrive>"
-		echo
-		aba_info "After transferring the install bundle file to your internal bastion"
-		aba_info "extract it into your home directory and"
-		aba_info "then continue by installing & running 'aba', for example, with the commands:"
-		aba_info "  tar xvf $(basename $dest)"
-		aba_info "  cd aba"
-		aba_info "  ./install"
-		aba_info "  aba"
-		echo
-		aba_info "Run 'aba -h' for all options."
-		echo
+		echo >&2
+		aba_info "Writing install bundle to $dest ..." >&2
+		echo >&2
+		aba_info "On your disconnected bastion:" >&2
+		aba_info "  tar xf $(basename $dest)" >&2
+		aba_info "  cd aba && ./install && aba" >&2
+		echo >&2
 	fi
 fi
 
@@ -217,7 +184,7 @@ out_file_list=$(echo $file_list | cut -c-90)
 
 # Bundle ISC protection: make ISC newer than .created so reg-create-imageset-config.sh
 # will skip regeneration on the disconnected side. Without this, the ISC gets regenerated
-# from local config (which may lack ocp_version_target, etc.) causing "no release images found"
+# from local config (which may lack ocp_upgrade_to, etc.) causing "no release images found"
 # during oc-mirror load because the new ISC doesn't match the tar contents.
 # .isc-pinned = user hand-edited the ISC before bundling, so the load side should NOT
 # auto-unlock it (the user's customizations must persist permanently).
