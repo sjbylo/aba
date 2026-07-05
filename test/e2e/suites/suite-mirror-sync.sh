@@ -166,6 +166,9 @@ test_end
 test_begin "Save/Load: roundtrip"
 
 e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
+# Test 4 (save) installs Quay on disN via the default mirror/ config —
+# must uninstall it too before asserting all registries are removed.
+e2e_run "Uninstall default mirror registry" "aba --dir mirror uninstall"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"

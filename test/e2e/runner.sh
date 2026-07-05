@@ -719,6 +719,42 @@ _cleanup_dis() {
 		return 1
 	fi
 
+	# Case 2 fallback: remotely-installed registries whose conN state was lost
+	# (e.g. snapshot revert wiped conN markers). ABA writes INSTALLED_BY_ABA.md
+	# inside each data dir at install time -- scan disN for these breadcrumbs
+	# and run mirror-registry uninstall for each one found.
+	echo "  Scanning disN for orphaned registries (INSTALLED_BY_ABA.md) ..."
+	for _try_user in root "$_default_user"; do
+		local _uhost="${_try_user}@${_dis_fqdn}"
+		local _orphan_dirs
+		_orphan_dirs=$(_essh "$_uhost" "find ~/e2e-mirror-* ~/${_E2E_ABA_INTERNAL_DIRS// / ~/} -maxdepth 2 -name INSTALLED_BY_ABA.md -type f 2>/dev/null" || true)
+		if [ -n "$_orphan_dirs" ]; then
+			echo "  [cleanup] Found orphaned registry breadcrumbs for $_try_user on disN:"
+			echo "$_orphan_dirs" | while read -r _md_path; do
+				local _data_dir
+				_data_dir=$(dirname "$_md_path")
+				echo "    $_data_dir"
+				# Attempt proper uninstall using mirror-registry if available
+				_essh "$_uhost" "
+					if [ -x '$_data_dir/../mirror-registry' ] || command -v mirror-registry &>/dev/null; then
+						_mr=\$(command -v mirror-registry || echo '$_data_dir/../mirror-registry')
+						echo '  [cleanup] Running mirror-registry uninstall for $_data_dir'
+						\$_mr uninstall -v --autoApprove \
+							--quayRoot '$_data_dir/quay-install' \
+							--quayStorage '$_data_dir/quay-install/quay-storage' \
+							--sqliteStorage '$_data_dir/quay-install/sqlite-storage' 2>&1 || true
+					else
+						echo '  [cleanup] mirror-registry not found -- using aba uninstall'
+						_aba=\$HOME/.e2e-harness/bin/aba
+						if [ -x \"\$_aba\" ] && [ -f ~/aba/mirror/.available ]; then
+							cd ~/aba && \$_aba -y -d mirror uninstall 2>&1 || true
+						fi
+					fi
+				" 2>&1
+			done
+		fi
+	done
+
 	# Post-uninstall assertion: verify no stale podman state on disN.
 	# Catches the exact failure mode where mirror-registry uninstall silently
 	# skips cleanup, leaving redis_pass secrets and systemd units behind.
@@ -737,6 +773,7 @@ _cleanup_dis() {
 		echo "$_podman_stale"
 		echo "  This will cause WRONGPASS / PermissionError on the next install."
 		echo "  Investigate why 'aba uninstall' did not clean up podman state."
+		echo "  Manual recovery: test/e2e/tools/force-clean-vm.sh <user@host>"
 		return 1
 	fi
 
