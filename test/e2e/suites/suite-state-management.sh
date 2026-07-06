@@ -37,6 +37,7 @@ source "$_SUITE_DIR/../lib/setup.sh"
 
 # --- Configuration ----------------------------------------------------------
 
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 _MIRROR_NAME="e2e-mirror-state1"
 _MIRROR_PORT=5111
@@ -336,7 +337,7 @@ e2e_run "Recreate mirror dir for local tilde test" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR && aba mirror --name $_TILDE_MIRROR"
 
 e2e_run "Local install with data_dir=~/$_TILDE_LOCAL_SUBDIR" \
-	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_LOCAL_SUBDIR'"
+	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_LOCAL_SUBDIR' -H $CON_HOST"
 
 e2e_run "Local: reg_root is absolute (no literal ~)" \
 	"bash -c 'source $_TILDE_STATE/state.sh && [[ \$reg_root == /* ]] || { echo \"reg_root=\$reg_root not absolute\"; false; }'"
