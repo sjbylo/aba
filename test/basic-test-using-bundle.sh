@@ -68,12 +68,12 @@ aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y || { sleep 60; aba -d $CLUSTER_NAME mon; } # wait and try again!
 aba -d $CLUSTER_NAME day2 
-. <(./aba -d $CLUSTER_NAME login)
+. <(aba -d $CLUSTER_NAME login) || . <(./aba -d $CLUSTER_NAME shell)   # Try x 2
 time until oc get packagemanifests | grep cincinnati-operator; do sleep 5; done
 oc get packagemanifests
 aba -d $CLUSTER_NAME day2-osus
 aba -d $CLUSTER_NAME day2-ntp
-. <(./aba -d $CLUSTER_NAME login)
+. <(aba -d $CLUSTER_NAME login) || . <(./aba -d $CLUSTER_NAME shell)   # Try x 2
 aba -d $CLUSTER_NAME delete -y
 aba -d mirror uninstall -y || true  # Delete mirror reg.
 set +x
