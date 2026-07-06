@@ -139,8 +139,8 @@ rc=$(_ask_rc_auto "" -y --auto-no)
 	|| test_fail "auto: ask -y --auto-no should return 1" "got rc=$rc"
 
 rc=$(_ask_rc_auto "" -n)
-[ "$rc" -eq 1 ] && test_pass "auto: ask -n (no --auto-yes) → rc=1 (default no)" \
-	|| test_fail "auto: ask -n should return 1 in auto mode" "got rc=$rc"
+[ "$rc" -eq 0 ] && test_pass "auto: ask -n with ASK_OVERRIDE → rc=0 (always yes, like dnf -y)" \
+	|| test_fail "auto: ask -n with ASK_OVERRIDE should return 0 (go ahead)" "got rc=$rc"
 
 rc=$(_ask_rc_auto "" -y)
 [ "$rc" -eq 0 ] && test_pass "auto: ask -y → rc=0 (default yes)" \
@@ -152,12 +152,12 @@ rc=$(_ask_rc_auto "" -y)
 echo "--- Unrecognized input ---"
 
 rc=$(_ask_rc "x" -y)
-[ "$rc" -eq 0 ] && test_pass "ask -y: 'x' → rc=0 (treat as default=yes)" \
-	|| test_fail "ask -y: 'x' should fall back to default (yes)" "got rc=$rc"
+[ "$rc" -eq 1 ] && test_pass "ask -y: 'x' → rc=1 (unrecognized = reject)" \
+	|| test_fail "ask -y: 'x' should return 1 (only explicit y/Y proceeds)" "got rc=$rc"
 
 rc=$(_ask_rc "x" -n)
-[ "$rc" -eq 1 ] && test_pass "ask -n: 'x' → rc=1 (treat as default=no)" \
-	|| test_fail "ask -n: 'x' should fall back to default (no)" "got rc=$rc"
+[ "$rc" -eq 1 ] && test_pass "ask -n: 'x' → rc=1 (unrecognized = reject)" \
+	|| test_fail "ask -n: 'x' should return 1 (only explicit y/Y proceeds)" "got rc=$rc"
 
 echo
 echo "=== Results: $pass passed, $fail failed ==="
