@@ -3872,8 +3872,14 @@ aba_bg_cleanup() {
 	run_once -F 2>/dev/null || true
 }
 
-# Ensure govc is installed in ~/bin
+# Ensure govc is installed in ~/bin (VMware only)
 ensure_govc() {
+	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
+	if [ "${platform:-}" != "vmw" ]; then
+		aba_debug "ensure_govc: skipping (platform=${platform:-unset}, not vmw)"
+		return 0
+	fi
+
 	aba_debug "ensure_govc: downloading and installing govc"
 	# Liberal bg kick-off (idempotent)
 	run_once -i "$TASK_DL_GOVC" -- "${CMD_DL_GOVC[@]}"
