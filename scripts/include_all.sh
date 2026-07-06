@@ -1233,11 +1233,11 @@ ask() {
 	fi
 
 	# Default reply is 'yes' (or 'no') and return 0
-	yn_opts="(Y/n)"
+	yn_opts="(y/n) [y]"
 	def_response=y
 	local auto_response=
-	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/N)" && shift
-	[ "$1" == "-y" ] && def_response=y && yn_opts="(Y/n)" && shift
+	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/n) [n]" && shift
+	[ "$1" == "-y" ] && def_response=y && yn_opts="(y/n) [y]" && shift
 	# --auto-yes/--auto-no: override the non-interactive (ask=false) answer
 	# independently of the interactive default (-n/-y).  Allows e.g.
 	# "ask -n --auto-yes" = human default N (safe), automation default Y (proceed).
@@ -1250,6 +1250,13 @@ ask() {
  	echo_yellow -n "[ABA] $@? $yn_opts: "
 	if [ "$ret_default" ]; then
 		echo_white "[default: $ret_default]"
+		# ASK_OVERRIDE (-y flag): always proceed (like dnf -y)
+		# unless --auto-no explicitly blocks this specific prompt
+		if [ "$ret_default" = "-y" ]; then
+			[ "${auto_response:-}" = "n" ] && return 1
+			return 0
+		fi
+		# ask=false (config): use auto_response if set, else def_response
 		local effective=${auto_response:-$def_response}
 		[ "$effective" = "n" ] && return 1
 		return 0
@@ -1261,11 +1268,11 @@ ask() {
 		[ "$def_response" = "n" ] && return 1 || return 0
 	fi
 	# Explicit yes
-	{ [ "$yn" = "y" ] || [ "$yn" = "Y" ]; } && return 0
+	{ [ "$yn" = "y" ] || [ "$yn" = "Y" ] || [ "$yn" = "yes" ] || [ "$yn" = "Yes" ] || [ "$yn" = "YES" ]; } && return 0
 	# Explicit no
-	{ [ "$yn" = "n" ] || [ "$yn" = "N" ]; } && return 1
-	# Unrecognized input, treat as default
-	[ "$def_response" = "n" ] && return 1 || return 0
+	{ [ "$yn" = "n" ] || [ "$yn" = "N" ] || [ "$yn" = "no" ] || [ "$yn" = "No" ] || [ "$yn" = "NO" ]; } && return 1
+	# Unrecognized input — don't proceed (safety: only explicit y/Y/yes means yes)
+	return 1
 }
 
 edit_file() {
