@@ -804,7 +804,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		[ -s "$2" ] || aba_abort "file not found or empty: $2"
 		cp "$2" kvm.conf
 		shift 2
-	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
+	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # Answer yes to all prompts
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		export ask=1
 		shift 
