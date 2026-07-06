@@ -6,7 +6,7 @@ Usage:
 
 Options:
   -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
-  -y                                   # Automatically accept the default answer to all prompts.
+  -y                                   # Answer yes to all prompts.
   -n, --name <name>                    # Create a named mirror directory (like cluster --name).
   -H, --reg-host <hostname>            # The hostname of the mirror registry.
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.

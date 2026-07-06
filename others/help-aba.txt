@@ -26,7 +26,7 @@ Other commands:
   aba help                              # See help for all steps/targets
 
 Options:
-  -y                                    # Automatically accept the default answer to all prompts
+  -y                                    # Answer yes to all prompts
   -d, --dir <path/to/dir>               # Run aba in the specified directory, or cd there and run without -d.
   -h, --help                            # Show this help information
   -S, --pull-secret <path/to/file>      # Location of your pull secret (json) file here
