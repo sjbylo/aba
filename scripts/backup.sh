@@ -25,11 +25,13 @@ aba_debug "Starting: $0 $*"
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
 repo_only=			# Also include the data/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
+with_clusters=			# Include cluster directories (pre-built configs for air-gap transfer)
 
 while echo "$1" | grep -q ^--[a-z]
 do
 	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
 	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
+	[ "$1" = "--with-cluster-configs" ] && with_clusters=1 && shift
 done
 
 [ "$1" ] && dest="$1"
@@ -51,7 +53,13 @@ cd ..
 # If script exits early (crash, Ctrl-C, tar failure): restore source repo to unlocked state.
 # .bundle is a temp marker for tar --transform; .isc-pinned + ISC timestamp must be restored
 # so the user's repo doesn't get stuck in a "locked" state after an interrupted bundle.
-trap 'rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"; [ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"' EXIT
+_restore_cleanup() {
+	rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"
+	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
+	for _d in $_restore_symlinks; do rm -f "$_d/mirror.conf"; ln -fs mirror/mirror.conf "$_d/mirror.conf"; done
+	for _d in $_restore_remove; do rm -f "$_d/mirror.conf"; done
+}
+trap '_restore_cleanup' EXIT
 
 # If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
@@ -76,7 +84,35 @@ touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
+# If --with-cluster-configs: prep cluster dirs and build path list for find
+_cluster_paths=""
+_restore_symlinks=""
+_restore_remove=""
+if [ "$with_clusters" ]; then
+	for _cf in "${repo_dir}"/*/cluster.conf; do
+		[ -f "$_cf" ] || continue
+		_cdir=$(dirname "$_cf")
+		[ "$(basename "$_cdir")" = "mirror" ] && continue
+		if [ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ]; then
+			touch "$_cdir/.bm-message"
+			[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
+			# Ensure mirror.conf is a real file in the tar with old mtime (prevents
+			# Make from regenerating install-config.yaml on the disconnected side)
+			if [ -L "$_cdir/mirror.conf" ]; then
+				_restore_symlinks+=" $_cdir"
+				rm -f "$_cdir/mirror.conf"
+				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
+			elif [ ! -f "$_cdir/mirror.conf" ]; then
+				_restore_remove+=" $_cdir"
+				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
+			fi
+		fi
+		_cluster_paths+=" $_cdir"
+	done
+fi
+
 # All 'find expr' below are by default "and"
+# shellcheck disable=SC2086
 file_list=$(find				\
 	"${repo_dir}/install"			\
 	"${repo_dir}/aba"			\
@@ -96,7 +132,13 @@ file_list=$(find				\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/.index"			\
 	"${repo_dir}/mirror"			\
-									\
+	$_cluster_paths				\
+								\
+	\( -path "${repo_dir}/mirror/data/working-dir*" -o	\
+	   -path "${repo_dir}/mirror/data/oc-mirror-workspace*" -o \
+	   -path "${repo_dir}/mirror/sync" -o			\
+	   -path "${repo_dir}/mirror/save" \) -prune -o		\
+								\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
 	! -path "${repo_dir}/cli/.??*"	  				\
@@ -115,10 +157,14 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/regcreds"	  			\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
-	! -path "${repo_dir}/mirror/data/working-dir*"  		\
-	! -path "${repo_dir}/mirror/sync/*"				\
-	! -path "${repo_dir}/mirror/save/*"				\
-	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
+	! -name ".install-complete"					\
+	! -name ".autopoweroff"						\
+	! -name ".autoupload"						\
+	! -name ".autorefresh"						\
+	! -name ".auto-agent-up"					\
+	! -name ".bm-nextstep"						\
+	! -name ".preflight-done"					\
+	! -name ".cli"							\
 	! -name "*.content-layer-digest"				\
 	! -name "*.expected-count"					\
 	! -path "${repo_dir}/test/output.log" 				\
@@ -127,6 +173,7 @@ file_list=$(find				\
 	\( -type f -o -type l \)				\
 								\
 	-newer ~/.aba.previous.backup 				\
+	-print							\
 )
 
 # Notes on the above
@@ -203,6 +250,15 @@ set +e   # Needed so we can capture the return code from tar and not just exit (
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
 ret=$?
 rm -f "${repo_dir}/.bundle"  # Also cleaned up by EXIT trap, but explicit here for clarity
+
+# Restore mirror.conf files that were temporarily modified for the bundle
+for _rdir in $_restore_symlinks; do
+	rm -f "$_rdir/mirror.conf"
+	ln -fs mirror/mirror.conf "$_rdir/mirror.conf"
+done
+for _rdir in $_restore_remove; do
+	rm -f "$_rdir/mirror.conf"
+done
 
 # Restore source repo after tar: touch .created so it's newer than ISC again.
 # Without this, the user's connected-side repo would stay "locked" and
