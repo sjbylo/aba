@@ -340,10 +340,12 @@ test_begin "Bare-metal: ISO simulation"
 e2e_run "Set platform=bm" "aba --platform bm"
 e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 
-e2e_run "Remove govc to test download-all" "rm -f cli/govc*"
+e2e_run "Remove govc tarball to test download-all" "rm -f cli/govc*"
 e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
-e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
-e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
+e2e_run "Run download-all (should NOT download govc for platform=bm)" "aba -d cli download-all"
+e2e_run "Verify govc tar still absent (platform=bm)" "! test -f cli/govc*gz"
+e2e_run "Verify govc NOT in download list (platform=bm)" \
+    "! make -sC cli out-download-all | grep -q govc"
 
 # $STANDARD is only ever created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Clean any leftover $STANDARD cluster dir" "rm -rf $STANDARD"

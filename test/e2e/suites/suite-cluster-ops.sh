@@ -424,14 +424,16 @@ test_begin "Setup: delete SNO and sync latest version"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
+# Capture current version BEFORE the retriable block so retries compare against the original
+_OLD_VER=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
+
 e2e_run "Resolve latest version and set target" "
-    old_ver=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
     aba --channel fast --version l
     new_ver=\$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print \$1}')
-    [ \"\$new_ver\" != \"\$old_ver\" ] || { echo \"FAIL: version did not change (still \$old_ver)\"; exit 1; }
+    [ \"\$new_ver\" != \"$_OLD_VER\" ] || { echo \"FAIL: version did not change (still $_OLD_VER)\"; exit 1; }
     aba -d mirror --upgrade-to \$new_ver
     aba --force -d mirror imagesetconf
-    echo \"Syncing version: \$new_ver (was: \$old_ver)\"
+    echo \"Syncing version: \$new_ver (was: $_OLD_VER)\"
 "
 
 e2e_run -r 1 2 "Sync latest version to mirror" \

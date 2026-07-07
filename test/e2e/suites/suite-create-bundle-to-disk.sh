@@ -291,10 +291,10 @@ e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 
 e2e_run "Remove govc tarball" "rm -f cli/govc*"
 e2e_run "Verify govc tarball removed" "test ! -f cli/govc*gz"
-e2e_run "Run download-all (govc should still be downloaded)" \
+e2e_run "Run download-all (govc skipped for platform=bm)" \
     "aba -d cli download-all"
-e2e_run "Verify govc tarball exists after download-all" \
-    "test -f cli/govc*gz"
+e2e_run "Verify govc tarball NOT downloaded (platform=bm excludes govc)" \
+    "test ! -f cli/govc*gz"
 
 # BM two-step install runs on internal bastion (registry is there, loaded from bundle)
 e2e_run_remote "Switch to bare-metal platform on internal bastion" \

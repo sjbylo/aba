@@ -93,6 +93,15 @@ e2e_run "Verify kvm.conf has KVM_NETWORK" "grep ^KVM_NETWORK kvm.conf"
 e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
 e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 
+e2e_run "Verify govc NOT in download list (platform=kvm)" \
+    "! make -sC cli out-download-all | grep -q govc"
+e2e_run "Verify govc NOT in install list (platform=kvm)" \
+    "! make -sC cli out-install | grep -q govc"
+e2e_run "Verify govc tarball NOT on disk (platform=kvm)" \
+    "! ls cli/govc*.tar.gz"
+e2e_run "Verify govc binary NOT in ~/bin (platform=kvm)" \
+    "! test -f ~/bin/govc"
+
 test_end
 
 # ============================================================================
