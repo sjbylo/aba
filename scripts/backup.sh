@@ -58,6 +58,8 @@ _restore_cleanup() {
 	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
 	for _d in $_restore_symlinks; do rm -f "$_d/mirror.conf"; ln -fs mirror/mirror.conf "$_d/mirror.conf"; done
 	for _d in $_restore_remove; do rm -f "$_d/mirror.conf"; done
+	# Restore vmware.conf/kvm.conf mtime after pinning for the tar
+	[ "$_hv_conf_path" ] && [ "$_hv_conf_mtime_ref" ] && touch -d "@$_hv_conf_mtime_ref" "$_hv_conf_path"
 }
 trap '_restore_cleanup' EXIT
 
@@ -88,7 +90,18 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 _cluster_paths=""
 _restore_symlinks=""
 _restore_remove=""
+_hv_conf_path=""
+_hv_conf_mtime_ref=""
 if [ "$with_clusters" ]; then
+	# Include vmware.conf or kvm.conf so the cluster's symlink resolves in the bundle
+	for _hv in vmware.conf kvm.conf; do
+		if [ -f "${repo_dir}/$_hv" ]; then
+			_hv_conf_path="${repo_dir}/$_hv"
+			_hv_conf_mtime_ref=$(stat -c %Y "$_hv_conf_path")
+			break
+		fi
+	done
+
 	for _cf in "${repo_dir}"/*/cluster.conf; do
 		[ -f "$_cf" ] || continue
 		_cdir=$(dirname "$_cf")
@@ -109,6 +122,20 @@ if [ "$with_clusters" ]; then
 		fi
 		_cluster_paths+=" $_cdir"
 	done
+
+	# Pin vmware.conf/kvm.conf between .init and install-config.yaml. Using the
+	# newest cluster.conf satisfies both: vmware.conf >= .init (no rebuild of vmware.conf)
+	# and vmware.conf < install-config.yaml (no rebuild of install-config.yaml).
+	if [ "$_hv_conf_path" ]; then
+		_newest_cc=""
+		for _d in $_cluster_paths; do
+			[ -f "$_d/cluster.conf" ] || continue
+			if [ ! "$_newest_cc" ] || [ "$_d/cluster.conf" -nt "$_newest_cc" ]; then
+				_newest_cc="$_d/cluster.conf"
+			fi
+		done
+		[ "$_newest_cc" ] && touch -r "$_newest_cc" "$_hv_conf_path"
+	fi
 fi
 
 # All 'find expr' below are by default "and"
@@ -133,6 +160,7 @@ file_list=$(find				\
 	"${repo_dir}/.index"			\
 	"${repo_dir}/mirror"			\
 	$_cluster_paths				\
+	${_hv_conf_path:+"$_hv_conf_path"}	\
 								\
 	\( -path "${repo_dir}/mirror/data/working-dir*" -o	\
 	   -path "${repo_dir}/mirror/data/oc-mirror-workspace*" -o \
