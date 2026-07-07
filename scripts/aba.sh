@@ -514,6 +514,10 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	ver_short=$(_ver_minor "$ver")  # Extract major.minor (e.g., 4.20.8 -> 4.20, 4.22.0-rc.1 -> 4.22)
 	download_all_catalogs "$ver_short"
 
+	# Version is now known -- start full CLI downloads (oc, openshift-install, etc.).
+	# The early download (line ~337) only fetched version-independent tools.
+	$ABA_ROOT/scripts/cli-download-all.sh >&2
+
 		shift 2
 		ocp_version=$ver
 	elif [ "$1" = "--upgrade-to" ]; then

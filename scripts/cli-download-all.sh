@@ -137,7 +137,8 @@ do
 		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override
 		# Wait without command — run_once reloads from saved cmd.sh
 		if ! run_once -q -w -i "$task_id"; then
-			# govc download failure is non-fatal for non-vmw platforms
+			# Safety net: govc download failure is non-fatal for non-vmw platforms
+			# (normally govc won't be in the tool list for non-vmw, but handle edge cases)
 			if [[ "$tool" == "govc" && "${platform:-}" != "vmw" ]]; then
 				aba_warning "govc failed to download — ignoring since platform != vmw."
 			else

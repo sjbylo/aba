@@ -1,4 +1,4 @@
-# Makefile to download and install oc, openshift-install, oc-mirror, govc and butane
+# Makefile to download and install oc, openshift-install, oc-mirror, butane and govc (vmw only)
 #
 # This is PURE MAKE -- no run_once inside recipes. run_once wraps Make from
 # OUTSIDE (cli-download-all.sh, ensure_*() functions). A user running
@@ -98,6 +98,17 @@ govc_tar_file := govc_Linux_$(govc_arch).tar.gz
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 platform := $(strip $(shell echo $(platform)))
+
+# govc is only needed for VMware platforms
+ifeq ($(platform),vmw)
+  _govc_download := download-govc
+  _govc_install  := govc
+  _govc_name     := govc
+else
+  _govc_download :=
+  _govc_install  :=
+  _govc_name     :=
+endif
 
 # OCP major version (e.g. "4" from "4.21.10") for CDN paths (openshift-v4/, openshift-v5/, etc.)
 ocp_major := $(firstword $(subst ., ,$(ocp_version)))
@@ -221,24 +232,24 @@ download-butane: $(butane_binary_file)  ## Download butane binary
 download-govc: $(govc_tar_file)  ## Download govc tarball
 
 # Download all CLI tarballs.
-# Always TRY govc (error handling for non-vmw platforms is done in the caller).
+# govc only included when platform=vmw.
 .PHONY: download
-download: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane download-govc  ## Download all CLI tarballs
+download: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane $(_govc_download)  ## Download all CLI tarballs
 
 .PHONY: download-all
-download-all: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane download-govc  ## Download all CLI tarballs (same as download)
+download-all: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane $(_govc_download)  ## Download all CLI tarballs (same as download)
 
 # Output logical tool names for cli-download-all.sh.
 # Version suffix appended for tools that need ocp_version, so callers
 # can construct version-dependent run_once task IDs.
 .PHONY: out-download-all
 out-download-all:
-	@echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane govc
+	@echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane $(_govc_name)
 
 # Version-independent tools only (usable without ocp_version being set)
 .PHONY: out-download-no-version
 out-download-no-version:
-	@echo oc-mirror butane govc
+	@echo oc-mirror butane $(_govc_name)
 
 
 ########################################################################
@@ -409,21 +420,21 @@ butane: ~/bin/butane  ## Install butane to ~/bin/butane
 	rm -rf $$_td
 
 # install/install-all: extract all tools.
-# Always includes govc (error handling for non-vmw is in the caller).
+# govc only included when platform=vmw.
 .PHONY: install
-install: .check-ocp-version oc openshift-install oc-mirror butane govc  ## Install all CLI tools to ~/bin
+install: .check-ocp-version oc openshift-install oc-mirror butane $(_govc_install)  ## Install all CLI tools to ~/bin
 
 .PHONY: install-all
-install-all: .check-ocp-version oc openshift-install oc-mirror butane govc  ## Install all CLI tools (same as install)
+install-all: .check-ocp-version oc openshift-install oc-mirror butane $(_govc_install)  ## Install all CLI tools (same as install)
 
 # Output targets for scripts to query which tools exist.
 .PHONY: out-install
 out-install:
-	@echo oc openshift-install oc-mirror butane govc
+	@echo oc openshift-install oc-mirror butane $(_govc_name)
 
 .PHONY: out-install-all
 out-install-all:
-	@echo oc openshift-install oc-mirror butane govc
+	@echo oc openshift-install oc-mirror butane $(_govc_name)
 
 
 ########################################################################
