@@ -184,12 +184,9 @@ case "$CLI_COMMAND" in
 			[ "$_a" = "daemon" ] && _a="run"
 			_daemon_args+=("$_a")
 		done
-		# Ensure --force is present (stale state from previous crash)
-		_has_force=""
-		for _a in "${_daemon_args[@]}"; do
-			[[ "$_a" =~ ^(-f|--force)$ ]] && _has_force=1
-		done
-		[ -z "$_has_force" ] && _daemon_args+=("--force")
+		# Only force-clean on the FIRST daemon launch (not on restart cycles).
+		# Subsequent cycles inherit running suites -- force would kill them.
+		_daemon_first_run=1
 
 		echo $$ > "$E2E_DAEMON_PID"
 		trap 'rm -f "$E2E_DAEMON_PID"' EXIT
@@ -200,9 +197,19 @@ case "$CLI_COMMAND" in
 		export _E2E_DAEMONIZED=1
 
 		while true; do
+			# Build per-cycle args: add --force only on the very first launch
+			_cycle_args=("${_daemon_args[@]}")
+			if [ -n "$_daemon_first_run" ]; then
+				_has_force=""
+				for _a in "${_cycle_args[@]}"; do
+					[[ "$_a" =~ ^(-f|-F|--force|--fresh)$ ]] && _has_force=1
+				done
+				[ -z "$_has_force" ] && _cycle_args+=("--force")
+				_daemon_first_run=""
+			fi
 			_daemon_log "Launching dispatcher ..."
 			_drc=0
-			"$BASH" "$_RUN_DIR/run.sh" "${_daemon_args[@]}" || _drc=$?
+			"$BASH" "$_RUN_DIR/run.sh" "${_cycle_args[@]}" || _drc=$?
 
 			if [ "$_drc" -eq 0 ]; then
 				_daemon_log "Dispatcher exited cleanly (all suites completed). Restarting full cycle ..."
@@ -744,7 +751,7 @@ for _p in $CLI_POOL_LIST; do
 
 	if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 		sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
-		sync_extras "$target" "${CON_SSH_USER:-steve}"
+		sync_extras "$target" "${CON_SSH_USER:-steve}" "$_p"
 		# Ensure rootless podman's pause process survives between SSH sessions
 		_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
 		echo "    con${_p}: harness deployed to ~/.e2e-harness/"

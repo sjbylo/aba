@@ -195,7 +195,7 @@ _dispatch_suite() {
 		return 1
 	fi
 	sync_dis_aba "$pool_num" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${pool_num} failed"
-	sync_extras "$target" "${CON_SSH_USER:-steve}"
+	sync_extras "$target" "${CON_SSH_USER:-steve}" "$pool_num"
 
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"

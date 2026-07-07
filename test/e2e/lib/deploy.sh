@@ -141,10 +141,11 @@ sync_source() {
 }
 
 # Push optional extras: notify.sh, vmware.conf, root essentials.
-# Usage: sync_extras <user@host> <user>
+# Usage: sync_extras <user@host> <user> [pool_num]
 sync_extras() {
 	local target="$1"
 	local user="$2"
+	local pool_num="${3:-}"
 
 	# notify.sh
 	if [ -x ~/bin/notify.sh ]; then
@@ -164,6 +165,25 @@ sync_extras() {
 		for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
 			_escp "$_vf" "${_dt}:~/.vmware.conf" 2>/dev/null || true
 		done
+	fi
+
+	# Deploy per-pool VMWARE_CONF from pools.conf (e.g. ~/.vmware.conf.vc.pools)
+	# so suites using $VMWARE_CONF find the file at the expected path.
+	if [ -n "$pool_num" ]; then
+		local _pool_vconf
+		_pool_vconf=$(_pool_vmware_conf "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+		if [ -n "$_pool_vconf" ]; then
+			local _pool_vf
+			_pool_vf="$(eval echo "$_pool_vconf")"
+			if [ -f "$_pool_vf" ] && [ "$_pool_vf" != "$_vf" ]; then
+				local _host="${target#*@}"
+				local _dis_host="${_host/con/dis}"
+				_escp "$_pool_vf" "${target}:${_pool_vconf}"
+				for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
+					_escp "$_pool_vf" "${_dt}:${_pool_vconf}" 2>/dev/null || true
+				done
+			fi
+		fi
 	fi
 
 	# Always deploy ESXi config so ESXi-specific tests work regardless of -v flag
@@ -246,7 +266,7 @@ deploy_pool() {
 	# Harness deploy
 	if sync_harness "$target" "$aba_root" "$deploy_config"; then
 		sync_infra_aba "$pool_num" "$aba_root" || echo "WARNING: infra aba deploy to pool ${pool_num} failed"
-		sync_extras "$target" "$user"
+		sync_extras "$target" "$user" "$pool_num"
 		echo "+ harness done"
 	else
 		echo "+ harness FAILED"
