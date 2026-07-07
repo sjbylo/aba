@@ -172,8 +172,8 @@ e2e_poll 300 15 "Wait for agent API on compact rendezvous node" \
 e2e_run "Extract compact node IPs" \
     "cd $COMPACT && eval \$(scripts/cluster-config.sh) && echo \"CP_IPS=\$CP_IP_ADDRESSES\""
 for _node_idx in 0 1 2; do
-    e2e_poll 300 15 "SSH into compact master $_node_idx (verify network)" \
-        "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
+    e2e_poll 300 15 "SSH into compact master $_node_idx (verify expected IP)" \
+        "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show' | grep \"\${_ips[$_node_idx]}\""
 done
 
 e2e_poll 1800 30 "Wait for compact bootstrap-complete" \

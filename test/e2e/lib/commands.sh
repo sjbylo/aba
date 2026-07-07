@@ -8,6 +8,32 @@
 # Dependencies: remote.sh, cli.sh, deploy.sh, constants.sh
 # =============================================================================
 
+# --- kill --------------------------------------------------------------------
+# Unconditionally kill daemon + dispatcher + clean all locks.
+
+cmd_kill() {
+	if [ -f "$E2E_DISPATCHER_PID" ]; then
+		local _dpid
+		_dpid=$(cat "$E2E_DISPATCHER_PID")
+		if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
+			kill "$_dpid" && echo "Dispatcher (pid $_dpid) killed."
+		fi
+		rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
+	fi
+	if [ -f "$E2E_DAEMON_PID" ]; then
+		local _dmpid
+		_dmpid=$(cat "$E2E_DAEMON_PID")
+		if [ -n "$_dmpid" ] && kill -0 "$_dmpid" 2>/dev/null; then
+			kill -- -"$_dmpid" 2>/dev/null || kill "$_dmpid" 2>/dev/null
+			echo "Daemon (pid $_dmpid) killed."
+		fi
+		rm -f "$E2E_DAEMON_PID"
+	fi
+	pkill -f 'run\.sh.*(run|daemon)' 2>/dev/null || true
+	rm -f ${E2E_POOL_LOCK_PREFIX}-*.lock "$E2E_GLOBAL_LOCK"
+	echo "All locks cleaned."
+}
+
 # --- stop --------------------------------------------------------------------
 # Kill runners on selected pools. Optionally --clean: delete clusters/mirrors.
 
@@ -65,6 +91,11 @@ cmd_stop() {
 		fi
 	done
 	echo "Done."
+
+	# Clean per-pool lock files so a new run.sh can acquire them
+	for p in $pool_list; do
+		rm -f "${E2E_POOL_LOCK_PREFIX}-${p}.lock"
+	done
 
 	# --clean: process .cleanup and .mirror-cleanup files
 	if [ -n "$do_clean" ]; then

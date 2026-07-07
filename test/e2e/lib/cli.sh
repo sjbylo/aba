@@ -55,6 +55,7 @@ _usage() {
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
 	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
 	  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
+	  run.sh kill                              Kill daemon + all children + remove all locks
 	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
@@ -217,6 +218,48 @@ _pool_vmware_conf() {
 	done
 }
 
+# Get the CON_SSH_USER for a specific pool number from pools.conf.
+# Returns empty string if not set (caller falls back to config.env default).
+_pool_con_user() {
+	local pools_file="$1" pool_num="$2"
+	[ -f "$pools_file" ] || return 1
+	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
+		local _pnum=""
+		local _user=""
+		for _kv in $_rest; do
+			case "$_kv" in
+				POOL_NUM=*)      _pnum="${_kv#POOL_NUM=}" ;;
+				CON_SSH_USER=*)  _user="${_kv#CON_SSH_USER=}" ;;
+			esac
+		done
+		if [ "$_pnum" = "$pool_num" ]; then
+			echo "${_user:-}"
+			return 0
+		fi
+	done
+}
+
+# Get the DIS_SSH_USER for a specific pool number from pools.conf.
+# Returns empty string if not set (caller falls back to config.env default).
+_pool_dis_user() {
+	local pools_file="$1" pool_num="$2"
+	[ -f "$pools_file" ] || return 1
+	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
+		local _pnum=""
+		local _user=""
+		for _kv in $_rest; do
+			case "$_kv" in
+				POOL_NUM=*)      _pnum="${_kv#POOL_NUM=}" ;;
+				DIS_SSH_USER=*)  _user="${_kv#DIS_SSH_USER=}" ;;
+			esac
+		done
+		if [ "$_pnum" = "$pool_num" ]; then
+			echo "${_user:-}"
+			return 0
+		fi
+	done
+}
+
 # Count pools in pools.conf.
 _pool_count_from_conf() {
 	local pools_file="$1"
@@ -236,7 +279,7 @@ _parse_args() {
 	# Step 1: Detect subcommand (first non-flag argument)
 	if [ $# -gt 0 ]; then
 		case "$1" in
-			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs)
+			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs|kill)
 				CLI_COMMAND="$1"; shift ;;
 		esac
 	fi
