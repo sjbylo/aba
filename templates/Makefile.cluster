@@ -70,7 +70,7 @@ init: .init
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \
-	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds
+	 [ -d ~/.aba/mirror/$$mirror_name ] && ln -sfn ~/.aba/mirror/$$mirror_name regcreds || rm -f regcreds
 	@if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf; \
 	else rm -f mirror.conf && touch mirror.conf; fi
 	@ln -fs ../aba.conf
@@ -103,7 +103,7 @@ cluster.conf: .init | mirror.conf  ## Initialize the OpenShift cluster.conf file
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \
-	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds; \
+	 [ -d ~/.aba/mirror/$$mirror_name ] && ln -sfn ~/.aba/mirror/$$mirror_name regcreds || rm -f regcreds; \
 	 if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf; \
 	 else rm -f mirror.conf && touch mirror.conf; fi
 
