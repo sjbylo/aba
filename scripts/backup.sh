@@ -108,25 +108,34 @@ if [ "$with_clusters" ]; then
 		[ "$(basename "$_cdir")" = "mirror" ] && continue
 		touch "$_cdir/.bm-message"
 		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
-		# Ensure mirror.conf is a real file in the tar with old mtime (prevents
-		# Make from regenerating install-config.yaml on the disconnected side)
-		if [ -L "$_cdir/mirror.conf" ]; then
-			_restore_symlinks+=" $_cdir"
-			rm -f "$_cdir/mirror.conf"
-			touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
-		elif [ ! -f "$_cdir/mirror.conf" ]; then
-			_restore_remove+=" $_cdir"
-			touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
+		# mirror.conf handling depends on whether configs are pre-generated:
+		# - With install-config.yaml: dereference symlink → real file with content,
+		#   pin mtime (prevents Make regen AND provides content for generate-image.sh)
+		# - Without install-config.yaml (cluster.conf-only): leave as symlink so disco
+		#   generates configs using its own freshly-installed mirror/mirror.conf
+		if [ -f "$_cdir/install-config.yaml" ]; then
+			if [ -L "$_cdir/mirror.conf" ]; then
+				_restore_symlinks+=" $_cdir"
+				cp -L "$_cdir/mirror.conf" "$_cdir/mirror.conf.tmp"
+				rm -f "$_cdir/mirror.conf"
+				mv "$_cdir/mirror.conf.tmp" "$_cdir/mirror.conf"
+				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
+			elif [ ! -f "$_cdir/mirror.conf" ]; then
+				_restore_remove+=" $_cdir"
+				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
+			fi
 		fi
 		_cluster_paths+=" $_cdir"
 	done
 
 	# Pin vmware.conf/kvm.conf between .init and install-config.yaml. Using the
-	# newest cluster.conf satisfies both: vmware.conf >= .init (no rebuild of vmware.conf)
-	# and vmware.conf < install-config.yaml (no rebuild of install-config.yaml).
+	# newest cluster.conf (among dirs WITH pre-built configs) satisfies both:
+	# vmware.conf >= .init (no rebuild) and vmware.conf < install-config.yaml (no regen).
+	# Cluster.conf-only dirs are excluded: they don't need mtime protection.
 	if [ "$_hv_conf_path" ]; then
 		_newest_cc=""
 		for _d in $_cluster_paths; do
+			[ -f "$_d/install-config.yaml" ] || continue
 			[ -f "$_d/cluster.conf" ] || continue
 			if [ ! "$_newest_cc" ] || [ "$_d/cluster.conf" -nt "$_newest_cc" ]; then
 				_newest_cc="$_d/cluster.conf"
