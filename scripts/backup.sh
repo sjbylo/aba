@@ -106,19 +106,17 @@ if [ "$with_clusters" ]; then
 		[ -f "$_cf" ] || continue
 		_cdir=$(dirname "$_cf")
 		[ "$(basename "$_cdir")" = "mirror" ] && continue
-		if [ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ]; then
-			touch "$_cdir/.bm-message"
-			[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
-			# Ensure mirror.conf is a real file in the tar with old mtime (prevents
-			# Make from regenerating install-config.yaml on the disconnected side)
-			if [ -L "$_cdir/mirror.conf" ]; then
-				_restore_symlinks+=" $_cdir"
-				rm -f "$_cdir/mirror.conf"
-				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
-			elif [ ! -f "$_cdir/mirror.conf" ]; then
-				_restore_remove+=" $_cdir"
-				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
-			fi
+		touch "$_cdir/.bm-message"
+		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
+		# Ensure mirror.conf is a real file in the tar with old mtime (prevents
+		# Make from regenerating install-config.yaml on the disconnected side)
+		if [ -L "$_cdir/mirror.conf" ]; then
+			_restore_symlinks+=" $_cdir"
+			rm -f "$_cdir/mirror.conf"
+			touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
+		elif [ ! -f "$_cdir/mirror.conf" ]; then
+			_restore_remove+=" $_cdir"
+			touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
 		fi
 		_cluster_paths+=" $_cdir"
 	done
