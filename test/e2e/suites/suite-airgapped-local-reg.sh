@@ -124,6 +124,21 @@ e2e_run "Compute cross-minor versions (N-2 install, N-1 upgrade target)" "
     older_minor=\$(echo \$older | cut -d. -f1-2)
     desired_minor=\$(echo \$desired | cut -d. -f1-2)
     [ \"\$older_minor\" != \"\$desired_minor\" ] || { echo \"FAIL: versions are same minor (\$older vs \$desired)\"; exit 1; }
+    # Walk back z-streams if the latest N-2 isn't in the upgrade target's graph yet
+    if ! verify_upgrade_path_exists \"\$older\" \"\$desired\" fast 2>/dev/null; then
+        echo \"Latest N-2 (\$older) not in fast-\${desired_minor} graph -- searching for valid version\"
+        all_versions=\$(fetch_all_versions fast \"\$older_minor\")
+        found=\"\"
+        for v in \$(echo \"\$all_versions\" | sort -rV); do
+            if verify_upgrade_path_exists \"\$v\" \"\$desired\" fast 2>/dev/null; then
+                echo \"Found valid N-2: \$v\"
+                older=\"\$v\"
+                found=1
+                break
+            fi
+        done
+        [ -n \"\$found\" ] || { echo \"FAIL: no \$older_minor version found in fast-\$desired_minor graph\"; exit 1; }
+    fi
     echo \"Install (N-2): \$older  Upgrade target (N-1): \$desired\"
     sudo rm -f /tmp/e2e-ocp-version-desired /tmp/e2e-ocp-version-older
     echo \$desired > /tmp/e2e-ocp-version-desired
