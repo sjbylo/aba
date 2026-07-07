@@ -142,23 +142,44 @@ _dispatch_suite() {
 
 	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
+	# Resolve per-pool SSH users: CLI flags > pools.conf > config.env default
+	local _pool_con_u _pool_dis_u
+	_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+	_pool_dis_u=$(_pool_dis_user "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+	[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+	[ -n "${CLI_DIS_USER:-}" ] && _pool_dis_u="$CLI_DIS_USER"
+	export CON_SSH_USER="${_pool_con_u:-${CON_SSH_USER:-steve}}"
+	export DIS_SSH_USER="${_pool_dis_u:-${DIS_SSH_USER:-steve}}"
+
 	# Capture scrollback from previous suite before killing the session
-	_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
+	# Skip capture-pane on RHEL 10 (tmux 3.3a crashes in cmd_capture_pane_exec)
+	[[ "${_pool_os_map[$pool_num]:-}" != rhel10* ]] && \
+		_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
 	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
-	# Detect SSH user change since last run on this pool
-	local _prev_user=""
+	# Detect SSH user change since last run on this pool (con or dis)
+	local _prev_user="" _prev_dis_user=""
 	_prev_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-user 2>/dev/null" 2>/dev/null) || true
 	_prev_user="${_prev_user//[[:space:]]/}"
+	_prev_dis_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-dis-user 2>/dev/null" 2>/dev/null) || true
+	_prev_dis_user="${_prev_dis_user//[[:space:]]/}"
 	local _cur_user="${CON_SSH_USER:-steve}"
+	local _cur_dis_user="${DIS_SSH_USER:-steve}"
 	local _user_changed=""
 	if [ -n "$_prev_user" ] && [ "$_prev_user" != "$_cur_user" ]; then
 		_user_changed=1
-		echo "    User changed ($_prev_user -> $_cur_user)"
-		echo "    Processing $_prev_user's cleanup files before revert ..."
-		local _old_host="${_prev_user}@con${pool_num}.${VM_BASE_DOMAIN}"
+		echo "    Con user changed ($_prev_user -> $_cur_user)"
+	fi
+	if [ -n "$_prev_dis_user" ] && [ "$_prev_dis_user" != "$_cur_dis_user" ]; then
+		_user_changed=1
+		echo "    Dis user changed ($_prev_dis_user -> $_cur_dis_user)"
+	fi
+	if [ -n "$_user_changed" ]; then
+		local _old_con_user="${_prev_user:-$_cur_user}"
+		echo "    Processing ${_old_con_user}'s cleanup files before revert ..."
+		local _old_host="${_old_con_user}@con${pool_num}.${VM_BASE_DOMAIN}"
 		local _old_allowed="con${pool_num}.${VM_BASE_DOMAIN} dis${pool_num}.${VM_BASE_DOMAIN}"
 		_run_cleanup_on_host "$_old_host" "      " "$_old_allowed" 2>&1 || echo "    WARNING: old user cleanup had errors (continuing with revert)"
 	fi
@@ -194,6 +215,21 @@ _dispatch_suite() {
 		echo "    ERROR: harness sync to con${pool_num} failed -- skipping dispatch"
 		return 1
 	fi
+
+	# After user-change revert, the new user's ~/aba is empty (snapshot
+	# only had the previous user's files). Re-deploy source so ./install works.
+	if [ -n "$_user_changed" ]; then
+		echo "    Re-deploying source after user-change revert ..."
+		local _tar
+		_tar=$(_make_source_tar "$_ABA_ROOT")
+		if sync_source "$target" "$_tar"; then
+			echo "    Source deployed to con${pool_num}"
+		else
+			echo "    WARNING: source deploy to con${pool_num} failed"
+		fi
+		rm -f "$_tar"
+	fi
+
 	sync_dis_aba "$pool_num" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${pool_num} failed"
 	sync_extras "$target" "${CON_SSH_USER:-steve}" "$pool_num"
 
@@ -624,12 +660,12 @@ _notify_periodic_status() {
 		_retrying[${_work_queue[$_qi]}]=1
 	done
 
-	# Show running suites with PAUSED detection
+	# Show running suites with PAUSED detection (file-based, avoids tmux 3.3a crash on RHEL 10)
 	for _ns in "${!_busy_pools[@]}"; do
 		local _pool_state="RUNNING"
-		local _pane_line=""
-		_pane_line=$(_ssh_con "$_ns" "tmux capture-pane -t '$_TMUX_SESSION' -p 2>/dev/null | grep -a '.' | tail -1" 2>/dev/null) || _pane_line=""
-		[[ "$_pane_line" == *"[R]etry"* ]] && _pool_state="PAUSED"
+		local _paused_check=""
+		_paused_check=$(_ssh_con "$_ns" "[ -f '/tmp/e2e-paused-${_busy_pools[$_ns]}' ] && echo yes" 2>/dev/null) || _paused_check=""
+		[ "$_paused_check" = "yes" ] && _pool_state="PAUSED"
 		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} ${_pool_state}
 "
 	done

@@ -77,7 +77,7 @@ _release_pool_locks() {
 trap _release_pool_locks EXIT
 
 case "$CLI_COMMAND" in
-	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy|logs)
+	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy|logs|kill)
 		;;
 	run)
 		# Skip locks when not daemonized: the foreground process will either
@@ -136,6 +136,10 @@ case "$CLI_COMMAND" in
 		;;
 	status)
 		cmd_status "$CLI_POOL_LIST"
+		exit 0
+		;;
+	kill)
+		cmd_kill
 		exit 0
 		;;
 	stop)
@@ -546,12 +550,16 @@ mkdir -p "$_POOL_OS_DIR"
 declare -a _pools_needing_reclone=()
 _need_infra=""
 
-# Per-pool RHEL version from pools.conf (falls back to CLI --os or default)
+# Per-pool RHEL version: CLI --os wins over pools.conf when explicitly set
 declare -A _pool_os_map=()
 _default_os="${INT_BASTION_RHEL_VER:-rhel8}"
 for _p in $CLI_POOL_LIST; do
-	_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
-	[ -z "${_pool_os_map[$_p]:-}" ] && _pool_os_map[$_p]="$_default_os"
+	if [ -n "${CLI_OS:-}" ]; then
+		_pool_os_map[$_p]="$CLI_OS"
+	else
+		_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+		[ -z "${_pool_os_map[$_p]:-}" ] && _pool_os_map[$_p]="$_default_os"
+	fi
 done
 
 _vms_ready() {
@@ -746,19 +754,25 @@ _save_last_run "$_RUN_DIR"
 
 echo ""
 echo "  Deploying test harness to conN hosts ..."
+_saved_con_ssh_user="${CON_SSH_USER:-}"
 for _p in $CLI_POOL_LIST; do
+	# Resolve per-pool SSH user: CLI flag > pools.conf > config.env default
+	_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+	[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+	export CON_SSH_USER="${_pool_con_u:-${_saved_con_ssh_user:-steve}}"
+
 	target=$(_con_target "$_p")
 
 	if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 		sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
 		sync_extras "$target" "${CON_SSH_USER:-steve}" "$_p"
-		# Ensure rootless podman's pause process survives between SSH sessions
 		_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
 		echo "    con${_p}: harness deployed to ~/.e2e-harness/"
 	else
 		echo "    con${_p}: FAILED to deploy harness (skipping)" >&2
 	fi
 done
+export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
 
 # --- Developer mode: push source ---------------------------------------------
 
@@ -768,7 +782,12 @@ if [ -n "${CLI_DEV:-}" ]; then
 	_deploy_tar=$(_make_source_tar "$_ABA_ROOT")
 	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 	echo "  Source tarball: $_deploy_size"
+	_saved_con_ssh_user="${CON_SSH_USER:-}"
 	for _p in $CLI_POOL_LIST; do
+		_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+		[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+		export CON_SSH_USER="${_pool_con_u:-${_saved_con_ssh_user:-steve}}"
+
 		target=$(_con_target "$_p")
 		echo -n "    con${_p}: "
 		if sync_source "$target" "$_deploy_tar"; then
@@ -777,12 +796,18 @@ if [ -n "${CLI_DEV:-}" ]; then
 			echo "FAILED"
 		fi
 	done
+	export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
 	rm -f "$_deploy_tar"
 else
 	# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
 	# Suites expect ~/aba to exist; this one-time install ensures it does.
 	_need_install=""
+	_saved_con_ssh_user="${CON_SSH_USER:-}"
 	for _p in $CLI_POOL_LIST; do
+		_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+		[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+		export CON_SSH_USER="${_pool_con_u:-${_saved_con_ssh_user:-steve}}"
+
 		target=$(_con_target "$_p")
 		if ! _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
 			_need_install=1
@@ -793,6 +818,10 @@ else
 		echo ""
 		echo "  Installing ABA from git ($E2E_GIT_BRANCH) on conN hosts ..."
 		for _p in $CLI_POOL_LIST; do
+			_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+			[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+			export CON_SSH_USER="${_pool_con_u:-${_saved_con_ssh_user:-steve}}"
+
 			target=$(_con_target "$_p")
 			echo -n "    con${_p}: "
 			if _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
@@ -810,6 +839,10 @@ else
 	echo ""
 	echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
 	for _p in $CLI_POOL_LIST; do
+		_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+		[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+		export CON_SSH_USER="${_pool_con_u:-${_saved_con_ssh_user:-steve}}"
+
 		target=$(_con_target "$_p")
 		echo -n "    con${_p}: "
 		_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
@@ -826,6 +859,7 @@ else
 			echo "skipped (no git repo)"
 		fi
 	done
+	export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
 fi
 
 # =============================================================================
@@ -1051,7 +1085,9 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 			unset '_pool_dead_count[$_p]'
 			_record_result "$local_suite" "$rc"
 			_collect_pool_logs "$_p"
-			_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
+			# Skip capture-pane on RHEL 10 (tmux 3.3a crashes in cmd_capture_pane_exec)
+			[[ "${_pool_os_map[$_p]:-}" != rhel10* ]] && \
+				_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
 			_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 			unset '_busy_pools[$_p]'
 			_state_changed=1

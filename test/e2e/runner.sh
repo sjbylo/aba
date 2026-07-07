@@ -87,7 +87,7 @@ trap ':' INT
 # previous run was as root, steve can't overwrite them (Permission denied
 # under set -e kills the runner).  Brief stale/empty value in the live
 # dashboard title is acceptable vs. a hard crash.
-sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
+sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-dis-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
 echo "$SUITE" > /tmp/e2e-last-suites
 whoami > /tmp/e2e-suite-user
 
@@ -597,8 +597,10 @@ fi
 [[ "$_cli_overrides" == *" DIS_USER "* ]] && export DIS_SSH_USER="$_cli_saved_dis_user"
 [[ "$_cli_overrides" == *" VMWARE "* ]]   && export VMWARE_CONF="$_cli_saved_vmware"
 
-# Metadata for live dashboard pane titles (written after config.env + CLI overrides are final)
+# Metadata for live dashboard pane titles and dispatcher user-change detection
+# (written after config.env + pools.conf + CLI overrides are final)
 echo "${INT_BASTION_RHEL_VER:-rhel8}" > /tmp/e2e-suite-os
+echo "${DIS_SSH_USER:-steve}" > /tmp/e2e-suite-dis-user
 _vmconf_display="${VMWARE_CONF:-}"
 [ -z "$_vmconf_display" ] && _vmconf_display="~/.vmware.conf"
 echo "$_vmconf_display" > /tmp/e2e-suite-vmconf
