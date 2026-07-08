@@ -342,6 +342,10 @@ _find_free_pool() {
 	local _now=${SECONDS:-0}
 	for _p in $CLI_POOL_LIST; do
 		if [ -z "${_busy_pools[$_p]:-}" ]; then
+			# Skip unreachable pools (state unknown -- could be running a suite)
+			if [ -n "${_unreachable_pools[$_p]:-}" ]; then
+				continue
+			fi
 			# Skip pools in INFRA FAIL cooldown
 			if [ -n "${_pool_cooldown_until[$_p]:-}" ] && [ "$_now" -lt "${_pool_cooldown_until[$_p]}" ]; then
 				continue
@@ -442,10 +446,21 @@ _detect_running_and_completed() {
 	_rc_base=$(basename "$_RC_PREFIX")
 
 	# Pass 1: detect running suites (live tmux takes precedence over stale .rc)
+	# Retry SSH up to 3 times per pool; if all fail, mark pool unreachable
+	# so the dispatcher won't treat it as free and risk duplicate dispatch.
 	local -A _running_suites=()
+	local _max_ssh_retries=3
 	for _p in $CLI_POOL_LIST; do
-		local sess_exists=""
-		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		local sess_exists="" _attempt
+		for _attempt in $(seq 1 $_max_ssh_retries); do
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			[ -n "$sess_exists" ] && break
+			# Distinguish "no tmux session" (SSH succeeded) from "SSH failed"
+			if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+				break
+			fi
+			[ "$_attempt" -lt "$_max_ssh_retries" ] && sleep 5
+		done
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
 			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
@@ -455,6 +470,13 @@ _detect_running_and_completed() {
 				_running_suites[$suite]=1
 				echo "    con${_p}: $suite still running"
 			fi
+			unset '_unreachable_pools[$_p]'
+		elif _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+			# SSH works but no tmux session -- pool is genuinely free
+			unset '_unreachable_pools[$_p]'
+		else
+			_unreachable_pools[$_p]=1
+			echo "    con${_p}: UNREACHABLE after ${_max_ssh_retries} attempts -- will not dispatch"
 		fi
 	done
 
@@ -466,8 +488,15 @@ _detect_running_and_completed() {
 		local _is_cli_pool=""
 		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
 		[ -n "$_is_cli_pool" ] && continue
-		local sess_exists=""
-		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		local sess_exists="" _attempt
+		for _attempt in $(seq 1 $_max_ssh_retries); do
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			[ -n "$sess_exists" ] && break
+			if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+				break
+			fi
+			[ "$_attempt" -lt "$_max_ssh_retries" ] && sleep 5
+		done
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
 			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
@@ -505,6 +534,30 @@ _detect_running_and_completed() {
 _is_running_on_external_pool() {
 	local suite="$1"
 	[ -n "${_external_running[$suite]:-}" ]
+}
+
+# Re-check pools that were unreachable at init time.  Called periodically from
+# the main dispatch loop so recovered pools can rejoin the dispatch rotation.
+_recheck_unreachable_pools() {
+	[ ${#_unreachable_pools[@]} -eq 0 ] && return
+	for _p in "${!_unreachable_pools[@]}"; do
+		if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+			local sess_exists=""
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			if [ "$sess_exists" = "yes" ]; then
+				local suite=""
+				suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+				if [ -n "$suite" ]; then
+					_busy_pools[$_p]="$suite"
+					_result_pool[$suite]="$_p"
+					printf "  [%s] RECOVERED: con%s now reachable -- running %s\n" "$(date '+%H:%M:%S')" "$_p" "$suite"
+				fi
+			else
+				printf "  [%s] RECOVERED: con%s now reachable -- idle\n" "$(date '+%H:%M:%S')" "$_p"
+			fi
+			unset '_unreachable_pools[$_p]'
+		fi
+	done
 }
 
 _refresh_external_running() {
