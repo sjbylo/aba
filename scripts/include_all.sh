@@ -916,7 +916,7 @@ _state_override_cluster() {
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
-				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/[[:space:]]*#.*//; s/^['\"]//; s/['\"]$//")
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 					aba_warning \
 						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
@@ -949,7 +949,7 @@ _state_override_mirror() {
 	for _field in $_status; do
 		_sval="${!_field}"
 		[ -z "$_sval" ] && continue
-		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/[[:space:]]*#.*//; s/^['\"]//; s/['\"]$//")
+		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
 		fi
