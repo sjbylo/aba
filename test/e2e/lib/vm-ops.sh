@@ -888,6 +888,9 @@ _vm_setup_network_connected() {
 		    id 10 ipv4.method manual ipv4.addresses $vlan_ip ipv4.never-default yes \
 		    802-3-ethernet.mtu 1500
 
+		# --- Route to KVM VLAN 123 subnet (for suite-kvm-network) ---
+		ip route replace 10.10.123.0/24 via ${KVM_HOST_LAB_IP:-10.0.1.10} || true
+
 		hostnamectl set-hostname $clone_name
 
 		echo "=== Network configured (connected) ==="
