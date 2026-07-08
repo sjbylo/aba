@@ -61,9 +61,9 @@ while [[ $# -gt 0 ]]; do
 			aba_debug "Argument: --light (exclude image-set archives)"
 			shift
 			;;
-		--with-cluster-configs)
+		--primed)
 			with_clusters="clusters=1"
-			aba_debug "Argument: --with-cluster-configs (include cluster directories)"
+			aba_debug "Argument: --primed (include pre-configured configs for air-gap transfer)"
 			shift
 			;;
 		*)
