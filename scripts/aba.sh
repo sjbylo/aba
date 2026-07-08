@@ -1011,8 +1011,8 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift
-	elif [ "$1" = "--with-cluster-configs" ]; then
-		opt_with_clusters="--with-cluster-configs"
+	elif [ "$1" = "--primed" ]; then
+		opt_primed="--primed"
 		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
@@ -1130,8 +1130,8 @@ if [ "$cur_target" ]; then
 		;;
 		bundle)
 			trap - ERR  # No need for this anymore
-			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_with_clusters
-			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_with_clusters
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_primed
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_primed
 			exit 
 		;;
 		info)

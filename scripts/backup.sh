@@ -25,13 +25,13 @@ aba_debug "Starting: $0 $*"
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
 repo_only=			# Also include the data/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
-with_clusters=			# Include cluster directories (pre-built configs for air-gap transfer)
+with_clusters=			# Include pre-configured configs (cluster dirs, mirror.conf, vmware.conf)
 
 while echo "$1" | grep -q ^--[a-z]
 do
 	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
 	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
-	[ "$1" = "--with-cluster-configs" ] && with_clusters=1 && shift
+	[ "$1" = "--primed" ] && with_clusters=1 && shift
 done
 
 [ "$1" ] && dest="$1"
@@ -86,7 +86,7 @@ touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
-# If --with-cluster-configs: prep cluster dirs and build path list for find
+# If --primed: prep cluster dirs and build path list for find
 _cluster_paths=""
 _hv_conf_path=""
 _hv_conf_mtime_ref=""
@@ -144,7 +144,7 @@ if [ "$with_clusters" ]; then
 fi
 
 # Default: exclude mirror/mirror.conf (wrong for disco if registry installed locally).
-# Cleared above when --with-cluster-configs AND no local registry (.available absent).
+# Cleared above when --primed AND no local registry (.available absent).
 _exclude_mirror_conf="! -path ${repo_dir}/mirror/mirror.conf"
 [ "$_include_mirror_conf" ] && _exclude_mirror_conf=""
 
