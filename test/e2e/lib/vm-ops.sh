@@ -1051,6 +1051,11 @@ _vm_setup_dnsmasq() {
 	vlan_api_vip="${POOL_VLAN_API_VIP[$pool_num]:-10.10.20.$((210 + pool_num))}"
 	vlan_apps_vip="${POOL_VLAN_APPS_VIP[$pool_num]:-10.10.20.$((220 + pool_num))}"
 
+	local kvm_vlan_node_ip kvm_vlan_api_vip kvm_vlan_apps_vip
+	kvm_vlan_node_ip="${KVM_VLAN_NODE_IP[$pool_num]:-10.10.123.$((200 + pool_num))}"
+	kvm_vlan_api_vip="${KVM_VLAN_API_VIP[$pool_num]:-10.10.123.$((210 + pool_num))}"
+	kvm_vlan_apps_vip="${KVM_VLAN_APPS_VIP[$pool_num]:-10.10.123.$((220 + pool_num))}"
+
 	echo "  [vm] Setting up dnsmasq on $host for pool $pool_num ($domain) ..."
 	echo "  [vm]   node=$node_ip  api_vip=$api_vip  apps_vip=$apps_vip  upstream=$upstream"
 	echo "  [vm]   vlan_node=$vlan_node_ip  vlan_api=$vlan_api_vip  vlan_apps=$vlan_apps_vip"
@@ -1078,6 +1083,10 @@ address=/api.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_api_
 address=/.apps.$(pool_cluster_name compact-vlan ${pool_num}).${domain}/${vlan_apps_vip}
 address=/api.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_api_vip}
 address=/.apps.$(pool_cluster_name standard-vlan ${pool_num}).${domain}/${vlan_apps_vip}
+address=/api.$(pool_cluster_name kvm-sno-vlan ${pool_num}).${domain}/${kvm_vlan_node_ip}
+address=/.apps.$(pool_cluster_name kvm-sno-vlan ${pool_num}).${domain}/${kvm_vlan_node_ip}
+address=/api.$(pool_cluster_name kvm-compact-vlan ${pool_num}).${domain}/${kvm_vlan_api_vip}
+address=/.apps.$(pool_cluster_name kvm-compact-vlan ${pool_num}).${domain}/${kvm_vlan_apps_vip}
 address=/api.$(pool_cluster_name vmw-preflight-pos ${pool_num}).${domain}/${node_ip}
 address=/.apps.$(pool_cluster_name vmw-preflight-pos ${pool_num}).${domain}/${node_ip}
 address=/api.$(pool_cluster_name vmw-preflight-neg ${pool_num}).${domain}/${node_ip}

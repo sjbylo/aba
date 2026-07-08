@@ -248,8 +248,8 @@ _kvm_net_test() {
 # 5-8. VLAN tests (vlan=123, guest-side tagging on br-lab)
 # ============================================================================
 
-_SNO_VLAN="$(pool_cluster_name sno-vlan)"
-_COMPACT_VLAN="$(pool_cluster_name compact-vlan)"
+_SNO_VLAN="$(pool_cluster_name kvm-sno-vlan)"
+_COMPACT_VLAN="$(pool_cluster_name kvm-compact-vlan)"
 _SNO="$(pool_cluster_name sno)"
 _COMPACT="$(pool_cluster_name compact)"
 

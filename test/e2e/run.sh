@@ -875,6 +875,7 @@ declare -a _work_queue=()
 declare -A _results=()
 declare -A _result_pool=()
 declare -A _bad_pools_map=()
+declare -A _unreachable_pools=()
 
 # Apply --fresh / --force scoping
 if [ -n "${CLI_FORCE:-}" ]; then
@@ -1062,7 +1063,7 @@ fi
 
 # --- Main dispatch loop -------------------------------------------------------
 
-while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
+while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ] || [ ${#_unreachable_pools[@]} -gt 0 ]; do
 
 	_state_changed=""
 	for _p in "${!_busy_pools[@]}"; do
@@ -1249,6 +1250,7 @@ while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
 	# Refresh external pool state every ~60s to detect new/finished external suites
 	if [ $(( SECONDS - ${_last_ext_refresh:-0} )) -ge 60 ]; then
 		_refresh_external_running
+		_recheck_unreachable_pools
 		_last_ext_refresh=$SECONDS
 	fi
 
