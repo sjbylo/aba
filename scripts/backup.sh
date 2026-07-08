@@ -56,10 +56,10 @@ cd ..
 _restore_cleanup() {
 	rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"
 	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
-	for _d in $_restore_symlinks; do rm -f "$_d/mirror.conf"; ln -fs mirror/mirror.conf "$_d/mirror.conf"; done
-	for _d in $_restore_remove; do rm -f "$_d/mirror.conf"; done
 	# Restore vmware.conf/kvm.conf mtime after pinning for the tar
 	[ "$_hv_conf_path" ] && [ "$_hv_conf_mtime_ref" ] && touch -d "@$_hv_conf_mtime_ref" "$_hv_conf_path"
+	# Restore mirror/mirror.conf mtime after pinning for the tar
+	[ "$_mirror_conf_mtime_ref" ] && touch -d "@$_mirror_conf_mtime_ref" "${repo_dir}/mirror/mirror.conf"
 }
 trap '_restore_cleanup' EXIT
 
@@ -88,10 +88,9 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 
 # If --with-cluster-configs: prep cluster dirs and build path list for find
 _cluster_paths=""
-_restore_symlinks=""
-_restore_remove=""
 _hv_conf_path=""
 _hv_conf_mtime_ref=""
+_mirror_conf_mtime_ref=""
 if [ "$with_clusters" ]; then
 	# Include vmware.conf or kvm.conf so the cluster's symlink resolves in the bundle
 	for _hv in vmware.conf kvm.conf; do
@@ -102,29 +101,22 @@ if [ "$with_clusters" ]; then
 		fi
 	done
 
+	# Include mirror/mirror.conf in the bundle if no local registry was installed.
+	# If .available exists, mirror.conf was used to install locally → likely wrong for disco.
+	# If .available doesn't exist (save-only workflow), mirror.conf may be pre-configured
+	# for the target environment → include it so disco can use it directly.
+	_include_mirror_conf=""
+	if [ -f "${repo_dir}/mirror/mirror.conf" ] && [ ! -f "${repo_dir}/mirror/.available" ]; then
+		_include_mirror_conf=1
+		_mirror_conf_mtime_ref=$(stat -c %Y "${repo_dir}/mirror/mirror.conf")
+	fi
+
 	for _cf in "${repo_dir}"/*/cluster.conf; do
 		[ -f "$_cf" ] || continue
 		_cdir=$(dirname "$_cf")
 		[ "$(basename "$_cdir")" = "mirror" ] && continue
 		touch "$_cdir/.bm-message"
 		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
-		# mirror.conf handling depends on whether configs are pre-generated:
-		# - With install-config.yaml: dereference symlink → real file with content,
-		#   pin mtime (prevents Make regen AND provides content for generate-image.sh)
-		# - Without install-config.yaml (cluster.conf-only): leave as symlink so disco
-		#   generates configs using its own freshly-installed mirror/mirror.conf
-		if [ -f "$_cdir/install-config.yaml" ]; then
-			if [ -L "$_cdir/mirror.conf" ]; then
-				_restore_symlinks+=" $_cdir"
-				cp -L "$_cdir/mirror.conf" "$_cdir/mirror.conf.tmp"
-				rm -f "$_cdir/mirror.conf"
-				mv "$_cdir/mirror.conf.tmp" "$_cdir/mirror.conf"
-				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
-			elif [ ! -f "$_cdir/mirror.conf" ]; then
-				_restore_remove+=" $_cdir"
-				touch -r "$_cdir/cluster.conf" "$_cdir/mirror.conf"
-			fi
-		fi
 		_cluster_paths+=" $_cdir"
 	done
 
@@ -143,7 +135,18 @@ if [ "$with_clusters" ]; then
 		done
 		[ "$_newest_cc" ] && touch -r "$_newest_cc" "$_hv_conf_path"
 	fi
+
+	# Pin mirror/mirror.conf mtime so it doesn't trigger install-config.yaml regeneration
+	# on disco. Same logic as vmware.conf: pin to newest cluster.conf among pre-built dirs.
+	if [ "$_include_mirror_conf" ] && [ "$_newest_cc" ]; then
+		touch -r "$_newest_cc" "${repo_dir}/mirror/mirror.conf"
+	fi
 fi
+
+# Default: exclude mirror/mirror.conf (wrong for disco if registry installed locally).
+# Cleared above when --with-cluster-configs AND no local registry (.available absent).
+_exclude_mirror_conf="! -path ${repo_dir}/mirror/mirror.conf"
+[ "$_include_mirror_conf" ] && _exclude_mirror_conf=""
 
 # All 'find expr' below are by default "and"
 # shellcheck disable=SC2086
@@ -181,7 +184,7 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/.rpms"  				\
 	! -path "${repo_dir}/mirror/.available"  			\
 	! -path "${repo_dir}/mirror/.loaded" 				\
-	! -path "${repo_dir}/mirror/mirror.conf"  			\
+	$_exclude_mirror_conf						\
 	! -path "${repo_dir}/mirror/mirror-registry"  			\
 	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
 	! -path "${repo_dir}/mirror/image-archive.tar"  		\
@@ -285,15 +288,6 @@ set +e   # Needed so we can capture the return code from tar and not just exit (
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
 ret=$?
 rm -f "${repo_dir}/.bundle"  # Also cleaned up by EXIT trap, but explicit here for clarity
-
-# Restore mirror.conf files that were temporarily modified for the bundle
-for _rdir in $_restore_symlinks; do
-	rm -f "$_rdir/mirror.conf"
-	ln -fs mirror/mirror.conf "$_rdir/mirror.conf"
-done
-for _rdir in $_restore_remove; do
-	rm -f "$_rdir/mirror.conf"
-done
 
 # Restore source repo after tar: touch .created so it's newer than ISC again.
 # Without this, the user's connected-side repo would stay "locked" and
