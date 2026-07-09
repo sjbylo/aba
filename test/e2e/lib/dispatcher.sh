@@ -151,10 +151,6 @@ _dispatch_suite() {
 	export CON_SSH_USER="${_pool_con_u:-${CON_SSH_USER:-steve}}"
 	export DIS_SSH_USER="${_pool_dis_u:-${DIS_SSH_USER:-steve}}"
 
-	# Capture scrollback from previous suite before killing the session
-	# Skip capture-pane on RHEL 10 (tmux 3.3a crashes in cmd_capture_pane_exec)
-	[[ "${_pool_os_map[$pool_num]:-}" != rhel10* ]] && \
-		_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
 	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
@@ -309,18 +305,9 @@ _check_hung() {
 
 	# Use the most recent of: summary log mtime OR tmux window activity.
 	# A long-running single command (e.g. oc-mirror extraction) won't
-	# update the summary log, but the tmux window still receives output.
-	# NOTE: use window_activity, not pane_last_activity -- the latter
-	# doesn't exist in tmux 3.2a (RHEL 8/9 default) and silently returns
-	# empty, causing false HUNG? alerts on long-running silent operations.
-	local _log_age="" _pane_age=""
+	# Staleness based on log file timestamp (tmux pane queries removed — crash risk on RHEL 10)
+	local _log_age=""
 	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
-	_pane_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{window_activity}' 2>/dev/null" 2>/dev/null) || _pane_age=""
-	if [ -n "$_log_age" ] && [ -n "$_pane_age" ]; then
-		[ "$_pane_age" -gt "$_log_age" ] && _log_age="$_pane_age"
-	elif [ -z "$_log_age" ]; then
-		_log_age="$_pane_age"
-	fi
 	[ -z "$_log_age" ] && return
 
 	local _now_epoch
@@ -874,9 +861,6 @@ _dispatch_loop() {
 				unset '_pool_dead_count[$_p]'
 				_record_result "$local_suite" "$rc"
 				_collect_pool_logs "$_p"
-				# Skip capture-pane on RHEL 10 (tmux 3.3a crashes in cmd_capture_pane_exec)
-				[[ "${_pool_os_map[$_p]:-}" != rhel10* ]] && \
-					_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
 				_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 				unset '_busy_pools[$_p]'
 				_state_changed=1
