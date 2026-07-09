@@ -29,6 +29,9 @@ while [ $# -gt 0 ]; do
 			;;
 		--force)
 			opt_force="--force"
+			aba_warning "--force bypasses cluster-side upgrade safety checks (release verification, admin ack gates)." \
+				"Only use in test/lab environments or when working around a known CVO bug." \
+				"Do NOT use --force on production clusters!"
 			shift
 			;;
 		--dry-run)
@@ -258,11 +261,14 @@ if [ ! "$upgrade_already_running" ]; then
 
 	# When OSUS is active, use --to <version> which lets the CVO validate
 	# the upgrade path via the local graph, including admin ack gates.
+	# --allow-upgrade-with-warnings: without this, oc returns exit=1 when
+	# a cluster operator is transiently degraded, even with --force.
+	_opt_warn="${opt_force:+--allow-upgrade-with-warnings}"
 	if [ "$osus_upstream" ]; then
 		aba_info "Local update graph detected: $osus_upstream"
-		upgrade_cmd="oc adm upgrade --to $target_ver $opt_force"
+		upgrade_cmd="oc adm upgrade --to $target_ver $opt_force $_opt_warn"
 	else
-		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest $opt_force"
+		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest $opt_force $_opt_warn"
 	fi
 
 	# Pre-flight: check ClusterVersion conditions using structured JSON.
