@@ -1028,7 +1028,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1293,7 +1293,7 @@ if [ "$cur_target" ]; then
 				aba_info "Removed cluster state: $_del_sd"
 			fi
 			# Clean generated artifacts so next install starts fresh from current config
-			make -s clean 2>/dev/null || true
+			make -s clean || true
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
@@ -1302,6 +1302,18 @@ if [ "$cur_target" ]; then
 				aba_info "Cluster directory removed: $_cdir"
 			fi
 			exit
+		;;
+		install)
+			# Idempotent install: if cluster is already installed, succeed
+			# without invoking make (avoids cascading dependency rebuilds
+			# that could recreate VMs on an already-running cluster).
+			if [ -f .install-complete ]; then
+				aba_info "Cluster already installed. Nothing to do."
+				aba_info "Run 'aba clean; aba install' to re-install, or 'aba delete' to remove VMs first."
+				exit 0
+			fi
+			# Not yet installed — re-add target and fall through to generic make block
+			BUILD_COMMAND="install $BUILD_COMMAND"
 		;;
 		refresh)
 			eval $BUILD_COMMAND
