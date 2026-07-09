@@ -1760,6 +1760,21 @@ _cluster_execute() {
 	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
 	local rc=$?
 
+	# After successful ISO creation (bare-metal, ISO-only step): show write-usb guidance
+	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
+		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
+		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Writing to USB" \
+			--msgbox "ISO file created:\n\n\
+  $_iso_path\n\n\
+To write to a USB drive, use raw/direct mode (byte-for-byte copy):\n\n\
+  sudo dd if=$_iso_path of=/dev/sdX bs=4M conv=fsync status=progress\n\n\
+Or run: aba --dir $cl_name write-usb\n\n\
+IMPORTANT: The ISO must be written as a raw disk image.\n\
+Any tool that copies the image byte-for-byte to the entire device\n\
+(e.g. dd, balenaEtcher 'Flash', Fedora Media Writer) will work.\n\
+Tools that reformat the USB or extract files will NOT boot." 0 0
+	fi
+
 	# After successful install in mirror mode, offer to configure OperatorHub
 	if [[ $rc -eq 0 && "$_TUI_MODE" != "DIRECT" && -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
