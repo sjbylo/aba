@@ -58,6 +58,14 @@ _restore_cleanup() {
 	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
 	# Restore vmware.conf/kvm.conf mtime after pinning for the tar
 	[ "$_hv_conf_path" ] && [ "$_hv_conf_mtime_ref" ] && touch -d "@$_hv_conf_mtime_ref" "$_hv_conf_path"
+	# Restore per-dir HV conf copies back to symlinks
+	for _copy in $_per_dir_hv_copies; do
+		local _dir _name
+		_dir=$(dirname "$_copy")
+		_name=$(basename "$_copy")
+		rm -f "$_copy"
+		ln -sf "../$_name" "$_copy"
+	done
 	# Restore mirror/mirror.conf mtime after pinning for the tar
 	[ "$_mirror_conf_mtime_ref" ] && touch -d "@$_mirror_conf_mtime_ref" "${repo_dir}/mirror/mirror.conf"
 }
@@ -91,8 +99,9 @@ _cluster_paths=""
 _hv_conf_path=""
 _hv_conf_mtime_ref=""
 _mirror_conf_mtime_ref=""
+_per_dir_hv_copies=""
 if [ "$with_clusters" ]; then
-	# Include vmware.conf or kvm.conf so the cluster's symlink resolves in the bundle
+	# Identify vmware.conf or kvm.conf at repo root (needed for per-dir copies)
 	for _hv in vmware.conf kvm.conf; do
 		if [ -f "${repo_dir}/$_hv" ]; then
 			_hv_conf_path="${repo_dir}/$_hv"
@@ -115,38 +124,59 @@ if [ "$with_clusters" ]; then
 		[ -f "$_cf" ] || continue
 		_cdir=$(dirname "$_cf")
 		[ "$(basename "$_cdir")" = "mirror" ] && continue
-		touch "$_cdir/.bm-message"
+		# Only touch .bm-message for dirs with pre-built configs (both must exist).
+		# Cluster.conf-only dirs need the bare-metal "edit your configs" pause.
+		[ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ] && touch "$_cdir/.bm-message"
 		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
 		_cluster_paths+=" $_cdir"
 	done
 
-	# Pin vmware.conf/kvm.conf between .init and install-config.yaml. Using the
-	# newest cluster.conf (among dirs WITH pre-built configs) satisfies both:
-	# vmware.conf >= .init (no rebuild) and vmware.conf < install-config.yaml (no regen).
-	# Cluster.conf-only dirs are excluded: they don't need mtime protection.
+	# Per-dir HV conf pinning: resolve each cluster dir's vmware.conf/kvm.conf symlink
+	# into a regular file pinned to THAT dir's cluster.conf. This avoids cross-cluster
+	# timestamp interference when clusters were prepared on different days.
+	# Without per-dir pinning, a single shared vmware.conf pinned to the newest
+	# cluster.conf can be newer than an older cluster's install-config.yaml, causing
+	# Make to regenerate (and wipe hand-edited) configs on disco.
 	if [ "$_hv_conf_path" ]; then
-		_newest_cc=""
+		local_hv_name=$(basename "$_hv_conf_path")
 		for _d in $_cluster_paths; do
 			[ -f "$_d/install-config.yaml" ] || continue
-			[ -f "$_d/cluster.conf" ] || continue
-			if [ ! "$_newest_cc" ] || [ "$_d/cluster.conf" -nt "$_newest_cc" ]; then
-				_newest_cc="$_d/cluster.conf"
+			if [ -L "$_d/$local_hv_name" ] || [ -f "$_d/$local_hv_name" ]; then
+				# Replace symlink with a real copy, pinned to this dir's cluster.conf
+				rm -f "$_d/$local_hv_name"
+				cp "$_hv_conf_path" "$_d/$local_hv_name"
+				touch -r "$_d/cluster.conf" "$_d/$local_hv_name"
+				_per_dir_hv_copies+=" $_d/$local_hv_name"
 			fi
 		done
-		[ "$_newest_cc" ] && touch -r "$_newest_cc" "$_hv_conf_path"
 	fi
 
 	# Pin mirror/mirror.conf mtime so it doesn't trigger install-config.yaml regeneration
-	# on disco. Same logic as vmware.conf: pin to newest cluster.conf among pre-built dirs.
-	if [ "$_include_mirror_conf" ] && [ "$_newest_cc" ]; then
-		touch -r "$_newest_cc" "${repo_dir}/mirror/mirror.conf"
+	# on disco. Pin to the oldest install-config.yaml among pre-built dirs (guarantees
+	# mirror.conf is never newer than any pre-built target).
+	if [ "$_include_mirror_conf" ]; then
+		_oldest_ic=""
+		for _d in $_cluster_paths; do
+			[ -f "$_d/install-config.yaml" ] || continue
+			if [ ! "$_oldest_ic" ] || [ "$_d/install-config.yaml" -ot "$_oldest_ic" ]; then
+				_oldest_ic="$_d/install-config.yaml"
+			fi
+		done
+		[ "$_oldest_ic" ] && touch -r "$_oldest_ic" "${repo_dir}/mirror/mirror.conf"
 	fi
 fi
 
 # Default: exclude mirror/mirror.conf (wrong for disco if registry installed locally).
 # Cleared above when --primed AND no local registry (.available absent).
+# When excluding, also exclude per-cluster mirror.conf symlinks to avoid dangling
+# symlinks in the bundle (they'd point to the excluded mirror/mirror.conf).
 _exclude_mirror_conf="! -path ${repo_dir}/mirror/mirror.conf"
-[ "$_include_mirror_conf" ] && _exclude_mirror_conf=""
+_exclude_cluster_mirror_conf=""
+if [ "$_include_mirror_conf" ]; then
+	_exclude_mirror_conf=""
+else
+	_exclude_cluster_mirror_conf='! -name mirror.conf'
+fi
 
 # All 'find expr' below are by default "and"
 # shellcheck disable=SC2086
@@ -185,6 +215,7 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/.available"  			\
 	! -path "${repo_dir}/mirror/.loaded" 				\
 	$_exclude_mirror_conf						\
+	$_exclude_cluster_mirror_conf					\
 	! -path "${repo_dir}/mirror/mirror-registry"  			\
 	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
 	! -path "${repo_dir}/mirror/image-archive.tar"  		\
