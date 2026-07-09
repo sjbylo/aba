@@ -19,6 +19,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -104,17 +105,14 @@ e2e_run "Auto-update: run aba (triggers update)" \
 e2e_run "Auto-update: verify installed binary has new build stamp" \
     "grep ^ABA_BUILD=\$(cat /tmp/e2e-aba-build-stamp) \$(which aba)"
 
-e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
-e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
-e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+suite_configure_aba
+suite_verify_aba_conf
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 # Operators verified after cluster install (one per catalog).
 # The sync step (below) ensures these are actually in the registry.
@@ -123,12 +121,11 @@ e2e_run "Verify aba.conf: ops" "grep '^ops=.*cincinnati-operator' aba.conf"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
-e2e_run "Re-apply ask=false after interactive test" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 e2e_run "Set test operators (re-apply)" \
     "aba --ops cincinnati-operator nginx-ingress-operator flux"
 
@@ -140,7 +137,7 @@ test_end
 test_begin "Setup: configure mirror for local registry"
 
 # Create mirror.conf pointing to conN's local pool registry (not disN)
-e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+suite_create_mirror_workdir
 e2e_run "Set reg_host to local registry" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Clear reg_ssh_key (local registry)" \

@@ -18,6 +18,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -61,32 +62,28 @@ e2e_run "Remove oc-mirror caches" \
 
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
-e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
-e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
-e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+suite_configure_aba
+suite_verify_aba_conf
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
-e2e_run "Re-apply ask=false after interactive test" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
-e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
+suite_create_mirror_workdir
 e2e_diag "Show aba.conf" "grep -E '^\w' aba.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
@@ -97,15 +94,23 @@ test_end
 # ============================================================================
 test_begin "Docker e2e-mirror-docker1: install and verify"
 
-# Negative path: sync without pull secret should fail
-e2e_run -q "Hide pull secret for must-fail test" \
-    "mv ~/.pull-secret.json ~/.pull-secret.json.bak"
+# Negative path: sync without pull secret should fail.
+# Must hide ALL credential locations: oc-mirror/podman/skopeo check ~/.pull-secret.json,
+# ~/.docker/config.json, and $XDG_RUNTIME_DIR/containers/auth.json.
+e2e_run -q "Hide all pull secrets for must-fail test" \
+    "mv ~/.pull-secret.json ~/.pull-secret.json.bak && \
+     [ -f ~/.docker/config.json ] && mv ~/.docker/config.json ~/.docker/config.json.bak || true; \
+     _xdg=\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}; \
+     [ -f \$_xdg/containers/auth.json ] && mv \$_xdg/containers/auth.json \$_xdg/containers/auth.json.bak || true"
 e2e_run_must_fail "Sync without pull secret should fail" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-test-neg-datadir'"
 e2e_run -q "Clean up data-dir side effect from must-fail test" \
     "rm -rf ~/e2e-test-neg-datadir"
-e2e_run -q "Restore pull secret" \
-    "mv ~/.pull-secret.json.bak ~/.pull-secret.json"
+e2e_run -q "Restore all pull secrets" \
+    "mv ~/.pull-secret.json.bak ~/.pull-secret.json && \
+     [ -f ~/.docker/config.json.bak ] && mv ~/.docker/config.json.bak ~/.docker/config.json || true; \
+     _xdg=\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}; \
+     [ -f \$_xdg/containers/auth.json.bak ] && mv \$_xdg/containers/auth.json.bak \$_xdg/containers/auth.json || true"
 
 # Create e2e-mirror-docker1 and install Docker registry on disN (port 5000).
 # Full image sync is skipped here: rootless podman 4.x on RHEL 8 has a lock

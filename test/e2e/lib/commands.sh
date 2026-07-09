@@ -8,26 +8,32 @@
 # Dependencies: remote.sh, cli.sh, deploy.sh, constants.sh
 # =============================================================================
 
+# Read a PID file, kill the process if alive, remove the PID file and extra files.
+# Usage: _stop_pid_file <pid_file> <label> [extra_files_to_rm...]
+_stop_pid_file() {
+	local _pidfile="$1" _label="$2"; shift 2
+	[ -f "$_pidfile" ] || return 0
+	local _pid
+	_pid=$(cat "$_pidfile" 2>/dev/null) || return 0
+	if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+		kill "$_pid" && echo "$_label (pid $_pid) stopped."
+	fi
+	rm -f "$_pidfile" "$@"
+}
+
 # --- kill --------------------------------------------------------------------
 # Unconditionally kill daemon + dispatcher + clean all locks.
 
 cmd_kill() {
-	if [ -f "$E2E_DISPATCHER_PID" ]; then
-		local _dpid
-		_dpid=$(cat "$E2E_DISPATCHER_PID")
-		if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
-			kill "$_dpid" && echo "Dispatcher (pid $_dpid) killed."
-		fi
-		rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
-	fi
+	_stop_pid_file "$E2E_DISPATCHER_PID" "Dispatcher" "$E2E_DISPATCH_STATE"
 	if [ -f "$E2E_DAEMON_PID" ]; then
 		local _dmpid
-		_dmpid=$(cat "$E2E_DAEMON_PID")
+		_dmpid=$(cat "$E2E_DAEMON_PID" 2>/dev/null)
 		if [ -n "$_dmpid" ] && kill -0 "$_dmpid" 2>/dev/null; then
 			kill -- -"$_dmpid" 2>/dev/null || kill "$_dmpid" 2>/dev/null
 			echo "Daemon (pid $_dmpid) killed."
 		fi
-		rm -f "$E2E_DAEMON_PID"
+		rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META"
 	fi
 	pkill -f 'run\.sh.*(run|daemon)' 2>/dev/null || true
 	rm -f ${E2E_POOL_LOCK_PREFIX}-*.lock "$E2E_GLOBAL_LOCK"
@@ -43,23 +49,13 @@ cmd_stop() {
 	local do_clean="${CLI_CLEAN:-}"
 
 	# Kill the dispatcher + daemon only when stopping ALL configured pools.
-	if [ "$pool_list" = "$all_pools" ]; then
-		if [ -f "$E2E_DISPATCHER_PID" ]; then
-			local _dpid
-			_dpid=$(cat "$E2E_DISPATCHER_PID")
-			if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null; then
-				kill "$_dpid" && echo "Dispatcher (pid $_dpid) stopped."
-			fi
-			rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE"
-		fi
-		if [ -f "$E2E_DAEMON_PID" ]; then
-			local _dmpid
-			_dmpid=$(cat "$E2E_DAEMON_PID")
-			if [ -n "$_dmpid" ] && kill -0 "$_dmpid" 2>/dev/null; then
-				kill "$_dmpid" && echo "Daemon (pid $_dmpid) stopped."
-			fi
-			rm -f "$E2E_DAEMON_PID"
-		fi
+	# Normalize both lists (sort + dedupe) to avoid whitespace/ordering mismatches.
+	local _sorted_req _sorted_all
+	_sorted_req=$(echo "$pool_list" | tr ' ' '\n' | sort -n | tr '\n' ' ' | sed 's/ *$//')
+	_sorted_all=$(echo "$all_pools" | tr ' ' '\n' | sort -n | tr '\n' ' ' | sed 's/ *$//')
+	if [ "$_sorted_req" = "$_sorted_all" ]; then
+		_stop_pid_file "$E2E_DISPATCHER_PID" "Dispatcher" "$E2E_DISPATCH_STATE"
+		_stop_pid_file "$E2E_DAEMON_PID" "Daemon" "$E2E_DAEMON_META"
 	fi
 
 	# Kill orphaned setup-infra.sh processes on bastion
@@ -316,7 +312,16 @@ _show_dispatcher_status() {
 	fi
 
 	if [ -f "$E2E_DAEMON_PID" ] && kill -0 "$(cat "$E2E_DAEMON_PID" 2>/dev/null)" 2>/dev/null; then
-		printf "  Daemon:     \033[1;32mRUNNING\033[0m (pid %s)\n" "$(cat "$E2E_DAEMON_PID")"
+		local _dmeta=""
+		if [ -f "$E2E_DAEMON_META" ]; then
+			local _dm_pools _dm_started _dm_args
+			_dm_pools=$(grep '^pools=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+			_dm_started=$(grep '^started=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+			_dm_args=$(grep '^args=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+			_dmeta=", since ${_dm_started}, pools ${_dm_pools}"
+			[ -n "$_dm_args" ] && _dmeta="${_dmeta}, ${_dm_args}"
+		fi
+		printf "  Daemon:     \033[1;32mRUNNING\033[0m (pid %s%s)\n" "$(cat "$E2E_DAEMON_PID")" "$_dmeta"
 	fi
 }
 
