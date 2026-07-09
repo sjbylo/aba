@@ -586,16 +586,22 @@ _test_kvm_connection() {
 		return 1
 	fi
 
-	local _out
+	# Prevent SSH host-key prompt from deadlocking behind the TUI dialog
+	local _saved_ssh_opts="${LIBVIRT_SSH_OPTS:-}"
+	export LIBVIRT_SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 $_saved_ssh_opts"
+
+	local _out _rc=0
 	if _out=$(virsh -c "${LIBVIRT_URI:-}" version 2>&1); then
 		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
 			--msgbox "\nLibvirt connection verified!\n\n$_out" 0 0
-		return 0
 	else
 		dlg --backtitle "$(ui_backtitle)" --title "Connection Failed" \
 			--msgbox "\nCannot connect to libvirt at:\n${LIBVIRT_URI:-?}\n\n$_out\n\nCheck URI and SSH access." 0 0
-		return 1
+		_rc=1
 	fi
+
+	export LIBVIRT_SSH_OPTS="$_saved_ssh_opts"
+	return $_rc
 }
 
 # =============================================================================
