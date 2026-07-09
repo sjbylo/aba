@@ -59,6 +59,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   aba [-d <cluster>] startup              # Gracefully start up the cluster (any platform)
   aba [-d <cluster>] delete [--force]     # Delete the cluster (removes VMs on vmw/kvm; --force removes dir)
   aba [-d <cluster>] clean                # Remove generated artifacts (keeps cluster.conf)
+  aba [-d <cluster>] write-usb            # Write the ISO to a USB drive (raw dd, with confirmation)
 
   aba [-d <cluster>] upgrade
       --to <version>                      # Target OCP version (e.g. 4.22.2). Falls back to mirror.conf:ocp_upgrade_to

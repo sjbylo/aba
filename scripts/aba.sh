@@ -1028,7 +1028,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install)
+				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1075,7 +1075,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1163,6 +1163,10 @@ if [ "$cur_target" ]; then
 		;;
 		unstick)
 			$ABA_ROOT/scripts/cluster-unstick.sh
+			exit
+		;;
+		write-usb)
+			$ABA_ROOT/scripts/cluster-write-usb.sh
 			exit
 		;;
 		cluster-version)
