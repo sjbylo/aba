@@ -2357,7 +2357,7 @@ _day2_upgrade() {
 		local _upgrade_hint=""
 		case "$_TUI_MODE" in
 			CONNO)
-				_upgrade_hint="To add newer versions to the mirror:\n  1. Prepare Upgrade (main menu → U)\n  2. Run Day-2 to apply changes (main menu → D)\n  3. Then retry Upgrade here"
+				_upgrade_hint="To add newer versions to the mirror:\n  1. Prepare Upgrade (main menu → U)\n  2. Day-2 → Configure OperatorHub (D → R)\n  3. Then retry Upgrade here"
 				;;
 			DISCO)
 				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/*.tar to this host's mirror/data/\n\n  On this host:\n    3. Load images (L) — unpacks upgrade bundle automatically\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
