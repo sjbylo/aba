@@ -2613,6 +2613,7 @@ run_once() {
 			if [[ $age -gt $ttl ]]; then
 				# Task output is stale, reset it
 				_log_history "TTL_EXPIRED age=${age}s ttl=${ttl}s"
+				aba_debug "run_once: task '$work_id' TTL expired (age=${age}s > ttl=${ttl}s), resetting"
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
 				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
@@ -2626,6 +2627,7 @@ run_once() {
 	# Explicit reset also removes identity files -- "forget everything."
 	if [[ "$reset" == true ]]; then
 		_log_history "RESET"
+		aba_debug "run_once: task '$work_id' explicitly reset (killing and clearing state)"
 		_kill_id "$work_id"
 		rm -f "$id_dir"/{cmd.sh,cmd,cwd}
 		return 0
@@ -2661,6 +2663,7 @@ run_once() {
 			exec 9>>"$lock_file"
 			if ! flock -n 9; then
 				exec 9>&-
+				aba_debug "run_once: task '$work_id' already running (lock held), skipping start"
 				return 0
 			fi
 		fi
@@ -2682,6 +2685,7 @@ run_once() {
 		done
 
 		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
+		aba_debug "run_once: starting task '$work_id': ${command[*]}"
 		
 		# Save command in two formats:
 		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
@@ -2747,6 +2751,7 @@ run_once() {
 		
 		# If exit file exists (task already completed), skip
 		if [[ -f "$exit_file" ]]; then
+			aba_debug "run_once: task '$work_id' already completed, skipping: ${command[*]}"
 			return 0
 		fi
 		
@@ -2794,6 +2799,7 @@ run_once() {
 						echo "Error: Task not started and no command provided." >&2
 					return 1
 				fi
+				aba_debug "run_once: task '$work_id' not running, restarting in foreground: ${command[*]}"
 				_start_task "true" "true"
 				wait $!
 			else
@@ -2824,6 +2830,7 @@ run_once() {
 				if [[ -n "$wait_timeout" ]]; then
 					# Wait with timeout
 					if ! flock -w "$wait_timeout" -x "$lock_file" -c "true"; then
+						aba_debug "run_once: task '$work_id' timed out after ${wait_timeout}s"
 						echo "Error: Timeout waiting for task $work_id after ${wait_timeout}s" >&2
 						return 124  # Standard timeout exit code
 					fi
@@ -2838,6 +2845,18 @@ run_once() {
 	exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
 	# Guard against empty exit_file (concurrent write in progress)
 	[[ -z "$exit_code" ]] && exit_code=1
+
+	# Read saved command for debug output if not already loaded
+	local _cmd_str="${command[*]}"
+	if [[ -z "$_cmd_str" && -f "$cmd_file" ]]; then
+		_cmd_str="$(cat "$cmd_file" 2>/dev/null)"
+	fi
+
+	if [[ $exit_code -eq 0 ]]; then
+		aba_debug "run_once: task '$work_id' finished successfully: $_cmd_str"
+	else
+		aba_debug "run_once: task '$work_id' FAILED (exit code: $exit_code): $_cmd_str"
+	fi
 
 	# --- SELF-HEALING VALIDATION ---
 	# If no command provided but task previously succeeded, load saved command
