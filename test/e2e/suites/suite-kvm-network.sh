@@ -32,6 +32,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -95,7 +96,7 @@ e2e_run "Copy kvm.conf from home directory" \
 e2e_run "Verify kvm.conf has LIBVIRT_URI" "grep ^LIBVIRT_URI kvm.conf"
 e2e_run "Verify kvm.conf has KVM_NETWORK" "grep ^KVM_NETWORK kvm.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 
 test_end
 

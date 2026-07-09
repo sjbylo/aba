@@ -26,6 +26,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -87,8 +88,7 @@ e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
 
 e2e_run "Install aba" "./install"
 
-e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
@@ -97,7 +97,7 @@ e2e_run "Set VC_FOLDER" \
     "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Verify vmware.conf: VC_FOLDER" "grep '^VC_FOLDER=' vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"

@@ -178,87 +178,30 @@ _all_pool_numbers() {
 
 # Get the RHEL version for a specific pool number from pools.conf.
 # Returns the INT_BASTION_RHEL_VER value, or "rhel8" if not set.
-_pool_rhel_ver() {
-	local pools_file="$1" pool_num="$2"
+# Generic pools.conf key lookup: _pool_conf_get <pools_file> <pool_num> <KEY> [default]
+# Parses the KEY=VALUE pairs after the first 4 columns, returns value for matching POOL_NUM.
+_pool_conf_get() {
+	local pools_file="$1" pool_num="$2" key="$3" default="${4:-}"
 	[ -f "$pools_file" ] || return 1
 	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
-		local _pnum=""
-		local _rhel=""
+		local _pnum="" _val=""
 		for _kv in $_rest; do
 			case "$_kv" in
-				POOL_NUM=*)              _pnum="${_kv#POOL_NUM=}" ;;
-				INT_BASTION_RHEL_VER=*)  _rhel="${_kv#INT_BASTION_RHEL_VER=}" ;;
+				POOL_NUM=*) _pnum="${_kv#POOL_NUM=}" ;;
+				${key}=*)   _val="${_kv#${key}=}" ;;
 			esac
 		done
 		if [ "$_pnum" = "$pool_num" ]; then
-			echo "${_rhel:-rhel8}"
+			echo "${_val:-$default}"
 			return 0
 		fi
 	done
 }
 
-# Get the VMWARE_CONF path for a specific pool number from pools.conf.
-# Returns empty string if not set (caller falls back to ~/.vmware.conf).
-_pool_vmware_conf() {
-	local pools_file="$1" pool_num="$2"
-	[ -f "$pools_file" ] || return 1
-	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
-		local _pnum=""
-		local _vconf=""
-		for _kv in $_rest; do
-			case "$_kv" in
-				POOL_NUM=*)    _pnum="${_kv#POOL_NUM=}" ;;
-				VMWARE_CONF=*) _vconf="${_kv#VMWARE_CONF=}" ;;
-			esac
-		done
-		if [ "$_pnum" = "$pool_num" ]; then
-			echo "${_vconf:-}"
-			return 0
-		fi
-	done
-}
-
-# Get the CON_SSH_USER for a specific pool number from pools.conf.
-# Returns empty string if not set (caller falls back to config.env default).
-_pool_con_user() {
-	local pools_file="$1" pool_num="$2"
-	[ -f "$pools_file" ] || return 1
-	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
-		local _pnum=""
-		local _user=""
-		for _kv in $_rest; do
-			case "$_kv" in
-				POOL_NUM=*)      _pnum="${_kv#POOL_NUM=}" ;;
-				CON_SSH_USER=*)  _user="${_kv#CON_SSH_USER=}" ;;
-			esac
-		done
-		if [ "$_pnum" = "$pool_num" ]; then
-			echo "${_user:-}"
-			return 0
-		fi
-	done
-}
-
-# Get the DIS_SSH_USER for a specific pool number from pools.conf.
-# Returns empty string if not set (caller falls back to config.env default).
-_pool_dis_user() {
-	local pools_file="$1" pool_num="$2"
-	[ -f "$pools_file" ] || return 1
-	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
-		local _pnum=""
-		local _user=""
-		for _kv in $_rest; do
-			case "$_kv" in
-				POOL_NUM=*)      _pnum="${_kv#POOL_NUM=}" ;;
-				DIS_SSH_USER=*)  _user="${_kv#DIS_SSH_USER=}" ;;
-			esac
-		done
-		if [ "$_pnum" = "$pool_num" ]; then
-			echo "${_user:-}"
-			return 0
-		fi
-	done
-}
+_pool_rhel_ver() { _pool_conf_get "$1" "$2" INT_BASTION_RHEL_VER rhel8; }
+_pool_vmware_conf() { _pool_conf_get "$1" "$2" VMWARE_CONF; }
+_pool_con_user() { _pool_conf_get "$1" "$2" CON_SSH_USER; }
+_pool_dis_user() { _pool_conf_get "$1" "$2" DIS_SSH_USER; }
 
 # Count pools in pools.conf.
 _pool_count_from_conf() {

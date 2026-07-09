@@ -273,3 +273,111 @@ deploy_pool() {
 		return 1
 	fi
 }
+
+# Deploy harness + source/git to all pools.
+# Wraps the per-pool harness deploy, dev-mode source push, and git branch sync.
+# Globals: CLI_POOL_LIST, CLI_DEV, CLI_CON_USER, _RUN_DIR, _ABA_ROOT,
+#          _DEPLOY_CONFIG_ENV, E2E_GIT_BRANCH, E2E_GIT_REPO_SLUG, CON_SSH_USER
+_deploy_to_pools() {
+	local _saved_con_ssh_user="${CON_SSH_USER:-}"
+
+	_export_pool_ssh_user() {
+		local _pool="$1"
+		local _u
+		_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_pool" 2>/dev/null) || true
+		[ -n "${CLI_CON_USER:-}" ] && _u="$CLI_CON_USER"
+		export CON_SSH_USER="${_u:-${_saved_con_ssh_user:-steve}}"
+	}
+
+	echo ""
+	echo "  Deploying test harness to conN hosts ..."
+	local _p target
+	for _p in $CLI_POOL_LIST; do
+		_export_pool_ssh_user "$_p"
+		target=$(_con_target "$_p")
+		if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
+			sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
+			sync_extras "$target" "${CON_SSH_USER:-steve}" "$_p"
+			_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
+			echo "    con${_p}: harness deployed to ~/.e2e-harness/"
+		else
+			echo "    con${_p}: FAILED to deploy harness (skipping)" >&2
+		fi
+	done
+	export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+
+	if [ -n "${CLI_DEV:-}" ]; then
+		echo ""
+		echo "  Developer mode: pushing ABA source to conN hosts ..."
+		local _deploy_tar _deploy_size
+		_deploy_tar=$(_make_source_tar "$_ABA_ROOT")
+		_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+		echo "  Source tarball: $_deploy_size"
+		_saved_con_ssh_user="${CON_SSH_USER:-}"
+		for _p in $CLI_POOL_LIST; do
+			_export_pool_ssh_user "$_p"
+			target=$(_con_target "$_p")
+			echo -n "    con${_p}: "
+			if sync_source "$target" "$_deploy_tar"; then
+				echo "done"
+			else
+				echo "FAILED"
+			fi
+		done
+		export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+		rm -f "$_deploy_tar"
+	else
+		# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
+		local _need_install=""
+		_saved_con_ssh_user="${CON_SSH_USER:-}"
+		for _p in $CLI_POOL_LIST; do
+			_export_pool_ssh_user "$_p"
+			target=$(_con_target "$_p")
+			if ! _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+				_need_install=1
+				break
+			fi
+		done
+		if [ -n "$_need_install" ]; then
+			echo ""
+			echo "  Installing ABA from git ($E2E_GIT_BRANCH) on conN hosts ..."
+			for _p in $CLI_POOL_LIST; do
+				_export_pool_ssh_user "$_p"
+				target=$(_con_target "$_p")
+				echo -n "    con${_p}: "
+				if _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+					echo "already installed"
+				elif _essh "$target" "cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$E2E_GIT_REPO_SLUG/refs/heads/$E2E_GIT_BRANCH/install)\" -- $E2E_GIT_BRANCH $E2E_GIT_REPO_SLUG" 2>&1; then
+					echo "done"
+				else
+					echo "FAILED"
+				fi
+			done
+		fi
+
+		# After -V revert, ~/aba may exist (from snapshot) but on the wrong branch.
+		# Ensure all conN hosts are on E2E_GIT_BRANCH.
+		echo ""
+		echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
+		local _cur_branch
+		for _p in $CLI_POOL_LIST; do
+			_export_pool_ssh_user "$_p"
+			target=$(_con_target "$_p")
+			echo -n "    con${_p}: "
+			_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
+			if [ "$_cur_branch" = "$E2E_GIT_BRANCH" ]; then
+				_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null 2>&1
+				echo "ok (already on $E2E_GIT_BRANCH)"
+			elif [ -n "$_cur_branch" ]; then
+				if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null 2>&1; then
+					echo "switched $_cur_branch -> $E2E_GIT_BRANCH"
+				else
+					echo "FAILED to switch to $E2E_GIT_BRANCH"
+				fi
+			else
+				echo "skipped (no git repo)"
+			fi
+		done
+		export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+	fi
+}

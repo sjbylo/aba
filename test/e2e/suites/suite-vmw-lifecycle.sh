@@ -23,6 +23,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -79,8 +80,7 @@ test_begin "Setup: install aba, configure for VMware"
 
 e2e_run "Install aba" "./install"
 
-e2e_run "Configure aba.conf for VMware" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Override channel to candidate (exercises non-default channel)" \
     "aba --channel candidate"
 
@@ -96,7 +96,7 @@ e2e_run "Verify vmware.conf has GOVC_URL" "grep ^GOVC_URL vmware.conf"
 e2e_run "Verify vmware.conf (VC_FOLDER or ESXi)" \
     "grep -q ^VC_FOLDER= vmware.conf || grep -q ^GOVC_URL= vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
 e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 
 test_end

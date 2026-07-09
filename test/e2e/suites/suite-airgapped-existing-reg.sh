@@ -19,6 +19,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 # L commands run on conN (this host). R commands SSH to disN.
@@ -71,12 +72,8 @@ e2e_run "Remove oc-mirror caches (conN)" \
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
-e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
-e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+suite_configure_aba
+suite_verify_aba_conf
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
@@ -93,8 +90,7 @@ _e2e_delete_leftover_cluster_remote "$COMPACT"
 e2e_run "Reset aba" "aba reset -f"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
-e2e_run "Re-apply config after reset" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
     "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
@@ -117,7 +113,7 @@ _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
 e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
     "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
 
-e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+suite_create_mirror_workdir
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"

@@ -236,7 +236,16 @@ _dispatch_suite() {
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
-	_ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null"
+	if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null"; then
+		echo "    INFRA FAIL: tmux launch failed on con${pool_num}" >&2
+		return 1
+	fi
+
+	# Verify the session actually exists (catches silent SSH failures)
+	if ! _ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION'" 2>/dev/null; then
+		echo "    INFRA FAIL: tmux session '$_TMUX_SESSION' not found after launch on con${pool_num}" >&2
+		return 1
+	fi
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
@@ -832,4 +841,214 @@ _print_final_summary() {
 		$NOTIFY_CMD "${_notify_hdr}
 ${_done_detail}Finished: $(date '+%Y-%m-%d %H:%M')" < /dev/null >/dev/null
 	fi
+}
+
+# --- Main dispatch loop -------------------------------------------------------
+# Caller must set up: _work_queue, _queue_idx, _busy_pools, _results,
+# _result_pool, _retried, _pool_dead_count, _unreachable_pools, _external_running,
+# _pool_os_map, suites_to_run, _MAX_RETRIES, _DEAD_THRESHOLD, _POLL_MIN, _POLL_MAX
+
+_dispatch_loop() {
+	local _poll_interval=$_POLL_MIN
+
+	while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ] || [ ${#_unreachable_pools[@]} -gt 0 ]; do
+
+		_state_changed=""
+		for _p in "${!_busy_pools[@]}"; do
+			local_suite="${_busy_pools[$_p]}"
+			rc=$(_check_pool "$_p" "$local_suite")
+			# Hung detection runs in parent shell so _hung_notified persists
+			[ -z "$rc" ] && { unset '_pool_dead_count[$_p]'; _check_hung "$_p" "$local_suite"; }
+			if [ -n "$rc" ]; then
+				# rc=255 (no .rc file + no tmux session) can be a false positive from
+				# transient SSH failures.  Require _DEAD_THRESHOLD consecutive 255s
+				# before accepting it; any other rc is trusted immediately.
+				if [ "$rc" = "255" ]; then
+					_pool_dead_count[$_p]=$(( ${_pool_dead_count[$_p]:-0} + 1 ))
+					if [ "${_pool_dead_count[$_p]}" -lt "$_DEAD_THRESHOLD" ]; then
+						echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]}/$_DEAD_THRESHOLD -- not killing yet" >&2
+						continue
+					fi
+					echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]} >= $_DEAD_THRESHOLD -- accepting rc=255" >&2
+				fi
+				unset '_pool_dead_count[$_p]'
+				_record_result "$local_suite" "$rc"
+				_collect_pool_logs "$_p"
+				# Skip capture-pane on RHEL 10 (tmux 3.3a crashes in cmd_capture_pane_exec)
+				[[ "${_pool_os_map[$_p]:-}" != rhel10* ]] && \
+					_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
+				_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
+				unset '_busy_pools[$_p]'
+				_state_changed=1
+			fi
+		done
+
+		# Force-rerun: clear suites from _results so they can be re-dispatched.
+		# Written by `reschedule` CLI; processed before inject queue so the
+		# subsequent inject won't skip the suite as "already passed".
+		if [ -f "$E2E_FORCE_RERUN" ] && [ -s "$E2E_FORCE_RERUN" ]; then
+			mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" 2>/dev/null || true
+		fi
+		if [ -f "${E2E_FORCE_RERUN}.processing" ]; then
+			while IFS= read -r _rr_suite; do
+				[ -z "$_rr_suite" ] && continue
+				if [ -n "${_results[$_rr_suite]:-}" ]; then
+					_old_rc="${_results[$_rr_suite]}"
+					unset '_results[$_rr_suite]'
+					printf "  [%s] RERUN: %s cleared from results (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rr_suite" "$_old_rc"
+				fi
+			done < "${E2E_FORCE_RERUN}.processing"
+			rm -f "${E2E_FORCE_RERUN}.processing"
+		fi
+
+		# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
+		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+			mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" 2>/dev/null || true
+		fi
+		if [ -f "${E2E_INJECT_QUEUE}.processing" ]; then
+			_inj_count=0
+			while IFS= read -r _inj_suite; do
+				[ -z "$_inj_suite" ] && continue
+				# Skip if already completed with PASS (exit=0)
+				if [ "${_results[$_inj_suite]:-}" = "0" ]; then
+					printf "  [%s] SKIPPED: %s (already passed)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue
+				fi
+				_already_running=""
+				for _bp in "${!_busy_pools[@]}"; do
+					[ "${_busy_pools[$_bp]}" = "$_inj_suite" ] && _already_running=1 && break
+				done
+				[ -z "$_already_running" ] && _is_running_on_external_pool "$_inj_suite" && _already_running=1
+				[ -n "$_already_running" ] && { printf "  [%s] SKIPPED: %s (running)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
+				_already_queued=""
+				for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+					[ "${_work_queue[$_qi]}" = "$_inj_suite" ] && _already_queued=1 && break
+				done
+				[ -n "$_already_queued" ] && { printf "  [%s] SKIPPED: %s (queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
+				_work_queue+=("$_inj_suite"); suites_to_run+=("$_inj_suite")
+				_inj_count=$(( _inj_count + 1 ))
+				printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+			done < "${E2E_INJECT_QUEUE}.processing"
+			rm -f "${E2E_INJECT_QUEUE}.processing"
+			if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+				$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected" < /dev/null >/dev/null
+			fi
+		fi
+
+		# Forced dispatch pickup
+		if [ -f "$E2E_FORCED_DISPATCH" ] && [ -s "$E2E_FORCED_DISPATCH" ]; then
+			while IFS=' ' read -r _fd_pool _fd_suite; do
+				[ -z "$_fd_pool" ] && continue
+				_busy_pools[$_fd_pool]="$_fd_suite"; _result_pool[$_fd_suite]="$_fd_pool"
+				printf "  [%s] EXTERNAL: %s -> pool %s\n" "$(date '+%H:%M:%S')" "$_fd_suite" "$_fd_pool"
+			done < "$E2E_FORCED_DISPATCH"
+			> "$E2E_FORCED_DISPATCH"
+		fi
+
+		# Dispatch to free pools
+		while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
+			free=$(_find_free_pool) || break
+			suite="${_work_queue[$_queue_idx]}"
+			# Skip suites already completed with PASS
+			if [ "${_results[$suite]:-}" = "0" ]; then
+				printf "  [%s] SKIP: %s (already passed)\n" "$(date '+%H:%M:%S')" "$suite"
+				_queue_idx=$(( _queue_idx + 1 )); continue
+			fi
+			_dup=""
+			for _dp in "${!_busy_pools[@]}"; do
+				[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
+			done
+			if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+				_dup=1; _dp="${_external_running[$suite]}"
+			fi
+			if [ -n "$_dup" ]; then
+				printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
+				_queue_idx=$(( _queue_idx + 1 )); continue
+			fi
+			_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
+			_queue_idx=$(( _queue_idx + 1 ))
+			_state_changed=1
+		done
+
+		# Inline retry -- only check for free pools if there are failed suites to retry
+		_has_retryable=""
+		if [ $_queue_idx -ge ${#_work_queue[@]} ]; then
+			for _rs in "${!_results[@]}"; do
+				_rrc="${_results[$_rs]}"
+				if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+					_has_retryable=1; break
+				fi
+			done
+		fi
+		if [ -n "$_has_retryable" ] && _find_free_pool >/dev/null; then
+			_retry_added=0
+			_retry_names=""
+			for _rs in "${!_results[@]}"; do
+				_rrc="${_results[$_rs]}"
+				if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+					_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
+					_rp="${_result_pool[$_rs]:-}"
+					[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
+					unset '_results[$_rs]'; _work_queue+=("$_rs")
+					printf "  [%s] RETRY %d/%d: %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
+					_retry_names="${_retry_names:+$_retry_names, }$_rs"
+					_retry_added=$(( _retry_added + 1 ))
+				fi
+			done
+			if [ "$_retry_added" -gt 0 ]; then
+				[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_names} (${_retry_added} re-queued)" < /dev/null >/dev/null
+				while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
+					free=$(_find_free_pool) || break
+					suite="${_work_queue[$_queue_idx]}"
+					_dup=""
+					for _dp in "${!_busy_pools[@]}"; do
+						[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
+					done
+					if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+						_dup=1; _dp="${_external_running[$suite]}"
+					fi
+					if [ -n "$_dup" ]; then
+						printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
+						_queue_idx=$(( _queue_idx + 1 )); continue
+					fi
+					_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
+					_queue_idx=$(( _queue_idx + 1 ))
+				done
+			fi
+		fi
+
+		_write_dispatch_state
+		_notify_periodic_status
+
+		_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
+		if [ ${#_busy_pools[@]} -gt 0 ]; then
+			_status_line="${#_results[@]}d ${#_busy_pools[@]}r ${_queued_remaining}q"
+			for _p in "${!_busy_pools[@]}"; do _status_line+=" con${_p}:${_busy_pools[$_p]}"; done
+			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do _status_line+=" q:${_work_queue[$_qi]}"; done
+			if [ "${_status_line}" != "${_prev_status:-}" ]; then
+				printf "  [%s] %d done, %d running" "$(date '+%H:%M:%S')" "${#_results[@]}" "${#_busy_pools[@]}"
+				[ "$_queued_remaining" -gt 0 ] && printf ", %d queued" "$_queued_remaining"
+				printf " |"; for _p in "${!_busy_pools[@]}"; do printf " con%s:%s" "$_p" "${_busy_pools[$_p]}"; done
+				if [ "$_queued_remaining" -gt 0 ]; then
+					printf " ||"; for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do printf " %s" "${_work_queue[$_qi]}"; done
+				fi
+				echo ""; _prev_status="$_status_line"
+			fi
+		fi
+
+		# Refresh external pool state every ~60s to detect new/finished external suites
+		if [ $(( SECONDS - ${_last_ext_refresh:-0} )) -ge 60 ]; then
+			_refresh_external_running
+			_recheck_unreachable_pools
+			_last_ext_refresh=$SECONDS
+		fi
+
+		# Adaptive polling: short interval after state changes, back off when idle
+		if [ -n "$_state_changed" ]; then
+			_poll_interval=$_POLL_MIN
+		else
+			_poll_interval=$(( _poll_interval * 2 ))
+			[ "$_poll_interval" -gt "$_POLL_MAX" ] && _poll_interval=$_POLL_MAX
+		fi
+		sleep "$_poll_interval"
+	done
 }
