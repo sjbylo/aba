@@ -63,9 +63,11 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
 
   aba [-d <cluster>] upgrade
       --to <version>                      # Target OCP version (e.g. 4.22.2). Falls back to mirror.conf:ocp_upgrade_to
-      --force                             # Pass --force to oc adm upgrade
+      --force                             # Bypass cluster-side upgrade guards (NOT for production!)
       --dry-run                           # Show what would happen without executing
       --skip-day2                         # Don't auto-run day2 even if IDMS is missing
+  WARNING: --force bypasses OpenShift's safety checks (release verification, admin ack gates).
+           Only use it in test/lab environments or when working around a known CVO bug.
   Note: for disconnected upgrades, first load the upgrade images with 'aba -d mirror load'
 
   VM lifecycle (platform=vmw or kvm only):
