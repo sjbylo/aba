@@ -575,7 +575,7 @@ _configure_kvm_form() {
 	return 0
 }
 
-# Test libvirt connection using current kvm.conf
+# Test libvirt connection and verify KVM host objects from kvm.conf
 _test_kvm_connection() {
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nTesting libvirt connection..." 0 0
 	source <(normalize-kvm-conf) 2>/dev/null || true
@@ -591,13 +591,55 @@ _test_kvm_connection() {
 	export LIBVIRT_SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 $_saved_ssh_opts"
 
 	local _out _rc=0
-	if _out=$(virsh -c "${LIBVIRT_URI:-}" version 2>&1); then
-		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
-			--msgbox "\nLibvirt connection verified!\n\n$_out" 0 0
-	else
+	if ! _out=$(virsh -c "${LIBVIRT_URI:-}" version 2>&1); then
 		dlg --backtitle "$(ui_backtitle)" --title "Connection Failed" \
 			--msgbox "\nCannot connect to libvirt at:\n${LIBVIRT_URI:-?}\n\n$_out\n\nCheck URI and SSH access." 0 0
+		export LIBVIRT_SSH_OPTS="$_saved_ssh_opts"
+		return 1
+	fi
+
+	# Connection OK -- now verify KVM host objects via SSH
+	local _kvm_host
+	_kvm_host=$(echo "$LIBVIRT_URI" | sed -E 's|^[^:]+://([^/]+)/.*|\1|')
+	local _ssh="ssh -F $HOME/.aba/ssh.conf ${_kvm_host}"
+	local _results="" _errors=""
+
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nVerifying KVM host configuration..." 0 0
+
+	# Check storage pool path exists and is writable
+	if [ -n "${KVM_STORAGE_POOL:-}" ]; then
+		if $_ssh "test -d '$KVM_STORAGE_POOL' && test -w '$KVM_STORAGE_POOL'" 2>/dev/null; then
+			local _disk_avail
+			_disk_avail=$($_ssh "df -h '$KVM_STORAGE_POOL' | tail -1 | awk '{print \$4}'" 2>/dev/null)
+			_results="${_results}\n  ✓ Storage pool: ${KVM_STORAGE_POOL} (${_disk_avail:-?} free)"
+		elif $_ssh "test -d '$KVM_STORAGE_POOL'" 2>/dev/null; then
+			_errors="${_errors}\n  ✗ Storage pool: ${KVM_STORAGE_POOL} exists but is NOT writable"
+		else
+			_errors="${_errors}\n  ✗ Storage pool: ${KVM_STORAGE_POOL} does NOT exist on ${_kvm_host}"
+		fi
+	fi
+
+	# Check network bridge exists
+	if [ -n "${KVM_NETWORK:-}" ]; then
+		if $_ssh "test -d '/sys/class/net/$KVM_NETWORK'" 2>/dev/null; then
+			local _bridge_state
+			_bridge_state=$($_ssh "cat /sys/class/net/$KVM_NETWORK/operstate" 2>/dev/null)
+			_results="${_results}\n  ✓ Network bridge: ${KVM_NETWORK} (${_bridge_state:-unknown})"
+		else
+			_errors="${_errors}\n  ✗ Network bridge: ${KVM_NETWORK} does NOT exist on ${_kvm_host}"
+		fi
+	fi
+
+	local _summary="\nLibvirt connection verified!\n\n$_out"
+	[ -n "$_results" ] && _summary="${_summary}\n\nKVM host checks:${_results}"
+	if [ -n "$_errors" ]; then
+		_summary="${_summary}\n${_errors}\n\nFix kvm.conf and re-test."
 		_rc=1
+		dlg --backtitle "$(ui_backtitle)" --title "Connection OK — Problems Found" \
+			--msgbox "$_summary" 0 0
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
+			--msgbox "$_summary" 0 0
 	fi
 
 	export LIBVIRT_SSH_OPTS="$_saved_ssh_opts"
