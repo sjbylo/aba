@@ -102,10 +102,9 @@ reg_detect_existing() {
 			aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
 			exit 0
 		else
-			aba_warning "Registry at $reg_host is unreachable but state.sh still exists." \
-				"The registry may have been removed externally." \
-				"Clearing stale state and proceeding with fresh install."
-			rm -f "$regcreds_dir/state.sh"
+			aba_abort "Registry at $reg_host is unreachable but state.sh still exists." \
+				"If the registry was removed externally, run 'aba -d $(basename "$PWD") uninstall' to clean up, then re-install." \
+				"If the host is temporarily down, wait and retry."
 		fi
 	fi
 
