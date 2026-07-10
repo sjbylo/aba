@@ -70,6 +70,8 @@ aba | grep -i "bundle .*detected"  # Verify it's the bundle!
 aba -d mirror load -H $MY_HOST -r -y
 rm -rf $CLUSTER_NAME
 aba cluster -n $CLUSTER_NAME -t sno -i $STARTING_IP -s install -y || { sleep 60; aba -d $CLUSTER_NAME mon; } # wait and try again!
+. <(aba -d $CLUSTER_NAME login) || . <(aba -d $CLUSTER_NAME shell)
+while oc get co --no-headers | awk '{print $3}' | grep False; do echo "Waiting for all operators to be available ..."; sleep 30; done
 aba -d $CLUSTER_NAME day2 
 . <(aba -d $CLUSTER_NAME login) || . <(./aba -d $CLUSTER_NAME shell)   # Try x 2
 time until oc get packagemanifests | grep cincinnati-operator; do sleep 5; done
@@ -79,5 +81,6 @@ aba -d $CLUSTER_NAME day2-ntp
 . <(aba -d $CLUSTER_NAME login) || . <(./aba -d $CLUSTER_NAME shell)   # Try x 2
 aba -d $CLUSTER_NAME delete -y
 aba -d mirror uninstall -y || true  # Delete mirror reg.
+int_up  # Internet up (from lib.sh)
 set +x
 echo ALL TESTS COMPLETED OK
