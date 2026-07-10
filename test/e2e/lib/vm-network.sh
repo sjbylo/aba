@@ -125,7 +125,9 @@ _vm_setup_network_connected() {
 		    802-3-ethernet.mtu 1500
 
 		# --- Route to KVM VLAN 123 subnet (for suite-kvm-network) ---
-		ip route replace 10.10.123.0/24 via ${KVM_HOST_LAB_IP:-10.0.1.10} || true
+		# Persist via NM so the route survives reboots/snapshot reverts
+		nmcli connection modify ens192 +ipv4.routes "10.10.123.0/24 ${KVM_HOST_LAB_IP:-10.0.1.10}"
+		nmcli connection up ens192
 
 		hostnamectl set-hostname $clone_name
 
