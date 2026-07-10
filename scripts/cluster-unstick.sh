@@ -24,7 +24,7 @@ aba_info "Finding stuck pods (not ready for >$((STUCK_THRESHOLD/60)) min or in e
 
 # Get pods in error state (CrashLoopBackOff, Error, ImagePullBackOff, ErrImagePull, CreateContainerError)
 _error_pods=$($OC get po -A --no-headers 2>/dev/null | \
-	awk '$4 ~ /(CrashLoopBackOff|Error|ImagePullBackOff|ErrImagePull|CreateContainerError|InvalidImageName)/ {print $1, $2}') || true
+	awk '$4 ~ /(CrashLoopBackOff|Error|ImagePullBackOff|ErrImagePull|CreateContainerError|InvalidImageName|ContainerStatusUnknown)/ {print $1, $2}') || true
 
 # Get pods not fully ready, excluding Completed and error pods (handled above).
 # Only include pods whose last state transition was >5 min ago.
