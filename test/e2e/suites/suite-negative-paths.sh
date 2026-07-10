@@ -224,7 +224,7 @@ e2e_run "Set reg_host to match stale state" \
 e2e_run "Remove .available to trigger install path" \
 	"rm -f mirror/.available"
 e2e_run_must_fail "Stale state must be detected (abort with unreachable message)" \
-	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing' 2>&1 | grep 'unreachable'"
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing'"
 e2e_run "Verify state.sh preserved for investigation" \
 	"test -f ~/.aba/mirror/mirror/state.sh"
 e2e_run "Cleanup stale state test" \
