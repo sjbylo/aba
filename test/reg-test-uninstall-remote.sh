@@ -9,6 +9,8 @@ cat > ~/.aba/ssh.conf <<END
 StrictHostKeyChecking no
 UserKnownHostsFile=/dev/null
 ConnectTimeout=15
+ServerAliveInterval=30
+ServerAliveCountMax=10
 PreferredAuthentications=publickey
 PasswordAuthentication=no
 LogLevel=ERROR
