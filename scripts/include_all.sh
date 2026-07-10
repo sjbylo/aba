@@ -615,8 +615,16 @@ normalize-mirror-conf()
 	)
 
 	# Phase 3 (ADR-007): override immutable fields from installed state
+	# Resolve the mirror dir name: when called from a cluster dir (where mirror.conf
+	# is a symlink to ../mirror/mirror.conf), follow the symlink to find the actual
+	# mirror directory name. Without this, cluster dirs would look for state at
+	# ~/.aba/mirror/<cluster-name>/state.sh which doesn't exist.
 	local _mn
-	_mn=$(basename "$PWD")
+	if [ -L mirror.conf ]; then
+		_mn=$(basename "$(dirname "$(readlink -f mirror.conf)")")
+	else
+		_mn=$(basename "$PWD")
+	fi
 	if [ -s "$HOME/.aba/mirror/$_mn/state.sh" ]; then
 		_state_override_mirror "$_mn"
 	fi

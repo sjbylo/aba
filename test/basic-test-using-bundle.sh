@@ -15,7 +15,10 @@ mkdir -p $TEST_DIR_CONN $TEST_DIR_DISCO
 # Clean up after last test
 cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d mirror uninstall -y && sudo rm -rf ~/quay-install || true  # Delete any existing mirror reg.
 cd $TEST_DIR_DISCO/aba 2>/dev/null && ./aba -d $CLUSTER_NAME delete -y || true  # Delete test cluster if existing
-! curl -f -SkIL https://$MY_HOST:8443/ || { echo Registry detected at https://$MY_HOST/; exit 1; }   # Sanity check
+# Also uninstall from main repo in case it left a registry running (namespace collision)
+aba -d ~/aba/mirror uninstall -y 
+# Also verify no state.sh left behind (prevents state override contamination)
+[ -f ~/.aba/mirror/mirror/state.sh ] && { echo "Error: state.sh file found [~/.aba/mirror/mirror/state.sh] for mirror!"; exit 1; }
 sudo rm -fv $(which aba)
 rm -rf ~/.oc-mirror/.cache
 rm -fv ~/bin/{oc-mirror,oc,openshift-install}
