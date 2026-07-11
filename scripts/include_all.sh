@@ -949,7 +949,12 @@ _state_override_cluster() {
 # Warning is shown once per process to avoid noisy repeated output.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
-	local _status="reg_host reg_port reg_root reg_user reg_pw ocp_version last_action last_action_at"
+	# ocp_version is intentionally excluded: it must always come from aba.conf (user intent),
+	# not from state.sh (mirror fact). After an upgrade sync, state.sh holds the TARGET version,
+	# which broke CLI version checks and ISC upgrade-path generation.
+	# See BACKLOG.md: "ISC upgrade mode broken by state.sh ocp_version override"
+	# and "day2-osus: channel set fails after cross-minor upgrade".
+	local _status="reg_host reg_port reg_root reg_user reg_pw last_action last_action_at"
 	local _field _sval _cval _drifted=""
 
 	source "$_state"
