@@ -152,6 +152,41 @@ pool_vlan_gateway() {
     echo "${dis_vlan%%/*}"
 }
 
+# --- KVM VLAN helpers (suite-kvm-network) -----------------------------------
+
+# Get the KVM VLAN node IP: pool_kvm_vlan_node_ip [POOL_NUM]
+pool_kvm_vlan_node_ip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	echo "${KVM_VLAN_NODE_IP[$p]:-10.10.123.$((200 + p))}"
+}
+
+# Get the KVM VLAN machine network: pool_kvm_vlan_network
+pool_kvm_vlan_network() {
+	echo "${KVM_VLAN_NETWORK:-10.10.123.0/24}"
+}
+
+# Get the KVM VLAN gateway: pool_kvm_vlan_gateway
+pool_kvm_vlan_gateway() {
+	echo "${KVM_VLAN_GATEWAY:-10.10.123.1}"
+}
+
+# Get the KVM VLAN DNS server: pool_kvm_vlan_dns
+pool_kvm_vlan_dns() {
+	echo "${KVM_VLAN_DNS:-10.10.123.1}"
+}
+
+# Get the KVM VLAN API VIP: pool_kvm_vlan_api_vip [POOL_NUM]
+pool_kvm_vlan_api_vip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	echo "${KVM_VLAN_API_VIP[$p]:-10.10.123.$((210 + p))}"
+}
+
+# Get the KVM VLAN APPS VIP: pool_kvm_vlan_apps_vip [POOL_NUM]
+pool_kvm_vlan_apps_vip() {
+	local p="${1:-${POOL_NUM:-1}}"
+	echo "${KVM_VLAN_APPS_VIP[$p]:-10.10.123.$((220 + p))}"
+}
+
 # SSH target for the connected bastion: pool_connected_bastion [POOL_NUM]
 # Returns user@conN.domain suitable for ssh/rsync.
 pool_connected_bastion() {

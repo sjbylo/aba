@@ -941,13 +941,13 @@ _interactive_prompt() {
         [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
         [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        read -t 0 -n 10000 </dev/tty 2>/dev/null
+        read -t 0 -n 10000 2>/dev/null || true
         if [ "$_clock_stopped" ]; then
             printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd] [!!cmd-on-disN]: ")"
-            read -r ans </dev/tty
+            read -r ans
         else
             printf "%s" "$(_e2e_red "[R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [p]ause [!cmd] [!!cmd-on-disN] (24h timeout): ")"
-            if ! read -t 86400 -r ans </dev/tty; then
+            if ! read -t 86400 -r ans; then
                 rm -f "$_paused_file"
                 _e2e_log_and_print "  >> $(_e2e_red "No input for 24 hours -- auto-aborting suite")"
                 e2e_cleanup_clusters
@@ -1010,7 +1010,7 @@ _interactive_prompt() {
                 else
                     _e2e_log "User entered command (disN=$INTERNAL_BASTION): $user_cmd"
                     echo "Running on disN ($INTERNAL_BASTION): $user_cmd"
-                    ssh -o LogLevel=ERROR -o ConnectTimeout=30 "$INTERNAL_BASTION" -- ". \$HOME/.bash_profile 2>/dev/null; $user_cmd" \
+                    _essh "$INTERNAL_BASTION" -- ". \$HOME/.bash_profile 2>/dev/null; $user_cmd" \
                         2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                     local new_rc=${PIPESTATUS[0]}
                     _e2e_log "User command (disN) exited $new_rc"
@@ -1118,15 +1118,24 @@ e2e_run() {
     local cmd="$*"
     local _lf="${E2E_LOG_FILE:-/dev/null}"
     local _display_host="${host:-$USER@$(hostname -s)}"
+    local _display_cwd="$PWD"
+    if [ -n "$host" ]; then
+        local _ruser="${host%%@*}"
+        if [ "$_ruser" = "root" ]; then
+            _display_cwd="/root/aba"
+        elif [ "$_ruser" != "$host" ]; then
+            _display_cwd="/home/$_ruser/aba"
+        fi
+    fi
 
     _e2e_cmd_ring_push "$mark $description [$_display_host] :: $cmd"
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_green "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Green "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_cyan "$description") $(_e2e_green "[$_display_host:$_display_cwd]")"
+        _e2e_summary "  $(_e2e_Cyan "$description") $(_e2e_Green "[$_display_host:$_display_cwd]")"
     else
-        _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$PWD]")"
-        _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_white "$description") $(_e2e_green "[$_display_host:$_display_cwd]")"
+        _e2e_summary "  $(_e2e_White "$description") $(_e2e_Green "[$_display_host:$_display_cwd]")"
     fi
     if [[ "$cmd" == *$'\n'* ]]; then
         _e2e_log "  CMD: $cmd"
@@ -1150,13 +1159,13 @@ e2e_run() {
             local ret=0
             : > "$_cmd_output_file"
 
-            if [ -n "$host" ]; then
+                if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
+                    _essh -n "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
-                    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
+                    _essh -n "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
                         2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             else
@@ -1180,7 +1189,14 @@ e2e_run() {
                 local _dur; _dur=$(_e2e_fmt_duration $_elapsed)
                 if [ $attempt -gt 1 ]; then
                     _e2e_summary "  $(_e2e_Green "RECOVERED") on attempt $attempt: $description ($_dur)"
-                    _e2e_notify "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
+                    (
+                        echo "Suite: $_E2E_SUITE_NAME | attempt $attempt/$tot_cnt | $_dur"
+                        echo "Cmd: $cmd"
+                        echo ""
+                        echo "--- Last 10 lines of output ---"
+                        echo ""
+                        tail -10 "$_cmd_output_file" 2>/dev/null
+                    ) | _e2e_notify_stdin "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "  $(_e2e_green "OK") ($_dur)"
                 _e2e_summary "  $(_e2e_Green "OK ($_dur)")"
@@ -1414,11 +1430,11 @@ e2e_wait_cluster_available() {
 }
 
 # Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
-# Default: 45-min timeout, 10s interval, 2 consecutive passes.
+# Default: 55-min timeout, 10s interval, 2 consecutive passes.
 e2e_wait_cluster_ready() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
-	local timeout="${3:-2700}"
+	local timeout="${3:-3300}"
 	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 10 2
 }
 
@@ -1460,17 +1476,26 @@ e2e_diag() {
     local ret=0
 
     local _display_host="${host:-$USER@$(hostname -s)}"
+    local _display_cwd="$PWD"
+    if [ -n "$host" ]; then
+        local _ruser="${host%%@*}"
+        if [ "$_ruser" = "root" ]; then
+            _display_cwd="/root/aba"
+        elif [ "$_ruser" != "$host" ]; then
+            _display_cwd="/home/$_ruser/aba"
+        fi
+    fi
 
     if [ -n "$host" ]; then
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_magenta "$description") $(_e2e_yellow "[$_display_host:$_display_cwd]")"
         _e2e_log_and_print "  $(_e2e_dim "$cmd")"
     else
-        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_white "$description") $(_e2e_yellow "[$_display_host:$PWD]")"
+        _e2e_log_and_print "  $(_e2e_yellow "[diag]") $(_e2e_white "$description") $(_e2e_yellow "[$_display_host:$_display_cwd]")"
         _e2e_log_and_print "  $(_e2e_dim "$cmd")"
     fi
 
     if [ -n "$host" ]; then
-        ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+        _essh -n "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
             2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     else
         ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
@@ -1602,7 +1627,7 @@ e2e_run_must_fail_remote() {
     _e2e_summary "  $(_e2e_Dim "($cmd)")"
 
     local ret=0
-    ssh -n -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes "$INTERNAL_BASTION" -- \
+    _essh -n "$INTERNAL_BASTION" -- \
         ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
         2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 

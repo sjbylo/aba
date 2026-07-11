@@ -238,9 +238,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.1.3.tar.gz
-tar xzf v1.1.3.tar.gz
-cd aba-1.1.3
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.1.4.tar.gz
+tar xzf v1.1.4.tar.gz
+cd aba-1.1.4
 ./install
 aba
 ```
@@ -248,7 +248,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.1.3 https://github.com/sjbylo/aba.git
+git clone --branch v1.1.4 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -835,7 +835,7 @@ aba -d mirror sync
 For fully disconnected (save to disk, transfer, load):
 ```
 aba -d mirror save    # on the connected workstation
-# Transfer mirror/data/imageset-config.yaml, mirror/data/.imageset-config-digest.yaml, and mirror/data/mirror_*.tar to the bastion
+# Transfer mirror/data/*.tar to the bastion (mirror_*.tar images + aba-transfer.tar bundle)
 aba -d mirror load    # on the internal bastion
 ```
 
@@ -969,20 +969,23 @@ aba day2-osus
 >
 > If the channel does not include the current version as a valid starting point, the upgrade path will not be available — even if the target version's images are mirrored.
 
-#### Using `--target-version`
+#### Using `--upgrade-to`
 
 1. On the *connected workstation*, set the target version and save the upgrade images:
 
 ```bash
-aba -d mirror --target-version 4.22.1 save
+aba -d mirror --upgrade-to 4.22.1 save
 ```
 
-This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images.
+This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images. A transfer bundle (`aba-transfer.tar`) is also created alongside the image archives, containing the ISC files, CLI binaries for the target version, and metadata.
 
-2. Copy to the *internal bastion*: `aba/mirror/data/imageset-config.yaml`, `aba/mirror/data/.imageset-config-digest.yaml`, and `aba/mirror/data/mirror_000001.tar`.
-3. On the bastion: `aba -d mirror load`
-4. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
-5. Upgrade the cluster:
+2. Copy all `*.tar` files to the *internal bastion*: `cp aba/mirror/data/*.tar /transfer-media/`
+   - `mirror_*.tar` — OCP images archive
+   - `aba-transfer.tar` — transfer bundle (ISC, CLIs, metadata)
+3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
+4. Load images: `aba -d mirror load` (automatically unpacks upgrade bundle, updates version)
+5. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
+6. Upgrade the cluster:
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
@@ -990,29 +993,34 @@ aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in m
 aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
-Or upgrade OpenShift via the Console or CLI in the usual way.
+> **Alternative upgrade methods:** Once the mirror is loaded and `day2` has been applied, you can also trigger the upgrade via:
+> - **`oc adm upgrade --to <version>`** — standard OpenShift CLI (ensure `aba day2` has been run first)
+> - **OpenShift Console** — if [OSUS](#cluster-updates-osus) is configured, available updates appear in the console for one-click upgrades
+>
+> `aba upgrade` is recommended because it handles `day2` integration and preflight checks automatically.
 
 #### Manual method
 
 
 1. Edit `aba/aba.conf` on the *connected workstation* to add operators/operator sets, then run `aba -d mirror save`.
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
-2. Copy to the *internal bastion*: `aba/mirror/data/imageset-config.yaml`, `aba/mirror/data/.imageset-config-digest.yaml`, and `aba/mirror/data/mirror_000001.tar`.
-3. On the bastion: `aba -d mirror load`
-4. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
-5. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
+2. Copy all tar files to the *internal bastion*: `cp aba/mirror/data/*.tar /transfer-media/` (includes `mirror_*.tar` images and `aba-transfer.tar` bundle with ISC, CLIs, and metadata).
+3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
+4. Load images: `aba -d mirror load`
+5. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
+6. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
 
 ### Updating a cluster in a partially disconnected environment
 
 > **Important — channel must cover both versions:**
 > The channel in `aba.conf` must contain both your current cluster version and the target version in its upgrade graph. See the note in [Updating a cluster in a fully disconnected environment](#updating-a-cluster-in-a-fully-disconnected-environment) for details.
 
-#### Using `--target-version`
+#### Using `--upgrade-to`
 
 1. On the *connected bastion*, set the target version and sync directly to the registry:
 
 ```bash
-aba -d mirror --target-version 4.22.1 sync
+aba -d mirror --upgrade-to 4.22.1 sync
 ```
 
 2. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
@@ -1024,14 +1032,14 @@ aba -d <cluster name> upgrade                  # Upgrade to latest z-stream in m
 aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (e.g. cross-minor)
 ```
 
-Or upgrade OpenShift via the Console or CLI in the usual way.
+Or use any of the [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment) (Console, `oc adm upgrade`) after running `aba day2`.
 
 #### Manual method
 
 1. Edit `aba/mirror/data/imageset-config.yaml` on the *connected bastion*.
 2. Run: `aba -d mirror sync`
 3. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
-4. Add operators or upgrade OpenShift via the Console or CLI in the usual way.
+4. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
 
 [Back to top](#quick-start)
 

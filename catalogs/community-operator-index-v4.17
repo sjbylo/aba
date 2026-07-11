@@ -158,7 +158,7 @@ istio-workspace-operator                                Istio Workspace         
 jaeger                                                  Community Jaeger Operator                                    stable
 jhipster-online-operator                                JHipster Online Operator                                     alpha
 k8gb                                                    k8gb                                                         alpha
-kairos-operator                                         Kairos Operator                                              stable
+kairos-operator                                         Kairos Operator                                              candidate-v2
 kaoto-operator                                          Kaoto Operator                                               alpha
 keda                                                    [DEPRECATED] KEDA                                            alpha
 keepalived-operator                                     Keepalived Operator                                          alpha

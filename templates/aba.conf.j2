@@ -42,13 +42,3 @@ verify_conf=all			# Validate config files and run network checks (DNS, NTP, IP c
 				# Set to 'conf' to validate config files only (skip network checks).
 				# Set to 'off' to skip all validation.
 
-#oc_mirror_version=v2            # Use version 2 of oc-mirror (v1 is deprecated and unsupported).
-				# Key v2 notes (as of Feb 2025):
-				# - v2 handles dependencies differently — include all required operators manually.
-				#   Example: 'web-terminal' requires 'devworkspace-operator' (included in op. set file: 'templates/operator-set-ocp').
-				# - Copy both the image set YAML and TAR files to the bastion (v2 needs the YAML to load images).
-				# - Error reporting differs; verify mirrored operators in Quay. Use '--retry' for retries on failure.
-				# Reference docs:
-				# https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/disconnected_environments/mirroring-in-disconnected-environments#about-installing-oc-mirror-v2
-				# and:
-				# https://docs.openshift.com/container-platform/4.17/disconnected/mirroring/about-installing-oc-mirror-v2.html#oc-mirror-troubleshooting-v2_about-installing-oc-mirror-v2

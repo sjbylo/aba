@@ -521,10 +521,10 @@ _conno_main() {
 		local ops_avail=true bndl_avail=true
 
 		# Internet-dependent items greyed out in offline mode
-		local upg_label="Prepare Upgrade"
+		local upg_label="Prepare Upgrade (beta)"
 		local _upg_target=""
 		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-			_upg_target=$(grep '^ocp_version_target=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+			_upg_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		fi
 		if [[ "$_TUI_INET" == "no" ]]; then
 			save_avail=false
@@ -535,9 +535,9 @@ _conno_main() {
 			ops_label="$TUI2_LABEL_OPERATORS $TUI2_STATUS_NO_INTERNET"
 			bndl_avail=false
 			bndl_label="$TUI2_LABEL_BUNDLE $TUI2_STATUS_NO_INTERNET"
-			upg_label="Prepare Upgrade $TUI2_STATUS_NO_INTERNET"
+			upg_label="Prepare Upgrade (beta) $TUI2_STATUS_NO_INTERNET"
 		elif [[ -n "$_upg_target" && "$_upg_target" != "${ocp_version:-}" ]]; then
-			upg_label="Prepare Upgrade [→ ${_upg_target}]"
+			upg_label="Prepare Upgrade (beta) [→ ${_upg_target}]"
 		fi
 
 		# Mirror recheck: only when _invalidate_mirror_cache fired after a
@@ -590,8 +590,8 @@ _conno_main() {
 		local _mstate
 		_mstate="$(mirror_state_label)"
 		local conno_menu_msg="Status: ${_mstate}"
-		if [[ -n "${ocp_version_target:-}" && "${ocp_version_target}" != "${ocp_version:-}" ]]; then
-			conno_menu_msg+="  |  upgrade target: ${ocp_version_target}"
+		if [[ -n "${ocp_upgrade_to:-}" && "${ocp_upgrade_to}" != "${ocp_version:-}" ]]; then
+			conno_menu_msg+="  |  upgrade target: ${ocp_upgrade_to}"
 		fi
 
 		# Mirror state is already shown via color-coded label (green/yellow/red)

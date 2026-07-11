@@ -26,6 +26,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -64,6 +65,7 @@ test_begin "Setup: ensure pre-populated registry"
 e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version resolved" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -86,16 +88,20 @@ e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
 
 e2e_run "Install aba" "./install"
 
-e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+e2e_run "Verify vmware.conf: VC_FOLDER" "grep '^VC_FOLDER=' vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
 test_end
 

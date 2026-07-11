@@ -39,21 +39,21 @@ if ! verify_release_version_exists "$ocp_version"; then
 		"This version may not have been released yet, or the channel may be wrong." \
 		"Use 'aba ocp-versions' to list available versions."
 fi
-if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-	aba_info "Verifying release image availability for upgrade target v${ocp_version_target} ..."
-	if ! verify_release_version_exists "$ocp_version_target"; then
+if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+	aba_info "Verifying release image availability for upgrade target v${ocp_upgrade_to} ..."
+	if ! verify_release_version_exists "$ocp_upgrade_to"; then
 		aba_abort \
-			"Upgrade target version $ocp_version_target not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+			"Upgrade target version $ocp_upgrade_to not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
 			"This version may not have been released yet, or the channel may be wrong." \
 			"Use 'aba ocp-versions' to list available versions."
 	fi
 	# Fail fast: verify upgrade path exists before starting downloads
 	_path_diag=""
-	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1); then
 		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"   # middle field (target channel)
 		_lowest="${_path_diag##*|}"                              # last field (lowest entry point)
 		aba_abort \
-			"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+			"Cannot upgrade directly from $ocp_version to $ocp_upgrade_to." \
 			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
 			"You need to upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
 			"" \
@@ -137,10 +137,22 @@ if ! _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
+# After successful sync: update state.sh with the synced version.
+# Use ocp_upgrade_to if set (upgrade sync), otherwise ocp_version (normal sync).
+_synced_ver="${ocp_upgrade_to:-$ocp_version}"
+replace-value-conf -q -n ocp_version -v "$_synced_ver" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+if [ "$_synced_ver" != "$ocp_version" ]; then
+	aba_info "Mirror state updated: ocp_version $ocp_version → $_synced_ver"
+fi
+
 echo
-aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"
-aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
+if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
+	aba_info_ok "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
+	aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
+	echo
+fi
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then

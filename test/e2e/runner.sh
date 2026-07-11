@@ -87,7 +87,7 @@ trap ':' INT
 # previous run was as root, steve can't overwrite them (Permission denied
 # under set -e kills the runner).  Brief stale/empty value in the live
 # dashboard title is acceptable vs. a hard crash.
-sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
+sudo rm -f /tmp/e2e-last-suites /tmp/e2e-suite-user /tmp/e2e-suite-dis-user /tmp/e2e-suite-os /tmp/e2e-suite-vmconf
 echo "$SUITE" > /tmp/e2e-last-suites
 whoami > /tmp/e2e-suite-user
 
@@ -122,6 +122,30 @@ _E2E_ABA_INTERNAL_DIRS="quay-install docker-reg"
 # across firewalld restarts and must be explicitly removed before each suite.
 # Add new ports here when suites open them so cleanup stays in sync.
 _E2E_STALE_FW_PORTS="8443/tcp 5000/tcp 5002/tcp 5005/tcp 5111/tcp 80/tcp"
+
+# Print filesystem snapshot of conN (local) and disN (remote) for debug diagnostics.
+_print_fs_snapshot() {
+	echo ""
+	echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
+	echo "  --- ls -ltr ~/ ---"
+	ls -ltr ~/
+	echo "  --- ls -ltr ~/* ---"
+	ls -ltr ~/*
+	echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+	sudo du -am ~/ | sort -rn | head -30
+	if [ -n "${DIS_VM:-}" ]; then
+		local _dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
+		echo ""
+		echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
+		echo "  --- ls -ltr ~/ ---"
+		_essh "$_dis" "ls -ltr ~/" 2>&1
+		echo "  --- ls -ltr ~/* ---"
+		_essh "$_dis" "ls -ltr ~/*" 2>&1
+		echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
+		_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1
+	fi
+	echo ""
+}
 
 _cleanup_non_mirror_local() {
 	# ABA CLI tools only (preserve ~/bin/notify.sh and other non-ABA files)
@@ -440,7 +464,8 @@ _ensure_pool_registry() {
 	if curl -sfk -o /dev/null -u "init:p4ssw0rd" "https://${_reg_host}:8443/v2/"; then
 		echo "  pool-registry: restarted successfully"
 	else
-		echo "  WARNING: pool-registry restart failed -- curl check unsuccessful"
+		echo "  ERROR: pool-registry restart failed -- curl check unsuccessful" >&2
+		return 1
 	fi
 }
 
@@ -597,8 +622,10 @@ fi
 [[ "$_cli_overrides" == *" DIS_USER "* ]] && export DIS_SSH_USER="$_cli_saved_dis_user"
 [[ "$_cli_overrides" == *" VMWARE "* ]]   && export VMWARE_CONF="$_cli_saved_vmware"
 
-# Metadata for live dashboard pane titles (written after config.env + CLI overrides are final)
+# Metadata for live dashboard pane titles and dispatcher user-change detection
+# (written after config.env + pools.conf + CLI overrides are final)
 echo "${INT_BASTION_RHEL_VER:-rhel8}" > /tmp/e2e-suite-os
+echo "${DIS_SSH_USER:-steve}" > /tmp/e2e-suite-dis-user
 _vmconf_display="${VMWARE_CONF:-}"
 [ -z "$_vmconf_display" ] && _vmconf_display="~/.vmware.conf"
 echo "$_vmconf_display" > /tmp/e2e-suite-vmconf
@@ -666,164 +693,8 @@ _revert_dis_snapshot() {
 	return 1
 }
 
-# --- Clean disN via ABA commands (replaces snapshot revert) -------------------
-# Instead of reverting disN to a VMware snapshot, use ABA's own cleanup to
-# return disN to a clean state.  This exercises aba uninstall/reset code paths
-# and is faster (no VM reboot + SSH wait).
-#
-# Covers: registry uninstall, filesystem cleanup, podman prune, cache removal,
-#         firewalld baseline restore, VC_FOLDER/GOVC_DATASTORE patch.
-#
-# Prerequisite: _pre_suite_cleanup has already run (deletes clusters/mirrors
-#               via .cleanup/.mirror-cleanup files).
-
-_cleanup_dis() {
-	local dis_host="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-	echo ""
-	echo "  Cleaning disN ($dis_host) via ABA commands ..."
-
-	# Three mirror install/uninstall cases:
-	#   1. conN → conN (local):  _cleanup_con_registry() already handled this.
-	#   2. conN → disN (remote): _cleanup_con_registry() already handled this
-	#      (aba uninstall from conN SSHes to disN to tear down Quay).
-	#   3. disN → disN (local):  Must uninstall FROM disN -- handled below.
-	local _dis_fqdn="${DIS_VM}.${VM_BASE_DOMAIN}"
-	local _default_user="${VM_DEFAULT_USER:-steve}"
-
-	# Case 3: uninstall any mirror installed locally on disN.
-	# Only trigger when a registry was actually installed (marker file exists).
-	# ~/aba/mirror/ always exists on disN after deploy (it's part of the source tree).
-	echo "  Checking for locally-installed registries on disN ..."
-	local _uninstall_failed=""
-	local _try_user
-	for _try_user in root "$_default_user"; do
-		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "
-			_aba=\$HOME/.e2e-harness/bin/aba
-			if [ -f ~/aba/mirror/.available ] || [ -f ~/aba/mirror/.installed ] || [ -f ~/aba/mirror/.unavailable ]; then
-				echo '  [cleanup] Found mirror dir for $_try_user on disN -- uninstalling locally'
-				if cd ~/aba && \$_aba -y -d mirror uninstall 2>&1; then
-					echo '  [cleanup] uninstall OK'
-				else
-					echo '  [cleanup] uninstall failed -- trying aba unregister (external registry)'
-					cd ~/aba && \$_aba -y -d mirror unregister 2>&1 || exit 1
-				fi
-			fi
-		" 2>&1 || {
-			echo "  ERROR: aba uninstall/unregister as $_try_user on disN failed (rc=$?)"
-			_uninstall_failed=1
-		}
-	done
-	if [ -n "$_uninstall_failed" ]; then
-		echo "  FATAL: aba uninstall on disN failed. Cannot proceed with dirty host."
-		return 1
-	fi
-
-	# Post-uninstall assertion: verify no stale podman state on disN.
-	# Catches the exact failure mode where mirror-registry uninstall silently
-	# skips cleanup, leaving redis_pass secrets and systemd units behind.
-	local _podman_stale=""
-	for _try_user in root "$_default_user"; do
-		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "podman secret ls --format '{{.Name}}' | grep -q redis_pass" \
-			&& _podman_stale+="  $_try_user: redis_pass podman secret exists"$'\n'
-		_essh "$_uhost" "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" \
-			&& _podman_stale+="  $_try_user: quay containers still present"$'\n'
-		_essh "$_uhost" "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null | grep -v 'not-found' | grep -q ." \
-			&& _podman_stale+="  $_try_user: quay systemd user units still active"$'\n'
-	done
-	if [ -n "$_podman_stale" ]; then
-		echo "  FATAL: Stale podman state found on disN after aba uninstall:"
-		echo "$_podman_stale"
-		echo "  This will cause WRONGPASS / PermissionError on the next install."
-		echo "  Investigate why 'aba uninstall' did not clean up podman state."
-		return 1
-	fi
-
-	# 1. Clean disN filesystem for all users (aba code, CLI tools, caches, mirror data)
-	echo "  Cleaning disN filesystem (non-mirror artifacts) ..."
-	for _try_user in root "$_default_user"; do
-		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "rm -rf ~/aba/* ~/aba/.??* ~/tmp/* ~/.aba/mirror ~/.cache/agent ~/.oc-mirror && rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane}" 2>&1
-		# Registry/test data dirs may contain files owned by container-mapped UIDs
-		# (rootless podman UID remapping), so sudo is needed for cleanup.
-		# Uses globs (e2e-mirror-*, e2e-test-*) + ABA-internal dirs.
-		_essh "$_uhost" "sudo rm -rf ~/e2e-mirror-* ~/e2e-test-*" 2>&1
-		for _mdir in $_E2E_ABA_INTERNAL_DIRS; do
-			_essh "$_uhost" "sudo rm -rf ~/$_mdir" 2>&1
-		done
-	done
-	# disN must never have a Red Hat pull secret (true air-gap invariant)
-	for _try_user in root "$_default_user"; do
-		local _uhost="${_try_user}@${_dis_fqdn}"
-		_essh "$_uhost" "rm -f ~/.pull-secret.json" 2>&1
-	done
-
-	# Remove stale CA trust anchors from previous registry installs
-	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
-
-	# 2. Restore baseline system state (firewalld on, as created by setup-infra)
-	_essh "$dis_host" "sudo systemctl enable firewalld; sudo systemctl start firewalld" 2>&1
-
-	# 3. Remove stale firewall ports from permanent config (survive restart)
-	echo "  Resetting firewall ports on disN ..."
-	for _port in $_E2E_STALE_FW_PORTS; do
-		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
-	done
-	_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1
-
-	# Verify no stale ports remain on disN
-	local _dis_fw_ports
-	_dis_fw_ports=$(_essh "$dis_host" "sudo firewall-cmd --list-ports")
-	if [ -n "$_dis_fw_ports" ]; then
-		echo "  WARNING: disN still has firewall ports after reset: $_dis_fw_ports"
-	else
-		echo "  disN firewall verified: no test ports"
-	fi
-
-	# 4. Ensure VC_FOLDER / GOVC_DATASTORE are correct on disN
-	if [ -n "${VC_FOLDER:-}" ]; then
-		_essh "$dis_host" "sed -i \"s#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER}#g\" ~/.vmware.conf" \
-			&& echo "  Set VC_FOLDER=${VC_FOLDER} on $dis_host" \
-			|| echo "  WARNING: could not set VC_FOLDER on $dis_host"
-	fi
-	if [ -n "${VM_DATASTORE:-}" ]; then
-		_essh "$dis_host" "sed -i \"s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g\" ~/.vmware.conf" \
-			&& echo "  Set GOVC_DATASTORE=${VM_DATASTORE} on $dis_host" \
-			|| echo "  WARNING: could not set GOVC_DATASTORE on $dis_host"
-	fi
-
-	# 5. Verify port 8443 is free (registry fully uninstalled).
-	#    Cross-user scenarios (steve->root) are handled by snapshot revert in run.sh.
-	#    This catches same-user partial installs where aba uninstall couldn't fully
-	#    tear down orphaned containers.
-	if _essh "$dis_host" "ss -tlnp | grep -q ':8443 '"; then
-		echo "  WARNING: port 8443 still occupied after cleanup -- retrying aba uninstall"
-		for _try_user in root "$_default_user"; do
-			local _uhost="${_try_user}@${_dis_fqdn}"
-			# Crash-recovery fallback: aba uninstall already ran but couldn't stop
-			# orphaned containers (partial install, no config left).  podman stop
-			# is the only option when aba state is gone.
-			_essh "$_uhost" "
-				cd /tmp
-				if podman ps -q 2>/dev/null | grep -q .; then
-					echo '  [cleanup] Stopping $_try_user containers on disN'
-					podman stop -a -t 5 || true
-					podman rm -af || true
-				fi
-			" 2>&1 || true
-		done
-		# Final check
-		if _essh "$dis_host" "ss -tlnp | grep -q ':8443 '"; then
-			echo "  FATAL: port 8443 STILL occupied on disN after all cleanup attempts"
-			return 1
-		fi
-		echo "  disN port 8443 freed after retry"
-	fi
-
-	echo "  disN cleanup verified: clean state"
-	echo "  disN cleanup complete."
-}
+# _cleanup_dis() extracted to lib/pool-cleanup.sh
+source "$_RUNNER_DIR/lib/pool-cleanup.sh"
 
 # --- Execute suite ------------------------------------------------------------
 
@@ -887,6 +758,11 @@ _pre_suite_cleanup() {
 	# Search both /root/ and /home/ so --user root cleans steve leftovers and vice versa.
 	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
 	echo "  Purged oc-mirror caches"
+
+	# Prune dangling/unused podman images (can accumulate 60GB+ over repeated suite runs)
+	podman image prune -af || true
+	sudo podman image prune -af || true
+	echo "  Pruned unused podman images"
 
 	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
 		[ -f "$cleanup_file" ] || continue
@@ -1091,26 +967,7 @@ if [ -f ~/.vmware.conf ]; then
 fi
 
 # Post-cleanup filesystem snapshot (debug: catch leftover files before suite starts)
-echo ""
-echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
-echo "  --- ls -ltr ~/ ---"
-ls -ltr ~/
-echo "  --- ls -ltr ~/* ---"
-ls -ltr ~/*
-echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-sudo du -am ~/ | sort -rn | head -30
-if [ -n "${DIS_VM:-}" ]; then
-	_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-	echo ""
-	echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
-	echo "  --- ls -ltr ~/ ---"
-	_essh "$_dis" "ls -ltr ~/" 2>&1
-	echo "  --- ls -ltr ~/* ---"
-	_essh "$_dis" "ls -ltr ~/*" 2>&1
-	echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-	_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1
-fi
-echo ""
+_print_fs_snapshot
 
 _rc=0
 
@@ -1198,26 +1055,7 @@ while true; do
 			[ -n "${VM_DATASTORE:-}" ] && sed -i "s#^GOVC_DATASTORE=.*#GOVC_DATASTORE=${VM_DATASTORE}#g" ~/.vmware.conf
 		fi
 		# Post-cleanup filesystem snapshot (debug: catch leftover files on restart)
-		echo ""
-		echo "  === Pre-suite filesystem snapshot (conN: $(hostname)) ==="
-		echo "  --- ls -ltr ~/ ---"
-		ls -ltr ~/
-		echo "  --- ls -ltr ~/* ---"
-		ls -ltr ~/*
-		echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-		sudo du -am ~/ | sort -rn | head -30
-		if [ -n "${DIS_VM:-}" ]; then
-			_dis="${DIS_SSH_USER}@${DIS_VM}.${VM_BASE_DOMAIN}"
-			echo ""
-			echo "  === Pre-suite filesystem snapshot (disN: ${DIS_VM}) ==="
-			echo "  --- ls -ltr ~/ ---"
-			_essh "$_dis" "ls -ltr ~/" 2>&1
-			echo "  --- ls -ltr ~/* ---"
-			_essh "$_dis" "ls -ltr ~/*" 2>&1
-			echo "  --- sudo du -am ~/ | sort -rn | head -30 ---"
-			_essh "$_dis" "sudo du -am ~/ | sort -rn | head -30" 2>&1
-		fi
-		echo ""
+		_print_fs_snapshot
 		continue
 	fi
 	break
@@ -1277,7 +1115,7 @@ if [ -x "$_govc" ] && [ -n "${VC_FOLDER:-}" ]; then
 	if [ -n "$_orphan_vms" ]; then
 		echo ""
 		echo "  *** POST-SUITE INTEGRITY FAILURE: orphan VMs found in $VC_FOLDER ***"
-		local _vm_list=""
+		_vm_list=""
 		while IFS= read -r _ovm; do
 			[ -z "$_ovm" ] && continue
 			echo "    $_ovm"

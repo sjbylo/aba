@@ -23,6 +23,7 @@ set -u
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -79,8 +80,7 @@ test_begin "Setup: install and configure aba"
 
 e2e_run "Install aba" "./install"
 
-e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 
 e2e_run -q "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
@@ -99,21 +99,24 @@ e2e_run -q "Clean neg-test dir" "rm -rf e2e-neg-test"
 # Copy vmware.conf and set the test VM folder
 e2e_run "Copy vmware.conf" "cp -v $VF vmware.conf"
 e2e_run -q "Set VC_FOLDER in vmware.conf" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run -q "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
+e2e_run -q "Verify vmware.conf: VC_FOLDER" "grep '^VC_FOLDER=' vmware.conf"
 
 # Suppress interactive prompts during testing
 e2e_run -q "Set ask=false" "aba --noask"
 
 # Configure NTP
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 
 # Set up operator-sets (kiali-ossm operator set for testing)
 echo kiali-ossm > templates/operator-set-abatest
 e2e_run "Set operator sets in aba.conf" "aba --op-sets abatest"
+e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
 # Create mirror directory and mirror.conf (needed by the bundle command)
-e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+suite_create_mirror_workdir
 
 # Read ocp_version/ocp_channel directly from aba.conf (no internal functions needed).
 . aba.conf
@@ -284,13 +287,14 @@ test_begin "Bare-metal simulation: platform=bm two-step install"
 
 # govc download-all test runs on connected bastion (CLI behavior check)
 e2e_run "Switch to bare-metal platform" "aba --platform bm"
+e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 
 e2e_run "Remove govc tarball" "rm -f cli/govc*"
 e2e_run "Verify govc tarball removed" "test ! -f cli/govc*gz"
-e2e_run "Run download-all (govc should still be downloaded)" \
+e2e_run "Run download-all (govc skipped for platform=bm)" \
     "aba -d cli download-all"
-e2e_run "Verify govc tarball exists after download-all" \
-    "test -f cli/govc*gz"
+e2e_run "Verify govc tarball NOT downloaded (platform=bm excludes govc)" \
+    "test ! -f cli/govc*gz"
 
 # BM two-step install runs on internal bastion (registry is there, loaded from bundle)
 e2e_run_remote "Switch to bare-metal platform on internal bastion" \
@@ -327,6 +331,7 @@ e2e_run_remote -q "Delete $STANDARD cluster dir (platform=bm, no VMs)" \
 e2e_run_remote -q "Restore VMware platform on disN" \
     "cd ~/aba && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
+e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 
 test_end 0
 

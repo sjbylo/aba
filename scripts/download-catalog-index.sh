@@ -19,7 +19,7 @@
 #   .index/.{catalog}-index-v{ver}.digest                Manifest digest (sha256:...) for pinning
 #   .index/.{catalog}-index-v{ver}.content-layer-digest  Content layer digest for change detection
 #   mirror/imageset-config-{catalog}-catalog-v{ver}.yaml Helper YAML for reference
-# SIDE EFFECTS: Catalog image is removed after extraction (no longer cached).
+# SIDE EFFECTS: Catalog image remains cached in podman storage (pull cache for future runs).
 #               Sweeps stale temp dirs (.aba-catalog-*, render-*) older than 24h at startup.
 #               Sweeps stale aba-catalog-* containers from previous interrupted runs.
 # IDEMPOTENT: Yes — checks content layer digest before downloading. If the remote
@@ -156,8 +156,9 @@ _get_content_layer_digest() {
 # If the FBC data layer hasn't changed, we skip pull, create, extract, AND parse.
 # When it HAS changed, we fall through to the full download — same as before.
 #
-# We also `podman rmi` after extraction to avoid ~1-2GB/catalog disk waste.
-# With the skopeo fast-path, there's no benefit to keeping images as a local cache.
+# Images are kept cached after extraction: this makes subsequent pulls fast (delta
+# download) and — critically — prevents "layer not known" corruption when a pull
+# is interrupted (the intact cached layers prevent orphaned blobs from accumulating).
 #
 # Net effect: repeat runs go from ~15s to ~1s per catalog (3 catalogs = ~3s vs ~45s).
 
@@ -220,12 +221,11 @@ _cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
 	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
 }
 
-# Container and image no longer needed — we've extracted the catalog data.
-# Image is removed to save ~1-2GB/catalog disk; the skopeo fast-path (above)
-# makes local image caching unnecessary.  See DESIGN comment above.
+# Container no longer needed — image stays cached as pull cache for future runs.
+# Cached layers make subsequent pulls fast (delta) and prevent "layer not known"
+# corruption from interrupted full downloads (podman#9588, podman#14003).
 podman rm -f "$container_name" >/dev/null 2>&1 || true
 container_name=""
-podman rmi "$catalog_url" >/dev/null 2>&1 || true
 
 # Extract operator data from FBC (File-Based Catalog)
 # Each operator directory under /configs can use one of several formats:

@@ -70,7 +70,7 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 				# Extract into the parent of REG_ROOT so mirror-registry binary and its
 				# supporting files are in the directory where mirror-registry expects them.
 				# mkdir -p ensures the parent dir exists (may have been removed already).
-				$_ssh "mkdir -p $_mirror_dir && tar -C $_mirror_dir -xmzf $remote_tmp/$tarball" || \
+				$_ssh "mkdir -p $_mirror_dir && tar -C $_mirror_dir --no-same-owner -xmzf $remote_tmp/$tarball" || \
 					aba_abort "Failed to extract mirror-registry on $reg_host"
 				$_ssh "rm -rf $remote_tmp"
 			fi

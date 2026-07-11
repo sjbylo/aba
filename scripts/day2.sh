@@ -279,7 +279,7 @@ if [ "$latest_working_dir" ]; then
 		fi
 	fi
 
-	wait_for_cs=
+	cs_pids=()
 
 	for f in $cs_file_list
 	do
@@ -320,8 +320,6 @@ if [ "$latest_working_dir" ]; then
 		aba_debug "Running: oc patch CatalogSource $cs_name -n $ns --type merge (pollInterval)"
 		oc patch CatalogSource $cs_name  -n $ns --type merge -p '{"spec": {"updateStrategy": {"registryPoll": {"interval": "2m"}}}}'
 
-		wait_for_cs=true
-
 		# Start a sub-process to wait for CatalogSource 'ready'
 		( 
 			sleep 1
@@ -358,10 +356,18 @@ if [ "$latest_working_dir" ]; then
 			# It's ok to abort from this background process 
 			aba_abort "catalog source $cs_name failed to become 'ready' in time.  Ensure the cluster is stable and try again."
 		) &
+		cs_pids+=($!)
 	done
 
-	# Wait for all sub-processes
-	[ "$wait_for_cs" ] && wait
+	# Wait for each CatalogSource subprocess individually so no failure is lost
+	cs_failed=0
+	for pid in "${cs_pids[@]}"; do
+		if ! wait "$pid"; then
+			cs_failed=1
+		fi
+	done
+
+	[ "$cs_failed" = "1" ] && aba_abort "One or more CatalogSources failed to become READY. Check the errors above."
 
 	aba_info "Showing status of all CatalogSource resources:"
 	exec_cmd="oc get CatalogSource -A"

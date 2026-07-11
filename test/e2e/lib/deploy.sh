@@ -107,21 +107,45 @@ sync_dis_aba() { sync_infra_aba "$@"; }
 
 # Push ABA source tarball to ~/aba on conN (for --dev mode).
 # Overlays on existing ~/aba (never wipes).
+# Deploys to BOTH the target user's ~/aba AND root's ~/aba, because
+# the runner may run as root (-u root) which uses /root/aba/ -- a
+# separate directory from /home/<user>/aba/.
+# Also refreshes ~/bin/aba for both users (installed by ./install).
 # Usage: sync_source <user@host> <tarball_path>
 sync_source() {
 	local target="$1"
 	local tarball="$2"
+	local _user="${target%%@*}"
+	local _host="${target#*@}"
 
-	_essh "$target" "mkdir -p ~/aba" &&
-	_escp "$tarball" "${target}:/tmp/aba-deploy.tar.gz" &&
-	_essh "$target" "tar xzf /tmp/aba-deploy.tar.gz -C ~/aba && rm -f /tmp/aba-deploy.tar.gz"
+	# Upload tarball once to /tmp (accessible by both users)
+	_escp "$tarball" "${target}:/tmp/aba-deploy.tar.gz" || return 1
+
+	# Extract for the deploy user
+	_essh "$target" "mkdir -p ~/aba && tar xzf /tmp/aba-deploy.tar.gz -C ~/aba" || return 1
+
+	# Extract for root too if connected as non-root
+	if [ "$_user" != "root" ]; then
+		_essh "root@${_host}" "mkdir -p ~/aba && tar xzf /tmp/aba-deploy.tar.gz -C ~/aba" || true
+	fi
+
+	# Refresh ~/bin/aba for both users (./install copies scripts/aba.sh there)
+	_essh "$target" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+	if [ "$_user" != "root" ]; then
+		_essh "root@${_host}" "[ -f ~/aba/scripts/aba.sh ] && cp ~/aba/scripts/aba.sh ~/bin/aba && chmod +x ~/bin/aba" || true
+	fi
+
+	# Cleanup
+	_essh "${target}" "rm -f /tmp/aba-deploy.tar.gz"
+	[ "$_user" != "root" ] && _essh "root@${_host}" "rm -f /tmp/aba-deploy.tar.gz" || true
 }
 
 # Push optional extras: notify.sh, vmware.conf, root essentials.
-# Usage: sync_extras <user@host> <user>
+# Usage: sync_extras <user@host> <user> [pool_num]
 sync_extras() {
 	local target="$1"
 	local user="$2"
+	local pool_num="${3:-}"
 
 	# notify.sh
 	if [ -x ~/bin/notify.sh ]; then
@@ -143,9 +167,51 @@ sync_extras() {
 		done
 	fi
 
+	# Deploy per-pool VMWARE_CONF from pools.conf (e.g. ~/.vmware.conf.vc.pools)
+	# so suites using $VMWARE_CONF find the file at the expected path.
+	if [ -n "$pool_num" ]; then
+		local _pool_vconf
+		_pool_vconf=$(_pool_vmware_conf "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+		if [ -n "$_pool_vconf" ]; then
+			local _pool_vf
+			_pool_vf="$(eval echo "$_pool_vconf")"
+			if [ -f "$_pool_vf" ] && [ "$_pool_vf" != "$_vf" ]; then
+				local _host="${target#*@}"
+				local _dis_host="${_host/con/dis}"
+				_escp "$_pool_vf" "${target}:${_pool_vconf}"
+				for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
+					_escp "$_pool_vf" "${_dt}:${_pool_vconf}" 2>/dev/null || true
+				done
+			fi
+		fi
+	fi
+
 	# Always deploy ESXi config so ESXi-specific tests work regardless of -v flag
 	if [ -f "$HOME/.vmware.conf.esxi" ] && [ "$_vf" != "$HOME/.vmware.conf.esxi" ]; then
 		_escp "$HOME/.vmware.conf.esxi" "${target}:~/.vmware.conf.esxi"
+	fi
+
+	# Ensure KVM VLAN route survives provisioning gaps or snapshot reverts.
+	local _root_target="root@${target#*@}"
+	_essh "$_root_target" \
+		"nmcli -g ipv4.routes connection show ens192 2>/dev/null | grep -q '10.10.123.0/24' || \
+		 { nmcli connection modify ens192 +ipv4.routes '10.10.123.0/24 ${KVM_HOST_LAB_IP:-10.0.1.10}' && \
+		   nmcli connection up ens192; }" 2>/dev/null || true
+
+	# Ensure dnsmasq config includes all cluster entries (e.g. kvm-sno-vlan).
+	# VMs provisioned before new entries were added won't have them.
+	# Re-run _vm_setup_dnsmasq() (single source of truth) if stale.
+	if [ -n "$pool_num" ]; then
+		if ! _essh "$_root_target" "grep -q 'kvm-sno-vlan' /etc/dnsmasq.d/e2e-pool.conf" 2>/dev/null; then
+			if type _vm_setup_dnsmasq &>/dev/null; then
+				_vm_setup_dnsmasq "con${pool_num}" "${user}" "con${pool_num}"
+			else
+				local _lib_dir
+				_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+				source "$_lib_dir/vm-network.sh"
+				_vm_setup_dnsmasq "con${pool_num}" "${user}" "con${pool_num}"
+			fi
+		fi
 	fi
 
 	# Push corrected Makefile + template to disN after snapshot reverts.
@@ -223,10 +289,118 @@ deploy_pool() {
 	# Harness deploy
 	if sync_harness "$target" "$aba_root" "$deploy_config"; then
 		sync_infra_aba "$pool_num" "$aba_root" || echo "WARNING: infra aba deploy to pool ${pool_num} failed"
-		sync_extras "$target" "$user"
+		sync_extras "$target" "$user" "$pool_num"
 		echo "+ harness done"
 	else
 		echo "+ harness FAILED"
 		return 1
+	fi
+}
+
+# Deploy harness + source/git to all pools.
+# Wraps the per-pool harness deploy, dev-mode source push, and git branch sync.
+# Globals: CLI_POOL_LIST, CLI_DEV, CLI_CON_USER, _RUN_DIR, _ABA_ROOT,
+#          _DEPLOY_CONFIG_ENV, E2E_GIT_BRANCH, E2E_GIT_REPO_SLUG, CON_SSH_USER
+_deploy_to_pools() {
+	local _saved_con_ssh_user="${CON_SSH_USER:-}"
+
+	_export_pool_ssh_user() {
+		local _pool="$1"
+		local _u
+		_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_pool" 2>/dev/null) || true
+		[ -n "${CLI_CON_USER:-}" ] && _u="$CLI_CON_USER"
+		export CON_SSH_USER="${_u:-${_saved_con_ssh_user:-steve}}"
+	}
+
+	echo ""
+	echo "  Deploying test harness to conN hosts ..."
+	local _p target
+	for _p in $CLI_POOL_LIST; do
+		_export_pool_ssh_user "$_p"
+		target=$(_con_target "$_p")
+		if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
+			sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
+			sync_extras "$target" "${CON_SSH_USER:-steve}" "$_p"
+			_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
+			echo "    con${_p}: harness deployed to ~/.e2e-harness/"
+		else
+			echo "    con${_p}: FAILED to deploy harness (skipping)" >&2
+		fi
+	done
+	export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+
+	if [ -n "${CLI_DEV:-}" ]; then
+		echo ""
+		echo "  Developer mode: pushing ABA source to conN hosts ..."
+		local _deploy_tar _deploy_size
+		_deploy_tar=$(_make_source_tar "$_ABA_ROOT")
+		_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
+		echo "  Source tarball: $_deploy_size"
+		_saved_con_ssh_user="${CON_SSH_USER:-}"
+		for _p in $CLI_POOL_LIST; do
+			_export_pool_ssh_user "$_p"
+			target=$(_con_target "$_p")
+			echo -n "    con${_p}: "
+			if sync_source "$target" "$_deploy_tar"; then
+				echo "done"
+			else
+				echo "FAILED"
+			fi
+		done
+		export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+		rm -f "$_deploy_tar"
+	else
+		# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
+		local _need_install=""
+		_saved_con_ssh_user="${CON_SSH_USER:-}"
+		for _p in $CLI_POOL_LIST; do
+			_export_pool_ssh_user "$_p"
+			target=$(_con_target "$_p")
+			if ! _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+				_need_install=1
+				break
+			fi
+		done
+		if [ -n "$_need_install" ]; then
+			echo ""
+			echo "  Installing ABA from git ($E2E_GIT_BRANCH) on conN hosts ..."
+			for _p in $CLI_POOL_LIST; do
+				_export_pool_ssh_user "$_p"
+				target=$(_con_target "$_p")
+				echo -n "    con${_p}: "
+				if _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+					echo "already installed"
+				elif _essh "$target" "cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$E2E_GIT_REPO_SLUG/refs/heads/$E2E_GIT_BRANCH/install)\" -- $E2E_GIT_BRANCH $E2E_GIT_REPO_SLUG" 2>&1; then
+					echo "done"
+				else
+					echo "FAILED"
+				fi
+			done
+		fi
+
+		# After -V revert, ~/aba may exist (from snapshot) but on the wrong branch.
+		# Ensure all conN hosts are on E2E_GIT_BRANCH.
+		echo ""
+		echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
+		local _cur_branch
+		for _p in $CLI_POOL_LIST; do
+			_export_pool_ssh_user "$_p"
+			target=$(_con_target "$_p")
+			echo -n "    con${_p}: "
+			_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
+			if [ "$_cur_branch" = "$E2E_GIT_BRANCH" ]; then
+				_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null 2>&1
+				echo "ok (already on $E2E_GIT_BRANCH)"
+			elif [ -n "$_cur_branch" ]; then
+				if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null 2>&1; then
+					echo "switched $_cur_branch -> $E2E_GIT_BRANCH"
+				else
+					echo "FAILED to switch to $E2E_GIT_BRANCH"
+				fi
+			else
+				echo "skipped (no git repo)"
+			fi
+		done
+		export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
 	fi
 }

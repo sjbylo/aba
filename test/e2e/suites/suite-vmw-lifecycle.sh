@@ -23,6 +23,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -62,6 +63,7 @@ test_begin "Setup: ensure pre-populated registry"
 e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version resolved" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -78,8 +80,7 @@ test_begin "Setup: install aba, configure for VMware"
 
 e2e_run "Install aba" "./install"
 
-e2e_run "Configure aba.conf for VMware" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Override channel to candidate (exercises non-default channel)" \
     "aba --channel candidate"
 
@@ -95,7 +96,8 @@ e2e_run "Verify vmware.conf has GOVC_URL" "grep ^GOVC_URL vmware.conf"
 e2e_run "Verify vmware.conf (VC_FOLDER or ESXi)" \
     "grep -q ^VC_FOLDER= vmware.conf || grep -q ^GOVC_URL= vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 
 test_end
 
@@ -152,6 +154,7 @@ e2e_run "Create compact cluster.conf (data_disk, prefixes, named mirror)" \
      --mirror-name $NAMED_MIRROR --step cluster.conf"
 e2e_run "Set mac_prefix for $COMPACT (VMware range, randomized)" \
     "sed -i 's#mac_prefix=.*#mac_prefix=00:50:56:1x:xx:#g' $COMPACT/cluster.conf"
+e2e_run "Verify mac_prefix set" "grep '^mac_prefix=00:50:56:1x:xx:' $COMPACT/cluster.conf"
 e2e_diag "Show compact cluster.conf" "grep -E '^\w' $COMPACT/cluster.conf"
 
 e2e_run "Generate ISO for compact cluster" "aba --dir $COMPACT iso"
@@ -169,8 +172,8 @@ e2e_poll 300 15 "Wait for agent API on compact rendezvous node" \
 e2e_run "Extract compact node IPs" \
     "cd $COMPACT && eval \$(scripts/cluster-config.sh) && echo \"CP_IPS=\$CP_IP_ADDRESSES\""
 for _node_idx in 0 1 2; do
-    e2e_poll 300 15 "SSH into compact master $_node_idx (verify network)" \
-        "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show | grep inet'"
+    e2e_poll 300 15 "SSH into compact master $_node_idx (verify expected IP)" \
+        "cd $COMPACT && source cluster.conf && eval \$(scripts/cluster-config.sh) && _ips=(\$CP_IP_ADDRESSES) && ssh -F ~/.aba/ssh.conf -i \$ssh_key_file -o ConnectTimeout=10 core@\${_ips[$_node_idx]} 'hostname && ip -4 addr show' | grep \"\${_ips[$_node_idx]}\""
 done
 
 e2e_poll 1800 30 "Wait for compact bootstrap-complete" \

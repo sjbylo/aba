@@ -30,7 +30,7 @@ cd "$(dirname "$0")"
 
 source bundle.conf
 
-vers_track="21 20"
+vers_track="22 21"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
 

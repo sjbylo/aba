@@ -18,6 +18,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -61,30 +62,28 @@ e2e_run "Remove oc-mirror caches" \
 
 e2e_run "Install aba (verify idempotent)" "../aba/install 2>&1 | grep 'already up-to-date' || ../aba/install 2>&1 | grep 'installed to'"
 
-e2e_run "Configure aba.conf" "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
-e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
-e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+suite_configure_aba
+suite_verify_aba_conf
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
-e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+e2e_run "Set VC_FOLDER in vmware.conf" "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Verify vmware.conf" "grep ^GOVC_URL= vmware.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 e2e_run "Set operator sets" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
 e2e_run "Basic interactive test" "test/basic-interactive-test.sh"
 
-e2e_run "Re-apply ask=false after interactive test" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
-e2e_run "Set NTP servers (re-apply)" "aba --ntp $NTP_IP ntp.example.com"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+suite_setup_ntp
 e2e_run "Set operator sets (re-apply)" "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
 
-e2e_run "Create mirror.conf for later tests" "aba -d mirror mirror.conf"
+suite_create_mirror_workdir
 e2e_diag "Show aba.conf" "grep -E '^\w' aba.conf"
 e2e_diag "Show mirror.conf" "grep -E '^\w' mirror/mirror.conf"
 
@@ -95,15 +94,23 @@ test_end
 # ============================================================================
 test_begin "Docker e2e-mirror-docker1: install and verify"
 
-# Negative path: sync without pull secret should fail
-e2e_run -q "Hide pull secret for must-fail test" \
-    "mv ~/.pull-secret.json ~/.pull-secret.json.bak"
+# Negative path: sync without pull secret should fail.
+# Must hide ALL credential locations: oc-mirror/podman/skopeo check ~/.pull-secret.json,
+# ~/.docker/config.json, and $XDG_RUNTIME_DIR/containers/auth.json.
+e2e_run -q "Hide all pull secrets for must-fail test" \
+    "mv ~/.pull-secret.json ~/.pull-secret.json.bak && \
+     [ -f ~/.docker/config.json ] && mv ~/.docker/config.json ~/.docker/config.json.bak || true; \
+     _xdg=\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}; \
+     [ -f \$_xdg/containers/auth.json ] && mv \$_xdg/containers/auth.json \$_xdg/containers/auth.json.bak || true"
 e2e_run_must_fail "Sync without pull secret should fail" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-test-neg-datadir'"
 e2e_run -q "Clean up data-dir side effect from must-fail test" \
     "rm -rf ~/e2e-test-neg-datadir"
-e2e_run -q "Restore pull secret" \
-    "mv ~/.pull-secret.json.bak ~/.pull-secret.json"
+e2e_run -q "Restore all pull secrets" \
+    "mv ~/.pull-secret.json.bak ~/.pull-secret.json && \
+     [ -f ~/.docker/config.json.bak ] && mv ~/.docker/config.json.bak ~/.docker/config.json || true; \
+     _xdg=\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}; \
+     [ -f \$_xdg/containers/auth.json.bak ] && mv \$_xdg/containers/auth.json.bak \$_xdg/containers/auth.json || true"
 
 # Create e2e-mirror-docker1 and install Docker registry on disN (port 5000).
 # Full image sync is skipped here: rootless podman 4.x on RHEL 8 has a lock
@@ -164,6 +171,9 @@ test_end
 test_begin "Save/Load: roundtrip"
 
 e2e_run "Uninstall e2e-mirror-docker1 registry" "aba --dir e2e-mirror-docker1 uninstall"
+# Test 4 (save) installs Quay on disN via the default mirror/ config —
+# must uninstall it too before asserting all registries are removed.
+e2e_run "Uninstall default mirror registry" "aba --dir mirror uninstall"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 
 e2e_run "Run e2e-mirror-docker1 reset" "aba --dir e2e-mirror-docker1 reset --force"
@@ -241,7 +251,7 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_wait_cluster_ready $SNO
+e2e_wait_cluster_available $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
@@ -300,9 +310,11 @@ e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --for
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_wait_cluster_ready $SNO
+e2e_wait_cluster_available $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
+e2e_run "Verify CatalogSources present after day2" \
+    "aba --dir $SNO run --cmd 'oc get catalogsource -n openshift-marketplace --no-headers' | grep ."
 e2e_run "Delete cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 
@@ -331,11 +343,14 @@ test_end
 test_begin "Bare-metal: ISO simulation"
 
 e2e_run "Set platform=bm" "aba --platform bm"
+e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 
-e2e_run "Remove govc to test download-all" "rm -f cli/govc*"
+e2e_run "Remove govc tarball to test download-all" "rm -f cli/govc*"
 e2e_run "Verify govc tar missing" "! test -f cli/govc*gz"
-e2e_run "Run download-all (should re-download govc)" "aba -d cli download-all"
-e2e_run "Verify govc tar exists" "test -f cli/govc*gz"
+e2e_run "Run download-all (should NOT download govc for platform=bm)" "aba -d cli download-all"
+e2e_run "Verify govc tar still absent (platform=bm)" "! test -f cli/govc*gz"
+e2e_run "Verify govc NOT in download list (platform=bm)" \
+    "! make -sC cli out-download-all | grep -q govc"
 
 # $STANDARD is only ever created under platform=bm (no VMs) -- rm -rf is correct
 e2e_run "Clean any leftover $STANDARD cluster dir" "rm -rf $STANDARD"
@@ -380,6 +395,7 @@ SNO_BM="${SNO}"
 _BM_MAC="00:50:56:BE:E0:01"
 
 e2e_run "Ensure platform=bm" "aba --platform bm"
+e2e_run "Verify aba.conf: platform=bm" "grep ^platform=bm aba.conf"
 e2e_run "Clean any leftover $SNO_BM cluster dir" "rm -rf $SNO_BM"
 e2e_add_to_cluster_cleanup "$PWD/$SNO_BM"
 
@@ -430,7 +446,7 @@ e2e_run "Power on OOB VM" \
 e2e_run -r 2 30 "BM Phase 3: monitor cluster install" \
     "aba --dir $SNO_BM install"
 e2e_run "Show cluster operator status" "aba --dir $SNO_BM run"
-e2e_wait_cluster_ready "$SNO_BM"
+e2e_wait_cluster_available "$SNO_BM"
 e2e_diag "Show cluster operators" "aba --dir $SNO_BM run --cmd 'oc get co'"
 
 # Cleanup OOB VM
@@ -449,6 +465,7 @@ e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:8443/v2/"
 
 e2e_run "Restore platform=vmw" "aba --platform vmw"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 
 test_end
 

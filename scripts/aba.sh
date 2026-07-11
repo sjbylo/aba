@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.1.3
+ABA_VERSION=1.1.4
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260701114641
+ABA_BUILD=20260711200019
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -368,7 +368,7 @@ do
 			cat $ABA_ROOT/others/help-aba.txt
 		elif [ "$_ht" = "mirror" -o "$_ht" = "save" -o "$_ht" = "load" -o "$_ht" = "sync" -o "$_ht" = "register" -o "$_ht" = "unregister" -o "$_ht" = "install" -o "$_ht" = "uninstall" -o "$_ht" = "verify" ]; then
 			cat $ABA_ROOT/others/help-mirror.txt
-		elif [ "$_ht" = "cluster" ]; then
+		elif [ "$_ht" = "cluster" -o "$_ht" = "upgrade" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
 		elif [ "$_ht" = "bundle" ]; then
 			cat $ABA_ROOT/others/help-bundle.txt
@@ -394,7 +394,7 @@ do
 		export DEBUG_ABA=1
 	export INFO_ABA=1
 	shift 
-elif [ "$1" = "--light" ]; then
+elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	export opt_light="--light"  # if "aba bundle", then leave out the image-set archive file(s) from the bundle
 	#BUILD_COMMAND="$BUILD_COMMAND light=light"  # FIXME: Should only allow force=1 after the appropriate target
 	shift
@@ -514,17 +514,21 @@ elif [ "$1" = "--light" ]; then
 	ver_short=$(_ver_minor "$ver")  # Extract major.minor (e.g., 4.20.8 -> 4.20, 4.22.0-rc.1 -> 4.22)
 	download_all_catalogs "$ver_short"
 
+	# Version is now known -- start full CLI downloads (oc, openshift-install, etc.).
+	# The early download (line ~337) only fetched version-independent tools.
+	$ABA_ROOT/scripts/cli-download-all.sh >&2
+
 		shift 2
 		ocp_version=$ver
-	elif [ "$1" = "--target-version" ]; then
+	elif [ "$1" = "--upgrade-to" ]; then
 		opt=$1
 		[ ! -f "$WORK_DIR/mirror.conf" ] && \
 			aba_abort "No mirror.conf found. Run from a mirror or cluster directory: aba -d <mirror|cluster> $opt ..."
 		# If no value (or "none"), clear the target version in mirror.conf
 		if [[ "$2" =~ ^- || -z "$2" || "$2" = "none" ]]; then
 			[[ "${2:-}" = "none" ]] && shift
-			replace-value-conf -q -n ocp_version_target -v "" -f "$WORK_DIR/mirror.conf"
-			aba_info "Upgrade target version cleared from mirror.conf"
+			replace-value-conf -q -n ocp_upgrade_to -v "" -f "$WORK_DIR/mirror.conf"
+			aba_info "Upgrade version cleared from mirror.conf"
 			shift
 			continue
 		fi
@@ -547,7 +551,7 @@ elif [ "$1" = "--light" ]; then
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
 		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
 		_is_prerelease "$tgt_ver" && aba_warning "Pre-release target version '$tgt_ver' — not for production use."
-		replace-value-conf -n ocp_version_target -v $tgt_ver -f $WORK_DIR/mirror.conf
+		replace-value-conf -n ocp_upgrade_to -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
 		_require_mirror_dir "$1"
@@ -804,7 +808,7 @@ elif [ "$1" = "--light" ]; then
 		[ -s "$2" ] || aba_abort "file not found or empty: $2"
 		cp "$2" kvm.conf
 		shift 2
-	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # One off, accept the default answer to all prompts for this invocation
+	elif [ "$1" = "-y" -o "$1" = "--yes" ]; then  # Answer yes to all prompts
 		export ASK_OVERRIDE=1  # For this invocation only, -y will overwide ask=true in aba.conf
 		export ask=1
 		shift 
@@ -1024,7 +1028,7 @@ elif [ "$1" = "--light" ]; then
 			cur_target=$1
 
 			case $cur_target in
-				tui|ssh|run|bundle|info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1071,7 +1075,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|getco|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload)
+		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1091,7 +1095,7 @@ if [ "$cur_target" ]; then
 
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
-		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue)
+		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|unstick)
 			_cn=$(basename "$PWD")
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
@@ -1101,7 +1105,7 @@ if [ "$cur_target" ]; then
 			# If still not marked after auto-detect, warn and ask
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
 				aba_warning "Cluster has not completed installation."
-				ask "Cluster has not completed installation, continue anyway" || exit 1
+				ask -n --auto-yes "Cluster has not completed installation, continue anyway" || exit 1
 			fi
 			;;
 	esac
@@ -1155,6 +1159,14 @@ if [ "$cur_target" ]; then
 			echo
 			aba_debug "Running: $OC get co"
 			$OC get co
+			exit
+		;;
+		unstick)
+			$ABA_ROOT/scripts/cluster-unstick.sh
+			exit
+		;;
+		write-usb)
+			$ABA_ROOT/scripts/cluster-write-usb.sh
 			exit
 		;;
 		cluster-version)
@@ -1285,7 +1297,7 @@ if [ "$cur_target" ]; then
 				aba_info "Removed cluster state: $_del_sd"
 			fi
 			# Clean generated artifacts so next install starts fresh from current config
-			make -s clean 2>/dev/null || true
+			make -s clean || true
 			# --force: remove the entire cluster directory (for clean re-creation)
 			if [ "$opt_force" ]; then
 				_cdir="$PWD"
@@ -1294,6 +1306,18 @@ if [ "$cur_target" ]; then
 				aba_info "Cluster directory removed: $_cdir"
 			fi
 			exit
+		;;
+		install)
+			# Idempotent install: if cluster is already installed, succeed
+			# without invoking make (avoids cascading dependency rebuilds
+			# that could recreate VMs on an already-running cluster).
+			if [ -f .install-complete ]; then
+				aba_info "Cluster already installed. Nothing to do."
+				aba_info "Run 'aba clean; aba install' to re-install, or 'aba delete' to remove VMs first."
+				exit 0
+			fi
+			# Not yet installed — re-add target and fall through to generic make block
+			BUILD_COMMAND="install $BUILD_COMMAND"
 		;;
 		refresh)
 			eval $BUILD_COMMAND

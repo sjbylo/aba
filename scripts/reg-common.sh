@@ -102,10 +102,9 @@ reg_detect_existing() {
 			aba_debug "Registry already installed and healthy at $reg_host -- skipping install"
 			exit 0
 		else
-			aba_warning "Registry at $reg_host is unreachable but state.sh still exists." \
-				"The registry may have been removed externally." \
-				"Clearing stale state and proceeding with fresh install."
-			rm -f "$regcreds_dir/state.sh"
+			aba_abort "Registry at $reg_host is unreachable but state.sh still exists." \
+				"If the registry was removed externally, run 'aba -d $(basename "$PWD") uninstall' to clean up, then re-install." \
+				"If the host is temporarily down, wait and retry."
 		fi
 	fi
 
@@ -182,7 +181,7 @@ reg_verify_localhost() {
 			"This may be fine if $fqdn_ip reaches this host via NAT or a load balancer." \
 			"Could not verify via SSH — unable to confirm automatically."
 		echo
-		ask "Continue installing on this host anyway (e.g. NAT/LB in use)" || \
+		ask -n --auto-yes "Continue installing on this host anyway (e.g. NAT/LB in use)" || \
 			aba_abort \
 				"Install cancelled. To fix:" \
 				"  - If $fqdn_ip should route here (NAT/LB), ensure the network path works and re-run." \
@@ -211,7 +210,7 @@ reg_check_quay_resources() {
 			"Quay mirror registry requires at least 4 vCPUs and 8GB RAM." \
 			"This host has ${vcpus} vCPU(s) and ~${mem_gb}GB RAM." \
 			"Use a Docker registry instead: set reg_vendor=docker in mirror.conf."
-		ask "Continue with Quay installation anyway" || exit 1
+		ask -n --auto-yes "Continue with Quay installation anyway" || exit 1
 	fi
 }
 
@@ -459,7 +458,9 @@ reg_post_install() {
 	reg_ssh_user=${reg_ssh_user:-}
 	reg_root_opts="${reg_root_opts:-}"
 	reg_fw_opened=${_reg_fw_opened:-}
-	reg_installed_at="$(date '+%Y-%m-%d %H:%M:%S')"
+	last_action=install
+	last_action_at='$(date '+%Y-%m-%d %H:%M:%S')'
+	reg_installed_at='$(date '+%Y-%m-%d %H:%M:%S')'
 	EOF
 	aba_info "Saved registry state to $regcreds_display/state.sh"
 

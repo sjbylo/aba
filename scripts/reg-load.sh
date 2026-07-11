@@ -10,6 +10,7 @@
 #   - After successful load: touches data/.created (unlocks ISC) unless data/.isc-pinned exists
 #   - Removes ../.bundle and data/.isc-pinned (bundle phase complete, repo becomes normal)
 #   - Sets TMPDIR and OC_MIRROR_CACHE to data_dir if configured
+#   - Auto-updates aba.conf ocp_version/ocp_channel if ISC version differs (Bug #956)
 # IDEMPOTENT:  Yes (oc-mirror skips images already present in the registry)
 # ENV:         INFO_ABA (default: 1 when called from make)
 
@@ -42,8 +43,47 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
-# Be sure a download has started ..
-#PLAIN_OUTPUT=1 run_once    -i cli:install:oc-mirror -- make -sC cli oc-mirror
+# Unpack transfer bundle if present (always contains ISC; for upgrades also
+# includes CLI tarballs and metadata).  Created by 'aba save' so that
+# 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
+# Tar paths are relative to aba root (mirror/data/*, cli/*), so unpack from aba root.
+_transfer_tar="data/aba-transfer.tar"
+_transfer_meta_ver=""
+_transfer_meta_chan=""
+if [ -f "$_transfer_tar" ]; then
+	aba_info "Found transfer bundle: $_transfer_tar"
+
+	# Unpack from aba root (CWD is mirror/, aba root is ..)
+	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
+		aba_abort "Failed to unpack transfer bundle ($_transfer_tar)." \
+			"The file may be corrupt. Re-copy mirror/data/*.tar from the connected host."
+	fi
+
+	# Read and validate metadata if present (only created for upgrade saves)
+	if [ -f "data/aba-transfer-metadata.json" ]; then
+		_transfer_meta_ver=$(grep '"ocp_version"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
+		_transfer_meta_chan=$(grep '"ocp_channel"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
+		_expected_sha=$(grep '"digest_isc_sha256"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
+
+		aba_info "Transfer bundle: OCP ${_transfer_meta_ver} (${_transfer_meta_chan})"
+
+		# Verify digest ISC integrity if checksum is available
+		if [ "$_expected_sha" ] && [ -f "data/imageset-config-digest.yaml" ]; then
+			_actual_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
+			if [ "$_actual_sha" != "$_expected_sha" ]; then
+				aba_abort "imageset-config-digest.yaml checksum mismatch." \
+					"The digest ISC does not match the transfer bundle metadata." \
+					"Re-copy mirror/data/*.tar from the connected host."
+			fi
+			aba_debug "Digest ISC checksum verified OK"
+		fi
+	fi
+
+	# Remove the transfer bundle (small, ephemeral delivery vehicle)
+	rm -f "$_transfer_tar" data/aba-transfer-metadata.json
+	aba_info "Transfer bundle unpacked and removed."
+fi
+
 aba_debug "Ensuring oc-mirror is available"
 if ! ensure_oc_mirror; then
 	error_msg=$(get_task_error "$TASK_INST_OC_MIRROR")
@@ -123,9 +163,41 @@ base_cmd="oc-mirror --v2 --config imageset-config.yaml --from file://. docker://
 [ "$TMPDIR" ] && mkdir -p "$TMPDIR"
 [ "$OC_MIRROR_CACHE" ] && mkdir -p "$OC_MIRROR_CACHE"
 
+# Pre-validate version before the long oc-mirror load (fail fast, not after 30 min).
+# Prefer upgrade bundle metadata (explicit), fall back to ISC parsing.
+_loaded_ver=""
+_loaded_chan=""
+if [ "$_transfer_meta_ver" ]; then
+	_loaded_ver="$_transfer_meta_ver"
+	_loaded_chan="$_transfer_meta_chan"
+	aba_debug "Version from transfer bundle metadata: ver=$_loaded_ver chan=$_loaded_chan"
+else
+	_isc_file="data/imageset-config.yaml"
+	if [ -f "$_isc_file" ]; then
+		_loaded_ver=$(grep '^\s*maxVersion:' "$_isc_file" | head -1 | sed 's/.*maxVersion: *//')
+		_loaded_chan=$(grep -E '^\s*- name: (stable|fast|candidate|eus)-[0-9]' "$_isc_file" | head -1 | sed 's/.*- name: *//; s/-[0-9].*//')
+		if [ "$_loaded_ver" ] && ! echo "$_loaded_ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+			aba_abort "Cannot parse a valid OCP version from $_isc_file (got: '$_loaded_ver')." \
+				"Check the imageset-config.yaml and try again."
+		fi
+		aba_debug "Version from ISC parsing: ver=$_loaded_ver chan=$_loaded_chan"
+	fi
+fi
+
 if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
+
+# After successful load: update state.sh with the loaded version.
+# state.sh is the authoritative record of what the mirror actually contains.
+if [ "$_loaded_ver" ]; then
+	replace-value-conf -q -n ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
+	if [ "$_loaded_ver" != "$ocp_version" ]; then
+		aba_info "Mirror state updated: ocp_version $ocp_version → $_loaded_ver"
+	fi
+fi
+replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 
 # Bundle phase complete: unlock ISC so future config changes trigger regeneration.
 # touch .created makes it newer than ISC → reg-create-imageset-config.sh will regenerate.
@@ -137,9 +209,14 @@ fi
 rm -f ../.bundle data/.isc-pinned
 
 echo
-aba_info_ok "OpenShift can now be installed. From aba's top-level directory, run the command:"
-aba_info_ok "  aba cluster --name mycluster [--type <sno|compact|standard>] [--starting-ip <ip>] [--api-vip <ip>] [--ingress-vip <ip>]"
-aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
+aba_info_ok "Images loaded successfully into the registry."
+aba_info_ok "Files in mirror/data/ (mirror_*.tar) can now be deleted or backed up to free disk space."
+echo
+if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
+	aba_info_ok "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
+	aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
+	echo
+fi
 
 echo
 if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
