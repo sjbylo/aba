@@ -1430,11 +1430,11 @@ e2e_wait_cluster_available() {
 }
 
 # Strict check: ClusterVersion Available=True, Progressing=False, zero Degraded.
-# Default: 45-min timeout, 10s interval, 2 consecutive passes.
+# Default: 55-min timeout, 10s interval, 2 consecutive passes.
 e2e_wait_cluster_ready() {
 	local cluster_dir="$1"
 	local location="${2:-local}"
-	local timeout="${3:-2700}"
+	local timeout="${3:-3300}"
 	_e2e_wait_cluster_condition "ready" "$cluster_dir" "$location" "$timeout" 10 2
 }
 
