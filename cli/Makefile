@@ -1,4 +1,4 @@
-# Makefile to download and install oc, openshift-install, oc-mirror, govc and butane
+# Makefile to download and install oc, openshift-install, oc-mirror, butane and govc (vmw only)
 #
 # This is PURE MAKE -- no run_once inside recipes. run_once wraps Make from
 # OUTSIDE (cli-download-all.sh, ensure_*() functions). A user running
@@ -98,6 +98,17 @@ govc_tar_file := govc_Linux_$(govc_arch).tar.gz
 -include ../aba.conf
 ocp_version := $(strip $(shell echo $(ocp_version)))
 platform := $(strip $(shell echo $(platform)))
+
+# govc is only needed for VMware platforms
+ifeq ($(platform),vmw)
+  _govc_download := download-govc
+  _govc_install  := govc
+  _govc_name     := govc
+else
+  _govc_download :=
+  _govc_install  :=
+  _govc_name     :=
+endif
 
 # OCP major version (e.g. "4" from "4.21.10") for CDN paths (openshift-v4/, openshift-v5/, etc.)
 ocp_major := $(firstword $(subst ., ,$(ocp_version)))
@@ -221,24 +232,24 @@ download-butane: $(butane_binary_file)  ## Download butane binary
 download-govc: $(govc_tar_file)  ## Download govc tarball
 
 # Download all CLI tarballs.
-# Always TRY govc (error handling for non-vmw platforms is done in the caller).
+# govc only included when platform=vmw.
 .PHONY: download
-download: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane download-govc  ## Download all CLI tarballs
+download: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane $(_govc_download)  ## Download all CLI tarballs
 
 .PHONY: download-all
-download-all: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane download-govc  ## Download all CLI tarballs (same as download)
+download-all: .check-ocp-version download-oc download-oc-mirror download-openshift-install download-butane $(_govc_download)  ## Download all CLI tarballs (same as download)
 
 # Output logical tool names for cli-download-all.sh.
 # Version suffix appended for tools that need ocp_version, so callers
 # can construct version-dependent run_once task IDs.
 .PHONY: out-download-all
 out-download-all:
-	@echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane govc
+	@echo oc:$(ocp_version) oc-mirror openshift-install:$(ocp_version) butane $(_govc_name)
 
 # Version-independent tools only (usable without ocp_version being set)
 .PHONY: out-download-no-version
 out-download-no-version:
-	@echo oc-mirror butane govc
+	@echo oc-mirror butane $(_govc_name)
 
 
 ########################################################################
@@ -333,11 +344,11 @@ oc: ~/bin/oc  ## Install oc into ~/bin
 ~/bin/oc: .init $(local_oc_tar_file) | ~/bin
 	@echo [ABA] Extracting $(local_oc_tar_file) to ~/bin/oc
 	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
-	tar -C $$_td -xmzf $(local_oc_tar_file) oc kubectl || \
+	tar -C $$_td --no-same-owner -xmzf $(local_oc_tar_file) oc kubectl || \
 		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_tar_file)"; \
 		  rm -rf $$_td; rm -f $(local_oc_tar_file); $(MAKE) $(local_oc_tar_file); \
 		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
-		  tar -C $$_td -xmzf $(local_oc_tar_file) oc kubectl || { rm -rf $$_td; exit 1; }; }; \
+		  tar -C $$_td --no-same-owner -xmzf $(local_oc_tar_file) oc kubectl || { rm -rf $$_td; exit 1; }; }; \
 	$$_td/oc --help >/dev/null 2>&1 || { echo [ABA] "Error: oc binary invalid!"; rm -rf $$_td; exit 1; }; \
 	mv $$_td/oc $@ && mv $$_td/kubectl ~/bin/kubectl; \
 	rm -rf $$_td
@@ -349,11 +360,11 @@ openshift-install: ~/bin/openshift-install  ## Install openshift-install into ~/
 ~/bin/openshift-install: .init $(openshift_install_file) | ~/bin
 	@echo [ABA] Extracting $(openshift_install_file) to ~/bin/openshift-install
 	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
-	tar -C $$_td -xmzf $(openshift_install_file) openshift-install || \
+	tar -C $$_td --no-same-owner -xmzf $(openshift_install_file) openshift-install || \
 		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(openshift_install_file)"; \
 		  rm -rf $$_td; rm -f $(openshift_install_file); $(MAKE) $(openshift_install_file); \
 		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
-		  tar -C $$_td -xmzf $(openshift_install_file) openshift-install || { rm -rf $$_td; exit 1; }; }; \
+		  tar -C $$_td --no-same-owner -xmzf $(openshift_install_file) openshift-install || { rm -rf $$_td; exit 1; }; }; \
 	$$_td/openshift-install --help >/dev/null || { echo [ABA] "Error: openshift-install binary invalid!"; rm -rf $$_td; exit 1; }; \
 	mv $$_td/openshift-install $@; \
 	rm -rf $$_td
@@ -365,12 +376,12 @@ oc-mirror: ~/bin/oc-mirror  ## Install oc-mirror into ~/bin
 ~/bin/oc-mirror: .init $(local_oc_mirror_tar) | ~/bin
 	@echo [ABA] Extracting $(local_oc_mirror_tar) to ~/bin/oc-mirror
 	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
-	tar -C $$_td -xmzf $(local_oc_mirror_tar) oc-mirror || \
+	tar -C $$_td --no-same-owner -xmzf $(local_oc_mirror_tar) oc-mirror || \
 		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(local_oc_mirror_tar)"; \
 		  rm -rf $$_td; rm -f $(local_oc_mirror_tar); $(MAKE) $(local_oc_mirror_tar); \
 		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
-		  tar -C $$_td -xmzf $(local_oc_mirror_tar) oc-mirror || { rm -rf $$_td; exit 1; }; }; \
-	chmod +x $$_td/oc-mirror; \
+		  tar -C $$_td --no-same-owner -xmzf $(local_oc_mirror_tar) oc-mirror || { rm -rf $$_td; exit 1; }; }; \
+	chmod a+rx $$_td/oc-mirror; \
 	mv $$_td/oc-mirror $@; \
 	rm -rf $$_td
 
@@ -381,12 +392,13 @@ govc: ~/bin/govc  ## Install govc to ~/bin/govc
 ~/bin/govc: .init $(govc_tar_file) | ~/bin
 	@echo [ABA] Extracting $(govc_tar_file) to ~/bin/govc
 	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
-	tar -C $$_td -xmzf $(govc_tar_file) govc || \
+	tar -C $$_td --no-same-owner -xmzf $(govc_tar_file) govc || \
 		{ echo "[ABA] Error: Corrupt tarball, re-downloading $(govc_tar_file)"; \
 		  rm -rf $$_td; rm -f $(govc_tar_file); $(MAKE) $(govc_tar_file); \
 		  _td=$$(mktemp -d ./.tmp.XXXXXX); \
-		  tar -C $$_td -xmzf $(govc_tar_file) govc || { rm -rf $$_td; exit 1; }; }; \
+		  tar -C $$_td --no-same-owner -xmzf $(govc_tar_file) govc || { rm -rf $$_td; exit 1; }; }; \
 	$$_td/govc --help >/dev/null 2>&1 || { echo [ABA] "Error: govc binary invalid"; rm -rf $$_td; exit 1; }; \
+	chmod a+rx $$_td/govc; \
 	mv $$_td/govc $@; \
 	rm -rf $$_td
 
@@ -409,21 +421,21 @@ butane: ~/bin/butane  ## Install butane to ~/bin/butane
 	rm -rf $$_td
 
 # install/install-all: extract all tools.
-# Always includes govc (error handling for non-vmw is in the caller).
+# govc only included when platform=vmw.
 .PHONY: install
-install: .check-ocp-version oc openshift-install oc-mirror butane govc  ## Install all CLI tools to ~/bin
+install: .check-ocp-version oc openshift-install oc-mirror butane $(_govc_install)  ## Install all CLI tools to ~/bin
 
 .PHONY: install-all
-install-all: .check-ocp-version oc openshift-install oc-mirror butane govc  ## Install all CLI tools (same as install)
+install-all: .check-ocp-version oc openshift-install oc-mirror butane $(_govc_install)  ## Install all CLI tools (same as install)
 
 # Output targets for scripts to query which tools exist.
 .PHONY: out-install
 out-install:
-	@echo oc openshift-install oc-mirror butane govc
+	@echo oc openshift-install oc-mirror butane $(_govc_name)
 
 .PHONY: out-install-all
 out-install-all:
-	@echo oc openshift-install oc-mirror butane govc
+	@echo oc openshift-install oc-mirror butane $(_govc_name)
 
 
 ########################################################################

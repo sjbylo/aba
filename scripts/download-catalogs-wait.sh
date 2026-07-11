@@ -16,7 +16,7 @@ source scripts/include_all.sh
 source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-# Read mirror.conf for ocp_version_target (if set)
+# Read mirror.conf for ocp_upgrade_to (if set)
 [ -s mirror.conf ] && source <(normalize-mirror-conf)
 
 # Build version list (current + target if cross-minor upgrade)

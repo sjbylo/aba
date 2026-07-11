@@ -19,6 +19,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 # L commands run on conN (this host). R commands SSH to disN.
@@ -71,33 +72,28 @@ e2e_run "Remove oc-mirror caches (conN)" \
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
 
-e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
-e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
-e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
-e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+suite_configure_aba
+suite_verify_aba_conf
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 
 e2e_run "Set NTP servers (IP only for install)" "aba --ntp $NTP_IP"
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
 e2e_run "Set operator sets" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
+e2e_run "Verify aba.conf: op_sets" "grep '^op_sets=abatest' aba.conf"
 
-e2e_run "Delete any leftover $SNO cluster" \
-    "_e2e_delete_leftover_cluster $SNO"
-e2e_run "Delete any leftover $COMPACT cluster" \
-    "_e2e_delete_leftover_cluster $COMPACT"
+_e2e_delete_leftover_cluster_remote "$SNO"
+_e2e_delete_leftover_cluster_remote "$COMPACT"
 e2e_run "Reset aba" "aba reset -f"
 
 # aba reset -f wipes aba.conf; re-apply configuration to avoid vi/editor hangs
-e2e_run "Re-apply config after reset" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
 e2e_run "Copy vmware.conf (re-apply)" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER (re-apply)" \
-    "sed -i 's#^VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
 e2e_run "Set NTP servers (re-apply, IP only)" "aba --ntp $NTP_IP"
 e2e_run "Set operator sets (re-apply)" \
     "echo kiali-ossm > templates/operator-set-abatest && aba --op-sets abatest"
@@ -117,7 +113,7 @@ _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
 e2e_run "Ensure pool registry running (OCP ${_ocp_channel} ${_ocp_version})" \
     "test/e2e/scripts/setup-pool-registry.sh --channel ${_ocp_channel} --version ${_ocp_version} --host ${CON_HOST}"
 
-e2e_run "Create mirror.conf" "aba -d mirror mirror.conf"
+suite_create_mirror_workdir
 e2e_run "Set reg_host to pool registry on conN" \
     "sed -i 's/^reg_host=.*/reg_host=${CON_HOST}/g' mirror/mirror.conf"
 e2e_run "Set operator sets in mirror.conf" "aba --op-sets abatest"
@@ -341,12 +337,15 @@ e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
-e2e_wait_cluster_ready $SNO remote
+e2e_wait_cluster_available $SNO remote
 e2e_diag_remote "Show cluster operators" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get co'"
 
 e2e_run_remote "Apply day2 config" \
     "cd ~/aba && aba --dir $SNO day2"
+
+e2e_run_remote "Verify CatalogSources present after day2" \
+    "cd ~/aba && aba --dir $SNO run --cmd 'oc get catalogsource -n openshift-marketplace --no-headers' | grep ."
 
 test_end
 
@@ -366,8 +365,8 @@ EOF"
 e2e_snapshot_file "voteapp-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save vote-app image to disk" \
     "aba -d mirror save --retry"
-e2e_run "Transfer vote-app archive+config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run "Transfer vote-app archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "voteapp-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load vote-app images" \
@@ -421,8 +420,8 @@ e2e_diag "Show save+load config" "cat mirror/data/imageset-config.yaml"
 e2e_snapshot_file "acm-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 3 2 "Save ACM images" "aba -d mirror save --retry"
 
-e2e_run "Transfer archive and config to internal bastion" \
-    "scp mirror/data/mirror_*.tar mirror/data/imageset-config.yaml ${INTERNAL_BASTION}:aba/mirror/data/"
+e2e_run "Transfer archive to internal bastion" \
+    "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "acm-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load ACM images" \

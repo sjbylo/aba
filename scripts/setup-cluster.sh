@@ -122,6 +122,13 @@ fi
 
 # Let's be explicit, only run make if there is a given target, e.g. 'install' or 'iso' etc
 if [ "$target" ]; then
+	# Idempotent install: if cluster is already installed, succeed without
+	# invoking make (avoids cascading dependency rebuilds).
+	if [[ "$target" == "install" && -f .install-complete ]]; then
+		aba_info "Cluster '$name' already installed. Nothing to do."
+		aba_info "Run 'aba clean; aba install' to re-install, or 'aba delete' to remove VMs first."
+		exit 0
+	fi
 	aba_debug "Targeting step: $target in dir: $PWD"
 	exec_cmd="make -s $target"
 	aba_debug "Running: $exec_cmd (in $PWD)"

@@ -70,7 +70,7 @@ init: .init
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \
-	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds
+	 [ -d ~/.aba/mirror/$$mirror_name ] && ln -sfn ~/.aba/mirror/$$mirror_name regcreds || rm -f regcreds
 	@if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf; \
 	else rm -f mirror.conf && touch mirror.conf; fi
 	@ln -fs ../aba.conf
@@ -103,7 +103,7 @@ cluster.conf: .init | mirror.conf  ## Initialize the OpenShift cluster.conf file
 	@mirror_name=$$(grep '^mirror_name=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
 	 mirror_name=$${mirror_name:-mirror}; \
 	 ln -sfn ../$$mirror_name mirror; \
-	 ln -sfn ~/.aba/mirror/$$mirror_name regcreds; \
+	 [ -d ~/.aba/mirror/$$mirror_name ] && ln -sfn ~/.aba/mirror/$$mirror_name regcreds || rm -f regcreds; \
 	 if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf; \
 	 else rm -f mirror.conf && touch mirror.conf; fi
 
@@ -140,11 +140,8 @@ preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS,
 	@echo "  - $(PWD)/agent-config.yaml:"
 	@echo "    - You *MUST* modify the mac addresses to match your server's network interfaces."
 	@echo "    - Optionally, add drive & NIC hints and any other required modifications."
-	@echo "3 Run: 'aba install' again to create the ISO file (or run: 'aba iso')."
-#	@echo "4 Power on all of your servers and boot them with the ISO file."
-#	@echo "5 Verify that the servers start up and can connect to the registry successfully."
-#	@echo "  - aba ssh            # connect to the first node for any needed troubleshooting."
-#	@echo "6 Run 'aba mon' to monitor the installation progress until its completion."
+	@echo "3 Run: 'aba install' again to create the ISO boot image."
+	@echo "  ABA will then show you how to write the ISO to a USB drive and boot your servers."
 	@echo 
 	@touch .bm-message
 
@@ -163,10 +160,26 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	@echo
 	@echo "Next steps:"
 	@echo
-	@echo "1 Boot your servers with the ISO file."
+	@echo "  ISO file: $(CURDIR)/iso-agent-based/agent.$(arch).iso"
+	@echo
+	@echo "  To write to a USB drive, use raw/direct mode (byte-for-byte copy):"
+	@echo
+	@echo "    sudo dd if=$(CURDIR)/iso-agent-based/agent.$(arch).iso of=/dev/sdX bs=4M conv=fsync status=progress"
+	@echo
+	@echo "  Or use: aba write-usb"
+	@echo
+	@echo "  IMPORTANT: The ISO must be written as a raw disk image, NOT extracted or"
+	@echo "  'burned' in ISO/file-copy mode. Any tool that copies the image byte-for-byte"
+	@echo "  to the entire device (e.g. dd, balenaEtcher 'Flash', Fedora Media Writer) will"
+	@echo "  work. Tools that reformat the USB or extract files from the ISO will NOT boot."
+	@echo
+	@echo "  Tip: Most server management interfaces (iLO, iDRAC, BMC) can mount the ISO"
+	@echo "  as virtual media over the management network — no physical USB required."
+	@echo
+	@echo "1 Boot your servers from the ISO (USB, virtual media, or PXE)."
 	@echo "2 Verify that the servers start up and can connect to the registry successfully."
 	@echo "3 If needed, run 'aba ssh' to log into the first node to troubleshoot."
-	@echo "4 It is important to run: 'aba install' again to monitor the installation progress until its completion (or run: 'aba mon')."
+	@echo "4 Run: 'aba install' again to monitor the installation progress until its completion (or run: 'aba mon')."
 	@echo 
 	@touch .bm-nextstep
 	@exit 0

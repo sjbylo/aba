@@ -37,21 +37,21 @@ if ! verify_release_version_exists "$ocp_version"; then
 		"This version may not have been released yet, or the channel may be wrong." \
 		"Use 'aba ocp-versions' to list available versions."
 fi
-if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-	aba_info "Verifying release image availability for upgrade target v${ocp_version_target} ..."
-	if ! verify_release_version_exists "$ocp_version_target"; then
+if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+	aba_info "Verifying release image availability for upgrade target v${ocp_upgrade_to} ..."
+	if ! verify_release_version_exists "$ocp_upgrade_to"; then
 		aba_abort \
-			"Upgrade target version $ocp_version_target not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
+			"Upgrade target version $ocp_upgrade_to not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
 			"This version may not have been released yet, or the channel may be wrong." \
 			"Use 'aba ocp-versions' to list available versions."
 	fi
 	# Fail fast: verify upgrade path exists before starting downloads
 	_path_diag=""
-	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_version_target" "$ocp_channel" 2>&1); then
+	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1); then
 		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"   # middle field (target channel)
 		_lowest="${_path_diag##*|}"                              # last field (lowest entry point)
 		aba_abort \
-			"Cannot upgrade directly from $ocp_version to $ocp_version_target." \
+			"Cannot upgrade directly from $ocp_version to $ocp_upgrade_to." \
 			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
 			"You need to upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
 			"" \
@@ -70,10 +70,10 @@ sleep 1
 aba_debug "Starting CLI downloads"
 scripts/cli-download-all.sh
 
-# Also download CLIs for the upgrade target version (needed on disconnected host)
-if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-	aba_info "Downloading CLI binaries for target version $ocp_version_target ..."
-	scripts/cli-download-all.sh --target-version "$ocp_version_target"
+# Also download CLIs for the upgrade version (needed on disconnected host)
+if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+	aba_info "Downloading CLI binaries for upgrade version $ocp_upgrade_to ..."
+	scripts/cli-download-all.sh --upgrade-to "$ocp_upgrade_to"
 fi
 
 # Wait for oc-mirror specifically (needed immediately below)
@@ -114,7 +114,7 @@ aba_info "Now saving (mirror2disk) images from external network to mirror/data/ 
 aba_warning \
 	"Ensure there is enough disk space under $PWD/data." \
 	"This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
-echo 
+echo >&2
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install
@@ -144,19 +144,89 @@ if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
-echo
-if [ "$ocp_version_target" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_version_target})."
-	aba_info_ok "To upgrade a disconnected cluster, copy to the internal host:"
-	aba_info_ok "  mirror/data/imageset-config.yaml"
-	aba_info_ok "  mirror/data/.imageset-config-digest.yaml  (required for air-gap catalog pinning)"
-	aba_info_ok "  mirror/data/mirror_*.tar"
-	aba_info_ok "  cli/openshift-*-${ocp_version_target}*  (matching CLI binaries for target version)"
-	aba_info_ok "Then run: aba load → aba day2 → aba upgrade --to ${ocp_version_target}"
-else
-	aba_info_ok "Use 'aba tar --out /path/to/large/portable/media/install-bundle.tar' to create an install bundle which can be transferred to your disconnected environment."
-	aba_info_ok "In your disconnected environment, unpack the install bundle and run 'cd aba; ./install; aba' for further instructions."
+# Ensure all CLI downloads are complete before building transfer bundle
+scripts/cli-download-all.sh --wait
+
+# Create aba-transfer.tar: always includes ISC files so 'cp mirror/data/*.tar'
+# transfers the correct imageset config to the disconnected host.
+# For upgrades: also includes CLI tarballs and metadata.
+# Skipped in bundle mode (aba bundle already packages everything).
+if [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
+
+_transfer_tar="data/aba-transfer.tar"
+_is_upgrade=""
+[ "${ocp_upgrade_to:-}" ] && is_version_greater "$ocp_upgrade_to" "$ocp_version" && _is_upgrade=1
+
+# Build the list of files to include (relative to aba root so the tar
+# unpacks correctly from either mirror/ or aba/ — mirror/data/* and cli/*)
+_bundle_files=()
+
+# ISC files are always included (relative to aba root)
+[ -f "data/imageset-config.yaml" ] && _bundle_files+=("mirror/data/imageset-config.yaml")
+[ -f "data/imageset-config-digest.yaml" ] && _bundle_files+=("mirror/data/imageset-config-digest.yaml")
+
+if [ "$_is_upgrade" ]; then
+	_bundle_ver="$ocp_upgrade_to"
+	_bundle_chan="${ocp_channel:-fast}"
+
+	# CLI tarballs for the upgrade target version (all rhel variants).
+	# Base version CLIs are already on the disconnected host from the initial install.
+	for _cli_tar in ../cli/openshift-client-linux-*-"${_bundle_ver}"*.tar.gz \
+	                ../cli/openshift-install-linux-"${_bundle_ver}"*.tar.gz; do
+		[ -f "$_cli_tar" ] && _bundle_files+=("cli/$(basename "$_cli_tar")")
+	done
+
+	# Compute digest ISC checksum for integrity validation at load time
+	_digest_isc_sha=""
+	if [ -f "data/imageset-config-digest.yaml" ]; then
+		_digest_isc_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
+	fi
+
+	# Create metadata JSON (inside mirror/data/ so it gets packed correctly)
+	cat > data/aba-transfer-metadata.json <<-METADATA
+	{
+	  "ocp_version": "${_bundle_ver}",
+	  "ocp_channel": "${_bundle_chan}",
+	  "architecture": "${ARCH:-amd64}",
+	  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+	  "digest_isc_sha256": "${_digest_isc_sha}"
+	}
+	METADATA
+	_bundle_files+=("mirror/data/aba-transfer-metadata.json")
 fi
-echo
+
+aba_info "Creating transfer bundle: $_transfer_tar"
+
+# Create the tar from aba root so paths are correct for unpack from aba root.
+# CWD is mirror/ so aba root is ..
+if ( cd .. && tar cf "mirror/$_transfer_tar" "${_bundle_files[@]}" ); then
+	_tar_size=$(du -sh "$_transfer_tar" | awk '{print $1}')
+	aba_info_ok "Transfer bundle created: $_transfer_tar ($_tar_size)"
+else
+	aba_warning "Failed to create transfer bundle ($_transfer_tar)." \
+		"The image archives (mirror_*.tar) are still valid." \
+		"You can manually copy ISC and CLI files to the disconnected host."
+fi
+rm -f data/aba-transfer-metadata.json
+
+fi  # end: transfer bundle creation
+
+echo >&2
+if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
+	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
+	aba_info_ok ""
+	aba_info_ok "Copy all *.tar files from mirror/data/ to the disconnected host:"
+	aba_info_ok "  cp mirror/data/*.tar /transfer-media/"
+	aba_info_ok ""
+	aba_info_ok "  Files: mirror_*.tar (images), aba-transfer.tar (ISC, CLIs, metadata)"
+	aba_info_ok ""
+	aba_info_ok "On the disconnected host:"
+	aba_info_ok "  cp /transfer-media/*.tar ~/aba/mirror/data/"
+	aba_info_ok "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
+elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
+	aba_info_ok "Images saved to mirror/data/."
+	aba_info_ok "Next: 'aba tar --out /path/to/portable/media/install-bundle.tar'"
+fi
+echo >&2
 
 exit 0

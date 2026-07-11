@@ -63,6 +63,10 @@ e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
 e2e_run "Install aba" "./install"
 e2e_run "Configure aba.conf" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: channel" "grep ^ocp_channel=$TEST_CHANNEL aba.conf"
+e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 e2e_run "Backup good aba.conf" "cp aba.conf aba.conf.good"
 e2e_run "Ensure mirror dir initialised" "make -sC mirror init"
 
@@ -125,6 +129,7 @@ e2e_run "Verify aba.conf.seen cleaned" "test ! -f .aba.conf.seen"
 e2e_run "Re-install after clean" "./install"
 e2e_run "Reconfigure after clean" \
 	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version format after clean" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 e2e_run "Re-init mirror dir" "make -sC mirror init"
 
 test_end 0
@@ -209,20 +214,21 @@ e2e_run "Idempotent install on healthy registry must succeed" \
 e2e_run "Cleanup idempotent install test state" \
 	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
-# Stale state detection: reg_detect_existing() must clear state.sh and proceed
+# Stale state detection: reg_detect_existing() must abort with a clear message
 # when the saved registry host is unreachable (e.g. VM reverted, registry wiped).
+# state.sh is intentionally preserved so the user can investigate and run aba uninstall.
 e2e_run "Create stale state.sh for gone registry" \
 	"mkdir -p ~/.aba/mirror/mirror && echo reg_host=gone-registry.example.com > ~/.aba/mirror/mirror/state.sh"
 e2e_run "Set reg_host to match stale state" \
 	"aba -d mirror -H gone-registry.example.com"
 e2e_run "Remove .available to trigger install path" \
 	"rm -f mirror/.available"
-e2e_run "Stale state must be detected and cleared" \
-	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing' 2>&1 | grep 'unreachable'"
-e2e_run "Verify state.sh was removed" \
-	"test ! -f ~/.aba/mirror/mirror/state.sh"
+e2e_run_must_fail "Stale state must be detected (abort with unreachable message)" \
+	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing'"
+e2e_run "Verify state.sh preserved for investigation" \
+	"test -f ~/.aba/mirror/mirror/state.sh"
 e2e_run "Cleanup stale state test" \
-	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
 
 # Verify without credentials: must fail with user-friendly message
 e2e_run "Set reg_host for verify test" \

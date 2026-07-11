@@ -22,6 +22,7 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
@@ -58,6 +59,7 @@ test_begin "Setup: ensure pre-populated registry"
 e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
     "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version resolved" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
 _ocp_channel=$(grep '^ocp_channel=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -89,7 +91,17 @@ e2e_run "Verify kvm.conf has LIBVIRT_URI" "grep ^LIBVIRT_URI kvm.conf"
 e2e_run "Verify kvm.conf has KVM_STORAGE_POOL" "grep ^KVM_STORAGE_POOL kvm.conf"
 e2e_run "Verify kvm.conf has KVM_NETWORK" "grep ^KVM_NETWORK kvm.conf"
 
-e2e_run "Set NTP servers" "aba --ntp $NTP_IP ntp.example.com"
+suite_setup_ntp
+e2e_run "Verify aba.conf: ntp_servers" "grep '^ntp_servers=.*$NTP_IP' aba.conf"
+
+e2e_run "Verify govc NOT in download list (platform=kvm)" \
+    "! make -sC cli out-download-all | grep -q govc"
+e2e_run "Verify govc NOT in install list (platform=kvm)" \
+    "! make -sC cli out-install | grep -q govc"
+e2e_run "Verify govc tarball NOT on disk (platform=kvm)" \
+    "! ls cli/govc*.tar.gz"
+e2e_run "Verify govc binary NOT in ~/bin (platform=kvm)" \
+    "! test -f ~/bin/govc"
 
 test_end
 

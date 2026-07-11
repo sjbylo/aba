@@ -17,6 +17,23 @@
 # All primitives take a fully-resolved VM name (see vm_name in include_all.sh)
 # and rely on govc environment from vmware.conf.
 
+# Retry a govc command on transient vCenter errors (task conflicts, locks, etc.).
+# Waits with backoff (5s, 10s, 15s, 20s, 25s) for up to ~75s total.
+#   _govc_retry <govc-args...>
+_govc_retry() {
+	local attempt max_attempts=5 delay rc out
+	for attempt in $(seq 1 $max_attempts); do
+		out=$(govc "$@" 2>&1) && return 0
+		rc=$?
+		[ $attempt -lt $max_attempts ] || break
+		delay=$(( attempt * 5 ))
+		aba_warning "govc $1 failed (rc=$rc, attempt $attempt/$max_attempts), retrying in ${delay}s ... [$out]"
+		sleep $delay
+	done
+	aba_error "govc $1 failed after $max_attempts attempts (rc=$rc): $out"
+	return $rc
+}
+
 # Cached lookup of a VM's runtime+hardware as JSON; empty on lookup failure.
 _vmw_vm_json() {
 	govc vm.info -json "$1" 2>/dev/null
@@ -55,19 +72,19 @@ vmp_power_on() {
 	# Skip when already on -- avoids govc "current state (Powered on)" error.
 	vmp_is_on "$vm" && return 0
 	aba_debug "Running: govc vm.power -on $vm"
-	govc vm.power -on "$vm"
+	_govc_retry vm.power -on "$vm"
 }
 
 vmp_power_off() {
 	local vm=$1
 	aba_debug "Running: govc vm.power -s $vm"
-	govc vm.power -s "$vm" || true
+	_govc_retry vm.power -s "$vm" || true
 }
 
 vmp_kill() {
 	local vm=$1
 	aba_debug "Running: govc vm.power -off $vm"
-	govc vm.power -off "$vm" || true
+	_govc_retry vm.power -off "$vm" || true
 }
 
 # ---------------------------------------------------------------------------
@@ -196,7 +213,7 @@ vmp_attach_iso() {
 vmp_destroy() {
 	local vm=$1 power_state
 	aba_debug "Running: govc vm.destroy $vm"
-	govc vm.destroy "$vm" || true
+	_govc_retry vm.destroy "$vm" || true
 
 	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
 	if [ "$power_state" != "null" ] && [ -n "$power_state" ]; then

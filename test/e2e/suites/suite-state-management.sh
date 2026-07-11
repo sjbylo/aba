@@ -34,9 +34,11 @@ source "$_SUITE_DIR/../lib/config-helpers.sh"
 source "$_SUITE_DIR/../lib/remote.sh"
 source "$_SUITE_DIR/../lib/pool-ops.sh"
 source "$_SUITE_DIR/../lib/setup.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Configuration ----------------------------------------------------------
 
+CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 DIS_HOST="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
 _MIRROR_NAME="e2e-mirror-state1"
 _MIRROR_PORT=5111
@@ -71,8 +73,8 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-e2e_run "Configure aba.conf" \
-	"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
+suite_verify_aba_conf
 
 test_end
 
@@ -126,7 +128,7 @@ e2e_run "state.sh: reg_ssh_user is set (remote install)" \
 	"grep -q '^reg_ssh_user=' $_STATE_DIR/state.sh"
 
 e2e_run "state.sh: reg_installed_at has timestamp" \
-	"grep -qE '^reg_installed_at=\"[0-9]{4}-' $_STATE_DIR/state.sh"
+	"grep -qE '^reg_installed_at=.[0-9]{4}-' $_STATE_DIR/state.sh"
 
 e2e_run "state.sh: NO uppercase REG_ vars" \
 	"! grep -q '^REG_' $_STATE_DIR/state.sh"
@@ -221,6 +223,8 @@ e2e_run "Re-install aba after reset" "cd ~/aba && ./install"
 
 e2e_run "Reconfigure aba.conf" \
 	"cd ~/aba && aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: platform=vmw after reconfigure" "grep ^platform=vmw aba.conf"
+e2e_run "Verify aba.conf: version format after reconfigure" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 test_end
 
@@ -330,7 +334,7 @@ e2e_run "Recreate mirror dir for local tilde test" \
 	"cd ~/aba && rm -rf $_TILDE_MIRROR && aba mirror --name $_TILDE_MIRROR"
 
 e2e_run "Local install with data_dir=~/$_TILDE_LOCAL_SUBDIR" \
-	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_LOCAL_SUBDIR'"
+	"cd ~/aba && aba -d $_TILDE_MIRROR install --vendor docker --reg-port $_TILDE_PORT --data-dir '~/$_TILDE_LOCAL_SUBDIR' -H $CON_HOST"
 
 e2e_run "Local: reg_root is absolute (no literal ~)" \
 	"bash -c 'source $_TILDE_STATE/state.sh && [[ \$reg_root == /* ]] || { echo \"reg_root=\$reg_root not absolute\"; false; }'"

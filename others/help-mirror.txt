@@ -6,7 +6,7 @@ Usage:
 
 Options:
   -d, --dir <path/to/dir>              # Run aba in the specified directory, or cd there and run without -d.
-  -y                                   # Automatically accept the default answer to all prompts.
+  -y                                   # Answer yes to all prompts.
   -n, --name <name>                    # Create a named mirror directory (like cluster --name).
   -H, --reg-host <hostname>            # The hostname of the mirror registry.
   -k, --reg-ssh-key ~/.ssh/mykey       # Path to ssh key, used to install Quay to a *remote host*.
@@ -70,6 +70,21 @@ Examples of registering an existing (externally-managed) mirror registry:
 
   Deregister (only removes local credentials, never modifies the external registry):
     aba -d mirror unregister
+
+Upgrade transfer workflow (disconnected):
+
+  On the connected host:
+    aba --dir mirror --upgrade-to 4.22.2 save
+    # Creates mirror_*.tar (images) + aba-transfer.tar (ISC, CLIs, metadata) in mirror/data/
+
+  Copy all *.tar files to the disconnected host:
+    cp mirror/data/*.tar /transfer-media/    (or scp, rsync, sneakernet)
+
+  On the disconnected host:
+    cp /transfer-media/*.tar ~/aba/mirror/data/
+    aba -d mirror load                  # unpacks upgrade bundle, loads images
+    aba -d <cluster> day2               # configures OperatorHub
+    aba -d <cluster> upgrade --to 4.22.2
 
 The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
 The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 

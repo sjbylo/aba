@@ -12,7 +12,7 @@
 #   --reset        Reset download task state (forces re-download on next run).
 #   --no-version   Only start downloads for version-independent tools
 #                  (oc-mirror, butane, govc) — used when ocp_version is unknown.
-#   --target-version <ver>  Download oc + openshift-install for <ver> (parallel).
+#   --upgrade-to <ver>  Download oc + openshift-install for <ver> (parallel).
 #                  Used by reg-save.sh to fetch CLIs for upgrade target version.
 #
 # Optional positional args after the mode flag are tool names to filter on.
@@ -59,7 +59,7 @@ if [ "${1:-}" = "--no-version" ]; then
 	shift
 fi
 
-if [ "${1:-}" = "--target-version" ]; then
+if [ "${1:-}" = "--upgrade-to" ]; then
 	target_ocp_version="$2"
 	shift 2
 fi
@@ -73,11 +73,26 @@ aba_debug "PLAIN_OUTPUT=1 (suppressing progress indicators)"
 
 showed_wait_msg=false
 
-# When --target-version is given, override ocp_version for the make calls
+# When --upgrade-to is given, override ocp_version for the make calls
 if [ "$target_ocp_version" ]; then
 	make_ocp_override="ocp_version=$target_ocp_version"
 else
 	make_ocp_override=""
+fi
+
+# Without internet, don't attempt CLI downloads.
+# CLIs arrive via the aba-transfer.tar bundle or the original install bundle.
+# Peek at the cached internet-check result (set by TUI startup or aba.sh early init).
+# If a cached result exists and says "no internet", skip.  If no cached result exists,
+# fall through — the download attempt will fail and run_once records the failure.
+if run_once -p -i "aba:check:internet" 2>/dev/null && \
+   ! { run_once -E -i "aba:check:internet" 2>/dev/null | grep -q '^0$'; }; then
+	if [[ "$mode" == "wait" ]]; then
+		aba_debug "No internet (cached): checking if CLIs are already installed"
+	elif [[ "$mode" == "start" ]]; then
+		aba_debug "No internet (cached): skipping CLI download initiation"
+		exit 0
+	fi
 fi
 
 aba_debug "Fetching download list from cli/Makefile ($make_list_target)"
@@ -122,7 +137,8 @@ do
 		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override
 		# Wait without command — run_once reloads from saved cmd.sh
 		if ! run_once -q -w -i "$task_id"; then
-			# govc download failure is non-fatal for non-vmw platforms
+			# Safety net: govc download failure is non-fatal for non-vmw platforms
+			# (normally govc won't be in the tool list for non-vmw, but handle edge cases)
 			if [[ "$tool" == "govc" && "${platform:-}" != "vmw" ]]; then
 				aba_warning "govc failed to download — ignoring since platform != vmw."
 			else

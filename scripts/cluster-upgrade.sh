@@ -2,7 +2,7 @@
 # Upgrade an OCP cluster to a target version using the local mirror registry.
 # Runs day2 (signatures, IDMS, catalogs), resolves the release digest, and
 # triggers 'oc adm upgrade --to-image' for disconnected environments.
-# Target version resolution: --to flag > mirror.conf:ocp_version_target >
+# Target version resolution: --to flag > mirror.conf:ocp_upgrade_to >
 # auto-detect (highest z-stream in mirror) > error.
 
 [ ! -f scripts/include_all.sh ] && echo "Error: Cluster directory $PWD not yet initialized! See: aba cluster --help" >&2 && exit 1
@@ -29,6 +29,9 @@ while [ $# -gt 0 ]; do
 			;;
 		--force)
 			opt_force="--force"
+			aba_warning "--force bypasses cluster-side upgrade safety checks (release verification, admin ack gates)." \
+				"Only use in test/lab environments or when working around a known CVO bug." \
+				"Do NOT use --force on production clusters!"
 			shift
 			;;
 		--dry-run)
@@ -110,10 +113,10 @@ if [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 	exit 0
 fi
 
-# Resolve target version: --to flag > mirror.conf:ocp_version_target > auto-detect from mirror > error
+# Resolve target version: --to flag > mirror.conf:ocp_upgrade_to > auto-detect from mirror > error
 if [ ! "$target_ver" ]; then
-	if [ "$ocp_version_target" ]; then
-		target_ver="$ocp_version_target"
+	if [ "$ocp_upgrade_to" ]; then
+		target_ver="$ocp_upgrade_to"
 		aba_info "Using target version from mirror.conf: $target_ver"
 	else
 		# Auto-detect: highest z-stream (same major.minor) version in mirror
@@ -154,7 +157,7 @@ if ! cluster_is_accessible; then
 	aba_warning \
 		"The cluster API is not reachable (ClusterVersion Available != True)." \
 		"To investigate: oc get clusterversion"
-	ask "Continue with upgrade anyway" || exit 1
+	ask -n --auto-yes "Continue with upgrade anyway" || exit 1
 fi
 
 # Idempotency: if an upgrade to the same target is already in progress, fall through to monitoring
@@ -258,11 +261,14 @@ if [ ! "$upgrade_already_running" ]; then
 
 	# When OSUS is active, use --to <version> which lets the CVO validate
 	# the upgrade path via the local graph, including admin ack gates.
+	# --allow-upgrade-with-warnings: without this, oc returns exit=1 when
+	# a cluster operator is transiently degraded, even with --force.
+	_opt_warn="${opt_force:+--allow-upgrade-with-warnings}"
 	if [ "$osus_upstream" ]; then
 		aba_info "Local update graph detected: $osus_upstream"
-		upgrade_cmd="oc adm upgrade --to $target_ver $opt_force"
+		upgrade_cmd="oc adm upgrade --to $target_ver $opt_force $_opt_warn"
 	else
-		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest $opt_force"
+		upgrade_cmd="oc adm upgrade --to-image=$mirror_image_by_digest $opt_force $_opt_warn"
 	fi
 
 	# Pre-flight: check ClusterVersion conditions using structured JSON.
@@ -286,7 +292,11 @@ if [ ! "$upgrade_already_running" ]; then
 				"ABA cannot resolve this automatically." \
 				"Review the message above and follow any referenced documentation."
 			echo
-			ask "Continue with upgrade (only if you have resolved the above)" || exit 1
+			if [ -n "$opt_force" ]; then
+				aba_info "--force specified: proceeding despite Upgradeable=False"
+			else
+				ask -n "Continue with upgrade (only if you have resolved the above)" || exit 1
+			fi
 		fi
 	fi
 
@@ -386,7 +396,7 @@ if [ ! "$upgrade_already_running" ]; then
 			"" \
 			"If you proceed, the upgrade will bypass OpenShift's update graph validation."
 		echo
-		ask "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
+		ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
 		upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
 	fi
 

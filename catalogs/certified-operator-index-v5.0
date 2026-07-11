@@ -1,23 +1,18 @@
 abinitio-runtime-operator                               Co>Operating System Runtime Operator                         stable
-accuknox-operator-certified                             Accuknox Operator                                            stable
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
-airlock-microgateway                                    Airlock Microgateway                                         5.1.0-alpha1
-aiu-operator                                            AIU Operator                                                 stable-v2.3
+airlock-microgateway                                    Airlock Microgateway                                         5.1
 anzograph-operator                                      Altair Graph Lakehouse Operator                              stable
 anzo-operator                                           Altair Graph Studio Operator                                 stable
 anzounstructured-operator                               Altair Graph Studio Unstructured Operator                    stable
 apelocal-csi                                            ApeLocal CSI Driver                                          stable
-appdynamics-cloud-operator                              Cisco AppDynamics Cloud Operator                             alpha
 appdynamics-operator                                    AppDynamics Operator for Kubernetes                          alpha
 aqua-operator-certified                                 Aqua Security Operator                                       2022.4
 axera-operator                                          Axera Microsegmentation & NDR                                alpha
-cass-operator                                           DataStax Kubernetes Operator for Apache Cassandra            stable
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
 cilium-enterprise                                       Isovalent Enterprise for Cilium                              1.16
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 coherence-operator                                      Coherence Kubernetes Operator                                stable
 conjur-follower-operator                                Conjur Enterprise Follower Operator                          stable
-coroot-operator                                         Coroot                                                       stable
 cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.14
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified                              Datadog Operator                                             stable
@@ -42,16 +37,13 @@ infoscale-dr-manager                                    InfoScale™ DR Manager 
 infoscale-licensing-operator                            InfoScale™ Licensing Operator                              fast
 infoscale-sds-operator                                  InfoScale™ SDS Operator                                    fast
 instana-agent-operator                                  Instana Agent Operator                                       stable
-keysight-loadcore-agents                                Keysight LoadCore Agents Operator                            alpha
 kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
-kubemq-operator-marketplace                             Kubemq Enterprise Operator                                   alpha
 kubeturbo-certified                                     Kubeturbo Operator                                           stable
 lightbits-operator                                      Lightbits Operator                                           alpha
 mariadb-enterprise-operator                             MariaDB Enterprise Operator                                  stable
 mediation-openstack-operator                            Turbonomic OpenStack Probe Operator                          stable
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
-mongodb-enterprise                                      MongoDB Enterprise Operator                                  stable
 mongodb-kubernetes                                      MongoDB Controllers for Kubernetes                           stable
 mto-dependencies-operator                               MTO Dependencies Operator                                    alpha
 netai-demo-operator                                     netai-demo-operator                                          alpha
@@ -68,10 +60,8 @@ nxiq-operator-certified                                 Nexus IQ Operator       
 oci-capi-autoscaling-operator                           OCI CAPI Autoscaling Operator                                stable
 odigos-operator                                         Odigos Operator                                              alpha
 open-liberty-certified                                  Open Liberty                                                 v1.6
-openshiftartifactoryha-operator                         JFrog Artifactory Enterprise Operator                        alpha
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
-raftt-operator                                          Raftt                                                        alpha
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 simplyblock-operator                                    Simplyblock Operator                                         alpha

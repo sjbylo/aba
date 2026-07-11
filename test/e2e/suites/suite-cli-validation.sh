@@ -24,6 +24,7 @@ set -u
 _SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SUITE_DIR/../lib/framework.sh"
 source "$_SUITE_DIR/../lib/config-helpers.sh"
+source "$_SUITE_DIR/../lib/suite-helpers.sh"
 
 # --- Suite ------------------------------------------------------------------
 
@@ -50,8 +51,8 @@ test_begin "Setup: install aba"
 
 e2e_install_aba --curl
 
-e2e_run "Configure aba.conf" \
-    "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+suite_configure_aba
+suite_verify_aba_conf
 
 test_end 0
 
@@ -70,6 +71,7 @@ e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
 
 e2e_run "Reconfigure after reset" \
     "aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+e2e_run "Verify aba.conf: version format after reset" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 e2e_run "Start save, Ctrl-C after 20s" \
     'rc=0; timeout 20 bash -c "aba -d mirror save" || rc=$?; [ "$rc" -eq 124 ]'

@@ -143,7 +143,7 @@ isconf: imagesetconf ## Same as imagesetconf
 #   - The .created file is touched after each generation; if the ISC file is newer
 #     than .created, it means the user modified it and their changes are preserved.
 data/imageset-config.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
-	$(SCRIPTS)/reg-create-imageset-config.sh
+	$(SCRIPTS)/reg-create-imageset-config.sh -f $(force)
 
 
 # FIXME: is vmware.conf needed for 'load' and 'sync' or only needed during 'make cluster'?

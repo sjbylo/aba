@@ -349,7 +349,7 @@ ui_backtitle() {
 	local text="ABA TUI v2"
 	[ -n "$mode_display" ] && text="$text  |  $mode_display"
 	if [[ -n "$ch" && -n "$ver" ]]; then
-		local _tgt="${ocp_version_target:-}"
+		local _tgt="${ocp_upgrade_to:-}"
 		if [[ -n "$_tgt" && "$_tgt" != "$ver" ]]; then
 			text="$text  |  $ch $ver → $_tgt"
 		else
@@ -537,7 +537,7 @@ confirm_and_execute() {
 	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
 
-	local default_item="1"
+	local default_item="${_TUI_LAST_EXEC_MODE:-1}"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -586,7 +586,7 @@ confirm_and_execute() {
 
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ -n "$choice" ]] && default_item="$choice"
+		[[ -n "$choice" ]] && default_item="$choice" && _TUI_LAST_EXEC_MODE="$choice"
 
 		case "$choice" in
 			1) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;

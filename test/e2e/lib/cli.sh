@@ -55,6 +55,7 @@ _usage() {
 	  run.sh deploy [-p 2,3]                   Push source code + harness to conN
 	  run.sh restart [-p 2] [-r]               Stop + deploy + re-run last suite
 	  run.sh stop [-p 2,3] [--no-clean]       Kill runners (cleans clusters/mirrors by default)
+	  run.sh kill                              Kill daemon + all children + remove all locks
 	  run.sh start [-p 1-4]                    Power on pool VMs (conN + disN)
 	  run.sh status [-p 3]                     Show what's running
 	  run.sh verify [-p all]                   Verify pool VMs (run ALL checks, report ALL results)
@@ -177,24 +178,30 @@ _all_pool_numbers() {
 
 # Get the RHEL version for a specific pool number from pools.conf.
 # Returns the INT_BASTION_RHEL_VER value, or "rhel8" if not set.
-_pool_rhel_ver() {
-	local pools_file="$1" pool_num="$2"
+# Generic pools.conf key lookup: _pool_conf_get <pools_file> <pool_num> <KEY> [default]
+# Parses the KEY=VALUE pairs after the first 4 columns, returns value for matching POOL_NUM.
+_pool_conf_get() {
+	local pools_file="$1" pool_num="$2" key="$3" default="${4:-}"
 	[ -f "$pools_file" ] || return 1
 	grep -v '^#' "$pools_file" | grep -v '^[[:space:]]*$' | while read -r _name _con _dis _template _rest; do
-		local _pnum=""
-		local _rhel=""
+		local _pnum="" _val=""
 		for _kv in $_rest; do
 			case "$_kv" in
-				POOL_NUM=*)              _pnum="${_kv#POOL_NUM=}" ;;
-				INT_BASTION_RHEL_VER=*)  _rhel="${_kv#INT_BASTION_RHEL_VER=}" ;;
+				POOL_NUM=*) _pnum="${_kv#POOL_NUM=}" ;;
+				${key}=*)   _val="${_kv#${key}=}" ;;
 			esac
 		done
 		if [ "$_pnum" = "$pool_num" ]; then
-			echo "${_rhel:-rhel8}"
+			echo "${_val:-$default}"
 			return 0
 		fi
 	done
 }
+
+_pool_rhel_ver() { _pool_conf_get "$1" "$2" INT_BASTION_RHEL_VER rhel8; }
+_pool_vmware_conf() { _pool_conf_get "$1" "$2" VMWARE_CONF; }
+_pool_con_user() { _pool_conf_get "$1" "$2" CON_SSH_USER; }
+_pool_dis_user() { _pool_conf_get "$1" "$2" DIS_SSH_USER; }
 
 # Count pools in pools.conf.
 _pool_count_from_conf() {
@@ -215,7 +222,7 @@ _parse_args() {
 	# Step 1: Detect subcommand (first non-flag argument)
 	if [ $# -gt 0 ]; then
 		case "$1" in
-			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs)
+			run|daemon|reschedule|deploy|restart|stop|start|status|verify|list|destroy|attach|live|dash|logs|kill)
 				CLI_COMMAND="$1"; shift ;;
 		esac
 	fi

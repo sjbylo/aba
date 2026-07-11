@@ -1,6 +1,6 @@
 abinitio-runtime-operator                               Co>Operating System Runtime Operator                         stable
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
-airlock-microgateway                                    Airlock Microgateway                                         5.1.0-alpha1
+airlock-microgateway                                    Airlock Microgateway                                         5.1
 aiu-operator                                            AIU Operator                                                 stable-v2.3
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
 amd-gpu-operator                                        amd-gpu-operator                                             alpha

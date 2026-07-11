@@ -152,7 +152,7 @@ jaeger                                                  Community Jaeger Operato
 jhipster-online-operator                                JHipster Online Operator                                     alpha
 jupyter-notebook-validator-operator                     Jupyter Notebook Validator Operator                          stable
 k8gb                                                    k8gb                                                         alpha
-kairos-operator                                         Kairos Operator                                              stable
+kairos-operator                                         Kairos Operator                                              candidate-v2
 keda                                                    [DEPRECATED] KEDA                                            alpha
 keepalived-operator                                     Keepalived Operator                                          alpha
 keycloak-operator                                       Keycloak Operator                                            fast
@@ -213,6 +213,7 @@ patch-operator                                          Patch Operator          
 patterns-operator                                       Validated Patterns Operator                                  fast
 pcc-operator                                            Prisma Cloud Compute Operator                                stable
 pelorus-operator                                        Pelorus Operator                                             alpha
+percona-server-mysql-operator                           Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator                         Percona XtraDB Cluster Operator                              stable
 proactive-node-scaling-operator                         Proactive Node Scaling Operator                              alpha
 project-onboarding-operator                             Project Onboarding                                           stable
@@ -222,6 +223,7 @@ prometheus                                              Prometheus Operator     
 prometurbo                                              Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 pulp-operator                                           Pulp Project                                                 beta
+rabbitmq-cluster-operator                               RabbitMQ-cluster-operator                                    stable
 redis-operator                                          Redis Operator                                               stable
 redkey-operator                                         Redkey Operator                                              stable
 reportportal-operator                                   reportportal-operator                                        alpha
@@ -254,6 +256,7 @@ tagger                                                  Tagger                  
 tempo-operator                                          Community Tempo Operator                                     alpha
 tf-controller                                           Weave GitOps Terraform Controller                            stable
 tidb-operator                                           TiDB Operator                                                stable
+trident-operator                                        NetApp Trident                                               stable
 trustify-operator                                       Trustify Operator                                            alpha
 ucs-ci-solutions-operator                               UCS-CI-Solutions-Operator                                    alpha
 universal-crossplane                                    Upbound Universal Crossplane (UXP)                           stable

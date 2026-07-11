@@ -3,7 +3,7 @@ accuknox-operator-certified                             Accuknox Operator       
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
 aic-operator                                            AIC Operator                                                 alpha
 aikit-operator                                          Intel® oneAPI AI Analytics Toolkit Operator                 alpha
-airlock-microgateway                                    Airlock Microgateway                                         5.1.0-alpha1
+airlock-microgateway                                    Airlock Microgateway                                         5.1
 aiu-operator                                            AIU Operator                                                 stable-v2.4
 alloy                                                   Alloy                                                        alpha
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
@@ -52,7 +52,7 @@ digitalai-release-operator                              Digital.ai Release      
 dxoperator                                              DxOperator V1 Legacy                                         alpha
 dxoperator-v2                                           DxOperator                                                   alpha
 dynatrace-operator                                      Dynatrace Operator                                           alpha
-eda-k8s-operator                                        eda-openshift-operator                                       stable
+eda-k8s-operator                                        eda-openshift-operator                                       5.0
 edb-hcp-operator                                        EDB Postgres AI                                              alpha
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
@@ -241,9 +241,9 @@ tigera-operator                                         Tigera Operator v1.38   
 timemachine-operator                                    Time Machine Operator                                        alpha
 trident-operator                                        NetApp Trident                                               stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    stable
-uma-operator                                            DX APM Universal Monitoring Agent                            stable
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     stable
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
+uma-operator                                            DX APM Universal Monitoring Agent                            beta
+uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     beta
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable

@@ -142,23 +142,40 @@ _dispatch_suite() {
 
 	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
-	# Capture scrollback from previous suite before killing the session
-	_ssh_con "$pool_num" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
+	# Resolve per-pool SSH users: CLI flags > pools.conf > config.env default
+	local _pool_con_u _pool_dis_u
+	_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+	_pool_dis_u=$(_pool_dis_user "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+	[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
+	[ -n "${CLI_DIS_USER:-}" ] && _pool_dis_u="$CLI_DIS_USER"
+	export CON_SSH_USER="${_pool_con_u:-${CON_SSH_USER:-steve}}"
+	export DIS_SSH_USER="${_pool_dis_u:-${DIS_SSH_USER:-steve}}"
+
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
 	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
-	# Detect SSH user change since last run on this pool
-	local _prev_user=""
+	# Detect SSH user change since last run on this pool (con or dis)
+	local _prev_user="" _prev_dis_user=""
 	_prev_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-user 2>/dev/null" 2>/dev/null) || true
 	_prev_user="${_prev_user//[[:space:]]/}"
+	_prev_dis_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-dis-user 2>/dev/null" 2>/dev/null) || true
+	_prev_dis_user="${_prev_dis_user//[[:space:]]/}"
 	local _cur_user="${CON_SSH_USER:-steve}"
+	local _cur_dis_user="${DIS_SSH_USER:-steve}"
 	local _user_changed=""
 	if [ -n "$_prev_user" ] && [ "$_prev_user" != "$_cur_user" ]; then
 		_user_changed=1
-		echo "    User changed ($_prev_user -> $_cur_user)"
-		echo "    Processing $_prev_user's cleanup files before revert ..."
-		local _old_host="${_prev_user}@con${pool_num}.${VM_BASE_DOMAIN}"
+		echo "    Con user changed ($_prev_user -> $_cur_user)"
+	fi
+	if [ -n "$_prev_dis_user" ] && [ "$_prev_dis_user" != "$_cur_dis_user" ]; then
+		_user_changed=1
+		echo "    Dis user changed ($_prev_dis_user -> $_cur_dis_user)"
+	fi
+	if [ -n "$_user_changed" ]; then
+		local _old_con_user="${_prev_user:-$_cur_user}"
+		echo "    Processing ${_old_con_user}'s cleanup files before revert ..."
+		local _old_host="${_old_con_user}@con${pool_num}.${VM_BASE_DOMAIN}"
 		local _old_allowed="con${pool_num}.${VM_BASE_DOMAIN} dis${pool_num}.${VM_BASE_DOMAIN}"
 		_run_cleanup_on_host "$_old_host" "      " "$_old_allowed" 2>&1 || echo "    WARNING: old user cleanup had errors (continuing with revert)"
 	fi
@@ -194,13 +211,37 @@ _dispatch_suite() {
 		echo "    ERROR: harness sync to con${pool_num} failed -- skipping dispatch"
 		return 1
 	fi
+
+	# After user-change revert, the new user's ~/aba is empty (snapshot
+	# only had the previous user's files). Re-deploy source so ./install works.
+	if [ -n "$_user_changed" ]; then
+		echo "    Re-deploying source after user-change revert ..."
+		local _tar
+		_tar=$(_make_source_tar "$_ABA_ROOT")
+		if sync_source "$target" "$_tar"; then
+			echo "    Source deployed to con${pool_num}"
+		else
+			echo "    WARNING: source deploy to con${pool_num} failed"
+		fi
+		rm -f "$_tar"
+	fi
+
 	sync_dis_aba "$pool_num" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${pool_num} failed"
-	sync_extras "$target" "${CON_SSH_USER:-steve}"
+	sync_extras "$target" "${CON_SSH_USER:-steve}" "$pool_num"
 
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
-	_ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null"
+	if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null"; then
+		echo "    INFRA FAIL: tmux launch failed on con${pool_num}" >&2
+		return 1
+	fi
+
+	# Verify the session actually exists (catches silent SSH failures)
+	if ! _ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION'" 2>/dev/null; then
+		echo "    INFRA FAIL: tmux session '$_TMUX_SESSION' not found after launch on con${pool_num}" >&2
+		return 1
+	fi
 
 	_busy_pools[$pool_num]="$suite"
 	_result_pool[$suite]="$pool_num"
@@ -264,18 +305,9 @@ _check_hung() {
 
 	# Use the most recent of: summary log mtime OR tmux window activity.
 	# A long-running single command (e.g. oc-mirror extraction) won't
-	# update the summary log, but the tmux window still receives output.
-	# NOTE: use window_activity, not pane_last_activity -- the latter
-	# doesn't exist in tmux 3.2a (RHEL 8/9 default) and silently returns
-	# empty, causing false HUNG? alerts on long-running silent operations.
-	local _log_age="" _pane_age=""
+	# Staleness based on log file timestamp (tmux pane queries removed — crash risk on RHEL 10)
+	local _log_age=""
 	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
-	_pane_age=$(_ssh_con "$pool_num" "tmux display-message -t '$_TMUX_SESSION' -p '#{window_activity}' 2>/dev/null" 2>/dev/null) || _pane_age=""
-	if [ -n "$_log_age" ] && [ -n "$_pane_age" ]; then
-		[ "$_pane_age" -gt "$_log_age" ] && _log_age="$_pane_age"
-	elif [ -z "$_log_age" ]; then
-		_log_age="$_pane_age"
-	fi
 	[ -z "$_log_age" ] && return
 
 	local _now_epoch
@@ -306,6 +338,10 @@ _find_free_pool() {
 	local _now=${SECONDS:-0}
 	for _p in $CLI_POOL_LIST; do
 		if [ -z "${_busy_pools[$_p]:-}" ]; then
+			# Skip unreachable pools (state unknown -- could be running a suite)
+			if [ -n "${_unreachable_pools[$_p]:-}" ]; then
+				continue
+			fi
 			# Skip pools in INFRA FAIL cooldown
 			if [ -n "${_pool_cooldown_until[$_p]:-}" ] && [ "$_now" -lt "${_pool_cooldown_until[$_p]}" ]; then
 				continue
@@ -406,10 +442,21 @@ _detect_running_and_completed() {
 	_rc_base=$(basename "$_RC_PREFIX")
 
 	# Pass 1: detect running suites (live tmux takes precedence over stale .rc)
+	# Retry SSH up to 3 times per pool; if all fail, mark pool unreachable
+	# so the dispatcher won't treat it as free and risk duplicate dispatch.
 	local -A _running_suites=()
+	local _max_ssh_retries=3
 	for _p in $CLI_POOL_LIST; do
-		local sess_exists=""
-		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		local sess_exists="" _attempt
+		for _attempt in $(seq 1 $_max_ssh_retries); do
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			[ -n "$sess_exists" ] && break
+			# Distinguish "no tmux session" (SSH succeeded) from "SSH failed"
+			if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+				break
+			fi
+			[ "$_attempt" -lt "$_max_ssh_retries" ] && sleep 5
+		done
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
 			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
@@ -419,6 +466,13 @@ _detect_running_and_completed() {
 				_running_suites[$suite]=1
 				echo "    con${_p}: $suite still running"
 			fi
+			unset '_unreachable_pools[$_p]'
+		elif _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+			# SSH works but no tmux session -- pool is genuinely free
+			unset '_unreachable_pools[$_p]'
+		else
+			_unreachable_pools[$_p]=1
+			echo "    con${_p}: UNREACHABLE after ${_max_ssh_retries} attempts -- will not dispatch"
 		fi
 	done
 
@@ -430,8 +484,15 @@ _detect_running_and_completed() {
 		local _is_cli_pool=""
 		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
 		[ -n "$_is_cli_pool" ] && continue
-		local sess_exists=""
-		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		local sess_exists="" _attempt
+		for _attempt in $(seq 1 $_max_ssh_retries); do
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			[ -n "$sess_exists" ] && break
+			if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+				break
+			fi
+			[ "$_attempt" -lt "$_max_ssh_retries" ] && sleep 5
+		done
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
 			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
@@ -469,6 +530,30 @@ _detect_running_and_completed() {
 _is_running_on_external_pool() {
 	local suite="$1"
 	[ -n "${_external_running[$suite]:-}" ]
+}
+
+# Re-check pools that were unreachable at init time.  Called periodically from
+# the main dispatch loop so recovered pools can rejoin the dispatch rotation.
+_recheck_unreachable_pools() {
+	[ ${#_unreachable_pools[@]} -eq 0 ] && return
+	for _p in "${!_unreachable_pools[@]}"; do
+		if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+			local sess_exists=""
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			if [ "$sess_exists" = "yes" ]; then
+				local suite=""
+				suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+				if [ -n "$suite" ]; then
+					_busy_pools[$_p]="$suite"
+					_result_pool[$suite]="$_p"
+					printf "  [%s] RECOVERED: con%s now reachable -- running %s\n" "$(date '+%H:%M:%S')" "$_p" "$suite"
+				fi
+			else
+				printf "  [%s] RECOVERED: con%s now reachable -- idle\n" "$(date '+%H:%M:%S')" "$_p"
+			fi
+			unset '_unreachable_pools[$_p]'
+		fi
+	done
 }
 
 _refresh_external_running() {
@@ -624,12 +709,12 @@ _notify_periodic_status() {
 		_retrying[${_work_queue[$_qi]}]=1
 	done
 
-	# Show running suites with PAUSED detection
+	# Show running suites with PAUSED detection (file-based, avoids tmux 3.3a crash on RHEL 10)
 	for _ns in "${!_busy_pools[@]}"; do
 		local _pool_state="RUNNING"
-		local _pane_line=""
-		_pane_line=$(_ssh_con "$_ns" "tmux capture-pane -t '$_TMUX_SESSION' -p 2>/dev/null | grep -a '.' | tail -1" 2>/dev/null) || _pane_line=""
-		[[ "$_pane_line" == *"[R]etry"* ]] && _pool_state="PAUSED"
+		local _paused_check=""
+		_paused_check=$(_ssh_con "$_ns" "[ -f '/tmp/e2e-paused-${_busy_pools[$_ns]}' ] && echo yes" 2>/dev/null) || _paused_check=""
+		[ "$_paused_check" = "yes" ] && _pool_state="PAUSED"
 		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} ${_pool_state}
 "
 	done
@@ -743,4 +828,211 @@ _print_final_summary() {
 		$NOTIFY_CMD "${_notify_hdr}
 ${_done_detail}Finished: $(date '+%Y-%m-%d %H:%M')" < /dev/null >/dev/null
 	fi
+}
+
+# --- Main dispatch loop -------------------------------------------------------
+# Caller must set up: _work_queue, _queue_idx, _busy_pools, _results,
+# _result_pool, _retried, _pool_dead_count, _unreachable_pools, _external_running,
+# _pool_os_map, suites_to_run, _MAX_RETRIES, _DEAD_THRESHOLD, _POLL_MIN, _POLL_MAX
+
+_dispatch_loop() {
+	local _poll_interval=$_POLL_MIN
+
+	while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ] || [ ${#_unreachable_pools[@]} -gt 0 ]; do
+
+		_state_changed=""
+		for _p in "${!_busy_pools[@]}"; do
+			local_suite="${_busy_pools[$_p]}"
+			rc=$(_check_pool "$_p" "$local_suite")
+			# Hung detection runs in parent shell so _hung_notified persists
+			[ -z "$rc" ] && { unset '_pool_dead_count[$_p]'; _check_hung "$_p" "$local_suite"; }
+			if [ -n "$rc" ]; then
+				# rc=255 (no .rc file + no tmux session) can be a false positive from
+				# transient SSH failures.  Require _DEAD_THRESHOLD consecutive 255s
+				# before accepting it; any other rc is trusted immediately.
+				if [ "$rc" = "255" ]; then
+					_pool_dead_count[$_p]=$(( ${_pool_dead_count[$_p]:-0} + 1 ))
+					if [ "${_pool_dead_count[$_p]}" -lt "$_DEAD_THRESHOLD" ]; then
+						echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]}/$_DEAD_THRESHOLD -- not killing yet" >&2
+						continue
+					fi
+					echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]} >= $_DEAD_THRESHOLD -- accepting rc=255" >&2
+				fi
+				unset '_pool_dead_count[$_p]'
+				_record_result "$local_suite" "$rc"
+				_collect_pool_logs "$_p"
+				_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
+				unset '_busy_pools[$_p]'
+				_state_changed=1
+			fi
+		done
+
+		# Force-rerun: clear suites from _results so they can be re-dispatched.
+		# Written by `reschedule` CLI; processed before inject queue so the
+		# subsequent inject won't skip the suite as "already passed".
+		if [ -f "$E2E_FORCE_RERUN" ] && [ -s "$E2E_FORCE_RERUN" ]; then
+			mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" 2>/dev/null || true
+		fi
+		if [ -f "${E2E_FORCE_RERUN}.processing" ]; then
+			while IFS= read -r _rr_suite; do
+				[ -z "$_rr_suite" ] && continue
+				if [ -n "${_results[$_rr_suite]:-}" ]; then
+					_old_rc="${_results[$_rr_suite]}"
+					unset '_results[$_rr_suite]'
+					printf "  [%s] RERUN: %s cleared from results (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rr_suite" "$_old_rc"
+				fi
+			done < "${E2E_FORCE_RERUN}.processing"
+			rm -f "${E2E_FORCE_RERUN}.processing"
+		fi
+
+		# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
+		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+			mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" 2>/dev/null || true
+		fi
+		if [ -f "${E2E_INJECT_QUEUE}.processing" ]; then
+			_inj_count=0
+			while IFS= read -r _inj_suite; do
+				[ -z "$_inj_suite" ] && continue
+				# Skip if already completed with PASS (exit=0)
+				if [ "${_results[$_inj_suite]:-}" = "0" ]; then
+					printf "  [%s] SKIPPED: %s (already passed)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue
+				fi
+				_already_running=""
+				for _bp in "${!_busy_pools[@]}"; do
+					[ "${_busy_pools[$_bp]}" = "$_inj_suite" ] && _already_running=1 && break
+				done
+				[ -z "$_already_running" ] && _is_running_on_external_pool "$_inj_suite" && _already_running=1
+				[ -n "$_already_running" ] && { printf "  [%s] SKIPPED: %s (running)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
+				_already_queued=""
+				for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
+					[ "${_work_queue[$_qi]}" = "$_inj_suite" ] && _already_queued=1 && break
+				done
+				[ -n "$_already_queued" ] && { printf "  [%s] SKIPPED: %s (queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
+				_work_queue+=("$_inj_suite"); suites_to_run+=("$_inj_suite")
+				_inj_count=$(( _inj_count + 1 ))
+				printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
+			done < "${E2E_INJECT_QUEUE}.processing"
+			rm -f "${E2E_INJECT_QUEUE}.processing"
+			if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+				$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected" < /dev/null >/dev/null
+			fi
+		fi
+
+		# Forced dispatch pickup
+		if [ -f "$E2E_FORCED_DISPATCH" ] && [ -s "$E2E_FORCED_DISPATCH" ]; then
+			while IFS=' ' read -r _fd_pool _fd_suite; do
+				[ -z "$_fd_pool" ] && continue
+				_busy_pools[$_fd_pool]="$_fd_suite"; _result_pool[$_fd_suite]="$_fd_pool"
+				printf "  [%s] EXTERNAL: %s -> pool %s\n" "$(date '+%H:%M:%S')" "$_fd_suite" "$_fd_pool"
+			done < "$E2E_FORCED_DISPATCH"
+			> "$E2E_FORCED_DISPATCH"
+		fi
+
+		# Dispatch to free pools
+		while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
+			free=$(_find_free_pool) || break
+			suite="${_work_queue[$_queue_idx]}"
+			# Skip suites already completed with PASS
+			if [ "${_results[$suite]:-}" = "0" ]; then
+				printf "  [%s] SKIP: %s (already passed)\n" "$(date '+%H:%M:%S')" "$suite"
+				_queue_idx=$(( _queue_idx + 1 )); continue
+			fi
+			_dup=""
+			for _dp in "${!_busy_pools[@]}"; do
+				[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
+			done
+			if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+				_dup=1; _dp="${_external_running[$suite]}"
+			fi
+			if [ -n "$_dup" ]; then
+				printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
+				_queue_idx=$(( _queue_idx + 1 )); continue
+			fi
+			_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
+			_queue_idx=$(( _queue_idx + 1 ))
+			_state_changed=1
+		done
+
+		# Inline retry -- only check for free pools if there are failed suites to retry
+		_has_retryable=""
+		if [ $_queue_idx -ge ${#_work_queue[@]} ]; then
+			for _rs in "${!_results[@]}"; do
+				_rrc="${_results[$_rs]}"
+				if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+					_has_retryable=1; break
+				fi
+			done
+		fi
+		if [ -n "$_has_retryable" ] && _find_free_pool >/dev/null; then
+			_retry_added=0
+			_retry_names=""
+			for _rs in "${!_results[@]}"; do
+				_rrc="${_results[$_rs]}"
+				if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+					_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
+					_rp="${_result_pool[$_rs]:-}"
+					[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
+					unset '_results[$_rs]'; _work_queue+=("$_rs")
+					printf "  [%s] RETRY %d/%d: %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
+					_retry_names="${_retry_names:+$_retry_names, }$_rs"
+					_retry_added=$(( _retry_added + 1 ))
+				fi
+			done
+			if [ "$_retry_added" -gt 0 ]; then
+				[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_names} (${_retry_added} re-queued)" < /dev/null >/dev/null
+				while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
+					free=$(_find_free_pool) || break
+					suite="${_work_queue[$_queue_idx]}"
+					_dup=""
+					for _dp in "${!_busy_pools[@]}"; do
+						[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
+					done
+					if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
+						_dup=1; _dp="${_external_running[$suite]}"
+					fi
+					if [ -n "$_dup" ]; then
+						printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
+						_queue_idx=$(( _queue_idx + 1 )); continue
+					fi
+					_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
+					_queue_idx=$(( _queue_idx + 1 ))
+				done
+			fi
+		fi
+
+		_write_dispatch_state
+		_notify_periodic_status
+
+		_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
+		if [ ${#_busy_pools[@]} -gt 0 ]; then
+			_status_line="${#_results[@]}d ${#_busy_pools[@]}r ${_queued_remaining}q"
+			for _p in "${!_busy_pools[@]}"; do _status_line+=" con${_p}:${_busy_pools[$_p]}"; done
+			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do _status_line+=" q:${_work_queue[$_qi]}"; done
+			if [ "${_status_line}" != "${_prev_status:-}" ]; then
+				printf "  [%s] %d done, %d running" "$(date '+%H:%M:%S')" "${#_results[@]}" "${#_busy_pools[@]}"
+				[ "$_queued_remaining" -gt 0 ] && printf ", %d queued" "$_queued_remaining"
+				printf " |"; for _p in "${!_busy_pools[@]}"; do printf " con%s:%s" "$_p" "${_busy_pools[$_p]}"; done
+				if [ "$_queued_remaining" -gt 0 ]; then
+					printf " ||"; for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do printf " %s" "${_work_queue[$_qi]}"; done
+				fi
+				echo ""; _prev_status="$_status_line"
+			fi
+		fi
+
+		# Refresh external pool state every ~60s to detect new/finished external suites
+		if [ $(( SECONDS - ${_last_ext_refresh:-0} )) -ge 60 ]; then
+			_refresh_external_running
+			_recheck_unreachable_pools
+			_last_ext_refresh=$SECONDS
+		fi
+
+		# Adaptive polling: short interval after state changes, back off when idle
+		if [ -n "$_state_changed" ]; then
+			_poll_interval=$_POLL_MIN
+		else
+			_poll_interval=$(( _poll_interval * 2 ))
+			[ "$_poll_interval" -gt "$_POLL_MAX" ] && _poll_interval=$_POLL_MAX
+		fi
+		sleep "$_poll_interval"
+	done
 }

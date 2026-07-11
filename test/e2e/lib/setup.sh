@@ -29,7 +29,7 @@ export -f _e2e_delete_leftover_cluster
 _e2e_delete_leftover_cluster_remote() {
 	local dir="$1"
 	e2e_run_remote "Delete any leftover $dir cluster" \
-		"cd ~/aba && if [ -d $dir ] && [ -f $dir/cluster.conf ]; then aba -y --dir $dir delete --force; elif [ -d $dir ]; then rm -rf $dir && echo '[cleanup] Removed unconfigured leftover dir: $dir'; fi"
+		"[ -d ~/aba ] || { echo '[cleanup] ~/aba not found on disN -- nothing to clean'; exit 0; }; cd ~/aba && if [ -d $dir ] && [ -f $dir/cluster.conf ]; then aba -y --dir $dir delete --force; elif [ -d $dir ]; then rm -rf $dir && echo '[cleanup] Removed unconfigured leftover dir: $dir'; fi"
 }
 
 # Source other libs if not already loaded
@@ -253,7 +253,7 @@ build_and_test_cluster() {
     e2e_run "Run post-install checks ($cluster_type)" \
         "aba --dir $cluster_type run"
 
-    e2e_wait_cluster_ready $cluster_type
+    e2e_wait_cluster_available $cluster_type
 }
 
 # --- build_and_test_cluster_remote ------------------------------------------
@@ -273,5 +273,5 @@ build_and_test_cluster_remote() {
     e2e_run_remote "Run post-install checks ($cluster_type)" \
         "cd ~/aba && aba --dir $cluster_type run"
 
-    e2e_wait_cluster_ready $cluster_type remote
+    e2e_wait_cluster_available $cluster_type remote
 }

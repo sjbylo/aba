@@ -33,6 +33,7 @@ source "$_RUN_DIR/lib/deploy.sh"
 source "$_RUN_DIR/lib/commands.sh"
 source "$_RUN_DIR/lib/tmux-ui.sh"
 source "$_RUN_DIR/lib/dispatcher.sh"
+source "$_RUN_DIR/lib/infra.sh"
 
 # --- Parse args + load config ------------------------------------------------
 
@@ -77,7 +78,7 @@ _release_pool_locks() {
 trap _release_pool_locks EXIT
 
 case "$CLI_COMMAND" in
-	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy|logs)
+	stop|status|attach|list|live|dash|daemon|reschedule|deploy|verify|destroy|logs|kill)
 		;;
 	run)
 		# Skip locks when not daemonized: the foreground process will either
@@ -138,6 +139,10 @@ case "$CLI_COMMAND" in
 		cmd_status "$CLI_POOL_LIST"
 		exit 0
 		;;
+	kill)
+		cmd_kill
+		exit 0
+		;;
 	stop)
 		_all_pools=$(_all_pool_numbers "${_RUN_DIR}/pools.conf") || _all_pools="$CLI_POOL_LIST"
 		cmd_stop "$CLI_POOL_LIST" "$_all_pools"
@@ -184,15 +189,42 @@ case "$CLI_COMMAND" in
 			[ "$_a" = "daemon" ] && _a="run"
 			_daemon_args+=("$_a")
 		done
-		# Ensure --force is present (stale state from previous crash)
-		_has_force=""
-		for _a in "${_daemon_args[@]}"; do
-			[[ "$_a" =~ ^(-f|--force)$ ]] && _has_force=1
-		done
-		[ -z "$_has_force" ] && _daemon_args+=("--force")
+		# Only force-clean on the FIRST daemon launch (not on restart cycles).
+		# Subsequent cycles inherit running suites -- force would kill them.
+		_daemon_first_run=1
+
+		# Refuse to start if another daemon is already running with overlapping pools
+		if [ -f "$E2E_DAEMON_PID" ]; then
+			_old_pid=$(cat "$E2E_DAEMON_PID" 2>/dev/null)
+			if [ -n "$_old_pid" ] && kill -0 "$_old_pid" 2>/dev/null; then
+				_old_pools=""
+				[ -f "$E2E_DAEMON_META" ] && _old_pools=$(grep '^pools=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+				_overlap=""
+				for _rp in $CLI_POOL_LIST; do
+					for _ep in $_old_pools; do
+						[ "$_rp" = "$_ep" ] && _overlap="${_overlap} ${_rp}"
+					done
+				done
+				if [ -n "$_overlap" ]; then
+					echo "FATAL: Daemon already running (PID $_old_pid, pools: ${_old_pools:-unknown})."
+					echo "       Pool overlap:${_overlap}"
+					echo "       Stop the old daemon first: run.sh kill  OR  kill $_old_pid"
+					exit 1
+				fi
+			fi
+		fi
 
 		echo $$ > "$E2E_DAEMON_PID"
-		trap 'rm -f "$E2E_DAEMON_PID"' EXIT
+		trap 'rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META"' EXIT
+		trap '' PIPE  # Ignore SIGPIPE so piping daemon output can't crash it
+
+		# Write metadata so `status` can show daemon config
+		cat > "$E2E_DAEMON_META" <<-META_EOF
+		pid=$$
+		pools=$CLI_POOL_LIST
+		started=$(date '+%Y-%m-%d %H:%M:%S')
+		args=${_daemon_args[*]}
+		META_EOF
 
 		_daemon_log "Daemon started (PID=$$, max_crashes=$_DAEMON_MAX_CRASHES, backoff=${_DAEMON_BACKOFF}s-${_DAEMON_BACKOFF_MAX}s)"
 		_daemon_log "Args: ${_daemon_args[*]}"
@@ -200,9 +232,19 @@ case "$CLI_COMMAND" in
 		export _E2E_DAEMONIZED=1
 
 		while true; do
+			# Build per-cycle args: add --force only on the very first launch
+			_cycle_args=("${_daemon_args[@]}")
+			if [ -n "$_daemon_first_run" ]; then
+				_has_force=""
+				for _a in "${_cycle_args[@]}"; do
+					[[ "$_a" =~ ^(-f|-F|--force|--fresh)$ ]] && _has_force=1
+				done
+				[ -z "$_has_force" ] && _cycle_args+=("--force")
+				_daemon_first_run=""
+			fi
 			_daemon_log "Launching dispatcher ..."
 			_drc=0
-			"$BASH" "$_RUN_DIR/run.sh" "${_daemon_args[@]}" || _drc=$?
+			"$BASH" "$_RUN_DIR/run.sh" "${_cycle_args[@]}" || _drc=$?
 
 			if [ "$_drc" -eq 0 ]; then
 				_daemon_log "Dispatcher exited cleanly (all suites completed). Restarting full cycle ..."
@@ -260,6 +302,34 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 	# --- If a daemon is already running, inject suites into its queue ---------
 	if _is_daemon_alive; then
 		_daemon_pid=$(cat "$E2E_DAEMON_PID")
+
+		# Check for pool overlap if the new invocation specifies pools
+		if [ -f "$E2E_DAEMON_META" ]; then
+			_running_pools=$(grep '^pools=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+			if [ -n "$_running_pools" ] && [ -n "$CLI_POOL_LIST" ]; then
+				_overlap=""
+				for _rp in $CLI_POOL_LIST; do
+					for _ep in $_running_pools; do
+						[ "$_rp" = "$_ep" ] && _overlap="${_overlap} ${_rp}"
+					done
+				done
+				_new_only=""
+				for _rp in $CLI_POOL_LIST; do
+					_found=""
+					for _ep in $_running_pools; do [ "$_rp" = "$_ep" ] && _found=1 && break; done
+					[ -z "$_found" ] && _new_only="${_new_only} ${_rp}"
+				done
+				if [ -n "$_new_only" ]; then
+					echo ""
+					echo "  WARNING: Daemon (PID $_daemon_pid) manages pools: $_running_pools"
+					echo "           Your -p includes pools not in the daemon:${_new_only}"
+					echo "           Those pools will NOT receive dispatched suites."
+					echo "           To manage all pools, stop the daemon and restart with the correct -p range."
+					echo ""
+				fi
+			fi
+		fi
+
 		echo ""
 		echo "  Daemon already running (PID $_daemon_pid). Injecting suites ..."
 		echo ""
@@ -280,12 +350,15 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 		validate_suites "$_RUN_DIR" "${_inject_suites[@]}" || exit 1
 
 		for _s in "${_inject_suites[@]}"; do
-			if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
-				_existing=$(cat "$E2E_INJECT_QUEUE")
-				printf '%s\n%s\n' "$_s" "$_existing" > "$E2E_INJECT_QUEUE"
-			else
-				echo "$_s" > "$E2E_INJECT_QUEUE"
-			fi
+			(
+				flock 9
+				if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+					_existing=$(cat "$E2E_INJECT_QUEUE")
+					printf '%s\n%s\n' "$_s" "$_existing" > "$E2E_INJECT_QUEUE"
+				else
+					echo "$_s" > "$E2E_INJECT_QUEUE"
+				fi
+			) 9>"${E2E_INJECT_QUEUE}.lock"
 			printf "  Queued: \033[1;36m%s\033[0m\n" "$_s"
 		done
 
@@ -516,214 +589,18 @@ if [ -n "${CLI_DRY_RUN:-}" ]; then
 	exit 0
 fi
 
-# --- Ensure infrastructure ---------------------------------------------------
+# --- Ensure infrastructure (extracted to lib/infra.sh) ------------------------
 
-_ensure_govc
-_vmconf="$HOME/.vmware.conf"
-# Save E2E-specific vars that vmware.conf might clobber (vmware.conf has its
-# own VC_FOLDER for ABA production use -- we need the E2E one from config.env).
-_saved_vc_folder="${VC_FOLDER:-}"
-[ -f "$_vmconf" ] && { set -a; source "$_vmconf"; set +a; }
-[ -n "$_saved_vc_folder" ] && VC_FOLDER="$_saved_vc_folder"
-unset _saved_vc_folder
-
-echo ""
-echo "=== E2E Test Run ==="
-echo "  Suites: ${suites_to_run[*]}"
-echo "  Pools: ${CLI_POOL_LIST}"
-echo ""
-
-# Check VM readiness and OS changes for each pool
-_POOL_OS_DIR="$_RUN_DIR/.pool-os"
-mkdir -p "$_POOL_OS_DIR"
-declare -a _pools_needing_reclone=()
-_need_infra=""
-
-# Per-pool RHEL version from pools.conf (falls back to CLI --os or default)
 declare -A _pool_os_map=()
-_default_os="${INT_BASTION_RHEL_VER:-rhel8}"
-for _p in $CLI_POOL_LIST; do
-	_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
-	[ -z "${_pool_os_map[$_p]:-}" ] && _pool_os_map[$_p]="$_default_os"
-done
+_ensure_pool_infrastructure
 
-_vms_ready() {
-	local pool_num="$1"
-	local user="${CON_SSH_USER:-steve}"
-	local con="con${pool_num}.${VM_BASE_DOMAIN}"
-
-	if ! _essh "${user}@${con}" "true" 2>/dev/null; then
-		echo "  Pool $pool_num: not ready (SSH to ${con} failed)" >&2
-		return 1
-	fi
-
-	if ! govc snapshot.tree -vm "con${pool_num}" | grep -q "pool-ready"; then
-		echo "  Pool $pool_num: not ready (con${pool_num} missing pool-ready snapshot)" >&2
-		return 1
-	fi
-
-	if ! govc snapshot.tree -vm "dis${pool_num}" | grep -q "pool-ready"; then
-		echo "  Pool $pool_num: not ready (dis${pool_num} missing pool-ready snapshot)" >&2
-		return 1
-	fi
-}
-
-if [ -n "${CLI_RECREATE_GOLDEN:-}" ]; then
-	echo "  --recreate-golden: all VMs will be rebuilt from new golden"
-	_need_infra=1
-else
-	for _p in $CLI_POOL_LIST; do
-		_pool_os_file="$_POOL_OS_DIR/pool-${_p}"
-		_cur_os="${_pool_os_map[$_p]}"
-		if [ -n "${CLI_RECREATE_VMS:-}" ]; then
-			echo "  Pool $_p: will be recreated (--recreate-vms)"
-			_need_infra=1
-		elif [ -f "$_pool_os_file" ] && [ "$(cat "$_pool_os_file")" != "$_cur_os" ]; then
-			echo "  Pool $_p: OS changed ($(cat "$_pool_os_file") -> $_cur_os) -- VMs will be recloned"
-			_pools_needing_reclone+=("$_p")
-			_need_infra=1
-		elif _vms_ready "$_p"; then
-			echo "  Pool $_p: ready"
-			echo "$_cur_os" > "$_pool_os_file"
-		else
-			_need_infra=1
-		fi
-	done
-fi
-
-# Selective reclone: destroy only pools that changed OS (not global --recreate-vms)
-if [ ${#_pools_needing_reclone[@]} -gt 0 ] && [ -z "${CLI_RECREATE_VMS:-}" ]; then
-	_print_box "1;43;30" "⟳  OS RECLONE: Rebuilding pools ${_pools_needing_reclone[*]}"
-	for _p in "${_pools_needing_reclone[@]}"; do
-		_pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
-
-		# Process cleanup files first (delete clusters/mirrors via aba)
-		for _try_user in "${CON_SSH_USER:-steve}" root steve; do
-			_try_host="${_try_user}@con${_p}.${VM_BASE_DOMAIN}"
-			_essh "$_try_host" "true" 2>/dev/null || continue
-			_has_cleanup=""
-			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
-			[ -z "$_has_cleanup" ] && continue
-			echo "  Pool $_p: processing cleanup files for $_try_user before OS reclone ..."
-			_run_cleanup_on_host "$_try_host" "    " "con${_p}.${VM_BASE_DOMAIN} dis${_p}.${VM_BASE_DOMAIN}" 2>&1 || true
-			break
-		done
-
-		# Destroy ALL VMs in the pool folder (clusters, conN, disN, etc.)
-		echo "  Destroying all VMs in pool $_p folder ..."
-		if [ -n "${VC_FOLDER:-}" ]; then
-			while IFS= read -r _vm_path; do
-				[ -z "$_vm_path" ] && continue
-				_vm_name="${_vm_path##*/}"
-				echo "  Destroying $_vm_name (OS mismatch) ..."
-				govc vm.power -off "$_vm_path" 2>/dev/null || true
-				govc vm.destroy "$_vm_path" 2>/dev/null || true
-			done < <(govc find "$_pool_folder" -type m 2>/dev/null)
-		else
-			# ESXi: no pool folders, destroy conN/disN by name
-			for _pfx in con dis; do
-				_vm="${_pfx}${_p}"
-				govc vm.power -off "$_vm" 2>/dev/null || true
-				govc vm.destroy "$_vm" 2>/dev/null || true
-			done
-		fi
-	done
-fi
-
-# When recreating VMs, destroy orphaned cluster VMs in pool folders first
-if [ -n "${CLI_RECREATE_VMS:-}" ]; then
-	for _p in $CLI_POOL_LIST; do
-		_pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
-		_orphans=$(govc find "$_pool_folder" -type m 2>/dev/null | grep -v "/con${_p}$" | grep -v "/dis${_p}$") || true
-		if [ -n "$_orphans" ]; then
-			echo "  Pool $_p: destroying orphaned VMs before recreate ..."
-			while IFS= read -r _vm_path; do
-				[ -z "$_vm_path" ] && continue
-				_vm_name="${_vm_path##*/}"
-				echo "    Destroying $_vm_name ..."
-				govc vm.power -off "$_vm_path" 2>/dev/null || true
-				govc vm.destroy "$_vm_path" 2>/dev/null || true
-			done <<< "$_orphans"
-		fi
-	done
-fi
-
-# Recreating golden implies recreating pool VMs (the whole point is to pick up golden changes)
-[ -n "${CLI_RECREATE_GOLDEN:-}" ] && CLI_RECREATE_VMS=1
-
-if [ -n "$_need_infra" ] || [ -n "${CLI_RECREATE_GOLDEN:-}" ] || [ -n "${CLI_RECREATE_VMS:-}" ]; then
-	echo ""
-	_print_box "1;46;30" "⟳  INFRA: Provisioning pool VMs (pools: $CLI_POOL_LIST)"
-	_base_infra_flags="--pools-file ${_RUN_DIR}/pools.conf"
-	[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _base_infra_flags+=" --recreate-golden"
-	[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
-	[ -n "${CLI_YES:-}" ]             && _base_infra_flags+=" --yes"
-
-	# Group pools by RHEL version and call setup-infra once per group.
-	# Each group gets its own golden VM (e.g. aba-e2e-golden-rhel8, aba-e2e-golden-rhel10).
-	declare -A _os_pool_groups=()
-	for _p in $CLI_POOL_LIST; do
-		_pos="${_pool_os_map[$_p]}"
-		_os_pool_groups[$_pos]+="${_os_pool_groups[$_pos]:+,}${_p}"
-	done
-
-	for _grp_os in "${!_os_pool_groups[@]}"; do
-		_grp_pools="${_os_pool_groups[$_grp_os]}"
-		echo "  --- RHEL group: $_grp_os (pools: $_grp_pools) ---"
-		INT_BASTION_RHEL_VER="$_grp_os" \
-		"$BASH" "$_RUN_DIR/setup-infra.sh" --pool-list "$_grp_pools" $_base_infra_flags 9>&- \
-			|| { echo "FATAL: Infrastructure setup failed for $_grp_os group (pools: $_grp_pools)" >&2; exit 1; }
-	done
-
-	for _p in $CLI_POOL_LIST; do
-		echo "${_pool_os_map[$_p]}" > "$_POOL_OS_DIR/pool-${_p}"
-	done
-
-	_print_box "1;46;30" "✔  INFRA: Pool VMs ready (pools: $CLI_POOL_LIST)"
-fi
-
-# --- Optional revert to pool-ready snapshot -----------------------------------
+# --- Optional revert to pool-ready snapshot (extracted to lib/infra.sh) -------
 
 if [ -n "${CLI_REVERT:-}" ]; then
-	echo ""
-	echo "  Processing cleanup files before revert (cluster VMs live on hypervisor) ..."
-	for _p in $CLI_POOL_LIST; do
-		for _try_user in "${CON_SSH_USER:-steve}" root steve; do
-			_try_host="${_try_user}@con${_p}.${VM_BASE_DOMAIN}"
-			_essh "$_try_host" "true" 2>/dev/null || continue
-			_has_cleanup=""
-			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
-			[ -z "$_has_cleanup" ] && continue
-			echo "    Pool $_p: found cleanup files for $_try_user -- running aba delete/uninstall ..."
-			_run_cleanup_on_host "$_try_host" "      " "con${_p}.${VM_BASE_DOMAIN} dis${_p}.${VM_BASE_DOMAIN}" 2>&1 || echo "    WARNING: cleanup for pool $_p user $_try_user had errors (continuing)"
-		done
-	done
-
-	echo ""
-	echo "  Reverting pool VMs to pool-ready snapshot ..."
-	for _p in $CLI_POOL_LIST; do
-		for prefix in con dis; do
-			vm="${prefix}${_p}"
-			if govc snapshot.tree -vm "$vm" 2>&1 | grep -q "pool-ready"; then
-				govc snapshot.revert -vm "$vm" "pool-ready" || { echo "  FATAL: revert $vm failed" >&2; exit 1; }
-				govc vm.power -on "$vm"
-				echo "    ${vm}: reverted to pool-ready"
-			else
-				echo "    ${vm}: WARNING -- pool-ready snapshot not found, skipping" >&2
-			fi
-		done
-	done
-
-	echo "  Waiting for conN SSH readiness ..."
-	for _p in $CLI_POOL_LIST; do
-		target=$(_con_target "$_p")
-		_wait_for_ssh "$target" 120 || { echo "  FATAL: con${_p} not reachable after revert" >&2; exit 1; }
-		echo "    con${_p}: SSH ready"
-	done
-	echo "  All pool VMs reverted and ready."
+	_revert_pool_snapshots
 fi
 
-# --- Deploy harness to conN ---------------------------------------------------
+# --- Deploy harness to conN (extracted to lib/deploy.sh) ----------------------
 
 # Pre-flight: verify notify.sh exists if NOTIFY_CMD is configured
 _notify_cmd=$(grep '^NOTIFY_CMD=' "$_RUN_DIR/config.env" | head -1 | cut -d= -f2- | sed "s/[[:space:]]*#.*//; s/^['\"]//; s/['\"]$//")
@@ -734,92 +611,8 @@ if [ -n "$_notify_cmd" ] && ! [ -x "$_notify_cmd" ]; then
 	exit 1
 fi
 
-# Save last-run state for read-only commands
 _save_last_run "$_RUN_DIR"
-
-echo ""
-echo "  Deploying test harness to conN hosts ..."
-for _p in $CLI_POOL_LIST; do
-	target=$(_con_target "$_p")
-
-	if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
-		sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
-		sync_extras "$target" "${CON_SSH_USER:-steve}"
-		# Ensure rootless podman's pause process survives between SSH sessions
-		_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
-		echo "    con${_p}: harness deployed to ~/.e2e-harness/"
-	else
-		echo "    con${_p}: FAILED to deploy harness (skipping)" >&2
-	fi
-done
-
-# --- Developer mode: push source ---------------------------------------------
-
-if [ -n "${CLI_DEV:-}" ]; then
-	echo ""
-	echo "  Developer mode: pushing ABA source to conN hosts ..."
-	_deploy_tar=$(_make_source_tar "$_ABA_ROOT")
-	_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
-	echo "  Source tarball: $_deploy_size"
-	for _p in $CLI_POOL_LIST; do
-		target=$(_con_target "$_p")
-		echo -n "    con${_p}: "
-		if sync_source "$target" "$_deploy_tar"; then
-			echo "done"
-		else
-			echo "FAILED"
-		fi
-	done
-	rm -f "$_deploy_tar"
-else
-	# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
-	# Suites expect ~/aba to exist; this one-time install ensures it does.
-	_need_install=""
-	for _p in $CLI_POOL_LIST; do
-		target=$(_con_target "$_p")
-		if ! _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
-			_need_install=1
-			break
-		fi
-	done
-	if [ -n "$_need_install" ]; then
-		echo ""
-		echo "  Installing ABA from git ($E2E_GIT_BRANCH) on conN hosts ..."
-		for _p in $CLI_POOL_LIST; do
-			target=$(_con_target "$_p")
-			echo -n "    con${_p}: "
-			if _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
-				echo "already installed"
-			elif _essh "$target" "cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$E2E_GIT_REPO_SLUG/refs/heads/$E2E_GIT_BRANCH/install)\" -- $E2E_GIT_BRANCH $E2E_GIT_REPO_SLUG" 2>&1; then
-				echo "done"
-			else
-				echo "FAILED"
-			fi
-		done
-	fi
-
-	# After -V revert, ~/aba may exist (from snapshot) but on the wrong branch.
-	# Ensure all conN hosts are on E2E_GIT_BRANCH.
-	echo ""
-	echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
-	for _p in $CLI_POOL_LIST; do
-		target=$(_con_target "$_p")
-		echo -n "    con${_p}: "
-		_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
-		if [ "$_cur_branch" = "$E2E_GIT_BRANCH" ]; then
-			_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null 2>&1
-			echo "ok (already on $E2E_GIT_BRANCH)"
-		elif [ -n "$_cur_branch" ]; then
-			if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null 2>&1; then
-				echo "switched $_cur_branch -> $E2E_GIT_BRANCH"
-			else
-				echo "FAILED to switch to $E2E_GIT_BRANCH"
-			fi
-		else
-			echo "skipped (no git repo)"
-		fi
-	done
-fi
+_deploy_to_pools
 
 # =============================================================================
 # --- Dynamic Work-Queue Dispatcher -------------------------------------------
@@ -834,6 +627,7 @@ declare -a _work_queue=()
 declare -A _results=()
 declare -A _result_pool=()
 declare -A _bad_pools_map=()
+declare -A _unreachable_pools=()
 
 # Apply --fresh / --force scoping
 if [ -n "${CLI_FORCE:-}" ]; then
@@ -1002,7 +796,7 @@ if [ -f "$E2E_DISPATCHER_PID" ]; then
 	fi
 fi
 echo $$ > "$E2E_DISPATCHER_PID"
-trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_INJECT_QUEUE" "$E2E_FORCED_DISPATCH" "$E2E_FORCE_RERUN"' EXIT
+trap 'rm -f "$E2E_DISPATCHER_PID" "$E2E_DISPATCH_STATE" "$E2E_FORCED_DISPATCH" "$E2E_FORCE_RERUN"' EXIT
 
 declare -A _retried=()
 declare -A _pool_dead_count=()
@@ -1019,205 +813,9 @@ if [ ${#_work_queue[@]} -gt 0 ] || [ $_num_running -gt 0 ]; then
 	echo ""
 fi
 
-# --- Main dispatch loop -------------------------------------------------------
+# --- Main dispatch loop (extracted to lib/dispatcher.sh) ----------------------
 
-while [ $_queue_idx -lt ${#_work_queue[@]} ] || [ ${#_busy_pools[@]} -gt 0 ]; do
-
-	_state_changed=""
-	for _p in "${!_busy_pools[@]}"; do
-		local_suite="${_busy_pools[$_p]}"
-		rc=$(_check_pool "$_p" "$local_suite")
-		# Hung detection runs in parent shell so _hung_notified persists
-		[ -z "$rc" ] && { unset '_pool_dead_count[$_p]'; _check_hung "$_p" "$local_suite"; }
-		if [ -n "$rc" ]; then
-			# rc=255 (no .rc file + no tmux session) can be a false positive from
-			# transient SSH failures.  Require _DEAD_THRESHOLD consecutive 255s
-			# before accepting it; any other rc is trusted immediately.
-			if [ "$rc" = "255" ]; then
-				_pool_dead_count[$_p]=$(( ${_pool_dead_count[$_p]:-0} + 1 ))
-				if [ "${_pool_dead_count[$_p]}" -lt "$_DEAD_THRESHOLD" ]; then
-					echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]}/$_DEAD_THRESHOLD -- not killing yet" >&2
-					continue
-				fi
-				echo "  DIAG: pool $_p dead-count ${_pool_dead_count[$_p]} >= $_DEAD_THRESHOLD -- accepting rc=255" >&2
-			fi
-			unset '_pool_dead_count[$_p]'
-			_record_result "$local_suite" "$rc"
-			_collect_pool_logs "$_p"
-			_ssh_con "$_p" "tmux capture-pane -t '$_TMUX_SESSION' -p -S - >> ~/.e2e-harness/logs/tmux-history.log 2>/dev/null" 2>/dev/null
-			_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
-			unset '_busy_pools[$_p]'
-			_state_changed=1
-		fi
-	done
-
-	# Force-rerun: clear suites from _results so they can be re-dispatched.
-	# Written by `reschedule` CLI; processed before inject queue so the
-	# subsequent inject won't skip the suite as "already passed".
-	if [ -f "$E2E_FORCE_RERUN" ] && [ -s "$E2E_FORCE_RERUN" ]; then
-		mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" 2>/dev/null || true
-	fi
-	if [ -f "${E2E_FORCE_RERUN}.processing" ]; then
-		while IFS= read -r _rr_suite; do
-			[ -z "$_rr_suite" ] && continue
-			if [ -n "${_results[$_rr_suite]:-}" ]; then
-				_old_rc="${_results[$_rr_suite]}"
-				unset '_results[$_rr_suite]'
-				printf "  [%s] RERUN: %s cleared from results (was exit=%s)\n" "$(date '+%H:%M:%S')" "$_rr_suite" "$_old_rc"
-			fi
-		done < "${E2E_FORCE_RERUN}.processing"
-		rm -f "${E2E_FORCE_RERUN}.processing"
-	fi
-
-	# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
-	if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
-		mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" 2>/dev/null || true
-	fi
-	if [ -f "${E2E_INJECT_QUEUE}.processing" ]; then
-		_inj_count=0
-		while IFS= read -r _inj_suite; do
-			[ -z "$_inj_suite" ] && continue
-			# Skip if already completed with PASS (exit=0)
-			if [ "${_results[$_inj_suite]:-}" = "0" ]; then
-				printf "  [%s] SKIPPED: %s (already passed)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue
-			fi
-			_already_running=""
-			for _bp in "${!_busy_pools[@]}"; do
-				[ "${_busy_pools[$_bp]}" = "$_inj_suite" ] && _already_running=1 && break
-			done
-			[ -z "$_already_running" ] && _is_running_on_external_pool "$_inj_suite" && _already_running=1
-			[ -n "$_already_running" ] && { printf "  [%s] SKIPPED: %s (running)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
-			_already_queued=""
-			for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do
-				[ "${_work_queue[$_qi]}" = "$_inj_suite" ] && _already_queued=1 && break
-			done
-			[ -n "$_already_queued" ] && { printf "  [%s] SKIPPED: %s (queued)\n" "$(date '+%H:%M:%S')" "$_inj_suite"; continue; }
-			_work_queue+=("$_inj_suite"); suites_to_run+=("$_inj_suite")
-			_inj_count=$(( _inj_count + 1 ))
-			printf "  [%s] INJECTED: %s (from reschedule)\n" "$(date '+%H:%M:%S')" "$_inj_suite"
-		done < "${E2E_INJECT_QUEUE}.processing"
-		rm -f "${E2E_INJECT_QUEUE}.processing"
-		if [ "$_inj_count" -gt 0 ] && [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-			$NOTIFY_CMD "[e2e] RESCHEDULE: ${_inj_count} suite(s) injected" < /dev/null >/dev/null
-		fi
-	fi
-
-	# Forced dispatch pickup
-	if [ -f "$E2E_FORCED_DISPATCH" ] && [ -s "$E2E_FORCED_DISPATCH" ]; then
-		while IFS=' ' read -r _fd_pool _fd_suite; do
-			[ -z "$_fd_pool" ] && continue
-			_busy_pools[$_fd_pool]="$_fd_suite"; _result_pool[$_fd_suite]="$_fd_pool"
-			printf "  [%s] EXTERNAL: %s -> pool %s\n" "$(date '+%H:%M:%S')" "$_fd_suite" "$_fd_pool"
-		done < "$E2E_FORCED_DISPATCH"
-		> "$E2E_FORCED_DISPATCH"
-	fi
-
-	# Dispatch to free pools
-	while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
-		free=$(_find_free_pool) || break
-		suite="${_work_queue[$_queue_idx]}"
-		# Skip suites already completed with PASS
-		if [ "${_results[$suite]:-}" = "0" ]; then
-			printf "  [%s] SKIP: %s (already passed)\n" "$(date '+%H:%M:%S')" "$suite"
-			_queue_idx=$(( _queue_idx + 1 )); continue
-		fi
-		_dup=""
-		for _dp in "${!_busy_pools[@]}"; do
-			[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
-		done
-		if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
-			_dup=1; _dp="${_external_running[$suite]}"
-		fi
-		if [ -n "$_dup" ]; then
-			printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
-			_queue_idx=$(( _queue_idx + 1 )); continue
-		fi
-		_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
-		_queue_idx=$(( _queue_idx + 1 ))
-		_state_changed=1
-	done
-
-	# Inline retry -- only check for free pools if there are failed suites to retry
-	_has_retryable=""
-	if [ $_queue_idx -ge ${#_work_queue[@]} ]; then
-		for _rs in "${!_results[@]}"; do
-			_rrc="${_results[$_rs]}"
-			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
-				_has_retryable=1; break
-			fi
-		done
-	fi
-	if [ -n "$_has_retryable" ] && _find_free_pool >/dev/null; then
-		_retry_added=0
-		_retry_names=""
-		for _rs in "${!_results[@]}"; do
-			_rrc="${_results[$_rs]}"
-			if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
-				_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
-				_rp="${_result_pool[$_rs]:-}"
-				[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
-				unset '_results[$_rs]'; _work_queue+=("$_rs")
-				printf "  [%s] RETRY %d/%d: %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
-				_retry_names="${_retry_names:+$_retry_names, }$_rs"
-				_retry_added=$(( _retry_added + 1 ))
-			fi
-		done
-		if [ "$_retry_added" -gt 0 ]; then
-			[ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ] && $NOTIFY_CMD "[e2e] RETRY: ${_retry_names} (${_retry_added} re-queued)" < /dev/null >/dev/null
-			while [ $_queue_idx -lt ${#_work_queue[@]} ]; do
-				free=$(_find_free_pool) || break
-				suite="${_work_queue[$_queue_idx]}"
-				_dup=""
-				for _dp in "${!_busy_pools[@]}"; do
-					[ "${_busy_pools[$_dp]}" = "$suite" ] && _dup=1 && break
-				done
-				if [ -z "$_dup" ] && _is_running_on_external_pool "$suite"; then
-					_dup=1; _dp="${_external_running[$suite]}"
-				fi
-				if [ -n "$_dup" ]; then
-					printf "  [%s] DEFER: %s (running on pool %s)\n" "$(date '+%H:%M:%S')" "$suite" "$_dp"
-					_queue_idx=$(( _queue_idx + 1 )); continue
-				fi
-				_dispatch_suite "$free" "$suite" || _record_result "$suite" "99"
-				_queue_idx=$(( _queue_idx + 1 ))
-			done
-		fi
-	fi
-
-	_write_dispatch_state
-	_notify_periodic_status
-
-	_queued_remaining=$(( ${#_work_queue[@]} - _queue_idx ))
-	if [ ${#_busy_pools[@]} -gt 0 ]; then
-		_status_line="${#_results[@]}d ${#_busy_pools[@]}r ${_queued_remaining}q"
-		for _p in "${!_busy_pools[@]}"; do _status_line+=" con${_p}:${_busy_pools[$_p]}"; done
-		for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do _status_line+=" q:${_work_queue[$_qi]}"; done
-		if [ "${_status_line}" != "${_prev_status:-}" ]; then
-			printf "  [%s] %d done, %d running" "$(date '+%H:%M:%S')" "${#_results[@]}" "${#_busy_pools[@]}"
-			[ "$_queued_remaining" -gt 0 ] && printf ", %d queued" "$_queued_remaining"
-			printf " |"; for _p in "${!_busy_pools[@]}"; do printf " con%s:%s" "$_p" "${_busy_pools[$_p]}"; done
-			if [ "$_queued_remaining" -gt 0 ]; then
-				printf " ||"; for (( _qi=_queue_idx; _qi<${#_work_queue[@]}; _qi++ )); do printf " %s" "${_work_queue[$_qi]}"; done
-			fi
-			echo ""; _prev_status="$_status_line"
-		fi
-	fi
-
-	# Refresh external pool state every ~60s to detect new/finished external suites
-	if [ $(( SECONDS - ${_last_ext_refresh:-0} )) -ge 60 ]; then
-		_refresh_external_running
-		_last_ext_refresh=$SECONDS
-	fi
-
-	# Adaptive polling: short interval after state changes, back off when idle
-	if [ -n "$_state_changed" ]; then
-		_poll_interval=$_POLL_MIN
-	else
-		_poll_interval=$(( _poll_interval * 2 ))
-		[ "$_poll_interval" -gt "$_POLL_MAX" ] && _poll_interval=$_POLL_MAX
-	fi
-	sleep "$_poll_interval"
-done
+_dispatch_loop
 
 # --- Final summary (from lib/dispatcher.sh) -----------------------------------
 

@@ -1,67 +1,118 @@
-Install OpenShift
+Configure, install & manage OpenShift clusters
 
-Usage (from root of aba directory):
-  aba cluster --name <string> [options]                              # Create a cluster directory.
+Usage:
+  aba cluster --name <name> [options]         # Create cluster directory (with cluster.conf)
+  aba cluster --name <name> --step <step>     # Create cluster directory and run up to <step>
+  aba --dir <cluster> <command>               # Operate on an existing cluster
+  Or run 'abatui' for a guided experience
 
-Examples:
-  aba cluster --name mycluster --type standard                       # Create the cluster dir and install OpenShift.
-  aba cluster --name mycompact --type compact --step agentconf       # Create agent-based config files and stop.
-  aba cluster --name sno --type sno --step agentconf|iso|install     # Create cluster dir and process until 'step'.
-  aba cluster --name sno --type sno --starting-ip 10.0.0.1           # Install SNO cluster, setting the first node's IP.
-  aba cluster --name ocp -A 10.0.0.5 -G 10.0.0.6                     # Set VIPs for API and ingress endpoints.
-  aba cluster --name mycluster --ports ens192 ens224                 # Specify network ports used for cluster nodes.
+  Steps (in order): cluster.conf → agentconf → iso → install → mon
+  Use --step to run up to that step and stop; resume later with 'aba --dir <cluster> install'.
+
+  All options are written to cluster.conf (the single source of truth).
+  Edit cluster.conf directly for full control, or pass options on the command line.
+
+  Tip: --dir is not needed if you run aba from inside the cluster directory
 
 Options:
+    -d, --dir <path/to/dir>               # Run aba in the specified directory, or cd there and run without -d
+    -y, --yes                             # Answer yes to all prompts
+    -n, --name <string>                   # The name of the cluster configuration to create
+    -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'
+    -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>
+                                          # See steps (targets) with "aba --dir mycluster help"
+    -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0)
+    -A, --api-vip <ip>                    # IP address for cluster's API
+    -G, --ingress-vip <ip>                # IP address for cluster application ingress
+    -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20
+    -g, --gateway-ip <ip>                 # Gateway IP or next hop address
+    -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror
+        --ports [<string> ...]            # Space-separated list of network port names (default: ens160)
+                                          # ports in <cluster name>/cluster.conf
 
-  aba cluster                             # Create a cluster dir with cluster configuration (cluster.conf).
-    -d, --dir <path/to/dir>               # Run aba in the specified directory, or cd there and run without -d.
-    -y                                    # Automatically accept the default answer to all prompts.
-    -n, --name <string>                   # The name of the cluster to create.
-    -t, --type <sno|compact|standard>     # Set type of cluster. Default is 'standard'.
-    -s, --step <step>                     # Process up to this step or target <cluster.conf|agentconf|iso|mon>.
-                                          # See steps (targets) with "aba --dir mycluster help".
-    -i, --starting-ip <ip>                # IP address for the first cluster node (rendezvous/node0).
-    -A, --api-vip <ip>                    # IP address for cluster's API.
-    -G, --ingress-vip <ip>                # IP address for cluster application ingress.
-    -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20.
-    -g, --gateway-ip <ip>                 # Gateway IP or next hop address.
-    -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror.
-        --ports [<string> ...]            # Space-separated list of network port names or empty to remove.
-                                          # ports in <cluster name>/cluster.conf.
-
-  # Below options ONLY for platform=vmw
+  VM options (platform=vmw or kvm only):
         --mcpu <count>                    # Set master CPU count (vCPUs)
         --mmem <count>                    # Set master memory (GB)
         --wcpu <count>                    # Set worker CPU count (vCPUs)
         --wmem <count>                    # Set worker memory (GB)
-        --data-disk-gb [<size>]           # Size (GB) of thin-provisioned 'data disk' or empty for none.
-    -W, --num-workers <count>             # Set number of worker nodes.
-        --num-masters <count>             # Set number of master/control-plane nodes.
-        --vlan [<tag>]                    # Set VLAN tag or empty to clear.
-        --host-prefix <bits>              # Pod subnet prefix per node (default: 23).
-        --master-prefix <name>            # Node name prefix for masters (default: master).
-        --worker-prefix <name>            # Node name prefix for workers (default: worker).
-        --ssh-key [<path>]                # Path to SSH public key or empty to clear.
-        --mirror-name <name>              # Mirror directory this cluster uses (default: mirror).
-                                          # Set to match a named mirror dir (e.g. enclave1).
+        --data-disk-gb [<size>]           # Size (GB) of thin-provisioned 'data disk' or empty for none
+    -W, --num-workers <count>             # Set number of worker nodes
+        --num-masters <count>             # Set number of master/control-plane nodes (1 or 3)
+        --vlan [<tag>]                    # Set VLAN tag or empty to clear
+        --host-prefix <bits>              # Pod subnet prefix per node (default: 23)
+        --master-prefix <name>            # Node name prefix for masters (default: master)
+        --worker-prefix <name>            # Node name prefix for workers (default: worker)
+        --ssh-key [<path>]                # Path to SSH public key or empty to clear
+        --mirror-name <name>              # Mirror directory this cluster uses (default: mirror)
+                                          # Set to match a named mirror dir (e.g. enclave1)
 
-Usage (from a cluster directory):
-  aba run --cmd "oc command"              # Run this 'oc command' on the current cluster.
-  aba upgrade --to <version>              # Upgrade cluster to target OCP version (disconnected).
-  aba shutdown                            # Gracefully shut down the cluster (any platform).
-  aba startup                             # Gracefully start up the cluster (any platform).
+Related commands (run with --dir <cluster> or from inside the cluster directory):
 
-Upgrade options:
+  aba [-d <cluster>] mon                  # Monitor installation (runs openshift-install agent wait-for)
+  aba [-d <cluster>] day2                 # Configure OperatorHub, signatures, etc (run after load/sync/upgrade)
+  aba [-d <cluster>] run --cmd "oc ..."   # Run an 'oc' command against this cluster
+  aba [-d <cluster>] info                 # Show cluster information
+  aba [-d <cluster>] shell                # Output KUBECONFIG export (use: eval $(aba -d mycluster shell))
+  aba [-d <cluster>] login                # Show cluster login credentials
+  aba [-d <cluster>] getco                # Show cluster version and operator status
+  aba [-d <cluster>] shutdown [--wait]    # Gracefully shut down the cluster (any platform)
+  aba [-d <cluster>] startup              # Gracefully start up the cluster (any platform)
+  aba [-d <cluster>] delete [--force]     # Delete the cluster (removes VMs on vmw/kvm; --force removes dir)
+  aba [-d <cluster>] clean                # Remove generated artifacts (keeps cluster.conf)
+  aba [-d <cluster>] write-usb            # Write the ISO to a USB drive (raw dd, with confirmation)
+
   aba [-d <cluster>] upgrade
-      --to <version>                      # Target OCP version (e.g. 4.19.28). Falls back to mirror.conf:ocp_version_target.
-      --force                             # Pass --force to oc adm upgrade
+      --to <version>                      # Target OCP version (e.g. 4.22.2). Falls back to mirror.conf:ocp_upgrade_to
+      --force                             # Bypass cluster-side upgrade guards (NOT for production!)
       --dry-run                           # Show what would happen without executing
       --skip-day2                         # Don't auto-run day2 even if IDMS is missing
+  WARNING: --force bypasses OpenShift's safety checks (release verification, admin ack gates).
+           Only use it in test/lab environments or when working around a known CVO bug.
+  Note: for disconnected upgrades, first load the upgrade images with 'aba -d mirror load'
 
-Usage for platform=vmw:
-  aba ls                                  # List all cluster node VMs
-  aba refresh                             # Re-create the VMs
-  aba create [--start]                    # Create the VMs if they don't exist
-  aba stop                                # Shut down the VMs 
-  aba start                               # Start the VMs 
-  aba kill                                # Power off the VMs 
+  VM lifecycle (platform=vmw or kvm only):
+  aba [-d <cluster>] ls                   # List all cluster node VMs
+  aba [-d <cluster>] shutdown [--wait]    # Gracefully shut down cluster and VMs
+  aba [-d <cluster>] startup              # Start VMs and wait for cluster to be ready
+  aba [-d <cluster>] start                # Start the VMs only
+  aba [-d <cluster>] stop [--wait]        # Shut down the VMs only
+  aba [-d <cluster>] kill                 # Power off the VMs immediately
+  aba [-d <cluster>] create [--start]     # Create VMs if they don't exist
+  aba [-d <cluster>] refresh              # Re-create the VMs and start
+  aba [-d <cluster>] delete               # Delete the VMs
+
+Examples:
+
+  Create cluster config only (edit cluster.conf before proceeding):
+    aba cluster --name mysno --type sno --starting-ip 10.0.1.100
+
+  Generate agent-based config files (edit install-config.yaml/agent-config.yaml before ISO):
+    aba cluster --name mysno --type sno --starting-ip 10.0.1.100 --step agentconf
+
+  Create the boot ISO (for bare-metal or manual VM deployment):
+    aba cluster --name mysno --type sno --starting-ip 10.0.1.100 --step iso
+
+  Install a single-node cluster end-to-end:
+    aba cluster --name mysno --type sno --starting-ip 10.0.1.100 --step install
+
+  Install a 3-node compact cluster with explicit VIPs:
+    aba cluster --name mycompact --type compact --api-vip 10.0.1.5 --ingress-vip 10.0.1.6 --step install
+
+  Install a standard cluster with custom VM resources and network:
+    aba cluster --name prod --type standard --mcpu 16 --mmem 32 --num-workers 4 --machine-network 10.0.0.0/20 --step install
+
+  Install directly from the Internet (no mirror, 'proxy' or 'direct' mode):
+    aba cluster --name dev --type sno --starting-ip 10.0.1.50 --int-connection proxy --step install
+
+  Monitor an ongoing installation:
+    aba --dir mysno mon
+
+  Upgrade a cluster (first mirror the upgrade images with 'aba -d mirror sync' or 'load'):
+    aba --dir mysno upgrade --to 4.22.2
+
+  Gracefully shut down and start up a cluster:
+    aba --dir mysno shutdown
+    aba --dir mysno startup
+
+  Delete a cluster:
+    aba --dir mysno delete

@@ -615,8 +615,16 @@ normalize-mirror-conf()
 	)
 
 	# Phase 3 (ADR-007): override immutable fields from installed state
+	# Resolve the mirror dir name: when called from a cluster dir (where mirror.conf
+	# is a symlink to ../mirror/mirror.conf), follow the symlink to find the actual
+	# mirror directory name. Without this, cluster dirs would look for state at
+	# ~/.aba/mirror/<cluster-name>/state.sh which doesn't exist.
 	local _mn
-	_mn=$(basename "$PWD")
+	if [ -L mirror.conf ]; then
+		_mn=$(basename "$(dirname "$(readlink -f mirror.conf)")")
+	else
+		_mn=$(basename "$PWD")
+	fi
 	if [ -s "$HOME/.aba/mirror/$_mn/state.sh" ]; then
 		_state_override_mirror "$_mn"
 	fi
@@ -898,23 +906,25 @@ externalize_cluster_state() {
 	aba_info "Cluster state saved to $_state_dir/"
 }
 
-# Emit export lines that override immutable cluster fields from state.sh.
+# Emit export lines for cluster status fields from state.sh.
 # Called at the end of normalize-cluster-conf() so state wins over config.
 # Drift (config != state) triggers a visible warning — cluster.conf should
-# NOT be edited for immutable fields after install.  Delete cluster first.
+# NOT be edited for status fields after install.  Delete cluster first.
 _state_override_cluster() {
 	local _name="$1" _domain="$2"
 	local _state="$HOME/.aba/clusters/$_name.$_domain/state.sh"
-	local _immutable="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
+	local _status="cluster_name base_domain starting_ip cluster_type machine_network prefix_length platform"
 	local _warn_fields="cluster_name base_domain starting_ip cluster_type platform"
 	local _field _sval _cval
 
-	for _field in $_immutable; do
-		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+	source "$_state"
+
+	for _field in $_status; do
+		_sval="${!_field}"
 		[ -z "$_sval" ] && continue
 		case " $_warn_fields " in
 			*" $_field "*)
-				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 					aba_warning \
 						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
@@ -924,32 +934,39 @@ _state_override_cluster() {
 		esac
 		# state.sh may store machine_network as CIDR (10.0.0.0/20); split it
 		if [ "$_field" = "machine_network" ] && [[ "$_sval" == */* ]]; then
-			echo "export machine_network=${_sval%/*}"        # IP part of CIDR
-			echo "export prefix_length=${_sval#*/}"          # prefix part of CIDR
+			echo "export machine_network='${_sval%/*}'"      # IP part of CIDR
+			echo "export prefix_length='${_sval#*/}'"        # prefix part of CIDR
 			continue
 		fi
-		echo "export ${_field}=${_sval}"
+		echo "export ${_field}='${_sval}'"
 	done
 }
 
-# Emit export lines that override immutable mirror fields from state.sh.
+# Emit export lines for mirror status fields from state.sh.
 # Called at the end of normalize-mirror-conf() so state wins over config.
 # Drift (config != state) triggers a visible warning — mirror.conf should
 # NOT be edited after install.  Uninstall first, then change mirror.conf.
 # Warning is shown once per process to avoid noisy repeated output.
 _state_override_mirror() {
 	local _name="$1" _state="$HOME/.aba/mirror/$1/state.sh"
-	local _immutable="reg_host reg_port reg_root reg_user reg_pw"
+	# ocp_version is intentionally excluded: it must always come from aba.conf (user intent),
+	# not from state.sh (mirror fact). After an upgrade sync, state.sh holds the TARGET version,
+	# which broke CLI version checks and ISC upgrade-path generation.
+	# See BACKLOG.md: "ISC upgrade mode broken by state.sh ocp_version override"
+	# and "day2-osus: channel set fails after cross-minor upgrade".
+	local _status="reg_host reg_port reg_root reg_user reg_pw last_action last_action_at"
 	local _field _sval _cval _drifted=""
 
-	for _field in $_immutable; do
-		_sval=$(grep "^${_field}=" "$_state" 2>/dev/null | head -1 | cut -d= -f2-)
+	source "$_state"
+
+	for _field in $_status; do
+		_sval="${!_field}"
 		[ -z "$_sval" ] && continue
-		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+		_cval=$(grep "^${_field}=" mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 		if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
 			_drifted="${_drifted:+$_drifted, }${_field}=${_cval} (installed: ${_sval})"
 		fi
-		echo "export ${_field}=${_sval}"
+		echo "export ${_field}='${_sval}'"
 	done
 
 	# Show drift warning once per aba invocation (file flag using parent PID)
@@ -1229,25 +1246,45 @@ ask() {
 	fi
 
 	# Default reply is 'yes' (or 'no') and return 0
-	yn_opts="(Y/n)"
+	yn_opts="(y/n) [y]"
 	def_response=y
-	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/N)" && shift
-	[ "$1" == "-y" ] && def_response=y && yn_opts="(Y/n)" && shift
+	local auto_response=
+	[ "$1" == "-n" ] && def_response=n && yn_opts="(y/n) [n]" && shift
+	[ "$1" == "-y" ] && def_response=y && yn_opts="(y/n) [y]" && shift
+	# --auto-yes/--auto-no: override the non-interactive (ask=false) answer
+	# independently of the interactive default (-n/-y).  Allows e.g.
+	# "ask -n --auto-yes" = human default N (safe), automation default Y (proceed).
+	[ "$1" == "--auto-yes" ] && auto_response=y && shift
+	[ "$1" == "--auto-no" ] && auto_response=n && shift
 	timer=
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
 	#echo
  	echo_yellow -n "[ABA] $@? $yn_opts: "
-	[ "$ret_default" ] && echo_white "[default: $ret_default]" && return 0
+	if [ "$ret_default" ]; then
+		echo_white "[default: $ret_default]"
+		# ASK_OVERRIDE (-y flag): always proceed (like dnf -y)
+		# unless --auto-no explicitly blocks this specific prompt
+		if [ "$ret_default" = "-y" ]; then
+			[ "${auto_response:-}" = "n" ] && return 1
+			return 0
+		fi
+		# ask=false (config): use auto_response if set, else def_response
+		local effective=${auto_response:-$def_response}
+		[ "$effective" = "n" ] && return 1
+		return 0
+	fi
 	read $timer yn
 
-	# Return default response, 0
-	[ ! "$yn" ] && return 0
-
-	[ "$def_response" == "y" ] && { [ "$yn" == "y" ] || [ "$yn" == "Y" ]; } && return 0
-	[ "$def_response" == "n" ] && { [ "$yn" == "n" ] || [ "$yn" == "N" ]; } && return 0
-
-	# return "non-default" response 
+	# Empty input = use default
+	if [ ! "$yn" ]; then
+		[ "$def_response" = "n" ] && return 1 || return 0
+	fi
+	# Explicit yes
+	{ [ "$yn" = "y" ] || [ "$yn" = "Y" ] || [ "$yn" = "yes" ] || [ "$yn" = "Yes" ] || [ "$yn" = "YES" ]; } && return 0
+	# Explicit no
+	{ [ "$yn" = "n" ] || [ "$yn" = "N" ] || [ "$yn" = "no" ] || [ "$yn" = "No" ] || [ "$yn" = "NO" ]; } && return 1
+	# Unrecognized input — don't proceed (safety: only explicit y/Y/yes means yes)
 	return 1
 }
 
@@ -2022,11 +2059,13 @@ replace-value-conf() {
 		local _sed_safe
 		_sed_safe=$(_sed_escape_replacement "$_write_value")
 
-		# Match old value: either single-quoted ('...') or unquoted (up to space/tab).
+		# Match old value: single-quoted ('...'), double-quoted ("..."), or unquoted.
 		# Trailing whitespace + comment is captured in \1 and preserved.
 		# Uses | as sed delimiter (| is forbidden in config values).
 		if grep -q -E "^[#[:space:]]*${name}='" "$f"; then
 			sed -i --follow-symlinks "s|^[# \t]*${name}='[^']*'\(.*\)|${name}=${_sed_safe}\1|g" "$f"
+		elif grep -q -E "^[#[:space:]]*${name}=\"" "$f"; then
+			sed -i --follow-symlinks "s|^[# \t]*${name}=\"[^\"]*\"\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		else
 			sed -i --follow-symlinks "s|^[# \t]*${name}=[^ \t]*\(.*\)|${name}=${_sed_safe}\1|g" "$f"
 		fi
@@ -2587,6 +2626,7 @@ run_once() {
 			if [[ $age -gt $ttl ]]; then
 				# Task output is stale, reset it
 				_log_history "TTL_EXPIRED age=${age}s ttl=${ttl}s"
+				aba_debug "run_once: task '$work_id' TTL expired (age=${age}s > ttl=${ttl}s), resetting"
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
 				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
@@ -2600,6 +2640,7 @@ run_once() {
 	# Explicit reset also removes identity files -- "forget everything."
 	if [[ "$reset" == true ]]; then
 		_log_history "RESET"
+		aba_debug "run_once: task '$work_id' explicitly reset (killing and clearing state)"
 		_kill_id "$work_id"
 		rm -f "$id_dir"/{cmd.sh,cmd,cwd}
 		return 0
@@ -2635,6 +2676,7 @@ run_once() {
 			exec 9>>"$lock_file"
 			if ! flock -n 9; then
 				exec 9>&-
+				aba_debug "run_once: task '$work_id' already running (lock held), skipping start"
 				return 0
 			fi
 		fi
@@ -2656,6 +2698,7 @@ run_once() {
 		done
 
 		_log_history "STARTED cmd=\"$(printf '%s ' "${command[@]}")\""
+		aba_debug "run_once: starting task '$work_id': ${command[*]}"
 		
 		# Save command in two formats:
 		# 1. cmd.sh - Machine-readable (declare -p) for reliable re-execution
@@ -2721,6 +2764,7 @@ run_once() {
 		
 		# If exit file exists (task already completed), skip
 		if [[ -f "$exit_file" ]]; then
+			aba_debug "run_once: task '$work_id' already completed, skipping: ${command[*]}"
 			return 0
 		fi
 		
@@ -2768,6 +2812,7 @@ run_once() {
 						echo "Error: Task not started and no command provided." >&2
 					return 1
 				fi
+				aba_debug "run_once: task '$work_id' not running, restarting in foreground: ${command[*]}"
 				_start_task "true" "true"
 				wait $!
 			else
@@ -2798,6 +2843,7 @@ run_once() {
 				if [[ -n "$wait_timeout" ]]; then
 					# Wait with timeout
 					if ! flock -w "$wait_timeout" -x "$lock_file" -c "true"; then
+						aba_debug "run_once: task '$work_id' timed out after ${wait_timeout}s"
 						echo "Error: Timeout waiting for task $work_id after ${wait_timeout}s" >&2
 						return 124  # Standard timeout exit code
 					fi
@@ -2812,6 +2858,18 @@ run_once() {
 	exit_code="$(cat "$exit_file" 2>/dev/null || echo 1)"
 	# Guard against empty exit_file (concurrent write in progress)
 	[[ -z "$exit_code" ]] && exit_code=1
+
+	# Read saved command for debug output if not already loaded
+	local _cmd_str="${command[*]}"
+	if [[ -z "$_cmd_str" && -f "$cmd_file" ]]; then
+		_cmd_str="$(cat "$cmd_file" 2>/dev/null)"
+	fi
+
+	if [[ $exit_code -eq 0 ]]; then
+		aba_debug "run_once: task '$work_id' finished successfully: $_cmd_str"
+	else
+		aba_debug "run_once: task '$work_id' FAILED (exit code: $exit_code): $_cmd_str"
+	fi
 
 	# --- SELF-HEALING VALIDATION ---
 	# If no command provided but task previously succeeded, load saved command
@@ -2899,14 +2957,14 @@ run_once() {
 # --- Catalog Download Helpers ---
 
 # Return space-separated list of major.minor versions needing catalog downloads.
-# Always includes the current ocp_version; adds ocp_version_target's major.minor
+# Always includes the current ocp_version; adds ocp_upgrade_to's major.minor
 # when it differs (cross-minor upgrade).  Expects ocp_version (and optionally
-# ocp_version_target) to be set in the environment.
+# ocp_upgrade_to) to be set in the environment.
 _catalog_versions_to_mirror() {
 	local _cur=$(_ver_minor "$ocp_version")
 	local _versions=("$_cur")
-	if [ "${ocp_version_target:-}" ] && [ "$ocp_version_target" != "$ocp_version" ]; then
-		local _tgt=$(_ver_minor "$ocp_version_target")
+	if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+		local _tgt=$(_ver_minor "$ocp_upgrade_to")
 		[ "$_tgt" != "$_cur" ] && _versions+=("$_tgt")
 	fi
 	echo "${_versions[*]}"
@@ -3079,7 +3137,7 @@ aba_prefetch_catalogs() {
 _oc_mirror_pin_catalogs_by_digest() {
 	local isc_file="$1"
 	local ocp_ver_major="$2"
-	local digest_isc=".imageset-config-digest.yaml"
+	local digest_isc="imageset-config-digest.yaml"
 	local sed_args=()
 
 	for catalog_name in redhat-operator certified-operator community-operator; do
@@ -3132,13 +3190,29 @@ _run_oc_mirror_with_retry() {
 	local base_cmd="$3"
 
 	# Pin catalog tags to digests unless disabled (OC_MIRROR_PIN_CATALOGS=0)
-	if [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
+	# During load (disk2mirror), skip regeneration — use the digest ISC that was
+	# transferred from the connected host. Regenerating from local .index/ files
+	# would use stale digests that don't match the archive (Bug #953).
+	if [ "$action" != "load" ] && [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
 		local _ocp_ver_major
 		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
 		local _config_file
 		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" )
 		if [ "$_config_file" != "imageset-config.yaml" ]; then
 			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"  # replace config filename in command
+		fi
+	elif [ "$action" = "load" ]; then
+		# Use the pre-generated digest ISC if it exists (transferred from connected host
+		# via aba-transfer.tar).
+		if [ -f "data/imageset-config-digest.yaml" ]; then
+			base_cmd="${base_cmd/--config imageset-config.yaml/--config imageset-config-digest.yaml}"
+			aba_info "Using transferred digest ISC for air-gap catalog pinning"
+		else
+			aba_warning "imageset-config-digest.yaml not found in mirror/data/." \
+				"On disconnected hosts, this file is required for catalog pinning." \
+				"Copy it from the connected host or use 'aba save' which creates" \
+				"an upgrade bundle containing it automatically." \
+				"Without it, oc-mirror may try to reach registry.redhat.io and fail."
 		fi
 	fi
 
@@ -3162,7 +3236,7 @@ _run_oc_mirror_with_retry() {
 		echo
 		aba_info -n "Attempt ($try/$try_tot)."
 		[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
-		aba_info "Running: cd data && umask 0022 && $cmd"
+		aba_info "Running: $cmd"
 
 		aba_debug "Running oc-mirror $action"
 		( cd data && umask 0022 && eval "$cmd" )
@@ -3830,8 +3904,14 @@ aba_bg_cleanup() {
 	run_once -F 2>/dev/null || true
 }
 
-# Ensure govc is installed in ~/bin
+# Ensure govc is installed in ~/bin (VMware only)
 ensure_govc() {
+	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
+	if [ "${platform:-}" != "vmw" ]; then
+		aba_debug "ensure_govc: skipping (platform=${platform:-unset}, not vmw)"
+		return 0
+	fi
+
 	aba_debug "ensure_govc: downloading and installing govc"
 	# Liberal bg kick-off (idempotent)
 	run_once -i "$TASK_DL_GOVC" -- "${CMD_DL_GOVC[@]}"

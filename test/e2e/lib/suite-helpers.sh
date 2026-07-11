@@ -156,6 +156,42 @@ suite_reset_and_install() {
 	suite_cleanup_oc_mirror_cache "$@"
 }
 
+# --- suite_bounce_stuck_pods [cluster_dir] [location] ------------------------
+# Bounce pods that are not fully ready (ready < total, not Completed).
+# Intended as a recovery heuristic when a cluster install stalls due to
+# transient scheduling or image-pull issues on known-good infrastructure.
+#
+# Excludes etcd and kube-apiserver pods (too dangerous to bounce mid-install).
+# Logs every pod it deletes so failures can still be diagnosed.
+#
+# Usage: suite_bounce_stuck_pods "sno" "remote"
+suite_bounce_stuck_pods() {
+	local cluster_dir="${1:-.}"
+	local location="${2:-local}"
+
+	local bounce_cmd='
+export KUBECONFIG=~/aba/'"$cluster_dir"'/iso-agent-based/auth/kubeconfig
+echo "--- Bouncing stuck pods (not-ready, not Completed) ---"
+stuck=$(oc get po -A --no-headers 2>/dev/null | awk '"'"'{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print $1, $2}'"'"')
+if [ -z "$stuck" ]; then
+	echo "No stuck pods found."
+	exit 0
+fi
+echo "$stuck" | while read ns pod; do
+	# Never bounce etcd or kube-apiserver
+	case "$pod" in etcd-*|kube-apiserver-*) echo "  SKIP (critical): $ns/$pod"; continue ;; esac
+	echo "  DELETE: $ns/$pod"
+	oc delete pod "$pod" -n "$ns" --grace-period=0 --force || true
+done
+echo "--- Bounce complete ---"'
+
+	if [ "$location" = "remote" ]; then
+		e2e_run_remote "Bounce stuck pods (recovery)" "$bounce_cmd"
+	else
+		e2e_run "Bounce stuck pods (recovery)" "$bounce_cmd"
+	fi
+}
+
 # --- suite_full_setup --------------------------------------------------------
 # Complete setup sequence used by most integration suites:
 # install aba, reset, configure, verify, vmware env, NTP, operator sets.

@@ -575,7 +575,7 @@ _configure_kvm_form() {
 	return 0
 }
 
-# Test libvirt connection using current kvm.conf
+# Test libvirt connection and verify KVM host objects from kvm.conf
 _test_kvm_connection() {
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nTesting libvirt connection..." 0 0
 	source <(normalize-kvm-conf) 2>/dev/null || true
@@ -586,16 +586,64 @@ _test_kvm_connection() {
 		return 1
 	fi
 
-	local _out
-	if _out=$(virsh -c "${LIBVIRT_URI:-}" version 2>&1); then
-		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
-			--msgbox "\nLibvirt connection verified!\n\n$_out" 0 0
-		return 0
-	else
+	# Prevent SSH host-key prompt from deadlocking behind the TUI dialog
+	local _saved_ssh_opts="${LIBVIRT_SSH_OPTS:-}"
+	export LIBVIRT_SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 $_saved_ssh_opts"
+
+	local _out _rc=0
+	if ! _out=$(virsh -c "${LIBVIRT_URI:-}" version 2>&1); then
 		dlg --backtitle "$(ui_backtitle)" --title "Connection Failed" \
 			--msgbox "\nCannot connect to libvirt at:\n${LIBVIRT_URI:-?}\n\n$_out\n\nCheck URI and SSH access." 0 0
+		export LIBVIRT_SSH_OPTS="$_saved_ssh_opts"
 		return 1
 	fi
+
+	# Connection OK -- now verify KVM host objects via SSH
+	local _kvm_host
+	_kvm_host=$(echo "$LIBVIRT_URI" | sed -E 's|^[^:]+://([^/]+)/.*|\1|')
+	local _ssh="ssh -F $HOME/.aba/ssh.conf ${_kvm_host}"
+	local _results="" _errors=""
+
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nVerifying KVM host configuration..." 0 0
+
+	# Check storage pool path exists and is writable
+	if [ -n "${KVM_STORAGE_POOL:-}" ]; then
+		if $_ssh "test -d '$KVM_STORAGE_POOL' && test -w '$KVM_STORAGE_POOL'" 2>/dev/null; then
+			local _disk_avail
+			_disk_avail=$($_ssh "df -h '$KVM_STORAGE_POOL' | tail -1 | awk '{print \$4}'" 2>/dev/null)
+			_results="${_results}\n  ✓ Storage pool: ${KVM_STORAGE_POOL} (${_disk_avail:-?} free)"
+		elif $_ssh "test -d '$KVM_STORAGE_POOL'" 2>/dev/null; then
+			_errors="${_errors}\n  ✗ Storage pool: ${KVM_STORAGE_POOL} exists but is NOT writable"
+		else
+			_errors="${_errors}\n  ✗ Storage pool: ${KVM_STORAGE_POOL} does NOT exist on ${_kvm_host}"
+		fi
+	fi
+
+	# Check network bridge exists
+	if [ -n "${KVM_NETWORK:-}" ]; then
+		if $_ssh "test -d '/sys/class/net/$KVM_NETWORK'" 2>/dev/null; then
+			local _bridge_state
+			_bridge_state=$($_ssh "cat /sys/class/net/$KVM_NETWORK/operstate" 2>/dev/null)
+			_results="${_results}\n  ✓ Network bridge: ${KVM_NETWORK} (${_bridge_state:-unknown})"
+		else
+			_errors="${_errors}\n  ✗ Network bridge: ${KVM_NETWORK} does NOT exist on ${_kvm_host}"
+		fi
+	fi
+
+	local _summary="\nLibvirt connection verified!\n\n$_out"
+	[ -n "$_results" ] && _summary="${_summary}\n\nKVM host checks:${_results}"
+	if [ -n "$_errors" ]; then
+		_summary="${_summary}\n${_errors}\n\nFix kvm.conf and re-test."
+		_rc=1
+		dlg --backtitle "$(ui_backtitle)" --title "Connection OK — Problems Found" \
+			--msgbox "$_summary" 0 0
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Connection Successful" \
+			--msgbox "$_summary" 0 0
+	fi
+
+	export LIBVIRT_SSH_OPTS="$_saved_ssh_opts"
+	return $_rc
 }
 
 # =============================================================================
@@ -1578,9 +1626,9 @@ _cluster_execute() {
 	# Platform display
 	local _plat_disp="$cl_platform"
 	case "$cl_platform" in
-		bm)  _plat_disp="bm (bare-metal)" ;;
-		vmw) _plat_disp="vmw (VMware/ESXi)" ;;
-		kvm) _plat_disp="kvm (libvirt/KVM)" ;;
+		bm)  _plat_disp="Bare-metal" ;;
+		vmw) _plat_disp="VMware/ESXi" ;;
+		kvm) _plat_disp="Libvirt/KVM" ;;
 	esac
 
 	# Mirror registry name — source mirror.conf for reg_host/reg_port
@@ -1613,7 +1661,7 @@ _cluster_execute() {
 
 	local summary="Review — Confirm before installing:\n\n"
 	summary+="  Cluster:      $fqdn\n"
-	summary+="  Type:         $cl_type ($_nm master, $_nw workers = $total_nodes node$( [[ $total_nodes -ne 1 ]] && echo s))\n"
+	summary+="  Type:         $cl_type$( [[ "$cl_type" == "sno" ]] && echo " (single node)" || echo " ($_nm master, $_nw workers = $total_nodes nodes)")\n"
 	summary+="  Platform:     $_plat_disp\n"
 	summary+="  OpenShift:    ${ocp_version:-?} (${ocp_channel:-?})\n"
 	local _mode_display
@@ -1649,7 +1697,7 @@ _cluster_execute() {
 			summary+="  Worker Mem:   ${cl_worker_mem:-(not set)} GB\n"
 		fi
 		summary+="  Data disk:    ${cl_disk:-(not set)} GB\n"
-		summary+="  MAC prefix:   ${cl_mac_template:-(auto)}\n"
+		summary+="  MAC template: ${cl_mac_template:-(auto)}\n"
 	fi
 	if [[ -n "$cl_macs" && "$cl_platform" == "bm" ]]; then
 		local mac_cnt
@@ -1711,6 +1759,21 @@ _cluster_execute() {
 	# main menu.  Return 1 is reserved for "Back" on the review page (above).
 	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
 	local rc=$?
+
+	# After successful ISO creation (bare-metal, ISO-only step): show write-usb guidance
+	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
+		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
+		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Writing to USB" \
+			--msgbox "ISO file created:\n\n\
+  $_iso_path\n\n\
+To write to a USB drive, use raw/direct mode (byte-for-byte copy):\n\n\
+  sudo dd if=$_iso_path of=/dev/sdX bs=4M conv=fsync status=progress\n\n\
+Or run: aba --dir $cl_name write-usb\n\n\
+IMPORTANT: The ISO must be written as a raw disk image.\n\
+Any tool that copies the image byte-for-byte to the entire device\n\
+(e.g. dd, balenaEtcher 'Flash', Fedora Media Writer) will work.\n\
+Tools that reformat the USB or extract files will NOT boot." 0 0
+	fi
 
 	# After successful install in mirror mode, offer to configure OperatorHub
 	if [[ $rc -eq 0 && "$_TUI_MODE" != "DIRECT" && -f "$ABA_ROOT/$cl_name/.install-complete" ]]; then
@@ -2309,10 +2372,10 @@ _day2_upgrade() {
 		local _upgrade_hint=""
 		case "$_TUI_MODE" in
 			CONNO)
-				_upgrade_hint="To add newer versions to the mirror:\n  1. Update the channel/version in ImageSet Config (main menu → V)\n  2. Sync images (main menu → Y)\n  3. Run Day-2 to apply changes (main menu → D)\n  4. Then retry Upgrade here"
+				_upgrade_hint="To add newer versions to the mirror:\n  1. Prepare Upgrade (main menu → U)\n  2. Day-2 → Configure OperatorHub (D → R)\n  3. Then retry Upgrade here"
 				;;
 			DISCO)
-				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/ files to this host\n\n  On this host:\n    3. Load images (L)\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
+				_upgrade_hint="To upgrade in a disconnected environment:\n\n  On the connected host:\n    1. Prepare Upgrade for Transfer (U)\n    2. Copy mirror/data/*.tar to this host's mirror/data/\n\n  On this host:\n    3. Load images (L) — unpacks upgrade bundle automatically\n    4. Day-2 → Configure OperatorHub (D → R)\n    5. Then retry Upgrade here\n\nIf you already copied new archives, have you loaded them (L)?"
 				;;
 			*)
 				_upgrade_hint="Ensure newer OpenShift versions are available in the mirror,\nthen retry Upgrade here."
