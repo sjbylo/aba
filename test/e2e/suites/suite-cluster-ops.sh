@@ -299,7 +299,7 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create and install SNO cluster" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_wait_cluster_ready $SNO
+e2e_wait_cluster_available $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 
 # Apply day2 (CatalogSources, IDMS/ITMS, trust CA)

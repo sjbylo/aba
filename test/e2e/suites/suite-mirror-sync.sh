@@ -251,7 +251,7 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Create SNO and generate ISO" \
     "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install --machine-network $(pool_machine_network)"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_wait_cluster_ready $SNO
+e2e_wait_cluster_available $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Delete SNO cluster" "aba --dir $SNO delete"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO"
@@ -310,7 +310,7 @@ e2e_run "Clean sno cluster dir" "if [ -d $SNO ]; then aba --dir $SNO reset --for
 e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run -r 2 10 "Install SNO" "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step install"
 e2e_run "Show cluster operator status" "aba --dir $SNO run"
-e2e_wait_cluster_ready $SNO
+e2e_wait_cluster_available $SNO
 e2e_diag "Show cluster operators" "aba --dir $SNO run --cmd 'oc get co'"
 e2e_run "Apply day2 config" "aba --dir $SNO day2"
 e2e_run "Verify CatalogSources present after day2" \
@@ -446,7 +446,7 @@ e2e_run "Power on OOB VM" \
 e2e_run -r 2 30 "BM Phase 3: monitor cluster install" \
     "aba --dir $SNO_BM install"
 e2e_run "Show cluster operator status" "aba --dir $SNO_BM run"
-e2e_wait_cluster_ready "$SNO_BM"
+e2e_wait_cluster_available "$SNO_BM"
 e2e_diag "Show cluster operators" "aba --dir $SNO_BM run --cmd 'oc get co'"
 
 # Cleanup OOB VM
