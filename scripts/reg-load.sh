@@ -190,10 +190,15 @@ fi
 
 # After successful load: update state.sh with the loaded version.
 # state.sh is the authoritative record of what the mirror actually contains.
+# mirror_ocp_version tracks the highest version in the mirror.
 if [ "$_loaded_ver" ]; then
 	replace-value-conf -q -n ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
+	replace-value-conf -q -n mirror_ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
 	if [ "$_loaded_ver" != "$ocp_version" ]; then
-		aba_info "Mirror state updated: ocp_version $ocp_version → $_loaded_ver"
+		replace-value-conf -q -n mirror_ocp_upgrade_from -v "$ocp_version" -f "$regcreds_dir/state.sh"
+		aba_info "Mirror state updated: mirror_ocp_version $ocp_version → $_loaded_ver"
+	else
+		replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
 	fi
 fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
