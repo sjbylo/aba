@@ -1,4 +1,11 @@
-## [Unreleased]
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.4...HEAD)
+
+---
+
+## [1.1.4](https://github.com/sjbylo/aba/releases/tag/v1.1.4) - 2026-07-11
+
+Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 30+ bug fixes
+
 
 ### New Features
 
