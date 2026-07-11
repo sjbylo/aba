@@ -137,14 +137,21 @@ if ! _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
-# After successful sync: update state.sh with the synced version.
-# Use ocp_upgrade_to if set (upgrade sync), otherwise ocp_version (normal sync).
+# After successful sync: update state.sh with mirror facts.
+# mirror_ocp_version tracks what's actually in the mirror (highest synced version).
+# mirror_ocp_upgrade_from tracks the source version of an upgrade sync.
 _synced_ver="${ocp_upgrade_to:-$ocp_version}"
 replace-value-conf -q -n ocp_version -v "$_synced_ver" -f "$regcreds_dir/state.sh"
+replace-value-conf -q -n mirror_ocp_version -v "$_synced_ver" -f "$regcreds_dir/state.sh"
+if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+	replace-value-conf -q -n mirror_ocp_upgrade_from -v "$ocp_version" -f "$regcreds_dir/state.sh"
+else
+	replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
+fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 if [ "$_synced_ver" != "$ocp_version" ]; then
-	aba_info "Mirror state updated: ocp_version $ocp_version → $_synced_ver"
+	aba_info "Mirror state updated: mirror_ocp_version $ocp_version → $_synced_ver"
 fi
 
 echo

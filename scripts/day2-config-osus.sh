@@ -287,7 +287,11 @@ aba_info_ok "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 # queries the wrong channel and OSUS returns an empty graph.
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 aba_debug "Cluster channel: $CH"
-_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+# Derive expected channel from the cluster's actual version, not aba.conf.
+# After a cross-minor upgrade (e.g. 4.20→4.21), aba.conf still says 4.20
+# but the cluster only accepts 4.21+ channels.
+_cluster_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || _cluster_ver=""
+_ocp_ver_major=$(echo "${_cluster_ver:-$ocp_version}" | cut -d. -f1-2)
 _expected_channel="${ocp_channel}-${_ocp_ver_major}"
 if [ "$CH" != "$_expected_channel" ]; then
 	aba_info "Cluster channel ($CH) does not match mirrored channel ($_expected_channel)"

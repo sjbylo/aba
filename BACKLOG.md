@@ -36,7 +36,7 @@ Issues or Pull Requests.
 ## ISC upgrade mode broken by state.sh ocp_version override
 
 **Severity:** HIGH — produces wrong ISC, upgrade sync downloads wrong images
-**Status:** Planned
+**Status:** Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact)
 **Added:** 2026-07-09
 
 **Problem:** When `_state_override_mirror()` overrides `ocp_version` from
@@ -180,7 +180,7 @@ selection first, or run on all installed clusters using this mirror.
 ## day2-osus: channel set fails after cross-minor upgrade
 
 **Severity:** HIGH — `aba day2-osus` errors out on upgraded clusters
-**Status:** Planned
+**Status:** Done (day2-config-osus.sh now derives channel from cluster's actual version)
 **Added:** 2026-07-10
 **Related:** ISC upgrade mode / state.sh override (above) — same root theme: scripts derive version/channel from config files instead of the live cluster
 
@@ -459,3 +459,91 @@ accepts: `direct`, `proxy`, or `<mirror-dir-name>` (default: `mirror`).
 defaulting to mirror, is cleaner. Accept old keys for a release or two. proxy
 and direct become reserved dir names. The key name itself might deserve a rename
 — something like image_source."
+
+---
+
+## Multi-version operator catalogs: day2 applies wrong catalog after upgrade sync
+
+**Severity:** HIGH — can break operators on existing clusters
+**Status:** Planned
+**Added:** 2026-07-11
+**Related:** ISC upgrade mode / state.sh override (above), day2-osus channel bug (above)
+
+**Problem:** When a mirror is upgraded (e.g. 4.21 → 4.23), `oc-mirror` generates
+CatalogSource files in `working-dir/cluster-resources/` that reference the
+**target** version's catalog (`redhat-operator-index:v4.23`). Running `aba day2`
+on an existing 4.21 cluster after the upgrade sync applies v4.23 CatalogSources
+to a 4.21 cluster, breaking operator resolution.
+
+**Details:**
+1. Each `oc-mirror` sync creates a filtered catalog image tagged by OCP
+   major.minor (e.g. `:v4.21`, `:v4.23`). These are independent images
+   containing operators compatible with **that** OCP version only.
+2. `oc-mirror` is additive — old catalog images (v4.21) remain in the registry
+   after a v4.23 sync. The images are fine.
+3. However, `working-dir/cluster-resources/cs-*.yaml` is **overwritten** on each
+   sync. After a v4.23 sync, these files point to v4.23 catalogs only.
+4. `day2.sh` blindly applies whatever CS files exist — no version awareness.
+5. The v4.23 catalog contains operators designed for 4.23 APIs. Installing them
+   on a 4.21 cluster can break because the operators may use APIs or channels
+   that don't exist in 4.21.
+
+**Impact scenarios:**
+
+| Scenario | Result |
+|----------|--------|
+| 4.21 cluster, `day2` already run before upgrade sync | Safe — existing CatalogSources still point to v4.21 |
+| 4.21 cluster, `aba day2` run AFTER v4.23 sync | **BREAKS** — v4.23 CatalogSources applied to 4.21 cluster |
+| New cluster at 4.21 from same mirror | **Risky** — `day2` applies v4.23 CatalogSources |
+| Stale v4.21 catalog (frozen from original sync) | No security patches for 4.21 operators unless re-synced |
+
+**Proposed fix (two parts):**
+
+### Part 1: Version-guard in day2.sh
+
+Before applying CatalogSources, query the cluster's actual version and compare
+it to the catalog version referenced in the CS file. Warn/abort if they don't
+match:
+```bash
+_cluster_ver=$(oc get clusterversion version \
+  -o jsonpath='{.status.desired.version}' 2>/dev/null) || _cluster_ver=""
+_cluster_major=$(echo "${_cluster_ver:-$ocp_version}" | cut -d. -f1-2)
+# Extract catalog version from CS image reference (e.g. v4.23)
+_cs_ver=$(grep -oP 'operator-index:v\K[0-9]+\.[0-9]+' "$f" | head -1)
+if [ "$_cs_ver" ] && [ "$_cluster_major" != "$_cs_ver" ]; then
+    aba_warning "CatalogSource references v$_cs_ver but cluster is at $_cluster_major — skipping"
+    continue
+fi
+```
+
+### Part 2: Multi-version operator catalogs in ISC
+
+When generating the ISC for an upgrade, include operator catalog entries for
+**both** the source and target versions. This ensures `oc-mirror` syncs operator
+images for all versions in use into the mirror:
+```yaml
+operators:
+- catalog: registry.redhat.io/redhat/redhat-operator-index:v4.21
+  packages:
+  - name: web-terminal
+- catalog: registry.redhat.io/redhat/redhat-operator-index:v4.23
+  packages:
+  - name: web-terminal
+```
+
+**Complication with Part 2:** `oc-mirror` generates one CS file per catalog name
+(not per version tag), so v4.21 and v4.23 entries collide in `cs-redhat-operator-
+index.yaml`. The images are synced correctly, but only one CS file survives.
+This is acceptable if `day2.sh` is version-aware (Part 1) — it can construct
+the correct CatalogSource image reference using the cluster's version rather
+than relying on the oc-mirror-generated CS file.
+
+**Alternative to Part 2:** Document that mixed-version environments require
+separate sync cycles. Users who upgrade the mirror but still have old clusters
+must run a separate sync for the old version to refresh its operator catalog.
+
+**Files to change:**
+- `scripts/day2.sh`: add version-guard before CS application loop (~line 284)
+- `scripts/reg-create-imageset-config.sh`: optionally emit dual catalog entries
+- `scripts/add-operators-to-imageset.sh`: handle dual catalog version logic
+- `templates/imageset-config.yaml.j2`: support dual operator catalog blocks
