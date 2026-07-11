@@ -31,10 +31,13 @@ mta-operator                                            Migration Toolkit for Ap
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.8
 multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.17
+netobserv-operator                                      Network Observability                                        stable
 node-healthcheck-operator                               Node Health Check Operator                                   stable
 node-maintenance-operator                               Node Maintenance Operator                                    stable
 node-observability-operator                             Node Observability Operator                                  alpha
+openshift-cert-manager-operator                         cert-manager Operator for Red Hat OpenShift                  stable-v1
 openshift-custom-metrics-autoscaler-operator            Custom Metrics Autoscaler                                    stable
+openshift-external-secrets-operator                     External Secrets Operator for Red Hat OpenShift              stable-v1
 openshift-pipelines-operator-rh                         Red Hat OpenShift Pipelines                                  latest
 openshift-secondary-scheduler-operator                  Secondary Scheduler Operator for Red Hat OpenShift           stable
 quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.17

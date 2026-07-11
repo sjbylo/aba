@@ -163,7 +163,7 @@ jhipster-online-operator                                JHipster Online Operator
 jumpstarter-operator                                    Jumpstarter Operator                                         alpha
 jupyter-notebook-validator-operator                     Jupyter Notebook Validator Operator                          stable
 k8gb                                                    k8gb                                                         alpha
-kairos-operator                                         Kairos Operator                                              stable
+kairos-operator                                         Kairos Operator                                              candidate-v2
 keda                                                    [DEPRECATED] KEDA                                            alpha
 keepalived-operator                                     Keepalived Operator                                          alpha
 kepler-operator                                         Kepler                                                       alpha

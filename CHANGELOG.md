@@ -1,4 +1,57 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.3...HEAD)
+## [Unreleased]
+
+### New Features
+
+- **Disconnected upgrade transfer bundle** — `aba save` now creates an `aba-transfer.tar` bundle containing the ImageSet Config, digest-pinned ISC, CLI binaries, and metadata. On the disconnected host, `aba load` unpacks the bundle automatically. Transfer is now simply `cp mirror/data/*.tar` — no manual ISC or CLI copying needed.
+- **Mirror state tracking** — Mirror operational state (`ocp_version`, `last_action`, `last_action_at`) is now tracked in per-mirror `state.sh` files. Previously, `reg-load.sh`/`reg-sync.sh` wrote the loaded version back to `aba.conf`, overwriting user intent with operational fact. State is now cleanly separated from configuration.
+- **`aba write-usb`** — New command for bare-metal installs that displays ISO details (path, size, SHA256), lists block devices with mount point warnings, refuses system disks, and shows the exact `dd` command before executing. Improved bare-metal guidance throughout the install flow.
+- **`aba unstick`** — New command to bounce not-ready pods during stuck cluster installs. Detects pods in error states (`CrashLoopBackOff`, `ImagePullBackOff`, `ContainerStatusUnknown`, `Init:*` prefixed states) and deletes them to trigger rescheduling.
+- **KVM connection pre-flight** — TUI connection test now verifies KVM storage pool exists and is writable (with free space shown) and that the network bridge exists (with link state).
+- **`ask()` auto-answer modes** — `--auto-yes` and `--auto-no` flags decouple the interactive default from the non-interactive (automation) response, allowing safe defaults for humans with automatic proceed for scripting.
+- **`--lite` alias** — `aba bundle --lite` accepted as synonym for `--light`.
+
+### Improvements
+
+- **Upgrade `--force` tolerates warnings** — `aba upgrade --force` now adds `--allow-upgrade-with-warnings` to bypass transiently degraded operators, matching the intent of forcing an upgrade. Prominent warnings added about `--force` not being for production.
+- **Upgrade `--force` bypasses admin ack** — `--force` now skips the interactive `AdminAckRequired` prompt for cross-minor upgrades, enabling fully automated upgrade workflows.
+- **Rename `--target-version` to `--upgrade-to`** — The CLI flag and config variable (`ocp_version_target` → `ocp_upgrade_to`) are renamed to unambiguously indicate upgrade intent. Old names are not accepted (clean break).
+- **`aba-transfer.tar` always bundles ISC** — The transfer bundle is now created for all save operations (not just upgrades), ensuring incremental saves (e.g. `additionalImages`) transfer the correct ISC to the disconnected host.
+- **TUI: Prepare Upgrade (beta) label** — The upgrade workflow menu item is labeled as beta to set expectations.
+- **TUI: upgrade hints point to Prepare Upgrade (U)** — Instead of directing users to manually edit ISC → sync → day2, the hint points to the guided Prepare Upgrade flow.
+- **TUI: improved DISCO bundle wizard** — Cleaner no-archives path (loop with "Check Again" / "Exit"), tighter payload summary, back-navigation to local/remote choice.
+- **TUI: remember execution mode** — The confirm-and-execute dialog highlights the user's previous choice (Terminal / Terminal auto-answer / TUI).
+- **TUI: improved Install Cluster dialog** — Shows "VMware/ESXi" (not "vmw"), "sno (single node)" shorthand, "MAC template" instead of "MAC prefix".
+- **Cleaner output** — Condensed post-load/sync hints, suppressed next-step hints in TUI mode, cleaner oc-mirror log output, simplified bundle messages.
+- **`aba install` idempotent** — Running `aba install` on an already-installed cluster now exits cleanly with guidance instead of cascading through the dependency chain.
+- **`run_once()` debug logging** — Comprehensive `aba_debug` logging at all key decision points (TTL expiry, lock contention, wait timeout, reset) with full command strings for troubleshooting.
+- **Improved `--help` text** — Rewritten `aba cluster --help` with structured layout, examples, and SSOT reminder. `-y` description updated to "Answer yes to all prompts" across all help files.
+- **Post-install instructions mention TUI** — Users see "aba (or abatui)" in bundle instructions.
+- **Default `reg_host` to local hostname** — New mirror installs default `reg_host` to the machine's hostname instead of the generic "registry".
+- **`govc` only downloaded for VMware** — CLI Makefile and `ensure_govc()` skip `govc` download/install when `platform` is not `vmw`.
+
+### Bug Fixes
+
+- **Fix state.sh overriding `ocp_version` after upgrade** — `_state_override_mirror()` no longer exports `ocp_version` from `state.sh`, which after an upgrade sync held the TARGET version and clobbered the `aba.conf` intent. This caused CLI version mismatch errors ("openshift-install version does not match aba.conf") and broken ISC upgrade-path generation.
+- **Fix CLI binary permissions** — Added `--no-same-owner` to all `tar` extractions and `chmod a+rx` for `oc-mirror` and `govc` to prevent UID/GID leaks from third-party tarballs. Previously, `oc-mirror` could extract as `984:984` with mode `rwxr-----`, making it unexecutable by non-root users.
+- **Fix state override from cluster directory** — `normalize-mirror-conf()` now follows the `mirror.conf` symlink to resolve the actual mirror directory name, fixing silent state override failures when called from a cluster directory.
+- **Fix state.sh silent overwrites** — Registry re-install now aborts if an ABA-managed registry is already installed (prevents orphaning). `reg_detect_existing()` aborts instead of silently deleting state when registry is unreachable.
+- **Fix config file `#` in values** — Config parser no longer truncates values containing `#` (e.g. registry passwords like `abc#def`). Single/double-quoted values are extracted verbatim; only unquoted values treat whitespace-preceded `#` as a comment.
+- **Fix `ask()` interactive logic (Bug #1024)** — The ask function's interactive path was completely inverted: for `ask -n`, typing "y" returned NO and typing "n" returned YES. Rewritten so return 0 always means "yes/proceed".
+- **Fix SSH connection drops** — Added `ServerAliveInterval` to SSH config to prevent long-running connections from being dropped by intermediate firewalls.
+- **Fix catalog image corruption** — Keep catalog images cached to prevent "layer not known" errors from podman garbage-collecting layers mid-operation.
+- **Fix `day2.sh` CatalogSource wait** — Per-PID exit code collection replaces bare `wait`, so a failing CatalogSource correctly aborts `day2` instead of being silently swallowed.
+- **Fix broken regcreds symlink** — Skip broken `regcreds` symlink for connected clusters instead of erroring out.
+- **Fix bare-metal CIDR prefix** — `prefix_length` split moved outside the platform conditional so it's always exported, fixing bare-metal cluster installs.
+- **Fix `govc` transient failures** — Retry `govc` commands on transient vCenter `TaskInProgress` conflicts.
+- **Fix `aba delete` cleanup visibility** — Removed `2>/dev/null` from `make clean` in delete so cleanup failures are visible.
+- **Fix TUI SSH deadlock** — Set `StrictHostKeyChecking=accept-new` and `BatchMode=yes` for libvirt connection tests, preventing host-key prompts from deadlocking the TUI.
+- **Fix ISC hint crash in bundle mode** — ISC hint guard no longer crashes with `exit 1` when running inside a bundle workflow.
+- **Fix stale ISC on incremental save** — Non-upgrade incremental saves now bundle the ISC in `aba-transfer.tar`, preventing `aba load` from using a stale local ISC that silently skips images.
+
+### Known Issues
+
+- **ISC upgrade mode broken by state.sh override** — After an upgrade sync, re-viewing or regenerating the ImageSet Config may produce a non-upgrade ISC (`minVersion == maxVersion`) because `state.sh` now holds the target version. Workaround: ensure `aba.conf` holds the correct source version before running Prepare Upgrade. A fix using `ocp_upgrade_from` in `state.sh` is planned.
+- **`aba day2` / `aba day2-osus` fails after cross-minor upgrade** — The OSUS channel is derived from `aba.conf`'s `ocp_version` (the install version), not the cluster's actual running version. After a cross-minor upgrade (e.g. 4.20 → 4.21), the script tries to set the old channel. Workaround: manually run `oc adm upgrade channel fast-4.21` (or appropriate channel).
 
 ---
 
