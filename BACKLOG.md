@@ -547,3 +547,43 @@ must run a separate sync for the old version to refresh its operator catalog.
 - `scripts/reg-create-imageset-config.sh`: optionally emit dual catalog entries
 - `scripts/add-operators-to-imageset.sh`: handle dual catalog version logic
 - `templates/imageset-config.yaml.j2`: support dual operator catalog blocks
+
+---
+
+## E2E: operator set installation smoke tests
+
+**Severity:** MEDIUM — missing operator dependencies silently break bundle builds
+**Status:** Planned
+**Added:** 2026-07-12
+
+**Problem:** Operator sets (`templates/operator-set-*`) list packages and their
+dependencies, but there is no automated test that verifies these sets actually
+install correctly. When upstream adds new dependencies (e.g. `ocs-tls-profiles`
+in ODF 4.22), the sets become stale and bundle builds fail with cryptic
+`ResolutionFailed` errors. This was caught manually; it should be caught by CI.
+
+**Proposed fix:** Add E2E tests that mirror and install the most important
+operator sets end-to-end, verifying that all expected CSVs reach `Succeeded`:
+
+- `operator-set-acm` (Advanced Cluster Management)
+- `operator-set-ai` (Assisted Installer / Infrastructure Operator)
+- `operator-set-odf` (OpenShift Data Foundation)
+- `operator-set-odfdr` (ODF Disaster Recovery)
+- `operator-set-quay` (Quay)
+- `operator-set-sec` (ACS / Compliance / File Integrity)
+- `operator-set-virt` (OpenShift Virtualization)
+
+Each test would:
+1. Configure `mirror.conf` with the operator set
+2. Sync/save + load the operator catalog and images
+3. Install the operator(s) on a test cluster
+4. Wait for all expected CSVs to reach `Succeeded`
+5. Report any `ResolutionFailed` subscriptions (missing dependencies)
+
+**Trigger:** Run at least once per minor OCP version bump (e.g. 4.21 → 4.22)
+to catch new dependencies early. Could also run on any change to
+`templates/operator-set-*` files.
+
+**Files:**
+- New suite(s) under `test/e2e/suites/`
+- `templates/operator-set-*` (validated, not changed)
