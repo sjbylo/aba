@@ -11,6 +11,7 @@ ocs-client-operator
 ocs-operator
 odf-csi-addons-operator
 odf-prometheus-operator
+ocs-tls-profiles
 recipe
 cephcsi-operator
 odf-dependencies
