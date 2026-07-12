@@ -38,7 +38,7 @@ else
 		ifeq ($(wildcard .bm-nextstep),)
 			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso .bm-nextstep
 		else
-			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso    agent     mon
+			TARGET_DEPENDENCIES = check ../aba.conf                                                   iso    .auto-agent-up     mon
 		endif
 	endif
 endif
@@ -206,7 +206,7 @@ refresh: $(hv_conf_dep) upload  ## Delete & re-create the VMs. Useful to redeplo
 	$(SCRIPTS)/monitor-install.sh
 	@touch .install-complete
 
-.auto-agent-up: .autorefresh
+.auto-agent-up: $(wildcard .autorefresh) iso-agent-based/agent.$(arch).iso
 	$(SCRIPTS)/wait-agent-up.sh
 	@touch .auto-agent-up
 
