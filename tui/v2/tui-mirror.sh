@@ -695,7 +695,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	ocp_upgrade_to="$_target_ver"
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
-		"Generating ImageSet configuration (operator catalogs\nmay also be refreshed, if needed). Please wait." 5 60
+		"Generating ImageSet configuration (operator catalogs may also be refreshed). Please wait." 5 60
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0
@@ -706,11 +706,11 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
 			rc=$?
 			if [[ $rc -eq 0 ]]; then
-				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
-					--msgbox "\nUpgrade images synced to registry.\n\n\
+			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
+				--msgbox "\nUpgrade images synced to registry.\n\n\
 Next steps:\n\n\
-  1. Run Day-2 to apply changes (D)\n\
-  2. Upgrade cluster (D → U)\n" 0 0
+  1. Day-2 / Cluster Management → Configure OperatorHub (D → R)\n\
+  2. Day-2 / Cluster Management → Upgrade cluster (D → U)\n" 0 0
 			fi
 			;;
 		2)

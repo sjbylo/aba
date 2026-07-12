@@ -86,6 +86,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
 					"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
 					"" \
+					"To cancel upgrade mode: aba --upgrade-to ''" \
 					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 			fi
 
