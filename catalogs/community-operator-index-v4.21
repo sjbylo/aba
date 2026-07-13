@@ -120,7 +120,7 @@ dynatrace-operator                                      Dynatrace Operator      
 eclipse-amlen-operator                                  eclipse-amlen-operator                                       alpha
 eclipse-che                                             Eclipse Che                                                  stable
 ecr-secret-operator                                     ECR Secret Operator                                          alpha
-edp-keycloak-operator                                   EDP Keycloak Operator                                        alpha
+edp-keycloak-operator                                   EDP Keycloak Operator                                        stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 egressip-ipam-operator                                  Egressip Ipam Operator                                       alpha
 ember-csi-community-operator                            Ember CSI Operator                                           beta
