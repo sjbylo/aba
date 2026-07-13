@@ -76,6 +76,12 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	scripts/cli-download-all.sh --upgrade-to "$ocp_upgrade_to"
 fi
 
+# Re-enable colored output now that CLI downloads are done.
+# In bundle mode (_ABA_BUNDLE_MODE), keep PLAIN_OUTPUT as an extra safety layer
+# to prevent color escape codes from reaching the tar stream (the primary guards
+# are make-bundle.sh's >&2 redirect and _print_colored's [ -t 1 ] check).
+[ ! "${_ABA_BUNDLE_MODE:-}" ] && unset PLAIN_OUTPUT
+
 # Wait for oc-mirror specifically (needed immediately below)
 aba_debug "Ensuring oc-mirror is available"
 if ! ensure_oc_mirror; then
