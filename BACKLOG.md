@@ -457,6 +457,44 @@ run `day2` automatically without prompting.
 
 ---
 
+## TUI Day-2: add "Cluster login" shell item
+
+**Severity:** LOW — UX convenience
+**Status:** Planned
+**Added:** 2026-07-13
+
+**Problem:** When troubleshooting or inspecting a cluster from the TUI, the
+user must exit the TUI, find the kubeconfig, export it, and run `oc` commands
+manually. This breaks flow, especially for less experienced users.
+
+**Proposed fix:** Add a "Cluster login" (or "Shell") menu item to the Day-2 /
+Cluster Management menu. When selected, it drops the user into an interactive
+bash shell with `KUBECONFIG` already exported and `oc` on the PATH. The user
+can run any `oc` commands, then `exit` to return to the TUI.
+
+**Implementation idea:**
+```bash
+# In the Day-2 menu handler:
+_kc=$(cluster_kubeconfig 2>/dev/null)
+export KUBECONFIG="$_kc"
+clear
+echo "[ABA] Logged into cluster: $(oc whoami --show-server 2>/dev/null)"
+echo "[ABA] Type 'exit' to return to the TUI."
+bash --login
+```
+
+**Considerations:**
+- Use `bash --login` (not `exec bash`) so the TUI resumes on `exit`
+- Show cluster name/API URL in the shell prompt or banner
+- `aba shell` CLI command already exists — reuse the same logic
+- Consider adding a custom `PS1` prompt (e.g. `[aba:clustername] $`) to
+  remind the user they're inside a TUI subshell
+
+**Files to change:**
+- `tui/v2/tui-cluster.sh`: add menu item to Day-2 menu and handler
+
+---
+
 ## day2-ntp: apply NTP config without node reboot where possible
 
 **Severity:** MEDIUM — reduces downtime during NTP configuration
