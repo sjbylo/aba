@@ -174,9 +174,9 @@ tenant-operator                                         Multi Tenant Operator   
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
 trident-operator                                        NetApp Trident                                               stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
-uma-operator                                            DX APM Universal Monitoring Agent                            beta
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     beta
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    stable
+uma-operator                                            DX APM Universal Monitoring Agent                            stable
+uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     stable
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
