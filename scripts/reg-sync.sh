@@ -156,16 +156,24 @@ fi
 
 echo
 if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
-	aba_info_ok "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
-	aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
-	echo
-fi
+	# Context-aware next steps: upgrade sync vs initial sync
+	_is_upgrade=""
+	[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && _is_upgrade=1
 
-echo
-if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
-	aba_warning -c magenta -p IMPORTANT \
-		"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
-		"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+	if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
+		if [ "$_is_upgrade" ]; then
+			aba_info "Next steps for upgrade ($ocp_version → $ocp_upgrade_to):"
+			aba_info "  1. aba -d <cluster> day2       (apply updated CatalogSources/IDMS)"
+			aba_info "  2. aba -d <cluster> upgrade --to $ocp_upgrade_to"
+		else
+			aba_info "Next steps:"
+			aba_info "  a) Install a new cluster:  aba cluster --name <name> --type <sno|compact|standard>"
+			aba_info "  b) Update an existing cluster:  aba -d <cluster> day2"
+		fi
+	else
+		aba_info "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
+		aba_info "Run 'aba cluster --help' for more information about installing clusters."
+	fi
 	echo
 fi
 

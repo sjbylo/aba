@@ -214,18 +214,18 @@ fi  # end: transfer bundle creation
 echo >&2
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
-	aba_info_ok ""
-	aba_info_ok "Copy all *.tar files from mirror/data/ to the disconnected host:"
-	aba_info_ok "  cp mirror/data/*.tar /transfer-media/"
-	aba_info_ok ""
-	aba_info_ok "  Files: mirror_*.tar (images), aba-transfer.tar (ISC, CLIs, metadata)"
-	aba_info_ok ""
-	aba_info_ok "On the disconnected host:"
-	aba_info_ok "  cp /transfer-media/*.tar ~/aba/mirror/data/"
-	aba_info_ok "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
+	echo
+	aba_info "Copy all *.tar files from mirror/data/ to the disconnected host:"
+	aba_info "  cp mirror/data/*.tar /transfer-media/"
+	echo
+	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (ISC, CLIs, metadata)"
+	echo
+	aba_info "On the disconnected host:"
+	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"
+	aba_info "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
 elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
 	aba_info_ok "Images saved to mirror/data/."
-	aba_info_ok "Next: 'aba tar --out /path/to/portable/media/install-bundle.tar'"
+	aba_info "Next: 'aba tar --out /path/to/portable/media/install-bundle.tar'"
 fi
 echo >&2
 
