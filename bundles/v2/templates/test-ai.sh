@@ -28,7 +28,6 @@ metadata:
   namespace: $NS
 spec:
   name: rhods-operator
-  channel: stable
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF

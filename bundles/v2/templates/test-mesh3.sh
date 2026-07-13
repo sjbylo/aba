@@ -18,7 +18,6 @@ metadata:
   name: servicemeshoperator3
   namespace: openshift-operators
 spec:
-  channel: stable
   installPlanApproval: Automatic
   name: servicemeshoperator3
   source: redhat-operators
@@ -30,7 +29,6 @@ metadata:
   name: kiali-ossm
   namespace: openshift-operators
 spec:
-  channel: stable
   installPlanApproval: Automatic
   name: kiali-ossm
   source: redhat-operators

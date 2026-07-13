@@ -21,7 +21,6 @@ metadata:
   name: web-terminal
   namespace: $NS
 spec:
-  channel: fast
   name: web-terminal
   source: redhat-operators
   sourceNamespace: openshift-marketplace
