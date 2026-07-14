@@ -10,7 +10,9 @@
 # SIDE EFFECTS: Pulls a container image into the local podman store
 # IDEMPOTENT: Yes (overwrites output file)
 
-source scripts/include_all.sh
+# Resolve include path: works from repo root (scripts/) or from mirror/ (../scripts/ symlink)
+_script_dir="$(cd "$(dirname "$0")" && pwd)"
+source "$_script_dir/include_all.sh"
 
 image="${1:?Usage: $0 <image> <output-file>}"
 output="${2:?Usage: $0 <image> <output-file>}"
