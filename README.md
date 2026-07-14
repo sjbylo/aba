@@ -593,6 +593,10 @@ aba mon              # Monitor installation progress
 ```
 
 For bare-metal (`platform=bm`, the default), ABA generates the configuration and ISO — you boot your servers and monitor installation.
+The ISO must be written as a raw disk image (byte-for-byte), not extracted or "burned" in file-copy mode.
+Use `aba write-usb` for guided USB writing, or `dd if=agent.x86_64.iso of=/dev/sdX bs=4M conv=fsync status=progress`.
+Most server management interfaces (iLO, iDRAC, BMC) can also mount the ISO as virtual media — no USB required.
+
 For VMware or KVM, installation is fully automated (VM creation, ISO attach, and boot).
 
 After OpenShift installs, access the cluster:
@@ -824,6 +828,7 @@ ops=web-terminal,devworkspace-operator
 ```
 
 You can use `op_sets`, `ops`, or both together.
+These settings control which operators are *mirrored* to your registry and made available in OperatorHub — operators must still be installed via the OpenShift console or `oc apply`.
 
 3. **Mirror the operator images:**
 
@@ -1120,13 +1125,107 @@ These commands control VMs directly without performing any OpenShift-level drain
 #### Network Configuration
 
 - **DNS**: Configure the following A records matching your cluster name and base domain:
-  - `api.<cluster>.<domain>` pointing to a free IP address
-  - `*.apps.<cluster>.<domain>` (wildcard) pointing to a free IP address
+  - `api.<cluster>.<domain>` pointing to a free IP address (not assigned to any host — the cluster will host it as a virtual IP)
+  - `*.apps.<cluster>.<domain>` (wildcard) pointing to a free IP address (same — a cluster-managed virtual IP)
   - For SNO: both records point to the *same IP address*
   - `registry.example.com` pointing to your mirror registry host
 - **Registry Connectivity**: Cluster nodes must have network access to the mirror registry on its configured port (default 8443).
 - **mDNS (Multicast DNS)**: The agent-based installer requires mDNS (UDP port 5353) to be allowed between cluster nodes. Ensure firewalls and switch ACLs do not block multicast traffic on the cluster network. See [this blog post](https://www.redhat.com/en/blog/fully-automated-openshift-deployments-with-vmware-vsphere) for details.
 - **NTP**: An NTP server is required for time synchronization across all nodes.
+- **Hardened hosts (DISA STIG, fapolicyd)**: ABA has been tested with DISA STIG profiles. If `fapolicyd` is active, you may need to add allow rules for ABA's tools and `openshift-install` under `/etc/fapolicyd/rules.d/`.
+
+#### Example: Bare-metal Compact Cluster
+
+This example shows a 3-node compact cluster with all network values that work together.
+
+<!-- Export this diagram from images/bare-metal-network.drawio using draw.io -->
+<div align="center">
+<img src="images/bare-metal-network.png" alt="Bare-metal Network Topology" title="Bare-metal Compact Cluster — Network Topology" width="70%">
+</div>
+
+**DNS A records required:**
+
+- `api.mycluster.example.com` &rarr; `10.0.1.99` (API VIP — free IP, managed by the cluster via keepalived)
+- `*.apps.mycluster.example.com` &rarr; `10.0.1.98` (Ingress VIP — free IP, managed by the cluster)
+- `registry.example.com` &rarr; `10.0.1.10` (bastion / mirror registry)
+
+**Matching `aba.conf` (network settings):**
+
+```
+domain=example.com
+machine_network=10.0.1.0/24
+dns_servers=10.0.1.5
+next_hop_address=10.0.1.1
+ntp_servers=10.0.1.5
+platform=bm
+```
+
+**Matching `cluster.conf`:**
+
+```
+cluster_name=mycluster
+base_domain=example.com
+api_vip=10.0.1.99
+ingress_vip=10.0.1.98
+starting_ip=10.0.1.101        # master0=.101, master1=.102, master2=.103
+num_masters=3
+num_workers=0
+dns_servers=10.0.1.5
+next_hop_address=10.0.1.1
+ntp_servers=10.0.1.5
+ports=ens1f0,ens2f0              # Two interfaces = bonding (optional)
+vlan=100                         # VLAN tag (optional)
+```
+
+**MAC addresses (`macs.conf`, optional):**
+
+```
+cat > mycluster/macs.conf <<EOF
+aa:bb:cc:dd:01:01    # master0 port 1 (ens1f0)
+aa:bb:cc:dd:01:02    # master0 port 2 (ens2f0)
+aa:bb:cc:dd:02:01    # master1 port 1
+aa:bb:cc:dd:02:02    # master1 port 2
+aa:bb:cc:dd:03:01    # master2 port 1
+aa:bb:cc:dd:03:02    # master2 port 2
+EOF
+```
+
+With bonding: 2 MACs per node (one per bonded port), grouped by host. Without bonding: 1 MAC per node.
+
+**Firewall (bastion &harr; nodes):**
+
+If a firewall exists between cluster nodes, the required inter-node ports (mDNS, etcd, Kubernetes API, etc.) must be open — see [Configuring your firewall](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/installation_configuration/configuring-firewall) for the full list. Between the bastion/registry and the nodes, ensure these ports are open:
+
+- `8443/tcp` — nodes pull images from the mirror registry
+- `22/tcp` — SSH access to nodes (for troubleshooting)
+- `6443/tcp` — bastion accesses the cluster API (kubectl/oc)
+- `443/tcp` — bastion accesses the OpenShift console and ingress routes
+
+**Pre-flight checklist (before `aba install`):**
+
+- [ ] DNS: `dig api.mycluster.example.com` resolves to the API VIP (10.0.1.99)
+- [ ] DNS: `dig test.apps.mycluster.example.com` resolves to the Ingress VIP (10.0.1.98)
+- [ ] NTP: bastion time is synced (`chronyc sources` or `timedatectl`)
+- [ ] Registry: `curl -sk https://registry.example.com:8443/v2/` returns OK
+- [ ] VIPs: 10.0.1.98 and 10.0.1.99 are not in use (`ping` shows no reply)
+- [ ] Network: nodes can reach registry on port 8443
+
+ABA runs pre-flight checks automatically before ISO generation.
+
+**Matching `mirror.conf` (key fields):**
+
+```
+reg_host=registry.example.com  # FQDN of the registry (must resolve via DNS)
+reg_port=8443                  # Registry port (Quay default)
+reg_path=/ocp4/openshift4      # Image path prefix in the registry
+reg_vendor=auto                # auto = Quay if available, else Docker
+```
+
+**Key rules:**
+
+- API and Ingress VIPs **must** be on the same L2 subnet as the cluster nodes (`machine_network`). They are managed via keepalived, which requires L2 adjacency.
+- `starting_ip` assigns sequential IPs: master0 gets `.101`, master1 gets `.102`, master2 gets `.103`.
+- For SNO clusters: `api_vip` and `ingress_vip` are ignored — both DNS records point to the single node IP.
 
 #### Target Platform
 
@@ -1686,6 +1785,7 @@ See `scripts/reg-install-docker.sh` and `scripts/reg-install.sh` for details.
 ## Q: Can bonds and/or VLAN be configured on my nodes?
 
 **Yes.** Configure bonds and/or VLAN in `cluster.conf`. If you list more than one network interface in `ports` (comma-separated), ABA creates a bond. If you provide a `vlan` tag, ABA configures VLAN. Both can be used together.
+ABA configures the machine network for installation — optionally with one bond and/or one VLAN. Additional networks (storage, backup, application) can be added after OpenShift is running using [NMState](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/kubernetes_nmstate/k8s-nmstate-updating-node-network-config). For more complex pre-install networking, edit `agent-config.yaml` directly.
 
 ---
 
@@ -1802,6 +1902,19 @@ aba -d mirror load                             # Retry
 ```
 
 `clean` removes stale state (`data/working-dir/`) while preserving saved images and configuration.
+
+---
+
+## Q: `aba load` or `aba sync` fails with "manifest unknown" or "localhost:55000" errors
+
+`oc-mirror` uses an internal cache registry on port 55000. Stale or corrupt cache data can cause "manifest unknown" errors. To fix:
+
+```
+rm -rf ~/.oc-mirror/.cache                     # Clear the oc-mirror cache
+aba -d mirror load                             # Retry
+```
+
+If the error persists, also kill any stale `oc-mirror` processes (`pkill -f oc-mirror`) and retry.
 
 ---
 

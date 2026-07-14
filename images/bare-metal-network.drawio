@@ -1,0 +1,282 @@
+<mxfile host="app.diagrams.net" agent="ABA" version="24.0.0" type="device">
+  <diagram id="bm-network" name="Bare-metal Compact Cluster">
+    <mxGraphModel dx="1300" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="Bare-metal Compact Cluster — Network Topology Example" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="250" y="30" width="600" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Host Network bar                                                 -->
+        <!-- ================================================================ -->
+        <mxCell id="hostnet-label" value="Host Network  (10.0.1.0/24)  —  VLAN 100 [2]" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="30" y="275" width="400" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="hostnet-line" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="30" y="310" as="sourcePoint"/>
+            <mxPoint x="1160" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Additional Network bar                                           -->
+        <!-- ================================================================ -->
+        <mxCell id="addnet-label" value="Additional Network (optional)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="30" y="700" width="250" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="addnet-line" value="" style="endArrow=none;strokeColor=#AAAAAA;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="30" y="720" as="sourcePoint"/>
+            <mxPoint x="1160" y="720" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Top-row devices (labels ABOVE)                                   -->
+        <!-- ================================================================ -->
+
+        <!-- Bastion / Registry -->
+        <mxCell id="bastion-label" value="Bastion / Registry&#10;registry.example.com&#10;10.0.1.10  :8443" style="text;html=1;align=center;verticalAlign=bottom;fontSize=10;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="30" y="90" width="140" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="bastion" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=none;imageBackgroundColor=none;imageBorder=none;image=img/lib/active_directory/generic_server.svg;" vertex="1" parent="1">
+          <mxGeometry x="75" y="150" width="50" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="bastion-hostnet" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100" y="215" as="sourcePoint"/>
+            <mxPoint x="100" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Gateway -->
+        <mxCell id="router-label" value="Gateway&#10;10.0.1.1" style="text;html=1;align=center;verticalAlign=bottom;fontSize=10;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="530" y="100" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="router" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=none;imageBackgroundColor=none;imageBorder=none;image=img/lib/active_directory/generic_server.svg;" vertex="1" parent="1">
+          <mxGeometry x="555" y="150" width="50" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="router-hostnet" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="580" y="215" as="sourcePoint"/>
+            <mxPoint x="580" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- DNS Server -->
+        <mxCell id="dns-label" value="DNS Server&#10;10.0.1.5" style="text;html=1;align=center;verticalAlign=bottom;fontSize=10;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="730" y="100" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="dns" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=none;imageBackgroundColor=none;imageBorder=none;image=img/lib/active_directory/generic_server.svg;" vertex="1" parent="1">
+          <mxGeometry x="755" y="150" width="50" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="dns-hostnet" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="780" y="215" as="sourcePoint"/>
+            <mxPoint x="780" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- NTP Server -->
+        <mxCell id="ntp-label" value="NTP Server&#10;10.0.1.5" style="text;html=1;align=center;verticalAlign=bottom;fontSize=10;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="930" y="100" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="ntp" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=none;imageBackgroundColor=none;imageBorder=none;image=img/lib/active_directory/generic_server.svg;" vertex="1" parent="1">
+          <mxGeometry x="955" y="150" width="50" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="ntp-hostnet" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="980" y="215" as="sourcePoint"/>
+            <mxPoint x="980" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- VIPs (floating ellipses)                                         -->
+        <!-- ================================================================ -->
+
+        <mxCell id="api-vip" value="API VIP [1]&#10;10.0.1.99" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F0F0F0;strokeColor=#666666;fontColor=#333333;fontSize=10;fontStyle=1;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="270" y="335" width="120" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="ingress-vip" value="Ingress VIP [1]&#10;10.0.1.98" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F0F0F0;strokeColor=#666666;fontColor=#333333;fontSize=10;fontStyle=1;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="450" y="335" width="120" height="55" as="geometry"/>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Server 1                                                         -->
+        <!-- ================================================================ -->
+        <mxCell id="srv1-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#888888;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="170" y="440" width="200" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv1-title" value="Server 1 — master0&#10;10.0.1.101" style="text;html=1;align=center;verticalAlign=top;fontSize=11;fontStyle=1;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="195" y="448" width="150" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv1-roles" value="Control Plane Node&#10;Infra Node&#10;Compute Node" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#555555;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="200" y="488" width="140" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv1-bond" value="bond0 [3]: ens1f0 + ens2f0&#10;VLAN 100 [2]" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;fontStyle=2;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="195" y="545" width="150" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv1-os" value="OS" style="shape=cylinder3;whiteSpace=wrap;html=1;size=8;fillColor=#DDDDDD;strokeColor=#888888;fontColor=#333333;fontSize=9;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="215" y="590" width="40" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv1-data" value="DATA" style="shape=cylinder3;whiteSpace=wrap;html=1;size=8;fillColor=#DDDDDD;strokeColor=#888888;fontColor=#333333;fontSize=9;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="280" y="590" width="50" height="45" as="geometry"/>
+        </mxCell>
+        <!-- Server 1 to host network (double line for bond) -->
+        <mxCell id="srv1-hostnet-a" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="265" y="440" as="sourcePoint"/>
+            <mxPoint x="265" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="srv1-hostnet-b" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="275" y="440" as="sourcePoint"/>
+            <mxPoint x="275" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Server 1 to additional network -->
+        <mxCell id="srv1-addnet" value="" style="endArrow=none;strokeColor=#AAAAAA;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="670" as="sourcePoint"/>
+            <mxPoint x="270" y="720" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Server 2                                                         -->
+        <!-- ================================================================ -->
+        <mxCell id="srv2-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#888888;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="450" y="440" width="200" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv2-title" value="Server 2 — master1&#10;10.0.1.102" style="text;html=1;align=center;verticalAlign=top;fontSize=11;fontStyle=1;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="475" y="448" width="150" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv2-roles" value="Control Plane Node&#10;Infra Node&#10;Compute Node" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#555555;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="480" y="488" width="140" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv2-bond" value="bond0 [3]: ens1f0 + ens2f0&#10;VLAN 100 [2]" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;fontStyle=2;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="475" y="545" width="150" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv2-os" value="OS" style="shape=cylinder3;whiteSpace=wrap;html=1;size=8;fillColor=#DDDDDD;strokeColor=#888888;fontColor=#333333;fontSize=9;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="495" y="590" width="40" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv2-data" value="DATA" style="shape=cylinder3;whiteSpace=wrap;html=1;size=8;fillColor=#DDDDDD;strokeColor=#888888;fontColor=#333333;fontSize=9;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="560" y="590" width="50" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv2-hostnet-a" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="545" y="440" as="sourcePoint"/>
+            <mxPoint x="545" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="srv2-hostnet-b" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="555" y="440" as="sourcePoint"/>
+            <mxPoint x="555" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="srv2-addnet" value="" style="endArrow=none;strokeColor=#AAAAAA;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="550" y="670" as="sourcePoint"/>
+            <mxPoint x="550" y="720" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Server 3                                                         -->
+        <!-- ================================================================ -->
+        <mxCell id="srv3-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#888888;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="730" y="440" width="200" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv3-title" value="Server 3 — master2&#10;10.0.1.103" style="text;html=1;align=center;verticalAlign=top;fontSize=11;fontStyle=1;fontColor=#333333;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="755" y="448" width="150" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv3-roles" value="Control Plane Node&#10;Infra Node&#10;Compute Node" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#555555;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="760" y="488" width="140" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv3-bond" value="bond0 [3]: ens1f0 + ens2f0&#10;VLAN 100 [2]" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;fontStyle=2;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="755" y="545" width="150" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv3-os" value="OS" style="shape=cylinder3;whiteSpace=wrap;html=1;size=8;fillColor=#DDDDDD;strokeColor=#888888;fontColor=#333333;fontSize=9;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="775" y="590" width="40" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv3-data" value="DATA" style="shape=cylinder3;whiteSpace=wrap;html=1;size=8;fillColor=#DDDDDD;strokeColor=#888888;fontColor=#333333;fontSize=9;fontFamily=Red Hat Display;" vertex="1" parent="1">
+          <mxGeometry x="840" y="590" width="50" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="srv3-hostnet-a" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="825" y="440" as="sourcePoint"/>
+            <mxPoint x="825" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="srv3-hostnet-b" value="" style="endArrow=none;strokeColor=#999999;strokeWidth=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="835" y="440" as="sourcePoint"/>
+            <mxPoint x="835" y="310" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="srv3-addnet" value="" style="endArrow=none;strokeColor=#AAAAAA;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="830" y="670" as="sourcePoint"/>
+            <mxPoint x="830" y="720" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- VIP dashed lines to servers                                      -->
+        <!-- ================================================================ -->
+        <mxCell id="api-srv1" value="" style="endArrow=none;strokeColor=#BBBBBB;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="305" y="390" as="sourcePoint"/>
+            <mxPoint x="270" y="440" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="api-srv2" value="" style="endArrow=none;strokeColor=#BBBBBB;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="345" y="390" as="sourcePoint"/>
+            <mxPoint x="550" y="440" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="api-srv3" value="" style="endArrow=none;strokeColor=#BBBBBB;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="370" y="390" as="sourcePoint"/>
+            <mxPoint x="830" y="440" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ing-srv1" value="" style="endArrow=none;strokeColor=#BBBBBB;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="480" y="390" as="sourcePoint"/>
+            <mxPoint x="270" y="440" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ing-srv2" value="" style="endArrow=none;strokeColor=#BBBBBB;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="390" as="sourcePoint"/>
+            <mxPoint x="550" y="440" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ing-srv3" value="" style="endArrow=none;strokeColor=#BBBBBB;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="540" y="390" as="sourcePoint"/>
+            <mxPoint x="830" y="440" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Footnotes                                                        -->
+        <!-- ================================================================ -->
+        <mxCell id="footnotes" value="[1] VIPs are free IPs on the same L2 subnet as the nodes, managed by keepalived (not assigned to any host).&#10;[2] VLAN is optional. Set vlan=100 in cluster.conf. Without it, nodes use untagged frames on the host network.&#10;[3] Bond is optional. List multiple interfaces in cluster.conf ports= (e.g. ports=ens1f0,ens2f0) to enable bonding." style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontColor=#555555;fontFamily=Red Hat Display;spacingLeft=4;" vertex="1" parent="1">
+          <mxGeometry x="30" y="755" width="750" height="55" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
