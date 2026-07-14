@@ -83,6 +83,28 @@ e2e_run "Resolve latest version as upgrade target" "
     echo \"Desired version: \$ocp_version\"
 "
 
+e2e_run "Validate older version is in upgrade graph" "
+    cd ~/aba && source scripts/include_all.sh &&
+    older=\$(< /tmp/e2e-ocp-version-older) &&
+    desired=\$(< /tmp/e2e-ocp-version-desired) &&
+    tgt_minor=\$(echo \$desired | cut -d. -f1-2) &&
+    if verify_upgrade_path \"\$older\" \"\$desired\" fast 2>/dev/null; then
+        echo \"Upgrade path OK: \$older -> \$desired\"
+    else
+        echo \"WARNING: \$older not in fast-\$tgt_minor graph, searching for valid source ...\"
+        src_minor=\$(echo \$older | cut -d. -f1-2)
+        graph_json=\$(_fetch_graph_cached fast \$tgt_minor 2>/dev/null)
+        valid=\$(echo \"\$graph_json\" | jq -r '.nodes[].version' 2>/dev/null \
+            | grep \"^\$src_minor\\.\" | sort -rV | head -1)
+        if [ -z \"\$valid\" ]; then
+            echo \"FATAL: no \$src_minor.x version in fast-\$tgt_minor graph\"; exit 1
+        fi
+        echo \"Using \$valid instead of \$older\"
+        aba -v \$valid
+        echo \$valid > /tmp/e2e-ocp-version-older
+    fi
+"
+
 e2e_run "Create mirror directory and mirror.conf" \
     "cd ~/aba && aba -d mirror mirror.conf"
 
