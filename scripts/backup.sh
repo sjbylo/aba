@@ -58,12 +58,11 @@ _restore_cleanup() {
 	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
 	# Restore per-dir symlinks and remove .primed markers from the SOURCE repo
 	# (.primed only belongs in the tar, not in the connected-side working tree)
+	local _i=0
 	for _resolved in $_resolved_copies; do
-		local _dir _name
-		_dir=$(dirname "$_resolved")
-		_name=$(basename "$_resolved")
 		rm -f "$_resolved"
-		ln -sf "../$_name" "$_resolved"
+		ln -sf "${_original_targets[$_i]}" "$_resolved"
+		_i=$(( _i + 1 ))
 	done
 	for _d in $_cluster_paths; do
 		rm -f "$_d/.primed"
@@ -101,6 +100,9 @@ _cluster_paths=""
 _hv_conf_path=""
 _resolved_copies=""
 _include_mirror_conf=""
+# Parallel arrays: _resolved_copies has the file paths, _original_targets has
+# each file's original symlink target so the EXIT trap restores it exactly.
+declare -a _original_targets=()
 if [ "$with_clusters" ]; then
 	# Identify vmware.conf or kvm.conf at repo root (included in the tar via find)
 	for _hv in vmware.conf kvm.conf; do
@@ -121,11 +123,19 @@ if [ "$with_clusters" ]; then
 		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
 		_cluster_paths+=" $_cdir"
 
-		# Resolve symlinks to real copies so the tarball is self-contained
+		# Resolve symlinks to real copies so the tarball is self-contained.
+		# Save the original target so the EXIT trap can restore it exactly
+		# (mirror.conf -> mirror/mirror.conf differs from vmware.conf -> ../vmware.conf).
 		for _f in vmware.conf kvm.conf mirror.conf; do
-			if [ -L "$_cdir/$_f" ] && [ -e "$_cdir/$_f" ]; then
-				cp --remove-destination "$(readlink -f "$_cdir/$_f")" "$_cdir/$_f"
-				_resolved_copies+=" $_cdir/$_f"
+			if [ -L "$_cdir/$_f" ]; then
+				_orig_target=$(readlink "$_cdir/$_f")
+				if [ -e "$_cdir/$_f" ]; then
+					cp --remove-destination "$(readlink -f "$_cdir/$_f")" "$_cdir/$_f"
+					_resolved_copies+=" $_cdir/$_f"
+					_original_targets+=("$_orig_target")
+				else
+					aba_debug "Dangling symlink: $_cdir/$_f -> $_orig_target (skipped)"
+				fi
 			fi
 		done
 
@@ -142,11 +152,13 @@ fi
 # Cleared above when --primed AND no local registry (.available absent).
 # When excluding, also exclude per-cluster mirror.conf symlinks to avoid dangling
 # symlinks in the bundle (they'd point to the excluded mirror/mirror.conf).
+# Exception: --primed resolves per-cluster symlinks to real copies, so they must
+# NOT be excluded even when mirror/mirror.conf itself is excluded.
 _exclude_mirror_conf="! -path ${repo_dir}/mirror/mirror.conf"
 _exclude_cluster_mirror_conf=""
 if [ "$_include_mirror_conf" ]; then
 	_exclude_mirror_conf=""
-else
+elif [ ! "$with_clusters" ]; then
 	_exclude_cluster_mirror_conf='! -name mirror.conf'
 fi
 
