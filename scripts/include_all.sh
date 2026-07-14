@@ -1317,37 +1317,59 @@ edit_file() {
 }
 
 try_cmd() {
-	# Run a command, if it fails, try again after 'pause' seconds
-	# Usage: try_cmd [-q] <pause> <backoff> <total>
-	local quiet=
-	[ "$1" = "-q" ] && local quiet=1 && local out=">/dev/null 2>&1" && shift
-	local pause=$1; shift		# initial pause time in sec
-	local backoff=$1; shift		# add backoff time to pause time
-	local total=$1; shift		# total number of tries
+	# Run a command with retries and optional increasing backoff.
+	# Usage: try_cmd [-n attempts] [-d delay] [-D increase] [-m message] [-q|-Q] [--] cmd [args...]
+	#   -n  max attempts        (default: 3)
+	#   -d  initial delay in s  (default: 5)
+	#   -D  add to delay each retry (default: 0 = fixed delay)
+	#   -m  context label for log messages (default: first word of command)
+	#   -q  quiet: only show final success/failure, suppress per-attempt chatter
+	#   -Q  silent: suppress all try_cmd output; return code only
+	local _tc_attempts=3 _tc_delay=5 _tc_increase=0 _tc_message="" _tc_quiet="" _tc_silent=""
 
-	local count=1
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-n) _tc_attempts="$2"; shift 2 ;;
+			-d) _tc_delay="$2"; shift 2 ;;
+			-D) _tc_increase="$2"; shift 2 ;;
+			-m) _tc_message="$2"; shift 2 ;;
+			-q) _tc_quiet=1; shift ;;
+			-Q) _tc_silent=1; shift ;;
+			--) shift; break ;;
+			*)  break ;;
+		esac
+	done
 
-	[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
+	[ $# -eq 0 ] && { echo_red "try_cmd: no command specified" >&2; return 1; }
 
-	echo  >>.cmd.out 
-	echo cmd $* >>.cmd.out 
-	while ! eval $* >>.cmd.out 2>&1
-	do
-		if [ $count -ge $total ]; then
-			[ ! "$quiet" ] && echo_red "Giving up on command \"$*\"" >&2
-			# Return non-zero
-			return 1
+	local _tc_label="${_tc_message:-$1}"
+	local _tc_count=1 _tc_pause=$_tc_delay _tc_rc=0
+
+	while [ $_tc_count -le $_tc_attempts ]; do
+		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
+			aba_info "Attempt $_tc_count/$_tc_attempts: $_tc_label"
+
+		_tc_rc=0
+		"$@" || _tc_rc=$?
+
+		if [ $_tc_rc -eq 0 ]; then
+			[ -z "$_tc_silent" ] && [ $_tc_attempts -gt 1 ] && \
+				aba_info_ok "$_tc_label"
+			return 0
 		fi
 
-		[ ! "$quiet" ] && aba_info Pausing $pause seconds ...
-		sleep $pause
-
-		pause=$(( pause + backoff ))
-		count=$(( count + 1 ))
-
-		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
-		echo cmd $* >>.cmd.out 
+		_tc_count=$(( _tc_count + 1 ))
+		if [ $_tc_count -le $_tc_attempts ]; then
+			[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
+				aba_warning "$_tc_label failed (attempt $(( _tc_count - 1 ))/$_tc_attempts), retrying in ${_tc_pause}s ..."
+			sleep $_tc_pause
+			_tc_pause=$(( _tc_pause + _tc_increase ))
+		fi
 	done
+
+	[ -z "$_tc_silent" ] && \
+		echo_red "[ABA] Failed after $_tc_attempts attempts: $_tc_label" >&2
+	return $_tc_rc
 }
 
 # Compact elapsed for aba_wait_show: "45s" if <1m; "4m" or "4m20s" if >=1m (no spaces).
