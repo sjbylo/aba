@@ -14,30 +14,31 @@ For general prerequisites, see the [Network Configuration](../README.md#network-
 - `*.apps.mycluster.example.com` &rarr; `10.0.1.98` (Ingress VIP — free IP, managed by the cluster)
 - `registry.example.com` &rarr; `10.0.1.10` (bastion / mirror registry)
 
-## Matching `aba.conf` (network settings)
+## Matching `aba.conf` (global network settings)
+
+Set these once — they apply to all clusters. If left empty, ABA auto-detects them from the host network.
 
 ```
 domain=example.com
+platform=bm
 machine_network=10.0.1.0/24
 dns_servers=10.0.1.5
 next_hop_address=10.0.1.1
 ntp_servers=10.0.1.5
-platform=bm
 ```
 
-## Matching `cluster.conf`
+## Matching `cluster.conf` (cluster-specific settings)
+
+Created by `aba cluster`. Network values (`dns_servers`, `next_hop_address`, `ntp_servers`) are copied from `aba.conf` at creation time. Edit them here if this cluster needs different values.
 
 ```
 cluster_name=mycluster
 base_domain=example.com
 api_vip=10.0.1.99
 ingress_vip=10.0.1.98
-starting_ip=10.0.1.101        # master0=.101, master1=.102, master2=.103
+starting_ip=10.0.1.101        # master1=.101, master2=.102, master3=.103
 num_masters=3
 num_workers=0
-dns_servers=10.0.1.5
-next_hop_address=10.0.1.1
-ntp_servers=10.0.1.5
 ports=ens1f0,ens2f0              # Two interfaces = bonding (optional)
 vlan=100                         # VLAN tag (optional)
 ```
@@ -55,12 +56,12 @@ reg_vendor=auto                # auto = Quay if available, else Docker
 
 ```
 cat > mycluster/macs.conf <<EOF
-aa:bb:cc:dd:01:01    # master0 port 1 (ens1f0)
-aa:bb:cc:dd:01:02    # master0 port 2 (ens2f0)
-aa:bb:cc:dd:02:01    # master1 port 1
-aa:bb:cc:dd:02:02    # master1 port 2
-aa:bb:cc:dd:03:01    # master2 port 1
-aa:bb:cc:dd:03:02    # master2 port 2
+aa:bb:cc:dd:01:01    # master1 port 1 (ens1f0)
+aa:bb:cc:dd:01:02    # master1 port 2 (ens2f0)
+aa:bb:cc:dd:02:01    # master2 port 1
+aa:bb:cc:dd:02:02    # master2 port 2
+aa:bb:cc:dd:03:01    # master3 port 1
+aa:bb:cc:dd:03:02    # master3 port 2
 EOF
 ```
 
@@ -68,12 +69,12 @@ With bonding: 2 MACs per node (one per bonded port), grouped by host. Without bo
 
 ## Firewall (bastion &harr; nodes)
 
-If a firewall exists between cluster nodes, the required inter-node ports (mDNS, etcd, Kubernetes API, etc.) must be open — see [Configuring your firewall](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/installation_configuration/configuring-firewall) for the full list. Between the bastion/registry and the nodes, ensure these ports are open:
+If a firewall exists between cluster nodes, the required inter-node ports (mDNS, etcd, Kubernetes API, etc.) must be open — see [Configuring your firewall](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/installation_configuration/configuring-firewall) for the full list. Between the bastion/registry and the nodes, ensure these ports are open:
 
 - `8443/tcp` — nodes pull images from the mirror registry
 - `22/tcp` — SSH access to nodes (for troubleshooting)
 - `6443/tcp` — bastion accesses the cluster API (kubectl/oc)
-- `443/tcp` — bastion accesses the OpenShift console and ingress routes
+- `443/tcp` — workstation accesses the OpenShift console and ingress routes (via browser)
 
 ## Pre-flight checklist (before `aba install`)
 
@@ -89,5 +90,5 @@ ABA runs pre-flight checks automatically before ISO generation.
 ## Key rules
 
 - API and Ingress VIPs **must** be on the same L2 subnet as the cluster nodes (`machine_network`). They are managed via keepalived, which requires L2 adjacency.
-- `starting_ip` assigns sequential IPs: master0 gets `.101`, master1 gets `.102`, master2 gets `.103`.
+- `starting_ip` assigns sequential IPs: master1 gets `.101`, master2 gets `.102`, master3 gets `.103`.
 - For SNO clusters: `api_vip` and `ingress_vip` are ignored — both DNS records point to the single node IP.
