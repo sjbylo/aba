@@ -1,14 +1,15 @@
 #!/bin/bash
-# test-primed-bundle-scenarios.sh — Validate --primed bundle mtime pinning and marker logic
+# test-primed-bundle-scenarios.sh — Validate --primed bundle .primed marker logic
 #
 # Tests that backup.sh --primed produces bundles where:
-# 1. Make will NOT regenerate pre-built install-config.yaml/agent-config.yaml
-# 2. .bm-message is only set for pre-built dirs (not cluster.conf-only)
-# 3. mirror.conf is included/excluded based on .available
-# 4. No dangling symlinks exist in the bundle
+# 1. .primed marker exists in pre-built dirs → Make skips regeneration
+# 2. .primed marker absent in cluster.conf-only dirs → Make generates normally
+# 3. .bm-message is only set for pre-built dirs (not cluster.conf-only)
+# 4. mirror.conf is included/excluded based on .available
+# 5. No dangling symlinks exist in the bundle
+# 6. Symlinks resolved to real copies for self-contained tarball
 #
-# Verification uses `make -q` (asks Make directly: "would you rebuild?")
-# with mtime assertions as diagnostics on failure.
+# Verification uses `make -n` (dry-run) to confirm Make behavior.
 
 set -e
 
@@ -82,6 +83,17 @@ assert_not_dangling_symlink() {
 		assert_fail "$desc (dangling symlink: $path → $(readlink "$path"))"
 	else
 		assert_pass "$desc"
+	fi
+}
+
+assert_regular_file() {
+	local desc="$1" path="$2"
+	if [[ -f "$path" && ! -L "$path" ]]; then
+		assert_pass "$desc"
+	elif [[ -L "$path" ]]; then
+		assert_fail "$desc (is a symlink, expected regular file: $path → $(readlink "$path"))"
+	else
+		assert_fail "$desc (not found: $path)"
 	fi
 }
 
@@ -239,13 +251,11 @@ create_cluster_dir "sno1" "vmw" "yes" "2026-07-01 10:00:00"
 EXTRACTED=$(run_bundle_and_extract)
 
 # Assertions
-assert_file_exists "vmware.conf exists in sno1" "$EXTRACTED/sno1/vmware.conf"
-assert_not_newer "vmware.conf <= install-config.yaml in sno1" \
-	"$EXTRACTED/sno1/vmware.conf" "$EXTRACTED/sno1/install-config.yaml"
+assert_file_exists ".primed marker exists (pre-built)" "$EXTRACTED/sno1/.primed"
+assert_regular_file "vmware.conf is regular file (not symlink)" "$EXTRACTED/sno1/vmware.conf"
 assert_file_exists ".bm-message exists (pre-built)" "$EXTRACTED/sno1/.bm-message"
 assert_file_exists ".init exists" "$EXTRACTED/sno1/.init"
 assert_not_dangling_symlink "mirror.conf not dangling" "$EXTRACTED/sno1/mirror.conf"
-# make -q check (need aba.conf for platform detection)
 assert_make_uptodate "Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno1" "install-config.yaml"
 
 echo ""
@@ -261,9 +271,9 @@ create_cluster_dir "sno1" "vmw" "no" "2026-07-01 10:00:00"
 
 EXTRACTED=$(run_bundle_and_extract)
 
+assert_file_not_exists ".primed should NOT exist (cluster.conf-only)" "$EXTRACTED/sno1/.primed"
 assert_file_not_exists ".bm-message should NOT exist (cluster.conf-only)" "$EXTRACTED/sno1/.bm-message"
 assert_file_exists ".init exists" "$EXTRACTED/sno1/.init"
-# For cluster.conf-only: Make SHOULD want to generate install-config.yaml
 assert_make_would_rebuild "Make WOULD generate install-config.yaml (expected)" "$EXTRACTED/sno1" "install-config.yaml"
 
 echo ""
@@ -280,10 +290,10 @@ create_cluster_dir "sno2" "vmw" "yes" "2026-07-01 10:05:00"
 
 EXTRACTED=$(run_bundle_and_extract)
 
-assert_not_newer "vmware.conf <= sno1/install-config.yaml" \
-	"$EXTRACTED/sno1/vmware.conf" "$EXTRACTED/sno1/install-config.yaml"
-assert_not_newer "vmware.conf <= sno2/install-config.yaml" \
-	"$EXTRACTED/sno2/vmware.conf" "$EXTRACTED/sno2/install-config.yaml"
+assert_file_exists "sno1: .primed marker" "$EXTRACTED/sno1/.primed"
+assert_file_exists "sno2: .primed marker" "$EXTRACTED/sno2/.primed"
+assert_regular_file "sno1: vmware.conf is regular file" "$EXTRACTED/sno1/vmware.conf"
+assert_regular_file "sno2: vmware.conf is regular file" "$EXTRACTED/sno2/vmware.conf"
 assert_make_uptodate "sno1: Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno1" "install-config.yaml"
 assert_make_uptodate "sno2: Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno2" "install-config.yaml"
 
@@ -301,10 +311,9 @@ create_cluster_dir "sno2" "vmw" "yes" "2026-07-03 14:00:00"  # Wednesday
 
 EXTRACTED=$(run_bundle_and_extract)
 
-assert_not_newer "vmware.conf <= sno1/install-config.yaml (Monday cluster)" \
-	"$EXTRACTED/sno1/vmware.conf" "$EXTRACTED/sno1/install-config.yaml"
-assert_not_newer "vmware.conf <= sno2/install-config.yaml (Wednesday cluster)" \
-	"$EXTRACTED/sno2/vmware.conf" "$EXTRACTED/sno2/install-config.yaml"
+# With .primed marker, mtime differences don't matter — Make skips regardless
+assert_file_exists "sno1: .primed marker" "$EXTRACTED/sno1/.primed"
+assert_file_exists "sno2: .primed marker" "$EXTRACTED/sno2/.primed"
 assert_make_uptodate "sno1: Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno1" "install-config.yaml"
 assert_make_uptodate "sno2: Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno2" "install-config.yaml"
 
@@ -322,11 +331,12 @@ create_cluster_dir "sno2" "vmw" "no"  "2026-07-02 12:00:00"
 
 EXTRACTED=$(run_bundle_and_extract)
 
+assert_file_exists ".primed on pre-built sno1" "$EXTRACTED/sno1/.primed"
+assert_file_not_exists ".primed NOT on cluster.conf-only sno2" "$EXTRACTED/sno2/.primed"
 assert_file_exists ".bm-message on pre-built sno1" "$EXTRACTED/sno1/.bm-message"
 assert_file_not_exists ".bm-message NOT on cluster.conf-only sno2" "$EXTRACTED/sno2/.bm-message"
-assert_not_newer "vmware.conf <= sno1/install-config.yaml" \
-	"$EXTRACTED/sno1/vmware.conf" "$EXTRACTED/sno1/install-config.yaml"
 assert_make_uptodate "sno1: Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno1" "install-config.yaml"
+assert_make_would_rebuild "sno2: Make WOULD generate install-config.yaml" "$EXTRACTED/sno2" "install-config.yaml"
 
 echo ""
 
@@ -343,8 +353,7 @@ create_cluster_dir "sno1" "vmw" "yes" "2026-07-01 10:00:00"
 EXTRACTED=$(run_bundle_and_extract)
 
 assert_file_exists "mirror/mirror.conf included in bundle" "$EXTRACTED/mirror/mirror.conf"
-assert_not_newer "mirror.conf <= sno1/install-config.yaml" \
-	"$EXTRACTED/sno1/mirror.conf" "$EXTRACTED/sno1/install-config.yaml"
+assert_regular_file "sno1/mirror.conf is regular file (resolved from symlink)" "$EXTRACTED/sno1/mirror.conf"
 
 echo ""
 
@@ -392,10 +401,9 @@ ln -sf ../kvm.conf "$MOCK_REPO/sno1/kvm.conf"
 EXTRACTED=$(run_bundle_and_extract)
 
 assert_file_exists "kvm.conf exists in bundle" "$EXTRACTED/kvm.conf"
-if [[ -f "$EXTRACTED/sno1/kvm.conf" ]]; then
-	assert_not_newer "kvm.conf <= sno1/install-config.yaml" \
-		"$EXTRACTED/sno1/kvm.conf" "$EXTRACTED/sno1/install-config.yaml"
-fi
+assert_regular_file "sno1/kvm.conf is regular file" "$EXTRACTED/sno1/kvm.conf"
+assert_file_exists "sno1: .primed marker" "$EXTRACTED/sno1/.primed"
+assert_make_uptodate "sno1: Make would NOT rebuild install-config.yaml" "$EXTRACTED/sno1" "install-config.yaml"
 
 # Restore for remaining tests
 cat > "$MOCK_REPO/vmware.conf" <<'VMWEOF'

@@ -109,13 +109,16 @@ cluster.conf: .init | mirror.conf  ## Initialize the OpenShift cluster.conf file
 
 agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to only generate the agent config files, so they can be edited. 
 
-# Note that install-config.yaml can be configured with vSphere params (need 'vmware.conf')
-install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf | .cli  ## Create the agent-based config file based on the cluster.conf file.
-	$(SCRIPTS)/verify-config.sh
-	$(SCRIPTS)/create-install-config.sh
+# .primed guard: when 'aba bundle --primed' bakes pre-built configs into the tar,
+# it drops a .primed marker. $(wildcard .primed) expands to ".primed" if the file
+# exists (empty dep list → no rebuild) or "" if absent (normal deps → rebuild).
+# Remove .primed to force regeneration: rm .primed && aba agentconf
+install-config.yaml: $(if $(wildcard .primed),,$(hv_conf_dep) cluster.conf mirror.conf) | .cli  ## Create the agent-based config file based on the cluster.conf file.
+	$(if $(wildcard .primed),,$(SCRIPTS)/verify-config.sh)
+	$(if $(wildcard .primed),,$(SCRIPTS)/create-install-config.sh)
 
-agent-config.yaml: cluster.conf mirror.conf | .init  ## Create the agent-based config file based on the cluster.conf file.
-	$(SCRIPTS)/create-agent-config.sh
+agent-config.yaml: $(if $(wildcard .primed),,cluster.conf mirror.conf) | .init  ## Create the agent-based config file based on the cluster.conf file.
+	$(if $(wildcard .primed),,$(SCRIPTS)/create-agent-config.sh)
 
 
 .PHONY: verify
