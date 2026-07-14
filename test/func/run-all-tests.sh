@@ -55,6 +55,7 @@ unit_tests=(
 	test/func/test-replace-value-conf.sh
 	test/func/test-preflight-check-vsphere.sh
 	test/func/test-vmware-required-privileges.sh
+	test/func/test-primed-bundle-scenarios.sh
 )
 
 # Integration tests (slow, may download)

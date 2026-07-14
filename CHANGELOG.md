@@ -60,6 +60,10 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 - **ISC upgrade mode broken by state.sh override** — After an upgrade sync, re-viewing or regenerating the ImageSet Config may produce a non-upgrade ISC (`minVersion == maxVersion`) because `state.sh` now holds the target version. Workaround: ensure `aba.conf` holds the correct source version before running Prepare Upgrade. A fix using `ocp_upgrade_from` in `state.sh` is planned.
 - **`aba day2` / `aba day2-osus` fails after cross-minor upgrade** — The OSUS channel is derived from `aba.conf`'s `ocp_version` (the install version), not the cluster's actual running version. After a cross-minor upgrade (e.g. 4.20 → 4.21), the script tries to set the old channel. Workaround: manually run `oc adm upgrade channel fast-4.21` (or appropriate channel).
 
+### New Features
+
+- **`aba bundle --primed`** — Bundle pre-configured cluster directories (with pre-built `install-config.yaml` and `agent-config.yaml`) alongside the mirror data. On the disconnected side, Make skips regeneration for primed clusters (`.primed` marker), while cluster.conf-only directories still go through normal config generation. Supports mixed bundles with both pre-built and unconfigured clusters.
+
 ---
 
 ## [1.1.3](https://github.com/sjbylo/aba/releases/tag/v1.1.3) - 2026-07-01

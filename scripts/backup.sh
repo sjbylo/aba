@@ -56,18 +56,18 @@ cd ..
 _restore_cleanup() {
 	rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"
 	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
-	# Restore vmware.conf/kvm.conf mtime after pinning for the tar
-	[ "$_hv_conf_path" ] && [ "$_hv_conf_mtime_ref" ] && touch -d "@$_hv_conf_mtime_ref" "$_hv_conf_path"
-	# Restore per-dir HV conf copies back to symlinks
-	for _copy in $_per_dir_hv_copies; do
+	# Restore per-dir symlinks and remove .primed markers from the SOURCE repo
+	# (.primed only belongs in the tar, not in the connected-side working tree)
+	for _resolved in $_resolved_copies; do
 		local _dir _name
-		_dir=$(dirname "$_copy")
-		_name=$(basename "$_copy")
-		rm -f "$_copy"
-		ln -sf "../$_name" "$_copy"
+		_dir=$(dirname "$_resolved")
+		_name=$(basename "$_resolved")
+		rm -f "$_resolved"
+		ln -sf "../$_name" "$_resolved"
 	done
-	# Restore mirror/mirror.conf mtime after pinning for the tar
-	[ "$_mirror_conf_mtime_ref" ] && touch -d "@$_mirror_conf_mtime_ref" "${repo_dir}/mirror/mirror.conf"
+	for _d in $_cluster_paths; do
+		rm -f "$_d/.primed"
+	done
 }
 trap '_restore_cleanup' EXIT
 
@@ -94,76 +94,48 @@ touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
-# If --primed: prep cluster dirs and build path list for find
+# If --primed: prep cluster dirs and build path list for find.
+# Replaces symlinks with real copies (self-contained tarball) and drops a
+# .primed marker in fully pre-built dirs so Make skips regeneration on disco.
 _cluster_paths=""
 _hv_conf_path=""
-_hv_conf_mtime_ref=""
-_mirror_conf_mtime_ref=""
-_per_dir_hv_copies=""
+_resolved_copies=""
+_include_mirror_conf=""
 if [ "$with_clusters" ]; then
-	# Identify vmware.conf or kvm.conf at repo root (needed for per-dir copies)
+	# Identify vmware.conf or kvm.conf at repo root (included in the tar via find)
 	for _hv in vmware.conf kvm.conf; do
-		if [ -f "${repo_dir}/$_hv" ]; then
-			_hv_conf_path="${repo_dir}/$_hv"
-			_hv_conf_mtime_ref=$(stat -c %Y "$_hv_conf_path")
-			break
-		fi
+		[ -f "${repo_dir}/$_hv" ] && _hv_conf_path="${repo_dir}/$_hv" && break
 	done
 
-	# Include mirror/mirror.conf in the bundle if no local registry was installed.
+	# Include mirror/mirror.conf if no local registry was installed.
 	# If .available exists, mirror.conf was used to install locally → likely wrong for disco.
-	# If .available doesn't exist (save-only workflow), mirror.conf may be pre-configured
-	# for the target environment → include it so disco can use it directly.
-	_include_mirror_conf=""
 	if [ -f "${repo_dir}/mirror/mirror.conf" ] && [ ! -f "${repo_dir}/mirror/.available" ]; then
 		_include_mirror_conf=1
-		_mirror_conf_mtime_ref=$(stat -c %Y "${repo_dir}/mirror/mirror.conf")
 	fi
 
 	for _cf in "${repo_dir}"/*/cluster.conf; do
 		[ -f "$_cf" ] || continue
 		_cdir=$(dirname "$_cf")
 		[ "$(basename "$_cdir")" = "mirror" ] && continue
-		# Only touch .bm-message for dirs with pre-built configs (both must exist).
-		# Cluster.conf-only dirs need the bare-metal "edit your configs" pause.
-		[ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ] && touch "$_cdir/.bm-message"
+
 		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
 		_cluster_paths+=" $_cdir"
+
+		# Resolve symlinks to real copies so the tarball is self-contained
+		for _f in vmware.conf kvm.conf mirror.conf; do
+			if [ -L "$_cdir/$_f" ] && [ -e "$_cdir/$_f" ]; then
+				cp --remove-destination "$(readlink -f "$_cdir/$_f")" "$_cdir/$_f"
+				_resolved_copies+=" $_cdir/$_f"
+			fi
+		done
+
+		# Mark fully pre-built dirs: .primed tells Make to skip regeneration.
+		# Cluster.conf-only dirs get NO .primed — normal generation on disco.
+		if [ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ]; then
+			touch "$_cdir/.primed"
+			touch "$_cdir/.bm-message"
+		fi
 	done
-
-	# Per-dir HV conf pinning: resolve each cluster dir's vmware.conf/kvm.conf symlink
-	# into a regular file pinned to THAT dir's cluster.conf. This avoids cross-cluster
-	# timestamp interference when clusters were prepared on different days.
-	# Without per-dir pinning, a single shared vmware.conf pinned to the newest
-	# cluster.conf can be newer than an older cluster's install-config.yaml, causing
-	# Make to regenerate (and wipe hand-edited) configs on disco.
-	if [ "$_hv_conf_path" ]; then
-		local_hv_name=$(basename "$_hv_conf_path")
-		for _d in $_cluster_paths; do
-			[ -f "$_d/install-config.yaml" ] || continue
-			if [ -L "$_d/$local_hv_name" ] || [ -f "$_d/$local_hv_name" ]; then
-				# Replace symlink with a real copy, pinned to this dir's cluster.conf
-				rm -f "$_d/$local_hv_name"
-				cp "$_hv_conf_path" "$_d/$local_hv_name"
-				touch -r "$_d/cluster.conf" "$_d/$local_hv_name"
-				_per_dir_hv_copies+=" $_d/$local_hv_name"
-			fi
-		done
-	fi
-
-	# Pin mirror/mirror.conf mtime so it doesn't trigger install-config.yaml regeneration
-	# on disco. Pin to the oldest install-config.yaml among pre-built dirs (guarantees
-	# mirror.conf is never newer than any pre-built target).
-	if [ "$_include_mirror_conf" ]; then
-		_oldest_ic=""
-		for _d in $_cluster_paths; do
-			[ -f "$_d/install-config.yaml" ] || continue
-			if [ ! "$_oldest_ic" ] || [ "$_d/install-config.yaml" -ot "$_oldest_ic" ]; then
-				_oldest_ic="$_d/install-config.yaml"
-			fi
-		done
-		[ "$_oldest_ic" ] && touch -r "$_oldest_ic" "${repo_dir}/mirror/mirror.conf"
-	fi
 fi
 
 # Default: exclude mirror/mirror.conf (wrong for disco if registry installed locally).
