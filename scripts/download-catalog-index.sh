@@ -194,10 +194,10 @@ aba_debug "tmp_dir=$tmp_dir"
 _sig_policy="$tmp_dir/policy.json"
 echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
 
-aba_info "Pulling operator catalog image: $catalog_url"
-_pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || {
-	aba_abort "Failed to pull catalog image: $catalog_url" "$_pull_err"
-}
+if ! try_cmd -n 3 -d 10 -D 5 -m "Pull catalog image: $catalog_url" -- \
+	podman pull --signature-policy="$_sig_policy" -q "$catalog_url"; then
+	aba_abort "Failed to pull catalog image: $catalog_url"
+fi
 
 # Capture manifest digest for runtime catalog pinning.
 # When oc-mirror sees a digest ref it skips upstream tag resolution -- critical for air-gap.
