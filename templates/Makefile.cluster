@@ -109,14 +109,21 @@ cluster.conf: .init | mirror.conf  ## Initialize the OpenShift cluster.conf file
 
 agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to only generate the agent config files, so they can be edited. 
 
+# install-config.yaml is ALWAYS regenerated, even in primed bundles, because it
+# contains registry-specific credentials (pull secret, rootCA, imageContentSources)
+# that differ between the connected side (where the bundle was built) and the
+# disconnected side (where the mirror runs). backup.sh --primed resolves the
+# mirror.conf symlink to a real copy (newer timestamp), triggering this rebuild.
+install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf | .cli  ## Create the agent-based config file based on the cluster.conf file.
+	$(SCRIPTS)/verify-config.sh
+	$(SCRIPTS)/create-install-config.sh
+
 # .primed guard: when 'aba bundle --primed' bakes pre-built configs into the tar,
 # it drops a .primed marker. $(wildcard .primed) expands to ".primed" if the file
 # exists (empty dep list → no rebuild) or "" if absent (normal deps → rebuild).
+# agent-config.yaml carries node-level config (IPs, MACs, topology) that does not
+# depend on registry credentials, so it is safe to skip in primed mode.
 # Remove .primed to force regeneration: rm .primed && aba agentconf
-install-config.yaml: $(if $(wildcard .primed),,$(hv_conf_dep) cluster.conf mirror.conf) | .cli  ## Create the agent-based config file based on the cluster.conf file.
-	$(if $(wildcard .primed),,$(SCRIPTS)/verify-config.sh)
-	$(if $(wildcard .primed),,$(SCRIPTS)/create-install-config.sh)
-
 agent-config.yaml: $(if $(wildcard .primed),,cluster.conf mirror.conf) | .init  ## Create the agent-based config file based on the cluster.conf file.
 	$(if $(wildcard .primed),,$(SCRIPTS)/create-agent-config.sh)
 
