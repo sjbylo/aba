@@ -400,14 +400,18 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	shift
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
+		_prev_s="" ; _prev_f="" ; _prev_c=""
 		echo_yellow "Available OpenShift versions:"
 		echo_white  "Latest stable:      $(fetch_latest_version stable)"
 		echo_white  "Latest fast:        $(fetch_latest_version fast)"
 		echo_white  "Latest candidate:   $(fetch_latest_version candidate)"
 		echo
-		echo_white  "Previous stable:    $(fetch_previous_version stable)"
-		echo_white  "Previous fast:      $(fetch_previous_version fast)"
-		echo_white  "Previous candidate: $(fetch_previous_version candidate)"
+		_prev_s=$(fetch_previous_version stable)
+		_prev_f=$(fetch_previous_version fast)
+		_prev_c=$(fetch_previous_version candidate)
+		[ -n "$_prev_s" ] && echo_white  "Previous stable:    $_prev_s"
+		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
+		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
 
 		which openshift-install >/dev/null 2>&1 && os_inst=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
 		[ "$os_inst" ] && \
