@@ -544,44 +544,118 @@ mirror_prep_upgrade() {
 		_existing_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 	fi
 
-	# Fetch available versions for the current channel (reuse cached data)
+	# Fetch upgrade targets reachable from the current version
 	local _channel="${ocp_channel:-fast}"
-	run_once -p -i "ocp:${_channel}:latest_version" 2>/dev/null || {
-		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"$(printf "$TUI2_MSG_VERSION_FETCHING" "$_channel")" 0 0
-		run_once -q -w -S -i "ocp:${_channel}:latest_version" 2>/dev/null || \
-			run_once -i "ocp:${_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $_channel"
-		run_once -q -w -S -i "ocp:${_channel}:latest_version_previous" 2>/dev/null || \
-			run_once -i "ocp:${_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $_channel"
+	local _targets _zstream="" _next="" _next1=""
+	_targets=$(fetch_upgrade_targets "$_current_ver" "$_channel" 2>/dev/null)
+
+	# Parse own-channel targets
+	while IFS=$'\t' read -r _label _ver; do
+		case "$_label" in
+			zstream) _zstream="$_ver" ;;
+			next)    _next="$_ver" ;;
+			next+1)  _next1="$_ver" ;;
+		esac
+	done <<< "$_targets"
+
+	# Check other channels for additional versions not on user's channel.
+	# _fb_items: array of "TAG|VERSION|CHANNEL" entries for fallback versions.
+	local _fb_items=() _shown_hint=false
+	local _all_seen="${_zstream}|${_next}|${_next1}|${_current_ver}"
+
+	_add_fallback_items() {
+		local _fb_ch="$1" _fb_tag_prefix="$2"
+		local _fb_targets _fb_z="" _fb_n="" _fb_n1=""
+		_fb_targets=$(fetch_upgrade_targets "$_current_ver" "$_fb_ch" 2>/dev/null)
+		[[ -z "$_fb_targets" ]] && return
+		while IFS=$'\t' read -r _l _v; do
+			case "$_l" in
+				zstream) _fb_z="$_v" ;;
+				next)    _fb_n="$_v" ;;
+				next+1)  _fb_n1="$_v" ;;
+			esac
+		done <<< "$_fb_targets"
+		# Add versions not already shown from the user's own channel
+		[[ -n "$_fb_n"  && "$_all_seen" != *"$_fb_n"*  ]] && _fb_items+=("${_fb_tag_prefix}n|$_fb_n|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_n}"
+		[[ -n "$_fb_z"  && "$_all_seen" != *"$_fb_z"*  ]] && _fb_items+=("${_fb_tag_prefix}z|$_fb_z|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_z}"
+		[[ -n "$_fb_n1" && "$_all_seen" != *"$_fb_n1"* ]] && _fb_items+=("${_fb_tag_prefix}1|$_fb_n1|$_fb_ch") && _all_seen="${_all_seen}|${_fb_n1}"
 	}
 
-	local _latest _previous
-	_latest=$(run_once -o -i "ocp:${_channel}:latest_version" 2>/dev/null)
-	_previous=$(run_once -o -i "ocp:${_channel}:latest_version_previous" 2>/dev/null)
+	[[ "$_channel" != "fast"      ]] && _add_fallback_items "fast" "f"
+	[[ "$_channel" != "candidate" ]] && _add_fallback_items "candidate" "c"
 
-	# Build menu items — show all valid upgrade versions (deduplicated)
-	local items=() _default_tag="m"
-
-	# Existing target from mirror.conf — validate against graph before showing
-	if [[ -n "$_existing_target" ]]; then
-		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
-			items+=("t" "Current target ($_existing_target)")
-			_default_tag="t"
-		else
-			# Invalid target — show it marked as unavailable so user knows
-			items+=("t" "Current target ($_existing_target) [NOT IN CHANNEL]")
-			_default_tag="l"
+	# Show informational hint if there are fallback-channel versions
+	if [[ ${#_fb_items[@]} -gt 0 ]]; then
+		local _fb_channels=""
+		local _item
+		for _item in "${_fb_items[@]}"; do
+			local _ch="${_item##*|}"
+			[[ "$_fb_channels" != *"$_ch"* ]] && _fb_channels="${_fb_channels:+$_fb_channels, }$_ch"
+		done
+		if [[ -z "$_targets" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --title "No Upgrades on ${_channel}" --msgbox \
+				"No upgrades available on the ${_channel} channel ... yet.\n\n\
+Items marked [switch to ...] will automatically\n\
+change your channel when selected." 0 0
 		fi
 	fi
-	if [[ -n "$_latest" && "$_latest" != "$_existing_target" ]]; then
-		items+=("l" "Latest    ($_latest)")
-		[[ "$_default_tag" == "m" ]] && _default_tag="l"
+
+	# Build menu items with numbered tags (1, 2, 3, ...)
+	local -A _tag_channel_map=() _tag_version_map=()
+	local items=() _default_tag="m" _tag_num=0
+
+	# Existing target from mirror.conf
+	if [[ -n "$_existing_target" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
+			items+=("$_tag_num" "Current target ($_existing_target)")
+		else
+			items+=("$_tag_num" "Current target ($_existing_target) [NOT IN CHANNEL]")
+		fi
+		_tag_version_map[$_tag_num]="$_existing_target"
+		_default_tag="$_tag_num"
 	fi
-	if [[ -n "$_previous" && "$_previous" != "$_existing_target" && "$_previous" != "$_latest" ]]; then
-		items+=("p" "Previous  ($_previous)")
+	# Own-channel: next minor
+	if [[ -n "$_next" && "$_next" != "$_existing_target" && "$_next" != "$_current_ver" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		items+=("$_tag_num" "Next minor ($(_ver_minor "$_next") latest: $_next)")
+		_tag_version_map[$_tag_num]="$_next"
+		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
 	fi
+	# Own-channel: z-stream
+	if [[ -n "$_zstream" && "$_zstream" != "$_existing_target" && "$_zstream" != "$_current_ver" && "$_zstream" != "$_next" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		items+=("$_tag_num" "Z-stream   ($(_ver_minor "$_zstream") latest: $_zstream)")
+		_tag_version_map[$_tag_num]="$_zstream"
+		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+	fi
+	# Own-channel: next+1
+	if [[ -n "$_next1" && "$_next1" != "$_existing_target" && "$_next1" != "$_current_ver" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		items+=("$_tag_num" "Minor $(_ver_minor "$_next1")  (latest: $_next1)")
+		_tag_version_map[$_tag_num]="$_next1"
+	fi
+	# Fallback channel items
+	for _item in "${_fb_items[@]}"; do
+		local _fb_tag="${_item%%|*}"
+		local _rest="${_item#*|}"
+		local _ver="${_rest%%|*}"
+		local _ch="${_rest##*|}"
+		local _minor _label
+		_minor="$(_ver_minor "$_ver")"
+		_tag_num=$(( _tag_num + 1 ))
+		if [[ "$_fb_tag" == *n ]]; then
+			_label="Next minor ($_minor latest: $_ver) [switch to $_ch]"
+		elif [[ "$_fb_tag" == *z ]]; then
+			_label="Z-stream   ($_minor latest: $_ver) [switch to $_ch]"
+		else
+			_label="Minor $_minor  (latest: $_ver) [switch to $_ch]"
+		fi
+		items+=("$_tag_num" "$_label")
+		_tag_version_map[$_tag_num]="$_ver"
+		_tag_channel_map[$_tag_num]="$_ch"
+		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+	done
 	items+=("m" "Manual entry (x.y or x.y.z)")
 	if [[ -n "$_existing_target" ]]; then
 		items+=("c" "Clear target (disable upgrade mode)")
@@ -601,9 +675,6 @@ mirror_prep_upgrade() {
 		local _choice
 		_choice=$(<"$_TUI_TMP")
 		case "$_choice" in
-			t) _target_ver="$_existing_target" ;;
-			l) _target_ver="$_latest" ;;
-			p) _target_ver="$_previous" ;;
 			c)
 				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 				ocp_upgrade_to=""
@@ -640,10 +711,16 @@ mirror_prep_upgrade() {
 				done
 				[[ -z "$_target_ver" ]] && continue
 				;;
+			*)
+				# Numbered tags: lookup version (and optional channel switch) from maps
+				_target_ver="${_tag_version_map[$_choice]:-}"
+				if [[ -n "${_tag_channel_map[$_choice]:-}" ]]; then
+					_channel="${_tag_channel_map[$_choice]}"
+				fi
+				;;
 		esac
 
 		# Verify version exists in Cincinnati graph (fast check before long oc-mirror run)
-		dlg --backtitle "$(ui_backtitle)" --infobox "Verifying ${_target_ver} exists in ${_channel} channel..." 0 0
 		if ! verify_release_version_exists "$_target_ver" "$_channel"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
 				"Version $_target_ver not found in '$_channel' channel.\n\nThis version may not have been released yet.\nCheck the channel or try a different version." 0 0
@@ -651,8 +728,6 @@ mirror_prep_upgrade() {
 		fi
 
 		# Validate upgrade path: source version must exist in the target channel graph.
-		# Covers both same-minor (z-stream) and cross-minor upgrades.
-		dlg --backtitle "$(ui_backtitle)" --infobox "Verifying upgrade path: ${_current_ver} → ${_target_ver}..." 0 0
 		local _path_diag
 		if _path_diag=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" 2>&1); then
 			: # path OK
@@ -674,21 +749,33 @@ Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_
 		break
 	done
 
-	# Choose sync vs save
-	local _upg_method=""
+	# Choose sync vs save — mention channel switch if applicable
+	local _upg_method="" _orig_channel="${ocp_channel:-stable}"
+	local _switch_note=""
+	if [[ "$_channel" != "$_orig_channel" ]]; then
+		_switch_note="  4. Switch channel: ${_orig_channel} → ${_channel}\n"
+	fi
 	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade" \
 		--cancel-label "$TUI2_BTN_CANCEL" \
 		--ok-label "$TUI2_BTN_SELECT" \
 		--menu "\nThis will:\n\n\
   1. Set target version to ${_target_ver}\n\
   2. Regenerate the ImageSet Config (if not user-edited)\n\
-  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\n\
+  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\
+${_switch_note}\n\
 How do you want to mirror the upgrade images?" 0 0 0 \
 		"1" "Sync to registry (direct)" \
 		"2" "Save to tar files (for transfer)" \
 		2>"$_TUI_TMP"
 	[[ $? -ne 0 ]] && return 1
 	_upg_method=$(<"$_TUI_TMP")
+
+	# If user selected a version from a different channel, switch now
+	if [[ "$_channel" != "$_orig_channel" ]]; then
+		replace-value-conf -q -n ocp_channel -v "$_channel" -f "$ABA_ROOT/aba.conf"
+		ocp_channel="$_channel"
+		tui_log "Switched channel to $_channel (for upgrade to $_target_ver)"
+	fi
 
 	# Persist target version and kick off ISC regeneration after user confirmed
 	replace-value-conf -q -n ocp_upgrade_to -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
