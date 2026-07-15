@@ -47,6 +47,10 @@ plan_tests \
     "mirror clean: removes files and re-extraction works" \
     "Load bundle to internal bastion" \
     "Bare-metal simulation: platform=bm two-step install" \
+    "Primed bundle: create and transfer to disco" \
+    "Primed bundle: verify on disco" \
+    "Primed bundle: deploy SNO from disco" \
+    "Primed bundle: verify source repo restored" \
     "Cleanup: delete cluster and uninstall mirror on disN"
 
 suite_begin "create-bundle-to-disk"
@@ -332,6 +336,181 @@ e2e_run_remote -q "Restore VMware platform on disN" \
     "cd ~/aba && aba --platform vmw"
 e2e_run -q "Restore VMware platform" "aba --platform vmw"
 e2e_run -q "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+
+test_end 0
+
+# ============================================================================
+# 11. Primed bundle: create cluster dirs and tar on conN
+#
+#     Tests the --primed flag that bundles pre-built cluster configurations
+#     for air-gap transfer. Creates two cluster dirs:
+#       - pre-built SNO (with install-config.yaml + agent-config.yaml)
+#       - conf-only compact (cluster.conf only, configs generated on disco)
+#     Then builds a tarball via 'make tarrepo clusters=1' (uses backup.sh
+#     --primed without the slow mirror save) and transfers to disN.
+# ============================================================================
+PRIMED_SNO="$(pool_cluster_name primed-sno)"
+PRIMED_COMPACT="$(pool_cluster_name primed-compact)"
+PRIMED_TAR="/tmp/e2e-primed-bundle-${POOL_NUM}.tar"
+PRIMED_EXTRACT_DIR="e2e-test-primed"
+
+test_begin "Primed bundle: create and transfer to disco"
+
+# Point mirror.conf at the disco registry so the primed bundle carries the
+# correct reg_host for the disconnected side (where aba iso will run).
+e2e_run "Set reg_host to disco registry for primed bundle" \
+    "aba --reg-host $DIS_HOST"
+e2e_run "Verify mirror.conf: reg_host=$DIS_HOST" \
+    "grep '^reg_host=$DIS_HOST' mirror/mirror.conf"
+
+e2e_run "Create pre-built SNO cluster dir (agentconf)" \
+    "aba cluster -n $PRIMED_SNO -t sno -i $(pool_starting_ip sno) -s agentconf -y"
+e2e_run "Verify pre-built: install-config.yaml exists" \
+    "test -f $PRIMED_SNO/install-config.yaml"
+e2e_run "Verify pre-built: agent-config.yaml exists" \
+    "test -f $PRIMED_SNO/agent-config.yaml"
+
+e2e_run "Create conf-only compact cluster dir" \
+    "aba cluster -n $PRIMED_COMPACT -t compact -i $(pool_starting_ip compact) -y"
+e2e_run "Verify conf-only: NO install-config.yaml" \
+    "test ! -f $PRIMED_COMPACT/install-config.yaml"
+
+e2e_run "Create primed tarball (tarrepo, skips mirror save)" \
+    "make tarrepo out=$PRIMED_TAR clusters=1"
+
+# Restore reg_host to conN (undo the disco override above)
+e2e_run -q "Restore reg_host to conN" \
+    "aba --reg-host con${POOL_NUM}.${VM_BASE_DOMAIN}"
+
+e2e_run "Transfer primed bundle to disco" \
+    "scp $PRIMED_TAR ${INTERNAL_BASTION}:/tmp/"
+
+e2e_run_remote "Extract primed bundle on disco" \
+    "rm -rf ~/$PRIMED_EXTRACT_DIR && mkdir ~/$PRIMED_EXTRACT_DIR && tar xf $PRIMED_TAR -C ~/$PRIMED_EXTRACT_DIR"
+
+test_end 0
+
+# ============================================================================
+# 12. Primed bundle: verify contents on disco
+# ============================================================================
+test_begin "Primed bundle: verify on disco"
+
+# --- Pre-built SNO: .primed marker + resolved files, Make skips rebuild ---
+e2e_run_remote "Pre-built: .primed marker present" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/.primed"
+
+e2e_run_remote "Pre-built: .bm-message present" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/.bm-message"
+
+e2e_run_remote "Pre-built: install-config.yaml present" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/install-config.yaml"
+
+e2e_run_remote "Pre-built: agent-config.yaml present" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/agent-config.yaml"
+
+e2e_run_remote "Pre-built: vmware.conf is regular file (not symlink)" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/vmware.conf && test ! -L ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/vmware.conf"
+
+e2e_run_remote "Pre-built: mirror.conf is regular file (not symlink)" \
+    "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf && test ! -L ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf"
+
+e2e_run_remote "Pre-built: Make skips install-config rebuild (.primed guard)" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && ! make -n -C $PRIMED_SNO install-config.yaml 2>&1 | grep -q create-install-config"
+
+e2e_run_remote "Pre-built: Make skips agent-config rebuild (.primed guard)" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && ! make -n -C $PRIMED_SNO agent-config.yaml 2>&1 | grep -q create-agent-config"
+
+# --- Conf-only compact: no .primed, Make would rebuild ---
+e2e_run_remote "Conf-only: .primed marker absent" \
+    "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_COMPACT/.primed"
+
+e2e_run_remote "Conf-only: .bm-message absent" \
+    "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_COMPACT/.bm-message"
+
+e2e_run_remote "Conf-only: install-config.yaml absent" \
+    "test ! -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_COMPACT/install-config.yaml"
+
+e2e_run_remote "Conf-only: Make WOULD generate install-config" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && make -n -C $PRIMED_COMPACT install-config.yaml 2>&1 | grep -q create-install-config"
+
+# --- Tar structure intact (key symlinks resolve) ---
+e2e_run_remote "Pre-built: Makefile symlink resolves" \
+    "test -e ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/Makefile"
+
+e2e_run_remote "Pre-built: scripts symlink resolves" \
+    "test -d ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/scripts"
+
+test_end 0
+
+# ============================================================================
+# 13. Primed bundle: deploy SNO from disco
+#
+#     End-to-end proof that a primed bundle produces a working cluster.
+#     On disco: verify mirror.conf points to the local registry, generate
+#     an ISO, deploy a VM, and wait until the node is reachable via SSH.
+#     Similar to kvm-network: no full bootstrap, just network reachability.
+# ============================================================================
+test_begin "Primed bundle: deploy SNO from disco"
+
+# Verify mirror.conf carries the correct reg_host (disco's registry, not conN)
+e2e_run_remote "Verify primed mirror.conf: reg_host=$DIS_HOST" \
+    "grep '^reg_host=$DIS_HOST' ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf"
+
+# Verify the registry is reachable from the primed config
+e2e_run_remote "Verify disco registry is reachable" \
+    "curl -sSk https://$DIS_HOST:\$(grep '^reg_port=' ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf | cut -d= -f2)/v2/ | head -1"
+
+# Generate ISO from primed configs (uses resolved mirror.conf → disco registry)
+e2e_run_remote "Generate ISO from primed SNO" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO iso"
+e2e_run_remote "Verify ISO created" \
+    "ls ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/iso-agent-based/agent.*.iso"
+
+# Deploy VM and wait for SSH (network reachability proof, no full install).
+# No e2e_add_to_cluster_cleanup: the cluster lives in a non-standard path
+# (~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO) and the explicit delete below
+# handles cleanup. The rm -rf of $PRIMED_EXTRACT_DIR catches crash leftovers.
+e2e_run_remote "Upload ISO to vCenter" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO upload"
+e2e_run_remote "Create and boot VM" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO refresh"
+e2e_run_remote -r 1 1 "Wait for node0 SSH ($PRIMED_SNO)" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && timeout 8m bash -c 'until aba --dir $PRIMED_SNO ssh --cmd hostname; do sleep 10; done'"
+
+# Cleanup: delete VM and remove extracted primed dir
+e2e_run_remote "Delete $PRIMED_SNO VMs" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO delete"
+e2e_run_remote -q "Remove primed extract dir on disco" \
+    "rm -rf ~/$PRIMED_EXTRACT_DIR $PRIMED_TAR"
+
+test_end 0
+
+# ============================================================================
+# 14. Primed bundle: verify source repo restored on conN
+#
+#     After backup.sh runs, the EXIT trap must restore original symlinks
+#     and remove .primed markers from the source repo.
+# ============================================================================
+test_begin "Primed bundle: verify source repo restored"
+
+e2e_run "Source repo: no .primed marker in pre-built dir" \
+    "test ! -f $PRIMED_SNO/.primed"
+
+e2e_run "Source repo: no .primed marker in conf-only dir" \
+    "test ! -f $PRIMED_COMPACT/.primed"
+
+e2e_run "Source repo: vmware.conf is still a symlink" \
+    "test -L $PRIMED_SNO/vmware.conf"
+
+e2e_run "Source repo: mirror.conf is still a symlink" \
+    "test -L $PRIMED_SNO/mirror.conf"
+
+e2e_run "Source repo: mirror.conf symlink is not dangling" \
+    "test -e $PRIMED_SNO/mirror.conf"
+
+# Cleanup test cluster dirs on conN
+e2e_run -q "Remove primed cluster dirs on conN" \
+    "rm -rf $PRIMED_SNO $PRIMED_COMPACT $PRIMED_TAR"
 
 test_end 0
 
