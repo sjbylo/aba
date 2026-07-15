@@ -414,8 +414,11 @@ e2e_run_remote "Pre-built: vmware.conf is regular file (not symlink)" \
 e2e_run_remote "Pre-built: mirror.conf is regular file (not symlink)" \
     "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf && test ! -L ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf"
 
-e2e_run_remote "Pre-built: Make skips install-config rebuild (.primed guard)" \
-    "cd ~/$PRIMED_EXTRACT_DIR/aba && ! make -n -C $PRIMED_SNO install-config.yaml 2>&1 | grep -q create-install-config"
+# install-config.yaml MUST be regenerated on disco (needs local registry creds),
+# so the .primed guard was removed from it. agent-config.yaml (node IPs/MACs) is
+# still guarded — no registry dependency.
+e2e_run_remote "Pre-built: Make WOULD regenerate install-config (no .primed guard)" \
+    "cd ~/$PRIMED_EXTRACT_DIR/aba && make -n -C $PRIMED_SNO install-config.yaml 2>&1 | grep -q create-install-config"
 
 e2e_run_remote "Pre-built: Make skips agent-config rebuild (.primed guard)" \
     "cd ~/$PRIMED_EXTRACT_DIR/aba && ! make -n -C $PRIMED_SNO agent-config.yaml 2>&1 | grep -q create-agent-config"
