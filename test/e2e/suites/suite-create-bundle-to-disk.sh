@@ -359,7 +359,7 @@ test_begin "Primed bundle: create and transfer to disco"
 # Point mirror.conf at the disco registry so the primed bundle carries the
 # correct reg_host for the disconnected side (where aba iso will run).
 e2e_run "Set reg_host to disco registry for primed bundle" \
-    "aba --reg-host $DIS_HOST"
+    "aba -d mirror --reg-host $DIS_HOST"
 e2e_run "Verify mirror.conf: reg_host=$DIS_HOST" \
     "grep '^reg_host=$DIS_HOST' mirror/mirror.conf"
 
@@ -380,7 +380,7 @@ e2e_run "Create primed tarball (tarrepo, skips mirror save)" \
 
 # Restore reg_host to conN (undo the disco override above)
 e2e_run -q "Restore reg_host to conN" \
-    "aba --reg-host con${POOL_NUM}.${VM_BASE_DOMAIN}"
+    "aba -d mirror --reg-host con${POOL_NUM}.${VM_BASE_DOMAIN}"
 
 e2e_run "Transfer primed bundle to disco" \
     "scp $PRIMED_TAR ${INTERNAL_BASTION}:/tmp/"
