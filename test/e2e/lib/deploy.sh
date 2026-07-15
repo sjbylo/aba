@@ -322,6 +322,10 @@ _deploy_to_pools() {
 			sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
 			sync_extras "$target" "${CON_SSH_USER:-steve}" "$_p"
 			_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
+			# Quay mirror on disN runs as rootless podman with systemd user services;
+			# without linger, services die when the SSH session ends (suite interrupt/pause).
+			local _dis_target="${target/con/dis}"
+			_essh "$_dis_target" "sudo loginctl enable-linger root" 2>/dev/null || true
 			echo "    con${_p}: harness deployed to ~/.e2e-harness/"
 		else
 			echo "    con${_p}: FAILED to deploy harness (skipping)" >&2
