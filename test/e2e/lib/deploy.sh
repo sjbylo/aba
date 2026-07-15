@@ -198,11 +198,11 @@ sync_extras() {
 		 { nmcli connection modify ens192 +ipv4.routes '10.10.123.0/24 ${KVM_HOST_LAB_IP:-10.0.1.10}' && \
 		   nmcli connection up ens192; }" 2>/dev/null || true
 
-	# Ensure dnsmasq config includes all cluster entries (e.g. kvm-sno-vlan).
+	# Ensure dnsmasq config includes all cluster entries (e.g. kvm-sno-vlan, primed-sno).
 	# VMs provisioned before new entries were added won't have them.
 	# Re-run _vm_setup_dnsmasq() (single source of truth) if stale.
 	if [ -n "$pool_num" ]; then
-		if ! _essh "$_root_target" "grep -q 'kvm-sno-vlan' /etc/dnsmasq.d/e2e-pool.conf" 2>/dev/null; then
+		if ! _essh "$_root_target" "grep -q 'primed-sno' /etc/dnsmasq.d/e2e-pool.conf" 2>/dev/null; then
 			if type _vm_setup_dnsmasq &>/dev/null; then
 				_vm_setup_dnsmasq "con${pool_num}" "${user}" "con${pool_num}"
 			else
