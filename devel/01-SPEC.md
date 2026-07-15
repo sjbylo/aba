@@ -115,6 +115,23 @@ using images from the local mirror registry. The workflow:
   manually with `oc adm upgrade --to <ver> --allow-not-recommended` if they
   accept the risk.
 
+### ocp_version semantics
+
+Three distinct version concepts exist in ABA:
+
+| Variable | Source | Meaning |
+|----------|--------|---------|
+| `ocp_version` | `aba.conf` | **User intent** — the version to deploy or mirror |
+| `mirror_ocp_version` | `state.sh` | **Mirror fact** — the version actually in the registry |
+| cluster version | `oc get clusterversion` | **Cluster fact** — the running version (always live) |
+
+After initial install these may all agree. They diverge during upgrades:
+the user sets a new `ocp_version` in `aba.conf`, but the mirror still holds
+the old version until `aba save/load` runs. Scripts that check what is IN the
+mirror (e.g. `verify-release-image.sh`) use `mirror_ocp_version` from
+`state.sh`. Scripts that determine what to download or extract use
+`ocp_version` from `aba.conf`.
+
 ### Cluster deletion (`aba delete`)
 
 Destroys cluster VMs and runs `make clean` to remove all generated artifacts
@@ -164,7 +181,7 @@ FROM config.
 
 | File | Scope | Key values |
 |------|-------|------------|
-| `aba.conf` | Global | `ocp_version`, `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
+| `aba.conf` | Global | `ocp_version` (user intent), `ocp_channel`, `platform` (vmw/kvm/bm), `op_sets`, `ops`, network defaults, `pull_secret_file`, `ask` |
 | `mirror.conf` | Per mirror dir | `reg_host`, `reg_port`, `reg_path`, `reg_vendor` (auto/quay/docker), `reg_user`, `reg_pw`, `data_dir`, `reg_ssh_key`, `reg_ssh_user`, `ocp_upgrade_to` (upgrade) |
 | `cluster.conf` | Per cluster dir | `cluster_name`, `base_domain`, `api_vip`, `ingress_vip`, `starting_ip`, `machine_network`, master/worker counts, `vlan`, `int_connection`, `mirror_name` |
 
@@ -414,7 +431,7 @@ remove these -- only Makefiles may.
 
 Installed-object state lives outside the working dir in `~/.aba/`:
 
-- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw) plus operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened)
+- **Mirror**: `~/.aba/mirror/<name>/state.sh` — registry identity (reg_host, reg_port, reg_vendor, reg_root, reg_user, reg_pw), operational state (reg_ssh_key, reg_ssh_user, reg_root_opts, reg_fw_opened), and version tracking (mirror_ocp_version, last_action, last_action_at, reg_installed_at)
 - **Cluster**: `~/.aba/clusters/<name>/state.sh` — cluster identity (cluster_name, base_domain, starting_ip, cluster_type, machine_network, prefix_length, platform)
 
 State files use lowercase vars matching config file names. Normalize functions
