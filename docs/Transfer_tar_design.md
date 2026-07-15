@@ -39,6 +39,7 @@ Today `aba-transfer.tar` (created by `reg-save.sh` during `aba save`) carries on
 **No, not directly.** `backup.sh` creates a full repo tar (scripts, templates, cli, mirror, etc.) -- it's the wrong tool for a lightweight "just cluster dirs" transfer. BUT we can **extract the cluster-dir preparation logic** (symlink resolution, `.primed` markers, exclusion list) into a shared function that both `backup.sh` and the new transfer command call.
 
 Specifically, the reusable piece is lines 96-163 of [backup.sh](scripts/backup.sh):
+
 - Walk `*/cluster.conf`, skip `mirror/`
 - Resolve `vmware.conf`, `kvm.conf`, `mirror.conf` symlinks to real copies
 - Touch `.primed` + `.bm-message` for fully pre-built dirs
@@ -69,25 +70,24 @@ However, `aba save` and `aba transfer` both write to `mirror/data/aba-transfer.t
 ### Q4: Where should extraction live?
 
 **New script `scripts/transfer-extract.sh`** called via a new Makefile target `extract-transfer` that is a dependency of `load`. This:
+
 - Moves the 40-line inline extraction block out of [reg-load.sh](scripts/reg-load.sh) (lines 46-85)
 - Adds cluster-dir extraction with smart handling (new dir = extract all, installed dir = only update day2/)
 - Can also be run standalone: `aba -d mirror extract-transfer`
 
 ### Q5: What files go into the cluster-dir transfer tar?
 
-Only small text/config files. **Excluded:**
-- `iso-agent-based/` (ISOs -- huge)
-- `.install-complete`, `.autopoweroff`, `.autoupload`, `.autorefresh`, `.auto-agent-up`, `.bm-nextstep`, `.preflight-done` (lifecycle markers)
-- `*.content-layer-digest`, `*.expected-count` (runtime artifacts)
-- Symlinks to shared dirs (`scripts/`, `templates/`, `cli/`, `mirror/`, `Makefile`, `aba.conf`) -- these already exist on disco
+**Keep it simple: tar the cluster dir as-is, exclude only `iso-agent-based/`.**
 
-**Included (resolved to real files):**
-- `cluster.conf`, `install-config.yaml`, `agent-config.yaml`
-- `vmware.conf` / `kvm.conf` (resolved from symlinks)
-- `mirror.conf` (resolved from symlinks)
-- `macs.conf` (if present)
-- `.primed`, `.bm-message`, `.init` (markers)
-- `day2/` subdirectory (custom manifests, if present)
+The only large file in a cluster dir is the ISO (1GB+), which gets regenerated on disco from the configs anyway. Everything else is tiny:
+
+- Config files: `cluster.conf`, `install-config.yaml`, `agent-config.yaml`, `vmware.conf`, `kvm.conf`, `mirror.conf`, `macs.conf` -- a few KB each
+- Symlinks: `scripts/`, `templates/`, `cli/`, `mirror/`, `Makefile`, `aba.conf` -- a few bytes each, and they MUST be included or the cluster dir is broken on disco (Make can't find its Makefile/scripts)
+- Markers: `.primed`, `.bm-message`, `.init` -- zero bytes each
+- Lifecycle markers (`.install-complete` etc.) -- won't exist on a new cluster being sent to disco; for the update case, extraction handles it
+- `day2/` subdirectory -- small YAML manifests
+
+No clever exclusion list to maintain. The resulting tar is a few KB per cluster dir.
 
 ---
 
@@ -96,6 +96,7 @@ Only small text/config files. **Excluded:**
 ### Step 1: Extract shared cluster-dir preparation
 
 Create a reusable function (or small script `scripts/prepare-cluster-dirs.sh`) that:
+
 - Accepts a list of cluster dirs (or "all")
 - Does the symlink resolution + `.primed` marking
 - Returns the file list suitable for tar
@@ -106,7 +107,8 @@ Both `backup.sh` and the new transfer script source/call it.
 ### Step 2: New `scripts/create-transfer.sh`
 
 - Sources the shared preparation function
-- Builds a tar of cluster dirs only (no repo scaffolding)
+- Tars cluster dirs as-is, excluding only `iso-agent-based/` (the sole large artifact)
+- No other exclusion list -- symlinks, markers, day2/ all included as-is
 - Optionally appends to existing `aba-transfer.tar` (from `aba save`) or creates fresh
 - Writes to `mirror/data/aba-transfer.tar`
 - Paths relative to aba root so extraction on disco works
@@ -114,6 +116,7 @@ Both `backup.sh` and the new transfer script source/call it.
 ### Step 3: New Make targets
 
 In [Makefile](Makefile) (repo root):
+
 ```
 .PHONY: transfer
 transfer:  ## Create transfer tar with primed cluster dirs
@@ -121,6 +124,7 @@ transfer:  ## Create transfer tar with primed cluster dirs
 ```
 
 In [templates/Makefile.cluster](templates/Makefile.cluster):
+
 ```
 .PHONY: transfer
 transfer:  ## Add this cluster dir to the transfer tar
@@ -144,6 +148,7 @@ Add `transfer` to the bypass list so it maps to a Make target (or handle it like
 ### Step 6: Wire extraction into Makefile.mirror
 
 In [templates/Makefile.mirror](templates/Makefile.mirror):
+
 ```
 .PHONY: extract-transfer
 extract-transfer:
@@ -187,6 +192,8 @@ flowchart LR
 
   transferTar --> copy --> load
 ```
+
+
 
 ## Open question for user
 
