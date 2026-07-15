@@ -1980,6 +1980,98 @@ verify_upgrade_path_exists() {
 }
 
 ############################################
+# Find valid upgrade targets reachable from a given version.
+# Queries the Cincinnati graph for the next minor (and optionally next-major.0)
+# to find which versions the user can actually upgrade to.
+# Args:
+#	$1 = current version (e.g. 4.19.38)
+#	$2 = channel base (e.g. fast, stable, candidate)
+#	$3 = max forward minors to probe (default: 3)
+# Output:
+#	One line per reachable target, tab-separated:
+#	  LABEL<tab>VERSION
+#	Labels: "zstream" (latest z in current minor), "next" (latest in next reachable minor),
+#	        "next+N" (Nth reachable minor beyond next)
+#	Versions are semver-sorted (highest last within each minor).
+#	Omits the current version itself and versions below it.
+############################################
+fetch_upgrade_targets() {
+	local current_ver="${1:-}"
+	local channel="${2:-${ocp_channel:-fast}}"
+	local max_probe="${3:-3}"
+
+	[[ -z "$current_ver" ]] && return 0
+
+	local cur_minor
+	cur_minor="$(_ver_minor "$current_ver")"
+	[[ -n "$cur_minor" ]] || return 0
+
+	# If only a minor was given (e.g. "4.22"), resolve to the latest z-stream
+	if [[ "$current_ver" == "$cur_minor" ]]; then
+		current_ver="$(fetch_all_versions "$channel" "$cur_minor" 2>/dev/null | tail -n1)"
+		[[ -n "$current_ver" ]] || return 0
+	fi
+
+	# 1) Latest z-stream in current minor (if newer than current)
+	local latest_z
+	latest_z="$(fetch_all_versions "$channel" "$cur_minor" 2>/dev/null | tail -n1)"
+	if [[ -n "$latest_z" ]] && is_version_greater "$latest_z" "$current_ver"; then
+		printf "zstream\t%s\n" "$latest_z"
+	fi
+
+	# 2) Probe forward minors: is current_ver a node in channel-(cur_minor+N)?
+	local x="${cur_minor%%.*}" y="${cur_minor#*.}"
+	local probed=0 next_label=0
+
+	while [[ $probed -lt $max_probe ]]; do
+		y=$(( y + 1 ))
+		local probe_minor="${x}.${y}"
+
+		local graph_versions
+		graph_versions=$(_fetch_graph_cached "$channel" "$probe_minor" 2>/dev/null |
+			jq -r '.nodes[].version' 2>/dev/null) || true
+
+		if [[ -z "$graph_versions" ]]; then
+			# No graph for this minor — try next major.0 (e.g. 4.22 → 5.0) once
+			if [[ $probed -eq 0 || $y -gt 99 ]]; then
+				local next_major="$(( x + 1 )).0"
+				graph_versions=$(_fetch_graph_cached "$channel" "$next_major" 2>/dev/null |
+					jq -r '.nodes[].version' 2>/dev/null) || true
+				[[ -z "$graph_versions" ]] && break
+				probe_minor="$next_major"
+				# Prevent re-probing major boundary
+				x=$(( x + 1 )); y=0
+			else
+				break
+			fi
+		fi
+
+		# Is our current version a valid entry point in this minor's graph?
+		if echo "$graph_versions" | grep -qxF "$current_ver"; then
+			# Find the latest version in this minor
+			local target
+			target=$(echo "$graph_versions" | grep "^${probe_minor}\." |
+				sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//' | tail -n1)
+			if [[ -n "$target" ]]; then
+				if [[ $next_label -eq 0 ]]; then
+					printf "next\t%s\n" "$target"
+				else
+					printf "next+%d\t%s\n" "$next_label" "$target"
+				fi
+				next_label=$(( next_label + 1 ))
+			fi
+		else
+			# Current version not in this minor's graph — can't reach it
+			break
+		fi
+
+		probed=$(( probed + 1 ))
+	done
+
+	return 0
+}
+
+############################################
 # Verify a release version exists in the Cincinnati graph.
 # Used as a pre-flight before oc-mirror to avoid wasted time on non-existent versions.
 # Args:
