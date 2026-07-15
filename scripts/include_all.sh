@@ -3231,7 +3231,7 @@ _populate_shipped_indexes() {
 	done
 }
 
-# Prefetch catalog indexes for current and previous minor versions.
+# Prefetch catalog indexes for current, previous, and upgrade-target minor versions.
 # Called by scripts/prefetch-catalogs.sh and TUI v2 for early background catalog fetching.
 # Requires: ocp_version and/or ocp_channel from aba.conf (or callers set them beforehand).
 aba_prefetch_catalogs() {
@@ -3254,17 +3254,41 @@ aba_prefetch_catalogs() {
 	download_all_catalogs "$_minor"
 	wait_for_all_catalogs "$_minor" || return 0
 
-	# Previous minor line (same major): x.(y-1)
-	local _major="${_minor%%.*}"                    # "4.22" → "4"
-	local _minor_num="${_minor##*.}"                # "4.22" → "22"
+	# Collect additional minors to prefetch (all background, no wait)
+	local _extra=() _seen=" $_minor "
+
+	# Previous minor (N-1, same major)
+	local _major="${_minor%%.*}"
+	local _minor_num="${_minor##*.}"
 	if [[ "$_minor_num" -gt 0 ]]; then
 		local _prev_minor="$_major.$((_minor_num - 1))"
 		local _prev_ver
 		_prev_ver=$(fetch_latest_z_version "$_channel" "$_prev_minor" 2>/dev/null) || true
 		if [[ -n "$_prev_ver" ]]; then
-			download_all_catalogs "$(_ver_minor "$_prev_ver")"
+			local _pm="$(_ver_minor "$_prev_ver")"
+			_extra+=("$_pm")
+			_seen+="$_pm "
 		fi
 	fi
+
+	# Upgrade targets from Cincinnati graph (e.g. 4.22 → 4.23, or 4.22 → 5.0)
+	if type -t fetch_upgrade_targets &>/dev/null; then
+		local _tgt_minor
+		while IFS=$'\t' read -r _label _tgt_ver; do
+			[[ -z "$_tgt_ver" ]] && continue
+			_tgt_minor="$(_ver_minor "$_tgt_ver")"
+			[[ "$_seen" == *" $_tgt_minor "* ]] && continue
+			_seen+="$_tgt_minor "
+			_extra+=("$_tgt_minor")
+			aba_debug "Prefetching upgrade-target catalog: $_tgt_minor (from $_label $_tgt_ver)"
+		done < <(fetch_upgrade_targets "$_ver" "$_channel" 2>/dev/null)
+	fi
+
+	# Fire off all extra catalog downloads (non-blocking via run_once)
+	local _m
+	for _m in "${_extra[@]}"; do
+		download_all_catalogs "$_m"
+	done
 }
 
 # --- Aba-facing cleanup ---

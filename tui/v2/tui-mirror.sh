@@ -618,7 +618,8 @@ change your channel when selected." 0 0
 	# Own-channel: next minor
 	if [[ -n "$_next" && "$_next" != "$_existing_target" && "$_next" != "$_current_ver" ]]; then
 		_tag_num=$(( _tag_num + 1 ))
-		items+=("$_tag_num" "Next minor ($(_ver_minor "$_next") latest: $_next)")
+		local _hop="minor"; [[ "${_next%%.*}" != "${_current_ver%%.*}" ]] && _hop="major"
+		items+=("$_tag_num" "Next $_hop ($(_ver_minor "$_next") latest: $_next)")
 		_tag_version_map[$_tag_num]="$_next"
 		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
 	fi
@@ -645,7 +646,8 @@ change your channel when selected." 0 0
 		_minor="$(_ver_minor "$_ver")"
 		_tag_num=$(( _tag_num + 1 ))
 		if [[ "$_fb_tag" == *n ]]; then
-			_label="Next minor ($_minor latest: $_ver) [switch to $_ch]"
+			local _fhop="minor"; [[ "${_ver%%.*}" != "${_current_ver%%.*}" ]] && _fhop="major"
+			_label="Next $_fhop ($_minor latest: $_ver) [switch to $_ch]"
 		elif [[ "$_fb_tag" == *z ]]; then
 			_label="Z-stream   ($_minor latest: $_ver) [switch to $_ch]"
 		else
