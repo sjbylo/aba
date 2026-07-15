@@ -1651,6 +1651,44 @@ _prev_minor() {
 	echo "${x}.$((y - 1))"
 }
 
+############################################
+# Find the nth candidate-exclusive version (not yet promoted to fast).
+# Scans from CDN latest minor downward, comparing candidate vs fast.
+# A version is "candidate-exclusive" if it's on candidate but NOT on fast.
+# Args: $1 = position (1=previous, 2=older), $2 = max minors to scan (default 4)
+# Returns: the version string, or empty if not found within scan range.
+############################################
+_candidate_nth_exclusive() {
+	local pos="${1:-1}"
+	local max_scan="${2:-4}"
+	local minor scanned=0 found=0
+
+	minor="$(fetch_latest_minor_version candidate)"
+	[[ -n "$minor" ]] || return 0
+
+	while [[ $scanned -lt $max_scan ]]; do
+		local cand fast
+		cand="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
+		[[ -n "$cand" ]] || break
+
+		fast="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
+
+		if [[ "$cand" != "${fast:-}" ]]; then
+			found=$(( found + 1 ))
+			if [[ $found -eq $pos ]]; then
+				echo "$cand"
+				return 0
+			fi
+		fi
+
+		minor="$(_prev_minor "$minor")"
+		[[ -n "$minor" ]] || break
+		scanned=$(( scanned + 1 ))
+	done
+
+	return 0
+}
+
 # return 0 if v contains prerelease suffix (has '-') else 1
 _is_prerelease() {
 	[[ "$1" == *-* ]]
@@ -1802,24 +1840,21 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
-# On candidate: if latest is pre-release from higher minor, "previous" is the GA latest.
+# On candidate: returns the 1st candidate-exclusive version (not on fast),
+# scanning from CDN minor downward. Empty if none found.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
 	local minor prev v
 
+	# Candidate channel: show only versions not yet promoted to fast
+	if [[ "$channel" = "candidate" ]]; then
+		_candidate_nth_exclusive 1
+		return 0
+	fi
+
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
-
-	# On candidate, if a newer pre-release exists, "previous" is the CDN GA latest
-	if [[ "$channel" = "candidate" ]]; then
-		local prerel ga_latest
-		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
-		if [[ -n "$prerel" ]]; then
-			ga_latest="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
-			[[ -n "$ga_latest" ]] && { echo "$ga_latest"; return 0; }
-		fi
-	fi
 
 	prev="$(_prev_minor "$minor")"
 	[[ -n "$prev" ]] || { echo ""; return 0; }
@@ -1832,10 +1867,17 @@ fetch_previous_version() {
 ############################################
 # Fetch latest version of N-2 minor (older)
 # Example: if latest minor is 4.21 -> return latest 4.19.z
+# On candidate: returns the 2nd candidate-exclusive version (not on fast).
 ############################################
 fetch_older_version() {
 	local channel="${1:-stable}"
 	local minor prev older v
+
+	# Candidate channel: show only versions not yet promoted to fast
+	if [[ "$channel" = "candidate" ]]; then
+		_candidate_nth_exclusive 2
+		return 0
+	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
