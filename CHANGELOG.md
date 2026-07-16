@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.5...HEAD)
+
+---
+
+## [1.1.5](https://github.com/sjbylo/aba/releases/tag/v1.1.5) - 2026-07-16
+
+Primed bundles (alpha), TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
+
 
 Primed bundles, TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
 
