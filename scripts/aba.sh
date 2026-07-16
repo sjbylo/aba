@@ -933,6 +933,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			aba_debug "Adding retry=3 (default) to BUILD_COMMAND"
 			shift
 		fi
+	elif [ "$1" = "--shell" ]; then
+		shift
+		BUILD_COMMAND="$BUILD_COMMAND output=shell"
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
 		opt_force="--force"

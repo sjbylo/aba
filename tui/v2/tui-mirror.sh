@@ -438,63 +438,97 @@ _mirror_install_remote() {
 
 # Shows a summary dialog before save/sync/load/bundle operations.
 # Lets the user confirm, go back, or view the ISC file.
+# For "Load" operations: if an aba-transfer.tar is pending, shows its contents
+# (via transfer-info.sh) instead of the local config, so the user sees what
+# will actually be loaded.
 # Returns 0 if confirmed, 1 if cancelled.
 _mirror_op_confirm() {
 	local title="$1"
+	local _ver _chan _target _op_count _op_preview _isc_for_view
+	local _from_transfer=false
 
-	source <(normalize-aba-conf) 2>/dev/null
-	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
-	local _ver="${ocp_version:-unknown}"
-	local _chan="${ocp_channel:-stable}"
-	# Show upgrade range if target is set, or detect from ISC maxVersion
-	local _target="${ocp_upgrade_to:-}"
-	if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
-		_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
+	# On DISCO, if a transfer tar is pending, show its contents (not stale local config)
+	if [[ "$_TUI_MODE" == "DISCO" && -f "$ABA_ROOT/mirror/data/aba-transfer.tar" ]]; then
+		local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
+		local transfer_upgrade_to="" transfer_operator_count="" transfer_operators=""
+		eval "$(make -sC "$ABA_ROOT/mirror" transfer-info output=shell 2>/dev/null)"
+		if [[ "$transfer_pending" == "true" ]]; then
+			_ver="$transfer_ocp_version"
+			_chan="$transfer_ocp_channel"
+			_target="$transfer_upgrade_to"
+			_op_count="$transfer_operator_count"
+			_op_preview="$(echo "$transfer_operators" | sed 's/,/, /g')"
+			if [[ $_op_count -gt 5 ]]; then
+				local _first5
+				_first5=$(echo "$transfer_operators" | cut -d, -f1-5 | sed 's/,/, /g')
+				_op_preview="$_first5, ... (+$(( _op_count - 5 )) more)"
+			fi
+			_from_transfer=true
+			tui_log "Transfer tar found: showing content from aba-transfer.tar"
+		fi
 	fi
 
-	# Pre-flight: validate target version exists in the configured channel
-	# Catches stale targets left from a previous channel (e.g. set on fast, switched to stable)
-	# Skip on DISCO — no internet to query Cincinnati, and the bundle already has the images.
-	if [[ "$_TUI_MODE" != "DISCO" && -n "$_target" && "$_target" != "$_ver" ]]; then
-		if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
-			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
-				--yes-label "Clear Target" --no-label "Cancel" \
-				--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
-			if [[ $? -eq 0 ]]; then
-				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
-				ocp_upgrade_to=""
-				_target=""
-				tui_kick_isconf_regen
-				tui_log "Cleared stale upgrade target (not in $_chan channel)"
-			else
-				return 1
+	# Fall back to local config if no transfer tar
+	if [[ "$_from_transfer" != "true" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null
+		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
+		_ver="${ocp_version:-unknown}"
+		_chan="${ocp_channel:-stable}"
+		_target="${ocp_upgrade_to:-}"
+		if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
+			_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
+		fi
+
+		# Pre-flight: validate target version exists in the configured channel
+		# Skip on DISCO — no internet to query Cincinnati, and the bundle already has the images.
+		if [[ "$_TUI_MODE" != "DISCO" && -n "$_target" && "$_target" != "$_ver" ]]; then
+			if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
+					--yes-label "Clear Target" --no-label "Cancel" \
+					--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
+				if [[ $? -eq 0 ]]; then
+					replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+					ocp_upgrade_to=""
+					_target=""
+					tui_kick_isconf_regen
+					tui_log "Cleared stale upgrade target (not in $_chan channel)"
+				else
+					return 1
+				fi
 			fi
 		fi
-		# Only show upgrade range if target is still valid (not cleared above)
-		[[ -n "$_target" ]] && _ver="${_ver} → ${_target}"
-	fi
-	local _op_count=${#OP_BASKET[@]}
-	local _op_preview=""
-	if [[ $_op_count -gt 0 ]]; then
-		local _shown=() _i=0
-		for _op in "${!OP_BASKET[@]}"; do
-			_shown+=("$_op")
-			_i=$(( _i + 1 ))
-			[[ $_i -ge 5 ]] && break
-		done
-		_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-		if [[ $_op_count -gt 5 ]]; then
-			_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+
+		_op_count=${#OP_BASKET[@]}
+		_op_preview=""
+		if [[ $_op_count -gt 0 ]]; then
+			local _shown=() _i=0
+			for _op in "${!OP_BASKET[@]}"; do
+				_shown+=("$_op")
+				_i=$(( _i + 1 ))
+				[[ $_i -ge 5 ]] && break
+			done
+			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+			if [[ $_op_count -gt 5 ]]; then
+				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+			fi
 		fi
 	fi
 
-	local _summary="OCP: $_ver ($_chan)\n"
+	# Show upgrade range
+	[[ -n "$_target" && "$_target" != "$_ver" ]] && _ver="${_ver} → ${_target}"
+
+	local _summary=""
+	[[ "$_from_transfer" == "true" ]] && _summary+="(from transfer bundle)\n"
+	_summary+="OCP: $_ver ($_chan)\n"
 	if [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
 		_summary+="Operators: none\n"
 	fi
 	_summary+="\nContinue?"
+
+	# For "View ISC": show the ISC from the transfer tar if available
+	_isc_for_view="$ABA_ROOT/mirror/data/imageset-config.yaml"
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
@@ -504,10 +538,21 @@ _mirror_op_confirm() {
 			--yesno "$_summary" 0 0
 		local rc=$?
 		if [[ $rc -eq 2 ]]; then
-			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
-			if [[ -f "$_isc" ]]; then
+			if [[ "$_from_transfer" == "true" ]]; then
+				# Extract ISC from transfer tar for viewing
+				local _tmp_isc
+				_tmp_isc=$(mktemp)
+				tar xf "$ABA_ROOT/mirror/data/aba-transfer.tar" -O "mirror/data/imageset-config.yaml" > "$_tmp_isc" 2>/dev/null || true
+				if [[ -s "$_tmp_isc" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration (from transfer bundle)" \
+						--exit-label "OK" --textbox "$_tmp_isc" 0 0
+				else
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Could not extract ISC from transfer bundle." 0 0
+				fi
+				rm -f "$_tmp_isc"
+			elif [[ -f "$_isc_for_view" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
-					--exit-label "OK" --textbox "$_isc" 0 0
+					--exit-label "OK" --textbox "$_isc_for_view" 0 0
 			else
 				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 0 0
 			fi
@@ -968,12 +1013,30 @@ mirror_view_isc() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
+			--help-button \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_ISC_MENU" 0 0 0 \
 				"${_isc_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
-			[[ $rc -ne 0 ]] && return 0
+			case "$rc" in
+				2)
+					show_help "ImageSet Configuration" \
+"The ImageSet Configuration (ISC) controls which images are mirrored.
+
+• View: see the current ISC YAML file
+• Select Operators: choose which operators to include
+• Force regenerate: rebuild ISC from current aba.conf settings
+• Exclude Release: toggle platform/release images on or off.
+  When ON, only operator images are mirrored — useful when
+  release images are already in the mirror and you only need
+  to transfer new or updated operators.
+• Edit: manually edit the ISC YAML (advanced users)"
+					continue
+					;;
+				0) ;;
+				*) return 0 ;;
+			esac
 
 			local choice
 			choice=$(<"$_TUI_TMP")

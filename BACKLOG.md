@@ -539,13 +539,33 @@ without requiring a reboot:
    Combined with MachineConfig for persistence, this gives instant sync
    with zero disruption.
 
-**Approach:** Use the direct method (SSH + restart chronyd or chronyc commands)
-for immediate effect, keep the MachineConfig apply for persistence. Skip the
-MCO reboot wait if the direct method succeeds.
+4. **NodeDisruptionPolicy (OCP 4.16+):** Apply a `MachineConfiguration`
+   object with a `nodeDisruptionPolicy` that tells the MCO to restart
+   `chronyd.service` instead of rebooting when `/etc/chrony.conf` changes:
+   ```yaml
+   spec:
+     nodeDisruptionPolicy:
+       files:
+       - actions:
+         - restart:
+             serviceName: chronyd.service
+           type: Restart
+         path: /etc/chrony.conf
+   ```
+   Apply this BEFORE the chrony MachineConfigs. The MCO will restart chronyd
+   instead of draining/rebooting. Only applies to OCP >= 4.16; on older
+   clusters, fall back to current behaviour. Phase 1a wait and Phase 4
+   (API recovery post-reboot) can be skipped when the policy is active.
+   Ref: https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/machine_configuration/machine-config-node-disruption_machine-configs-configure
+
+**Approach:** On OCP 4.16+, use NodeDisruptionPolicy (approach 4) as the
+primary method -- cleanest, fully supported by the MCO. On older clusters
+(4.12-4.15), fall back to direct SSH + restart chronyd (approach 1). Keep
+the MachineConfig apply in all cases for persistence.
 
 **Compatibility:** Check which approach works on OCP 4.12+ (minimum supported).
 `chronyc` commands and `systemctl restart chronyd` should work on all versions.
-MCO rebootless updates are 4.14+.
+MCO rebootless updates are 4.14+. NodeDisruptionPolicy is 4.16+.
 
 **Files to change:**
 - `scripts/day2-config-ntp.sh`: add direct SSH chrony reconfiguration before
@@ -598,6 +618,24 @@ download the next minor line in the background:
 - `scripts/include_all.sh` (`download_all_catalogs()`): consider adding a
   `priority_order` parameter or reordering the internal catalog list
 - `scripts/prefetch-catalogs.sh`: no change needed (thin wrapper)
+
+---
+
+## Automated infrastructure services (`infra=auto`)
+
+**Severity:** MEDIUM — major UX improvement for new users
+**Status:** Planned
+**Added:** 2026-07-16
+
+**Problem:** Users new to OpenShift must manually install and configure DNS
+(dnsmasq), NTP (chronyd), and firewall rules before ABA can install a cluster.
+This is the #1 barrier to entry for beginners.
+
+**Proposed fix:** New `aba.conf` setting `infra=auto` (default: `manual`) that
+makes ABA automatically install and configure these services on the bastion.
+Per-cluster DNS records are added at install time and removed on delete.
+
+**Design doc:** `ai/DESIGN-infra-auto.md`
 
 ---
 

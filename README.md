@@ -628,6 +628,7 @@ Run 'aba day2-osus' to configure the OpenShift Update Service.
 Run 'aba day2-ntp' to configure NTP on this cluster.
 ```
 
+If the install is not progressing, try `aba -d <cluster> unstick` to recycle any crashlooping and failed pods so the cluster installation can recover.
 If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme.
 
 **vSphere-specific:** See [vSphere Preflight Validation](Troubleshooting.md#vsphere-preflight-validation) for how to read vSphere preflight output and how to grant the required vCenter privileges.
@@ -988,9 +989,10 @@ This automatically configures the ImageSetConfiguration with `shortestPath`, `mi
    - `mirror_*.tar` — OCP images archive
    - `aba-transfer.tar` — transfer bundle (ISC, CLIs, metadata)
 3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
-4. Load images: `aba -d mirror load` (automatically unpacks upgrade bundle, updates version)
-5. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
-6. Upgrade the cluster:
+4. (Optional) Inspect the transfer bundle: `aba -d mirror transfer-info`
+5. Load images: `aba -d mirror load` (automatically unpacks upgrade bundle, updates version)
+6. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
+7. Upgrade the cluster:
 
 ```bash
 aba -d <cluster name> upgrade --dry-run        # List available versions in the mirror
@@ -1011,9 +1013,10 @@ aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
 2. Copy all tar files to the *internal bastion*: `cp aba/mirror/data/*.tar /transfer-media/` (includes `mirror_*.tar` images and `aba-transfer.tar` bundle with ISC, CLIs, and metadata).
 3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
-4. Load images: `aba -d mirror load`
-5. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
-6. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
+4. (Optional) Inspect the transfer bundle: `aba -d mirror transfer-info`
+5. Load images: `aba -d mirror load`
+6. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
+7. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
 
 ### Updating a cluster in a partially disconnected environment
 
@@ -1323,6 +1326,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba -d mirror unregister` | Deregister a registry (removes local creds only)              |
 | `aba -d mirror password`   | Regenerate pull secret for existing registry                  |
 | `aba -d mirror tidy`       | Clean up stale metadata from a previous run                   |
+| `aba -d mirror transfer-info` | Inspect a pending transfer bundle (version, operators, upgrade target) |
 | `aba -d mirror uninstall`  | Uninstall the registry                                        |
 
 
@@ -1345,6 +1349,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba run --cmd "oc get nodes"`  | Run an arbitrary `oc` command (default: `oc get co`)          |
 | `aba ssh`                       | SSH to the rendezvous node                                    |
 | `aba mon`                       | Monitor cluster installation                                  |
+| `aba -d <cluster> unstick`      | Recover a stalled cluster install by recycling crashlooping and failed pods |
 
 
 ### VM Commands (VMware / KVM)
