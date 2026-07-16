@@ -308,6 +308,10 @@ index: init catalogs-download catalogs-wait
 catalog: catalogs-download
 	@echo "[ABA] Warning: 'make catalog' is deprecated, use 'make catalogs-download' instead" >&2
 
+.PHONY: transfer-info
+transfer-info: .init              ## Show contents of a pending aba-transfer.tar (or local ISC)
+	$(SCRIPTS)/transfer-info.sh $(output)
+
 uninstall: .init .unavailable     ## Uninstall any previously installed registry  
 .unavailable:
 	$(SCRIPTS)/reg-uninstall.sh
