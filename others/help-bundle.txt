@@ -12,6 +12,8 @@ Usage:
     -f, --force                               # Remove any existing files under mirror/data.
         --light (--lite)                      # Create *light* bundle, excluding all aba/mirror/data/mirror_*.tar file(s).
                                               # Manual merging of image-set archive file(s) (ISA) required!
+        --primed                              # Include pre-configured settings (cluster dirs, mirror.conf, vmware.conf)
+                                              # for a ready-to-deploy air-gapped bundle.
 
   The 'bundle' command creates an 'install bundle' which is used to install OpenShift in a fully disconnected
   (air-gapped) environment. The 'bundle' command also writes the provided args (channel, version, operators ...)

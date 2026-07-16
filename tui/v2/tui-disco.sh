@@ -143,7 +143,7 @@ Next: install mirror registry → load images → install cluster\n" \
 disco_main() {
 	tui_log "Entering DISCO mode action menu"
 	_disco_bundle_wizard_gate || return 1
-	local default_item="$TUI2_DISCO_TAG_INSTALL_REG"
+	local default_item=""
 
 	# --- Menu loop: no per-action flag assignments needed ---
 	# _TUI_NEED_MIRROR_RECHECK is set only by _invalidate_mirror_cache()
@@ -211,6 +211,14 @@ disco_main() {
 			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
 
+		# Smart focus: last assignment wins = highest priority (read bottom-to-top)
+		if [[ -z "$default_item" ]]; then
+			default_item="$TUI2_DISCO_TAG_INSTALL_REG"
+			if mirror_available && ! _mirror_has_release_image;  then default_item="$TUI2_DISCO_TAG_LOAD"; fi
+			if _mirror_has_release_image;                         then default_item="$TUI2_DISCO_TAG_INSTALL"; fi
+			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];         then default_item="$TUI2_DISCO_TAG_DAY2"; fi
+		fi
+
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_MENU" \
 			--cancel-label "$TUI2_BTN_EXIT" \
 			--ok-label "$TUI2_BTN_SELECT" \
@@ -270,6 +278,7 @@ Navigation:
 				else
 					disco_install_reg
 				fi
+				default_item=""
 				;;
 			"$TUI2_DISCO_TAG_LOAD")
 				if [[ "$load_avail" == "false" ]]; then
@@ -281,12 +290,13 @@ Navigation:
 				else
 					disco_load_images
 				fi
+				default_item=""
 				;;
 			"$TUI2_DISCO_TAG_INSTALL")
 				tui_install_cluster_gate DISCO
 				case "$?" in
-				0) cluster_install_flow ;;
-				3) ;;
+				0) cluster_install_flow; default_item="" ;;
+				3) default_item="" ;;
 				esac
 				;;
 			"$TUI2_DISCO_TAG_DAY2")

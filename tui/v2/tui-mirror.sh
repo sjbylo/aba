@@ -438,63 +438,97 @@ _mirror_install_remote() {
 
 # Shows a summary dialog before save/sync/load/bundle operations.
 # Lets the user confirm, go back, or view the ISC file.
+# For "Load" operations: if an aba-transfer.tar is pending, shows its contents
+# (via transfer-info.sh) instead of the local config, so the user sees what
+# will actually be loaded.
 # Returns 0 if confirmed, 1 if cancelled.
 _mirror_op_confirm() {
 	local title="$1"
+	local _ver _chan _target _op_count _op_preview _isc_for_view
+	local _from_transfer=false
 
-	source <(normalize-aba-conf) 2>/dev/null
-	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
-	local _ver="${ocp_version:-unknown}"
-	local _chan="${ocp_channel:-stable}"
-	# Show upgrade range if target is set, or detect from ISC maxVersion
-	local _target="${ocp_upgrade_to:-}"
-	if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
-		_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
+	# On DISCO, if a transfer tar is pending, show its contents (not stale local config)
+	if [[ "$_TUI_MODE" == "DISCO" && -f "$ABA_ROOT/mirror/data/aba-transfer.tar" ]]; then
+		local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
+		local transfer_upgrade_to="" transfer_operator_count="" transfer_operators=""
+		eval "$(make -sC "$ABA_ROOT/mirror" transfer-info output=shell 2>/dev/null)"
+		if [[ "$transfer_pending" == "true" ]]; then
+			_ver="$transfer_ocp_version"
+			_chan="$transfer_ocp_channel"
+			_target="$transfer_upgrade_to"
+			_op_count="$transfer_operator_count"
+			_op_preview="$(echo "$transfer_operators" | sed 's/,/, /g')"
+			if [[ $_op_count -gt 5 ]]; then
+				local _first5
+				_first5=$(echo "$transfer_operators" | cut -d, -f1-5 | sed 's/,/, /g')
+				_op_preview="$_first5, ... (+$(( _op_count - 5 )) more)"
+			fi
+			_from_transfer=true
+			tui_log "Transfer tar found: showing content from aba-transfer.tar"
+		fi
 	fi
 
-	# Pre-flight: validate target version exists in the configured channel
-	# Catches stale targets left from a previous channel (e.g. set on fast, switched to stable)
-	# Skip on DISCO — no internet to query Cincinnati, and the bundle already has the images.
-	if [[ "$_TUI_MODE" != "DISCO" && -n "$_target" && "$_target" != "$_ver" ]]; then
-		if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
-			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
-				--yes-label "Clear Target" --no-label "Cancel" \
-				--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
-			if [[ $? -eq 0 ]]; then
-				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
-				ocp_upgrade_to=""
-				_target=""
-				tui_kick_isconf_regen
-				tui_log "Cleared stale upgrade target (not in $_chan channel)"
-			else
-				return 1
+	# Fall back to local config if no transfer tar
+	if [[ "$_from_transfer" != "true" ]]; then
+		source <(normalize-aba-conf) 2>/dev/null
+		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
+		_ver="${ocp_version:-unknown}"
+		_chan="${ocp_channel:-stable}"
+		_target="${ocp_upgrade_to:-}"
+		if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
+			_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
+		fi
+
+		# Pre-flight: validate target version exists in the configured channel
+		# Skip on DISCO — no internet to query Cincinnati, and the bundle already has the images.
+		if [[ "$_TUI_MODE" != "DISCO" && -n "$_target" && "$_target" != "$_ver" ]]; then
+			if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
+					--yes-label "Clear Target" --no-label "Cancel" \
+					--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
+				if [[ $? -eq 0 ]]; then
+					replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
+					ocp_upgrade_to=""
+					_target=""
+					tui_kick_isconf_regen
+					tui_log "Cleared stale upgrade target (not in $_chan channel)"
+				else
+					return 1
+				fi
 			fi
 		fi
-		# Only show upgrade range if target is still valid (not cleared above)
-		[[ -n "$_target" ]] && _ver="${_ver} → ${_target}"
-	fi
-	local _op_count=${#OP_BASKET[@]}
-	local _op_preview=""
-	if [[ $_op_count -gt 0 ]]; then
-		local _shown=() _i=0
-		for _op in "${!OP_BASKET[@]}"; do
-			_shown+=("$_op")
-			_i=$(( _i + 1 ))
-			[[ $_i -ge 5 ]] && break
-		done
-		_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-		if [[ $_op_count -gt 5 ]]; then
-			_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+
+		_op_count=${#OP_BASKET[@]}
+		_op_preview=""
+		if [[ $_op_count -gt 0 ]]; then
+			local _shown=() _i=0
+			for _op in "${!OP_BASKET[@]}"; do
+				_shown+=("$_op")
+				_i=$(( _i + 1 ))
+				[[ $_i -ge 5 ]] && break
+			done
+			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+			if [[ $_op_count -gt 5 ]]; then
+				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+			fi
 		fi
 	fi
 
-	local _summary="OCP: $_ver ($_chan)\n"
+	# Show upgrade range
+	[[ -n "$_target" && "$_target" != "$_ver" ]] && _ver="${_ver} → ${_target}"
+
+	local _summary=""
+	[[ "$_from_transfer" == "true" ]] && _summary+="(from transfer bundle)\n"
+	_summary+="OCP: $_ver ($_chan)\n"
 	if [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
 		_summary+="Operators: none\n"
 	fi
 	_summary+="\nContinue?"
+
+	# For "View ISC": show the ISC from the transfer tar if available
+	_isc_for_view="$ABA_ROOT/mirror/data/imageset-config.yaml"
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
@@ -504,10 +538,21 @@ _mirror_op_confirm() {
 			--yesno "$_summary" 0 0
 		local rc=$?
 		if [[ $rc -eq 2 ]]; then
-			local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
-			if [[ -f "$_isc" ]]; then
+			if [[ "$_from_transfer" == "true" ]]; then
+				# Extract ISC from transfer tar for viewing
+				local _tmp_isc
+				_tmp_isc=$(mktemp)
+				tar xf "$ABA_ROOT/mirror/data/aba-transfer.tar" -O "mirror/data/imageset-config.yaml" > "$_tmp_isc" 2>/dev/null || true
+				if [[ -s "$_tmp_isc" ]]; then
+					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration (from transfer bundle)" \
+						--exit-label "OK" --textbox "$_tmp_isc" 0 0
+				else
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Could not extract ISC from transfer bundle." 0 0
+				fi
+				rm -f "$_tmp_isc"
+			elif [[ -f "$_isc_for_view" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
-					--exit-label "OK" --textbox "$_isc" 0 0
+					--exit-label "OK" --textbox "$_isc_for_view" 0 0
 			else
 				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 0 0
 			fi
@@ -544,44 +589,120 @@ mirror_prep_upgrade() {
 		_existing_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 	fi
 
-	# Fetch available versions for the current channel (reuse cached data)
+	# Fetch upgrade targets reachable from the current version
 	local _channel="${ocp_channel:-fast}"
-	run_once -p -i "ocp:${_channel}:latest_version" 2>/dev/null || {
-		dlg --backtitle "$(ui_backtitle)" --infobox \
-			"$(printf "$TUI2_MSG_VERSION_FETCHING" "$_channel")" 0 0
-		run_once -q -w -S -i "ocp:${_channel}:latest_version" 2>/dev/null || \
-			run_once -i "ocp:${_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $_channel"
-		run_once -q -w -S -i "ocp:${_channel}:latest_version_previous" 2>/dev/null || \
-			run_once -i "ocp:${_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $_channel"
+	local _targets _zstream="" _next="" _next1=""
+	_targets=$(fetch_upgrade_targets "$_current_ver" "$_channel" 2>/dev/null)
+
+	# Parse own-channel targets
+	while IFS=$'\t' read -r _label _ver; do
+		case "$_label" in
+			zstream) _zstream="$_ver" ;;
+			next)    _next="$_ver" ;;
+			next+1)  _next1="$_ver" ;;
+		esac
+	done <<< "$_targets"
+
+	# Check other channels for additional versions not on user's channel.
+	# _fb_items: array of "TAG|VERSION|CHANNEL" entries for fallback versions.
+	local _fb_items=() _shown_hint=false
+	local _all_seen="${_zstream}|${_next}|${_next1}|${_current_ver}"
+
+	_add_fallback_items() {
+		local _fb_ch="$1" _fb_tag_prefix="$2"
+		local _fb_targets _fb_z="" _fb_n="" _fb_n1=""
+		_fb_targets=$(fetch_upgrade_targets "$_current_ver" "$_fb_ch" 2>/dev/null)
+		[[ -z "$_fb_targets" ]] && return
+		while IFS=$'\t' read -r _l _v; do
+			case "$_l" in
+				zstream) _fb_z="$_v" ;;
+				next)    _fb_n="$_v" ;;
+				next+1)  _fb_n1="$_v" ;;
+			esac
+		done <<< "$_fb_targets"
+		# Add versions not already shown from the user's own channel
+		[[ -n "$_fb_n"  && "$_all_seen" != *"$_fb_n"*  ]] && _fb_items+=("${_fb_tag_prefix}n|$_fb_n|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_n}"
+		[[ -n "$_fb_z"  && "$_all_seen" != *"$_fb_z"*  ]] && _fb_items+=("${_fb_tag_prefix}z|$_fb_z|$_fb_ch")  && _all_seen="${_all_seen}|${_fb_z}"
+		[[ -n "$_fb_n1" && "$_all_seen" != *"$_fb_n1"* ]] && _fb_items+=("${_fb_tag_prefix}1|$_fb_n1|$_fb_ch") && _all_seen="${_all_seen}|${_fb_n1}"
 	}
 
-	local _latest _previous
-	_latest=$(run_once -o -i "ocp:${_channel}:latest_version" 2>/dev/null)
-	_previous=$(run_once -o -i "ocp:${_channel}:latest_version_previous" 2>/dev/null)
+	[[ "$_channel" != "fast"      ]] && _add_fallback_items "fast" "f"
+	[[ "$_channel" != "candidate" ]] && _add_fallback_items "candidate" "c"
 
-	# Build menu items — show all valid upgrade versions (deduplicated)
-	local items=() _default_tag="m"
-
-	# Existing target from mirror.conf — validate against graph before showing
-	if [[ -n "$_existing_target" ]]; then
-		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
-			items+=("t" "Current target ($_existing_target)")
-			_default_tag="t"
-		else
-			# Invalid target — show it marked as unavailable so user knows
-			items+=("t" "Current target ($_existing_target) [NOT IN CHANNEL]")
-			_default_tag="l"
+	# Show informational hint if there are fallback-channel versions
+	if [[ ${#_fb_items[@]} -gt 0 ]]; then
+		local _fb_channels=""
+		local _item
+		for _item in "${_fb_items[@]}"; do
+			local _ch="${_item##*|}"
+			[[ "$_fb_channels" != *"$_ch"* ]] && _fb_channels="${_fb_channels:+$_fb_channels, }$_ch"
+		done
+		if [[ -z "$_targets" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --title "No Upgrades on ${_channel}" --msgbox \
+				"No upgrades available on the ${_channel} channel ... yet.\n\n\
+Items marked [switch to ...] will automatically\n\
+change your channel when selected." 0 0
 		fi
 	fi
-	if [[ -n "$_latest" && "$_latest" != "$_existing_target" ]]; then
-		items+=("l" "Latest    ($_latest)")
-		[[ "$_default_tag" == "m" ]] && _default_tag="l"
+
+	# Build menu items with numbered tags (1, 2, 3, ...)
+	local -A _tag_channel_map=() _tag_version_map=()
+	local items=() _default_tag="m" _tag_num=0
+
+	# Existing target from mirror.conf
+	if [[ -n "$_existing_target" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
+			items+=("$_tag_num" "Current target ($_existing_target)")
+		else
+			items+=("$_tag_num" "Current target ($_existing_target) [NOT IN CHANNEL]")
+		fi
+		_tag_version_map[$_tag_num]="$_existing_target"
+		_default_tag="$_tag_num"
 	fi
-	if [[ -n "$_previous" && "$_previous" != "$_existing_target" && "$_previous" != "$_latest" ]]; then
-		items+=("p" "Previous  ($_previous)")
+	# Own-channel: next minor
+	if [[ -n "$_next" && "$_next" != "$_existing_target" && "$_next" != "$_current_ver" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		local _hop="minor"; [[ "${_next%%.*}" != "${_current_ver%%.*}" ]] && _hop="major"
+		items+=("$_tag_num" "Next $_hop ($(_ver_minor "$_next") latest: $_next)")
+		_tag_version_map[$_tag_num]="$_next"
+		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
 	fi
+	# Own-channel: z-stream
+	if [[ -n "$_zstream" && "$_zstream" != "$_existing_target" && "$_zstream" != "$_current_ver" && "$_zstream" != "$_next" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		items+=("$_tag_num" "Z-stream   ($(_ver_minor "$_zstream") latest: $_zstream)")
+		_tag_version_map[$_tag_num]="$_zstream"
+		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+	fi
+	# Own-channel: next+1
+	if [[ -n "$_next1" && "$_next1" != "$_existing_target" && "$_next1" != "$_current_ver" ]]; then
+		_tag_num=$(( _tag_num + 1 ))
+		items+=("$_tag_num" "Minor $(_ver_minor "$_next1")  (latest: $_next1)")
+		_tag_version_map[$_tag_num]="$_next1"
+	fi
+	# Fallback channel items
+	for _item in "${_fb_items[@]}"; do
+		local _fb_tag="${_item%%|*}"
+		local _rest="${_item#*|}"
+		local _ver="${_rest%%|*}"
+		local _ch="${_rest##*|}"
+		local _minor _label
+		_minor="$(_ver_minor "$_ver")"
+		_tag_num=$(( _tag_num + 1 ))
+		if [[ "$_fb_tag" == *n ]]; then
+			local _fhop="minor"; [[ "${_ver%%.*}" != "${_current_ver%%.*}" ]] && _fhop="major"
+			_label="Next $_fhop ($_minor latest: $_ver) [switch to $_ch]"
+		elif [[ "$_fb_tag" == *z ]]; then
+			_label="Z-stream   ($_minor latest: $_ver) [switch to $_ch]"
+		else
+			_label="Minor $_minor  (latest: $_ver) [switch to $_ch]"
+		fi
+		items+=("$_tag_num" "$_label")
+		_tag_version_map[$_tag_num]="$_ver"
+		_tag_channel_map[$_tag_num]="$_ch"
+		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+	done
 	items+=("m" "Manual entry (x.y or x.y.z)")
 	if [[ -n "$_existing_target" ]]; then
 		items+=("c" "Clear target (disable upgrade mode)")
@@ -601,9 +722,6 @@ mirror_prep_upgrade() {
 		local _choice
 		_choice=$(<"$_TUI_TMP")
 		case "$_choice" in
-			t) _target_ver="$_existing_target" ;;
-			l) _target_ver="$_latest" ;;
-			p) _target_ver="$_previous" ;;
 			c)
 				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 				ocp_upgrade_to=""
@@ -640,10 +758,16 @@ mirror_prep_upgrade() {
 				done
 				[[ -z "$_target_ver" ]] && continue
 				;;
+			*)
+				# Numbered tags: lookup version (and optional channel switch) from maps
+				_target_ver="${_tag_version_map[$_choice]:-}"
+				if [[ -n "${_tag_channel_map[$_choice]:-}" ]]; then
+					_channel="${_tag_channel_map[$_choice]}"
+				fi
+				;;
 		esac
 
 		# Verify version exists in Cincinnati graph (fast check before long oc-mirror run)
-		dlg --backtitle "$(ui_backtitle)" --infobox "Verifying ${_target_ver} exists in ${_channel} channel..." 0 0
 		if ! verify_release_version_exists "$_target_ver" "$_channel"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
 				"Version $_target_ver not found in '$_channel' channel.\n\nThis version may not have been released yet.\nCheck the channel or try a different version." 0 0
@@ -651,8 +775,6 @@ mirror_prep_upgrade() {
 		fi
 
 		# Validate upgrade path: source version must exist in the target channel graph.
-		# Covers both same-minor (z-stream) and cross-minor upgrades.
-		dlg --backtitle "$(ui_backtitle)" --infobox "Verifying upgrade path: ${_current_ver} → ${_target_ver}..." 0 0
 		local _path_diag
 		if _path_diag=$(verify_upgrade_path_exists "$_current_ver" "$_target_ver" "$_channel" 2>&1); then
 			: # path OK
@@ -674,15 +796,20 @@ Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_
 		break
 	done
 
-	# Choose sync vs save
-	local _upg_method=""
+	# Choose sync vs save — mention channel switch if applicable
+	local _upg_method="" _orig_channel="${ocp_channel:-stable}"
+	local _switch_note=""
+	if [[ "$_channel" != "$_orig_channel" ]]; then
+		_switch_note="  4. Switch channel: ${_orig_channel} → ${_channel}\n"
+	fi
 	dlg --backtitle "$(ui_backtitle)" --title "Prepare Upgrade" \
 		--cancel-label "$TUI2_BTN_CANCEL" \
 		--ok-label "$TUI2_BTN_SELECT" \
 		--menu "\nThis will:\n\n\
   1. Set target version to ${_target_ver}\n\
   2. Regenerate the ImageSet Config (if not user-edited)\n\
-  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\n\
+  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\
+${_switch_note}\n\
 How do you want to mirror the upgrade images?" 0 0 0 \
 		"1" "Sync to registry (direct)" \
 		"2" "Save to tar files (for transfer)" \
@@ -690,12 +817,19 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	[[ $? -ne 0 ]] && return 1
 	_upg_method=$(<"$_TUI_TMP")
 
+	# If user selected a version from a different channel, switch now
+	if [[ "$_channel" != "$_orig_channel" ]]; then
+		replace-value-conf -q -n ocp_channel -v "$_channel" -f "$ABA_ROOT/aba.conf"
+		ocp_channel="$_channel"
+		tui_log "Switched channel to $_channel (for upgrade to $_target_ver)"
+	fi
+
 	# Persist target version and kick off ISC regeneration after user confirmed
 	replace-value-conf -q -n ocp_upgrade_to -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
 	ocp_upgrade_to="$_target_ver"
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
-		"Generating ImageSet configuration (operator catalogs\nmay also be refreshed, if needed). Please wait." 5 60
+		"Generating ImageSet configuration (operator catalogs may also be refreshed). Please wait." 5 60
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0
@@ -706,11 +840,11 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
 			rc=$?
 			if [[ $rc -eq 0 ]]; then
-				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
-					--msgbox "\nUpgrade images synced to registry.\n\n\
+			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Images Ready" \
+				--msgbox "\nUpgrade images synced to registry.\n\n\
 Next steps:\n\n\
-  1. Run Day-2 to apply changes (D)\n\
-  2. Upgrade cluster (D → U)\n" 0 0
+  1. Day-2 / Cluster Management → Configure OperatorHub (D → R)\n\
+  2. Day-2 / Cluster Management → Upgrade cluster (D → U)\n" 0 0
 			fi
 			;;
 		2)
@@ -879,12 +1013,30 @@ mirror_view_isc() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
+			--help-button \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_ISC_MENU" 0 0 0 \
 				"${_isc_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
-			[[ $rc -ne 0 ]] && return 0
+			case "$rc" in
+				2)
+					show_help "ImageSet Configuration" \
+"The ImageSet Configuration (ISC) controls which images are mirrored.
+
+• View: see the current ISC YAML file
+• Select Operators: choose which operators to include
+• Force regenerate: rebuild ISC from current aba.conf settings
+• Exclude Release: toggle platform/release images on or off.
+  When ON, only operator images are mirrored — useful when
+  release images are already in the mirror and you only need
+  to transfer new or updated operators.
+• Edit: manually edit the ISC YAML (advanced users)"
+					continue
+					;;
+				0) ;;
+				*) return 0 ;;
+			esac
 
 			local choice
 			choice=$(<"$_TUI_TMP")

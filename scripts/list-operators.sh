@@ -57,8 +57,10 @@ tmp_dir=$(mktemp -d "$ABA_TMP/list-ops-XXXXXX")
 trap 'podman rm -f "$container_name" >/dev/null 2>&1; rm -rf "$tmp_dir"' EXIT INT TERM
 
 # ── Pull image ───────────────────────────────────────────────────────
-info "Pulling $catalog_url ..."
-podman pull -q "$catalog_url" >/dev/null 2>&1 || die "Failed to pull $catalog_url — check credentials / network"
+if ! try_cmd -n 3 -d 10 -D 5 -m "Pull $catalog_url" -- \
+	podman pull -q "$catalog_url"; then
+	die "Failed to pull $catalog_url — check credentials / network"
+fi
 
 # ── Extract /configs ─────────────────────────────────────────────────
 info "Extracting catalog data ..."

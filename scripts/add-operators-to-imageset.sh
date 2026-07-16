@@ -310,6 +310,6 @@ do
 done
 
 #echo >&2
-aba_info_ok "Number of operators added: ${#op_names_arr[@]}" >&2
+aba_info_ok "Number of operators included: ${#op_names_arr[@]}" >&2
 
 exit 0

@@ -61,6 +61,11 @@ while [[ $# -gt 0 ]]; do
 			aba_debug "Argument: --light (exclude image-set archives)"
 			shift
 			;;
+		--primed)
+			with_clusters="clusters=1"
+			aba_debug "Argument: --primed (include pre-configured configs for air-gap transfer)"
+			shift
+			;;
 		*)
 			bundle_dest_file="$1"
 			aba_debug "Argument: bundle_dest_file=$bundle_dest_file"
@@ -69,7 +74,7 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-aba_debug "Options: bundle_dest_file=$bundle_dest_file force=$force light_bundle=$light_bundle"
+aba_debug "Options: bundle_dest_file=$bundle_dest_file force=$force light_bundle=$light_bundle with_clusters=$with_clusters"
 
 if [ ! "$bundle_dest_file" ]; then
 	bundle_dest_file=/tmp
@@ -208,8 +213,8 @@ if [ "$bundle_dest_file" = "-" ]; then
 	aba_debug "All CLI tarballs downloaded"
 
 	aba_info "Writing install bundle (tar format) to stdout ..." >&2
-	aba_debug "Calling: make -s tar out=-"
-	make -s tar out=-   # Be sure the output of this command is ONLY tar output!
+	aba_debug "Calling: make -s tar out=- $with_clusters"
+	make -s tar out=- $with_clusters   # Be sure the output of this command is ONLY tar output!
 
 	aba_debug "Stdout bundle creation complete, exiting"
 	exit
@@ -250,8 +255,8 @@ if [ "$light_bundle" ]; then
 	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f "$bundle_dest_file"
-	aba_debug "Calling: make tarrepo out=$bundle_dest_file"
-	make -s tarrepo out="$bundle_dest_file"			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
+	aba_debug "Calling: make tarrepo out=$bundle_dest_file $with_clusters"
+	make -s tarrepo out="$bundle_dest_file" $with_clusters			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
 	aba_debug "Light bundle created successfully: $bundle_dest_file"
 else
 	# Create a full install bundle containing the repo AND the image-set archive file(s) ...
@@ -294,8 +299,8 @@ else
 	
 	aba_info "Creating install bundle archive ..."
 	rm -f "$bundle_dest_file"
-	aba_debug "Calling: make tar out=$bundle_dest_file"
-	make -s tar out="$bundle_dest_file"	   		# Create all-in-one archive, including all files.
+	aba_debug "Calling: make tar out=$bundle_dest_file $with_clusters"
+	make -s tar out="$bundle_dest_file" $with_clusters	   		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
 

@@ -18,20 +18,9 @@
 # and rely on govc environment from vmware.conf.
 
 # Retry a govc command on transient vCenter errors (task conflicts, locks, etc.).
-# Waits with backoff (5s, 10s, 15s, 20s, 25s) for up to ~75s total.
-#   _govc_retry <govc-args...>
+# Waits with linear backoff (5s, 10s, 15s, 20s, 25s) for up to ~75s total.
 _govc_retry() {
-	local attempt max_attempts=5 delay rc out
-	for attempt in $(seq 1 $max_attempts); do
-		out=$(govc "$@" 2>&1) && return 0
-		rc=$?
-		[ $attempt -lt $max_attempts ] || break
-		delay=$(( attempt * 5 ))
-		aba_warning "govc $1 failed (rc=$rc, attempt $attempt/$max_attempts), retrying in ${delay}s ... [$out]"
-		sleep $delay
-	done
-	aba_error "govc $1 failed after $max_attempts attempts (rc=$rc): $out"
-	return $rc
+	try_cmd -n 5 -d 5 -D 5 -m "govc $1" -- govc "$@"
 }
 
 # Cached lookup of a VM's runtime+hardware as JSON; empty on lookup failure.
@@ -184,20 +173,9 @@ vmp_attach_iso() {
 		return 1
 	fi
 
-	local _insert_ok="" _cdrom_err
-	for _try in 1 2 3; do
-		_cdrom_err=$(govc device.cdrom.insert -vm "$vm_name" -device "$_cdrom_dev" \
-			-ds "$iso_datastore" "$iso_path" 2>&1)
-		_rc=$?
-		aba_debug "vmp_attach_iso: cdrom.insert vm=$vm_name dev=$_cdrom_dev ds=$iso_datastore path=$iso_path attempt=$_try rc=$_rc $_cdrom_err"
-		if [ $_rc -eq 0 ]; then
-			_insert_ok=1
-			break
-		fi
-		sleep 3
-	done
-	if [ -z "$_insert_ok" ]; then
-		echo "vmp_attach_iso: failed to insert ISO on $vm_name after 3 attempts" >&2
+	if ! try_cmd -n 3 -d 3 -m "Insert ISO on $vm_name" -- \
+		govc device.cdrom.insert -vm "$vm_name" -device "$_cdrom_dev" \
+			-ds "$iso_datastore" "$iso_path"; then
 		return 1
 	fi
 

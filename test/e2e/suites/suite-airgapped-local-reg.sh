@@ -676,9 +676,9 @@ e2e_run_remote "Apply OSUS day2" \
 # Wait for all COs to be available (AVAILABLE=True)
 e2e_wait_cluster_available $SNO remote
 
-# Wait up to 30 min for all operators to stabilize before upgrading.
+# Wait up to 40 min for all operators to stabilize before upgrading.
 # Operators can flap after heavy deployments (OSUS, service mesh) on SNO.
-e2e_wait_cluster_ready $SNO remote 1800
+e2e_wait_cluster_ready $SNO remote 2400
 
 # Cross-minor upgrade: first attempt WITHOUT --force must FAIL.
 # Admin acknowledgment gates (Upgradeable=False) block cross-minor upgrades
@@ -695,8 +695,8 @@ sleep 3
 e2e_poll_remote 120 10 "Verify upgrade in progress" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc adm upgrade' | grep 'upgrade is in progress'"
 
-# Wait for upgrade to complete before cleanup
-e2e_wait_cluster_ready $SNO remote 2700
+# Wait for upgrade to complete before cleanup (cross-minor can take 50-60+ min)
+e2e_wait_cluster_ready $SNO remote 3900
 
 test_end
 

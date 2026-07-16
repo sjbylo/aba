@@ -954,7 +954,9 @@ _state_override_mirror() {
 	# which broke CLI version checks and ISC upgrade-path generation.
 	# See BACKLOG.md: "ISC upgrade mode broken by state.sh ocp_version override"
 	# and "day2-osus: channel set fails after cross-minor upgrade".
-	local _status="reg_host reg_port reg_root reg_user reg_pw last_action last_action_at"
+	# mirror_ocp_version and mirror_ocp_upgrade_from are the mirror-fact equivalents:
+	# they track what's actually in the mirror registry (set by reg-sync.sh / reg-load.sh).
+	local _status="reg_host reg_port reg_root reg_user reg_pw mirror_ocp_version mirror_ocp_upgrade_from last_action last_action_at"
 	local _field _sval _cval _drifted=""
 
 	source "$_state"
@@ -1315,37 +1317,59 @@ edit_file() {
 }
 
 try_cmd() {
-	# Run a command, if it fails, try again after 'pause' seconds
-	# Usage: try_cmd [-q] <pause> <backoff> <total>
-	local quiet=
-	[ "$1" = "-q" ] && local quiet=1 && local out=">/dev/null 2>&1" && shift
-	local pause=$1; shift		# initial pause time in sec
-	local backoff=$1; shift		# add backoff time to pause time
-	local total=$1; shift		# total number of tries
+	# Run a command with retries and optional increasing backoff.
+	# Usage: try_cmd [-n attempts] [-d delay] [-D increase] [-m message] [-q|-Q] [--] cmd [args...]
+	#   -n  max attempts        (default: 3)
+	#   -d  initial delay in s  (default: 5)
+	#   -D  add to delay each retry (default: 0 = fixed delay)
+	#   -m  context label for log messages (default: first word of command)
+	#   -q  quiet: only show final success/failure, suppress per-attempt chatter
+	#   -Q  silent: suppress all try_cmd output; return code only
+	local _tc_attempts=3 _tc_delay=5 _tc_increase=0 _tc_message="" _tc_quiet="" _tc_silent=""
 
-	local count=1
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-n) _tc_attempts="$2"; shift 2 ;;
+			-d) _tc_delay="$2"; shift 2 ;;
+			-D) _tc_increase="$2"; shift 2 ;;
+			-m) _tc_message="$2"; shift 2 ;;
+			-q) _tc_quiet=1; shift ;;
+			-Q) _tc_silent=1; shift ;;
+			--) shift; break ;;
+			*)  break ;;
+		esac
+	done
 
-	[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
+	[ $# -eq 0 ] && { echo_red "try_cmd: no command specified" >&2; return 1; }
 
-	echo  >>.cmd.out 
-	echo cmd $* >>.cmd.out 
-	while ! eval $* >>.cmd.out 2>&1
-	do
-		if [ $count -ge $total ]; then
-			[ ! "$quiet" ] && echo_red "Giving up on command \"$*\"" >&2
-			# Return non-zero
-			return 1
+	local _tc_label="${_tc_message:-$1}"
+	local _tc_count=1 _tc_pause=$_tc_delay _tc_rc=0
+
+	while [ $_tc_count -le $_tc_attempts ]; do
+		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
+			aba_info "Attempt $_tc_count/$_tc_attempts: $_tc_label"
+
+		_tc_rc=0
+		"$@" || _tc_rc=$?
+
+		if [ $_tc_rc -eq 0 ]; then
+			[ -z "$_tc_silent" ] && [ $_tc_attempts -gt 1 ] && \
+				aba_info_ok "$_tc_label"
+			return 0
 		fi
 
-		[ ! "$quiet" ] && aba_info Pausing $pause seconds ...
-		sleep $pause
-
-		pause=$(( pause + backoff ))
-		count=$(( count + 1 ))
-
-		[ ! "$quiet" ] && aba_info "Attempt $count/$total of command: \"$*\""
-		echo cmd $* >>.cmd.out 
+		_tc_count=$(( _tc_count + 1 ))
+		if [ $_tc_count -le $_tc_attempts ]; then
+			[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
+				aba_warning "$_tc_label failed (attempt $(( _tc_count - 1 ))/$_tc_attempts), retrying in ${_tc_pause}s ..."
+			sleep $_tc_pause
+			_tc_pause=$(( _tc_pause + _tc_increase ))
+		fi
 	done
+
+	[ -z "$_tc_silent" ] && \
+		echo_red "[ABA] Failed after $_tc_attempts attempts: $_tc_label" >&2
+	return $_tc_rc
 }
 
 # Compact elapsed for aba_wait_show: "45s" if <1m; "4m" or "4m20s" if >=1m (no spaces).
@@ -1627,6 +1651,44 @@ _prev_minor() {
 	echo "${x}.$((y - 1))"
 }
 
+############################################
+# Find the nth candidate-exclusive version (not yet promoted to fast).
+# Scans from CDN latest minor downward, comparing candidate vs fast.
+# A version is "candidate-exclusive" if it's on candidate but NOT on fast.
+# Args: $1 = position (1=previous, 2=older), $2 = max minors to scan (default 4)
+# Returns: the version string, or empty if not found within scan range.
+############################################
+_candidate_nth_exclusive() {
+	local pos="${1:-1}"
+	local max_scan="${2:-4}"
+	local minor scanned=0 found=0
+
+	minor="$(fetch_latest_minor_version candidate)"
+	[[ -n "$minor" ]] || return 0
+
+	while [[ $scanned -lt $max_scan ]]; do
+		local cand fast
+		cand="$(fetch_all_versions candidate "$minor" 2>/dev/null | tail -n1)"
+		[[ -n "$cand" ]] || break
+
+		fast="$(fetch_all_versions fast "$minor" 2>/dev/null | tail -n1)"
+
+		if [[ "$cand" != "${fast:-}" ]]; then
+			found=$(( found + 1 ))
+			if [[ $found -eq $pos ]]; then
+				echo "$cand"
+				return 0
+			fi
+		fi
+
+		minor="$(_prev_minor "$minor")"
+		[[ -n "$minor" ]] || break
+		scanned=$(( scanned + 1 ))
+	done
+
+	return 0
+}
+
 # return 0 if v contains prerelease suffix (has '-') else 1
 _is_prerelease() {
 	[[ "$1" == *-* ]]
@@ -1778,24 +1840,21 @@ fetch_latest_z_version() {
 ############################################
 # Fetch latest version of previous minor
 # Example: if latest minor is 4.20 -> return latest 4.19.z
-# On candidate: if latest is pre-release from higher minor, "previous" is the GA latest.
+# On candidate: returns the 1st candidate-exclusive version (not on fast),
+# scanning from CDN minor downward. Empty if none found.
 ############################################
 fetch_previous_version() {
 	local channel="${1:-stable}"
 	local minor prev v
 
+	# Candidate channel: show only versions not yet promoted to fast
+	if [[ "$channel" = "candidate" ]]; then
+		_candidate_nth_exclusive 1
+		return 0
+	fi
+
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
-
-	# On candidate, if a newer pre-release exists, "previous" is the CDN GA latest
-	if [[ "$channel" = "candidate" ]]; then
-		local prerel ga_latest
-		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
-		if [[ -n "$prerel" ]]; then
-			ga_latest="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
-			[[ -n "$ga_latest" ]] && { echo "$ga_latest"; return 0; }
-		fi
-	fi
 
 	prev="$(_prev_minor "$minor")"
 	[[ -n "$prev" ]] || { echo ""; return 0; }
@@ -1808,10 +1867,17 @@ fetch_previous_version() {
 ############################################
 # Fetch latest version of N-2 minor (older)
 # Example: if latest minor is 4.21 -> return latest 4.19.z
+# On candidate: returns the 2nd candidate-exclusive version (not on fast).
 ############################################
 fetch_older_version() {
 	local channel="${1:-stable}"
 	local minor prev older v
+
+	# Candidate channel: show only versions not yet promoted to fast
+	if [[ "$channel" = "candidate" ]]; then
+		_candidate_nth_exclusive 2
+		return 0
+	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
 	[[ -n "$minor" ]] || { echo ""; return 0; }
@@ -1911,6 +1977,98 @@ verify_upgrade_path_exists() {
 	echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
 
 	return 1
+}
+
+############################################
+# Find valid upgrade targets reachable from a given version.
+# Queries the Cincinnati graph for the next minor (and optionally next-major.0)
+# to find which versions the user can actually upgrade to.
+# Args:
+#	$1 = current version (e.g. 4.19.38)
+#	$2 = channel base (e.g. fast, stable, candidate)
+#	$3 = max forward minors to probe (default: 3)
+# Output:
+#	One line per reachable target, tab-separated:
+#	  LABEL<tab>VERSION
+#	Labels: "zstream" (latest z in current minor), "next" (latest in next reachable minor),
+#	        "next+N" (Nth reachable minor beyond next)
+#	Versions are semver-sorted (highest last within each minor).
+#	Omits the current version itself and versions below it.
+############################################
+fetch_upgrade_targets() {
+	local current_ver="${1:-}"
+	local channel="${2:-${ocp_channel:-fast}}"
+	local max_probe="${3:-3}"
+
+	[[ -z "$current_ver" ]] && return 0
+
+	local cur_minor
+	cur_minor="$(_ver_minor "$current_ver")"
+	[[ -n "$cur_minor" ]] || return 0
+
+	# If only a minor was given (e.g. "4.22"), resolve to the latest z-stream
+	if [[ "$current_ver" == "$cur_minor" ]]; then
+		current_ver="$(fetch_all_versions "$channel" "$cur_minor" 2>/dev/null | tail -n1)"
+		[[ -n "$current_ver" ]] || return 0
+	fi
+
+	# 1) Latest z-stream in current minor (if newer than current)
+	local latest_z
+	latest_z="$(fetch_all_versions "$channel" "$cur_minor" 2>/dev/null | tail -n1)"
+	if [[ -n "$latest_z" ]] && is_version_greater "$latest_z" "$current_ver"; then
+		printf "zstream\t%s\n" "$latest_z"
+	fi
+
+	# 2) Probe forward minors: is current_ver a node in channel-(cur_minor+N)?
+	local x="${cur_minor%%.*}" y="${cur_minor#*.}"
+	local probed=0 next_label=0
+
+	while [[ $probed -lt $max_probe ]]; do
+		y=$(( y + 1 ))
+		local probe_minor="${x}.${y}"
+
+		local graph_versions
+		graph_versions=$(_fetch_graph_cached "$channel" "$probe_minor" 2>/dev/null |
+			jq -r '.nodes[].version' 2>/dev/null) || true
+
+		if [[ -z "$graph_versions" ]]; then
+			# No graph for this minor — try next major.0 (e.g. 4.22 → 5.0) once
+			if [[ $probed -eq 0 || $y -gt 99 ]]; then
+				local next_major="$(( x + 1 )).0"
+				graph_versions=$(_fetch_graph_cached "$channel" "$next_major" 2>/dev/null |
+					jq -r '.nodes[].version' 2>/dev/null) || true
+				[[ -z "$graph_versions" ]] && break
+				probe_minor="$next_major"
+				# Prevent re-probing major boundary
+				x=$(( x + 1 )); y=0
+			else
+				break
+			fi
+		fi
+
+		# Is our current version a valid entry point in this minor's graph?
+		if echo "$graph_versions" | grep -qxF "$current_ver"; then
+			# Find the latest version in this minor
+			local target
+			target=$(echo "$graph_versions" | grep "^${probe_minor}\." |
+				sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//' | tail -n1)
+			if [[ -n "$target" ]]; then
+				if [[ $next_label -eq 0 ]]; then
+					printf "next\t%s\n" "$target"
+				else
+					printf "next+%d\t%s\n" "$next_label" "$target"
+				fi
+				next_label=$(( next_label + 1 ))
+			fi
+		else
+			# Current version not in this minor's graph — can't reach it
+			break
+		fi
+
+		probed=$(( probed + 1 ))
+	done
+
+	return 0
 }
 
 ############################################
@@ -3073,7 +3231,7 @@ _populate_shipped_indexes() {
 	done
 }
 
-# Prefetch catalog indexes for current and previous minor versions.
+# Prefetch catalog indexes for current, previous, and upgrade-target minor versions.
 # Called by scripts/prefetch-catalogs.sh and TUI v2 for early background catalog fetching.
 # Requires: ocp_version and/or ocp_channel from aba.conf (or callers set them beforehand).
 aba_prefetch_catalogs() {
@@ -3096,17 +3254,41 @@ aba_prefetch_catalogs() {
 	download_all_catalogs "$_minor"
 	wait_for_all_catalogs "$_minor" || return 0
 
-	# Previous minor line (same major): x.(y-1)
-	local _major="${_minor%%.*}"                    # "4.22" → "4"
-	local _minor_num="${_minor##*.}"                # "4.22" → "22"
+	# Collect additional minors to prefetch (all background, no wait)
+	local _extra=() _seen=" $_minor "
+
+	# Previous minor (N-1, same major)
+	local _major="${_minor%%.*}"
+	local _minor_num="${_minor##*.}"
 	if [[ "$_minor_num" -gt 0 ]]; then
 		local _prev_minor="$_major.$((_minor_num - 1))"
 		local _prev_ver
 		_prev_ver=$(fetch_latest_z_version "$_channel" "$_prev_minor" 2>/dev/null) || true
 		if [[ -n "$_prev_ver" ]]; then
-			download_all_catalogs "$(_ver_minor "$_prev_ver")"
+			local _pm="$(_ver_minor "$_prev_ver")"
+			_extra+=("$_pm")
+			_seen+="$_pm "
 		fi
 	fi
+
+	# Upgrade targets from Cincinnati graph (e.g. 4.22 → 4.23, or 4.22 → 5.0)
+	if type -t fetch_upgrade_targets &>/dev/null; then
+		local _tgt_minor
+		while IFS=$'\t' read -r _label _tgt_ver; do
+			[[ -z "$_tgt_ver" ]] && continue
+			_tgt_minor="$(_ver_minor "$_tgt_ver")"
+			[[ "$_seen" == *" $_tgt_minor "* ]] && continue
+			_seen+="$_tgt_minor "
+			_extra+=("$_tgt_minor")
+			aba_debug "Prefetching upgrade-target catalog: $_tgt_minor (from $_label $_tgt_ver)"
+		done < <(fetch_upgrade_targets "$_ver" "$_channel" 2>/dev/null)
+	fi
+
+	# Fire off all extra catalog downloads (non-blocking via run_once)
+	local _m
+	for _m in "${_extra[@]}"; do
+		download_all_catalogs "$_m"
+	done
 }
 
 # --- Aba-facing cleanup ---

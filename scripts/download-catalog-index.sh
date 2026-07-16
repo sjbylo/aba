@@ -194,10 +194,10 @@ aba_debug "tmp_dir=$tmp_dir"
 _sig_policy="$tmp_dir/policy.json"
 echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
 
-aba_info "Pulling operator catalog image: $catalog_url"
-_pull_err=$(podman pull --signature-policy="$_sig_policy" -q "$catalog_url" 2>&1 >/dev/null) || {
-	aba_abort "Failed to pull catalog image: $catalog_url" "$_pull_err"
-}
+if ! try_cmd -n 3 -d 10 -D 5 -m "Pull catalog image: $catalog_url" -- \
+	podman pull --signature-policy="$_sig_policy" -q "$catalog_url"; then
+	aba_abort "Failed to pull catalog image: $catalog_url"
+fi
 
 # Capture manifest digest for runtime catalog pinning.
 # When oc-mirror sees a digest ref it skips upstream tag resolution -- critical for air-gap.
@@ -211,20 +211,35 @@ else
 	aba_debug "Could not capture digest for $catalog_url -- tag will be used"
 fi
 
-# Run container and extract /configs
+# Run container and extract /configs (retry once on transient Podman errors)
+# "no such container" errors are typically caused by stale container IDs from
+# interrupted previous runs — sweeping and retrying resolves them.
+_extract_catalog() {
+	local _cname="$1"
+	podman rm -f "$_cname" >/dev/null 2>&1 || true
+	local _err
+	_err=$(podman create -q --name "$_cname" "$catalog_url" 2>&1 >/dev/null) || {
+		echo "$_err"; return 1
+	}
+	_err=$(podman cp "$_cname:/configs" "$tmp_dir/configs" 2>&1) || {
+		echo "$_err"; return 1
+	}
+	podman rm -f "$_cname" >/dev/null 2>&1 || true
+	return 0
+}
+
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
-_run_err=$(podman create -q --name "$container_name" "$catalog_url" 2>&1 >/dev/null) || {
-	aba_abort "Failed to create catalog container" "$_run_err"
-}
-
-_cp_err=$(podman cp "$container_name:/configs" "$tmp_dir/configs" 2>&1) || {
-	aba_abort "Failed to extract /configs from catalog container" "$_cp_err"
-}
-
-# Container no longer needed — image stays cached as pull cache for future runs.
-# Cached layers make subsequent pulls fast (delta) and prevent "layer not known"
-# corruption from interrupted full downloads (podman#9588, podman#14003).
-podman rm -f "$container_name" >/dev/null 2>&1 || true
+_extract_err=""
+if ! _extract_err=$(_extract_catalog "$container_name"); then
+	aba_warning "Extraction failed (retrying): $_extract_err"
+	podman rm -f "$container_name" >/dev/null 2>&1 || true
+	rm -rf "$tmp_dir/configs"
+	sleep 2
+	container_name="aba-catalog-${catalog_name}-v${ocp_ver_major}-$$-retry"
+	if ! _extract_err=$(_extract_catalog "$container_name"); then
+		aba_abort "Failed to extract /configs from catalog container (after retry)" "$_extract_err"
+	fi
+fi
 container_name=""
 
 # Extract operator data from FBC (File-Based Catalog)

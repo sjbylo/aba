@@ -512,10 +512,12 @@ e2e_run "Align state.sh with version change" "
     _state=~/.aba/mirror/mirror/state.sh
     ver=\$(grep ^ocp_version= ~/aba/aba.conf | cut -d= -f2 | awk '{print \$1}')
     sed -i '/^ocp_version=/d' \$_state
+    sed -i '/^mirror_ocp_version=/d' \$_state
     echo \"ocp_version=\$ver\" >> \$_state
-    got=\$(grep '^ocp_version=' \$_state | cut -d= -f2)
-    [ \"\$got\" = \"\$ver\" ] || { echo \"FAIL: state.sh ocp_version=\$got expected \$ver\"; exit 1; }
-    echo \"state.sh ocp_version aligned to \$ver: OK\"
+    echo \"mirror_ocp_version=\$ver\" >> \$_state
+    got=\$(grep '^mirror_ocp_version=' \$_state | cut -d= -f2)
+    [ \"\$got\" = \"\$ver\" ] || { echo \"FAIL: state.sh mirror_ocp_version=\$got expected \$ver\"; exit 1; }
+    echo \"state.sh mirror_ocp_version aligned to \$ver: OK\"
 "
 
 _VER_B=$(grep ^ocp_version= aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -543,13 +545,15 @@ e2e_run "Assert binary reports correct version" \
 e2e_run -q "Restore ocp_version to latest" \
 	"aba --channel fast --version l"
 
-e2e_run -q "Restore state.sh ocp_version" "
+e2e_run -q "Restore state.sh mirror_ocp_version" "
     _state=~/.aba/mirror/mirror/state.sh
     ver=\$(grep ^ocp_version= ~/aba/aba.conf | cut -d= -f2 | awk '{print \$1}')
     sed -i '/^ocp_version=/d' \$_state
+    sed -i '/^mirror_ocp_version=/d' \$_state
     echo \"ocp_version=\$ver\" >> \$_state
-    got=\$(grep '^ocp_version=' \$_state | cut -d= -f2)
-    [ \"\$got\" = \"\$ver\" ] || { echo \"FAIL: state.sh ocp_version=\$got expected \$ver\"; exit 1; }
+    echo \"mirror_ocp_version=\$ver\" >> \$_state
+    got=\$(grep '^mirror_ocp_version=' \$_state | cut -d= -f2)
+    [ \"\$got\" = \"\$ver\" ] || { echo \"FAIL: state.sh mirror_ocp_version=\$got expected \$ver\"; exit 1; }
 "
 
 e2e_run -q "Restore full verification" "aba --verify all"

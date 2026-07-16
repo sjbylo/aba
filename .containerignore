@@ -1,0 +1,65 @@
+# Podman/Docker build context exclusions for the ABA container image.
+# Only large runtime data (image-set tars) and dev artifacts are excluded.
+# CLI tools, registry installer, and all ABA scaffolding are INCLUDED.
+
+# --- Version control / dev ---
+.git
+.gitignore
+.backup
+ai
+dev
+devel
+docs
+images
+tools
+data
+
+# --- Cluster directories (user creates these at runtime) ---
+sno*
+compact*
+standard*
+ocp*
+demo*
+
+# --- Catalog cache (rebuilt at runtime) ---
+catalogs
+
+# --- Mirror: image-set tars (mounted at runtime -- too large for layers) ---
+mirror/data
+
+# --- Mirror: unpacked installer files (rebuilt from the tarball) ---
+mirror/mirror-registry
+mirror/execution-environment.tar
+mirror/image-archive.tar
+mirror/quay.tar
+mirror/pause.tar
+mirror/postgres.tar
+mirror/redis.tar
+mirror/sqlite3.tar
+
+# --- Mirror: recursive symlink ---
+mirror/mirror
+
+# --- Mirror: runtime state (created during install) ---
+mirror/.init
+mirror/.rpms
+mirror/.available
+mirror/.loaded
+mirror/regcreds
+mirror/regcreds.bk
+mirror/reg-uninstall.sh
+mirror/mirror.conf.bk
+
+# --- Generated ISOs ---
+*/iso-agent-based
+
+# --- Test artifacts ---
+test
+bundles
+
+# --- Build artifacts ---
+*.content-layer-digest
+*.expected-count
+.dnf-install.log
+.bundle
+.aba.conf.seen
