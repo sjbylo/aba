@@ -4,12 +4,12 @@ Primed bundles, TUI upgrade picker, catalog prefetch, RHEL 10 support, and impro
 
 ### New Features
 
-- **`aba bundle --primed`** — Bundle pre-configured cluster directories (with pre-built `install-config.yaml` and `agent-config.yaml`) alongside the mirror data. On the disconnected side, Make skips regeneration for primed clusters (`.primed` marker), while cluster.conf-only directories still go through normal config generation. Supports mixed bundles with both pre-built and unconfigured clusters.
 - **TUI upgrade path picker** — Upgrade menu now queries available versions from the mirror registry and validates them against the Cincinnati upgrade graph, showing only safe upgrade targets.
 - **Catalog prefetch for next minor** — Background pre-download of operator catalogs for the next OCP minor version (e.g. if on 4.21, prefetch 4.22 catalogs), prioritizing the `redhat` catalog.
 - **`aba transfer-info`** — New command to show transfer tar contents, metadata, and cluster directory summary.
 - **Suggest `aba unstick` on install failure** — When cluster install fails with stuck pods, the error message now suggests running `aba unstick` as a recovery step.
 - **Container image workflow** — Containerfile and documentation for running ABA inside a container for disconnected deployments.
+- **`aba bundle --primed` (alpha)** — Bundle pre-configured cluster directories (with pre-built `install-config.yaml` and `agent-config.yaml`) alongside the mirror data. On the disconnected side, Make skips regeneration for primed clusters (`.primed` marker), while cluster.conf-only directories still go through normal config generation. Supports mixed bundles with both pre-built and unconfigured clusters.
 
 ### Improvements
 

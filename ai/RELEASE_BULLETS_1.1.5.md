@@ -1,14 +1,14 @@
-# Release Bullets for v1.2.0
+# Release Bullets for v1.1.5
 
-Primed bundles, TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX.
+Primed bundles (alpha), TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX.
 
 ## New Features
 
-- **`aba bundle --primed`** — Bundle pre-configured cluster directories alongside mirror data. On the disconnected side, primed clusters skip config regeneration while cluster.conf-only directories generate normally.
 - **TUI upgrade path picker** — Upgrade menu queries available versions from the mirror registry and validates them against the Cincinnati upgrade graph.
 - **Catalog prefetch for next minor** — Background pre-download of operator catalogs for the next OCP minor version.
 - **`aba transfer-info`** — Show transfer tar contents, metadata, and cluster directory summary.
 - **Suggest `aba unstick` on install failure** — Error message now suggests `aba unstick` when cluster install fails with stuck pods.
+- **`aba bundle --primed` (alpha)** — Bundle pre-configured cluster directories alongside mirror data. Primed clusters skip config regeneration on the disconnected side.
 
 ## Improvements
 
