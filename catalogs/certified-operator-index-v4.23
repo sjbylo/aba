@@ -13,7 +13,7 @@ cilium-enterprise                                       Isovalent Enterprise for
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 coherence-operator                                      Coherence Kubernetes Operator                                stable
 conjur-follower-operator                                Conjur Enterprise Follower Operator                          stable
-cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.14
+cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.15
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified                              Datadog Operator                                             stable
 digitalai-deploy-operator                               Digital.ai Deploy                                            stable-v24.3
@@ -71,7 +71,7 @@ t8c-certified                                           Turbonomic Platform Oper
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
 tawon-operator                                          Tawon                                                        alpha
 template-operator                                       Template Operator                                            release-0.1
-tenant-operator                                         Multi Tenant Operator                                        release-1.8
+tenant-operator                                         Multi Tenant Operator                                        release-1.9
 truenas-csi                                             TrueNAS CSI Driver                                           stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
 vast-csi-operator                                       VAST CSI driver operator                                     stable

@@ -248,7 +248,7 @@ latest_working_dir="mirror/data/working-dir"
 
 ns=openshift-marketplace
 
-if [ "$latest_working_dir" ]; then
+if [ -d "$latest_working_dir/cluster-resources" ]; then
 	# Apply any idms/itms files created by oc-mirror v2
 	for f in $(ls $latest_working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 	do
@@ -275,7 +275,7 @@ if [ "$latest_working_dir" ]; then
 				"Your imageset-config.yaml includes operators, but no CatalogSource files were generated." \
 				"Run 'aba -d mirror sync' or 'aba -d mirror save' (transfer ISC and archive files), then 'aba -d mirror load' to mirror operator images."
 		else
-			aba_debug "No CatalogSource files found (no operators in 'aba.conf', 'mirror/mirror.conf' or in 'mirror/data/imageset-config.yaml') — skipping."
+			aba_info "No operators configured — skipping CatalogSource setup."
 		fi
 	fi
 

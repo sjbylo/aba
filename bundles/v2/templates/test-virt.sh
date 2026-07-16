@@ -34,7 +34,6 @@ spec:
   source: redhat-operators
   sourceNamespace: openshift-marketplace
   name: kubevirt-hyperconverged
-  channel: "stable"
 EOF
 
 wait_for_csv "kubevirt-hyperconverged"

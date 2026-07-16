@@ -1,6 +1,6 @@
 abinitio-runtime-operator                               Co>Operating System Runtime Operator                         stable
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
-airlock-microgateway                                    Airlock Microgateway                                         5.1
+airlock-microgateway                                    Airlock Microgateway                                         "5.1"
 aiu-operator                                            AIU Operator                                                 stable-v2.3
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
 amd-gpu-operator                                        amd-gpu-operator                                             alpha
@@ -25,7 +25,7 @@ coherence-operator                                      Coherence Kubernetes Ope
 confluent-for-kubernetes                                Confluent for Kubernetes                                     3.3
 conjur-follower-operator                                Conjur Enterprise Follower Operator                          stable
 couchbase-enterprise-certified                          Couchbase Operator                                           stable
-cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.14
+cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.15
 crunchy-postgres-operator                               Crunchy Postgres for Kubernetes                              v5
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified                              Datadog Operator                                             stable
@@ -39,6 +39,7 @@ eda-k8s-operator                                        eda-openshift-operator  
 edb-hcp-operator                                        EDB Postgres AI                                              stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
+exascaler-csi-driver-operator                           EXAScaler CSI File Driver                                    alpha
 f5-ai-security-operator                                 F5 AI Security Operator                                      stable
 f5-bigip-ctlr-operator                                  F5 Container Ingress Services                                stable
 falcon-operator                                         CrowdStrike Falcon Platform - Operator                       certified-1.0
@@ -46,7 +47,7 @@ fujitsu-enterprise-postgres-operator                    Fujitsu Enterprise Postg
 function-mesh                                           Function Mesh Operator                                       alpha
 gitlab-operator-kubernetes                              GitLab                                                       stable
 gitlab-runner-operator                                  GitLab Runner                                                stable
-google-cloud-cluster-services-for-openshift-telemetry   Cluster Services for OpenShift Telemetry                     alpha
+google-cloud-cluster-services-for-openshift-telemetry   Cluster Services for OpenShift Telemetry                     stable
 gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
 habana-ai-operator                                      Intel Gaudi Base Operator                                    stable
 hammu-platform                                          Hammu Platform                                               alpha
@@ -152,7 +153,7 @@ t8c-certified                                           Turbonomic Platform Oper
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
 tawon-operator                                          Tawon                                                        alpha
 template-operator                                       Template Operator                                            release-0.1
-tenant-operator                                         Multi Tenant Operator                                        release-1.8
+tenant-operator                                         Multi Tenant Operator                                        release-1.9
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
 trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable

@@ -25,11 +25,13 @@ aba_debug "Starting: $0 $*"
 dest=/tmp/aba-backup-$(whoami).tar	# Default file to write to
 inc= 				# Full backup by default (not incremental) 
 repo_only=			# Also include the data/mirror_*.tar files (for some use-cases it's more efficient to keep them separate) 
+with_clusters=			# Include pre-configured configs (cluster dirs, mirror.conf, vmware.conf)
 
 while echo "$1" | grep -q ^--[a-z]
 do
 	[ "$1" = "--repo" ] && repo_only=1 && shift	# Set to NOT include any mirror_*.tar files, which should be copied separately. 
 	[ "$1" = "--inc" ] && inc=1 && shift    	# Set optional backup type to "incremental".  Full is default. 
+	[ "$1" = "--primed" ] && with_clusters=1 && shift
 done
 
 [ "$1" ] && dest="$1"
@@ -51,7 +53,22 @@ cd ..
 # If script exits early (crash, Ctrl-C, tar failure): restore source repo to unlocked state.
 # .bundle is a temp marker for tar --transform; .isc-pinned + ISC timestamp must be restored
 # so the user's repo doesn't get stuck in a "locked" state after an interrupted bundle.
-trap 'rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"; [ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"' EXIT
+_restore_cleanup() {
+	rm -f "${repo_dir}/.bundle" "${repo_dir}/mirror/data/.isc-pinned"
+	[ -f "${repo_dir}/mirror/data/.created" ] && touch "${repo_dir}/mirror/data/.created"
+	# Restore per-dir symlinks and remove .primed markers from the SOURCE repo
+	# (.primed only belongs in the tar, not in the connected-side working tree)
+	local _i=0
+	for _resolved in $_resolved_copies; do
+		rm -f "$_resolved"
+		ln -sf "${_original_targets[$_i]}" "$_resolved"
+		_i=$(( _i + 1 ))
+	done
+	for _d in $_cluster_paths; do
+		rm -f "$_d/.primed"
+	done
+}
+trap '_restore_cleanup' EXIT
 
 # If this is the first run OR is doing a full backup ... set up for full backup (i.e. set time in past) 
 [ ! -f ~/.aba.previous.backup -o ! "$inc" ] && touch -t 7001010000 ~/.aba.previous.backup 
@@ -76,7 +93,77 @@ touch "${repo_dir}/.bundle"
 rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this conf file again on the internal/private network
 
 
+# If --primed: prep cluster dirs and build path list for find.
+# Replaces symlinks with real copies (self-contained tarball) and drops a
+# .primed marker in fully pre-built dirs so Make skips regeneration on disco.
+_cluster_paths=""
+_hv_conf_path=""
+_resolved_copies=""
+_include_mirror_conf=""
+# Parallel arrays: _resolved_copies has the file paths, _original_targets has
+# each file's original symlink target so the EXIT trap restores it exactly.
+declare -a _original_targets=()
+if [ "$with_clusters" ]; then
+	# Identify vmware.conf or kvm.conf at repo root (included in the tar via find)
+	for _hv in vmware.conf kvm.conf; do
+		[ -f "${repo_dir}/$_hv" ] && _hv_conf_path="${repo_dir}/$_hv" && break
+	done
+
+	# Include mirror/mirror.conf if no local registry was installed.
+	# If .available exists, mirror.conf was used to install locally → likely wrong for disco.
+	if [ -f "${repo_dir}/mirror/mirror.conf" ] && [ ! -f "${repo_dir}/mirror/.available" ]; then
+		_include_mirror_conf=1
+	fi
+
+	for _cf in "${repo_dir}"/*/cluster.conf; do
+		[ -f "$_cf" ] || continue
+		_cdir=$(dirname "$_cf")
+		[ "$(basename "$_cdir")" = "mirror" ] && continue
+
+		[ ! -f "$_cdir/.init" ] && touch -r "$_cdir/cluster.conf" "$_cdir/.init"
+		_cluster_paths+=" $_cdir"
+
+		# Resolve symlinks to real copies so the tarball is self-contained.
+		# Save the original target so the EXIT trap can restore it exactly
+		# (mirror.conf -> mirror/mirror.conf differs from vmware.conf -> ../vmware.conf).
+		for _f in vmware.conf kvm.conf mirror.conf; do
+			if [ -L "$_cdir/$_f" ]; then
+				_orig_target=$(readlink "$_cdir/$_f")
+				if [ -e "$_cdir/$_f" ]; then
+					cp --remove-destination "$(readlink -f "$_cdir/$_f")" "$_cdir/$_f"
+					_resolved_copies+=" $_cdir/$_f"
+					_original_targets+=("$_orig_target")
+				else
+					aba_debug "Dangling symlink: $_cdir/$_f -> $_orig_target (skipped)"
+				fi
+			fi
+		done
+
+		# Mark fully pre-built dirs: .primed tells Make to skip regeneration.
+		# Cluster.conf-only dirs get NO .primed — normal generation on disco.
+		if [ -f "$_cdir/install-config.yaml" ] && [ -f "$_cdir/agent-config.yaml" ]; then
+			touch "$_cdir/.primed"
+			touch "$_cdir/.bm-message"
+		fi
+	done
+fi
+
+# Default: exclude mirror/mirror.conf (wrong for disco if registry installed locally).
+# Cleared above when --primed AND no local registry (.available absent).
+# When excluding, also exclude per-cluster mirror.conf symlinks to avoid dangling
+# symlinks in the bundle (they'd point to the excluded mirror/mirror.conf).
+# Exception: --primed resolves per-cluster symlinks to real copies, so they must
+# NOT be excluded even when mirror/mirror.conf itself is excluded.
+_exclude_mirror_conf="! -path ${repo_dir}/mirror/mirror.conf"
+_exclude_cluster_mirror_conf=""
+if [ "$_include_mirror_conf" ]; then
+	_exclude_mirror_conf=""
+elif [ ! "$with_clusters" ]; then
+	_exclude_cluster_mirror_conf='! -name mirror.conf'
+fi
+
 # All 'find expr' below are by default "and"
+# shellcheck disable=SC2086
 file_list=$(find				\
 	"${repo_dir}/install"			\
 	"${repo_dir}/aba"			\
@@ -96,7 +183,14 @@ file_list=$(find				\
 	"${repo_dir}/Troubleshooting.md"	\
 	"${repo_dir}/.index"			\
 	"${repo_dir}/mirror"			\
-									\
+	$_cluster_paths				\
+	${_hv_conf_path:+"$_hv_conf_path"}	\
+								\
+	\( -path "${repo_dir}/mirror/data/working-dir*" -o	\
+	   -path "${repo_dir}/mirror/data/oc-mirror-workspace*" -o \
+	   -path "${repo_dir}/mirror/sync" -o			\
+	   -path "${repo_dir}/mirror/save" \) -prune -o		\
+								\
 	! -path "${repo_dir}/.git*"  					\
 	! -path "${repo_dir}/cli/.init"  				\
 	! -path "${repo_dir}/cli/.??*"	  				\
@@ -104,7 +198,8 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/.rpms"  				\
 	! -path "${repo_dir}/mirror/.available"  			\
 	! -path "${repo_dir}/mirror/.loaded" 				\
-	! -path "${repo_dir}/mirror/mirror.conf"  			\
+	$_exclude_mirror_conf						\
+	$_exclude_cluster_mirror_conf					\
 	! -path "${repo_dir}/mirror/mirror-registry"  			\
 	! -path "${repo_dir}/mirror/execution-environment.tar"  	\
 	! -path "${repo_dir}/mirror/image-archive.tar"  		\
@@ -115,10 +210,14 @@ file_list=$(find				\
 	! -path "${repo_dir}/mirror/regcreds"	  			\
 	! -path "${repo_dir}/mirror/reg-uninstall.sh"  			\
 	! -path "${repo_dir}/*/iso-agent-based*"  			\
-	! -path "${repo_dir}/mirror/data/working-dir*"  		\
-	! -path "${repo_dir}/mirror/sync/*"				\
-	! -path "${repo_dir}/mirror/save/*"				\
-	! -path "${repo_dir}/mirror/data/oc-mirror-workspace*"		\
+	! -name ".install-complete"					\
+	! -name ".autopoweroff"						\
+	! -name ".autoupload"						\
+	! -name ".autorefresh"						\
+	! -name ".auto-agent-up"					\
+	! -name ".bm-nextstep"						\
+	! -name ".preflight-done"					\
+	! -name ".cli"							\
 	! -name "*.content-layer-digest"				\
 	! -name "*.expected-count"					\
 	! -path "${repo_dir}/test/output.log" 				\
@@ -127,6 +226,7 @@ file_list=$(find				\
 	\( -type f -o -type l \)				\
 								\
 	-newer ~/.aba.previous.backup 				\
+	-print							\
 )
 
 # Notes on the above

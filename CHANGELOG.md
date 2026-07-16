@@ -1,4 +1,49 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.5...HEAD)
+
+---
+
+## [1.1.5](https://github.com/sjbylo/aba/releases/tag/v1.1.5) - 2026-07-16
+
+Primed bundles (alpha), TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
+
+
+Primed bundles, TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
+
+### New Features
+
+- **TUI upgrade path picker** — Upgrade menu now queries available versions from the mirror registry and validates them against the Cincinnati upgrade graph, showing only safe upgrade targets.
+- **Catalog prefetch for next minor** — Background pre-download of operator catalogs for the next OCP minor version (e.g. if on 4.21, prefetch 4.22 catalogs), prioritizing the `redhat` catalog.
+- **`aba transfer-info`** — New command to show transfer tar contents, metadata, and cluster directory summary.
+- **Suggest `aba unstick` on install failure** — When cluster install fails with stuck pods, the error message now suggests running `aba unstick` as a recovery step.
+- **Container image workflow** — Containerfile and documentation for running ABA inside a container for disconnected deployments.
+- **`aba bundle --primed` (alpha)** — Bundle pre-configured cluster directories (with pre-built `install-config.yaml` and `agent-config.yaml`) alongside the mirror data. On the disconnected side, Make skips regeneration for primed clusters (`.primed` marker), while cluster.conf-only directories still go through normal config generation. Supports mixed bundles with both pre-built and unconfigured clusters.
+
+### Improvements
+
+- **RHEL 10 support** — RHEL 10 and CentOS Stream 10 added as supported platforms in documentation and prerequisites.
+- **Clarified sudo requirements** — Documentation now emphasizes that ABA runs as a normal user with `sudo` for system operations; root is optional, not required.
+- **Context-aware next steps** — `aba load`, `aba save`, and `aba sync` now show condensed, context-appropriate hints (e.g. suggests `day2` + `upgrade` for upgrade loads, or `aba cluster` for new installs) with consistent coloring.
+- **TUI: smart DISCO menu focus** — After a state-changing action (e.g. `load`), the menu cursor automatically moves to the logical next step (e.g. "Install cluster").
+- **TUI: day2 offer after load** — TUI offers to run `aba day2` immediately after loading images, since it's always the next step.
+- **TUI: improved upgrade UX** — Clearer wording, cancel hints, and better dialog flow in the upgrade workflow.
+- **Agent wait timeout increased to 5 min** — Accommodates slower VM boot times across all platforms.
+- **Skip agent wait on install retry** — When `aba install` is retried after the agent was already detected, the agent wait is skipped.
+- **`aba unstick` refactored** — Single-pass pod detection with generic status matching replaces a hardcoded status list.
+- **`try_cmd()` retry consolidation** — Common retry logic extracted into a shared `try_cmd()` function, reducing duplication across scripts.
+- **Candidate-exclusive version discovery** — `aba ocp-versions` now shows candidate channel versions that are not yet in the fast channel.
+- **README: abatui mentioned alongside aba** — Workflow entry points now mention `abatui` as an alternative.
+- **README: bare-metal example** — Comprehensive bare-metal configuration example with network diagram, DNS records, and pre-flight checklist.
+- **`ocp_version` semantic separation** — `ocp_version` in `aba.conf` is now strictly "user intent" (what to install), cleanly separated from `ocp_version` in `state.sh` (what the mirror currently holds).
+
+### Bug Fixes
+
+- **Fix ODF operator set missing `ocs-tls-profiles`** — Added `ocs-tls-profiles` to `operator-set-odf`, fixing ODF installation failures on recent OCP versions.
+- **Fix catalog extraction retry** — Transient Podman "no such container" errors during catalog extraction now trigger automatic retry instead of aborting.
+- **Fix Docker registry image download path** — Corrected source path in `download-docker-reg-image.sh`.
+- **Fix `--primed` bundle symlink restoration** — EXIT trap now restores the exact original symlink targets (e.g. `mirror/mirror.conf` vs `../vmware.conf`) instead of using a generic `../$name` pattern.
+- **Fix `--primed` mirror.conf exclusion** — Resolved `mirror.conf` copies in primed cluster directories are no longer excluded from the tarball when a local registry is installed.
+- **Fix `.primed` guard on install-config.yaml** — Removed overly strict `.primed` guard that prevented `install-config.yaml` regeneration when cluster configs changed.
+- **Fix `aba save` color output** — Removed stale `PLAIN_OUTPUT=1` export in `reg-save.sh` that suppressed all color output.
 
 ---
 

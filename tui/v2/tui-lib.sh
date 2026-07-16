@@ -795,12 +795,13 @@ _invalidate_mirror_cache() {
 	# The menu loop re-triggers automatically if >120s elapsed.
 }
 
-# Inform user about day2 after mirror load/sync.
-# Shows only clusters that use this mirror (int_connection unset = mirror mode).
-# Must be called AFTER confirm_and_execute returns (not from a post_cmd_hook)
-# to avoid nested execution and confusing dialog ordering.
+# After mirror load/sync, offer to run day2 on clusters using this mirror.
+# Zero clusters: simple success message.
+# One cluster: offer to run day2 now.
+# Multiple clusters: informational dialog (user runs day2 manually).
 _offer_day2_after_mirror_update() {
-	local _cl _list="" _int_conn
+	local _cl _int_conn
+	local -a _clusters=()
 
 	for _cl in $(list_installed_clusters); do
 		# Check if cluster uses the mirror (int_connection empty = mirror mode)
@@ -811,10 +812,36 @@ _offer_day2_after_mirror_update() {
 			echo "${int_connection:-}"
 		)
 		[[ -n "$_int_conn" ]] && continue
-		_list="${_list}\n  - $(cluster_display_name "$_cl")"
+		_clusters+=("$_cl")
 	done
 
-	[[ -z "$_list" ]] && return 0
+	if [[ ${#_clusters[@]} -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Mirror Updated" \
+			--msgbox "Mirror updated successfully." 0 0
+		return 0
+	fi
+
+	if [[ ${#_clusters[@]} -eq 1 ]]; then
+		local _fqdn
+		_fqdn=$(cluster_display_name "${_clusters[0]}")
+		dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
+			--yes-label "Run Day-2 now" \
+			--no-label "Later" \
+			--yesno "Mirror updated successfully.\n\n\
+Cluster $_fqdn uses this mirror.\n\n\
+Run Day-2 now to apply changes\n\
+(new operators, updated release image, etc.)?" 0 0
+		if [[ $? -eq 0 ]]; then
+			confirm_and_execute "aba --dir ${_clusters[0]} day2" "Configure OperatorHub: $_fqdn"
+		fi
+		return 0
+	fi
+
+	# Multiple clusters: informational dialog
+	local _list=""
+	for _cl in "${_clusters[@]}"; do
+		_list="${_list}\n  - $(cluster_display_name "$_cl")"
+	done
 
 	dlg --backtitle "$(ui_backtitle)" --title "Configure OperatorHub" \
 		--msgbox "Mirror updated successfully.\n\n\

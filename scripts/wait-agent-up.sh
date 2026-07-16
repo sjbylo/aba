@@ -33,7 +33,7 @@ if [ ! -f .install-complete ]; then
 		[[ $code =~ ^4..$ ]]
 	}
 
-	if aba_wait_show "Waiting for Agent at $agent_url" 8 180 _agent_is_alive; then
+	if aba_wait_show "Waiting for Agent at $agent_url" 8 300 _agent_is_alive; then
 		aba_info_ok "Agent alive!"
 		sleep 8
 		exit 0

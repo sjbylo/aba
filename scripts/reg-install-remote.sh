@@ -254,16 +254,11 @@ reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 # Docker needs an explicit check because 'podman run -d' returns immediately
 # before the registry has fully loaded its auth config (htpasswd volume).
 if [ "$vendor" = "docker" ]; then
-	_curl_ok=
-	for _attempt in 1 2 3; do
-		_curl_err=$(curl -k -fsSL --connect-timeout 10 "https://${reg_host}:${reg_port}/v2/" \
-			-u "$reg_user:$reg_pw" 2>&1 >/dev/null) && { _curl_ok=1; break; }
-		[ "$_attempt" -lt 3 ] && aba_info "Registry not yet ready (attempt $_attempt/3), retrying in 5s ..." && sleep 5
-	done
-	if [ -z "$_curl_ok" ]; then
+	if ! try_cmd -n 3 -d 5 -m "Verify registry ${reg_host}:${reg_port}" -- \
+		curl -k -fsSL --connect-timeout 10 -o /dev/null \
+			"https://${reg_host}:${reg_port}/v2/" -u "$reg_user:$reg_pw"; then
 		aba_abort \
 			"Registry started on $reg_host but verification of ${reg_host}:${reg_port} failed after 3 attempts." \
-			"curl error: $_curl_err" \
 			"Check firewall rules (port $reg_port), TLS certificates, and registry credentials." \
 			"Credentials saved. After fixing: aba -d $(basename "$PWD") verify"
 	fi

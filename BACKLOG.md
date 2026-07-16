@@ -36,7 +36,7 @@ Issues or Pull Requests.
 ## ISC upgrade mode broken by state.sh ocp_version override
 
 **Severity:** HIGH — produces wrong ISC, upgrade sync downloads wrong images
-**Status:** Planned
+**Status:** Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact)
 **Added:** 2026-07-09
 
 **Problem:** When `_state_override_mirror()` overrides `ocp_version` from
@@ -180,7 +180,7 @@ selection first, or run on all installed clusters using this mirror.
 ## day2-osus: channel set fails after cross-minor upgrade
 
 **Severity:** HIGH — `aba day2-osus` errors out on upgraded clusters
-**Status:** Planned
+**Status:** Done (day2-config-osus.sh now derives channel from cluster's actual version)
 **Added:** 2026-07-10
 **Related:** ISC upgrade mode / state.sh override (above) — same root theme: scripts derive version/channel from config files instead of the live cluster
 
@@ -419,6 +419,226 @@ done
 
 ---
 
+## day2-osus: auto-run day2 if CatalogSources not yet applied
+
+**Severity:** LOW — UX improvement, reduces manual steps
+**Status:** Planned
+**Added:** 2026-07-13
+
+**Problem:** When the user runs `aba day2-osus` on a cluster where `aba day2`
+has not yet been run, it fails with "cincinnati-operator not available in
+OperatorHub" because the mirrored CatalogSources haven't been applied yet.
+The user has to manually run `aba day2` first, then re-run `aba day2-osus`.
+
+**Current behavior:** `day2-config-osus.sh` checks for the `cincinnati-operator`
+package manifest and aborts if not found, telling the user to run `aba day2`.
+
+**Proposed fix:** Before aborting, detect whether `aba day2` has been run on
+this cluster (e.g. check if mirrored CatalogSources exist, or check for a
+day2 marker). If not, offer to run it automatically:
+```
+[ABA] CatalogSources not yet applied to this cluster.
+[ABA] Running 'aba day2' first...
+```
+Then continue with the OSUS installation. In `--yes`/non-interactive mode,
+run `day2` automatically without prompting.
+
+**Considerations:**
+- `day2` includes more than just CatalogSources (IDMS, signatures, NTP) —
+  running it as a prerequisite is safe and idempotent
+- Need to wait for CatalogSource sync after `day2` before retrying the
+  `cincinnati-operator` package manifest check
+- Should NOT auto-run `day2` if it was already run but the operator is
+  genuinely missing (different failure mode)
+
+**Files to change:**
+- `scripts/day2-config-osus.sh`: add day2 prerequisite check before the
+  `cincinnati-operator` availability check
+
+---
+
+## TUI Day-2: add "Cluster login" shell item
+
+**Severity:** LOW — UX convenience
+**Status:** Planned
+**Added:** 2026-07-13
+
+**Problem:** When troubleshooting or inspecting a cluster from the TUI, the
+user must exit the TUI, find the kubeconfig, export it, and run `oc` commands
+manually. This breaks flow, especially for less experienced users.
+
+**Proposed fix:** Add a "Cluster login" (or "Shell") menu item to the Day-2 /
+Cluster Management menu. When selected, it drops the user into an interactive
+bash shell with `KUBECONFIG` already exported and `oc` on the PATH. The user
+can run any `oc` commands, then `exit` to return to the TUI.
+
+**Implementation idea:**
+```bash
+# In the Day-2 menu handler:
+_kc=$(cluster_kubeconfig 2>/dev/null)
+export KUBECONFIG="$_kc"
+clear
+echo "[ABA] Logged into cluster: $(oc whoami --show-server 2>/dev/null)"
+echo "[ABA] Type 'exit' to return to the TUI."
+bash --login
+```
+
+**Considerations:**
+- Use `bash --login` (not `exec bash`) so the TUI resumes on `exit`
+- Show cluster name/API URL in the shell prompt or banner
+- `aba shell` CLI command already exists — reuse the same logic
+- Consider adding a custom `PS1` prompt (e.g. `[aba:clustername] $`) to
+  remind the user they're inside a TUI subshell
+
+**Files to change:**
+- `tui/v2/tui-cluster.sh`: add menu item to Day-2 menu and handler
+
+---
+
+## day2-ntp: apply NTP config without node reboot where possible
+
+**Severity:** MEDIUM — reduces downtime during NTP configuration
+**Status:** Planned
+**Added:** 2026-07-13
+
+**Problem:** `aba day2-ntp` applies NTP configuration via MachineConfig, which
+triggers the MCO to drain, reboot, and reconcile every node. On a 3-node
+compact cluster this means ~15-30 minutes of rolling reboots just to change
+`chrony.conf`. On SNO, the entire cluster goes offline during the reboot.
+
+**Current implementation:** `day2-config-ntp.sh` generates Butane specs for
+master/worker MachineConfigs, applies them with `oc apply`, then waits for
+MCO to process (Phase 1a/1b), chrony.conf to appear (Phase 2), NTP sync
+(Phase 3), and API recovery (Phase 4).
+
+**Proposed improvement:** Where possible, apply NTP configuration directly
+without requiring a reboot:
+
+1. **Direct chrony reconfiguration via SSH:** After applying the MachineConfig
+   (for persistence across future reboots), also SSH to each node and:
+   ```bash
+   # Write chrony.conf directly
+   sudo cp /tmp/chrony.conf /etc/chrony.conf
+   # Reload chrony without reboot
+   sudo systemctl restart chronyd
+   ```
+   This gives immediate NTP sync without waiting for MCO reboot.
+
+2. **MCO rebootless updates (OCP 4.14+):** OpenShift 4.14+ supports
+   `In-place updates` for certain MachineConfig changes (files under
+   `/etc/` that don't require a kernel or kubelet restart). Chrony config
+   changes may qualify. Investigate whether the MCO can apply chrony.conf
+   changes without draining/rebooting nodes.
+
+3. **`chronyc` live reconfiguration:** Use `chronyc` commands to add/remove
+   NTP sources at runtime without touching `chrony.conf`:
+   ```bash
+   chronyc add server <ntp-host> iburst
+   chronyc delete <old-source>
+   ```
+   Combined with MachineConfig for persistence, this gives instant sync
+   with zero disruption.
+
+4. **NodeDisruptionPolicy (OCP 4.16+):** Apply a `MachineConfiguration`
+   object with a `nodeDisruptionPolicy` that tells the MCO to restart
+   `chronyd.service` instead of rebooting when `/etc/chrony.conf` changes:
+   ```yaml
+   spec:
+     nodeDisruptionPolicy:
+       files:
+       - actions:
+         - restart:
+             serviceName: chronyd.service
+           type: Restart
+         path: /etc/chrony.conf
+   ```
+   Apply this BEFORE the chrony MachineConfigs. The MCO will restart chronyd
+   instead of draining/rebooting. Only applies to OCP >= 4.16; on older
+   clusters, fall back to current behaviour. Phase 1a wait and Phase 4
+   (API recovery post-reboot) can be skipped when the policy is active.
+   Ref: https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/machine_configuration/machine-config-node-disruption_machine-configs-configure
+
+**Approach:** On OCP 4.16+, use NodeDisruptionPolicy (approach 4) as the
+primary method -- cleanest, fully supported by the MCO. On older clusters
+(4.12-4.15), fall back to direct SSH + restart chronyd (approach 1). Keep
+the MachineConfig apply in all cases for persistence.
+
+**Compatibility:** Check which approach works on OCP 4.12+ (minimum supported).
+`chronyc` commands and `systemctl restart chronyd` should work on all versions.
+MCO rebootless updates are 4.14+. NodeDisruptionPolicy is 4.16+.
+
+**Files to change:**
+- `scripts/day2-config-ntp.sh`: add direct SSH chrony reconfiguration before
+  or after MachineConfig apply; conditionally skip MCO reboot wait
+
+---
+
+## Catalog prefetch: download next minor in background
+
+**Severity:** LOW — UX improvement, reduces wait time
+**Status:** Planned
+**Added:** 2026-07-13
+
+**Problem:** When a user selects OCP 4.21, the operator catalog for 4.22 is not
+downloaded until the user explicitly sets an upgrade target. This means the user
+has to wait for the 4.22 catalog download when they later initiate an upgrade.
+Catalogs are large (~200-500MB per catalog type) and take minutes to pull.
+
+**Current behavior:** `aba_prefetch_catalogs()` downloads the current minor
+(e.g. 4.22) and then the **previous** minor (e.g. 4.21). The previous minor
+download is rarely useful — if you're on 4.22, you don't need 4.21 catalogs.
+
+**Proposed change:** Replace the previous-minor prefetch with a **next-minor**
+prefetch. After downloading the current version's catalogs, speculatively
+download the next minor line in the background:
+
+1. Download **current** minor catalogs (e.g. 4.22) — blocking, needed now
+2. Download **next** minor catalogs (e.g. 4.23) — background, sequential,
+   silent on failure (version may not exist yet)
+
+**Priorities within each version:**
+- Download the **redhat-operator** catalog first (most used, contains the
+  operators users care about: ACM, ODF, Virt, etc.)
+- Then certified-operator, then community-operator
+- This ensures the highest-value catalog is ready fastest
+
+**Constraints:**
+- Sequential downloads only (one catalog at a time) — minimize bandwidth
+  and disk disruption to active operations
+- Silent failure — if the next minor doesn't exist yet, exit quietly
+- No cross-major speculation (don't try 5.0 when on 4.x) — different
+  catalog image naming, too speculative
+- Respect existing TTL caching (`CATALOG_CACHE_TTL`) — don't re-download
+  catalogs that are already cached
+
+**Files to change:**
+- `scripts/include_all.sh` (`aba_prefetch_catalogs()`): replace previous-minor
+  logic with next-minor logic; reorder catalog downloads within
+  `download_all_catalogs()` to prioritize redhat-operator
+- `scripts/include_all.sh` (`download_all_catalogs()`): consider adding a
+  `priority_order` parameter or reordering the internal catalog list
+- `scripts/prefetch-catalogs.sh`: no change needed (thin wrapper)
+
+---
+
+## Automated infrastructure services (`infra=auto`)
+
+**Severity:** MEDIUM — major UX improvement for new users
+**Status:** Planned
+**Added:** 2026-07-16
+
+**Problem:** Users new to OpenShift must manually install and configure DNS
+(dnsmasq), NTP (chronyd), and firewall rules before ABA can install a cluster.
+This is the #1 barrier to entry for beginners.
+
+**Proposed fix:** New `aba.conf` setting `infra=auto` (default: `manual`) that
+makes ABA automatically install and configure these services on the bastion.
+Per-cluster DNS records are added at install time and removed on delete.
+
+**Design doc:** `ai/DESIGN-infra-auto.md`
+
+---
+
 ## Refactors
 
 - **ARCH variable normalization**: `include_all.sh` normalizes ARCH to the Go/OCI convention (`amd64`), but ISO filenames and Makefiles use `uname -m` (`x86_64`). Scripts like `vmw-upload.sh`, `kvm-upload.sh`, and `cluster-write-usb.sh` must override ARCH after sourcing `include_all.sh`. Provide both `ARCH` (Go: `amd64`) and `ARCH_UNAME` (kernel: `x86_64`) from `include_all.sh` so scripts don't need per-file overrides.
@@ -459,3 +679,131 @@ accepts: `direct`, `proxy`, or `<mirror-dir-name>` (default: `mirror`).
 defaulting to mirror, is cleaner. Accept old keys for a release or two. proxy
 and direct become reserved dir names. The key name itself might deserve a rename
 — something like image_source."
+
+---
+
+## Multi-version operator catalogs: day2 applies wrong catalog after upgrade sync
+
+**Severity:** HIGH — can break operators on existing clusters
+**Status:** Planned
+**Added:** 2026-07-11
+**Related:** ISC upgrade mode / state.sh override (above), day2-osus channel bug (above)
+
+**Problem:** When a mirror is upgraded (e.g. 4.21 → 4.23), `oc-mirror` generates
+CatalogSource files in `working-dir/cluster-resources/` that reference the
+**target** version's catalog (`redhat-operator-index:v4.23`). Running `aba day2`
+on an existing 4.21 cluster after the upgrade sync applies v4.23 CatalogSources
+to a 4.21 cluster, breaking operator resolution.
+
+**Details:**
+1. Each `oc-mirror` sync creates a filtered catalog image tagged by OCP
+   major.minor (e.g. `:v4.21`, `:v4.23`). These are independent images
+   containing operators compatible with **that** OCP version only.
+2. `oc-mirror` is additive — old catalog images (v4.21) remain in the registry
+   after a v4.23 sync. The images are fine.
+3. However, `working-dir/cluster-resources/cs-*.yaml` is **overwritten** on each
+   sync. After a v4.23 sync, these files point to v4.23 catalogs only.
+4. `day2.sh` blindly applies whatever CS files exist — no version awareness.
+5. The v4.23 catalog contains operators designed for 4.23 APIs. Installing them
+   on a 4.21 cluster can break because the operators may use APIs or channels
+   that don't exist in 4.21.
+
+**Impact scenarios:**
+
+| Scenario | Result |
+|----------|--------|
+| 4.21 cluster, `day2` already run before upgrade sync | Safe — existing CatalogSources still point to v4.21 |
+| 4.21 cluster, `aba day2` run AFTER v4.23 sync | **BREAKS** — v4.23 CatalogSources applied to 4.21 cluster |
+| New cluster at 4.21 from same mirror | **Risky** — `day2` applies v4.23 CatalogSources |
+| Stale v4.21 catalog (frozen from original sync) | No security patches for 4.21 operators unless re-synced |
+
+**Proposed fix (two parts):**
+
+### Part 1: Version-guard in day2.sh
+
+Before applying CatalogSources, query the cluster's actual version and compare
+it to the catalog version referenced in the CS file. Warn/abort if they don't
+match:
+```bash
+_cluster_ver=$(oc get clusterversion version \
+  -o jsonpath='{.status.desired.version}' 2>/dev/null) || _cluster_ver=""
+_cluster_major=$(echo "${_cluster_ver:-$ocp_version}" | cut -d. -f1-2)
+# Extract catalog version from CS image reference (e.g. v4.23)
+_cs_ver=$(grep -oP 'operator-index:v\K[0-9]+\.[0-9]+' "$f" | head -1)
+if [ "$_cs_ver" ] && [ "$_cluster_major" != "$_cs_ver" ]; then
+    aba_warning "CatalogSource references v$_cs_ver but cluster is at $_cluster_major — skipping"
+    continue
+fi
+```
+
+### Part 2: Multi-version operator catalogs in ISC
+
+When generating the ISC for an upgrade, include operator catalog entries for
+**both** the source and target versions. This ensures `oc-mirror` syncs operator
+images for all versions in use into the mirror:
+```yaml
+operators:
+- catalog: registry.redhat.io/redhat/redhat-operator-index:v4.21
+  packages:
+  - name: web-terminal
+- catalog: registry.redhat.io/redhat/redhat-operator-index:v4.23
+  packages:
+  - name: web-terminal
+```
+
+**Complication with Part 2:** `oc-mirror` generates one CS file per catalog name
+(not per version tag), so v4.21 and v4.23 entries collide in `cs-redhat-operator-
+index.yaml`. The images are synced correctly, but only one CS file survives.
+This is acceptable if `day2.sh` is version-aware (Part 1) — it can construct
+the correct CatalogSource image reference using the cluster's version rather
+than relying on the oc-mirror-generated CS file.
+
+**Alternative to Part 2:** Document that mixed-version environments require
+separate sync cycles. Users who upgrade the mirror but still have old clusters
+must run a separate sync for the old version to refresh its operator catalog.
+
+**Files to change:**
+- `scripts/day2.sh`: add version-guard before CS application loop (~line 284)
+- `scripts/reg-create-imageset-config.sh`: optionally emit dual catalog entries
+- `scripts/add-operators-to-imageset.sh`: handle dual catalog version logic
+- `templates/imageset-config.yaml.j2`: support dual operator catalog blocks
+
+---
+
+## E2E: operator set installation smoke tests
+
+**Severity:** MEDIUM — missing operator dependencies silently break bundle builds
+**Status:** Planned
+**Added:** 2026-07-12
+
+**Problem:** Operator sets (`templates/operator-set-*`) list packages and their
+dependencies, but there is no automated test that verifies these sets actually
+install correctly. When upstream adds new dependencies (e.g. `ocs-tls-profiles`
+in ODF 4.22), the sets become stale and bundle builds fail with cryptic
+`ResolutionFailed` errors. This was caught manually; it should be caught by CI.
+
+**Proposed fix:** Add E2E tests that mirror and install the most important
+operator sets end-to-end, verifying that all expected CSVs reach `Succeeded`:
+
+- `operator-set-acm` (Advanced Cluster Management)
+- `operator-set-ai` (Assisted Installer / Infrastructure Operator)
+- `operator-set-odf` (OpenShift Data Foundation)
+- `operator-set-odfdr` (ODF Disaster Recovery)
+- `operator-set-quay` (Quay)
+- `operator-set-sec` (ACS / Compliance / File Integrity)
+- `operator-set-virt` (OpenShift Virtualization)
+
+Each test would:
+1. Configure `mirror.conf` with the operator set
+2. Sync/save + load the operator catalog and images
+3. Install the operator(s) on a test cluster
+4. Wait for all expected CSVs to reach `Succeeded`
+5. Report any `ResolutionFailed` subscriptions (missing dependencies)
+
+**Trigger:** Run at least once per minor OCP version bump (e.g. 4.21 → 4.22)
+to catch new dependencies early. Could also run on any change to
+`templates/operator-set-*` files.
+
+**Files:**
+- New suite(s) under `test/e2e/suites/`
+- `templates/operator-set-*` (validated, not changed)

@@ -190,10 +190,15 @@ fi
 
 # After successful load: update state.sh with the loaded version.
 # state.sh is the authoritative record of what the mirror actually contains.
+# mirror_ocp_version tracks the highest version in the mirror.
 if [ "$_loaded_ver" ]; then
 	replace-value-conf -q -n ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
+	replace-value-conf -q -n mirror_ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
 	if [ "$_loaded_ver" != "$ocp_version" ]; then
-		aba_info "Mirror state updated: ocp_version $ocp_version → $_loaded_ver"
+		replace-value-conf -q -n mirror_ocp_upgrade_from -v "$ocp_version" -f "$regcreds_dir/state.sh"
+		aba_info "Mirror state updated: mirror_ocp_version $ocp_version → $_loaded_ver"
+	else
+		replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
 	fi
 fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
@@ -209,20 +214,28 @@ fi
 rm -f ../.bundle data/.isc-pinned
 
 echo
-aba_info_ok "Images loaded successfully into the registry."
-aba_info_ok "Files in mirror/data/ (mirror_*.tar) can now be deleted or backed up to free disk space."
+aba_info "Files in mirror/data/ (mirror_*.tar) can now be deleted or backed up to free disk space."
 echo
-if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
-	aba_info_ok "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
-	aba_info_ok "Run 'aba cluster --help' for more information about installing clusters."
-	echo
-fi
 
-echo
-if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
-	aba_warning -c magenta -p IMPORTANT \
-		"If you have already installed a cluster, (re-)run the command 'aba -d <clustername> day2'" \
-		"to configure/refresh OperatorHub/Catalogs, Signatures etc."
+if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
+	# Context-aware next steps: upgrade load shows day2 + upgrade; initial load shows cluster creation
+	_is_upgrade=""
+	[ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ] && _is_upgrade=1
+
+	if have_installed_clusters=$(echo ../*/.install-complete) && [ "$have_installed_clusters" != "../*/.install-complete" ]; then
+		if [ "$_is_upgrade" ]; then
+			aba_info "Next steps for upgrade ($ocp_version → $_loaded_ver):"
+			aba_info "  1. aba -d <cluster> day2       (apply updated CatalogSources/IDMS)"
+			aba_info "  2. aba -d <cluster> upgrade --to $_loaded_ver"
+		else
+			aba_info "Next steps:"
+			aba_info "  a) Install a new cluster:  aba cluster --name <name> --type <sno|compact|standard>"
+			aba_info "  b) Update an existing cluster:  aba -d <cluster> day2"
+		fi
+	else
+		aba_info "Next: aba cluster --name <name> --type <sno|compact|standard> (or run abatui)"
+		aba_info "Run 'aba cluster --help' for more information about installing clusters."
+	fi
 	echo
 fi
 

@@ -40,7 +40,7 @@ conjur-follower-operator                                Conjur Enterprise Follow
 coroot-operator                                         Coroot                                                       stable
 couchbase-enterprise-certified                          Couchbase Operator                                           stable
 cpd-platform-operator                                   Cloud Pak for Data Platform Operator                         v6.4
-cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.14
+cp-fko                                                  Confluent Distribution of the Apache Flink® Kubernetes Operator stable-v1.15
 crunchy-postgres-operator                               Crunchy Postgres for Kubernetes                              v5
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified                              Datadog Operator                                             stable
@@ -66,7 +66,7 @@ fujitsu-enterprise-postgres-operator-with-cg-module     Fujitsu Enterprise Postg
 function-mesh                                           Function Mesh Operator                                       alpha
 gitlab-operator-kubernetes                              GitLab                                                       stable
 gitlab-runner-operator                                  GitLab Runner                                                stable
-google-cloud-cluster-services-for-openshift-telemetry   Cluster Services for OpenShift Telemetry                     alpha
+google-cloud-cluster-services-for-openshift-telemetry   Cluster Services for OpenShift Telemetry                     stable
 gpu-operator-certified                                  NVIDIA GPU Operator                                          v26.3
 habana-ai-operator                                      Intel Gaudi Base Operator                                    stable
 hammu-platform                                          Hammu Platform                                               alpha
@@ -236,14 +236,14 @@ t8c-certified                                           Turbonomic Platform Oper
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
 tawon-operator                                          Tawon                                                        fast-v3
 template-operator                                       Template Operator                                            release-0.1
-tenant-operator                                         Multi Tenant Operator                                        release-1.8
+tenant-operator                                         Multi Tenant Operator                                        release-1.9
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.40
 timemachine-operator                                    Time Machine Operator                                        alpha
 trident-operator                                        NetApp Trident                                               stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
-uma-operator                                            DX APM Universal Monitoring Agent                            beta
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     beta
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    stable
+uma-operator                                            DX APM Universal Monitoring Agent                            stable
+uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     stable
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable

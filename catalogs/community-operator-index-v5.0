@@ -38,6 +38,7 @@ ack-keyspaces-controller                                AWS Controllers for Kube
 ack-kinesis-controller                                  AWS Controllers for Kubernetes - Amazon Kinesis              alpha
 ack-kms-controller                                      AWS Controllers for Kubernetes - Amazon KMS                  alpha
 ack-lambda-controller                                   AWS Controllers for Kubernetes - Amazon Lambda               alpha
+ack-lambdamicrovms-controller                           AWS Controllers for Kubernetes - Amazon Lambda Microvms      alpha
 ack-memorydb-controller                                 AWS Controllers for Kubernetes - MemoryDB                    alpha
 ack-mq-controller                                       AWS Controllers for Kubernetes - Amazon MQ                   alpha
 ack-mwaa-controller                                     AWS Controllers for Kubernetes - Amazon Managed Workflows for Apache Airflow alpha
@@ -56,6 +57,8 @@ ack-route53resolver-controller                          AWS Controllers for Kube
 ack-s3control-controller                                AWS Controllers for Kubernetes - Amazon S3 Control           alpha
 ack-s3-controller                                       AWS Controllers for Kubernetes - Amazon S3                   alpha
 ack-s3files-controller                                  AWS Controllers for Kubernetes - Amazon S3Files              alpha
+ack-s3tables-controller                                 AWS Controllers for Kubernetes - Amazon S3 Tables            alpha
+ack-s3vectors-controller                                AWS Controllers for Kubernetes - Amazon S3 Vectors           alpha
 ack-sagemaker-controller                                AWS Controllers for Kubernetes - Amazon SageMaker            alpha
 ack-secretsmanager-controller                           AWS Controllers for Kubernetes - Amazon Secrets Manager      alpha
 ack-ses-controller                                      AWS Controllers for Kubernetes - Amazon SES                  alpha
@@ -65,6 +68,7 @@ ack-sqs-controller                                      AWS Controllers for Kube
 ack-ssm-controller                                      AWS Controllers for Kubernetes - Amazon SSM                  alpha
 ack-wafv2-controller                                    AWS Controllers for Kubernetes - Amazon WAFV2                alpha
 aerospike-kubernetes-operator                           Aerospike Kubernetes Operator                                stable
+ahv-to-ove-operator                                     AHV to OVE Migration Operator                                alpha
 airflow-helm-operator                                   Airflow Helm Operator                                        alpha
 alvearie-imaging-ingestion                              Alvearie Imaging Ingestion Operator                          alpha
 analytics-operator                                      Observability Analytics                                      alpha
@@ -115,7 +119,7 @@ dns-operator                                            DNS Operator            
 dynatrace-operator                                      Dynatrace Operator                                           alpha
 eclipse-amlen-operator                                  eclipse-amlen-operator                                       alpha
 eclipse-che                                             Eclipse Che                                                  stable
-edp-keycloak-operator                                   EDP Keycloak Operator                                        alpha
+edp-keycloak-operator                                   EDP Keycloak Operator                                        stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 egressip-ipam-operator                                  Egressip Ipam Operator                                       alpha
 ember-csi-community-operator                            Ember CSI Operator                                           beta

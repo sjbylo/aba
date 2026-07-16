@@ -68,6 +68,9 @@ if [ $ret -ne 0 ]; then
 	echo_red "[ABA] Something went wrong with the installation." >&2
 	[ "${wait_for_exit_reasons[$ret]}" ] && echo_yellow "[ABA] Reason: '${wait_for_exit_reasons[$ret]} ($ret)'" || echo_yellow "[ABA] Reason: 'Unknown ($ret)'"
 	echo_yellow "[ABA] The cluster may need more time. Re-run the same command to resume monitoring, example: aba -d $CLUSTER_NAME mon."
+	if [ $ret -eq 6 ] || [ $ret -eq 7 ]; then
+		echo_yellow "[ABA] Stuck pods may be blocking progress. Run 'aba -d $CLUSTER_NAME unstick' to detect and restart them."
+	fi
 	echo_yellow "[ABA] If the problem persists, check the output above for clues."
 
 	exit $ret
