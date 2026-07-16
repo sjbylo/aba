@@ -46,7 +46,7 @@ Or use the TUI wizard for a guided experience: `abatui`
 
 That's it. ABA will prompt you for your OpenShift version, operators, registry type, and deployment scenario.
 
-> **Prerequisites:** RHEL 8/9 or Fedora, root or passwordless sudo, Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
+> **Prerequisites:** RHEL 8/9/10 or Fedora, passwordless sudo (or root), Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
 
 **Contents** <!-- omit in toc -->
 
@@ -155,8 +155,8 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 
 **Linux OS Requirements:**
 
-- **Workstation**: RHEL 8 or 9, CentOS Stream 8 or 9, or Fedora.
-- **Bastion**: RHEL 8 or 9 for disconnected OpenShift installation.
+- **Workstation**: RHEL 8, 9, or 10, CentOS Stream 8, 9, or 10, or Fedora.
+- **Bastion**: RHEL 8, 9, or 10 for disconnected OpenShift installation.
 
 ## Choose Your Path
 
@@ -176,7 +176,7 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 
 ### ABA Workflow Diagram
 
-This chart shows the complete flow — fully disconnected, partially disconnected, connected, and platform choices (bare-metal, VMware, KVM). Running `aba` (interactive mode) follows this workflow. See also: [interactive Mermaid version](docs/aba-flow.md).
+This chart shows the complete flow — fully disconnected, partially disconnected, connected, and platform choices (bare-metal, VMware, KVM). Running `aba` or `abatui` (guided wizard) follows this workflow. See also: [interactive Mermaid version](docs/aba-flow.md).
 
 <div align="center">
 <img src="images/aba-flow-diagram.png" alt="ABA Flow Chart" title="ABA Flow Chart" width="75%">
@@ -210,14 +210,14 @@ You can also [create your own bundle](#custom-bundles).
 
 # Install ABA
 
-> ABA requires root access, either directly or via passwordless sudo. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
+> ABA runs as a normal user and uses `sudo` for system-level operations (e.g. installing RPMs, firewall rules). Alternatively, it can run as root. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
 
 > **Upgrading:** When upgrading ABA to a new version, backward compatibility is not guaranteed. It is recommended to start with a fresh clone rather than updating in-place.
 
 ### Prerequisites
 
-- RHEL 8/9, CentOS Stream 8/9, or Fedora (see [Supported Architectures](#supported-architectures))
-- Root access or passwordless sudo
+- RHEL 8/9/10, CentOS Stream 8/9/10, or Fedora (see [Supported Architectures](#supported-architectures))
+- Passwordless sudo (or root)
 - Internet access (for download)
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret))
 
@@ -268,7 +268,7 @@ aba
 - Show available OpenShift versions: `aba ocp-versions`
 - Show available operator sets: `aba show-op-sets` (includes `ocp`, `odf`, `virt`, `ai`, `mesh3`, and more)
 
-Running `aba` creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
+Running `aba` (or `abatui`) creates the `aba.conf` file. Review and update values such as your preferred platform, base domain, network address, and required operators. If needed, add operators by setting `op_sets=` and/or `ops=` in `aba.conf`.
 
 **TUI (Text User Interface):** For a guided wizard experience:
 
@@ -367,7 +367,7 @@ cd aba
 aba                           # Starts the disconnected workflow
 ```
 
-Running `aba` detects the install bundle, verifies that the image-set archive file(s) are present under `mirror/data/`, and walks you through the disconnected installation — including registry setup, image loading, and cluster creation.
+Running `aba` (or `abatui`) detects the install bundle, verifies that the image-set archive file(s) are present under `mirror/data/`, and walks you through the disconnected installation — including registry setup, image loading, and cluster creation.
 
 ### Load the images from disk into the mirror registry on the local bastion
 
@@ -417,7 +417,7 @@ You can create an install bundle with everything you need to install OpenShift i
 
 #### Prerequisites
 
-- ABA installed on a connected RHEL 8/9 or Fedora host (see [Install ABA](#install-aba))
+- ABA installed on a connected RHEL 8/9/10 or Fedora host (see [Install ABA](#install-aba))
 - Red Hat pull secret saved to `~/.pull-secret.json`
 - Sufficient disk space (500 GB+ recommended for operators) — see [disk space FAQ](#q-how-much-disk-space-do-i-need-when-using-aba)
 - Portable storage device mounted (USB drive, external disk, etc.)
@@ -460,7 +460,7 @@ cat ocp_mycluster_4.22.1_* | tar tvf -
 cksum ocp_mycluster_4.22.1_* | tee CHECKSUM.txt
 ```
 
-Copy the files to your RHEL 8/9 bastion in the disconnected environment. Verify integrity:
+Copy the files to your RHEL 8/9/10 bastion in the disconnected environment. Verify integrity:
 
 ```
 cksum ocp_mycluster_4.22.1_*
@@ -1211,8 +1211,8 @@ To install OpenShift in a fully disconnected environment, you need one connected
 
 #### Connected Workstation
 
-- RHEL 8/9 or Fedora with Internet access. See [Supported Architectures](#supported-architectures).
-- Root access or passwordless sudo (see [Common Requirements](#common-requirements)).
+- RHEL 8/9/10 or Fedora with Internet access. See [Supported Architectures](#supported-architectures).
+- Passwordless sudo or root access (see [Common Requirements](#common-requirements)).
 - [Install ABA](#install-aba).
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
@@ -1223,13 +1223,13 @@ To install OpenShift in a fully disconnected environment, you need one connected
 
 #### Internal Bastion
 
-- RHEL 8 or 9 within the disconnected environment.
-- Root access or passwordless sudo (see [Common Requirements](#common-requirements)).
+- RHEL 8, 9, or 10 within the disconnected environment.
+- Passwordless sudo or root access (see [Common Requirements](#common-requirements)).
 - Install RPMs listed in `aba/templates/rpms-internal.txt`. See [Installing RPMs](#installing-rpms).
 - For Quay or Docker on the Internal Bastion: passwordless SSH from the bastion to itself.
 - For Quay or Docker on a remote host: passwordless SSH from the Internal Bastion to that host.
 
-After configuring these prerequisites, run `aba` to start the workflow.
+After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
 ## Partially Disconnected Prerequisites
 
@@ -1239,15 +1239,15 @@ In a *partially disconnected environment*, the *connected bastion* has limited (
 
 #### Connected Bastion
 
-- RHEL 8 or 9 with access to both the Internet and the disconnected environment.
-- Root access or passwordless sudo (see [Common Requirements](#common-requirements)).
+- RHEL 8, 9, or 10 with access to both the Internet and the disconnected environment.
+- Passwordless sudo or root access (see [Common Requirements](#common-requirements)).
 - [Install ABA](#install-aba).
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
 - For Quay or Docker locally: passwordless SSH from the bastion to itself.
 - For Quay or Docker on a remote host: passwordless SSH from the bastion to that host.
 
-After configuring these prerequisites, run `aba` to start the workflow.
+After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
 ## Connected Installation (No Mirror)
 
@@ -1680,7 +1680,7 @@ See `scripts/reg-install-docker.sh` and `scripts/reg-install.sh` for details.
 
 ## Q: Can ABA run inside a container?
 
-**Preferably, run ABA on an x86 or ARM RHEL 8/9 host.** ABA has been tested in a container (see [Running ABA in a Container](#running-aba-in-a-container)), but be aware of storage, permission, and tool compatibility caveats.
+**Preferably, run ABA on an x86 or ARM RHEL 8/9/10 host.** ABA has been tested in a container (see [Running ABA in a Container](#running-aba-in-a-container)), but be aware of storage, permission, and tool compatibility caveats.
 
 ---
 
