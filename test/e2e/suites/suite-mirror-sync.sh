@@ -144,7 +144,7 @@ e2e_diag_remote "Show firewalld status before cycle" \
 e2e_run_remote "Stop firewalld" \
     "sudo systemctl stop firewalld"
 e2e_run_remote "Start firewalld" \
-    "sudo systemctl enable firewalld; sudo systemctl start firewalld"
+    "sudo systemctl enable firewalld; sudo systemctl start firewalld && sudo firewall-cmd --state"
 e2e_run_remote "Verify port 5000 persisted across restart" \
     "sudo firewall-cmd --list-all | grep 'ports: .*5000/tcp'"
 

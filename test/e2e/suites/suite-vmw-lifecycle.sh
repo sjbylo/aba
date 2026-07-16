@@ -208,8 +208,8 @@ e2e_run -r 2 10 "Install SNO (alt SSH key + named mirror)" \
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
     "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 
-# Wait for cluster to become ready (VMware SNO typically 15-25 min after bootstrap)
-e2e_wait_cluster_ready $SNO local 2100
+# Wait for initial cluster install to complete (VMware SNO typically 25-40 min after bootstrap)
+e2e_wait_cluster_ready $SNO local 3000
 
 # EARLY day2: .install-complete does NOT exist yet.
 # day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,

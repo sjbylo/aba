@@ -1614,8 +1614,8 @@ _fetch_cached() {
 	local tmp
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
-	# Let curl errors show (don't suppress stderr)
-	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp"; then
+	# Retry transient failures (DNS, connection reset) — curl --retry alone skips DNS errors
+	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 5 -q curl -f -sS "$url" -o "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
