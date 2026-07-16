@@ -22,7 +22,7 @@ cephcsi-operator                                        CephCSI operator        
 cincinnati-operator                                     OpenShift Update Service                                     v1
 cli-manager                                             CLI Manager                                                  tech-preview
 cluster-kube-descheduler-operator                       Kube Descheduler Operator                                    stable
-cluster-logging                                         Red Hat OpenShift Logging                                    stable-6.5
+cluster-logging                                         Red Hat OpenShift Logging                                    stable-6.6
 cluster-observability-operator                          Cluster Observability Operator                               stable
 clusterresourceoverride                                 ClusterResourceOverride Operator                             stable
 compliance-operator                                     Compliance Operator                                          stable
@@ -62,7 +62,7 @@ limitador-operator                                      Limitador Operator      
 local-storage-operator                                  Local Storage                                                stable
 logic-operator                                          OpenShift Serverless Logic Operator                          stable
 logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
-loki-operator                                           Loki Operator                                                stable-6.5
+loki-operator                                           Loki Operator                                                stable-6.6
 lvms-operator                                           LVM Storage                                                  stable-4.20
 machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
 mcg-operator                                            NooBaa Operator                                              stable-4.20
@@ -101,6 +101,7 @@ openshift-gitops-operator                               Red Hat OpenShift GitOps
 openshift-pipelines-operator-rh                         Red Hat OpenShift Pipelines                                  latest
 openshift-secondary-scheduler-operator                  Secondary Scheduler Operator for Red Hat OpenShift           stable
 openshift-zero-trust-workload-identity-manager          Zero Trust Workload Identity Manager                         stable-v1
+openstack-operator                                      OpenStack                                                    stable-v1.0
 opentelemetry-product                                   Red Hat build of OpenTelemetry                               stable
 pf-status-relay-operator                                pf-status-relay-operator                                     stable
 policy-controller-operator                              Policy Controller Operator                                   stable

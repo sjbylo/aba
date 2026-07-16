@@ -15,6 +15,7 @@ bamoe-kogito-operator                                   IBM BAMOE Kogito Operato
 businessautomation-operator                             Business Automation                                          stable
 cephcsi-operator                                        CephCSI operator                                             stable-4.22
 cincinnati-operator                                     OpenShift Update Service                                     v1
+cluster-logging                                         Red Hat OpenShift Logging                                    stable-6.6
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
 devworkspace-operator                                   DevWorkspace Operator                                        fast
@@ -28,6 +29,7 @@ kiali-ossm                                              Kiali Operator          
 kubevirt-hyperconverged                                 OpenShift Virtualization                                     stable
 logic-operator                                          OpenShift Serverless Logic Operator                          stable
 logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
+loki-operator                                           Loki Operator                                                stable-6.6
 machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
 mcg-operator                                            NooBaa Operator                                              stable-4.22
 mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.0
