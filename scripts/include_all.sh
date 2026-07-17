@@ -1353,7 +1353,7 @@ try_cmd() {
 		"$@" || _tc_rc=$?
 
 		if [ $_tc_rc -eq 0 ]; then
-			[ -z "$_tc_silent" ] && [ $_tc_attempts -gt 1 ] && \
+			[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && [ $_tc_attempts -gt 1 ] && \
 				aba_success "$_tc_label" >&2
 			return 0
 		fi
