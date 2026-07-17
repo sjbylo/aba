@@ -3177,8 +3177,8 @@ download_all_catalogs() {
 # Usage: wait_for_all_catalogs <version_short>
 # Example: wait_for_all_catalogs "4.19"
 #
-# NOTE: This function is called from add-operators-to-imageset.sh where stdout
-#       is redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
+# NOTE: This function is called from reg-create-imageset-config.sh where stdout
+#       may be redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
 wait_for_all_catalogs() {
 	local version_short="${1}"
 	

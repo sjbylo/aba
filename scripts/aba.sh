@@ -1747,7 +1747,7 @@ scripts/cli-download-all.sh
 ocp_ver_short=$(_ver_minor "$target_ver")  # Extract major.minor (e.g., 4.20.8 -> 4.20, 4.22.0-rc.1 -> 4.22)
 download_all_catalogs "$ocp_ver_short"
 # Note: Catalogs wait/check happens in scripts that actually need them
-# (e.g., add-operators-to-imageset.sh, download-and-wait-catalogs.sh)
+# (e.g., reg-create-imageset-config.sh, download-and-wait-catalogs.sh)
 
 # Start: download mirror-registry and docker-reg images. Wait: ensure_quay_registry() in include_all.sh
 run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}"
