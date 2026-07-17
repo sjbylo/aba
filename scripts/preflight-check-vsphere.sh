@@ -10,9 +10,9 @@
 #   2. Load vmware.conf via normalize-vmware-conf.
 #   3. Probe that govc is on PATH (abort with remediation hint if not).
 #   4. Verify the seven required GOVC_* fields are present.
-#      On failure: emit one aba_warning per missing field + bump _preflight_errors.
+#      On failure: emit one aba_warn per missing field + bump _preflight_errors.
 #      The parent summary block at preflight-check.sh:209-212 aborts on error count.
-#   5. On success: single aba_info_ok line.
+#   5. On success: single aba_success line.
 #
 # Phase 2 will extend this function with connectivity / TLS / resource checks.
 # Phase 3 will extend it with privilege validation using VSPHERE_PRIVS_* arrays
@@ -54,20 +54,20 @@ _vsphere_resource_pool_path=""
 _vsphere_d12_count=0
 
 # --- Shared emit helpers (private to this file) ---------------------------
-# Keep label and counter in sync. aba_warning prints with whatever prefix we
+# Keep label and counter in sync. aba_warn prints with whatever prefix we
 # pass via -p; the counter we bump is the matching parent-aggregated total.
 # $_vsphere_label is "ESXi" or "vSphere" depending on whether VC is set.
 _vsphere_err() {
 	local main="$1"
 	shift
-	aba_warning -p Error "$_vsphere_label: $main" "$@"
+	aba_warn -p Error "$_vsphere_label: $main" "$@"
 	_preflight_errors=$(( _preflight_errors + 1 ))
 }
 
 _vsphere_warn() {
 	local main="$1"
 	shift
-	aba_warning "$_vsphere_label: $main" "$@"
+	aba_warn "$_vsphere_label: $main" "$@"
 	_preflight_warnings=$(( _preflight_warnings + 1 ))
 }
 
@@ -100,12 +100,12 @@ _vsphere_parse_govc_url() {
 # is INSIDE the `bash -c` subshell to suppress bash's own "connect: Connection refused"
 # stderr noise that /dev/tcp prints on failure. It does NOT suppress stderr of anything
 # the caller runs; it is the documented narrow exception (see CLAUDE.md rule + Pitfall 6 in RESEARCH.md).
-# Returns 0 on success; on failure emits one aba_warning, bumps _preflight_errors, returns 1.
+# Returns 0 on success; on failure emits one aba_warn, bumps _preflight_errors, returns 1.
 _vsphere_probe_tcp() {
 	local host port
 	read -r host port < <(_vsphere_parse_govc_url "$GOVC_URL")
 	if timeout 3 bash -c "echo >/dev/tcp/$host/$port 2>/dev/null"; then
-		aba_info_ok "$_vsphere_label: TCP reachable ($host:$port)"
+		aba_success "$_vsphere_label: TCP reachable ($host:$port)"
 		return 0
 	fi
 	_vsphere_err "cannot reach $host:$port (TCP) - check DNS/firewall/GOVC_URL"
@@ -119,7 +119,7 @@ _vsphere_probe_tcp() {
 # some RHEL openssl builds exit 0 even on trust failure (openssl/openssl#8079).
 # The `out=$(cmd 2>&1)` idiom captures stderr into a variable for inspection; this is
 # an ALLOWED pattern per CLAUDE.md (it is NOT the banned `cmd 2>&1 | grep` pipeline).
-# Returns 0 on success; on failure emits one multi-line aba_warning with D-03 remediation.
+# Returns 0 on success; on failure emits one multi-line aba_warn with D-03 remediation.
 _vsphere_probe_tls() {
 	case "${GOVC_INSECURE:-}" in
 		1|true|True|TRUE|yes|YES)
@@ -140,11 +140,11 @@ _vsphere_probe_tls() {
 		</dev/null 2>&1) || tls_rc=$?
 
 	if [ "$tls_rc" -eq 0 ]; then
-		aba_info_ok "$_vsphere_label: TLS trust chain verified ($host)"
+		aba_success "$_vsphere_label: TLS trust chain verified ($host)"
 		return 0
 	fi
 	if echo "$tls_out" | grep -qE 'Verify return code:[[:space:]]*0[[:space:]]*\(ok\)'; then
-		aba_info_ok "$_vsphere_label: TLS trust chain verified ($host)"
+		aba_success "$_vsphere_label: TLS trust chain verified ($host)"
 		return 0
 	fi
 
@@ -163,7 +163,7 @@ _vsphere_probe_auth() {
 	local about_out about_rc=0
 	about_out=$(govc about 2>&1) || about_rc=$?
 	if [ "$about_rc" -eq 0 ]; then
-		aba_info_ok "$_vsphere_label: authenticated as $GOVC_USERNAME"
+		aba_success "$_vsphere_label: authenticated as $GOVC_USERNAME"
 		return 0
 	fi
 	# Trim to first line so we don't dump a multi-line error blob to the user.
@@ -183,7 +183,7 @@ _vsphere_probe_auth() {
 # $1 = human kind label (e.g. "datacenter", "cluster", "datastore", "network",
 #      "folder", "resource pool").
 # $2 = absolute vSphere inventory path.
-# Returns 0 on success; on failure emits one aba_warning + bumps _preflight_errors + returns 1.
+# Returns 0 on success; on failure emits one aba_warn + bumps _preflight_errors + returns 1.
 # Note: `out=$(cmd 2>&1)` captures stderr INTO a variable; this is an allowed idiom
 # per CLAUDE.md - it is NOT the banned `cmd 2>&1 | grep` pipeline.
 _vsphere_object_exists() {
@@ -191,7 +191,7 @@ _vsphere_object_exists() {
 	local out rc=0
 	out=$(govc object.collect -s "$path" name 2>&1) || rc=$?
 	if [ "$rc" -eq 0 ]; then
-		aba_info_ok "$_vsphere_label: $kind '$path'"
+		aba_success "$_vsphere_label: $kind '$path'"
 		return 0
 	fi
 	_vsphere_err "$kind '$path' not found"
@@ -220,10 +220,10 @@ _vsphere_object_exists() {
 #      to resource pools rather than any object sharing the leaf name)
 #
 # On success: writes the resolved absolute path to _vsphere_resolver_result and returns 0.
-# On failure: emits one aba_warning, bumps _preflight_errors, returns 1.
+# On failure: emits one aba_warn, bumps _preflight_errors, returns 1.
 #
 # Important: the resolved path is returned via the module variable
-# _vsphere_resolver_result, NOT via stdout. aba_warning / aba_debug helpers
+# _vsphere_resolver_result, NOT via stdout. aba_warn / aba_debug helpers
 # write to stdout, and capturing stdout from this function would swallow
 # those messages instead of letting them reach the user.
 #
@@ -241,7 +241,7 @@ _vsphere_resolve_object() {
 	if [[ "$hint" = /* ]]; then
 		out=$(govc object.collect -s "$hint" name 2>&1) || rc=$?
 		if [ "$rc" -eq 0 ]; then
-			aba_info_ok "$_vsphere_label: $kind '$hint'"
+			aba_success "$_vsphere_label: $kind '$hint'"
 			_vsphere_resolver_result="$hint"
 			return 0
 		fi
@@ -255,7 +255,7 @@ _vsphere_resolve_object() {
 	local flat="$search_root/$hint"
 	out=$(govc object.collect -s "$flat" name 2>&1) || rc=$?
 	if [ "$rc" -eq 0 ]; then
-		aba_info_ok "$_vsphere_label: $kind '$flat'"
+		aba_success "$_vsphere_label: $kind '$flat'"
 		_vsphere_resolver_result="$flat"
 		return 0
 	fi
@@ -282,7 +282,7 @@ _vsphere_resolve_object() {
 	if [ "$hits_count" -eq 1 ]; then
 		local resolved
 		resolved=$(printf "%s\n" "$find_out" | grep '^/' | head -1)
-		aba_info_ok "$_vsphere_label: $kind '$hint' -> $resolved"
+		aba_success "$_vsphere_label: $kind '$hint' -> $resolved"
 		_vsphere_resolver_result="$resolved"
 		return 0
 	fi
@@ -339,7 +339,7 @@ _vsphere_probe_resources_network_on_cluster() {
 		_vsphere_err "network '$GOVC_NETWORK' is not attached to any host in cluster '$GOVC_CLUSTER'"
 		return 1
 	fi
-	aba_info_ok "$_vsphere_label: network '$GOVC_NETWORK' attached to cluster '$GOVC_CLUSTER'"
+	aba_success "$_vsphere_label: network '$GOVC_NETWORK' attached to cluster '$GOVC_CLUSTER'"
 	return 0
 }
 
@@ -373,7 +373,7 @@ _vsphere_probe_resources() {
 		# See Troubleshooting.md "ESXi: Network not found" for details.
 		_vsphere_network_path="/ha-datacenter/network/$GOVC_NETWORK"
 		if govc host.portgroup.info "$GOVC_NETWORK" >/dev/null 2>&1; then
-			aba_info_ok "$_vsphere_label: network '$_vsphere_network_path'"
+			aba_success "$_vsphere_label: network '$_vsphere_network_path'"
 			_vsphere_network_found=1
 		else
 			_vsphere_err "network '$_vsphere_network_path' not found"
@@ -390,7 +390,7 @@ _vsphere_probe_resources() {
 	fi
 
 	# D-07: if DC is missing, emit cascade note and bail. The note is aba_info
-	# (NOT aba_warning) and must NOT bump _preflight_errors - _vsphere_object_exists
+	# (NOT aba_warn) and must NOT bump _preflight_errors - _vsphere_object_exists
 	# already bumped once for the "not found" line, keeping the total at exactly 1.
 	if ! _vsphere_object_exists datacenter "/$GOVC_DATACENTER"; then
 		aba_info "$_vsphere_label: skipping cluster/datastore/network/folder/resource-pool checks until datacenter resolves"
@@ -461,7 +461,7 @@ _vsphere_probe_resources() {
 		if [ "$rp_rc" -eq 0 ]; then
 			_vsphere_resource_pool_path="$default_rp_path"
 			_vsphere_resource_pool_found=1
-			aba_info_ok "$_vsphere_label: using default resource pool '$default_rp_path'"
+			aba_success "$_vsphere_label: using default resource pool '$default_rp_path'"
 		else
 			_vsphere_err "default resource pool '$default_rp_path' not found - verify the cluster is properly configured."
 		fi
@@ -534,7 +534,7 @@ _vsphere_check_privileges() {
 
 	# Step 3a: Admin role fast-path - vCenter built-in Admin has all privs by construction.
 	if [ "$role_name" = "Admin" ]; then
-		aba_info_ok "$_vsphere_label: $kind '$scope_path' user '$GOVC_USERNAME' has Admin role"
+		aba_success "$_vsphere_label: $kind '$scope_path' user '$GOVC_USERNAME' has Admin role"
 		return 0
 	fi
 
@@ -576,7 +576,7 @@ _vsphere_check_privileges() {
 #       "not found" warning already bumped once).
 # D-11: ISO_DATASTORE is checked as a second DATASTORE scope only when set,
 #       different from GOVC_DATASTORE, and confirmed present by Layer 3.
-# D-17: after all scopes processed, emit ONE multi-line aba_warning summary
+# D-17: after all scopes processed, emit ONE multi-line aba_warn summary
 #       when at least one gap was recorded; emit nothing on clean pass.
 # D-18: summary does NOT bump _preflight_errors (presentation only; the
 #       individual gap warnings already bumped once each).
@@ -593,7 +593,7 @@ _vsphere_probe_privileges() {
 	# so per-scope queries return "no role assigned" (D-12) on every scope —
 	# all noise, no signal. Short-circuit to avoid misleading warnings.
 	if [[ "$GOVC_USERNAME" == "administrator@vsphere.local" ]]; then
-		aba_info_ok "$_vsphere_label: '$GOVC_USERNAME' is the built-in admin — skipping privilege scope checks"
+		aba_success "$_vsphere_label: '$GOVC_USERNAME' is the built-in admin — skipping privilege scope checks"
 		return 0
 	fi
 
@@ -704,7 +704,7 @@ _vsphere_probe_privileges() {
 	# D-18: summary does NOT bump _preflight_errors.
 	local gap_count=$(( _preflight_errors - errors_before ))
 	if [ "$gap_count" -gt 0 ]; then
-		aba_warning -p Error "$_vsphere_label: $gap_count privilege gap(s) across $scopes_with_gaps scope(s)" \
+		aba_warn -p Error "$_vsphere_label: $gap_count privilege gap(s) across $scopes_with_gaps scope(s)" \
 			"Next: review the curated list at scripts/vmware-required-privileges.sh and the OpenShift docs linked in its header." \
 			"Grant the missing privileges to the vCenter user or role and re-run aba install."
 	fi
@@ -782,13 +782,13 @@ preflight_check_vsphere() {
 		return 0
 	fi
 
-	# Success (UX-01 / D-10): one aba_info_ok line; tell the user which shape
+	# Success (UX-01 / D-10): one aba_success line; tell the user which shape
 	# (ESXi vs vCenter) was detected so the reduced ESXi probe set is not
 	# mistaken for a regression.
 	if [ -z "${VC:-}" ]; then
-		aba_info_ok "ESXi: direct host detected (reduced preflight: TCP+TLS+auth+datastore+network)"
+		aba_success "ESXi: direct host detected (reduced preflight: TCP+TLS+auth+datastore+network)"
 	else
-		aba_info_ok "vSphere: vCenter detected, running full checks..."
+		aba_success "vSphere: vCenter detected, running full checks..."
 	fi
 
 	# Phase 2 Layer 1 + Layer 2: connectivity (TCP + TLS) + auth. Short-circuit the

@@ -118,7 +118,7 @@ aba_info "Now syncing (mirror2mirror) images from external network to registry $
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
-	aba_warning \
+	aba_warn \
 		"Ensure there is enough disk space under $reg_root." \
 		"This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
 fi

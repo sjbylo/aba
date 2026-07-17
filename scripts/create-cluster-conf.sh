@@ -53,7 +53,7 @@ if [ ! "$ntp_servers" ]; then
 fi
 if [ $_filled -gt 0 ]; then
 	if [ "$ask" ]; then
-		aba_warning \
+		aba_warn \
 			"$_filled network value(s) were auto-detected and written to aba.conf." \
 			"Please review aba.conf and re-run the command."
 		exit 1

@@ -64,7 +64,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 		# Guard: target must be > source (upgrades only, not downgrades)
 		if ! is_version_greater "$ocp_upgrade_to" "$ocp_version"; then
 			# Stale target — clear it and proceed without upgrade mode
-			aba_warning "ocp_upgrade_to ($ocp_upgrade_to) is lower than ocp_version ($ocp_version) — ignoring."
+			aba_warn "ocp_upgrade_to ($ocp_upgrade_to) is lower than ocp_version ($ocp_version) — ignoring."
 			replace-value-conf -q -n ocp_upgrade_to -v "" -f mirror.conf
 			ocp_upgrade_to=""
 		else
@@ -110,9 +110,9 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	touch data/.created
 
 	if [ "$tgt_major" ]; then
-		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml (upgrade: $ocp_version → $ocp_upgrade_to, $ocp_channel-$tgt_major, shortestPath, $ARCH)"
+		aba_success "Image set config file created: mirror/data/imageset-config.yaml (upgrade: $ocp_version → $ocp_upgrade_to, $ocp_channel-$tgt_major, shortestPath, $ARCH)"
 	else
-		aba_info_ok "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
+		aba_success "Image set config file created: mirror/data/imageset-config.yaml ($ocp_channel-$ocp_version $ARCH)"
 	fi
 	[ ! "$ops" ] && [ ! "$op_sets" ] && \
 		aba_info "To add operators, set 'op_sets' or 'ops' in aba.conf, then re-run 'aba save' or 'aba sync'."
@@ -128,7 +128,7 @@ else
 			aba_info "Preserving bundled imageset-config (matches saved images). Will unlock after 'aba load'."
 		fi
 	else
-		aba_warning "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
+		aba_warn "Image set config (data/imageset-config.yaml) was modified by user — preserving edits (not regenerating)." \
 			"To force regeneration: aba --force -d mirror imagesetconf"
 	fi
 fi

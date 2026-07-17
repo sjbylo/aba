@@ -44,7 +44,7 @@ if [ ! -f ~/bin/oc-mirror ]; then
 	aba_abort "Test 1 FAILED: oc-mirror not found in ~/bin/"
 fi
 
-aba_info_ok "Test 1 PASSED: oc-mirror installed" >&2
+aba_success "Test 1 PASSED: oc-mirror installed" >&2
 
 # Test 2: Catalog downloads
 echo ""
@@ -68,10 +68,10 @@ for catalog in redhat-operator certified-operator community-operator; do
 	if [ ! -s "$index_file" ]; then
 		aba_abort "Test 2 FAILED: Catalog file $index_file missing or empty"
 	fi
-	aba_info_ok "✓ $index_file exists" >&2
+	aba_success "✓ $index_file exists" >&2
 done
 
-aba_info_ok "Test 2 PASSED: All catalogs downloaded" >&2
+aba_success "Test 2 PASSED: All catalogs downloaded" >&2
 
 # Test 3: Create imageset config
 echo ""
@@ -99,7 +99,7 @@ if ! grep -q "platform:" mirror/data/imageset-config.yaml; then
 	aba_abort "Test 3 FAILED: No platform section in imageset config"
 fi
 
-aba_info_ok "Test 3 PASSED: Imageset config created and valid" >&2
+aba_success "Test 3 PASSED: Imageset config created and valid" >&2
 
 # Test 4: Check operators in config (optional - depends on aba.conf)
 echo ""
@@ -114,7 +114,7 @@ aba_info "Operators in config: $op_count" >&2
 aba_info "Sample of imageset config:" >&2
 head -20 mirror/data/imageset-config.yaml | sed 's/^/  /' >&2
 
-aba_info_ok "Test 4 PASSED: Config verified" >&2
+aba_success "Test 4 PASSED: Config verified" >&2
 
 # NOTE: We do NOT run actual 'aba -d mirror save' here because:
 # 1. It requires ~/.pull-secret.json (user-specific)
@@ -132,7 +132,7 @@ aba_info_ok "Test 4 PASSED: Config verified" >&2
 # All tests passed
 echo ""
 echo "========================================="
-aba_info_ok "✓ ALL MIRROR SAVE PREREQUISITES PASSED" >&2
+aba_success "✓ ALL MIRROR SAVE PREREQUISITES PASSED" >&2
 echo "========================================="
 echo ""
 echo "Summary:"

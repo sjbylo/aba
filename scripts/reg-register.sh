@@ -32,7 +32,7 @@ if [ -s "$regcreds_dir/state.sh" ]; then
 		aba_abort "An ABA-managed registry ($reg_vendor) is already installed here." \
 			"Run 'aba -d $(basename "$PWD") uninstall' first, then register."
 	else
-		aba_warning "Re-registering: overwriting previous external registry state ($reg_host:$reg_port)."
+		aba_warn "Re-registering: overwriting previous external registry state ($reg_host:$reg_port)."
 	fi
 fi
 
@@ -127,6 +127,6 @@ EOF
 aba_info "Saved registry state to $regcreds_display/state.sh"
 
 echo
-aba_info_ok "Existing registry registered: $reg_host:$reg_port"
+aba_success "Existing registry registered: $reg_host:$reg_port"
 aba_info "Credentials stored in: $regcreds_display/"
 aba_info "Run 'aba -d $(basename $PWD) verify' to confirm connectivity."

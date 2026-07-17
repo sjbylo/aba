@@ -279,7 +279,7 @@ if ! aba_wait_show "Obtaining the policy engine route" 2 900 _osus_check_policy_
 fi
 
 POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}")"
-aba_info_ok "Policy engine: $POLICY_ENGINE_GRAPH_URI"
+aba_success "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 
 # Ensure the cluster channel matches what was mirrored (ocp_channel from aba.conf).
 # OpenShift defaults to stable-X.Y at install time, but images/graph may have been
@@ -312,7 +312,7 @@ _osus_check_graph_available() {
 if ! aba_wait_show "Checking graph endpoint (Ctrl-C to skip)" 10 900 _osus_check_graph_available; then
 	aba_abort "Timed out waiting for graph endpoint (15 min): ${POLICY_ENGINE_GRAPH_URI}?channel=$CH"
 fi
-aba_info_ok "Graph endpoint available"
+aba_success "Graph endpoint available"
 
 #####################
 aba_info "Updating cluster version with $POLICY_ENGINE_GRAPH_URI ..."
@@ -320,5 +320,5 @@ aba_info "Updating cluster version with $POLICY_ENGINE_GRAPH_URI ..."
 PATCH="{\"spec\":{\"upstream\":\"${POLICY_ENGINE_GRAPH_URI}\"}}"
 oc patch clusterversion version -p $PATCH --type merge
 
-aba_info_ok "Update Service configuration completed successfully!"
+aba_success "Update Service configuration completed successfully!"
 aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."

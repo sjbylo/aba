@@ -51,7 +51,7 @@ source scripts/include_all.sh
 trap - ERR
 
 # Surface aba_info lines too (the D-12 explanatory footer uses aba_info,
-# which is gated behind INFO_ABA by default). aba_info_ok is always visible.
+# which is gated behind INFO_ABA by default). aba_success is always visible.
 export INFO_ABA=1
 
 source <(normalize-aba-conf)

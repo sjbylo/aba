@@ -193,4 +193,4 @@ echo ""
 ##############################################################
 echo "=== All Tests Complete ==="
 echo ""
-aba_info_ok "✓ Connectivity check tests passed!"
+aba_success "✓ Connectivity check tests passed!"

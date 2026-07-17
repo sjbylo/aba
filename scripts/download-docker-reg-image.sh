@@ -28,7 +28,7 @@ fi
 aba_info "Saving $image to $output ..."
 if podman save "$image" | gzip > "${output}.tmp" && gzip -t "${output}.tmp"; then
 	mv "${output}.tmp" "$output"
-	aba_info_ok "Saved $image to $output"
+	aba_success "Saved $image to $output"
 else
 	rm -f "${output}.tmp" "$output"
 	aba_abort "Failed to save Docker registry image (corrupted or interrupted)"

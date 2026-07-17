@@ -51,7 +51,7 @@ if [ -s reg-uninstall.sh ]; then
 fi
 
 # Fallback: no state file found -- try to detect running containers
-aba_warning \
+aba_warn \
 	"No registry state found in $regcreds_dir/state.sh." \
 	"Attempting to detect a running registry ..."
 
@@ -122,7 +122,7 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 			docker)
 				aba_info "Removing Docker registry container and data on $reg_host ..."
 				$_ssh "podman rm -f registry; $SUDO rm -rf $reg_root" || \
-					aba_warning "Remote Docker cleanup returned non-zero (container may not have existed)"
+					aba_warn "Remote Docker cleanup returned non-zero (container may not have existed)"
 				# Verify container is gone
 				if $_ssh "podman ps -a --format '{{.Names}}'" 2>/dev/null | grep -q '^registry$'; then
 					aba_abort "Failed to remove Docker registry container on $reg_host"
@@ -140,7 +140,7 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 			docker)
 				aba_info "Removing Docker registry container and data ..."
 				podman rm -f registry || \
-					aba_warning "Docker container removal returned non-zero (container may not have existed)"
+					aba_warn "Docker container removal returned non-zero (container may not have existed)"
 				# Verify container is gone
 				if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^registry$'; then
 					aba_abort "Failed to remove Docker registry container"
@@ -169,4 +169,4 @@ fi
 # Invalidate cached mirror-verify result so TUI doesn't show stale "mirror ready"
 aba_mirror_verify_refresh
 
-aba_info_ok "Registry uninstall successful"
+aba_success "Registry uninstall successful"

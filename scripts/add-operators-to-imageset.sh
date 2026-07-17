@@ -142,7 +142,7 @@ add_op() {
 		END
 	fi
 	else
-		aba_warning "Operator '$op' not found in index file .index/$catalog-index-v$ocp_ver_major"
+		aba_warn "Operator '$op' not found in index file .index/$catalog-index-v$ocp_ver_major"
 	fi
 }
 
@@ -159,7 +159,7 @@ if [ "$ops" -o "$op_sets" ]; then
 		# Check for the index file
 		if [ ! -s .index/$catalog-index-v$ocp_ver_major ]; then
 			catalog_file_errors=1
-			aba_warning "Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major" >&2
+			aba_warn "Missing operator catalog file: $PWD/.index/$catalog-index-v$ocp_ver_major" >&2
 		fi
 	done
 
@@ -184,7 +184,7 @@ aba_info "Adding operators to the image-set config file ..."  >&2
 
 # 'all' is a special operator set which allows all operators to be downloaded!  The below "operators->catalog" entry will enable all op.
 if echo "$op_sets" | grep -qe "^all$" -e "^all," -e ",all$" -e ",all,"; then
-	aba_info_ok "Adding all redhat-operator operators to your image-set config file!" >&2
+	aba_success "Adding all redhat-operator operators to your image-set config file!" >&2
 	cat <<-END >> "$OUTPUT_FILE"
 	  operators:
 	  - catalog: registry.redhat.io/redhat/redhat-operator-index:v$ocp_ver_major
@@ -224,12 +224,12 @@ do
 				[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 				community_operator+=("$op")
 			else
-				aba_warning "Operator '$op' (from set '$op_set_name') not found in any catalog for OCP $ocp_ver_major -- skipping"
+				aba_warn "Operator '$op' (from set '$op_set_name') not found in any catalog for OCP $ocp_ver_major -- skipping"
 			fi
 		done
 	else
 		# Should never reach here, but just in case...
-		aba_warning \
+		aba_warn \
 			"Missing operator set file: 'templates/operator-set-$op_set_name'." \
 			"Please adjust your operator settings (in aba.conf) or create the missing file: aba -d mirror catalog"
 	fi
@@ -260,7 +260,7 @@ if [ "$ops" ]; then
 			[ ! "${op_set_array[$op_set_name]}" ] && community_operator+=("#-$op_set_name-operators") && op_set_array[$op_set_name]=1
 			community_operator+=("$op")
 		else
-			aba_warning "Operator '$op' not found in any catalog for OCP $ocp_ver_major -- skipping"
+			aba_warn "Operator '$op' not found in any catalog for OCP $ocp_ver_major -- skipping"
 		fi
 	done
 else
@@ -310,6 +310,6 @@ do
 done
 
 #echo >&2
-aba_info_ok "Number of operators included: ${#op_names_arr[@]}" >&2
+aba_success "Number of operators included: ${#op_names_arr[@]}" >&2
 
 exit 0

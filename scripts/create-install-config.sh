@@ -104,7 +104,7 @@ elif [ "$int_connection" = "proxy" ]; then
 				"Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" 
 		fi
 
-		aba_info_ok "Configuring the cluster wide proxy using the following settings:"
+		aba_success "Configuring the cluster wide proxy using the following settings:"
 		aba_info "  http_proxy=$http_proxy"
 		aba_info "  https_proxy=$https_proxy"
 		aba_info "  no_proxy=$no_proxy"
@@ -116,7 +116,7 @@ elif [ "$int_connection" = "proxy" ]; then
 		export use_proxy=1
 		use_mirror=
 	else
-		aba_warning \
+		aba_warn \
 			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set or available." \
 			"If you want to configure the cluster wide proxy, set 'int_connection=proxy' or override by" \
 			"setting the '*_proxy' values directly in 'cluster.conf'." 
@@ -124,7 +124,7 @@ elif [ "$int_connection" = "proxy" ]; then
 		sleep 2
 	fi
 elif [ "$int_connection" ]; then
-	aba_warning "Internet connection incorrectly defined in cluster.conf" >&2
+	aba_warn "Internet connection incorrectly defined in cluster.conf" >&2
 #else
 #	aba_info "Not configuring the Internet connectivity (proxy or direct) since value: int_connection not set in cluster.conf"
 # Added Validating availability... below to make more sense!
@@ -140,7 +140,7 @@ if [ "$use_mirror" ]; then
 		_ps_auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth" "$regcreds_dir/pull-secret-mirror.json" 2>/dev/null)
 		if [ -z "$_ps_auth" ] || [ "$_ps_auth" = "null" ]; then
 			_ps_hosts=$(jq -r '.auths | keys[]' "$regcreds_dir/pull-secret-mirror.json" 2>/dev/null | paste -sd ', ')
-			aba_warning \
+			aba_warn \
 				"Pull secret has no credentials for $reg_host:$reg_port" \
 				"Pull secret contains: ${_ps_hosts:-(empty)}" \
 				"Check that reg_host/reg_port in ${mirror_name:-mirror}/mirror.conf match your registry" \
@@ -161,7 +161,7 @@ if [ "$use_mirror" ]; then
 		# If we pull from the local reg. then we define the image content sources
 		export image_content_sources=$(scripts/j2 templates/image-content-sources.yaml.j2)
 	else
-		aba_warning -p Attention \
+		aba_warn -p Attention \
 			"Expected to find mirror credentials but found none!" \
 			"No pull secret files found in directory: $regcreds_display/" \
 			"A mirror registry has NOT been installed or configured!  See: aba mirror --help"
@@ -180,7 +180,7 @@ if [ "$use_mirror" ]; then
 		#	echo_red "No private mirror registry configured! Using proxy settings to access Red Hat's public registry" >&2
 		#else
 		# Should check accessibility to registry.redhat.io?
-			aba_warning -p Attention \
+			aba_warn -p Attention \
 				"Root CA file missing: $regcreds_display/rootCA.pem" \
 				"No mirror registry available!" \
 				"No value: additionalTrustBundle will be added to install-config.yaml"
@@ -190,7 +190,7 @@ if [ "$use_mirror" ]; then
 	fi
 
 	if [ "$show_mirror_missing_err" ]; then
-		aba_warning -p Attention \
+		aba_warn -p Attention \
 			"No mirror registry found and no Internet connection (proxy or direct) defined in cluster.conf" \
 			"If this is *unexpected*, you should do one of the following:" \
 			"  1) Install a mirror registry: see aba mirror --help" \
@@ -246,6 +246,6 @@ aba_debug Creating install-config.yaml ...
 [ -s install-config.yaml ] && cp install-config.yaml install-config.yaml.backup
 scripts/j2 templates/install-config.yaml.j2 > install-config.yaml
 
-aba_info_ok "$PWD/install-config.yaml generated successfully!"
+aba_success "$PWD/install-config.yaml generated successfully!"
 echo
 
