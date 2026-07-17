@@ -18,9 +18,9 @@
 # and rely on govc environment from vmware.conf.
 
 # Retry a govc command on transient vCenter errors (task conflicts, locks, etc.).
-# Waits with linear backoff (5s, 10s, 15s, 20s, 25s) for up to ~75s total.
+# Waits with linear backoff (3s, 6s, 9s) for up to ~18s total.
 _govc_retry() {
-	try_cmd -n 5 -d 5 -D 5 -m "govc $1" -- govc "$@"
+	try_cmd -n 3 -d 3 -D 3 -m "govc $1" -- govc "$@"
 }
 
 # Cached lookup of a VM's runtime+hardware as JSON; empty on lookup failure.
