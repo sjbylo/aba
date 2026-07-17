@@ -1350,8 +1350,9 @@ try_cmd() {
 	local _tc_count=1 _tc_pause=$_tc_delay _tc_rc=0
 
 	while [ $_tc_count -le $_tc_attempts ]; do
-		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
-			aba_info "Attempt $_tc_count/$_tc_attempts: $_tc_label" >&2
+		# Only show retry messages from attempt 2 onwards (silence = success on first try)
+		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && [ $_tc_count -gt 1 ] && \
+			aba_info "Retry $_tc_count/$_tc_attempts: $_tc_label" >&2
 
 		_tc_rc=0
 		"$@" || _tc_rc=$?
