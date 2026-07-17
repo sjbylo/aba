@@ -36,7 +36,7 @@ _kvm_verify_objects() {
 		_line=$(cat "$_f")
 		case "$_line" in
 			ok*)   aba_debug "Verified: ${_line#ok }" ;;       # strip "ok " prefix
-			fail*) aba_warning "${_line#fail }"; _err=1 ;;     # strip "fail " prefix
+			fail*) aba_warn "${_line#fail }"; _err=1 ;;     # strip "fail " prefix
 		esac
 	done
 	rm -rf "$_tmpdir"

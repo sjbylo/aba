@@ -122,7 +122,7 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 
 	rm -rf "${regcreds_dir:?}/"*
 
-	aba_info_ok "Remote $vendor registry uninstall successful"
+	aba_success "Remote $vendor registry uninstall successful"
 	exit 0
 fi
 

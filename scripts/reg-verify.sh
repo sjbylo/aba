@@ -46,7 +46,7 @@ fi
 # Check valid config in mirror.conf
 mirrors=$(jq -r '.auths | keys[]' "$regcreds_dir/pull-secret-mirror.json")
 if ! echo "$mirrors" | grep -q "^$reg_host:$reg_port$"; then
-	aba_warning \
+	aba_warn \
 		"Values in mirror.conf do not match the values in pull secret: regcreds/pull-secret-mirror.json!" \
 		"Value in mirror.conf: $reg_host:$reg_port" \
 		"Value in pull-secret-mirror.json: $(echo "$mirrors" | tr '\n' ' ')" \
@@ -59,12 +59,12 @@ fi
 aba_info "Verifying mirror registry at $reg_url ..."
 
 if check_release_image; then
-	aba_info_ok "Registry credentials verified for $reg_url"
-	aba_info_ok "Release image for v$_release_ver is available at $reg_host:$reg_port"
+	aba_success "Registry credentials verified for $reg_url"
+	aba_success "Release image for v$_release_ver is available at $reg_host:$reg_port"
 elif [ "$_registry_auth_ok" = "true" ]; then
 	# Phase 1 passed (registry up + auth OK), Phase 2 failed (image not found)
-	aba_info_ok "Registry credentials verified for $reg_url"
-	aba_warning "Release image for v$_release_ver is NOT available at $reg_host:$reg_port" \
+	aba_success "Registry credentials verified for $reg_url"
+	aba_warn "Release image for v$_release_ver is NOT available at $reg_host:$reg_port" \
 		"${_release_check_err:+Registry: $_release_check_err}" \
 		"Images may not have been mirrored yet (run: aba sync or aba save/load)"
 else

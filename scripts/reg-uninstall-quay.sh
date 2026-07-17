@@ -54,7 +54,7 @@ if ask "Uninstall Quay mirror registry on localhost, installed at $reg_host:$reg
 
 	rm -rf "${regcreds_dir:?}/"*
 
-	aba_info_ok "Quay registry uninstall successful"
+	aba_success "Quay registry uninstall successful"
 	exit 0
 fi
 

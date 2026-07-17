@@ -175,7 +175,7 @@ reg_verify_localhost() {
 	# Fallback: if SSH couldn't confirm, check whether the IP is on a local interface.
 	# The IP may still route here via NAT or load balancer — prompt the user.
 	if [ -z "$_ssh_confirmed" ] && ! echo "$local_ips" | grep -qw "$fqdn_ip"; then
-		aba_warning \
+		aba_warn \
 			"$reg_host resolves to $fqdn_ip which is not found on any local network interface." \
 			"This host's IPs: $(echo $local_ips | xargs | tr ' ' ', ')" \
 			"This may be fine if $fqdn_ip reaches this host via NAT or a load balancer." \
@@ -206,7 +206,7 @@ reg_check_quay_resources() {
 	fi
 	mem_gb=$(( mem_kb / 1024 / 1024 ))
 	if [ "$vcpus" -le 2 ] || [ "$mem_gb" -le 4 ]; then
-		aba_warning \
+		aba_warn \
 			"Quay mirror registry requires at least 4 vCPUs and 8GB RAM." \
 			"This host has ${vcpus} vCPU(s) and ~${mem_gb}GB RAM." \
 			"Use a Docker registry instead: set reg_vendor=docker in mirror.conf."
@@ -297,7 +297,7 @@ reg_open_firewall() {
 			aba_info "firewalld not active on $reg_host, opened port $reg_port via iptables."
 			_reg_fw_opened=1
 		else
-			aba_warning "Could not auto-open firewall port $reg_port on $reg_host." \
+			aba_warn "Could not auto-open firewall port $reg_port on $reg_host." \
 				"If the registry is unreachable, open the port manually on $reg_host, e.g.:" \
 				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
 				"  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
@@ -316,7 +316,7 @@ reg_open_firewall() {
 			aba_info "firewalld not active, opened port $reg_port via iptables."
 			_reg_fw_opened=1
 		else
-			aba_warning "Could not auto-open firewall port $reg_port." \
+			aba_warn "Could not auto-open firewall port $reg_port." \
 				"If the registry is unreachable, open the port manually, e.g.:" \
 				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
 				"  or: sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT"
@@ -473,5 +473,5 @@ reg_post_install() {
 	done
 
 	echo
-	aba_info_ok "Registry installed/configured successfully!"
+	aba_success "Registry installed/configured successfully!"
 }

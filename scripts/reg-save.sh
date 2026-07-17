@@ -103,13 +103,13 @@ aba_debug "Available disk space: $avail MB"
 
 # Stark warning if very low (incremental saves may still succeed, so don't abort)
 if [ $avail -lt 20500 ]; then
-	aba_warning "Very low disk space under $PWD/data (only $avail MB free)" \
+	aba_warn "Very low disk space under $PWD/data (only $avail MB free)" \
 		"A first-time save requires at least 20GB for the base platform alone" \
 		"Operators require additional 40-400GB of space" \
 		"Incremental saves may succeed with less space"
 	echo >&2
 elif [ $avail -lt 51250 ]; then
-	aba_warning "Less than 50GB of space available under $PWD/data (only $avail MB)" \
+	aba_warn "Less than 50GB of space available under $PWD/data (only $avail MB)" \
 		"Operator images require between ~40 to ~400GB of disk space!"
 	echo >&2
 fi
@@ -117,7 +117,7 @@ fi
 aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
-aba_warning \
+aba_warn \
 	"Ensure there is enough disk space under $PWD/data." \
 	"This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
 echo >&2
@@ -207,9 +207,9 @@ aba_info "Creating transfer bundle: $_transfer_tar"
 # CWD is mirror/ so aba root is ..
 if ( cd .. && tar cf "mirror/$_transfer_tar" "${_bundle_files[@]}" ); then
 	_tar_size=$(du -sh "$_transfer_tar" | awk '{print $1}')
-	aba_info_ok "Transfer bundle created: $_transfer_tar ($_tar_size)"
+	aba_success "Transfer bundle created: $_transfer_tar ($_tar_size)"
 else
-	aba_warning "Failed to create transfer bundle ($_transfer_tar)." \
+	aba_warn "Failed to create transfer bundle ($_transfer_tar)." \
 		"The image archives (mirror_*.tar) are still valid." \
 		"You can manually copy ISC and CLI files to the disconnected host."
 fi
@@ -219,7 +219,7 @@ fi  # end: transfer bundle creation
 
 echo >&2
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
-	aba_info_ok "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
+	aba_success "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
 	echo
 	aba_info "Copy all *.tar files from mirror/data/ to the disconnected host:"
 	aba_info "  cp mirror/data/*.tar /transfer-media/"
@@ -230,7 +230,7 @@ if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"
 	aba_info "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
 elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
-	aba_info_ok "Images saved to mirror/data/."
+	aba_success "Images saved to mirror/data/."
 	aba_info "Next: 'aba tar --out /path/to/portable/media/install-bundle.tar'"
 fi
 echo >&2

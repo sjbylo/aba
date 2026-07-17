@@ -36,7 +36,7 @@ fi
 # so the CVO pod references the mirror URL, not quay.io — avoids sigstore
 # verification failures in OCP 4.21+).
 if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
-	aba_warning "verify_conf=$verify_conf: skipping release image connectivity check"
+	aba_warn "verify_conf=$verify_conf: skipping release image connectivity check"
 else
 	check_release_image || aba_abort \
 		"Cannot access the release image for OpenShift v$ocp_version (HTTP ${_release_http_code:-?})" \
@@ -73,5 +73,5 @@ else
 	aba_info "openshift-install already extracted from mirror registry"
 fi
 
-aba_info_ok "Release image for version $release_ver is available at $reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
+aba_success "Release image for version $release_ver is available at $reg_host:$reg_port$reg_path/openshift/release-images$release_sha"
 

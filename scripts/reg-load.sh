@@ -123,7 +123,7 @@ if [ -s "$regcreds_dir/rootCA.pem" ]; then
 	aba_debug "Installing root CA certificate"
 	trust_root_ca "$regcreds_dir/rootCA.pem" # FIXME: Is this required here since the rootCA.pem is installed after reg install?
 else
-	aba_warning "No $regcreds_display/rootCA.pem cert file found (skipTLS=$skipTLS)" 
+	aba_warn "No $regcreds_display/rootCA.pem cert file found (skipTLS=$skipTLS)" 
 fi
 
 [ ! "$data_dir" ] && data_dir=\~
@@ -144,7 +144,7 @@ echo
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
-	aba_warning \
+	aba_warn \
 		"Ensure there is enough disk space under $reg_root." \
 		"This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
 fi

@@ -81,7 +81,7 @@ if _ca_date=$($OC -n openshift-kube-apiserver-operator get secret kube-apiserver
 	aba_info "Cluster CA certificate expires in ${_ca_days} days ($_ca_short)"
 	_showed_cert=true
 	if [ "$_ca_days" -lt "$_cert_warning_days" ]; then
-		aba_warning "Restart the cluster before then to allow automatic CA renewal!"
+		aba_warn "Restart the cluster before then to allow automatic CA renewal!"
 	fi
 fi
 
@@ -109,12 +109,12 @@ if [ "$_nearest_days" -lt 999999 ]; then
 	aba_info "Nearest node certificate expires in ${_nearest_days} days ($_nearest_date)"
 	_showed_cert=true
 	if [ "$_nearest_days" -lt "$_cert_warning_days" ]; then
-		aba_warning "Start the cluster before then to allow automatic certificate renewal!"
+		aba_warn "Start the cluster before then to allow automatic certificate renewal!"
 	fi
 fi
 
 if [ "$_showed_cert" = "false" ]; then
-	aba_warning "Could not determine certificate expiry. Ensure the cluster is restarted periodically for cert renewal."
+	aba_warn "Could not determine certificate expiry. Ensure the cluster is restarted periodically for cert renewal."
 fi
 
 aba_info "Never power down a cluster for an extended period without taking a fresh etcd snapshot first!"
@@ -209,15 +209,15 @@ for node in $_all_nodes; do
 
 	if [ "$_ok" = "false" ]; then
 		_shutdown_failed=1
-		aba_warning "$node${_ip:+ ($_ip)}: shutdown FAILED (SSH and oc debug both failed)" 2>&1 | tee -a $logfile
+		aba_warn "$node${_ip:+ ($_ip)}: shutdown FAILED (SSH and oc debug both failed)" 2>&1 | tee -a $logfile
 	fi
 done
 
 echo
 if [ -z "$_shutdown_failed" ]; then
-	aba_info_ok "All nodes will complete shutdown and power off shortly!" 2>&1 | tee -a $logfile
+	aba_success "All nodes will complete shutdown and power off shortly!" 2>&1 | tee -a $logfile
 else
-	aba_warning "Some nodes could not be reached — check $logfile for details" 2>&1 | tee -a $logfile
+	aba_warn "Some nodes could not be reached — check $logfile for details" 2>&1 | tee -a $logfile
 fi
 
 # Clean up stale debug pods that could re-execute shutdown on next boot.
@@ -290,7 +290,7 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	else
 		echo "" | tee -a $logfile
 		echo "[ABA] Node power-off wait finished ($(date -Iseconds))" >> $logfile
-		aba_info_ok "All nodes powered off." 2>&1 | tee -a $logfile
+		aba_success "All nodes powered off." 2>&1 | tee -a $logfile
 	fi
 fi
 

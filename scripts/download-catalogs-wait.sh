@@ -60,4 +60,4 @@ for _ver in "${_versions_to_wait[@]}"; do
 	done
 done
 
-aba_info_ok "All operator catalogs ready for OCP ${_versions_to_wait[*]}"
+aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]}"

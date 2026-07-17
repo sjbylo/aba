@@ -160,7 +160,7 @@ if [ "$_diff_rc1" -eq 0 ] && [ "$_diff_rc2" -eq 0 ]; then
 	aba_info "NTP MachineConfig already applied (unchanged). Verifying config on nodes."
 else
 	[ "$_diff_rc1" -gt 1 ] || [ "$_diff_rc2" -gt 1 ] && \
-		aba_warning "oc diff failed (master rc=$_diff_rc1, worker rc=$_diff_rc2). Applying anyway."
+		aba_warn "oc diff failed (master rc=$_diff_rc1, worker rc=$_diff_rc2). Applying anyway."
 	_mc_changed=1
 	oc apply -f 99-master-chrony-conf-override.yaml
 	oc apply -f 99-worker-chrony-conf-override.yaml
@@ -262,7 +262,7 @@ elif [ "$_wait_rc" -ne 0 ]; then
 		"Check 'oc get mcp' and 'oc get nodes' for status."
 fi
 
-aba_info_ok "chrony.conf applied on all nodes."
+aba_success "chrony.conf applied on all nodes."
 
 # Phase 3: at least one NTP source synced on every node.
 # Uses chronyc -N to show original configured names (avoids hostname resolution issues
@@ -309,15 +309,15 @@ for host in $nodesIPs; do
 	_sources=$(ssh -F ~/.aba/ssh.conf -q core@$host 'chronyc -N sources' 2>/dev/null) || true
 	_unreachable=$(echo "$_sources" | grep '^\^?' | awk '{print $2}' | sort -u) || true
 	if [ -n "$_unreachable" ]; then
-		aba_warning "Node $host: unreachable NTP source(s): $_unreachable"
+		aba_warn "Node $host: unreachable NTP source(s): $_unreachable"
 		_has_warnings=1
 	fi
 done
 
 if [ -n "$_has_warnings" ]; then
-	aba_info_ok "NTP configured (at least one source synced, some unreachable)."
+	aba_success "NTP configured (at least one source synced, some unreachable)."
 else
-	aba_info_ok "NTP configured and all sources synced on all nodes."
+	aba_success "NTP configured and all sources synced on all nodes."
 fi
 
 # Phase 4: ensure API server is available before returning.
@@ -333,7 +333,7 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 	aba_info "Aborted by user."
 	exit 0
 elif [ "$_wait_rc" -ne 0 ]; then
-	aba_warning "API server not available after 5 min. Cluster may still be recovering."
+	aba_warn "API server not available after 5 min. Cluster may still be recovering."
 fi
 
-aba_info_ok "API server available."
+aba_success "API server available."

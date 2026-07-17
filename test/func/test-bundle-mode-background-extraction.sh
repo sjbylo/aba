@@ -103,7 +103,7 @@ if [ ! -d ~/.aba/runner/mirror:reg:install ]; then
 fi
 
 echo "✓ Found task: mirror:reg:install"
-aba_info_ok "Test 2 PASSED: All background tasks started" >&2
+aba_success "Test 2 PASSED: All background tasks started" >&2
 echo ""
 
 # Test 3: Wait for extraction to complete
@@ -142,7 +142,7 @@ if [ $elapsed -ge $max_wait ]; then
 	exit 1
 fi
 
-aba_info_ok "Test 3 PASSED: Extraction completed successfully" >&2
+aba_success "Test 3 PASSED: Extraction completed successfully" >&2
 echo ""
 
 # Test 4: Verify extracted files
@@ -192,7 +192,7 @@ if [ "$cli_binaries_found" -lt 2 ]; then
 	exit 1
 fi
 
-aba_info_ok "Test 4 PASSED: All files extracted successfully" >&2
+aba_success "Test 4 PASSED: All files extracted successfully" >&2
 echo ""
 
 # Test 5: Verify Makefile can use the extracted files
@@ -216,7 +216,7 @@ if [ -f ~/.aba/runner/mirror:reg:install/cmd ]; then
 	echo "✓ Task used correct task ID: mirror:reg:install"
 fi
 
-aba_info_ok "Test 5 PASSED: Makefile integration works" >&2
+aba_success "Test 5 PASSED: Makefile integration works" >&2
 echo ""
 
 # Test 6: Verify ensure_quay_registry() function works
@@ -238,7 +238,7 @@ if grep -q "TASK_INST_QUAY_REG" scripts/include_all.sh; then
 	echo "✓ Function uses TASK_INST_QUAY_REG constant"
 fi
 
-aba_info_ok "Test 6 PASSED: ensure_quay_registry() function works" >&2
+aba_success "Test 6 PASSED: ensure_quay_registry() function works" >&2
 echo ""
 
 # Cleanup
@@ -250,7 +250,7 @@ echo ""
 
 # All tests passed
 echo "========================================="
-aba_info_ok "✓ ALL BUNDLE EXTRACTION TESTS PASSED" >&2
+aba_success "✓ ALL BUNDLE EXTRACTION TESTS PASSED" >&2
 echo "========================================="
 echo ""
 echo "Summary:"

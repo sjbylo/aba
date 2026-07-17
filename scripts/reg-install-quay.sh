@@ -71,7 +71,7 @@ if [ -z "$_quay_ssh_ok" ]; then
 	rm -f "$flag_file"
 	if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" "$reg_host" "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 || [ ! -f "$flag_file" ]; then
 		rm -f "$flag_file"
-		aba_warning "SSH to '$reg_host' failed — trying localhost instead ..."
+		aba_warn "SSH to '$reg_host' failed — trying localhost instead ..."
 		if ! ssh -F "$ssh_conf_file" -i "$temp_aba_key" localhost "mkdir -p $ABA_TMP && touch $flag_file" >/dev/null 2>&1 || [ ! -f "$flag_file" ]; then
 			aba_abort \
 				"For local Quay installation, SSH must work to localhost. The Quay installer requires this." \

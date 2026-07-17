@@ -174,12 +174,12 @@ fi
 # mutations propagate correctly to this shell - matching real usage in preflight-check.sh.
 
 # Stub aba_* helpers so messages become predictable strings.
-# aba_warning honours the same -p PREFIX / -c COLOR / -n flags the production helper
-# accepts (scripts/include_all.sh aba_warning), so callers using `-p Error` produce
+# aba_warn honours the same -p PREFIX / -c COLOR / -n flags the production helper
+# accepts (scripts/include_all.sh aba_warn), so callers using `-p Error` produce
 # ERROR-prefixed lines, matching the label the user sees in the real install flow.
 aba_info()      { echo "INFO: $*"; }
-aba_info_ok()   { echo "OK: $*"; }
-aba_warning() {
+aba_success()   { echo "OK: $*"; }
+aba_warn() {
 	local prefix=WARN
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -472,7 +472,7 @@ fi
 # (TEST-02 scenario: Untrusted CA)
 # 22. Path E: Layer 1 TLS failure (GOVC_INSECURE unset) -> 1 trust-chain warning
 # + 2 remediation lines (GOVC_INSECURE=1 hint FIRST, CA-trust-store hint SECOND)
-# + errors=1. Production emits a multi-arg aba_warning; our stub joins args with
+# + errors=1. Production emits a multi-arg aba_warn; our stub joins args with
 # space, so the three pieces appear on the same WARN line.
 _reset_path_state
 OPENSSL_STUB_RC=1
@@ -562,13 +562,13 @@ else
 fi
 
 # 28. Path K: GOVC_RESOURCE_POOL unset + default exists -> visible OK line
-# via aba_info_ok (verbose-on-success convention: users asked to see every
+# via aba_success (verbose-on-success convention: users asked to see every
 # check pass, not just failures) + errors=0.
 _reset_path_state
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
 rp_ok=$(grep -c "^OK: vSphere: using default resource pool '/GoodDC/host/GoodCluster/Resources'" "$_smoke_out" || true)
 if [ "$rp_ok" -eq 1 ] && [ "$_preflight_errors" -eq 0 ]; then
-	test_pass "Path K: default RP used -> aba_info_ok line + errors=0"
+	test_pass "Path K: default RP used -> aba_success line + errors=0"
 else
 	test_fail "Path K broken: rp_ok=$rp_ok errors=$_preflight_errors"
 fi
@@ -722,12 +722,12 @@ else
 fi
 
 # (TEST-02 scenario: Missing privilege)
-# 36. Path S: missing-object skip emits aba_debug, NOT aba_warning (D-06
+# 36. Path S: missing-object skip emits aba_debug, NOT aba_warn (D-06
 # no-conflation decision: do not confuse "privilege not granted" with
 # "object not found"). All 6 non-root found flags stay 0. Temporarily
 # override aba_debug to observe the skip line. Expected: exactly 1
 # 'skipping privilege check for missing datacenter' DEBUG line + 0
-# aba_warning for DATACENTER privileges + counters unchanged for DC scope.
+# aba_warn for DATACENTER privileges + counters unchanged for DC scope.
 _reset_path_state
 aba_debug() { echo "DEBUG: $*"; }
 GOVC_STUB_PERMS_OUT=$'Role\tEntity\tPrincipal\tPropagate\nAdmin\t/\tadmin@vsphere.local\tYes\n'
@@ -735,7 +735,7 @@ _vsphere_probe_privileges >"$_smoke_out" 2>&1 || true
 skip_dc=$(grep -c "^DEBUG: vSphere: skipping privilege check for missing datacenter" "$_smoke_out" || true)
 warn_dc=$(grep -c "datacenter '/GoodDC' missing privilege" "$_smoke_out" || true)
 if [ "$skip_dc" -eq 1 ] && [ "$warn_dc" -eq 0 ] && [ "$_preflight_errors" -eq 0 ]; then
-	test_pass "Path S: DC found=0 -> aba_debug skip (NOT aba_warning) + errors=0"
+	test_pass "Path S: DC found=0 -> aba_debug skip (NOT aba_warn) + errors=0"
 else
 	test_fail "Path S broken: skip_dc=$skip_dc warn_dc=$warn_dc errors=$_preflight_errors"
 fi

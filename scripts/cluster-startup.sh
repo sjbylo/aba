@@ -101,12 +101,12 @@ sleep 5 	# Sometimes need to wait to avoid uncordon errors!
 
 aba_info "Making all nodes schedulable (uncordon):"
 if ! aba_wait_show "Uncordon all nodes" 5 600 uncordon_all_nodes; then
-	aba_warning "Uncordon did not fully complete after 10 minutes, continuing ..."
+	aba_warn "Uncordon did not fully complete after 10 minutes, continuing ..."
 fi
 
 # Wait for this command to work!
 if ! aba_wait_show "Waiting for cluster API after uncordon" 10 300 _cluster_startup_oc_get_nodes; then
-	aba_warning "Could not reach cluster API after 5 minutes, continuing ..."
+	aba_warn "Could not reach cluster API after 5 minutes, continuing ..."
 fi
 
 all_nodes_ready() { aba_debug "Running: $OC get nodes (all_nodes_ready check)"; [ -z "$($OC get nodes -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -v ^True$)" ]; }
@@ -137,12 +137,12 @@ trap '_rc=$?; trap - ERR; kill $pid &>/dev/null; wait $pid 2>/dev/null; exit $_r
 # Wait for all nodes in Ready state
 if ! all_nodes_ready; then
 	if ! aba_wait_show "Waiting for all nodes Ready (Ctrl-C to skip)" 10 600 all_nodes_ready; then
-		aba_warning "Not all nodes are 'Ready' yet, but continuing ..."
+		aba_warn "Not all nodes are 'Ready' yet, but continuing ..."
 	fi
 fi
 
 if all_nodes_ready; then
-	aba_info_ok "All nodes are ready!"
+	aba_success "All nodes are ready!"
 fi
 exec_cmd="$OC get nodes"
 aba_debug "Running: $exec_cmd"
@@ -166,16 +166,16 @@ _cluster_startup_cos_ready() {
 
 _console_ok=""
 if ! curl -skL "$console" | grep -q 'Red Hat OpenShift'; then
-	aba_info_ok "The cluster will complete startup and become fully available shortly!"
+	aba_success "The cluster will complete startup and become fully available shortly!"
 	aba_info "Waiting for the console to become available at $console"
 	if ! aba_wait_show "Waiting for OpenShift console (Ctrl-C to skip)" 5 300 _cluster_startup_console_ready; then
 		aba_info "Console not ready yet, continuing ..."
 	else
-		aba_info_ok "Cluster console is accessible at $console"
+		aba_success "Cluster console is accessible at $console"
 		_console_ok=1
 	fi
 else
-	aba_info_ok "Cluster console is accessible at $console"
+	aba_success "Cluster console is accessible at $console"
 	_console_ok=1
 fi
 
@@ -187,12 +187,12 @@ if ! _cluster_startup_cos_ready; then
 	fi
 fi
 
-aba_info_ok "All cluster operators are fully available!"
+aba_success "All cluster operators are fully available!"
 
 # Re-check console if it wasn't ready earlier (may have come up during operator wait)
 if [ -z "$_console_ok" ]; then
 	if _cluster_startup_console_ready 2>/dev/null; then
-		aba_info_ok "Cluster console is accessible at $console"
+		aba_success "Cluster console is accessible at $console"
 	else
 		aba_info "Console not accessible yet at $console -- it should appear shortly."
 	fi

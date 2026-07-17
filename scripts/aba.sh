@@ -507,7 +507,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		# ver should now be x.y.z or x.y.z-prerelease format (guaranteed by early validation)
 
 		# Warn if pre-release version
-		_is_prerelease "$ver" && aba_warning "Pre-release version '$ver' — not for production use." 
+		_is_prerelease "$ver" && aba_warn "Pre-release version '$ver' — not for production use." 
 
 		replace-value-conf -n ocp_version -v $ver -f $ABA_ROOT/aba.conf
 
@@ -554,7 +554,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
 		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
-		_is_prerelease "$tgt_ver" && aba_warning "Pre-release target version '$tgt_ver' — not for production use."
+		_is_prerelease "$tgt_ver" && aba_warn "Pre-release target version '$tgt_ver' — not for production use."
 		replace-value-conf -n ocp_upgrade_to -v $tgt_ver -f $WORK_DIR/mirror.conf
 		shift 2
 	elif [ "$1" = "--reg-host" -o "$1" = "--mirror-hostname" -o "$1" = "-H" ]; then
@@ -755,7 +755,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				if [ -s "$ABA_ROOT/templates/operator-set-$1" -o "$1" = "all" ]; then
 					[ "$op_set_list" ] && op_set_list="$op_set_list,$1" || op_set_list=$1
 				else
-					aba_warning "No such operator set: $1" >&2
+					aba_warn "No such operator set: $1" >&2
 				aba_info -n "Available operator sets are: " >&2
 				ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
 				echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
@@ -1069,7 +1069,7 @@ _ensure_hv_ready() {
 		bm)  aba_abort "VM operations require platform=vmw or platform=kvm in aba.conf" ;;
 		*)   aba_abort "Unknown platform '$platform' in aba.conf" ;;
 	esac
-	[ -f agent-config.yaml ] || aba_warning "agent-config.yaml not found. Run 'aba cluster' first."
+	[ -f agent-config.yaml ] || aba_warn "agent-config.yaml not found. Run 'aba cluster' first."
 	HV=$platform
 }
 
@@ -1114,7 +1114,7 @@ if [ "$cur_target" ]; then
 			fi
 			# If still not marked after auto-detect, warn and ask
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
-				aba_warning "Cluster has not completed installation."
+				aba_warn "Cluster has not completed installation."
 				ask -n --auto-yes "Cluster has not completed installation, continue anyway" || exit 1
 			fi
 			;;
@@ -1284,7 +1284,7 @@ if [ "$cur_target" ]; then
 				ln -sfn ../templates templates 2>/dev/null || true
 			fi
 			# init may fail on corrupted state — non-fatal for delete
-			make -s init 2>/dev/null || aba_warning "Cluster .init failed — proceeding with best-effort delete."
+			make -s init 2>/dev/null || aba_warn "Cluster .init failed — proceeding with best-effort delete."
 
 			source <(normalize-aba-conf)
 			case "$platform" in
@@ -1443,7 +1443,7 @@ if [ -f .bundle ]; then
 	if [ ! "$(ls mirror/data/mirror_*tar 2>/dev/null)" ]; then
 		{
 			echo
-			aba_warning -p "IMPORTANT" \
+			aba_warn -p "IMPORTANT" \
 				"The Image-set archive file(s) (ISA image payload) are not included in this install bundle." \
 				"The ISA file(s) were left out of the install bundle during its creation and *must be*" \
 				"moved or copied into the install bundle under the aba/mirror/data directory before continuing!"
@@ -1663,7 +1663,7 @@ fi
 					aba_debug "Successfully fetched version list ($(echo "$all_versions" | wc -l) versions)"
 					if echo "$all_versions" | grep -qx "$target_ver"; then
 						aba_debug "Version $target_ver validated successfully"
-						_is_prerelease "$target_ver" && aba_warning "Pre-release version '$target_ver' — not for production use."
+						_is_prerelease "$target_ver" && aba_warn "Pre-release version '$target_ver' — not for production use."
 						break
 					else
 						aba_debug "Version $target_ver not found in version list"
