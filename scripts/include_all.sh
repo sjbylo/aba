@@ -411,6 +411,7 @@ normalize-aba-conf() {
 
 	# Sanitize config, normalize boolean flags (users may write =0/=1/=true/=false),
 	# and split machine_network CIDR into two vars (machine_network + prefix_length).
+	# RFC 1123: domain must be lowercase for Kubernetes.
 	_normalize_export < aba.conf | \
 		sed -E	\
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
@@ -418,7 +419,8 @@ normalize-aba-conf() {
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g'
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
+			-e 's/^(export domain=)(.*)/\1\L\2/'
 
 	# Resolve derived values immediately — deferred expansion like ${ocp_version%%.*}
 	# breaks when callers use eval "$(normalize-aba-conf)" because the shell expands
@@ -695,10 +697,12 @@ normalize-cluster-conf()
 	# Sanitize config, then:
 	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
 	#   - Normalize old int_connection=none to empty (backward compat)
+	#   - RFC 1123: base_domain must be lowercase for Kubernetes
 	_normalize_export < cluster.conf | \
 		sed -E	\
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
-			-e 's/^(export )int_connection=none/\1int_connection= /g'
+			-e 's/^(export )int_connection=none/\1int_connection= /g' \
+			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
@@ -2121,6 +2125,8 @@ replace-value-conf() {
 	# -v <string> : new value. If missing, remove the value
 	# -f <files>
 	# -q          : quiet (debug-level messages only)
+	# --lower     : convert value to lowercase before writing
+	# --upper     : convert value to uppercase before writing
 	#
 	# Handles single-quoted old values (e.g. reg_pw='p4ssw0rd').
 	# Auto-quotes new values that contain spaces or '#'.
@@ -2129,6 +2135,7 @@ replace-value-conf() {
 	aba_debug "Calling: replace-value-conf() $*"
 
 	local quiet=
+	local _rvc_case=
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -2152,12 +2159,32 @@ replace-value-conf() {
 				local quiet=1
 				shift
 				;;
+			--lower)
+				_rvc_case=lower
+				shift
+				;;
+			--upper)
+				_rvc_case=upper
+				shift
+				;;
 			*)
 				local files="$files $1"
 				shift
 				;;
 		esac
 	done
+
+	# Apply case transformation if requested
+	if [ -n "$_rvc_case" ] && [ -n "${value:-}" ]; then
+		local _orig_value="$value"
+		case "$_rvc_case" in
+			lower) value="${value,,}" ;;
+			upper) value="${value^^}" ;;
+		esac
+		if [ "$value" != "$_orig_value" ]; then
+			aba_info "Converted $name to ${_rvc_case}case: $value" >&2
+		fi
+	fi
 
 	# Auto-quote values that contain shell metacharacters so they survive sourcing.
 	# Safe unquoted: alphanumeric, dot, slash, colon, @, comma, equals, plus, hyphen, percent, underscore.

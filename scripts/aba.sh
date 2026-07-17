@@ -292,7 +292,7 @@ else
 	# Only auto-fill empty network values in bundle mode (on internal/disconnected network).
 	# For pre-created bundles, aba.conf will exist but network values will be empty ... so attempt to fill them in.
 	if [ -f "$ABA_ROOT/.bundle" ]; then
-		[ ! "$domain" ]			&& v=$(get_domain)		&& [ "$v" ] && replace-value-conf -n domain		-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: domain=$domain
+		[ ! "$domain" ]			&& v=$(get_domain)		&& [ "$v" ] && replace-value-conf --lower -n domain		-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: domain=$domain
 		[ ! "$machine_network" ]	&& v=$(get_machine_network) 	&& [ "$v" ] && replace-value-conf -n machine_network	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: machine_network=$machine_network
 		[ ! "$dns_servers" ]		&& v=$(get_dns_servers)		&& [ "$v" ] && replace-value-conf -n dns_servers	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: dns_servers=$dns_servers
 		[ ! "$next_hop_address" ]	&& v=$(get_next_hop)		&& [ "$v" ] && replace-value-conf -n next_hop_address	-v "$v"	-f $ABA_ROOT/aba.conf && aba_debug Add: next_hop_address=$next_hop_address
@@ -659,7 +659,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		domain=""
 		[[ $2 =~ ([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]] && domain=${BASH_REMATCH[0]}  # no need for grep
 		[ ! "$domain" ] && aba_abort "domain format incorrect [$2]" 
-		replace-value-conf -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
+		replace-value-conf --lower -n domain -v "$domain" -f $WORK_DIR/cluster.conf ${_CLI_CLUSTER_NAME:+$ABA_ROOT/$_CLI_CLUSTER_NAME/cluster.conf} $ABA_ROOT/aba.conf
 		shift 2
 	elif [ "$1" = "--machine-network" -o "$1" = "-M" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
