@@ -1615,7 +1615,8 @@ _fetch_cached() {
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
 	# Retry transient failures (DNS, connection reset) — curl --retry alone skips DNS errors
-	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 5 -q curl -f -sS "$url" -o "$tmp"; then
+	# Worst case: 3 × 8s max-time + 2 × 2s delay = ~28s
+	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 2 -q curl -f -s --connect-timeout 5 --max-time 8 "$url" -o "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
@@ -1626,6 +1627,7 @@ _fetch_cached() {
 			mv -f "$tmp" "$cache_file"
 		fi
 	else
+		aba_debug "fetch failed: $url"
 		rm -f "$tmp" 2>/dev/null || true
 	fi
 
