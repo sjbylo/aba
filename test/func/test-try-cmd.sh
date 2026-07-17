@@ -236,6 +236,25 @@ out=$(try_cmd -d 0 -- true 2>&1) || rc=$?
 assert_eq "exit code is 0" "0" "$rc"
 assert_contains "default attempts is 3" "1/3" "$out"
 
+# ── 16. stdout must be clean (no wrapper messages) ──────────────────
+# try_cmd wraps another command; its own status messages must go to
+# stderr so they never corrupt piped output (e.g. _fetch_graph_cached | jq).
+echo "Test 16: stdout is clean — no wrapper messages leak to stdout"
+rc=0
+stdout_only=$(try_cmd -n 3 -d 0 -- true 2>/dev/null) || rc=$?
+assert_eq "exit code is 0" "0" "$rc"
+assert_eq "stdout is empty on success" "" "$stdout_only"
+
+rc=0
+stdout_only=$(try_cmd -n 2 -d 0 -- false 2>/dev/null) || rc=$?
+assert_eq "exit code is 1" "1" "$rc"
+assert_eq "stdout is empty on failure" "" "$stdout_only"
+
+rc=0
+stdout_only=$(try_cmd -q -n 2 -d 0 -- false 2>/dev/null) || rc=$?
+assert_eq "exit code is 1" "1" "$rc"
+assert_eq "stdout is empty in quiet mode" "" "$stdout_only"
+
 # ── Summary ──────────────────────────────────────────────────────────
 echo
 echo "=== Results: $PASS passed, $FAIL failed ==="

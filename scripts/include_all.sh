@@ -1347,14 +1347,14 @@ try_cmd() {
 
 	while [ $_tc_count -le $_tc_attempts ]; do
 		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
-			aba_info "Attempt $_tc_count/$_tc_attempts: $_tc_label"
+			aba_info "Attempt $_tc_count/$_tc_attempts: $_tc_label" >&2
 
 		_tc_rc=0
 		"$@" || _tc_rc=$?
 
 		if [ $_tc_rc -eq 0 ]; then
 			[ -z "$_tc_silent" ] && [ $_tc_attempts -gt 1 ] && \
-				aba_info_ok "$_tc_label"
+				aba_info_ok "$_tc_label" >&2
 			return 0
 		fi
 
