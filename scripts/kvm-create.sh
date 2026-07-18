@@ -148,7 +148,7 @@ if [ -n "${START_VM:-}" ]; then
 
 	calculate_and_show_completion $cp_cnt $wkr_cnt
 else
-	aba_info_ok "To start the VMs and monitor the installation, run: aba start mon"
+	aba_success "To start the VMs and monitor the installation, run: aba start mon"
 fi
 
 exit 0

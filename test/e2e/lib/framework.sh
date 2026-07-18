@@ -292,7 +292,7 @@ _e2e_summary() {
 # directly (conN has internet access).
 
 _e2e_notify_suffix() {
-    echo "(pool${POOL_NUM:-?}/$(hostname -s))"
+    echo "(pool${POOL_NUM:-?}/$(hostname -s) $(date '+%H:%M'))"
 }
 
 _e2e_notify() {

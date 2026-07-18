@@ -564,14 +564,94 @@ _mirror_op_confirm() {
 }
 
 # =============================================================================
+# Guard 2 (TUI): notice when upgrade requires release images
+# Core auto-fixes excl_platform in reg-save.sh/reg-sync.sh; TUI shows notice.
+# =============================================================================
+
+_ensure_platform_for_upgrade() {
+	source <(normalize-aba-conf) 2>/dev/null
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
+	local _excl="${excl_platform:-false}"
+	local _target="${ocp_upgrade_to:-}"
+
+	[[ "$_excl" != "true" ]] && return 0
+	[[ -z "$_target" || "$_target" == "${ocp_version:-}" ]] && return 0
+
+	dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
+		--msgbox "$TUI2_MSG_UPGRADE_NEEDS_RELEASE" 0 0
+	tui_log "Guard: excl_platform auto-switched to false for upgrade to $_target"
+}
+
+# =============================================================================
+# Guard 1 (TUI): offer to exclude release images when already in mirror
+# Only for save (not sync — sync is incremental).
+# Returns 0 if user chose to exclude (caller must handle temp toggle).
+# Returns 1 if user chose to include all or condition not met.
+# =============================================================================
+
+_offer_excl_platform_for_save() {
+	source <(normalize-aba-conf) 2>/dev/null
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
+
+	[[ "${excl_platform:-false}" == "true" ]] && return 1
+
+	local _target="${ocp_upgrade_to:-}"
+	[[ -n "$_target" && "$_target" != "${ocp_version:-}" ]] && return 1
+
+	local _mirror_ver="${mirror_ocp_version:-}"
+	[[ -z "$_mirror_ver" ]] && return 1
+	[[ "$_mirror_ver" != "${ocp_version:-}" ]] && return 1
+
+	# All conditions met: version unchanged, no new upgrade target
+	local _msg
+	# shellcheck disable=SC2059
+	printf -v _msg "$TUI2_MSG_EXCL_PLATFORM_OFFER" "${ocp_version:-}"
+
+	dlg --backtitle "$(ui_backtitle)" --title "Exclude Release Images?" \
+		--yes-label "Exclude" --no-label "Include All" \
+		--yesno "$_msg" 0 0
+	local rc=$?
+	if [[ $rc -eq 0 ]]; then
+		tui_log "Guard: user chose to exclude release images for this save"
+		return 0
+	fi
+	return 1
+}
+
+# =============================================================================
 # Save Images (to local archive)
 # =============================================================================
 
 mirror_save() {
 	tui_log "Action: Save Images"
-	_mirror_op_confirm "$TUI2_LABEL_SAVE" || return 1
+
+	_ensure_platform_for_upgrade
+
+	local _tmp_excl=false
+	if _offer_excl_platform_for_save; then
+		_tmp_excl=true
+		replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating ISC (operators only)..." 3 50
+		run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
+	fi
+
+	_mirror_op_confirm "$TUI2_LABEL_SAVE" || {
+		if [[ "$_tmp_excl" == "true" ]]; then
+			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+			tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+		fi
+		return 1
+	}
 	confirm_and_execute "aba --dir mirror save$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SAVE"
 	local rc=$?
+
+	if [[ "$_tmp_excl" == "true" ]]; then
+		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+		tui_log "Guard: restored excl_platform=false after save"
+	fi
+
 	return $rc
 }
 
@@ -827,6 +907,9 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	# Persist target version and kick off ISC regeneration after user confirmed
 	replace-value-conf -q -n ocp_upgrade_to -v "$_target_ver" -f "$ABA_ROOT/mirror/mirror.conf"
 	ocp_upgrade_to="$_target_ver"
+
+	_ensure_platform_for_upgrade
+
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
 		"Generating ImageSet configuration (operator catalogs may also be refreshed). Please wait." 5 60
@@ -877,6 +960,7 @@ To upgrade a disconnected cluster:\n\n\
 
 mirror_sync() {
 	tui_log "Action: Sync Images"
+	_ensure_platform_for_upgrade
 	_mirror_op_confirm "$TUI2_LABEL_SYNC" || return 1
 	confirm_and_execute "aba --dir mirror sync$(_tui_oc_mirror_retry_suffix)" "$TUI2_LABEL_SYNC" _invalidate_mirror_cache
 	local rc=$?

@@ -57,7 +57,7 @@ if [ "$exit_code" -ne 0 ]; then
 	aba_abort "Test 1 FAILED: Task exited with code $exit_code"
 fi
 
-aba_info_ok "Test 1 PASSED: catalog downloaded via podman extraction" >&2
+aba_success "Test 1 PASSED: catalog downloaded via podman extraction" >&2
 
 # --- Test 2: Catalog downloads ---
 echo ""
@@ -95,7 +95,7 @@ for catalog_file in "${catalog_files[@]}"; do
 	if ! grep -q "operator" "$catalog_file"; then
 		aba_abort "Test 2 FAILED: Catalog file $catalog_file doesn't contain expected data"
 	fi
-	aba_info_ok "✓ $catalog_file exists and is valid" >&2
+	aba_success "✓ $catalog_file exists and is valid" >&2
 done
 
 # Verify run_once tasks were created
@@ -110,7 +110,7 @@ for catalog in redhat-operator certified-operator community-operator; do
 	fi
 done
 
-aba_info_ok "Test 2 PASSED: All catalogs downloaded successfully" >&2
+aba_success "Test 2 PASSED: All catalogs downloaded successfully" >&2
 
 # --- Test 3: Registry scripts (quick smoke test) ---
 echo ""
@@ -125,15 +125,15 @@ for script in scripts/reg-install.sh scripts/reg-save.sh scripts/reg-load.sh scr
 	if ! bash -n "$script"; then
 		aba_abort "Test 3 FAILED: Script $script has syntax errors"
 	fi
-	aba_info_ok "✓ $script syntax is valid" >&2
+	aba_success "✓ $script syntax is valid" >&2
 done
 
-aba_info_ok "Test 3 PASSED: Registry scripts syntax valid" >&2
+aba_success "Test 3 PASSED: Registry scripts syntax valid" >&2
 
 # --- All tests passed ---
 echo ""
 echo "========================================="
-aba_info_ok "✓ ALL INTEGRATION TESTS PASSED" >&2
+aba_success "✓ ALL INTEGRATION TESTS PASSED" >&2
 echo "========================================="
 echo ""
 echo "Summary:"

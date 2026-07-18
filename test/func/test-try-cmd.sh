@@ -85,8 +85,8 @@ echo "Test 1: Command succeeds on first attempt"
 rc=0
 out=$(try_cmd -n 3 -d 0 -- true 2>&1) || rc=$?
 assert_eq "exit code is 0" "0" "$rc"
-assert_contains "shows attempt message" "Attempt 1/3" "$out"
-assert_contains "shows OK message" "true" "$out"
+assert_not_contains "no message on first success" "Retry" "$out"
+assert_not_contains "no attempt message on first try" "Attempt" "$out"
 
 # ── 2. Command fails all attempts ────────────────────────────────────
 echo "Test 2: Command fails all attempts"
@@ -135,6 +135,7 @@ echo "Test 5: Quiet mode (-q)"
 rc=0
 out=$(try_cmd -q -n 3 -d 0 -- false 2>&1) || rc=$?
 assert_not_contains "no attempt messages" "Attempt" "$out"
+assert_not_contains "no retry messages" "Retry" "$out"
 assert_not_contains "no retry warnings" "retrying" "$out"
 assert_contains "still shows final failure" "Failed after 3" "$out"
 
@@ -158,10 +159,10 @@ assert_contains "label in attempt" "Pull my-image" "$out"
 assert_contains "label in failure" "Pull my-image" "$out"
 
 # ── 8. Default label (first word of command) ─────────────────────────
-echo "Test 8: Default label from command"
+echo "Test 8: Default label in failure message"
 rc=0
-out=$(try_cmd -n 1 -d 0 -- echo hello 2>&1) || rc=$?
-assert_contains "label is command name" "echo" "$out"
+out=$(try_cmd -n 1 -d 0 -- false 2>&1) || rc=$?
+assert_contains "label is command name in failure" "false" "$out"
 
 # ── 9. Increasing backoff (-D) ──────────────────────────────────────
 echo "Test 9: Increasing backoff (-D) timing"
@@ -230,11 +231,30 @@ assert_eq "exit code is 0" "0" "$rc"
 assert_eq "content is correct" "hello world" "$result"
 
 # ── 15. Defaults: -n 3, -d 5 ────────────────────────────────────────
-echo "Test 15: Default values"
+echo "Test 15: Default values (verify 3 attempts on failure)"
 rc=0
-out=$(try_cmd -d 0 -- true 2>&1) || rc=$?
+out=$(try_cmd -d 0 -- false 2>&1) || rc=$?
+assert_eq "exit code is 1" "1" "$rc"
+assert_contains "default attempts is 3" "Failed after 3 attempts" "$out"
+
+# ── 16. stdout must be clean (no wrapper messages) ──────────────────
+# try_cmd wraps another command; its own status messages must go to
+# stderr so they never corrupt piped output (e.g. _fetch_graph_cached | jq).
+echo "Test 16: stdout is clean — no wrapper messages leak to stdout"
+rc=0
+stdout_only=$(try_cmd -n 3 -d 0 -- true 2>/dev/null) || rc=$?
 assert_eq "exit code is 0" "0" "$rc"
-assert_contains "default attempts is 3" "1/3" "$out"
+assert_eq "stdout is empty on success" "" "$stdout_only"
+
+rc=0
+stdout_only=$(try_cmd -n 2 -d 0 -- false 2>/dev/null) || rc=$?
+assert_eq "exit code is 1" "1" "$rc"
+assert_eq "stdout is empty on failure" "" "$stdout_only"
+
+rc=0
+stdout_only=$(try_cmd -q -n 2 -d 0 -- false 2>/dev/null) || rc=$?
+assert_eq "exit code is 1" "1" "$rc"
+assert_eq "stdout is empty in quiet mode" "" "$stdout_only"
 
 # ── Summary ──────────────────────────────────────────────────────────
 echo

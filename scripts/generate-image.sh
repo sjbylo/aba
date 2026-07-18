@@ -120,5 +120,5 @@ cp -rp $ASSETS_DIR/auth $ASSETS_DIR/auth.backup
 scripts/add_ntp_ignition_to_iso.sh
 
 echo 
-#aba_info_ok "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"
-aba_info_ok "The agent based ISO has been created."
+#aba_success "The agent based ISO has been created in the $PWD/$ASSETS_DIR directory"
+aba_success "The agent based ISO has been created."

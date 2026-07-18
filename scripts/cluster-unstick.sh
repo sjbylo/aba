@@ -68,12 +68,12 @@ for pod in data.get('items', []):
 ") || true
 
 if [ -z "$_stuck" ]; then
-	aba_info_ok "No stuck pods found — cluster looks healthy (or pods are still starting up)."
+	aba_success "No stuck pods found — cluster looks healthy (or pods are still starting up)."
 	exit 0
 fi
 
 _count=$(echo "$_stuck" | wc -l)
-aba_warning "Found $_count stuck pod(s):"
+aba_warn "Found $_count stuck pod(s):"
 echo "$_stuck" | while read _ns _pod; do
 	_status=$($OC get pod "$_pod" -n "$_ns" -o jsonpath='{.status.phase}/{.status.reason}' 2>/dev/null) || true
 	printf "  %s/%s  (%s)\n" "$_ns" "$_pod" "${_status:-unknown}" >&2
@@ -92,4 +92,4 @@ echo "$_stuck" | while read _ns _pod; do
 	$OC delete pod "$_pod" -n "$_ns" || true
 done
 
-aba_info_ok "Done. Pods will be rescheduled by their controllers."
+aba_success "Done. Pods will be rescheduled by their controllers."

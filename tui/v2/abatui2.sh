@@ -117,8 +117,8 @@ trap - ERR
 
 # Suppress config drift warnings during startup splash screen.
 # tui-lib.sh runs normalize-mirror-conf at source time (top-level code, line ~333)
-# which triggers _state_override_mirror -> aba_warning. Must be set BEFORE sourcing.
-# ABA_SUPPRESS_WARNINGS is checked by aba_warning() in include_all.sh.
+# which triggers _state_override_mirror -> aba_warn. Must be set BEFORE sourcing.
+# ABA_SUPPRESS_WARNINGS is checked by aba_warn() in include_all.sh.
 export ABA_SUPPRESS_WARNINGS=1
 
 # Source TUI v2 modules

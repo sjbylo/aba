@@ -153,7 +153,7 @@ if [[ -s macs.conf ]]; then
 
 	# Warn if fewer MAC addresses than expected
 	if (( mac_count < expected_mac_count )); then
-		aba_warning "Found only $mac_count valid MAC addresses in macs.conf.  Expecting: $expected_mac_count for the whole cluster ($num_ports port(s) per node x $num_nodes nodes)."
+		aba_warn "Found only $mac_count valid MAC addresses in macs.conf.  Expecting: $expected_mac_count for the whole cluster ($num_ports port(s) per node x $num_nodes nodes)."
 	fi
 else
 	# Since the jinja2 template now uses a simple list, we can also auto-generate the addresses in a similar way for VMs. 
@@ -217,5 +217,5 @@ aba_debug "arr_macs=${arr_macs[@]}"
 [ -s agent-config.yaml ] && cp agent-config.yaml agent-config.yaml.backup
 scripts/j2 templates/$template_file > agent-config.yaml
 
-aba_info_ok "$PWD/agent-config.yaml generated successfully!"
+aba_success "$PWD/agent-config.yaml generated successfully!"
 

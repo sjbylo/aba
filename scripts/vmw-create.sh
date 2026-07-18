@@ -98,7 +98,7 @@ if [ "$GOVC_URL" ] && [ "$master_mem" -le 16 ]; then
 	if ask "Increase master memory from ${master_mem}GB to 20GB to avoid bootstrap disk-space issue (OCPBUGS-62790)"; then
 		master_mem=20
 	else
-		aba_warning "Keeping master memory at ${master_mem}GB -- bootstrap may fail with 'no space left on device'"
+		aba_warn "Keeping master memory at ${master_mem}GB -- bootstrap may fail with 'no space left on device'"
 	fi
 fi
 aba_debug master_mem=$master_mem
@@ -165,7 +165,7 @@ if [ -n "${START_VM:-}" ]; then
 	# Output VM start time and estimated end time
 	calculate_and_show_completion $cp_cnt $wkr_cnt
 else
-	aba_info_ok "To start the VMs and monitor the installation, run: aba start mon"
+	aba_success "To start the VMs and monitor the installation, run: aba start mon"
 fi
 
 exit 0

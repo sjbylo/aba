@@ -175,17 +175,17 @@ else
 fi
 
 # =============================================================================
-# Step 6: Lint aba_warning / aba_abort usage
+# Step 6: Lint aba_warn / aba_abort usage
 # =============================================================================
-# Detects consecutive aba_warning or aba_abort calls that should be combined
+# Detects consecutive aba_warn or aba_abort calls that should be combined
 # into a single call with follow-up lines as extra arguments.
-# Correct:   aba_warning "Main message" "Follow-up line"
-# Wrong:     aba_warning "Line 1"
-#            aba_warning "Line 2"   <-- should be a follow-up arg, not a new call
+# Correct:   aba_warn "Main message" "Follow-up line"
+# Wrong:     aba_warn "Line 1"
+#            aba_warn "Line 2"   <-- should be a follow-up arg, not a new call
 #
 # Exceptions: lines with -p flag (different prefix) or continuation lines (\)
 # are not flagged.
-echo -e "${YELLOW}[6/6] Checking aba_warning/aba_abort usage patterns...${NC}"
+echo -e "${YELLOW}[6/6] Checking aba_warn/aba_abort usage patterns...${NC}"
 _lint_failed=0
 
 for script in scripts/*.sh; do
@@ -195,7 +195,7 @@ for script in scripts/*.sh; do
     while IFS=: read -r linenum content; do
         # Strip leading whitespace from content
         content="${content#"${content%%[![:space:]]*}"}"
-        # Get function name (aba_warning or aba_abort)
+        # Get function name (aba_warn or aba_abort)
         fn="${content%% *}"
         # Skip lines with -p flag (different prefix = intentionally separate)
         if [[ "$content" == *" -p "* ]]; then
@@ -212,16 +212,16 @@ for script in scripts/*.sh; do
         fi
         prev_line=$linenum
         prev_fn="$fn"
-    done < <(grep -n '^\s*aba_warning\b\|^\s*aba_abort\b' "$script" 2>/dev/null)
+    done < <(grep -n '^\s*aba_warn\b\|^\s*aba_abort\b' "$script" 2>/dev/null)
 done
 
 if [ $_lint_failed -eq 1 ]; then
-    echo -e "${RED}      ✗ Found consecutive aba_warning/aba_abort calls that should be combined${NC}"
-    echo -e "${RED}        Use: aba_warning \"Main message\" \"Follow-up line\" (multi-arg form)${NC}\n"
+    echo -e "${RED}      ✗ Found consecutive aba_warn/aba_abort calls that should be combined${NC}"
+    echo -e "${RED}        Use: aba_warn \"Main message\" \"Follow-up line\" (multi-arg form)${NC}\n"
     exit 1
 fi
 
-echo -e "${GREEN}      ✓ aba_warning/aba_abort usage OK${NC}\n"
+echo -e "${GREEN}      ✓ aba_warn/aba_abort usage OK${NC}\n"
 
 # =============================================================================
 # Step 7: Verify README.md permalink anchors (only if README.md changed)

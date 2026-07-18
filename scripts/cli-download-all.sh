@@ -140,7 +140,7 @@ do
 			# Safety net: govc download failure is non-fatal for non-vmw platforms
 			# (normally govc won't be in the tool list for non-vmw, but handle edge cases)
 			if [[ "$tool" == "govc" && "${platform:-}" != "vmw" ]]; then
-				aba_warning "govc failed to download — ignoring since platform != vmw."
+				aba_warn "govc failed to download — ignoring since platform != vmw."
 			else
 				aba_error "Download failed for $tool"
 				exit 1

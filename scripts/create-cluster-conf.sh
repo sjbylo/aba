@@ -27,7 +27,7 @@ fi
 # for cluster.conf.  Auto-detect any missing values and write them into aba.conf.
 _filled=0
 if [ ! "$domain" ]; then
-	v=$(get_domain) && [ "$v" ] && replace-value-conf -q -n domain -v "$v" -f aba.conf && domain="$v"
+	v=$(get_domain) && [ "$v" ] && replace-value-conf --lower -q -n domain -v "$v" -f aba.conf && domain="$v"
 	[ "$domain" ] && { aba_info "Auto-detected domain=$domain"; _filled=$((_filled+1)); }
 fi
 if [ ! "$machine_network" ]; then
@@ -53,7 +53,7 @@ if [ ! "$ntp_servers" ]; then
 fi
 if [ $_filled -gt 0 ]; then
 	if [ "$ask" ]; then
-		aba_warning \
+		aba_warn \
 			"$_filled network value(s) were auto-detected and written to aba.conf." \
 			"Please review aba.conf and re-run the command."
 		exit 1

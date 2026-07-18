@@ -44,7 +44,7 @@ aba_info "Worker count: $num_workers is valid"
 
 # verify_conf=off: skip all validation entirely
 if [ "$verify_conf" = "off" ]; then
-	aba_info_ok "Configuration validation skipped (verify_conf=off)"
+	aba_success "Configuration validation skipped (verify_conf=off)"
 	exit 0
 fi
 
@@ -63,7 +63,7 @@ if [ ! "$SNO" ]; then
 			aba_abort "Missing DNS record $cl_api_domain" 
 		elif echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			aba_warning -p Attention \
+			aba_warn -p Attention \
 				"inserting actual IP address ($actual_ip_of_api) into cluster.conf" \
 				"Please verify this is correct! If not, edit cluster.conf file and try again!" 
 			replace-value-conf -n api_vip -v "$actual_ip_of_api" cluster.conf
@@ -83,7 +83,7 @@ if [ ! "$SNO" ]; then
 			aba_abort "Missing DNS record $cl_ingress_domain!" 
 		elif echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 			# Add into cluster.conf
-			aba_warning -p Attention \
+			aba_warn -p Attention \
 				"inserting actual IP address ($actual_ip_of_ingress) into cluster.conf" \
 				"Please verify this is correct! If not, edit cluster.conf file and try again!"
 			replace-value-conf -n ingress_vip -v "$actual_ip_of_ingress" cluster.conf
@@ -95,12 +95,12 @@ if [ ! "$SNO" ]; then
 	fi
 else
 	[ "$api_vip" ] || [ "$ingress_vip" ] && \
-		aba_warning "Cluster endpoints: api_vip and ingress_vip are not required for single-node (SNO) configuration, they will be ignored."
+		aba_warn "Cluster endpoints: api_vip and ingress_vip are not required for single-node (SNO) configuration, they will be ignored."
 fi
 
 # verify_conf=conf: VIP resolution (above) is done; skip remaining network checks
 if [ "$verify_conf" = "conf" ]; then
-	aba_info_ok "Configuration validation passed (network checks skipped, verify_conf=conf)"
+	aba_success "Configuration validation passed (network checks skipped, verify_conf=conf)"
 	exit 0
 fi
 
@@ -155,7 +155,7 @@ if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$';
 		"To skip network checks, set verify_conf=conf in aba.conf"
 fi
 
-aba_info_ok "Cluster configuration is valid"
+aba_success "Cluster configuration is valid"
 
 exit 0
 

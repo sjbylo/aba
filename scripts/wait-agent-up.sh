@@ -34,7 +34,7 @@ if [ ! -f .install-complete ]; then
 	}
 
 	if aba_wait_show "Waiting for Agent at $agent_url" 8 300 _agent_is_alive; then
-		aba_info_ok "Agent alive!"
+		aba_success "Agent alive!"
 		sleep 8
 		exit 0
 	fi

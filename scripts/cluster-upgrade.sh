@@ -10,7 +10,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $* from $PWD"
 
-aba_warning "'aba upgrade' is in BETA and may change in future releases."
+aba_warn "'aba upgrade' is in BETA and may change in future releases."
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
@@ -29,7 +29,7 @@ while [ $# -gt 0 ]; do
 			;;
 		--force)
 			opt_force="--force"
-			aba_warning "--force bypasses cluster-side upgrade safety checks (release verification, admin ack gates)." \
+			aba_warn "--force bypasses cluster-side upgrade safety checks (release verification, admin ack gates)." \
 				"Only use in test/lab environments or when working around a known CVO bug." \
 				"Do NOT use --force on production clusters!"
 			shift
@@ -147,14 +147,14 @@ aba_info "Target cluster version:  $target_ver"
 
 # Idempotency: if already at target version, succeed silently (check BEFORE health)
 if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
-	aba_info_ok "Cluster is already at version $target_ver — nothing to do."
+	aba_success "Cluster is already at version $target_ver — nothing to do."
 	exit 0
 fi
 
 # Preflight: cluster accessibility — only needs API reachable (Available=True).
 # A cluster with Progressing operators or a Degraded operator can still accept upgrades.
 if ! cluster_is_accessible; then
-	aba_warning \
+	aba_warn \
 		"The cluster API is not reachable (ClusterVersion Available != True)." \
 		"To investigate: oc get clusterversion"
 	ask -n --auto-yes "Continue with upgrade anyway" || exit 1
@@ -170,7 +170,7 @@ if [ "$cv_progressing" = "True" ]; then
 	cv_desired=$(oc get clusterversion version \
 		-o jsonpath='{.status.desired.version}' 2>/dev/null) || true
 	if [ "$cv_desired" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
-		aba_info_ok "Upgrade to $target_ver is already in progress."
+		aba_success "Upgrade to $target_ver is already in progress."
 		upgrade_already_running=1
 	elif [ "$cv_desired" != "$target_ver" ] && [ ! "$opt_dry_run" ]; then
 		aba_abort \
@@ -216,7 +216,7 @@ if [ "$opt_dry_run" ]; then
 	if [ "$target_in_mirror" ]; then
 		aba_info "Mirror image:     $mirror_image"
 	else
-		aba_warning "Target $target_ver NOT FOUND in mirror"
+		aba_warn "Target $target_ver NOT FOUND in mirror"
 	fi
 	[ "$osus_upstream" ] && aba_info "Update graph:     $osus_upstream"
 
@@ -245,7 +245,7 @@ if [ ! "$upgrade_already_running" ]; then
 		aba_info "Running 'aba day2' to apply mirror resources, signatures, and catalog sources ..."
 		scripts/day2.sh
 	else
-		aba_warning "--skip-day2 specified. Skipping day2 configuration — upgrade may fail without signatures or mirror configuration."
+		aba_warn "--skip-day2 specified. Skipping day2 configuration — upgrade may fail without signatures or mirror configuration."
 	fi
 
 	# Get release digest from mirror
@@ -278,7 +278,7 @@ if [ ! "$upgrade_already_running" ]; then
 		_cv_failing=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Failing" and .status=="True") | .reason // "unknown"' 2>/dev/null) || true
 		if [ -n "$_cv_failing" ]; then
 			_cv_fail_msg=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Failing") | .message // ""' 2>/dev/null) || true
-			aba_warning "Cluster is reporting Failing=$_cv_failing" \
+			aba_warn "Cluster is reporting Failing=$_cv_failing" \
 				"$_cv_fail_msg"
 		fi
 
@@ -286,7 +286,7 @@ if [ ! "$upgrade_already_running" ]; then
 		if [ -n "$_cv_upgradeable" ]; then
 			_cv_upg_msg=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Upgradeable" and .status=="False") | .message // ""' 2>/dev/null) || true
 			echo
-			aba_warning "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)" \
+			aba_warn "Cluster reports Upgradeable=False (reason: $_cv_upgradeable)" \
 				"$_cv_upg_msg" \
 				"" \
 				"ABA cannot resolve this automatically." \
@@ -330,7 +330,7 @@ if [ ! "$upgrade_already_running" ]; then
 		aba_debug "No ISC channel found — using cluster channel prefix: $_channel_prefix"
 	else
 		_channel_prefix="${ocp_channel:-stable}"
-		aba_warning "No update channel set on cluster or ISC — using '$_channel_prefix' from aba.conf"
+		aba_warn "No update channel set on cluster or ISC — using '$_channel_prefix' from aba.conf"
 	fi
 	_required_channel="${_channel_prefix}-${_target_major}"
 	_channel_changed=""
@@ -388,7 +388,7 @@ if [ ! "$upgrade_already_running" ]; then
 	# We must get user consent before adding --allow-explicit-upgrade.
 	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
 		echo
-		aba_warning "No local update graph (OSUS) detected." \
+		aba_warn "No local update graph (OSUS) detected." \
 			"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
 			"" \
 			"It is strongly recommended to configure OSUS before upgrading:" \
@@ -410,7 +410,7 @@ if [ ! "$upgrade_already_running" ]; then
 			"Check: oc adm upgrade"
 	fi
 
-	aba_info_ok "Upgrade command accepted by cluster"
+	aba_success "Upgrade command accepted by cluster"
 fi
 
 # Wait for the upgrade to actually start (Progressing=True).
@@ -433,7 +433,7 @@ if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 fi
 
 if [ "$_wait_rc" -ne 0 ]; then
-	aba_warning "Upgrade has not started progressing after 5 minutes."
+	aba_warn "Upgrade has not started progressing after 5 minutes."
 	echo
 	# Report blocking conditions using structured JSON
 	_stall_json=$(oc get clusterversion version -o json 2>/dev/null) || true
@@ -446,7 +446,7 @@ if [ "$_wait_rc" -ne 0 ]; then
 			"\(.type)=\(.status) (\(.reason // "unknown")): \(.message // "")"
 		' 2>/dev/null) || true
 		if [ -n "$_stall_conditions" ]; then
-			aba_warning "Blocking conditions detected:"
+			aba_warn "Blocking conditions detected:"
 			echo "$_stall_conditions" | while IFS= read -r _cond; do
 				aba_info "  $_cond"
 			done
@@ -482,12 +482,12 @@ cv_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2
 
 echo
 if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
-	aba_info_ok "Upgrade complete! Cluster is now at version $target_ver"
+	aba_success "Upgrade complete! Cluster is now at version $target_ver"
 	oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 	exit 0
 fi
 
-aba_info_ok "Upgrade $current_ver → $target_ver is in progress!"
+aba_success "Upgrade $current_ver → $target_ver is in progress!"
 echo
 oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 echo

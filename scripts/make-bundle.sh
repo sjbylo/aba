@@ -129,7 +129,7 @@ if [ "$force" ]; then
 	aba_debug "Force flag set - cleaning existing files"
 	if [ -d mirror/data ] && [ "$(ls mirror/data 2>/dev/null)" ]; then
 		aba_debug "Deleting existing mirror/data directory contents"
-		aba_warning "Deleting all files under aba/mirror/data! (--force set)" >&2
+		aba_warn "Deleting all files under aba/mirror/data! (--force set)" >&2
 		rm -rf mirror/data
 		aba_debug "mirror/data directory removed"
 	else
@@ -138,7 +138,7 @@ if [ "$force" ]; then
 
 	if [ -f "$bundle_dest_file" ]; then
 		aba_debug "Deleting existing bundle file: $bundle_dest_file"
-		aba_warning "Deleting existing bundle file: $bundle_dest_file (--force set)" >&2
+		aba_warn "Deleting existing bundle file: $bundle_dest_file (--force set)" >&2
 		rm -f "$bundle_dest_file"
 		aba_debug "Bundle file deleted"
 	else
@@ -176,11 +176,11 @@ if [ -d mirror/data ]; then
 
 		if [ -s mirror/data/imageset-config.yaml ] || [ -f mirror/mirror.conf ] || [ "$image_set_files_exist" ]; then
 			aba_debug "Repository appears to be in use - prompting user"
-			aba_warning "This repo is already in use!  Modified files exist under: mirror/data" >&2
+			aba_warn "This repo is already in use!  Modified files exist under: mirror/data" >&2
 			echo -n "         " >&2;  ls mirror/data >&2
 			[ "$image_set_files_exist" ] && \
-			aba_warning "Image set archive file(s) also exist." >&2
-			aba_warning "Back up any required files and try again with '--force' to delete all existing files under mirror/data." \
+			aba_warn "Image set archive file(s) also exist." >&2
+			aba_warn "Back up any required files and try again with '--force' to delete all existing files under mirror/data." \
 				"Or, use a fresh Aba repo and try again!" >&2
 			ask "         Files will be overwritten. Continue anyway" >&2 || exit 1
 			aba_debug "User confirmed to continue with existing files"
@@ -223,7 +223,7 @@ fi
 aba_debug "Checking if bundle file already exists: $bundle_dest_file"
 if [ -s "$bundle_dest_file" ]; then
 	aba_debug "Bundle file exists, prompting user for overwrite confirmation"
-	aba_warning "File $bundle_dest_file already exists!" 
+	aba_warn "File $bundle_dest_file already exists!" 
 	ask "The file will be overwritten. Continue anyway" || exit 1
 	aba_debug "User confirmed to overwrite existing bundle"
 else
@@ -266,7 +266,7 @@ else
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
 		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
 		# FIXME: Do rough calculation of available vs required disk space ... and check ...
-		aba_warning \
+		aba_warn \
 			"Make sure there is enough free disk space under: $PWD" \
 			"The image-set archive file(s) created by oc-mirror will first be written to" \
 			"aba/mirror/data/mirror_000001.tar, and then a full copy of the Aba repository will be written" \

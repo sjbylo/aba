@@ -59,6 +59,14 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 			"" \
 			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	fi
+
+	# Auto-fix: upgrade requires release images — excl_platform=true would omit them
+	if [ "${excl_platform:-}" = "true" ]; then
+		aba_warn "Upgrade target set (${ocp_upgrade_to}) but excl_platform=true — release images would be missing." \
+			"Switching excl_platform=false in aba.conf to include release images."
+		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+		excl_platform=false
+	fi
 fi
 
 # Be sure a download has started ..
@@ -118,7 +126,7 @@ aba_info "Now syncing (mirror2mirror) images from external network to registry $
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
-	aba_warning \
+	aba_warn \
 		"Ensure there is enough disk space under $reg_root." \
 		"This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
 fi

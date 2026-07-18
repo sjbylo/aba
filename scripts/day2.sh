@@ -49,7 +49,7 @@ aba_debug "Running: oc whoami --request-timeout=20s"
 if ! oc whoami --request-timeout='20s' >/dev/null 2>/dev/null; then
 	aba_debug "Running: oc whoami (with KUBECONFIG=$KUBECONFIG)"
 	if ! oc whoami >/dev/null; then
-		aba_warning "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
+		aba_warn "Unable to access the cluster using KUBECONFIG=$KUBECONFIG"
 
 		. <(aba login)
 
@@ -101,7 +101,7 @@ if [ -s "$regcreds_dir/rootCA.pem" ] && [ "$cm_existing" ]; then
 	if [ -n "$_new_cert_body" ] && [ -n "$_bundle_body" ] && \
 	   ! echo "$_bundle_body" | grep -qF "$_new_cert_body"; then
 		_local_fp=$(openssl x509 -noout -fingerprint -in "$regcreds_dir/rootCA.pem" 2>/dev/null || true)
-		aba_warning "Registry CA has changed. Appending new CA to the cluster trust bundle." \
+		aba_warn "Registry CA has changed. Appending new CA to the cluster trust bundle." \
 			"New CA:  $_local_fp"
 		_cert_changed=1
 	fi
@@ -208,7 +208,7 @@ apply_custom_manifests() {
 
 		# Verify file is not empty
 		if [ ! -s "$manifest_file" ]; then
-			aba_warning "Skipping empty file: $rel_path"
+			aba_warn "Skipping empty file: $rel_path"
 			failure_count=$((failure_count + 1))
 			continue
 		fi
@@ -219,18 +219,18 @@ apply_custom_manifests() {
 		if oc apply -f "$manifest_file"; then
 			success_count=$((success_count + 1))
 		else
-			aba_warning "Failed to apply custom manifest: $rel_path (continuing with other files)"
+			aba_warn "Failed to apply custom manifest: $rel_path (continuing with other files)"
 			failure_count=$((failure_count + 1))
 		fi
 	done <<< "$found_files"
 
 	# Show summary
 	if [ $success_count -gt 0 ]; then
-		aba_info_ok "Successfully applied $success_count custom manifest(s)"
+		aba_success "Successfully applied $success_count custom manifest(s)"
 	fi
 
 	if [ $failure_count -gt 0 ]; then
-		aba_warning "Failed to apply $failure_count custom manifest(s) - see warnings above"
+		aba_warn "Failed to apply $failure_count custom manifest(s) - see warnings above"
 	fi
 
 	return 0  # Always return success - failures are non-fatal
@@ -258,7 +258,7 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 			aba_debug "Running: $exec_cmd"
 			$exec_cmd
 		else
-			aba_warning "no such file: $f"
+			aba_warn "no such file: $f"
 		fi
 	done
 
@@ -270,7 +270,7 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 	if [ ! "$cs_file_list" ]; then
 		_isc="mirror/data/imageset-config.yaml"
 		if [ -f "$_isc" ] && grep -q '^[[:space:]]*operators:' "$_isc"; then
-			aba_warning -p IMPORTANT \
+			aba_warn -p IMPORTANT \
 				"No CatalogSource files found under $latest_working_dir/cluster-resources" \
 				"Your imageset-config.yaml includes operators, but no CatalogSource files were generated." \
 				"Run 'aba -d mirror sync' or 'aba -d mirror save' (transfer ISC and archive files), then 'aba -d mirror load' to mirror operator images."
@@ -334,7 +334,7 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 
 				if [ "$state" = "READY" ]; then
 					echo
-					aba_info_ok "CatalogSource $cs_name is ready!"
+					aba_success "CatalogSource $cs_name is ready!"
 
 					exit 0  # exit the process
 				fi
@@ -385,8 +385,8 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
-	aba_warning "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
-	aba_warning -p IMPORTANT \
+	aba_warn "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
+	aba_warn -p IMPORTANT \
 		"No cluster resource files found (CatalogSource, idms/itms ...) " \
 		"This usually occurs when Aba has not yet pushed any operator images to your mirror registry — either because mirroring" \
 		"hasn’t been run, or it wasn’t done from this host." \
@@ -403,7 +403,7 @@ fi
 # Apply user-provided custom manifests (if any)
 apply_custom_manifests
 
-aba_info_ok "Day-2 configuration completed successfully."
+aba_success "Day-2 configuration completed successfully."
 
 exit 0
 

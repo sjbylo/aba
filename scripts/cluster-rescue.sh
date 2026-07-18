@@ -57,7 +57,7 @@ else
 	aba_info "No CSRs exist. Nothing to do!" 
 fi
 
-aba_info_ok "Rescue complete."
+aba_success "Rescue complete."
 
 # Only pause if changes were made
 [ "$add_pause" ] && sleep 20

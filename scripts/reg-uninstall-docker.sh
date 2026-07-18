@@ -54,7 +54,7 @@ if ask "Uninstall Docker registry on localhost at $reg_host:$reg_port (data: $re
 
 	rm -rf "${regcreds_dir:?}/"*
 
-	aba_info_ok "Docker registry uninstall successful"
+	aba_success "Docker registry uninstall successful"
 	exit 0
 fi
 

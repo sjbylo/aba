@@ -65,7 +65,7 @@ if ! file "$temp_tar" | grep -q "tar archive"; then
 	aba_abort "Test 1 FAILED: Output is not a tar archive"
 fi
 
-aba_info_ok "Test 1 PASSED: Output is valid tar format" >&2
+aba_success "Test 1 PASSED: Output is valid tar format" >&2
 
 # Test 2: Verify no text leakage in tar output
 echo ""
@@ -81,7 +81,7 @@ if strings "$temp_tar" | head -20 | grep -qE "^(Error|Warning|INFO|DEBUG):"; the
 	aba_abort "Test 2 FAILED: Found error/warning messages in tar output"
 fi
 
-aba_info_ok "Test 2 PASSED: No text leakage detected" >&2
+aba_success "Test 2 PASSED: No text leakage detected" >&2
 
 # Test 3: Verify tar contents are reasonable
 echo ""
@@ -101,13 +101,13 @@ expected_paths=(
 
 for path in "${expected_paths[@]}"; do
 	if ! tar -tf "$temp_tar" | grep -q "^$path"; then
-		aba_warning "Expected path '$path' not found in tar (may be normal)" >&2
+		aba_warn "Expected path '$path' not found in tar (may be normal)" >&2
 	else
-		aba_info_ok "✓ Found: $path" >&2
+		aba_success "✓ Found: $path" >&2
 	fi
 done
 
-aba_info_ok "Test 3 PASSED: Tar contents are valid" >&2
+aba_success "Test 3 PASSED: Tar contents are valid" >&2
 
 # Test 4: Verify tar can be extracted
 echo ""
@@ -126,7 +126,7 @@ if [ -z "$(ls -A "$temp_dir")" ]; then
 	aba_abort "Test 4 FAILED: Extracted directory is empty"
 fi
 
-aba_info_ok "Test 4 PASSED: Tar extracts successfully" >&2
+aba_success "Test 4 PASSED: Tar extracts successfully" >&2
 
 # Cleanup
 rm -rf "$temp_dir" "$temp_tar"
@@ -134,7 +134,7 @@ rm -rf "$temp_dir" "$temp_tar"
 # All tests passed
 echo ""
 echo "========================================="
-aba_info_ok "✓ ALL BUNDLE TESTS PASSED" >&2
+aba_success "✓ ALL BUNDLE TESTS PASSED" >&2
 echo "========================================="
 echo ""
 echo "Summary:"
