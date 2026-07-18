@@ -376,7 +376,7 @@ TUI2_MSG_DIRECT_MENU="Install from internet (no mirror):"
 TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
-TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThis will switch to connected mode, which requires\ninternet access.\n\nIf you still need to operate in a disconnected environment,\ndo not switch — the bundle state cannot be automatically\nrestored without re-transferring and unpacking the bundle.\n\nContinue?"
+TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThis will switch the TUI to connected mode, which\nrequires internet access. ABA will sync images\ndirectly instead of using transfer bundles.\n\nYour mirror registry and clusters are not affected.\n\nContinue?"
 TUI2_MSG_DISCO_LIGHT="No image archive files found.\n\nIf you used 'light' mode to create the bundle,\ncopy the image archive file(s) (mirror_*.tar) from your\ntransfer media to:\n\n  %s/mirror/data/\n\nThen select 'Check again'."
 
 # =============================================================================
