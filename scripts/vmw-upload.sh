@@ -33,7 +33,7 @@ source scripts/vm-vmw.sh
 
 set +e
 trap - ERR
-if ! try_cmd -n 3 -d 5 -D 5 -l "ISO upload to [$ISO_DATASTORE]" -- \
+if ! try_cmd -n 3 -d 5 -D 5 -m "ISO upload to [$ISO_DATASTORE]" -- \
 	vmp_upload_iso "$ASSETS_DIR/agent.$ARCH.iso" "$ISO_DATASTORE" "images/agent-${CLUSTER_NAME}.iso"
 then
 	aba_abort "ISO file failed to upload!" \
