@@ -1,5 +1,27 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.5...HEAD)
 
+### Added
+
+- **Smart `excl_platform` guards** — `aba save` and `aba upgrade` auto-exclude platform release images when they are already mirrored, avoiding redundant downloads. TUI offers to exclude when it detects the images are already present.
+
+### Changed
+
+- **ISC generation rewritten** — Imageset config generation is now atomic via Jinja2 templating + JSON data model, replacing the fragile shell script (`add-operators-to-imageset.sh` removed).
+- **Output function naming** — `aba_info_ok` renamed to `aba_success`, `aba_warning` to `aba_warn` across the entire codebase for consistency.
+- **`try_cmd()` reduced verbosity** — Success messages suppressed on first attempt (no retry = no message); quiet mode suppresses all output including success.
+
+### Fixed
+
+- **Normalize domain to lowercase (RFC 1123)** — Uppercase domain names in `aba.conf` or `cluster.conf` are automatically lowercased at runtime, preventing silent Kubernetes validation failures.
+- **TUI DISCO reset dialog** — Reworded the "Switch to connected mode" confirmation so it accurately describes the effect (sync mode changes; registry and clusters are unaffected).
+- **`try_cmd()` output to stderr** — Retry/success messages no longer contaminate stdout (broke piped commands).
+- **`_fetch_cached` reliability** — Tighter curl timeouts, DNS retry on transient failure, better debug logging.
+
+### Community
+
+- Thanks to @Paymanmah for deployment feedback that drove the domain validation and documentation improvements.
+- Thanks to @mateuszdrwal for collaboration on PR #31.
+
 ---
 
 ## [1.1.5](https://github.com/sjbylo/aba/releases/tag/v1.1.5) - 2026-07-16
