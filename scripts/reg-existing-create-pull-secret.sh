@@ -31,6 +31,6 @@ else
 fi
 
 [ ! -s "$regcreds_dir/rootCA.pem" ] && \
-	aba_warning -p IMPORTANT \
+	aba_warn -p IMPORTANT \
 		"Fetch the root CA file for $reg_host and copy it to $regcreds_dir/rootCA.pem.  After the file is in place, run: aba -d mirror verify"
 

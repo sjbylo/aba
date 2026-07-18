@@ -248,7 +248,7 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 
 # Output reminder message
 if [ "$repo_only" ]; then
-	aba_warning "This is a *light* bundle (image-set archives NOT included)." >&2
+	aba_warn "This is a *light* bundle (image-set archives NOT included)." >&2
 	aba_info "Also transfer: ${PWD}/${repo_dir}/mirror/data/mirror_*.tar" >&2
 fi
 
@@ -330,5 +330,5 @@ set -e
 # Upon success, make a note of the time FIXME: Remove the 'inc' feature
 touch ~/.aba.previous.backup
 
-[ "$dest" != "-" ] && aba_info_ok "Install bundle written successfully to $dest!" >&2 || aba_info_ok "Install bundle streamed successfully to stdout!" >&2
+[ "$dest" != "-" ] && aba_success "Install bundle written successfully to $dest!" >&2 || aba_success "Install bundle streamed successfully to stdout!" >&2
 

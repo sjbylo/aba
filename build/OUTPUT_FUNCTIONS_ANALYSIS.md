@@ -7,9 +7,9 @@
 | Function | Color | Stream | Gated By | Prefix | -n Support | Multi-line | Special |
 |----------|-------|--------|----------|--------|------------|------------|---------|
 | `aba_info()` | White | stdout | INFO_ABA | [ABA] | ✅ | ❌ | - |
-| `aba_info_ok()` | Green | stdout | ❌ NONE | [ABA] | ✅ | ❌ | - |
+| `aba_success()` | Green | stdout | ❌ NONE | [ABA] | ✅ | ❌ | - |
 | `aba_debug()` | Magenta | stderr | DEBUG_ABA | [ABA_DEBUG] | ✅ | ❌ | timestamp, tput erase |
-| `aba_warning()` | Red | stderr | ❌ NONE | [ABA] | ✅ | ✅ | -p/-c flags, sleep(1) |
+| `aba_warn()` | Red | stderr | ❌ NONE | [ABA] | ✅ | ✅ | -p/-c flags, sleep(1) |
 | `aba_abort()` | Red | stderr | ❌ NONE | [ABA] | ❌ | ✅ | sleep(1), exit(1) |
 | `echo_warn()` | Red | stderr | ❌ NONE | Warning: | ✅ | ❌ | ❌ Redundant? |
 
@@ -28,34 +28,34 @@
 - All others → stderr ✅
 - **Problem**: User-facing messages should consistently use stderr
 
-### 2. **aba_info_ok() Doesn't Respect INFO_ABA**
+### 2. **aba_success() Doesn't Respect INFO_ABA**
 ```bash
 aba_info()     # ✅ Respects INFO_ABA
-aba_info_ok()  # ❌ Always prints
+aba_success()  # ❌ Always prints
 ```
 **Problem**: Inconsistent behavior with `--quiet` flag
 
 ### 3. **Redundant echo_warn()**
-- Both `echo_warn()` and `aba_warning()` exist
+- Both `echo_warn()` and `aba_warn()` exist
 - Different prefixes ("Warning:" vs "[ABA] Warning:")
 - **Problem**: Confusing which to use
 
 ### 4. **Missing Functions**
-- ❌ `aba_success()` - No dedicated success function (currently use `aba_info_ok()`)
-- ❌ `aba_error()` - No non-fatal error function (must use `aba_warning()` or `aba_abort()`)
+- ❌ `aba_success()` - No dedicated success function (currently use `aba_success()`)
+- ❌ `aba_error()` - No non-fatal error function (must use `aba_warn()` or `aba_abort()`)
 
 ### 5. **No Consistent Iconography**
 - No ✓, ✗, ⚠, ℹ symbols for visual clarity
 - Debug has timestamp, but others don't
 
 ### 6. **sleep(1) in Warning/Abort**
-- Both `aba_warning()` and `aba_abort()` sleep for 1 second
+- Both `aba_warn()` and `aba_abort()` sleep for 1 second
 - **Question**: Is this necessary? Slows down scripts
 
 ### 7. **No WARNING Gate**
 - `aba_info()` respects `INFO_ABA`
 - `aba_debug()` respects `DEBUG_ABA`
-- `aba_warning()` has no `WARN_ABA` gate
+- `aba_warn()` has no `WARN_ABA` gate
 - **Problem**: Can't suppress warnings with `--quiet`
 
 ---
@@ -65,11 +65,11 @@ aba_info_ok()  # ❌ Always prints
 ### Option A: **Evolutionary (Safe)**
 Improve existing functions without breaking changes:
 
-1. ✅ Make `aba_info_ok()` respect `INFO_ABA`
-2. ✅ Add `WARN_ABA` gate to `aba_warning()` (default: enabled)
+1. ✅ Make `aba_success()` respect `INFO_ABA`
+2. ✅ Add `WARN_ABA` gate to `aba_warn()` (default: enabled)
 3. ✅ Add optional icons to existing functions
 4. ✅ Deprecate `echo_warn()` (keep but mark as deprecated)
-5. ✅ Add `aba_success()` (alias to `aba_info_ok()` but with ✓ icon)
+5. ✅ Add `aba_success()` (alias to `aba_success()` but with ✓ icon)
 6. ✅ Add `aba_error()` (like `aba_abort()` but no exit)
 7. ✅ Make sleep() configurable via `ABA_SLEEP_ON_ERROR` (default: 1)
 
@@ -151,10 +151,10 @@ aba_error "Failed to download catalog" \
 # Does NOT exit
 ```
 
-### 3. Fix `aba_info_ok()` to Respect INFO_ABA
+### 3. Fix `aba_success()` to Respect INFO_ABA
 
 ```bash
-aba_info_ok() {
+aba_success() {
     [ ! "$INFO_ABA" ] && return 0  # ← ADD THIS LINE
     
     if [ "$1" = "-n" ]; then
@@ -166,10 +166,10 @@ aba_info_ok() {
 }
 ```
 
-### 4. Add WARN_ABA Gate to aba_warning()
+### 4. Add WARN_ABA Gate to aba_warn()
 
 ```bash
-aba_warning() {
+aba_warn() {
     [ ! "${WARN_ABA:-1}" = "1" ] && return 0  # ← ADD THIS LINE
     
     # ... rest of function unchanged ...
@@ -229,7 +229,7 @@ aba_error() {
 # At top of include_all.sh:
 : ${ABA_SLEEP_ON_ERROR:=1}  # Default 1 second, 0 to disable
 
-# In aba_warning() and aba_abort():
+# In aba_warn() and aba_abort():
 [ "${ABA_SLEEP_ON_ERROR:-1}" -gt 0 ] && sleep "${ABA_SLEEP_ON_ERROR:-1}"
 ```
 
@@ -246,14 +246,14 @@ ABA_SLEEP_ON_ERROR=0 aba bundle ...
 **Phase 1 (Immediate - Safe):**
 1. ✅ Add `aba_success()` function with icon support
 2. ✅ Add `aba_error()` function (non-fatal)
-3. ✅ Fix `aba_info_ok()` to respect `INFO_ABA`
-4. ✅ Add `WARN_ABA` gate to `aba_warning()`
+3. ✅ Fix `aba_success()` to respect `INFO_ABA`
+4. ✅ Add `WARN_ABA` gate to `aba_warn()`
 5. ✅ Make sleep configurable via `ABA_SLEEP_ON_ERROR`
 6. ✅ Add icon support to all functions (optional via `ABA_USE_ICONS`)
 
 **Phase 2 (After testing):**
 1. Move `aba_info()` to stderr (requires audit of all callers)
-2. Deprecate `echo_warn()` in favor of `aba_warning()`
+2. Deprecate `echo_warn()` in favor of `aba_warn()`
 3. Add optional timestamps to all functions (via `ABA_TIMESTAMPS`)
 
 **Phase 3 (Future):**
@@ -266,7 +266,7 @@ ABA_SLEEP_ON_ERROR=0 aba bundle ...
 ### Low Risk Changes:
 - Adding new functions (`aba_success`, `aba_error`)
 - Adding gates (`WARN_ABA`, `ABA_SLEEP_ON_ERROR`, `ABA_USE_ICONS`)
-- Fixing `aba_info_ok()` to respect `INFO_ABA`
+- Fixing `aba_success()` to respect `INFO_ABA`
 
 ### Medium Risk Changes:
 - Moving `aba_info()` to stderr (must audit all callers)

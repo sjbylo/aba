@@ -231,7 +231,7 @@ _extract_catalog() {
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."
 _extract_err=""
 if ! _extract_err=$(_extract_catalog "$container_name"); then
-	aba_warning "Extraction failed (retrying): $_extract_err"
+	aba_warn "Extraction failed (retrying): $_extract_err"
 	podman rm -f "$container_name" >/dev/null 2>&1 || true
 	rm -rf "$tmp_dir/configs"
 	sleep 2
@@ -416,7 +416,7 @@ if (( skipped_count > 0 )) || { (( expected_count > 0 )) && (( op_count != expec
 	fi
 fi
 
-aba_info_ok "Extracted $catalog_name index v$ocp_ver_major ($op_count operators)"
+aba_success "Extracted $catalog_name index v$ocp_ver_major ($op_count operators)"
 
 # Save content layer digest for future change detection (fast-path early exit)
 _new_cld=$(_get_content_layer_digest "$remote_ref") || _new_cld=""

@@ -142,7 +142,7 @@ aba_info() {
 }
 
 # Same as aba_info, but green
-aba_info_ok() {
+aba_success() {
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_green -n "[ABA] $@"
@@ -222,7 +222,7 @@ aba_error() {
 	echo_red "[ABA] Error: $*" >&2
 }
 
-aba_warning() {
+aba_warn() {
 	# TUI sets ABA_SUPPRESS_WARNINGS during startup splash to keep it clean
 	[[ "${ABA_SUPPRESS_WARNINGS:-}" == "1" ]] && return 0
 
@@ -268,7 +268,7 @@ aba_warning() {
 	done
 }
 
-#aba_warning() {
+#aba_warn() {
 #	local prefix=Warning
 #	[ "$1" = "-p" ] && prefix="$2" && shift 2
 #	local main_msg="$1"
@@ -411,6 +411,7 @@ normalize-aba-conf() {
 
 	# Sanitize config, normalize boolean flags (users may write =0/=1/=true/=false),
 	# and split machine_network CIDR into two vars (machine_network + prefix_length).
+	# RFC 1123: domain must be lowercase for Kubernetes.
 	_normalize_export < aba.conf | \
 		sed -E	\
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
@@ -418,7 +419,8 @@ normalize-aba-conf() {
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
-			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g'
+			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
+			-e 's/^(export domain=)(.*)/\1\L\2/'
 
 	# Resolve derived values immediately — deferred expansion like ${ocp_version%%.*}
 	# breaks when callers use eval "$(normalize-aba-conf)" because the shell expands
@@ -442,13 +444,13 @@ warn_if_cluster_unstable() {
 	aba_debug "Running: oc get co --no-headers (cluster stability check)"
 	_co_unavail=$(oc get co --no-headers 2>/dev/null | awk '$3 != "True" { printf "%s ", $1 }')
 	if [ -n "${_co_unavail% }" ]; then                 # trim trailing space before checking
-		aba_warning "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"  # trim trailing space
+		aba_warn "Cluster is still reconciling -- some ClusterOperators are not yet available: ${_co_unavail% }. Check: oc get co"  # trim trailing space
 	fi
 
 	aba_debug "Running: oc get mcp (MCP update check)"
 	if oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null \
 		| grep -q True; then
-		aba_warning "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
+		aba_warn "MachineConfigPool is updating -- nodes may be restarting. If this fails, retry after: oc wait mcp --all --for=condition=Updated"
 	fi
 }
 
@@ -695,10 +697,12 @@ normalize-cluster-conf()
 	# Sanitize config, then:
 	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
 	#   - Normalize old int_connection=none to empty (backward compat)
+	#   - RFC 1123: base_domain must be lowercase for Kubernetes
 	_normalize_export < cluster.conf | \
 		sed -E	\
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
-			-e 's/^(export )int_connection=none/\1int_connection= /g'
+			-e 's/^(export )int_connection=none/\1int_connection= /g' \
+			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
@@ -847,8 +851,8 @@ externalize_cluster_state() {
 	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
 	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
 
-	[ -z "${cluster_name:-}" ] && aba_warning "externalize_cluster_state: cluster_name not set" && return 1
-	[ -z "${base_domain:-}" ] && aba_warning "externalize_cluster_state: base_domain not set" && return 1
+	[ -z "${cluster_name:-}" ] && aba_warn "externalize_cluster_state: cluster_name not set" && return 1
+	[ -z "${base_domain:-}" ] && aba_warn "externalize_cluster_state: base_domain not set" && return 1
 
 	local _assets_dir="${ASSETS_DIR:-iso-agent-based}"
 
@@ -926,7 +930,7 @@ _state_override_cluster() {
 			*" $_field "*)
 				_cval=$(grep "^${_field}=" cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | sed "s/^'\(.*\)'.*/\1/; t; s/^\"\(.*\)\".*/\1/; t; s/[[:space:]]#.*//; s/[[:space:]]*$//")
 				if [ "$_cval" ] && [ "$_cval" != "$_sval" ]; then
-					aba_warning \
+					aba_warn \
 						"cluster.conf has '${_field}=${_cval}' but installed cluster has '${_field}=${_sval}'." \
 						"Using installed value. If needed, run 'aba -d $_name delete' before changing cluster.conf."
 				fi
@@ -974,7 +978,7 @@ _state_override_mirror() {
 	# Show drift warning once per aba invocation (file flag using parent PID)
 	if [ -n "$_drifted" ] && [ ! -f "$ABA_TMP/drift.$$" ]; then
 		touch "$ABA_TMP/drift.$$"
-		aba_warning \
+		aba_warn \
 			"mirror.conf differs from installed registry: $_drifted" \
 			"Using installed values. To change, run 'aba -d $(basename "$PWD") uninstall' first, then edit mirror.conf."
 	fi
@@ -1114,10 +1118,10 @@ verify-cluster-conf() {
 	[ "$int_connection" ] && { echo "$int_connection" | grep -qxE "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
-	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warning -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
+	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warn -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
 
 	# mac_prefix is required for virtual platforms (VMs need unique MACs)
-	[[ "$platform" == "vmw" || "$platform" == "kvm" ]] && [ -z "$mac_prefix" ] && { aba_warning -p "Error" "mac_prefix is required for platform=$platform in cluster.conf"; ret=1; }
+	[[ "$platform" == "vmw" || "$platform" == "kvm" ]] && [ -z "$mac_prefix" ] && { aba_warn -p "Error" "mac_prefix is required for platform=$platform in cluster.conf"; ret=1; }
 
 	[ "$master_cpu_count" ] && ! echo $master_cpu_count | grep -q -E '^[0-9]+$' && { echo_red "Error: master_cpu_count is invalid in cluster.conf: [$master_cpu_count]" >&2; ret=1; }
 	[ "$master_mem" ] && ! echo $master_mem | grep -q -E '^[0-9]+$' && { echo_red "Error: master_mem is invalid in cluster.conf: [$master_mem]" >&2; ret=1; }
@@ -1226,7 +1230,7 @@ install_rpms() {
 	if [ "$rpms_to_install" ]; then
 		echo "Installing required rpm packages:$rpms_to_install (logging to .dnf-install.log). Please wait!" >&2  # send to stderr so this can be seen during "aba bundle -o -"
 		if ! $SUDO dnf install $rpms_to_install -y >> .dnf-install.log 2>&1; then
-			aba_warning \
+			aba_warn \
 				"an error occurred during rpm installation. See the logs at .dnf-install.log." \
 				"If dnf cannot be used to install rpm packages, please install the following packages manually and try again!" 
 			aba_info $rpms_to_install >&2
@@ -1346,22 +1350,23 @@ try_cmd() {
 	local _tc_count=1 _tc_pause=$_tc_delay _tc_rc=0
 
 	while [ $_tc_count -le $_tc_attempts ]; do
-		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
-			aba_info "Attempt $_tc_count/$_tc_attempts: $_tc_label"
+		# Only show retry messages from attempt 2 onwards (silence = success on first try)
+		[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && [ $_tc_count -gt 1 ] && \
+			aba_info "Retry $_tc_count/$_tc_attempts: $_tc_label" >&2
 
 		_tc_rc=0
 		"$@" || _tc_rc=$?
 
 		if [ $_tc_rc -eq 0 ]; then
-			[ -z "$_tc_silent" ] && [ $_tc_attempts -gt 1 ] && \
-				aba_info_ok "$_tc_label"
+			[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && [ $_tc_attempts -gt 1 ] && \
+				aba_success "$_tc_label" >&2
 			return 0
 		fi
 
 		_tc_count=$(( _tc_count + 1 ))
 		if [ $_tc_count -le $_tc_attempts ]; then
 			[ -z "$_tc_silent" ] && [ -z "$_tc_quiet" ] && \
-				aba_warning "$_tc_label failed (attempt $(( _tc_count - 1 ))/$_tc_attempts), retrying in ${_tc_pause}s ..."
+				aba_warn "$_tc_label failed (attempt $(( _tc_count - 1 ))/$_tc_attempts), retrying in ${_tc_pause}s ..."
 			sleep $_tc_pause
 			_tc_pause=$(( _tc_pause + _tc_increase ))
 		fi
@@ -1614,8 +1619,9 @@ _fetch_cached() {
 	local tmp
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
-	# Let curl errors show (don't suppress stderr)
-	if [[ -n "$tmp" ]] && curl -f -sS "$url" > "$tmp"; then
+	# Retry transient failures (DNS, connection reset) — curl --retry alone skips DNS errors
+	# Worst case: 3 × 8s max-time + 2 × 2s delay = ~28s
+	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 2 -q curl -f -s --connect-timeout 5 --max-time 8 "$url" -o "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
@@ -1626,6 +1632,7 @@ _fetch_cached() {
 			mv -f "$tmp" "$cache_file"
 		fi
 	else
+		aba_debug "fetch failed: $url"
 		rm -f "$tmp" 2>/dev/null || true
 	fi
 
@@ -2119,6 +2126,8 @@ replace-value-conf() {
 	# -v <string> : new value. If missing, remove the value
 	# -f <files>
 	# -q          : quiet (debug-level messages only)
+	# --lower     : convert value to lowercase before writing
+	# --upper     : convert value to uppercase before writing
 	#
 	# Handles single-quoted old values (e.g. reg_pw='p4ssw0rd').
 	# Auto-quotes new values that contain spaces or '#'.
@@ -2127,6 +2136,7 @@ replace-value-conf() {
 	aba_debug "Calling: replace-value-conf() $*"
 
 	local quiet=
+	local _rvc_case=
 
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -2150,12 +2160,32 @@ replace-value-conf() {
 				local quiet=1
 				shift
 				;;
+			--lower)
+				_rvc_case=lower
+				shift
+				;;
+			--upper)
+				_rvc_case=upper
+				shift
+				;;
 			*)
 				local files="$files $1"
 				shift
 				;;
 		esac
 	done
+
+	# Apply case transformation if requested
+	if [ -n "$_rvc_case" ] && [ -n "${value:-}" ]; then
+		local _orig_value="$value"
+		case "$_rvc_case" in
+			lower) value="${value,,}" ;;
+			upper) value="${value^^}" ;;
+		esac
+		if [ "$value" != "$_orig_value" ]; then
+			aba_info "Converted $name to ${_rvc_case}case: $value" >&2
+		fi
+	fi
 
 	# Auto-quote values that contain shell metacharacters so they survive sourcing.
 	# Safe unquoted: alphanumeric, dot, slash, colon, @, comma, equals, plus, hyphen, percent, underscore.
@@ -2229,7 +2259,7 @@ replace-value-conf() {
 		fi
 
 		if [ ! "$quiet" ]; then
-			[ "$value" ] && aba_info_ok "Added value ${name}=${_write_value} to file $f" >&2 || aba_info_ok "Clearing ${name} in file $f" >&2 
+			[ "$value" ] && aba_success "Added value ${name}=${_write_value} to file $f" >&2 || aba_success "Clearing ${name} in file $f" >&2 
 		else
 			[ "$value" ] && aba_debug "Added value ${name}=${_write_value} to file $f"     || aba_debug "Clearing ${name} in file $f"
 		fi
@@ -2241,7 +2271,7 @@ replace-value-conf() {
 	if [ "$_first_file" ] && [ "$value" ]; then
 		echo "${name}=${_write_value}" >> "$_first_file"
 		if [ ! "$quiet" ]; then
-			aba_info_ok "Added value ${name}=${_write_value} to file $_first_file" >&2
+			aba_success "Added value ${name}=${_write_value} to file $_first_file" >&2
 		else
 			aba_debug "Added value ${name}=${_write_value} to file $_first_file"
 		fi
@@ -2596,7 +2626,7 @@ calculate_and_show_completion() {
     local end_time=$(date -d "+${total_duration} minutes" "$time_format")
 
     # 4. Output
-    aba_info_ok "Installation started at ${start_time} — estimated completion: ${end_time} (${total_duration} minutes)"
+    aba_success "Installation started at ${start_time} — estimated completion: ${end_time} (${total_duration} minutes)"
 }
 
 
@@ -3175,8 +3205,8 @@ download_all_catalogs() {
 # Usage: wait_for_all_catalogs <version_short>
 # Example: wait_for_all_catalogs "4.19"
 #
-# NOTE: This function is called from add-operators-to-imageset.sh where stdout
-#       is redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
+# NOTE: This function is called from reg-create-imageset-config.sh where stdout
+#       may be redirected to YAML file. ALL user messages MUST use >&2 (stderr)!
 wait_for_all_catalogs() {
 	local version_short="${1}"
 	
@@ -3216,7 +3246,7 @@ wait_for_all_catalogs() {
 	aba_debug "community-operator catalog ready"
 	
 	# Must use stderr since stdout may be redirected to YAML file
-	aba_info_ok "All catalog downloads completed for OCP $version_short" >&2
+	aba_success "All catalog downloads completed for OCP $version_short" >&2
 }
 
 # Copy shipped catalog indexes into .index/ if live versions don't exist yet.
@@ -3390,7 +3420,7 @@ _run_oc_mirror_with_retry() {
 			base_cmd="${base_cmd/--config imageset-config.yaml/--config imageset-config-digest.yaml}"
 			aba_info "Using transferred digest ISC for air-gap catalog pinning"
 		else
-			aba_warning "imageset-config-digest.yaml not found in mirror/data/." \
+			aba_warn "imageset-config-digest.yaml not found in mirror/data/." \
 				"On disconnected hosts, this file is required for catalog pinning." \
 				"Copy it from the connected host or use 'aba save' which creates" \
 				"an upgrade bundle containing it automatically." \
@@ -3444,25 +3474,25 @@ _run_oc_mirror_with_retry() {
 
 		try=$(( try + 1 ))
 		if [ $try -le $try_tot ]; then
-			aba_warning "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
+			aba_warn "[ABA] oc-mirror $action failed (exit=$ret: $decoded) -- history: [$exit_history] ... Trying again." >&2
 		fi
 	done
 
 	if [ "$failed" ]; then
 		try=$(( try - 1 ))
-		aba_warning -n "Image $action aborted ..." >&2
+		aba_warn -n "Image $action aborted ..." >&2
 		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
-		aba_warning \
+		aba_warn \
 			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
 			"View https://status.redhat.com/ for any current issues or planned maintenance."
-		[ $try_tot -eq 1 ] && aba_warning "         Consider using the --retry option!" >&2
+		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 
 		return 1
 	fi
 
 	echo
 	local _past="${action}ed"; [ "$action" = "save" ] && _past="saved"
-	aba_info_ok -n "Images $_past successfully!"
+	aba_success -n "Images $_past successfully!"
 	[ $try_tot -gt 1 ] && [ $try -gt 1 ] && echo_white " (after $try attempts!)" || echo
 
 	return 0
@@ -3621,7 +3651,7 @@ validate_pull_secret() {
 	local rc=$?
 	
 	if [[ $rc -eq 0 ]]; then
-		aba_info_ok "Pull secret validated successfully"
+		aba_success "Pull secret validated successfully"
 		return 0
 	else
 		echo_red "[ABA] Error: Pull secret validation failed" >&2

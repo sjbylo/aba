@@ -20,7 +20,7 @@ _mock_dir=$(mktemp -d)
 _test_out=$(mktemp)
 trap 'rm -rf "$_mock_dir" "$_test_out"' EXIT
 
-# Source include_all for aba_debug, aba_warning, etc.
+# Source include_all for aba_debug, aba_warn, etc.
 source scripts/include_all.sh dummy_arg 2>/dev/null
 
 # Override aba_abort so it doesn't exit the test runner

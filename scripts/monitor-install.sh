@@ -76,20 +76,20 @@ if [ $ret -ne 0 ]; then
 	exit $ret
 fi
 
-aba_info_ok "The cluster has been successfully installed!"
+aba_success "The cluster has been successfully installed!"
 
 # --- Externalize cluster state (ADR-007) ---
 externalize_cluster_state
 
-aba_info_ok "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
-aba_info_ok "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
+aba_success "Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or"
+aba_success "Run '. <(aba login)' to log into the cluster using kubeadmin's password."
 if [ -f "$regcreds_dir/pull-secret-mirror.json" ]; then
-	aba_info_ok "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)."
-	aba_info_ok "Run 'aba day2-osus' to configure the OpenShift Update Service."
+	aba_success "Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)."
+	aba_success "Run 'aba day2-osus' to configure the OpenShift Update Service."
 fi
-aba_info_ok "Run 'aba day2-ntp' to configure NTP on this cluster."
-aba_info_ok "Run 'aba info' to view this information again."
-aba_info_ok "Run 'aba help' and 'aba -h' for more options."
+aba_success "Run 'aba day2-ntp' to configure NTP on this cluster."
+aba_success "Run 'aba info' to view this information again."
+aba_success "Run 'aba help' and 'aba -h' for more options."
 
 if [ ! -f ~/.aba_first_cluster_success ]; then
 	_bdr=$(printf '═%.0s' $(seq 1 64))

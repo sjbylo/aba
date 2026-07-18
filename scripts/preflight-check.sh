@@ -27,9 +27,9 @@ preflight_check_dns() {
 		total=$((total + 1))
 		# Self-referencing query — works in air-gapped environments (no internet needed)
 		if dig @"$ip" +time=3 +tries=1 version.bind chaos txt >/dev/null 2>&1; then
-			aba_info_ok "DNS server $ip is reachable"
+			aba_success "DNS server $ip is reachable"
 		else
-			aba_warning "DNS server $ip is not reachable"
+			aba_warn "DNS server $ip is not reachable"
 			failed=$((failed + 1))
 			_preflight_warnings=$((_preflight_warnings + 1))
 		fi
@@ -43,7 +43,7 @@ preflight_check_dns() {
 		_preflight_errors=$((_preflight_errors + 1))
 		# Undo the warnings that were already counted, replace with single error
 		_preflight_warnings=$((_preflight_warnings - failed))
-		aba_warning "All $total DNS server(s) are unreachable!"
+		aba_warn "All $total DNS server(s) are unreachable!"
 	fi
 }
 
@@ -64,18 +64,18 @@ preflight_check_ntp() {
 		if [ "$ntp_method" = "chronyd" ]; then
 			# chronyd -Q queries without changing system clock, no root needed
 			if timeout 5 chronyd -Q "server $host iburst" >/dev/null 2>&1; then
-				aba_info_ok "NTP server $host is reachable"
+				aba_success "NTP server $host is reachable"
 			else
-				aba_warning "NTP server $host is not reachable"
+				aba_warn "NTP server $host is not reachable"
 				failed=$((failed + 1))
 				_preflight_warnings=$((_preflight_warnings + 1))
 			fi
 		else
 			# Fallback: UDP port check
 			if timeout 3 bash -c "echo >/dev/udp/$host/123" 2>/dev/null; then
-				aba_info_ok "NTP server $host is reachable (UDP port 123)"
+				aba_success "NTP server $host is reachable (UDP port 123)"
 			else
-				aba_warning "NTP server $host is not reachable"
+				aba_warn "NTP server $host is not reachable"
 				failed=$((failed + 1))
 				_preflight_warnings=$((_preflight_warnings + 1))
 			fi
@@ -89,7 +89,7 @@ preflight_check_ntp() {
 	if [ $failed -eq $total ]; then
 		_preflight_errors=$((_preflight_errors + 1))
 		_preflight_warnings=$((_preflight_warnings - failed))
-		aba_warning "All $total NTP server(s) are unreachable!"
+		aba_warn "All $total NTP server(s) are unreachable!"
 	fi
 }
 
@@ -144,7 +144,7 @@ preflight_check_ip_conflicts() {
 			if [ -z "$iface" ]; then
 				aba_debug "Could not determine interface for $ip, falling back to ping"
 				if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
-					aba_warning "IP conflict: $ip is already in use!"
+					aba_warn "IP conflict: $ip is already in use!"
 					_preflight_errors=$((_preflight_errors + 1))
 					conflicts=$((conflicts + 1))
 				else
@@ -156,16 +156,16 @@ preflight_check_ip_conflicts() {
 			aba_debug "Using interface $iface for arping $ip"
 			arping_err=$(arping -c 1 -w 2 -I "$iface" "$ip" 2>&1 >/dev/null) && arping_rc=0 || arping_rc=$?
 			if [ $arping_rc -eq 0 ]; then
-				aba_warning "IP conflict: $ip is already in use!"
+				aba_warn "IP conflict: $ip is already in use!"
 				_preflight_errors=$((_preflight_errors + 1))
 				conflicts=$((conflicts + 1))
 			elif echo "$arping_err" | grep -qi "permission\|operation not permitted\|setuid\|socket\|invalid option\|device" 2>/dev/null; then
 				# arping can fail for reasons other than "no reply" (permissions, missing device);
 				# fall back to ping for this and all subsequent IPs
-				aba_warning "arping failed ($arping_err), falling back to ping"
+				aba_warn "arping failed ($arping_err), falling back to ping"
 				ip_check_method="ping"
 				if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
-					aba_warning "IP conflict: $ip is already in use!"
+					aba_warn "IP conflict: $ip is already in use!"
 					_preflight_errors=$((_preflight_errors + 1))
 					conflicts=$((conflicts + 1))
 				else
@@ -176,7 +176,7 @@ preflight_check_ip_conflicts() {
 			fi
 		else
 			if ping -c 1 -W 2 "$ip" >/dev/null 2>&1; then
-				aba_warning "IP conflict: $ip is already in use!"
+				aba_warn "IP conflict: $ip is already in use!"
 				_preflight_errors=$((_preflight_errors + 1))
 				conflicts=$((conflicts + 1))
 			else
@@ -186,7 +186,7 @@ preflight_check_ip_conflicts() {
 	done
 
 	if [ $conflicts -eq 0 ]; then
-		aba_info_ok "No IP conflicts detected for $num_nodes node(s)"
+		aba_success "No IP conflicts detected for $num_nodes node(s)"
 	fi
 }
 
@@ -211,10 +211,10 @@ if [ $_preflight_errors -gt 0 ]; then
 	aba_abort "Pre-flight failed: $_preflight_errors error(s), $_preflight_warnings warning(s)"
 fi
 if [ $_preflight_warnings -gt 0 ]; then
-	aba_warning "Pre-flight completed with $_preflight_warnings warning(s)"
+	aba_warn "Pre-flight completed with $_preflight_warnings warning(s)"
 	aba_info "To skip network and vSphere checks, run: aba --verify conf (see aba.conf)"
 	sleep 2
 fi
-aba_info_ok "Pre-flight validation passed"
+aba_success "Pre-flight validation passed"
 
 exit 0

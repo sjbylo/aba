@@ -33,7 +33,30 @@ mirror:
 #  - name: quay.io/containerdisks/centos-stream:9
 #  - name: quay.io/containerdisks/fedora:latest
 #  helm: {}
-{%- if ops == '' and op_sets == '' %}
+{%- if has_operators == 'true' and operators_data %}
+  operators:
+{%- for cat in operators_data %}
+  - catalog: {{ cat.catalog }}
+{%- if cat.all %}
+    packages:
+{%- else %}
+    packages:
+{%- set current_group = {'name': ''} %}
+{%- for pkg in cat.packages %}
+{%- if pkg.group and pkg.group != current_group.name %}
+{%- if current_group.update({'name': pkg.group}) %}{% endif %}
+    # {{ pkg.group }} operators
+{%- endif %}
+    - name: {{ pkg.name }}{% if pkg.comment %}  # {{ pkg.comment }}{% endif %}
+
+{%- if pkg.channel %}
+      channels:
+      - name: "{{ pkg.channel }}"
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- else %}
 #  operators:
 #  - catalog: registry.redhat.io/redhat/redhat-operator-index:v{{ tgt_major if (ocp_upgrade_to is defined and ocp_upgrade_to and ocp_upgrade_to != ocp_version) else ocp_ver_major }}
 #    packages:

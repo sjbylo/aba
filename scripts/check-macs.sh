@@ -43,7 +43,7 @@ do
 	if echo "$all_neighbors" | grep -qi " lladdr $mac\b"; then
 		# State-aware warning: show states we saw for this MAC (STALE/REACHABLE/etc.)
 		states="$(echo "$all_neighbors" | grep -i " lladdr $mac\b" | awk '{print $NF}' | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
-		aba_warning "Mac address $mac might already be in use (found in system neighbor cache) [states: ${states:-unknown}]."
+		aba_warn "Mac address $mac might already be in use (found in system neighbor cache) [states: ${states:-unknown}]."
 		IN_ARP_CACHE=1
 		list_of_matching_entries+=("$mac")
 	fi
@@ -117,7 +117,7 @@ if ((${#list_of_matching_entries[@]} > 0)); then
 fi
 
 if [ "$IN_ARP_CACHE" ]; then
-	aba_warning \
+	aba_warn \
 		"Mac address conflicts may cause the OpenShift installation to fail!" \
 		"Consider changing 'mac_prefix' in cluster.conf and try again." \
 		"After clearing the neighbor cache & pinging IPs, no more mac address conflicts detected!"

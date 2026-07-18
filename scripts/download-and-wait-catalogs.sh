@@ -24,5 +24,5 @@ download_all_catalogs "$ocp_ver_short"
 # Wait for all to complete
 wait_for_all_catalogs "$ocp_ver_short"
 
-aba_info_ok "All operator catalogs ready for OCP $ocp_ver_short"
+aba_success "All operator catalogs ready for OCP $ocp_ver_short"
 

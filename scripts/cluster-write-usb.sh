@@ -50,10 +50,10 @@ if [ -z "$usb_dev" ]; then
 	echo
 	# Check for USB-connected devices
 	if ! lsblk -d -n -o NAME,TRAN -e 11 | grep -q 'usb'; then
-		aba_warning "No USB devices detected. Insert a USB drive and try again, or specify the device manually."
+		aba_warn "No USB devices detected. Insert a USB drive and try again, or specify the device manually."
 		echo
 	fi
-	aba_warning "Choose carefully — the target device will be COMPLETELY OVERWRITTEN."
+	aba_warn "Choose carefully — the target device will be COMPLETELY OVERWRITTEN."
 	echo
 	read -rp "[ABA] Enter target device (e.g. /dev/sdX): " usb_dev
 fi
@@ -76,7 +76,7 @@ dev_size=$(lsblk -b -d -n -o SIZE "$usb_dev" 2>/dev/null || echo "unknown")
 dev_model=$(lsblk -d -n -o MODEL "$usb_dev" 2>/dev/null | xargs || echo "unknown")
 
 echo
-aba_warning "This will OVERWRITE ALL DATA on: $usb_dev ($dev_model, $(numfmt --to=iec-i --suffix=B "$dev_size" 2>/dev/null || echo "$dev_size bytes"))"
+aba_warn "This will OVERWRITE ALL DATA on: $usb_dev ($dev_model, $(numfmt --to=iec-i --suffix=B "$dev_size" 2>/dev/null || echo "$dev_size bytes"))"
 echo
 echo "Command that will be executed:"
 echo
@@ -95,7 +95,7 @@ sudo dd if="$iso_file" of="$usb_dev" bs=4M conv=fsync status=progress
 sync
 
 echo
-aba_info_ok "ISO written successfully to $usb_dev"
+aba_success "ISO written successfully to $usb_dev"
 aba_info "You can now boot your server from this USB device."
 aba_info "Verify: the server's BIOS/UEFI boot order must include USB boot."
 aba_info "Tip: Most server management interfaces (iLO, iDRAC, BMC) can also mount"

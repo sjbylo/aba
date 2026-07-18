@@ -38,5 +38,5 @@ mv "$regcreds_dir" "${regcreds_dir}.bk"
 aba_info "Credentials backed up to ${regcreds_display}.bk/"
 
 echo
-aba_info_ok "Existing registry deregistered (registry itself was not modified)."
+aba_success "Existing registry deregistered (registry itself was not modified)."
 aba_info "Credentials backed up to: ${regcreds_display}.bk/"
