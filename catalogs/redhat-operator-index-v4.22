@@ -27,7 +27,7 @@ cluster-observability-operator                          Cluster Observability Op
 clusterresourceoverride                                 ClusterResourceOverride Operator                             stable
 compliance-operator                                     Compliance Operator                                          stable
 console-plugin-operator                                 External Secrets Management Console                          tech-preview-v1
-container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.16
+container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.17
 costmanagement-metrics-operator                         Cost Management Metrics Operator                             stable
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
@@ -103,8 +103,8 @@ opentelemetry-product                                   Red Hat build of OpenTel
 pf-status-relay-operator                                pf-status-relay-operator                                     stable
 policy-controller-operator                              Policy Controller Operator                                   stable
 ptp-operator                                            PTP Operator                                                 stable
-quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.16
-quay-operator                                           Red Hat Quay                                                 stable-3.16
+quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.17
+quay-operator                                           Red Hat Quay                                                 stable-3.17
 recipe                                                  Recipe                                                       stable-4.22
 red-hat-hawtio-operator                                 HawtIO Operator                                              v2
 redhat-oadp-operator                                    OADP Operator                                                stable
