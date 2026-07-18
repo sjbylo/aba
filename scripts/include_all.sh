@@ -3483,7 +3483,7 @@ _run_oc_mirror_with_retry() {
 		aba_warn -n "Image $action aborted ..." >&2
 		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
 		aba_warn \
-			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
+			"Check the output above for specific errors (auth, network, timeout). Resolve any issues and try again." \
 			"View https://status.redhat.com/ for any current issues or planned maintenance."
 		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 

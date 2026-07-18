@@ -33,12 +33,12 @@ source scripts/vm-vmw.sh
 
 set +e
 trap - ERR
-vmp_upload_iso "$ASSETS_DIR/agent.$ARCH.iso" "$ISO_DATASTORE" "images/agent-${CLUSTER_NAME}.iso"
-ret=$?
-if [ $ret -ne 0 ]; then
+if ! try_cmd -n 3 -d 5 -D 5 -l "ISO upload to [$ISO_DATASTORE]" -- \
+	vmp_upload_iso "$ASSETS_DIR/agent.$ARCH.iso" "$ISO_DATASTORE" "images/agent-${CLUSTER_NAME}.iso"
+then
 	aba_abort "ISO file failed to upload!" \
-		"The ISO may be attached to a running VM and cannot be overwritten." \
-		"Stop the VM first with 'aba stop' and try again."
+		"Common causes: the ISO is attached to a running VM (stop it with 'aba stop')," \
+		"a stale file on the datastore (delete it via 'govc datastore.rm'), or a transient vCenter/datastore error."
 fi
 
 exit 0
