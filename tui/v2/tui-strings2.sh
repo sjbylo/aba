@@ -397,6 +397,9 @@ TUI2_MSG_BASKET_EMPTY="Basket is empty.\n\nUse 'Select Operator Sets' or 'Search
 TUI2_MSG_BUNDLE_PATH_PROMPT="Create a portable bundle (tar) containing the ABA repo,\nCLI tools, registry installer, and container images.\n\nThis bundle can be transferred to a disconnected\nenvironment via USB or other media.\n\nEnter output path (version suffix added automatically):"
 TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\nUse --light to exclude large archives (saves disk space)?"
 
+TUI2_MSG_UPGRADE_NEEDS_RELEASE="Upgrade requires release images.\n\nRelease image exclusion (excl_platform) has been\nswitched off automatically so the upgrade target\nimages will be included."
+TUI2_MSG_EXCL_PLATFORM_OFFER="Release images for v%s are already in the\nmirror registry.\n\nExclude them from this save to reduce\ntransfer size?\n\n(Only new/changed operators will be saved)"
+
 # =============================================================================
 # Messages — Execution / Exit
 # =============================================================================
