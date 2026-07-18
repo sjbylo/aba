@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.5...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.6...HEAD)
+
+---
+
+## [1.1.6](https://github.com/sjbylo/aba/releases/tag/v1.1.6) - 2026-07-18
+
+Smart excl_platform guards, ISC generation rewrite, RFC 1123 domain normalization, and reliability fixes.
+
 
 ### Added
 
