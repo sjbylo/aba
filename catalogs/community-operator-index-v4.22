@@ -135,6 +135,7 @@ flux                                                    Flux                    
 fossul-operator                                         Fossul Operator                                              alpha
 fqdn-egress-operator                                    FQDN Egress Operator                                         stable
 github-arc-operator                                     github-arc-operator                                          alpha
+gitlab-operator-kubernetes                              GitLab                                                       stable
 gitops-primer                                           gitops-primer                                                alpha
 gitwebhook-operator                                     GitWebhook operator                                          alpha
 global-load-balancer-operator                           Global Load Balancer Operator                                alpha
