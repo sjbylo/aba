@@ -130,7 +130,7 @@ do
 			continue
 		fi
 		if ! $showed_wait_msg; then
-			aba_info "Ensuring CLI downloads are complete ..."
+			aba_info "Waiting for background CLI downloads to finish ..."
 			showed_wait_msg=true
 		fi
 		# Idempotent start (guarantees cmd.sh exists for the wait)
@@ -147,9 +147,11 @@ do
 			fi
 		fi
 	else
-		# Skip download if an install task for this tool is already running or
-		# done — the install's make handles the download via file prerequisites.
-		# Starting both would race on the same tarball (ADR-008 Finding 5).
+		# Skip download only if an install task for this tool is CURRENTLY
+		# RUNNING — its Make handles the download via file prerequisites and
+		# starting both would race on the same tarball (ADR-008 Finding 5).
+		# A previously completed install (possibly for an older version) does
+		# NOT block — there's no race with a finished process.
 		inst_task=""
 		case "$tool" in
 			oc-mirror)          inst_task="$TASK_INST_OC_MIRROR" ;;
@@ -158,8 +160,8 @@ do
 			govc)               inst_task="$TASK_INST_GOVC" ;;
 			butane)             inst_task="$TASK_INST_BUTANE" ;;
 		esac
-		if [[ -n "$inst_task" ]] && run_once -A -i "$inst_task" 2>/dev/null; then
-			aba_debug "Skipping download for $tool — install task running or done"
+		if [[ -n "$inst_task" ]] && run_once -A -i "$inst_task" 2>/dev/null && ! run_once -p -i "$inst_task" 2>/dev/null; then
+			aba_debug "Skipping download for $tool — install task currently running"
 			continue
 		fi
 

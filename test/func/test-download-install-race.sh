@@ -1,14 +1,17 @@
 #!/bin/bash
-# Test: download/install task ID mismatch race (ADR-008 Finding 5)
+# Test: download/install task race condition (ADR-008 Finding 5)
 #
-# Verifies that cli-download-all.sh skips downloading a tool when an
-# install task for that tool is already running or completed.
-# This prevents two processes from racing on the same tarball.
+# Verifies that cli-download-all.sh only skips downloading a tool when an
+# install task for that tool is CURRENTLY RUNNING (lock held).
+# A previously completed install (possibly for a different version) must NOT
+# block a new download — only an actively running install races on the tarball.
 #
 # Scenarios:
-#   1. Install task RUNNING  → download should be SKIPPED
-#   2. Install task COMPLETED → download should be SKIPPED
-#   3. No install task        → download should PROCEED
+#   1. No install task        → download should PROCEED
+#   2. Install task COMPLETED → download should PROCEED (no race)
+#   3. Install task RUNNING   → download should be SKIPPED (race risk)
+#   4. Install task FAILED    → download should PROCEED (no race)
+#   5. Version switch: old install done, new download needed → PROCEED
 
 set -euo pipefail
 
@@ -37,11 +40,10 @@ echo "======================================================="
 echo ""
 
 # --- Helper: check if cli-download-all.sh would skip a tool ---
-# Uses run_once -A (active = running or completed), same as cli-download-all.sh
-
+# Matches the FIXED logic: skip only if active AND NOT completed (= running)
 check_would_skip() {
 	local inst_task="$1"
-	run_once -A -i "$inst_task" 2>/dev/null
+	run_once -A -i "$inst_task" 2>/dev/null && ! run_once -p -i "$inst_task" 2>/dev/null
 }
 
 # ── Test 1: No install task → download should PROCEED ──
@@ -53,18 +55,18 @@ else
 	log_pass "Download proceeds when no install task exists"
 fi
 
-# ── Test 2: Install task COMPLETED → download should be SKIPPED ──
+# ── Test 2: Install task COMPLETED → download should PROCEED ──
 echo ""
-echo "Test 2: Install task completed (run_once ran to completion)"
+echo "Test 2: Install task completed — download should PROCEED (no race)"
 
 TASK_TEST_DONE="test:inst:done"
 run_once -i "$TASK_TEST_DONE" -- true
 run_once -q -w -i "$TASK_TEST_DONE"
 
 if check_would_skip "$TASK_TEST_DONE"; then
-	log_pass "Download skipped when install task completed"
+	log_fail "Download skipped despite install being completed (no race risk)"
 else
-	log_fail "Download NOT skipped despite install task being completed"
+	log_pass "Download proceeds when install task previously completed"
 fi
 
 # ── Test 3: Install task RUNNING (lock held) → download should be SKIPPED ──
@@ -85,26 +87,25 @@ fi
 # Clean up the slow task
 run_once -r -i "$TASK_TEST_SLOW"
 
-# ── Test 4: Install task FAILED → still skip (tarball may be partial) ──
+# ── Test 4: Install task FAILED → download should PROCEED ──
 echo ""
-echo "Test 4: Install task failed (non-zero exit)"
+echo "Test 4: Install task failed — download should PROCEED (no race)"
 
 TASK_TEST_FAIL="test:inst:fail"
 run_once -i "$TASK_TEST_FAIL" -- false
 run_once -q -w -i "$TASK_TEST_FAIL" || true
 
 if check_would_skip "$TASK_TEST_FAIL"; then
-	log_pass "Download skipped when install task failed (tarball may exist)"
+	log_fail "Download skipped despite install having failed (no race risk)"
 else
-	log_fail "Download NOT skipped despite install exit file existing"
+	log_pass "Download proceeds when install task previously failed"
 fi
 
-# ── Test 5: Full integration — run_once install + check skip ──
+# ── Test 5: Full integration — running install blocks, completed does not ──
 echo ""
-echo "Test 5: Full run_once integration — start install, verify skip"
+echo "Test 5: Full run_once integration — running blocks, completed does not"
 
 TASK_TEST_INST="test:install:widget"
-TASK_TEST_DL="test:download:widget"
 
 # Start a slow "install" task in background
 run_once -i "$TASK_TEST_INST" -- sleep 5
@@ -119,7 +120,7 @@ else
 	log_fail "Install task not in running state — test setup issue"
 fi
 
-# Now check: would a download for this tool be skipped?
+# While running: download should be skipped
 if check_would_skip "$TASK_TEST_INST"; then
 	log_pass "Download correctly skipped while install is running"
 else
@@ -129,16 +130,40 @@ fi
 # Wait for install to finish
 run_once -q -w -i "$TASK_TEST_INST"
 
-# After completion: should still skip (exit file exists now)
+# After completion: download should PROCEED (no more race)
 if check_would_skip "$TASK_TEST_INST"; then
-	log_pass "Download correctly skipped after install completed"
+	log_fail "Download still skipped after install completed (should proceed)"
 else
-	log_fail "Download NOT skipped after install completed"
+	log_pass "Download proceeds after install completed"
 fi
 
-# ── Test 6: Verify all TASK_INST_* variables resolve correctly ──
+# ── Test 6: Version switch scenario ──
 echo ""
-echo "Test 6: All TASK_INST_* variables are defined"
+echo "Test 6: Version switch — old install done, new version download needed"
+
+TASK_OLD_INST="test:install:oc-old-ver"
+
+# Simulate old install completed
+run_once -i "$TASK_OLD_INST" -- true
+run_once -q -w -i "$TASK_OLD_INST"
+
+# Verify it completed
+if run_once -p -i "$TASK_OLD_INST" 2>/dev/null; then
+	log_pass "Old install task is completed (simulating version switch)"
+else
+	log_fail "Old install task setup failed"
+fi
+
+# A new download for a different version should NOT be blocked
+if check_would_skip "$TASK_OLD_INST"; then
+	log_fail "New version download blocked by old completed install"
+else
+	log_pass "New version download proceeds despite old install being done"
+fi
+
+# ── Test 7: Verify all TASK_INST_* variables resolve correctly ──
+echo ""
+echo "Test 7: All TASK_INST_* variables are defined"
 
 all_defined=true
 for var in TASK_INST_OC_MIRROR TASK_INST_OC TASK_INST_OPENSHIFT_INSTALL \
@@ -152,9 +177,9 @@ if $all_defined; then
 	log_pass "All TASK_INST_* variables are defined"
 fi
 
-# ── Test 7: TASK_DL_* and TASK_INST_* have different values ──
+# ── Test 8: TASK_DL_* and TASK_INST_* have different values ──
 echo ""
-echo "Test 7: Download and install task IDs are distinct"
+echo "Test 8: Download and install task IDs are distinct"
 
 distinct=true
 for pair in \
