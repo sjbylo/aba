@@ -608,7 +608,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--vendor" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[[ "$2" =~ ^(auto|quay|docker)$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, or docker"
+		[[ "$2" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR})$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_QUAY_NG_VENDOR"
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2

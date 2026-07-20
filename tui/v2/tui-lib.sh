@@ -328,7 +328,7 @@ _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 _TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
 
 # Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
-# Values: "auto", "quay", "docker"
+# Values: "auto", "quay", "docker", "quay-ng"
 _TUI_REG_VENDOR="auto"
 if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null || true
@@ -1120,7 +1120,7 @@ _tui_settings_menu_reg_vendor() {
 	local pick
 	pick=$(<"$_TUI_TMP")
 	case "$pick" in
-		auto|quay|docker)
+		auto|quay|docker|$_QUAY_NG_VENDOR)
 			if [[ ! -f "$vf" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "mirror.conf not available." 0 0
 				return 1

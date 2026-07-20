@@ -37,10 +37,13 @@ MR_TARBALL := mirror-registry-$(MR_ARCH).tar.gz
 
 # Determine registry prerequisite based on vendor and architecture.
 # Docker registry needs only the lightweight Docker image; Quay needs the full mirror-registry tarball.
+# quay-ng needs a lightweight saved container image (~64MB).
 # arm64 always uses Docker (Quay binary not available for that architecture).
 _REG_VENDOR := $(shell grep '^reg_vendor=' mirror.conf 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*\#.*//')
 ifeq ($(_REG_VENDOR),docker)
   _REGISTRY_PREREQ := docker-reg-image.tgz
+else ifeq ($(_REG_VENDOR),quay-ng)
+  _REGISTRY_PREREQ := quay-ng-image.tgz
 else ifeq ($(arch),aarch64)
   _REGISTRY_PREREQ := docker-reg-image.tgz
 else
@@ -196,7 +199,7 @@ mirror-registry: $(MR_TARBALL) ## Extract the mirror-registry binary
 	tar xmvzf $(MR_TARBALL) || { echo "[ABA] Error: $(MR_TARBALL) is corrupt or truncated. Deleting — re-run to re-download."; rm -f $(MR_TARBALL) mirror-registry execution-environment.tar image-archive.tar sqlite3.tar 2>/dev/null; exit 1; }
 
 .PHONY: download-registries
-download-registries: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL)) docker-reg-image.tgz
+download-registries: $(if $(filter aarch64,$(arch)),,$(MR_TARBALL)) docker-reg-image.tgz quay-ng-image.tgz
 
 mirror_registry_url = https://mirror.openshift.com/pub/cgw/mirror-registry/latest
 
@@ -225,6 +228,13 @@ DOCKER_REG_IMAGE := docker.io/library/registry:latest
 DOCKER_REG_FILE  := docker-reg-image.tgz
 $(DOCKER_REG_FILE):
 	@$(SCRIPTS)/download-docker-reg-image.sh $(DOCKER_REG_IMAGE) $(DOCKER_REG_FILE)
+
+# quay-ng registry image (Go-based single-binary Quay mirror registry)
+QUAY_NG_IMAGE ?= quay.io/sjbylo/quay-mirror:dev
+QUAY_NG_FILE  := quay-ng-image.tgz
+$(QUAY_NG_FILE):
+	@echo "[ABA] Pulling $(QUAY_NG_IMAGE) and saving to $(QUAY_NG_FILE) ..."
+	@podman pull $(QUAY_NG_IMAGE) && podman save -o $(QUAY_NG_FILE) $(QUAY_NG_IMAGE)
 
 .PHONY: install-docker-registry
 install-docker-registry:

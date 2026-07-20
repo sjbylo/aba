@@ -20,10 +20,11 @@ reg_user=init				# Username for the registry.
 reg_pw='p4ssw0rd'			# Registry password. Leave empty to auto-generate one (e.g. reg_pw=).
 					# Must be at least 8 characters with no whitespace and not include: "'`$
 
-reg_vendor=auto				# Registry type: auto, quay, or docker.
-					# auto   = Quay if available for this architecture, otherwise Docker.
-					# quay   = Mirror Registry for Red Hat OpenShift (Quay appliance).
-					# docker = Standard Docker/OCI registry (docker.io/library/registry).
+reg_vendor=auto				# Registry type: auto, quay, docker, or quay-ng.
+					# auto    = Quay if available for this architecture, otherwise Docker.
+					# quay    = Mirror Registry for Red Hat OpenShift (Quay appliance).
+					# docker  = Standard Docker/OCI registry (docker.io/library/registry).
+					# quay-ng = New Go-based Quay mirror registry (single binary, minimal resources). [ALPHA]
 
 data_dir=				# Optional: Absolute path to storage for images and temporary files.
 					# Quay installs to $data_dir/quay-install; oc-mirror cache to $data_dir/.oc-mirror.
