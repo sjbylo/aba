@@ -416,6 +416,7 @@ _record_result() {
 		local _status="FAIL (exit=$rc)"
 		[ "$rc" -eq 3 ] && _status="SKIP"
 		[ "$rc" -eq 5 ] && _status="FAIL (exit=5, orphan VMs or leftover containers)"
+		[ "$rc" -eq 255 ] && _status="CRASH (exit=255, suite killed/VM unreachable)"
 		$NOTIFY_CMD "[e2e] ${_status}: ${suite} (pool ${pool_num})" < /dev/null >/dev/null &
 	fi
 }
