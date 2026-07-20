@@ -472,7 +472,7 @@ If valid, extract and install:
 cat /path/to/ocp_mycluster_4.22.1_* | tar xvf -
 cd aba
 ./install
-aba         # Follow the instructions
+aba         # Follow the instructions (or use: abatui)
 ```
 
 The image-set archive file(s) are located under the `mirror/data/` directory inside the expanded ABA repository (e.g. `aba/mirror/data/mirror_000001.tar`). Install the mirror registry and load images:
@@ -481,7 +481,7 @@ The image-set archive file(s) are located under the `mirror/data/` directory ins
 aba -d mirror -H registry.example.com load --retry 3
 ```
 
-To install OpenShift:
+To create a cluster configuration and install OpenShift:
 
 ```
 aba cluster \
@@ -490,8 +490,11 @@ aba cluster \
     [--starting-ip <ip>] \
     [--api-vip <ip>] \
     [--ingress-vip <ip>]
+aba -d mycluster install
 ```
 
+For VMware/KVM, this creates VMs and completes the installation automatically.
+For bare metal, the install pauses to let you edit agent-config (MAC addresses, disk hints), then again after ISO generation so you can boot your servers.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
@@ -1919,8 +1922,6 @@ We need help! Here are some ideas for new features and enhancements.
 [Back to top](#quick-start)
 
 ---
-
-> Looking for the previous README? See [README_OLD.md](README_OLD.md).
 
 # License
 
