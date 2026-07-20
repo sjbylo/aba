@@ -163,6 +163,8 @@ preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS,
 .PHONY: iso
 iso: iso-agent-based/agent.$(arch).iso ## Build the agent-based iso file in iso-agent-based dir.
 	@echo "[ABA] ISO ready: $(CURDIR)/iso-agent-based/agent.$(arch).iso"
+	@echo "[ABA] Warning: The ISO contains certificates that expire 24 hours after creation."
+	@echo "[ABA]          Boot your servers and complete the install within that window."
 iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .preflight-done ~/bin/openshift-install   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	$(SCRIPTS)/generate-image.sh
 
