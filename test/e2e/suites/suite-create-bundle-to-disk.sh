@@ -283,7 +283,7 @@ test_end 0
 #    Both tests are kept for defense-in-depth.
 #
 #    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
-#      1st `aba install` -> creates agent configs, prints "Check & edit"
+#      1st `aba install` -> creates agent configs, prints "Review and edit"
 #      2nd `aba install` -> creates ISO, prints "Boot your servers"
 #      (3rd would monitor cluster -- not tested since no real BM servers)
 # ============================================================================
@@ -317,7 +317,7 @@ e2e_run_remote "Verify ISO not yet created" \
 
 # Phase 1: "aba install" stops after agent configs, shows MAC review instructions
 e2e_run_remote "First aba install (creates configs, stops for MAC review)" \
-    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Check & edit' /tmp/bm-phase1.out"
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Review and edit' /tmp/bm-phase1.out"
 e2e_run_remote "Verify .bm-message exists" "test -f ~/aba/$STANDARD/.bm-message"
 e2e_run_remote "Verify ISO not yet created (still)" \
     "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"

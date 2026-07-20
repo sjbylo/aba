@@ -38,6 +38,7 @@ plan_tests \
     "Setup: install aba and configure" \
     "Docker e2e-mirror-docker1: install and verify" \
     "Firewalld: port persistence" \
+    "Quay-ng: remote install, verify, uninstall" \
     "OC_MIRROR_CACHE: custom cache location" \
     "Save/Load: roundtrip" \
     "SNO: bootstrap after save/load" \
@@ -151,7 +152,30 @@ e2e_run_remote "Verify port 5000 persisted across restart" \
 test_end
 
 # ============================================================================
-# 4. OC_MIRROR_CACHE: verify custom cache directory
+# 4. Quay-ng [ALPHA]: install on remote host, verify, uninstall
+# ============================================================================
+test_begin "Quay-ng: remote install, verify, uninstall"
+
+e2e_run "Create e2e-mirror-quay-ng dir" "aba mirror --name e2e-mirror-quay-ng"
+e2e_add_to_mirror_cleanup "$PWD/e2e-mirror-quay-ng"
+e2e_run "Install quay-ng registry on remote host" \
+    "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa"
+e2e_run "Verify quay-ng registry access" "aba -d e2e-mirror-quay-ng verify"
+
+# Idempotent install: re-running install on a healthy registry must succeed
+e2e_run "Idempotent install (registry already running)" \
+    "aba -d e2e-mirror-quay-ng install"
+e2e_run "Verify registry still accessible after idempotent install" \
+    "aba -d e2e-mirror-quay-ng verify"
+
+e2e_run "Uninstall quay-ng registry" "aba --dir e2e-mirror-quay-ng uninstall"
+e2e_run "Verify registry unreachable after uninstall" \
+    "! curl -sk --connect-timeout 5 https://${DIS_HOST}:9999/v2/"
+
+test_end
+
+# ============================================================================
+# 5. OC_MIRROR_CACHE: verify custom cache directory
 # ============================================================================
 test_begin "OC_MIRROR_CACHE: custom cache location"
 
@@ -166,7 +190,7 @@ e2e_run -q "Clean up custom cache dir" "rm -rf \$HOME/.custom_oc_mirror_cache"
 test_end
 
 # ============================================================================
-# 5. Save/Load roundtrip
+# 6. Save/Load roundtrip
 # ============================================================================
 test_begin "Save/Load: roundtrip"
 
@@ -220,7 +244,7 @@ e2e_diag "Check oc-mirror cache (local)" \
 test_end
 
 # ============================================================================
-# 6. SNO: bootstrap after save/load (smoke test)
+# 7. SNO: bootstrap after save/load (smoke test)
 # ============================================================================
 test_begin "SNO: bootstrap after save/load"
 
@@ -259,7 +283,7 @@ e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 test_end
 
 # ============================================================================
-# 7. Testy user: re-sync with custom mirror configuration
+# 8. Testy user: re-sync with custom mirror configuration
 # ============================================================================
 test_begin "Testy user: re-sync with custom mirror conf"
 
@@ -321,7 +345,7 @@ e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 test_end
 
 # ============================================================================
-# 8. Bare-metal: ISO simulation (two-step install)
+# 9. Bare-metal: ISO simulation (two-step install)
 #
 #    Tests the BM two-step install flow from the SYNC perspective:
 #      - govc download-all behavior with platform=bm
@@ -336,7 +360,7 @@ test_end
 #    Both tests are kept for defense-in-depth.
 #
 #    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
-#      1st `aba install` -> creates agent configs, prints "Check & edit"
+#      1st `aba install` -> creates agent configs, prints "Review and edit"
 #      2nd `aba install` -> creates ISO, prints "Boot your servers"
 #      (3rd would monitor cluster -- not tested since no real BM servers)
 # ============================================================================
@@ -363,7 +387,7 @@ e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso
 
 # Phase 1: "aba install" stops after agent configs, shows MAC review instructions
 e2e_run "First aba install (generates configs, stops for MAC review)" \
-    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Check & edit' /tmp/bm-phase1.out"
+    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Review and edit' /tmp/bm-phase1.out"
 e2e_run "Verify .bm-message exists" "test -f $STANDARD/.bm-message"
 e2e_run "Verify ISO not yet created (still)" "! ls $STANDARD/iso-agent-based/agent.*.iso"
 
@@ -378,7 +402,7 @@ e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 test_end
 
 # ============================================================================
-# 9. Bare-metal: full 3-step OOB SNO install
+# 10. Bare-metal: full 3-step OOB SNO install
 #
 #    Full BM install using an out-of-band VMware VM to simulate real hardware.
 #    Uses the extracted vmp_* helpers from scripts/vm-vmw.sh for VM lifecycle.
@@ -406,7 +430,7 @@ e2e_run "Write BM MAC to macs.conf" \
 
 # Phase 1: agent configs
 e2e_run "BM Phase 1: generate agent configs" \
-    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase1.out && grep 'Check & edit' /tmp/bm3-phase1.out"
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase1.out && grep 'Review and edit' /tmp/bm3-phase1.out"
 e2e_run "Verify .bm-message exists" "test -f $SNO_BM/.bm-message"
 
 # Phase 2: ISO
@@ -480,7 +504,9 @@ e2e_run "Delete SNO cluster" \
 e2e_run "Delete standard cluster dir" "rm -rf $STANDARD"
 e2e_run "Uninstall e2e-mirror-docker1 registry" \
     "if [ -d e2e-mirror-docker1 ]; then aba --dir e2e-mirror-docker1 uninstall; else echo '[cleanup] e2e-mirror-docker1 already removed'; fi"
-e2e_run "Assert: registry fully removed on disN (docker1)" "e2e_assert_registry_removed"
+e2e_run "Uninstall e2e-mirror-quay-ng registry" \
+    "if [ -d e2e-mirror-quay-ng ]; then aba --dir e2e-mirror-quay-ng uninstall; else echo '[cleanup] e2e-mirror-quay-ng already removed'; fi"
+e2e_run "Assert: registry fully removed on disN (docker1/quay-ng)" "e2e_assert_registry_removed"
 e2e_run_remote "Remove e2e-mirror-datadir2 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir2"
 e2e_run "Uninstall mirror registry on disN" \
