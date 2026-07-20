@@ -115,17 +115,19 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 
 		$_QUAY_NG_VENDOR)
 			aba_info "Uninstalling $_QUAY_NG_VENDOR registry on remote host $reg_host ..."
-			$_ssh "systemctl --user stop quay.service 2>/dev/null; \
+			$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
+					systemctl --user stop quay.service; \
+				fi; \
 				rm -f ~/.config/containers/systemd/quay.container; \
 				systemctl --user daemon-reload 2>/dev/null; \
-				$SUDO rm -rf $reg_root" || \
+				[ -d '$reg_root' ] && $SUDO rm -rf '$reg_root'" || \
 				aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
 
 			# Post-uninstall assertions
 			_stale=""
 			$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
 			$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-			$_ssh "podman ps -a --format '{{.Names}}' | grep -q '^systemd-quay$'" && _stale+="  quay container still present"$'\n'
+			$_ssh "systemctl --user is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
 			if [ -n "$_stale" ]; then
 				aba_abort \
 					"$_QUAY_NG_VENDOR registry uninstall left stale state on $reg_host:" \
