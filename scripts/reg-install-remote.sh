@@ -1,7 +1,7 @@
 #!/bin/bash
 # Generic SSH orchestrator for remote registry install.
 # Called by reg-install.sh dispatcher with vendor name as first argument.
-# Usage: reg-install-remote.sh <quay|docker> [args...]
+# Usage: reg-install-remote.sh <quay|docker|quay-ng> [args...]
 #
 # Handles all SSH pre-checks, copies vendor-specific files to the remote host,
 # runs the install command remotely, and fetches back the CA certificate.
@@ -241,6 +241,81 @@ case "$vendor" in
 		remote_ca="$REGISTRY_CERTS_DIR/ca.crt"
 		;;
 
+	$_QUAY_NG_VENDOR)
+		# Pre-install assertion: detect stale state.
+		_stale=""
+		$_ssh "ss -tlnp | grep -q ':${reg_port} '" && _stale+="  Port $reg_port still listening"$'\n'
+		$_ssh "systemctl --user is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
+		if [ -n "$_stale" ]; then
+			aba_abort \
+				"Stale registry state detected on $reg_host before install:" \
+				"$_stale" \
+				"A previous install was not fully cleaned up." \
+				"Run 'aba -d $(basename "$PWD") uninstall' first, or clean up manually."
+		fi
+
+		ask "Install $_QUAY_NG_VENDOR registry on remote host ($reg_ssh_user@$reg_host:$reg_root), accessible via $reg_hostport" || exit 1
+
+		aba_info "Installing $_QUAY_NG_VENDOR registry on remote host $reg_host ..."
+
+		_image_file="quay-ng-image.tgz"
+		if [ ! -f "$_image_file" ]; then
+			aba_info "Downloading $_QUAY_NG_VENDOR image ..."
+			make -s "$_image_file"
+		fi
+
+		aba_info "Copying $_QUAY_NG_VENDOR image to remote host ..."
+		$_scp "$_image_file" "$_target:$remote_dir/"
+
+		aba_info "Running $_QUAY_NG_VENDOR install on remote host ..."
+		if ! $_ssh "
+			set -e
+			podman load -i $remote_dir/$_image_file
+			mkdir -p $reg_root
+			_abs_root=\$(cd $reg_root && pwd)
+			mkdir -p ~/.config/containers/systemd
+			cat > ~/.config/containers/systemd/quay.container <<QUADLET
+[Unit]
+Description=Quay OCI Registry ($_QUAY_NG_VENDOR)
+After=network-online.target
+
+[Container]
+Image=$_QUAY_NG_IMAGE
+Volume=\${_abs_root}:/data:Z
+PublishPort=${reg_port}:${reg_port}
+Exec=serve -data-dir /data -hostname $reg_host -addr :${reg_port}
+
+[Install]
+WantedBy=default.target
+QUADLET
+			systemctl --user daemon-reload
+			systemctl --user start quay.service
+			# Wait for initialization
+			for i in \$(seq 1 15); do
+				[ -f \"\$_abs_root/auth/admin-password\" ] && break
+				sleep 1
+			done
+			[ -f \"\$_abs_root/auth/admin-password\" ] || { echo 'ERROR: admin-password not created'; exit 1; }
+			# Enable linger for rootless persistence
+			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
+				loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes' || $SUDO loginctl enable-linger \"\$USER\"
+			fi
+		"; then
+			aba_abort "$_QUAY_NG_VENDOR install failed on remote host $reg_host." \
+				"Check the output above for details."
+		fi
+
+		# Read auto-generated credentials from remote
+		reg_user="admin"
+		reg_pw=$($_ssh "cat $reg_root/auth/admin-password")
+
+		# Write actual credentials back to mirror.conf so it stays in sync
+		replace-value-conf -n reg_user -v "$reg_user" -f mirror.conf
+		replace-value-conf -n reg_pw -v "'$reg_pw'" -f mirror.conf
+
+		remote_ca="$reg_root/ssl.cert"
+		;;
+
 	*)
 		aba_abort "Unknown registry vendor: $vendor"
 		;;
@@ -253,7 +328,7 @@ reg_post_install "$_target:$remote_ca" "$vendor" --ssh
 # Quay's mirror-registry handles its own post-install verification via Ansible.
 # Docker needs an explicit check because 'podman run -d' returns immediately
 # before the registry has fully loaded its auth config (htpasswd volume).
-if [ "$vendor" = "docker" ]; then
+if [ "$vendor" = "docker" ] || [ "$vendor" = "$_QUAY_NG_VENDOR" ]; then
 	if ! try_cmd -n 3 -d 5 -m "Verify registry ${reg_host}:${reg_port}" -- \
 		curl -k -fsSL --connect-timeout 10 -o /dev/null \
 			"https://${reg_host}:${reg_port}/v2/" -u "$reg_user:$reg_pw"; then

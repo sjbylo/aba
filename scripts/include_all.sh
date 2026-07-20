@@ -43,6 +43,11 @@ mkdir -p "$ABA_TMP"
 
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
+# Registry vendor name for the new Go-based Quay mirror registry.
+# Single rename point — change here to rename the vendor everywhere.
+_QUAY_NG_VENDOR="quay-ng"
+_QUAY_NG_IMAGE="${QUAY_NG_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
+
 # ===========================
 # Color Echo Functions
 # ===========================
@@ -655,11 +660,12 @@ verify-mirror-conf() {
 
 	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker|existing)$' || { echo_red "Error: reg_vendor must be auto, quay, docker, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE "^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_QUAY_NG_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	if [ "$reg_pw" ] && [ "$(resolved_reg_vendor)" != "docker" ]; then
+	# quay-ng auto-generates its password, so skip this check for that vendor.
+	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_QUAY_NG_VENDOR" ]]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
 			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
@@ -672,7 +678,7 @@ verify-mirror-conf() {
 }
 
 # Resolve reg_vendor to the actual registry type for this host.
-# User intent (auto/quay/docker/existing) stays in mirror.conf unchanged.
+# User intent (auto/quay/docker/quay-ng/existing) stays in mirror.conf unchanged.
 # This function is the ONLY place where "auto" is resolved to a concrete vendor.
 resolved_reg_vendor() {
 	local vendor="${reg_vendor:-auto}"
@@ -2275,6 +2281,12 @@ replace-value-conf() {
 		else
 			aba_debug "Added value ${name}=${_write_value} to file $_first_file"
 		fi
+		return 0
+	fi
+
+	# Clearing a key that doesn't exist is a no-op (already empty)
+	if [ ! "$value" ]; then
+		aba_debug "Key [$name] not found — nothing to clear"
 		return 0
 	fi
 

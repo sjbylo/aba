@@ -96,6 +96,10 @@ case "$vendor" in
 		reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 		echo "$_podman_ps" | grep -q "quay-app\|quay" && _found=1
 		;;
+	$_QUAY_NG_VENDOR)
+		reg_root=$data_dir/$_QUAY_NG_VENDOR
+		echo "$_podman_ps" | grep -q "^systemd-quay$" && _found=1
+		;;
 esac
 
 # Also check if registry data directory exists (container may be gone but data remains)
@@ -134,6 +138,11 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 				aba_info "Running command: $cmd"
 				$cmd || exit 1
 				;;
+			$_QUAY_NG_VENDOR)
+				aba_info "Removing $_QUAY_NG_VENDOR registry on $reg_host ..."
+				$_ssh "systemctl --user stop quay.service 2>/dev/null; rm -f ~/.config/containers/systemd/quay.container; systemctl --user daemon-reload 2>/dev/null; $SUDO rm -rf $reg_root" || \
+					aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+				;;
 		esac
 	else
 		case "$vendor" in
@@ -152,6 +161,13 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 				cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 				aba_info "Running command: $cmd"
 				$cmd || exit 1
+				;;
+			$_QUAY_NG_VENDOR)
+				aba_info "Removing $_QUAY_NG_VENDOR registry ..."
+				systemctl --user stop quay.service 2>/dev/null || true
+				rm -f "$HOME/.config/containers/systemd/quay.container"
+				systemctl --user daemon-reload 2>/dev/null || true
+				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
 				;;
 		esac
 	fi

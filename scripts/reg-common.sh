@@ -3,8 +3,9 @@
 # reg-common.sh -- Shared functions for registry install/uninstall
 # =============================================================================
 # Sourced by vendor-specific scripts (reg-install-quay.sh, reg-install-docker.sh,
-# etc.) and dispatchers. Provides common pre-checks, post-install, firewall,
-# and configuration functions so vendor scripts only contain vendor-specific logic.
+# reg-install-quay-ng.sh, etc.) and dispatchers. Provides common pre-checks,
+# post-install, firewall, and configuration functions so vendor scripts only
+# contain vendor-specific logic.
 #
 # Functions:
 #   reg_load_config        Load and validate mirror.conf, set common variables
@@ -234,6 +235,7 @@ reg_setup_data_dir() {
 	case "$vendor" in
 		quay)   reg_root="$data_dir/quay-install" ;;
 		docker) reg_root="$data_dir/docker-reg" ;;
+		$_QUAY_NG_VENDOR) reg_root="$data_dir/$_QUAY_NG_VENDOR" ;;
 		*)      reg_root="$data_dir/$vendor" ;;
 	esac
 
