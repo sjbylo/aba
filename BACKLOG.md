@@ -33,6 +33,26 @@ Issues or Pull Requests.
 
 ---
 
+## Validate SSH key files (private vs public)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-07-20
+
+**Problem:** Users can accidentally pass a public key (`.pub`) where a private
+key is expected (e.g. `reg_ssh_key` in mirror.conf, `ssh_key_file` in
+cluster.conf). SSH fails with a cryptic "error in libcrypto" message.
+
+**Proposed fix:** Add a validation helper that:
+1. Warns if file ends in `.pub` ("looks like a public key")
+2. Checks file contents: private keys contain `-----BEGIN ... PRIVATE KEY-----`
+3. Apply to `reg_ssh_key` (mirror.conf) and `ssh_key_file` (cluster.conf)
+   in their respective `verify-*-conf()` functions.
+
+**Workaround:** Use the correct key path (e.g. `~/.ssh/id_rsa` not `~/.ssh/id_rsa.pub`).
+
+---
+
 ## ISC upgrade mode broken by state.sh ocp_version override
 
 **Severity:** HIGH — produces wrong ISC, upgrade sync downloads wrong images
