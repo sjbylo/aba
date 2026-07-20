@@ -51,6 +51,8 @@ if [ -s reg-uninstall.sh ]; then
 fi
 
 # Fallback: no state file found -- try to detect running containers
+source scripts/reg-common.sh
+
 aba_warn \
 	"No registry state found in $regcreds_dir/state.sh." \
 	"Attempting to detect a running registry ..."
