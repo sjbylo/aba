@@ -141,18 +141,18 @@ preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS,
 	@touch .preflight-done
 
 .bm-message:
-	@echo
-	@echo "Next steps:"
-	@echo
-	@echo "1 cd $(shell basename $(PWD))       # If not already, change into your cluster directory."
-	@echo "2 Check & edit the agent configuration files: "
-	@echo "  - $(PWD)/install-config.yaml:"
-	@echo "  - $(PWD)/agent-config.yaml:"
-	@echo "    - You *MUST* modify the mac addresses to match your server's network interfaces."
-	@echo "    - Optionally, add drive & NIC hints and any other required modifications."
-	@echo "3 Run: 'aba install' again to create the ISO boot image."
-	@echo "  ABA will then show you how to write the ISO to a USB drive and boot your servers."
-	@echo 
+	@_cluster_dir=$(notdir $(CURDIR)); \
+	echo; \
+	echo "Next steps:"; \
+	echo; \
+	echo "1 Review and edit the agent configuration files:"; \
+	echo "  - $(PWD)/install-config.yaml"; \
+	echo "  - $(PWD)/agent-config.yaml"; \
+	echo "    You MUST set the MAC addresses to match your servers' network interfaces."; \
+	echo "    Optionally, add disk & NIC hints and any other required modifications."; \
+	echo "2 Run: 'aba -d $$_cluster_dir install' to create the ISO boot image."; \
+	echo "  ABA will then show you boot options (virtual media, USB, or PXE)."; \
+	echo
 	@touch .bm-message
 
 # Ensure openshift-install binary exists (delegates to cli/Makefile if missing)
@@ -167,30 +167,41 @@ iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .prefli
 	$(SCRIPTS)/generate-image.sh
 
 .bm-nextstep:
-	@echo
-	@echo "Next steps:"
-	@echo
-	@echo "  ISO file: $(CURDIR)/iso-agent-based/agent.$(arch).iso"
-	@echo
-	@echo "  To write to a USB drive, use raw/direct mode (byte-for-byte copy):"
-	@echo
-	@echo "    sudo dd if=$(CURDIR)/iso-agent-based/agent.$(arch).iso of=/dev/sdX bs=4M conv=fsync status=progress"
-	@echo
-	@echo "  Or use: aba write-usb"
-	@echo
-	@echo "  IMPORTANT: The ISO must be written as a raw disk image, NOT extracted or"
-	@echo "  'burned' in ISO/file-copy mode. Any tool that copies the image byte-for-byte"
-	@echo "  to the entire device (e.g. dd, balenaEtcher 'Flash', Fedora Media Writer) will"
-	@echo "  work. Tools that reformat the USB or extract files from the ISO will NOT boot."
-	@echo
-	@echo "  Tip: Most server management interfaces (iLO, iDRAC, BMC) can mount the ISO"
-	@echo "  as virtual media over the management network — no physical USB required."
-	@echo
-	@echo "1 Boot your servers from the ISO (USB, virtual media, or PXE)."
-	@echo "2 Verify that the servers start up and can connect to the registry successfully."
-	@echo "3 If needed, run 'aba ssh' to log into the first node to troubleshoot."
-	@echo "4 Run: 'aba install' again to monitor the installation progress until its completion (or run: 'aba mon')."
-	@echo 
+	@_cluster_dir=$(notdir $(CURDIR)); \
+	_nm=$$(grep '^num_masters=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
+	_nw=$$(grep '^num_workers=' cluster.conf 2>/dev/null | cut -d= -f2 | awk '{print $$1}'); \
+	_total=$$(( $${_nm:-1} + $${_nw:-0} )); \
+	echo; \
+	echo "Next steps:"; \
+	echo; \
+	echo "  Boot options:"; \
+	echo; \
+	echo "  - Virtual media: Most server management interfaces (iLO, iDRAC, BMC) can mount"; \
+	echo "    the ISO over the management network — no physical USB required."; \
+	echo "  - USB drive: Write the ISO to USB in raw/direct mode (byte-for-byte copy):"; \
+	echo; \
+	echo "      sudo dd if=$(CURDIR)/iso-agent-based/agent.$(arch).iso of=/dev/sdX bs=4M conv=fsync status=progress"; \
+	echo; \
+	echo "    Or use: aba -d $$_cluster_dir write-usb"; \
+	echo; \
+	if [ "$$_total" -gt 1 ]; then \
+		echo "    NOTE: Prepare one USB drive per server ($$_total servers total). Each server must"; \
+		echo "    retain access to its boot media throughout the entire installation process."; \
+		echo; \
+	fi; \
+	echo "    IMPORTANT: The ISO must be written as a raw disk image, NOT extracted or"; \
+	echo "    'burned' in ISO/file-copy mode. Any tool that copies the image byte-for-byte"; \
+	echo "    to the entire device (e.g. dd, balenaEtcher 'Flash', Fedora Media Writer) will"; \
+	echo "    work. Tools that reformat the USB or extract files from the ISO will NOT boot."; \
+	echo; \
+	echo "  - PXE: Serve the ISO via your PXE infrastructure."; \
+	echo; \
+	echo "1 Boot your servers from the ISO using one of the methods above."; \
+	echo "2 Verify the servers have started and can reach the registry: check the server"; \
+	echo "  console for boot progress, or run 'aba -d $$_cluster_dir ssh' to log into the"; \
+	echo "  rendezvous node."; \
+	echo "3 Run: 'aba -d $$_cluster_dir install' to monitor installation progress (or: 'aba -d $$_cluster_dir mon')."; \
+	echo
 	@touch .bm-nextstep
 	@exit 0
 
