@@ -140,8 +140,25 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 				;;
 			$_QUAY_NG_VENDOR)
 				aba_info "Removing $_QUAY_NG_VENDOR registry on $reg_host ..."
-				$_ssh "systemctl --user stop quay.service 2>/dev/null; rm -f ~/.config/containers/systemd/quay.container; systemctl --user daemon-reload 2>/dev/null; $SUDO rm -rf $reg_root" || \
+				$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
+						systemctl --user stop quay.service; \
+					fi; \
+					rm -f ~/.config/containers/systemd/quay.container; \
+					systemctl --user daemon-reload 2>/dev/null; \
+					[ -d '$reg_root' ] && $SUDO rm -rf '$reg_root'" || \
 					aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+
+				# Post-uninstall assertions
+				_stale=""
+				$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
+				$_ssh "systemctl --user is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
+				if [ -n "$_stale" ]; then
+					aba_abort \
+						"$_QUAY_NG_VENDOR registry uninstall left stale state on $reg_host:" \
+						"$_stale" \
+						"Investigate and clean up manually before retrying."
+				fi
 				;;
 		esac
 	else
@@ -164,12 +181,34 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 				;;
 			$_QUAY_NG_VENDOR)
 				aba_info "Removing $_QUAY_NG_VENDOR registry ..."
-				systemctl --user stop quay.service 2>/dev/null || true
-				rm -f "$HOME/.config/containers/systemd/quay.container"
+				if systemctl --user is-active quay.service &>/dev/null; then
+					systemctl --user stop quay.service
+				fi
+				[ -f "$HOME/.config/containers/systemd/quay.container" ] && \
+					rm -f "$HOME/.config/containers/systemd/quay.container"
 				systemctl --user daemon-reload 2>/dev/null || true
 				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
+
+				# Post-uninstall assertions
+				_stale=""
+				[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
+				systemctl --user is-active quay.service &>/dev/null && _stale+="  quay.service still active"$'\n'
+				if [ -n "$_stale" ]; then
+					aba_abort \
+						"$_QUAY_NG_VENDOR registry uninstall left stale state:" \
+						"$_stale" \
+						"Investigate and clean up manually before retrying."
+				fi
 				;;
 		esac
+	fi
+
+	# Close firewall port opened during install
+	if [ "$_is_remote" ]; then
+		reg_close_firewall --ssh
+	else
+		reg_close_firewall
 	fi
 else
 	exit 1
