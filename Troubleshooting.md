@@ -1,20 +1,110 @@
-# Troubleshooting 
+# Troubleshooting
+
+**Contents**
+
+- [Quay mirror registry](#quay-mirror-registry)
+- [oc-mirror disk space](#oc-mirror-disk-space)
+- [Cluster install: bootstrap failure](#cluster-install-bootstrap-failure)
+- [Cluster install: stalled or not progressing](#cluster-install-stalled-or-not-progressing)
+- [Cluster install: debugging the rendezvous node](#cluster-install-debugging-the-rendezvous-node)
+- [MAC address reuse issues](#mac-address-reuse-issues)
+- [vSphere Preflight Validation](#vsphere-preflight-validation)
+
+> See also the [Troubleshooting FAQ](README.md#troubleshooting) in the README for additional topics (Quay sync failures, `oc-mirror` cache issues, network unreachable errors, bastion network mismatch, and more).
+
+---
 
 ## Quay mirror registry
 
-If you see the error "Cannot initialize user in a non-empty database" when trying to install Quay, this usually means that Quay files - from a previous installation - still exist 
-and should be deleted.  Delete any old files from ~/quay-install and try again.
+If you see the error "Cannot initialize user in a non-empty database" when trying to install Quay, this usually means that Quay files from a previous installation still exist and should be deleted. Delete any old files from `~/quay-install` and try again.
 
-## Booting and Internet connection of the Rendezvous Node
+---
 
-Try these commands to discover any problems with the installation of OpenShift using the Agent-based method.
+## oc-mirror disk space
 
-Ssh to the rendezvous server:
+Sometimes `oc-mirror` runs out of temporary disk space under `/tmp`. Fix this by increasing the space under `/tmp` or setting `data_dir` in `mirror/mirror.conf` to a directory with more disk space:
+
+```
+sudo mount -o remount,size=6G /tmp
+```
+
+See also: https://access.redhat.com/solutions/2843
+
+---
+
+## Cluster install: bootstrap failure
+
+The installation may fail with an error similar to:
+
+```
+ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded
+```
+
+You might also see the following errors:
+
+```
+INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc0000b3c30 Href:0xc0000b3c40 ID:0xc000f06cec Kind:0xc0000b3c50 Reason:0xc0000b3c60}
+INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc000f855c0 Href:0xc000f855d0 ID:0xc000e80e5c Kind:0xc000f855e0 Reason:0xc000f855f0}
+ERROR Attempted to gather ClusterOperator status after wait failure: Listing ClusterOperator objects: Get "https://api.compact.example.com:6443/apis/config.openshift.io/v1/clusteroperators": tls: failed to verify certificate: x509: certificate is valid for kubernetes, kubernetes.default, kubernetes.default.svc, kubernetes.default.svc.cluster.local, openshift, openshift.default, openshift.default.svc, openshift.default.svc.cluster.local, 172.30.0.1, not api.compact.example.com
+INFO Use the following commands to gather logs from the cluster
+INFO openshift-install gather bootstrap --help
+ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded
+```
+
+**What to check:**
+
+1. SSH to the rendezvous node to investigate:
+   ```
+   aba -d mycluster ssh
+   ```
+   If SSH fails, access the server's console directly.
+
+2. After fixing the problem, you may need to regenerate agent configuration files, the ISO, or both. Run `aba -d mycluster clean` and then `aba -d mycluster install` to start again.
+
+3. When reinstalling a cluster, use `aba -d mycluster clean` (not `aba -d mycluster refresh`) to generate fresh random MAC addresses — see [MAC address reuse issues](#mac-address-reuse-issues) below.
+
+---
+
+## Cluster install: stalled or not progressing
+
+If the installation appears stuck — cluster operators remain `Degraded` or `Progressing` for an extended period, or pods are crashlooping — try:
+
+```
+aba -d mycluster unstick
+```
+
+This finds pods that have been not-ready for more than 5 minutes (crashlooping, stuck in `ContainerCreating`, `ImagePullBackOff`, `Error`, etc.) and deletes them so Kubernetes reschedules fresh replacements. Critical static pods (`etcd`, `kube-apiserver`) are never touched. It is safe to run multiple times on a non-progressing cluster install.
+
+**Common examples of stuck pods during installation:**
+
+- `openshift-ingress-canary/ingress-canary-*` — stuck in `ContainerCreating`, blocks the Ingress operator from reporting `Available`.
+- `openshift-network-diagnostics/network-check-target-*` — crashlooping, causes the Network operator to report `Degraded`.
+- `openshift-dns/dns-default-*` — not ready, prevents DNS resolution for other pods and cascades failures.
+- `openshift-console/console-*` — crashlooping, blocks the Console operator.
+- `openshift-authentication/oauth-openshift-*` — stuck, prevents login and causes Authentication operator degradation.
+- `openshift-ingress/router-default-*` — not ready, blocks the Ingress operator.
+
+These are typically transient — a pod races with a dependency that isn't ready yet and gets stuck. Deleting the pod lets Kubernetes retry with the dependency now available.
+
+If the cluster still does not recover after running `unstick`, check `aba -d mycluster mon` output and SSH to the nodes (`aba -d mycluster ssh`) for further investigation.
+
+---
+
+## Cluster install: debugging the rendezvous node
+
+SSH to the rendezvous node to investigate installation problems:
+
 ```
 aba -d mycluster ssh
 # This will run `ssh core@<ip of rendezvous server>`
+```
 
-[core@master1 ~]$ journalctl -u assisted-service.service -f 
+### Check the Assisted Service
+
+The Assisted Service must be able to pull its image and start:
+
+```
+[core@master1 ~]$ journalctl -u assisted-service.service -f
 Nov 19 02:14:31 master1 systemd[1]: Starting Assisted Service container...
 Nov 19 02:14:31 master1 podman[2600]: Trying to pull quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:042248d2950dab0cb12163bfa021ce5c980b828feeb33080eec24accd5fb8adc...
 Nov 19 02:14:31 master1 podman[2600]: Getting image source signatures
@@ -28,9 +118,7 @@ Nov 19 02:14:31 master1 podman[2600]: Copying blob sha256:43e3075e6dc816f272ecb9
 Started Assisted Service container
 ```
 
-- Be sure the Assisted Service image can be pulled and started.
-
-If it fails the log will show:
+If it fails, the log will show:
 
 ```
 Nov 23 09:31:53 master1 systemd[1]: Starting Assisted Service container...
@@ -44,45 +132,39 @@ Nov 23 09:31:56 master1 systemd[1]: assisted-service.service: Scheduled restart 
 Nov 23 09:31:56 master1 systemd[1]: Stopped Assisted Service container.
 ```
 
+- Check the pull-secret, the root CA cert, the registry hostname and port in `mirror.conf` and `cluster.conf`.
+- Verify mirror access: `aba -d mirror verify`
 
-If the image cannot be pulled from the registry:
+### Check that InfraEnv registered
 
-```
-unauthorized: access to the requested resource is not authorized
-```
-- Check the pull-secret, the root CA cert, the registry hostname and port in the mirror.conf and cluster.conf files. 
-- Run the following to verify mirror access: `aba -d mirror verify`
-
-Be sure the InfraEnv is properly set:
+Look for:
 
 ```
 Successfully registered InfraEnv ocp1 with id
 ```
 
-Be sure the release image can be pulled:
+### Check the release image download
 
 ```
-[core@master1 ~]$   journalctl -b -u release-image.service -f
+[core@master1 ~]$ journalctl -b -u release-image.service -f
 Nov 19 02:18:18 master1 systemd[1]: Starting Download the OpenShift Release Image...
 Nov 19 02:18:18 master1 release-image-download.sh[5747]: Pulling quay.io/openshift-release-dev/ocp-release@sha256:f8ba6f54eae419aba17926417d950ae18e06021beae9d7947a8b8243ad48353a...
 Nov 19 02:18:18 master1 release-image-download.sh[5853]: 0adedea0b5eac1a9f85b61c904bd73060cea4718dae98ee1fb8a3af444067a0d
 Nov 19 02:18:19 master1 systemd[1]: Finished Download the OpenShift Release Image.
 ```
 
-During bootkube installation:
+### Monitor bootkube progress
 
 ```
-[core@master1 ~]$   journalctl -b -u bootkube.service -f
+[core@master1 ~]$ journalctl -b -u bootkube.service -f
 ```
 
-It is normal to see warnings, errors and failure messages.  
-
-Typical errors:
+It is normal to see warnings and errors during bootkube startup:
 - "unable to get REST mapping for ..."
-- "no matches for kind ..." 
+- "no matches for kind ..."
 - "Failed to create ..."
 
-But, after 5-10 mins you should see more positive messages:
+After 5-10 minutes, you should see pods starting to appear:
 
 ```
 Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        DoesNotExist
@@ -91,7 +173,7 @@ Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster
 Nov 19 02:27:06 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        DoesNotExist
 ```
 
-Installation progressing:
+Then progressing:
 
 ```
 Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        Pending
@@ -100,7 +182,8 @@ Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-co
 Nov 19 02:38:46 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster-version/cluster-version-operator        Ready
 ```
 
-Installation of bootkube complete:
+All pods ready:
+
 ```
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-apiserver/kube-apiserver        Ready
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-scheduler/openshift-kube-scheduler        Ready
@@ -108,66 +191,36 @@ Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-kube-co
 Nov 19 02:39:21 master1 bootkube.sh[10004]:         Pod Status:openshift-cluster-version/cluster-version-operator        Ready
 ```
 
-... success!
-
-Then, the log will show the following: 
+Followed by masters joining and bootkube completing:
 
 ```
 Nov 19 02:39:21 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
 Nov 19 02:39:21 master1 bootkube.sh[10004]: Waiting for 2 masters to join        0 masters joined the cluster
-Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master2 joined the cluster                                                                                    
-Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master3 joined the cluster                                                                                    
+Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master2 joined the cluster
+Nov 19 02:39:26 master1 bootkube.sh[10004]:         Master master3 joined the cluster
 Nov 19 02:39:26 master1 bootkube.sh[10004]:         2 masters joined the cluster
 Nov 19 02:39:26 master1 bootkube.sh[10004]: All self-hosted control plane components successfully started
 Nov 19 02:39:26 master1 bootkube.sh[10004]: Sending bootstrap-success event. Waiting for remaining assets to be created.
 ```
 
-Once bootkube has finished and the host has restarted run the following command to observe the installation of OpenShift:
+### Monitor cluster operators after bootstrap
+
+Once bootkube completes and the node restarts:
 
 ```
-aba run --cmd "get co"
-aba run --cmd "get nodes"
+aba -d mycluster run --cmd "get co"
+aba -d mycluster run --cmd "get nodes"
 ```
 
-## Other problems that might happen during mirroring: 
+---
 
-oc mirror fails with error "invalid mirror sequence order"
-https://access.redhat.com/solutions/7026766
+## MAC address reuse issues
 
-You might see the below error:
+Repeated installation of OpenShift using the exact same MAC addresses can cause the install to fail or take a long time to complete.
 
-```
-INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc0000b3c30 Href:0xc0000b3c40 ID:0xc000f06cec Kind:0xc0000b3c50 Reason:0xc0000b3c60} 
-INFO Unable to retrieve cluster metadata from Agent Rest API: [GET /v2/clusters/{cluster_id}][404] v2GetClusterNotFound  &{Code:0xc000f855c0 Href:0xc000f855d0 ID:0xc000e80e5c Kind:0xc000f855e0 Reason:0xc000f855f0} 
-ERROR Attempted to gather ClusterOperator status after wait failure: Listing ClusterOperator objects: Get "https://api.compact.example.com:6443/apis/config.openshift.io/v1/clusteroperators": tls: failed to verify certificate: x509: certificate is valid for kubernetes, kubernetes.default, kubernetes.default.svc, kubernetes.default.svc.cluster.local, openshift, openshift.default, openshift.default.svc, openshift.default.svc.cluster.local, 172.30.0.1, not api.compact.example.com 
-INFO Use the following commands to gather logs from the cluster 
-INFO openshift-install gather bootstrap --help    
-ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded 
-```
+When reinstalling a cluster, run `aba -d mycluster clean` first (not `aba -d mycluster refresh`). This regenerates the configuration with fresh random MAC addresses, as long as `xx` is present in the `mac_prefix` parameter in `cluster.conf`.
 
-## Other Problems
-
-Sometimes oc-mirror runs out of temporary disk space under /tmp.  You can fix this by increasing the space under /tmp or setting `data_dir` in `aba/mirror/mirror.conf` to a directory with more disk space:
-```
-sudo mount -o remount,size=6G /tmp
-# or see: https://access.redhat.com/solutions/2843 
-```
-
-The actual installation of OpenShift might fail with an error similar to:
-
-```
-ERROR Bootstrap failed to complete: : bootstrap process timed out: context deadline exceeded
-```
-
-Use the following command to access the node to see if there are any problems:
-```
-aba ssh
-```
-Note: You can run `aba ssh` to easily log into the first node to troubleshoot the agent-based installation process. If ssh fails, you will need to take a look at the server's console and troubleshoot from there.  After fixing the problem, you may need to re-generate the agent configuration files, the ISO file, or both.  Run `aba clean` and then start again, such as by running `aba agentconf`. 
-
-In tests, it was found that repeated installation of OpenShift using the exact same mac addresses tends to cause the install to either fail or to take a long time to complete.
-When installing a fresh cluster, it is better not to run 'aba refresh' but to run 'aba clean' first and then run 'aba'. This will cause the configuration to be refreshed with random mac addresses (as long as "xx" is in use within the 'mac_prefix' parameter in the 'cluster.conf' file).
-
+---
 
 ## vSphere Preflight Validation
 
@@ -235,7 +288,7 @@ Line-by-line:
   cluster, datastore, network, folder, resource pool) where at least one
   gap was observed.
 
-After fixing the RBAC or the configuration, re-run `aba install`. No extra
+After fixing the RBAC or the configuration, re-run `aba -d mycluster install`. No extra
 flag is needed - preflight runs automatically on every install attempt.
 
 ### ESXi: "Network not found" on a freshly installed host
@@ -313,4 +366,3 @@ privilege is ever added to
 [scripts/vmware-required-privileges.sh](scripts/vmware-required-privileges.sh)
 the admin only needs to re-run the two commands - the updated array is
 picked up on the next shell expansion with no script edits.
-
