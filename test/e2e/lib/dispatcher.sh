@@ -325,9 +325,15 @@ _check_hung() {
 
 		_hung_notified[$pool_num]=1
 		local _idle_min=$(( _idle_secs / 60 ))
+		# Grab the last few lines of the summary log to show what step is stuck
+		local _tail=""
+		_tail=$(_ssh_con "$pool_num" "tail -6 ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'" 2>/dev/null) || _tail=""
 		printf "  \033[1;35mHUNG?:\033[0m %s on pool %s -- no output (%d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
+		[ -n "$_tail" ] && printf "  Last log output:\n%s\n" "$_tail" >&2
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-			$NOTIFY_CMD "[e2e] HUNG?: ${suite} on pool ${pool_num} -- no output (${_idle_min} min)" < /dev/null >/dev/null &
+			local _notify_msg="[e2e] HUNG?: ${suite} on pool ${pool_num} -- no output (${_idle_min} min)"
+			[ -n "$_tail" ] && _notify_msg="$_notify_msg"$'\n'"$_tail"
+			$NOTIFY_CMD "$_notify_msg" < /dev/null >/dev/null &
 		fi
 	fi
 }

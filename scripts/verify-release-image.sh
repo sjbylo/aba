@@ -40,6 +40,7 @@ if [ "$verify_conf" = "conf" ] || [ "$verify_conf" = "off" ]; then
 else
 	check_release_image || aba_abort \
 		"Cannot access the release image for OpenShift v$ocp_version (HTTP ${_release_http_code:-?})" \
+		"Image: $reg_host:$reg_port${reg_path}/openshift/release-images:${ocp_version}-$(uname -m)" \
 		"${_release_check_err:+Error: $_release_check_err}" \
 		"${_release_check_extra[@]}" \
 		"Run 'aba -d mirror verify' for detailed diagnostics."

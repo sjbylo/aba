@@ -1342,14 +1342,16 @@ e2e_run_remote() {
 #
 e2e_poll() {
     local timeout="$1" interval="$2"; shift 2
-    e2e_run "$1 (max $((timeout/60))m)" \
+    # -r 2: poll already has its own timeout loop; 5 retries of a long poll is excessive
+    e2e_run -r 2 30 "$1 (max $((timeout/60))m)" \
         "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
 }
 
 # Shorthand: e2e_poll on $INTERNAL_BASTION
 e2e_poll_remote() {
     local timeout="$1" interval="$2"; shift 2
-    e2e_run_remote "$1 (max $((timeout/60))m)" \
+    # -r 2: poll already has its own timeout loop; 5 retries of a long poll is excessive
+    e2e_run_remote -r 2 30 "$1 (max $((timeout/60))m)" \
         "end=\$((SECONDS + $timeout)); while [ \$SECONDS -lt \$end ]; do ( $2 ) && exit 0; sleep $interval; done; exit 1"
 }
 
@@ -1392,7 +1394,9 @@ _e2e_wait_cluster_condition() {
 			check_cmd="cd ~/aba && lines=\$(aba --dir $cluster_dir run | tail -n +2 | awk 'NR>1{print \$3}'); [ -n \"\$lines\" ] && bad=\$(echo \"\$lines\" | grep -cv '^True\$' || true) && echo \"Unavailable=\$bad\" && [ \"\$bad\" -eq 0 ]"
 			;;
 		ready)
-			check_cmd="cd ~/aba && export KUBECONFIG=\$PWD/$cluster_dir/iso-agent-based/auth/kubeconfig && cv_avail=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' 2>/dev/null) && cv_prog=\$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].status}' 2>/dev/null) && deg=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null | grep -c True || true) && echo \"Available=\$cv_avail Progressing=\$cv_prog Degraded=\$deg\" && [ \"\$cv_avail\" = True ] && [ \"\$cv_prog\" = False ] && [ \"\$deg\" -eq 0 ]"
+			# Single source of truth: oc get co for all three conditions.
+			# Avoids ClusterVersion lag where COs are healthy but CV hasn't caught up.
+			check_cmd="cd ~/aba && export KUBECONFIG=\$PWD/$cluster_dir/iso-agent-based/auth/kubeconfig && raw=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Available\")].status} {.status.conditions[?(@.type==\"Progressing\")].status} {.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null) && [ -n \"\$raw\" ] && unavail=\$(echo \"\$raw\" | awk '{print \$1}' | grep -cv '^True\$' || true) && prog=\$(echo \"\$raw\" | awk '{print \$2}' | grep -c '^True\$' || true) && deg=\$(echo \"\$raw\" | awk '{print \$3}' | grep -c '^True\$' || true) && echo \"Unavail=\$unavail Progressing=\$prog Degraded=\$deg\" && [ \"\$unavail\" -eq 0 ] && [ \"\$prog\" -eq 0 ] && [ \"\$deg\" -eq 0 ]"
 			;;
 	esac
 
@@ -1413,10 +1417,11 @@ done
 echo \"TIMEOUT after ${timeout}s (needed $stability consecutive passes)\"
 exit 1"
 
+	# -r 2: stability loop already has its own timeout; 5 retries of a 50-70 min wait is excessive
 	if [ "$location" = "remote" ]; then
-		e2e_run_remote "$desc (max $((timeout/60))m)" "$stability_loop"
+		e2e_run_remote -r 2 30 "$desc (max $((timeout/60))m)" "$stability_loop"
 	else
-		e2e_run "$desc (max $((timeout/60))m)" "$stability_loop"
+		e2e_run -r 2 30 "$desc (max $((timeout/60))m)" "$stability_loop"
 	fi
 }
 
