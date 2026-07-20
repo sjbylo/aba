@@ -447,7 +447,7 @@ aba bundle \
 - This generates several 10 GB archive files named `ocp_mycluster_4.22.1_aa|ab|ac...` etc.
 - The OpenShift version can be set to the most recent previous point version (`--version p`) or to the latest (`--version l`).
 - `--op-sets` refers to predefined sets of operators (run `aba show-op-sets` to list them). Create your own operator set file in `aba/templates/` if needed.
-- `--ops` adds individual operators.
+- `--ops` adds individual operators (run `aba show-operators` to list them, or use `abatui` to select interactively).
 - *If known*, set `--base-domain`, `--machine-network`, `--dns` and `--ntp` (otherwise, set them in `aba.conf` after unpacking the bundle).
 - Set `--platform`: `bm` (bare-metal), `vmw` (vSphere/ESXi), or `kvm` (KVM/libvirt).
 - Warning: `--force` overwrites any existing image-set files under `aba/mirror/data`.
@@ -1390,6 +1390,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba`                 | Interactive mode — guides you through the workflow                 |
 | `abatui`              | TUI wizard — full guided workflow (`--direct`, `--disco`, `--conno`) |
 | `aba ocp-versions`    | Show a table of latest OpenShift versions per channel              |
+| `aba show-operators`  | List available operators (`--certified`, `--community`, `--all`)   |
 | `aba show-op-sets`    | List available operator sets and their descriptions                |
 | `aba -d cli download` | Download all required CLI tools                                    |
 | `aba -d cli install`  | Download and install CLI binaries to `~/bin`                       |

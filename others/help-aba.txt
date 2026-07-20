@@ -23,6 +23,10 @@ Other commands:
   aba [-d cli] oc                       # Download and install the oc binary
   aba [-d cli] openshift-install        # Download and install the openshift-install binary
   aba ocp-versions|ocp-ver              # Show a table of the latest versions of OpenShift
+  aba show-operators                    # List available operators (Red Hat catalog by default)
+  aba show-operators --certified        # List certified operators (or --community/--all)
+  aba show-operators --refresh          # Re-download catalogs if stale, then list
+  aba show-op-sets                      # List available operator sets
   aba help                              # See help for all steps/targets
 
 Options:

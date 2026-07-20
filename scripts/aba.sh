@@ -321,7 +321,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -434,6 +434,10 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			printf "  %-12s %s\n" "$set_name" "$desc"
 		done
 		exit 0
+	elif [ "$1" = "show-ops" ] || [ "$1" = "show-operators" ]; then
+		shift
+		cd "$ABA_ROOT"
+		exec $ABA_ROOT/scripts/show-ops.sh "$@"
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
 		if [ "$1" = "-" ]; then
