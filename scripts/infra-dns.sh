@@ -1,9 +1,11 @@
 #!/bin/bash
-# infra-dns.sh -- Manage per-cluster DNS records in ABA's dnsmasq.
+# infra-dns.sh -- Manage DNS records in ABA's dnsmasq.
 #
 # Called automatically by:
 #   - Makefile.cluster (.infra-dns target) during install → add-cluster
 #   - aba.sh delete flow → remove-cluster
+#   - Makefile.mirror (.available target) → add-mirror
+#   - reg-uninstall.sh → remove-mirror
 #
 # All commands are no-ops if ABA's dnsmasq marker does not exist.
 # This script is NOT intended for direct user invocation.
@@ -11,6 +13,8 @@
 # Usage:
 #   scripts/infra-dns.sh add-cluster            (reads cluster.conf from CWD)
 #   scripts/infra-dns.sh remove-cluster <name>
+#   scripts/infra-dns.sh add-mirror             (reads mirror.conf from CWD)
+#   scripts/infra-dns.sh remove-mirror
 #   scripts/infra-dns.sh check
 
 set -euo pipefail
@@ -76,6 +80,47 @@ case "${1:-}" in
 		aba_info "DNS records removed for cluster: ${local_name}"
 		;;
 
+	add-mirror)
+		# No-op if ABA doesn't own dnsmasq
+		[ -f "$_MARKER" ] || exit 0
+
+		source <(normalize-mirror-conf)
+
+		reg_host="${reg_host:-}"
+		[ -z "$reg_host" ] && exit 0
+
+		# Determine the IP to point the registry hostname at
+		local_iface=$(_pick_install_iface 2>/dev/null || true)
+		if [ -n "$local_iface" ]; then
+			mirror_ip=$(ip -o -4 addr show dev "$local_iface" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)
+		fi
+		[ -z "${mirror_ip:-}" ] && exit 0
+
+		# Skip if reg_host is already an IP address
+		echo "$reg_host" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' && exit 0
+
+		_conf="/etc/dnsmasq.d/aba-mirror.conf"
+
+		$SUDO tee "$_conf" >/dev/null <<-EOF
+		address=/${reg_host}/${mirror_ip}
+		EOF
+
+		_dnsmasq_restart
+		aba_info "DNS record added: ${reg_host} → ${mirror_ip}"
+		;;
+
+	remove-mirror)
+		# No-op if ABA doesn't own dnsmasq
+		[ -f "$_MARKER" ] || exit 0
+
+		_conf="/etc/dnsmasq.d/aba-mirror.conf"
+		[ -f "$_conf" ] || exit 0
+
+		$SUDO rm -f "$_conf"
+		_dnsmasq_restart
+		aba_info "DNS record removed for mirror registry"
+		;;
+
 	check)
 		# Verify dnsmasq is running (used by preflight)
 		[ -f "$_MARKER" ] || exit 0
@@ -93,7 +138,7 @@ case "${1:-}" in
 		;;
 
 	*)
-		echo "Usage: scripts/infra-dns.sh {add-cluster|remove-cluster <name>|check}" >&2
+		echo "Usage: scripts/infra-dns.sh {add-cluster|remove-cluster <name>|add-mirror|remove-mirror|check}" >&2
 		exit 1
 		;;
 esac
