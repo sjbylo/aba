@@ -24,11 +24,10 @@
 # The marker file /etc/dnsmasq.d/aba-upstream.conf signals to ABA that
 # dnsmasq is managed by ABA and per-cluster records should be auto-managed.
 
-set -euo pipefail
+set -eo pipefail
 
 ABA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ABA_ROOT/scripts/include_all.sh"
-ask=${ask:-}
 
 # --- Parse arguments ---
 bastion_ip=""
