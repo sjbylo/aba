@@ -37,7 +37,7 @@ if ! $_ssh true; then
 		"Fix SSH connectivity and try again."
 fi
 
-if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
+if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
 
 	# mirror-registry binary and supporting files live alongside reg_root
 	_mirror_dir="$(dirname "$reg_root")"

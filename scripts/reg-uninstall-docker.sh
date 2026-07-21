@@ -24,7 +24,7 @@ source "$regcreds_dir/state.sh"
 
 REGISTRY_NAME="registry"
 
-if ask "Uninstall Docker registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
+if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 
 	if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
 		aba_info "Stopping and removing registry container ..."
