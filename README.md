@@ -713,6 +713,53 @@ If OpenShift fails to install or is not progressing, see the [Troubleshooting](T
 
 **vSphere-specific:** See [vSphere Preflight Validation](Troubleshooting.md#vsphere-preflight-validation) for how to read vSphere preflight output and how to grant the required vCenter privileges.
 
+## Automatic DNS and NTP Setup
+
+If your bastion does not have a DNS server configured for your cluster, ABA can set one up automatically using `dnsmasq`.
+Once configured, ABA will **automatically create and remove DNS records** (`api.<cluster>.<domain>` and `*.apps.<cluster>.<domain>`) during cluster install and delete — no manual DNS management required.
+
+### Quick setup
+
+```bash
+# Set up dnsmasq as local DNS resolver (auto-detects upstream and bastion IP)
+aba setup dns
+
+# Set up chronyd as NTP server for the cluster network
+aba setup ntp
+```
+
+After running these, `aba.conf` is automatically updated with `dns_servers` and `ntp_servers` pointing to the bastion IP.
+
+### What happens automatically
+
+| Event | Action |
+| ----- | ------ |
+| `aba -d mirror install` | DNS record for `reg_host` is created |
+| `aba -d mirror uninstall` | DNS record for `reg_host` is removed |
+| Cluster install (ISO generation) | DNS records for `api.<name>` and `*.apps.<name>` are created |
+| `aba --dir <cluster> delete` | DNS records for the cluster are removed |
+
+All DNS management is **no-op** when `dnsmasq` is not managed by ABA (safe by default).
+
+### Removal
+
+```bash
+# Remove dnsmasq config and restore original DNS settings
+aba remove dns
+
+# Remove NTP server configuration (chronyd continues as client)
+aba remove ntp
+```
+
+### Options
+
+```bash
+aba setup dns -y                          # Skip interactive prompt
+aba setup dns --upstream 10.0.1.8         # Override upstream DNS server
+aba setup dns --bastion-ip 10.0.0.10      # Override bastion IP
+aba setup ntp --allow-network 10.0.0.0/16 # Override allowed network CIDR
+```
+
 ## Pre-flight Validation
 
 Before generating the ISO, ABA automatically runs pre-flight checks:
@@ -1673,6 +1720,15 @@ To re-install ABA, see [Install ABA](#install-aba).
 # FAQ
 
 ### Setup and Platform
+
+## Q: How do I set up DNS and NTP for my clusters automatically?
+
+**Use `aba setup dns` and `aba setup ntp`.**
+These configure your bastion as the DNS and NTP server for the cluster network.
+Once DNS is set up, ABA automatically manages per-cluster DNS records (api and apps wildcard) during cluster install and delete.
+See [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup) for details and options.
+
+---
 
 ## Q: Does ABA know what RPM packages to install?
 
