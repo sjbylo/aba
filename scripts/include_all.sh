@@ -664,7 +664,7 @@ verify-mirror-conf() {
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	# quay-ng auto-generates its password, so skip this check for that vendor.
+	# quay-ng and docker handle passwords safely, so skip this check for those vendors.
 	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_QUAY_NG_VENDOR" ]]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;

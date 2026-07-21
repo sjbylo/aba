@@ -659,6 +659,27 @@ Per-cluster DNS records are added at install time and removed on delete.
 
 ---
 
+## quay-ng: transition to GA (mirror-registry v3.0)
+
+**Severity:** LOW — tracking item, no action until upstream ships GA
+**Status:** Waiting on upstream
+**Added:** 2026-07-21
+
+**Context:** The Go-based mirror-registry rewrite (currently `quay-ng` in ABA)
+will ship as "mirror-registry v3.0". ABA already supports it as an ALPHA vendor.
+
+**When GA ships, ABA needs:**
+- Switch `_QUAY_NG_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
+- Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
+- Re-test `-init-password-stdin` flag (merged upstream, not in current image)
+- Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
+- Rename vendor display from "quay-ng [ALPHA]" (internal name can stay)
+- Update bundle workflow for official offline delivery format
+
+**Design doc:** `ai/DESIGN-quay-ng-vendor.md`
+
+---
+
 ## Refactors
 
 - **ARCH variable normalization**: `include_all.sh` normalizes ARCH to the Go/OCI convention (`amd64`), but ISO filenames and Makefiles use `uname -m` (`x86_64`). Scripts like `vmw-upload.sh`, `kvm-upload.sh`, and `cluster-write-usb.sh` must override ARCH after sourcing `include_all.sh`. Provide both `ARCH` (Go: `amd64`) and `ARCH_UNAME` (kernel: `x86_64`) from `include_all.sh` so scripts don't need per-file overrides.

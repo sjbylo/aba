@@ -268,10 +268,24 @@ case "$vendor" in
 		$_scp "$_image_file" "$_target:$remote_dir/"
 
 		aba_info "Running $_QUAY_NG_VENDOR install on remote host ..."
-		if ! $_ssh "
+
+		# Initialize registry on remote (creates certs, admin user, database)
+		# reg_generate_password guarantees $reg_pw is always set at this point
+		$_ssh "
 			set -e
 			podman load -i $remote_dir/$_image_file
 			mkdir -p $reg_root
+			_abs_root=\$(cd $reg_root && pwd)
+			if [ ! -f \"\$_abs_root/auth/admin-password\" ]; then
+				echo '$reg_pw' | podman run --rm -i \
+					-v \"\${_abs_root}:/data:Z\" $_QUAY_NG_IMAGE \
+					init -data-dir /data -hostname $reg_host -init-password-stdin
+			fi
+		" || aba_abort "Registry initialization failed on $reg_host."
+
+		# Create Quadlet and start the service
+		if ! $_ssh "
+			set -e
 			_abs_root=\$(cd $reg_root && pwd)
 			mkdir -p ~/.config/containers/systemd
 			cat > ~/.config/containers/systemd/quay.container <<QUADLET
@@ -282,19 +296,14 @@ After=network-online.target
 [Container]
 Image=$_QUAY_NG_IMAGE
 Volume=\${_abs_root}:/data:Z
-PublishPort=${reg_port}:${reg_port}
-Exec=serve -data-dir /data -hostname $reg_host -addr :${reg_port}
+PublishPort=${reg_port}:8443
+Exec=serve -data-dir /data -hostname $reg_host -addr :8443
 
 [Install]
 WantedBy=default.target
 QUADLET
 			systemctl --user daemon-reload
 			systemctl --user start quay.service
-			# Wait for initialization
-			for i in \$(seq 1 15); do
-				[ -f \"\$_abs_root/auth/admin-password\" ] && break
-				sleep 1
-			done
 			[ -f \"\$_abs_root/auth/admin-password\" ] || { echo 'ERROR: admin-password not created'; exit 1; }
 			# Enable linger for rootless persistence
 			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
@@ -305,13 +314,9 @@ QUADLET
 				"Check the output above for details."
 		fi
 
-		# Read auto-generated credentials from remote
+		# Credentials: reg_pw already set by reg_generate_password, reg_user is always admin
 		reg_user="admin"
-		reg_pw=$($_ssh "cat $reg_root/auth/admin-password")
-
-		# Write actual credentials back to mirror.conf so it stays in sync
 		replace-value-conf -n reg_user -v "$reg_user" -f mirror.conf
-		replace-value-conf -n reg_pw -v "'$reg_pw'" -f mirror.conf
 
 		remote_ca="$reg_root/ssl.cert"
 		;;
