@@ -99,6 +99,7 @@ aba_info "Probing mirror registry at $reg_url"
 if probe_host "$reg_url/health/instance" "Quay registry health endpoint"; then
 	aba_debug "Quay registry detected and accessible"
 elif probe_host --any "$reg_url/v2/" "Docker registry API"; then
+	# 401 is expected on /v2/ without credentials (Docker, quay-ng, GCR all behave this way)
 	aba_debug "Docker/OCI registry detected and accessible"
 elif probe_host "$reg_url/" "registry root"; then
 	aba_debug "Generic registry detected and accessible"

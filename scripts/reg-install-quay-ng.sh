@@ -11,6 +11,7 @@ reg_load_config
 reg_detect_existing
 reg_check_fqdn
 reg_setup_data_dir "$_QUAY_NG_VENDOR"
+reg_generate_password
 reg_verify_localhost
 
 _QUAY_NG_IMAGE_FILE="quay-ng-image.tgz"
@@ -33,6 +34,20 @@ fi
 
 mkdir -p "$reg_root"
 
+# Initialize registry (creates certs, admin user, database)
+if [ ! -f "$reg_root/auth/admin-password" ]; then
+	aba_info "Initializing registry ..."
+	echo "$reg_pw" | podman run --rm -i \
+		-v "${reg_root}:/data:Z" "$_QUAY_NG_IMAGE" \
+		init -data-dir /data -hostname "$reg_host" -init-password-stdin
+
+	if [ ! -f "$reg_root/auth/admin-password" ]; then
+		aba_abort \
+			"Registry initialization failed — no credentials created." \
+			"Check podman output above for errors."
+	fi
+fi
+
 # Create Quadlet unit file for systemd-managed container
 mkdir -p "$_QUADLET_DIR"
 cat > "$_QUADLET_FILE" <<-EOF
@@ -43,8 +58,8 @@ After=network-online.target
 [Container]
 Image=$_QUAY_NG_IMAGE
 Volume=${reg_root}:/data:Z
-PublishPort=${reg_port}:${reg_port}
-Exec=serve -data-dir /data -hostname $reg_host -addr :${reg_port}
+PublishPort=${reg_port}:8443
+Exec=serve -data-dir /data -hostname $reg_host -addr :8443
 
 [Install]
 WantedBy=default.target
@@ -59,29 +74,9 @@ if ! systemctl --user start "$_SERVICE_NAME"; then
 		"Quadlet: $_QUADLET_FILE"
 fi
 
-# Wait for the registry to initialize (generates certs, creates admin)
-aba_info "Waiting for registry to initialize ..."
-local_ok=""
-for i in $(seq 1 15); do
-	if [ -f "$reg_root/auth/admin-password" ]; then
-		local_ok=1
-		break
-	fi
-	sleep 1
-done
-if [ ! "$local_ok" ]; then
-	aba_abort \
-		"Registry did not create admin credentials within 15 seconds." \
-		"Check: journalctl --user -xeu $_SERVICE_NAME"
-fi
-
-# Read auto-generated credentials
+# Credentials are already set (user-supplied or ABA-generated via reg_generate_password)
 reg_user="admin"
-reg_pw=$(cat "$reg_root/auth/admin-password")
-
-# Write actual credentials back to mirror.conf so it stays in sync
 replace-value-conf -n reg_user -v "$reg_user" -f mirror.conf
-replace-value-conf -n reg_pw -v "'$reg_pw'" -f mirror.conf
 
 # Ensure rootless podman containers survive VM reboot
 if [ "$(id -u)" -ne 0 ] && command -v loginctl >/dev/null 2>&1; then
@@ -105,9 +100,18 @@ cat > "$reg_root/INSTALLED_BY_ABA.md" <<-BREADCRUMB
 	To uninstall: cd $PWD && aba uninstall
 BREADCRUMB
 
-# Verify connectivity
-if ! curl -k -fsSL --connect-timeout 10 "$reg_url/v2/" \
-	-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+# Verify connectivity (wait briefly for TLS listener to be ready)
+_verify_ok=""
+for i in $(seq 1 10); do
+	if curl -k -fsSL --connect-timeout 3 "$reg_url/v2/" \
+		-u "$reg_user:$reg_pw" >/dev/null 2>&1; then
+		_verify_ok=1
+		break
+	fi
+	sleep 1
+done
+
+if [ ! "$_verify_ok" ]; then
 	_local_ips=$(hostname -I 2>/dev/null | xargs)
 	_localhost_ok="no"
 	curl -k -fsSL --connect-timeout 10 "https://localhost:$reg_port/v2/" \
