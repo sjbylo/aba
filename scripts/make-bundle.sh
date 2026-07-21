@@ -93,6 +93,10 @@ source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 
+# Kick off CLI downloads early (non-blocking) so they run in parallel with oc-mirror
+aba_debug "Starting CLI downloads in background (will be waited on later)"
+scripts/cli-download-all.sh
+
 if [ "$bundle_dest_file" = "-" ]; then
 	# Be sure the standard output of this command is ONLY tar output and nothing else!
 	aba_debug "Bundle destination: stdout (streaming tar output)"
@@ -229,9 +233,6 @@ if [ -s "$bundle_dest_file" ]; then
 else
 	aba_debug "Bundle file does not exist, proceeding"
 fi
-
-###aba_info "Downloading CLI installation files ..."
-### FIXME - Is this needed since make save will do this - make -C cli download	# Downlaod required CLIs install files.
 
 
 # Light bundle flag give?
