@@ -17,7 +17,7 @@
 #   scripts/infra-dns.sh remove-mirror
 #   scripts/infra-dns.sh check
 
-set -euo pipefail
+set -eo pipefail
 
 _SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$_SCRIPT_DIR/include_all.sh"
