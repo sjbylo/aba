@@ -118,8 +118,8 @@ echo "--- DNS: remove ---"
 tools/remove-dns.sh -y
 
 _assert "Marker file removed" test ! -f /etc/dnsmasq.d/aba-upstream.conf
-_assert "dnsmasq stopped" ! systemctl is-active --quiet dnsmasq
-_assert "resolv.conf restored" ! grep -q '^nameserver 127.0.0.1' /etc/resolv.conf
+_assert_not "dnsmasq stopped" systemctl is-active --quiet dnsmasq
+_assert_not "resolv.conf restored" grep -q '^nameserver 127.0.0.1' /etc/resolv.conf
 _assert "NM dns=none removed" test ! -f /etc/NetworkManager/conf.d/aba-no-dns.conf
 
 # ── NTP Setup ────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ _assert "chronyd is active" systemctl is-active --quiet chronyd
 echo
 echo "--- NTP: idempotent re-run ---"
 tools/setup-ntp.sh -y --allow-network 10.0.0.0/16
-_allow_count=$(grep -c '^allow 10.0.0.0/16' /etc/chrony.conf)
+_allow_count=$(grep -c '^allow 10.0.0.0/16' /etc/chrony.conf || true)
 _assert "Only one allow line (idempotent)" test "$_allow_count" -eq 1
 
 # ── NTP Remove ───────────────────────────────────────────────────────────────

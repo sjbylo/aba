@@ -83,8 +83,10 @@ install_rpms chrony
 if grep -q "^allow ${allow_network}$" /etc/chrony.conf 2>/dev/null; then
 	aba_info "chrony.conf already has 'allow $allow_network' — skipping."
 else
-	$SUDO sed -i "/^#.*Allow NTP client/a allow ${allow_network}" /etc/chrony.conf 2>/dev/null \
-		|| echo "allow ${allow_network}" | $SUDO tee -a /etc/chrony.conf >/dev/null
+	$SUDO sed -i "/^#.*Allow NTP client/a allow ${allow_network}" /etc/chrony.conf 2>/dev/null
+	if ! grep -q "^allow ${allow_network}$" /etc/chrony.conf 2>/dev/null; then
+		echo "allow ${allow_network}" | $SUDO tee -a /etc/chrony.conf >/dev/null
+	fi
 	aba_info "Added 'allow $allow_network' to /etc/chrony.conf"
 fi
 
