@@ -114,7 +114,7 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to o
 # that differ between the connected side (where the bundle was built) and the
 # disconnected side (where the mirror runs). backup.sh --primed resolves the
 # mirror.conf symlink to a real copy (newer timestamp), triggering this rebuild.
-install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf | .cli  ## Create the agent-based config file based on the cluster.conf file.
+install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf .infra-dns | .cli  ## Create the agent-based config file based on the cluster.conf file.
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh
 
@@ -141,7 +141,7 @@ preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS,
 	@$(SCRIPTS)/infra-dns.sh add-cluster
 	@touch .infra-dns
 
-.preflight-done: install-config.yaml agent-config.yaml .infra-dns
+.preflight-done: install-config.yaml agent-config.yaml
 	$(SCRIPTS)/preflight-check.sh
 	@touch .preflight-done
 
