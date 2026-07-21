@@ -715,7 +715,7 @@ If OpenShift fails to install or is not progressing, see the [Troubleshooting](T
 
 ## Automatic DNS and NTP Setup
 
-If your bastion does not have a DNS server configured for your cluster, ABA can set one up automatically using `dnsmasq`.
+If your environment does not have a DNS server configured for your cluster, ABA can set one up automatically using `dnsmasq`.
 Once configured, ABA will **automatically create and remove DNS records** (`api.<cluster>.<domain>` and `*.apps.<cluster>.<domain>`) during cluster install and delete — no manual DNS management required.
 
 ### Quick setup
