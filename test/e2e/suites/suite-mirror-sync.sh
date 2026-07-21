@@ -179,6 +179,15 @@ e2e_run "Uninstall quay-ng registry" "aba --dir e2e-mirror-quay-ng uninstall"
 e2e_run "Verify registry unreachable after uninstall" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:9999/v2/"
 
+# Custom credentials: verify reg_user and reg_pw are respected
+e2e_run "Install quay-ng with custom user and password" \
+    "aba -d e2e-mirror-quay-ng install --vendor quay-ng --reg-port 9999 -H $DIS_HOST -k ~/.ssh/id_rsa --reg-user testadmin --reg-password SecretPass42"
+e2e_run "Verify custom credentials work" \
+    "curl -sk -u testadmin:SecretPass42 https://${DIS_HOST}:9999/v2/ -o /dev/null -w '%{http_code}' | grep -q 200"
+e2e_run "Verify wrong password fails" \
+    "! curl -sk -u testadmin:wrongpass https://${DIS_HOST}:9999/v2/ -o /dev/null -w '%{http_code}' | grep -q 200"
+e2e_run "Uninstall quay-ng (custom creds)" "aba --dir e2e-mirror-quay-ng uninstall"
+
 test_end
 
 # ============================================================================
