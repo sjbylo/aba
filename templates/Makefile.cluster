@@ -136,7 +136,12 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS, NTP, IP conflicts).
 	$(SCRIPTS)/preflight-check.sh
 
-.preflight-done: install-config.yaml agent-config.yaml
+# Auto-manage DNS records if ABA's dnsmasq is configured (tools/setup-dns.sh was run)
+.infra-dns: cluster.conf .init
+	@$(SCRIPTS)/infra-dns.sh add-cluster
+	@touch .infra-dns
+
+.preflight-done: install-config.yaml agent-config.yaml .infra-dns
 	$(SCRIPTS)/preflight-check.sh
 	@touch .preflight-done
 
