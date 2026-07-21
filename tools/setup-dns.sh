@@ -163,7 +163,7 @@ if [ -f "$ABA_ROOT/aba.conf" ]; then
 fi
 
 # --- If mirror already installed, add its DNS record too ---
-if [ -f "$ABA_ROOT/mirror/mirror.conf" ]; then
+if [ -f "$ABA_ROOT/mirror/.available" ]; then
 	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/infra-dns.sh" add-mirror)
 fi
 
