@@ -149,13 +149,12 @@ fi
 $SUDO systemctl enable --now dnsmasq
 $SUDO systemctl restart dnsmasq
 
-# --- Verify ---
-if ! dig @127.0.0.1 +short +timeout=3 google.com >/dev/null 2>&1; then
-	aba_warn "dnsmasq started but external resolution failed." \
-		"Check upstream DNS ($upstream) is reachable." \
-		"Verify with: dig @127.0.0.1 google.com"
+# --- Verify dnsmasq is responding ---
+if dig @127.0.0.1 +timeout=3 localhost >/dev/null 2>&1; then
+	aba_info "dnsmasq is running and responding on 127.0.0.1"
 else
-	aba_info "DNS resolution verified (dig @127.0.0.1 google.com)"
+	aba_warn "dnsmasq started but not responding on 127.0.0.1." \
+		"Check: systemctl status dnsmasq"
 fi
 
 # --- Auto-set dns_servers in aba.conf ---
@@ -168,6 +167,16 @@ fi
 if [ -f "$ABA_ROOT/mirror/.available" ]; then
 	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/infra-dns.sh" add-mirror)
 fi
+
+# --- Invalidate stale .infra-dns markers so existing clusters get DNS records ---
+for _cconf in "$ABA_ROOT"/*/cluster.conf; do
+	[ -f "$_cconf" ] || continue
+	_cdir="$(dirname "$_cconf")"
+	if [ -f "$_cdir/.infra-dns" ]; then
+		rm -f "$_cdir/.infra-dns"
+		(cd "$_cdir" && "$ABA_ROOT/scripts/infra-dns.sh" add-cluster)
+	fi
+done
 
 aba_info "dnsmasq configured successfully."
 aba_info "ABA will now auto-manage per-cluster DNS records during install/delete."

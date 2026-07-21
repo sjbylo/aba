@@ -25,6 +25,7 @@ source "$_SCRIPT_DIR/include_all.sh"
 _MARKER="/etc/dnsmasq.d/aba-upstream.conf"
 
 _dnsmasq_restart() {
+	$SUDO systemctl reset-failed dnsmasq 2>/dev/null || true
 	$SUDO systemctl restart dnsmasq 2>/dev/null || \
 		aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
 }

@@ -372,6 +372,8 @@ do
 			cat $ABA_ROOT/others/help-cluster.txt
 		elif [ "$_ht" = "bundle" ]; then
 			cat $ABA_ROOT/others/help-bundle.txt
+		elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
+			cat $ABA_ROOT/others/help-setup.txt
 		else
 			# If some other target, then show the main help
 			cat $ABA_ROOT/others/help-aba.txt
@@ -1042,6 +1044,34 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			cur_target=$1
 
 			case $cur_target in
+				setup|remove)
+					# Dispatch immediately — pass all remaining args to the tool script
+					shift
+					_infra_sub="${1:-}"
+					[ "$_infra_sub" ] && shift
+					case "$_infra_sub" in
+						-h|--help|"")
+							cat $ABA_ROOT/others/help-setup.txt
+							exit 0
+							;;
+					esac
+					case "$cur_target" in
+						setup)
+							case "$_infra_sub" in
+								dns) exec $ABA_ROOT/tools/setup-dns.sh "$@" ;;
+								ntp) exec $ABA_ROOT/tools/setup-ntp.sh "$@" ;;
+								*)   aba_abort "Usage: aba setup {dns|ntp} [options]" ;;
+							esac
+							;;
+						remove)
+							case "$_infra_sub" in
+								dns) exec $ABA_ROOT/tools/remove-dns.sh "$@" ;;
+								ntp) exec $ABA_ROOT/tools/remove-ntp.sh "$@" ;;
+								*)   aba_abort "Usage: aba remove {dns|ntp} [options]" ;;
+							esac
+							;;
+					esac
+					;;
 				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb)
 					# These are processed directly in code below, bypassing Make
 					:

@@ -48,4 +48,4 @@ fi
 
 # --- Restart chronyd (still runs as client) ---
 $SUDO systemctl restart chronyd
-aba_info "chronyd restarted (still syncing as client, no longer serving)."
+aba_info "chronyd restarted. NTP service to cluster network removed."
