@@ -27,6 +27,7 @@ set -euo pipefail
 
 ABA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ABA_ROOT/scripts/include_all.sh"
+ask=${ask:-}
 
 # --- Parse arguments ---
 bastion_ip=""
