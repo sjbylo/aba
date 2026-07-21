@@ -187,6 +187,35 @@ e2e_run_remote "Verify single dnf batch (no duplicate install)" \
 test_end
 
 # ============================================================================
+# 5b. Infrastructure: setup auto-DNS and NTP on internal bastion
+#     Verifies tools/setup-dns.sh and tools/setup-ntp.sh on the disconnected
+#     bastion. Cluster installs later will exercise infra-dns.sh add-cluster.
+# ============================================================================
+test_begin "Infra: setup DNS and NTP on internal bastion"
+
+e2e_run_remote "Run tools/setup-dns.sh on internal bastion" \
+    "cd ~/aba && tools/setup-dns.sh -y --upstream 8.8.8.8"
+e2e_run_remote "Verify dnsmasq marker exists" \
+    "test -f /etc/dnsmasq.d/aba-upstream.conf"
+e2e_run_remote "Verify dnsmasq is running" \
+    "systemctl is-active dnsmasq"
+e2e_run_remote "Verify DNS resolution via dnsmasq" \
+    "dig @127.0.0.1 +short +timeout=3 google.com | grep -E '^[0-9]'"
+e2e_run_remote "Verify dns_servers set in aba.conf" \
+    "cd ~/aba && grep '^dns_servers=' aba.conf | grep -v '^dns_servers=$'"
+
+e2e_run_remote "Run tools/setup-ntp.sh on internal bastion" \
+    "cd ~/aba && tools/setup-ntp.sh -y"
+e2e_run_remote "Verify chrony allow line present" \
+    "grep '^allow ' /etc/chrony.conf"
+e2e_run_remote "Verify chronyd is running" \
+    "systemctl is-active chronyd"
+e2e_run_remote "Verify ntp_servers set in aba.conf" \
+    "cd ~/aba && grep '^ntp_servers=' aba.conf | grep -v '^ntp_servers=$'"
+
+test_end
+
+# ============================================================================
 # 6. Registry: Docker install and verify (smoke test with custom params)
 #    Exercises non-default mirror.conf values: port, user, password, path,
 #    data_dir.  Verifies install + accessibility, then uninstalls immediately.
@@ -279,6 +308,8 @@ e2e_run_remote "Increase SNO resources for mesh/upgrade" \
 e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
+e2e_run_remote "Verify auto-DNS record created for SNO" \
+    "test -f /etc/dnsmasq.d/aba-${SNO}.conf && dig @127.0.0.1 +short api.${SNO}.$(pool_domain) | grep -q '$(pool_sno_ip)'"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_wait_cluster_available $SNO remote
@@ -707,6 +738,8 @@ test_begin "Standard: cluster with macs.conf"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_run_remote "Verify auto-DNS record removed after SNO delete" \
+    "test ! -f /etc/dnsmasq.d/aba-${SNO}.conf"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Remove sno cluster dir" \
     "cd ~/aba && rm -rf $SNO"
@@ -754,6 +787,22 @@ e2e_run_remote "Uninstall Quay registry" \
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:${_QUAY_PORT}/v2/"
+
+test_end
+
+# ============================================================================
+# End-of-suite: remove DNS/NTP infra on disN (clean up what 5b set up)
+# ============================================================================
+test_begin "Cleanup: remove DNS and NTP infra on disN"
+
+e2e_run_remote "Remove ABA DNS config" \
+    "cd ~/aba && tools/remove-dns.sh -y"
+e2e_run_remote "Verify dnsmasq marker gone" \
+    "test ! -f /etc/dnsmasq.d/aba-upstream.conf"
+e2e_run_remote "Remove ABA NTP config" \
+    "cd ~/aba && tools/remove-ntp.sh -y"
+e2e_run_remote "Verify no chrony allow" \
+    "! grep -q '^allow ' /etc/chrony.conf"
 
 test_end
 

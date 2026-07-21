@@ -1306,6 +1306,10 @@ if [ "$cur_target" ]; then
 			# Clean up externalized state (~/.aba/clusters/<name>.<domain>/)
 			source <(normalize-cluster-conf) 2>/dev/null || true
 			_del_sd=$(cluster_state_dir "${cluster_name:-}" "${base_domain:-}")
+
+			# Remove ABA-managed DNS records for this cluster (no-op if not using ABA DNS)
+			$ABA_ROOT/scripts/infra-dns.sh remove-cluster "${cluster_name:-}"
+
 			if [ "$_del_sd" ] && [ -d "$_del_sd" ]; then
 				rm -rf "$_del_sd"
 				aba_info "Removed cluster state: $_del_sd"
