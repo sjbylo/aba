@@ -98,6 +98,8 @@ test_begin "Docker e2e-mirror-docker1: install and verify"
 # Negative path: sync without pull secret should fail.
 # Must hide ALL credential locations: oc-mirror/podman/skopeo check ~/.pull-secret.json,
 # ~/.docker/config.json, and $XDG_RUNTIME_DIR/containers/auth.json.
+# Register mirror/ for crash recovery — aba sync installs a registry as a side effect.
+e2e_add_to_mirror_cleanup "$PWD/mirror"
 e2e_run -q "Hide all pull secrets for must-fail test" \
     "mv ~/.pull-secret.json ~/.pull-secret.json.bak && \
      [ -f ~/.docker/config.json ] && mv ~/.docker/config.json ~/.docker/config.json.bak || true; \
@@ -105,7 +107,12 @@ e2e_run -q "Hide all pull secrets for must-fail test" \
      [ -f \$_xdg/containers/auth.json ] && mv \$_xdg/containers/auth.json \$_xdg/containers/auth.json.bak || true"
 e2e_run_must_fail "Sync without pull secret should fail" \
     "aba -d mirror sync --retry -H $DIS_HOST -k ~/.ssh/id_rsa --data-dir '~/e2e-test-neg-datadir'"
-e2e_run -q "Clean up data-dir side effect from must-fail test" \
+# aba sync installs a Quay registry on disN as a dependency before syncing.
+# The sync fails (expected), but the registry is left running on disN.
+# Must uninstall it to avoid interfering with later registry tests (e.g. quay-ng).
+e2e_run "Uninstall registry side-effect from must-fail test" \
+    "aba --dir mirror uninstall"
+e2e_run -q "Clean up local data-dir from must-fail test" \
     "rm -rf ~/e2e-test-neg-datadir"
 e2e_run -q "Restore all pull secrets" \
     "mv ~/.pull-secret.json.bak ~/.pull-secret.json && \
@@ -516,10 +523,12 @@ e2e_run_remote "Remove e2e-mirror-datadir1 on disN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
 e2e_run "Remove e2e-mirror-datadir1 on conN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
+e2e_run_remote "Remove e2e-test-neg-datadir on disN" \
+    "sudo rm -rf ~/e2e-test-neg-datadir"
 e2e_run_remote "Verify no leftover mirror data dirs on disN" \
-    "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1"
+    "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1 && test ! -d ~/e2e-test-neg-datadir"
 e2e_run "Verify no leftover mirror data dirs on conN" \
-    "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1"
+    "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1 && test ! -d ~/e2e-test-neg-datadir"
 
 test_end
 
