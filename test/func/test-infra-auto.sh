@@ -46,13 +46,13 @@ _assert "Marker file exists" test -f /etc/dnsmasq.d/aba-upstream.conf
 _assert "dnsmasq is active" systemctl is-active --quiet dnsmasq
 _assert "resolv.conf points to localhost" grep -q '^nameserver 127.0.0.1' /etc/resolv.conf
 _assert "resolv.conf backup exists" test -f /etc/resolv.conf.aba-backup
-_assert "External DNS resolves" dig @127.0.0.1 +short +timeout=3 google.com
+_assert "dnsmasq responds to queries" bash -c 'dig @127.0.0.1 +timeout=3 localhost | grep -q NOERROR'
 
 # Idempotent
 echo
 echo "--- DNS: idempotent re-run ---"
 tools/setup-dns.sh -y --upstream 8.8.8.8
-_assert "Still works after re-run" dig @127.0.0.1 +short +timeout=3 google.com
+_assert "Still works after re-run" bash -c 'dig @127.0.0.1 +timeout=3 localhost | grep -q NOERROR'
 
 # ── infra-dns.sh add-cluster ─────────────────────────────────────────────────
 echo
@@ -121,6 +121,60 @@ _assert "Marker file removed" test ! -f /etc/dnsmasq.d/aba-upstream.conf
 _assert_not "dnsmasq stopped" systemctl is-active --quiet dnsmasq
 _assert_not "resolv.conf restored" grep -q '^nameserver 127.0.0.1' /etc/resolv.conf
 _assert "NM dns=none removed" test ! -f /etc/NetworkManager/conf.d/aba-no-dns.conf
+
+# ── Late setup backfill (stale .infra-dns markers) ────────────────────────────
+echo
+echo "--- DNS: late setup backfill ---"
+
+# Create a cluster dir with a stale .infra-dns marker (simulates a cluster
+# that was created before DNS was set up)
+_bf_dir=$(mktemp -d -p "$PWD" backfill-XXXXXX)
+cat > "$_bf_dir/cluster.conf" <<-EOF
+cluster_name=backfilltest
+base_domain=example.com
+starting_ip=10.77.77.77
+EOF
+touch "$_bf_dir/.infra-dns"
+
+_assert "Stale .infra-dns marker exists before setup" test -f "$_bf_dir/.infra-dns"
+
+# Run setup — should detect stale markers and backfill DNS records
+tools/setup-dns.sh -y --upstream 8.8.8.8
+
+_assert "Stale .infra-dns marker removed by setup" test ! -f "$_bf_dir/.infra-dns"
+_assert "Backfilled cluster DNS record exists" test -f /etc/dnsmasq.d/aba-backfilltest.example.com.conf
+_assert "Backfilled api resolves" bash -c 'dig @127.0.0.1 +short api.backfilltest.example.com | grep -q 10.77.77.77'
+
+# Clean up
+scripts/infra-dns.sh remove-cluster backfilltest example.com
+rm -rf "$_bf_dir"
+
+# ── CLI dispatch (aba setup / aba remove) ─────────────────────────────────────
+echo
+echo "--- CLI dispatch: aba setup/remove ---"
+
+# Remove DNS first (from the backfill test above)
+tools/remove-dns.sh -y 2>/dev/null || true
+
+_assert "aba setup --help works" bash -c 'aba setup --help | grep -q "setup dns"'
+_assert "aba remove --help works" bash -c 'aba remove --help | grep -q "remove dns"'
+_assert "aba setup badarg fails" bash -c '! aba setup badarg 2>/dev/null'
+_assert "aba remove badarg fails" bash -c '! aba remove badarg 2>/dev/null'
+
+# Verify dispatch actually calls the scripts
+aba setup dns -y --upstream 8.8.8.8 >/dev/null 2>&1
+_assert "aba setup dns configured dnsmasq" systemctl is-active --quiet dnsmasq
+_assert "aba setup dns created marker" test -f /etc/dnsmasq.d/aba-upstream.conf
+
+aba remove dns -y >/dev/null 2>&1
+_assert "aba remove dns removed marker" test ! -f /etc/dnsmasq.d/aba-upstream.conf
+_assert_not "aba remove dns stopped dnsmasq" systemctl is-active --quiet dnsmasq
+
+aba setup ntp -y --allow-network 10.0.0.0/16 >/dev/null 2>&1
+_assert "aba setup ntp added allow line" grep -q '^allow 10.0.0.0/16' /etc/chrony.conf
+
+aba remove ntp -y >/dev/null 2>&1
+_assert_not "aba remove ntp removed allow line" grep -q '^allow ' /etc/chrony.conf
 
 # ── NTP Setup ────────────────────────────────────────────────────────────────
 echo

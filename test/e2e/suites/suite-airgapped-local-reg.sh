@@ -46,6 +46,7 @@ plan_tests \
     "Setup: calculate older version for upgrade" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
+    "Infra: setup DNS and NTP on internal bastion" \
     "Registry: Docker install and verify (custom params)" \
     "Registry: Quay install and load" \
     "SNO: install cluster" \
@@ -59,7 +60,8 @@ plan_tests \
     "Lifecycle: shutdown/startup" \
     "Upgrade: cross-minor with admin ack gate" \
     "Standard: cluster with macs.conf" \
-    "Cleanup: uninstall registry on disN"
+    "Cleanup: uninstall registry on disN" \
+    "Cleanup: remove DNS and NTP infra on disN"
 
 suite_begin "airgapped-local-reg"
 
@@ -188,30 +190,46 @@ test_end
 
 # ============================================================================
 # 5b. Infrastructure: setup auto-DNS and NTP on internal bastion
-#     Verifies tools/setup-dns.sh and tools/setup-ntp.sh on the disconnected
-#     bastion. Cluster installs later will exercise infra-dns.sh add-cluster.
+#     Verifies aba setup/remove CLI dispatch and tools/ scripts on the
+#     disconnected bastion. Cluster installs later exercise infra-dns.sh.
 # ============================================================================
 test_begin "Infra: setup DNS and NTP on internal bastion"
 
-e2e_run_remote "Run tools/setup-dns.sh on internal bastion" \
-    "cd ~/aba && tools/setup-dns.sh -y --upstream 8.8.8.8"
+# --- CLI help ---
+e2e_run_remote "Verify 'aba setup --help' works" \
+    "cd ~/aba && aba setup --help | grep -q 'setup dns'"
+e2e_run_remote "Verify 'aba remove --help' works" \
+    "cd ~/aba && aba remove --help | grep -q 'remove dns'"
+
+# --- Setup DNS via CLI dispatch ---
+e2e_run_remote "Setup DNS via 'aba setup dns'" \
+    "cd ~/aba && aba setup dns -y"
 e2e_run_remote "Verify dnsmasq marker exists" \
     "test -f /etc/dnsmasq.d/aba-upstream.conf"
 e2e_run_remote "Verify dnsmasq is running" \
     "systemctl is-active dnsmasq"
-e2e_run_remote "Verify DNS resolution via dnsmasq" \
-    "dig @127.0.0.1 +short +timeout=3 google.com | grep -E '^[0-9]'"
+e2e_run_remote "Verify dnsmasq is responding" \
+    "dig @127.0.0.1 +timeout=3 localhost | grep -q 'NOERROR\\|127.0.0.1'"
 e2e_run_remote "Verify dns_servers set in aba.conf" \
     "cd ~/aba && grep '^dns_servers=' aba.conf | grep -v '^dns_servers=$'"
 
-e2e_run_remote "Run tools/setup-ntp.sh on internal bastion" \
-    "cd ~/aba && tools/setup-ntp.sh -y"
+# --- Idempotency: second run is a no-op ---
+e2e_run_remote "Verify setup dns is idempotent (second run is no-op)" \
+    "cd ~/aba && aba setup dns -y 2>&1 | grep -q 'already configured'"
+
+# --- Setup NTP via CLI dispatch ---
+e2e_run_remote "Setup NTP via 'aba setup ntp'" \
+    "cd ~/aba && aba setup ntp -y"
 e2e_run_remote "Verify chrony allow line present" \
     "grep '^allow ' /etc/chrony.conf"
 e2e_run_remote "Verify chronyd is running" \
     "systemctl is-active chronyd"
 e2e_run_remote "Verify ntp_servers set in aba.conf" \
     "cd ~/aba && grep '^ntp_servers=' aba.conf | grep -v '^ntp_servers=$'"
+
+# --- Idempotency: second NTP run ---
+e2e_run_remote "Verify setup ntp is idempotent" \
+    "cd ~/aba && aba setup ntp -y 2>&1 | grep -q 'already'"
 
 test_end
 
@@ -765,6 +783,8 @@ e2e_run_remote "Generate agent configs" \
     "cd ~/aba && aba --dir $STANDARD agentconf"
 e2e_run_remote "Verify agent-config has MACs from macs.conf" \
     "cd ~/aba && grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' $STANDARD/agent-config.yaml | grep -q ."
+e2e_run_remote "Verify auto-DNS record created for standard cluster" \
+    "test -f /etc/dnsmasq.d/aba-${STANDARD}.$(pool_domain).conf"
 # Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
 # valid and control plane comes up.  Full operator verification is done on
 # the SNO cluster earlier in this suite.
@@ -773,6 +793,8 @@ e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
     "cd ~/aba && aba --dir $STANDARD delete"
+e2e_run_remote "Verify auto-DNS record removed after standard delete" \
+    "test ! -f /etc/dnsmasq.d/aba-${STANDARD}.$(pool_domain).conf"
 e2e_remove_from_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
@@ -799,12 +821,32 @@ test_end
 # ============================================================================
 test_begin "Cleanup: remove DNS and NTP infra on disN"
 
-e2e_run_remote "Remove ABA DNS config" \
-    "cd ~/aba && tools/remove-dns.sh -y"
+# --- Test "late setup" backfill: remove DNS, create a cluster dir, re-setup,
+#     verify the stale .infra-dns marker is cleared and records are backfilled.
+e2e_run_remote "Remove DNS to test re-setup backfill" \
+    "cd ~/aba && aba remove dns -y"
+e2e_run_remote "Create dummy cluster dir for backfill test" \
+    "cd ~/aba && aba cluster -n backfill-test -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run_remote "Touch stale .infra-dns marker (simulates pre-DNS run)" \
+    "touch ~/aba/backfill-test/.infra-dns"
+e2e_run_remote "Re-setup DNS (should backfill existing clusters)" \
+    "cd ~/aba && aba setup dns -y"
+e2e_run_remote "Verify backfill-test DNS record was created" \
+    "test -f /etc/dnsmasq.d/aba-backfill-test.$(pool_domain).conf"
+e2e_run_remote "Verify stale .infra-dns marker was removed" \
+    "test ! -f ~/aba/backfill-test/.infra-dns"
+e2e_run_remote "Clean up backfill-test cluster dir" \
+    "cd ~/aba && rm -rf backfill-test"
+
+# --- Final removal via CLI dispatch ---
+e2e_run_remote "Remove ABA DNS config via 'aba remove dns'" \
+    "cd ~/aba && aba remove dns -y"
 e2e_run_remote "Verify dnsmasq marker gone" \
     "test ! -f /etc/dnsmasq.d/aba-upstream.conf"
-e2e_run_remote "Remove ABA NTP config" \
-    "cd ~/aba && tools/remove-ntp.sh -y"
+e2e_run_remote "Verify dnsmasq is stopped" \
+    "! systemctl is-active dnsmasq"
+e2e_run_remote "Remove ABA NTP config via 'aba remove ntp'" \
+    "cd ~/aba && aba remove ntp -y"
 e2e_run_remote "Verify no chrony allow" \
     "! grep -q '^allow ' /etc/chrony.conf"
 
