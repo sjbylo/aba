@@ -88,6 +88,29 @@ echo
 echo "--- DNS: check ---"
 _assert "infra-dns.sh check passes" scripts/infra-dns.sh check
 
+# ── infra-dns.sh add-mirror / remove-mirror ──────────────────────────────────
+echo
+echo "--- DNS: add-mirror ---"
+
+_mirror_dir=$(mktemp -d)
+cat > "$_mirror_dir/mirror.conf" <<-EOF
+reg_host=registry.example.com
+EOF
+
+(cd "$_mirror_dir" && $OLDPWD/scripts/infra-dns.sh add-mirror)
+
+_assert "Mirror record file exists" test -f /etc/dnsmasq.d/aba-mirror.conf
+_assert "Mirror hostname resolves" dig @127.0.0.1 +short registry.example.com | grep -qE '^[0-9]'
+
+echo
+echo "--- DNS: remove-mirror ---"
+
+scripts/infra-dns.sh remove-mirror
+
+_assert "Mirror record file removed" test ! -f /etc/dnsmasq.d/aba-mirror.conf
+
+rm -rf "$_mirror_dir"
+
 # ── DNS Remove ───────────────────────────────────────────────────────────────
 echo
 echo "--- DNS: remove ---"

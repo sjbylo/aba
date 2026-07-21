@@ -274,6 +274,8 @@ e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror
 
 e2e_run_remote "Install Quay registry on port $_QUAY_PORT" \
     "cd ~/aba && aba -d mirror install"
+e2e_run_remote "Verify auto-DNS record created for mirror registry" \
+    "test -f /etc/dnsmasq.d/aba-mirror.conf && dig @127.0.0.1 +short ${DIS_HOST} | grep -qE '^[0-9]'"
 e2e_poll_remote 60 5 "Wait for Quay container" \
     "podman ps | grep quay"
 e2e_run_remote "Verify Quay running" \
@@ -784,6 +786,8 @@ test_begin "Cleanup: uninstall registry on disN"
 
 e2e_run_remote "Uninstall Quay registry" \
     "cd ~/aba && aba -d mirror uninstall"
+e2e_run_remote "Verify mirror DNS record removed after uninstall" \
+    "test ! -f /etc/dnsmasq.d/aba-mirror.conf"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:${_QUAY_PORT}/v2/"
