@@ -54,7 +54,7 @@ case "${1:-}" in
 				"Set api_vip/ingress_vip or starting_ip in cluster.conf."
 		fi
 
-		_conf="/etc/dnsmasq.d/aba-${cluster_name}.conf"
+		_conf="/etc/dnsmasq.d/aba-${cluster_name}.${base_domain}.conf"
 
 		$SUDO tee "$_conf" >/dev/null <<-EOF
 		address=/api.${cluster_name}.${base_domain}/${api_ip}
@@ -70,14 +70,16 @@ case "${1:-}" in
 		[ -f "$_MARKER" ] || exit 0
 
 		local_name="${2:-}"
+		local_domain="${3:-}"
 		[ -z "$local_name" ] && exit 0
+		[ -z "$local_domain" ] && exit 0
 
-		_conf="/etc/dnsmasq.d/aba-${local_name}.conf"
+		_conf="/etc/dnsmasq.d/aba-${local_name}.${local_domain}.conf"
 		[ -f "$_conf" ] || exit 0
 
 		$SUDO rm -f "$_conf"
 		_dnsmasq_restart
-		aba_info "DNS records removed for cluster: ${local_name}"
+		aba_info "DNS records removed for cluster: ${local_name}.${local_domain}"
 		;;
 
 	add-mirror)
@@ -135,7 +137,7 @@ case "${1:-}" in
 		;;
 
 	*)
-		echo "Usage: scripts/infra-dns.sh {add-cluster|remove-cluster <name>|add-mirror|remove-mirror|check}" >&2
+		echo "Usage: scripts/infra-dns.sh {add-cluster|remove-cluster <name> <domain>|add-mirror|remove-mirror|check}" >&2
 		exit 1
 		;;
 esac

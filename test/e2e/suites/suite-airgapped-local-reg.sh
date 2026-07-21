@@ -311,7 +311,7 @@ e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
 e2e_run_remote "Verify auto-DNS record created for SNO" \
-    "test -f /etc/dnsmasq.d/aba-${SNO}.conf && dig @127.0.0.1 +short api.${SNO}.$(pool_domain) | grep -q '$(pool_sno_ip)'"
+    "test -f /etc/dnsmasq.d/aba-${SNO}.$(pool_domain).conf && dig @127.0.0.1 +short api.${SNO}.$(pool_domain) | grep -q '$(pool_sno_ip)'"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_wait_cluster_available $SNO remote
@@ -741,7 +741,7 @@ test_begin "Standard: cluster with macs.conf"
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
 e2e_run_remote "Verify auto-DNS record removed after SNO delete" \
-    "test ! -f /etc/dnsmasq.d/aba-${SNO}.conf"
+    "test ! -f /etc/dnsmasq.d/aba-${SNO}.$(pool_domain).conf"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Remove sno cluster dir" \
     "cd ~/aba && rm -rf $SNO"
