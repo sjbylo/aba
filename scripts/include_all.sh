@@ -459,24 +459,28 @@ warn_if_cluster_unstable() {
 	fi
 }
 
-# Check if the cluster install is truly complete (all three success criteria).
+# Check if the cluster install is truly complete (all operators healthy).
 # Returns 0 if ready, 1 if not. Requires oc to be authenticated.
-# Criteria: ClusterVersion Available=True, Progressing=False, no Degraded operators.
+# Uses individual ClusterOperators (oc get co) directly — the ClusterVersion
+# object lags behind operator state and produces false negatives.
 cluster_is_ready() {
-	local _cv_available _cv_progressing _degraded_count
+	local _raw _unavail _progressing _degraded
 
-	aba_debug "Running: oc get clusterversion (readiness check)"
+	aba_debug "Running: oc get co (readiness check)"
 
-	_cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null)
-	[ "$_cv_available" = "True" ] || return 1
+	# For each ClusterOperator, extract "Available Progressing Degraded" as one line.
+	# Example output: "True False False\nTrue False False\n..." (one line per CO).
+	_raw=$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Available")].status} {.status.conditions[?(@.type=="Progressing")].status} {.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null) || return 1
+	[ -n "$_raw" ] || return 1
 
-	_cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null)
-	[ "$_cv_progressing" = "False" ] || return 1
+	# Count operators not meeting each criterion
+	_unavail=$(echo "$_raw" | awk '{print $1}' | grep -cv '^True$' || true)
+	_progressing=$(echo "$_raw" | awk '{print $2}' | grep -c '^True$' || true)
+	_degraded=$(echo "$_raw" | awk '{print $3}' | grep -c '^True$' || true)
 
-	_degraded_count=$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null | grep -c "True" || true)
-	[ "$_degraded_count" -eq 0 ] || return 1
+	aba_debug "cluster_is_ready: Unavail=$_unavail Progressing=$_progressing Degraded=$_degraded"
 
-	return 0
+	[ "$_unavail" -eq 0 ] && [ "$_progressing" -eq 0 ] && [ "$_degraded" -eq 0 ]
 }
 
 # Relaxed health check: only verifies the cluster API is reachable and functional.
@@ -2085,6 +2089,46 @@ fetch_upgrade_targets() {
 }
 
 ############################################
+# Fetch upgrade targets for ALL relevant channels (user's + fast + candidate).
+# Outputs tab-separated: CHANNEL\tLABEL\tVERSION
+# Used by TUI "Prepare Upgrade" to build the version picker without
+# calling fetch_upgrade_targets multiple times.
+# Args:
+#	$1 = current version (e.g. 4.20.30)
+#	$2 = user's channel (e.g. candidate) [optional, default: fast]
+############################################
+fetch_all_upgrade_targets() {
+	local ver="${1:-}" channel="${2:-${ocp_channel:-fast}}"
+	[[ -n "$ver" ]] || return 0
+
+	local ch _seen_ch=" "
+	for ch in "$channel" fast candidate; do
+		[[ "$_seen_ch" == *" $ch "* ]] && continue
+		_seen_ch+="$ch "
+		local _out
+		_out=$(fetch_upgrade_targets "$ver" "$ch" 2>/dev/null) || continue
+		while IFS=$'\t' read -r _label _tgt_ver; do
+			[[ -n "$_tgt_ver" ]] && printf '%s\t%s\t%s\n' "$ch" "$_label" "$_tgt_ver"
+		done <<< "$_out"
+	done
+}
+
+############################################
+# Start (or skip) the background upgrade-targets fetch via run_once.
+# Single source of truth for task ID, command, and TTL.
+# Called by aba_prefetch_catalogs() at startup and TUI fallback.
+# Args:
+#	$1 = current version [optional, default: $ocp_version]
+#	$2 = user's channel [optional, default: $ocp_channel or fast]
+############################################
+aba_upgrade_targets_start() {
+	local ver="${1:-${ocp_version:-}}" channel="${2:-${ocp_channel:-fast}}"
+	[[ -n "$ver" ]] || return 0
+	run_once -i "aba:upgrade-targets:${ver}" -t "$(parse_duration "$ABA_CACHE_TTL")" -- \
+		bash -lc "source ./scripts/include_all.sh; fetch_all_upgrade_targets '$ver' '$channel'"
+}
+
+############################################
 # Verify a release version exists in the Cincinnati graph.
 # Used as a pre-flight before oc-mirror to avoid wasted time on non-existent versions.
 # Args:
@@ -3289,6 +3333,9 @@ aba_prefetch_catalogs() {
 	fi
 
 	[[ -n "$_ver" ]] || return 0
+
+	# Pre-warm upgrade targets for all channels (TUI "Prepare Upgrade" peeks at this)
+	aba_upgrade_targets_start "$_ver" "$_channel"
 
 	# Minor x.y — download_all_catalogs uses catalog:${minor}:* task IDs (not patch z)
 	local _minor=$(_ver_minor "$_ver")

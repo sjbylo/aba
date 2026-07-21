@@ -279,7 +279,7 @@ case "$vendor" in
 			if [ ! -f \"\$_abs_root/auth/admin-password\" ]; then
 				echo '$reg_pw' | podman run --rm -i \
 					-v \"\${_abs_root}:/data:Z\" $_QUAY_NG_IMAGE \
-					init -data-dir /data -hostname $reg_host -init-password-stdin
+					init -data-dir /data -hostname $reg_host -init-user $reg_user -init-password-stdin
 			fi
 		" || aba_abort "Registry initialization failed on $reg_host."
 
@@ -314,9 +314,6 @@ QUADLET
 				"Check the output above for details."
 		fi
 
-		# Credentials: reg_pw already set by reg_generate_password, reg_user is always admin
-		reg_user="admin"
-		replace-value-conf -n reg_user -v "$reg_user" -f mirror.conf
 
 		remote_ca="$reg_root/ssl.cert"
 		;;

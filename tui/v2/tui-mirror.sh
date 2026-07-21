@@ -672,16 +672,31 @@ mirror_prep_upgrade() {
 	# Fetch upgrade targets reachable from the current version
 	local _channel="${ocp_channel:-fast}"
 	local _targets _zstream="" _next="" _next1=""
-	_targets=$(fetch_upgrade_targets "$_current_ver" "$_channel" 2>/dev/null)
+	local _task_id="aba:upgrade-targets:${_current_ver}"
+
+	# Peek: is the background upgrade-target fetch done? Show infobox only if not.
+	if ! run_once -p -i "$_task_id" 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Checking available upgrade versions for v${_current_ver}..." 3 60
+		run_once -q -w -S -i "$_task_id" 2>/dev/null || {
+			aba_upgrade_targets_start "$_current_ver" "$_channel"
+			run_once -q -w -i "$_task_id" 2>/dev/null || true
+		}
+	fi
+
+	# Read combined output: CHANNEL\tLABEL\tVERSION
+	local _all_targets
+	_all_targets=$(run_once -o -i "$_task_id" 2>/dev/null)
 
 	# Parse own-channel targets
-	while IFS=$'\t' read -r _label _ver; do
+	while IFS=$'\t' read -r _ch _label _ver; do
+		[[ "$_ch" == "$_channel" ]] || continue
 		case "$_label" in
 			zstream) _zstream="$_ver" ;;
 			next)    _next="$_ver" ;;
 			next+1)  _next1="$_ver" ;;
 		esac
-	done <<< "$_targets"
+	done <<< "$_all_targets"
 
 	# Check other channels for additional versions not on user's channel.
 	# _fb_items: array of "TAG|VERSION|CHANNEL" entries for fallback versions.
@@ -691,7 +706,8 @@ mirror_prep_upgrade() {
 	_add_fallback_items() {
 		local _fb_ch="$1" _fb_tag_prefix="$2"
 		local _fb_targets _fb_z="" _fb_n="" _fb_n1=""
-		_fb_targets=$(fetch_upgrade_targets "$_current_ver" "$_fb_ch" 2>/dev/null)
+		# Filter combined output to this channel
+		_fb_targets=$(echo "$_all_targets" | awk -F'\t' -v ch="$_fb_ch" '$1==ch {print $2"\t"$3}')
 		[[ -z "$_fb_targets" ]] && return
 		while IFS=$'\t' read -r _l _v; do
 			case "$_l" in

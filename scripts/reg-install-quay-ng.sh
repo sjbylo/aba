@@ -39,7 +39,7 @@ if [ ! -f "$reg_root/auth/admin-password" ]; then
 	aba_info "Initializing registry ..."
 	echo "$reg_pw" | podman run --rm -i \
 		-v "${reg_root}:/data:Z" "$_QUAY_NG_IMAGE" \
-		init -data-dir /data -hostname "$reg_host" -init-password-stdin
+		init -data-dir /data -hostname "$reg_host" -init-user "$reg_user" -init-password-stdin
 
 	if [ ! -f "$reg_root/auth/admin-password" ]; then
 		aba_abort \
@@ -73,10 +73,6 @@ if ! systemctl --user start "$_SERVICE_NAME"; then
 		"Check: journalctl --user -xeu $_SERVICE_NAME" \
 		"Quadlet: $_QUADLET_FILE"
 fi
-
-# Credentials are already set (user-supplied or ABA-generated via reg_generate_password)
-reg_user="admin"
-replace-value-conf -n reg_user -v "$reg_user" -f mirror.conf
 
 # Ensure rootless podman containers survive VM reboot
 if [ "$(id -u)" -ne 0 ] && command -v loginctl >/dev/null 2>&1; then

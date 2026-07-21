@@ -15,7 +15,7 @@ reg_port=8443				# Port of the existing or target mirror registry.
 reg_path=/ocp{{ ocp_major }}/openshift{{ ocp_major }}		# Path where mirrored images are stored,
 					# e.g. https://registry.example.com:8443/ocp4/openshift4/...
 
-reg_user=init				# Username for the registry (quay-ng always uses 'admin').
+reg_user=init				# Username for the registry.
 
 reg_pw='p4ssw0rd'			# Registry password. Leave empty to auto-generate one (e.g. reg_pw=).
 					# Must be at least 8 characters with no whitespace and not include: "'`$
