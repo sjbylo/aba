@@ -38,7 +38,7 @@ fi
 if [ -s reg-uninstall.sh ]; then
 	source reg-uninstall.sh
 
-	if ask "Uninstall the previously installed mirror registry on host $reg_host_to_del"; then
+	if ask -n --auto-yes "Uninstall the previously installed mirror registry on host $reg_host_to_del"; then
 		reg_delete
 
 		rm -rf "${regcreds_dir:?}/"*
@@ -121,7 +121,7 @@ fi
 _location="localhost"
 [ "$_is_remote" ] && _location="$reg_ssh_user@$reg_host"
 
-if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall this registry"; then
+if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root). Uninstall this registry"; then
 	if [ "$_is_remote" ]; then
 		_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 		case "$vendor" in

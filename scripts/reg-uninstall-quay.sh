@@ -22,7 +22,7 @@ fi
 
 source "$regcreds_dir/state.sh"
 
-if ask "Uninstall Quay mirror registry on localhost, installed at $reg_host:$reg_port (root: $reg_root)"; then
+if ask -n --auto-yes "Uninstall Quay mirror registry on localhost, installed at $reg_host:$reg_port (root: $reg_root)"; then
 
 	ensure_quay_registry
 

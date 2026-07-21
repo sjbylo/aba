@@ -35,7 +35,7 @@ else
 	exit 0
 fi
 
-ask "Delete the above virtual machine(s)" || exit 1
+ask -n --auto-yes "Delete the above virtual machine(s)" || exit 1
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")

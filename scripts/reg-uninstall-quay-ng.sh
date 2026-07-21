@@ -23,7 +23,7 @@ _QUADLET_DIR="$HOME/.config/containers/systemd"
 _QUADLET_FILE="$_QUADLET_DIR/quay.container"
 _SERVICE_NAME="quay.service"
 
-if ask "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
+if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 
 	if systemctl --user is-active "$_SERVICE_NAME" &>/dev/null; then
 		aba_info "Stopping $_SERVICE_NAME ..."
