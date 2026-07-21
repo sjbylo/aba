@@ -130,11 +130,13 @@ dns=none
 EOF
 $SUDO systemctl reload NetworkManager 2>/dev/null || true
 
-# --- Rewrite resolv.conf ---
-$SUDO tee /etc/resolv.conf >/dev/null <<-EOF
-# Managed by ABA (tools/setup-dns.sh). Original backed up to /etc/resolv.conf.aba-backup
-nameserver 127.0.0.1
-EOF
+# --- Rewrite resolv.conf (preserve search domain from original) ---
+_search_line=$(grep '^search ' /etc/resolv.conf.aba-backup 2>/dev/null || grep '^search ' /etc/resolv.conf 2>/dev/null || true)
+{
+	echo "# Managed by ABA (tools/setup-dns.sh). Original backed up to /etc/resolv.conf.aba-backup"
+	[ "$_search_line" ] && echo "$_search_line"
+	echo "nameserver 127.0.0.1"
+} | $SUDO tee /etc/resolv.conf >/dev/null
 
 # --- Open firewall ---
 if command -v firewall-cmd >/dev/null 2>&1; then
