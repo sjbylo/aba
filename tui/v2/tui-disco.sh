@@ -108,7 +108,7 @@ Once copied, select 'Check Again'.\n" \
 	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "ABA Install Bundle" --msgbox \
-		"\nDisconnected payload summary:\n\
+		"\nDisconnected payload summary:\n\n\
   • OpenShift version: ${_bv}\n\
   • Update channel: ${_bc}\n\
   • Image archives: mirror_*.tar detected in mirror/data/\n\
