@@ -5,7 +5,7 @@
 # Requires: root/sudo, dig, dnsmasq installable, chrony installed
 # Run from the ABA root directory.
 
-set -euo pipefail
+set -eo pipefail
 
 source scripts/include_all.sh
 
@@ -69,8 +69,8 @@ EOF
 (cd "$_test_dir" && $OLDPWD/scripts/infra-dns.sh add-cluster)
 
 _assert "Cluster record file exists" test -f /etc/dnsmasq.d/aba-testcluster.conf
-_assert "api resolves" dig @127.0.0.1 +short api.testcluster.example.com | grep -q '10.99.99.99'
-_assert "apps wildcard resolves" dig @127.0.0.1 +short foo.apps.testcluster.example.com | grep -q '10.99.99.99'
+_assert "api resolves" bash -c 'dig @127.0.0.1 +short api.testcluster.example.com | grep -q 10.99.99.99'
+_assert "apps wildcard resolves" bash -c 'dig @127.0.0.1 +short foo.apps.testcluster.example.com | grep -q 10.99.99.99'
 
 # ── infra-dns.sh remove-cluster ──────────────────────────────────────────────
 echo
@@ -79,7 +79,7 @@ echo "--- DNS: remove-cluster ---"
 scripts/infra-dns.sh remove-cluster testcluster
 
 _assert "Cluster record file removed" test ! -f /etc/dnsmasq.d/aba-testcluster.conf
-_assert_not "api no longer resolves" dig @127.0.0.1 +short +timeout=2 api.testcluster.example.com | grep -q '10.99.99.99'
+_assert_not "api no longer resolves" bash -c 'dig @127.0.0.1 +short +timeout=2 api.testcluster.example.com | grep -q 10.99.99.99'
 
 rm -rf "$_test_dir"
 
@@ -100,7 +100,7 @@ EOF
 (cd "$_mirror_dir" && $OLDPWD/scripts/infra-dns.sh add-mirror)
 
 _assert "Mirror record file exists" test -f /etc/dnsmasq.d/aba-mirror.conf
-_assert "Mirror hostname resolves" dig @127.0.0.1 +short registry.example.com | grep -qE '^[0-9]'
+_assert "Mirror hostname resolves" bash -c 'dig @127.0.0.1 +short registry.example.com | grep -qE "^[0-9]"'
 
 echo
 echo "--- DNS: remove-mirror ---"
