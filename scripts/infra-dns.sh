@@ -96,9 +96,6 @@ case "${1:-}" in
 		fi
 		[ -z "${mirror_ip:-}" ] && exit 0
 
-		# Skip if reg_host is already an IP address
-		echo "$reg_host" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' && exit 0
-
 		_conf="/etc/dnsmasq.d/aba-mirror.conf"
 
 		$SUDO tee "$_conf" >/dev/null <<-EOF
