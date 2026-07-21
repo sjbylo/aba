@@ -162,5 +162,10 @@ if [ -f "$ABA_ROOT/aba.conf" ]; then
 	aba_info "Set dns_servers=$bastion_ip in aba.conf"
 fi
 
+# --- If mirror already installed, add its DNS record too ---
+if [ -f "$ABA_ROOT/mirror/mirror.conf" ]; then
+	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/infra-dns.sh" add-mirror)
+fi
+
 aba_info "dnsmasq configured successfully."
 aba_info "ABA will now auto-manage per-cluster DNS records during install/delete."
