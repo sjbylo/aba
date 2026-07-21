@@ -68,7 +68,7 @@ EOF
 
 (cd "$_test_dir" && $OLDPWD/scripts/infra-dns.sh add-cluster)
 
-_assert "Cluster record file exists" test -f /etc/dnsmasq.d/aba-testcluster.conf
+_assert "Cluster record file exists" test -f /etc/dnsmasq.d/aba-testcluster.example.com.conf
 _assert "api resolves" bash -c 'dig @127.0.0.1 +short api.testcluster.example.com | grep -q 10.99.99.99'
 _assert "apps wildcard resolves" bash -c 'dig @127.0.0.1 +short foo.apps.testcluster.example.com | grep -q 10.99.99.99'
 
@@ -76,9 +76,9 @@ _assert "apps wildcard resolves" bash -c 'dig @127.0.0.1 +short foo.apps.testclu
 echo
 echo "--- DNS: remove-cluster ---"
 
-scripts/infra-dns.sh remove-cluster testcluster
+scripts/infra-dns.sh remove-cluster testcluster example.com
 
-_assert "Cluster record file removed" test ! -f /etc/dnsmasq.d/aba-testcluster.conf
+_assert "Cluster record file removed" test ! -f /etc/dnsmasq.d/aba-testcluster.example.com.conf
 _assert_not "api no longer resolves" bash -c 'dig @127.0.0.1 +short +timeout=2 api.testcluster.example.com | grep -q 10.99.99.99'
 
 rm -rf "$_test_dir"
