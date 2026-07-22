@@ -137,7 +137,7 @@ e2e_run "Delete any leftover $POS cluster" \
 e2e_add_to_cluster_cleanup "$PWD/$POS"
 
 e2e_run -r 2 10 "Create POS cluster.conf" \
-	"aba cluster -n $POS -t sno --step cluster.conf"
+	"aba cluster -n $POS -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 e2e_run -r 2 30 "Positive install: full install to operator-ready" \
 	"aba --dir $POS install"
@@ -168,7 +168,7 @@ e2e_run "Delete any leftover $NEG cluster" \
 e2e_add_to_cluster_cleanup "$PWD/$NEG"
 
 e2e_run -r 2 10 "Create NEG cluster.conf" \
-	"aba cluster -n $NEG -t sno --step cluster.conf"
+	"aba cluster -n $NEG -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
 e2e_run_must_fail "Install aborts at preflight (bogus vCenter credentials)" \
 	"aba --dir $NEG install"

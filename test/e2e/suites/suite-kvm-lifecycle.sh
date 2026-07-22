@@ -77,7 +77,7 @@ test_begin "Setup: install aba, configure for KVM"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for KVM" \
-    "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+    "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $(pool_machine_network)"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=kvm" "grep ^platform=kvm aba.conf"
