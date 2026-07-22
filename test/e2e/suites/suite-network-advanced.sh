@@ -177,7 +177,9 @@ _net_test() {
         govc_network="${GOVC_NETWORK:?GOVC_NETWORK must be set in vmware.conf}"
         machine_network="$(pool_machine_network)"
         next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
-        start_ip="$(pool_node_ip)"
+        # Use pool_starting_ip (not pool_node_ip) — compact/standard need nodes
+        # AFTER VIPs, not at the same base IP as SNO.
+        start_ip="$(pool_starting_ip "$ctype")"
     fi
 
     test_begin "$label"
