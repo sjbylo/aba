@@ -56,6 +56,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
 - [Install ABA](#install-aba)
 - [Partially Disconnected Installation](#partially-disconnected-installation)
 - [Air-Gapped Installation](#air-gapped-installation)
+  - [Air-Gapped Transfer](#air-gapped-transfer)
   - [Custom Bundles](#custom-bundles)
   - [Light Bundles](#light-bundles-when-disk-space-or-portable-media-is-limited)
 - [Connected Installation (No Mirror)](#connected-installation-no-mirror)
@@ -394,6 +395,25 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
 - Installs Quay or Docker Registry onto the remote host `registry.example.com` and loads the images.
 
 After loading, verify connectivity: `aba -d mirror verify`
+
+### Air-Gapped Transfer
+
+After the initial bundle install, use **save/transfer/load** for all subsequent updates (upgrades, additional operators). See [Cluster Updates](#cluster-updates-osus) and [Adding Operators](#adding-operators-to-the-mirror-registry) for detailed workflows.
+
+The universal rule:
+
+```
+# On connected host:  aba -d mirror save
+# Transfer:           cp mirror/data/*.tar /media/       (always ALL *.tar files)
+# On disconnected:    cp /media/*.tar ~/aba/mirror/data/ && aba -d mirror load
+```
+
+**Notes:**
+
+- Always copy ALL `*.tar` files from `mirror/data/` — both `mirror_*.tar` (images) and `aba-transfer.tar` (matching ISC and CLIs).
+- It is safe to overwrite existing tar files on the disconnected side — each `aba save` produces a fresh set. Back up old files first if you need them (e.g. for another mirror).
+- After a successful load, you will be asked whether to delete the archive files to free disk space.
+- `aba bundle` is for initial bootstrap only. Use save/transfer/load for all ongoing updates.
 
 Now continue with [Installing a Cluster](#installing-a-cluster) below.
 

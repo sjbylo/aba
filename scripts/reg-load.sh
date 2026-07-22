@@ -43,6 +43,13 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+# --- Guard: archive files must be present ---
+if ! ls data/mirror_*.tar >/dev/null 2>&1; then
+	aba_abort "No mirror_*.tar archive files found in mirror/data/." \
+		"Copy the archive files from the connected host first:" \
+		"  cp <source>/mirror/data/*.tar mirror/data/"
+fi
+
 # Unpack transfer bundle if present (always contains ISC; for upgrades also
 # includes CLI tarballs and metadata).  Created by 'aba save' so that
 # 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
@@ -50,6 +57,15 @@ aba_debug "Configuration validated"
 _transfer_tar="data/aba-transfer.tar"
 _transfer_meta_ver=""
 _transfer_meta_chan=""
+
+# --- Guard: warn if transfer tar is missing (user may have copied only mirror_*.tar) ---
+if [ ! -f "$_transfer_tar" ]; then
+	aba_warn "No aba-transfer.tar found alongside mirror_*.tar archives." \
+		"The transfer tar contains the matching ISC and metadata." \
+		"Ensure you copied ALL *.tar files from mirror/data/." \
+		"Continuing with existing local ISC."
+fi
+
 if [ -f "$_transfer_tar" ]; then
 	aba_info "Found transfer bundle: $_transfer_tar"
 
@@ -79,9 +95,9 @@ if [ -f "$_transfer_tar" ]; then
 		fi
 	fi
 
-	# Remove the transfer bundle (small, ephemeral delivery vehicle)
-	rm -f "$_transfer_tar" data/aba-transfer-metadata.json
-	aba_info "Transfer bundle unpacked and removed."
+	# Transfer bundle unpacked — keep in place for potential re-use
+	# (re-load after registry reinstall, or copy to another mirror)
+	aba_info "Transfer bundle unpacked."
 fi
 
 aba_debug "Ensuring oc-mirror is available"
@@ -215,7 +231,18 @@ fi
 rm -f ../.bundle data/.isc-pinned
 
 echo
-aba_info "Files in mirror/data/ (mirror_*.tar) can now be deleted or backed up to free disk space."
+
+# Offer to delete large archive files to free disk space
+_archive_files=( data/mirror_*.tar )
+if [ -e "${_archive_files[0]}" ]; then
+	_archive_size=$(du -sh data/mirror_*.tar 2>/dev/null | tail -1 | awk '{print $1}')
+	if ask -n --auto-no "Delete mirror_*.tar files (${_archive_size:-?} total) to free disk space"; then
+		rm -f data/mirror_*.tar data/aba-transfer.tar data/aba-transfer-metadata.json
+		aba_info "Archive and transfer files deleted."
+	else
+		aba_info "Archive files kept. Delete manually when no longer needed: rm mirror/data/mirror_*.tar"
+	fi
+fi
 echo
 
 if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then

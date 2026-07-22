@@ -266,6 +266,14 @@ e2e_run_must_fail_remote "Load without data dir should fail" \
 e2e_run_remote -q "Restore data dir" \
 	"cd ~/aba && mv mirror/data.bak mirror/data"
 
+# Negative path: data/ exists but no mirror_*.tar
+e2e_run_remote -q "Move mirror_*.tar aside" \
+	"cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ 2>/dev/null || true"
+e2e_run_must_fail_remote "Load without mirror_*.tar should fail" \
+	"cd ~/aba && aba -d mirror load"
+e2e_run_remote -q "Restore mirror_*.tar" \
+	"cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ 2>/dev/null || true; rmdir mirror/data/.tmp-bak 2>/dev/null || true"
+
 test_end
 
 # ============================================================================
@@ -276,6 +284,8 @@ test_begin "Load images into existing registry"
 e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load images into registry" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote "Verify aba-transfer.tar kept after load" \
+    "cd ~/aba && test -f mirror/data/aba-transfer.tar"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 test_end
