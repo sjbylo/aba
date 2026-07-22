@@ -3400,24 +3400,26 @@ aba_prefetch_catalogs() {
 # Disable with: OC_MIRROR_PIN_CATALOGS=0 in ~/.aba/config (or env)
 # Remove once oc-mirror fixes upstream tag resolution in air-gap (OCPBUGS-81712).
 #
-# Usage: _oc_mirror_pin_catalogs_by_digest <isc_file> <ocp_ver_major>
+# Usage: _oc_mirror_pin_catalogs_by_digest <isc_file> <ocp_ver_major> [<additional_ver_major>...]
 #   isc_file:       basename of ISC relative to data/ (e.g. "imageset-config.yaml")
-#   ocp_ver_major:  e.g. "4.20"
+#   ocp_ver_major:  e.g. "4.20" (additional versions for upgrade catalogs)
 # Returns: filename to use (original or "imageset-config-digest.yaml") on stdout.
 
 _oc_mirror_pin_catalogs_by_digest() {
-	local isc_file="$1"
-	local ocp_ver_major="$2"
+	local isc_file="$1"; shift
 	local digest_isc="imageset-config-digest.yaml"
 	local sed_args=()
 
-	for catalog_name in redhat-operator certified-operator community-operator; do
-		local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
-		[ -s "$digest_file" ] || continue
-		local digest
-		digest=$(cat "$digest_file")
-		sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}  # was :v${ocp_ver_major}|g")
-		aba_debug "Will pin $catalog_name catalog: :v${ocp_ver_major} -> @${digest}"
+	for ocp_ver_major in "$@"; do
+		[ -z "$ocp_ver_major" ] && continue
+		for catalog_name in redhat-operator certified-operator community-operator; do
+			local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
+			[ -s "$digest_file" ] || continue
+			local digest
+			digest=$(cat "$digest_file")
+			sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}  # was :v${ocp_ver_major}|g")
+			aba_debug "Will pin $catalog_name catalog: :v${ocp_ver_major} -> @${digest}"
+		done
 	done
 
 	if [ ${#sed_args[@]} -gt 0 ]; then
@@ -3467,10 +3469,21 @@ _run_oc_mirror_with_retry() {
 	if [ "$action" != "load" ] && [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
 		local _ocp_ver_major
 		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+		# For upgrades, the ISC may reference the TARGET version's catalog (e.g. v4.21)
+		# not the base version's (v4.20). Pin both.
+		local _upgrade_ver_major=""
+		if [ "${ocp_upgrade_to:-}" ]; then
+			_upgrade_ver_major=$(echo "$ocp_upgrade_to" | cut -d. -f1-2)
+			[ "$_upgrade_ver_major" = "$_ocp_ver_major" ] && _upgrade_ver_major=""
+		fi
+		aba_debug "Catalog digest pinning: base=$_ocp_ver_major upgrade=${_upgrade_ver_major:-none}"
 		local _config_file
-		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" )
+		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" $_upgrade_ver_major )
 		if [ "$_config_file" != "imageset-config.yaml" ]; then
-			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"  # replace config filename in command
+			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"
+			aba_debug "Using digest-pinned ISC: $_config_file"
+		else
+			aba_debug "No catalog digests available, using original ISC"
 		fi
 	elif [ "$action" = "load" ]; then
 		# Use the pre-generated digest ISC if it exists (transferred from connected host

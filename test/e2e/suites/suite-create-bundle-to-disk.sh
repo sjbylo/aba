@@ -177,6 +177,8 @@ e2e_run "Show tar file size (human)" "ls -lh ~/tmp/delete-me*tar"
 e2e_run "List tar contents" "tar tvf ~/tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
     "tar tvf ~/tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
+e2e_run "Verify aba-transfer.tar in bundle (always created by aba save)" \
+    "tar tvf ~/tmp/delete-me*tar | grep mirror/data/aba-transfer.tar"
 
 test_end 0
 

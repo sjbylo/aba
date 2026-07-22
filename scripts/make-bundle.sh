@@ -305,5 +305,8 @@ else
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
 
+echo >&2
+aba_info "For subsequent updates: aba save, then transfer mirror/data/*.tar to the disconnected host. See README.md 'Air-Gapped Transfer'." >&2
+
 aba_debug "Bundle creation completed, exiting successfully"
 exit 0

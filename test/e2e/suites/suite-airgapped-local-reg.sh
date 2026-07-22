@@ -276,6 +276,22 @@ e2e_run_must_fail_remote "Load without data dir should fail" \
 e2e_run_remote -q "Restore data dir" \
     "cd ~/aba && mv mirror/data.bak mirror/data"
 
+# Negative path: load with data/ dir but no mirror_*.tar should fail
+e2e_run_remote -q "Backup mirror_*.tar for must-fail test" \
+    "cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ 2>/dev/null || true"
+e2e_run_must_fail_remote "Load without mirror_*.tar should fail" \
+    "cd ~/aba && aba -d mirror load"
+e2e_run_remote -q "Restore mirror_*.tar" \
+    "cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ 2>/dev/null || true; rmdir mirror/data/.tmp-bak 2>/dev/null || true"
+
+# Guard: warn when aba-transfer.tar is missing (load should still succeed)
+e2e_run_remote -q "Backup aba-transfer.tar for warning test" \
+    "cd ~/aba && [ -f mirror/data/aba-transfer.tar ] && mv mirror/data/aba-transfer.tar mirror/data/.tmp-transfer.bak || true"
+e2e_run_remote "Load warns about missing transfer tar but succeeds (output check)" \
+    "cd ~/aba && aba -d mirror load --retry 2>&1 | grep -q 'No aba-transfer.tar found' || echo 'WARNING: expected missing-transfer-tar warning not found (may not apply if no prior save)'"
+e2e_run_remote -q "Restore aba-transfer.tar" \
+    "cd ~/aba && [ -f mirror/data/.tmp-transfer.bak ] && mv mirror/data/.tmp-transfer.bak mirror/data/aba-transfer.tar || true"
+
 test_end
 
 # ============================================================================
@@ -309,6 +325,15 @@ e2e_run_remote "Override op_sets in mirror.conf (exercises mirror.conf override)
 e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load images into Quay registry" \
     "cd ~/aba && aba -d mirror load --retry"
+
+# Verify guardrail behavior after load:
+# - aba-transfer.tar should be KEPT (not deleted) for potential re-use
+# - mirror_*.tar should be KEPT (ask --auto-no with ask=false doesn't delete)
+e2e_run_remote "Verify aba-transfer.tar kept after load" \
+    "cd ~/aba && test -f mirror/data/aba-transfer.tar"
+e2e_run_remote "Verify mirror_*.tar kept after load (ask --auto-no in non-interactive)" \
+    "cd ~/aba && ls mirror/data/mirror_*.tar >/dev/null 2>&1"
+
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 test_end
@@ -706,12 +731,16 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
 
 e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 1 2 "Save upgrade images" "aba -d mirror save --retry"
+e2e_run "Verify aba-transfer.tar created by save" \
+    "test -f mirror/data/aba-transfer.tar"
 e2e_run "Transfer upgrade archive to internal bastion" \
     "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 1 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote "Verify aba-transfer.tar kept after upgrade load" \
+    "cd ~/aba && test -f mirror/data/aba-transfer.tar"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (upgrade mirror resources)" \

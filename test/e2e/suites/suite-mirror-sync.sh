@@ -534,6 +534,8 @@ e2e_run "Remove e2e-mirror-datadir1 on conN" \
     "sudo rm -rf ~/e2e-mirror-datadir1"
 e2e_run_remote "Remove e2e-test-neg-datadir on disN" \
     "sudo rm -rf ~/e2e-test-neg-datadir"
+e2e_run "Remove e2e-test-neg-datadir on conN" \
+    "rm -rf ~/e2e-test-neg-datadir"
 e2e_run_remote "Verify no leftover mirror data dirs on disN" \
     "test ! -d ~/e2e-mirror-datadir2 && test ! -d ~/e2e-mirror-datadir1 && test ! -d ~/e2e-test-neg-datadir"
 e2e_run "Verify no leftover mirror data dirs on conN" \
