@@ -26,6 +26,7 @@ CLI_FORCE=""
 CLI_RESUME=""
 CLI_DEV=""
 CLI_REVERT=""
+CLI_LOOP=""
 CLI_OS=""
 CLI_VMWARE_CONF=""
 CLI_CON_USER=""
@@ -75,6 +76,7 @@ _usage() {
 	  -F, --fresh            Clear old results and run all suites from scratch (aliases: -f, --force)
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
+	  -L, --loop             Continuous loop: re-queue all suites when a round completes
 	  -n, --dry-run          Show dispatch plan, don't execute
 	  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
 	  --no-clean             Skip cluster/mirror cleanup on stop/destroy
@@ -258,6 +260,7 @@ _parse_args() {
 			-F|--fresh|-f|--force)  CLI_FORCE=1; shift ;;
 			-d|--dev)               CLI_DEV=1; shift ;;
 			-r|--resume)            CLI_RESUME=1; shift ;;
+			-L|--loop)              CLI_LOOP=1; shift ;;
 			-o|--os)                CLI_OS="$2"; shift 2 ;;
 			-v|--vmware-conf)       CLI_VMWARE_CONF="$2"; shift 2 ;;
 			-u|--user)              CLI_CON_USER="$2"; CLI_DIS_USER="$2"; shift 2 ;;
