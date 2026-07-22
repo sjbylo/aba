@@ -3596,15 +3596,15 @@ probe_host() {
 
 	# -k: skip TLS verification — probe_host checks unknown/untrusted hosts
 	# (e.g. hairpin NAT diagnostics via localhost). Not used for primary verification.
-	if curl -s $_pf \
+	local _probe_err
+	_probe_err=$(curl -s $_pf \
 		--connect-timeout "$_connect_timeout" \
 		--max-time "$_max_time" \
 		--retry "$_retry" \
 		-ILk \
-		"$url" >/dev/null 2>&1; then
-		return 0
-	fi
+		"$url" 2>&1 >/dev/null) && return 0
 
+	aba_debug "probe_host failed for $desc: $_probe_err"
 	return 1
 }
 
@@ -4313,9 +4313,11 @@ require_internet_and_pull_secret() {
 	local has_internet=true
 
 	# Check internet (quick probe, 5s timeout)
-	if ! curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
+	local _inet_err
+	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ 2>&1 >/dev/null); then
 		has_internet=false
 		errors+=("No internet access (cannot reach registry.redhat.io)")
+		aba_debug "Internet check failed: $_inet_err"
 	fi
 
 	# Check pull secret (global, then fallback)

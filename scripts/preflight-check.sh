@@ -26,10 +26,12 @@ preflight_check_dns() {
 	for ip in $servers; do
 		total=$((total + 1))
 		# Self-referencing query — works in air-gapped environments (no internet needed)
-		if dig @"$ip" +time=3 +tries=1 version.bind chaos txt >/dev/null 2>&1; then
+		local _dig_err
+		if _dig_err=$(dig @"$ip" +time=3 +tries=1 version.bind chaos txt 2>&1 >/dev/null); then
 			aba_success "DNS server $ip is reachable"
 		else
 			aba_warn "DNS server $ip is not reachable"
+			aba_debug "dig @$ip failed: $_dig_err"
 			failed=$((failed + 1))
 			_preflight_warnings=$((_preflight_warnings + 1))
 		fi
@@ -75,10 +77,12 @@ preflight_check_ntp() {
 			}
 		else
 			# Fallback: UDP port check
-			if timeout 3 bash -c "echo >/dev/udp/$host/123" 2>/dev/null; then
+			local _udp_err
+			if _udp_err=$(timeout 3 bash -c "echo >/dev/udp/$host/123" 2>&1); then
 				aba_success "NTP server $host is reachable (UDP port 123)"
 			else
 				aba_warn "NTP server $host is not reachable"
+				aba_debug "UDP probe $host:123 failed: $_udp_err"
 				failed=$((failed + 1))
 				_preflight_warnings=$((_preflight_warnings + 1))
 			fi

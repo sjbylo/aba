@@ -140,8 +140,9 @@ _search_line=$(grep '^search ' /etc/resolv.conf.aba-backup 2>/dev/null || grep '
 
 # --- Open firewall ---
 if command -v firewall-cmd >/dev/null 2>&1; then
-	$SUDO firewall-cmd --permanent --add-service=dns 2>/dev/null || true
-	$SUDO firewall-cmd --reload 2>/dev/null || true
+	_fw_err=""
+	_fw_err=$($SUDO firewall-cmd --permanent --add-service=dns 2>&1) || aba_debug "firewall-cmd add-service=dns: $_fw_err"
+	_fw_err=$($SUDO firewall-cmd --reload 2>&1) || aba_debug "firewall-cmd reload: $_fw_err"
 	aba_info "Firewall: opened DNS (port 53)"
 fi
 
@@ -150,9 +151,11 @@ $SUDO systemctl enable --now dnsmasq
 $SUDO systemctl restart dnsmasq
 
 # --- Verify dnsmasq is responding ---
-if dig @127.0.0.1 +timeout=3 localhost >/dev/null 2>&1; then
+_dig_verify=""
+if _dig_verify=$(dig @127.0.0.1 +timeout=3 localhost 2>&1 >/dev/null); then
 	aba_info "dnsmasq is running and responding on 127.0.0.1"
 else
+	aba_debug "dig @127.0.0.1 localhost failed: $_dig_verify"
 	aba_warn "dnsmasq started but not responding on 127.0.0.1." \
 		"Check: systemctl status dnsmasq"
 fi

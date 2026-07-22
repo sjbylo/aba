@@ -93,7 +93,9 @@ trap _cleanup EXIT
 
 # Check connectivity to registry
 aba_debug "Checking connectivity to registry.redhat.io"
-if ! curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 >/dev/null 2>&1; then
+_reg_err=""
+if ! _reg_err=$(curl --connect-timeout 15 --retry 8 -IL http://registry.redhat.io/v2 2>&1 >/dev/null); then
+	aba_debug "registry.redhat.io check failed: $_reg_err"
 	aba_abort "Cannot access registry.redhat.io - check internet connection"
 fi
 

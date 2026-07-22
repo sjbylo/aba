@@ -86,7 +86,12 @@ _list_mirror_versions() {
 	local repo="$reg_host:$reg_port$reg_path/openshift/release-images"
 	local arch
 	arch=$(uname -m)
-	skopeo list-tags "docker://$repo" 2>/dev/null \
+	aba_debug "Running: skopeo list-tags docker://$repo"
+	local _tags_json
+	_tags_json=$(skopeo list-tags "docker://$repo" 2>"$ABA_TMP/skopeo-tags-err.$$") || true
+	[ -s "$ABA_TMP/skopeo-tags-err.$$" ] && aba_debug "skopeo list-tags stderr: $(cat "$ABA_TMP/skopeo-tags-err.$$")"
+	rm -f "$ABA_TMP/skopeo-tags-err.$$"
+	echo "$_tags_json" \
 		| grep -oP '"(\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?)-'"$arch"'"' \
 		| tr -d '"' | sed "s/-${arch}$//" | sort -V
 }
@@ -200,8 +205,10 @@ osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/
 aba_info "Verifying release image exists in mirror ..."
 aba_debug "Running: skopeo inspect docker://$mirror_image"
 target_in_mirror=1
-if ! skopeo inspect "docker://$mirror_image" >/dev/null 2>&1; then
+_skopeo_err=""
+if ! _skopeo_err=$(skopeo inspect "docker://$mirror_image" 2>&1 >/dev/null); then
 	target_in_mirror=
+	aba_debug "skopeo inspect failed: $_skopeo_err"
 	if [ ! "$opt_dry_run" ]; then
 		aba_abort "Release image not found in mirror: $mirror_image\nRun 'aba -d mirror sync' or 'aba -d mirror load' first to sync/load the target version images."
 	fi

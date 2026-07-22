@@ -92,8 +92,9 @@ fi
 
 # --- Open firewall ---
 if command -v firewall-cmd >/dev/null 2>&1; then
-	$SUDO firewall-cmd --permanent --add-service=ntp 2>/dev/null || true
-	$SUDO firewall-cmd --reload 2>/dev/null || true
+	_fw_err=""
+	_fw_err=$($SUDO firewall-cmd --permanent --add-service=ntp 2>&1) || aba_debug "firewall-cmd add-service=ntp: $_fw_err"
+	_fw_err=$($SUDO firewall-cmd --reload 2>&1) || aba_debug "firewall-cmd reload: $_fw_err"
 	aba_info "Firewall: opened NTP (port 123)"
 fi
 
@@ -102,9 +103,12 @@ $SUDO systemctl enable --now chronyd
 $SUDO systemctl restart chronyd
 
 # --- Verify ---
-if chronyc sources 2>/dev/null | grep -q '^\^'; then
+_chrony_src=""
+_chrony_src=$(chronyc sources 2>&1)
+if echo "$_chrony_src" | grep -q '^\^'; then
 	aba_info "chronyd is syncing (chronyc sources OK)"
 else
+	aba_debug "chronyc sources output: $_chrony_src"
 	aba_warn "chronyd running but no upstream sources detected." \
 		"Check /etc/chrony.conf for server/pool directives."
 fi
