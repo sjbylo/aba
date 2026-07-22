@@ -2431,7 +2431,15 @@ _pick_install_iface() {
 		fi
 	fi
 
-	# 2) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
+	# 2) Default-route interface via kernel route lookup (catches bridges, bonds, etc.)
+	# 'ip route get' does a routing-table lookup (no packets sent) so it works even air-gapped.
+	ifc=$(ip route get 8.8.8.8 2>/dev/null | awk '/dev/ {for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+	if [[ -n "${ifc:-}" ]] && _is_usable_iface "$ifc"; then
+		echo "$ifc"
+		return 0
+	fi
+
+	# 3) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
 	# Note: keep this filter conservative; better to return nothing than a wrong veth/bridge.
 	while read -r ifc; do
 		# Exclude obvious virtual/container patterns
