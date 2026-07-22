@@ -1111,6 +1111,13 @@ verify-cluster-conf() {
 	echo $num_masters | grep -q -E '^[0-9]+$' || { echo_red "Error: num_masters is invalid in cluster.conf" >&2; ret=1; }
 	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
 
+	# Topology rules: num_masters must be 1 (SNO) or 3 (compact/standard)
+	if echo "$num_masters" | grep -q -E '^[0-9]+$'; then
+		[ "$num_masters" -ne 1 ] && [ "$num_masters" -ne 3 ] && { echo_red "Error: num_masters can only be 1 or 3 in cluster.conf" >&2; ret=1; }
+		# SNO: workers must be 0 when masters is 1
+		[ "$num_masters" -eq 1 ] && [ "$num_workers" -ne 0 ] && { echo_red "Error: num_workers must be 0 when num_masters is 1 (SNO)" >&2; ret=1; }
+	fi
+
 	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 	PERL_DNS_IP_REGEX='^(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3}(?:,(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3})*$'
 	#! echo $dns_servers | grep -q -P $PERL_DNS_IP_REGEX && { echo_red "Error: dns_servers is invalid in cluster.conf [$dns_servers]" >&2; ret=1; }
