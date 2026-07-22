@@ -206,6 +206,157 @@ _test_vip "VIP outside wrapped range (253+5, VIP=10.0.1.3)" \
 	10.0.0.253  10.0.1.3  10.0.0.240  3 2  0
 
 # -----------------------------------------------------------------------
+# Auto-allocation tests
+# -----------------------------------------------------------------------
+# These test verify-config.sh's VIP auto-allocation when:
+#   - VIPs are empty in cluster.conf
+#   - ABA manages DNS (dnsmasq marker exists) or not
+#   - starting_ip is at various positions in the subnet
+
+echo ""
+echo "=== VIP Auto-Allocation Tests ==="
+echo ""
+
+# Helper: run verify-config with empty VIPs, optionally with ABA dnsmasq marker.
+# Checks whether VIPs were auto-allocated and written to cluster.conf.
+_test_auto_alloc() {
+	local test_name="$1"
+	local starting_ip="$2"
+	local num_masters="${3:-3}"
+	local num_workers="${4:-2}"
+	local machine_net="${5:-10.0.0.0}"
+	local prefix_len="${6:-20}"
+	local aba_dns="${7:-1}"          # 1=simulate ABA-managed DNS, 0=external
+	local expect_fail="${8:-0}"      # 1=expect abort, 0=expect auto-alloc
+	local expect_api="${9:-}"        # expected api_vip (empty = just check non-empty)
+	local expect_ing="${10:-}"       # expected ingress_vip
+
+	_total=$(( _total + 1 ))
+
+	local cname="autotest$_total"
+	local cdir="$ABA_ROOT/$cname"
+
+	[ -d "$cdir" ] && rm -rf "$cdir"
+	_test_dirs+=("$cdir")
+
+	mkdir -p "$cdir"
+	cd "$cdir"
+	ln -fs ../templates/Makefile.cluster Makefile
+	make -s init 2>/dev/null || true
+
+	source <(normalize-aba-conf)
+	cat > cluster.conf <<-EOF
+	cluster_name=$cname
+	base_domain=${domain:-example.com}
+	api_vip=
+	ingress_vip=
+	starting_ip=$starting_ip
+	num_masters=$num_masters
+	num_workers=$num_workers
+	machine_network=$machine_net
+	prefix_length=$prefix_len
+	next_hop_address=${next_hop_address:-10.0.0.1}
+	dns_servers=${dns_servers:-10.0.1.8}
+	hostPrefix=23
+	mac_prefix=00:50:56:2x:xx:
+	master_prefix=master
+	worker_prefix=worker
+	ssh_key_file=~/.ssh/id_rsa
+	mirror_name=mirror
+	ports=ens160
+	master_cpu_count=10
+	master_mem=20
+	worker_cpu_count=5
+	worker_mem=10
+	data_disk=500
+	EOF
+
+	[ -f mirror.conf ] || touch mirror.conf
+
+	# Simulate ABA-managed DNS marker if requested
+	if [ "$aba_dns" = "1" ]; then
+		sudo mkdir -p /etc/dnsmasq.d
+		sudo touch /etc/dnsmasq.d/aba-upstream.conf
+	else
+		sudo rm -f /etc/dnsmasq.d/aba-upstream.conf
+	fi
+
+	local output="" rc=0
+	output=$(scripts/verify-config.sh 2>&1) || rc=$?
+
+	cd "$ABA_ROOT"
+
+	if [ "$expect_fail" = "1" ]; then
+		if [ "$rc" -ne 0 ]; then
+			echo "PASS: $test_name (correctly aborted)"
+			_pass=$(( _pass + 1 ))
+		else
+			echo "FAIL: $test_name — expected abort but passed!"
+			_fail=$(( _fail + 1 ))
+		fi
+	else
+		if [ "$rc" -ne 0 ]; then
+			# Check if it failed on auto-allocation vs other
+			if echo "$output" | grep -qE 'Cannot auto-allocate|Missing DNS record'; then
+				echo "FAIL: $test_name — auto-allocation failed: $(echo "$output" | grep -E 'Cannot|Missing' | head -1)"
+				_fail=$(( _fail + 1 ))
+			else
+				echo "PASS: $test_name (auto-alloc OK; failed later — expected)"
+				_pass=$(( _pass + 1 ))
+			fi
+		else
+			echo "PASS: $test_name"
+			_pass=$(( _pass + 1 ))
+		fi
+
+		# Verify the allocated VIPs if expected values given
+		if [ -n "$expect_api" ] && [ -f "$cdir/cluster.conf" ]; then
+			local got_api got_ing
+			got_api=$(grep '^api_vip=' "$cdir/cluster.conf" | head -1 | sed 's/api_vip=//; s/[[:space:]].*//')
+			got_ing=$(grep '^ingress_vip=' "$cdir/cluster.conf" | head -1 | sed 's/ingress_vip=//; s/[[:space:]].*//')
+			if [ "$got_api" != "$expect_api" ] || [ "$got_ing" != "$expect_ing" ]; then
+				echo "  FAIL: expected api=$expect_api ing=$expect_ing, got api=$got_api ing=$got_ing"
+				_fail=$(( _fail + 1 ))
+				_pass=$(( _pass - 1 ))
+			fi
+		fi
+	fi
+}
+
+# --- Auto-alloc "before" (normal case) ---
+# starting_ip=10.0.2.100, 5 nodes → api=10.0.2.98, ing=10.0.2.99
+_test_auto_alloc "auto-alloc: before starting_ip (normal)" \
+	10.0.2.100  3 2  10.0.0.0 20  1  0  10.0.2.98  10.0.2.99
+
+# --- Auto-alloc "before" near bottom but still in subnet ---
+# starting_ip=10.0.0.5, 5 nodes → api=10.0.0.3, ing=10.0.0.4 (still in 10.0.0.0/20)
+_test_auto_alloc "auto-alloc: before, near bottom of subnet" \
+	10.0.0.5  3 2  10.0.0.0 20  1  0  10.0.0.3  10.0.0.4
+
+# --- Auto-alloc "after" fallback (starting_ip at very bottom) ---
+# starting_ip=10.0.0.1, 5 nodes → before=9.255.255.255 (out of subnet!)
+# fallback: after last node +10 = 10.0.0.1+5+10=10.0.0.16, ing=10.0.0.17
+_test_auto_alloc "auto-alloc: fallback to after (starting_ip near bottom)" \
+	10.0.0.1  3 2  10.0.0.0 20  1  0  10.0.0.16  10.0.0.17
+
+# --- Auto-alloc "after" fallback (starting_ip=x.x.x.2) ---
+# starting_ip=10.0.0.2 → before: api=10.0.0.0 (network addr, <= net_int) → fallback
+# after: 10.0.0.2+5+10=10.0.0.17, ing=10.0.0.18
+_test_auto_alloc "auto-alloc: fallback to after (starting_ip=.2)" \
+	10.0.0.2  3 2  10.0.0.0 20  1  0  10.0.0.17  10.0.0.18
+
+# --- No ABA-managed DNS → should abort ---
+_test_auto_alloc "auto-alloc: abort when external DNS (no dnsmasq marker)" \
+	10.0.2.100  3 2  10.0.0.0 20  0  1
+
+# --- SNO with empty VIPs should NOT auto-allocate (SNO doesn't need VIPs) ---
+# Use _test_vip for this since SNO skips VIP checks entirely
+# (already covered by existing tests above)
+
+# Restore dnsmasq marker if it existed before (bastion normally has it)
+sudo touch /etc/dnsmasq.d/aba-upstream.conf 2>/dev/null || true
+
+# -----------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------
 echo ""

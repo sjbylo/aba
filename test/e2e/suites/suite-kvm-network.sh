@@ -160,7 +160,9 @@ _kvm_net_test() {
 	else
 		machine_network="$(pool_machine_network)"
 		next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
-		start_ip="$(pool_node_ip)"
+		# Use pool_starting_ip (not pool_node_ip) — compact/standard need nodes
+		# AFTER VIPs, not at the same base IP as SNO.
+		start_ip="$(pool_starting_ip "$ctype")"
 		ntp_ip_test="$NTP_IP"
 	fi
 

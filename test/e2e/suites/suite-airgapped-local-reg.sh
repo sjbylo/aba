@@ -14,7 +14,7 @@
 #   - Vote-app deployment with IDMS redirect
 #   - OSUS + cluster upgrade
 #   - Graceful shutdown/startup/restart cycle
-#   - Standard cluster with macs.conf (bare-metal MAC addresses)
+#   - Standard cluster with macs.conf + auto-DNS VIP allocation (no explicit VIPs)
 # =============================================================================
 
 set -u
@@ -59,7 +59,7 @@ plan_tests \
     "Deploy: service mesh demo" \
     "Lifecycle: shutdown/startup" \
     "Upgrade: cross-minor with admin ack gate" \
-    "Standard: cluster with macs.conf" \
+    "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)" \
     "Cleanup: uninstall registry on disN" \
     "Cleanup: remove DNS and NTP infra on disN"
 
@@ -781,9 +781,9 @@ e2e_wait_cluster_ready $SNO remote 3900
 test_end
 
 # ============================================================================
-# 16. Standard cluster with macs.conf
+# 16. Standard cluster with macs.conf + auto-DNS VIP allocation
 # ============================================================================
-test_begin "Standard: cluster with macs.conf"
+test_begin "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
@@ -793,7 +793,9 @@ e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Remove sno cluster dir" \
     "cd ~/aba && rm -rf $SNO"
 
-# Build standard cluster -- delete any leftover VMs before removing the dir
+# Build standard cluster -- delete any leftover VMs before removing the dir.
+# VIPs are intentionally omitted: this tests ABA's auto-DNS feature, which
+# should auto-allocate api_vip and ingress_vip when not provided.
 _e2e_delete_leftover_cluster_remote "$STANDARD"
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
