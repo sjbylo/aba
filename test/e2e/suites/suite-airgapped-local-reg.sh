@@ -301,6 +301,11 @@ test_end
 # ============================================================================
 test_begin "Registry: Quay install and load"
 
+# Negative path tests in block 6 may auto-install a Docker registry via Makefile
+# dependencies (aba -d mirror load triggers install target).  Clean up first.
+e2e_run_remote "Uninstall any leftover registry before Quay install" \
+    "cd ~/aba && aba -d mirror uninstall"
+
 _QUAY_PORT=8448
 e2e_run_remote "Set vendor=quay and reg_port=$_QUAY_PORT for Quay" \
     "cd ~/aba && aba --dir mirror --vendor quay --reg-port $_QUAY_PORT"

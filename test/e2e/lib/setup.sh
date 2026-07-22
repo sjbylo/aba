@@ -17,10 +17,10 @@ _e2e_delete_leftover_cluster() {
 	[ ! -d "$dir" ] && return 0
 	if [ -f "$dir/cluster.conf" ]; then
 		aba -y --dir "$dir" delete --force
-	else
-		rm -rf "$dir"
-		echo "[cleanup] Removed unconfigured leftover dir: $dir"
 	fi
+	# Always remove the dir to prevent stale configs (e.g. VIPs from a previous
+	# suite's network) from affecting the next run.  aba cluster recreates it.
+	rm -rf "$dir"
 }
 export -f _e2e_delete_leftover_cluster
 

@@ -21,8 +21,12 @@
 #
 # Usage: suite_configure_aba [--extra-flag value ...]
 suite_configure_aba() {
+	# Gateway = first usable IP in machine_network (e.g. 10.0.0.0/20 → 10.0.0.1)
+	local _mn _gw
+	_mn=$(pool_machine_network)
+	_gw="${_mn%%.*}.$(echo "${_mn#*.}" | sed 's|\.[^.]*$|.1|')"  # network+1
 	e2e_run "Configure aba.conf" \
-		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) $*"
+		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $_mn --gateway $_gw $*"
 }
 
 # --- suite_verify_aba_conf ---------------------------------------------------
@@ -65,8 +69,11 @@ suite_setup_operator_set() {
 # Calls configure, vmware env, NTP, and operator sets.
 suite_reapply_config() {
 	local ops="${1:-}"
+	local _mn _gw
+	_mn=$(pool_machine_network)
+	_gw="${_mn%%.*}.$(echo "${_mn#*.}" | sed 's|\.[^.]*$|.1|')"
 	e2e_run "Re-apply aba.conf" \
-		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $_mn --gateway $_gw"
 	suite_setup_vmware_env
 	suite_setup_ntp
 	[ -n "$ops" ] && suite_setup_operator_set "abatest" "$ops"
