@@ -61,6 +61,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Light Bundles](#light-bundles-when-disk-space-or-portable-media-is-limited)
 - [Connected Installation (No Mirror)](#connected-installation-no-mirror)
 - [Installing a Cluster](#installing-a-cluster)
+  - [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup)
   - [Pre-flight Validation](#pre-flight-validation)
   - [Customizing Install Configuration](#customizing-install-configuration)
   - [Embedding Custom Manifests (Day-0)](#embedding-custom-manifests-day-0)
@@ -760,6 +761,18 @@ After running these, `aba.conf` is automatically updated with `dns_servers` and 
 | `aba --dir <cluster> delete` | DNS records for the cluster are removed |
 
 All DNS management is **no-op** when `dnsmasq` is not managed by ABA (safe by default).
+
+### VIP auto-allocation for multi-node clusters
+
+When ABA manages DNS and you create a multi-node cluster (compact or standard) **without** specifying `api_vip` and `ingress_vip`, ABA will automatically allocate two VIP addresses:
+
+- **Preferred**: two IPs just before `starting_ip` (e.g. `starting_ip=10.0.2.100` → `api_vip=10.0.2.98`, `ingress_vip=10.0.2.99`)
+- **Fallback**: if "before" would wrap out of the subnet, ABA places VIPs after the last node IP (with a +10 gap)
+
+The auto-allocated VIPs are written to `cluster.conf` and corresponding DNS records are created automatically.
+This only applies when ABA manages DNS (`aba setup dns` was run). With external DNS, you must provide VIPs explicitly or create DNS records manually.
+
+SNO clusters do not require VIPs — `starting_ip` is used for everything.
 
 ### Removal
 
