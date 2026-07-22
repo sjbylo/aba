@@ -114,7 +114,7 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to o
 # that differ between the connected side (where the bundle was built) and the
 # disconnected side (where the mirror runs). backup.sh --primed resolves the
 # mirror.conf symlink to a real copy (newer timestamp), triggering this rebuild.
-install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf .infra-dns | .cli  ## Create the agent-based config file based on the cluster.conf file.
+install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf | .cli  ## Create the agent-based config file based on the cluster.conf file.
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh
 
@@ -136,8 +136,11 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS, NTP, IP conflicts).
 	$(SCRIPTS)/preflight-check.sh
 
-# Auto-manage DNS records if ABA's dnsmasq is configured (tools/setup-dns.sh was run)
-.infra-dns: cluster.conf .init
+# Auto-manage DNS records if ABA's dnsmasq is configured (tools/setup-dns.sh was run).
+# Depends on install-config.yaml so verify-config.sh runs first — it validates
+# and/or auto-detects VIPs from DNS.  If we ran before verify-config, the fallback
+# to starting_ip would create bogus DNS records that verify-config then trusts.
+.infra-dns: install-config.yaml
 	@$(SCRIPTS)/infra-dns.sh add-cluster
 	@touch .infra-dns
 
@@ -170,7 +173,7 @@ iso: iso-agent-based/agent.$(arch).iso ## Build the agent-based iso file in iso-
 	@echo "[ABA] ISO ready: $(CURDIR)/iso-agent-based/agent.$(arch).iso"
 	@echo "[ABA] Warning: The ISO contains certificates that expire 24 hours after creation."
 	@echo "[ABA]          Boot your servers and complete the install within that window."
-iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .preflight-done ~/bin/openshift-install   # Note that install-config.yaml can itself be dependent on vmware.conf params
+iso-agent-based/agent.$(arch).iso: install-config.yaml agent-config.yaml .preflight-done .infra-dns ~/bin/openshift-install   # Note that install-config.yaml can itself be dependent on vmware.conf params
 	$(SCRIPTS)/generate-image.sh
 
 .bm-nextstep:
