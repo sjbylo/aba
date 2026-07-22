@@ -860,6 +860,10 @@ while true; do
 	_retried=()
 	_completed=()
 	_busy_pools=()
+	_hung_notified=()
+	_dispatch_time=()
+	_bad_pools_map=()
+	_pool_dead_count=()
 
 	# Restore original suite list and re-randomize
 	suites_to_run=("${_original_suites[@]}")
