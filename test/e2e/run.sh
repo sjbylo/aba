@@ -815,7 +815,62 @@ fi
 
 # --- Main dispatch loop (extracted to lib/dispatcher.sh) ----------------------
 
-_dispatch_loop
+# Save the original suite list for --loop mode (injected suites append to
+# suites_to_run, so we need a clean copy for each round).
+_original_suites=("${suites_to_run[@]}")
+_round=1
+
+while true; do
+	if [ "$_round" -gt 1 ]; then
+		echo ""
+		_print_box "1;44;97" "■  ROUND $_round STARTING  ($(date '+%H:%M'))"
+		echo ""
+	fi
+
+	_dispatch_loop
+
+	if [ -z "${CLI_LOOP:-}" ]; then
+		break
+	fi
+
+	# --- Round complete: print summary and reset for next round ---
+	echo ""
+	_n_ok=0; _n_fail=0; _n_skip=0
+	for _rs in "${!_results[@]}"; do
+		case "${_results[$_rs]}" in
+			0) _n_ok=$(( _n_ok + 1 )) ;;
+			3) _n_skip=$(( _n_skip + 1 )) ;;
+			*) _n_fail=$(( _n_fail + 1 )) ;;
+		esac
+	done
+	_print_box "1;46;97" "■  ROUND $_round COMPLETE: ${_n_ok} pass, ${_n_fail} fail, ${_n_skip} skip  ($(date '+%H:%M'))"
+
+	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+		$NOTIFY_CMD "[e2e] Round $_round done: ${_n_ok} pass, ${_n_fail} fail, ${_n_skip} skip. Starting round $(( _round + 1 ))." < /dev/null >/dev/null &
+	fi
+
+	# Clean .rc files from this round so they don't interfere with next round
+	for _p in $CLI_POOL_LIST; do
+		_ssh_con "$_p" "sudo rm -f ${_RC_PREFIX}-*.rc" 2>/dev/null || true
+	done
+
+	# Reset in-memory state
+	_results=()
+	_result_pool=()
+	_retried=()
+	_completed=()
+	_busy_pools=()
+
+	# Restore original suite list and re-randomize
+	suites_to_run=("${_original_suites[@]}")
+	if [ ${#suites_to_run[@]} -gt 1 ]; then
+		readarray -t suites_to_run < <(printf '%s\n' "${suites_to_run[@]}" | shuf)
+	fi
+	_build_work_queue
+	_queue_idx=0
+
+	_round=$(( _round + 1 ))
+done
 
 # --- Final summary (from lib/dispatcher.sh) -----------------------------------
 
