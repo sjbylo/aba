@@ -65,13 +65,20 @@ reg_check_fqdn() {
 	aba_debug "Verifying resolution of mirror hostname: $reg_host"
 
 	# Primary: dig (most common on RHEL systems)
-	fqdn_ip=$(dig +short "$reg_host" 2>/dev/null \
+	aba_debug "Running: dig +short $reg_host"
+	local _dig_err=""
+	fqdn_ip=$(dig +short "$reg_host" 2>"$ABA_TMP/dig-reg.$$" \
 		| grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1) || true
+	[ -s "$ABA_TMP/dig-reg.$$" ] && { _dig_err=$(cat "$ABA_TMP/dig-reg.$$"); aba_debug "dig stderr: $_dig_err"; }
+	rm -f "$ABA_TMP/dig-reg.$$"
+	aba_debug "dig result for $reg_host: '${fqdn_ip:-<empty>}'"
 
 	# Fallback: getent (works when dig is unavailable, e.g. minimal installs)
 	if [ ! "$fqdn_ip" ]; then
+		aba_debug "dig returned empty, falling back to: getent hosts $reg_host"
 		fqdn_ip=$(getent hosts "$reg_host" 2>/dev/null \
 			| awk '{print $1}' | head -1) || true
+		aba_debug "getent result for $reg_host: '${fqdn_ip:-<empty>}'"
 	fi
 
 	if [ ! "$fqdn_ip" ]; then
