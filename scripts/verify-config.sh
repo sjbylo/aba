@@ -64,17 +64,19 @@ actual_ip_of_ingress=$(dig +time=8 +short $_apps_domain 2>"$ABA_TMP/dig-apps.$$"
 rm -f "$ABA_TMP/dig-apps.$$"
 aba_debug "dig result for $_apps_domain: '${actual_ip_of_ingress:-<empty>}'"
 
+# Check if ABA manages DNS (dnsmasq marker from tools/setup-dns.sh)
+_aba_manages_dns=""
+[ -f /etc/dnsmasq.d/aba-upstream.conf ] && _aba_manages_dns=1
+
 # If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
-	# Check if ABA manages DNS (dnsmasq marker from tools/setup-dns.sh)
-	_aba_manages_dns=""
-	[ -f /etc/dnsmasq.d/aba-upstream.conf ] && _aba_manages_dns=1
 
 	# Auto-allocate both VIPs when ABA manages DNS and neither VIP nor DNS exists.
 	# Prefer placing VIPs before starting_ip (starting_ip-2, starting_ip-1).
 	# If that wraps out of the subnet, place after the last node (+10 gap).
 	_need_auto_alloc=""
 	_is_ip='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+
 	if ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; } && [ ! "$actual_ip_of_api" ]; then
 		_need_auto_alloc=1
 	fi
@@ -222,19 +224,25 @@ if [ ! "$SNO" ]; then
 	fi
 else
 	# For SNO...
-	# Check values are both pointing to "rendezvous_ip"
-	[ "$actual_ip_of_api" != "$rendezvous_ip" ] && \
-		aba_abort "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+	if [ "${_aba_manages_dns:-}" ] && { [ "$actual_ip_of_api" = "<empty>" ] || [ -z "$actual_ip_of_api" ]; }; then
+		# ABA manages DNS but records don't exist yet — infra-dns.sh will
+		# create them after this script (Makefile dependency order).
+		aba_info "DNS validation skipped for SNO (ABA-managed DNS, infra-dns.sh will create records)"
+	else
+		# Check values are both pointing to "rendezvous_ip"
+		[ "$actual_ip_of_api" != "$rendezvous_ip" ] && \
+			aba_abort "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!" \
+				"To skip network checks, set verify_conf=conf in aba.conf"
 
-	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
+		aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
 
-	# Ensure apps DNS exists
-	[ "$actual_ip_of_ingress" != "$rendezvous_ip" ] && \
-		aba_abort "DNS record $cl_ingress_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_ingress!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+		# Ensure apps DNS exists
+		[ "$actual_ip_of_ingress" != "$rendezvous_ip" ] && \
+			aba_abort "DNS record $cl_ingress_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_ingress!" \
+				"To skip network checks, set verify_conf=conf in aba.conf"
 
-	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+		aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	fi
 fi
 
 # Wildcard shadow detection: verify that api.X and *.apps.X are distinct
