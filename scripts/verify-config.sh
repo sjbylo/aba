@@ -66,14 +66,64 @@ aba_debug "dig result for $_apps_domain: '${actual_ip_of_ingress:-<empty>}'"
 
 # If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
-	# If api_vip defined and an IP address
-	if [ "$api_vip" ] && echo "$api_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+	# Check if ABA manages DNS (dnsmasq marker from tools/setup-dns.sh)
+	_aba_manages_dns=""
+	[ -f /etc/dnsmasq.d/aba-upstream.conf ] && _aba_manages_dns=1
+
+	# Auto-allocate both VIPs when ABA manages DNS and neither VIP nor DNS exists.
+	# Prefer placing VIPs before starting_ip (starting_ip-2, starting_ip-1).
+	# If that wraps out of the subnet, place after the last node (+10 gap).
+	_need_auto_alloc=""
+	_is_ip='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+	if ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; } && [ ! "$actual_ip_of_api" ]; then
+		_need_auto_alloc=1
+	fi
+	if ! { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; } && [ ! "$actual_ip_of_ingress" ]; then
+		_need_auto_alloc=1
+	fi
+
+	if [ "$_need_auto_alloc" ] && [ "$_aba_manages_dns" ] && [ "$starting_ip" ]; then
+		# Auto-allocate VIPs for ABA-managed DNS environments
+		_start_int=$(ip_to_int "$starting_ip")
+		_node_count=$(( ${num_masters:-3} + ${num_workers:-0} ))
+		_net_int=$(ip_to_int "$machine_network")
+		# Subnet size: 2^(32-prefix_length)
+		_subnet_size=$(( 1 << (32 - ${prefix_length:-24}) ))
+		_net_end=$(( _net_int + _subnet_size - 1 ))
+
+		# Try "before starting_ip": api=starting_ip-2, ingress=starting_ip-1
+		_try_api=$(( _start_int - 2 ))
+		_try_ing=$(( _start_int - 1 ))
+
+		if [ "$_try_api" -gt "$_net_int" ] && [ "$_try_ing" -lt "$_net_end" ]; then
+			# "Before" placement fits within the subnet
+			api_vip=$(int_to_ip "$_try_api")
+			ingress_vip=$(int_to_ip "$_try_ing")
+		else
+			# "Before" wraps out of subnet — place after last node (+10 gap)
+			_after_api=$(( _start_int + _node_count + 10 ))
+			_after_ing=$(( _start_int + _node_count + 11 ))
+			if [ "$_after_ing" -lt "$_net_end" ]; then
+				api_vip=$(int_to_ip "$_after_api")
+				ingress_vip=$(int_to_ip "$_after_ing")
+			else
+				aba_abort "Cannot auto-allocate VIPs: no room in subnet $machine_network/$prefix_length." \
+					"Set api_vip and ingress_vip explicitly in cluster.conf."
+			fi
+		fi
+
+		aba_info "Auto-allocated VIPs: api_vip=$api_vip, ingress_vip=$ingress_vip (ABA-managed DNS)"
+		replace-value-conf -n api_vip -v "$api_vip" cluster.conf
+		replace-value-conf -n ingress_vip -v "$ingress_vip" cluster.conf
+		_vips_auto_allocated=1  # Skip DNS validation below — records created by infra-dns.sh later
+	fi
+
+	# Validate api_vip: from cluster.conf, DNS, or auto-allocated above
+	if [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; then
 		aba_info "API endpoint: api_vip=$api_vip is defined"
 	else
-		if [ ! "$actual_ip_of_api" ]; then
-			aba_abort "Missing DNS record $cl_api_domain" 
-		elif echo "$actual_ip_of_api" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			# Add into cluster.conf
+		if [ "$actual_ip_of_api" ] && echo "$actual_ip_of_api" | grep -q -E "$_is_ip"; then
+			# DNS record found — auto-populate cluster.conf
 			aba_warn -p Attention \
 				"inserting actual IP address ($actual_ip_of_api) into cluster.conf" \
 				"Please verify this is correct! If not, edit cluster.conf file and try again!" 
@@ -81,19 +131,17 @@ if [ ! "$SNO" ]; then
 			sleep 1
 			api_vip=$actual_ip_of_api
 		else
-			aba_abort "Ingress endpoint: api_vip must be defined for this cluster configuration!" 
+			aba_abort "Missing DNS record $cl_api_domain" \
+				"Create DNS records for api.$cluster_name.$base_domain or set api_vip in cluster.conf."
 		fi
 	fi
 
-	# If ingress_vip is defined and an IP address
-	if [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+	# Validate ingress_vip: from cluster.conf, DNS, or auto-allocated above
+	if [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; then
 		aba_info "Ingress endpoint: ingress_vip=$ingress_vip is defined"
 	else
-		# If ingress_vip not defined or an IP address
-		if [ ! "$actual_ip_of_ingress" ]; then
-			aba_abort "Missing DNS record $cl_ingress_domain!" 
-		elif echo "$actual_ip_of_ingress" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			# Add into cluster.conf
+		if [ "$actual_ip_of_ingress" ] && echo "$actual_ip_of_ingress" | grep -q -E "$_is_ip"; then
+			# DNS record found — auto-populate cluster.conf
 			aba_warn -p Attention \
 				"inserting actual IP address ($actual_ip_of_ingress) into cluster.conf" \
 				"Please verify this is correct! If not, edit cluster.conf file and try again!"
@@ -101,7 +149,8 @@ if [ ! "$SNO" ]; then
 			sleep 1
 			ingress_vip=$actual_ip_of_ingress
 		else
-			aba_abort "Ingress endpoint: ingress_vip must be defined for this cluster configuration!"
+			aba_abort "Missing DNS record $cl_ingress_domain!" \
+				"Create DNS records for *.apps.$cluster_name.$base_domain or set ingress_vip in cluster.conf."
 		fi
 	fi
 else
@@ -151,19 +200,26 @@ fi
 
 # If NOT SNO...
 if [ ! "$SNO" ]; then
-	# Ensure api DNS exists and points to correct ip
-	[ "$actual_ip_of_api" != "$api_vip" ] && \
-		aba_abort "DNS record: $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+	if [ "${_vips_auto_allocated:-}" ]; then
+		# VIPs were just auto-allocated — DNS records will be created by
+		# infra-dns.sh (runs after this script via Makefile dependency).
+		# Skip DNS validation; it would fail because records don't exist yet.
+		aba_info "DNS validation skipped (VIPs auto-allocated, infra-dns.sh will create records)"
+	else
+		# Ensure api DNS exists and points to correct ip
+		[ "$actual_ip_of_api" != "$api_vip" ] && \
+			aba_abort "DNS record: $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!" \
+				"To skip network checks, set verify_conf=conf in aba.conf"
 
-	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
+		aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
 
-	# Ensure apps DNS exists and points to correct ip
-	[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
-		aba_abort "DNS record: $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+		# Ensure apps DNS exists and points to correct ip
+		[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
+			aba_abort "DNS record: $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!" \
+				"To skip network checks, set verify_conf=conf in aba.conf"
 
-	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+		aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	fi
 else
 	# For SNO...
 	# Check values are both pointing to "rendezvous_ip"
