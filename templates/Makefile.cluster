@@ -114,7 +114,7 @@ agentconf: install-config.yaml agent-config.yaml  ## Convenient step/target to o
 # that differ between the connected side (where the bundle was built) and the
 # disconnected side (where the mirror runs). backup.sh --primed resolves the
 # mirror.conf symlink to a real copy (newer timestamp), triggering this rebuild.
-install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf | .cli  ## Create the agent-based config file based on the cluster.conf file.
+install-config.yaml: $(hv_conf_dep) cluster.conf mirror.conf .infra-dns | .cli  ## Create the agent-based config file based on the cluster.conf file.
 	$(SCRIPTS)/verify-config.sh
 	$(SCRIPTS)/create-install-config.sh
 
@@ -136,11 +136,15 @@ verify: agentconf  ## Extract cluster configuration details from the generated a
 preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS, NTP, IP conflicts).
 	$(SCRIPTS)/preflight-check.sh
 
+# Resolve VIPs: detect from DNS, auto-allocate (ABA-managed DNS), or back-fill.
+# Must run before .infra-dns so VIPs are populated in cluster.conf.
+.resolve-vips: cluster.conf | .cli
+	@$(SCRIPTS)/resolve-vips.sh
+	@touch .resolve-vips
+
 # Auto-manage DNS records if ABA's dnsmasq is configured (tools/setup-dns.sh was run).
-# Depends on install-config.yaml so verify-config.sh runs first — it auto-allocates
-# VIPs (when not provided) and writes them to cluster.conf.  infra-dns.sh then
-# reads the populated VIPs and creates DNS records.
-.infra-dns: install-config.yaml
+# Depends on .resolve-vips so VIPs are populated in cluster.conf before DNS creation.
+.infra-dns: .resolve-vips
 	@$(SCRIPTS)/infra-dns.sh add-cluster
 	@touch .infra-dns
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Functional test: VIP collision detection in verify-config.sh
+# Functional test: VIP collision detection and auto-allocation in resolve-vips.sh
 #
 # Tests that ABA correctly detects and rejects invalid VIP configurations
 # for multi-node clusters (standard/compact), including:
@@ -8,6 +8,7 @@
 #   - Subnet-wrapping edge cases
 #   - SNO bypass (VIP checks should not apply)
 #   - Valid configurations (should pass VIP checks)
+#   - Auto-allocation (ABA-managed DNS)
 #
 # Prerequisites: aba installed, aba.conf configured with a valid domain.
 # Does NOT require a mirror, DNS, or vCenter — uses verify_conf=conf.
@@ -48,7 +49,7 @@ trap '_restore_verify_conf; _cleanup' EXIT
 replace-value-conf -n verify_conf -v conf -f aba.conf
 
 # Helper: create a cluster dir with proper ABA structure, inject VIP config,
-# then run verify-config.sh.  Checks the output for expected error messages.
+# then run resolve-vips.sh.  Checks the output for expected error messages.
 _test_vip() {
 	local test_name="$1"
 	local starting_ip="$2"
@@ -106,7 +107,7 @@ _test_vip() {
 	[ -f mirror.conf ] || touch mirror.conf
 
 	local output="" rc=0
-	output=$(scripts/verify-config.sh 2>&1) || rc=$?
+	output=$(scripts/resolve-vips.sh 2>&1) || rc=$?
 
 	cd "$ABA_ROOT"
 
@@ -122,7 +123,7 @@ _test_vip() {
 				_pass=$(( _pass + 1 ))
 			fi
 		else
-			echo "FAIL: $test_name — expected abort but verify-config passed!"
+			echo "FAIL: $test_name — expected abort but resolve-vips passed!"
 			_fail=$(( _fail + 1 ))
 		fi
 	else
@@ -130,13 +131,13 @@ _test_vip() {
 			echo "PASS: $test_name"
 			_pass=$(( _pass + 1 ))
 		else
-			# Check if it failed on VIP collision (our code) vs DNS/other (acceptable)
+			# Check if it failed on VIP collision (our code) vs other (acceptable)
 			if echo "$output" | grep -qE 'must be different|falls within the node IP range'; then
 				echo "FAIL: $test_name — VIP check wrongly rejected valid config!"
 				echo "  Output: $(echo "$output" | tail -5)"
 				_fail=$(( _fail + 1 ))
 			else
-				# Failed on DNS/mirror/other — VIP checks passed, which is what we test
+				# Failed on something else — VIP checks passed, which is what we test
 				echo "PASS: $test_name (VIP checks OK; failed later — expected)"
 				_pass=$(( _pass + 1 ))
 			fi
@@ -208,7 +209,7 @@ _test_vip "VIP outside wrapped range (253+5, VIP=10.0.1.3)" \
 # -----------------------------------------------------------------------
 # Auto-allocation tests
 # -----------------------------------------------------------------------
-# These test verify-config.sh's VIP auto-allocation when:
+# These test resolve-vips.sh's VIP auto-allocation when:
 #   - VIPs are empty in cluster.conf
 #   - ABA manages DNS (dnsmasq marker exists) or not
 #   - starting_ip is at various positions in the subnet
@@ -217,7 +218,7 @@ echo ""
 echo "=== VIP Auto-Allocation Tests ==="
 echo ""
 
-# Helper: run verify-config with empty VIPs, optionally with ABA dnsmasq marker.
+# Helper: run resolve-vips with empty VIPs, optionally with ABA dnsmasq marker.
 # Checks whether VIPs were auto-allocated and written to cluster.conf.
 _test_auto_alloc() {
 	local test_name="$1"
@@ -282,7 +283,7 @@ _test_auto_alloc() {
 	fi
 
 	local output="" rc=0
-	output=$(scripts/verify-config.sh 2>&1) || rc=$?
+	output=$(scripts/resolve-vips.sh 2>&1) || rc=$?
 
 	cd "$ABA_ROOT"
 
