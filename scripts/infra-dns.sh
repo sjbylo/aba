@@ -45,17 +45,21 @@ case "${1:-}" in
 		[ -z "$cluster_name" ] && aba_abort "infra-dns.sh add-cluster: cluster_name not set in cluster.conf"
 		[ -z "$base_domain" ] && aba_abort "infra-dns.sh add-cluster: base_domain not set in cluster.conf"
 
-		# Determine IPs: SNO uses starting_ip for both api and apps
-		# Multi-node uses api_vip and ingress_vip
+		# Determine IPs: SNO uses starting_ip for both api and apps.
+		# Multi-node clusters MUST have explicit api_vip and ingress_vip —
+		# falling back to starting_ip would create bogus DNS records where
+		# both VIPs point to the first node IP.
 		if [ "${api_vip:-}" ] && [ "${ingress_vip:-}" ]; then
 			api_ip="$api_vip"
 			apps_ip="$ingress_vip"
-		elif [ "${starting_ip:-}" ]; then
+		elif [ "${num_masters:-1}" = "1" ] && [ "${num_workers:-0}" = "0" ] && [ "${starting_ip:-}" ]; then
+			# SNO: single node uses starting_ip for everything
 			api_ip="$starting_ip"
 			apps_ip="$starting_ip"
 		else
 			aba_abort "infra-dns.sh add-cluster: cannot determine cluster IPs." \
-				"Set api_vip/ingress_vip or starting_ip in cluster.conf."
+				"Multi-node clusters require api_vip and ingress_vip in cluster.conf." \
+				"Set them explicitly, or create DNS records for api.$cluster_name.$base_domain manually."
 		fi
 
 		_conf="/etc/dnsmasq.d/aba-${cluster_name}.${base_domain}.conf"

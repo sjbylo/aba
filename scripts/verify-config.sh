@@ -109,6 +109,35 @@ else
 		aba_warn "Cluster endpoints: api_vip and ingress_vip are not required for single-node (SNO) configuration, they will be ignored."
 fi
 
+# --- VIP collision checks (non-SNO only) ---
+# Catch configuration errors before openshift-install rejects them.
+if [ ! "$SNO" ] && [ "$api_vip" ] && [ "$ingress_vip" ]; then
+	# api_vip and ingress_vip must be different
+	[ "$api_vip" = "$ingress_vip" ] && \
+		aba_abort "api_vip ($api_vip) and ingress_vip ($ingress_vip) must be different!" \
+			"Each VIP requires a unique IP address."
+
+	# VIPs must not overlap with node IPs (starting_ip is the first node).
+	# Uses ip_to_int() from include_all.sh for robust range comparison —
+	# handles subnets larger than /24 and IPs that wrap across octet boundaries.
+	if [ "$starting_ip" ]; then
+		_node_start=$(ip_to_int "$starting_ip")
+		_node_count=$(( ${num_masters:-3} + ${num_workers:-0} ))
+		_node_end=$(( _node_start + _node_count - 1 ))
+		_api_int=$(ip_to_int "$api_vip")
+		_ing_int=$(ip_to_int "$ingress_vip")
+
+		if [ "$_api_int" -ge "$_node_start" ] && [ "$_api_int" -le "$_node_end" ]; then
+			aba_abort "api_vip ($api_vip) falls within the node IP range ($starting_ip + $_node_count nodes)!" \
+				"VIPs must be outside the node IP range."
+		fi
+		if [ "$_ing_int" -ge "$_node_start" ] && [ "$_ing_int" -le "$_node_end" ]; then
+			aba_abort "ingress_vip ($ingress_vip) falls within the node IP range ($starting_ip + $_node_count nodes)!" \
+				"VIPs must be outside the node IP range."
+		fi
+	fi
+fi
+
 # verify_conf=conf: VIP resolution (above) is done; skip remaining network checks
 if [ "$verify_conf" = "conf" ]; then
 	aba_success "Configuration validation passed (network checks skipped, verify_conf=conf)"
