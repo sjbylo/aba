@@ -149,7 +149,7 @@ e2e_run "Delete any leftover $COMPACT cluster" \
 e2e_add_to_cluster_cleanup "$PWD/$COMPACT"
 
 e2e_run "Create compact cluster.conf (data_disk, prefixes, named mirror)" \
-    "aba cluster -n $COMPACT -t compact --starting-ip $(pool_starting_ip compact) \
+    "aba cluster -n $COMPACT -t compact \
      --data-disk 300 --host-prefix 20 --master-prefix xxx --worker-prefix yyy \
      --mirror-name $NAMED_MIRROR --step cluster.conf"
 e2e_run "Set mac_prefix for $COMPACT (VMware range, randomized)" \
@@ -197,12 +197,12 @@ e2e_add_to_cluster_cleanup "$PWD/$SNO"
 e2e_run "Copy SSH key to alternate name (exercises ssh_key_file)" \
     "cp -f ~/.ssh/id_rsa ~/.ssh/e2e_alt_key && cp -f ~/.ssh/id_rsa.pub ~/.ssh/e2e_alt_key.pub"
 e2e_run "Create SNO cluster.conf with alt SSH key and named mirror" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) \
+    "aba cluster -n $SNO -t sno \
      --ssh-key ~/.ssh/e2e_alt_key --mirror-name $NAMED_MIRROR --step cluster.conf"
 e2e_run "Verify ssh_key_file set" "grep 'ssh_key_file=.*e2e_alt_key' $SNO/cluster.conf"
 e2e_run "Verify mirror_name set" "grep 'mirror_name=$NAMED_MIRROR' $SNO/cluster.conf"
 e2e_run -r 2 10 "Install SNO (alt SSH key + named mirror)" \
-    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step refresh"
+    "aba cluster -n $SNO -t sno --step refresh"
 
 # Wait for bootstrap only (not full install-complete)
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
