@@ -63,13 +63,16 @@ preflight_check_ntp() {
 		total=$((total + 1))
 		if [ "$ntp_method" = "chronyd" ]; then
 			# chronyd -Q queries without changing system clock, no root needed
-			if timeout 5 chronyd -Q "server $host iburst" >/dev/null 2>&1; then
+			local _chrony_out
+			_chrony_out=$(timeout 5 chronyd -Q "server $host iburst" 2>&1) && {
 				aba_success "NTP server $host is reachable"
-			else
+				aba_debug "chronyd -Q $host: $_chrony_out"
+			} || {
 				aba_warn "NTP server $host is not reachable"
+				aba_debug "chronyd -Q $host failed: $_chrony_out"
 				failed=$((failed + 1))
 				_preflight_warnings=$((_preflight_warnings + 1))
-			fi
+			}
 		else
 			# Fallback: UDP port check
 			if timeout 3 bash -c "echo >/dev/udp/$host/123" 2>/dev/null; then
