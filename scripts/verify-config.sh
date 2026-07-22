@@ -50,8 +50,19 @@ fi
 
 # --- DNS VIP resolution runs for both verify_conf=conf and verify_conf=all ---
 
-actual_ip_of_api=$(dig +time=8 +short $cl_api_domain)
-actual_ip_of_ingress=$(dig +time=8 +short $RANDOM.apps.$cl_domain)   # Use $RANDOM to avoid DNS cache issue
+aba_debug "Running: dig +time=8 +short $cl_api_domain"
+_dig_err=""
+actual_ip_of_api=$(dig +time=8 +short $cl_api_domain 2>"$ABA_TMP/dig-api.$$") || true
+[ -s "$ABA_TMP/dig-api.$$" ] && { _dig_err=$(cat "$ABA_TMP/dig-api.$$"); aba_debug "dig api stderr: $_dig_err"; }
+rm -f "$ABA_TMP/dig-api.$$"
+aba_debug "dig result for $cl_api_domain: '${actual_ip_of_api:-<empty>}'"
+
+_apps_domain="$RANDOM.apps.$cl_domain"
+aba_debug "Running: dig +time=8 +short $_apps_domain"
+actual_ip_of_ingress=$(dig +time=8 +short $_apps_domain 2>"$ABA_TMP/dig-apps.$$") || true  # Use $RANDOM to avoid DNS cache issue
+[ -s "$ABA_TMP/dig-apps.$$" ] && { _dig_err=$(cat "$ABA_TMP/dig-apps.$$"); aba_debug "dig apps stderr: $_dig_err"; }
+rm -f "$ABA_TMP/dig-apps.$$"
+aba_debug "dig result for $_apps_domain: '${actual_ip_of_ingress:-<empty>}'"
 
 # If not SNO, then ensure api_vip and ingress_vip are defined 
 if [ ! "$SNO" ]; then
@@ -144,7 +155,10 @@ fi
 # Wildcard shadow detection: verify that api.X and *.apps.X are distinct
 # records, not just caught by a parent wildcard like *.X
 _wc_probe="aba-dns-wildcard-check.$cl_domain"
-_wc_ip=$(dig +time=8 +short "$_wc_probe" 2>/dev/null)
+aba_debug "Running: dig +time=8 +short $_wc_probe (wildcard shadow check)"
+_wc_ip=$(dig +time=8 +short "$_wc_probe" 2>"$ABA_TMP/dig-wc.$$") || true
+[ -s "$ABA_TMP/dig-wc.$$" ] && aba_debug "dig wildcard stderr: $(cat "$ABA_TMP/dig-wc.$$")"
+rm -f "$ABA_TMP/dig-wc.$$"
 
 if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 	aba_abort \
