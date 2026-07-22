@@ -137,9 +137,9 @@ preflight: install-config.yaml agent-config.yaml  ## Run pre-flight checks (DNS,
 	$(SCRIPTS)/preflight-check.sh
 
 # Auto-manage DNS records if ABA's dnsmasq is configured (tools/setup-dns.sh was run).
-# Depends on install-config.yaml so verify-config.sh runs first — it validates
-# and/or auto-detects VIPs from DNS.  If we ran before verify-config, the fallback
-# to starting_ip would create bogus DNS records that verify-config then trusts.
+# Depends on install-config.yaml so verify-config.sh runs first — it auto-allocates
+# VIPs (when not provided) and writes them to cluster.conf.  infra-dns.sh then
+# reads the populated VIPs and creates DNS records.
 .infra-dns: install-config.yaml
 	@$(SCRIPTS)/infra-dns.sh add-cluster
 	@touch .infra-dns
