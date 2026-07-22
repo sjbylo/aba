@@ -595,6 +595,10 @@ _offer_excl_platform_for_save() {
 
 	[[ "${excl_platform:-false}" == "true" ]] && return 1
 
+	# Don't offer if no operators are configured — excluding release images
+	# with no operators results in an empty ISC (nothing to mirror).
+	[[ -z "${operators:-}" ]] && return 1
+
 	local _target="${ocp_upgrade_to:-}"
 	[[ -n "$_target" && "$_target" != "${ocp_version:-}" ]] && return 1
 
