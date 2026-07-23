@@ -152,6 +152,7 @@ _dispatch_suite() {
 	export DIS_SSH_USER="${_pool_dis_u:-${DIS_SSH_USER:-steve}}"
 
 	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
+	sleep 1  # Let tmux fully release the session name before new-session
 	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
 	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
