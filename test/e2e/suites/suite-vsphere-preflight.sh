@@ -64,7 +64,7 @@ e2e_run "Verify con bastion is reachable" \
 
 e2e_install_aba
 e2e_run "Configure aba.conf (temporary, for version resolution)" \
-	"aba --noask --platform vmw --channel \$TEST_CHANNEL --version \$OCP_VERSION --base-domain \$(pool_domain)"
+	"aba --noask --platform vmw --channel \$TEST_CHANNEL --version \$OCP_VERSION --base-domain \$(pool_domain) --machine-network \$(pool_machine_network) --gateway \$(pool_gateway)"
 e2e_run "Verify aba.conf: version resolved" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
 _ocp_version=$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print $1}')
@@ -87,7 +87,7 @@ e2e_run "Reset aba to clean state" \
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for VMware" \
-	"aba --noask --platform vmw --channel \$TEST_CHANNEL --version \$OCP_VERSION --base-domain \$(pool_domain)"
+	"aba --noask --platform vmw --channel \$TEST_CHANNEL --version \$OCP_VERSION --base-domain \$(pool_domain) --machine-network \$(pool_machine_network) --gateway \$(pool_gateway)"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
 e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
 
