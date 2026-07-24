@@ -1,6 +1,9 @@
 #!/bin/bash
 # Uninstall Docker/OCI registry from localhost.
 # Called by reg-uninstall.sh dispatcher; reads state from $regcreds_dir/state.sh.
+#
+# Idempotent: if probes show the registry is already fully gone, clear local
+# state and succeed. Leftover state after cleanup still aborts.
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
@@ -26,6 +29,14 @@ REGISTRY_NAME="registry"
 
 if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 
+	_stale=$(reg_stale_report docker)
+	if [ -z "$_stale" ]; then
+		aba_info "Docker registry already gone on localhost -- clearing local state"
+		reg_close_firewall
+		reg_finish_uninstall "Docker" "already uninstalled"
+		exit 0
+	fi
+
 	if podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$"; then
 		aba_info "Stopping and removing registry container ..."
 		podman rm -f "$REGISTRY_NAME" || true
@@ -40,11 +51,7 @@ if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_p
 
 	reg_close_firewall
 
-	# Post-uninstall assertions: verify Docker registry is fully gone.
-	_stale=""
-	[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
-	ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-	podman ps -a --format '{{.Names}}' | grep -q "^${REGISTRY_NAME}$" && _stale+="  registry container still present"$'\n'
+	_stale=$(reg_stale_report docker)
 	if [ -n "$_stale" ]; then
 		aba_abort \
 			"Docker registry uninstall left stale state:" \
@@ -52,9 +59,7 @@ if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_p
 			"Investigate and clean up manually before retrying."
 	fi
 
-	rm -rf "${regcreds_dir:?}/"*
-
-	aba_success "Docker registry uninstall successful"
+	reg_finish_uninstall "Docker" "uninstall successful"
 	exit 0
 fi
 
