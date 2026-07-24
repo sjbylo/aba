@@ -54,14 +54,14 @@ _LOCK_MAX_AGE=86400  # 24 hours
 
 if [ -f "$LOCK_FILE" ]; then
 	read -r _lock_pid _lock_ts _ < "$LOCK_FILE"
-	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
+	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid"; then
 		echo "ERROR: runner.sh for suite '$SUITE' already executing on $(hostname) (pid $_lock_pid). Aborting."
 		echo "255" > "$RC_FILE"
 		exit 1
 	fi
 	# Auto-expire: if lock is older than 24h, treat as stale regardless
 	_now=$(date +%s)
-	if [ -n "$_lock_ts" ] && [ $(( _now - _lock_ts )) -lt "$_LOCK_MAX_AGE" ] 2>/dev/null; then
+	if [ -n "$_lock_ts" ] && [ $(( _now - _lock_ts )) -lt "$_LOCK_MAX_AGE" ]; then
 		: # Lock is recent but PID is dead -- fall through to stale removal
 	fi
 	echo "  Stale lock file found (pid ${_lock_pid:-unknown} dead) -- removing."
@@ -92,7 +92,7 @@ echo "$SUITE" > /tmp/e2e-last-suites
 whoami > /tmp/e2e-suite-user
 
 # So the tmux window shows the suite name for all launch paths (dispatcher, restart, manual).
-tmux rename-window "$SUITE" 2>/dev/null
+tmux rename-window "$SUITE"
 
 echo ""
 echo "========================================"
@@ -244,13 +244,13 @@ _cleanup_test_artifact_dirs() {
 		local _default_user="${VM_DEFAULT_USER:-steve}"
 		for _check_user in root "$_default_user"; do
 			local _found
-			_found=$(_essh "${_check_user}@${_dis_fqdn}" "ls -d ~/e2e-test-* 2>/dev/null" || true)
+			_found=$(_essh "${_check_user}@${_dis_fqdn}" "ls -d ~/e2e-test-*" || true)
 			if [ -n "$_found" ]; then
 				echo "  WARNING: test artifact dirs found on $label ($_check_user): $_found"
 				_essh "${_check_user}@${_dis_fqdn}" "rm -rf ~/e2e-test-*" 2>&1
 			fi
 			_found=$(_essh "${_check_user}@${_dis_fqdn}" \
-				"for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && echo \"SKIP \$d\" && continue; echo \"\$d\"; done" 2>/dev/null || true)
+				"for d in ~/aba/e2e-*; do [ -d \"\$d\" ] || continue; [ -f \"\$d/.autorefresh\" ] || [ -f \"\$d/.autoupload\" ] && echo \"SKIP \$d\" && continue; echo \"\$d\"; done" || true)
 			if [ -n "$_found" ]; then
 				local _skip _clean
 				_skip=$(echo "$_found" | grep '^SKIP ' || true)
@@ -308,14 +308,14 @@ _verify_no_orphan_vms() {
 
 	# Try vCenter folder scan first (works when govc talks to vCenter)
 	if [ -n "${VC_FOLDER:-}" ]; then
-		_all_vms=$("$_govc" find "$VC_FOLDER" -type m 2>/dev/null) || _all_vms=""
+		_all_vms=$("$_govc" find "$VC_FOLDER" -type m) || _all_vms=""
 	fi
 
 	# Fallback for ESXi: VC_FOLDER path doesn't exist on ESXi hosts.
 	# Scan all VMs and filter by pool naming convention.
 	if [ -z "$_all_vms" ]; then
 		_esxi_mode=1
-		_all_vms=$("$_govc" find / -type m 2>/dev/null) || _all_vms=""
+		_all_vms=$("$_govc" find / -type m) || _all_vms=""
 	fi
 
 	[ -z "$_all_vms" ] && echo "  No VMs found (checked ${VC_FOLDER:-/})" && return 0
@@ -370,8 +370,8 @@ _verify_no_orphan_vms() {
 	while IFS= read -r _ovm; do
 		[ -z "$_ovm" ] && continue
 		echo "    Destroying orphan: $_ovm"
-		"$_govc" vm.power -off -force "$_ovm" 2>/dev/null || true
-		if ! "$_govc" vm.destroy "$_ovm" 2>/dev/null; then
+		"$_govc" vm.power -off -force "$_ovm" || true
+		if ! "$_govc" vm.destroy "$_ovm"; then
 			echo "    ERROR: failed to destroy $_ovm"
 			_cleanup_failed=1
 			continue
@@ -381,7 +381,7 @@ _verify_no_orphan_vms() {
 			local _parent
 			_parent=$(dirname "$_ovm")
 			if [ "$_parent" != "$VC_FOLDER" ]; then
-				"$_govc" object.destroy "$_parent" 2>/dev/null || true
+				"$_govc" object.destroy "$_parent" || true
 			fi
 		fi
 	done <<< "$_real_orphans"
@@ -403,7 +403,7 @@ _reset_con_firewall() {
 		case "$_port" in
 			8443/tcp|22/tcp) continue ;;  # pool registry + ssh — do not touch
 		esac
-		if sudo firewall-cmd --query-port="$_port" --permanent &>/dev/null; then
+		if sudo firewall-cmd --query-port="$_port" --permanent >/dev/null; then
 			sudo firewall-cmd --remove-port="$_port" --permanent
 			_removed="$_removed $_port"
 		fi
@@ -485,9 +485,15 @@ _runner_cleanup() {
 		echo "ERROR: mirror cleanup failed -- investigate before re-running"
 		_cleanup_failed=1
 	fi
+	# If we died before the final RC write (e.g. during integrity checks), persist
+	# the best-known status. Never overwrite an RC already written by an early
+	# exit path (those set RC then exit without necessarily updating $_rc).
+	if [ ! -f "$RC_FILE" ] && [ -n "${_rc:-}" ]; then
+		echo "$_rc" > "$RC_FILE"
+	fi
 	if [ -n "$_cleanup_failed" ] && [ -f "$RC_FILE" ]; then
 		local _cur_rc
-		_cur_rc=$(cat "$RC_FILE" 2>/dev/null)
+		_cur_rc=$(cat "$RC_FILE")
 		# Only override if the suite didn't already pass -- never mask a PASS
 		if [ "${_cur_rc:-0}" -ne 0 ]; then
 			echo "1" > "$RC_FILE"
@@ -495,6 +501,7 @@ _runner_cleanup() {
 			echo "WARNING: cleanup issue detected but suite PASSED -- preserving PASS result" >&2
 		fi
 	fi
+	# Drop lock last -- dispatcher waits for lock clear before treating .rc as final
 	rm -f "$LOCK_FILE"
 }
 trap '_runner_cleanup' EXIT
@@ -529,9 +536,9 @@ export _E2E_INTERACTIVE=1
 # --- Ensure current user can self-SSH (needed by _pre_suite_cleanup) ----------
 # Pool-ready snapshots may predate the idempotent-append fix in _vm_setup_ssh_keys.
 # Without this, root-as-runner can't SSH to root@conN to clean up stale resources.
-_my_pub="$(cat "$HOME/.ssh/id_rsa.pub" 2>/dev/null || true)"
+_my_pub="$(cat "$HOME/.ssh/id_rsa.pub" || true)"
 if [ -n "$_my_pub" ] && [ -f "$HOME/.ssh/authorized_keys" ]; then
-	if ! grep -qF "$_my_pub" "$HOME/.ssh/authorized_keys" 2>/dev/null; then
+	if ! grep -qF "$_my_pub" "$HOME/.ssh/authorized_keys"; then
 		echo "$_my_pub" >> "$HOME/.ssh/authorized_keys"
 		chmod 600 "$HOME/.ssh/authorized_keys"
 		echo "  Fixed: added own public key to authorized_keys (self-SSH)"
@@ -546,7 +553,7 @@ unset _my_pub
 # and cluster VM operations (aba delete uses govc underneath).
 
 if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
-	if ! command -v govc &>/dev/null; then
+	if ! command -v govc >/dev/null; then
 		# govc not in PATH -- check ~/bin/ and harness bin/ (deployed by run.sh)
 		if [ -x "$HOME/bin/govc" ]; then
 			export PATH="$HOME/bin:$PATH"
@@ -563,7 +570,7 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			exit 1
 		}
 		export PATH="$HOME/bin:$PATH"
-		command -v govc &>/dev/null || {
+		command -v govc >/dev/null || {
 			echo "  ERROR: govc not found in PATH after bootstrap." >&2
 			echo "99" > "$RC_FILE"
 			exit 1
@@ -594,10 +601,10 @@ fi
 # explicitly CLI-provided; save those before pools.conf can clobber them.
 
 _cli_overrides=" ${_E2E_CLI_OVERRIDES:-} "
-[[ "$_cli_overrides" == *" OS "* ]]       && _cli_saved_os="$INT_BASTION_RHEL_VER"
+[[ "$_cli_overrides" == *" OS "* ]] && _cli_saved_os="$INT_BASTION_RHEL_VER"
 [[ "$_cli_overrides" == *" CON_USER "* ]] && _cli_saved_con_user="$CON_SSH_USER"
 [[ "$_cli_overrides" == *" DIS_USER "* ]] && _cli_saved_dis_user="$DIS_SSH_USER"
-[[ "$_cli_overrides" == *" VMWARE "* ]]   && _cli_saved_vmware="$VMWARE_CONF"
+[[ "$_cli_overrides" == *" VMWARE "* ]] && _cli_saved_vmware="$VMWARE_CONF"
 
 if [ -f "$_RUNNER_DIR/pools.conf" ]; then
 	while IFS= read -r _line; do
@@ -617,10 +624,10 @@ if [ -f "$_RUNNER_DIR/pools.conf" ]; then
 fi
 
 # Re-apply CLI overrides that pools.conf may have clobbered
-[[ "$_cli_overrides" == *" OS "* ]]       && export INT_BASTION_RHEL_VER="$_cli_saved_os"
+[[ "$_cli_overrides" == *" OS "* ]] && export INT_BASTION_RHEL_VER="$_cli_saved_os"
 [[ "$_cli_overrides" == *" CON_USER "* ]] && export CON_SSH_USER="$_cli_saved_con_user"
 [[ "$_cli_overrides" == *" DIS_USER "* ]] && export DIS_SSH_USER="$_cli_saved_dis_user"
-[[ "$_cli_overrides" == *" VMWARE "* ]]   && export VMWARE_CONF="$_cli_saved_vmware"
+[[ "$_cli_overrides" == *" VMWARE "* ]] && export VMWARE_CONF="$_cli_saved_vmware"
 
 # Metadata for live dashboard pane titles and dispatcher user-change detection
 # (written after config.env + pools.conf + CLI overrides are final)
@@ -669,7 +676,7 @@ _revert_dis_snapshot() {
 			# Remove stale firewall ports that may have been baked into the snapshot
 			echo "  Resetting firewall ports on $DIS_VM ..."
 			for _port in $_E2E_STALE_FW_PORTS; do
-				_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
+				_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent >/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
 			done
 			_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1
 			# Fix VC_FOLDER on disN after snapshot revert (snapshot has base value,
@@ -742,8 +749,6 @@ echo ""
 # Each conN is a separate host and only one suite runs per pool, so any leftover
 # file is from a previously finished/crashed suite and is safe to process.
 _pre_suite_cleanup() {
-	local found=""
-
 	# Pool-scope guard: only process cleanup entries targeting this pool's hosts
 	local _allowed_con="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 	local _allowed_dis="dis${POOL_NUM}.${VM_BASE_DOMAIN}"
@@ -756,7 +761,7 @@ _pre_suite_cleanup() {
 
 	# Purge all oc-mirror caches (can grow to many GB across nested dirs).
 	# Search both /root/ and /home/ so --user root cleans steve leftovers and vice versa.
-	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf
+	sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf
 	echo "  Purged oc-mirror caches"
 
 	# Prune dangling/unused podman images (can accumulate 60GB+ over repeated suite runs)
@@ -764,94 +769,21 @@ _pre_suite_cleanup() {
 	sudo podman image prune -af || true
 	echo "  Pruned unused podman images"
 
-	for cleanup_file in "${_RUNNER_DIR}"/logs/*.cleanup; do
-		[ -f "$cleanup_file" ] || continue
-		found=1
-		echo "  Found leftover: $(basename "$cleanup_file") -- deleting clusters from cleanup list ..."
-		echo "    Contents: $(cat "$cleanup_file" | tr '\n' ' ')"
-		local target abs_path _cleanup_ok=1 _has_foreign=""
-		while IFS=' ' read -r target abs_path; do
-			[ -z "$abs_path" ] && continue
-			local _tgt_host="${target#*@}"
-			if [ "$_tgt_host" != "$_allowed_con" ] && [ "$_tgt_host" != "$_allowed_dis" ]; then
-				echo "    WARNING: cross-pool target $target skipped (allowed: $_allowed_con $_allowed_dis)"
-				_has_foreign=1
-				continue
-			fi
-			echo "    $target: aba -y -d $abs_path delete"
-			# < /dev/null prevents ssh from consuming the while-read loop's stdin
-			# Note: _verify_no_orphan_vms has already run and passed before we get here,
-			# so a missing cluster dir means the cluster was never created or already cleaned
-			# (not silently rm -rf'd with orphan VMs left behind).
-		if ! ( _essh "$target" \
-			"if [ -d '$abs_path' ]; then
-				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete --force
-			else
-				echo '  WARNING: cluster dir $abs_path not found -- nothing to delete.'
-				echo '  (orphan VM check already passed -- no dangling VMs)'
-			fi" \
-			< /dev/null 2>&1 ); then
-				echo "  WARNING: cleanup failed for $target:$abs_path"
-				_cleanup_ok=""
-			fi
-		done < "$cleanup_file"
-		if [ -n "$_has_foreign" ]; then
-			echo "  Keeping $(basename "$cleanup_file") -- contains cross-pool entries"
-		elif [ -n "$_cleanup_ok" ]; then
-			rm -f "$cleanup_file"
-		else
-			echo "  ERROR: cluster cleanup FAILED for $(basename "$cleanup_file") -- cannot proceed"
-			echo "  Investigate why 'aba delete' failed before re-running the suite."
-			return 1
-		fi
-	done
+	local _had_cleanup=""
+	shopt -s nullglob
+	local _pre_files=( "${_RUNNER_DIR}"/logs/*.cleanup "${_RUNNER_DIR}"/logs/*.mirror-cleanup )
+	shopt -u nullglob
+	[ ${#_pre_files[@]} -gt 0 ] && _had_cleanup=1
 
-	for cleanup_file in "${_RUNNER_DIR}"/logs/*.mirror-cleanup; do
-		[ -f "$cleanup_file" ] || continue
-		found=1
-		echo "  Found leftover: $(basename "$cleanup_file") -- uninstalling mirrors from cleanup list ..."
-		echo "    Contents: $(cat "$cleanup_file" | tr '\n' ' ')"
-		local target abs_path _mirror_ok=1 _has_foreign=""
-		while IFS=' ' read -r target abs_path; do
-			[ -z "$abs_path" ] && continue
-			local _tgt_host="${target#*@}"
-			if [ "$_tgt_host" != "$_allowed_con" ] && [ "$_tgt_host" != "$_allowed_dis" ]; then
-				echo "    WARNING: cross-pool target $target skipped (allowed: $_allowed_con $_allowed_dis)"
-				_has_foreign=1
-				continue
-			fi
-			_mirror_rc=0
-			# < /dev/null prevents ssh from consuming the while-read loop's stdin
-			# Registered-only mirrors (reg_vendor=existing) need 'unregister', not 'uninstall'.
-		_essh "$target" \
-			"if [ -d '$abs_path' ]; then
-				if grep -qs 'reg_vendor=existing' '$abs_path/regcreds/state.sh' 2>/dev/null; then
-					echo '  Externally-managed registry -- using unregister'
-					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister
-				else
-					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
-			fi && if [ \"\$(basename '$abs_path')\" = mirror ]; then echo '  (preserving pool mirror dir)'; else rm -rf '$abs_path'; fi
-		else
-			echo '  (dir not found -- already cleaned)'
-		fi" \
-			< /dev/null 2>&1 || _mirror_rc=$?
-			if [ "$_mirror_rc" -ne 0 ]; then
-				echo "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_mirror_rc)"
-				_mirror_ok=""
-			fi
-		done < "$cleanup_file"
-		if [ -n "$_has_foreign" ]; then
-			echo "  Keeping $(basename "$cleanup_file") -- contains cross-pool entries"
-		elif [ -n "$_mirror_ok" ]; then
-			rm -f "$cleanup_file"
-		else
-			echo "  ERROR: mirror cleanup FAILED for $(basename "$cleanup_file") -- cannot proceed"
-			echo "  Investigate why 'aba uninstall' failed before re-running the suite."
-			return 1
-		fi
-	done
+	# Shared aba-based cleanup (lib/cleanup.sh). Missing dirs = success.
+	# On aba failure: keeps the file and returns 1 -- never force-clean.
+	if ! _e2e_process_cleanup_dir "${_RUNNER_DIR}/logs" "$_allowed_con $_allowed_dis" "  "; then
+		echo "  ERROR: pre-suite cleanup FAILED -- investigate aba delete/uninstall above."
+		echo "  Cleanup files kept for investigation. Do NOT force-clean past an aba failure."
+		return 1
+	fi
 
-	[ -n "$found" ] && echo "  Pre-suite cleanup complete."
+	[ -n "$_had_cleanup" ] && echo "  Pre-suite cleanup complete."
 	return 0
 }
 
@@ -983,7 +915,7 @@ while true; do
 	# the suite script has a bug (e.g. hardcoded exit 0).  Override to FAIL.
 	if [ "$_rc" -eq 0 ]; then
 		_log="${E2E_LOG_DIR}/${SUITE}-latest.log"
-		if [ -f "$_log" ] && grep -q "Total:.*Fail: [1-9]" "$_log" 2>/dev/null; then
+		if [ -f "$_log" ] && grep -q "Total:.*Fail: [1-9]" "$_log"; then
 			echo ""
 			echo "  *** BUG: suite exited 0 but suite_end reported failures -- overriding to rc=1 ***"
 			echo ""
@@ -1065,10 +997,11 @@ _elapsed=$(( $(date +%s) - _start_time ))
 _mins=$(( _elapsed / 60 ))
 _secs=$(( _elapsed % 60 ))
 
-# Write the suite's exit code to the RC file immediately, so it survives
-# even if runner.sh is killed before the final write at the bottom.
-# Post-suite integrity checks below may upgrade this to a failure.
-echo "$_rc" > "$RC_FILE"
+# Do NOT write RC_FILE yet. Dispatcher treats .rc as "suite done" and immediately
+# sync_harness()'s runner.sh for the next suite. Writing early races that redeploy
+# against post-suite integrity checks still executing this script (bash then reads
+# a truncated/replaced file → bogus "command not found" / unbound variable).
+# RC is written after integrity checks (below) and by EXIT trap if we die first.
 
 if [ $_rc -eq 0 ]; then
 	echo ""

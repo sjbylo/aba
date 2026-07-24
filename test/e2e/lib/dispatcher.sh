@@ -8,6 +8,7 @@
 # Depends on:
 #   lib/constants.sh  -- E2E_TMUX_SESSION, E2E_RC_PREFIX, E2E_DISPATCH_STATE, etc.
 #   lib/remote.sh     -- _essh, _escp, _ssh_con, _con_target, _dis_target, _wait_for_ssh
+#   lib/cleanup.sh    -- _e2e_process_cleanup_dir (aba delete/uninstall)
 #   lib/deploy.sh     -- sync_harness, sync_extras
 #
 # Caller must declare these arrays before calling dispatcher functions:
@@ -54,73 +55,44 @@ _POOL_INFRA_FAIL_THRESHOLD=3
 _POOL_COOLDOWN_SECONDS=300
 
 # --- Process cleanup files on a remote host -----------------------------------
-# Shared function: SSHes to target, iterates .cleanup and .mirror-cleanup files,
-# runs aba delete/uninstall for each entry, removes processed files.
+# Fetches ~/.e2e-harness/logs/*cleanup* from the host, runs the shared aba-based
+# cleanup helpers (lib/cleanup.sh), then deletes successfully processed files
+# on the remote host.  On aba failure: keeps the remote file for investigation.
 # Usage: _run_cleanup_on_host <user@host> [indent] [allowed_hosts]
-#   indent:        prefix for log lines (default "    ")
-#   allowed_hosts: space-separated hostnames that entries may target.
-#                  If set, entries targeting other hosts are skipped with a
-#                  warning and the cleanup file is kept for the correct pool.
 
 _run_cleanup_on_host() {
-	local target="$1"
+	local logs_host="$1"
 	local indent="${2:-    }"
 	local allowed_hosts="${3:-}"
-	# Pass allowed_hosts as comma-separated $1 (SSH mangles space-separated args)
-	local allowed_csv="${allowed_hosts// /,}"
-	_essh "$target" bash -s -- "$allowed_csv" <<-'CLEANUP_HEREDOC'
-		_allowed_csv="$1"
-		_indent="    "
-		_logs="$HOME/.e2e-harness/logs"
-		_ssh_opts="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-		_all_ok=1
-		for f in "$_logs"/*.cleanup "$_logs"/*.mirror-cleanup; do
-			[ -f "$f" ] || continue
-			echo "${_indent}Processing $(basename "$f") ..."
-			echo "${_indent}  Contents: $(cat "$f" | tr '\n' ' ')"
-			_file_ok=1
-			_has_foreign=
-			while IFS=' ' read -r tgt abs_path; do
-				[ -z "$abs_path" ] && continue
-				# Pool-scope guard: reject entries targeting hosts outside this pool
-				if [ -n "$_allowed_csv" ]; then
-					_tgt_host="${tgt#*@}"
-					_match=
-					IFS=',' read -ra _ah_arr <<< "$_allowed_csv"
-					for _ah in "${_ah_arr[@]}"; do
-						[ "$_tgt_host" = "$_ah" ] && _match=1 && break
-					done
-					if [ -z "$_match" ]; then
-						echo "${_indent}  WARNING: cross-pool target $tgt skipped (allowed: $_allowed_csv)"
-						_has_foreign=1
-						continue
-					fi
-				fi
-		if echo "$f" | grep -q '\.cleanup$'; then
-			echo "${_indent}  $tgt: delete $abs_path"
-			if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete --force" < /dev/null 2>&1; then
-				echo "${_indent}  ERROR: delete failed for $abs_path on $tgt"
-				_file_ok=""
-			fi
-		else
-			echo "${_indent}  $tgt: uninstall $abs_path"
-			if ! ssh $_ssh_opts "$tgt" "[ -d '$abs_path' ] && \$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall" < /dev/null 2>&1; then
-				echo "${_indent}  ERROR: uninstall failed for $abs_path on $tgt"
-				_file_ok=""
-			fi
+	local _tmp _remote_files _rf _base _all_ok=1
+
+	_tmp=$(mktemp -d /tmp/e2e-cleanup.XXXXXX)
+	_remote_files=$(_essh "$logs_host" \
+		'ls ~/.e2e-harness/logs/*.cleanup ~/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null' || true)
+	if [ -z "$_remote_files" ]; then
+		rm -rf "$_tmp"
+		return 0
+	fi
+
+	for _rf in $_remote_files; do
+		_base=$(basename "$_rf")
+		_essh "$logs_host" "cat '$_rf'" > "$_tmp/$_base" || true
+	done
+
+	if ! _e2e_process_cleanup_dir "$_tmp" "$allowed_hosts" "$indent"; then
+		_all_ok=""
+	fi
+
+	# Mirror deletions: files removed locally were fully cleaned -- drop remote copies.
+	# Files still present locally failed aba or have cross-pool entries -- keep remote.
+	for _rf in $_remote_files; do
+		_base=$(basename "$_rf")
+		if [ ! -f "$_tmp/$_base" ]; then
+			_essh "$logs_host" "rm -f '$_rf'" || true
 		fi
-			done < "$f"
-			if [ -n "$_has_foreign" ]; then
-				echo "${_indent}  Keeping $(basename "$f") -- contains cross-pool entries"
-			elif [ -n "$_file_ok" ]; then
-				rm -f "$f"
-			else
-				echo "${_indent}  ERROR: cleanup FAILED -- keeping $(basename "$f") for investigation"
-				_all_ok=""
-			fi
-		done
-		[ -n "$_all_ok" ]
-	CLEANUP_HEREDOC
+	done
+	rm -rf "$_tmp"
+	[ -n "$_all_ok" ]
 }
 
 # Convenience wrapper: process cleanup files on a pool's conN host.
@@ -143,24 +115,18 @@ _dispatch_suite() {
 	printf "  \033[1;36mDISPATCH:\033[0m \033[1;33m%s\033[0m -> pool %s (con%s)\n" "$suite" "$pool_num" "$pool_num"
 
 	# Resolve per-pool SSH users: CLI flags > pools.conf > config.env default
-	local _pool_con_u _pool_dis_u
-	_pool_con_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
-	_pool_dis_u=$(_pool_dis_user "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
-	[ -n "${CLI_CON_USER:-}" ] && _pool_con_u="$CLI_CON_USER"
-	[ -n "${CLI_DIS_USER:-}" ] && _pool_dis_u="$CLI_DIS_USER"
-	export CON_SSH_USER="${_pool_con_u:-${CON_SSH_USER:-steve}}"
-	export DIS_SSH_USER="${_pool_dis_u:-${DIS_SSH_USER:-steve}}"
+	_export_pool_ssh_users "$pool_num"
 
-	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
+	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION'"
 	sleep 1  # Let tmux fully release the session name before new-session
-	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num' 2>/dev/null"
+	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num'"
 	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
 
 	# Detect SSH user change since last run on this pool (con or dis)
 	local _prev_user="" _prev_dis_user=""
-	_prev_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-user 2>/dev/null" 2>/dev/null) || true
+	_prev_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-user") || true
 	_prev_user="${_prev_user//[[:space:]]/}"
-	_prev_dis_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-dis-user 2>/dev/null" 2>/dev/null) || true
+	_prev_dis_user=$(_ssh_con "$pool_num" "cat /tmp/e2e-suite-dis-user") || true
 	_prev_dis_user="${_prev_dis_user//[[:space:]]/}"
 	local _cur_user="${CON_SSH_USER:-steve}"
 	local _cur_dis_user="${DIS_SSH_USER:-steve}"
@@ -233,13 +199,13 @@ _dispatch_suite() {
 	local _retry_arg=""
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
-	if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on 2>/dev/null"; then
+	if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on"; then
 		echo "    INFRA FAIL: tmux launch failed on con${pool_num}" >&2
 		return 1
 	fi
 
 	# Verify the session actually exists (catches silent SSH failures)
-	if ! _ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION'" 2>/dev/null; then
+	if ! _ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION'"; then
 		echo "    INFRA FAIL: tmux session '$_TMUX_SESSION' not found after launch on con${pool_num}" >&2
 		return 1
 	fi
@@ -258,8 +224,19 @@ _check_pool() {
 	local suite="$2"
 	local rc_content
 
-	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc' 2>/dev/null" 2>/dev/null) || rc_content=""
+	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc'") || rc_content=""
 	if [ -n "$rc_content" ]; then
+		# .rc may appear before the runner fully exits (legacy early write, or EXIT
+		# trap still running cleanup). A live lock means harness must NOT be
+		# redeployed yet -- sync_harness would truncate the running runner.sh.
+		if _ssh_con "$pool_num" "
+			_lf='${_RC_PREFIX}-${suite}.lock'
+			[ -f \"\$_lf\" ] || exit 1
+			read -r _pid _ < \"\$_lf\" || exit 1
+			[ -n \"\$_pid\" ] && kill -0 \"\$_pid\"
+		"; then
+			return
+		fi
 		rc_content="${rc_content//[^0-9]/}"
 		echo "${rc_content:-255}"
 		return
@@ -272,11 +249,11 @@ _check_pool() {
 	local _grace=60
 
 	local sess_alive="" _ssh_rc=0
-	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || { _ssh_rc=$?; sess_alive=""; }
+	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || { _ssh_rc=$?; sess_alive=""; }
 	if [ "$sess_alive" != "yes" ]; then
 		echo "  DIAG: pool $pool_num tmux check 1 failed (ssh_rc=$_ssh_rc, got='$sess_alive')" >&2
 		sleep 5
-		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || { _ssh_rc=$?; sess_alive=""; }
+		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || { _ssh_rc=$?; sess_alive=""; }
 		if [ "$sess_alive" = "yes" ]; then
 			return
 		fi
@@ -308,7 +285,7 @@ _check_hung() {
 	# A long-running single command (e.g. oc-mirror extraction) won't
 	# Staleness based on log file timestamp (tmux pane queries removed — crash risk on RHEL 10)
 	local _log_age=""
-	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null" 2>/dev/null) || _log_age=""
+	_log_age=$(_ssh_con "$pool_num" "stat -L -c %Y ~/.e2e-harness/logs/${suite}-summary.log") || _log_age=""
 	[ -z "$_log_age" ] && return
 
 	local _now_epoch
@@ -319,7 +296,7 @@ _check_hung() {
 		# Marker file is written by _interactive_prompt (framework.sh); same
 		# signal cmd_status uses for PAUSED state.
 		local _paused=""
-		_paused=$(_ssh_con "$pool_num" "[ -f '/tmp/e2e-paused-${suite}' ] && echo yes" 2>/dev/null) || _paused=""
+		_paused=$(_ssh_con "$pool_num" "[ -f '/tmp/e2e-paused-${suite}' ] && echo yes") || _paused=""
 		if [ "$_paused" = "yes" ]; then
 			return
 		fi
@@ -328,7 +305,7 @@ _check_hung() {
 		local _idle_min=$(( _idle_secs / 60 ))
 		# Grab the last few lines of the summary log to show what step is stuck
 		local _tail=""
-		_tail=$(_ssh_con "$pool_num" "tail -6 ~/.e2e-harness/logs/${suite}-summary.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'" 2>/dev/null) || _tail=""
+		_tail=$(_ssh_con "$pool_num" "tail -6 ~/.e2e-harness/logs/${suite}-summary.log | sed 's/\x1b\[[0-9;]*m//g'") || _tail=""
 		printf "  \033[1;35mHUNG?:\033[0m %s on pool %s -- no output (%d min)\n" "$suite" "$pool_num" "$_idle_min" >&2
 		[ -n "$_tail" ] && printf "  Last log output:\n%s\n" "$_tail" >&2
 		if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
@@ -354,10 +331,10 @@ _find_free_pool() {
 				continue
 			fi
 			# Cooldown expired -- clear it
-			unset '_pool_cooldown_until[$_p]' 2>/dev/null
-			if _essh "$(_con_target "$_p")" "true" 2>/dev/null; then
+			unset '_pool_cooldown_until[$_p]'
+			if _essh "$(_con_target "$_p")" "true"; then
 				local _has_sess=""
-				_has_sess=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _has_sess=""
+				_has_sess=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || _has_sess=""
 				[ "$_has_sess" = "yes" ] && continue
 				echo "$_p"
 				return 0
@@ -438,8 +415,8 @@ _collect_pool_logs() {
 	local _con_target _dis_target
 	_con_target=$(_con_target "$pool_num")
 	_dis_target=$(_dis_target "$pool_num")
-	_escp -r "${_con_target}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
-	_escp -r "${_dis_target}:~/.e2e-harness/logs/*" "$log_dir/" 2>/dev/null || true
+	_escp -r "${_con_target}:~/.e2e-harness/logs/*" "$log_dir/" || true
+	_escp -r "${_dis_target}:~/.e2e-harness/logs/*" "$log_dir/" || true
 }
 
 # --- Detect running and completed suites (stateless reconnect) ----------------
@@ -457,17 +434,17 @@ _detect_running_and_completed() {
 	for _p in $CLI_POOL_LIST; do
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
-			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
 			[ -n "$sess_exists" ] && break
 			# Distinguish "no tmux session" (SSH succeeded) from "SSH failed"
-			if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+			if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 				break
 			fi
 			[ "$_attempt" -lt "$_max_ssh_retries" ] && sleep 5
 		done
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
-			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites") || suite=""
 			if [ -n "$suite" ]; then
 				_busy_pools[$_p]="$suite"
 				_result_pool[$suite]="$_p"
@@ -475,7 +452,7 @@ _detect_running_and_completed() {
 				echo "    con${_p}: $suite still running"
 			fi
 			unset '_unreachable_pools[$_p]'
-		elif _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+		elif _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 			# SSH works but no tmux session -- pool is genuinely free
 			unset '_unreachable_pools[$_p]'
 		else
@@ -487,23 +464,23 @@ _detect_running_and_completed() {
 	# Pass 1b: scan pools OUTSIDE CLI_POOL_LIST for running suites.
 	# Prevents duplicate dispatch when multiple dispatchers coexist.
 	local _all_known_pools=""
-	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf" 2>/dev/null) || _all_known_pools=""
+	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf") || _all_known_pools=""
 	for _p in $_all_known_pools; do
 		local _is_cli_pool=""
 		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
 		[ -n "$_is_cli_pool" ] && continue
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
-			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
 			[ -n "$sess_exists" ] && break
-			if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+			if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 				break
 			fi
 			[ "$_attempt" -lt "$_max_ssh_retries" ] && sleep 5
 		done
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
-			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites") || suite=""
 			if [ -n "$suite" ]; then
 				_external_running[$suite]="$_p"
 				echo "    con${_p}: $suite running (external pool -- will not duplicate)"
@@ -514,7 +491,7 @@ _detect_running_and_completed() {
 	# Pass 2: detect completed suites (.rc files)
 	for _p in $CLI_POOL_LIST; do
 		local rc_files=""
-		rc_files=$(_ssh_con "$_p" "ls ${_RC_PREFIX}-*.rc 2>/dev/null" 2>/dev/null) || rc_files=""
+		rc_files=$(_ssh_con "$_p" "ls ${_RC_PREFIX}-*.rc") || rc_files=""
 		if [ -n "$rc_files" ]; then
 			while IFS= read -r rc_file; do
 				[ -z "$rc_file" ] && continue
@@ -525,7 +502,7 @@ _detect_running_and_completed() {
 					echo "    con${_p}: $suite .rc ignored (suite is running on another pool)"
 					continue
 				fi
-				rc=$(_ssh_con "$_p" "cat '$rc_file' 2>/dev/null" 2>/dev/null) || rc=""
+				rc=$(_ssh_con "$_p" "cat '$rc_file'") || rc=""
 				rc="${rc//[^0-9]/}"
 				_completed[$suite]="${rc:-255}"
 				_result_pool[$suite]="$_p"
@@ -545,12 +522,12 @@ _is_running_on_external_pool() {
 _recheck_unreachable_pools() {
 	[ ${#_unreachable_pools[@]} -eq 0 ] && return
 	for _p in "${!_unreachable_pools[@]}"; do
-		if _ssh_con "$_p" "echo reachable" 2>/dev/null | grep -q reachable; then
+		if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 			local sess_exists=""
-			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
 			if [ "$sess_exists" = "yes" ]; then
 				local suite=""
-				suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+				suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites") || suite=""
 				if [ -n "$suite" ]; then
 					_busy_pools[$_p]="$suite"
 					_result_pool[$suite]="$_p"
@@ -566,17 +543,17 @@ _recheck_unreachable_pools() {
 
 _refresh_external_running() {
 	local _all_known_pools=""
-	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf" 2>/dev/null) || return 0
+	_all_known_pools=$(_all_pool_numbers "$_RUN_DIR/pools.conf") || return 0
 	local -A _new_ext=()
 	for _p in $_all_known_pools; do
 		local _is_cli_pool=""
 		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
 		[ -n "$_is_cli_pool" ] && continue
 		local sess_exists=""
-		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || sess_exists=""
+		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
-			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || suite=""
+			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites") || suite=""
 			[ -n "$suite" ] && _new_ext[$suite]="$_p"
 		fi
 	done
@@ -590,7 +567,7 @@ _force_clean_all() {
 	echo "  --force: wiping all suite state on all pools ..."
 	for _p in $CLI_POOL_LIST; do
 		_ssh_con "$_p" "
-			tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
+			tmux kill-session -t '$_TMUX_SESSION'
 			sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
 		"
 		_process_pool_cleanup_files "$_p"
@@ -604,7 +581,7 @@ _force_clean_pool() {
 	local pool_num="$1"
 	echo "  --force: wiping suite state on con${pool_num} ..."
 	_ssh_con "$pool_num" "
-		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
+		tmux kill-session -t '$_TMUX_SESSION'
 		sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
 	"
 	_process_pool_cleanup_files "$pool_num"
@@ -628,12 +605,12 @@ _force_clean_suite() {
 	for _p in $CLI_POOL_LIST; do
 		for suite in "${_suite_list[@]}"; do
 			_ssh_con "$_p" "
-				running=\$(cat /tmp/e2e-last-suites 2>/dev/null) || running=''
+				running=\$(cat /tmp/e2e-last-suites) || running=''
 				if [ \"\$running\" = '$suite' ]; then
-					tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null
+					tmux kill-session -t '$_TMUX_SESSION'
 				fi
 				sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
-			" 2>/dev/null
+			"
 		done
 		local _dominated=""
 		if [ -n "${_busy_pools[$_p]:-}" ]; then
@@ -721,7 +698,7 @@ _notify_periodic_status() {
 	for _ns in "${!_busy_pools[@]}"; do
 		local _pool_state="RUNNING"
 		local _paused_check=""
-		_paused_check=$(_ssh_con "$_ns" "[ -f '/tmp/e2e-paused-${_busy_pools[$_ns]}' ] && echo yes" 2>/dev/null) || _paused_check=""
+		_paused_check=$(_ssh_con "$_ns" "[ -f '/tmp/e2e-paused-${_busy_pools[$_ns]}' ] && echo yes") || _paused_check=""
 		[ "$_paused_check" = "yes" ] && _pool_state="PAUSED"
 		_notify_body+="  con${_ns}: ${_busy_pools[$_ns]} ${_pool_state}
 "
@@ -731,11 +708,11 @@ _notify_periodic_status() {
 	for _ns in "${!_results[@]}"; do
 		local _nrc="${_results[$_ns]}"
 		local _np="${_result_pool[$_ns]:-?}"
-		if [ "$_nrc" -eq 0 ] 2>/dev/null; then
+		if [ "$_nrc" -eq 0 ]; then
 			_notify_body+="  con${_np}: ${_ns} PASS
 "
 			_n_ok=$(( _n_ok + 1 ))
-		elif [ "$_nrc" -eq 3 ] 2>/dev/null; then
+		elif [ "$_nrc" -eq 3 ]; then
 			_notify_body+="  con${_np}: ${_ns} SKIP
 "
 			_n_skip=$(( _n_skip + 1 ))
@@ -869,7 +846,7 @@ _dispatch_loop() {
 				unset '_pool_dead_count[$_p]'
 				_record_result "$local_suite" "$rc"
 				_collect_pool_logs "$_p"
-				_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null"
+				_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION'"
 				unset '_busy_pools[$_p]'
 				_state_changed=1
 			fi
@@ -879,7 +856,7 @@ _dispatch_loop() {
 		# Written by `reschedule` CLI; processed before inject queue so the
 		# subsequent inject won't skip the suite as "already passed".
 		if [ -f "$E2E_FORCE_RERUN" ] && [ -s "$E2E_FORCE_RERUN" ]; then
-			mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" 2>/dev/null || true
+			mv "$E2E_FORCE_RERUN" "${E2E_FORCE_RERUN}.processing" || true
 		fi
 		if [ -f "${E2E_FORCE_RERUN}.processing" ]; then
 			while IFS= read -r _rr_suite; do
@@ -895,7 +872,7 @@ _dispatch_loop() {
 
 		# Inject queue (from reschedule) -- atomic: mv then read to avoid race with writer
 		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
-			mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" 2>/dev/null || true
+			mv "$E2E_INJECT_QUEUE" "${E2E_INJECT_QUEUE}.processing" || true
 		fi
 		if [ -f "${E2E_INJECT_QUEUE}.processing" ]; then
 			_inj_count=0
@@ -966,7 +943,7 @@ _dispatch_loop() {
 		if [ $_queue_idx -ge ${#_work_queue[@]} ]; then
 			for _rs in "${!_results[@]}"; do
 				_rrc="${_results[$_rs]}"
-				if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
 					_has_retryable=1; break
 				fi
 			done
@@ -976,7 +953,7 @@ _dispatch_loop() {
 			_retry_names=""
 			for _rs in "${!_results[@]}"; do
 				_rrc="${_results[$_rs]}"
-				if [ "$_rrc" -ne 0 ] 2>/dev/null && [ "$_rrc" -ne 3 ] 2>/dev/null && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
+				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
 					_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
 					_rp="${_result_pool[$_rs]:-}"
 					[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"

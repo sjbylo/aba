@@ -74,7 +74,7 @@ _cleanup_dis() {
 	for _try_user in root "$_default_user"; do
 		local _uhost="${_try_user}@${_dis_fqdn}"
 		local _orphan_dirs
-		_orphan_dirs=$(_essh "$_uhost" "find ~/e2e-mirror-* ~/${_E2E_ABA_INTERNAL_DIRS// / ~/} -maxdepth 2 -name INSTALLED_BY_ABA.md -type f 2>/dev/null" || true)
+		_orphan_dirs=$(_essh "$_uhost" "find ~/e2e-mirror-* ~/${_E2E_ABA_INTERNAL_DIRS// / ~/} -maxdepth 2 -name INSTALLED_BY_ABA.md -type f" || true)
 		if [ -n "$_orphan_dirs" ]; then
 			echo "  [cleanup] Found orphaned registry breadcrumbs for $_try_user on disN:"
 			echo "$_orphan_dirs" | while read -r _md_path; do
@@ -83,7 +83,7 @@ _cleanup_dis() {
 				echo "    $_data_dir"
 				# Attempt proper uninstall using mirror-registry if available
 				_essh "$_uhost" "
-					if [ -x '$_data_dir/../mirror-registry' ] || command -v mirror-registry &>/dev/null; then
+					if [ -x '$_data_dir/../mirror-registry' ] || command -v mirror-registry >/dev/null; then
 						_mr=\$(command -v mirror-registry || echo '$_data_dir/../mirror-registry')
 						echo '  [cleanup] Running mirror-registry uninstall for $_data_dir'
 						\$_mr uninstall -v --autoApprove \
@@ -112,7 +112,7 @@ _cleanup_dis() {
 			&& _podman_stale+="  $_try_user: redis_pass podman secret exists"$'\n'
 		_essh "$_uhost" "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" \
 			&& _podman_stale+="  $_try_user: quay containers still present"$'\n'
-		_essh "$_uhost" "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null | grep -v 'not-found' | grep -q ." \
+		_essh "$_uhost" "systemctl --user list-units 'quay-*' --no-legend | grep -v 'not-found' | grep -q ." \
 			&& _podman_stale+="  $_try_user: quay systemd user units still active"$'\n'
 	done
 	if [ -n "$_podman_stale" ]; then
@@ -152,7 +152,7 @@ _cleanup_dis() {
 	# 3. Remove stale firewall ports from permanent config (survive restart)
 	echo "  Resetting firewall ports on disN ..."
 	for _port in $_E2E_STALE_FW_PORTS; do
-		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent &>/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
+		_essh "$dis_host" "sudo firewall-cmd --query-port=$_port --permanent >/dev/null && sudo firewall-cmd --remove-port=$_port --permanent" 2>&1
 	done
 	_essh "$dis_host" "sudo firewall-cmd --reload" 2>&1
 
@@ -190,7 +190,7 @@ _cleanup_dis() {
 			# is the only option when aba state is gone.
 			_essh "$_uhost" "
 				cd /tmp
-				if podman ps -q 2>/dev/null | grep -q .; then
+				if podman ps -q | grep -q .; then
 					echo '  [cleanup] Stopping $_try_user containers on disN'
 					podman stop -a -t 5 || true
 					podman rm -af || true

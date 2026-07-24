@@ -18,20 +18,16 @@
 #
 #     FORBIDDEN patterns:
 #       cmd 2>/dev/null          # hides errors entirely
-#       cmd >/dev/null 2>&1      # silences both streams -- use >/dev/null alone
-#       cmd &>/dev/null          # same problem -- silences both streams
-#       cmd 2>/dev/null | grep   # stderr discarded, grep only sees stdout
-#       cmd 2>&1 | grep          # stderr MERGED into pipe -- grep sees both
+#       cmd >/dev/null 2>&1      # silences both streams
+#       cmd &>/dev/null          # same -- silences both streams
 #
 #     CORRECT alternatives:
 #       cmd >/dev/null           # stdout silenced, stderr still visible
 #       var=$(cmd) || var=""     # capture output; empty on failure (explicit)
 #
-#     NARROW EXCEPTIONS (must have a comment explaining why):
-#       command -v foo >/dev/null    # existence check; no stderr output
-#       kill -0 $pid 2>/dev/null     # process probe; "no such process" is noise
-#       tmux ... 2>/dev/null         # tmux session may not exist
-#       [ "$x" -gt 0 ] 2>/dev/null  # arithmetic guard; non-numeric warning
+#     OK for existence checks (stdout only; typically no stderr):
+#       command -v foo >/dev/null
+#       type foo >/dev/null
 #
 #  3. NEVER use '|| true' in framework or test code.
 #     These scripts do NOT use set -e, so || true does nothing except
@@ -122,10 +118,11 @@ source "$_E2E_LIB_DIR/constants.sh"
 # can restore default SIGINT behavior with 'trap - INT'.
 trap ':' INT
 
-# --- SSH wrapper ------------------------------------------------------------
+# --- SSH wrapper + shared cleanup -------------------------------------------
 # Suites run as child bash processes, so functions sourced by the runner are
-# NOT inherited.  Source the canonical SSH wrapper from remote.sh.
+# NOT inherited.  Source the canonical SSH wrapper and aba-based cleanup helpers.
 source "$_E2E_LIB_DIR/remote.sh"
+source "$_E2E_LIB_DIR/cleanup.sh"
 
 # --- Globals ----------------------------------------------------------------
 
@@ -265,7 +262,7 @@ _e2e_log_and_print() {
 _e2e_draw_line() {
     local char="${1:--}"
     local cols
-    cols=$(tput cols 2>/dev/null || echo 80)
+    cols=$(tput cols || echo 80)
     printf '%*s\n' "$cols" '' | tr ' ' "$char"
 }
 
@@ -298,7 +295,7 @@ _e2e_notify_suffix() {
 _e2e_notify() {
     [ -n "$NOTIFY_CMD" ] || return 0
     local _msg="[e2e] $* $(_e2e_notify_suffix)"
-    $NOTIFY_CMD "$_msg" < /dev/null >/dev/null 2>&1 &
+    $NOTIFY_CMD "$_msg" < /dev/null >/dev/null &
 }
 
 _e2e_notify_stdin() {
@@ -306,7 +303,7 @@ _e2e_notify_stdin() {
     if [ -n "$NOTIFY_CMD" ]; then
         local _msg="[e2e] $subject $(_e2e_notify_suffix)"
         local _suffix; _suffix="$(_e2e_notify_suffix)"
-        { cat; printf "\n%s\n" "$_suffix"; } | $NOTIFY_CMD "$_msg" >/dev/null 2>&1
+        { cat; printf "\n%s\n" "$_suffix"; } | $NOTIFY_CMD "$_msg" >/dev/null
     else
         cat > /dev/null  # drain stdin
     fi
@@ -688,46 +685,28 @@ e2e_remove_from_cluster_cleanup() {
 
 	local entry="$target $abs_path"
 	local tmp="${cleanup_file}.tmp"
-	grep -vxF "$entry" "$cleanup_file" > "$tmp" 2>/dev/null || true
+	grep -vxF "$entry" "$cleanup_file" > "$tmp" || true
 	mv "$tmp" "$cleanup_file"
 	[ -s "$cleanup_file" ] || rm -f "$cleanup_file"
 	_e2e_log "  Removed cluster from cleanup list: $entry"
 }
 
 # Delete all clusters in the cleanup list.  Safe to call multiple times.
-# SSHs to each stored user@fqdn and runs 'aba -d <path> delete'.
-# Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
+# Uses shared aba-based helper (lib/cleanup.sh). On aba failure: keeps file.
 e2e_cleanup_clusters() {
 	local cleanup_file="${_E2E_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.cleanup}"
+	local _rc=0
 	[ -f "$cleanup_file" ] || return 0
 
 	_e2e_log_and_print "  Cleaning up clusters (from cleanup list) ..."
-	local target abs_path _all_ok=1 _cleanup_rc
-	while IFS=' ' read -r target abs_path; do
-		[ -z "$abs_path" ] && continue
-		_e2e_log_and_print "  $target: aba -y -d $abs_path delete"
-		_cleanup_rc=0
-		# < /dev/null prevents ssh from consuming the while-read loop's stdin
-		_essh "$target" \
-			"if [ -d '$abs_path' ]; then
-				\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' delete
-			else
-				echo '  (cluster dir $abs_path already removed -- nothing to delete)'
-			fi" \
-			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
-		_cleanup_rc=${PIPESTATUS[0]}
-		if [ "$_cleanup_rc" -ne 0 ]; then
-			_e2e_log_and_print "  ERROR: cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
-			_all_ok=""
-		fi
-	done < "$cleanup_file"
-	if [ -n "$_all_ok" ]; then
-		rm -f "$cleanup_file"
+	_e2e_process_one_cleanup_file "$cleanup_file" cluster "" "  " 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+	_rc=${PIPESTATUS[0]}
+	if [ "$_rc" -eq 0 ]; then
 		_e2e_log_and_print "  Cleanup complete."
-	else
-		_e2e_log_and_print "  ERROR: cluster cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
-		return 1
+		return 0
 	fi
+	_e2e_log_and_print "  ERROR: cluster cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
+	return 1
 }
 
 # --- Mirror Cleanup List ----------------------------------------------------
@@ -805,57 +784,29 @@ e2e_remove_from_mirror_cleanup() {
 
 	local entry="$target $abs_path"
 	local tmp="${cleanup_file}.tmp"
-	grep -vxF "$entry" "$cleanup_file" > "$tmp" 2>/dev/null || true
+	grep -vxF "$entry" "$cleanup_file" > "$tmp" || true
 	mv "$tmp" "$cleanup_file"
 	[ -s "$cleanup_file" ] || rm -f "$cleanup_file"
 	_e2e_log "  Removed mirror from cleanup list: $entry"
 }
 
 # Uninstall all mirrors in the cleanup list.  Safe to call multiple times.
-# Returns 1 if ANY cleanup entry fails -- caller must handle the failure.
+# Uses shared aba-based helper (lib/cleanup.sh). On aba failure: keeps file.
+# NEVER rm -rf registry state after aba failure -- investigate instead.
 e2e_cleanup_mirrors() {
 	local cleanup_file="${_E2E_MIRROR_CLEANUP_FILE:-${E2E_LOG_DIR}/${_E2E_SUITE_NAME}.mirror-cleanup}"
+	local _rc=0
 	[ -f "$cleanup_file" ] || return 0
 
 	_e2e_log_and_print "  Cleaning up mirrors (from cleanup list) ..."
-	local target abs_path _all_ok=1 _cleanup_rc
-	while IFS=' ' read -r target abs_path; do
-		[ -z "$abs_path" ] && continue
-		_cleanup_rc=0
-		# < /dev/null prevents ssh from consuming the while-read loop's stdin
-		# Registered-only mirrors (reg_vendor=existing) need 'unregister', not 'uninstall'.
-		_essh "$target" \
-			"if [ -d '$abs_path' ] && [ -f '$abs_path/.available' ]; then
-				if grep -qs 'reg_vendor=existing' '$abs_path/regcreds/state.sh' 2>/dev/null; then
-					echo '  Externally-managed registry -- using unregister'
-					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' unregister
-				else
-					\$HOME/.e2e-harness/bin/aba -y -d '$abs_path' uninstall
-				fi
-		elif [ -d '$abs_path' ]; then
-			if [ \"\$(basename '$abs_path')\" = mirror ]; then
-				echo '  (preserving pool mirror dir $abs_path)'
-			else
-				echo '  (mirror $abs_path has no .available -- removing orphaned data dir)'
-				rm -rf '$abs_path'
-			fi
-			else
-				echo '  (mirror dir $abs_path does not exist -- skipping)'
-			fi" \
-			< /dev/null 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
-		_cleanup_rc=${PIPESTATUS[0]}
-		if [ "$_cleanup_rc" -ne 0 ]; then
-			_e2e_log_and_print "  ERROR: mirror cleanup failed for $target:$abs_path (exit=$_cleanup_rc)"
-			_all_ok=""
-		fi
-	done < "$cleanup_file"
-	if [ -n "$_all_ok" ]; then
-		rm -f "$cleanup_file"
+	_e2e_process_one_cleanup_file "$cleanup_file" mirror "" "  " 2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
+	_rc=${PIPESTATUS[0]}
+	if [ "$_rc" -eq 0 ]; then
 		_e2e_log_and_print "  Mirror cleanup complete."
-	else
-		_e2e_log_and_print "  ERROR: mirror cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
-		return 1
+		return 0
 	fi
+	_e2e_log_and_print "  ERROR: mirror cleanup FAILED -- keeping $(basename "$cleanup_file") for investigation"
+	return 1
 }
 
 # --- Post-Uninstall Assertion -----------------------------------------------
@@ -941,7 +892,7 @@ _interactive_prompt() {
         [ -n "$description" ] && _ctx="${_ctx:+$_ctx | }Step: $description"
         [ -n "$_ctx" ] && _e2e_log_and_print "$(_e2e_yellow "$_ctx")"
         _e2e_log_and_print "FAILED: \"$(_e2e_exit_info $ret)\" $cmd"
-        read -t 0 -n 10000 2>/dev/null || true
+        read -t 0 -n 10000 || true
         if [ "$_clock_stopped" ]; then
             printf "%s" "$(_e2e_red "PAUSED [R]etry [s]kip [S]kip-suite [0]restart-suite [c]leanup [a]bort [!cmd] [!!cmd-on-disN]: ")"
             read -r ans
@@ -1010,7 +961,7 @@ _interactive_prompt() {
                 else
                     _e2e_log "User entered command (disN=$INTERNAL_BASTION): $user_cmd"
                     echo "Running on disN ($INTERNAL_BASTION): $user_cmd"
-                    _essh "$INTERNAL_BASTION" -- ". \$HOME/.bash_profile 2>/dev/null; $user_cmd" \
+                    _essh "$INTERNAL_BASTION" -- ". \$HOME/.bash_profile; $user_cmd" \
                         2>&1 | tee -a "${E2E_LOG_FILE:-/dev/null}"
                     local new_rc=${PIPESTATUS[0]}
                     _e2e_log "User command (disN) exited $new_rc"
@@ -1038,10 +989,10 @@ _interactive_prompt() {
 #   _e2e_exit_info 1    =>  "exit=1"
 _e2e_exit_info() {
     local rc="$1"
-    if [ "$rc" -gt 128 ] 2>/dev/null; then
+    if [ "$rc" -gt 128 ]; then
         local sig=$((rc - 128))
         local name
-        name=$(kill -l "$sig" 2>/dev/null) || name=""
+        name=$(kill -l "$sig") || name=""
         if [ -n "$name" ]; then
             echo "exit=${rc}/SIG${name}"
             return
@@ -1162,10 +1113,10 @@ e2e_run() {
                 if [ -n "$host" ]; then
                 _e2e_log "  Running on $host (attempt $attempt/$tot_cnt): $cmd"
                 if [ -n "$quiet" ]; then
-                    _essh -n "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
+                    _essh -n "$host" -- ". \$HOME/.bash_profile; set -e; $cmd" \
                         >> "$_lf" 2>&1 || ret=$?
                 else
-                    _essh -n "$host" -- ". \$HOME/.bash_profile 2>/dev/null; set -e; $cmd" \
+                    _essh -n "$host" -- ". \$HOME/.bash_profile; set -e; $cmd" \
                         2>&1 | tee -a "$_lf" "$_cmd_output_file"; ret=${PIPESTATUS[0]}
                 fi
             else
@@ -1195,7 +1146,7 @@ e2e_run() {
                         echo ""
                         echo "--- Last 10 lines of output ---"
                         echo ""
-                        tail -10 "$_cmd_output_file" 2>/dev/null
+                        tail -10 "$_cmd_output_file"
                     ) | _e2e_notify_stdin "RECOVERED: $description [$_E2E_SUITE_NAME] (attempt $attempt/$tot_cnt, $_dur)"
                 fi
                 _e2e_log_and_print "  $(_e2e_green "OK") ($_dur)"
@@ -1224,7 +1175,7 @@ e2e_run() {
                     echo ""
                     echo "--- Last 20 lines of output ---"
                     echo ""
-                    tail -20 "$_cmd_output_file" 2>/dev/null
+                    tail -20 "$_cmd_output_file"
                 ) | _e2e_notify_stdin "FIRST FAIL: $description ($_exi)"
             fi
 
@@ -1249,7 +1200,7 @@ e2e_run() {
                         echo ""
                         echo "--- Last 20 lines of output ---"
                         echo ""
-                        tail -20 "$_cmd_output_file" 2>/dev/null
+                        tail -20 "$_cmd_output_file"
                     ) | _e2e_notify_stdin "EXHAUSTED: $description ($_exi)"
                 fi
                 break
@@ -1396,7 +1347,7 @@ _e2e_wait_cluster_condition() {
 		ready)
 			# Single source of truth: oc get co for all three conditions.
 			# Avoids ClusterVersion lag where COs are healthy but CV hasn't caught up.
-			check_cmd="cd ~/aba && export KUBECONFIG=\$PWD/$cluster_dir/iso-agent-based/auth/kubeconfig && raw=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Available\")].status} {.status.conditions[?(@.type==\"Progressing\")].status} {.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}' 2>/dev/null) && [ -n \"\$raw\" ] && unavail=\$(echo \"\$raw\" | awk '{print \$1}' | grep -cv '^True\$' || true) && prog=\$(echo \"\$raw\" | awk '{print \$2}' | grep -c '^True\$' || true) && deg=\$(echo \"\$raw\" | awk '{print \$3}' | grep -c '^True\$' || true) && echo \"Unavail=\$unavail Progressing=\$prog Degraded=\$deg\" && [ \"\$unavail\" -eq 0 ] && [ \"\$prog\" -eq 0 ] && [ \"\$deg\" -eq 0 ]"
+			check_cmd="cd ~/aba && export KUBECONFIG=\$PWD/$cluster_dir/iso-agent-based/auth/kubeconfig && raw=\$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type==\"Available\")].status} {.status.conditions[?(@.type==\"Progressing\")].status} {.status.conditions[?(@.type==\"Degraded\")].status}{\"\\n\"}{end}') && [ -n \"\$raw\" ] && unavail=\$(echo \"\$raw\" | awk '{print \$1}' | grep -cv '^True\$' || true) && prog=\$(echo \"\$raw\" | awk '{print \$2}' | grep -c '^True\$' || true) && deg=\$(echo \"\$raw\" | awk '{print \$3}' | grep -c '^True\$' || true) && echo \"Unavail=\$unavail Progressing=\$prog Degraded=\$deg\" && [ \"\$unavail\" -eq 0 ] && [ \"\$prog\" -eq 0 ] && [ \"\$deg\" -eq 0 ]"
 			;;
 	esac
 
@@ -1500,7 +1451,7 @@ e2e_diag() {
     fi
 
     if [ -n "$host" ]; then
-        _essh -n "$host" -- ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+        _essh -n "$host" -- ". \$HOME/.bash_profile; $cmd" \
             2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
     else
         ( trap - INT; eval "$cmd" ) < /dev/null 2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
@@ -1539,9 +1490,9 @@ e2e_snapshot_file() {
 	local snap_dir="${E2E_LOG_DIR}/${_E2E_SUITE_NAME}/snapshots"
 	mkdir -p "$snap_dir"
 	local seq
-	seq=$(printf "%02d" "$(ls "$snap_dir" 2>/dev/null | wc -l)")
+	seq=$(printf "%02d" "$(ls "$snap_dir" | wc -l)")
 	local dest="${snap_dir}/${seq}-${label}-$(basename "$file")"
-	if cp "$file" "$dest" 2>/dev/null; then
+	if cp "$file" "$dest"; then
 		_e2e_log "  Snapshot: $dest"
 	else
 		_e2e_log "  Snapshot FAILED (file missing?): $file"
@@ -1559,10 +1510,10 @@ e2e_snapshot_file_remote() {
 	local snap_dir="${E2E_LOG_DIR}/${_E2E_SUITE_NAME}/snapshots"
 	mkdir -p "$snap_dir"
 	local seq
-	seq=$(printf "%02d" "$(ls "$snap_dir" 2>/dev/null | wc -l)")
+	seq=$(printf "%02d" "$(ls "$snap_dir" | wc -l)")
 	local dest="${snap_dir}/${seq}-${label}-$(basename "$file")"
 	if scp -o LogLevel=ERROR -o ConnectTimeout=30 -o BatchMode=yes \
-		"${INTERNAL_BASTION}:${file}" "$dest" 2>/dev/null; then
+		"${INTERNAL_BASTION}:${file}" "$dest"; then
 		_e2e_log "  Snapshot (remote): $dest"
 	else
 		_e2e_log "  Snapshot FAILED (remote file missing?): ${INTERNAL_BASTION}:${file}"
@@ -1633,7 +1584,7 @@ e2e_run_must_fail_remote() {
 
     local ret=0
     _essh -n "$INTERNAL_BASTION" -- \
-        ". \$HOME/.bash_profile 2>/dev/null; $cmd" \
+        ". \$HOME/.bash_profile; $cmd" \
         2>&1 | tee -a "$_lf"; ret=${PIPESTATUS[0]}
 
     if [ $ret -ne 0 ]; then
@@ -1751,7 +1702,7 @@ assert_ne() {
 assert_command_exists() {
     local cmd_name="$1"
     local msg="${2:-Command should exist: $cmd_name}"
-    if command -v "$cmd_name" &>/dev/null; then
+    if command -v "$cmd_name" >/dev/null; then
         _e2e_log "  ASSERT OK: command exists: $cmd_name"
     else
         _assert_fail "$msg"
@@ -1922,7 +1873,7 @@ preflight_ssh() {
 }
 
 require_govc() {
-    if ! command -v govc &>/dev/null; then
+    if ! command -v govc >/dev/null; then
         _e2e_log_and_print "  $(_e2e_yellow "GUARD: govc not found -- skipping")"
         return 1
     fi

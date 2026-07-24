@@ -76,9 +76,9 @@ test_begin "Setup: install aba and configure"
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches (conN)" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 # Use fast channel for cross-minor upgrade testing.
 # We configure with --version p (N-1), then compute N-2 in the next step
@@ -127,12 +127,12 @@ e2e_run "Compute cross-minor versions (N-2 install, N-1 upgrade target)" "
     desired_minor=\$(echo \$desired | cut -d. -f1-2)
     [ \"\$older_minor\" != \"\$desired_minor\" ] || { echo \"FAIL: versions are same minor (\$older vs \$desired)\"; exit 1; }
     # Walk back z-streams if the latest N-2 isn't in the upgrade target's graph yet
-    if ! verify_upgrade_path_exists \"\$older\" \"\$desired\" fast 2>/dev/null; then
+    if ! verify_upgrade_path_exists \"\$older\" \"\$desired\" fast; then
         echo \"Latest N-2 (\$older) not in fast-\${desired_minor} graph -- searching for valid version\"
         all_versions=\$(fetch_all_versions fast \"\$older_minor\")
         found=\"\"
         for v in \$(echo \"\$all_versions\" | sort -rV); do
-            if verify_upgrade_path_exists \"\$v\" \"\$desired\" fast 2>/dev/null; then
+            if verify_upgrade_path_exists \"\$v\" \"\$desired\" fast; then
                 echo \"Found valid N-2: \$v\"
                 older=\"\$v\"
                 found=1
@@ -278,11 +278,11 @@ e2e_run_remote -q "Restore data dir" \
 
 # Negative path: load with data/ dir but no mirror_*.tar should fail
 e2e_run_remote -q "Backup mirror_*.tar for must-fail test" \
-    "cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ 2>/dev/null || true"
+    "cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ || true"
 e2e_run_must_fail_remote "Load without mirror_*.tar should fail" \
     "cd ~/aba && aba -d mirror load"
 e2e_run_remote -q "Restore mirror_*.tar" \
-    "cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ 2>/dev/null || true; rmdir mirror/data/.tmp-bak 2>/dev/null || true"
+    "cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ || true; rmdir mirror/data/.tmp-bak || true"
 
 # Guard: warn when aba-transfer.tar is missing (load should still succeed)
 e2e_run_remote -q "Backup aba-transfer.tar for warning test" \
@@ -337,7 +337,7 @@ e2e_run_remote -r 3 2 "Load images into Quay registry" \
 e2e_run_remote "Verify aba-transfer.tar kept after load" \
     "cd ~/aba && test -f mirror/data/aba-transfer.tar"
 e2e_run_remote "Verify mirror_*.tar kept after load (ask --auto-no in non-interactive)" \
-    "cd ~/aba && ls mirror/data/mirror_*.tar >/dev/null 2>&1"
+    "cd ~/aba && ls mirror/data/mirror_*.tar >/dev/null"
 
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
