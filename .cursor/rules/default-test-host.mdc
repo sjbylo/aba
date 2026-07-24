@@ -1,0 +1,13 @@
+---
+description: Default test host for running functional and manual tests
+alwaysApply: true
+---
+
+# Default Test Host
+
+When running functional tests, manual script validation, or any ad-hoc testing that requires a remote host:
+
+- **Default host**: `conno.example.com`
+- Connect via: `ssh -F ~/.aba/ssh.conf conno.example.com`
+- This host has sudo access, dnsmasq available, chrony installed
+- Use this unless the user specifies a different host
