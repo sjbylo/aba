@@ -3538,6 +3538,7 @@ _run_oc_mirror_with_retry() {
 		aba_info "Running: $cmd"
 
 		aba_debug "Running oc-mirror $action"
+		mkdir -p data
 		( cd data && umask 0022 && eval "$cmd" )
 		local ret=$?
 		aba_debug "oc-mirror $action exit code: $ret"
