@@ -817,12 +817,15 @@ fi
 # --- Main dispatch loop (extracted to lib/dispatcher.sh) ----------------------
 
 # Save the original suite list for --loop mode (injected suites append to
-# suites_to_run, so we need a clean copy for each round).
+# suites_to_run, so we need a clean copy for each refill batch).
+# With --loop, _dispatch_loop refills as soon as the queue drains (free pools
+# get work immediately; in-flight suites are left alone). The outer while below
+# is a fallback if the dispatch loop ever exits while --loop is still set.
 _original_suites=("${suites_to_run[@]}")
 _round=1
 
 while true; do
-	if [ "$_round" -gt 1 ]; then
+	if [ "$_round" -gt 1 ] && [ -z "${CLI_LOOP:-}" ]; then
 		echo ""
 		_print_box "1;44;97" "■  ROUND $_round STARTING  ($(date '+%H:%M'))"
 		echo ""
@@ -834,28 +837,19 @@ while true; do
 		break
 	fi
 
-	# --- Round complete: print summary and reset for next round ---
+	# Fallback: dispatch loop exited while --loop is set (e.g. transient
+	# unreachable-all). Re-arm a full batch and continue.
 	echo ""
-	_n_ok=0; _n_fail=0; _n_skip=0
-	for _rs in "${!_results[@]}"; do
-		case "${_results[$_rs]}" in
-			0) _n_ok=$(( _n_ok + 1 )) ;;
-			3) _n_skip=$(( _n_skip + 1 )) ;;
-			*) _n_fail=$(( _n_fail + 1 )) ;;
-		esac
-	done
-	_print_box "1;46;97" "■  ROUND $_round COMPLETE: ${_n_ok} pass, ${_n_fail} fail, ${_n_skip} skip  ($(date '+%H:%M'))"
-
+	_print_box "1;45;97" "■  LOOP: dispatch loop exited -- re-arming round $(( _round + 1 ))  ($(date '+%H:%M'))"
 	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
-		$NOTIFY_CMD "[e2e] Round $_round done: ${_n_ok} pass, ${_n_fail} fail, ${_n_skip} skip. Starting round $(( _round + 1 ))." < /dev/null >/dev/null &
+		$NOTIFY_CMD "[e2e] LOOP: dispatch loop exited; re-arming round $(( _round + 1 ))" < /dev/null >/dev/null &
 	fi
 
-	# Clean .rc files from this round so they don't interfere with next round
 	for _p in $CLI_POOL_LIST; do
+		[ -n "${_busy_pools[$_p]:-}" ] && continue
 		_ssh_con "$_p" "sudo rm -f ${_RC_PREFIX}-*.rc" || true
 	done
 
-	# Reset in-memory state
 	_results=()
 	_result_pool=()
 	_retried=()
@@ -866,14 +860,12 @@ while true; do
 	_bad_pools_map=()
 	_pool_dead_count=()
 
-	# Restore original suite list and re-randomize
 	suites_to_run=("${_original_suites[@]}")
 	if [ ${#suites_to_run[@]} -gt 1 ]; then
 		readarray -t suites_to_run < <(printf '%s\n' "${suites_to_run[@]}" | shuf)
 	fi
 	_build_work_queue
 	_queue_idx=0
-
 	_round=$(( _round + 1 ))
 done
 
