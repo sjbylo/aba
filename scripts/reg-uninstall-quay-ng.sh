@@ -1,6 +1,9 @@
 #!/bin/bash
 # Uninstall the Go-based Quay mirror registry (quay-ng) from localhost.
 # Called by reg-uninstall.sh dispatcher; reads state from $regcreds_dir/state.sh.
+#
+# Idempotent: if probes show the registry is already fully gone, clear local
+# state and succeed. Leftover state after cleanup still aborts.
 
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
@@ -25,6 +28,14 @@ _SERVICE_NAME="quay.service"
 
 if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_host:$reg_port (data: $reg_root)"; then
 
+	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR")
+	if [ -z "$_stale" ]; then
+		aba_info "$_QUAY_NG_VENDOR registry already gone on localhost -- clearing local state"
+		reg_close_firewall
+		reg_finish_uninstall "$_QUAY_NG_VENDOR" "already uninstalled"
+		exit 0
+	fi
+
 	if systemctl --user is-active "$_SERVICE_NAME" &>/dev/null; then
 		aba_info "Stopping $_SERVICE_NAME ..."
 		systemctl --user stop "$_SERVICE_NAME" || true
@@ -45,11 +56,7 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_h
 
 	reg_close_firewall
 
-	# Post-uninstall assertions
-	_stale=""
-	[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
-	ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-	systemctl --user is-active "$_SERVICE_NAME" &>/dev/null && _stale+="  $_SERVICE_NAME still active"$'\n'
+	_stale=$(reg_stale_report "$_QUAY_NG_VENDOR")
 	if [ -n "$_stale" ]; then
 		aba_abort \
 			"$_QUAY_NG_VENDOR registry uninstall left stale state:" \
@@ -57,9 +64,7 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_h
 			"Investigate and clean up manually before retrying."
 	fi
 
-	rm -rf "${regcreds_dir:?}/"*
-
-	aba_success "$_QUAY_NG_VENDOR registry uninstall successful"
+	reg_finish_uninstall "$_QUAY_NG_VENDOR" "uninstall successful"
 	exit 0
 fi
 

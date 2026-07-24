@@ -18,6 +18,8 @@
 #   reg_open_firewall       Open firewall port (firewalld/iptables, local or SSH)
 #   reg_close_firewall      Close firewall port at uninstall time (mirrors reg_open_firewall)
 #   reg_post_install        Copy CA, generate pull secret, write state.sh, verify
+#   reg_stale_report        Probe whether a registry is still present (local or remote)
+#   reg_finish_uninstall    Clear regcreds after a verified-clean uninstall
 # =============================================================================
 
 # Guard against double-sourcing
@@ -483,4 +485,110 @@ reg_post_install() {
 
 	echo
 	aba_success "Registry installed/configured successfully!"
+}
+
+# --- _reg_host_run ------------------------------------------------------------
+# Run a shell snippet locally (bash -c) or via an ssh command-prefix string.
+# Usage: _reg_host_run [<ssh_cmd>] <shell_command>
+_reg_host_run() {
+	local ssh_cmd="$1"
+	local cmd="$2"
+
+	if [ -n "$ssh_cmd" ]; then
+		# Intentional word-split: ssh_cmd is a prefix like "ssh -i key -F conf user@host"
+		# shellcheck disable=SC2086
+		$ssh_cmd "$cmd"
+	else
+		bash -c "$cmd"
+	fi
+}
+
+# --- _reg_probe_set -----------------------------------------------------------
+# Run a probe that uses exit 0 = present (stale), 1 = absent.
+# Any other exit (SSH drop, missing tool, etc.) aborts -- never treat as gone.
+# Usage: _reg_probe_set <ssh_cmd> <shell_command> <label> && stale+="..."
+_reg_probe_set() {
+	local ssh_cmd="$1"
+	local cmd="$2"
+	local label="$3"
+	local rc=0
+
+	_reg_host_run "$ssh_cmd" "$cmd" || rc=$?
+	case "$rc" in
+		0) return 0 ;;
+		1) return 1 ;;
+		*) aba_abort "Registry probe failed ($label, rc=$rc)" ;;
+	esac
+}
+
+# --- reg_stale_report ---------------------------------------------------------
+# Probe whether a registry is still present. Prints a multi-line report of
+# leftovers (empty string = fully gone). Requires reg_root + reg_port from
+# state.sh. Optional ssh_cmd probes a remote host instead of localhost.
+# Probe/tool/SSH failures abort (fail closed) -- they must not look like "gone".
+#
+# Usage: _stale=$(reg_stale_report quay|docker|quay-ng [ssh_cmd])
+reg_stale_report() {
+	local vendor="$1"
+	local ssh_cmd="${2:-}"
+	local port="${reg_port:-8443}"
+	local stale=""
+	local rc state
+
+	# Probe snippets: capture tool output first, then grep.
+	# Never `tool | grep` alone — grep's "no match" (1) masks tool failures (e.g. 127)
+	# even under pipefail (rightmost non-zero wins).
+	case "$vendor" in
+		quay)
+			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+				stale+="  reg_root ($reg_root) still exists"$'\n'
+			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
+				stale+="  Port $port still listening"$'\n'
+			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -qE 'quay-app|quay-redis|quay-postgres'" "quay containers" && \
+				stale+="  Quay containers still present"$'\n'
+			_reg_probe_set "$ssh_cmd" "_o=\$(podman secret ls --format '{{.Name}}') || exit \$?; echo \"\$_o\" | grep -q redis_pass" "redis_pass secret" && \
+				stale+="  redis_pass podman secret still exists"$'\n'
+			;;
+		docker)
+			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+				stale+="  reg_root ($reg_root) still exists"$'\n'
+			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
+				stale+="  Port $port still listening"$'\n'
+			_reg_probe_set "$ssh_cmd" "_o=\$(podman ps -a --format '{{.Names}}') || exit \$?; echo \"\$_o\" | grep -q '^registry$'" "registry container" && \
+				stale+="  registry container still present"$'\n'
+			;;
+		"$_QUAY_NG_VENDOR"|quay-ng)
+			_reg_probe_set "$ssh_cmd" "test -d $reg_root" "reg_root" && \
+				stale+="  reg_root ($reg_root) still exists"$'\n'
+			_reg_probe_set "$ssh_cmd" "_o=\$(ss -tlnp) || exit \$?; echo \"\$_o\" | grep -q ':$port '" "port $port" && \
+				stale+="  Port $port still listening"$'\n'
+			# systemctl is-active: 0 + "active" = present; 3/"inactive" = gone.
+			# SSH failure (255) or missing systemctl (127) must not look like gone.
+			rc=0
+			state=$(_reg_host_run "$ssh_cmd" "systemctl --user is-active quay.service 2>/dev/null") || rc=$?
+			if [ "$rc" -eq 255 ] || [ "$rc" -eq 127 ]; then
+				aba_abort "Registry probe failed (quay.service, rc=$rc)"
+			fi
+			[ "$state" = "active" ] && stale+="  quay.service still active"$'\n'
+			;;
+		*)
+			aba_abort "reg_stale_report: unknown vendor '$vendor'"
+			;;
+	esac
+
+	# Always succeed after a completed probe run. Individual absent-checks return 1
+	# via `&&`, which must not make this function (or its $() caller) fail under set -e.
+	printf '%s' "$stale"
+	return 0
+}
+
+# --- reg_finish_uninstall -----------------------------------------------------
+# Clear persistent regcreds after a verified-clean uninstall (or already-gone).
+# Usage: reg_finish_uninstall <vendor> ["already uninstalled"|"uninstall successful"]
+reg_finish_uninstall() {
+	local vendor="$1"
+	local msg="${2:-uninstall successful}"
+
+	rm -rf "${regcreds_dir:?}/"*
+	aba_success "${vendor} registry ${msg}"
 }
