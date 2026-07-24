@@ -487,6 +487,8 @@ test_end
 # ============================================================================
 test_begin "Deploy: vote-app with IDMS"
 
+e2e_run "Sleep 5 pause before new-project" "sleep 5"
+
 # --- (a) Deploy directly from mirror registry path ---
 e2e_run_remote "Create demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get project demo || oc new-project demo'"
