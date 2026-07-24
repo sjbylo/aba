@@ -28,6 +28,7 @@ _ABA_ROOT="$(cd "$_RUN_DIR/../.." && pwd)"
 
 source "$_RUN_DIR/lib/constants.sh"
 source "$_RUN_DIR/lib/remote.sh"
+source "$_RUN_DIR/lib/cleanup.sh"
 source "$_RUN_DIR/lib/cli.sh"
 source "$_RUN_DIR/lib/deploy.sh"
 source "$_RUN_DIR/lib/commands.sh"
@@ -71,7 +72,7 @@ _acquire_pool_locks() {
 
 _release_pool_locks() {
 	for _fd in "${_LOCK_FDS[@]}"; do
-		eval "exec ${_fd}>&-" 2>/dev/null
+		eval "exec ${_fd}>&-"
 	done
 	_LOCK_FDS=()
 }
@@ -195,10 +196,10 @@ case "$CLI_COMMAND" in
 
 		# Refuse to start if another daemon is already running with overlapping pools
 		if [ -f "$E2E_DAEMON_PID" ]; then
-			_old_pid=$(cat "$E2E_DAEMON_PID" 2>/dev/null)
-			if [ -n "$_old_pid" ] && kill -0 "$_old_pid" 2>/dev/null; then
+			_old_pid=$(cat "$E2E_DAEMON_PID")
+			if [ -n "$_old_pid" ] && kill -0 "$_old_pid"; then
 				_old_pools=""
-				[ -f "$E2E_DAEMON_META" ] && _old_pools=$(grep '^pools=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+				[ -f "$E2E_DAEMON_META" ] && _old_pools=$(grep '^pools=' "$E2E_DAEMON_META" | cut -d= -f2-)
 				_overlap=""
 				for _rp in $CLI_POOL_LIST; do
 					for _ep in $_old_pools; do
@@ -293,8 +294,8 @@ esac
 _is_daemon_alive() {
 	[ -f "$E2E_DAEMON_PID" ] || return 1
 	local _pid
-	_pid=$(cat "$E2E_DAEMON_PID" 2>/dev/null) || return 1
-	[ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
+	_pid=$(cat "$E2E_DAEMON_PID") || return 1
+	[ -n "$_pid" ] && kill -0 "$_pid"
 }
 
 if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
@@ -305,7 +306,7 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 
 		# Check for pool overlap if the new invocation specifies pools
 		if [ -f "$E2E_DAEMON_META" ]; then
-			_running_pools=$(grep '^pools=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+			_running_pools=$(grep '^pools=' "$E2E_DAEMON_META" | cut -d= -f2-)
 			if [ -n "$_running_pools" ] && [ -n "$CLI_POOL_LIST" ]; then
 				_overlap=""
 				for _rp in $CLI_POOL_LIST; do
@@ -386,7 +387,7 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 	# Launch: import env, then exec into the daemon
 	(
 		while IFS= read -r -d '' _line; do
-			[[ "$_line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]] && export "$_line" 2>/dev/null
+			[[ "$_line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]] && export "$_line"
 		done < "$_env_file"
 		rm -f "$_env_file"
 		cd "$_RUN_DIR"
@@ -394,11 +395,11 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 		exec "$BASH" "$_RUN_DIR/run.sh" "${_bg_args[@]}"
 	) >> "$_DAEMON_LOG" 2>&1 &
 	_bg_pid=$!
-	disown "$_bg_pid" 2>/dev/null
+	disown "$_bg_pid"
 
 	# Brief wait to confirm the daemon started and wrote its PID
 	sleep 1
-	if kill -0 "$_bg_pid" 2>/dev/null; then
+	if kill -0 "$_bg_pid"; then
 		echo ""
 		echo "  Dispatcher launched in background (PID: $_bg_pid)"
 		echo ""
@@ -438,7 +439,7 @@ if [ -n "${CLI_RESUME:-}" ]; then
 		exit 1
 	fi
 	_resume_pool=$(echo "$CLI_POOL_LIST" | tr -d ' ')
-	_last=$(_ssh_con "$_resume_pool" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || _last=""
+	_last=$(_ssh_con "$_resume_pool" "cat /tmp/e2e-last-suites") || _last=""
 	if [ -z "$_last" ]; then
 		echo "ERROR: No previous suite record on con${_resume_pool} (/tmp/e2e-last-suites not found)" >&2
 		exit 1
@@ -483,7 +484,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 	for p in $CLI_POOL_LIST; do
 		printf "    con${p}: "
 		if _ssh_con "$p" "
-			tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
+			tmux kill-session -t '$E2E_TMUX_SESSION'
 			sudo rm -f $_rc_glob
 			echo stopped
 		"; then
@@ -508,7 +509,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 	echo "  [2/4] Cleaning up resources in cleanup lists ..."
 	for p in $CLI_POOL_LIST; do
 		printf "    con${p}: "
-		_process_pool_cleanup_files "$p" 2>/dev/null && echo "done" || echo "unreachable"
+		_process_pool_cleanup_files "$p" && echo "done" || echo "unreachable"
 	done
 
 	# 3) Deploy harness + source
@@ -536,7 +537,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 		if [ -n "${CLI_SUITE:-}" ]; then
 			_last="$CLI_SUITE"
 		else
-			_last=$(_ssh_con "$p" "cat /tmp/e2e-last-suites 2>/dev/null" 2>/dev/null) || _last=""
+			_last=$(_ssh_con "$p" "cat /tmp/e2e-last-suites") || _last=""
 		fi
 		if [ -z "$_last" ]; then
 			echo "    con${p}: skipped (no previous suite or unreachable)"
@@ -548,7 +549,7 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 			_resume_flag=""
 			[ -n "${CLI_RESUME:-}" ] && _resume_flag="--resume"
 			_runner_cmd="bash ~/.e2e-harness/runner.sh $_resume_flag $p $suite"
-			if _ssh_con "$p" "tmux set-option -g history-limit 200000 2>/dev/null; tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'; tmux rename-window -t '$E2E_TMUX_SESSION' '$suite'" 2>/dev/null; then
+			if _ssh_con "$p" "tmux set-option -g history-limit 200000; tmux new-session -d -s '$E2E_TMUX_SESSION' '$_runner_cmd'; tmux rename-window -t '$E2E_TMUX_SESSION' '$suite'"; then
 				echo "    con${p}: dispatched $suite (tmux: $E2E_TMUX_SESSION)"
 				_restart_ok=$(( _restart_ok + 1 ))
 			else
@@ -702,7 +703,7 @@ if [ ${#_work_queue[@]} -eq 0 ] && [ $_num_running -eq 0 ]; then
 	if [ $_num_completed -gt 0 ]; then
 		echo "  All suites already completed:"
 		for _cs in "${!_completed[@]}"; do
-			if [ "${_completed[$_cs]}" -eq 0 ] 2>/dev/null; then
+			if [ "${_completed[$_cs]}" -eq 0 ]; then
 				printf "    \033[32mPASS\033[0m  %s\n" "$_cs"
 			else
 				printf "    \033[1;31mFAIL\033[0m  %s (exit=%s)\n" "$_cs" "${_completed[$_cs]}"
@@ -758,7 +759,7 @@ for _p in $CLI_POOL_LIST; do _pool_count=$(( _pool_count + 1 )); done
 if [ -n "${CLI_FORCE:-}" ] && [ "$_pool_count" -eq 1 ] && [ -n "${CLI_SUITE:-}" ]; then
 	if [ -f "$E2E_DISPATCHER_PID" ]; then
 		_old_dpid=$(cat "$E2E_DISPATCHER_PID")
-		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
+		if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid"; then
 			_pool=$(echo "$CLI_POOL_LIST" | tr -d ' ')
 			printf "\n  Dispatcher running (pid %s) -- one-shot dispatch\n" "$_old_dpid"
 			declare -A _retried=()
@@ -783,13 +784,13 @@ fi
 
 if [ -f "$E2E_DISPATCHER_PID" ]; then
 	_old_dpid=$(cat "$E2E_DISPATCHER_PID")
-	if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid" 2>/dev/null; then
+	if [ -n "$_old_dpid" ] && [ "$_old_dpid" != "$$" ] && kill -0 "$_old_dpid"; then
 		printf "\n  \033[1;33mWARNING: Another dispatcher is already running (pid %s)\033[0m\n" "$_old_dpid"
 		if [ -n "${CLI_YES:-}" ]; then _answer="y"; else
 			printf "  Kill it and take over? (Y/n): "; read -r -t 30 _answer || _answer="n"
 		fi
 		if [[ "$_answer" =~ ^[Yy]?$ ]]; then
-			kill "$_old_dpid" 2>/dev/null; sleep 1; echo "  Killed old dispatcher."
+			kill "$_old_dpid"; sleep 1; echo "  Killed old dispatcher."
 		else
 			echo "  Aborted."; exit 1
 		fi
@@ -851,7 +852,7 @@ while true; do
 
 	# Clean .rc files from this round so they don't interfere with next round
 	for _p in $CLI_POOL_LIST; do
-		_ssh_con "$_p" "sudo rm -f ${_RC_PREFIX}-*.rc" 2>/dev/null || true
+		_ssh_con "$_p" "sudo rm -f ${_RC_PREFIX}-*.rc" || true
 	done
 
 	# Reset in-memory state
@@ -881,6 +882,6 @@ done
 _overall_rc=0
 _print_final_summary
 
-[ -n "$DASH_SESSION" ] && tmux kill-session -t "$DASH_SESSION" 2>/dev/null
+[ -n "$DASH_SESSION" ] && tmux kill-session -t "$DASH_SESSION"
 
 exit "$_overall_rc"

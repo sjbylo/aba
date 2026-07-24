@@ -122,8 +122,8 @@ e2e_run "Verify fake SNO removed" "test ! -d ${_FAKE_DIR}/e2e-fake-sno1"
 e2e_run "Verify fake compact removed" "test ! -d ${_FAKE_DIR}/e2e-fake-compact1"
 e2e_run "Verify fake mirror removed" "test ! -d ${_FAKE_DIR}/e2e-fake-mirror1"
 e2e_run "Verify no cleanup files remain" "
-	ls ${E2E_LOG_DIR:-\$HOME/.e2e-harness/logs}/dummy-cleanup-happy.cleanup 2>/dev/null && exit 1 || true
-	ls ${E2E_LOG_DIR:-\$HOME/.e2e-harness/logs}/dummy-cleanup-happy.mirror-cleanup 2>/dev/null && exit 1 || true
+	ls ${E2E_LOG_DIR:-\$HOME/.e2e-harness/logs}/dummy-cleanup-happy.cleanup && exit 1 || true
+	ls ${E2E_LOG_DIR:-\$HOME/.e2e-harness/logs}/dummy-cleanup-happy.mirror-cleanup && exit 1 || true
 	echo 'No stale cleanup files -- OK'
 "
 

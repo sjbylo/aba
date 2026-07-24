@@ -47,13 +47,33 @@ sync_harness() {
 	local aba_root="$2"
 	local deploy_config="$3"
 
-	_essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,runner.sh,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" || return 1
+	# Refuse to clobber a live runner -- scp truncates in place and bash will
+	# execute garbage from the replaced file (seen as "final: command not found").
+	if _essh "$target" '
+		for _lf in /tmp/e2e-suite-*.lock; do
+			[ -f "$_lf" ] || continue
+			read -r _pid _ < "$_lf" || continue
+			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+				echo "live-lock: $_lf pid=$_pid"
+				exit 0
+			fi
+		done
+		exit 1
+	'; then
+		echo "    ERROR: suite still running on ${target} -- cannot sync harness" >&2
+		return 1
+	fi
+
+	_essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" || return 1
 
 	# Clean stale regular-file *-summary.log and summary.log left by old rsync deploys.
 	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
-	_essh "$target" "cd ~/.e2e-harness/logs 2>/dev/null && for f in *-summary.log summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
+	_essh "$target" "cd ~/.e2e-harness/logs && for f in *-summary.log summary.log; do [ -f \"\$f\" ] && [ ! -L \"\$f\" ] && rm -f \"\$f\"; done" || true
 
-	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh" &&
+	# Atomic replace of runner.sh (scp to tmp + mv) so a still-open bash FD cannot
+	# observe a truncated in-place write if the lock check races.
+	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh.new" &&
+	_essh "$target" "mv -f ~/.e2e-harness/runner.sh.new ~/.e2e-harness/runner.sh" &&
 	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env" &&
 	_escp "${aba_root}/test/e2e/pools.conf"          "${target}:~/.e2e-harness/pools.conf" &&
 	_escp "${aba_root}/test/e2e/lib/"*.sh            "${target}:~/.e2e-harness/lib/" &&
@@ -163,7 +183,7 @@ sync_extras() {
 		local _host="${target#*@}"
 		local _dis_host="${_host/con/dis}"
 		for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
-			_escp "$_vf" "${_dt}:~/.vmware.conf" 2>/dev/null || true
+			_escp "$_vf" "${_dt}:~/.vmware.conf" || true
 		done
 	fi
 
@@ -171,7 +191,7 @@ sync_extras() {
 	# so suites using $VMWARE_CONF find the file at the expected path.
 	if [ -n "$pool_num" ]; then
 		local _pool_vconf
-		_pool_vconf=$(_pool_vmware_conf "${_RUN_DIR}/pools.conf" "$pool_num" 2>/dev/null) || true
+		_pool_vconf=$(_pool_vmware_conf "${_RUN_DIR}/pools.conf" "$pool_num") || true
 		if [ -n "$_pool_vconf" ]; then
 			local _pool_vf
 			_pool_vf="$(eval echo "$_pool_vconf")"
@@ -180,7 +200,7 @@ sync_extras() {
 				local _dis_host="${_host/con/dis}"
 				_escp "$_pool_vf" "${target}:${_pool_vconf}"
 				for _dt in "root@${_host}" "${target/con/dis}" "root@${_dis_host}"; do
-					_escp "$_pool_vf" "${_dt}:${_pool_vconf}" 2>/dev/null || true
+					_escp "$_pool_vf" "${_dt}:${_pool_vconf}" || true
 				done
 			fi
 		fi
@@ -194,16 +214,16 @@ sync_extras() {
 	# Ensure KVM VLAN route survives provisioning gaps or snapshot reverts.
 	local _root_target="root@${target#*@}"
 	_essh "$_root_target" \
-		"nmcli -g ipv4.routes connection show ens192 2>/dev/null | grep -q '10.10.123.0/24' || \
+		"nmcli -g ipv4.routes connection show ens192 | grep -q '10.10.123.0/24' || \
 		 { nmcli connection modify ens192 +ipv4.routes '10.10.123.0/24 ${KVM_HOST_LAB_IP:-10.0.1.10}' && \
-		   nmcli connection up ens192; }" 2>/dev/null || true
+		   nmcli connection up ens192; }" || true
 
 	# Ensure dnsmasq config includes all cluster entries (e.g. kvm-sno-vlan, primed-sno).
 	# VMs provisioned before new entries were added won't have them.
 	# Re-run _vm_setup_dnsmasq() (single source of truth) if stale.
 	if [ -n "$pool_num" ]; then
-		if ! _essh "$_root_target" "grep -q 'primed-sno' /etc/dnsmasq.d/e2e-pool.conf" 2>/dev/null; then
-			if type _vm_setup_dnsmasq &>/dev/null; then
+		if ! _essh "$_root_target" "grep -q 'primed-sno' /etc/dnsmasq.d/e2e-pool.conf"; then
+			if type _vm_setup_dnsmasq >/dev/null; then
 				_vm_setup_dnsmasq "con${pool_num}" "${user}" "con${pool_num}"
 			else
 				local _lib_dir
@@ -222,9 +242,9 @@ sync_extras() {
 	local _host="${target#*@}"
 	local _dis_host="${_host/con/dis}"
 	for _dt in "${target/con/dis}" "root@${_dis_host}"; do
-		_essh "$_dt" "[ -d ~/aba/templates ]" 2>/dev/null || continue
-		_escp "${_aba_root}/templates/Makefile.cluster" "${_dt}:~/aba/templates/Makefile.cluster" 2>/dev/null || true
-		_escp "${_aba_root}/Makefile"                   "${_dt}:~/aba/Makefile" 2>/dev/null || true
+		_essh "$_dt" "[ -d ~/aba/templates ]" || continue
+		_escp "${_aba_root}/templates/Makefile.cluster" "${_dt}:~/aba/templates/Makefile.cluster" || true
+		_escp "${_aba_root}/Makefile"                   "${_dt}:~/aba/Makefile" || true
 	done
 
 	# Root essentials (govc, pull-secret, vmware.conf)
@@ -251,7 +271,26 @@ _deploy_root_essentials() {
 	fi
 }
 
+# Resolve per-pool SSH users: CLI flags > pools.conf > ambient/default.
+# Exports CON_SSH_USER and DIS_SSH_USER so _con_target/_dis_target and nested
+# helpers (sync_infra_aba, etc.) all hit the same account the suite runner uses.
+# Usage: _export_pool_ssh_users <pool_num>
+_export_pool_ssh_users() {
+	local pool_num="$1"
+	local _con_u="" _dis_u=""
+	local _pools="${_RUN_DIR:-}/pools.conf"
+
+	_con_u=$(_pool_con_user "$_pools" "$pool_num") || true
+	_dis_u=$(_pool_dis_user "$_pools" "$pool_num") || true
+	[ -n "${CLI_CON_USER:-}" ] && _con_u="$CLI_CON_USER"
+	[ -n "${CLI_DIS_USER:-}" ] && _dis_u="$CLI_DIS_USER"
+	export CON_SSH_USER="${_con_u:-${CON_SSH_USER:-steve}}"
+	export DIS_SSH_USER="${_dis_u:-${DIS_SSH_USER:-steve}}"
+}
+
 # Full deploy to one pool: source (if --dev) + harness + extras.
+# Always deploys as the pool's CON_SSH_USER (from pools.conf / CLI), so root
+# pools get /root/.e2e-harness and /root/aba -- not steve's home.
 # Usage: deploy_pool <pool_num> <aba_root> <deploy_config> [source_tarball]
 deploy_pool() {
 	local pool_num="$1"
@@ -259,15 +298,16 @@ deploy_pool() {
 	local deploy_config="$3"
 	local source_tar="${4:-}"
 
-	local user="${CON_SSH_USER:-steve}"
+	_export_pool_ssh_users "$pool_num"
+	local user="${CON_SSH_USER}"
 	local target
 	target=$(_con_target "$pool_num" "$user")
 
-	echo -n "    con${pool_num}: "
+	echo -n "    con${pool_num} (${user}): "
 
 	# Check for running suite (skip unless --force)
 	local _running_sess=""
-	_running_sess=$(_essh "$target" "tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes" 2>/dev/null) || _running_sess=""
+	_running_sess=$(_essh "$target" "tmux has-session -t '$E2E_TMUX_SESSION' && echo yes") || _running_sess=""
 	if [ "$_running_sess" = "yes" ]; then
 		if [ -z "${CLI_FORCE:-}" ]; then
 			echo "RUNNING (skipped -- use --force to deploy anyway)"
@@ -303,35 +343,30 @@ deploy_pool() {
 #          _DEPLOY_CONFIG_ENV, E2E_GIT_BRANCH, E2E_GIT_REPO_SLUG, CON_SSH_USER
 _deploy_to_pools() {
 	local _saved_con_ssh_user="${CON_SSH_USER:-}"
-
-	_export_pool_ssh_user() {
-		local _pool="$1"
-		local _u
-		_u=$(_pool_con_user "${_RUN_DIR}/pools.conf" "$_pool" 2>/dev/null) || true
-		[ -n "${CLI_CON_USER:-}" ] && _u="$CLI_CON_USER"
-		export CON_SSH_USER="${_u:-${_saved_con_ssh_user:-steve}}"
-	}
+	local _saved_dis_ssh_user="${DIS_SSH_USER:-}"
 
 	echo ""
 	echo "  Deploying test harness to conN hosts ..."
 	local _p target
 	for _p in $CLI_POOL_LIST; do
-		_export_pool_ssh_user "$_p"
+		_export_pool_ssh_users "$_p"
 		target=$(_con_target "$_p")
 		if sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
 			sync_dis_aba "$_p" "$_ABA_ROOT" || echo "    WARNING: infra aba deploy to dis${_p} failed"
-			sync_extras "$target" "${CON_SSH_USER:-steve}" "$_p"
-			_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER:-steve}"
+			sync_extras "$target" "${CON_SSH_USER}" "$_p"
+			_essh "$target" "sudo loginctl enable-linger ${CON_SSH_USER}"
 			# Quay mirror on disN runs as rootless podman with systemd user services;
 			# without linger, services die when the SSH session ends (suite interrupt/pause).
-			local _dis_target="${target/con/dis}"
-			_essh "$_dis_target" "sudo loginctl enable-linger root" 2>/dev/null || true
-			echo "    con${_p}: harness deployed to ~/.e2e-harness/"
+			local _dis_tgt
+			_dis_tgt=$(_dis_target "$_p")
+			_essh "$_dis_tgt" "sudo loginctl enable-linger root" || true
+			echo "    con${_p} (${CON_SSH_USER}): harness deployed to ~/.e2e-harness/"
 		else
-			echo "    con${_p}: FAILED to deploy harness (skipping)" >&2
+			echo "    con${_p} (${CON_SSH_USER}): FAILED to deploy harness (skipping)" >&2
 		fi
 	done
 	export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+	export DIS_SSH_USER="${_saved_dis_ssh_user:-steve}"
 
 	if [ -n "${CLI_DEV:-}" ]; then
 		echo ""
@@ -340,11 +375,10 @@ _deploy_to_pools() {
 		_deploy_tar=$(_make_source_tar "$_ABA_ROOT")
 		_deploy_size=$(du -h "$_deploy_tar" | cut -f1)
 		echo "  Source tarball: $_deploy_size"
-		_saved_con_ssh_user="${CON_SSH_USER:-}"
 		for _p in $CLI_POOL_LIST; do
-			_export_pool_ssh_user "$_p"
+			_export_pool_ssh_users "$_p"
 			target=$(_con_target "$_p")
-			echo -n "    con${_p}: "
+			echo -n "    con${_p} (${CON_SSH_USER}): "
 			if sync_source "$target" "$_deploy_tar"; then
 				echo "done"
 			else
@@ -352,15 +386,15 @@ _deploy_to_pools() {
 			fi
 		done
 		export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+		export DIS_SSH_USER="${_saved_dis_ssh_user:-steve}"
 		rm -f "$_deploy_tar"
 	else
 		# Non-dev mode: install ABA from git on any conN that doesn't have it yet.
 		local _need_install=""
-		_saved_con_ssh_user="${CON_SSH_USER:-}"
 		for _p in $CLI_POOL_LIST; do
-			_export_pool_ssh_user "$_p"
+			_export_pool_ssh_users "$_p"
 			target=$(_con_target "$_p")
-			if ! _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+			if ! _essh "$target" "test -x ~/aba/install"; then
 				_need_install=1
 				break
 			fi
@@ -369,10 +403,10 @@ _deploy_to_pools() {
 			echo ""
 			echo "  Installing ABA from git ($E2E_GIT_BRANCH) on conN hosts ..."
 			for _p in $CLI_POOL_LIST; do
-				_export_pool_ssh_user "$_p"
+				_export_pool_ssh_users "$_p"
 				target=$(_con_target "$_p")
-				echo -n "    con${_p}: "
-				if _essh "$target" "test -x ~/aba/install" 2>/dev/null; then
+				echo -n "    con${_p} (${CON_SSH_USER}): "
+				if _essh "$target" "test -x ~/aba/install"; then
 					echo "already installed"
 				elif _essh "$target" "cd ~ && rm -rf ~/aba && bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$E2E_GIT_REPO_SLUG/refs/heads/$E2E_GIT_BRANCH/install)\" -- $E2E_GIT_BRANCH $E2E_GIT_REPO_SLUG" 2>&1; then
 					echo "done"
@@ -388,15 +422,15 @@ _deploy_to_pools() {
 		echo "  Ensuring ABA is on branch '$E2E_GIT_BRANCH' on conN hosts ..."
 		local _cur_branch
 		for _p in $CLI_POOL_LIST; do
-			_export_pool_ssh_user "$_p"
+			_export_pool_ssh_users "$_p"
 			target=$(_con_target "$_p")
-			echo -n "    con${_p}: "
-			_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD 2>/dev/null" 2>/dev/null) || _cur_branch=""
+			echo -n "    con${_p} (${CON_SSH_USER}): "
+			_cur_branch=$(_essh "$target" "cd ~/aba && git rev-parse --abbrev-ref HEAD") || _cur_branch=""
 			if [ "$_cur_branch" = "$E2E_GIT_BRANCH" ]; then
-				_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null 2>&1
+				_essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git reset --hard FETCH_HEAD" >/dev/null
 				echo "ok (already on $E2E_GIT_BRANCH)"
 			elif [ -n "$_cur_branch" ]; then
-				if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null 2>&1; then
+				if _essh "$target" "cd ~/aba && git fetch origin $E2E_GIT_BRANCH && git checkout -B $E2E_GIT_BRANCH FETCH_HEAD" >/dev/null; then
 					echo "switched $_cur_branch -> $E2E_GIT_BRANCH"
 				else
 					echo "FAILED to switch to $E2E_GIT_BRANCH"
@@ -406,5 +440,6 @@ _deploy_to_pools() {
 			fi
 		done
 		export CON_SSH_USER="${_saved_con_ssh_user:-steve}"
+		export DIS_SSH_USER="${_saved_dis_ssh_user:-steve}"
 	fi
 }

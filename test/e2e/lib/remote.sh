@@ -20,7 +20,8 @@ _close_lock_fds() {
 		eval "exec ${_lfd}>&-" 2>/dev/null
 	done
 }
-if ! declare -p _LOCK_FDS &>/dev/null; then _LOCK_FDS=(); fi
+# &>/dev/null: declare -p prints "not found" on stderr when unset (runner.sh path)
+[[ -v _LOCK_FDS ]] || _LOCK_FDS=()
 
 # Canonical SSH wrapper -- the ONLY SSH function in the framework.
 # Usage:
@@ -74,7 +75,7 @@ _wait_for_ssh() {
 	local deadline=$(( $(date +%s) + timeout ))
 
 	while [ "$(date +%s)" -lt "$deadline" ]; do
-		if _essh "$target" "true" 2>/dev/null; then
+		if _essh "$target" "true"; then
 			return 0
 		fi
 		sleep 5
