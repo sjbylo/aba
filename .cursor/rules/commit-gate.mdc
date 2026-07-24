@@ -1,0 +1,28 @@
+# Commit Gate — Hard Stop
+
+## The pattern that keeps failing
+
+After making code changes, the agent runs pre-commit checks, they pass,
+and the agent commits+pushes WITHOUT asking. This has happened repeatedly.
+
+## The rule
+
+After ANY file edit or pre-commit check:
+1. Show the diff (`git diff --stat` + key changes)
+2. Say: "Ready to commit. Should I commit and push?"
+3. STOP. Do not run `git commit` or `git push`.
+4. Wait for the user to say one of: "commit", "push", "commit and push"
+
+## What is NOT permission
+- "ok" → NOT permission (means "acknowledged")
+- "yes" → NOT permission (means "yes to the edit")
+- "continue" → NOT permission (means "keep working")
+- "good" → NOT permission
+- Pre-commit checks passing → NOT permission
+- Deploy succeeding → NOT permission
+
+## What IS permission
+- "commit" or "commit it"
+- "push" or "push it"
+- "commit and push"
+- An explicit sentence like "go ahead and commit"

@@ -1,0 +1,49 @@
+---
+description: Critical safety rules for ESXi host operations - NEVER run dangerous commands
+alwaysApply: true
+---
+
+# ESXi Host Safety Rules (ALWAYS ACTIVE)
+
+## NEVER run these commands on ESXi hosts
+
+ESXi uses BusyBox with limited, unpredictable command behavior. The following are **STRICTLY FORBIDDEN** on any ESXi host via SSH:
+
+- **`killall`** -- BusyBox killall matches broadly and WILL kill system processes (hostd, vpxa, SSH). This causes total management outage requiring physical console access and host reboot.
+- **`pkill`** -- Same risk as killall.
+- **`kill` without a specific PID** -- Never guess PIDs.
+- **`killall5`**, **`kill -9 -1`**, or any signal-all-processes command.
+
+## If you need to kill a process on ESXi
+
+1. Find the exact PID first: `ps | grep "nc -l 9999"` (or whatever the process is)
+2. Kill ONLY that PID: `kill <specific-pid>`
+3. NEVER use pattern-based killing (`killall`, `pkill`, `kill $(pgrep ...)`)
+
+## NEVER disconnect ESXi hosts from vCenter
+
+- Do NOT run `govc host.disconnect` -- this puts the host in a disconnected state that requires manual reconnect with the ESXi root password and may trigger EVC compatibility errors.
+- If a host shows "notResponding", restart vpxa on the host: `ssh root@host "/etc/init.d/vpxa restart"` -- do NOT disconnect it.
+
+## General ESXi SSH safety
+
+- ESXi is NOT a general-purpose Linux host. BusyBox commands behave differently.
+- Always test commands on ONE host first, verify, then proceed to others.
+- NEVER run commands that could affect system processes (killall, pkill, service stop, etc.) without explicit user permission.
+- For network throughput testing, track PIDs explicitly:
+  ```bash
+  # CORRECT: track PID and kill only that
+  ssh root@esxi "nc -l 9999 > /dev/null & echo \$!"
+  # ... later ...
+  ssh root@esxi "kill <the-specific-pid>"
+
+  # WRONG: never do this
+  ssh root@esxi "killall nc"
+  ```
+
+## The 2026-04-14 incident
+
+`killall nc` on esxi1 and esxi4 killed hostd, vpxa, SSH, and VM networking.
+Required physical DCUI console access to restart management agents on both hosts,
+full reboot of both hosts, manual EVC workaround to reconnect esxi4 to vCenter,
+and manual VM power-on. Never again.

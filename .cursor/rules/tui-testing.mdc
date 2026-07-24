@@ -1,0 +1,135 @@
+---
+description: TUI v2 testing protocol — checklists for functional, consistency, UX, performance, and security testing
+globs: tui/v2/**
+alwaysApply: false
+---
+
+# TUI v2 Testing Protocol
+
+After every TUI code change, run the relevant test categories via `tmux send-keys` on registry4.
+
+## 1. Functional Testing
+
+Verify features work correctly end-to-end.
+
+### After every field/dialog change:
+- **Happy path**: enter value → confirm → verify it took effect
+- **Cancel path**: enter value → press Back/ESC → re-enter → verify value persisted (save-on-edit)
+- **Round-trip**: complete a flow → cancel at each stage → retry → verify no state lost
+- **Edge cases**: empty input, invalid input, max-length input
+
+### After every menu change:
+- **All items reachable**: navigate to every menu item, confirm it responds
+- **Greyed items**: verify disabled items show reason tag and can't be activated
+- **Focus preservation**: after edit/toggle, menu cursor stays on same item
+
+## 2. Cross-Mode Consistency Testing
+
+Ensure equivalent features behave the same across CONNO, DISCO, and DIRECT.
+
+### After any feature change:
+- **Side-by-side parity**: if feature exists in one mode, check all other modes
+- **Menu structure**: section separators, ordering, tag letters consistent
+- **Dialog wording**: same concept uses same title/message constants
+- **Button labels**: same action uses same `TUI2_BTN_*` constant everywhere
+- **Status labels**: mirror state, cluster state shown equivalently
+
+### Specific comparisons:
+- CONNO "Install Cluster" vs DISCO "Install Cluster" — both offer to install mirror if missing
+- CONNO "Sync" vs DISCO "Load" — both show `_mirror_config_review` when no mirror
+- Menu title shows mirror state in both CONNO and DISCO
+
+## 3. UX Testing
+
+Verify visual presentation and user experience.
+
+### After any dialog layout change:
+- **No menu shifting**: toggle all options in a menu, verify columns stay stable
+- **Readable commands**: long commands shown multi-line with backslash continuations
+- **Title consistency**: no manual padding (dlg wrapper adds 1 space automatically)
+- **Color codes**: verify `\Z` codes render correctly, don't leave raw escape sequences visible
+
+### Navigation:
+- **ESC at every level**: sub-menu → parent, wizard page → previous page, main menu → confirm quit
+- **Help on every screen**: press Help button, verify content is relevant and dismisses cleanly
+- **Tab order**: verify button focus makes sense (Select focused by default on menus)
+
+## 4. Performance Testing
+
+Verify no UI freezes or excessive delays.
+
+### After any state-check change:
+- **Menu render time**: main menu should appear in < 2 seconds
+- **Toggle response**: field toggles should be instant (no blocking network calls)
+- **Background checks**: `_mirror_has_release_image`, internet checks must be non-blocking
+- **Cache usage**: verify `run_once` TTL caching is working (don't purge on startup)
+
+## 5. Security / Safety Testing
+
+Verify no destructive actions happen without confirmation.
+
+### After any action-handler change:
+- **Confirm before execute**: every `aba` command goes through `confirm_and_execute`
+- **No silent overwrites**: editing a config value shows current value first
+- **Uninstall/delete guarded**: destructive operations require explicit Yes confirmation
+- **No credential leaks**: passwords shown in config dialogs, but not in command output
+
+## 6. State Persistence Testing
+
+Verify config survives across sessions and navigation paths.
+
+### After any config-related change:
+- **Edit in one path, verify in another**: edit hostname in "Install Registry" → verify in "Load Images" config review
+- **Survive TUI restart**: edit value → kill TUI → relaunch → verify value persists
+- **Config file is truth**: after TUI edit, `grep` the config file to confirm write happened
+- **No phantom defaults**: if config file has a value, the dialog MUST show it (not a hardcoded default)
+
+## 7. Chaos / Resilience Testing
+
+Actively try to break the TUI with unexpected conditions and out-of-order actions.
+
+### Network chaos:
+
+Toggle and check internet on registry4 using:
+```bash
+. ~/aba/test/lib.sh
+int_down      # disable internet (ens224)
+int_up        # restore internet (ens224)
+intcheck.sh   # shows UP or DOWN
+```
+Clear run_once cache before testing: `rm -rf ~/.aba/runner/aba:check:*`
+
+- **No internet**: int_down, clear cache, launch TUI → should show error dialog with failed sites
+- **Partial internet**: block only one required site (e.g. iptables drop api.openshift.com) → verify error lists exactly that site
+- **Internet drops mid-operation**: start a sync/save, int_down during transfer → verify TUI reports error cleanly (no hang, no silent failure)
+- **Internet restored**: start in DISCO, int_up, use "Reset to Connected Mode" → verify mode switch works
+
+### Wrong-order actions (user doesn't follow the "normal" workflow):
+- **Install cluster before mirror**: select "Install Cluster" with no mirror → must offer to install, not crash
+- **Load before install registry**: select "Load Images" with no mirror → must offer config review + install
+- **Day-2 before install**: select Day-2 with no cluster → must show "install cluster first" message
+- **Monitor before install**: select "Finalize" with no cluster → must show appropriate message
+- **Bundle before sync**: select "Create Bundle" with no saved images → verify it handles gracefully
+- **Delete non-existent cluster**: select cluster operations on empty cluster list
+
+### Config corruption / missing files:
+- **Delete mirror.conf mid-session**: rm mirror.conf, then select "Load Images" → must recreate with defaults
+- **Delete aba.conf**: verify TUI shows dead-end or recovers gracefully
+- **Empty config values**: set reg_host="" in mirror.conf, enter config review → verify it shows empty (not a stale cached value)
+- **Malformed config**: add garbage lines to mirror.conf → verify normalize-mirror-conf doesn't crash the TUI
+- **Missing .available with running registry**: rm .available, verify TUI thinks mirror is not installed and offers to install
+
+### Rapid/repeated actions:
+- **Double-enter**: press Enter rapidly on a menu item → verify no double-action or dialog stacking
+- **Rapid Back/Forward**: navigate quickly between wizard pages → verify no state corruption
+- **Cancel mid-edit**: open inputbox, type partial value, press ESC → verify old value preserved
+
+### Resource exhaustion:
+- **Disk full**: fill /tmp, then try bundle creation → verify clean error (not silent truncation)
+- **No tar archives in mirror/data**: enter DISCO "Load" → must show "light bundle" dialog, not crash
+- **Very long hostnames/paths**: enter 200-char hostname → verify dialog handles it (truncation OK, crash not OK)
+
+### Mode confusion:
+- **Force wrong mode**: `abatui --disco` on connected host → verify DISCO menu works (no internet-dependent items fail silently)
+- **Bundle flag stale**: touch .bundle on connected host, launch TUI → verify "bundle on connected host" dialog appears
+- **Switch modes rapidly**: CONNO → DIRECT → CONNO → DISCO via menu → verify no stale state leaks between modes

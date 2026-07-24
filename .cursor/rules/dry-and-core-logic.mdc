@@ -1,0 +1,19 @@
+---
+description: DRY principle and core-vs-TUI logic separation
+alwaysApply: true
+---
+
+# DRY and logic placement
+
+## DRY (Don't Repeat Yourself)
+
+- Never duplicate logic (task IDs, commands, config paths, `run_once` invocations)
+- If two or more places need the same logic, extract a shared function
+- When a `run_once` task is started in one place and peeked/waited in another, the start command must live in ONE shared helper -- not copy-pasted
+
+## Logic belongs in ABA core, not the TUI
+
+- ABA core (`scripts/include_all.sh`, dedicated scripts, Makefile targets) owns the smarts
+- The TUI is a dumb consumer: it calls ABA functions/commands, orchestrates UI (dialogs, infoboxes), and reads results
+- Never add business logic, caching logic, or data-fetching logic directly in TUI code
+- Pattern: ABA core function does the work -> TUI fires it via `run_once` -> TUI peeks/waits/reads output

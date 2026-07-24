@@ -1,0 +1,104 @@
+# E2E Operations Guide (run.sh)
+
+Operational reference for the E2E test framework. Read this BEFORE running any `run.sh` commands.
+
+## Daemon lifecycle
+
+```bash
+# Start daemon (manages dispatch across pools)
+run.sh daemon -p 1-4 --dev --all --yes
+
+# Check status (ALWAYS do this first)
+run.sh status -p 1-4
+
+# Stop ONE pool's runner (daemon stays alive)
+run.sh stop -p 1
+
+# Stop ALL runners + kill daemon (only when -p matches all daemon pools)
+run.sh stop -p 1-4
+
+# Nuclear: kill daemon + dispatcher + all locks
+run.sh kill
+
+# Queue a suite into a running daemon
+run.sh run -s suite-name
+
+# Reschedule a failed suite
+run.sh reschedule -s suite-name
+
+# Deploy code changes to pools (does NOT restart suites)
+run.sh deploy -p 1-4 --dev --force
+```
+
+## CRITICAL rules
+
+- **NEVER pipe daemon output through `head`, `tail`, `grep`, or any filter** -- the pipe reader closing sends SIGPIPE (signal 13) which kills the daemon (exit 141). Run daemon commands without pipes. If you need to capture output, redirect to a file: `run.sh daemon ... > /tmp/daemon.log 2>&1`
+- **NEVER start a daemon without checking `run.sh status` first** -- an old daemon may already be running with a different `-p` range. Check `ps aux | grep run.sh` as a backup.
+- **`stop -p 1-4` kills EVERYTHING** -- it kills ALL runners AND the daemon when the pool list matches all configured pools. To stop just one pool, use `stop -p N` (e.g. `stop -p 1`).
+- **`--force` wipes ALL completed suite results** -- don't use `--force` just to restart the daemon. It resets every suite to "not run". Only use it when you genuinely want to re-run everything from scratch.
+- **Running suites do NOT see code changes** -- after editing code on bastion, you MUST `run.sh deploy -p <pools> --dev --force` to push changes. Verify with `md5sum` on conN, not `git log` (deploy uses tarballs, not git).
+
+## PAUSED suite handling
+
+A PAUSED suite has exhausted all retry attempts and is waiting for operator input.
+
+- **PAUSED = FAILED** -- report it as a failure and investigate root cause FIRST
+- **NEVER send keystrokes to a paused suite without user permission**
+- tmux keystrokes (when authorized):
+  - `R` = retry current step
+  - `s` = skip this test (move to next)
+  - `S` = skip entire suite
+  - `0` = restart suite from beginning
+  - `!command` = run a shell command on the host
+
+## Pool SSH user (CRITICAL -- read this first!)
+
+Each pool in `pools.conf` defines `CON_SSH_USER` and `DIS_SSH_USER` (typically `root`).
+All tmux sessions, runner processes, and harness files on that pool are owned by that user.
+
+**Before diagnosing ANY tmux or process issue on a pool:**
+1. Check `pools.conf` for the pool's `CON_SSH_USER` (currently all pools use `root`)
+2. Check tmux as THAT user: `ssh -F ~/.aba/ssh.conf root@conN "tmux ls"`
+3. Checking `tmux ls` as `steve` will show NOTHING -- that does NOT mean the pool is idle
+4. **NEVER kill a tmux session without first confirming it is genuinely stale** -- a running root-owned session IS the active suite
+
+## Idle pool troubleshooting
+
+If a pool shows IDLE but the daemon has pending suites:
+
+1. **Check daemon `-p` range** -- `run.sh status` shows daemon PID but NOT its pool range (until Phase 2 is implemented). Verify with `ps aux | grep run.sh` that the daemon's `-p` includes this pool.
+2. **Check for stale tmux session** -- first read `pools.conf` for the SSH user (e.g. `root`), then: `ssh -F ~/.aba/ssh.conf root@conN "tmux list-sessions"`. A leftover `e2e-suite` session makes the dispatcher think the pool is busy. Only kill it if the session is genuinely stale (no runner process, no log activity): `ssh -F ~/.aba/ssh.conf root@conN "tmux kill-session -t e2e-suite"`.
+3. **Check dispatcher log** -- `tail -50 test/e2e/logs/daemon.log | grep "pool N\|conN\|unreach"`. The pool may be in `_unreachable_pools` due to SSH failures.
+4. **Check if dispatcher is alive** -- `run.sh status` shows dispatcher PID. If "not running", the daemon may have crashed. Check `test/e2e/logs/daemon.log` for crash info.
+
+## Recovery procedures
+
+| Problem | Recovery |
+|---------|----------|
+| Stale tmux blocks pool | Check `pools.conf` for SSH user first! Then: `ssh -F ~/.aba/ssh.conf <user>@conN "tmux kill-session -t e2e-suite"` -- only if session is genuinely stale (verify: no runner process, no log writes) |
+| Daemon crashed / won't start | `run.sh kill` then start fresh with `run.sh daemon ...` |
+| Pool stuck mid-suite | `run.sh stop -p N` then `run.sh run -p N -s suite-name` |
+| Old daemon with wrong -p range | `kill <old-daemon-pid>` (just the PID, not `run.sh stop`), then start new daemon |
+| Duplicate suites on two pools | Check for SSH timeout in dispatcher log; the dedup fix retries SSH 3x before marking unreachable |
+| Deploy not taking effect | Verify: `ssh -F ~/.aba/ssh.conf root@conN "md5sum ~/.e2e-harness/suites/suite-foo.sh"` vs local `md5sum test/e2e/suites/suite-foo.sh` |
+
+## Common mistakes (from real incidents)
+
+1. **Started daemon with `-p 2-4`, wondered why pool 1 never got work** -- always use `-p 1-4` (or `-p all`) unless intentionally excluding pools.
+2. **Ran `run.sh stop -p 1-4` to "restart pool 1"** -- this killed ALL runners on ALL pools plus the daemon. Should have used `run.sh stop -p 1`.
+3. **Piped `run.sh daemon ... 2>&1 | head -40`** -- SIGPIPE killed the daemon after 40 lines. The daemon crashed 5 times and gave up.
+4. **Used `--force` to restart daemon after crash** -- wiped all 7 completed suite results and started everything from scratch.
+5. **Didn't check for existing daemon before starting new one** -- two daemons ran simultaneously with overlapping pools, causing confusion.
+6. **Checked `tmux ls` as steve, saw no sessions, concluded pool was idle and killed root processes** -- all pools use `CON_SSH_USER=root` in `pools.conf`. Root-owned tmux sessions are the ACTIVE suites, not orphans. Always check `pools.conf` and use `sudo tmux ls` or SSH as the correct user. Killing these sessions wasted hours of test time (2026-07-10 incident).
+
+## Key state files
+
+| File | Purpose |
+|------|---------|
+| `$E2E_DAEMON_PID` (`/tmp/e2e-daemon.pid`) | Daemon process PID |
+| `$E2E_DISPATCHER_PID` (`/tmp/e2e-dispatcher.pid`) | Dispatcher process PID |
+| `$E2E_DISPATCH_STATE` (`/tmp/e2e-dispatch-state`) | Current dispatcher state (for status) |
+| `$E2E_INJECT_QUEUE` (`/tmp/e2e-inject-queue`) | Suites queued by `run.sh run -s` |
+| `test/e2e/logs/daemon.log` | Daemon/dispatcher log |
+| `~/.e2e-harness/` (on conN) | Deployed harness + suites |
+| `/tmp/e2e-suite-output.log` (on conN) | Current suite stdout |

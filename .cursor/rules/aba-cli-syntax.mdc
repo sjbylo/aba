@@ -1,0 +1,40 @@
+---
+description: Correct aba CLI syntax — avoid hallucinating subcommand-style invocations
+alwaysApply: true
+---
+
+# ABA CLI syntax
+
+## The `-d` / `--dir` flag is required to run a target in a subdirectory
+
+```bash
+# CORRECT — run the "save" target inside the mirror/ directory
+aba -d mirror save
+aba -d mirror install
+aba -d mirror load
+aba -d compact1 install
+
+# WRONG — "aba mirror save" does NOT mean "save inside mirror/"
+# "aba mirror" means "create a new mirror directory called mirror"
+aba mirror save        # WRONG
+aba mirror install     # WRONG
+aba compact1 install   # WRONG
+```
+
+## Why this matters
+
+`aba <name>` creates a new named resource (mirror or cluster directory).
+`aba -d <dir> <target>` runs a make target inside an existing directory.
+
+These are completely different operations. Confusing them produces invalid commands.
+
+## Quick reference
+
+| Intent | Correct | Wrong |
+|--------|---------|-------|
+| Save images | `aba -d mirror save` | `aba mirror save` |
+| Install registry | `aba -d mirror install` | `aba mirror install` |
+| Load images | `aba -d mirror load` | `aba mirror load` |
+| Install cluster | `aba -d mycluster install` | `aba mycluster install` |
+| Create a mirror dir | `aba mirror` | (this one IS correct) |
+| Create a cluster dir | `aba sno --name foo` | (this one IS correct) |

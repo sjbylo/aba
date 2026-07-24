@@ -1,0 +1,44 @@
+---
+description: Diagnose ESXi memory overcommit causing bootstrap OOM
+alwaysApply: false
+---
+
+# ESXi Memory Overcommit — Bootstrap OOM Diagnosis
+
+When a compact cluster bootstrap fails with OOM kills despite sufficient VM RAM (e.g. 32GB), check for **vSphere memory overcommitment** before blaming the VM size.
+
+## Symptoms
+
+- Kernel OOM kills on the rendezvous node (master1) during bootstrap
+- Killed processes show **low RSS** values (e.g. 90–120MB) — makes no sense if 32GB is available
+- `oom_score_adj:999` (BestEffort cgroup OOM, not system-wide)
+- master1 becomes pingable but SSH dead (OOM death spiral kills sshd)
+- etcd never scales out: master2/master3 etcd logs show `member not found in member list`
+- Other nodes (master2/master3) are fine with plenty of free RAM
+
+## Diagnostic commands
+
+```bash
+# 1. Check ESXi host memory — is it over 90%?
+govc host.info <host-ip>
+
+# 2. Compare VM configured vs actual physical backing
+govc vm.info -r <vm-name>
+# Key fields:
+#   Memory:             32768MB    ← configured
+#   Host memory usage:  3881MB     ← actual physical RAM (should be close to configured!)
+#   Guest memory usage: 655MB      ← what the guest OS reports
+
+# 3. If Host memory usage << Memory, the hypervisor is ballooning/swapping
+```
+
+## Root cause (Apr 2026 incident)
+
+ESXi host 10.0.1.40 was at **96.1% memory** (251/262GB). VMware balloon driver reclaimed physical RAM from VMs. bundle-compact master1 (32GB configured) only received 3.8GB physical. e2e-compact1 VMs (20GB) were also affected but less severely.
+
+## Fix
+
+- **Power off unused VMs** on the ESXi host to free physical RAM (shutting down demo1 dropped host from 96% to 63%)
+- Set **memory reservations** on cluster VMs so ESXi cannot balloon them
+- Migrate VMs to a less loaded ESXi host
+- Smaller VMs (20GB) get squeezed less than larger ones (32GB) under balloon pressure
