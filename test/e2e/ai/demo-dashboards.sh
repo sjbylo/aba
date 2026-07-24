@@ -45,7 +45,7 @@ echo ""
 echo "--- Step 1: Create simulated pool sessions on $HOST ---"
 
 for sess in $POOL1_SESSION $POOL2_SESSION; do
-    _ssh "tmux kill-session -t $sess 2>/dev/null; tmux new-session -d -s $sess"
+    _ssh "tmux kill-session -t $sess; tmux new-session -d -s $sess"
     echo "  Created tmux session: $sess"
 done
 
@@ -182,7 +182,7 @@ sleep 1
 echo ""
 echo "--- Step 4: Create summary dashboard on bastion ---"
 
-tmux kill-session -t $DASH_SESSION 2>/dev/null
+tmux kill-session -t $DASH_SESSION
 
 # Pane 1: tail pool 1 summary log (read-only, just SSH + tail, no tmux on remote)
 # Pane 2: tail pool 2 summary log

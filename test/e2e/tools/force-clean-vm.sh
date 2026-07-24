@@ -46,7 +46,7 @@ echo "Secrets:"
 $SSH "podman secret ls" 2>&1 || echo "  (no secrets)"
 echo ""
 echo "Systemd quay units:"
-$SSH "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null" || echo "  (none)"
+$SSH "systemctl --user list-units 'quay-*' --no-legend" || echo "  (none)"
 echo ""
 
 read -r -p "Proceed with force-cleanup? (y/N): " _answer
@@ -57,19 +57,19 @@ fi
 
 echo ""
 echo "--- Stopping and removing pods ---"
-$SSH "podman pod stop quay-pod 2>/dev/null || true; podman pod rm -f quay-pod 2>/dev/null || true" 2>&1
+$SSH "podman pod stop quay-pod || true; podman pod rm -f quay-pod || true" 2>&1
 
 echo "--- Removing standalone containers ---"
-$SSH "podman rm -f quay-app quay-redis quay-postgres 2>/dev/null || true" 2>&1
-$SSH "podman rm -f registry 2>/dev/null || true" 2>&1
+$SSH "podman rm -f quay-app quay-redis quay-postgres || true" 2>&1
+$SSH "podman rm -f registry || true" 2>&1
 
 echo "--- Removing secrets ---"
-$SSH "podman secret rm redis_pass 2>/dev/null || true" 2>&1
+$SSH "podman secret rm redis_pass || true" 2>&1
 
 echo "--- Stopping systemd user units ---"
-$SSH "systemctl --user stop 'quay-*' 2>/dev/null || true" 2>&1
-$SSH "systemctl --user disable 'quay-*' 2>/dev/null || true" 2>&1
-$SSH "systemctl --user reset-failed 'quay-*' 2>/dev/null || true" 2>&1
+$SSH "systemctl --user stop 'quay-*' || true" 2>&1
+$SSH "systemctl --user disable 'quay-*' || true" 2>&1
+$SSH "systemctl --user reset-failed 'quay-*' || true" 2>&1
 
 echo ""
 echo "--- Post-cleanup verification ---"
@@ -94,7 +94,7 @@ else
 fi
 
 echo "Systemd:"
-_units=$($SSH "systemctl --user list-units 'quay-*' --no-legend 2>/dev/null | grep -v 'not-found'" || true)
+_units=$($SSH "systemctl --user list-units 'quay-*' --no-legend | grep -v 'not-found'" || true)
 if [ -n "$_units" ]; then
 	echo "  WARNING: quay systemd units still active!"
 	echo "$_units"
