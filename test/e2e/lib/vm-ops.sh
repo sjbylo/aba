@@ -20,10 +20,10 @@
 _E2E_LIB_DIR_VMOPS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh &>/dev/null; then
+if ! type _wait_for_ssh >/dev/null; then
 	source "$_E2E_LIB_DIR_VMOPS/remote.sh"
 fi
-if ! type pool_domain &>/dev/null; then
+if ! type pool_domain >/dev/null; then
 	source "$_E2E_LIB_DIR_VMOPS/config-helpers.sh"
 fi
 

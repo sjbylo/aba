@@ -9,10 +9,10 @@
 _E2E_LIB_DIR_VMCLONE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh &>/dev/null; then
+if ! type _wait_for_ssh >/dev/null; then
 	source "$_E2E_LIB_DIR_VMCLONE/remote.sh"
 fi
-if ! type pool_domain &>/dev/null; then
+if ! type pool_domain >/dev/null; then
 	source "$_E2E_LIB_DIR_VMCLONE/config-helpers.sh"
 fi
 
@@ -23,8 +23,8 @@ fi
 _GOVC_API_TYPE=""
 _is_esxi() {
 	if [ -z "$_GOVC_API_TYPE" ]; then
-		_GOVC_API_TYPE=$(govc about -json 2>/dev/null \
-			| python3 -c "import json,sys; print(json.load(sys.stdin).get('about',{}).get('apiType',''))" 2>/dev/null) || true
+		_GOVC_API_TYPE=$(govc about -json \
+			| python3 -c "import json,sys; print(json.load(sys.stdin).get('about',{}).get('apiType',''))") || true
 	fi
 	[ "$_GOVC_API_TYPE" = "HostAgent" ]
 }
@@ -40,7 +40,7 @@ _vm_annotate() {
 	local status="$2"
 	govc vm.change -vm "$vm" -annotation "Status: $status
 Updated: $(date '+%Y-%m-%d %H:%M:%S %Z')
-Managed by: E2E framework (setup-infra.sh)" 2>/dev/null || true
+Managed by: E2E framework (setup-infra.sh)" || true
 }
 
 # Get the VMware port group name for a NIC (standard or dvSwitch).
@@ -93,7 +93,7 @@ clone_vm() {
 	_vm_annotate "$clone_name" "Cloned from $source_vm -- configuring"
 
 	# Expand disk to target size
-	if [ "${VM_DISK_SIZE:-0}" -gt 0 ] 2>/dev/null; then
+	if [ "${VM_DISK_SIZE:-0}" -gt 0 ]; then
 		echo "  Setting disk size to ${VM_DISK_SIZE}GB ..."
 		govc vm.disk.change -vm "$clone_name" -disk.label "Hard disk 1" -size "${VM_DISK_SIZE}G" || \
 			echo "  WARNING: disk resize failed (non-fatal)"
@@ -140,14 +140,14 @@ _clone_vm_esxi() {
 
 	# Parse source VM's vmPathName: "[Datastore] dir/file.vmx"
 	local src_vmpath
-	src_vmpath=$(govc vm.info -json "$source_vm" 2>/dev/null \
+	src_vmpath=$(govc vm.info -json "$source_vm" \
 		| python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 vms = d.get('virtualMachines', d.get('VirtualMachines', []))
 if vms:
     print(vms[0]['config']['files']['vmPathName'])
-" 2>/dev/null) || true
+") || true
 
 	if [ -z "$src_vmpath" ]; then
 		echo "  ERROR: cannot determine VMX path for '$source_vm'" >&2
@@ -164,7 +164,7 @@ if vms:
 	# Get the current disk filename from the VMX (scsi0:0.fileName)
 	local src_disk_file
 	src_disk_file=$(ssh -o ConnectTimeout=10 "root@${esxi_host}" \
-		"awk -F'\"' '/^scsi0:0.fileName/{print \$2}' '/vmfs/volumes/${src_ds}/${src_dir}/${src_vmx_file}'" 2>/dev/null) || true
+		"awk -F'\"' '/^scsi0:0.fileName/{print \$2}' '/vmfs/volumes/${src_ds}/${src_dir}/${src_vmx_file}'") || true
 	if [ -z "$src_disk_file" ]; then
 		echo "  ERROR: cannot read disk filename from source VMX" >&2
 		return 1
@@ -176,16 +176,16 @@ if vms:
 	# vmkfstools can't clone a locked VMDK; power off the source if needed.
 	local _src_was_on=""
 	local _src_power
-	_src_power=$(govc vm.info -json "$source_vm" 2>/dev/null \
+	_src_power=$(govc vm.info -json "$source_vm" \
 		| python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 vms = d.get('virtualMachines', d.get('VirtualMachines', []))
 if vms: print(vms[0]['runtime']['powerState'])
-" 2>/dev/null) || true
+") || true
 	if [ "$_src_power" = "poweredOn" ]; then
 		echo "  [esxi] powering off source VM '$source_vm' (vmkfstools requires unlocked disk) ..."
-		govc vm.power -off "$source_vm" 2>/dev/null || true
+		govc vm.power -off "$source_vm" || true
 		sleep 3
 		_src_was_on=1
 	fi
@@ -201,11 +201,11 @@ if vms: print(vms[0]['runtime']['powerState'])
 	# Power source back on if it was running before
 	if [ -n "$_src_was_on" ]; then
 		echo "  [esxi] restoring source VM '$source_vm' power state ..."
-		govc vm.power -on "$source_vm" 2>/dev/null || true
+		govc vm.power -on "$source_vm" || true
 	fi
 
 	if ! ssh "root@${esxi_host}" \
-		"test -f '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmdk'" 2>/dev/null; then
+		"test -f '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmdk'"; then
 		echo "  ERROR: disk clone failed" >&2
 		return 1
 	fi
@@ -244,19 +244,19 @@ if vms: print(vms[0]['runtime']['powerState'])
 	done
 
 	# Transform and write the VMX, then append any missing address lines
-	ssh "root@${esxi_host}" "cat '/vmfs/volumes/${src_ds}/${src_dir}/${src_vmx_file}'" 2>/dev/null \
+	ssh "root@${esxi_host}" "cat '/vmfs/volumes/${src_ds}/${src_dir}/${src_vmx_file}'" \
 	| sed -f "$_sed_script" \
 	| ssh "root@${esxi_host}" \
-		"cat > '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmx'" 2>/dev/null
+		"cat > '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmx'"
 
 	# The source VMX may use generatedAddress (vpx) instead of address (static).
 	# After sed removes generatedAddress, we must ensure address lines exist.
 	for _mi in 0 1 2; do
 		if [ $_mi -lt ${#_macs[@]} ] && [ -n "${_macs[$_mi]}" ]; then
 			if ! ssh "root@${esxi_host}" \
-				"grep -q '^ethernet${_mi}\.address = ' '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmx'" 2>/dev/null; then
+				"grep -q '^ethernet${_mi}\.address = ' '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmx'"; then
 				ssh "root@${esxi_host}" \
-					"echo 'ethernet${_mi}.address = \"${_macs[$_mi]}\"' >> '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmx'" 2>/dev/null
+					"echo 'ethernet${_mi}.address = \"${_macs[$_mi]}\"' >> '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.vmx'"
 			fi
 		fi
 	done
@@ -265,7 +265,7 @@ if vms: print(vms[0]['runtime']['powerState'])
 	# 3. Copy nvram (firmware settings)
 	ssh "root@${esxi_host}" \
 		"cp '/vmfs/volumes/${src_ds}/${src_dir}/${src_vm_base}.nvram' \
-		    '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.nvram'" 2>/dev/null || true
+		    '/vmfs/volumes/${target_ds}/${clone_name}/${clone_name}.nvram'" || true
 
 	# 4. Register the VM
 	govc vm.register -ds "${target_ds}" \
@@ -286,7 +286,7 @@ _clone_set_macs() {
 	local i=0
 	while true; do
 		local device="ethernet-${i}"
-		if ! govc device.info -vm "$clone_name" "$device" &>/dev/null; then
+		if ! govc device.info -vm "$clone_name" "$device" >/dev/null; then
 			break
 		fi
 		local nic_net
@@ -339,7 +339,7 @@ _vm_ensure_3nics() {
 	local nic3_net="${VM_NIC3_NETWORK:-External Network}"
 
 	local nic_count=0
-	while govc device.info -vm "$vm_name" "ethernet-${nic_count}" &>/dev/null; do
+	while govc device.info -vm "$vm_name" "ethernet-${nic_count}" >/dev/null; do
 		nic_count=$(( nic_count + 1 ))
 	done
 
@@ -351,14 +351,14 @@ _vm_ensure_3nics() {
 	echo "  [vm] $vm_name has $nic_count NIC(s) -- adding $(( 3 - nic_count )) more ..."
 
 	if [ "$nic_count" -lt 2 ]; then
-		if ! govc vm.network.add -vm "$vm_name" -net "$nic2_net" -net.adapter vmxnet3 2>/dev/null; then
+		if ! govc vm.network.add -vm "$vm_name" -net "$nic2_net" -net.adapter vmxnet3; then
 			echo "  [vm]   WARNING: govc vm.network.add failed for $nic2_net (ESXi port group not visible via API?)"
 			_esxi_add_nic_via_vmx "$vm_name" 1 "$nic2_net" || return 1
 		fi
 		echo "  [vm]   ethernet-1 -> $nic2_net"
 	fi
 	if [ "$nic_count" -lt 3 ]; then
-		if ! govc vm.network.add -vm "$vm_name" -net "$nic3_net" -net.adapter vmxnet3 2>/dev/null; then
+		if ! govc vm.network.add -vm "$vm_name" -net "$nic3_net" -net.adapter vmxnet3; then
 			echo "  [vm]   WARNING: govc vm.network.add failed for $nic3_net (ESXi port group not visible via API?)"
 			_esxi_add_nic_via_vmx "$vm_name" 2 "$nic3_net" || return 1
 		fi
@@ -373,13 +373,13 @@ _esxi_add_nic_via_vmx() {
 
 	local esxi_host="$GOVC_URL"
 	local vmx_path
-	vmx_path=$(govc vm.info -json "$vm_name" 2>/dev/null \
+	vmx_path=$(govc vm.info -json "$vm_name" \
 		| python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 vms = d.get('virtualMachines', d.get('VirtualMachines', []))
 if vms: print(vms[0]['config']['files']['vmPathName'])
-" 2>/dev/null) || return 1
+") || return 1
 
 	local ds rel
 	ds=$(echo "$vmx_path" | sed 's/^\[//;s/\].*//')
@@ -395,8 +395,8 @@ if vms: print(vms[0]['config']['files']['vmPathName'])
 		ethernet${nic_idx}.pciSlotNumber = "${pci_slot}"
 	NICEOF
 	# Reload the VMX so ESXi picks up the changes
-	govc vm.unregister "$vm_name" 2>/dev/null || true
-	govc vm.register -ds "$ds" "[${ds}] ${rel}" 2>/dev/null || return 1
+	govc vm.unregister "$vm_name" || true
+	govc vm.register -ds "$ds" "[${ds}] ${rel}" || return 1
 }
 
 # --- VM Template Configuration ----------------------------------------------
@@ -408,7 +408,7 @@ declare -A VM_TEMPLATES=(
 )
 
 # MAC addresses per clone (set via config.env, declared here if not already)
-if ! declare -p VM_CLONE_MACS &>/dev/null; then
+if ! declare -p VM_CLONE_MACS >/dev/null; then
 	declare -A VM_CLONE_MACS=()
 fi
 

@@ -209,7 +209,7 @@ _pool_dis_user() { _pool_conf_get "$1" "$2" DIS_SSH_USER; }
 _pool_count_from_conf() {
 	local pools_file="$1"
 	if [ -f "$pools_file" ]; then
-		grep -c '^[^#]' "$pools_file" 2>/dev/null || echo 0
+		grep -c '^[^#]' "$pools_file" || echo 0
 	else
 		echo 0
 	fi
@@ -380,8 +380,8 @@ _load_config() {
 
 _detect_git_metadata() {
 	local aba_root="$1"
-	export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$aba_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
-	export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$aba_root" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
+	export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$aba_root" rev-parse --abbrev-ref HEAD || echo dev)}"
+	export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$aba_root" remote get-url origin || echo https://github.com/sjbylo/aba.git)}"
 	export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
 }
 

@@ -9,15 +9,15 @@
 _E2E_LIB_DIR_VMNET="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh &>/dev/null; then
+if ! type _wait_for_ssh >/dev/null; then
 	source "$_E2E_LIB_DIR_VMNET/remote.sh"
 fi
-if ! type pool_domain &>/dev/null; then
+if ! type pool_domain >/dev/null; then
 	source "$_E2E_LIB_DIR_VMNET/config-helpers.sh"
 fi
 
 # VLAN IPs per clone (set via config.env)
-if ! declare -p VM_CLONE_VLAN_IPS &>/dev/null; then
+if ! declare -p VM_CLONE_VLAN_IPS >/dev/null; then
 	declare -A VM_CLONE_VLAN_IPS=()
 fi
 
@@ -92,7 +92,7 @@ _vm_setup_network_connected() {
 
 		# --- Force MTU 1500 on all NICs (DHCP may hand out 9000) ---
 		for _c in ens192 ens224 ens256; do
-		    nmcli connection modify "\$_c" 802-3-ethernet.mtu 1500 2>/dev/null || true
+		    nmcli connection modify "\$_c" 802-3-ethernet.mtu 1500 || true
 		done
 
 		# --- ens192: lab network (NOT default route) ---
@@ -163,7 +163,7 @@ _vm_setup_network_disconnected() {
 
 		# --- Force MTU 1500 on all NICs (DHCP may hand out 9000) ---
 		for _c in ens192 ens224 ens256; do
-		    nmcli connection modify "\$_c" 802-3-ethernet.mtu 1500 2>/dev/null || true
+		    nmcli connection modify "\$_c" 802-3-ethernet.mtu 1500 || true
 		done
 
 		# --- ens256: DISABLE (disconnected host has no direct internet) ---
@@ -417,12 +417,12 @@ _vm_fix_mtu() {
 	cat <<-'MTUEOF' | _essh "${user}@${host}" -- sudo bash
 		nmcli -g NAME connection show | while IFS= read -r conn; do
 			[ -z "$conn" ] && continue
-			type=$(nmcli -g connection.type connection show "$conn" 2>/dev/null) || continue
+			type=$(nmcli -g connection.type connection show "$conn") || continue
 			case "$type" in
 				802-3-ethernet|vlan)
-					cur=$(nmcli -g 802-3-ethernet.mtu connection show "$conn" 2>/dev/null) || true
+					cur=$(nmcli -g 802-3-ethernet.mtu connection show "$conn") || true
 					if [ "$cur" != "1500" ]; then
-						nmcli connection modify "$conn" 802-3-ethernet.mtu 1500 2>/dev/null || true
+						nmcli connection modify "$conn" 802-3-ethernet.mtu 1500 || true
 						echo "    $conn: MTU set to 1500 (was: ${cur:-auto})"
 					fi
 					;;
@@ -432,7 +432,7 @@ _vm_fix_mtu() {
 		nmcli -g DEVICE device status | while IFS= read -r dev; do
 			[ "$dev" = "lo" ] && continue
 			[ -z "$dev" ] && continue
-			ip link set "$dev" mtu 1500 2>/dev/null || true
+			ip link set "$dev" mtu 1500 || true
 		done
 	MTUEOF
 }

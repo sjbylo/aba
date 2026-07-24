@@ -54,7 +54,7 @@ cmd_live() {
 
 	# Reuse existing live session if it has the right number of panes
 	local _existing_panes=0
-	_existing_panes=$(tmux list-panes -t "$_sess" 2>/dev/null | wc -l) || _existing_panes=0
+	_existing_panes=$(tmux list-panes -t "$_sess" | wc -l) || _existing_panes=0
 	if [ "$_existing_panes" -eq "$_np" ]; then
 		echo "Live session already running with $_np panes -- reattaching."
 		if [ -n "${TMUX:-}" ]; then
@@ -64,7 +64,7 @@ cmd_live() {
 		fi
 	fi
 
-	tmux kill-session -t "$_sess" 2>/dev/null
+	tmux kill-session -t "$_sess"
 	tmux set-option -g history-limit 50000
 
 	# Claim ownership on each conN (prevents competing live dashboards)
@@ -75,7 +75,7 @@ cmd_live() {
 	done
 
 	# Clean up own temp dirs from previous runs
-	find /tmp -maxdepth 1 -name 'e2e-live.*' -user "$(id -un)" -exec rm -rf {} + 2>/dev/null; true
+	find /tmp -maxdepth 1 -name 'e2e-live.*' -user "$(id -un)" -exec rm -rf {} +; true
 	local _live_script_dir
 	_live_script_dir=$(mktemp -d /tmp/e2e-live.XXXXXX)
 
@@ -103,7 +103,7 @@ _live_create_pane_script() {
 	local _script="${_live_script_dir}/pool${p}.sh"
 	{
 		echo '#!/bin/bash'
-		echo 'stty -ixon 2>/dev/null'
+		echo 'stty -ixon'
 		echo "export _POOL_NUM=$p"
 		echo "export _DOMAIN='${_domain}'"
 		echo "export _SSH_OPTS='$_so'"
@@ -115,14 +115,14 @@ _live_create_pane_script() {
 		echo '  if [ -f "$_PANE_SCRIPT" ]; then'
 		echo '    source "$_PANE_SCRIPT"'
 		echo '  else'
-		echo "    _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
-		echo "    _os=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)"
-		echo "    _vmconf=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)"
+		echo "    _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites')"
+		echo "    _os=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-os')"
+		echo "    _vmconf=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-vmconf')"
 		echo '    _vmtag=""'
 		echo '    [ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"'
 		printf "    printf '\\\\033]2;live | Pool %d | ${_default_user}%%s%%s%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\" \"\${_os:+ | \$_os}\" \"\$_vmtag\"\n" "$p"
 		echo '    clear'
-		echo "    ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '${E2E_TMUX_SESSION}' 2>/dev/null && exec tmux attach -d -t '${E2E_TMUX_SESSION}'\" 2>/dev/null || {"
+		echo "    ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '${E2E_TMUX_SESSION}' && exec tmux attach -d -t '${E2E_TMUX_SESSION}'\" || {"
 		echo "      echo 'No e2e session on pool ${p}. Waiting for suite to start...'"
 		echo '    }'
 		echo '    sleep 5'
@@ -150,9 +150,9 @@ cmd_attach() {
 
 	echo "Attaching to tmux on ${user}@${host} ..."
 	exec ssh -t -o LogLevel=ERROR "${user}@${host}" \
-		"if tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then \
+		"if tmux has-session -t '$E2E_TMUX_SESSION'; then \
 		   tmux attach -t '$E2E_TMUX_SESSION'; \
-		 else echo 'No e2e session found on ${host}.'; tmux list-sessions 2>/dev/null || echo '(no tmux sessions)'; fi"
+		 else echo 'No e2e session found on ${host}.'; tmux list-sessions || echo '(no tmux sessions)'; fi"
 }
 
 # --- Shared dashboard builder ------------------------------------------------
@@ -174,22 +174,22 @@ _create_tmux_dashboard() {
 		local _so="$_E2E_SSH_OPTS"
 		local _sess_name="${E2E_TMUX_SESSION:-e2e-suite}"
 		echo "while true; do"\
-" _u=\$(ssh $_so \${_u:-${_user}}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null);"\
+" _u=\$(ssh $_so \${_u:-${_user}}@${_h} 'cat /tmp/e2e-suite-user');"\
 " _u=\${_u:-${_user}};"\
-" _os=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null);"\
-" _vc=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null);"\
+" _os=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-os');"\
+" _vc=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-vmconf');"\
 " _vt=''; [ -n \"\$_vc\" ] && [ \"\$_vc\" != '~/.vmware.conf' ] && _vt=\" | \$(basename \"\$_vc\")\";"\
-" if ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name} 2>/dev/null' 2>/dev/null; then"\
-"   _s=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null);"\
+" if ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name}'; then"\
+"   _s=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites');"\
 "   printf '\\033]2;dashboard | Pool ${_p} | %s%s%s%s\\033\\\\' \"\${_u}\" \"\${_s:+ | \$_s}\" \"\${_os:+ | \$_os}\" \"\$_vt\";"\
 "   clear;"\
-"   ssh $_so \${_u}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' 2>/dev/null & _tpid=\$!;"\
-"   while kill -0 \$_tpid 2>/dev/null; do"\
+"   ssh $_so \${_u}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' & _tpid=\$!;"\
+"   while kill -0 \$_tpid; do"\
 "     sleep 10;"\
-"     _ns=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null);"\
-"     [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid 2>/dev/null && break;"\
+"     _ns=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites');"\
+"     [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid && break;"\
 "   done;"\
-"   wait \$_tpid 2>/dev/null;"\
+"   wait \$_tpid;"\
 " else"\
 "   printf '\\033]2;dashboard | Pool ${_p} | %s | (idle)%s%s\\033\\\\' \"\${_u}\" \"\${_os:+ | \$_os}\" \"\$_vt\";"\
 "   clear;"\
@@ -201,19 +201,19 @@ _create_tmux_dashboard() {
 
 	# Reuse existing dashboard if it has the right number of panes
 	local _existing_panes=0
-	_existing_panes=$(tmux list-panes -t "$_sess" 2>/dev/null | wc -l) || _existing_panes=0
+	_existing_panes=$(tmux list-panes -t "$_sess" | wc -l) || _existing_panes=0
 	if [ "$_existing_panes" -eq "$_np" ]; then
 		return 0
 	fi
 
-	tmux kill-session -t "$_sess" 2>/dev/null
+	tmux kill-session -t "$_sess"
 
 	# Build layout based on pool count (supports up to 6)
 	_create_pane_layout "$_sess" "$_np" "_dash_pane_cmd" "${_pool_nums[@]}"
 
-	tmux set-option -t "$_sess" allow-rename on 2>/dev/null
-	tmux set-option -t "$_sess" pane-border-status top 2>/dev/null
-	tmux set-option -t "$_sess" pane-border-format " #{pane_title} " 2>/dev/null
+	tmux set-option -t "$_sess" allow-rename on
+	tmux set-option -t "$_sess" pane-border-status top
+	tmux set-option -t "$_sess" pane-border-format " #{pane_title} "
 }
 
 # --- Layout builder (supports 1-6 pools) ------------------------------------
@@ -241,7 +241,7 @@ _create_pane_layout() {
 		if [ "$_np" -ge 2 ]; then
 			tmux split-window -t "$_sess" -v "$($_cmd_func "${_pool_nums[1]}")"
 		fi
-		tmux select-layout -t "$_sess" even-vertical 2>/dev/null
+		tmux select-layout -t "$_sess" even-vertical
 	elif [ "$_np" -le 4 ]; then
 		# 3-4 pools: 2x2 grid
 		tmux new-session -d -s "$_sess" "$($_cmd_func "${_pool_nums[0]}")"
@@ -266,14 +266,14 @@ _create_pane_layout() {
 		tmux split-window -v -t "$_tl" "$($_cmd_func "${_pool_nums[2]}")"
 		local _ml
 		_ml=$(tmux list-panes -t "$_sess" -F '#{pane_id}' | sed -n '3p')
-		tmux split-window -v -t "$_ml" "$($_cmd_func "${_pool_nums[4]}")" 2>/dev/null
+		tmux split-window -v -t "$_ml" "$($_cmd_func "${_pool_nums[4]}")"
 		# Split right column into 3
 		tmux split-window -v -t "$_tr" "$($_cmd_func "${_pool_nums[3]}")"
 		if [ "$_np" -ge 6 ]; then
 			local _mr
 			_mr=$(tmux list-panes -t "$_sess" -F '#{pane_id}' | tail -1)
-			tmux split-window -v -t "$_mr" "$($_cmd_func "${_pool_nums[5]}")" 2>/dev/null
+			tmux split-window -v -t "$_mr" "$($_cmd_func "${_pool_nums[5]}")"
 		fi
-		tmux select-layout -t "$_sess" tiled 2>/dev/null
+		tmux select-layout -t "$_sess" tiled
 	fi
 }

@@ -53,7 +53,7 @@ fi
 
 # --- Require govc (fail fast; use ABA ensure_govc when available) ------------
 _ensure_govc() {
-	if command -v govc &>/dev/null; then
+	if command -v govc >/dev/null; then
 		return 0
 	fi
 	if [ -f "$_ABA_ROOT/scripts/include_all.sh" ]; then
@@ -204,14 +204,14 @@ _verify_con_vm() {
 		echo "  PASS: SSH key matches bastion"
 
 		# Verify self-SSH works for both users
-		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
+		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
 		echo "  PASS: ${user} self-SSH"
 
-		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
+		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
 		echo "  PASS: root self-SSH"
 
 		# --- Users / environment ---
-		id testy > /dev/null 2>&1 || _fail "testy user missing"
+		id testy >/dev/null || _fail "testy user missing"
 		echo "  PASS: testy user exists"
 
 		sudo -u testy sudo -n whoami | grep -q root || _fail "testy cannot sudo"
@@ -331,7 +331,7 @@ _configure_dis_vm() {
 
 	echo "  [$vm] Waiting for internet via $con_vm NAT ..."
 	local waited=0
-	while ! _essh "${user}@${vm}" -- "ping -c1 -W3 8.8.8.8" &>/dev/null; do
+	while ! _essh "${user}@${vm}" -- "ping -c1 -W3 8.8.8.8" >/dev/null; do
 		sleep 5
 		waited=$(( waited + 5 ))
 		if [ $waited -ge 300 ]; then
@@ -410,7 +410,7 @@ _verify_dis_vm() {
 		ip addr show ens224.10 | grep -q "${_dis_vlan}" || _fail "VLAN IP ${_dis_vlan} not on ens224.10"
 		echo "  PASS: VLAN IP ${_dis_vlan} on ens224.10"
 
-		! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 || _fail "internet still reachable (should be air-gapped)"
+		! ping -c 1 -W 3 8.8.8.8 >/dev/null || _fail "internet still reachable (should be air-gapped)"
 		echo "  PASS: no internet (disconnected)"
 
 		for _iface in ens192 ens224 ens224.10 ens256; do
@@ -422,7 +422,7 @@ _verify_dis_vm() {
 		# --- VLAN connectivity ---
 		_vlan_ok=0
 		for _try in \$(seq 1 40); do
-			if ping -c 1 -W 3 ${_con_vlan} > /dev/null 2>&1; then _vlan_ok=1; break; fi
+			if ping -c 1 -W 3 ${_con_vlan} >/dev/null; then _vlan_ok=1; break; fi
 			sleep 3
 		done
 		[ "\$_vlan_ok" -eq 1 ] || _fail "cannot ping con VLAN ${_con_vlan} after 120s"
@@ -501,10 +501,10 @@ _verify_dis_vm() {
 		echo "  PASS: SSH key matches bastion"
 
 		# Verify self-SSH works for both users
-		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
+		_who=\$(sudo -u ${user} ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@localhost whoami < /dev/null) && [ "\$_who" = "${user}" ] || _fail "${user} self-SSH failed (got: \$_who)"
 		echo "  PASS: ${user} self-SSH"
 
-		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null 2>/dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
+		_who=\$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost whoami < /dev/null) && [ "\$_who" = "root" ] || _fail "root self-SSH failed (got: \$_who)"
 		echo "  PASS: root self-SSH"
 
 		# --- VLAN SSH connectivity (dis -> con, proves cross-VM SSH works) ---
@@ -515,7 +515,7 @@ _verify_dis_vm() {
 		echo "  PASS: root@${vm} -> root@${con_vm} SSH via VLAN"
 
 		# --- Users / environment ---
-		id testy > /dev/null 2>&1 || _fail "testy user missing"
+		id testy >/dev/null || _fail "testy user missing"
 		echo "  PASS: testy user exists"
 
 		sudo -u testy sudo -n whoami | grep -q root || _fail "testy cannot sudo"
@@ -666,10 +666,10 @@ mkdir -p "$_LOG_DIR"
 # subshells and their SSH sessions from running after run.sh is killed).
 _cleanup_children() {
 	local _pids
-	_pids=$(jobs -p 2>/dev/null) || true
+	_pids=$(jobs -p) || true
 	if [ -n "$_pids" ]; then
-		kill $_pids 2>/dev/null || true
-		wait 2>/dev/null || true
+		kill $_pids || true
+		wait || true
 	fi
 }
 trap '_cleanup_children' EXIT INT TERM HUP
@@ -819,34 +819,34 @@ _prepare_golden() {
 	echo "  Golden VM IP: $ip"
 
 	local user="$VM_DEFAULT_USER"
-	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_wait_ssh "$ip" "$user" || return 1
 	_vm_annotate "$_GOLDEN_NAME" "Configuring: SSH keys and network"
-	_vm_setup_ssh_keys "$ip" "$user"      || return 1
-	_vm_wait_ssh "$ip" "$user"            || return 1
-	_vm_fix_mtu "$ip" "$user"             || return 1
+	_vm_setup_ssh_keys "$ip" "$user" || return 1
+	_vm_wait_ssh "$ip" "$user" || return 1
+	_vm_fix_mtu "$ip" "$user" || return 1
 	_vm_setup_default_route "$ip" "$user" || return 1
-	_vm_fix_proxy_noproxy "$ip" "$user"   || return 1
-	_vm_disable_proxy_autoload "$ip" "$user"        || return 1
-	_vm_setup_firewall "$ip" "$user"      || return 1
-	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_fix_proxy_noproxy "$ip" "$user" || return 1
+	_vm_disable_proxy_autoload "$ip" "$user" || return 1
+	_vm_setup_firewall "$ip" "$user" || return 1
+	_vm_wait_ssh "$ip" "$user" || return 1
 	_vm_annotate "$_GOLDEN_NAME" "Configuring: installing packages"
-	_vm_install_packages "$ip" "$user"    || return 1
-	_vm_setup_time "$ip" "$user"          || return 1
+	_vm_install_packages "$ip" "$user" || return 1
+	_vm_setup_time "$ip" "$user" || return 1
 	_vm_annotate "$_GOLDEN_NAME" "Configuring: dnf update (may reboot)"
-	_vm_dnf_update "$ip" "$user"          || return 1
-	_vm_wait_ssh "$ip" "$user"            || return 1
+	_vm_dnf_update "$ip" "$user" || return 1
+	_vm_wait_ssh "$ip" "$user" || return 1
 	_vm_annotate "$_GOLDEN_NAME" "Configuring: cleanup and user provisioning"
-	_vm_cleanup_caches "$ip" "$user"      || return 1
-	_vm_cleanup_podman "$ip" "$user"      || return 1
-	_vm_cleanup_home "$ip" "$user"        || return 1
+	_vm_cleanup_caches "$ip" "$user" || return 1
+	_vm_cleanup_podman "$ip" "$user" || return 1
+	_vm_cleanup_home "$ip" "$user" || return 1
 	_vm_deploy_pull_secret "$ip" "$user" || return 1
 	_vm_deploy_proxy_scripts "$ip" "$user" || return 1
 	_vm_create_test_user_and_key_on_host "$ip" "$user" || return 1
-	_vm_deploy_tmux_conf "$ip" "$user"   || return 1
+	_vm_deploy_tmux_conf "$ip" "$user" || return 1
 	_vm_provision_root_user "$ip" "$user" || return 1
-	_vm_set_aba_testing "$ip" "$user"     || return 1
+	_vm_set_aba_testing "$ip" "$user" || return 1
 	_vm_annotate "$_GOLDEN_NAME" "Verifying golden VM"
-	_vm_verify_golden "$ip" "$user"       || return 1
+	_vm_verify_golden "$ip" "$user" || return 1
 
 	_vm_annotate "$_GOLDEN_NAME" "Shutting down for snapshot"
 	_essh "${user}@${ip}" -- "sudo systemctl enable expand-root.service" || true
@@ -858,7 +858,7 @@ _prepare_golden() {
 	local _pw_tries=0
 	while [ "$_pw_tries" -lt 30 ]; do
 		local _pw_state
-		_pw_state=$(govc vm.info "$_GOLDEN_NAME" 2>/dev/null | awk '/Power state:/{print $NF}') || true
+		_pw_state=$(govc vm.info "$_GOLDEN_NAME" | awk '/Power state:/{print $NF}') || true
 		[ "$_pw_state" = "poweredOff" ] && break
 		sleep 2
 		_pw_tries=$(( _pw_tries + 1 ))
@@ -1057,7 +1057,7 @@ for i in "${_POOL_ARRAY[@]}"; do
 	fi
 
 	echo "  Configuring pool $i ($con_vm + $dis_vm) ..."
-	echo "    Logs: $con_log  |  $dis_log"
+	echo "    Logs: $con_log |  $dis_log"
 
 	# con and dis configure in parallel within each pool.  dis has a built-in
 	# retry loop ("Waiting for internet via con NAT") that blocks until con's
@@ -1119,7 +1119,7 @@ for i in "${_POOL_ARRAY[@]}"; do
 		# (govc vm.disk.change resizes the vDisk but the partition stays
 		# at the golden's original size until expand-root grows it)
 		_essh "${VM_DEFAULT_USER}@${vm_name}.${VM_BASE_DOMAIN}" \
-			"sudo rm -f /var/lib/expand-root.done" 2>/dev/null || true
+			"sudo rm -f /var/lib/expand-root.done" || true
 		echo "  Shutting down $vm_name ..."
 		govc vm.power -s -force "$vm_name" &
 		_snapshot_vms+=("$vm_name")
@@ -1135,7 +1135,7 @@ if [ ${#_snapshot_vms[@]} -gt 0 ]; then
 	for vm_name in "${_snapshot_vms[@]}"; do
 		_pw_tries=0
 		while [ "$_pw_tries" -lt 30 ]; do
-			_pw_state=$(govc vm.info "$vm_name" 2>/dev/null | awk '/Power state:/{print $NF}') || true
+			_pw_state=$(govc vm.info "$vm_name" | awk '/Power state:/{print $NF}') || true
 			[ "$_pw_state" = "poweredOff" ] && break
 			sleep 2
 			_pw_tries=$(( _pw_tries + 1 ))

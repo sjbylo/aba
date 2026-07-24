@@ -21,7 +21,7 @@ _vms_ready() {
 	local user="${CON_SSH_USER:-steve}"
 	local con="con${pool_num}.${VM_BASE_DOMAIN}"
 
-	if ! _essh "${user}@${con}" "true" 2>/dev/null; then
+	if ! _essh "${user}@${con}" "true"; then
 		echo "  Pool $pool_num: not ready (SSH to ${con} failed)" >&2
 		return 1
 	fi
@@ -69,7 +69,7 @@ _ensure_pool_infrastructure() {
 		if [ -n "${CLI_OS:-}" ]; then
 			_pool_os_map[$_p]="$CLI_OS"
 		else
-			_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p" 2>/dev/null) || true
+			_pool_os_map[$_p]=$(_pool_rhel_ver "${_RUN_DIR}/pools.conf" "$_p") || true
 			[ -z "${_pool_os_map[$_p]:-}" ] && _pool_os_map[$_p]="$_default_os"
 		fi
 	done
@@ -107,9 +107,9 @@ _ensure_pool_infrastructure() {
 			local _try_user _try_host _has_cleanup
 			for _try_user in "${CON_SSH_USER:-steve}" root steve; do
 				_try_host="${_try_user}@con${_p}.${VM_BASE_DOMAIN}"
-				_essh "$_try_host" "true" 2>/dev/null || continue
+				_essh "$_try_host" "true" || continue
 				_has_cleanup=""
-				_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
+				_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup") || true
 				[ -z "$_has_cleanup" ] && continue
 				echo "  Pool $_p: processing cleanup files for $_try_user before OS reclone ..."
 				_run_cleanup_on_host "$_try_host" "    " "con${_p}.${VM_BASE_DOMAIN} dis${_p}.${VM_BASE_DOMAIN}" 2>&1 || true
@@ -124,16 +124,16 @@ _ensure_pool_infrastructure() {
 					[ -z "$_vm_path" ] && continue
 					_vm_name="${_vm_path##*/}"
 					echo "  Destroying $_vm_name (OS mismatch) ..."
-					govc vm.power -off "$_vm_path" 2>/dev/null || true
-					govc vm.destroy "$_vm_path" 2>/dev/null || true
-				done < <(govc find "$_pool_folder" -type m 2>/dev/null)
+					govc vm.power -off "$_vm_path" || true
+					govc vm.destroy "$_vm_path" || true
+				done < <(govc find "$_pool_folder" -type m)
 			else
 				# ESXi: no pool folders, destroy conN/disN by name
 				local _pfx _vm
 				for _pfx in con dis; do
 					_vm="${_pfx}${_p}"
-					govc vm.power -off "$_vm" 2>/dev/null || true
-					govc vm.destroy "$_vm" 2>/dev/null || true
+					govc vm.power -off "$_vm" || true
+					govc vm.destroy "$_vm" || true
 				done
 			fi
 		done
@@ -144,7 +144,7 @@ _ensure_pool_infrastructure() {
 		for _p in $CLI_POOL_LIST; do
 			local _pool_folder="${VC_FOLDER:-/Datacenter/vm/aba-e2e}/pool${_p}"
 			local _orphans
-			_orphans=$(govc find "$_pool_folder" -type m 2>/dev/null | grep -v "/con${_p}$" | grep -v "/dis${_p}$") || true
+			_orphans=$(govc find "$_pool_folder" -type m | grep -v "/con${_p}$" | grep -v "/dis${_p}$") || true
 			if [ -n "$_orphans" ]; then
 				echo "  Pool $_p: destroying orphaned VMs before recreate ..."
 				local _vm_path _vm_name
@@ -152,8 +152,8 @@ _ensure_pool_infrastructure() {
 					[ -z "$_vm_path" ] && continue
 					_vm_name="${_vm_path##*/}"
 					echo "    Destroying $_vm_name ..."
-					govc vm.power -off "$_vm_path" 2>/dev/null || true
-					govc vm.destroy "$_vm_path" 2>/dev/null || true
+					govc vm.power -off "$_vm_path" || true
+					govc vm.destroy "$_vm_path" || true
 				done <<< "$_orphans"
 			fi
 		done
@@ -167,8 +167,8 @@ _ensure_pool_infrastructure() {
 		_print_box "1;46;30" "⟳  INFRA: Provisioning pool VMs (pools: $CLI_POOL_LIST)"
 		local _base_infra_flags="--pools-file ${_RUN_DIR}/pools.conf"
 		[ -n "${CLI_RECREATE_GOLDEN:-}" ] && _base_infra_flags+=" --recreate-golden"
-		[ -n "${CLI_RECREATE_VMS:-}" ]    && _base_infra_flags+=" --recreate-vms"
-		[ -n "${CLI_YES:-}" ]             && _base_infra_flags+=" --yes"
+		[ -n "${CLI_RECREATE_VMS:-}" ] && _base_infra_flags+=" --recreate-vms"
+		[ -n "${CLI_YES:-}" ] && _base_infra_flags+=" --yes"
 
 		# Group pools by RHEL version and call setup-infra once per group.
 		# Each group gets its own golden VM (e.g. aba-e2e-golden-rhel8, aba-e2e-golden-rhel10).
@@ -205,9 +205,9 @@ _revert_pool_snapshots() {
 		local _try_user _try_host _has_cleanup
 		for _try_user in "${CON_SSH_USER:-steve}" root steve; do
 			_try_host="${_try_user}@con${_p}.${VM_BASE_DOMAIN}"
-			_essh "$_try_host" "true" 2>/dev/null || continue
+			_essh "$_try_host" "true" || continue
 			_has_cleanup=""
-			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup 2>/dev/null" 2>/dev/null) || true
+			_has_cleanup=$(_essh "$_try_host" "ls \$HOME/.e2e-harness/logs/*.cleanup \$HOME/.e2e-harness/logs/*.mirror-cleanup") || true
 			[ -z "$_has_cleanup" ] && continue
 			echo "    Pool $_p: found cleanup files for $_try_user -- running aba delete/uninstall ..."
 			_run_cleanup_on_host "$_try_host" "      " "con${_p}.${VM_BASE_DOMAIN} dis${_p}.${VM_BASE_DOMAIN}" 2>&1 || echo "    WARNING: cleanup for pool $_p user $_try_user had errors (continuing)"
