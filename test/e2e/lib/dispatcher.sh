@@ -648,6 +648,85 @@ _build_work_queue() {
 	done
 }
 
+# --loop: when the queue drains, immediately feed the next batch onto free pools.
+# Do NOT wait for in-flight suites -- that left pools idle at the end of every round.
+# Requires: _original_suites, _round (set by run.sh).
+_loop_refill_queue() {
+	[ -n "${CLI_LOOP:-}" ] || return 1
+	[ ${#_original_suites[@]} -gt 0 ] || return 1
+
+	# Quiet no-op if every original suite is still in-flight (e.g. --loop -s one-suite
+	# with free pools waiting). Must not bump _round or notify on every poll tick.
+	local _suite _bp _running _avail=0
+	for _suite in "${_original_suites[@]}"; do
+		_running=""
+		for _bp in "${!_busy_pools[@]}"; do
+			[ "${_busy_pools[$_bp]}" = "$_suite" ] && _running=1 && break
+		done
+		[ -z "$_running" ] && _avail=$(( _avail + 1 ))
+	done
+	if [ "$_avail" -eq 0 ]; then
+		return 1
+	fi
+
+	local _n_ok=0 _n_fail=0 _n_skip=0 _rs
+	for _rs in "${!_results[@]}"; do
+		case "${_results[$_rs]}" in
+			0) _n_ok=$(( _n_ok + 1 )) ;;
+			3) _n_skip=$(( _n_skip + 1 )) ;;
+			*) _n_fail=$(( _n_fail + 1 )) ;;
+		esac
+	done
+
+	echo ""
+	_print_box "1;46;97" "■  ROUND $_round DRAINED: ${_n_ok} pass, ${_n_fail} fail, ${_n_skip} skip -- refilling free pools  ($(date '+%H:%M'))"
+
+	if [ -n "${NOTIFY_CMD:-}" ] && [ -x "${NOTIFY_CMD%% *}" ]; then
+		local _busy_n=${#_busy_pools[@]}
+		$NOTIFY_CMD "[e2e] Round $_round drained: ${_n_ok} pass, ${_n_fail} fail, ${_n_skip} skip. Refilling (${_busy_n} still in-flight). Starting round $(( _round + 1 ))." < /dev/null >/dev/null &
+	fi
+
+	# Drop completed-state for suites that are not still running so "already passed"
+	# skip does not block the next batch. Leave in-flight suites alone.
+	# Copy keys first -- unsetting while iterating "${!_results[@]}" can skip entries.
+	local _result_keys=("${!_results[@]}")
+	for _rs in "${_result_keys[@]}"; do
+		local _still_busy=""
+		for _bp in "${!_busy_pools[@]}"; do
+			[ "${_busy_pools[$_bp]}" = "$_rs" ] && _still_busy=1 && break
+		done
+		[ -n "$_still_busy" ] && continue
+		unset '_results[$_rs]'
+		unset '_result_pool[$_rs]'
+		unset '_retried[$_rs]'
+		unset '_completed[$_rs]'
+	done
+
+	suites_to_run=("${_original_suites[@]}")
+	if [ ${#suites_to_run[@]} -gt 1 ]; then
+		readarray -t suites_to_run < <(printf '%s\n' "${suites_to_run[@]}" | shuf)
+	fi
+
+	# Build a fresh queue (excludes suites currently on a busy pool)
+	_build_work_queue
+	_queue_idx=0
+
+	# Should not happen after _avail check; keep as safety.
+	if [ ${#_work_queue[@]} -eq 0 ]; then
+		printf "  [%s] LOOP: refill aborted -- queue empty after build\n" "$(date '+%H:%M:%S')"
+		return 1
+	fi
+
+	_round=$(( _round + 1 ))
+	echo ""
+	_print_box "1;44;97" "■  ROUND $_round FEED  ($(date '+%H:%M'))"
+	echo ""
+
+	printf "  [%s] LOOP: queued %d suite(s) for free pools (in-flight suites excluded)\n" \
+		"$(date '+%H:%M:%S')" "${#_work_queue[@]}"
+	return 0
+}
+
 # --- Write dispatch state file for read-only commands -------------------------
 
 _write_dispatch_state() {
@@ -911,6 +990,15 @@ _dispatch_loop() {
 				printf "  [%s] EXTERNAL: %s -> pool %s\n" "$(date '+%H:%M:%S')" "$_fd_suite" "$_fd_pool"
 			done < "$E2E_FORCED_DISPATCH"
 			> "$E2E_FORCED_DISPATCH"
+		fi
+
+		# --loop: queue drained but a pool is free → refill now (do not wait for in-flight)
+		if [ -n "${CLI_LOOP:-}" ] && [ $_queue_idx -ge ${#_work_queue[@]} ]; then
+			if _find_free_pool >/dev/null; then
+				if _loop_refill_queue; then
+					_state_changed=1
+				fi
+			fi
 		fi
 
 		# Dispatch to free pools

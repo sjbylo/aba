@@ -76,7 +76,8 @@ _usage() {
 	  -F, --fresh            Clear old results and run all suites from scratch (aliases: -f, --force)
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
-	  -L, --loop             Continuous loop: re-queue all suites when a round completes
+	  -L, --loop             Keep pools busy: re-queue suites as soon as the queue drains
+	                         (does not wait for in-flight suites to finish)
 	  -n, --dry-run          Show dispatch plan, don't execute
 	  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
 	  --no-clean             Skip cluster/mirror cleanup on stop/destroy
