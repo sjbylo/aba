@@ -130,14 +130,14 @@ echo >&2
 # User requires to clean out any existing files under mirror/data
 if [ "$force" ]; then
 {
-	aba_debug "Force flag set - cleaning existing files"
-	if [ -d mirror/data ] && [ "$(ls mirror/data 2>/dev/null)" ]; then
-		aba_debug "Deleting existing mirror/data directory contents"
-		aba_warn "Deleting all files under aba/mirror/data! (--force set)" >&2
-		rm -rf mirror/data
-		aba_debug "mirror/data directory removed"
+	aba_debug "Force flag set - cleaning existing ABA-owned files"
+	if [ -d mirror/data ]; then
+		aba_debug "Cleaning ABA-owned files in mirror/data (preserving oc-mirror working-dir/)"
+		aba_warn "Deleting ABA-owned files under aba/mirror/data/ (--force set)" >&2
+		rm -f mirror/data/imageset*.yaml mirror/data/mirror_*.tar mirror/data/aba-transfer*.* mirror/data/.created mirror/data/.isc-pinned
+		aba_debug "ABA-owned files removed (working-dir/ preserved)"
 	else
-		aba_debug "mirror/data directory is empty or doesn't exist"
+		aba_debug "mirror/data directory doesn't exist"
 	fi
 
 	if [ -f "$bundle_dest_file" ]; then
