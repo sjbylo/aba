@@ -2108,16 +2108,26 @@ fetch_all_upgrade_targets() {
 	local ver="${1:-}" channel="${2:-${ocp_channel:-fast}}"
 	[[ -n "$ver" ]] || return 0
 
-	local ch _seen_ch=" "
+	local ch _seen_ch=" " _tmpdir _pids=() _chans=()
+	_tmpdir=$(mktemp -d) || return 1
+
+	# Fetch each channel in parallel (max 3 concurrent processes)
 	for ch in "$channel" fast candidate; do
 		[[ "$_seen_ch" == *" $ch "* ]] && continue
 		_seen_ch+="$ch "
-		local _out
-		_out=$(fetch_upgrade_targets "$ver" "$ch" 2>/dev/null) || continue
-		while IFS=$'\t' read -r _label _tgt_ver; do
+		( fetch_upgrade_targets "$ver" "$ch" 2>/dev/null | while IFS=$'\t' read -r _label _tgt_ver; do
 			[[ -n "$_tgt_ver" ]] && printf '%s\t%s\t%s\n' "$ch" "$_label" "$_tgt_ver"
-		done <<< "$_out"
+		done > "$_tmpdir/$ch" ) &
+		_pids+=($!)
+		_chans+=("$ch")
 	done
+
+	wait "${_pids[@]}" 2>/dev/null || true
+
+	for ch in "${_chans[@]}"; do
+		cat "$_tmpdir/$ch" 2>/dev/null || true
+	done
+	rm -rf "$_tmpdir"
 }
 
 ############################################
