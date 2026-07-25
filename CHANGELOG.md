@@ -1,5 +1,38 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.6...HEAD)
 
+VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor, and VMware reliability fixes.
+
+### Added
+
+- **VIP auto-allocation** — Multi-node clusters get API/Ingress VIPs auto-allocated from the machine network when ABA manages DNS, eliminating manual VIP assignment.
+- **VIP collision detection** — ABA detects IP conflicts (ARP probe) before cluster install and aborts with a clear message rather than proceeding with conflicting addresses.
+- **Auto DNS/NTP infrastructure (`aba setup dns/ntp`)** — New commands configure dnsmasq and chronyd on the bastion. Per-cluster DNS records (API, apps wildcard, nodes) are auto-managed at install time and removed on delete.
+- **Quay-ng registry vendor [ALPHA]** — New mirror registry option backed by the Go-based Quay mirror-registry rewrite (Quadlet-based, rootless). Supports custom credentials and remote install.
+- **`aba show-operators`** — List all available operators from the cached catalog index without needing internet access.
+- **TUI: Cluster Login Terminal** — New "L" menu item in Day-2 menu opens an interactive shell pre-logged into the selected cluster (KUBECONFIG exported, `oc` ready).
+- **Air-gap transfer guardrails** — `aba load` aborts if no `mirror_*.tar` files exist, warns if `aba-transfer.tar` is missing, and offers to clean up large archives after successful load.
+- **`aba setup/remove` CLI commands** — First-class CLI entry points for DNS and NTP infrastructure management (`aba setup dns`, `aba setup ntp`, `aba remove dns`, `aba remove ntp`).
+
+### Changed
+
+- **Bundle `--force` preserves oc-mirror state** — Only ABA-owned files (`imageset*.yaml`, `mirror_*.tar`, `aba-transfer*.*`, marker files) are removed; `working-dir/` is preserved across retries.
+- **Stderr capture for diagnostics** — Internal commands (dig, curl, govc, virsh, skopeo, firewall-cmd, chronyd) now log stderr to `trace.log` via `aba_debug` instead of discarding it silently.
+- **Split `verify-config.sh`** — Refactored into `resolve-vips.sh` (VIP allocation logic) and a validation-only `verify-config.sh` for cleaner separation of concerns.
+- **Registry uninstall idempotent** — `aba uninstall` succeeds cleanly even when the registry is already removed or partially torn down.
+- **`aba-transfer.tar` always created by `aba save`** — No longer conditional on bundle mode; always generated for consistent air-gap workflows.
+
+### Fixed
+
+- **Fix `externalize_cluster_state()` source order** — `normalize-aba-conf` now sourced before `normalize-cluster-conf`, so cluster.conf values correctly override aba.conf for cluster-specific settings. Previously corrupted `machine_network` in `state.sh` on multi-homed bastions.
+- **Fix VMware CD-ROM NFS datastore race** — New `vmp_ensure_cdrom_connected()` detects when NFS-backed ISO fails to connect at VM power-on (transient NFS timeout) and recovers by force-connecting the device and resetting the VM.
+- **Fix network auto-detection for bridge interfaces** — Correctly identifies the bastion's primary network on hosts using bridge interfaces (e.g. `br-lab`).
+- **Fix ISO upload resilience** — Retry logic (`try_cmd`) and post-upload size verification prevent silent zero-byte ISO uploads from proceeding.
+- **Fix CLI download race after version switch** — Downloads no longer skipped when `ocp_version` changes between operations (ADR-008 race guard).
+- **Fix `_aba_manages_dns` check for SNO** — DNS record management now works for SNO clusters (check moved outside non-SNO block).
+- **Fix destructive prompts default to "no"** — Interactive prompts for destructive operations (uninstall, delete VMs) now default to `[n]` instead of `[y]`, preventing accidental actions.
+- **Fix ISO certificate expiry warning** — Users are now warned that ISO certificates expire after 24 hours.
+- **Fix TUI: don't offer to skip release images when no operators configured** — Menu option hidden when irrelevant.
+
 ---
 
 ## [1.1.6](https://github.com/sjbylo/aba/releases/tag/v1.1.6) - 2026-07-18

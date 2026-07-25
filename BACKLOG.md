@@ -56,7 +56,7 @@ cluster.conf). SSH fails with a cryptic "error in libcrypto" message.
 ## ISC upgrade mode broken by state.sh ocp_version override
 
 **Severity:** HIGH — produces wrong ISC, upgrade sync downloads wrong images
-**Status:** Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact)
+**Status:** Mostly Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact; mirror_ocp_upgrade_from tracked in state.sh). ISC template not yet updated to use mirror_ocp_upgrade_from.
 **Added:** 2026-07-09
 
 **Problem:** When `_state_override_mirror()` overrides `ocp_version` from
@@ -202,6 +202,7 @@ selection first, or run on all installed clusters using this mirror.
 **Severity:** HIGH — `aba day2-osus` errors out on upgraded clusters
 **Status:** Done (day2-config-osus.sh now derives channel from cluster's actual version)
 **Added:** 2026-07-10
+**Closed:** 2026-07-10
 **Related:** ISC upgrade mode / state.sh override (above) — same root theme: scripts derive version/channel from config files instead of the live cluster
 
 **Problem:** `day2-config-osus.sh` builds the expected channel from `aba.conf`
@@ -480,9 +481,10 @@ run `day2` automatically without prompting.
 ## TUI Day-2: "Open Cluster Login Terminal" in all Day-2 menus
 
 **Severity:** LOW — UX convenience
-**Status:** Planned
+**Status:** Done (v1.1.6: "L" menu item in Day-2 menu)
 **Added:** 2026-07-13
 **Updated:** 2026-07-25
+**Closed:** 2026-07-25
 
 **Problem:** When troubleshooting or inspecting a cluster from the TUI, the
 user must exit the TUI, find the kubeconfig, export it, and run `oc` commands
@@ -587,7 +589,7 @@ MCO rebootless updates are 4.14+. NodeDisruptionPolicy is 4.16+.
 ## Catalog prefetch: download next minor in background
 
 **Severity:** LOW — UX improvement, reduces wait time
-**Status:** Planned
+**Status:** Mostly Done (prefetch now downloads upgrade-target minors from Cincinnati graph, which includes the next minor when available). Previous minor is still fetched too — could be dropped.
 **Added:** 2026-07-13
 
 **Problem:** When a user selects OCP 4.21, the operator catalog for 4.22 is not
@@ -632,19 +634,20 @@ download the next minor line in the background:
 
 ---
 
-## Automated infrastructure services (`infra=auto`)
+## Automated infrastructure services (`aba setup dns/ntp`)
 
 **Severity:** MEDIUM — major UX improvement for new users
-**Status:** Planned
+**Status:** Done (v1.1.5: `aba setup dns`, `aba setup ntp`, `aba remove dns`, `aba remove ntp`; per-cluster DNS hooks in Makefile)
 **Added:** 2026-07-16
+**Closed:** 2026-07-24
 
 **Problem:** Users new to OpenShift must manually install and configure DNS
 (dnsmasq), NTP (chronyd), and firewall rules before ABA can install a cluster.
 This is the #1 barrier to entry for beginners.
 
-**Proposed fix:** New `aba.conf` setting `infra=auto` (default: `manual`) that
-makes ABA automatically install and configure these services on the bastion.
-Per-cluster DNS records are added at install time and removed on delete.
+**Implemented:** `aba setup dns` / `aba setup ntp` configure services on the
+bastion. Per-cluster DNS records are added at install time (`.infra-dns` marker
+in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 **Design doc:** `ai/DESIGN-infra-auto.md`
 
