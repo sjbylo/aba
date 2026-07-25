@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.1.6...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.0...HEAD)
+
+---
+
+## [1.2.0](https://github.com/sjbylo/aba/releases/tag/v1.2.0) - 2026-07-25
+
+VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor (alpha), and VMware reliability fixes
+
 
 VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor, and VMware reliability fixes.
 
