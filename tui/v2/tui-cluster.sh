@@ -2116,6 +2116,7 @@ cluster_day2_menu() {
 			"O" "OpenShift Update Service (OSUS)" \
 			"" "──── Status ───────────────────────" \
 			"S" "Cluster status" \
+			"L" "Cluster Login Terminal" \
 			"H" "SSH into Rendezvous Server" \
 			"" "──── Lifecycle ────────────────────" \
 			"U" "Upgrade cluster (beta)" \
@@ -2137,6 +2138,7 @@ cluster_day2_menu() {
 
 Status:
 • Cluster status: shows cluster operators and node status
+• Cluster Login Terminal: opens a shell logged into the cluster (oc ready)
 • SSH: opens an interactive SSH session on the Rendezvous Server
 
 Lifecycle:
@@ -2167,6 +2169,7 @@ Navigation:
 			N) _day2_run "day2-ntp" ;;
 			O) _day2_run_osus ;;
 			S) _day2_status ;;
+			L) _day2_login ;;
 			H) _day2_ssh ;;
 			U) _day2_upgrade ;;
 			G) _day2_shutdown ;;
@@ -2277,6 +2280,39 @@ _day2_status() {
 		--exit-label "$TUI2_BTN_BACK" \
 		--textbox "$output_file" 0 0
 	rm -f "$output_file"
+}
+
+# --- Cluster Login Terminal ---
+_day2_login() {
+	if ! select_installed_cluster "$TUI2_TITLE_DAY2_LOGIN" "Select cluster to log into:"; then
+		return 1
+	fi
+
+	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	tui_log "Cluster Login Terminal: $cl_display"
+
+	clear
+	echo "═══════════════════════════════════════════════════════════════"
+	echo "  Cluster Login Terminal: $cl_display"
+	echo "  Type 'exit' to return to TUI"
+	echo "═══════════════════════════════════════════════════════════════"
+	echo
+
+	cd "$ABA_ROOT"
+	# Set KUBECONFIG and run oc login, then drop into interactive shell.
+	# Close flock fd so the subshell doesn't hold the TUI lock.
+	(
+		eval "$(aba --dir "$SELECTED_CLUSTER" shell 2>/dev/null)"
+		# Run the login command (best-effort — works without kubeadmin pw too)
+		eval "$(aba --dir "$SELECTED_CLUSTER" login 2>/dev/null)" || true
+		echo
+		exec bash --norc -i
+	) {ABA_TUI_FLOCK_FD}>&-
+	local _login_rc=$?
+	[[ $_login_rc -ne 0 ]] && echo -e "\n\e[31mLogin failed (exit code $_login_rc)\e[0m"
+
+	echo
+	read -rp "Press ENTER to return to TUI..."
 }
 
 # --- SSH into Rendezvous Server ---
