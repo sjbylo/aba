@@ -1,0 +1,31 @@
+---
+description: Session context and task audit
+alwaysApply: true
+---
+
+# Session context
+
+## SESSION_STATE.md
+
+Use `ai/SESSION_STATE.md` for:
+- **Cross-chat handoffs** — update before handing off to another chat
+- **Logging core code changes** during gotest (so the user knows what changed)
+
+Do NOT:
+- Update it obsessively every reply — context lives in chat history
+- Create multiple `ai/state-*.md` files
+
+## Resuming context in a new chat
+
+If the user says "continue where I left off" or similar:
+- Read `git log --oneline -10` to see recent work
+- Check `git status` and `git diff --stat` for uncommitted changes
+- Read `ai/SESSION_STATE.md` if it exists
+- That's enough to resume
+
+## Periodic task audit
+
+At the **end of every reply**:
+
+1. Check whether any in-progress todos or plans have been left incomplete or forgotten.
+2. If forgotten plans or tasks are found, remind the user.

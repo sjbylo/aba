@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------------
 /sno*/
 /demo*/
+/mesh*/
 /compact*/
 /standard*/
 /ocp/
@@ -65,6 +66,7 @@ mirror/.??*
 mirror/.redhat-operator-index*
 mirror/mirror.conf*
 mirror/docker-reg-image.tgz
+mirror/quay-ng-image.tgz
 mirror/cli
 mirror/mirror
 mirror/reg-uninstall.sh.provision
@@ -133,9 +135,12 @@ ai/
 # Editor / IDE / tooling
 # -----------------------------------------------------------------------------
 .vscode*
-.cursor/
+#.cursor/
 .planning/
 .cursorignore
+# Ignore Cursor Plan Mode drafts and local temp states
+.cursor/plans/
+.cursor/skills/
 
 # -----------------------------------------------------------------------------
 # General patterns

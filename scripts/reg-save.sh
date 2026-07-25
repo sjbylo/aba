@@ -106,6 +106,11 @@ scripts/create-containers-auth.sh || exit 1
 # Check disk space before downloading images
 aba_debug "Checking disk space in data/ directory"
 mkdir -p data
+
+# Remove stale transfer bundle to prevent mismatch if this save fails partway
+rm -f data/aba-transfer.tar data/aba-transfer-metadata.json
+aba_debug "Removed any stale aba-transfer.tar from data/"
+
 avail=$(df -m data | awk '{print $4}' | tail -1)
 aba_debug "Available disk space: $avail MB"
 
@@ -164,9 +169,6 @@ scripts/cli-download-all.sh --wait
 # Create aba-transfer.tar: always includes ISC files so 'cp mirror/data/*.tar'
 # transfers the correct imageset config to the disconnected host.
 # For upgrades: also includes CLI tarballs and metadata.
-# Skipped in bundle mode (aba bundle already packages everything).
-if [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
-
 _transfer_tar="data/aba-transfer.tar"
 _is_upgrade=""
 [ "${ocp_upgrade_to:-}" ] && is_version_greater "$ocp_upgrade_to" "$ocp_version" && _is_upgrade=1
@@ -222,8 +224,6 @@ else
 		"You can manually copy ISC and CLI files to the disconnected host."
 fi
 rm -f data/aba-transfer-metadata.json
-
-fi  # end: transfer bundle creation
 
 echo >&2
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then

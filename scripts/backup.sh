@@ -174,6 +174,7 @@ file_list=$(find				\
 	"${repo_dir}/others"			\
 	"${repo_dir}/scripts"			\
 	"${repo_dir}/templates"			\
+	"${repo_dir}/tools"			\
 	"${repo_dir}/tui/v2"			\
 	"${repo_dir}/Makefile"			\
 	"${repo_dir}/README.md"			\

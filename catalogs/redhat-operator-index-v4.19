@@ -12,6 +12,7 @@ ansible-cloud-addons-operator                           Ansible Cloud Addons    
 apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.16
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
 authorino-operator                                      Authorino Operator                                           stable
+automation-orchestrator-operator                        Automation Orchestrator Operator                             candidate
 aws-efs-csi-driver-operator                             AWS EFS CSI Driver Operator                                  stable
 aws-load-balancer-operator                              AWS Load Balancer Operator                                   stable-v1
 bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable
@@ -54,7 +55,7 @@ kernel-module-management                                Kernel Module Management
 kiali-ossm                                              Kiali Operator                                               stable
 kubernetes-nmstate-operator                             Kubernetes NMState Operator                                  stable
 kubevirt-hyperconverged                                 OpenShift Virtualization                                     stable
-kueue-operator                                          Red Hat build of Kueue                                       stable-v1.3
+kueue-operator                                          Red Hat build of Kueue                                       stable-v1.4
 leader-worker-set                                       Leader Worker Set Operator                                   stable-v1.0
 lifecycle-agent                                         Lifecycle Agent                                              stable
 lightspeed-operator                                     OpenShift Lightspeed Operator                                stable
@@ -69,7 +70,7 @@ mcg-operator                                            NooBaa Operator         
 mcp-gateway                                             MCP Gateway Operator (Tech Preview)                          preview
 metallb-operator                                        MetalLB Operator                                             stable
 model-validation-operator                               Model Validation Operator                                    tech-preview
-mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.1
+mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.2
 mtc-operator                                            Migration Toolkit for Containers Operator                    release-v1.8
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.11
@@ -121,7 +122,7 @@ rhpam-kogito-operator                                   RHPAM Kogito Operator   
 rh-service-binding-operator                             Service Binding Operator                                     stable
 rhsso-operator                                          Red Hat Single Sign-On Operator                              stable
 rhtas-operator                                          Red Hat Trusted Artifact Signer                              stable
-rhtpa-operator                                          Red Hat Trusted Profile Analyzer                             stable-v1.1
+rhtpa-operator                                          Red Hat Trusted Profile Analyzer                             stable-v3
 rook-ceph-operator                                      Rook-Ceph                                                    stable-4.19
 run-once-duration-override-operator                     Run Once Duration Override Operator                          stable
 runtimes-inventory-operator                             Runtimes Inventory Operator                                  stable

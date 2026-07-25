@@ -16,22 +16,22 @@ _h="con${_POOL_NUM}.${_DOMAIN}"
 _sess="${_E2E_TMUX_SESSION:-e2e-suite}"
 
 # Detect which user owns the tmux session on this pool
-_suite_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
+_suite_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user')
 _user="${_suite_user:-$_DEFAULT_USER}"
 
 # Check if another live dashboard took over this pool.
 # exit 0 (not return) to kill the pane shell -- return just goes back to the
 # wrapper's while-loop and re-sources us, creating infinite spam.
-_owner=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-live-owner 2>/dev/null' 2>/dev/null)
+_owner=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-live-owner')
 if [ -n "$_owner" ] && [ "$_owner" != "$_LIVE_ID" ]; then
 	echo "Another live dashboard took over pool ${_POOL_NUM}."
 	exit 0
 fi
 
 # Read suite metadata for pane title
-_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
-_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)
-_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)
+_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites')
+_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os')
+_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf')
 _vmtag=""
 [ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"
 
@@ -40,13 +40,13 @@ _set_title() {
 }
 
 # Check if the remote tmux session exists
-if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/dev/null; then
+if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess'"; then
 	# Session exists -- check if the pane is dead (suite finished, remain-on-exit keeping it)
-	_dead=$(ssh $_SSH_OPTS ${_user}@${_h} "tmux list-panes -t '$_sess' -F '#{pane_dead}' 2>/dev/null" 2>/dev/null)
+	_dead=$(ssh $_SSH_OPTS ${_user}@${_h} "tmux list-panes -t '$_sess' -F '#{pane_dead}'")
 	if [ "$_dead" = "1" ]; then
 		# Suite finished. Show banner (no clear -- suite output is in our scrollback
 		# from the previous attach, if any).
-		_result=$(ssh $_SSH_OPTS ${_user}@${_h} "grep -E '(PASSED|FAILED):' ~/.e2e-harness/logs/${_suite}-summary.log 2>/dev/null | tail -1 | sed 's/\x1b\[[0-9;]*m//g'" 2>/dev/null)
+		_result=$(ssh $_SSH_OPTS ${_user}@${_h} "grep -E '(PASSED|FAILED):' ~/.e2e-harness/logs/${_suite}-summary.log | tail -1 | sed 's/\x1b\[[0-9;]*m//g'")
 		_result=$(echo "$_result" | sed 's/^[0-9:]*[[:space:]]*//' | sed 's/=//g' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
 		[ -z "$_result" ] && _result="Suite ended (aborted or no result)"
 
@@ -74,7 +74,7 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 		while true; do
 			sleep 5
 			# Single SSH call: check session existence AND pane state together
-			_check=$(ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null && tmux list-panes -t '$_sess' -F '#{pane_dead}' 2>/dev/null || echo NOSESSION" 2>/dev/null)
+			_check=$(ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' && tmux list-panes -t '$_sess' -F '#{pane_dead}' || echo NOSESSION")
 
 			if [ -z "$_check" ]; then
 				# SSH failed (empty output) -- ignore, don't break
@@ -92,10 +92,10 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 			_gone_count=0
 
 			# Re-check user in case a new suite started as a different user
-			_new_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null)
+			_new_user=$(ssh $_SSH_OPTS ${_DEFAULT_USER}@${_h} 'cat /tmp/e2e-suite-user')
 			_new_user="${_new_user:-$_DEFAULT_USER}"
 			if [ "$_new_user" != "$_user" ]; then
-				if ssh $_SSH_OPTS ${_new_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/dev/null; then
+				if ssh $_SSH_OPTS ${_new_user}@${_h} "tmux has-session -t '$_sess'"; then
 					break
 				fi
 			fi
@@ -103,21 +103,21 @@ if ssh $_SSH_OPTS ${_user}@${_h} "tmux has-session -t '$_sess' 2>/dev/null" 2>/d
 	else
 		# Pane alive -- always re-read metadata right before attach (suite may
 		# have changed since the top of the loop, especially during rapid cycling)
-		_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
+		_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites')
 		local _retries=0
 		while [ -z "$_suite" ] && [ "$_retries" -lt 5 ]; do
 			sleep 2
-			_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)
+			_suite=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-last-suites')
 			_retries=$(( _retries + 1 ))
 		done
-		_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)
-		_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)
+		_os=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-os')
+		_vmconf=$(ssh $_SSH_OPTS ${_user}@${_h} 'cat /tmp/e2e-suite-vmconf')
 		_vmtag=""
 		[ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"
 		_set_title "${_suite:-(starting...)}" "${_user}" "${_os:+ | $_os}" "$_vmtag"
 		_IDLE_MSG_SHOWN=
 		clear
-		ssh -t $_SSH_OPTS ${_user}@${_h} "exec tmux attach -d -t '$_sess'" 2>/dev/null
+		ssh -t $_SSH_OPTS ${_user}@${_h} "exec tmux attach -d -t '$_sess'"
 		# Attach exited (session killed or SSH dropped). Next loop iteration
 		# will detect the new state.
 	fi

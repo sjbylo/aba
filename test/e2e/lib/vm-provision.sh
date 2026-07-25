@@ -18,10 +18,10 @@
 _E2E_LIB_DIR_VMPROV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source remote helpers if not already loaded
-if ! type _wait_for_ssh &>/dev/null; then
+if ! type _wait_for_ssh >/dev/null; then
 	source "$_E2E_LIB_DIR_VMPROV/remote.sh"
 fi
-if ! type pool_domain &>/dev/null; then
+if ! type pool_domain >/dev/null; then
 	source "$_E2E_LIB_DIR_VMPROV/config-helpers.sh"
 fi
 
@@ -74,11 +74,11 @@ _vm_setup_ssh_keys() {
 		set -ex
 		mkdir -p /root/.ssh
 		chmod 700 /root/.ssh
-		grep -qF '${pub_key}' /root/.ssh/authorized_keys 2>/dev/null || echo '${pub_key}' >> /root/.ssh/authorized_keys
+		grep -qF '${pub_key}' /root/.ssh/authorized_keys || echo '${pub_key}' >> /root/.ssh/authorized_keys
 		chmod 600 /root/.ssh/authorized_keys
 
 		mkdir -p /home/${user}/.ssh
-		grep -qF '${pub_key}' /home/${user}/.ssh/authorized_keys 2>/dev/null || echo '${pub_key}' >> /home/${user}/.ssh/authorized_keys
+		grep -qF '${pub_key}' /home/${user}/.ssh/authorized_keys || echo '${pub_key}' >> /home/${user}/.ssh/authorized_keys
 		chmod 600 /home/${user}/.ssh/authorized_keys
 		chown -R ${user}:${user} /home/${user}/.ssh
 
@@ -114,7 +114,7 @@ _vm_install_packages() {
 	# Configure dnf + RHSM proxy (required for disN VMs behind a firewall)
 	local _proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
 	if [ -z "$_proxy_url" ] && [ -f "$HOME/.proxy-set.sh" ]; then
-		_proxy_url=$(grep -i '^export HTTPS_PROXY=' "$HOME/.proxy-set.sh" 2>/dev/null | head -1 | sed 's/.*=//;s/"//g')
+		_proxy_url=$(grep -i '^export HTTPS_PROXY=' "$HOME/.proxy-set.sh" | head -1 | sed 's/.*=//;s/"//g')
 	fi
 	if [ -n "$_proxy_url" ]; then
 		local _proxy_host _proxy_port
@@ -124,7 +124,7 @@ _vm_install_packages() {
 		_essh "${user}@${host}" -- "sudo subscription-manager config \
 			--server.proxy_hostname='${_proxy_host}' \
 			--server.proxy_port='${_proxy_port}'" || true
-		_essh "${user}@${host}" -- "grep -q '^proxy=' /etc/dnf/dnf.conf 2>/dev/null \
+		_essh "${user}@${host}" -- "grep -q '^proxy=' /etc/dnf/dnf.conf \
 			|| echo 'proxy=${_proxy_url}' | sudo tee -a /etc/dnf/dnf.conf >/dev/null" || true
 	fi
 
@@ -132,7 +132,7 @@ _vm_install_packages() {
 	if [ -n "${SUB_USERNAME:-}" ] && [ -n "${SUB_PASSWORD:-}" ]; then
 		local _su="$SUB_USERNAME" _sp="$SUB_PASSWORD"
 		cat <<-REGEOF | _essh "${user}@${host}" -- sudo bash
-			if ! subscription-manager identity &>/dev/null; then
+			if ! subscription-manager identity >/dev/null; then
 				echo "  [vm] Not registered -- registering as ${_su} ..."
 				subscription-manager register --username='${_su}' --password='${_sp}' 2>&1 || echo "  WARNING: registration failed"
 			else
@@ -143,7 +143,7 @@ _vm_install_packages() {
 
 	cat <<-'PKGEOF' | _essh "${user}@${host}" -- sudo bash
 		set -ex
-		subscription-manager refresh 2>/dev/null || true
+		subscription-manager refresh || true
 		dnf clean all
 
 		for attempt in 1 2 3; do
@@ -244,14 +244,14 @@ _vm_dnf_update() {
 		elapsed=$(( elapsed + poll_interval ))
 
 		local rc
-		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc 2>/dev/null" 2>/dev/null) || true
+		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc") || true
 
 		if [ -n "$rc" ]; then
 			if [ "$rc" = "0" ]; then
 				echo "  [vm] dnf update succeeded after ~${elapsed}s"
 			else
 				echo "  [vm] dnf update FAILED (rc=$rc) after ~${elapsed}s" >&2
-				_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+				_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" || true
 				return 1
 			fi
 			break
@@ -264,7 +264,7 @@ _vm_dnf_update() {
 
 	if [ $elapsed -ge $poll_timeout ]; then
 		echo "  [vm] ERROR: dnf update did not complete within ${poll_timeout}s" >&2
-		_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+		_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" || true
 		return 1
 	fi
 
@@ -337,7 +337,7 @@ _vm_dnf_update_pool() {
 		elapsed=$(( elapsed + poll_interval ))
 
 		local rc
-		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc 2>/dev/null" 2>/dev/null) || true
+		rc=$(_essh "${user}@${host}" -- "cat /tmp/dnf-update.rc") || true
 
 		if [ -n "$rc" ]; then
 			case "$rc" in
@@ -355,12 +355,12 @@ _vm_dnf_update_pool() {
 					;;
 				failed)
 					echo "  [vm] dnf update FAILED on $host after ~${elapsed}s" >&2
-					_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+					_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" || true
 					return 1
 					;;
 		*)
 			echo "  [vm] dnf update ERROR on $host (rc=$rc) after ~${elapsed}s" >&2
-			_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+			_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" || true
 			return 1
 			;;
 			esac
@@ -372,7 +372,7 @@ _vm_dnf_update_pool() {
 	done
 
 	echo "  [vm] ERROR: dnf update did not complete on $host within ${poll_timeout}s" >&2
-	_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" 2>/dev/null || true
+	_essh "${user}@${host}" -- "tail -30 /tmp/dnf-update.log" || true
 	return 1
 }
 
@@ -492,7 +492,7 @@ _vm_authorize_root_on_kvm_host() {
 	[ -z "$_root_pub" ] && { echo "  [vm] WARNING: no root SSH key found on $host"; return 0; }
 
 	if ssh -F "${SSH_CONF:-$HOME/.aba/ssh.conf}" "$_kvm_userhost" \
-		"grep -qF '$_root_pub' ~/.ssh/authorized_keys 2>/dev/null || echo '$_root_pub' >> ~/.ssh/authorized_keys"; then
+		"grep -qF '$_root_pub' ~/.ssh/authorized_keys || echo '$_root_pub' >> ~/.ssh/authorized_keys"; then
 		echo "  [vm] Root key authorized on $_kvm_userhost"
 	else
 		echo "  [vm] WARNING: could not authorize root key on $_kvm_userhost"
@@ -697,8 +697,8 @@ _vm_create_test_user_and_key_on_host() {
 		USER_PUB=\$(cat /home/${def_user}/.ssh/id_rsa.pub)
 
 		# Authorize the shared key for both users
-		grep -qF "\$USER_PUB" /root/.ssh/authorized_keys 2>/dev/null || echo "\$USER_PUB" >> /root/.ssh/authorized_keys
-		grep -qF "\$USER_PUB" /home/${def_user}/.ssh/authorized_keys 2>/dev/null || echo "\$USER_PUB" >> /home/${def_user}/.ssh/authorized_keys
+		grep -qF "\$USER_PUB" /root/.ssh/authorized_keys || echo "\$USER_PUB" >> /root/.ssh/authorized_keys
+		grep -qF "\$USER_PUB" /home/${def_user}/.ssh/authorized_keys || echo "\$USER_PUB" >> /home/${def_user}/.ssh/authorized_keys
 
 		chmod 600 /root/.ssh/authorized_keys
 		chmod 600 /home/${def_user}/.ssh/authorized_keys
@@ -799,9 +799,9 @@ _vm_install_aba() {
 	local host="$1"
 	local user="${2:-$VM_DEFAULT_USER}"
 	local branch
-	branch="${E2E_GIT_BRANCH:-$(git -C "${_ABA_ROOT:-$HOME/aba}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
+	branch="${E2E_GIT_BRANCH:-$(git -C "${_ABA_ROOT:-$HOME/aba}" rev-parse --abbrev-ref HEAD || echo dev)}"
 	local repo_url
-	repo_url="${E2E_GIT_REPO:-$(git -C "${_ABA_ROOT:-$HOME/aba}" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
+	repo_url="${E2E_GIT_REPO:-$(git -C "${_ABA_ROOT:-$HOME/aba}" remote get-url origin || echo https://github.com/sjbylo/aba.git)}"
 
 	echo "  [vm] Installing aba on ${user}@${host} (branch: $branch) ..."
 

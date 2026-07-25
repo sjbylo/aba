@@ -43,6 +43,11 @@ mkdir -p "$ABA_TMP"
 
 _ABA_CONF_ERR="Invalid or incomplete aba.conf. Check the errors above, fix aba.conf or run aba or ./abatui."
 
+# Registry vendor name for the new Go-based Quay mirror registry.
+# Single rename point — change here to rename the vendor everywhere.
+_QUAY_NG_VENDOR="quay-ng"
+_QUAY_NG_IMAGE="${QUAY_NG_IMAGE:-quay.io/sjbylo/quay-mirror:dev}"
+
 # ===========================
 # Color Echo Functions
 # ===========================
@@ -454,24 +459,28 @@ warn_if_cluster_unstable() {
 	fi
 }
 
-# Check if the cluster install is truly complete (all three success criteria).
+# Check if the cluster install is truly complete (all operators healthy).
 # Returns 0 if ready, 1 if not. Requires oc to be authenticated.
-# Criteria: ClusterVersion Available=True, Progressing=False, no Degraded operators.
+# Uses individual ClusterOperators (oc get co) directly — the ClusterVersion
+# object lags behind operator state and produces false negatives.
 cluster_is_ready() {
-	local _cv_available _cv_progressing _degraded_count
+	local _raw _unavail _progressing _degraded
 
-	aba_debug "Running: oc get clusterversion (readiness check)"
+	aba_debug "Running: oc get co (readiness check)"
 
-	_cv_available=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null)
-	[ "$_cv_available" = "True" ] || return 1
+	# For each ClusterOperator, extract "Available Progressing Degraded" as one line.
+	# Example output: "True False False\nTrue False False\n..." (one line per CO).
+	_raw=$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Available")].status} {.status.conditions[?(@.type=="Progressing")].status} {.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null) || return 1
+	[ -n "$_raw" ] || return 1
 
-	_cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null)
-	[ "$_cv_progressing" = "False" ] || return 1
+	# Count operators not meeting each criterion
+	_unavail=$(echo "$_raw" | awk '{print $1}' | grep -cv '^True$' || true)
+	_progressing=$(echo "$_raw" | awk '{print $2}' | grep -c '^True$' || true)
+	_degraded=$(echo "$_raw" | awk '{print $3}' | grep -c '^True$' || true)
 
-	_degraded_count=$(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null | grep -c "True" || true)
-	[ "$_degraded_count" -eq 0 ] || return 1
+	aba_debug "cluster_is_ready: Unavail=$_unavail Progressing=$_progressing Degraded=$_degraded"
 
-	return 0
+	[ "$_unavail" -eq 0 ] && [ "$_progressing" -eq 0 ] && [ "$_degraded" -eq 0 ]
 }
 
 # Relaxed health check: only verifies the cluster API is reachable and functional.
@@ -655,11 +664,12 @@ verify-mirror-conf() {
 
 	[ "$reg_ssh_key" ] && { echo $reg_ssh_key | grep -Eq "$REGEX_ABS_PATH" || { echo_red "Error: reg_ssh_key is invalid in mirror.conf [$reg_ssh_key]" >&2; ret=1; }; }
 
-	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE '^(auto|quay|docker|existing)$' || { echo_red "Error: reg_vendor must be auto, quay, docker, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
+	[ "$reg_vendor" ] && { echo "$reg_vendor" | grep -qE "^(auto|quay|docker|${_QUAY_NG_VENDOR}|existing)$" || { echo_red "Error: reg_vendor must be auto, quay, docker, ${_QUAY_NG_VENDOR}, or existing in mirror.conf [$reg_vendor]" >&2; ret=1; }; }
 
 	# Quay's mirror-registry passes the password through shell+Ansible without escaping.
 	# These chars break install or silently corrupt the password (upstream bug).
-	if [ "$reg_pw" ] && [ "$(resolved_reg_vendor)" != "docker" ]; then
+	# quay-ng and docker handle passwords safely, so skip this check for those vendors.
+	if [ "$reg_pw" ] && [[ "$(resolved_reg_vendor)" != "docker" && "$(resolved_reg_vendor)" != "$_QUAY_NG_VENDOR" ]]; then
 		case "$reg_pw" in
 			*\`*) echo_red "Error: reg_pw contains a backtick (\`) which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
 			*'"'*) echo_red "Error: reg_pw contains a double-quote (\") which breaks Quay install. Remove it or use reg_vendor=docker." >&2; ret=1 ;;
@@ -672,7 +682,7 @@ verify-mirror-conf() {
 }
 
 # Resolve reg_vendor to the actual registry type for this host.
-# User intent (auto/quay/docker/existing) stays in mirror.conf unchanged.
+# User intent (auto/quay/docker/quay-ng/existing) stays in mirror.conf unchanged.
 # This function is the ONLY place where "auto" is resolved to a concrete vendor.
 resolved_reg_vendor() {
 	local vendor="${reg_vendor:-auto}"
@@ -848,8 +858,8 @@ cluster_api_reachable() {
 # Requires: normalize-aba-conf and normalize-cluster-conf already sourced,
 #           or will source them itself.
 externalize_cluster_state() {
-	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
 	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
+	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
 
 	[ -z "${cluster_name:-}" ] && aba_warn "externalize_cluster_state: cluster_name not set" && return 1
 	[ -z "${base_domain:-}" ] && aba_warn "externalize_cluster_state: base_domain not set" && return 1
@@ -1100,6 +1110,13 @@ verify-cluster-conf() {
 
 	echo $num_masters | grep -q -E '^[0-9]+$' || { echo_red "Error: num_masters is invalid in cluster.conf" >&2; ret=1; }
 	echo $num_workers | grep -q -E '^[0-9]+$' || { echo_red "Error: num_workers is invalid in cluster.conf" >&2; ret=1; }
+
+	# Topology rules: num_masters must be 1 (SNO) or 3 (compact/standard)
+	if echo "$num_masters" | grep -q -E '^[0-9]+$'; then
+		[ "$num_masters" -ne 1 ] && [ "$num_masters" -ne 3 ] && { echo_red "Error: num_masters can only be 1 or 3 in cluster.conf" >&2; ret=1; }
+		# SNO: workers must be 0 when masters is 1
+		[ "$num_masters" -eq 1 ] && [ "$num_workers" -ne 0 ] && { echo_red "Error: num_workers must be 0 when num_masters is 1 (SNO)" >&2; ret=1; }
+	fi
 
 	REGEX='^(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3}))(,(([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})|([A-Za-z0-9-]+)|([0-9]{1,3}(\.[0-9]{1,3}){3})))*$'
 	PERL_DNS_IP_REGEX='^(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3}(?:,(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[0-9]{1,2})){3})*$'
@@ -2079,6 +2096,56 @@ fetch_upgrade_targets() {
 }
 
 ############################################
+# Fetch upgrade targets for ALL relevant channels (user's + fast + candidate).
+# Outputs tab-separated: CHANNEL\tLABEL\tVERSION
+# Used by TUI "Prepare Upgrade" to build the version picker without
+# calling fetch_upgrade_targets multiple times.
+# Args:
+#	$1 = current version (e.g. 4.20.30)
+#	$2 = user's channel (e.g. candidate) [optional, default: fast]
+############################################
+fetch_all_upgrade_targets() {
+	local ver="${1:-}" channel="${2:-${ocp_channel:-fast}}"
+	[[ -n "$ver" ]] || return 0
+
+	local ch _seen_ch=" " _tmpdir _pids=() _chans=()
+	_tmpdir=$(mktemp -d) || return 1
+
+	# Fetch each channel in parallel (max 3 concurrent processes)
+	for ch in "$channel" fast candidate; do
+		[[ "$_seen_ch" == *" $ch "* ]] && continue
+		_seen_ch+="$ch "
+		( fetch_upgrade_targets "$ver" "$ch" 2>/dev/null | while IFS=$'\t' read -r _label _tgt_ver; do
+			[[ -n "$_tgt_ver" ]] && printf '%s\t%s\t%s\n' "$ch" "$_label" "$_tgt_ver"
+		done > "$_tmpdir/$ch" ) &
+		_pids+=($!)
+		_chans+=("$ch")
+	done
+
+	wait "${_pids[@]}" 2>/dev/null || true
+
+	for ch in "${_chans[@]}"; do
+		cat "$_tmpdir/$ch" 2>/dev/null || true
+	done
+	rm -rf "$_tmpdir"
+}
+
+############################################
+# Start (or skip) the background upgrade-targets fetch via run_once.
+# Single source of truth for task ID, command, and TTL.
+# Called by aba_prefetch_catalogs() at startup and TUI fallback.
+# Args:
+#	$1 = current version [optional, default: $ocp_version]
+#	$2 = user's channel [optional, default: $ocp_channel or fast]
+############################################
+aba_upgrade_targets_start() {
+	local ver="${1:-${ocp_version:-}}" channel="${2:-${ocp_channel:-fast}}"
+	[[ -n "$ver" ]] || return 0
+	run_once -i "aba:upgrade-targets:${ver}" -t "$(parse_duration "$ABA_CACHE_TTL")" -- \
+		bash -lc "source ./scripts/include_all.sh; fetch_all_upgrade_targets '$ver' '$channel'"
+}
+
+############################################
 # Verify a release version exists in the Cincinnati graph.
 # Used as a pre-flight before oc-mirror to avoid wasted time on non-existent versions.
 # Args:
@@ -2278,6 +2345,12 @@ replace-value-conf() {
 		return 0
 	fi
 
+	# Clearing a key that doesn't exist is a no-op (already empty)
+	if [ ! "$value" ]; then
+		aba_debug "Key [$name] not found — nothing to clear"
+		return 0
+	fi
+
 	return 1 # Files do not exist or no value to write
 }
 
@@ -2375,7 +2448,15 @@ _pick_install_iface() {
 		fi
 	fi
 
-	# 2) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
+	# 2) Default-route interface via kernel route lookup (catches bridges, bonds, etc.)
+	# 'ip route get' does a routing-table lookup (no packets sent) so it works even air-gapped.
+	ifc=$(ip route get 8.8.8.8 2>/dev/null | awk '/dev/ {for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+	if [[ -n "${ifc:-}" ]] && _is_usable_iface "$ifc"; then
+		echo "$ifc"
+		return 0
+	fi
+
+	# 3) First "real" UP iface with IPv4 (exclude common virtual/container interfaces)
 	# Note: keep this filter conservative; better to return nothing than a wrong veth/bridge.
 	while read -r ifc; do
 		# Exclude obvious virtual/container patterns
@@ -3278,6 +3359,9 @@ aba_prefetch_catalogs() {
 
 	[[ -n "$_ver" ]] || return 0
 
+	# Pre-warm upgrade targets for all channels (TUI "Prepare Upgrade" peeks at this)
+	aba_upgrade_targets_start "$_ver" "$_channel"
+
 	# Minor x.y — download_all_catalogs uses catalog:${minor}:* task IDs (not patch z)
 	local _minor=$(_ver_minor "$_ver")
 
@@ -3341,24 +3425,26 @@ aba_prefetch_catalogs() {
 # Disable with: OC_MIRROR_PIN_CATALOGS=0 in ~/.aba/config (or env)
 # Remove once oc-mirror fixes upstream tag resolution in air-gap (OCPBUGS-81712).
 #
-# Usage: _oc_mirror_pin_catalogs_by_digest <isc_file> <ocp_ver_major>
+# Usage: _oc_mirror_pin_catalogs_by_digest <isc_file> <ocp_ver_major> [<additional_ver_major>...]
 #   isc_file:       basename of ISC relative to data/ (e.g. "imageset-config.yaml")
-#   ocp_ver_major:  e.g. "4.20"
+#   ocp_ver_major:  e.g. "4.20" (additional versions for upgrade catalogs)
 # Returns: filename to use (original or "imageset-config-digest.yaml") on stdout.
 
 _oc_mirror_pin_catalogs_by_digest() {
-	local isc_file="$1"
-	local ocp_ver_major="$2"
+	local isc_file="$1"; shift
 	local digest_isc="imageset-config-digest.yaml"
 	local sed_args=()
 
-	for catalog_name in redhat-operator certified-operator community-operator; do
-		local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
-		[ -s "$digest_file" ] || continue
-		local digest
-		digest=$(cat "$digest_file")
-		sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}  # was :v${ocp_ver_major}|g")
-		aba_debug "Will pin $catalog_name catalog: :v${ocp_ver_major} -> @${digest}"
+	for ocp_ver_major in "$@"; do
+		[ -z "$ocp_ver_major" ] && continue
+		for catalog_name in redhat-operator certified-operator community-operator; do
+			local digest_file="../.index/.${catalog_name}-index-v${ocp_ver_major}.digest"
+			[ -s "$digest_file" ] || continue
+			local digest
+			digest=$(cat "$digest_file")
+			sed_args+=(-e "s|${catalog_name}-index:v${ocp_ver_major}|${catalog_name}-index@${digest}  # was :v${ocp_ver_major}|g")
+			aba_debug "Will pin $catalog_name catalog: :v${ocp_ver_major} -> @${digest}"
+		done
 	done
 
 	if [ ${#sed_args[@]} -gt 0 ]; then
@@ -3408,10 +3494,21 @@ _run_oc_mirror_with_retry() {
 	if [ "$action" != "load" ] && [ "${OC_MIRROR_PIN_CATALOGS:-1}" != "0" ]; then
 		local _ocp_ver_major
 		_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
+		# For upgrades, the ISC may reference the TARGET version's catalog (e.g. v4.21)
+		# not the base version's (v4.20). Pin both.
+		local _upgrade_ver_major=""
+		if [ "${ocp_upgrade_to:-}" ]; then
+			_upgrade_ver_major=$(echo "$ocp_upgrade_to" | cut -d. -f1-2)
+			[ "$_upgrade_ver_major" = "$_ocp_ver_major" ] && _upgrade_ver_major=""
+		fi
+		aba_debug "Catalog digest pinning: base=$_ocp_ver_major upgrade=${_upgrade_ver_major:-none}"
 		local _config_file
-		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" )
+		_config_file=$( cd data && _oc_mirror_pin_catalogs_by_digest "imageset-config.yaml" "$_ocp_ver_major" $_upgrade_ver_major )
 		if [ "$_config_file" != "imageset-config.yaml" ]; then
-			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"  # replace config filename in command
+			base_cmd="${base_cmd/--config imageset-config.yaml/--config $_config_file}"
+			aba_debug "Using digest-pinned ISC: $_config_file"
+		else
+			aba_debug "No catalog digests available, using original ISC"
 		fi
 	elif [ "$action" = "load" ]; then
 		# Use the pre-generated digest ISC if it exists (transferred from connected host
@@ -3451,6 +3548,7 @@ _run_oc_mirror_with_retry() {
 		aba_info "Running: $cmd"
 
 		aba_debug "Running oc-mirror $action"
+		mkdir -p data
 		( cd data && umask 0022 && eval "$cmd" )
 		local ret=$?
 		aba_debug "oc-mirror $action exit code: $ret"
@@ -3483,7 +3581,7 @@ _run_oc_mirror_with_retry() {
 		aba_warn -n "Image $action aborted ..." >&2
 		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
 		aba_warn \
-			"Long-running processes, copying large amounts of data are prone to error! Resolve any issues (if needed) and try again." \
+			"Check the output above for specific errors (auth, network, timeout). Resolve any issues and try again." \
 			"View https://status.redhat.com/ for any current issues or planned maintenance."
 		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 
@@ -3524,15 +3622,15 @@ probe_host() {
 
 	# -k: skip TLS verification — probe_host checks unknown/untrusted hosts
 	# (e.g. hairpin NAT diagnostics via localhost). Not used for primary verification.
-	if curl -s $_pf \
+	local _probe_err
+	_probe_err=$(curl -s $_pf \
 		--connect-timeout "$_connect_timeout" \
 		--max-time "$_max_time" \
 		--retry "$_retry" \
 		-ILk \
-		"$url" >/dev/null 2>&1; then
-		return 0
-	fi
+		"$url" 2>&1 >/dev/null) && return 0
 
+	aba_debug "probe_host failed for $desc: $_probe_err"
 	return 1
 }
 
@@ -4241,9 +4339,11 @@ require_internet_and_pull_secret() {
 	local has_internet=true
 
 	# Check internet (quick probe, 5s timeout)
-	if ! curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ >/dev/null 2>&1; then
+	local _inet_err
+	if ! _inet_err=$(curl -sILk --connect-timeout 5 --max-time 10 https://registry.redhat.io/v2/ 2>&1 >/dev/null); then
 		has_internet=false
 		errors+=("No internet access (cannot reach registry.redhat.io)")
+		aba_debug "Internet check failed: $_inet_err"
 	fi
 
 	# Check pull secret (global, then fallback)

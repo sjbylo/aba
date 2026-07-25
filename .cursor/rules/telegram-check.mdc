@@ -1,0 +1,38 @@
+# Two-way Telegram communication
+
+## Checking for user messages
+
+During **any sleep or monitoring loop** (e.g. E2E suite monitoring, waiting for long commands), check for Telegram messages from the user by running:
+
+```bash
+~/bin/telegram-read.sh
+```
+
+**When to check:**
+- After each monitoring cycle (i.e. after every `sleep N && check` iteration)
+- At the **start of any new session** (the user may have sent instructions while Cursor was down)
+- Before ending a turn where you plan to sleep and check again
+
+**If messages are returned (exit code 0):**
+1. Read and follow the instructions
+2. Acknowledge via `~/bin/notify.sh "Done: <summary of what you did>"`
+3. If the instruction is unclear, ask for clarification via `~/bin/notify.sh "Clarification needed: <question>"`
+
+**If no messages (exit code 1):** continue the current monitoring loop normally.
+
+## Sending updates
+
+Use `~/bin/notify.sh "<message>"` to proactively send status updates to the user's Telegram, especially:
+- When a suite completes (pass or fail)
+- When you encounter an error that needs user input
+- When all monitoring work is done
+
+## Daemon management
+
+The inbox daemon must be running for message reception to work. Start it with:
+```bash
+~/bin/telegram-start.sh start
+```
+Check status: `~/bin/telegram-start.sh status`
+
+If the daemon is not running and the user expects two-way communication, start it.

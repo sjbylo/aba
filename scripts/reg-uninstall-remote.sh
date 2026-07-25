@@ -37,10 +37,19 @@ if ! $_ssh true; then
 		"Fix SSH connectivity and try again."
 fi
 
-if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
+if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_root"; then
 
 	# mirror-registry binary and supporting files live alongside reg_root
 	_mirror_dir="$(dirname "$reg_root")"
+
+	# Already fully gone on the remote host → clear local state and succeed.
+	_stale=$(reg_stale_report "$vendor" "$_ssh")
+	if [ -z "$_stale" ]; then
+		aba_info "$vendor registry already gone on $reg_host -- clearing local state"
+		reg_close_firewall --ssh
+		reg_finish_uninstall "Remote $vendor" "already uninstalled"
+		exit 0
+	fi
 
 	case "$vendor" in
 		quay)
@@ -60,7 +69,7 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 				fi
 
 				# Use remote user's temp dir — $ABA_TMP is local-user-specific
-			remote_tmp="/tmp/.aba-${reg_ssh_user}/reg-uninstall-$$"
+				remote_tmp="/tmp/.aba-${reg_ssh_user}/reg-uninstall-$$"
 				$_ssh "mkdir -p $remote_tmp" || aba_abort "Failed to create temp dir on $reg_host"
 				trap '$_ssh "rm -rf $remote_tmp" 2>/dev/null' EXIT
 
@@ -76,23 +85,24 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 			fi
 
 			aba_info "Running: mirror-registry uninstall on $reg_host ..."
-			if ! $_ssh "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts"; then
-				aba_abort "Quay mirror-registry uninstall failed on $reg_host"
-			fi
+			_uninst_rc=0
+			$_ssh "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?
 
-			# Post-uninstall assertions: verify Quay is fully gone on remote host.
-			# mirror-registry uninstall uses Ansible which can silently skip steps.
-			_stale=""
-			$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
-			$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-			$_ssh "podman ps -a --format '{{.Names}}' | grep -qE 'quay-app|quay-redis|quay-postgres'" && _stale+="  Quay containers still present"$'\n'
-			$_ssh "podman secret ls --format '{{.Name}}' | grep -q redis_pass" && _stale+="  redis_pass podman secret still exists"$'\n'
+			_stale=$(reg_stale_report quay "$_ssh")
 			if [ -n "$_stale" ]; then
+				if [ "$_uninst_rc" -ne 0 ]; then
+					aba_abort \
+						"Quay mirror-registry uninstall failed on $reg_host (exit=$_uninst_rc) and left stale state:" \
+						"$_stale" \
+						"Investigate the uninstall failure above. Do not force-clean past an aba failure."
+				fi
 				aba_abort \
 					"mirror-registry uninstall reported success but left stale state on $reg_host:" \
 					"$_stale" \
 					"Investigate why mirror-registry's Ansible playbook did not fully clean up."
 			fi
+			[ "$_uninst_rc" -ne 0 ] && \
+				aba_info "mirror-registry uninstall exited $_uninst_rc on $reg_host but registry is fully gone -- treating as success"
 			;;
 
 		docker)
@@ -100,14 +110,29 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 			$_ssh "podman rm -f registry 2>/dev/null; \
 				$SUDO rm -rf $reg_root" || true
 
-			# Post-uninstall assertions: verify Docker registry is fully gone.
-			_stale=""
-			$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
-			$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
-			$_ssh "podman ps -a --format '{{.Names}}' | grep -q '^registry$'" && _stale+="  registry container still present"$'\n'
+			_stale=$(reg_stale_report docker "$_ssh")
 			if [ -n "$_stale" ]; then
 				aba_abort \
 					"Docker registry uninstall left stale state on $reg_host:" \
+					"$_stale" \
+					"Investigate and clean up manually before retrying."
+			fi
+			;;
+
+		$_QUAY_NG_VENDOR)
+			aba_info "Uninstalling $_QUAY_NG_VENDOR registry on remote host $reg_host ..."
+			$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
+					systemctl --user stop quay.service; \
+				fi; \
+				rm -f ~/.config/containers/systemd/quay.container; \
+				systemctl --user daemon-reload 2>/dev/null; \
+				[ -d '$reg_root' ] && $SUDO rm -rf '$reg_root'" || \
+				aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+
+			_stale=$(reg_stale_report "$_QUAY_NG_VENDOR" "$_ssh")
+			if [ -n "$_stale" ]; then
+				aba_abort \
+					"$_QUAY_NG_VENDOR registry uninstall left stale state on $reg_host:" \
 					"$_stale" \
 					"Investigate and clean up manually before retrying."
 			fi
@@ -119,10 +144,7 @@ if ask "Uninstall $vendor registry on remote host $reg_ssh_user@$reg_host:$reg_r
 	esac
 
 	reg_close_firewall --ssh
-
-	rm -rf "${regcreds_dir:?}/"*
-
-	aba_success "Remote $vendor registry uninstall successful"
+	reg_finish_uninstall "Remote $vendor" "uninstall successful"
 	exit 0
 fi
 

@@ -87,7 +87,7 @@ _notify() {
     local msg="$1"
     _log "NOTIFY: $msg"
     if [ -x ~/bin/notify.sh ]; then
-        ~/bin/notify.sh "[continuous] $msg" < /dev/null >/dev/null 2>&1 &
+        ~/bin/notify.sh "[continuous] $msg" < /dev/null >/dev/null &
     fi
 }
 
@@ -151,7 +151,7 @@ fi
 _cleanup() {
     echo ""
     _log "Caught signal -- stopping daemon ..."
-    "$_RUN_SH" stop -p "$POOL_SPEC" --no-clean --yes 2>/dev/null || true
+    "$_RUN_SH" stop -p "$POOL_SPEC" --no-clean --yes || true
     _notify "Continuous runner stopped (signal)"
     exit 0
 }
@@ -180,10 +180,10 @@ _wait_for_completion() {
         fi
 
         local pending running done_count done_list
-        pending=$(grep '^PENDING=' "$_STATE_FILE" 2>/dev/null | cut -d= -f2-)
-        running=$(grep '^RUNNING=' "$_STATE_FILE" 2>/dev/null | cut -d= -f2-)
-        done_count=$(grep '^DONE=' "$_STATE_FILE" 2>/dev/null | cut -d= -f2-)
-        done_list=$(grep '^DONE_LIST=' "$_STATE_FILE" 2>/dev/null | cut -d= -f2-)
+        pending=$(grep '^PENDING=' "$_STATE_FILE" | cut -d= -f2-)
+        running=$(grep '^RUNNING=' "$_STATE_FILE" | cut -d= -f2-)
+        done_count=$(grep '^DONE=' "$_STATE_FILE" | cut -d= -f2-)
+        done_list=$(grep '^DONE_LIST=' "$_STATE_FILE" | cut -d= -f2-)
 
         # Still have work to do
         if [ -n "$pending" ] || [ -n "$running" ]; then
@@ -195,12 +195,12 @@ _wait_for_completion() {
         fi
 
         # Check if dispatcher is still alive (it might be between suites)
-        if [ -f /tmp/e2e-dispatcher.pid ] && kill -0 "$(cat /tmp/e2e-dispatcher.pid 2>/dev/null)" 2>/dev/null; then
+        if [ -f /tmp/e2e-dispatcher.pid ] && kill -0 "$(cat /tmp/e2e-dispatcher.pid)"; then
             # Dispatcher alive but nothing running/pending -- might be finishing up
             if [ -z "$pending" ] && [ -z "$running" ] && [ "${done_count:-0}" -gt 0 ]; then
                 # Give it a moment to exit cleanly
                 sleep 5
-                if kill -0 "$(cat /tmp/e2e-dispatcher.pid 2>/dev/null)" 2>/dev/null; then
+                if kill -0 "$(cat /tmp/e2e-dispatcher.pid)"; then
                     continue
                 fi
             else

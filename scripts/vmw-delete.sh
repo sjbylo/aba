@@ -41,7 +41,7 @@ else
 	exit 0
 fi
 
-ask "Delete the above virtual machine(s)" || exit 1
+ask -n --auto-yes "Delete the above virtual machine(s)" || exit 1
 
 source scripts/vm-vmw.sh
 

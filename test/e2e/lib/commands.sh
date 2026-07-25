@@ -14,8 +14,8 @@ _stop_pid_file() {
 	local _pidfile="$1" _label="$2"; shift 2
 	[ -f "$_pidfile" ] || return 0
 	local _pid
-	_pid=$(cat "$_pidfile" 2>/dev/null) || return 0
-	if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+	_pid=$(cat "$_pidfile") || return 0
+	if [ -n "$_pid" ] && kill -0 "$_pid"; then
 		kill "$_pid" && echo "$_label (pid $_pid) stopped."
 	fi
 	rm -f "$_pidfile" "$@"
@@ -28,14 +28,14 @@ cmd_kill() {
 	_stop_pid_file "$E2E_DISPATCHER_PID" "Dispatcher" "$E2E_DISPATCH_STATE"
 	if [ -f "$E2E_DAEMON_PID" ]; then
 		local _dmpid
-		_dmpid=$(cat "$E2E_DAEMON_PID" 2>/dev/null)
-		if [ -n "$_dmpid" ] && kill -0 "$_dmpid" 2>/dev/null; then
-			kill -- -"$_dmpid" 2>/dev/null || kill "$_dmpid" 2>/dev/null
+		_dmpid=$(cat "$E2E_DAEMON_PID")
+		if [ -n "$_dmpid" ] && kill -0 "$_dmpid"; then
+			kill -- -"$_dmpid" || kill "$_dmpid"
 			echo "Daemon (pid $_dmpid) killed."
 		fi
 		rm -f "$E2E_DAEMON_PID" "$E2E_DAEMON_META"
 	fi
-	pkill -f 'run\.sh.*(run|daemon)' 2>/dev/null || true
+	pkill -f 'run\.sh.*(run|daemon)' || true
 	rm -f ${E2E_POOL_LOCK_PREFIX}-*.lock "$E2E_GLOBAL_LOCK"
 	echo "All locks cleaned."
 }
@@ -60,10 +60,10 @@ cmd_stop() {
 
 	# Kill orphaned setup-infra.sh processes on bastion
 	local _orphan_pids
-	_orphan_pids=$(pgrep -f "setup-infra.sh" 2>/dev/null) || true
+	_orphan_pids=$(pgrep -f "setup-infra.sh") || true
 	if [ -n "$_orphan_pids" ]; then
 		echo "Killing orphaned setup-infra.sh processes: $_orphan_pids"
-		kill $_orphan_pids 2>/dev/null || true
+		kill $_orphan_pids || true
 	fi
 
 	local _rc_glob="${E2E_RC_PREFIX}-*.rc ${E2E_RC_PREFIX}-*.lock /tmp/e2e-runner.rc /tmp/e2e-runner.lock /tmp/e2e-paused-*"
@@ -75,9 +75,9 @@ cmd_stop() {
 		target=$(_con_target "$p")
 		printf "  con${p}: "
 		if _essh "$target" "
-			_suite_user=\$(cat /tmp/e2e-suite-user 2>/dev/null) || _suite_user=\"\"
+			_suite_user=\$(cat /tmp/e2e-suite-user) || _suite_user=\"\"
 			_sudo=\"\"; [ \"\$_suite_user\" = root ] && _sudo=sudo
-			\$_sudo tmux kill-session -t '$E2E_TMUX_SESSION' 2>/dev/null
+			\$_sudo tmux kill-session -t '$E2E_TMUX_SESSION'
 			sudo rm -f $_rc_glob
 			echo stopped
 		"; then
@@ -120,7 +120,7 @@ cmd_start() {
 			_state=$(govc vm.info -json "$vm" | grep -o '"powerState":"[^"]*"' | head -1) || _state=""
 			if [[ "$_state" == *"poweredOn"* ]]; then
 				echo "    ${vm}: already on"
-			elif govc vm.info "$vm" &>/dev/null; then
+			elif govc vm.info "$vm" >/dev/null; then
 				govc vm.power -on "$vm"
 				echo "    ${vm}: powered on"
 			else
@@ -147,19 +147,19 @@ cmd_status() {
 		target=$(_con_target "$p")
 		local _info=""
 		_info=$(_essh "$target" "
-			_suite_user=\$(cat /tmp/e2e-suite-user 2>/dev/null) || _suite_user=\"\"
+			_suite_user=\$(cat /tmp/e2e-suite-user) || _suite_user=\"\"
 			_sudo=\"\"; [ \"\$_suite_user\" = root ] && _sudo=sudo
 			_uhome=~; [ \"\$_suite_user\" = root ] && _uhome=/root
 			_slog=\"\${_uhome}/.e2e-harness/logs/summary.log\"
-			\$_sudo test -f \"\$_slog\" 2>/dev/null || _slog=\$(\$_sudo ls -t \${_uhome}/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
-			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null) || suite=\"\"
-			_ts() { stat -c %Y \"\$1\" 2>/dev/null | xargs -I{} date -d @{} +%H:%M 2>/dev/null; }
-			if \$_sudo tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
+			\$_sudo test -f \"\$_slog\" || _slog=\$(\$_sudo ls -t \${_uhome}/.e2e-harness/logs/*-summary.log | head -1)
+			suite=\$(cat /tmp/e2e-last-suites) || suite=\"\"
+			_ts() { stat -c %Y \"\$1\" | xargs -I{} date -d @{} +%H:%M; }
+			if \$_sudo tmux has-session -t '$E2E_TMUX_SESSION'; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
-				last=\$(\$_sudo tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+				last=\$(\$_sudo tail -1 \"\$_slog\" | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
-					rc=\$(cat \"\$rc_file\" 2>/dev/null)
+					rc=\$(cat \"\$rc_file\")
 					_since=\$(_ts \"\$rc_file\")
 					echo \"DONE|\${suite}|exit=\${rc}|\${_since}\"
 				elif [ -f \"/tmp/e2e-paused-\${suite}\" ]; then
@@ -173,7 +173,7 @@ cmd_status() {
 				if [ -n \"\$suite\" ]; then
 					rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
 					if [ -f \"\$rc_file\" ]; then
-						rc=\$(cat \"\$rc_file\" 2>/dev/null)
+						rc=\$(cat \"\$rc_file\")
 						_since=\$(_ts \"\$rc_file\")
 						echo \"FINISHED|\${suite}|exit=\${rc}|\${_since}\"
 					else
@@ -184,13 +184,13 @@ cmd_status() {
 				fi
 			fi
 			echo '|||TABLE|||'
-			\$_sudo tac \"\$_slog\" 2>/dev/null \\
+			\$_sudo tac \"\$_slog\" \\
 				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \\
 				| tac \\
 				| sed 's/\x1b\[[0-9;]*m//g' \\
 				| grep -E 'PASS|FAIL|SKIP|RUNNING|PENDING|  --' \\
 				| sed 's/^[0-9: ]*//'
-		" 2>/dev/null || echo "UNREACHABLE|-|-|")
+		" || echo "UNREACHABLE|-|-|")
 
 		local _status_line="${_info%%|||TABLE|||*}"
 		local _table_data="${_info#*|||TABLE|||}"
@@ -256,7 +256,7 @@ cmd_status() {
 }
 
 _show_dispatcher_status() {
-	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")" 2>/dev/null; then
+	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")"; then
 		printf "  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)" "$(cat "$E2E_DISPATCHER_PID")"
 		if [ -f "$E2E_DISPATCH_STATE" ]; then
 			local _ds_pending _ds_running _ds_done _ds_done_list
@@ -269,7 +269,7 @@ _show_dispatcher_status() {
 			if [ -n "$_ds_running" ]; then
 				# shellcheck disable=SC2086
 				set -- $_ds_running; local _n_active=$#
-				printf "    Active (%d):  %s\n" "$_n_active" "${_ds_running// /  |  }"
+				printf "    Active (%d):  %s\n" "$_n_active" "${_ds_running// / |  }"
 			fi
 
 			# Merge injected suites into pending display
@@ -285,10 +285,10 @@ _show_dispatcher_status() {
 			if [ -n "$_ds_pending" ]; then
 				# shellcheck disable=SC2086
 				set -- $_ds_pending; local _n_pending=$#
-				printf "    Pending (%d): %s\n" "$_n_pending" "${_ds_pending// /  |  }"
+				printf "    Pending (%d): %s\n" "$_n_pending" "${_ds_pending// / |  }"
 			fi
 
-			if [ -n "$_ds_done" ] && [ "$_ds_done" -gt 0 ] 2>/dev/null; then
+			if [ -n "$_ds_done" ] && [ "$_ds_done" -gt 0 ]; then
 				local _done_summary=""
 				local _entry
 				for _entry in $_ds_done_list; do
@@ -311,13 +311,13 @@ _show_dispatcher_status() {
 		printf "  Dispatcher: \033[90mnot running\033[0m\n"
 	fi
 
-	if [ -f "$E2E_DAEMON_PID" ] && kill -0 "$(cat "$E2E_DAEMON_PID" 2>/dev/null)" 2>/dev/null; then
+	if [ -f "$E2E_DAEMON_PID" ] && kill -0 "$(cat "$E2E_DAEMON_PID")"; then
 		local _dmeta=""
 		if [ -f "$E2E_DAEMON_META" ]; then
 			local _dm_pools _dm_started _dm_args
-			_dm_pools=$(grep '^pools=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
-			_dm_started=$(grep '^started=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
-			_dm_args=$(grep '^args=' "$E2E_DAEMON_META" 2>/dev/null | cut -d= -f2-)
+			_dm_pools=$(grep '^pools=' "$E2E_DAEMON_META" | cut -d= -f2-)
+			_dm_started=$(grep '^started=' "$E2E_DAEMON_META" | cut -d= -f2-)
+			_dm_args=$(grep '^args=' "$E2E_DAEMON_META" | cut -d= -f2-)
 			_dmeta=", since ${_dm_started}, pools ${_dm_pools}"
 			[ -n "$_dm_args" ] && _dmeta="${_dmeta}, ${_dm_args}"
 		fi
@@ -407,7 +407,7 @@ cmd_destroy() {
 		local prefix
 		for prefix in con dis; do
 			local vm="${prefix}${p}"
-			if govc vm.info "$vm" | grep "Name:" >/dev/null 2>&1; then
+			if govc vm.info "$vm" | grep "Name:" >/dev/null; then
 				echo "  Destroying $vm ..."
 				govc vm.power -off "$vm" || true
 				govc vm.destroy "$vm"
@@ -445,7 +445,7 @@ cmd_reschedule() {
 		printf "  Queued: \033[1;36m%s\033[0m (front)\n" "$suite"
 	done
 	echo ""
-	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")" 2>/dev/null; then
+	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")"; then
 		echo "  Dispatcher is running -- will pick this up on its next cycle (~30s)."
 	else
 		echo "  WARNING: No dispatcher running. Start one with: run.sh run -p all"
@@ -485,7 +485,7 @@ cmd_deploy() {
 # --- Internal helpers --------------------------------------------------------
 
 _ensure_govc() {
-	if command -v govc &>/dev/null; then
+	if command -v govc >/dev/null; then
 		return 0
 	fi
 	local _aba_root="${_ABA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"

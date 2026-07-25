@@ -21,8 +21,12 @@
 #
 # Usage: suite_configure_aba [--extra-flag value ...]
 suite_configure_aba() {
+	# Gateway = first usable IP in machine_network (e.g. 10.0.0.0/20 → 10.0.0.1)
+	local _mn _gw
+	_mn=$(pool_machine_network)
+	_gw="${_mn%%.*}.$(echo "${_mn#*.}" | sed 's|\.[^.]*$|.1|')"  # network+1
 	e2e_run "Configure aba.conf" \
-		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) $*"
+		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $_mn --gateway $_gw $*"
 }
 
 # --- suite_verify_aba_conf ---------------------------------------------------
@@ -65,8 +69,11 @@ suite_setup_operator_set() {
 # Calls configure, vmware env, NTP, and operator sets.
 suite_reapply_config() {
 	local ops="${1:-}"
+	local _mn _gw
+	_mn=$(pool_machine_network)
+	_gw="${_mn%%.*}.$(echo "${_mn#*.}" | sed 's|\.[^.]*$|.1|')"
 	e2e_run "Re-apply aba.conf" \
-		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+		"aba --noask --platform vmw --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $_mn --gateway $_gw"
 	suite_setup_vmware_env
 	suite_setup_ntp
 	[ -n "$ops" ] && suite_setup_operator_set "abatest" "$ops"
@@ -77,14 +84,14 @@ suite_reapply_config() {
 # Pass --remote to also clean disN.
 suite_cleanup_oc_mirror_cache() {
 	e2e_run "Remove oc-mirror caches (conN)" \
-		"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+		"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 	e2e_run "Remove stale oc-mirror temp dirs >1 day old (conN)" \
-		"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 2>/dev/null | xargs rm -rf"
+		"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 | xargs rm -rf"
 	if [ "${1:-}" = "--remote" ]; then
 		e2e_run_remote -q "Remove oc-mirror caches (disN)" \
-			"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+			"sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 		e2e_run_remote -q "Remove stale oc-mirror temp dirs >1 day old (disN)" \
-			"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 2>/dev/null | xargs rm -rf"
+			"find /var/tmp -maxdepth 1 -type d -name 'container_images_storage*' -mtime +0 | xargs rm -rf"
 	fi
 }
 
@@ -172,7 +179,7 @@ suite_bounce_stuck_pods() {
 	local bounce_cmd='
 export KUBECONFIG=~/aba/'"$cluster_dir"'/iso-agent-based/auth/kubeconfig
 echo "--- Bouncing stuck pods (not-ready, not Completed) ---"
-stuck=$(oc get po -A --no-headers 2>/dev/null | awk '"'"'{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print $1, $2}'"'"')
+stuck=$(oc get po -A --no-headers | awk '"'"'{split($3, arr, "/"); if (arr[1] != arr[2] && $4 != "Completed") print $1, $2}'"'"')
 if [ -z "$stuck" ]; then
 	echo "No stuck pods found."
 	exit 0

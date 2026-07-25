@@ -58,8 +58,8 @@ pool_registry_purge_extras() {
     local _auth="${REG_USER}:${REG_PW}"
 
     local all_repos
-    all_repos=$(curl -sk -u "$_auth" "${_reg}/v2/_catalog?n=500" 2>/dev/null \
-        | python3 -c 'import json,sys; [print(r) for r in json.load(sys.stdin).get("repositories",[])]' 2>/dev/null)
+    all_repos=$(curl -sk -u "$_auth" "${_reg}/v2/_catalog?n=500" \
+        | python3 -c 'import json,sys; [print(r) for r in json.load(sys.stdin).get("repositories",[])]')
 
     local deleted=0 kept=0
 
@@ -71,8 +71,8 @@ pool_registry_purge_extras() {
         [[ $skip -eq 1 ]] && { kept=$((kept + 1)); continue; }
 
         local tags
-        tags=$(curl -sk -u "$_auth" "${_reg}/v2/${repo}/tags/list" 2>/dev/null \
-            | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tags") or []; [print(x) for x in t]' 2>/dev/null)
+        tags=$(curl -sk -u "$_auth" "${_reg}/v2/${repo}/tags/list" \
+            | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tags") or []; [print(x) for x in t]')
         [[ -z "$tags" ]] && continue
 
         for tag in $tags; do
@@ -82,13 +82,13 @@ pool_registry_purge_extras() {
                 -H "Accept: application/vnd.oci.image.manifest.v1+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
                 -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
-                "${_reg}/v2/${repo}/manifests/${tag}" 2>/dev/null \
+                "${_reg}/v2/${repo}/manifests/${tag}" \
                 | grep -i docker-content-digest | awk '{print $2}' | tr -d '\r\n')
             [[ -z "$digest" ]] && continue
 
             local rc
             rc=$(curl -sk -u "$_auth" -X DELETE "${_reg}/v2/${repo}/manifests/${digest}" \
-                -o /dev/null -w "%{http_code}" 2>/dev/null)
+                -o /dev/null -w "%{http_code}")
             [[ "$rc" == "202" ]] && deleted=$((deleted + 1))
         done
     done
@@ -105,7 +105,7 @@ _pool_registry_gc() {
     podman run --rm \
         -v "${POOL_REG_DIR}/data:/var/lib/registry:Z" \
         docker.io/library/registry:latest \
-        garbage-collect --delete-untagged /etc/distribution/config.yml >/dev/null 2>&1
+        garbage-collect --delete-untagged /etc/distribution/config.yml >/dev/null
     podman start "$CONTAINER_NAME" >/dev/null
 
     # Wait for registry to be healthy after restart (avoids oc-mirror race)
@@ -138,8 +138,8 @@ pool_registry_prune_old_releases() {
     local _repo
     for _repo in "${REG_PATH#/}/openshift/release-images" "${REG_PATH#/}/openshift/release"; do
         local tags
-        tags=$(curl -sk -u "$_auth" "${_reg}/v2/${_repo}/tags/list" 2>/dev/null \
-            | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tags") or []; [print(x) for x in t]' 2>/dev/null)
+        tags=$(curl -sk -u "$_auth" "${_reg}/v2/${_repo}/tags/list" \
+            | python3 -c 'import json,sys; t=json.load(sys.stdin).get("tags") or []; [print(x) for x in t]')
         [[ -z "$tags" ]] && continue
 
         local deleted=0
@@ -154,14 +154,14 @@ pool_registry_prune_old_releases() {
                 -H "Accept: application/vnd.oci.image.manifest.v1+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
                 -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
-                "${_reg}/v2/${_repo}/manifests/${tag}" 2>/dev/null \
+                "${_reg}/v2/${_repo}/manifests/${tag}" \
                 | grep -i docker-content-digest | awk '{print $2}' | tr -d '\r\n')
             [[ -z "$digest" ]] && continue
 
             local rc
             rc=$(curl -sk -u "$_auth" -X DELETE \
                 "${_reg}/v2/${_repo}/manifests/${digest}" \
-                -o /dev/null -w "%{http_code}" 2>/dev/null)
+                -o /dev/null -w "%{http_code}")
             [[ "$rc" == "202" ]] && deleted=$((deleted + 1))
         done
 
@@ -235,7 +235,7 @@ if curl --retry 3 -sfk -o /dev/null -u "${REG_USER}:${REG_PW}" "https://${reg_ho
 else
     echo "[1/4] Installing Docker registry on ${reg_host}:${REG_PORT} ..."
 
-    if ! rpm -q podman &>/dev/null; then
+    if ! rpm -q podman >/dev/null; then
         sudo dnf install -y podman
     fi
 
@@ -278,7 +278,7 @@ else
     podman pod rm -f -a || true
 
     # Open firewall port
-    if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
+    if rpm -q firewalld >/dev/null && systemctl is-active firewalld >/dev/null; then
         sudo firewall-cmd --add-port=${REG_PORT}/tcp --permanent || true
         sudo firewall-cmd --reload
     fi
@@ -371,7 +371,7 @@ echo "  Imageset config written to $SYNC_DIR/imageset-config.yaml"
 # Skip if already synced for this version AND the images are still there.
 DONE_MARKER="$SYNC_DIR/.synced-${version}"
 if [[ -f "$DONE_MARKER" ]]; then
-    if skopeo inspect --authfile "$POOL_AUTH" "docker://${reg_host}:${REG_PORT}${REG_PATH}/openshift/release-images:${version}-$(uname -m)" &>/dev/null; then
+    if skopeo inspect --authfile "$POOL_AUTH" "docker://${reg_host}:${REG_PORT}${REG_PATH}/openshift/release-images:${version}-$(uname -m)" >/dev/null; then
         echo "[4/4] Already synced for ${version} (verified) -- skipping"
     else
         echo "[4/4] Done-marker exists but release image not found -- re-syncing"
@@ -388,11 +388,11 @@ if [[ ! -f "$DONE_MARKER" ]]; then
     [[ -x "$HOME/bin/oc-mirror" ]] && export PATH="$HOME/bin:$PATH"
 
     _oc_mirror_tmp_installed=""
-    if ! command -v oc-mirror &>/dev/null; then
+    if ! command -v oc-mirror >/dev/null; then
         echo "  Installing oc-mirror via aba cli Makefile ..."
         # Wait for any background run_once downloads to finish before extracting;
         # otherwise Make sees a partially-downloaded tarball and extraction fails.
-        "$ABA_ROOT/scripts/cli-download-all.sh" --wait oc-mirror 2>/dev/null || true
+        "$ABA_ROOT/scripts/cli-download-all.sh" --wait oc-mirror || true
         make -C "$ABA_ROOT/cli" ~/bin/oc-mirror
         export PATH="$HOME/bin:$PATH"
         _oc_mirror_tmp_installed=1

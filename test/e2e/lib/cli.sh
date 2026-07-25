@@ -26,6 +26,7 @@ CLI_FORCE=""
 CLI_RESUME=""
 CLI_DEV=""
 CLI_REVERT=""
+CLI_LOOP=""
 CLI_OS=""
 CLI_VMWARE_CONF=""
 CLI_CON_USER=""
@@ -75,6 +76,8 @@ _usage() {
 	  -F, --fresh            Clear old results and run all suites from scratch (aliases: -f, --force)
 	  -d, --dev              Push local source to ~/aba on conN (instead of git clone)
 	  -r, --resume           Skip previously-passed tests (checkpointed)
+	  -L, --loop             Keep pools busy: re-queue suites as soon as the queue drains
+	                         (does not wait for in-flight suites to finish)
 	  -n, --dry-run          Show dispatch plan, don't execute
 	  -c, --clean            Delete clusters/mirrors before stopping/destroying (default for stop/destroy)
 	  --no-clean             Skip cluster/mirror cleanup on stop/destroy
@@ -207,7 +210,7 @@ _pool_dis_user() { _pool_conf_get "$1" "$2" DIS_SSH_USER; }
 _pool_count_from_conf() {
 	local pools_file="$1"
 	if [ -f "$pools_file" ]; then
-		grep -c '^[^#]' "$pools_file" 2>/dev/null || echo 0
+		grep -c '^[^#]' "$pools_file" || echo 0
 	else
 		echo 0
 	fi
@@ -258,6 +261,7 @@ _parse_args() {
 			-F|--fresh|-f|--force)  CLI_FORCE=1; shift ;;
 			-d|--dev)               CLI_DEV=1; shift ;;
 			-r|--resume)            CLI_RESUME=1; shift ;;
+			-L|--loop)              CLI_LOOP=1; shift ;;
 			-o|--os)                CLI_OS="$2"; shift 2 ;;
 			-v|--vmware-conf)       CLI_VMWARE_CONF="$2"; shift 2 ;;
 			-u|--user)              CLI_CON_USER="$2"; CLI_DIS_USER="$2"; shift 2 ;;
@@ -377,8 +381,8 @@ _load_config() {
 
 _detect_git_metadata() {
 	local aba_root="$1"
-	export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$aba_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}"
-	export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$aba_root" remote get-url origin 2>/dev/null || echo https://github.com/sjbylo/aba.git)}"
+	export E2E_GIT_BRANCH="${E2E_GIT_BRANCH:-$(git -C "$aba_root" rev-parse --abbrev-ref HEAD || echo dev)}"
+	export E2E_GIT_REPO="${E2E_GIT_REPO:-$(git -C "$aba_root" remote get-url origin || echo https://github.com/sjbylo/aba.git)}"
 	export E2E_GIT_REPO_SLUG="${E2E_GIT_REPO_SLUG:-$(echo "$E2E_GIT_REPO" | sed 's|.*github.com[:/]||; s|\.git$||')}"
 }
 

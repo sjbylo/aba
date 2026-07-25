@@ -1,0 +1,14 @@
+---
+description: Default branch for E2E testing is always "dev"
+alwaysApply: true
+---
+
+# E2E Testing: Always Use the "dev" Branch
+
+When running E2E tests (`run.sh run`, `run.sh deploy`, `gotest`, etc.):
+
+- **Always default to the `dev` branch** unless the user explicitly says otherwise.
+- The local workspace should be on `dev` before deploying code to pools.
+- Use `--dev` flag with `run.sh` to push the local (dev) source to pools.
+- The `--dev` deploy overlays source files via tarball; `.git/` on pools is NOT updated. Verify deployed code by comparing file checksums (md5sum), not `git log`.
+- If in doubt about which branch to test: **use `dev`**.

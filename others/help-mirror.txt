@@ -82,9 +82,23 @@ Upgrade transfer workflow (disconnected):
 
   On the disconnected host:
     cp /transfer-media/*.tar ~/aba/mirror/data/
-    aba -d mirror load                  # unpacks upgrade bundle, loads images
+    aba -d mirror load                  # unpacks transfer bundle, loads images
     aba -d <cluster> day2               # configures OperatorHub
     aba -d <cluster> upgrade --to 4.22.2
+
+Air-gapped transfer (save/transfer/load):
+
+  After the initial bundle install, use save/transfer/load for all subsequent updates:
+
+  1. On connected host:   aba -d mirror save        (or: aba -d mirror --upgrade-to X.Y.Z save)
+  2. Transfer:            cp mirror/data/*.tar /media/   (always copy ALL *.tar files)
+  3. On disconnected host: cp /media/*.tar ~/aba/mirror/data/ && aba -d mirror load
+
+  Notes:
+    - Always copy ALL *.tar files from mirror/data/ (both mirror_*.tar and aba-transfer.tar).
+    - It is safe to overwrite existing tar files on the disconnected host. Back up first if needed.
+    - After load, you will be asked whether to delete the archive files to free disk space.
+    - Bundle (aba bundle) is for initial bootstrap only. Use save/transfer/load for ongoing updates.
 
 The 'install' command can be substituted with save, load, or sync. When these commands are used, 'install' will be triggered automatically if required.
 The options above [-k, -U, -H etc] can be used also for 'save', 'load' and/or 'sync' and will be passed to the 'install' command, if needed. 

@@ -1,0 +1,17 @@
+---
+description: Use ssh -F ~/.aba/ssh.conf for all SSH/SCP commands to bastion and remote hosts
+alwaysApply: true
+---
+
+# SSH config for remote commands
+
+When running SSH or SCP commands from the workspace (e.g. to bastion, conN, disN), always use:
+
+```bash
+ssh -F ~/.aba/ssh.conf <host> "..."
+scp -F ~/.aba/ssh.conf ...
+```
+
+This suppresses "Warning: Permanently added ... to the list of known hosts" noise and applies standard connection settings (no host key checking, /dev/null known_hosts, 15s timeout, batch mode, ERROR log level).
+
+The config file lives at `~/.aba/ssh.conf` on bastion (the workspace host).

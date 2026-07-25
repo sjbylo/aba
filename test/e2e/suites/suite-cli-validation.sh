@@ -64,7 +64,7 @@ test_begin "Reset + catalog download"
 e2e_run "Reset aba" "aba reset -f"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
     "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"

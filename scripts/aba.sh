@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.1.6
+ABA_VERSION=1.2.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260718202205
+ABA_BUILD=20260725220644
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -321,7 +321,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -372,6 +372,8 @@ do
 			cat $ABA_ROOT/others/help-cluster.txt
 		elif [ "$_ht" = "bundle" ]; then
 			cat $ABA_ROOT/others/help-bundle.txt
+		elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
+			cat $ABA_ROOT/others/help-setup.txt
 		else
 			# If some other target, then show the main help
 			cat $ABA_ROOT/others/help-aba.txt
@@ -434,6 +436,10 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			printf "  %-12s %s\n" "$set_name" "$desc"
 		done
 		exit 0
+	elif [ "$1" = "show-ops" ] || [ "$1" = "show-operators" ]; then
+		shift
+		cd "$ABA_ROOT"
+		exec $ABA_ROOT/scripts/show-ops.sh "$@"
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
 		if [ "$1" = "-" ]; then
@@ -604,7 +610,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--vendor" ]; then
 		_require_mirror_dir "$1"
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1"
-		[[ "$2" =~ ^(auto|quay|docker)$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, or docker"
+		[[ "$2" =~ ^(auto|quay|docker|${_QUAY_NG_VENDOR})$ ]] || aba_abort "invalid vendor '$2' -- must be auto, quay, docker, or $_QUAY_NG_VENDOR"
 		make -sC $WORK_DIR mirror.conf force=yes
 		replace-value-conf -n reg_vendor -v "$2" -f $WORK_DIR/mirror.conf
 		shift 2
@@ -1038,6 +1044,34 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			cur_target=$1
 
 			case $cur_target in
+				setup|remove)
+					# Dispatch immediately — pass all remaining args to the tool script
+					shift
+					_infra_sub="${1:-}"
+					[ "$_infra_sub" ] && shift
+					case "$_infra_sub" in
+						-h|--help|"")
+							cat $ABA_ROOT/others/help-setup.txt
+							exit 0
+							;;
+					esac
+					case "$cur_target" in
+						setup)
+							case "$_infra_sub" in
+								dns) exec $ABA_ROOT/tools/setup-dns.sh "$@" ;;
+								ntp) exec $ABA_ROOT/tools/setup-ntp.sh "$@" ;;
+								*)   aba_abort "Usage: aba setup {dns|ntp} [options]" ;;
+							esac
+							;;
+						remove)
+							case "$_infra_sub" in
+								dns) exec $ABA_ROOT/tools/remove-dns.sh "$@" ;;
+								ntp) exec $ABA_ROOT/tools/remove-ntp.sh "$@" ;;
+								*)   aba_abort "Usage: aba remove {dns|ntp} [options]" ;;
+							esac
+							;;
+					esac
+					;;
 				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb)
 					# These are processed directly in code below, bypassing Make
 					:
@@ -1115,7 +1149,7 @@ if [ "$cur_target" ]; then
 			# If still not marked after auto-detect, warn and ask
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
 				aba_warn "Cluster has not completed installation."
-				ask -n --auto-yes "Cluster has not completed installation, continue anyway" || exit 1
+				ask "Cluster has not completed installation, continue anyway" || exit 1
 			fi
 			;;
 	esac
@@ -1302,6 +1336,10 @@ if [ "$cur_target" ]; then
 			# Clean up externalized state (~/.aba/clusters/<name>.<domain>/)
 			source <(normalize-cluster-conf) 2>/dev/null || true
 			_del_sd=$(cluster_state_dir "${cluster_name:-}" "${base_domain:-}")
+
+			# Remove ABA-managed DNS records for this cluster (no-op if not using ABA DNS)
+			$ABA_ROOT/scripts/infra-dns.sh remove-cluster "${cluster_name:-}" "${base_domain:-}"
+
 			if [ "$_del_sd" ] && [ -d "$_del_sd" ]; then
 				rm -rf "$_del_sd"
 				aba_info "Removed cluster state: $_del_sd"

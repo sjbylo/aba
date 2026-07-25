@@ -1,0 +1,51 @@
+# run_once() background task pattern
+
+## Core concept
+
+`run_once` is ABA's task deduplication and lifecycle manager. It handles backgrounding internally — callers NEVER need `&`.
+
+## The pattern
+
+### Kick (start background task when inputs change)
+
+```bash
+run_once -r -i "task:id" 2>/dev/null || true   # Reset (invalidate previous result)
+run_once -i "task:id" -- <command>              # Start in background (returns immediately)
+```
+
+`run_once -i ... -- cmd` calls `_start_task "false"` which backgrounds via an internal subshell. Do NOT add `&` — it's already non-blocking.
+
+### Wait (block until task completes — before consuming output)
+
+```bash
+run_once -q -w -i "task:id" 2>/dev/null || true   # Block until done
+run_once -q -w -i "task:id" -- <command>           # Start-if-needed + wait
+```
+
+### Peek (check if done without blocking)
+
+```bash
+run_once -p -i "task:id" 2>/dev/null   # Returns 0 if done, non-zero if still running
+```
+
+## ISC (ImageSetConfig) regeneration specifically
+
+- **`tui_kick_isconf_regen()`** = invalidate + start background regen. Called whenever ISC inputs change (ocp_version, channel, operators, ocp_version_target, excl_platform).
+- **Before consuming ISC** (display, save, sync, bundle): MUST call `run_once -q -w -i "aba:isconf:generate"` to ensure it's complete.
+- ISC generation is fast (template fill via `make isconf`) but still requires the wait to avoid races.
+
+## Common mistake
+
+```bash
+# WRONG — double-backgrounds (& is redundant, run_once already backgrounds)
+(cd "$ABA_ROOT" && aba_isconf_generate_start) &
+
+# CORRECT — run_once handles backgrounding
+(cd "$ABA_ROOT" && aba_isconf_generate_start)
+```
+
+## When reviewing bugs related to run_once
+
+- If a "race condition" bug mentions run_once, check if the **wait** (`-w`) is missing before consumption — that's almost always the fix.
+- If code adds `&` after a `run_once -i` call, that's the bug — remove the `&`.
+- This is NOT a bug if the kick and consumption are in separate user actions (e.g., kick on config change, wait on "View ISC" menu action).

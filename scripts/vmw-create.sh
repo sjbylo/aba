@@ -146,6 +146,7 @@ create_node() {
 			cmd="govc vm.power -on $vm_name"
 			aba_debug "Running: $cmd"
 			$cmd
+			vmp_ensure_cdrom_connected "$vm_name"
 		fi
 
 		i=$(( i + 1 ))

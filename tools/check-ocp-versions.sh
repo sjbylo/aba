@@ -1,28 +1,81 @@
 #!/bin/bash -e
 #
-# Monitor for new OpenShift releases across major versions and channels.
-# Auto-discovers the latest minor for each major; no hardcoded minor numbers.
-# Tracks seen versions in ~/.ocp-new-ver/ and notifies on new ones.
+# Monitor for new OpenShift releases and notify on unseen versions.
+# Tracks seen versions in ~/.ocp-new-ver/.
 #
-# Usage: check-ocp-versions.sh [-v]
-#   -v  verbose output (show probing progress)
+# Default: only the tip minor of each major (WINDOW=1), on stable + candidate.
+# That covers (1) latest GA line e.g. 4.22.x and (2) latest pre-release e.g. 5.0.0.
+#
+# Usage: check-ocp-versions.sh [options]
+#   -v, --verbose              Show probing progress
+#   -w, --window N             Minors back from latest to check (default: 1)
+#   --majors LIST              Comma-separated majors to probe (default: 4,5,6)
+#   --channels LIST            Comma-separated channels (default: stable,candidate)
+#                              Use stable,fast,candidate for the old full set
 #
 # Intended to run via cron, e.g.:
 #   */30 * * * * /path/to/check-ocp-versions.sh 2>&1 | logger -t ocp-ver-check
 
-[ "$1" = "-v" ] && verbose=1
+verbose=
+WINDOW=1
+MAJORS=(4 5 6)
+CHANNELS=("stable" "candidate")
+BASE_URL="https://mirror.openshift.com/pub"
+DB_DIR=~/.ocp-new-ver
 
-[ "$verbose" ] && echo "Start $0 at $(date)"
+usage() {
+	sed -n '2,18p' "$0" | sed 's/^# \?//'
+	exit "${1:-0}"
+}
+
+# Parse "a,b,c" or "a b c" into a bash array name passed as $1
+_parse_list() {
+	local -n _out=$1
+	shift
+	local raw="$*"
+	raw="${raw//,/ }"
+	# shellcheck disable=SC2206
+	_out=($raw)
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-v|--verbose) verbose=1; shift ;;
+		-w|--window)
+			[ -n "${2:-}" ] || { echo "Error: $1 needs a value" >&2; exit 1; }
+			WINDOW=$2
+			shift 2
+			;;
+		--majors)
+			[ -n "${2:-}" ] || { echo "Error: $1 needs a value" >&2; exit 1; }
+			_parse_list MAJORS "$2"
+			shift 2
+			;;
+		--channels)
+			[ -n "${2:-}" ] || { echo "Error: $1 needs a value" >&2; exit 1; }
+			_parse_list CHANNELS "$2"
+			shift 2
+			;;
+		-h|--help) usage 0 ;;
+		*)
+			echo "Error: unknown option: $1" >&2
+			usage 1
+			;;
+	esac
+done
+
+[[ "$WINDOW" =~ ^[0-9]+$ ]] && [ "$WINDOW" -ge 1 ] || {
+	echo "Error: --window must be a positive integer (got '$WINDOW')" >&2
+	exit 1
+}
+[ ${#MAJORS[@]} -gt 0 ] || { echo "Error: --majors list is empty" >&2; exit 1; }
+[ ${#CHANNELS[@]} -gt 0 ] || { echo "Error: --channels list is empty" >&2; exit 1; }
+
+[ "$verbose" ] && echo "Start $0 at $(date) (window=$WINDOW majors=${MAJORS[*]} channels=${CHANNELS[*]})"
 
 [ -f ~/.proxy-set.sh ] && . ~/.proxy-set.sh
 
-DB_DIR=~/.ocp-new-ver
 mkdir -p "$DB_DIR"
-
-WINDOW=5                   # How many minors back from latest to check
-MAJORS=(4 5 6)             # Probe these; non-existent ones are skipped
-CHANNELS=("stable" "fast" "candidate")
-BASE_URL="https://mirror.openshift.com/pub"
 
 # Auto-discover the highest available minor for a given major version.
 # Probes candidate first (may have RC for a newer minor), then fast, then stable.
@@ -70,7 +123,7 @@ for major in "${MAJORS[@]}"; do
 
 			[ "$verbose" ] && echo "  Checking $CH_VER ..."
 
-			avail_ver=$(curl --max-time 15 -f --retry 3 -sSL "$URL" 2>/dev/null | grep ^Name: | awk '{print $NF}')
+			avail_ver=$(curl --max-time 15 -f --retry 3 -sSL "$URL" 2>/dev/null | grep ^Name: | awk '{print $NF}') || true
 
 			if [ -z "$avail_ver" ]; then
 				continue

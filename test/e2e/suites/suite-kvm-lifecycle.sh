@@ -77,7 +77,7 @@ test_begin "Setup: install aba, configure for KVM"
 e2e_run "Install aba" "./install"
 
 e2e_run "Configure aba.conf for KVM" \
-    "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain)"
+    "aba --noask --platform kvm --channel $TEST_CHANNEL --version $OCP_VERSION --base-domain $(pool_domain) --machine-network $(pool_machine_network)"
 
 e2e_run "Verify aba.conf: ask=false" "grep ^ask=false aba.conf"
 e2e_run "Verify aba.conf: platform=kvm" "grep ^platform=kvm aba.conf"
@@ -154,8 +154,8 @@ e2e_run -r 2 10 "Create VMs and start install" \
 e2e_poll 1800 30 "Wait for SNO bootstrap-complete" \
     "cd $SNO && openshift-install agent wait-for bootstrap-complete --dir iso-agent-based 2>&1 | tail -1"
 
-# Wait for initial cluster install to complete (KVM SNO can take 30-45 min after bootstrap)
-e2e_wait_cluster_ready $SNO local 3000
+# Wait for initial cluster install to complete (KVM SNO can take 45-60 min after bootstrap)
+e2e_wait_cluster_ready $SNO local 4200
 
 # EARLY day2: .install-complete does NOT exist yet.
 # day2.sh gate should detect cluster_is_ready(), auto-create .install-complete,

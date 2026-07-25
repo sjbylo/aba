@@ -1,0 +1,34 @@
+---
+description: On gotest wakes or PAUSED pools, follow the gotest skill — investigate, do not status-only
+alwaysApply: true
+---
+
+# Gotest wake / PAUSED enforcement
+
+When **any** of these is true:
+
+- A shell/timer prints `AGENT_LOOP_WAKE_GOTEST` or `AGENT_LOOP_TICK_gotest`
+- `run.sh status` shows a pool **PAUSED**
+- The user said `gotest` / E2E monitoring loop is active
+
+You MUST:
+
+1. **Read and follow** `.cursor/skills/gotest/SKILL.md` (do not rely on memory).
+2. For each **PAUSED** suite: investigate root cause (tmux pane, suite logs, host errors) — **PAUSED = FAILED**.
+3. Failure handling per skill: **RCA always** → fix only if **very obvious and under 5 lines** → otherwise **do nothing** to code. Do **not** write plan files.
+4. Keystrokes: follow the gotest skill — autonomous `R` only for documented unstick cases; never `s` / `S` / `0` without explicit user permission.
+5. Notify via `~/bin/notify.sh` on autonomous actions (unstick, `R`, deploy, tiny fix).
+
+**Forbidden:** wake → status one-liner → sleep 15m with no investigation.
+**Forbidden:** writing `ai/PLAN_*.md` (or similar) for gotest failures.
+
+## Arming wakes (so the agent actually wakes)
+
+Gotest timers **must** use Shell `notify_on_output` with the sleep/echo as the
+**foreground** command (`block_until_ms: 0`). Stdout stays on the terminal.
+
+**Forbidden when arming:** `nohup`, `>>/tmp/….log` (or any file-only redirect) on the
+wake command, or a parent shell that exits after `… &`. Those write ticks to disk but
+**never notify** this chat — overnight “loop worked but agent slept” failure mode.
+
+If logging is needed: `| tee -a /tmp/loop-gotest.log`, never replace stdout.

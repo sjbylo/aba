@@ -88,13 +88,13 @@ e2e_run "Validate older version is in upgrade graph" "
     older=\$(< /tmp/e2e-ocp-version-older) &&
     desired=\$(< /tmp/e2e-ocp-version-desired) &&
     tgt_minor=\$(echo \$desired | cut -d. -f1-2) &&
-    if verify_upgrade_path \"\$older\" \"\$desired\" fast 2>/dev/null; then
+    if verify_upgrade_path \"\$older\" \"\$desired\" fast; then
         echo \"Upgrade path OK: \$older -> \$desired\"
     else
         echo \"WARNING: \$older not in fast-\$tgt_minor graph, searching for valid source ...\"
         src_minor=\$(echo \$older | cut -d. -f1-2)
-        graph_json=\$(_fetch_graph_cached fast \$tgt_minor 2>/dev/null)
-        valid=\$(echo \"\$graph_json\" | jq -r '.nodes[].version' 2>/dev/null \
+        graph_json=\$(_fetch_graph_cached fast \$tgt_minor)
+        valid=\$(echo \"\$graph_json\" | jq -r '.nodes[].version' \
             | grep \"^\$src_minor\\.\" | sort -rV | head -1)
         if [ -z \"\$valid\" ]; then
             echo \"FATAL: no \$src_minor.x version in fast-\$tgt_minor graph\"; exit 1

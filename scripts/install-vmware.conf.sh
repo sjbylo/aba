@@ -116,7 +116,9 @@ if [ -s vmware.conf ]; then
 
 	aba_debug "Checking govc config file: $PWD/vmware.conf"
 
-	if ! govc about >/dev/null 2>&1; then
+	_govc_err=""
+	if ! _govc_err=$(govc about 2>&1 >/dev/null); then
+		aba_debug "govc about failed: $_govc_err"
 		aba_abort "Cannot access vSphere or ESXi at $GOVC_URL.  Please edit $PWD/vmware.conf and try again!" 
 	fi
 

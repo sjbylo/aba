@@ -34,7 +34,7 @@ echo ""
 # -------------------------------------------------------------------------
 echo "--- Step 1: Ensure persistent tmux session on $HOST ---"
 
-if _ssh "tmux has-session -t $TMUX_SESSION 2>/dev/null"; then
+if _ssh "tmux has-session -t $TMUX_SESSION"; then
     echo "  Session '$TMUX_SESSION' already exists -- reusing."
 else
     echo "  Creating tmux session '$TMUX_SESSION' ..."
@@ -51,7 +51,7 @@ echo "--- Step 2: Check concurrent run protection ---"
 LOCK_CHECK=$(_ssh "
     if [ -f $LOCK_FILE ]; then
         pid=\$(cat $LOCK_FILE)
-        if kill -0 \$pid 2>/dev/null; then
+        if kill -0 \$pid; then
             echo BUSY
         else
             echo STALE
@@ -132,7 +132,7 @@ echo "--- Step 5: Poll for completion (watching $RC_FILE) ---"
 
 elapsed=0
 while true; do
-    rc_content=$(_ssh "cat $RC_FILE 2>/dev/null" || true)
+    rc_content=$(_ssh "cat $RC_FILE" || true)
     if [ -n "$rc_content" ]; then
         echo "  Completed after ~${elapsed}s. Exit code: $rc_content"
         break
@@ -154,7 +154,7 @@ done
 echo ""
 echo "--- Step 6: Verify tmux session survived ---"
 
-if _ssh "tmux has-session -t $TMUX_SESSION 2>/dev/null"; then
+if _ssh "tmux has-session -t $TMUX_SESSION"; then
     echo "  Session '$TMUX_SESSION' is still alive -- GOOD (persistent)."
 else
     echo "  ERROR: Session '$TMUX_SESSION' is gone! The session should persist."
@@ -167,7 +167,7 @@ fi
 echo ""
 echo "--- Step 7: Verify lock file cleaned up ---"
 
-if _ssh "test -f $LOCK_FILE" 2>/dev/null; then
+if _ssh "test -f $LOCK_FILE"; then
     echo "  WARNING: Lock file still exists (trap may not have fired)."
 else
     echo "  Lock file removed -- GOOD."
@@ -188,7 +188,7 @@ echo "  Now checking lock ..."
 LOCK_CHECK=$(_ssh "
     if [ -f $LOCK_FILE ]; then
         pid=\$(cat $LOCK_FILE)
-        if kill -0 \$pid 2>/dev/null; then
+        if kill -0 \$pid; then
             echo BUSY
         else
             echo STALE
@@ -207,7 +207,7 @@ fi
 echo ""
 echo "  Waiting for slow command to finish ..."
 while true; do
-    rc_content=$(_ssh "cat $RC_FILE 2>/dev/null" || true)
+    rc_content=$(_ssh "cat $RC_FILE" || true)
     [ -n "$rc_content" ] && break
     sleep 2
 done

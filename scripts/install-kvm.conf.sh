@@ -65,7 +65,9 @@ if [ -s kvm.conf ]; then
 
 	aba_debug "Checking kvm config file: $PWD/kvm.conf"
 
-	if ! virsh -c "$LIBVIRT_URI" version >/dev/null 2>&1; then
+	_virsh_err=""
+	if ! _virsh_err=$(virsh -c "$LIBVIRT_URI" version 2>&1 >/dev/null); then
+		aba_debug "virsh version failed: $_virsh_err"
 		aba_abort "Cannot connect to libvirt at $LIBVIRT_URI.  Please edit $PWD/kvm.conf and try again!"
 	fi
 
