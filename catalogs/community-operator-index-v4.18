@@ -122,6 +122,7 @@ deployment-validation-operator                          Deployment Validation Op
 devopsinabox                                            Devops-in-a-box                                              alpha
 dns-operator                                            DNS Operator                                                 stable
 docling-operator                                        Docling Operator                                             alpha
+dotvirt-operator                                        dotvirt operator                                             stable-v0
 dynatrace-operator                                      Dynatrace Operator                                           alpha
 eclipse-amlen-operator                                  eclipse-amlen-operator                                       alpha
 eclipse-che                                             Eclipse Che                                                  stable

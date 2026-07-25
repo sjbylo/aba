@@ -121,6 +121,7 @@ debezium-operator                                       Debezium Operator       
 deployment-validation-operator                          Deployment Validation Operator                               alpha
 devopsinabox                                            Devops-in-a-box                                              alpha
 dns-operator                                            DNS Operator                                                 stable
+dotvirt-operator                                        dotvirt operator                                             stable-v0
 dynatrace-operator                                      Dynatrace Operator                                           alpha
 eclipse-amlen-operator                                  eclipse-amlen-operator                                       alpha
 eclipse-che                                             Eclipse Che                                                  stable

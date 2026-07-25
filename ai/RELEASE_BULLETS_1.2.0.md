@@ -1,6 +1,6 @@
-# Release Bullets for v1.2.0
+# ABA 1.2.0 - Release Notes
 
-VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor, and VMware reliability fixes.
+VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor (alpha), and VMware reliability fixes.
 
 ## New Features
 
@@ -14,7 +14,7 @@ VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, q
 ## Improvements
 
 - **Air-gap transfer guardrails** — `aba load` aborts if `mirror_*.tar` missing, warns if `aba-transfer.tar` missing, offers to clean up archives after successful load.
-- **Bundle `--force` preserves oc-mirror state** — Only ABA-owned files are removed; `working-dir/` is preserved across retries.
+- **Bundle `--force` preserves oc-mirror state** — Only ABA-owned files are removed; `working-dir/` is now preserved across retries.
 - **Stderr capture for diagnostics** — Internal commands (dig, curl, govc, skopeo, firewall-cmd, chronyd) now log stderr to trace.log instead of discarding it.
 - **Bridge interface detection** — Network auto-detection works correctly on hosts using bridge interfaces (e.g. `br-lab`).
 - **Registry uninstall idempotent** — `aba uninstall` succeeds cleanly even when the registry is already removed.

@@ -66,7 +66,7 @@ machine-deletion-remediation                            Machine Deletion Remedia
 mcg-operator                                            NooBaa Operator                                              stable-4.17
 metallb-operator                                        MetalLB Operator                                             stable
 model-validation-operator                               Model Validation Operator                                    tech-preview
-mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.1
+mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.2
 mtc-operator                                            Migration Toolkit for Containers Operator                    release-v1.8
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.9

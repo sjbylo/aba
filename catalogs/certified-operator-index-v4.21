@@ -163,5 +163,6 @@ vault-secrets-operator                                  Vault Secrets Operator  
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
 visionone-containersecurity                             TrendAI Vision One Container Security                        stable
+wave                                                    Wave                                                         stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
