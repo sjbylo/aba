@@ -119,9 +119,11 @@ debezium-operator                                       Debezium Operator       
 deployment-validation-operator                          Deployment Validation Operator                               alpha
 devopsinabox                                            Devops-in-a-box                                              alpha
 dns-operator                                            DNS Operator                                                 stable
+dotvirt-operator                                        dotvirt operator                                             stable-v0
 dynatrace-operator                                      Dynatrace Operator                                           alpha
 eclipse-amlen-operator                                  eclipse-amlen-operator                                       alpha
 eclipse-che                                             Eclipse Che                                                  stable
+ecr-secret-operator                                     ECR Secret Operator                                          alpha
 edp-keycloak-operator                                   EDP Keycloak Operator                                        stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 egressip-ipam-operator                                  Egressip Ipam Operator                                       alpha
@@ -156,6 +158,7 @@ ipfs-operator                                           IPFS Operator           
 istio-workspace-operator                                Istio Workspace                                              alpha
 jaeger                                                  Community Jaeger Operator                                    stable
 jhipster-online-operator                                JHipster Online Operator                                     alpha
+jumpstarter-operator                                    Jumpstarter Operator                                         alpha
 jupyter-notebook-validator-operator                     Jupyter Notebook Validator Operator                          stable
 k8gb                                                    k8gb                                                         alpha
 kairos-operator                                         Kairos Operator                                              candidate-v2
@@ -165,6 +168,7 @@ keycloak-operator                                       Keycloak Operator       
 keycloak-permissions-operator                           Keycloak Permissions Operator                                alpha
 klusterlet                                              Klusterlet                                                   stable
 kogito-operator                                         Kogito                                                       1.x
+koku-metrics-operator                                   Koku Metrics Operator                                        beta
 konveyor-operator                                       Konveyor Operator                                            alpha
 korrel8r                                                Korrel8r                                                     stable
 kuadrant-operator                                       Kuadrant Operator                                            stable
@@ -173,6 +177,7 @@ kubernaut-operator                                      Kubernaut Operator      
 kubernetes-imagepuller-operator                         Kubernetes Image Puller Operator                             stable
 kubeturbo                                               Kubeturbo Operator                                           stable
 l5-operator                                             L5 Operator                                                  alpha
+layer7-operator                                         Layer7 Operator                                              preview
 lbconfig-operator                                       External Load-Balancer Configuration Operator                beta
 lib-bucket-provisioner                                  lib-bucket-provisioner                                       alpha
 limitador-operator                                      Limitador                                                    stable
@@ -230,12 +235,15 @@ prometurbo                                              Prometurbo Operator     
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 pulp-operator                                           Pulp Project                                                 beta
 rabbitmq-cluster-operator                               RabbitMQ-cluster-operator                                    stable
+rabbitmq-messaging-topology-operator                    rabbitmq-messaging-topology-operator                         stable
 redis-operator                                          Redis Operator                                               stable
 redkey-operator                                         Redkey Operator                                              stable
 reportportal-operator                                   reportportal-operator                                        alpha
 resource-locker-operator                                Resource Locker Operator                                     alpha
 rhoas-operator                                          OpenShift Application Services (RHOAS)                       beta
 ripsaw                                                  benchmark-operator                                           alpha
+rsct-operator                                           RSCT Operator for IBM Power Systems                          alpha
+sailoperator                                            Sail Operator                                                stable
 sap-commerce-operator                                   SAP Commerce Operator                                        alpha
 sap-data-intelligence-observer-operator                 SAP Data Intelligence 3 - Observer Operator                  stable
 sap-hana-express-operator                               SAP Hana Express Operator                                    stable

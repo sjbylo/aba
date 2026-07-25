@@ -63,6 +63,7 @@ hnas-csi-operator                                       Hitachi NAS CSI Driver O
 hpe-csi-operator                                        HPE CSI Operator for OpenShift                               stable
 hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric CSI Operator for Kubernetes          stable
 hpe-filex-csi-operator                                  HPE GreenLake File Storage CSI Operator                      stable
+hpeoneview-operator                                     HPEOneView                                                   alpha
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 hulft                                                   HULFT10 for Container Platform                               stable
 iax-webhook-router                                      ITRS Analytics Webhook Router                                stable
@@ -171,7 +172,7 @@ tigera-operator                                         Tigera Operator v1.38   
 trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    stable
+uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
 uma-operator                                            DX APM Universal Monitoring Agent                            stable
 uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     stable
 vast-csi-operator                                       VAST CSI driver operator                                     stable
@@ -180,6 +181,7 @@ vcp-operator                                            CyberArk Certificate Man
 vfunction-server-operator                               vFunction Operator                                           stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
 visionone-containersecurity                             TrendAI Vision One Container Security                        stable
+wave                                                    Wave                                                         stable
 webserver-operator                                      WebServer Operator                                           stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
