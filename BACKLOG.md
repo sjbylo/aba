@@ -477,41 +477,32 @@ run `day2` automatically without prompting.
 
 ---
 
-## TUI Day-2: add "Cluster login" shell item
+## TUI Day-2: "Open Cluster Login Terminal" in all Day-2 menus
 
 **Severity:** LOW — UX convenience
 **Status:** Planned
 **Added:** 2026-07-13
+**Updated:** 2026-07-25
 
 **Problem:** When troubleshooting or inspecting a cluster from the TUI, the
 user must exit the TUI, find the kubeconfig, export it, and run `oc` commands
 manually. This breaks flow, especially for less experienced users.
 
-**Proposed fix:** Add a "Cluster login" (or "Shell") menu item to the Day-2 /
-Cluster Management menu. When selected, it drops the user into an interactive
-bash shell with `KUBECONFIG` already exported and `oc` on the PATH. The user
-can run any `oc` commands, then `exit` to return to the TUI.
+**Proposed fix:** Add an "Open Cluster Login Terminal" (or similar) menu item
+to ALL Day-2 menu items. When selected, it opens a full terminal (do not ask
+which terminal to run it in) and runs:
 
-**Implementation idea:**
 ```bash
-# In the Day-2 menu handler:
-_kc=$(cluster_kubeconfig 2>/dev/null)
-export KUBECONFIG="$_kc"
-clear
-echo "[ABA] Logged into cluster: $(oc whoami --show-server 2>/dev/null)"
-echo "[ABA] Type 'exit' to return to the TUI."
-bash --login
+. <(aba -d mycluster login) || . <(aba shell)
 ```
 
-**Considerations:**
-- Use `bash --login` (not `exec bash`) so the TUI resumes on `exit`
-- Show cluster name/API URL in the shell prompt or banner
-- `aba shell` CLI command already exists — reuse the same logic
-- Consider adding a custom `PS1` prompt (e.g. `[aba:clustername] $`) to
-  remind the user they're inside a TUI subshell
+**Key requirements:**
+- Present in ALL Day-2 menu items (not just one cluster menu)
+- Opens a proper full terminal directly — no dialog asking which terminal
+- Uses `aba login` (sources kubeconfig) with fallback to `aba shell`
 
 **Files to change:**
-- `tui/v2/tui-cluster.sh`: add menu item to Day-2 menu and handler
+- `tui/v2/tui-cluster.sh`: add menu item to all Day-2 menus and handler
 
 ---
 
@@ -848,3 +839,38 @@ to catch new dependencies early. Could also run on any change to
 **Files:**
 - New suite(s) under `test/e2e/suites/`
 - `templates/operator-set-*` (validated, not changed)
+
+---
+
+## Bundle additional CLI tools (virtctl, etc.)
+
+**Severity:** LOW — UX convenience for air-gapped users
+**Status:** Planned
+**Added:** 2026-07-25
+
+**Problem:** ABA bundles only `oc` and `kubectl` for air-gapped transfer.
+Other CLI tools like `virtctl` (OpenShift Virtualization), `tkn` (Tekton/Pipelines),
+`argocd`, `acs-cli` (roxctl), etc. are very useful and often needed on the
+disconnected side but unavailable without internet.
+
+**Question:** Which CLI tools should ABA download and include in the bundle?
+Candidates:
+- `virtctl` — required for OpenShift Virtualization VM management
+- `tkn` — Tekton Pipelines CLI
+- `roxctl` — Red Hat ACS (StackRox) CLI
+- `argocd` — GitOps CLI
+- `helm` — Helm chart management
+- `kustomize` — already bundled with `oc`?
+- `opm` — operator package manager (for catalog maintainers)
+
+**Proposed approach:** Since ABA already downloads `oc`/`kubectl` via
+`ensure_cli_tools`, it should be straightforward to extend this to additional
+tools — especially those tied to operator sets the user has configured.
+For example, if `operator-set-virt` is selected, automatically include `virtctl`
+in the bundle. If `operator-set-pipelines` is selected, include `tkn`.
+
+**Considerations:**
+- Download size: each tool is 30-100MB; only include tools for configured operator sets
+- Version pinning: tools should match the OCP version where possible
+- Discovery: where are these binaries hosted? (GitHub releases, mirror.openshift.com, etc.)
+- Air-gap delivery: include in `aba-transfer.tar` or as separate binaries in `cli/`?
