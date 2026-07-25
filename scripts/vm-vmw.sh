@@ -186,6 +186,37 @@ vmp_attach_iso() {
 	fi
 }
 
+# After power-on, verify the CD-ROM is actually connected.  NFS-backed ISO
+# datastores can fail to attach at boot time (transient NFS timeout), leaving
+# the device in recoverableError state.  If disconnected, force-connect and
+# reset the VM so it boots from the ISO.
+#   vmp_ensure_cdrom_connected <vm_name>
+vmp_ensure_cdrom_connected() {
+	local vm_name=$1
+	local _dev _connected
+
+	# Find the cdrom device name
+	_dev=$(govc device.ls -vm "$vm_name" 2>/dev/null | awk '/cdrom/ {print $1}')
+	[ -z "$_dev" ] && return 0
+
+	# Brief pause — let vSphere settle after power-on
+	sleep 3
+
+	_connected=$(govc device.info -json -vm "$vm_name" "$_dev" 2>/dev/null \
+		| grep -o '"connected": *[a-z]*' | head -1 | awk '{print $2}')
+
+	if [ "$_connected" = "true" ]; then
+		aba_debug "vmp_ensure_cdrom_connected: $vm_name $_dev already connected"
+		return 0
+	fi
+
+	aba_warn "CD-ROM disconnected on $vm_name (NFS datastore race) — reconnecting and resetting VM"
+	govc device.connect -vm "$vm_name" "$_dev" || true
+	sleep 1
+	govc vm.power -reset "$vm_name" || true
+	aba_debug "vmp_ensure_cdrom_connected: $vm_name reset after reconnecting $_dev"
+}
+
 # Destroy a VM and verify it no longer exists.
 #   vmp_destroy <vm_name>
 vmp_destroy() {
