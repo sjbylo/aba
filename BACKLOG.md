@@ -33,10 +33,30 @@ Issues or Pull Requests.
 
 ---
 
+## Validate SSH key files (private vs public)
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-07-20
+
+**Problem:** Users can accidentally pass a public key (`.pub`) where a private
+key is expected (e.g. `reg_ssh_key` in mirror.conf, `ssh_key_file` in
+cluster.conf). SSH fails with a cryptic "error in libcrypto" message.
+
+**Proposed fix:** Add a validation helper that:
+1. Warns if file ends in `.pub` ("looks like a public key")
+2. Checks file contents: private keys contain `-----BEGIN ... PRIVATE KEY-----`
+3. Apply to `reg_ssh_key` (mirror.conf) and `ssh_key_file` (cluster.conf)
+   in their respective `verify-*-conf()` functions.
+
+**Workaround:** Use the correct key path (e.g. `~/.ssh/id_rsa` not `~/.ssh/id_rsa.pub`).
+
+---
+
 ## ISC upgrade mode broken by state.sh ocp_version override
 
 **Severity:** HIGH — produces wrong ISC, upgrade sync downloads wrong images
-**Status:** Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact)
+**Status:** Mostly Done (v1.1.4: ocp_version removed from state override; mirror_ocp_version added as mirror fact; mirror_ocp_upgrade_from tracked in state.sh). ISC template not yet updated to use mirror_ocp_upgrade_from.
 **Added:** 2026-07-09
 
 **Problem:** When `_state_override_mirror()` overrides `ocp_version` from
@@ -182,6 +202,7 @@ selection first, or run on all installed clusters using this mirror.
 **Severity:** HIGH — `aba day2-osus` errors out on upgraded clusters
 **Status:** Done (day2-config-osus.sh now derives channel from cluster's actual version)
 **Added:** 2026-07-10
+**Closed:** 2026-07-10
 **Related:** ISC upgrade mode / state.sh override (above) — same root theme: scripts derive version/channel from config files instead of the live cluster
 
 **Problem:** `day2-config-osus.sh` builds the expected channel from `aba.conf`
@@ -457,41 +478,33 @@ run `day2` automatically without prompting.
 
 ---
 
-## TUI Day-2: add "Cluster login" shell item
+## TUI Day-2: "Open Cluster Login Terminal" in all Day-2 menus
 
 **Severity:** LOW — UX convenience
-**Status:** Planned
+**Status:** Done (v1.1.6: "L" menu item in Day-2 menu)
 **Added:** 2026-07-13
+**Updated:** 2026-07-25
+**Closed:** 2026-07-25
 
 **Problem:** When troubleshooting or inspecting a cluster from the TUI, the
 user must exit the TUI, find the kubeconfig, export it, and run `oc` commands
 manually. This breaks flow, especially for less experienced users.
 
-**Proposed fix:** Add a "Cluster login" (or "Shell") menu item to the Day-2 /
-Cluster Management menu. When selected, it drops the user into an interactive
-bash shell with `KUBECONFIG` already exported and `oc` on the PATH. The user
-can run any `oc` commands, then `exit` to return to the TUI.
+**Proposed fix:** Add an "Open Cluster Login Terminal" (or similar) menu item
+to ALL Day-2 menu items. When selected, it opens a full terminal (do not ask
+which terminal to run it in) and runs:
 
-**Implementation idea:**
 ```bash
-# In the Day-2 menu handler:
-_kc=$(cluster_kubeconfig 2>/dev/null)
-export KUBECONFIG="$_kc"
-clear
-echo "[ABA] Logged into cluster: $(oc whoami --show-server 2>/dev/null)"
-echo "[ABA] Type 'exit' to return to the TUI."
-bash --login
+. <(aba -d mycluster login) || . <(aba shell)
 ```
 
-**Considerations:**
-- Use `bash --login` (not `exec bash`) so the TUI resumes on `exit`
-- Show cluster name/API URL in the shell prompt or banner
-- `aba shell` CLI command already exists — reuse the same logic
-- Consider adding a custom `PS1` prompt (e.g. `[aba:clustername] $`) to
-  remind the user they're inside a TUI subshell
+**Key requirements:**
+- Present in ALL Day-2 menu items (not just one cluster menu)
+- Opens a proper full terminal directly — no dialog asking which terminal
+- Uses `aba login` (sources kubeconfig) with fallback to `aba shell`
 
 **Files to change:**
-- `tui/v2/tui-cluster.sh`: add menu item to Day-2 menu and handler
+- `tui/v2/tui-cluster.sh`: add menu item to all Day-2 menus and handler
 
 ---
 
@@ -576,7 +589,7 @@ MCO rebootless updates are 4.14+. NodeDisruptionPolicy is 4.16+.
 ## Catalog prefetch: download next minor in background
 
 **Severity:** LOW — UX improvement, reduces wait time
-**Status:** Planned
+**Status:** Mostly Done (prefetch now downloads upgrade-target minors from Cincinnati graph, which includes the next minor when available). Previous minor is still fetched too — could be dropped.
 **Added:** 2026-07-13
 
 **Problem:** When a user selects OCP 4.21, the operator catalog for 4.22 is not
@@ -621,21 +634,43 @@ download the next minor line in the background:
 
 ---
 
-## Automated infrastructure services (`infra=auto`)
+## Automated infrastructure services (`aba setup dns/ntp`)
 
 **Severity:** MEDIUM — major UX improvement for new users
-**Status:** Planned
+**Status:** Done (v1.1.5: `aba setup dns`, `aba setup ntp`, `aba remove dns`, `aba remove ntp`; per-cluster DNS hooks in Makefile)
 **Added:** 2026-07-16
+**Closed:** 2026-07-24
 
 **Problem:** Users new to OpenShift must manually install and configure DNS
 (dnsmasq), NTP (chronyd), and firewall rules before ABA can install a cluster.
 This is the #1 barrier to entry for beginners.
 
-**Proposed fix:** New `aba.conf` setting `infra=auto` (default: `manual`) that
-makes ABA automatically install and configure these services on the bastion.
-Per-cluster DNS records are added at install time and removed on delete.
+**Implemented:** `aba setup dns` / `aba setup ntp` configure services on the
+bastion. Per-cluster DNS records are added at install time (`.infra-dns` marker
+in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 
 **Design doc:** `ai/DESIGN-infra-auto.md`
+
+---
+
+## quay-ng: transition to GA (mirror-registry v3.0)
+
+**Severity:** LOW — tracking item, no action until upstream ships GA
+**Status:** Waiting on upstream
+**Added:** 2026-07-21
+
+**Context:** The Go-based mirror-registry rewrite (currently `quay-ng` in ABA)
+will ship as "mirror-registry v3.0". ABA already supports it as an ALPHA vendor.
+
+**When GA ships, ABA needs:**
+- Switch `_QUAY_NG_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
+- Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
+- Re-test `-init-password-stdin` flag (merged upstream, not in current image)
+- Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
+- Rename vendor display from "quay-ng [ALPHA]" (internal name can stay)
+- Update bundle workflow for official offline delivery format
+
+**Design doc:** `ai/DESIGN-quay-ng-vendor.md`
 
 ---
 
@@ -807,3 +842,38 @@ to catch new dependencies early. Could also run on any change to
 **Files:**
 - New suite(s) under `test/e2e/suites/`
 - `templates/operator-set-*` (validated, not changed)
+
+---
+
+## Bundle additional CLI tools (virtctl, etc.)
+
+**Severity:** LOW — UX convenience for air-gapped users
+**Status:** Planned
+**Added:** 2026-07-25
+
+**Problem:** ABA bundles only `oc` and `kubectl` for air-gapped transfer.
+Other CLI tools like `virtctl` (OpenShift Virtualization), `tkn` (Tekton/Pipelines),
+`argocd`, `acs-cli` (roxctl), etc. are very useful and often needed on the
+disconnected side but unavailable without internet.
+
+**Question:** Which CLI tools should ABA download and include in the bundle?
+Candidates:
+- `virtctl` — required for OpenShift Virtualization VM management
+- `tkn` — Tekton Pipelines CLI
+- `roxctl` — Red Hat ACS (StackRox) CLI
+- `argocd` — GitOps CLI
+- `helm` — Helm chart management
+- `kustomize` — already bundled with `oc`?
+- `opm` — operator package manager (for catalog maintainers)
+
+**Proposed approach:** Since ABA already downloads `oc`/`kubectl` via
+`ensure_cli_tools`, it should be straightforward to extend this to additional
+tools — especially those tied to operator sets the user has configured.
+For example, if `operator-set-virt` is selected, automatically include `virtctl`
+in the bundle. If `operator-set-pipelines` is selected, include `tkn`.
+
+**Considerations:**
+- Download size: each tool is 30-100MB; only include tools for configured operator sets
+- Version pinning: tools should match the OCP version where possible
+- Discovery: where are these binaries hosted? (GitHub releases, mirror.openshift.com, etc.)
+- Air-gap delivery: include in `aba-transfer.tar` or as separate binaries in `cli/`?

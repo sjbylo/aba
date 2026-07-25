@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/cursor-environment.json",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "dnf install -y make", 
+  "terminals": [
+    {
+      "name": "Dev Server",
+      "command": "echo 'CentOS Stream Environment Ready'"
+    }
+  ]
+}

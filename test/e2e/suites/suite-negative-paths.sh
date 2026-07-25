@@ -201,18 +201,8 @@ e2e_run_must_fail "Install to localhost with remote key must fail" \
 e2e_run "Restore mirror.conf after localhost test" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf && sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror/mirror.conf"
 
-# Idempotent install: reg_detect_existing() must skip install (exit 0) when
-# state.sh shows ABA already installed a healthy registry at this host.
-e2e_run "Set reg_host for idempotent install test" \
-	"aba -d mirror -H \$(hostname -f)"
-e2e_run "Create fake state.sh for idempotent install test" \
-	"mkdir -p ~/.aba/mirror/mirror && echo reg_host=\$(hostname -f) > ~/.aba/mirror/mirror/state.sh"
-e2e_run "Remove .available to trigger install path" \
-	"rm -f mirror/.available"
-e2e_run "Idempotent install on healthy registry must succeed" \
-	"cd mirror && bash -c 'source scripts/reg-common.sh && reg_load_config && reg_detect_existing && reg_check_fqdn'"
-e2e_run "Cleanup idempotent install test state" \
-	"rm -f ~/.aba/mirror/mirror/state.sh && sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf"
+# Idempotent install is tested in suite-mirror-sync.sh (both Docker and Quay-ng)
+# with real running registries. No need to duplicate here.
 
 # Stale state detection: reg_detect_existing() must abort with a clear message
 # when the saved registry host is unreachable (e.g. VM reverted, registry wiped).

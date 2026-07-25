@@ -243,7 +243,7 @@ e2e_run "state.sh removed after uninstall" \
 	"test ! -f $_STATE_DIR/state.sh"
 
 e2e_run "regcreds dir cleaned after uninstall" \
-	"test -z \"\$(ls -A $_STATE_DIR/ 2>/dev/null)\" || test ! -d $_STATE_DIR"
+	"test -z \"\$(ls -A $_STATE_DIR/)\" || test ! -d $_STATE_DIR"
 
 test_end
 
@@ -367,7 +367,7 @@ test_begin "Register existing: lowercase state.sh"
 
 # Generate dummy creds for the register test
 e2e_run "Create dummy CA cert" \
-	"openssl req -x509 -newkey rsa:2048 -keyout /tmp/e2e-dummy-ca.key -out /tmp/e2e-dummy-ca.pem -days 1 -nodes -subj '/CN=e2e-test' 2>/dev/null"
+	"openssl req -x509 -newkey rsa:2048 -keyout /tmp/e2e-dummy-ca.key -out /tmp/e2e-dummy-ca.pem -days 1 -nodes -subj '/CN=e2e-test'"
 
 e2e_run "Create dummy pull secret" \
 	"echo '{\"auths\":{\"dummy:8443\":{\"auth\":\"dGVzdDp0ZXN0\"}}}' > /tmp/e2e-dummy-ps.json"

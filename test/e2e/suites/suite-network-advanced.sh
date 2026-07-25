@@ -81,7 +81,7 @@ test_end
 test_begin "Setup: install aba and configure"
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
     "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
@@ -177,7 +177,9 @@ _net_test() {
         govc_network="${GOVC_NETWORK:?GOVC_NETWORK must be set in vmware.conf}"
         machine_network="$(pool_machine_network)"
         next_hop="${DEFAULT_GATEWAY:-10.0.1.1}"
-        start_ip="$(pool_node_ip)"
+        # Use pool_starting_ip (not pool_node_ip) — compact/standard need nodes
+        # AFTER VIPs, not at the same base IP as SNO.
+        start_ip="$(pool_starting_ip "$ctype")"
     fi
 
     test_begin "$label"

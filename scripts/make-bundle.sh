@@ -93,6 +93,10 @@ source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 
+# Kick off CLI downloads early (non-blocking) so they run in parallel with oc-mirror
+aba_debug "Starting CLI downloads in background (will be waited on later)"
+scripts/cli-download-all.sh
+
 if [ "$bundle_dest_file" = "-" ]; then
 	# Be sure the standard output of this command is ONLY tar output and nothing else!
 	aba_debug "Bundle destination: stdout (streaming tar output)"
@@ -126,14 +130,14 @@ echo >&2
 # User requires to clean out any existing files under mirror/data
 if [ "$force" ]; then
 {
-	aba_debug "Force flag set - cleaning existing files"
-	if [ -d mirror/data ] && [ "$(ls mirror/data 2>/dev/null)" ]; then
-		aba_debug "Deleting existing mirror/data directory contents"
-		aba_warn "Deleting all files under aba/mirror/data! (--force set)" >&2
-		rm -rf mirror/data
-		aba_debug "mirror/data directory removed"
+	aba_debug "Force flag set - cleaning existing ABA-owned files"
+	if [ -d mirror/data ]; then
+		aba_debug "Cleaning ABA-owned files in mirror/data (preserving oc-mirror working-dir/)"
+		aba_warn "Deleting ABA-owned files under aba/mirror/data/ (--force set)" >&2
+		rm -f mirror/data/imageset*.yaml mirror/data/mirror_*.tar mirror/data/aba-transfer*.* mirror/data/.created mirror/data/.isc-pinned
+		aba_debug "ABA-owned files removed (working-dir/ preserved)"
 	else
-		aba_debug "mirror/data directory is empty or doesn't exist"
+		aba_debug "mirror/data directory doesn't exist"
 	fi
 
 	if [ -f "$bundle_dest_file" ]; then
@@ -230,9 +234,6 @@ else
 	aba_debug "Bundle file does not exist, proceeding"
 fi
 
-###aba_info "Downloading CLI installation files ..."
-### FIXME - Is this needed since make save will do this - make -C cli download	# Downlaod required CLIs install files.
-
 
 # Light bundle flag give?
 if [ "$light_bundle" ]; then
@@ -303,6 +304,9 @@ else
 	make -s tar out="$bundle_dest_file" $with_clusters	   		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
+
+echo >&2
+aba_info "For subsequent updates: aba save, then transfer mirror/data/*.tar to the disconnected host. See README.md 'Air-Gapped Transfer'." >&2
 
 aba_debug "Bundle creation completed, exiting successfully"
 exit 0

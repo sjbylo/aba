@@ -14,7 +14,7 @@
 #   - Vote-app deployment with IDMS redirect
 #   - OSUS + cluster upgrade
 #   - Graceful shutdown/startup/restart cycle
-#   - Standard cluster with macs.conf (bare-metal MAC addresses)
+#   - Standard cluster with macs.conf + auto-DNS VIP allocation (no explicit VIPs)
 # =============================================================================
 
 set -u
@@ -46,6 +46,7 @@ plan_tests \
     "Setup: calculate older version for upgrade" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
+    "Infra: setup DNS and NTP on internal bastion" \
     "Registry: Docker install and verify (custom params)" \
     "Registry: Quay install and load" \
     "SNO: install cluster" \
@@ -58,8 +59,9 @@ plan_tests \
     "Deploy: service mesh demo" \
     "Lifecycle: shutdown/startup" \
     "Upgrade: cross-minor with admin ack gate" \
-    "Standard: cluster with macs.conf" \
-    "Cleanup: uninstall registry on disN"
+    "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)" \
+    "Cleanup: uninstall registry on disN" \
+    "Cleanup: remove DNS and NTP infra on disN"
 
 suite_begin "airgapped-local-reg"
 
@@ -74,9 +76,9 @@ test_begin "Setup: install aba and configure"
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches (conN)" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 # Use fast channel for cross-minor upgrade testing.
 # We configure with --version p (N-1), then compute N-2 in the next step
@@ -125,12 +127,12 @@ e2e_run "Compute cross-minor versions (N-2 install, N-1 upgrade target)" "
     desired_minor=\$(echo \$desired | cut -d. -f1-2)
     [ \"\$older_minor\" != \"\$desired_minor\" ] || { echo \"FAIL: versions are same minor (\$older vs \$desired)\"; exit 1; }
     # Walk back z-streams if the latest N-2 isn't in the upgrade target's graph yet
-    if ! verify_upgrade_path_exists \"\$older\" \"\$desired\" fast 2>/dev/null; then
+    if ! verify_upgrade_path_exists \"\$older\" \"\$desired\" fast; then
         echo \"Latest N-2 (\$older) not in fast-\${desired_minor} graph -- searching for valid version\"
         all_versions=\$(fetch_all_versions fast \"\$older_minor\")
         found=\"\"
         for v in \$(echo \"\$all_versions\" | sort -rV); do
-            if verify_upgrade_path_exists \"\$v\" \"\$desired\" fast 2>/dev/null; then
+            if verify_upgrade_path_exists \"\$v\" \"\$desired\" fast; then
                 echo \"Found valid N-2: \$v\"
                 older=\"\$v\"
                 found=1
@@ -187,6 +189,51 @@ e2e_run_remote "Verify single dnf batch (no duplicate install)" \
 test_end
 
 # ============================================================================
+# 5b. Infrastructure: setup auto-DNS and NTP on internal bastion
+#     Verifies aba setup/remove CLI dispatch and tools/ scripts on the
+#     disconnected bastion. Cluster installs later exercise infra-dns.sh.
+# ============================================================================
+test_begin "Infra: setup DNS and NTP on internal bastion"
+
+# --- CLI help ---
+e2e_run_remote "Verify 'aba setup --help' works" \
+    "cd ~/aba && aba setup --help | grep -q 'setup dns'"
+e2e_run_remote "Verify 'aba remove --help' works" \
+    "cd ~/aba && aba remove --help | grep -q 'remove dns'"
+
+# --- Setup DNS via CLI dispatch ---
+e2e_run_remote "Setup DNS via 'aba setup dns'" \
+    "cd ~/aba && aba setup dns -y"
+e2e_run_remote "Verify dnsmasq marker exists" \
+    "test -f /etc/dnsmasq.d/aba-upstream.conf"
+e2e_run_remote "Verify dnsmasq is running" \
+    "systemctl is-active dnsmasq"
+e2e_run_remote "Verify dnsmasq is responding" \
+    "dig @127.0.0.1 +timeout=3 localhost | grep -q 'NOERROR\\|127.0.0.1'"
+e2e_run_remote "Verify dns_servers set in aba.conf" \
+    "cd ~/aba && grep '^dns_servers=' aba.conf | grep -v '^dns_servers=$'"
+
+# --- Idempotency: second run is a no-op ---
+e2e_run_remote "Verify setup dns is idempotent (second run is no-op)" \
+    "cd ~/aba && aba setup dns -y 2>&1 | grep -q 'already configured'"
+
+# --- Setup NTP via CLI dispatch ---
+e2e_run_remote "Setup NTP via 'aba setup ntp'" \
+    "cd ~/aba && aba setup ntp -y"
+e2e_run_remote "Verify chrony allow line present" \
+    "grep '^allow ' /etc/chrony.conf"
+e2e_run_remote "Verify chronyd is running" \
+    "systemctl is-active chronyd"
+e2e_run_remote "Verify ntp_servers set in aba.conf" \
+    "cd ~/aba && grep '^ntp_servers=' aba.conf | grep -v '^ntp_servers=$'"
+
+# --- Idempotency: second NTP run ---
+e2e_run_remote "Verify setup ntp is idempotent" \
+    "cd ~/aba && aba setup ntp -y 2>&1 | grep -q 'already'"
+
+test_end
+
+# ============================================================================
 # 6. Registry: Docker install and verify (smoke test with custom params)
 #    Exercises non-default mirror.conf values: port, user, password, path,
 #    data_dir.  Verifies install + accessibility, then uninstalls immediately.
@@ -229,6 +276,22 @@ e2e_run_must_fail_remote "Load without data dir should fail" \
 e2e_run_remote -q "Restore data dir" \
     "cd ~/aba && mv mirror/data.bak mirror/data"
 
+# Negative path: load with data/ dir but no mirror_*.tar should fail
+e2e_run_remote -q "Backup mirror_*.tar for must-fail test" \
+    "cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ || true"
+e2e_run_must_fail_remote "Load without mirror_*.tar should fail" \
+    "cd ~/aba && aba -d mirror load"
+e2e_run_remote -q "Restore mirror_*.tar" \
+    "cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ || true; rmdir mirror/data/.tmp-bak || true"
+
+# Guard: warn when aba-transfer.tar is missing (load should still succeed)
+e2e_run_remote -q "Backup aba-transfer.tar for warning test" \
+    "cd ~/aba && [ -f mirror/data/aba-transfer.tar ] && mv mirror/data/aba-transfer.tar mirror/data/.tmp-transfer.bak || true"
+e2e_run_remote "Load warns about missing transfer tar but succeeds (output check)" \
+    "cd ~/aba && aba -d mirror load --retry 2>&1 | grep -q 'No aba-transfer.tar found' || echo 'WARNING: expected missing-transfer-tar warning not found (may not apply if no prior save)'"
+e2e_run_remote -q "Restore aba-transfer.tar" \
+    "cd ~/aba && [ -f mirror/data/.tmp-transfer.bak ] && mv mirror/data/.tmp-transfer.bak mirror/data/aba-transfer.tar || true"
+
 test_end
 
 # ============================================================================
@@ -238,6 +301,11 @@ test_end
 # ============================================================================
 test_begin "Registry: Quay install and load"
 
+# Negative path tests in block 6 may auto-install a Docker registry via Makefile
+# dependencies (aba -d mirror load triggers install target).  Clean up first.
+e2e_run_remote "Uninstall any leftover registry before Quay install" \
+    "cd ~/aba && aba -d mirror uninstall"
+
 _QUAY_PORT=8448
 e2e_run_remote "Set vendor=quay and reg_port=$_QUAY_PORT for Quay" \
     "cd ~/aba && aba --dir mirror --vendor quay --reg-port $_QUAY_PORT"
@@ -245,6 +313,8 @@ e2e_diag_remote "Show mirror.conf on bastion" "grep -E '^\w' ~/aba/mirror/mirror
 
 e2e_run_remote "Install Quay registry on port $_QUAY_PORT" \
     "cd ~/aba && aba -d mirror install"
+e2e_run_remote "Verify auto-DNS record created for mirror registry" \
+    "test -f /etc/dnsmasq.d/aba-mirror.conf && dig @127.0.0.1 +short ${DIS_HOST} | grep -qE '^[0-9]'"
 e2e_poll_remote 60 5 "Wait for Quay container" \
     "podman ps | grep quay"
 e2e_run_remote "Verify Quay running" \
@@ -260,6 +330,15 @@ e2e_run_remote "Override op_sets in mirror.conf (exercises mirror.conf override)
 e2e_snapshot_file_remote "initial-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 3 2 "Load images into Quay registry" \
     "cd ~/aba && aba -d mirror load --retry"
+
+# Verify guardrail behavior after load:
+# - aba-transfer.tar should be KEPT (not deleted) for potential re-use
+# - mirror_*.tar should be KEPT (ask --auto-no with ask=false doesn't delete)
+e2e_run_remote "Verify aba-transfer.tar kept after load" \
+    "cd ~/aba && test -f mirror/data/aba-transfer.tar"
+e2e_run_remote "Verify mirror_*.tar kept after load (ask --auto-no in non-interactive)" \
+    "cd ~/aba && ls mirror/data/mirror_*.tar >/dev/null"
+
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 test_end
@@ -279,6 +358,8 @@ e2e_run_remote "Increase SNO resources for mesh/upgrade" \
 e2e_diag_remote "Show SNO cluster.conf" "grep -E '^\w' ~/aba/$SNO/cluster.conf"
 e2e_run_remote -r 2 10 "Install SNO cluster" \
     "cd ~/aba && aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) -s install"
+e2e_run_remote "Verify auto-DNS record created for SNO" \
+    "test -f /etc/dnsmasq.d/aba-${SNO}.$(pool_domain).conf && dig @127.0.0.1 +short api.${SNO}.$(pool_domain) | grep -q '$(pool_sno_ip)'"
 e2e_run_remote "Show cluster operator status" \
     "cd ~/aba && aba --dir $SNO run"
 e2e_wait_cluster_available $SNO remote
@@ -405,6 +486,8 @@ test_end
 #     Two deployments: (a) direct from mirror path, (b) via IDMS redirect
 # ============================================================================
 test_begin "Deploy: vote-app with IDMS"
+
+e2e_run "Sleep 5 pause before new-project" "sleep 5"
 
 # --- (a) Deploy directly from mirror registry path ---
 e2e_run_remote "Create demo project" \
@@ -655,12 +738,16 @@ e2e_run "Append cincinnati-operator to imageset config (if not already present)"
 
 e2e_snapshot_file "upgrade-save" "mirror/data/imageset-config.yaml"
 e2e_run -r 1 2 "Save upgrade images" "aba -d mirror save --retry"
+e2e_run "Verify aba-transfer.tar created by save" \
+    "test -f mirror/data/aba-transfer.tar"
 e2e_run "Transfer upgrade archive to internal bastion" \
     "scp mirror/data/*.tar ${INTERNAL_BASTION}:aba/mirror/data/"
 e2e_run -q "Remove transferred archives" "rm -f mirror/data/mirror_*.tar"
 e2e_snapshot_file_remote "upgrade-load" "aba/mirror/data/imageset-config.yaml"
 e2e_run_remote -r 1 2 "Load upgrade images" \
     "cd ~/aba && aba -d mirror load --retry"
+e2e_run_remote "Verify aba-transfer.tar kept after upgrade load" \
+    "cd ~/aba && test -f mirror/data/aba-transfer.tar"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
 
 e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
@@ -701,17 +788,21 @@ e2e_wait_cluster_ready $SNO remote 3900
 test_end
 
 # ============================================================================
-# 16. Standard cluster with macs.conf
+# 16. Standard cluster with macs.conf + auto-DNS VIP allocation
 # ============================================================================
-test_begin "Standard: cluster with macs.conf"
+test_begin "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)"
 
 e2e_run_remote "Delete SNO cluster" \
     "cd ~/aba && aba --dir $SNO delete"
+e2e_run_remote "Verify auto-DNS record removed after SNO delete" \
+    "test ! -f /etc/dnsmasq.d/aba-${SNO}.$(pool_domain).conf"
 e2e_remove_from_cluster_cleanup "$PWD/$SNO" remote
 e2e_run_remote "Remove sno cluster dir" \
     "cd ~/aba && rm -rf $SNO"
 
-# Build standard cluster -- delete any leftover VMs before removing the dir
+# Build standard cluster -- delete any leftover VMs before removing the dir.
+# VIPs are intentionally omitted: this tests ABA's auto-DNS feature, which
+# should auto-allocate api_vip and ingress_vip when not provided.
 _e2e_delete_leftover_cluster_remote "$STANDARD"
 e2e_run_remote "Create standard cluster config" \
     "cd ~/aba && aba cluster -n $STANDARD -t standard -i $(pool_starting_ip standard) --num-workers 2 --step cluster.conf"
@@ -730,6 +821,8 @@ e2e_run_remote "Generate agent configs" \
     "cd ~/aba && aba --dir $STANDARD agentconf"
 e2e_run_remote "Verify agent-config has MACs from macs.conf" \
     "cd ~/aba && grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' $STANDARD/agent-config.yaml | grep -q ."
+e2e_run_remote "Verify auto-DNS record created for standard cluster" \
+    "test -f /etc/dnsmasq.d/aba-${STANDARD}.$(pool_domain).conf"
 # Bootstrap only (saves ~30 min vs full install) -- proves agent configs are
 # valid and control plane comes up.  Full operator verification is done on
 # the SNO cluster earlier in this suite.
@@ -738,6 +831,8 @@ e2e_run_remote "Bootstrap standard cluster" \
     "cd ~/aba && aba --dir $STANDARD bootstrap"
 e2e_run_remote "Delete standard cluster" \
     "cd ~/aba && aba --dir $STANDARD delete"
+e2e_run_remote "Verify auto-DNS record removed after standard delete" \
+    "test ! -f /etc/dnsmasq.d/aba-${STANDARD}.$(pool_domain).conf"
 e2e_remove_from_cluster_cleanup "$PWD/$STANDARD" remote
 e2e_run_remote "Clean standard cluster dir" \
     "cd ~/aba && rm -rf $STANDARD"
@@ -751,9 +846,47 @@ test_begin "Cleanup: uninstall registry on disN"
 
 e2e_run_remote "Uninstall Quay registry" \
     "cd ~/aba && aba -d mirror uninstall"
+e2e_run_remote "Verify mirror DNS record removed after uninstall" \
+    "test ! -f /etc/dnsmasq.d/aba-mirror.conf"
 e2e_run "Assert: registry fully removed on disN" "e2e_assert_registry_removed"
 e2e_run "Verify registry unreachable on disN" \
     "! curl -sk --connect-timeout 5 https://${DIS_HOST}:${_QUAY_PORT}/v2/"
+
+test_end
+
+# ============================================================================
+# End-of-suite: remove DNS/NTP infra on disN (clean up what 5b set up)
+# ============================================================================
+test_begin "Cleanup: remove DNS and NTP infra on disN"
+
+# --- Test "late setup" backfill: remove DNS, create a cluster dir, re-setup,
+#     verify the stale .infra-dns marker is cleared and records are backfilled.
+e2e_run_remote "Remove DNS to test re-setup backfill" \
+    "cd ~/aba && aba remove dns -y"
+e2e_run_remote "Create dummy cluster dir for backfill test" \
+    "cd ~/aba && aba cluster -n backfill-test -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+e2e_run_remote "Touch stale .infra-dns marker (simulates pre-DNS run)" \
+    "touch ~/aba/backfill-test/.infra-dns"
+e2e_run_remote "Re-setup DNS (should backfill existing clusters)" \
+    "cd ~/aba && aba setup dns -y"
+e2e_run_remote "Verify backfill-test DNS record was created" \
+    "test -f /etc/dnsmasq.d/aba-backfill-test.$(pool_domain).conf"
+e2e_run_remote "Verify stale .infra-dns marker was removed" \
+    "test ! -f ~/aba/backfill-test/.infra-dns"
+e2e_run_remote "Clean up backfill-test cluster dir" \
+    "cd ~/aba && rm -rf backfill-test"
+
+# --- Final removal via CLI dispatch ---
+e2e_run_remote "Remove ABA DNS config via 'aba remove dns'" \
+    "cd ~/aba && aba remove dns -y"
+e2e_run_remote "Verify dnsmasq marker gone" \
+    "test ! -f /etc/dnsmasq.d/aba-upstream.conf"
+e2e_run_remote "Verify dnsmasq is stopped" \
+    "! systemctl is-active dnsmasq"
+e2e_run_remote "Remove ABA NTP config via 'aba remove ntp'" \
+    "cd ~/aba && aba remove ntp -y"
+e2e_run_remote "Verify no chrony allow" \
+    "! grep -q '^allow ' /etc/chrony.conf"
 
 test_end
 

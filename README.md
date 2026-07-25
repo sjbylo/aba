@@ -56,9 +56,12 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
 - [Install ABA](#install-aba)
 - [Partially Disconnected Installation](#partially-disconnected-installation)
 - [Air-Gapped Installation](#air-gapped-installation)
+  - [Air-Gapped Transfer](#air-gapped-transfer)
   - [Custom Bundles](#custom-bundles)
   - [Light Bundles](#light-bundles-when-disk-space-or-portable-media-is-limited)
+- [Connected Installation (No Mirror)](#connected-installation-no-mirror)
 - [Installing a Cluster](#installing-a-cluster)
+  - [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup)
   - [Pre-flight Validation](#pre-flight-validation)
   - [Customizing Install Configuration](#customizing-install-configuration)
   - [Embedding Custom Manifests (Day-0)](#embedding-custom-manifests-day-0)
@@ -74,7 +77,6 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Common Requirements](#common-requirements)
   - [Air-Gapped Prerequisites](#air-gapped-prerequisites)
   - [Partially Disconnected Prerequisites](#partially-disconnected-prerequisites)
-  - [Connected Installation (No Mirror)](#connected-installation-no-mirror)
 - [Command Reference](#command-reference)
 - [Advanced Topics](#advanced-topics)
   - [Named Mirror Directories (Enclaves)](#named-mirror-directories-enclaves)
@@ -238,9 +240,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.1.6.tar.gz
-tar xzf v1.1.6.tar.gz
-cd aba-1.1.6
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.2.0.tar.gz
+tar xzf v1.2.0.tar.gz
+cd aba-1.2.0
 ./install
 aba
 ```
@@ -248,7 +250,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.1.6 https://github.com/sjbylo/aba.git
+git clone --branch v1.2.0 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -395,6 +397,25 @@ aba -d mirror load -H registry.example.com -k ~/.ssh/id_rsa
 
 After loading, verify connectivity: `aba -d mirror verify`
 
+### Air-Gapped Transfer
+
+After the initial bundle install, use **save/transfer/load** for all subsequent updates (upgrades, additional operators). See [Cluster Updates](#cluster-updates-osus) and [Adding Operators](#adding-operators-to-the-mirror-registry) for detailed workflows.
+
+The universal rule:
+
+```
+# On connected host:  aba -d mirror save
+# Transfer:           cp mirror/data/*.tar /media/       (always ALL *.tar files)
+# On disconnected:    cp /media/*.tar ~/aba/mirror/data/ && aba -d mirror load
+```
+
+**Notes:**
+
+- Always copy ALL `*.tar` files from `mirror/data/` — both `mirror_*.tar` (images) and `aba-transfer.tar` (matching ISC and CLIs).
+- It is safe to overwrite existing tar files on the disconnected side — each `aba save` produces a fresh set. Back up old files first if you need them (e.g. for another mirror).
+- After a successful load, you will be asked whether to delete the archive files to free disk space.
+- `aba bundle` is for initial bootstrap only. Use save/transfer/load for all ongoing updates.
+
 Now continue with [Installing a Cluster](#installing-a-cluster) below.
 
 <div align="center">
@@ -447,7 +468,7 @@ aba bundle \
 - This generates several 10 GB archive files named `ocp_mycluster_4.22.1_aa|ab|ac...` etc.
 - The OpenShift version can be set to the most recent previous point version (`--version p`) or to the latest (`--version l`).
 - `--op-sets` refers to predefined sets of operators (run `aba show-op-sets` to list them). Create your own operator set file in `aba/templates/` if needed.
-- `--ops` adds individual operators.
+- `--ops` adds individual operators (run `aba show-operators` to list them, or use `abatui` to select interactively).
 - *If known*, set `--base-domain`, `--machine-network`, `--dns` and `--ntp` (otherwise, set them in `aba.conf` after unpacking the bundle).
 - Set `--platform`: `bm` (bare-metal), `vmw` (vSphere/ESXi), or `kvm` (KVM/libvirt).
 - Warning: `--force` overwrites any existing image-set files under `aba/mirror/data`.
@@ -472,7 +493,7 @@ If valid, extract and install:
 cat /path/to/ocp_mycluster_4.22.1_* | tar xvf -
 cd aba
 ./install
-aba         # Follow the instructions
+aba         # Follow the instructions (or use: abatui)
 ```
 
 The image-set archive file(s) are located under the `mirror/data/` directory inside the expanded ABA repository (e.g. `aba/mirror/data/mirror_000001.tar`). Install the mirror registry and load images:
@@ -481,7 +502,7 @@ The image-set archive file(s) are located under the `mirror/data/` directory ins
 aba -d mirror -H registry.example.com load --retry 3
 ```
 
-To install OpenShift:
+To create a cluster configuration and install OpenShift:
 
 ```
 aba cluster \
@@ -490,8 +511,11 @@ aba cluster \
     [--starting-ip <ip>] \
     [--api-vip <ip>] \
     [--ingress-vip <ip>]
+aba -d mycluster install
 ```
 
+For VMware/KVM, this creates VMs and completes the installation automatically.
+For bare metal, the install pauses to let you edit agent-config (MAC addresses, disk hints), then again after ISO generation so you can boot your servers.
 Run `aba cluster --help` or see the [Installing a Cluster](#installing-a-cluster) section for more details.
 
 ## Light Bundles (When Disk Space or Portable Media Is Limited)
@@ -552,6 +576,67 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 [Back to top](#quick-start)
 
+# Connected Installation (No Mirror)
+
+In a connected environment, cluster nodes pull images directly from the Internet (or via an HTTP proxy). No mirror registry is needed.
+
+> **No external portals required.** Unlike hosted installer services, ABA runs entirely on your infrastructure. No network details, credentials, or configuration need to be entered into any external system or web portal.
+
+#### Prerequisites
+
+- ABA [installed](#install-aba) and `aba.conf` configured (OpenShift version, base domain, machine network, etc.)
+- Cluster nodes can reach the Internet directly or via a proxy
+- DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) -- see [Network Configuration](#network-configuration)
+- See [Common Requirements](#common-requirements)
+
+#### Steps
+
+1. Create the cluster directory:
+
+```
+cd aba
+aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
+```
+
+2. Edit `mycluster/cluster.conf` and set the connection type:
+
+```
+int_connection=direct      # Nodes pull from the Internet directly (no proxy needed)
+```
+
+or, if your nodes require a proxy:
+
+```
+int_connection=proxy       # Nodes pull via your HTTP proxy
+http_proxy=http://proxy.example.com:3128
+https_proxy=http://proxy.example.com:3128
+no_proxy=.example.com,.lan,10.0.0.0/8
+```
+
+If `http_proxy`/`https_proxy`/`no_proxy` are not set in `cluster.conf`, ABA uses the corresponding environment variables from the bastion host, where you run the `aba` or `abatui` commands.
+
+> **proxy vs direct:** Use `proxy` when cluster nodes cannot reach public registries (`quay.io`, `registry.redhat.io`) without an HTTP proxy. Use `direct` only when nodes have unrestricted internet access. In both modes, no mirror registry is required — images are pulled from public Red Hat registries.
+
+3. Install the cluster:
+
+```
+cd mycluster
+aba install
+```
+
+For bare-metal, ABA generates the ISO for you to boot your servers. For VMware/KVM, installation is fully automated.
+
+4. Access the cluster:
+
+```
+. <(aba -d mycluster shell)
+oc whoami
+```
+
+See [Installing a Cluster](#installing-a-cluster) for the full list of flags, customization options, and Day 2 operations.
+
+[Back to top](#quick-start)
+
 <!-- perma-link: backward compatibility -->
 <a id="installing-openshift"></a>
 
@@ -573,43 +658,60 @@ cd aba
 aba cluster \
     --name mycluster \
     [--type sno|compact|standard] \
-    [--step <step>] \
     [--starting-ip <ip>] \
     [--api-vip <ip>] \
-    [--ingress-vip <ip>]
+    [--ingress-vip <ip>] \
+    [--step <step>]
 ```
 
-- Creates a directory `mycluster` with a `cluster.conf` file and prompts you to run `aba` inside it.
-- Useful `--step` values: `agentconf`, `iso`, `mon`.
-- Review `cluster.conf` to configure the cluster name, base domain, API and Ingress VIPs, Internet connection mode, port names, bonding, and VLAN settings etc.
-- For VMware/KVM: use `--data-disk-gb <size>` to add a thin-provisioned data disk to each VM.
+This is a **one-time** command that creates the cluster directory and `cluster.conf`. After the directory exists, all further operations use `aba -d mycluster <command>` (or `cd mycluster && aba <command>`).
+
+- Review `cluster.conf` to verify the cluster name, base domain (must be lowercase), networking, node sizes, bonding/VLAN, and connection mode.
 - If `domain`, `machine_network`, `dns_servers`, `next_hop_address`, or `ntp_servers` are empty in `aba.conf`, ABA auto-detects them from the host network.
+- Run `aba cluster --help` for the full list of options and examples.
 
-ABA guides you through the installation — generating agent-based configuration files, then the ISO, then monitoring installation:
+Optionally, add `--step <step>` to continue beyond configuration and into the installation pipeline in a single command (e.g. `--step install` for a full end-to-end install on VMware/KVM).
 
-```
-cd mycluster
-aba mon              # Monitor installation progress
-```
+#### Installation stages
+
+Once the cluster directory exists, run `aba -d mycluster install` (or `cd mycluster && aba install`) to proceed through the installation pipeline. ABA processes these stages in order, pausing on bare-metal so you can review and boot your servers:
+
+| Stage         | What it does                                                | What to review / do |
+| -----         | ------------                                                | ------------------- |
+| **agentconf** | Generates `install-config.yaml` and `agent-config.yaml`.    | **MAC addresses** (must match your servers), and optionally: hostnames, rendezvous host, installation disks (`rootDeviceHints`), network interfaces, host roles. |
+| **iso**       | Runs pre-flight checks, then builds the bootable Agent ISO. | For bare-metal: write the ISO to your servers' boot media and boot them (see [below](#booting-bare-metal-servers)). For VMware/KVM: nothing — ABA proceeds automatically. |
+| **mon**       | Monitors host discovery, validation, bootstrap, and installation progress. | Observe progress until `Install complete!`. |
+
+For **VMware/KVM**, `aba install` runs all stages end-to-end (creates VMs, attaches the ISO, boots, and monitors).
+For **bare-metal**, `aba install` pauses between stages so you can review agent-config, boot your servers, and then monitor.
+
+You can stop at a specific stage to review and customize before continuing — see [Modifying Agent-based Configuration](#modifying-agent-based-configuration) for the workflow and examples.
+
+> **Note:** `aba cluster` is only for initial setup. Once the cluster directory exists, always use
+> `aba -d mycluster <command>` (or `cd mycluster && aba <command>`) for install, monitor, upgrade, delete, and all other operations.
+
+#### Booting bare-metal servers
 
 For bare-metal (`platform=bm`, the default), ABA generates the configuration and ISO — you boot your servers and monitor installation.
 The ISO must be written as a raw disk image (byte-for-byte), not extracted or "burned" in file-copy mode.
 Use `aba write-usb` for guided USB writing, or `dd if=agent.x86_64.iso of=/dev/sdX bs=4M conv=fsync status=progress`.
 Most server management interfaces (iLO, iDRAC, BMC) can also mount the ISO as virtual media — no USB required.
 
+> **USB boot note:** If booting from USB, prepare **one USB drive per server**. The Agent-based Installer waits until all hosts have registered, synced NTP, and passed validation before proceeding — you cannot boot servers sequentially with a single USB drive because removing the drive from one server to boot another will stall the installation.
+
 For VMware or KVM, installation is fully automated (VM creation, ISO attach, and boot).
 
 After OpenShift installs, access the cluster:
 
 ```
-. <(aba shell)       # Set KUBECONFIG
+. <(aba -d mycluster shell)   # Set KUBECONFIG
 oc whoami
 ```
 
 or:
 
 ```
-. <(aba login)       # Log in via oc login
+. <(aba -d mycluster login)   # Log in via oc login
 oc whoami
 ```
 
@@ -628,10 +730,68 @@ Run 'aba day2-osus' to configure the OpenShift Update Service.
 Run 'aba day2-ntp' to configure NTP on this cluster.
 ```
 
-If the install is not progressing, try `aba -d <cluster> unstick` to recycle any crashlooping and failed pods so the cluster installation can recover.
-If OpenShift fails to install, see the [Troubleshooting](Troubleshooting.md) readme.
+If OpenShift fails to install or is not progressing, see the [Troubleshooting](Troubleshooting.md) guide.
 
 **vSphere-specific:** See [vSphere Preflight Validation](Troubleshooting.md#vsphere-preflight-validation) for how to read vSphere preflight output and how to grant the required vCenter privileges.
+
+## Automatic DNS and NTP Setup
+
+If your environment does not have a DNS server configured for your cluster, ABA can set one up automatically using `dnsmasq`.
+Once configured, ABA will **automatically create and remove DNS records** (`api.<cluster>.<domain>` and `*.apps.<cluster>.<domain>`) during cluster install and delete — no manual DNS management required.
+
+### Quick setup
+
+```bash
+# Set up dnsmasq as local DNS resolver (auto-detects upstream and bastion IP)
+aba setup dns
+
+# Set up chronyd as NTP server for the cluster network
+aba setup ntp
+```
+
+After running these, `aba.conf` is automatically updated with `dns_servers` and `ntp_servers` pointing to the bastion IP.
+
+### What happens automatically
+
+| Event | Action |
+| ----- | ------ |
+| `aba -d mirror install` | DNS record for `reg_host` is created |
+| `aba -d mirror uninstall` | DNS record for `reg_host` is removed |
+| Cluster install (ISO generation) | DNS records for `api.<name>` and `*.apps.<name>` are created |
+| `aba --dir <cluster> delete` | DNS records for the cluster are removed |
+
+All DNS management is **no-op** when `dnsmasq` is not managed by ABA (safe by default).
+
+### VIP auto-allocation for multi-node clusters
+
+When ABA manages DNS and you create a multi-node cluster (compact or standard) **without** specifying `api_vip` and `ingress_vip`, ABA will automatically allocate two VIP addresses:
+
+- **Preferred**: two IPs just before `starting_ip` (e.g. `starting_ip=10.0.2.100` → `api_vip=10.0.2.98`, `ingress_vip=10.0.2.99`)
+- **Fallback**: if "before" would wrap out of the subnet, ABA places VIPs after the last node IP (with a +10 gap)
+
+The auto-allocated VIPs are written to `cluster.conf` and corresponding DNS records are created automatically.
+This only applies when ABA manages DNS (`aba setup dns` was run). With external DNS, you must provide VIPs explicitly or create DNS records manually.
+
+SNO clusters do not require VIPs — `starting_ip` is used for everything.
+
+### Removal
+
+```bash
+# Remove dnsmasq config and restore original DNS settings
+aba remove dns
+
+# Remove NTP server configuration (chronyd continues as client)
+aba remove ntp
+```
+
+### Options
+
+```bash
+aba setup dns -y                          # Skip interactive prompt
+aba setup dns --upstream 10.0.1.8         # Override upstream DNS server
+aba setup dns --bastion-ip 10.0.0.10      # Override bastion IP
+aba setup ntp --allow-network 10.0.0.0/16 # Override allowed network CIDR
+```
 
 ## Pre-flight Validation
 
@@ -702,9 +862,9 @@ Use `aba -D iso` for debug output.
 
 ### Modifying Agent-based Configuration
 
-If you modify `install-config.yaml` or `agent-config.yaml`, ABA detects and preserves your changes for future runs. Common updates such as IP/MAC changes, default routes, or root device hints all work fine.
+If you modify `install-config.yaml` or `agent-config.yaml`, ABA detects and preserves your changes for future runs.
 
-Typical workflow:
+Typical workflow — stop at `agentconf`, review and edit, then continue:
 
 ```
 aba cluster \
@@ -713,16 +873,23 @@ aba cluster \
     --starting-ip 10.0.1.100 \
     --step agentconf
 cd mycluster
-# Edit install-config.yaml and/or agent-config.yaml as needed
+# Review and edit install-config.yaml and/or agent-config.yaml
 aba install
 ```
 
-Example — direct agent-based installer to install on the 2nd disk:
+**What bare-metal users typically need to change in `agent-config.yaml`:**
 
-```
-    rootDeviceHints:
-      deviceName: /dev/sdb
-```
+- **MAC addresses** — must match your physical servers. Use a [`macs.conf`](#target-platform) file in the cluster directory for an easier approach, or edit `agent-config.yaml` directly.
+- **Installation disk** — if the default disk isn't correct, add `rootDeviceHints`:
+  ```
+      rootDeviceHints:
+        deviceName: /dev/sdb
+  ```
+- **Hostnames** — defaults are generated from the cluster name. If you need different hostnames, update `cluster.conf` and re-run `aba install` (which regenerates `agent-config.yaml`) rather than editing `agent-config.yaml` directly.
+
+For more advanced scenarios — such as per-node disk hints (different disks on different servers) or custom per-node network configuration — edit `agent-config.yaml` directly. ABA detects and preserves your changes across re-runs.
+
+For VMware/KVM, these are typically generated correctly and rarely need editing.
 
 ## Embedding Custom Manifests (Day-0)
 
@@ -752,7 +919,7 @@ aba iso                    # Regenerate the ISO with embedded manifests
 After installing the cluster and waiting for it to come up, verify the manifest was applied:
 
 ```bash
-. <(aba shell)
+. <(aba -d mycluster shell)
 oc get configmap bootstrap-config -n openshift-config
 ```
 
@@ -789,14 +956,14 @@ aba info
 ### Option A: Use kubeadmin credentials
 
 ```
-. <(aba login)
+. <(aba -d mycluster login)
 oc whoami
 ```
 
 ### Option B: Use kubeconfig export
 
 ```
-. <(aba shell)
+. <(aba -d mycluster shell)
 oc whoami
 oc get co
 ```
@@ -1249,67 +1416,6 @@ In a *partially disconnected environment*, the *connected bastion* has limited (
 
 After configuring these prerequisites, run `aba` (or `abatui`) to start the workflow.
 
-## Connected Installation (No Mirror)
-
-In a connected environment, cluster nodes pull images directly from the Internet (or via an HTTP proxy). No mirror registry is needed.
-
-> **No external portals required.** Unlike hosted installer services, ABA runs entirely on your infrastructure. No network details, credentials, or configuration need to be entered into any external system or web portal.
-
-#### Prerequisites
-
-- ABA [installed](#install-aba) and `aba.conf` configured (OpenShift version, base domain, machine network, etc.)
-- Cluster nodes can reach the Internet directly or via a proxy
-- DNS A records created for API (`api.<cluster>.<domain>`) and Ingress (`*.apps.<cluster>.<domain>`) -- see [Network Configuration](#network-configuration)
-- See [Common Requirements](#common-requirements)
-
-#### Steps
-
-1. Create the cluster directory:
-
-```
-cd aba
-aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
-```
-
-1. Edit `mycluster/cluster.conf` and set the connection type:
-
-```
-int_connection=direct      # Nodes pull from the Internet directly (no proxy needed)
-```
-
-or, if your nodes require a proxy:
-
-```
-int_connection=proxy       # Nodes pull via your HTTP proxy
-http_proxy=http://proxy.example.com:3128
-https_proxy=http://proxy.example.com:3128
-no_proxy=.example.com,.lan,10.0.0.0/8
-```
-
-If `http_proxy`/`https_proxy`/`no_proxy` are not set in `cluster.conf`, ABA uses the corresponding environment variables from the bastion host, where you run the `aba` or `abatui` commands.
-
-> **proxy vs direct:** Use `proxy` when cluster nodes cannot reach public registries (`quay.io`, `registry.redhat.io`) without an HTTP proxy. Use `direct` only when nodes have unrestricted internet access. In both modes, no mirror registry is required — images are pulled from public Red Hat registries.
-
-2. Install the cluster:
-
-```
-cd mycluster
-aba install
-```
-
-For bare-metal, ABA generates the ISO for you to boot your servers. For VMware/KVM, installation is fully automated.
-
-3. Access the cluster:
-
-```
-. <(aba shell)
-oc whoami
-```
-
-See [Installing a Cluster](#installing-a-cluster) for the full list of flags, customization options, and Day 2 operations.
-
-[Back to top](#quick-start)
-
 # Command Reference
 
 ### Mirror Registry Commands
@@ -1387,6 +1493,7 @@ See [Installing a Cluster](#installing-a-cluster) for the full list of flags, cu
 | `aba`                 | Interactive mode — guides you through the workflow                 |
 | `abatui`              | TUI wizard — full guided workflow (`--direct`, `--disco`, `--conno`) |
 | `aba ocp-versions`    | Show a table of latest OpenShift versions per channel              |
+| `aba show-operators`  | List available operators (`--certified`, `--community`, `--all`)   |
 | `aba show-op-sets`    | List available operator sets and their descriptions                |
 | `aba -d cli download` | Download all required CLI tools                                    |
 | `aba -d cli install`  | Download and install CLI binaries to `~/bin`                       |
@@ -1647,6 +1754,15 @@ To re-install ABA, see [Install ABA](#install-aba).
 
 ### Setup and Platform
 
+## Q: How do I set up DNS and NTP for my clusters automatically?
+
+**Use `aba setup dns` and `aba setup ntp`.**
+These configure your bastion as the DNS and NTP server for the cluster network.
+Once DNS is set up, ABA automatically manages per-cluster DNS records (api and apps wildcard) during cluster install and delete.
+See [Automatic DNS and NTP Setup](#automatic-dns-and-ntp-setup) for details and options.
+
+---
+
 ## Q: Does ABA know what RPM packages to install?
 
 **Yes.** ABA uses predefined package lists:
@@ -1790,6 +1906,8 @@ In standard workflows, the host running `oc-mirror` is the same host running `ab
 
 ### Troubleshooting
 
+> See also the [Troubleshooting guide](Troubleshooting.md) for cluster install issues (bootstrap failures, stuck pods, rendezvous node debugging, vSphere preflight).
+
 ## Q: Pushing images to the Quay mirror (e.g. aba load/sync) often fails, even after re-trying several times! What can I do?
 
 Docker Registry is supported by ABA as a lighter alternative (note: Red Hat does not officially support Docker Registry for OpenShift mirroring):
@@ -1919,8 +2037,6 @@ We need help! Here are some ideas for new features and enhancements.
 [Back to top](#quick-start)
 
 ---
-
-> Looking for the previous README? See [README_OLD.md](README_OLD.md).
 
 # License
 

@@ -70,7 +70,7 @@ e2e_run -q "Remove old files" \
 e2e_install_aba
 
 e2e_run "Remove oc-mirror caches" \
-    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror 2>/dev/null | xargs sudo rm -rf"
+    "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 
 e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
     "avail_gb=\$(df / --output=avail -BG | tail -1 | tr -d ' G'); echo \"[setup] / available: \${avail_gb}GB\"; [ \$avail_gb -gt ${E2E_MIN_DISK_GB} ]"
@@ -177,6 +177,8 @@ e2e_run "Show tar file size (human)" "ls -lh ~/tmp/delete-me*tar"
 e2e_run "List tar contents" "tar tvf ~/tmp/delete-me*tar"
 e2e_run "Verify mirror_000001.tar in bundle" \
     "tar tvf ~/tmp/delete-me*tar | grep mirror/data/mirror_000001.tar"
+e2e_run "Verify aba-transfer.tar in bundle (always created by aba save)" \
+    "tar tvf ~/tmp/delete-me*tar | grep mirror/data/aba-transfer.tar"
 
 test_end 0
 
@@ -283,7 +285,7 @@ test_end 0
 #    Both tests are kept for defense-in-depth.
 #
 #    BM two-step flow (controlled by .bm-message / .bm-nextstep gate files):
-#      1st `aba install` -> creates agent configs, prints "Check & edit"
+#      1st `aba install` -> creates agent configs, prints "Review and edit"
 #      2nd `aba install` -> creates ISO, prints "Boot your servers"
 #      (3rd would monitor cluster -- not tested since no real BM servers)
 # ============================================================================
@@ -317,7 +319,7 @@ e2e_run_remote "Verify ISO not yet created" \
 
 # Phase 1: "aba install" stops after agent configs, shows MAC review instructions
 e2e_run_remote "First aba install (creates configs, stops for MAC review)" \
-    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Check & edit' /tmp/bm-phase1.out"
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Review and edit' /tmp/bm-phase1.out"
 e2e_run_remote "Verify .bm-message exists" "test -f ~/aba/$STANDARD/.bm-message"
 e2e_run_remote "Verify ISO not yet created (still)" \
     "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"

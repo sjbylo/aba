@@ -1,0 +1,13 @@
+---
+description: VM disk size normalization for E2E test infrastructure
+globs: test/e2e/**
+alwaysApply: false
+---
+
+# VM Disk Size
+
+- All E2E VMs (conN/disN) are normalized to the same disk size via `VM_DISK_SIZE` in `config.env`
+- `clone_vm()` in `vm-ops.sh` runs `govc vm.disk.change -size ${VM_DISK_SIZE}G` after every clone -- no size query needed
+- The `expand-root.service` on each VM auto-grows `/` on boot to fill the expanded vDisk
+- Never use `VM_DISK_EXTRA_GB` (removed) -- always set an absolute target via `VM_DISK_SIZE`
+- Free-space assertions in suites must use a threshold achievable on all disk sizes (currently >200GB)

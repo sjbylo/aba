@@ -8,6 +8,7 @@ anzo-operator                                           Altair Graph Studio Oper
 anzounstructured-operator                               Altair Graph Studio Unstructured Operator                    stable
 apelocal-csi                                            ApeLocal CSI Driver                                          stable
 appdynamics-operator                                    AppDynamics Operator for Kubernetes                          alpha
+appian-operator                                         Appian operator                                              alpha
 aqua-operator-certified                                 Aqua Security Operator                                       2022.4
 axera-operator                                          Axera Microsegmentation & NDR                                alpha
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
@@ -64,6 +65,7 @@ lightbits-operator                                      Lightbits Operator      
 linstor-operator                                        LINSTOR Operator                                             stable-v2
 mariadb-enterprise-operator                             MariaDB Enterprise Operator                                  stable
 mediation-openstack-operator                            Turbonomic OpenStack Probe Operator                          stable
+minio-minkms-operator                                   Minio AIStor Key management System (KMS)                     stable
 minio-object-store-operator                             MinIO AIStor                                                 stable
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-kubernetes                                      MongoDB Controllers for Kubernetes                           stable
@@ -79,8 +81,8 @@ nim-operator-certified                                  The NVIDIA NIM Operator 
 nspc-operator                                           NEC Storage Plug-in for Containers                           stable
 nutanixcsioperator                                      Nutanix CSI Operator                                         stable-3.x
 nvidia-maintenance-operator                             NVIDIA Maintenance Operator                                  stable
+nvidia-network-operator                                 NVIDIA Network Operator                                      stable
 nxiq-operator-certified                                 Nexus IQ Operator                                            stable
-oci-capi-autoscaling-operator                           OCI CAPI Autoscaling Operator                                stable
 odigos-operator                                         Odigos Operator                                              alpha
 open-liberty-certified                                  Open Liberty                                                 v1.6
 operator-certification-operator                         Operator Certification Operator                              alpha
@@ -89,6 +91,7 @@ portworx-certified                                      Portworx Enterprise     
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 rbln-npu-operator                                       RBLN operator                                                stable
+redis-enterprise-operator-cert                          Redis Enterprise Operator                                    production
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 simplyblock-operator                                    Simplyblock Operator                                         alpha
@@ -107,5 +110,6 @@ vast-csi-operator                                       VAST CSI driver operator
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
+wave                                                    Wave                                                         stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts

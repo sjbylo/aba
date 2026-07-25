@@ -38,7 +38,7 @@ fi
 if [ -s reg-uninstall.sh ]; then
 	source reg-uninstall.sh
 
-	if ask "Uninstall the previously installed mirror registry on host $reg_host_to_del"; then
+	if ask -n --auto-yes "Uninstall the previously installed mirror registry on host $reg_host_to_del"; then
 		reg_delete
 
 		rm -rf "${regcreds_dir:?}/"*
@@ -51,6 +51,8 @@ if [ -s reg-uninstall.sh ]; then
 fi
 
 # Fallback: no state file found -- try to detect running containers
+source scripts/reg-common.sh
+
 aba_warn \
 	"No registry state found in $regcreds_dir/state.sh." \
 	"Attempting to detect a running registry ..."
@@ -96,6 +98,10 @@ case "$vendor" in
 		reg_root_opt="--quayRoot \"$reg_root\" --quayStorage \"$reg_root/quay-storage\" --sqliteStorage \"$reg_root/sqlite-storage\""
 		echo "$_podman_ps" | grep -q "quay-app\|quay" && _found=1
 		;;
+	$_QUAY_NG_VENDOR)
+		reg_root=$data_dir/$_QUAY_NG_VENDOR
+		echo "$_podman_ps" | grep -q "^systemd-quay$" && _found=1
+		;;
 esac
 
 # Also check if registry data directory exists (container may be gone but data remains)
@@ -115,7 +121,7 @@ fi
 _location="localhost"
 [ "$_is_remote" ] && _location="$reg_ssh_user@$reg_host"
 
-if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall this registry"; then
+if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root). Uninstall this registry"; then
 	if [ "$_is_remote" ]; then
 		_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 		case "$vendor" in
@@ -133,6 +139,28 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 				cmd="eval ./mirror-registry uninstall -v --targetHostname $reg_host --targetUsername $reg_ssh_user --autoApprove -k \"$reg_ssh_key\" $reg_root_opt"
 				aba_info "Running command: $cmd"
 				$cmd || exit 1
+				;;
+			$_QUAY_NG_VENDOR)
+				aba_info "Removing $_QUAY_NG_VENDOR registry on $reg_host ..."
+				$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
+						systemctl --user stop quay.service; \
+					fi; \
+					rm -f ~/.config/containers/systemd/quay.container; \
+					systemctl --user daemon-reload 2>/dev/null; \
+					[ -d '$reg_root' ] && $SUDO rm -rf '$reg_root'" || \
+					aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+
+				# Post-uninstall assertions
+				_stale=""
+				$_ssh "test -d $reg_root" && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				$_ssh "ss -tlnp | grep -q ':${reg_port:-8443} '" && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
+				$_ssh "systemctl --user is-active quay.service &>/dev/null" && _stale+="  quay.service still active"$'\n'
+				if [ -n "$_stale" ]; then
+					aba_abort \
+						"$_QUAY_NG_VENDOR registry uninstall left stale state on $reg_host:" \
+						"$_stale" \
+						"Investigate and clean up manually before retrying."
+				fi
 				;;
 		esac
 	else
@@ -153,7 +181,36 @@ if ask "Detected $vendor registry on $_location (data: $reg_root). Uninstall thi
 				aba_info "Running command: $cmd"
 				$cmd || exit 1
 				;;
+			$_QUAY_NG_VENDOR)
+				aba_info "Removing $_QUAY_NG_VENDOR registry ..."
+				if systemctl --user is-active quay.service &>/dev/null; then
+					systemctl --user stop quay.service
+				fi
+				[ -f "$HOME/.config/containers/systemd/quay.container" ] && \
+					rm -f "$HOME/.config/containers/systemd/quay.container"
+				systemctl --user daemon-reload 2>/dev/null || true
+				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
+
+				# Post-uninstall assertions
+				_stale=""
+				[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
+				ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'
+				systemctl --user is-active quay.service &>/dev/null && _stale+="  quay.service still active"$'\n'
+				if [ -n "$_stale" ]; then
+					aba_abort \
+						"$_QUAY_NG_VENDOR registry uninstall left stale state:" \
+						"$_stale" \
+						"Investigate and clean up manually before retrying."
+				fi
+				;;
 		esac
+	fi
+
+	# Close firewall port opened during install
+	if [ "$_is_remote" ]; then
+		reg_close_firewall --ssh
+	else
+		reg_close_firewall
 	fi
 else
 	exit 1
