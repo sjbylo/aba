@@ -156,13 +156,44 @@ reg_root=$data_dir/quay-install
 aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 if [ ! -d data ]; then
-	aba_abort "Error: Missing 'mirror/data' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" 
+	aba_abort "No mirror/data/ directory — nothing to load." \
+		"Load needs image archives (mirror_*.tar) under mirror/data/." \
+		"On a connected host:  aba -d mirror save" \
+		"Or copy archives in:  mkdir -p mirror/data && cp <media>/*.tar mirror/data/"
+
 fi
 aba_debug "data/ directory exists"
 
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
+# Reassure the user: summarize what this load will apply (tag-based ISC).
+# Reuse transfer-info.sh (same parser as TUI / aba transfer-info) — do not
+# invent a second ISC parser. Prefer transfer tar content when present.
 echo
+if _ti_out=$(scripts/transfer-info.sh --shell 2>/dev/null); then
+	eval "$_ti_out"
+	_load_ver="${transfer_ocp_version:-}"
+	if [ -n "${transfer_upgrade_to:-}" ] && [ "$transfer_upgrade_to" != "${transfer_ocp_version:-}" ]; then
+		_load_ver="${transfer_ocp_version} → ${transfer_upgrade_to}"
+	fi
+	aba_info "About to load:"
+	if [ -n "$_load_ver" ]; then
+		aba_info "  OCP: ${_load_ver} (${transfer_ocp_channel:-unknown})"
+	fi
+	if [ "${transfer_operator_count:-0}" -gt 0 ] 2>/dev/null; then
+		_ops_preview=$(echo "${transfer_operators:-}" | sed 's/,/, /g')
+		if [ "${transfer_operator_count}" -gt 8 ]; then
+			_ops_preview=$(echo "${transfer_operators:-}" | cut -d, -f1-8 | sed 's/,/, /g')
+			_ops_preview="${_ops_preview}, ... (+$(( transfer_operator_count - 8 )) more)"
+		fi
+		aba_info "  Operators (${transfer_operator_count}): ${_ops_preview}"
+	else
+		aba_info "  Operators: none"
+	fi
+	aba_info "  Registry: ${reg_host}:${reg_port}${reg_path}"
+	echo
+fi
+
 aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 echo
