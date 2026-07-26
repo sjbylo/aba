@@ -848,32 +848,13 @@ to catch new dependencies early. Could also run on any change to
 ## Bundle additional CLI tools (virtctl, etc.)
 
 **Severity:** LOW — UX convenience for air-gapped users
-**Status:** Planned
+**Status:** Done
 **Added:** 2026-07-25
+**Done:** 2026-07-26
 
-**Problem:** ABA bundles only `oc` and `kubectl` for air-gapped transfer.
-Other CLI tools like `virtctl` (OpenShift Virtualization), `tkn` (Tekton/Pipelines),
-`argocd`, `acs-cli` (roxctl), etc. are very useful and often needed on the
-disconnected side but unavailable without internet.
+**Solution:** Optional `download-extra-clis` / `install-extra-clis` in `cli/Makefile`
+(virtctl, kn, tkn, helm, opm, argocd, roxctl). Auto-downloaded on `aba bundle` and
+`aba save` via `cli_download_extra_clis` (warn-and-continue). Not part of everyday
+`download-all`. Disco installs extras when artifacts already exist under `cli/`.
 
-**Question:** Which CLI tools should ABA download and include in the bundle?
-Candidates:
-- `virtctl` — required for OpenShift Virtualization VM management
-- `tkn` — Tekton Pipelines CLI
-- `roxctl` — Red Hat ACS (StackRox) CLI
-- `argocd` — GitOps CLI
-- `helm` — Helm chart management
-- `kustomize` — already bundled with `oc`?
-- `opm` — operator package manager (for catalog maintainers)
-
-**Proposed approach:** Since ABA already downloads `oc`/`kubectl` via
-`ensure_cli_tools`, it should be straightforward to extend this to additional
-tools — especially those tied to operator sets the user has configured.
-For example, if `operator-set-virt` is selected, automatically include `virtctl`
-in the bundle. If `operator-set-pipelines` is selected, include `tkn`.
-
-**Considerations:**
-- Download size: each tool is 30-100MB; only include tools for configured operator sets
-- Version pinning: tools should match the OCP version where possible
-- Discovery: where are these binaries hosted? (GitHub releases, mirror.openshift.com, etc.)
-- Air-gap delivery: include in `aba-transfer.tar` or as separate binaries in `cli/`?
+**Follow-ups (optional):** operator-set-conditioned inclusion to shrink download size.

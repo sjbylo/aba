@@ -78,6 +78,12 @@ cli/.init
 cli/*tar.gz
 cli/butane-binary
 cli/butane-amd64
+cli/*-amd64
+cli/*-x86_64
+cli/*-arm64
+cli/*-aarch64
+cli/*-s390x
+cli/*-ppc64le
 cli/*-download
 cli/govc
 cli/.*installed
