@@ -69,6 +69,14 @@ fi
 if [ -f "$_transfer_tar" ]; then
 	aba_info "Found transfer bundle: $_transfer_tar"
 
+	# Drop leftovers from a prior load before unpack. Non-upgrade transfer tars
+	# omit metadata (and sometimes the digest ISC); tar xf will not remove
+	# pre-existing files, so a stale aba-transfer-metadata.json would be
+	# validated against the newly unpacked digest ISC (false checksum mismatch).
+	rm -f data/aba-transfer-metadata.json \
+		data/imageset-config.yaml \
+		data/imageset-config-digest.yaml
+
 	# Unpack from aba root (CWD is mirror/, aba root is ..)
 	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
 		aba_abort "Failed to unpack transfer bundle ($_transfer_tar)." \
