@@ -4272,6 +4272,41 @@ is_bundle_mode() {
 	[ -f "${ABA_ROOT:-.}/.bundle" ]
 }
 
+# Download optional convenience CLIs (virtctl, kn, tkn, helm, opm, argocd, roxctl).
+# Not required by ABA — warn-and-continue so a flake never fails bundle/save.
+# Usage: cli_download_extra_clis           # start (non-blocking)
+#        cli_download_extra_clis --wait    # wait for completion
+#        cli_download_extra_clis --reset   # reset task state
+cli_download_extra_clis() {
+	local _mode="${1:-}"
+	# Prefer CWD-relative scripts/ (works from aba root and from mirror/ via symlink)
+	local _dl="scripts/cli-download-all.sh"
+	if [ ! -f "$_dl" ] && [ -n "${ABA_ROOT:-}" ] && [ -f "${ABA_ROOT}/scripts/cli-download-all.sh" ]; then
+		_dl="${ABA_ROOT}/scripts/cli-download-all.sh"
+	fi
+
+	# Soft-fail in Make recipes: skip missing extras instead of aborting bundle/save.
+	# Direct "aba -d cli download-extra-clis" leaves SOFT_EXTRA unset → hard fail.
+	export SOFT_EXTRA=1
+
+	case "$_mode" in
+		--wait)
+			if ! "$_dl" --wait --extra; then
+				aba_warn "Optional extra CLI download failed — continuing (not required by ABA)." \
+					"You can retry with: aba -d cli download-extra-clis"
+			fi
+			;;
+		--reset)
+			"$_dl" --reset --extra 2>/dev/null || true
+			;;
+		*)
+			"$_dl" --extra 2>/dev/null || \
+				aba_warn "Optional extra CLI download start failed — continuing (not required by ABA)."
+			;;
+	esac
+	return 0
+}
+
 # Check internet connectivity to required sites
 # Usage: check_internet_connectivity <prefix> [quiet]
 #   prefix: Task ID prefix (e.g., "aba" for shared CLI/TUI probes)
