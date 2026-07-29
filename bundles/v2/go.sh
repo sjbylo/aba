@@ -72,6 +72,9 @@ do
 	versions+=("$ver")
 done
 
+echo Clear unused images ...
+podman image prune -af
+
 list=$(echo "${versions[@]}" | tr ' ' '\n')
 echo "#######################"
 echo -e "Creating install bundles for versions:\n$list"
