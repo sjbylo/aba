@@ -855,11 +855,12 @@ cluster_api_reachable() {
 # Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
 # Copies auth, config backups, and creates clusterstate symlink.
 # Must be called from the cluster directory (e.g. ~/aba/sno/).
-# Requires: normalize-aba-conf and normalize-cluster-conf already sourced,
-#           or will source them itself.
 externalize_cluster_state() {
-	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
-	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
+	# Always source both: cluster.conf values must override aba.conf defaults
+	# (e.g. machine_network may differ). Conditional sourcing allowed stale
+	# aba.conf values to leak through the Make/aba.sh environment.
+	source <(normalize-aba-conf)
+	source <(normalize-cluster-conf)
 
 	[ -z "${cluster_name:-}" ] && aba_warn "externalize_cluster_state: cluster_name not set" && return 1
 	[ -z "${base_domain:-}" ] && aba_warn "externalize_cluster_state: base_domain not set" && return 1
