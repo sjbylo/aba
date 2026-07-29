@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Verify optional extra CLIs stay off download-all/install-all and appear on *-extra-clis.
+# Verify optional extra CLIs stay off download-all/install-all, appear on *-extra-clis,
+# and install to ~/bin on the disco side when artifacts are already present.
 # Usage: bash test/func/test-extra-clis.sh
 
 set -euo pipefail
@@ -122,6 +123,127 @@ else
 	ok "soft-fail: no successful kn artifact left"
 fi
 cleanup_test_kn
+
+# --- Disco-side install: artifacts present → installed to ~/bin ---------------
+# Simulates air-gap unpack: tarballs/binaries already under cli/, no download.
+# Uses cli-install-all.sh (same path as disco bundle install).
+section "disco install: artifacts → ~/bin via cli-install-all.sh"
+
+TEST_HOME=$(mktemp -d)
+STAGING=$(mktemp -d)
+BACKUP_DIR=$(mktemp -d)
+CREATED_ARTS=()
+HAD_BUNDLE=0
+[ -e .bundle ] && HAD_BUNDLE=1
+
+restore_disco_artifacts() {
+	local f base
+	for f in "${CREATED_ARTS[@]:-}"; do
+		base=$(basename "$f")
+		rm -f "$f"
+		if [ -e "$BACKUP_DIR/$base" ]; then
+			mv "$BACKUP_DIR/$base" "$f"
+		fi
+	done
+	if [ "$HAD_BUNDLE" -eq 0 ]; then
+		rm -f .bundle
+	fi
+	rm -rf "$TEST_HOME" "$STAGING" "$BACKUP_DIR"
+}
+trap 'cleanup_test_kn; restore_disco_artifacts' EXIT
+
+_make_stub() {
+	# $1 = binary name inside staging dir
+	printf '#!/bin/bash\n# aba func-test stub\nexit 0\n' > "$STAGING/$1"
+	chmod +x "$STAGING/$1"
+}
+
+_place_art() {
+	# $1 = path under cli/
+	local dest="cli/$1"
+	if [ -e "$dest" ]; then
+		mv "$dest" "$BACKUP_DIR/$(basename "$dest")"
+	fi
+	mv "$2" "$dest"
+	CREATED_ARTS+=("$dest")
+}
+
+# Resolve host-specific artifact filenames from cli/Makefile (single source of truth)
+while read -r tool art; do
+	[ -n "$tool" ] || continue
+	case "$tool" in
+		virtctl|roxctl)
+			_make_stub "$tool"
+			_place_art "$art" "$STAGING/$tool"
+			;;
+		kn|helm|opm|argocd)
+			_make_stub "$tool"
+			tar -C "$STAGING" -czf "$STAGING/$art" "$tool"
+			_place_art "$art" "$STAGING/$art"
+			;;
+		tkn)
+			_make_stub tkn
+			# tkn recipe extracts member name "tkn" specifically
+			tar -C "$STAGING" -czf "$STAGING/$art" tkn
+			_place_art "$art" "$STAGING/$art"
+			;;
+		*)
+			ko "unexpected extra artifact mapping: $tool $art"
+			;;
+	esac
+done < <(make -sC cli --eval 'print-extra-artifacts: ; @printf "%s %s\n" virtctl "$(virtctl_file)" kn "$(kn_tar_file)" tkn "$(tkn_tar_file)" helm "$(helm_tar_file)" opm "$(local_opm_tar)" argocd "$(argocd_tar_file)" roxctl "$(roxctl_file)"' print-extra-artifacts)
+
+avail=$(make --no-print-directory -sC cli out-install-extra-available)
+for t in $EXTRA_TOOLS; do
+	if echo "$avail" | grep -qw "$t"; then
+		ok "out-install-extra-available lists $t"
+	else
+		ko "out-install-extra-available missing $t (got: $avail)"
+	fi
+done
+
+# Reset install task state so run_once actually runs make for these tools
+for t in $EXTRA_TOOLS; do
+	scripts/cli-install-all.sh --reset "$t" >/dev/null 2>&1 || true
+done
+
+# .bundle → skip download wait (disco / transfer tree)
+touch .bundle
+
+set +e
+install_out=$(
+	HOME="$TEST_HOME" \
+	PLAIN_OUTPUT=1 \
+	scripts/cli-install-all.sh --wait $EXTRA_TOOLS 2>&1
+)
+install_rc=$?
+set -e
+
+if [ "$install_rc" -eq 0 ]; then
+	ok "cli-install-all.sh --wait extras exited 0"
+else
+	ko "cli-install-all.sh --wait extras failed (rc=$install_rc): $install_out"
+fi
+
+for t in $EXTRA_TOOLS; do
+	if [ -x "$TEST_HOME/bin/$t" ]; then
+		ok "disco install placed ~/bin/$t"
+	else
+		ko "disco install missing $TEST_HOME/bin/$t"
+	fi
+done
+
+# Restore real cli/ artifacts; ensure stubs did not leak into the real ~/bin
+restore_disco_artifacts
+trap cleanup_test_kn EXIT
+CREATED_ARTS=()
+for t in $EXTRA_TOOLS; do
+	if [ -x "$HOME/bin/$t" ] && head -1 "$HOME/bin/$t" 2>/dev/null | grep -q 'aba func-test stub'; then
+		ko "stub leaked to real ~/bin/$t"
+	else
+		ok "no stub leak in ~/bin/$t"
+	fi
+done
 
 echo
 echo "Results: $pass passed, $fail failed"

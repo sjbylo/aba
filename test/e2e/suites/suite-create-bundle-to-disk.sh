@@ -11,6 +11,7 @@
 #   - Light bundle creation (specific operator subset)
 #   - Full bundle creation (all operators)
 #   - Bundle tar verification (contents, mirror_000001.tar presence)
+#   - Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) in bundle + ~/bin on disco
 #
 # Prerequisites:
 #   - ~/.pull-secret.json must exist
@@ -180,6 +181,20 @@ e2e_run "Verify mirror_000001.tar in bundle" \
 e2e_run "Verify aba-transfer.tar in bundle (always created by aba save)" \
     "tar tvf ~/tmp/delete-me*tar | grep mirror/data/aba-transfer.tar"
 
+# Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) are pulled during aba bundle
+# via cli_download_extra_clis (soft-fail). Require all seven artifacts landed so
+# the disco-side install check below is meaningful.
+e2e_run "Verify all extra CLI artifacts present after bundle" \
+    "avail=\$(make -sC cli out-install-extra-available); echo \"available: \$avail\"; \
+     for t in virtctl kn tkn helm opm argocd roxctl; do \
+       echo \"\$avail\" | grep -qw \"\$t\" || { echo \"missing extra artifact: \$t\"; exit 1; }; \
+     done"
+e2e_run "Verify extra CLI artifacts packed into bundle tar" \
+    "for t in virtctl kn tkn helm opm argocd roxctl; do \
+       tar tvf ~/tmp/delete-me*tar | grep -E \"/cli/\${t}[-.]\" | head -1 || \
+         { echo \"extra CLI not in bundle tar: \$t\"; exit 1; }; \
+     done"
+
 test_end 0
 
 # ============================================================================
@@ -264,6 +279,22 @@ e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote -r 3 2 "Install mirror registry and load images from bundle" \
     "cd ~/aba && aba -d mirror load -H $DIS_HOST --retry"
+
+# Bundle unpack leaves extra CLI artifacts under cli/. cli-install-all.sh
+# installs them when present (aba starts this in background; --wait makes the
+# check race-free). Same contract as test/func/test-extra-clis.sh disco check.
+e2e_run_remote "Verify extra CLI artifacts available on disco" \
+    "cd ~/aba && avail=\$(make -sC cli out-install-extra-available); echo \"available: \$avail\"; \
+     for t in virtctl kn tkn helm opm argocd roxctl; do \
+       echo \"\$avail\" | grep -qw \"\$t\" || { echo \"missing extra artifact on disco: \$t\"; exit 1; }; \
+     done"
+e2e_run_remote "Ensure extra CLIs installed on disco (cli-install-all --wait)" \
+    "cd ~/aba && scripts/cli-install-all.sh --wait virtctl kn tkn helm opm argocd roxctl"
+e2e_run_remote "Verify extra CLIs installed to ~/bin on disco" \
+    "for t in virtctl kn tkn helm opm argocd roxctl; do \
+       [ -x \"\$HOME/bin/\$t\" ] || { echo \"missing ~/bin/\$t on disco\"; ls -la \"\$HOME/bin\" 2>&1 | head -40; exit 1; }; \
+       echo \"ok ~/bin/\$t\"; \
+     done"
 
 test_end 0
 
