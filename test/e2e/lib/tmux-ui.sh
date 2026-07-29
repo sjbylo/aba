@@ -115,15 +115,15 @@ _live_create_pane_script() {
 		echo '  if [ -f "$_PANE_SCRIPT" ]; then'
 		echo '    source "$_PANE_SCRIPT"'
 		echo '  else'
-		echo "    _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites')"
-		echo "    _os=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-os')"
-		echo "    _vmconf=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-vmconf')"
+		echo "    _suite=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null)"
+		echo "    _os=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null)"
+		echo "    _vmconf=\$(ssh $_so ${_default_user}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null)"
 		echo '    _vmtag=""'
 		echo '    [ -n "$_vmconf" ] && [ "$_vmconf" != "~/.vmware.conf" ] && _vmtag=" | $(basename "$_vmconf")"'
 		printf "    printf '\\\\033]2;live | Pool %d | ${_default_user}%%s%%s%%s\\\\033\\\\\\\\' \"\${_suite:+ | \$_suite}\" \"\${_os:+ | \$_os}\" \"\$_vmtag\"\n" "$p"
 		echo '    clear'
-		echo "    ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '${E2E_TMUX_SESSION}' && exec tmux attach -d -t '${E2E_TMUX_SESSION}'\" || {"
-		echo "      echo 'No e2e session on pool ${p}. Waiting for suite to start...'"
+		echo "    ssh -t $_so ${_default_user}@${_h} \"tmux has-session -t '${E2E_TMUX_SESSION}' 2>/dev/null && exec tmux attach -d -t '${E2E_TMUX_SESSION}'\" || {"
+		echo "      echo 'Pool ${p} idle — waiting for suite to start...'"
 		echo '    }'
 		echo '    sleep 5'
 		echo '  fi'
@@ -174,26 +174,26 @@ _create_tmux_dashboard() {
 		local _so="$_E2E_SSH_OPTS"
 		local _sess_name="${E2E_TMUX_SESSION:-e2e-suite}"
 		echo "while true; do"\
-" _u=\$(ssh $_so \${_u:-${_user}}@${_h} 'cat /tmp/e2e-suite-user');"\
+" _u=\$(ssh $_so \${_u:-${_user}}@${_h} 'cat /tmp/e2e-suite-user 2>/dev/null' 2>/dev/null);"\
 " _u=\${_u:-${_user}};"\
-" _os=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-os');"\
-" _vc=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-vmconf');"\
+" _os=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-os 2>/dev/null' 2>/dev/null);"\
+" _vc=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-suite-vmconf 2>/dev/null' 2>/dev/null);"\
 " _vt=''; [ -n \"\$_vc\" ] && [ \"\$_vc\" != '~/.vmware.conf' ] && _vt=\" | \$(basename \"\$_vc\")\";"\
-" if ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name}'; then"\
-"   _s=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites');"\
+" if ssh $_so \${_u}@${_h} 'tmux has-session -t ${_sess_name} 2>/dev/null'; then"\
+"   _s=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null);"\
 "   printf '\\033]2;dashboard | Pool ${_p} | %s%s%s%s\\033\\\\' \"\${_u}\" \"\${_s:+ | \$_s}\" \"\${_os:+ | \$_os}\" \"\$_vt\";"\
 "   clear;"\
 "   ssh $_so \${_u}@${_h} 'tail -F -n 500 ~/.e2e-harness/logs/${_logfile}' & _tpid=\$!;"\
 "   while kill -0 \$_tpid; do"\
 "     sleep 10;"\
-"     _ns=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites');"\
+"     _ns=\$(ssh $_so \${_u}@${_h} 'cat /tmp/e2e-last-suites 2>/dev/null' 2>/dev/null);"\
 "     [ -n \"\$_ns\" ] && [ \"\$_ns\" != \"\$_s\" ] && kill \$_tpid && break;"\
 "   done;"\
 "   wait \$_tpid;"\
 " else"\
 "   printf '\\033]2;dashboard | Pool ${_p} | %s | (idle)%s%s\\033\\\\' \"\${_u}\" \"\${_os:+ | \$_os}\" \"\$_vt\";"\
 "   clear;"\
-"   echo 'No e2e session on pool ${_p}. Waiting for suite to start...';"\
+"   echo 'Pool ${_p} idle — waiting for suite to start...';"\
 "   sleep 5;"\
 " fi;"\
 " done"

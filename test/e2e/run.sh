@@ -137,7 +137,7 @@ case "$CLI_COMMAND" in
 		exit 0
 		;;
 	status)
-		cmd_status "$CLI_POOL_LIST"
+		cmd_status "$CLI_POOL_LIST" "$_RUN_DIR"
 		exit 0
 		;;
 	kill)
@@ -364,7 +364,7 @@ if [ "$CLI_COMMAND" = "run" ] && [ -z "${_E2E_DAEMONIZED:-}" ]; then
 		done
 
 		echo ""
-		echo "  ${#_inject_suites[@]} suite(s) injected. Dispatcher will pick them up shortly."
+		_e2e_print_queue_dispatch_hint "${#_inject_suites[@]}" "$_RUN_DIR/logs/daemon.log"
 		echo ""
 		exit 0
 	fi
