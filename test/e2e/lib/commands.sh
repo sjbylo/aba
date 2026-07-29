@@ -135,8 +135,73 @@ cmd_start() {
 # --- status ------------------------------------------------------------------
 # Show what's running on each pool.
 
+# True if pidfile exists and its PID is alive.
+_e2e_pid_alive() {
+	local _f="${1:-}" _p
+	[ -n "$_f" ] && [ -f "$_f" ] || return 1
+	_p=$(cat "$_f" 2>/dev/null) || return 1
+	[ -n "$_p" ] || return 1
+	kill -0 "$_p" 2>/dev/null
+}
+
+# Daemon/dispatcher phase for status + inject UX.
+# Prints: infra | dispatcher | daemon-only | none
+_e2e_run_phase() {
+	if pgrep -f 'setup-infra\.sh' >/dev/null 2>&1; then
+		echo infra
+		return
+	fi
+	if _e2e_pid_alive "$E2E_DISPATCHER_PID"; then
+		echo dispatcher
+		return
+	fi
+	if _e2e_pid_alive "$E2E_DAEMON_PID"; then
+		echo daemon-only
+		return
+	fi
+	echo none
+}
+
+# Last useful infra/daemon log line (best-effort).
+_e2e_daemon_log_tail() {
+	local _log="${1:-}"
+	[ -n "$_log" ] && [ -f "$_log" ] || return 0
+	# Prefer human INFRA/FATAL lines over set -x noise
+	grep -E 'INFRA:|FATAL:|FAILED:|DISPATCH:|Waiting for SSH|No route to host|ERROR:' "$_log" 2>/dev/null \
+		| sed 's/\x1b\[[0-9;]*m//g' | tail -1
+}
+
+# Post-queue messaging for inject/reschedule. Args: count [daemon_log]
+_e2e_print_queue_dispatch_hint() {
+	local _n="$1"
+	local _log="${2:-}"
+	local _phase _tail
+	_phase=$(_e2e_run_phase)
+
+	case "$_phase" in
+		dispatcher)
+			echo "  ${_n} suite(s) injected. Dispatcher will pick them up shortly."
+			;;
+		infra)
+			echo "  ${_n} suite(s) queued in $E2E_INJECT_QUEUE"
+			echo "  WARNING: Daemon is still in INFRA (setup-infra). Dispatcher is NOT running yet."
+			echo "           Suites will not start until infrastructure finishes."
+			_tail=$(_e2e_daemon_log_tail "$_log")
+			[ -n "${_tail:-}" ] && echo "           Last: $_tail"
+			;;
+		*)
+			echo "  ${_n} suite(s) queued in $E2E_INJECT_QUEUE"
+			echo "  WARNING: Dispatcher is NOT running — queued suites will sit idle."
+			echo "           Check: ./run.sh status   and   tail -F ${_log:-logs/daemon.log}"
+			;;
+	esac
+}
+
 cmd_status() {
 	local pool_list="$1"
+	local run_dir="${2:-}"
+	local _daemon_log=""
+	[ -n "$run_dir" ] && _daemon_log="${run_dir}/logs/daemon.log"
 
 	printf "  %-6s  %-10s  %-40s  %-8s  %s\n" "POOL" "STATE" "SUITE" "SINCE" "LAST OUTPUT"
 	printf "  %-6s  %-10s  %-40s  %-8s  %s\n" "------" "----------" "----------------------------------------" "--------" "--------------------"
@@ -146,20 +211,21 @@ cmd_status() {
 		local target
 		target=$(_con_target "$p")
 		local _info=""
+		# Quiet probes: missing /tmp/e2e-* and tmux on idle pools must not spam stderr
 		_info=$(_essh "$target" "
-			_suite_user=\$(cat /tmp/e2e-suite-user) || _suite_user=\"\"
+			_suite_user=\$(cat /tmp/e2e-suite-user 2>/dev/null) || _suite_user=\"\"
 			_sudo=\"\"; [ \"\$_suite_user\" = root ] && _sudo=sudo
 			_uhome=~; [ \"\$_suite_user\" = root ] && _uhome=/root
 			_slog=\"\${_uhome}/.e2e-harness/logs/summary.log\"
-			\$_sudo test -f \"\$_slog\" || _slog=\$(\$_sudo ls -t \${_uhome}/.e2e-harness/logs/*-summary.log | head -1)
-			suite=\$(cat /tmp/e2e-last-suites) || suite=\"\"
-			_ts() { stat -c %Y \"\$1\" | xargs -I{} date -d @{} +%H:%M; }
-			if \$_sudo tmux has-session -t '$E2E_TMUX_SESSION'; then
+			\$_sudo test -f \"\$_slog\" 2>/dev/null || _slog=\$(\$_sudo ls -t \${_uhome}/.e2e-harness/logs/*-summary.log 2>/dev/null | head -1)
+			suite=\$(cat /tmp/e2e-last-suites 2>/dev/null) || suite=\"\"
+			_ts() { stat -c %Y \"\$1\" 2>/dev/null | xargs -I{} date -d @{} +%H:%M; }
+			if \$_sudo tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null; then
 				suite=\${suite:-unknown}
 				rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
-				last=\$(\$_sudo tail -1 \"\$_slog\" | sed 's/\x1b\[[0-9;]*m//g')
+				last=\$(\$_sudo tail -1 \"\$_slog\" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 				if [ -f \"\$rc_file\" ]; then
-					rc=\$(cat \"\$rc_file\")
+					rc=\$(cat \"\$rc_file\" 2>/dev/null)
 					_since=\$(_ts \"\$rc_file\")
 					echo \"DONE|\${suite}|exit=\${rc}|\${_since}\"
 				elif [ -f \"/tmp/e2e-paused-\${suite}\" ]; then
@@ -173,7 +239,7 @@ cmd_status() {
 				if [ -n \"\$suite\" ]; then
 					rc_file=\"${E2E_RC_PREFIX}-\${suite}.rc\"
 					if [ -f \"\$rc_file\" ]; then
-						rc=\$(cat \"\$rc_file\")
+						rc=\$(cat \"\$rc_file\" 2>/dev/null)
 						_since=\$(_ts \"\$rc_file\")
 						echo \"FINISHED|\${suite}|exit=\${rc}|\${_since}\"
 					else
@@ -184,13 +250,15 @@ cmd_status() {
 				fi
 			fi
 			echo '|||TABLE|||'
-			\$_sudo tac \"\$_slog\" \\
-				| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \\
-				| tac \\
-				| sed 's/\x1b\[[0-9;]*m//g' \\
-				| grep -E 'PASS|FAIL|SKIP|RUNNING|PENDING|  --' \\
-				| sed 's/^[0-9: ]*//'
-		" || echo "UNREACHABLE|-|-|")
+			if [ -n \"\$_slog\" ] && \$_sudo test -f \"\$_slog\" 2>/dev/null; then
+				\$_sudo tac \"\$_slog\" 2>/dev/null \\
+					| awk 'BEGIN{p=0} /====/{if(p)exit; p=1; next} p{print}' \\
+					| tac \\
+					| sed 's/\x1b\[[0-9;]*m//g' \\
+					| grep -E 'PASS|FAIL|SKIP|RUNNING|PENDING|  --' \\
+					| sed 's/^[0-9: ]*//'
+			fi
+		" 2>/dev/null || echo "UNREACHABLE|-|-|")
 
 		local _status_line="${_info%%|||TABLE|||*}"
 		local _table_data="${_info#*|||TABLE|||}"
@@ -251,13 +319,34 @@ cmd_status() {
 		fi
 	done
 
-	# Dispatcher status section
-	_show_dispatcher_status
+	# Dispatcher / daemon / phase section
+	_show_dispatcher_status "$_daemon_log"
 }
 
 _show_dispatcher_status() {
-	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")"; then
-		printf "  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)" "$(cat "$E2E_DISPATCHER_PID")"
+	local _daemon_log="${1:-}"
+	local _phase _tail _disp_pid _daemon_pid
+	_phase=$(_e2e_run_phase)
+
+	case "$_phase" in
+		infra)
+			printf "  Phase:      \033[1;36mINFRA\033[0m (setup-infra in progress — suites will not start yet)\n"
+			;;
+		daemon-only)
+			printf "  Phase:      \033[1;33mWAITING\033[0m (daemon up, dispatcher not started yet)\n"
+			;;
+		dispatcher)
+			printf "  Phase:      \033[1;32mDISPATCH\033[0m\n"
+			;;
+	esac
+	if [ "$_phase" = "infra" ] || [ "$_phase" = "daemon-only" ]; then
+		_tail=$(_e2e_daemon_log_tail "$_daemon_log")
+		[ -n "$_tail" ] && printf "    Last:      %s\n" "$_tail"
+	fi
+
+	if [ "$_phase" = "dispatcher" ]; then
+		_disp_pid=$(cat "$E2E_DISPATCHER_PID" 2>/dev/null)
+		printf "  Dispatcher: \033[1;32mRUNNING\033[0m (pid %s)" "$_disp_pid"
 		if [ -f "$E2E_DISPATCH_STATE" ]; then
 			local _ds_pending _ds_running _ds_done _ds_done_list
 			_ds_pending=$(grep '^PENDING=' "$E2E_DISPATCH_STATE" | cut -d= -f2-)
@@ -309,10 +398,16 @@ _show_dispatcher_status() {
 		fi
 	else
 		printf "  Dispatcher: \033[90mnot running\033[0m\n"
+		if [ -f "$E2E_INJECT_QUEUE" ] && [ -s "$E2E_INJECT_QUEUE" ]; then
+			local _inj_n
+			_inj_n=$(grep -c . "$E2E_INJECT_QUEUE" 2>/dev/null || echo 0)
+			printf "    Inject queue: %s suite(s) waiting (not consumed until dispatcher starts)\n" "$_inj_n"
+		fi
 	fi
 
-	if [ -f "$E2E_DAEMON_PID" ] && kill -0 "$(cat "$E2E_DAEMON_PID")"; then
+	if _e2e_pid_alive "$E2E_DAEMON_PID"; then
 		local _dmeta=""
+		_daemon_pid=$(cat "$E2E_DAEMON_PID" 2>/dev/null)
 		if [ -f "$E2E_DAEMON_META" ]; then
 			local _dm_pools _dm_started _dm_args
 			_dm_pools=$(grep '^pools=' "$E2E_DAEMON_META" | cut -d= -f2-)
@@ -321,7 +416,7 @@ _show_dispatcher_status() {
 			_dmeta=", since ${_dm_started}, pools ${_dm_pools}"
 			[ -n "$_dm_args" ] && _dmeta="${_dmeta}, ${_dm_args}"
 		fi
-		printf "  Daemon:     \033[1;32mRUNNING\033[0m (pid %s%s)\n" "$(cat "$E2E_DAEMON_PID")" "$_dmeta"
+		printf "  Daemon:     \033[1;32mRUNNING\033[0m (pid %s%s)\n" "$_daemon_pid" "$_dmeta"
 	fi
 }
 
@@ -445,11 +540,7 @@ cmd_reschedule() {
 		printf "  Queued: \033[1;36m%s\033[0m (front)\n" "$suite"
 	done
 	echo ""
-	if [ -f "$E2E_DISPATCHER_PID" ] && kill -0 "$(cat "$E2E_DISPATCHER_PID")"; then
-		echo "  Dispatcher is running -- will pick this up on its next cycle (~30s)."
-	else
-		echo "  WARNING: No dispatcher running. Start one with: run.sh run -p all"
-	fi
+	_e2e_print_queue_dispatch_hint "${#suites_to_run[@]}" "${run_dir}/logs/daemon.log"
 	echo "  Tip: if you changed suite code, run 'deploy --force' first."
 	echo ""
 }

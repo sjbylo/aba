@@ -562,21 +562,23 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			cp "$HOME/.e2e-harness/bin/govc" "$HOME/bin/govc"
 			chmod 755 "$HOME/bin/govc"
 			export PATH="$HOME/bin:$PATH"
-		elif [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
+		elif [ -f "$_ABA_ROOT/cli/Makefile" ]; then
+			# make govc does not need aba.conf (ensure_govc does, and skips when
+			# platform!=vmw — which is exactly the pre-init / bare-clone case).
 			echo "  Bootstrapping govc ..."
-		make -sC "$_ABA_ROOT/cli" govc || {
-			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
-			echo "99" > "$RC_FILE"
-			exit 1
-		}
-		export PATH="$HOME/bin:$PATH"
-		command -v govc >/dev/null || {
-			echo "  ERROR: govc not found in PATH after bootstrap." >&2
-			echo "99" > "$RC_FILE"
-			exit 1
-		}
+			make -sC "$_ABA_ROOT/cli" govc || {
+				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+				echo "99" > "$RC_FILE"
+				exit 1
+			}
+			export PATH="$HOME/bin:$PATH"
+			command -v govc >/dev/null || {
+				echo "  ERROR: govc not found in PATH after bootstrap." >&2
+				echo "99" > "$RC_FILE"
+				exit 1
+			}
 		else
-			echo "  WARNING: ABA not fully initialized (missing cli/Makefile or aba.conf)."
+			echo "  WARNING: ABA not fully initialized (missing cli/Makefile)."
 			echo "           Suite will install/configure ABA before using govc."
 		fi
 	fi
@@ -796,20 +798,22 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		if command -v govc >/dev/null; then
 			cp "$(command -v govc)" "$_FRAMEWORK_BIN/govc"
 			echo "  Copied govc to $_FRAMEWORK_BIN/govc"
-		elif [ -f "$_ABA_ROOT/scripts/include_all.sh" ]; then
-			( source "$_ABA_ROOT/scripts/include_all.sh" && ensure_govc )
+		elif [ -f "$_ABA_ROOT/cli/Makefile" ]; then
+			# Prefer make over ensure_govc: ensure_govc no-ops when platform!=vmw
+			# (common before aba.conf exists), which caused exit=99 death spirals.
+			make -sC "$_ABA_ROOT/cli" govc || true
 			if [ -x ~/bin/govc ]; then
 				cp ~/bin/govc "$_FRAMEWORK_BIN/govc"
 				echo "  Installed govc to $_FRAMEWORK_BIN/govc"
 			fi
 		fi
-	if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
-		echo ""
-		echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
-		echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
-		echo "99" > "$RC_FILE"
-		exit 99
-	fi
+		if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
+			echo ""
+			echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
+			echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
+			echo "99" > "$RC_FILE"
+			exit 99
+		fi
 	fi
 
 	# Check for orphan VMs FIRST, before any cleanup runs.
