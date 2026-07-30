@@ -1,5 +1,19 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.0...HEAD)
 
+### Added
+
+- **Bundle optional extra CLIs for air-gap** — `aba save` and `aba bundle` now download virtctl, kn, tkn, helm, opm, argocd, and roxctl (soft-fail so flaky CDNs never block transfer). On the disconnected side, `aba load` installs any extras already present. Extras are excluded from everyday `aba` installs to keep startup fast.
+
+### Changed
+
+- **`aba load` preflight shows transfer summary** — Before unpacking, `aba load` prints what the transfer contains (OCP version, operator catalogs, registry type) so operators know what they're about to apply.
+- **Bundle builds prune unused images** — `podman image prune -af` runs before building install bundles, reclaiming disk space from prior builds.
+
+### Fixed
+
+- **Fix `externalize_cluster_state()` conditional sourcing** — The normalize functions were conditionally skipped when variables (e.g. `platform`) were already set by the Make/aba.sh environment, allowing stale `machine_network` values from `aba.conf` to leak into `state.sh`. Now both normalize functions are always sourced unconditionally so `cluster.conf` values take precedence.
+- **Fix stale transfer metadata on `aba load`** — Leftover ISC/metadata from a prior upgrade transfer caused false digest-checksum mismatches when loading a non-upgrade transfer. Stale files are now cleared before unpacking.
+
 ---
 
 ## [1.2.0](https://github.com/sjbylo/aba/releases/tag/v1.2.0) - 2026-07-25
