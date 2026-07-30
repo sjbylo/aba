@@ -502,11 +502,11 @@ _conno_main() {
 	# after the action, so by the time the user presses OK and the menu
 	# redraws, the check is usually already complete.
 	while :; do
-		# Internet: runs independently on 120s TTL cache (fast when warm)
+		# Internet: runs independently on 300s TTL cache (fast when warm)
 		if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
 			dlg --backtitle "$(ui_backtitle)" --infobox "Please wait..." 3 25
 		fi
-		if aba_inet_check_cached 120; then _TUI_INET="yes"; else _TUI_INET="no"; fi
+		if aba_inet_check_cached 300; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
 		local items=()
 

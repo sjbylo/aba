@@ -2886,17 +2886,24 @@ run_once() {
 	fi
 
 	# --- TTL CHECK ---
-	# If TTL specified and exit file exists, check if it's expired
+	# If TTL specified and exit file exists, check if it's expired.
+	# Failed tasks (exit != 0) use a shorter TTL (max 30s) so transient
+	# failures recover quickly without caching "down" state for minutes.
 	if [[ -n "$ttl" && -f "$exit_file" ]]; then
 		local now=$(date +%s)
 		local exit_mtime=$(stat -c %Y "$exit_file" 2>/dev/null || stat -f %m "$exit_file" 2>/dev/null)
 		
 		if [[ -n "$exit_mtime" ]]; then
 			local age=$((now - exit_mtime))
-			if [[ $age -gt $ttl ]]; then
-				# Task output is stale, reset it
-				_log_history "TTL_EXPIRED age=${age}s ttl=${ttl}s"
-				aba_debug "run_once: task '$work_id' TTL expired (age=${age}s > ttl=${ttl}s), resetting"
+			local effective_ttl=$ttl
+			local _exit_rc
+			_exit_rc=$(cat "$exit_file" 2>/dev/null) || _exit_rc=0
+			if [[ "$_exit_rc" != "0" && $ttl -gt 30 ]]; then
+				effective_ttl=30
+			fi
+			if [[ $age -gt $effective_ttl ]]; then
+				_log_history "TTL_EXPIRED age=${age}s ttl=${effective_ttl}s exit=${_exit_rc}"
+				aba_debug "run_once: task '$work_id' expired (age=${age}s ttl=${effective_ttl}s exit=${_exit_rc}), resetting"
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
 				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
@@ -4327,9 +4334,9 @@ check_internet_connectivity() {
 	fi
 	
 	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
-	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://api.openshift.com/
+	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://mirror.openshift.com/
+	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 8 --max-time 15 https://registry.redhat.io/
 	
 	# Wait: block for the 3 checks started above
 	FAILED_SITES=""
