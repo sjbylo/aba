@@ -792,7 +792,7 @@ _invalidate_mirror_cache() {
 	_TUI_NEED_MIRROR_RECHECK=true
 	aba_mirror_verify_refresh
 	# Internet check uses TTL (aba_inet_check_cached) — no reset needed here.
-	# The menu loop re-triggers automatically if >120s elapsed.
+	# The menu loop re-triggers automatically if >300s elapsed.
 }
 
 # After mirror load/sync, offer to run day2 on clusters using this mirror.
