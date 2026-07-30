@@ -84,6 +84,11 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 				$_ssh "rm -rf $remote_tmp"
 			fi
 
+			# mirror-registry hardcodes --name ansible_runner_instance without
+			# --replace.  A prior interrupted run leaves it behind (--rm is
+			# unreliable on signal kill), blocking all subsequent calls.
+			$_ssh "podman rm -f ansible_runner_instance 2>/dev/null" || true
+
 			aba_info "Running: mirror-registry uninstall on $reg_host ..."
 			_uninst_rc=0
 			$_ssh "cd $_mirror_dir && ./mirror-registry uninstall -v --autoApprove $reg_root_opts" || _uninst_rc=$?

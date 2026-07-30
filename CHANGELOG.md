@@ -13,6 +13,7 @@
 
 - **Fix `externalize_cluster_state()` conditional sourcing** — The normalize functions were conditionally skipped when variables (e.g. `platform`) were already set by the Make/aba.sh environment, allowing stale `machine_network` values from `aba.conf` to leak into `state.sh`. Now both normalize functions are always sourced unconditionally so `cluster.conf` values take precedence.
 - **Fix stale transfer metadata on `aba load`** — Leftover ISC/metadata from a prior upgrade transfer caused false digest-checksum mismatches when loading a non-upgrade transfer. Stale files are now cleared before unpacking.
+- **Fix stale `ansible_runner_instance` blocking mirror-registry** — An interrupted `mirror-registry` install or uninstall left its internal Ansible container behind, causing all subsequent `mirror-registry` calls to fail with "container name already in use". Now consistently cleaned up before every `mirror-registry` invocation (local and remote install/uninstall).
 
 ---
 

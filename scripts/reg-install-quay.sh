@@ -118,6 +118,11 @@ if ! ensure_quay_registry; then
 	aba_abort "Failed to extract mirror-registry:\n$error_msg"
 fi
 
+# mirror-registry hardcodes --name ansible_runner_instance without
+# --replace.  A prior interrupted run leaves it behind (--rm is
+# unreliable on signal kill), blocking all subsequent calls.
+podman rm -f ansible_runner_instance 2>/dev/null || true
+
 # $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
 # $reg_pw is quoted to preserve special characters (e.g. " ! @ #).
 # shellcheck disable=SC2086

@@ -39,10 +39,10 @@ if ask -n --auto-yes "Uninstall Quay mirror registry on localhost, installed at 
 
 	ensure_quay_registry
 
-	# Check for existing "ansible_runner_instance" container
-	podman ps -a | grep -q quay.io.*ansible_runner_instance && \
-		aba_info "Removing stale ansible_runner_instance ..." && \
-		podman stop ansible_runner_instance && podman rm ansible_runner_instance
+	# mirror-registry hardcodes --name ansible_runner_instance without
+	# --replace.  A prior interrupted run leaves it behind (--rm is
+	# unreliable on signal kill), blocking all subsequent calls.
+	podman rm -f ansible_runner_instance 2>/dev/null || true
 
 	aba_info "Running command: ./mirror-registry uninstall -v --autoApprove $reg_root_opts"
 	# $reg_root_opts is intentionally unquoted — it expands to multiple arguments.
