@@ -7,7 +7,6 @@
 ### Changed
 
 - **`aba load` preflight shows transfer summary** — Before unpacking, `aba load` prints what the transfer contains (OCP version, operator catalogs, registry type) so operators know what they're about to apply.
-- **Bundle builds prune unused images** — `podman image prune -af` runs before building install bundles, reclaiming disk space from prior builds.
 
 ### Fixed
 

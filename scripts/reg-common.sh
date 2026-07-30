@@ -484,7 +484,10 @@ reg_post_install() {
 	done
 
 	echo
+	local _where="$reg_host:$reg_port"
+	[ "${reg_ssh_key:-}" ] && _where+=" (remote, user: ${reg_ssh_user:-root})"
 	aba_success "Registry installed/configured successfully!"
+	aba_info "$vendor registry at $_where, root: $reg_root"
 }
 
 # --- _reg_host_run ------------------------------------------------------------
