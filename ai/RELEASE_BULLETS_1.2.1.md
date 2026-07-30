@@ -1,6 +1,6 @@
-# ABA 1.3.0 - Release Notes
+# ABA 1.2.1 - Release Notes
 
-Extra CLI bundling for air-gap, load preflight summary, and state externalization fix.
+Extra CLI bundling for air-gap, load preflight summary, state externalization fix, and mirror-registry resilience.
 
 ## New Features
 
@@ -15,3 +15,4 @@ Extra CLI bundling for air-gap, load preflight summary, and state externalizatio
 
 - **Fix `externalize_cluster_state()` conditional sourcing** — Stale `machine_network` from aba.conf leaked into state.sh when normalize was conditionally skipped. Now both normalize functions are always sourced.
 - **Fix stale transfer metadata on `aba load`** — Leftover ISC/metadata from a prior upgrade transfer caused false digest mismatches.
+- **Fix stale `ansible_runner_instance` blocking mirror-registry** — An interrupted `mirror-registry` call left its internal Ansible container behind, blocking all subsequent install/uninstall calls. Now cleaned up before every `mirror-registry` invocation.
