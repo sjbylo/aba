@@ -159,11 +159,13 @@ else
 fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
-if [ "$_synced_ver" != "$ocp_version" ]; then
-	aba_info "Mirror state updated: mirror_ocp_version $ocp_version → $_synced_ver"
-fi
 
 echo
+if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
+	aba_success "Images synced to $reg_host:$reg_port (upgrade: $ocp_version → $_synced_ver)"
+else
+	aba_success "Images synced to $reg_host:$reg_port (OCP $_synced_ver)"
+fi
 if [ ! "${ABA_SUPPRESS_WARNINGS:-}" ]; then
 	# Context-aware next steps: upgrade sync vs initial sync
 	_is_upgrade=""

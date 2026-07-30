@@ -9,7 +9,6 @@ Extra CLI bundling for air-gap, load preflight summary, state externalization fi
 ## Improvements
 
 - **`aba load` shows transfer summary** — Before unpacking, prints what the transfer contains (OCP version, operator catalogs, registry type).
-- **Bundle builds prune unused images** — Reclaims disk from prior builds before creating install bundles.
 
 ## Bug Fixes
 

@@ -252,13 +252,20 @@ if [ "$_loaded_ver" ]; then
 	replace-value-conf -q -n mirror_ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
 	if [ "$_loaded_ver" != "$ocp_version" ]; then
 		replace-value-conf -q -n mirror_ocp_upgrade_from -v "$ocp_version" -f "$regcreds_dir/state.sh"
-		aba_info "Mirror state updated: mirror_ocp_version $ocp_version → $_loaded_ver"
 	else
 		replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
 	fi
 fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+
+echo
+_loaded_display="${_loaded_ver:-$ocp_version}"
+if [ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ]; then
+	aba_success "Images loaded into $reg_host:$reg_port (upgrade: $ocp_version → $_loaded_ver)"
+else
+	aba_success "Images loaded into $reg_host:$reg_port (OCP $_loaded_display)"
+fi
 
 # Bundle phase complete: unlock ISC so future config changes trigger regeneration.
 # touch .created makes it newer than ISC → reg-create-imageset-config.sh will regenerate.
