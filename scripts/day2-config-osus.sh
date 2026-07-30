@@ -153,8 +153,26 @@ cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. 
 warn_if_cluster_unstable
 
 #####################
-if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
+# Prerequisite: day2 must have run to create CatalogSources.
+# Without CatalogSources there are no packagemanifests — checking for
+# cincinnati-operator would always fail with a confusing message.
+if ! oc get catalogsource -n openshift-marketplace -o name 2>/dev/null | grep -q .; then
+	aba_warn "No CatalogSources found in OperatorHub." \
+		"'aba day2' must run first to configure OperatorHub before OSUS can be installed."
+	if ask "Run 'aba day2' now"; then
+		scripts/day2.sh
+	else
+		aba_abort "Cannot install OSUS without CatalogSources. Run 'aba day2' first."
+	fi
+	if ! oc get catalogsource -n openshift-marketplace -o name 2>/dev/null | grep -q .; then
+		aba_abort "No operator catalogs are mirrored. OSUS requires the 'redhat-operators' catalog." \
+			"Add operators to your imageset-config.yaml, run 'aba -d mirror sync' (or save/load), then 'aba day2'."
+	fi
+fi
+
+if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
+	sleep 5
+	if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 		aba_abort \
 			"cincinnati-operator not available in OperatorHub for this cluster." \
 			"The CatalogSource may still be synchronizing -- wait a few minutes and try again:" \

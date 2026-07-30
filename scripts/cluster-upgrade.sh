@@ -389,22 +389,37 @@ if [ ! "$upgrade_already_running" ]; then
 			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	fi
 
-	# If no OSUS graph, warn and require explicit user permission.
-	# Without OSUS the cluster has no update graph, so OpenShift cannot
-	# validate the upgrade path or enforce admin acknowledgment gates.
-	# We must get user consent before adding --allow-explicit-upgrade.
+	# If no OSUS graph, offer to install OSUS if the cincinnati operator
+	# is available (day2 already ran at line 253, so CatalogSources exist).
+	# Falls through to manual override if user declines or cincinnati is absent.
 	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
-		echo
-		aba_warn "No local update graph (OSUS) detected." \
-			"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
-			"" \
-			"It is strongly recommended to configure OSUS before upgrading:" \
-			"  aba day2" \
-			"" \
-			"If you proceed, the upgrade will bypass OpenShift's update graph validation."
-		echo
-		ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
-		upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
+		_cincinnati_available=""
+		oc get packagemanifests cincinnati-operator >/dev/null 2>&1 && _cincinnati_available=1
+
+		if [ "$_cincinnati_available" ]; then
+			echo
+			aba_info "The 'cincinnati-operator' package is available in OperatorHub."
+			if ask "Install OSUS (OpenShift Update Service) now before upgrading"; then
+				scripts/day2-config-osus.sh
+				osus_upstream=$(oc get clusterversion version \
+					-o jsonpath='{.spec.upstream}' 2>/dev/null) || true
+				if [ "$osus_upstream" ]; then
+					aba_success "OSUS configured — upgrade will use local update graph"
+					upgrade_cmd="oc adm upgrade --to $target_ver $opt_force $_opt_warn"
+				fi
+			fi
+		fi
+
+		if [ -z "$osus_upstream" ]; then
+			echo
+			aba_warn "No local update graph (OSUS) detected." \
+				"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
+				"" \
+				"If you proceed, the upgrade will bypass OpenShift's update graph validation."
+			echo
+			ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
+			upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
+		fi
 	fi
 
 	# Execute upgrade
