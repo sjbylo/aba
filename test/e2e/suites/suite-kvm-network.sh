@@ -179,7 +179,7 @@ _kvm_net_test() {
 		"_e2e_delete_leftover_cluster $cname"
 
 	e2e_run "Generate cluster.conf for $cname" \
-		"aba cluster -n $cname -t $ctype --starting-ip $start_ip --step cluster.conf"
+		"aba cluster -n $cname -t $ctype --starting-ip $start_ip --mmem 16 --step cluster.conf"
 
 	e2e_run "Set machine_network=$machine_network" \
 		"sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $cname/cluster.conf"
