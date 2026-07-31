@@ -499,7 +499,7 @@ e2e_poll_remote 480 30 "Wait for vote-app rollout" \
 e2e_run_remote "Delete demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc delete project demo'"
 e2e_run_remote "Wait for demo namespace termination" \
-    "cd ~/aba && aba --dir $SNO run --cmd 'while oc get project demo 2>/dev/null; do sleep 5; done'"
+    "cd ~/aba && KUBECONFIG=$SNO/iso-agent-based/auth/kubeconfig timeout 120 bash -c 'while oc get project demo 2>&1; do sleep 5; done'"
 e2e_run_remote -r 3 2 "Recreate demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc new-project demo'"
 

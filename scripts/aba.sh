@@ -1342,7 +1342,8 @@ if [ "$cur_target" ]; then
 
 			if [ "$_del_sd" ] && [ -d "$_del_sd" ]; then
 				rm -rf "$_del_sd"
-				aba_info "Removed cluster state: $_del_sd"
+				aba_info "Cluster state removed"
+				aba_debug "State dir: $_del_sd"
 			fi
 			# Clean generated artifacts so next install starts fresh from current config
 			make -s clean || true
