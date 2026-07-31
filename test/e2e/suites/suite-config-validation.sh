@@ -52,6 +52,9 @@ suite_verify_aba_conf
 e2e_run "Create throwaway SNO cluster dir" \
 	"aba cluster -n e2etmp -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
 
+e2e_run "Verify ssh_key_file uses literal ~ (not expanded)" \
+	"grep '^ssh_key_file=~/\\.' e2etmp/cluster.conf"
+
 e2e_run "Ensure mirror dir initialised" \
 	"aba -d mirror mirror.conf"
 

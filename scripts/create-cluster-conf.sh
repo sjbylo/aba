@@ -121,7 +121,7 @@ fi
 [ ! "$hostPrefix" ]		&& export hostPrefix=23
 [ ! "$master_prefix" ]		&& export master_prefix=master
 [ ! "$worker_prefix" ]		&& export worker_prefix=worker
-[ ! "$ssh_key_file" ]		&& export ssh_key_file=~/.ssh/id_rsa
+[ ! "$ssh_key_file" ]		&& export ssh_key_file='~/.ssh/id_rsa'
 [ ! "$mirror_name" ]		&& export mirror_name=mirror
 [ ! "$ports" ]			&& export ports=ens160
 [ ! "$vlan" ]			&& export vlan=
