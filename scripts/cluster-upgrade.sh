@@ -348,33 +348,26 @@ if [ ! "$upgrade_already_running" ]; then
 		_channel_changed=1
 	fi
 
-	# When the channel changed, re-fetch available updates from the new channel.
+	_osus_graph_has_target() {
+		_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || return 1
+		_available_versions=$(echo "$_upgrade_text" \
+			| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+		_conditional_versions=$(echo "$_upgrade_text" \
+			| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+		echo "$_available_versions" | grep -qxF "$target_ver" && return 0
+		echo "$_conditional_versions" | grep -qxF "$target_ver"
+	}
+
 	if [ "$_channel_changed" ]; then
-		aba_info "Waiting for update graph to refresh after channel change ..."
-		_graph_ok=""
-		for _try in $(seq 1 12); do
-			_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || true
-			_available_versions=$(echo "$_upgrade_text" \
-				| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
-			_conditional_versions=$(echo "$_upgrade_text" \
-				| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
-			if echo "$_available_versions" | grep -qxF "$target_ver"; then
-				_graph_ok=1
-				break
-			fi
-			if echo "$_conditional_versions" | grep -qxF "$target_ver"; then
-				_graph_ok=1
-				break
-			fi
-			sleep 5
-		done
+		# Re-fetch available updates from the new channel (up to ~1 min)
+		aba_wait_show "Waiting for update graph to refresh after channel change" 5 60 _osus_graph_has_target && _graph_ok=1
 	else
-		# No channel change — check immediately
-		if echo "$_available_versions" | grep -qxF "$target_ver"; then
-			_graph_ok=1
-		elif echo "$_conditional_versions" | grep -qxF "$target_ver"; then
-			_graph_ok=1
-		fi
+		_osus_graph_has_target && _graph_ok=1
+	fi
+
+	# OSUS graph may still be populating (e.g. just installed by day2-config-osus).
+	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+		aba_wait_show "Waiting for OSUS update graph to show $target_ver" 5 120 _osus_graph_has_target && _graph_ok=1
 	fi
 
 	# Validate that the target is reachable before attempting the upgrade

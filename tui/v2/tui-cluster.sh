@@ -2310,7 +2310,7 @@ _day2_login() {
 		cat > "$_rcfile" <<-'RCEOF'
 		_oc_ns() { oc config view --minify -o jsonpath='{..namespace}' 2>/dev/null; }
 		RCEOF
-		echo "PS1='[$cl_display|\$(_oc_ns)]"'\n\$ '"'" >> "$_rcfile"
+		echo "PS1='[$cl_display|\$(_oc_ns)] "'\$ '"'" >> "$_rcfile"
 		echo "trap 'rm -f $_rcfile' EXIT" >> "$_rcfile"
 		exec bash --rcfile "$_rcfile" -i
 	) {ABA_TUI_FLOCK_FD}>&-
