@@ -2306,7 +2306,13 @@ _day2_login() {
 		# Run the login command (best-effort — works without kubeadmin pw too)
 		eval "$(aba --dir "$SELECTED_CLUSTER" login 2>/dev/null)" || true
 		echo
-		exec bash --norc -i
+		_rcfile=$(mktemp)
+		cat > "$_rcfile" <<-'RCEOF'
+		_oc_ns() { oc config view --minify -o jsonpath='{..namespace}' 2>/dev/null; }
+		RCEOF
+		echo "PS1='[$cl_display|\$(_oc_ns)]"'\n\$ '"'" >> "$_rcfile"
+		echo "trap 'rm -f $_rcfile' EXIT" >> "$_rcfile"
+		exec bash --rcfile "$_rcfile" -i
 	) {ABA_TUI_FLOCK_FD}>&-
 	local _login_rc=$?
 	[[ $_login_rc -ne 0 ]] && echo -e "\n\e[31mLogin failed (exit code $_login_rc)\e[0m"
