@@ -918,7 +918,8 @@ externalize_cluster_state() {
 	# Convenience symlink
 	ln -sfn "$_state_dir" clusterstate
 
-	aba_info "Cluster state saved to $_state_dir/"
+	aba_info "Cluster state saved"
+	aba_debug "State dir: $_state_dir/"
 }
 
 # Emit export lines for cluster status fields from state.sh.
