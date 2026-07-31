@@ -142,9 +142,17 @@ $(cat "$regcreds_dir/rootCA.pem")"
 		aba_abort "Timed out waiting for imagestream API (3 min)"
 	fi
 
-	# The above workaround describes re-creating the is/oauth-proxy 
+	_day2_oauth_proxy_available() {
+		aba_debug "Running: oc get imagestream -n openshift oauth-proxy"
+		oc get imagestream -n openshift oauth-proxy >/dev/null 2>&1
+	}
+
+	if ! aba_wait_show "Waiting for oauth-proxy imagestream" 5 180 _day2_oauth_proxy_available; then
+		aba_abort "Timed out waiting for oauth-proxy imagestream (3 min)"
+	fi
+
 	aba_debug "Running: oc get imagestream -n openshift oauth-proxy -o yaml"
-	if oc get imagestream -n openshift oauth-proxy -o yaml | grep -qi "unknown authority"; then
+	if oc get imagestream -n openshift oauth-proxy -o yaml 2>&1 | grep -qi "unknown authority"; then
 		aba_info "'Unknown authority' found in imagestream/oauth-proxy in namespace openshift."
 		aba_debug "Running: oc delete imagestream -n openshift oauth-proxy"
 		oc delete imagestream -n openshift oauth-proxy >/dev/null 2>&1 || true
