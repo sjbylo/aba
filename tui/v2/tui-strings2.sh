@@ -51,7 +51,7 @@ TUI2_TITLE_OPERATOR_SEARCH="Search Operators"
 TUI2_TITLE_DISCO_MENU="Fully Disconnected – Actions"
 TUI2_TITLE_DISCO_INSTALL_REG="Install Registry"
 TUI2_TITLE_DISCO_LOAD="Load Images to Mirror"
-TUI2_TITLE_DISCO_VIEW_ISC="ImageSet Configuration (read-only)"
+TUI2_TITLE_DISCO_VIEW_ISC="ImageSet Configuration (read-only from bundle)"
 TUI2_TITLE_DISCO_RESET="Reset to Connected Mode"
 TUI2_TITLE_DISCO_LIGHT="No Archive Files Found"
 
@@ -64,7 +64,7 @@ TUI2_TITLE_CONNO_INSTALL_MIRROR="Install Mirror Registry"
 TUI2_TITLE_CONNO_SAVE="Save Images to Disk"
 TUI2_TITLE_CONNO_SYNC="Sync Images to Mirror"
 TUI2_TITLE_CONNO_VIEW_ISC="ImageSet Configuration"
-TUI2_TITLE_CONNO_EDIT_ISC="Edit ImageSet Configuration"
+TUI2_TITLE_CONNO_EDIT_ISC="Edit imageset-config.yaml"
 TUI2_TITLE_CONNO_BUNDLE="Create Install Bundle"
 
 # =============================================================================
@@ -205,8 +205,8 @@ TUI2_LABEL_INSTALL_REGISTRY="Install Registry (local or remote)"
 TUI2_LABEL_SYNC="Sync images to mirror"
 TUI2_LABEL_SAVE="Save images to disk"
 TUI2_LABEL_LOAD="Load images to mirror"
-TUI2_LABEL_VIEW_ISC="View/Edit ImageSet Config"
-TUI2_LABEL_VIEW_ISC_RO="View ImageSet Config"
+TUI2_LABEL_VIEW_ISC="View/Edit imageset-config.yaml"
+TUI2_LABEL_VIEW_ISC_RO="View imageset-config.yaml"
 TUI2_LABEL_OPERATORS="Select Operators"
 TUI2_LABEL_BUNDLE="Create Install Bundle"
 TUI2_LABEL_INSTALL_CLUSTER="Install Cluster"
@@ -261,10 +261,10 @@ TUI2_MSG_PLATFORM_CONFIG_MISSING="%s configuration not found.\n\nExpected: %s\nR
 # Prompt / Message Text — Mirror / ISC
 # =============================================================================
 
-TUI2_MSG_ISC_GENERATING="Generating ImageSet configuration (operator catalogs may also be refreshed).\n\nPlease wait."
-TUI2_MSG_ISC_NOT_FOUND="ImageSet configuration file not found.\n\nFile: %s"
-TUI2_MSG_ISC_SAVED="ImageSet configuration saved.\n\nABA will not overwrite your edits.\nUse 'Reset' to revert to auto-generated."
-TUI2_MSG_ISC_RESET="ImageSet configuration reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
+TUI2_MSG_ISC_GENERATING="Generating imageset-config.yaml (operator catalogs may also be refreshed).\n\nPlease wait."
+TUI2_MSG_ISC_NOT_FOUND="imageset-config.yaml not found.\n\nFile: %s"
+TUI2_MSG_ISC_SAVED="imageset-config.yaml saved.\n\nABA will not overwrite your edits.\nUse 'Regenerate' to rebuild from aba.conf + mirror.conf."
+TUI2_MSG_ISC_RESET="imageset-config.yaml reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
 TUI2_MSG_CATALOG_DOWNLOADING="Downloading operator catalogs for OpenShift %s...\n\nThis may take a few minutes."
 TUI2_MSG_CATALOG_FAILED="Failed to download catalog: %s\n\nCheck internet connection and try again."
 
@@ -298,7 +298,7 @@ TUI2_BTN_FULL_BUNDLE="Full bundle"
 # Messages — Mode Detection
 # =============================================================================
 
-TUI2_MSG_BUNDLE_INCOMPLETE="Bundle incomplete.\n\nThe install bundle was detected but no ImageSet\nconfiguration was found.\n\nRe-transfer the bundle or run 'aba reset'."
+TUI2_MSG_BUNDLE_INCOMPLETE="Bundle incomplete.\n\nThe install bundle was detected but no\nimageset-config.yaml was found.\n\nRe-transfer the bundle or run 'aba reset'."
 TUI2_MSG_BUNDLE_CONNECTED="This host has an ABA install bundle but also has internet access.\nThe bundle is intended for disconnected environments.\n\n• Fully Disconnected — use the bundle as intended\n• Connected mode — use internet access (mirror or direct)"
 TUI2_MSG_DEAD_END="Cannot proceed.\n\nNo internet access and no bundle detected.\n\nTransfer a bundle from a connected host first,\nor ensure internet connectivity."
 TUI2_MSG_MODE_SELECT="This choice affects the ENTIRE installation workflow.\n\n   How would you like to install OpenShift?"
@@ -341,7 +341,7 @@ TUI2_MSG_VM_WORKER_CPU_PROMPT="Number of CPUs per worker node:"
 TUI2_MSG_VM_WORKER_MEM_PROMPT="Memory per worker node (GB):"
 TUI2_MSG_VM_DISK_PROMPT="Additional data disk size (GB, empty for none):"
 TUI2_MSG_VM_MAC_PROMPT="MAC address prefix (e.g. 52:54:00):"
-TUI2_MSG_OSUS_WARNING="The Cincinnati/OSUS operator does not appear to be in your ImageSet configuration.\n\nThe OSUS Day-2 operation may fail without it.\n\nContinue anyway?"
+TUI2_MSG_OSUS_WARNING="The Cincinnati/OSUS operator does not appear to be in your imageset-config.yaml.\n\nThe OSUS Day-2 operation may fail without it.\n\nContinue anyway?"
 TUI2_MSG_NO_CLUSTERS="No clusters configured."
 TUI2_MSG_NO_INSTALLED_CLUSTERS="No installed clusters found."
 
@@ -386,7 +386,7 @@ TUI2_MSG_DISCO_LIGHT="No image archive files found.\n\nIf you used 'light' mode 
 
 TUI2_MSG_MIRROR_TARGET="Install a mirror registry:\n\nChoose installation target:"
 TUI2_MSG_MIRROR_REMOTE_PROMPT="Enter the remote host (SSH target):\n\n(e.g., user@registry-host)"
-TUI2_MSG_ISC_MENU="ImageSet Configuration:"
+TUI2_MSG_ISC_MENU="Configure which images oc-mirror will include.\n"
 TUI2_MSG_OPERATOR_MENU="Operator Selection:"
 TUI2_MSG_OPERATOR_SET_MENU="Select a set to add/remove:"
 TUI2_MSG_OPERATOR_SEARCH_PROMPT="Enter operator name (or partial name) to search:"
