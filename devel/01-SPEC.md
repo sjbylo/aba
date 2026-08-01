@@ -492,7 +492,8 @@ re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
 The "primed" use case targets DevOps environments where ALL cluster configuration
 is known in advance on the connected side. An external pipeline or operator
 generates the configs; ABA bundles them into a deployment-ready package that
-requires only a single command on the disconnected side.
+requires only a single command on the disconnected side (for virtualized
+platforms; bare-metal retains its guided step-by-step flow).
 
 This is also the workaround for configurations that `cluster.conf` cannot yet
 express (per-node `rootDeviceHints`, per-role NIC names — see BACKLOG): the user
@@ -500,9 +501,9 @@ supplies their own `agent-config.yaml` and marks the dir as "primed".
 
 ### Commands
 
-| When   | Command                            | Alias              | Purpose                              |
+| When   | Command                            | Alias               | Purpose                              |
 |--------|------------------------------------|---------------------|--------------------------------------|
-| Day 0  | `aba bundle --primed`              | `aba bundle-primed` | Full bundle with pre-configured dirs |
+| Day 0  | `aba bundle-primed`                | `aba bundle --primed` | Full bundle with pre-configured dirs |
 | Day N  | `aba transfer-primed`              | `aba transfer`      | Lightweight configs-only tar         |
 | Disco  | `aba -d <cluster> deploy-primed`   | `aba -d <cluster> deploy` | One-command pipeline          |
 

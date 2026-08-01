@@ -618,7 +618,7 @@ aba -d edge1 deploy-primed             # Deploy the new cluster
 
 | Command | Alias | Purpose |
 |---------|-------|---------|
-| `aba bundle --primed` | `aba bundle-primed` | Full bundle with pre-configured cluster dirs |
+| `aba bundle-primed` | `aba bundle --primed` | Full bundle with pre-configured cluster dirs |
 | `aba transfer-primed` | `aba transfer` | Create configs-only tar for day-N updates |
 | `aba -d <cluster> deploy-primed` | `aba -d <cluster> deploy` | One-command deployment pipeline |
 

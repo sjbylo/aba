@@ -366,17 +366,17 @@ do
 		_ht="${cur_target:-$2}"
 		if [ ! "$_ht" ]; then
 			cat $ABA_ROOT/others/help-aba.txt
-	elif [ "$_ht" = "mirror" -o "$_ht" = "save" -o "$_ht" = "load" -o "$_ht" = "sync" -o "$_ht" = "register" -o "$_ht" = "unregister" -o "$_ht" = "install" -o "$_ht" = "uninstall" -o "$_ht" = "verify" ]; then
-		cat $ABA_ROOT/others/help-mirror.txt
-	elif [ "$_ht" = "cluster" -o "$_ht" = "upgrade" ]; then
-		cat $ABA_ROOT/others/help-cluster.txt
-	elif [ "$_ht" = "bundle" -o "$_ht" = "bundle-primed" ]; then
-		cat $ABA_ROOT/others/help-bundle.txt
-	elif [ "$_ht" = "deploy-primed" -o "$_ht" = "deploy" ]; then
-		cat $ABA_ROOT/others/help-deploy.txt
-	elif [ "$_ht" = "transfer-primed" -o "$_ht" = "transfer" ]; then
-		cat $ABA_ROOT/others/help-transfer.txt
-	elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
+		elif [ "$_ht" = "mirror" -o "$_ht" = "save" -o "$_ht" = "load" -o "$_ht" = "sync" -o "$_ht" = "register" -o "$_ht" = "unregister" -o "$_ht" = "install" -o "$_ht" = "uninstall" -o "$_ht" = "verify" ]; then
+			cat $ABA_ROOT/others/help-mirror.txt
+		elif [ "$_ht" = "cluster" -o "$_ht" = "upgrade" ]; then
+			cat $ABA_ROOT/others/help-cluster.txt
+		elif [ "$_ht" = "bundle" -o "$_ht" = "bundle-primed" ]; then
+			cat $ABA_ROOT/others/help-bundle.txt
+		elif [ "$_ht" = "deploy-primed" -o "$_ht" = "deploy" ]; then
+			cat $ABA_ROOT/others/help-deploy.txt
+		elif [ "$_ht" = "transfer-primed" -o "$_ht" = "transfer" ]; then
+			cat $ABA_ROOT/others/help-transfer.txt
+		elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
 			cat $ABA_ROOT/others/help-setup.txt
 		else
 			# If some other target, then show the main help
@@ -1173,26 +1173,26 @@ if [ "$cur_target" ]; then
 			$ABA_ROOT/scripts/oc-command.sh "$cmd"
 			exit 
 		;;
-	bundle)
-		trap - ERR  # No need for this anymore
-		aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_primed
-		eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_primed
-		exit 
-	;;
-	bundle-primed)
-		trap - ERR
-		aba_debug "Running: aba bundle --primed (via bundle-primed alias)"
-		eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light --primed
-		exit
-	;;
-	deploy-primed|deploy)
-		$ABA_ROOT/scripts/deploy-primed.sh
-		exit
-	;;
-	transfer-primed|transfer)
-		$ABA_ROOT/scripts/transfer-primed.sh
-		exit
-	;;
+		bundle)
+			trap - ERR  # No need for this anymore
+			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_primed
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_primed
+			exit 
+		;;
+		bundle-primed)
+			trap - ERR
+			aba_debug "Running: aba bundle-primed"
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light --primed
+			exit
+		;;
+		deploy-primed|deploy)
+			$ABA_ROOT/scripts/deploy-primed.sh
+			exit
+		;;
+		transfer-primed|transfer)
+			$ABA_ROOT/scripts/transfer-primed.sh
+			exit
+		;;
 		info)
 			$ABA_ROOT/scripts/cluster-info.sh
 			exit
