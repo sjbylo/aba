@@ -3664,6 +3664,35 @@ _run_oc_mirror_with_retry() {
 		aba_debug "Backed up cluster-resources to $_hist_dir/${_ts}-${action}"
 	fi
 
+	# Accumulate signatures across syncs into an ABA-owned merged file.
+	# oc-mirror regenerates signature-configmap.json from scratch each run,
+	# dropping signatures for versions not in the current sync.
+	local _sig_file="$_cr_dir/signature-configmap.json"
+	local _merged_file="$_cr_dir/signature-configmap-merged.json"
+	if [ -s "$_sig_file" ]; then
+		if [ -s "$_merged_file" ]; then
+			jq -s '.[0].binaryData as $old |
+				.[1] | .binaryData = ($old + .binaryData)' \
+				"$_merged_file" "$_sig_file" > "${_merged_file}.tmp"
+
+			local _new_count _merged_count
+			_new_count=$(jq '.binaryData | length' "$_sig_file")
+			_merged_count=$(jq '.binaryData | length' "${_merged_file}.tmp" 2>/dev/null) || _merged_count=0
+			_merged_count=${_merged_count:-0}
+			if [ "$_merged_count" -ge "$_new_count" ]; then
+				mv "${_merged_file}.tmp" "$_merged_file"
+				aba_debug "Merged signatures into $_merged_file ($_merged_count keys)"
+			else
+				rm -f "${_merged_file}.tmp"
+				aba_warn "Signature merge validation failed (got $_merged_count keys, expected >= $_new_count). Removing merged file."
+				rm -f "$_merged_file"
+			fi
+		else
+			cp "$_sig_file" "$_merged_file"
+			aba_debug "Seeded merged signature file: $_merged_file"
+		fi
+	fi
+
 	return 0
 }
 

@@ -422,7 +422,8 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd
 
-	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
+	sig_file=$latest_working_dir/cluster-resources/signature-configmap-merged.json
+	[ -s "$sig_file" ] || sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
 	if [ -s "$sig_file" ]; then
 		aba_info "Applying signatures from: $sig_file ..."
 		if oc get configmap mirrored-release-signatures -n openshift-config-managed >/dev/null 2>&1; then
