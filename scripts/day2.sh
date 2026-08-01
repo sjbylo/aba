@@ -423,11 +423,17 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 	$exec_cmd
 
 	sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
-	if [ -s $sig_file ]; then
+	if [ -s "$sig_file" ]; then
 		aba_info "Applying signatures from: $sig_file ..."
-		exec_cmd="oc apply -f $sig_file"
-		aba_debug "Running: $exec_cmd"
-		$exec_cmd
+		if oc get configmap mirrored-release-signatures -n openshift-config-managed >/dev/null 2>&1; then
+			# Merge new signatures into existing ConfigMap (additive).
+			# oc apply would prune signatures from prior syncs because
+			# last-applied-configuration tracks the previous key set.
+			oc patch configmap mirrored-release-signatures -n openshift-config-managed \
+				--type=merge -p "$(jq '{binaryData: .binaryData}' "$sig_file")"
+		else
+			oc apply -f "$sig_file"
+		fi
 	else
 		aba_info "No Signature files found in $latest_working_dir/cluster-resources" >&2
 	fi
