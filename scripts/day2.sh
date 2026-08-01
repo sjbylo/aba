@@ -292,13 +292,13 @@ apply_custom_manifests() {
 # mirror/data/working-dir/cluster-resources/itms-oc-mirror.yaml
 # ls mirror/data/working-dir/cluster-resources/{idms,itms}*yaml
 
-latest_working_dir="mirror/data/working-dir"
+working_dir="mirror/data/working-dir"
 
 ns=openshift-marketplace
 
-if [ -d "$latest_working_dir/cluster-resources" ]; then
+if [ -d "$working_dir/cluster-resources" ]; then
 	# Apply any idms/itms files created by oc-mirror v2
-	for f in $(ls $latest_working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
+	for f in $(ls $working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 	do
 		if [ -s $f ]; then
 			aba_info oc apply -f $f
@@ -311,7 +311,7 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 	done
 
 	# Apply any CatalogSource files created by oc-mirror v2
-	cs_file_list=$(ls $latest_working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
+	cs_file_list=$(ls $working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
 	# Only warn about missing CatalogSources when operators are actually in the ISC.
 	# If the ISC has no operators section, CatalogSource files are expected to be absent.
@@ -319,7 +319,7 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 		_isc="mirror/data/imageset-config.yaml"
 		if [ -f "$_isc" ] && grep -q '^[[:space:]]*operators:' "$_isc"; then
 			aba_warn -p IMPORTANT \
-				"No CatalogSource files found under $latest_working_dir/cluster-resources" \
+				"No CatalogSource files found under $working_dir/cluster-resources" \
 				"Your imageset-config.yaml includes operators, but no CatalogSource files were generated." \
 				"Run 'aba -d mirror sync' or 'aba -d mirror save' (transfer ISC and archive files), then 'aba -d mirror load' to mirror operator images."
 		else
@@ -422,8 +422,8 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 	aba_debug "Running: $exec_cmd"
 	$exec_cmd
 
-	sig_file=$latest_working_dir/cluster-resources/signature-configmap-merged.json
-	[ -s "$sig_file" ] || sig_file=$latest_working_dir/cluster-resources/signature-configmap.json
+	sig_file=$working_dir/signature-configmap-merged.json
+	[ -s "$sig_file" ] || sig_file=$working_dir/cluster-resources/signature-configmap.json
 	if [ -s "$sig_file" ]; then
 		aba_info "Applying signatures from: $sig_file ..."
 		if oc get configmap mirrored-release-signatures -n openshift-config-managed >/dev/null 2>&1; then
@@ -436,7 +436,7 @@ if [ -d "$latest_working_dir/cluster-resources" ]; then
 			oc apply -f "$sig_file"
 		fi
 	else
-		aba_info "No Signature files found in $latest_working_dir/cluster-resources" >&2
+		aba_info "No Signature files found in $working_dir/cluster-resources" >&2
 	fi
 else
 	# FIXME: Only show warning IF the mirror has been used for this cluster
