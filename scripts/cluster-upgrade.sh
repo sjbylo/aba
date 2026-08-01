@@ -313,7 +313,7 @@ if [ ! "$upgrade_already_running" ]; then
 	_available_versions=$(echo "$_upgrade_text" \
 		| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
 	_conditional_versions=$(echo "$_upgrade_text" \
-		| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+		| awk '/Conditional updates:|Updates with known issues:/{f=1; next} f && /^  Version:/{print $2}') || true
 
 	# Ensure the cluster's update channel matches what was mirrored.
 	# The ISC (imageset-config.yaml) is the source of truth — it contains
@@ -348,43 +348,30 @@ if [ ! "$upgrade_already_running" ]; then
 		_channel_changed=1
 	fi
 
-	_osus_graph_has_target() {
+	_osus_graph_refresh() {
 		_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || return 1
 		_available_versions=$(echo "$_upgrade_text" \
 			| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
 		_conditional_versions=$(echo "$_upgrade_text" \
-			| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+			| awk '/Conditional updates:|Updates with known issues:/{f=1; next} f && /^  Version:/{print $2}' ) || true
+		# Graph is "ready" if it has any versions at all
+		[ -n "$_available_versions" ] || [ -n "$_conditional_versions" ]
+	}
+
+	_osus_graph_has_target() {
+		_osus_graph_refresh || return 1
 		echo "$_available_versions" | grep -qxF "$target_ver" && return 0
 		echo "$_conditional_versions" | grep -qxF "$target_ver"
 	}
 
 	if [ "$_channel_changed" ]; then
-		# Re-fetch available updates from the new channel (up to ~1 min)
 		aba_wait_show "Waiting for update graph to refresh after channel change" 5 60 _osus_graph_has_target && _graph_ok=1
 	else
 		_osus_graph_has_target && _graph_ok=1
 	fi
 
-	# OSUS graph may still be populating (e.g. just installed by day2-config-osus).
-	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
-		aba_wait_show "Waiting for OSUS update graph to show $target_ver" 5 120 _osus_graph_has_target && _graph_ok=1
-	fi
-
-	# Validate that the target is reachable before attempting the upgrade
-	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
-		_all_available=$(echo "$_available_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
-		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
-		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
-			${_all_available:+"Available upgrades: $_all_available"} \
-			${_all_conditional:+"Conditional upgrades: $_all_conditional"} \
-			"${_all_available:- No upgrades found — the upgrade may require intermediate versions.}" \
-			"Check the upgrade path: oc adm upgrade" \
-			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
-	fi
-
-	# If no OSUS graph, offer to install OSUS if the cincinnati operator
-	# is available (day2 already ran at line 253, so CatalogSources exist).
-	# Falls through to manual override if user declines or cincinnati is absent.
+	# If no graph and no OSUS, offer to install OSUS now.
+	# day2 already ran (line 253), so CatalogSources exist.
 	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
 		_cincinnati_available=""
 		oc get packagemanifests cincinnati-operator >/dev/null 2>&1 && _cincinnati_available=1
@@ -402,17 +389,56 @@ if [ ! "$upgrade_already_running" ]; then
 				fi
 			fi
 		fi
+	fi
 
-		if [ -z "$osus_upstream" ]; then
-			echo
-			aba_warn "No local update graph (OSUS) detected." \
-				"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
-				"" \
-				"If you proceed, the upgrade will bypass OpenShift's update graph validation."
-			echo
-			ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
-			upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
-		fi
+	# Wait for OSUS graph to have any data, then check for target immediately
+	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+		aba_wait_show "Waiting for OSUS update graph" 5 120 _osus_graph_refresh
+		_osus_graph_has_target && _graph_ok=1
+	fi
+
+	# OSUS is configured but target version not in graph after waiting
+	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+		_all_available=$(echo "$_available_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
+		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
+		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
+			${_all_available:+"Available upgrades: $_all_available"} \
+			${_all_conditional:+"Conditional upgrades: $_all_conditional"} \
+			"${_all_available:- No upgrades found — the upgrade may require intermediate versions.}" \
+			"Check the upgrade path: oc adm upgrade" \
+			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+	fi
+
+	# No OSUS at all — offer manual override without graph validation
+	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
+		echo
+		aba_warn "No local update graph (OSUS) detected." \
+			"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
+			"" \
+			"If you proceed, the upgrade will bypass OpenShift's update graph validation."
+		echo
+		ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
+		upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
+	fi
+
+	# Warn if target is a conditional upgrade (has known issues)
+	if [ "$_graph_ok" ] && ! echo "$_available_versions" | grep -qxF "$target_ver" \
+	   && echo "$_conditional_versions" | grep -qxF "$target_ver"; then
+		# Extract risk details from the "Updates with known issues" block
+		_risk_info=$(echo "$_upgrade_text" | awk -v ver="$target_ver" '
+			/Updates with known issues:/{f=1; next}
+			f && /^  Version:/ && $2==ver {found=1; next}
+			f && found && /^  Version:/{exit}
+			f && found && /^  Reason:/{printf "  %s\n", $0; next}
+			f && found && /^  Message:/{printf "  %s\n", $0; next}
+			f && found && /^  http/{printf "  %s\n", $0; next}
+			f && found && /^   /{printf "  %s\n", $0}
+		')
+		echo
+		aba_warn "Version $target_ver is a conditional upgrade (has known issues):"
+		[ -n "$_risk_info" ] && echo "$_risk_info"
+		echo
+		ask -n "Proceed with upgrade to $target_ver despite known issues" || exit 1
 	fi
 
 	# Execute upgrade
