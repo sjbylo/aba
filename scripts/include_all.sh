@@ -922,6 +922,55 @@ externalize_cluster_state() {
 	aba_debug "State dir: $_state_dir/"
 }
 
+# Display post-install summary and next steps.
+# Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
+# and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
+show_cluster_summary() {
+	local _regcreds="${regcreds_dir:-}"
+	local _cn="${CLUSTER_NAME:-${cluster_name:-?}}"
+	local _bd="${BASE_DOMAIN:-${base_domain:-?}}"
+	local _masters="${CP_REPLICAS:-${num_masters:-0}}"
+	local _workers="${WORKER_REPLICAS:-${num_workers:-0}}"
+
+	# Derive cluster type from replica counts
+	local _type="standard"
+	[ "$_workers" -eq 0 ] && [ "$_masters" -eq 1 ] && _type="sno"
+	[ "$_workers" -eq 0 ] && [ "$_masters" -ge 3 ] && _type="compact"
+
+	local _nodes=$(( _masters + _workers ))
+
+	# Platform label
+	local _plat="${platform:-unknown}"
+	case "$_plat" in
+		kvm) _plat="KVM" ;;
+		vmw) _plat="VMware" ;;
+		bm)  _plat="bare-metal" ;;
+	esac
+
+	# Context-aware command prefix
+	local _dir; _dir=$(basename "$PWD")
+	local _p="aba"
+	[ "$_dir" != "$_cn" ] && _p="aba -d $_dir"
+
+	echo
+	aba_success "Cluster installed successfully!"
+	aba_info "  Name:     $_cn.$_bd"
+	aba_info "  Version:  ${ocp_version:-?}"
+	aba_info "  Type:     $_type ($_nodes node(s))"
+	aba_info "  Platform: $_plat"
+	aba_info "  API:      https://api.$_cn.$_bd:6443"
+	echo
+	aba_info "Next steps:"
+	aba_info "  . <($_p shell)     — access cluster (kubeconfig)"
+	aba_info "  . <($_p login)     — log in as kubeadmin"
+	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then
+		aba_info "  $_p day2           — configure OperatorHub with mirror registry"
+		aba_info "  $_p day2-osus      — configure OpenShift Update Service"
+	fi
+	aba_info "  $_p day2-ntp       — configure NTP"
+	aba_info "  $_p info           — view this information again"
+}
+
 # Emit export lines for cluster status fields from state.sh.
 # Called at the end of normalize-cluster-conf() so state wins over config.
 # Drift (config != state) triggers a visible warning — cluster.conf should

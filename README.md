@@ -718,16 +718,21 @@ oc whoami
 Example output on successful install:
 
 ```
-INFO Install complete!
-INFO To access the cluster as the system:admin user when using 'oc', run
-INFO     export KUBECONFIG=/home/steve/aba/mycluster/iso-agent-based/auth/kubeconfig
-INFO Access the OpenShift web-console here: https://console-openshift-console.apps.mycluster.example.com
-INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ"
-Run '. <(aba shell)' to access the cluster using the kubeconfig file, or
-Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
-Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry.
-Run 'aba day2-osus' to configure the OpenShift Update Service.
-Run 'aba day2-ntp' to configure NTP on this cluster.
+[ABA] Cluster installed successfully!
+[ABA]   Name:     mycluster.example.com
+[ABA]   Version:  4.21.20
+[ABA]   Type:     sno (1 node(s))
+[ABA]   Platform: KVM
+[ABA]   API:      https://api.mycluster.example.com:6443
+
+[ABA] Next steps:
+[ABA]   . <(aba shell)     — access cluster (kubeconfig)
+[ABA]   . <(aba login)     — log in as kubeadmin
+[ABA]   aba day2           — configure OperatorHub with mirror registry
+[ABA]   aba day2-osus      — configure OpenShift Update Service
+[ABA]   aba day2-ntp       — configure NTP
+[ABA]   aba info           — view this information again
+[ABA]   aba help           — more options
 ```
 
 If OpenShift fails to install or is not progressing, see the [Troubleshooting](Troubleshooting.md) guide.
