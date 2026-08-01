@@ -3651,6 +3651,18 @@ _run_oc_mirror_with_retry() {
 	aba_success -n "Images $_past successfully!"
 	[ $try_tot -gt 1 ] && [ $try -gt 1 ] && echo_white " (after $try attempts!)" || echo
 
+	# Backup cluster-resources after successful oc-mirror run (keep last 5)
+	local _cr_dir="data/working-dir/cluster-resources"
+	local _hist_dir="data/working-dir/.cluster-resources-history"
+	if [ -d "$_cr_dir" ]; then
+		local _ts; _ts=$(date '+%Y%m%d-%H%M%S')
+		mkdir -p "$_hist_dir"
+		cp -a "$_cr_dir" "$_hist_dir/${_ts}-${action}"
+		# Prune oldest beyond 5
+		ls -dt "$_hist_dir"/*/ 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
+		aba_debug "Backed up cluster-resources to $_hist_dir/${_ts}-${action}"
+	fi
+
 	return 0
 }
 
