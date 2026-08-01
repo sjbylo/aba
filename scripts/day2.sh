@@ -174,74 +174,114 @@ else
 fi
 
 apply_custom_manifests() {
-	# Apply user-provided custom manifests from day2-custom-manifests/ in cluster folder
-	# This function is called after signature application to allow users to deploy
-	# additional resources (e.g., StorageClass, NetworkPolicy, custom operators, etc.)
+	# Apply user-provided custom manifests from day2-custom-manifests/ in cluster folder.
+	# Supports two modes:
+	#   1. Waved: numbered subdirs (10-ns/, 20-app/) applied in sort -V order.
+	#      Optional .wait file in a wave dir gates the next wave via oc wait.
+	#   2. Flat (legacy): all .yaml/.yml files applied in alphabetical order.
+	# Mode is auto-detected: if ANY numbered subdir exists, waved mode is used.
 
 	local custom_manifest_dir="$PWD/day2-custom-manifests"
 
-	# Check if day2-custom-manifests directory exists
 	if [ ! -d "$custom_manifest_dir" ]; then
 		aba_info "No custom manifests directory found at $custom_manifest_dir (this is optional)"
 		return 0
 	fi
 
-	# Recursively discover .yaml/.yml files; sort ensures deterministic alphabetical
-	# order so users can control ordering via directory/file naming (e.g. 00-ns/, 01-app/)
-	local found_files
-	found_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
+	# Inner helper: apply a list of manifest files (one per line on stdin)
+	_apply_manifest_list() {
+		local _success=0 _fail=0
+		local _file
+		while IFS= read -r _file; do
+			[ -z "$_file" ] && continue
+			local _rel="${_file#"$custom_manifest_dir"/}"
+			if [ ! -s "$_file" ]; then
+				aba_warn "Skipping empty file: $_rel"
+				_fail=$(( _fail + 1 ))
+				continue
+			fi
+			aba_info "oc apply -f $_rel"
+			if oc apply -f "$_file"; then
+				_success=$(( _success + 1 ))
+			else
+				aba_warn "Failed to apply: $_rel (continuing)"
+				_fail=$(( _fail + 1 ))
+			fi
+		done
+		[ $_success -gt 0 ] && aba_success "Applied $_success manifest(s) in this batch"
+		[ $_fail -gt 0 ] && aba_warn "Failed $_fail manifest(s) in this batch"
+	}
 
-	# Count matched files; grep -c exits 1 on zero matches, so suppress that with || true
-	local file_count
-	file_count="$(printf '%s\n' "$found_files" | grep -c . || true)"
+	# Detect waved mode: any numbered subdir?
+	local _waves
+	_waves=$(find "$custom_manifest_dir" -maxdepth 1 -type d -name '[0-9]*' 2>/dev/null | sort -V)
 
-	# If no files found, inform user and return
-	if [ "$file_count" -eq 0 ]; then
-		aba_debug "No custom manifest files (.yaml/.yml) found in $custom_manifest_dir"
+	if [ -z "$_waves" ]; then
+		# --- Flat (legacy) mode ---
+		local found_files
+		found_files="$(find "$custom_manifest_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)"
+		local file_count
+		file_count="$(printf '%s\n' "$found_files" | grep -c . || true)"
+
+		if [ "$file_count" -eq 0 ]; then
+			aba_debug "No custom manifest files (.yaml/.yml) found in $custom_manifest_dir"
+			return 0
+		fi
+
+		aba_info "Found $file_count custom manifest file(s) (flat mode)"
+		aba_info "Applying user-provided custom manifests ..."
+		echo "$found_files" | _apply_manifest_list
 		return 0
 	fi
 
-	# Show what we're doing
-	aba_info "Found $file_count custom manifest file(s) in $custom_manifest_dir"
-	aba_info "Applying user-provided custom manifests ..."
+	# --- Waved mode ---
+	aba_info "Waved manifest application detected"
 
-	# Track successes and failures
-	local success_count=0
-	local failure_count=0
+	# Also collect any top-level (non-subdir) manifests to apply first
+	local _top_files
+	_top_files=$(find "$custom_manifest_dir" -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)
+	if [ "$_top_files" ]; then
+		aba_info "Applying top-level manifests (before waves) ..."
+		echo "$_top_files" | _apply_manifest_list
+	fi
 
-	# Apply each file; while+read handles filenames that contain spaces
-	while IFS= read -r manifest_file; do
-		# Show path relative to the custom manifests directory for cleaner output
-		local rel_path="${manifest_file#"$custom_manifest_dir"/}"  # strip base dir → relative path
+	local _wave_num=0
+	while IFS= read -r _wave_dir; do
+		[ -z "$_wave_dir" ] && continue
+		_wave_num=$(( _wave_num + 1 ))
+		local _wave_name
+		_wave_name=$(basename "$_wave_dir")
 
-		# Verify file is not empty
-		if [ ! -s "$manifest_file" ]; then
-			aba_warn "Skipping empty file: $rel_path"
-			failure_count=$((failure_count + 1))
+		local _wave_files
+		_wave_files=$(find "$_wave_dir" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)
+
+		if [ -z "$_wave_files" ]; then
+			aba_debug "Wave $_wave_name: no manifest files, skipping"
 			continue
 		fi
 
-		# Apply the manifest
-		aba_info "oc apply -f $rel_path"
-		aba_debug "Running: oc apply -f $manifest_file"
-		if oc apply -f "$manifest_file"; then
-			success_count=$((success_count + 1))
-		else
-			aba_warn "Failed to apply custom manifest: $rel_path (continuing with other files)"
-			failure_count=$((failure_count + 1))
+		local _wf_count
+		_wf_count=$(echo "$_wave_files" | grep -c . || true)
+		aba_info "Wave $_wave_name: applying $_wf_count manifest(s) ..."
+		echo "$_wave_files" | _apply_manifest_list
+
+		# Process .wait gate if present
+		local _wait_file="$_wave_dir/.wait"
+		if [ -f "$_wait_file" ]; then
+			aba_info "Wave $_wave_name: processing .wait gate ..."
+			while IFS= read -r _wait_line; do
+				# Skip empty lines and comments
+				[[ -z "$_wait_line" || "$_wait_line" =~ ^[[:space:]]*# ]] && continue
+				aba_info "oc wait $_wait_line"
+				if ! eval oc wait $_wait_line; then
+					aba_warn "Wait gate failed: oc wait $_wait_line (continuing to next wave)"
+				fi
+			done < "$_wait_file"
 		fi
-	done <<< "$found_files"
+	done <<< "$_waves"
 
-	# Show summary
-	if [ $success_count -gt 0 ]; then
-		aba_success "Successfully applied $success_count custom manifest(s)"
-	fi
-
-	if [ $failure_count -gt 0 ]; then
-		aba_warn "Failed to apply $failure_count custom manifest(s) - see warnings above"
-	fi
-
-	return 0  # Always return success - failures are non-fatal
+	aba_success "Waved manifest application complete ($_wave_num wave(s) processed)"
+	return 0
 }
 
 

@@ -487,6 +487,77 @@ re-download. Affected: `cli/Makefile`, `templates/Makefile.mirror`,
 
 ---
 
+## Primed Workflow (DevOps / hands-off deployment)
+
+The "primed" use case targets DevOps environments where ALL cluster configuration
+is known in advance on the connected side. An external pipeline or operator
+generates the configs; ABA bundles them into a deployment-ready package that
+requires only a single command on the disconnected side.
+
+This is also the workaround for configurations that `cluster.conf` cannot yet
+express (per-node `rootDeviceHints`, per-role NIC names — see BACKLOG): the user
+supplies their own `agent-config.yaml` and marks the dir as "primed".
+
+### Commands
+
+| When   | Command                            | Alias              | Purpose                              |
+|--------|------------------------------------|---------------------|--------------------------------------|
+| Day 0  | `aba bundle --primed`              | `aba bundle-primed` | Full bundle with pre-configured dirs |
+| Day N  | `aba transfer-primed`              | `aba transfer`      | Lightweight configs-only tar         |
+| Disco  | `aba -d <cluster> deploy-primed`   | `aba -d <cluster> deploy` | One-command pipeline          |
+
+### Key marker: `.primed`
+
+Placed in cluster dirs that have both `install-config.yaml` and `agent-config.yaml`.
+Guards `agent-config.yaml` regeneration (Make skips it). `install-config.yaml` is
+ALWAYS regenerated because it needs the disconnected registry CA cert.
+
+### Transfer artifacts
+
+- `aba-transfer.tar` — ISC and CLI tarballs (from `aba save`)
+- `aba-transfer-configs.tar` — primed cluster dirs (from `aba transfer-primed`)
+- Both live in `mirror/data/` so `cp mirror/data/*.tar` transfers everything
+
+### Config-only transfers
+
+When `aba -d mirror load` finds config tars but no `mirror_*.tar`, it extracts
+the cluster dirs and exits successfully without attempting image loading.
+
+### Future
+
+Container image delivery via Podman (WIP) will leverage the same primed configs.
+
+See ADR 010 for full rationale.
+
+---
+
+## Waved day2-custom-manifests
+
+Independent of "primed" — available to any cluster using custom day-2 manifests.
+
+### Auto-detected modes
+
+1. **Waved** (numbered subdirs present): Subdirs named `[0-9]*` are applied as
+   waves in `sort -V` order. Optional `.wait` file gates the next wave via
+   `oc wait`. Top-level flat files are applied before any waves.
+
+2. **Flat** (no numbered subdirs): Legacy behavior — all `.yaml/.yml` files
+   applied in alphabetical order. Backward compatible.
+
+### .wait file format
+
+Each non-comment line is passed as arguments to `oc wait`:
+
+```
+--for=condition=available deployment/my-operator -n my-ns --timeout=120s
+```
+
+Failed `oc wait` is non-fatal (warning + continue).
+
+See ADR 011 for full rationale.
+
+---
+
 ## Non-goals
 
 Things ABA intentionally does not do (currently):

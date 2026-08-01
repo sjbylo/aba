@@ -44,7 +44,36 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 aba_debug "Configuration validated"
 
 # --- Guard: archive files must be present ---
+# Config-only transfers (aba-transfer-configs.tar without mirror_*.tar) are valid.
+# Extract configs and exit gracefully if no images to load.
 if ! ls data/mirror_*.tar >/dev/null 2>&1; then
+	_has_configs=""
+	[ -f "data/aba-transfer-configs.tar" ] && _has_configs=1
+	[ -f "data/aba-transfer.tar" ] && _has_configs=1
+
+	if [ "$_has_configs" ]; then
+		# Extract transfer tars (configs only, no images)
+		if [ -f "data/aba-transfer-configs.tar" ]; then
+			aba_info "Found config-only transfer: data/aba-transfer-configs.tar"
+			if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
+				aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
+			fi
+			aba_info "Config transfer extracted (cluster directories updated)."
+		fi
+		if [ -f "$_transfer_tar" ]; then
+			aba_info "Found transfer bundle: $_transfer_tar"
+			rm -f data/aba-transfer-metadata.json \
+				data/imageset-config.yaml \
+				data/imageset-config-digest.yaml
+			if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
+				aba_abort "Failed to unpack transfer bundle ($_transfer_tar)."
+			fi
+			aba_info "Transfer bundle unpacked."
+		fi
+		aba_info "Config-only transfer: no images to load. Done."
+		exit 0
+	fi
+
 	aba_abort "No mirror_*.tar archive files found in mirror/data/." \
 		"Copy the archive files from the connected host first:" \
 		"  cp <source>/mirror/data/*.tar mirror/data/"
@@ -106,6 +135,15 @@ if [ -f "$_transfer_tar" ]; then
 	# Transfer bundle unpacked — keep in place for potential re-use
 	# (re-load after registry reinstall, or copy to another mirror)
 	aba_info "Transfer bundle unpacked."
+fi
+
+# Extract configs transfer tar if present (cluster dirs for day-N updates)
+if [ -f "data/aba-transfer-configs.tar" ]; then
+	aba_info "Found config transfer: data/aba-transfer-configs.tar"
+	if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
+		aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
+	fi
+	aba_info "Config transfer extracted (cluster directories updated)."
 fi
 
 aba_debug "Ensuring oc-mirror is available"
