@@ -276,13 +276,13 @@ e2e_run_must_fail_remote "Load without data dir should fail" \
 e2e_run_remote -q "Restore data dir" \
     "cd ~/aba && mv mirror/data.bak mirror/data"
 
-# Negative path: load with data/ dir but no mirror_*.tar should fail
-e2e_run_remote -q "Backup mirror_*.tar for must-fail test" \
-    "cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ || true"
+# Negative path: load with data/ dir but no mirror_*.tar (and no transfer tars) should fail
+e2e_run_remote -q "Backup mirror_*.tar and transfer tars for must-fail test" \
+    "cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ || true && mv mirror/data/aba-transfer*.tar mirror/data/.tmp-bak/ 2>/dev/null || true"
 e2e_run_must_fail_remote "Load without mirror_*.tar should fail" \
     "cd ~/aba && aba -d mirror load"
-e2e_run_remote -q "Restore mirror_*.tar" \
-    "cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ || true; rmdir mirror/data/.tmp-bak || true"
+e2e_run_remote -q "Restore mirror_*.tar and transfer tars" \
+    "cd ~/aba && mv mirror/data/.tmp-bak/*.tar mirror/data/ || true; rmdir mirror/data/.tmp-bak || true"
 
 # Guard: warn when aba-transfer.tar is missing (load should still succeed)
 e2e_run_remote -q "Backup aba-transfer.tar for warning test" \
