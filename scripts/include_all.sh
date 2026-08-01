@@ -947,10 +947,11 @@ show_cluster_summary() {
 		bm)  _plat="bare-metal" ;;
 	esac
 
-	# Context-aware command prefix
+	# Context-aware command prefix: "aba" from inside the cluster dir,
+	# "aba -d <dir>" when invoked via -d flag.
 	local _dir; _dir=$(basename "$PWD")
 	local _p="aba"
-	[ "$_dir" != "$_cn" ] && _p="aba -d $_dir"
+	[ "${ABA_TARGET_DIR:-}" ] && _p="aba -d $_dir"
 
 	echo
 	aba_success "Cluster installed successfully!"
