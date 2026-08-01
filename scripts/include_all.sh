@@ -818,15 +818,15 @@ cluster_state_dir() {
 	echo "$HOME/.aba/clusters/$name.$domain"
 }
 
-# Returns path to kubeconfig (prefers external state, falls back to local)
+# Returns path to kubeconfig (prefers local, falls back to external state)
 cluster_kubeconfig() {
 	local _sd
 	_sd=$(cluster_state_dir "$@") || return 1
 	local local_path="iso-agent-based/auth/kubeconfig"
-	if [[ -f "$_sd/kubeconfig" ]]; then
-		echo "$_sd/kubeconfig"
-	elif [[ -f "$local_path" ]]; then
+	if [[ -f "$local_path" ]]; then
 		echo "$PWD/$local_path"
+	elif [[ -f "$_sd/kubeconfig" ]]; then
+		echo "$_sd/kubeconfig"
 	fi
 }
 
