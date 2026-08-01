@@ -2405,8 +2405,9 @@ _day2_upgrade() {
 	fi
 
 	if [[ $_dry_rc -ne 0 && ${#_sorted[@]} -eq 0 ]]; then
+		local _raw_escaped="${_versions_raw//$'\n'/\\n}"
 		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Check Failed" \
-			--msgbox "Failed to query available versions (exit $_dry_rc).\n\nCheck cluster connectivity and credentials.\n\nRaw output:\n${_versions_raw:-(empty)}" 0 0
+			--msgbox "Failed to query available versions (exit $_dry_rc).\n\nCheck cluster connectivity and credentials.\n\nRaw output:\n${_raw_escaped:-(empty)}" 0 0
 		return 1
 	fi
 
