@@ -861,6 +861,35 @@ to catch new dependencies early. Could also run on any change to
 
 ---
 
+## Upgrade: Upgradeable=False pre-flight check in CLI
+
+**Severity:** MEDIUM — CLI silently hits confusing OpenShift errors
+**Status:** Planned
+**Added:** 2026-08-01
+
+**Problem:** The TUI checks `Upgradeable=False` before triggering an upgrade
+(`_upgrade_preflight_check` in `tui-cluster.sh`), but the CLI path (`aba upgrade`)
+does not. When an admin acknowledgment gate is active (e.g. cross-minor upgrade
+4.14→4.15 requiring API removal acknowledgment), the CLI upgrade fails with a
+confusing OpenShift error instead of a clear ABA message.
+
+**Proposed fix:** Add an `Upgradeable=False` check to `cluster-upgrade.sh` before
+executing the upgrade command. If detected:
+1. Show the `Upgradeable=False` reason and message
+2. For admin ack gates: offer to auto-acknowledge with `oc adm upgrade ack`
+3. For other blockers: abort with a clear message
+
+The check already exists in `tui-cluster.sh` (`_upgrade_preflight_check`) — the
+logic should be extracted to a shared function in `include_all.sh` or moved
+into `cluster-upgrade.sh` itself so both TUI and CLI benefit.
+
+**Files to change:**
+- `scripts/cluster-upgrade.sh`: add `Upgradeable=False` check before upgrade
+- `tui/v2/tui-cluster.sh`: refactor `_upgrade_preflight_check` to share logic
+- `scripts/include_all.sh`: optional shared helper
+
+---
+
 ## Feature: Per-node / per-role cluster configuration
 
 **Severity:** MEDIUM — blocks some bare-metal use cases without `--primed` workaround
