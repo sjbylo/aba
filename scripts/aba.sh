@@ -120,6 +120,7 @@ while [ $i -le $# ]; do
 				fi
 
 				WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+				export ABA_TARGET_DIR="$target_dir"
 			else
 				# Skip subsequent --dir/-d and their values
 				echo "[ABA] Warning: ignoring duplicate $arg (only the first --dir/-d is used)" >&2
