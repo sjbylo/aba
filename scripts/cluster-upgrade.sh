@@ -364,10 +364,13 @@ if [ ! "$upgrade_already_running" ]; then
 		echo "$_conditional_versions" | grep -qxF "$target_ver"
 	}
 
-	if [ "$_channel_changed" ]; then
-		aba_wait_show "Waiting for update graph to refresh after channel change" 5 60 _osus_graph_has_target && _graph_ok=1
-	else
-		_osus_graph_has_target && _graph_ok=1
+	if [ "$osus_upstream" ]; then
+		if [ "$_channel_changed" ]; then
+			aba_wait_show "Waiting for update graph to refresh after channel change" 5 60 _osus_graph_has_target && _graph_ok=1
+		else
+			_osus_graph_has_target && _graph_ok=1
+		fi
+		[ "$_graph_ok" ] && aba_info "Version $target_ver found in OSUS update graph"
 	fi
 
 	# If no graph and no OSUS, offer to install OSUS now.
@@ -386,6 +389,8 @@ if [ ! "$upgrade_already_running" ]; then
 				if [ "$osus_upstream" ]; then
 					aba_success "OSUS configured — upgrade will use local update graph"
 					upgrade_cmd="oc adm upgrade --to $target_ver $opt_force $_opt_warn"
+					# OSUS install patches CA, proxy, trust -- operators need time to reconcile
+					aba_wait_show "Waiting for cluster operators to stabilize" 10 180 cluster_is_ready
 				fi
 			fi
 		fi
