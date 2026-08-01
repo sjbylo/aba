@@ -79,6 +79,10 @@ fi
 # --- Externalize cluster state (ADR-007) ---
 externalize_cluster_state
 
+source <(normalize-aba-conf)
+source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+
 show_cluster_summary
 
 if [ ! -f ~/.aba_first_cluster_success ]; then
