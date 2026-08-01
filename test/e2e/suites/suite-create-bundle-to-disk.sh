@@ -565,8 +565,7 @@ DEPLOY_PRIMED_SNO="$(pool_cluster_name deploy-sno)"
 test_begin "deploy-primed: end-to-end pipeline"
 
 e2e_run "Create pre-built SNO for deploy-primed" \
-    "aba cluster -n $DEPLOY_PRIMED_SNO -t sno -i $(pool_starting_ip sno) -y && \
-     aba -d $DEPLOY_PRIMED_SNO agentconf"
+    "aba cluster -n $DEPLOY_PRIMED_SNO -t sno -i $(pool_starting_ip sno) -s agentconf -y"
 
 e2e_run "Verify deploy-primed --help works" \
     "aba -d $DEPLOY_PRIMED_SNO deploy-primed --help | grep -q 'Pipeline steps'"
@@ -587,8 +586,7 @@ TRANSFER_SNO="$(pool_cluster_name xfer-sno)"
 test_begin "transfer-primed: create configs tar"
 
 e2e_run "Create cluster for transfer test" \
-    "aba cluster -n $TRANSFER_SNO -t sno -i $(pool_starting_ip sno) -y && \
-     aba -d $TRANSFER_SNO agentconf"
+    "aba cluster -n $TRANSFER_SNO -t sno -i $(pool_starting_ip sno) -s agentconf -y"
 
 e2e_run "Run aba transfer-primed" \
     "aba transfer-primed"
@@ -630,8 +628,8 @@ test_begin "Config-only load: extract configs without images"
 
 # Create a dummy configs tar to test extraction
 e2e_run "Create cluster for config-only test" \
-    "aba cluster -n cfg-test -t sno -i $(pool_starting_ip sno) -y && \
-     aba -d cfg-test agentconf && aba transfer-primed"
+    "aba cluster -n cfg-test -t sno -i $(pool_starting_ip sno) -s agentconf -y && \
+     aba transfer-primed"
 
 # Transfer configs tar to disco (without mirror_*.tar)
 e2e_run "Transfer only configs tar to disco" \
