@@ -13,7 +13,7 @@ Main commands:
   aba [-d mirror] register ...          # Register an existing mirror registry (see 'aba mirror --help')
   aba [-d mirror] unregister            # Deregister an existing registry (removes local creds only)
   aba bundle                            # Create a bundle archive file. See 'aba bundle --help'
-  aba bundle-primed                     # Alias for 'aba bundle --primed'. See 'aba bundle --help'
+  aba bundle-primed                     # Create a primed bundle. See 'aba bundle --help'
   aba cluster                           # Install OpenShift cluster. See 'aba cluster --help'
   aba [-d <cluster>] deploy-primed      # One-command primed deployment pipeline. See 'aba deploy --help'
   aba transfer-primed                   # Create config-only transfer tar. See 'aba transfer --help'
