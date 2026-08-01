@@ -73,26 +73,26 @@ if [ ! "$SNO" ]; then
 	# Non-SNO: DNS must resolve to the configured VIPs
 	[ "$actual_ip_of_api" != "$api_vip" ] && \
 		aba_abort "DNS record: $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
 
 	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
 
 	[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
 		aba_abort "DNS record: $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
 
 	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
 else
 	# SNO: DNS must resolve to the rendezvous_ip (starting_ip)
 	[ "$actual_ip_of_api" != "$rendezvous_ip" ] && \
 		aba_abort "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
 
 	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
 
 	[ "$actual_ip_of_ingress" != "$rendezvous_ip" ] && \
 		aba_abort "DNS record $cl_ingress_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_ingress!" \
-			"To skip network checks, set verify_conf=conf in aba.conf"
+			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
 
 	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
 fi
@@ -111,7 +111,7 @@ if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$';
 		"A catch-all record like *.$cl_domain exists -- OpenShift requires explicit records." \
 		"Create distinct DNS records for:" \
 		"  api.$cl_domain  and  *.apps.$cl_domain" \
-		"To skip network checks, set verify_conf=conf in aba.conf"
+		"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
 fi
 
 aba_success "Cluster configuration is valid"
