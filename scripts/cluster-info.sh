@@ -11,16 +11,22 @@ export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
-# Resolve kubeconfig (prefer externalized state, fall back to local)
-kc=$(cluster_kubeconfig)
+# Resolve kubeconfig: prefer local path, fall back to externalized state
+if [ -f "$PWD/iso-agent-based/auth/kubeconfig" ]; then
+	kc="$PWD/iso-agent-based/auth/kubeconfig"
+else
+	kc=$(cluster_kubeconfig)
+fi
 [ -z "$kc" ] && aba_abort "Cluster not ready! Cannot find kubeconfig."
 
-# Resolve kubeadmin password (externalized or local)
-_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
-if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
-	pw=$(cat "$_sd/kubeadmin-password")
+# Resolve kubeadmin password: prefer local, fall back to externalized state
+if [ -f "$PWD/iso-agent-based/auth/kubeadmin-password" ]; then
+	pw=$(cat "$PWD/iso-agent-based/auth/kubeadmin-password")
 else
-	pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)
+	_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
+	if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
+		pw=$(cat "$_sd/kubeadmin-password")
+	fi
 fi
 
 aba_info "To access the cluster as the system:admin user when using 'oc', run"
