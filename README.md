@@ -576,6 +576,54 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 [Back to top](#quick-start)
 
+## Primed Bundles (DevOps / Hands-Off Deployment)
+
+Use primed bundles when ALL cluster configuration is prepared in advance on the connected side — ideal for DevOps pipelines, factory imaging, or when you need configs that `cluster.conf` cannot express (per-node rootDeviceHints, custom agent-config.yaml).
+
+### Day 0: Create and deploy a primed bundle
+
+```bash
+# Connected side: create cluster, configure everything, then bundle
+aba cluster -n factory -t compact --starting-ip 10.0.1.50
+# Edit agent-config.yaml, install-config.yaml as needed...
+aba bundle-primed --out /media/usb/ocp-bundle
+
+# Transfer bundle + images to disconnected side
+
+# Disconnected side: one-command deployment
+tar xf ocp-bundle.tar -C ~ && cd ~/aba && ./install
+cp /media/usb/mirror_*.tar mirror/data/
+aba -d factory deploy-primed
+```
+
+The `deploy-primed` command runs the full pipeline: mirror install → image load → cluster install → day-2 config. Each step is idempotent — safe to re-run after interruption.
+
+### Day N: Transfer new cluster configs without re-mirroring images
+
+```bash
+# Connected side: create a new cluster dir
+aba cluster -n edge1 -t sno --starting-ip 10.0.2.10
+aba transfer-primed                    # Creates mirror/data/aba-transfer-configs.tar
+
+# Transfer only the small configs tar (a few KB)
+cp mirror/data/aba-transfer-configs.tar /media/usb/
+
+# Disconnected side:
+cp /media/usb/aba-transfer-configs.tar mirror/data/
+aba -d mirror load                     # Extracts configs (no images = no-op on load)
+aba -d edge1 deploy-primed             # Deploy the new cluster
+```
+
+### Commands reference
+
+| Command | Alias | Purpose |
+|---------|-------|---------|
+| `aba bundle --primed` | `aba bundle-primed` | Full bundle with pre-configured cluster dirs |
+| `aba transfer-primed` | `aba transfer` | Create configs-only tar for day-N updates |
+| `aba -d <cluster> deploy-primed` | `aba -d <cluster> deploy` | One-command deployment pipeline |
+
+[Back to top](#quick-start)
+
 # Connected Installation (No Mirror)
 
 In a connected environment, cluster nodes pull images directly from the Internet (or via an HTTP proxy). No mirror registry is needed.
@@ -1112,6 +1160,38 @@ Run `aba day2` as normal — manifests are applied after oc-mirror resources (ID
 - Empty files are skipped with a warning
 - If a manifest fails to apply, day2 continues with the remaining files
 - Manifests are applied **after** the mirror registry is configured, so they can reference mirrored images
+
+#### Ordered Waves with Readiness Gates
+
+For more advanced deployments requiring ordered dependencies with readiness checks, use numbered subdirectories with optional `.wait` gates:
+
+```bash
+day2-custom-manifests/
+  10-namespaces/
+    ns.yaml
+  20-operator/
+    subscription.yaml
+    .wait                    # Gate: wait for operator before applying wave 30
+  30-app/
+    deployment.yaml
+```
+
+When numbered subdirectories (`[0-9]*`) are present, ABA switches to **waved mode**:
+
+- Waves are applied in numeric order (`sort -V` handles 1, 2, 10, 20 correctly)
+- Top-level flat files are applied before any waves
+- An optional `.wait` file in a wave directory gates the next wave
+
+The `.wait` file contains `oc wait` arguments, one invocation per line:
+
+```bash
+# Wait for the operator deployment to be available (timeout 2 min)
+--for=condition=available deployment/my-operator -n my-namespace --timeout=120s
+```
+
+If a wait gate fails, a warning is issued and the next wave continues (non-fatal).
+
+If no numbered subdirectories exist, the flat (legacy) mode is used automatically.
 
 ## Synchronize NTP Across Cluster Nodes
 

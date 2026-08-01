@@ -858,3 +858,34 @@ to catch new dependencies early. Could also run on any change to
 `download-all`. Disco installs extras when artifacts already exist under `cli/`.
 
 **Follow-ups (optional):** operator-set-conditioned inclusion to shrink download size.
+
+---
+
+## Feature: Per-node / per-role cluster configuration
+
+**Severity:** MEDIUM — blocks some bare-metal use cases without `--primed` workaround
+**Status:** Planned
+**Added:** 2026-08-01
+
+**Problem:** `cluster.conf` provides a single set of config values applied uniformly
+to all nodes of a given role. Some bare-metal deployments need:
+
+- **Per-role NIC names** (`ports_master=ens1f0`, `ports_worker=ens2f1`) — masters
+  boot from one interface, workers from another.
+- **Per-node `rootDeviceHints`** — each physical server has a unique disk identifier
+  (e.g. `/dev/disk/by-path/...` or serial number).
+
+**Current workaround:** Use `aba bundle --primed` to supply a hand-crafted
+`agent-config.yaml` that ABA bundles as-is (the `.primed` marker skips regeneration).
+
+**Proposed approach:**
+- Extend `cluster.conf` syntax to accept per-role and optionally per-node overrides
+- Per-role: `ports_master=`, `ports_worker=` (already partially supported)
+- Per-node: new config file or extended `macs.conf` format with per-node fields
+- Must remain backward compatible with existing single-value `ports=` syntax
+
+**Files likely affected:**
+- `scripts/include_all.sh` (`normalize-cluster-conf`): parse new per-role keys
+- `templates/agent-config.yaml.j2`: conditional per-node rootDeviceHints
+- `scripts/create-cluster-conf.sh`: new prompts/validation
+- `devel/01-SPEC.md`: document the extended config model
