@@ -43,13 +43,16 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+# Transfer bundle path (used in both early-exit and normal flow)
+_transfer_tar="data/aba-transfer.tar"
+
 # --- Guard: archive files must be present ---
 # Config-only transfers (aba-transfer-configs.tar without mirror_*.tar) are valid.
 # Extract configs and exit gracefully if no images to load.
 if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 	_has_configs=""
 	[ -f "data/aba-transfer-configs.tar" ] && _has_configs=1
-	[ -f "data/aba-transfer.tar" ] && _has_configs=1
+	[ -f "$_transfer_tar" ] && _has_configs=1
 
 	if [ "$_has_configs" ]; then
 		# Extract transfer tars (configs only, no images)
@@ -83,7 +86,6 @@ fi
 # includes CLI tarballs and metadata).  Created by 'aba save' so that
 # 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
 # Tar paths are relative to aba root (mirror/data/*, cli/*), so unpack from aba root.
-_transfer_tar="data/aba-transfer.tar"
 _transfer_meta_ver=""
 _transfer_meta_chan=""
 
@@ -137,7 +139,9 @@ if [ -f "$_transfer_tar" ]; then
 	aba_info "Transfer bundle unpacked."
 fi
 
-# Extract configs transfer tar if present (cluster dirs for day-N updates)
+# Extract configs transfer tar if present (cluster dirs for day-N updates).
+# Only runs in the normal flow (mirror_*.tar exists); the early-exit path
+# above already handles the config-only case.
 if [ -f "data/aba-transfer-configs.tar" ]; then
 	aba_info "Found config transfer: data/aba-transfer-configs.tar"
 	if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then

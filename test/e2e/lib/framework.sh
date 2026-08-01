@@ -512,10 +512,12 @@ suite_end() {
     elif [ "$_E2E_FAIL_COUNT" -gt 0 ] || [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
+        wait
         return 1
     else
         _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, $_total_dur) ==========")"
         _e2e_notify "PASSED: $_E2E_SUITE_NAME -- ${_E2E_PASS_COUNT} tests ($_total_dur)"
+        wait
         return 0
     fi
 }
