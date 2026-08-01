@@ -3668,7 +3668,7 @@ _run_oc_mirror_with_retry() {
 	# oc-mirror regenerates signature-configmap.json from scratch each run,
 	# dropping signatures for versions not in the current sync.
 	local _sig_file="$_cr_dir/signature-configmap.json"
-	local _merged_file="$_cr_dir/signature-configmap-merged.json"
+	local _merged_file="data/working-dir/signature-configmap-merged.json"
 	if [ -s "$_sig_file" ]; then
 		if [ -s "$_merged_file" ]; then
 			jq -s '.[0].binaryData as $old |
