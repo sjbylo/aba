@@ -616,6 +616,7 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_CONNO_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 			"$TUI2_CONNO_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced"
 		)
@@ -756,6 +757,9 @@ Navigation:
 		"$TUI2_CONNO_TAG_SETTINGS")
 			_tui_settings_menu
 			;;
+		"$TUI2_CONNO_TAG_FEEDBACK")
+			_tui_feedback
+			;;
 		"$TUI2_CONNO_TAG_ADVANCED")
 			tui_advanced_menu
 			default_item=""
@@ -794,7 +798,7 @@ while :; do
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
-
+Feedback and contributions — in any form — are very welcome!
 
 Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit.
 " 0 0

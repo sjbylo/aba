@@ -718,7 +718,7 @@ _direct_action_menu() {
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_DIRECT_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_DIRECT_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced"
 		)
@@ -779,8 +779,8 @@ Navigation:
 					cluster_day2_menu
 				fi
 				;;
-			"$TUI2_DIRECT_TAG_SETTINGS")
-				_tui_settings_menu
+			"$TUI2_DIRECT_TAG_FEEDBACK")
+				_tui_feedback
 				;;
 			"$TUI2_DIRECT_TAG_ADVANCED")
 				tui_advanced_menu

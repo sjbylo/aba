@@ -363,8 +363,8 @@ dlg() {
 _TUI_MODE=""   # Set by mode detection: DISCO, CONNO, DIRECT
 _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 
-# Session-only: forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
-_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
+# Forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
+_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-${TUI_OC_MIRROR_RETRY_COUNT:-1}}"
 
 # Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
 # Values: "auto", "quay", "docker", "quay-ng"
@@ -572,13 +572,37 @@ _format_cmd_display() {
 	printf '%s' "$out"
 }
 
+# Persist execution mode preference to ~/.aba/config
+_tui_persist_exec_mode() {
+	local mode="$1"
+	local conf="$HOME/.aba/config"
+	mkdir -p "$HOME/.aba"
+	if [[ -f "$conf" ]] && grep -q '^TUI_EXEC_MODE=' "$conf"; then
+		sed -i "s/^TUI_EXEC_MODE=.*/TUI_EXEC_MODE=$mode/" "$conf"
+	else
+		echo "TUI_EXEC_MODE=$mode" >> "$conf"
+	fi
+}
+
+# Persist oc-mirror retry count to ~/.aba/config
+_tui_persist_retry_count() {
+	local count="$1"
+	local conf="$HOME/.aba/config"
+	mkdir -p "$HOME/.aba"
+	if [[ -f "$conf" ]] && grep -q '^TUI_OC_MIRROR_RETRY_COUNT=' "$conf"; then
+		sed -i "s/^TUI_OC_MIRROR_RETRY_COUNT=.*/TUI_OC_MIRROR_RETRY_COUNT=$count/" "$conf"
+	else
+		echo "TUI_OC_MIRROR_RETRY_COUNT=$count" >> "$conf"
+	fi
+}
+
 confirm_and_execute() {
 	local cmd="$1"
 	local title="${2:-Confirm Execution}"
 	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
 
-	local default_item="${_TUI_LAST_EXEC_MODE:-1}"
+	local default_item="${_TUI_LAST_EXEC_MODE:-${TUI_EXEC_MODE:-1}}"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -587,28 +611,28 @@ confirm_and_execute() {
 			--extra-button --extra-label "Command" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
-			"1" "Run in Terminal" \
-			"2" "Run in Terminal (auto-answer)" \
-			"3" "Run in TUI (auto-answer)" \
+			"1" "Run in Terminal (interactive)" \
+			"2" "Run in Terminal (non-interactive)" \
+			"3" "Run in TUI (non-interactive)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_EXEC" \
-"• Run in Terminal
+"• Run in Terminal (interactive)
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
   - Press ENTER to return to TUI
 
-• Run in Terminal (auto-answer)
+• Run in Terminal (non-interactive)
   - Command runs in real terminal with full output
-  - Prompts are auto-answered with defaults (-y)
+  - Prompts are answered with defaults (-y)
   - Press ENTER to return to TUI
 
-• Run in TUI (auto-answer)
+• Run in TUI (non-interactive)
   - Command runs inside dialog interface
-  - All prompts are auto-answered with defaults (-y)
+  - Prompts are answered with defaults (-y)
   - Output shown live in progressbox
   - Scrollable output review after completion"
 				continue
@@ -627,7 +651,7 @@ confirm_and_execute() {
 
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ -n "$choice" ]] && default_item="$choice" && _TUI_LAST_EXEC_MODE="$choice"
+		[[ -n "$choice" ]] && default_item="$choice" && _TUI_LAST_EXEC_MODE="$choice" && _tui_persist_exec_mode "$choice"
 
 		case "$choice" in
 			1) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
@@ -750,7 +774,7 @@ _exec_in_terminal() {
 	echo "  Executing: $cmd"
 	echo "═══════════════════════════════════════════════════════════════"
 	if [[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]]; then
-		echo "  Tip: Enable auto-answer in TUI Settings to skip prompts"
+		echo "  Tip: Select non-interactive mode to skip prompts"
 	fi
 	echo
 
@@ -1020,6 +1044,180 @@ is_bundle_mode() {
 	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
+# Feedback / issue submission via GitHub.
+# Tiered: gh CLI (direct submit) > browser > show URL.
+_tui_feedback() {
+	local gh_url="https://github.com/sjbylo/aba"
+	local choice
+
+	dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+		--cancel-label "$TUI2_BTN_BACK" \
+		--menu "How would you like to share feedback?" 0 0 0 \
+		"I" "Report an issue" \
+		"D" "Start a discussion" \
+		"S" "Star the project on GitHub" \
+		2>"$_TUI_TMP"
+	[[ $? -ne 0 ]] && return
+
+	choice=$(<"$_TUI_TMP")
+
+	local url=""
+	case "$choice" in
+		I) url="$gh_url/issues/new" ;;
+		D) url="$gh_url/discussions/new?category=general" ;;
+		S) url="$gh_url" ;;
+	esac
+	[[ -z "$url" ]] && return
+
+	# For "Report an issue" with gh CLI: collect and submit directly
+	if [[ "$choice" == "I" ]] && _tui_feedback_try_gh; then
+		return
+	fi
+
+	# Fallback: open in browser or show URL with reason
+	_tui_feedback_show_url "$url"
+	tui_log "Feedback: showed URL $url"
+}
+
+# Try to submit an issue directly via gh CLI.
+# Returns 0 if submitted, 1 if gh unavailable/unauthenticated.
+_tui_feedback_try_gh() {
+	local gh_url="https://github.com/sjbylo/aba"
+
+	if [[ "${_TUI_INET:-no}" != "yes" ]]; then
+		return 1
+	fi
+
+	if ! command -v gh &>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --title "Install GitHub CLI" \
+			--yes-label "Install" --no-label "Skip" \
+			--yesno "The GitHub CLI (gh) is needed to submit issues directly.\n\nThis will add the official GitHub CLI repository and\ninstall the 'gh' package via dnf.\n\nProceed?" 0 0
+		if [[ $? -ne 0 ]]; then
+			return 1
+		fi
+
+		local _gh_log
+		_gh_log=$(mktemp)
+		(
+			echo "Adding GitHub CLI repository..."
+			sudo dnf install -y 'dnf-command(config-manager)' 2>&1 || true
+			sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo 2>&1
+			echo ""
+			echo "Installing gh..."
+			sudo dnf install -y gh 2>&1
+		) 2>&1 | tee "$_gh_log" | dlg --backtitle "$(ui_backtitle)" \
+			--title "Installing GitHub CLI" \
+			--progressbox "Installing gh via dnf..." 20 70
+		local inst_rc=${PIPESTATUS[0]}
+
+		if [[ $inst_rc -ne 0 ]] || ! command -v gh &>/dev/null; then
+			local _tail
+			_tail=$(tail -10 "$_gh_log" 2>/dev/null)
+			rm -f "$_gh_log"
+			dlg --backtitle "$(ui_backtitle)" --title "Installation Failed" \
+				--msgbox "GitHub CLI installation failed.\n\n${_tail}\n\nFalling back to URL." 0 0
+			return 1
+		fi
+		rm -f "$_gh_log"
+		tui_log "Feedback: gh installed successfully"
+	fi
+
+	if ! gh auth status --hostname github.com &>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --title "GitHub Login" \
+			--yes-label "Login" --no-label "Skip" \
+			--yesno "To submit issues directly from the TUI, a one-time\nGitHub CLI login is needed.\n\nA code will be shown — enter it at github.com/login/device\n(you can use your phone or any browser).\n\nProceed with login?" 0 0
+		if [[ $? -ne 0 ]]; then
+			return 1
+		fi
+
+		_tui_redirect_restore
+		clear
+		echo "═══════════════════════════════════════════════════════════════"
+		echo "  GitHub CLI Login (one-time setup)"
+		echo "═══════════════════════════════════════════════════════════════"
+		echo
+		gh auth login --hostname github.com --git-protocol https --web
+		local auth_rc=$?
+		echo
+		echo "Press ENTER to return to the TUI..."
+		read -r
+		_tui_redirect_activate
+
+		if [[ $auth_rc -ne 0 ]] || ! gh auth status --hostname github.com &>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+				--msgbox "GitHub login was not completed.\nFalling back to URL." 0 0
+			return 1
+		fi
+		tui_log "Feedback: gh auth login succeeded"
+	fi
+
+	# Authenticated — collect title and body
+	local title="" body=""
+
+	dlg --backtitle "$(ui_backtitle)" --title "Report an Issue" \
+		--inputbox "Issue title:" 0 70 "" 2>"$_TUI_TMP"
+	[[ $? -ne 0 ]] && return 0
+	title=$(<"$_TUI_TMP")
+	[[ -z "$title" ]] && return 0
+
+	dlg --backtitle "$(ui_backtitle)" --title "Report an Issue" \
+		--inputbox "Description (optional):" 0 70 "" 2>"$_TUI_TMP"
+	[[ $? -ne 0 ]] && return 0
+	body=$(<"$_TUI_TMP")
+
+	# Add ABA version context
+	local aba_ver=""
+	aba_ver=$(cd "$ABA_ROOT" && git describe --tags --always 2>/dev/null) || true
+	[[ -n "$aba_ver" ]] && body="${body:+$body\n\n}ABA version: $aba_ver"
+
+	dlg --backtitle "$(ui_backtitle)" --infobox "Submitting issue..." 3 30
+
+	local issue_url=""
+	issue_url=$(gh issue create --repo sjbylo/aba \
+		--title "$title" --body "$body" 2>/dev/null) || true
+
+	if [[ -n "$issue_url" && "$issue_url" == http* ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Issue Created" \
+			--msgbox "Issue submitted successfully!\n\n$issue_url" 0 0
+		tui_log "Feedback: issue created at $issue_url"
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "Failed to submit issue.\nPlease try manually:\n\n$gh_url/issues/new" 0 0
+		tui_log "Feedback: gh issue create failed"
+	fi
+	return 0
+}
+
+# Show a URL with context about why we can't do better.
+_tui_feedback_show_url() {
+	local url="$1"
+	local reason=""
+
+	if [[ "${_TUI_INET:-no}" != "yes" ]]; then
+		reason="No internet connection detected."
+	elif ! command -v gh &>/dev/null; then
+		reason="GitHub CLI (gh) is not installed."
+	elif ! gh auth status --hostname github.com &>/dev/null 2>&1; then
+		reason="GitHub CLI is not authenticated."
+	fi
+
+	local msg=""
+	if [[ -n "$reason" ]]; then
+		msg="$reason\n\nOpen this URL in a browser when you have access:\n\n$url"
+	else
+		msg="Open this URL in a browser:\n\n$url"
+	fi
+
+	if [[ "${_TUI_INET:-no}" == "yes" ]] && command -v xdg-open &>/dev/null; then
+		xdg-open "$url" &>/dev/null &
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "Opening in your browser:\n\n$url" 0 0
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "$msg" 0 0
+	fi
+}
+
 # Append ` --retry N` when _TUI_RETRY_COUNT > 0 (for oc-mirror operations).
 _tui_oc_mirror_retry_suffix() {
 	if [[ "${_TUI_RETRY_COUNT:-0}" -gt 0 ]]; then
@@ -1090,56 +1288,6 @@ _tui_abaconf_raw_ask() {
 	echo "$_ask_val"
 }
 
-# Human label for Settings menu Auto-answer row
-_tui_settings_ask_label() {
-	local raw=""
-	raw=$(_tui_abaconf_raw_ask)
-
-	case "${raw,,}" in                               # lowercase for case-insensitive match
-		""|"true"|"1")
-			echo "Ask every time"
-			;;
-		yes)
-			echo "Auto yes"
-			;;
-		no)
-			echo "Auto no"
-			;;
-		false|0)
-			echo "Ask every time"
-			;;
-		*)
-			echo "Ask every time (${raw:-unset})"
-			;;
-	esac
-}
-
-_tui_settings_persist_ask_mode() {
-	local mode="$1"
-	local conf="$ABA_ROOT/aba.conf"
-	if [[ ! -f "$conf" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"No aba.conf found — cannot save settings.\n\nRun setup or copy templates first." 0 0
-		return 1
-	fi
-	case "$mode" in
-		always)
-			replace-value-conf -q -n ask -v true -f "$conf"
-			;;
-		yes)
-			replace-value-conf -q -n ask -v yes -f "$conf"
-			;;
-		no)
-			replace-value-conf -q -n ask -v no -f "$conf"
-			;;
-		*)
-			return 1
-			;;
-	esac
-	source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-	return 0
-}
-
 _tui_settings_menu_reg_vendor() {
 	local vf="$ABA_ROOT/mirror/mirror.conf"
 	if [[ ! -f "$vf" ]]; then
@@ -1190,6 +1338,7 @@ _tui_settings_menu_retry() {
 
 	if [[ "$val" =~ ^[0-9]+$ ]] && [[ "$val" -le 999 ]]; then
 		_TUI_RETRY_COUNT="$val"
+		_tui_persist_retry_count "$val"
 		tui_log "Settings: _TUI_RETRY_COUNT=$val"
 	else
 		dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -1234,17 +1383,8 @@ _tui_settings_menu() {
 			_TUI_REG_VENDOR="${reg_vendor:-auto}"
 		fi
 
-		# Current auto-answer display (ON = skip prompts, OFF = ask user)
-		local ask_display
-		local raw
-		raw=$(_tui_abaconf_raw_ask)
-		case "${raw,,}" in
-			yes)  ask_display="Auto-answer: \Z2ON\Zn (-y)" ;;
-			*)    ask_display="Auto-answer: \Z1OFF\Zn" ;;
-		esac
-
 		# Mirror-related settings: only relevant when a mirror is in play
-		local _menu_items=("1" "$ask_display")
+		local _menu_items=()
 		local _help_extra=""
 		if [[ "${_TUI_MODE:-}" != "DIRECT" ]]; then
 			local reg_display
@@ -1259,7 +1399,7 @@ _tui_settings_menu() {
 				0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
 				*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;
 			esac
-			_menu_items+=("2" "$reg_display" "3" "$retry_display")
+			_menu_items+=("1" "$reg_display" "2" "$retry_display")
 			_help_extra="
 Registry Type:
   Auto   - Let aba choose the registry (recommended).
@@ -1269,6 +1409,12 @@ Registry Type:
 Retry Count:
   How many times to retry failed oc-mirror operations.
   0 = no retries, or set any count (default: 1)."
+		fi
+
+		if [[ ${#_menu_items[@]} -eq 0 ]]; then
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+				--msgbox "No settings available in this mode." 0 0
+			return 0
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
@@ -1284,10 +1430,8 @@ Retry Count:
 		case "$rc" in
 			2)
 				show_help "$TUI2_TITLE_SETTINGS" \
-"Auto-answer (-y):
-  When ON, aba commands run without confirmation prompts.
-  When OFF, you will be asked to confirm each action.
-${_help_extra}
+"${_help_extra:-No settings available in this mode.}
+
 Toggle a setting by selecting it and pressing Enter."
 				continue
 				;;
@@ -1303,20 +1447,6 @@ Toggle a setting by selecting it and pressing Enter."
 
 		case "$choice" in
 			1)
-				# Toggle: OFF ↔ ON (like v1)
-				raw=$(_tui_abaconf_raw_ask)
-				case "${raw,,}" in
-					yes)
-						_tui_settings_persist_ask_mode always
-						tui_log "Settings: Auto-answer toggled OFF"
-						;;
-					*)
-						_tui_settings_persist_ask_mode yes
-						tui_log "Settings: Auto-answer toggled ON"
-						;;
-				esac
-				;;
-			2)
 				# Toggle in-memory: auto → quay → docker → auto
 				case "$_TUI_REG_VENDOR" in
 					auto)   _TUI_REG_VENDOR="quay";   tui_log "Settings: Registry type toggled to Quay" ;;
@@ -1333,7 +1463,7 @@ Toggle a setting by selecting it and pressing Enter."
 					replace-value-conf -q -n reg_vendor -v "$_TUI_REG_VENDOR" -f "$vf"
 				fi
 				;;
-			3)
+			2)
 				# Toggle: 0 → 1 → 2 → 5 → 0
 				case "${_TUI_RETRY_COUNT:-1}" in
 					0) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count toggled to 1" ;;
@@ -1342,6 +1472,7 @@ Toggle a setting by selecting it and pressing Enter."
 					5) _TUI_RETRY_COUNT=0; tui_log "Settings: Retry count toggled to OFF" ;;
 					*) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count reset to 1" ;;
 				esac
+				_tui_persist_retry_count "$_TUI_RETRY_COUNT"
 				;;
 		esac
 	done

@@ -947,6 +947,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--shell" ]; then
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND output=shell"
+		upgrade_shell="--shell"
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
 		opt_force="--force"
@@ -1255,6 +1256,7 @@ if [ "$cur_target" ]; then
 			[ "$opt_force" ] && upgrade_args+=(--force)
 			[ "$upgrade_dry_run" ] && upgrade_args+=($upgrade_dry_run)
 			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
+			[ "$upgrade_shell" ] && upgrade_args+=($upgrade_shell)
 			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
 			exit
 		;;
