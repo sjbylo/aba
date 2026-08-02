@@ -389,8 +389,9 @@ if [ ! "$upgrade_already_running" ]; then
 				if [ "$osus_upstream" ]; then
 					aba_success "OSUS configured — upgrade will use local update graph"
 					upgrade_cmd="oc adm upgrade --to $target_ver $opt_force $_opt_warn"
-					# OSUS install patches CA, proxy, trust -- operators need time to reconcile
-					aba_wait_show "Waiting for cluster operators to stabilize" 10 180 cluster_is_ready
+				# OSUS install patches CA, proxy, trust -- give the cluster time to settle
+				sleep 15
+				aba_wait_show "Waiting for cluster to finish reconciling" 10 300 cluster_not_progressing
 				fi
 			fi
 		fi
