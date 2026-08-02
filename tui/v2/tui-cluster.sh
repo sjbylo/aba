@@ -2291,6 +2291,7 @@ _day2_login() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	tui_log "Cluster Login Terminal: $cl_display"
 
+	_tui_redirect_restore
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Cluster Login Terminal: $cl_display"
@@ -2308,7 +2309,10 @@ _day2_login() {
 		echo
 		_rcfile=$(mktemp)
 		cat > "$_rcfile" <<-'RCEOF'
+		[ -f /etc/bashrc ] && source /etc/bashrc
+		[ -f /usr/share/bash-completion/bash_completion ] && source /usr/share/bash-completion/bash_completion
 		_oc_ns() { oc config view --minify -o jsonpath='{..namespace}' 2>/dev/null; }
+		source <(oc completion bash 2>/dev/null) 2>/dev/null
 		RCEOF
 		echo "PS1='[$cl_display|\$(_oc_ns)] "'\$ '"'" >> "$_rcfile"
 		echo "trap 'rm -f $_rcfile' EXIT" >> "$_rcfile"
@@ -2319,6 +2323,7 @@ _day2_login() {
 
 	echo
 	read -rp "Press ENTER to return to TUI..."
+	_tui_redirect_activate
 }
 
 # --- SSH into Rendezvous Server ---
@@ -2330,6 +2335,7 @@ _day2_ssh() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	tui_log "SSH into Rendezvous Server of $cl_display"
 
+	_tui_redirect_restore
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  SSH into Rendezvous Server of: $cl_display"
@@ -2337,14 +2343,44 @@ _day2_ssh() {
 	echo "═══════════════════════════════════════════════════════════════"
 	echo
 
-	cd "$ABA_ROOT"
+	cd "$ABA_ROOT/$SELECTED_CLUSTER"
+
+	# Read SSH key and rendezvous IP from cluster config
+	local _ssh_key _ssh_ip
+	_ssh_key=$(source <(normalize-cluster-conf) && echo "$ssh_key_file")
+	_ssh_ip=$(cat iso-agent-based/rendezvousIP 2>/dev/null)
+
+	if [[ -z "$_ssh_ip" ]]; then
+		echo "Error: rendezvous IP not found for $cl_display"
+		read -rp "Press ENTER to return to TUI..."
+		_tui_redirect_activate
+		return 1
+	fi
+
+	aba_info "Running: ssh -i $_ssh_key core@$_ssh_ip"
+
+	# SSH with session-only KUBECONFIG and oc completion (no changes to core user's env)
 	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
-	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&-
+	ssh -t -F ~/.aba/ssh.conf -i "$_ssh_key" core@"$_ssh_ip" \
+		"bash --rcfile <(echo '
+source /etc/bashrc 2>/dev/null
+_kc=\$(sudo find /etc/kubernetes -name lb-ext.kubeconfig 2>/dev/null | head -1)
+if [ -n \"\$_kc\" ]; then
+	_tmp=\$(mktemp)
+	sudo cp \"\$_kc\" \"\$_tmp\" && chmod 600 \"\$_tmp\"
+	export KUBECONFIG=\"\$_tmp\"
+	trap \"rm -f \$_tmp\" EXIT
+fi
+source <(oc completion bash 2>/dev/null) 2>/dev/null
+unset _kc _tmp
+') -i" {ABA_TUI_FLOCK_FD}>&-
 	local _ssh_rc=$?
 	[[ $_ssh_rc -ne 0 ]] && echo -e "\n\e[31mSSH failed (exit code $_ssh_rc)\e[0m"
 
+	cd "$ABA_ROOT"
 	echo
 	read -rp "Press ENTER to return to TUI..."
+	_tui_redirect_activate
 }
 
 # Pre-flight: check for upgrade gates that require manual acknowledgment.

@@ -322,6 +322,10 @@ unset -f _tick
 sleep 0.3
 clear
 
+# Blanket redirect: capture all stray stdout/stderr to log, preventing TUI corruption.
+# dlg(), show_help(), _exec_in_terminal() temporarily restore the terminal as needed.
+_tui_redirect_init
+
 # =============================================================================
 # Mode Detection
 # =============================================================================

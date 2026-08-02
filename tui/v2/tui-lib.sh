@@ -35,6 +35,34 @@ tui_log() {
 }
 
 # =============================================================================
+# Blanket stdout/stderr redirect — prevent stray output from corrupting TUI
+# =============================================================================
+# After _tui_redirect_init, ALL stdout/stderr goes to the log file.
+# dlg(), show_help(), and _exec_in_terminal() temporarily restore the terminal
+# for dialog rendering / interactive commands, then re-redirect afterward.
+# FD 5 = saved original stdout, FD 6 = saved original stderr.
+
+_TUI_REDIRECT_ACTIVE=""
+
+_tui_redirect_init() {
+	exec 5>&1 6>&2
+	exec 1>>"$_TUI_LOG_FILE" 2>>"$_TUI_LOG_FILE"
+	_TUI_REDIRECT_ACTIVE=1
+}
+
+_tui_redirect_restore() {
+	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		exec 1>&5 2>&6
+	fi
+}
+
+_tui_redirect_activate() {
+	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		exec 1>>"$_TUI_LOG_FILE" 2>>"$_TUI_LOG_FILE"
+	fi
+}
+
+# =============================================================================
 # DISCO mode filters — strip public/internet values from config fields
 # =============================================================================
 
@@ -314,6 +342,17 @@ dlg() {
 	fi
 
 	# Close the flock fd so dialog doesn't inherit it (prevents orphaned lock on kill)
+	# Blanket redirect: save caller's stderr (may be $_TUI_TMP from `dlg ... 2>"$_TUI_TMP"`),
+	# restore terminal for rendering, route dialog selection output to saved FD via --output-fd.
+	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		exec 7>&2
+		_tui_redirect_restore
+		dialog --no-shadow --colors --no-collapse --tab-correct --output-fd 7 "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
+		local _dlg_rc=$?
+		_tui_redirect_activate
+		exec 7>&-
+		return $_dlg_rc
+	fi
 	dialog --no-shadow --colors --no-collapse --tab-correct "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
 }
 
@@ -399,8 +438,10 @@ confirm_quit() {
 show_help() {
 	local title="$1"
 	local body="$2"
+	_tui_redirect_restore
 	dialog --no-shadow --colors --backtitle "$(ui_backtitle)" \
 		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 {ABA_TUI_FLOCK_FD}>&- || true
+	_tui_redirect_activate
 }
 
 # =============================================================================
@@ -686,11 +727,14 @@ _exec_in_terminal() {
 	local _title="${2:-}"
 	local post_cmd_hook="${3:-}"
 
+	_tui_redirect_restore
+
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
 	if [[ "$cmd" =~ [\`\$\;\|\>\<]|'&&' ]]; then
 		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
 		echo "ERROR: Command blocked — contains invalid characters."
 		read -rp "Press ENTER to return to TUI..."
+		_tui_redirect_activate
 		return 1
 	fi
 
@@ -701,7 +745,6 @@ _exec_in_terminal() {
 
 	tui_log "Executing in terminal: $cmd"
 	cd "$ABA_ROOT"
-
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Executing: $cmd"
@@ -731,23 +774,25 @@ _exec_in_terminal() {
 	fi
 
 	echo
+	local _ret=0
 	if [[ "$_term_interrupted" == "true" ]]; then
 		echo "── Command interrupted (Ctrl-C) ──"
 		echo
 		read -rp "Press ENTER to continue..."
-		return 1
+		_ret=1
 	elif [[ $exit_code -eq 0 ]]; then
 		echo "── Command completed successfully ──"
 		echo
 		read -rp "Press ENTER to continue..."
-		return 0
+		_ret=0
 	else
 		echo "── Command FAILED (exit code: $exit_code) ──"
 		echo
 		read -rp "Press R to retry, ENTER to return to menu... " _reply
-		[[ "$_reply" == [Rr] ]] && return 2
-		return 1
+		[[ "$_reply" == [Rr] ]] && _ret=2 || _ret=1
 	fi
+	_tui_redirect_activate
+	return $_ret
 }
 
 # =============================================================================
@@ -1479,6 +1524,8 @@ offer_editor() {
 _TUI_START_EPOCH=$(date +%s)
 
 _show_v2_exit_summary() {
+	_tui_redirect_restore
+	clear
 	echo "TUI v2 complete."
 	echo
 	local f mod_epoch shown=0
