@@ -1044,8 +1044,7 @@ is_bundle_mode() {
 	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
-# Feedback / issue submission via GitHub.
-# Tiered: gh CLI (direct submit) > browser > show URL.
+# Feedback: show GitHub URLs, try to open in browser if available.
 _tui_feedback() {
 	local gh_url="https://github.com/sjbylo/aba"
 	local choice
@@ -1069,153 +1068,18 @@ _tui_feedback() {
 	esac
 	[[ -z "$url" ]] && return
 
-	# For "Report an issue" with gh CLI: collect and submit directly
-	if [[ "$choice" == "I" ]] && _tui_feedback_try_gh; then
-		return
-	fi
-
-	# Fallback: open in browser or show URL with reason
-	_tui_feedback_show_url "$url"
-	tui_log "Feedback: showed URL $url"
-}
-
-# Try to submit an issue directly via gh CLI.
-# Returns 0 if submitted, 1 if gh unavailable/unauthenticated.
-_tui_feedback_try_gh() {
-	local gh_url="https://github.com/sjbylo/aba"
-
-	if [[ "${_TUI_INET:-no}" != "yes" ]]; then
-		return 1
-	fi
-
-	if ! command -v gh &>/dev/null; then
-		dlg --backtitle "$(ui_backtitle)" --title "Install GitHub CLI" \
-			--yes-label "Install" --no-label "Skip" \
-			--yesno "The GitHub CLI (gh) is needed to submit issues directly.\n\nThis will add the official GitHub CLI repository and\ninstall the 'gh' package via dnf.\n\nProceed?" 0 0
-		if [[ $? -ne 0 ]]; then
-			return 1
-		fi
-
-		local _gh_log
-		_gh_log=$(mktemp)
-		(
-			echo "Adding GitHub CLI repository..."
-			sudo dnf install -y 'dnf-command(config-manager)' 2>&1 || true
-			sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo 2>&1
-			echo ""
-			echo "Installing gh..."
-			sudo dnf install -y gh 2>&1
-		) 2>&1 | tee "$_gh_log" | dlg --backtitle "$(ui_backtitle)" \
-			--title "Installing GitHub CLI" \
-			--progressbox "Installing gh via dnf..." 20 70
-		local inst_rc=${PIPESTATUS[0]}
-
-		if [[ $inst_rc -ne 0 ]] || ! command -v gh &>/dev/null; then
-			local _tail
-			_tail=$(tail -10 "$_gh_log" 2>/dev/null)
-			rm -f "$_gh_log"
-			dlg --backtitle "$(ui_backtitle)" --title "Installation Failed" \
-				--msgbox "GitHub CLI installation failed.\n\n${_tail}\n\nFalling back to URL." 0 0
-			return 1
-		fi
-		rm -f "$_gh_log"
-		tui_log "Feedback: gh installed successfully"
-	fi
-
-	if ! gh auth status --hostname github.com &>/dev/null; then
-		dlg --backtitle "$(ui_backtitle)" --title "GitHub Login" \
-			--yes-label "Login" --no-label "Skip" \
-			--yesno "To submit issues directly from the TUI, a one-time\nGitHub CLI login is needed.\n\nA code will be shown — enter it at github.com/login/device\n(you can use your phone or any browser).\n\nProceed with login?" 0 0
-		if [[ $? -ne 0 ]]; then
-			return 1
-		fi
-
-		_tui_redirect_restore
-		clear
-		echo "═══════════════════════════════════════════════════════════════"
-		echo "  GitHub CLI Login (one-time setup)"
-		echo "═══════════════════════════════════════════════════════════════"
-		echo
-		gh auth login --hostname github.com --git-protocol https --web
-		local auth_rc=$?
-		echo
-		echo "Press ENTER to return to the TUI..."
-		read -r
-		_tui_redirect_activate
-
-		if [[ $auth_rc -ne 0 ]] || ! gh auth status --hostname github.com &>/dev/null; then
-			dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-				--msgbox "GitHub login was not completed.\nFalling back to URL." 0 0
-			return 1
-		fi
-		tui_log "Feedback: gh auth login succeeded"
-	fi
-
-	# Authenticated — collect title and body
-	local title="" body=""
-
-	dlg --backtitle "$(ui_backtitle)" --title "Report an Issue" \
-		--inputbox "Issue title:" 0 70 "" 2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return 0
-	title=$(<"$_TUI_TMP")
-	[[ -z "$title" ]] && return 0
-
-	dlg --backtitle "$(ui_backtitle)" --title "Report an Issue" \
-		--inputbox "Description (optional):" 0 70 "" 2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return 0
-	body=$(<"$_TUI_TMP")
-
-	# Add ABA version context
-	local aba_ver=""
-	aba_ver=$(cd "$ABA_ROOT" && git describe --tags --always 2>/dev/null) || true
-	[[ -n "$aba_ver" ]] && body="${body:+$body\n\n}ABA version: $aba_ver"
-
-	dlg --backtitle "$(ui_backtitle)" --infobox "Submitting issue..." 3 30
-
-	local issue_url=""
-	issue_url=$(gh issue create --repo sjbylo/aba \
-		--title "$title" --body "$body" 2>/dev/null) || true
-
-	if [[ -n "$issue_url" && "$issue_url" == http* ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "Issue Created" \
-			--msgbox "Issue submitted successfully!\n\n$issue_url" 0 0
-		tui_log "Feedback: issue created at $issue_url"
-	else
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "Failed to submit issue.\nPlease try manually:\n\n$gh_url/issues/new" 0 0
-		tui_log "Feedback: gh issue create failed"
-	fi
-	return 0
-}
-
-# Show a URL with context about why we can't do better.
-_tui_feedback_show_url() {
-	local url="$1"
-	local reason=""
-
-	if [[ "${_TUI_INET:-no}" != "yes" ]]; then
-		reason="No internet connection detected."
-	elif ! command -v gh &>/dev/null; then
-		reason="GitHub CLI (gh) is not installed."
-	elif ! gh auth status --hostname github.com &>/dev/null 2>&1; then
-		reason="GitHub CLI is not authenticated."
-	fi
-
-	local msg=""
-	if [[ -n "$reason" ]]; then
-		msg="$reason\n\nOpen this URL in a browser when you have access:\n\n$url"
-	else
-		msg="Open this URL in a browser:\n\n$url"
-	fi
-
 	if [[ "${_TUI_INET:-no}" == "yes" ]] && command -v xdg-open &>/dev/null; then
 		xdg-open "$url" &>/dev/null &
 		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
 			--msgbox "Opening in your browser:\n\n$url" 0 0
+	elif [[ "${_TUI_INET:-no}" != "yes" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "No internet connection detected.\n\nOpen this URL in a browser when you have access:\n\n$url" 0 0
 	else
 		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "$msg" 0 0
+			--msgbox "Open this URL in a browser:\n\n$url" 0 0
 	fi
+	tui_log "Feedback: $url"
 }
 
 # Append ` --retry N` when _TUI_RETRY_COUNT > 0 (for oc-mirror operations).
