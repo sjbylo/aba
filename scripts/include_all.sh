@@ -498,6 +498,18 @@ cluster_is_accessible() {
 	return 0
 }
 
+# Check that ClusterVersion is not actively reconciling.
+# Use after changes that trigger CVO reconciliation (OSUS install, CA/proxy patches)
+# to wait until the CVO settles before issuing an upgrade command.
+cluster_not_progressing() {
+	local _cv_progressing
+
+	aba_debug "Running: oc get clusterversion (progressing check)"
+
+	_cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null)
+	[ "$_cv_progressing" = "False" ]
+}
+
 # Auto-detect that a cluster install has completed.
 # If kubeconfig exists but .install-complete is missing, probe the cluster API.
 # If the cluster is ready, create the marker and externalize state.
