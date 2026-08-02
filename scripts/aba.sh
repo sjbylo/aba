@@ -1030,6 +1030,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift
+	elif [ "$1" = "--allow-not-recommended" ]; then
+		upgrade_allow_not_recommended="--allow-not-recommended"
+		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
 		shift
@@ -1257,6 +1260,7 @@ if [ "$cur_target" ]; then
 			[ "$upgrade_dry_run" ] && upgrade_args+=($upgrade_dry_run)
 			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
 			[ "$upgrade_shell" ] && upgrade_args+=($upgrade_shell)
+			[ "$upgrade_allow_not_recommended" ] && upgrade_args+=($upgrade_allow_not_recommended)
 			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
 			exit
 		;;

@@ -64,6 +64,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   aba [-d <cluster>] upgrade
       --to <version>                      # Target OCP version (e.g. 4.22.2). Falls back to mirror.conf:ocp_upgrade_to
       --force                             # Bypass cluster-side upgrade guards (NOT for production!)
+      --allow-not-recommended             # Skip interactive confirmation for conditional upgrades
       --dry-run                           # Show what would happen without executing
       --dry-run --shell                   # Machine-readable output (sourceable key=value pairs)
       --skip-day2                         # Don't auto-run day2 even if IDMS is missing

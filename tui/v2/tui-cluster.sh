@@ -2423,7 +2423,7 @@ _day2_upgrade() {
 	# Fetch available versions via machine-readable output
 	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
 	local _shell_out _dry_rc=0
-	_shell_out=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run --shell 2>&1) || _dry_rc=$?
+	_shell_out=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run --shell 2>/dev/null) || _dry_rc=$?
 	eval "$_shell_out"
 
 	local _sorted=() _conditional=()
@@ -2456,7 +2456,14 @@ _day2_upgrade() {
 	fi
 
 	local opt_warnings="OFF" opt_force="OFF"
-	local default_item="${_sorted[0]:-${_conditional[0]:-M}}"
+	local _cur_minor="${upgrade_current_ver%.*}"
+
+	# Default to the safest choice: z-stream first, then minor, then conditional
+	local default_item="M"
+	for v in "${_sorted[@]}"; do
+		[[ "${v%.*}" == "$_cur_minor" ]] && default_item="$v" && break
+	done
+	[[ "$default_item" == "M" ]] && default_item="${_sorted[0]:-${_conditional[0]:-M}}"
 
 	while :; do
 		# Build menu header
@@ -2464,28 +2471,49 @@ _day2_upgrade() {
 		[[ -n "${upgrade_channel:-}" ]] && _header="$_header (${upgrade_channel})"
 		[[ "${upgrade_osus:-}" == "true" ]] && _header="$_header [OSUS]"
 
-		# Build version items
-		local items=() idx=0
+		# Classify versions into z-stream and minor upgrade groups
+		local _zstream=() _minor=()
 		for v in "${_sorted[@]}"; do
-			if [[ $idx -eq 0 ]]; then
-				items+=("$v" "(newest)")
+			if [[ "${v%.*}" == "$_cur_minor" ]]; then
+				_zstream+=("$v")
 			else
-				items+=("$v" "")
+				_minor+=("$v")
 			fi
-			idx=$(( idx + 1 ))
 		done
 
-		# Show conditional versions when warnings toggle is ON
-		if [[ "$opt_warnings" == "ON" ]]; then
+		# Build version items: z-stream first (safest), then minor
+		local items=() _first=1
+		if [[ ${#_zstream[@]} -gt 0 ]]; then
+			items+=("" "──── Z-stream (${_cur_minor}) ─────────────")
+			for v in "${_zstream[@]}"; do
+				items+=("$v" "")
+			done
+		fi
+		if [[ ${#_minor[@]} -gt 0 ]]; then
+			local _minor_ver="${_minor[0]%.*}"
+			items+=("" "──── Minor upgrade (${_cur_minor} → ${_minor_ver}) ──")
+			for v in "${_minor[@]}"; do
+				if [[ $_first -eq 1 ]]; then
+					items+=("$v" "(newest)")
+					_first=0
+				else
+					items+=("$v" "")
+				fi
+			done
+		fi
+
+		# Show conditional versions when toggle is ON
+		if [[ "$opt_warnings" == "ON" && ${#_conditional[@]} -gt 0 ]]; then
+			items+=("" "──── Conditional (not recommended) ───")
 			for v in "${_conditional[@]}"; do
-				items+=("$v" "(!) not recommended")
+				items+=("$v" "(!) known issues")
 			done
 		fi
 
 		items+=("M" "Manual entry...")
 		items+=("" "──── Options ────────────────────")
-		items+=("W" "Warnings:  $opt_warnings")
-		items+=("F" "Force:     $opt_force")
+		items+=("W" "Include conditional versions:  $opt_warnings")
+		items+=("F" "Force (bypass safety checks):  $opt_force")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
 			--ok-label "Upgrade" \
@@ -2526,6 +2554,10 @@ _day2_upgrade() {
 		elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
 			_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
 			local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $choice"
+			# If the version is conditional, tell ABA core to skip the redundant interactive question
+			local _is_conditional=
+			for _cv in "${_conditional[@]}"; do [[ "$_cv" == "$choice" ]] && _is_conditional=1 && break; done
+			[[ "$_is_conditional" ]] && _cmd="$_cmd --allow-not-recommended"
 			[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
 			confirm_and_execute "$_cmd" \
 				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"

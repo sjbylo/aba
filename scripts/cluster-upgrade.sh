@@ -10,7 +10,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $* from $PWD"
 
-aba_warn "'aba upgrade' is in BETA and may change in future releases."
+aba_warn "'aba upgrade' is in BETA and may change in future releases." >&2
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
@@ -20,6 +20,7 @@ opt_force=
 opt_dry_run=
 opt_skip_day2=
 opt_shell=
+opt_allow_not_recommended=
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -47,6 +48,10 @@ while [ $# -gt 0 ]; do
 			opt_shell=1
 			shift
 			;;
+		--allow-not-recommended)
+			opt_allow_not_recommended=1
+			shift
+			;;
 		*)
 			aba_abort "Unknown option: $1. See: aba -d <cluster> upgrade --help"
 			;;
@@ -69,7 +74,7 @@ fi
 export KUBECONFIG
 
 # Preflight: cluster access (fast TCP probe, then oc)
-aba_info "Checking cluster access ..."
+aba_info "Checking cluster access ..." >&2
 cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 aba_debug "Running: oc whoami --request-timeout='20s'"
 if ! oc whoami --request-timeout='20s' >/dev/null; then
@@ -83,7 +88,7 @@ current_ver=$(oc get clusterversion version \
 	-o jsonpath='{.status.history[?(@.state=="Completed")].version}' 2>/dev/null \
 	| awk '{print $1}') || current_ver=""
 [ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version (no completed version in history)"
-aba_info "Current cluster version: $current_ver"
+aba_info "Current cluster version: $current_ver" >&2
 
 # Query available versions from mirror.
 # Tags follow the pattern: <version>-<arch> (e.g. 4.21.12-x86_64)
@@ -483,7 +488,11 @@ if [ ! "$upgrade_already_running" ]; then
 		aba_warn "Version $target_ver is a conditional upgrade (has known issues):"
 		[ -n "$_risk_info" ] && echo "$_risk_info"
 		echo
-		ask -n "Proceed with unrecommended upgrade to $target_ver despite known issues" || exit 1
+		if [ "$opt_allow_not_recommended" ]; then
+			aba_info "Proceeding (--allow-not-recommended was specified)."
+		else
+			ask -n "Proceed with unrecommended upgrade to $target_ver despite known issues" || exit 1
+		fi
 		upgrade_cmd="$upgrade_cmd --allow-not-recommended"
 	fi
 
