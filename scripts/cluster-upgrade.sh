@@ -444,7 +444,8 @@ if [ ! "$upgrade_already_running" ]; then
 		aba_warn "Version $target_ver is a conditional upgrade (has known issues):"
 		[ -n "$_risk_info" ] && echo "$_risk_info"
 		echo
-		ask -n "Proceed with upgrade to $target_ver despite known issues" || exit 1
+		ask -n "Proceed with unrecommended upgrade to $target_ver despite known issues" || exit 1
+		upgrade_cmd="$upgrade_cmd --allow-not-recommended"
 	fi
 
 	# Execute upgrade
