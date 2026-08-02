@@ -1591,17 +1591,20 @@ aba_wait_show() (
 	return "$_rc"
 )
 
+# Semver-aware sort (stdin -> stdout). Handles pre-release: ec < rc < GA.
+# sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver);
+# the -zzz trick tags GA versions so they sort after their pre-release siblings.
+_semver_sort() {
+	sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//'
+}
+
 # Check if version1 is strictly greater than version2 (semver-aware).
-# sort -V puts pre-release suffixes above bare versions (wrong for semver);
-# the -zzz trick makes GA sort after its pre-release siblings.
 is_version_greater() {
 	local version1=$1
 	local version2=$2
 
 	local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" \
-		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
-		| sort -V \
-		| sed 's/-zzz$//' \
+		| _semver_sort \
 		| tr "\n" "|")
 
 	[[ "$sorted_versions" != "$version1|$version2|" ]]
@@ -1845,8 +1848,6 @@ _fetch_graph_cached() {
 # Args:
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
-# sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver).
-# The -zzz trick tags GA versions so they sort after their pre-release siblings.
 ############################################
 fetch_all_versions() {
 	local channel="${1:-stable}"
@@ -1855,9 +1856,7 @@ fetch_all_versions() {
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
 		| grep "^${minor}\." \
-		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
-		| sort -V \
-		| sed 's/-zzz$//'
+		| _semver_sort
 }
 
 ############################################
@@ -2061,7 +2060,7 @@ verify_upgrade_path_exists() {
 
 	# Output diagnostic for callers to format their own error message
 	local lowest
-	lowest=$(echo "$graph_versions" | sort -V | head -1)
+	lowest=$(echo "$graph_versions" | _semver_sort | head -1)
 	echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
 
 	return 1
@@ -2139,7 +2138,7 @@ fetch_upgrade_targets() {
 			# Find the latest version in this minor
 			local target
 			target=$(echo "$graph_versions" | grep "^${probe_minor}\." |
-				sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//' | tail -n1)
+				_semver_sort | tail -n1)
 			if [[ -n "$target" ]]; then
 				if [[ $next_label -eq 0 ]]; then
 					printf "next\t%s\n" "$target"

@@ -19,6 +19,7 @@ target_ver=
 opt_force=
 opt_dry_run=
 opt_skip_day2=
+opt_shell=
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -40,6 +41,10 @@ while [ $# -gt 0 ]; do
 			;;
 		--skip-day2)
 			opt_skip_day2=1
+			shift
+			;;
+		--shell)
+			opt_shell=1
 			shift
 			;;
 		*)
@@ -93,9 +98,43 @@ _list_mirror_versions() {
 	rm -f "$ABA_TMP/skopeo-tags-err.$$"
 	echo "$_tags_json" \
 		| grep -oP '"(\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?)-'"$arch"'"' \
-		| tr -d '"' | sed "s/-${arch}$//" | sort -V
+		| tr -d '"' | sed "s/-${arch}$//" | _semver_sort
 }
 
+
+# Machine-readable output: --dry-run --shell (sourceable key=value pairs)
+if [ "$opt_shell" ] && [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
+	# Query cluster graph via structured JSON (oc adm upgrade has no -o json)
+	_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
+	_graph_conditional=""
+	if [ -n "$_cv_json" ]; then
+		_graph_conditional=$(echo "$_cv_json" | jq -r \
+			'.status.conditionalUpdates[]?.release.version' 2>/dev/null) || true
+	fi
+
+	# Collect mirror versions higher than current, classify and pre-sort descending
+	_recommended=() _cond_in_mirror=()
+	while IFS= read -r v; do
+		[ -z "$v" ] && continue
+		is_version_greater "$v" "$current_ver" || continue
+		if [ -n "$_graph_conditional" ] && echo "$_graph_conditional" | grep -qxF "$v"; then
+			_cond_in_mirror+=("$v")
+		else
+			_recommended+=("$v")
+		fi
+	done < <(_list_mirror_versions | tac)
+
+	# Channel and OSUS status
+	_channel=$(echo "$_cv_json" | jq -r '.spec.channel // ""' 2>/dev/null) || _channel=""
+	_osus_upstream=$(echo "$_cv_json" | jq -r '.spec.upstream // ""' 2>/dev/null) || _osus_upstream=""
+
+	echo "upgrade_current_ver=$current_ver"
+	echo "upgrade_channel=\"$_channel\""
+	[ -n "$_osus_upstream" ] && echo "upgrade_osus=true" || echo "upgrade_osus=false"
+	echo "upgrade_versions=\"${_recommended[*]}\""
+	echo "upgrade_conditional=\"${_cond_in_mirror[*]}\""
+	exit 0
+fi
 # Version-discovery mode: --dry-run without --to just lists what's available
 if [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 	osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || true
@@ -405,8 +444,8 @@ if [ ! "$upgrade_already_running" ]; then
 
 	# OSUS is configured but target version not in graph after waiting
 	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
-		_all_available=$(echo "$_available_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
-		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
+		_all_available=$(echo "$_available_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
+		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
 		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
 			${_all_available:+"Available upgrades: $_all_available"} \
 			${_all_conditional:+"Conditional upgrades: $_all_conditional"} \
