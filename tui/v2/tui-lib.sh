@@ -574,26 +574,14 @@ _format_cmd_display() {
 
 # Persist execution mode preference to ~/.aba/config
 _tui_persist_exec_mode() {
-	local mode="$1"
 	local conf="$HOME/.aba/config"
-	mkdir -p "$HOME/.aba"
-	if [[ -f "$conf" ]] && grep -q '^TUI_EXEC_MODE=' "$conf"; then
-		sed -i "s/^TUI_EXEC_MODE=.*/TUI_EXEC_MODE=$mode/" "$conf"
-	else
-		echo "TUI_EXEC_MODE=$mode" >> "$conf"
-	fi
+	[[ -f "$conf" ]] && replace-value-conf -q -n TUI_EXEC_MODE -v "$1" -f "$conf"
 }
 
 # Persist oc-mirror retry count to ~/.aba/config
 _tui_persist_retry_count() {
-	local count="$1"
 	local conf="$HOME/.aba/config"
-	mkdir -p "$HOME/.aba"
-	if [[ -f "$conf" ]] && grep -q '^TUI_OC_MIRROR_RETRY_COUNT=' "$conf"; then
-		sed -i "s/^TUI_OC_MIRROR_RETRY_COUNT=.*/TUI_OC_MIRROR_RETRY_COUNT=$count/" "$conf"
-	else
-		echo "TUI_OC_MIRROR_RETRY_COUNT=$count" >> "$conf"
-	fi
+	[[ -f "$conf" ]] && replace-value-conf -q -n TUI_OC_MIRROR_RETRY_COUNT -v "$1" -f "$conf"
 }
 
 confirm_and_execute() {
