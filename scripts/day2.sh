@@ -153,7 +153,7 @@ $(cat "$regcreds_dir/rootCA.pem")"
 
 	aba_debug "Running: oc get imagestream -n openshift oauth-proxy -o yaml"
 	if oc get imagestream -n openshift oauth-proxy -o yaml 2>&1 | grep -qi "unknown authority"; then
-		aba_info "'Unknown authority' found in imagestream/oauth-proxy in namespace openshift."
+		aba_info "Waiting for registry CA trust to propagate to the cluster ..."
 		aba_debug "Running: oc delete imagestream -n openshift oauth-proxy"
 		oc delete imagestream -n openshift oauth-proxy >/dev/null 2>&1 || true
 
@@ -166,7 +166,7 @@ $(cat "$regcreds_dir/rootCA.pem")"
 			aba_abort "Timed out waiting for oauth-proxy imagestream recreation (6 min)"
 		fi
 	else
-		aba_info "'Unknown authority' not found in imagestream/oauth-proxy -n openshift.  Assuming already fixed."
+		aba_info "Registry CA trust already propagated."
 	fi
 	# Note, might still need to restart operators, e.g. 'oc delete pod -l name=jaeger-operator -n openshift-distributed-tracing'
 else
