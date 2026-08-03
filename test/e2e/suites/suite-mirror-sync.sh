@@ -159,7 +159,7 @@ e2e_run_remote "Verify port 5000 persisted across restart" \
 test_end
 
 # ============================================================================
-# 4. Quay-ng [ALPHA]: install on remote host, verify, uninstall
+# 4. Quay-ng [BETA]: install on remote host, verify, uninstall
 # ============================================================================
 test_begin "Quay-ng: remote install, verify, uninstall"
 

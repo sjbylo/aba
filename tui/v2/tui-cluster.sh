@@ -2475,7 +2475,7 @@ _day2_upgrade() {
 		if [[ "${upgrade_osus:-}" == "true" ]]; then
 			_header="$_header [OSUS]"
 		else
-			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths"
+			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths (recommended)"
 		fi
 
 		# Classify versions into z-stream and minor upgrade groups
@@ -2534,11 +2534,18 @@ _day2_upgrade() {
 
 		case $rc in
 			2)
-				# Help: show human-readable dry-run output
-				local _help_out
-				_help_out=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || true
-				dlg --backtitle "$(ui_backtitle)" --title "Available Versions (raw)" \
-					--msgbox "$_help_out" 0 0
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Help" \
+					--msgbox "\
+Select a target version to upgrade the cluster.\n\n\
+Z-stream upgrades (e.g. 4.21.20 → 4.21.26) are patch updates\n\
+within the same minor version.\n\n\
+Minor upgrades (e.g. 4.21 → 4.22) move to a new feature release.\n\n\
+Versions marked (conditional) have known issues — selecting one\n\
+will show the details before proceeding.\n\n\
+The Force option bypasses cluster-side safety checks.\n\
+Only use Force in test/lab environments.\n\n\
+Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
+(recommended). Enforces admin acknowledgment gates." 0 0
 				continue
 				;;
 			1|255) return 1 ;;

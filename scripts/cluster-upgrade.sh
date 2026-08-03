@@ -492,7 +492,7 @@ if [ ! "$upgrade_already_running" ]; then
 		if [ "$_cincinnati_available" ]; then
 			echo
 			aba_info "The 'cincinnati-operator' package is available in OperatorHub."
-			if ask "Install OSUS (OpenShift Update Service) now before upgrading"; then
+			if ask "Install OSUS (OpenShift Update Service) now before upgrading (recommended)"; then
 				scripts/day2-config-osus.sh
 				osus_upstream=$(oc get clusterversion version \
 					-o jsonpath='{.spec.upstream}' 2>/dev/null) || true
