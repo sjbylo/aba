@@ -318,6 +318,7 @@ Navigation:
 		tui_advanced_menu
 		local _adv_rc=$?
 		[[ $_adv_rc -eq 2 ]] && return 2
+		[[ "$_TUI_MODE" != "DISCO" ]] && return 0
 		;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_view_isc "true"

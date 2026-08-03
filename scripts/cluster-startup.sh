@@ -33,7 +33,7 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 		_wait_rc=0
-		aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 300 _cluster_startup_api_up || _wait_rc=$?
+		aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up || _wait_rc=$?
 		if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 			aba_info "Aborted. Power on the servers and try again."
 			exit 0
@@ -50,7 +50,7 @@ fi
 if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 	aba_info Waiting for cluster API endpoint to become alive at $server_url ...
 	_wait_rc=0
-	aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 300 _cluster_startup_api_up || _wait_rc=$?
+	aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up || _wait_rc=$?
 	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 		aba_info "Aborted. Cluster may still be starting up."
 		exit 0
