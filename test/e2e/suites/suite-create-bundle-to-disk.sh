@@ -499,6 +499,13 @@ e2e_run_remote "Verify primed mirror.conf: reg_host=$DIS_HOST" \
 e2e_run_remote "Verify disco registry is reachable" \
     "curl -sSk https://$DIS_HOST:\$(grep '^reg_port=' ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf | cut -d= -f2)/v2/ | head -1"
 
+# Add DNS entries on disN so aba iso's preflight check can resolve the cluster
+_primed_node_ip="$(pool_node_ip)"
+e2e_run_remote "Add primed-sno DNS on disco" \
+    "printf 'address=/api.${PRIMED_SNO}.p${POOL_NUM}.${VM_BASE_DOMAIN}/${_primed_node_ip}\naddress=/.apps.${PRIMED_SNO}.p${POOL_NUM}.${VM_BASE_DOMAIN}/${_primed_node_ip}\n' | sudo tee /etc/dnsmasq.d/aba-${PRIMED_SNO}.conf && sudo systemctl restart dnsmasq"
+e2e_run_remote "Verify DNS resolves on disco" \
+    "dig +short api.${PRIMED_SNO}.p${POOL_NUM}.${VM_BASE_DOMAIN} | grep -q '${_primed_node_ip}'"
+
 # Generate ISO from primed configs (uses resolved mirror.conf → disco registry)
 e2e_run_remote "Generate ISO from primed SNO" \
     "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO iso"
@@ -521,6 +528,8 @@ e2e_run_remote "Delete $PRIMED_SNO VMs" \
     "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO delete"
 e2e_run_remote -q "Remove primed extract dir on disco" \
     "rm -rf ~/$PRIMED_EXTRACT_DIR $PRIMED_TAR"
+e2e_run_remote -q "Remove primed-sno DNS on disco" \
+    "sudo rm -f /etc/dnsmasq.d/aba-${PRIMED_SNO}.conf && sudo systemctl restart dnsmasq"
 
 test_end 0
 
