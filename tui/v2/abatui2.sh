@@ -762,6 +762,7 @@ Navigation:
 			;;
 		"$TUI2_CONNO_TAG_ADVANCED")
 			tui_advanced_menu
+			[[ "$_TUI_MODE" != "CONNO" ]] && return 0
 			default_item=""
 			;;
 		"$TUI2_CONNO_TAG_RECONFIGURE")
@@ -863,6 +864,7 @@ while :; do
 			;;
 		CONNO)
 			_conno_main
+			[[ "$_TUI_MODE" != "CONNO" ]] && continue
 			break
 			;;
 		DIRECT)

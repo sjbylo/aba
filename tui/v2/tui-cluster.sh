@@ -1929,7 +1929,7 @@ tui_advanced_menu() {
 		source <(normalize-aba-conf) 2>/dev/null || true
 		_plat_label="Platform Settings (${platform:-bm})"
 		adv_items+=("P" "$_plat_label")
-		if mirror_available; then
+		if [[ "${_TUI_MODE:-}" != "DIRECT" ]] && mirror_available; then
 			adv_items+=("U" "Uninstall Mirror Registry (destructive)")
 		fi
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
@@ -2054,8 +2054,7 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 					CONNO)
 						_TUI_MODE="DIRECT"
 						tui_log "Advanced: switching to DIRECT mode"
-						direct_main || true
-						_TUI_MODE="CONNO"
+						return 0
 						;;
 					DIRECT)
 						_TUI_MODE="CONNO"
@@ -2074,11 +2073,11 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 						--title "Warning: Switching to Fully Disconnected Mode" \
 						--defaultno \
 						--yesno "\
-Switching from Connected to Disconnected mode on the same host is not\n\
+Switching to Fully Disconnected mode on the same host is not\n\
 the standard workflow.\n\n\
-Disconnected mode is designed for fully disconnected (air-gapped)\n\
-environments. The recommended workflow is:\n\n\
-  1. Create an Install Bundle in Connected mode\n\
+Fully Disconnected mode is designed for air-gapped environments.\n\
+The recommended workflow is:\n\n\
+  1. Create an Install Bundle in Partially Disconnected (this) mode\n\
      (aba bundle, or aba save + aba tar)\n\
   2. Transfer the bundle to the disconnected environment\n\
   3. Unpack the bundle, install aba and run aba/TUI there\n\n\
@@ -2087,9 +2086,7 @@ Continue only if you know what you are doing." 0 0 || continue
 					_TUI_MODE="DISCO"
 					_TUI_DISCO_FROM_CONNO=true
 					tui_log "Advanced: switching to DISCO mode (user confirmed warning)"
-					disco_main || true
-					_TUI_MODE="CONNO"
-					_TUI_DISCO_FROM_CONNO=false
+					return 0
 				fi
 				;;
 		esac
@@ -2421,9 +2418,10 @@ _day2_upgrade() {
 	fi
 
 	# Fetch available versions via machine-readable output
-	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
-	local _shell_out _dry_rc=0
-	_shell_out=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run --shell 2>/dev/null) || _dry_rc=$?
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY...\n\n(If OSUS is installed, may need to wait for the update graph to refresh)" 0 0
+	local _shell_out _shell_err _dry_rc=0
+	_shell_err=$(mktemp)
+	_shell_out=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run --shell 2>"$_shell_err") || _dry_rc=$?
 	eval "$_shell_out"
 
 	local _sorted=() _conditional=()
@@ -2431,11 +2429,16 @@ _day2_upgrade() {
 	read -ra _conditional <<< "${upgrade_conditional:-}"
 
 	if [[ $_dry_rc -ne 0 && ${#_sorted[@]} -eq 0 ]]; then
-		local _raw_escaped="${_shell_out//$'\n'/\\n}"
+		local _err_msg
+		_err_msg=$(<"$_shell_err")
+		rm -f "$_shell_err"
+		_err_msg=$(echo "$_err_msg" | grep -v '^\[ABA\] Warning:' | sed 's/\[ABA\] //')
+		local _err_escaped="${_err_msg//$'\n'/\\n}"
 		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Check Failed" \
-			--msgbox "Failed to query available versions (exit $_dry_rc).\n\nCheck cluster connectivity and credentials.\n\nRaw output:\n${_raw_escaped:-(empty)}" 0 0
+			--msgbox "Failed to query available versions (exit $_dry_rc).\n\n${_err_escaped:-(unknown error)}" 0 0
 		return 1
 	fi
+	rm -f "$_shell_err"
 
 	if [[ ${#_sorted[@]} -eq 0 && ${#_conditional[@]} -eq 0 ]]; then
 		local _upgrade_hint=""
@@ -2469,7 +2472,11 @@ _day2_upgrade() {
 		# Build menu header
 		local _header="Current: ${upgrade_current_ver:-?}"
 		[[ -n "${upgrade_channel:-}" ]] && _header="$_header (${upgrade_channel})"
-		[[ "${upgrade_osus:-}" == "true" ]] && _header="$_header [OSUS]"
+		if [[ "${upgrade_osus:-}" == "true" ]]; then
+			_header="$_header [OSUS]"
+		else
+			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths"
+		fi
 
 		# Classify versions into z-stream and minor upgrade groups
 		local _zstream=() _minor=()

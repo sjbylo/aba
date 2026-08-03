@@ -1199,19 +1199,8 @@ _tui_settings_menu_retry() {
 }
 
 # Build a compact settings summary string for the menu item label.
-# DIRECT mode: "(ask)" — no mirror settings shown (Bug #131).
-# CONNO/DISCO:  "(ask, Docker, retry=2)" with color codes.
 _tui_settings_summary() {
-	local ask_short
-	local raw
-	raw=$(_tui_abaconf_raw_ask)
-	case "${raw,,}" in
-		yes) ask_short="-y" ;;
-		*)   ask_short="ask" ;;
-	esac
-
 	if [[ "${_TUI_MODE:-}" == "DIRECT" ]]; then
-		printf '(\Z6%s\Zn)' "$ask_short"
 		return
 	fi
 
@@ -1221,7 +1210,7 @@ _tui_settings_summary() {
 		docker) rv="Docker" ;;
 	esac
 
-	printf '(\Z6%s, %s, retry=%s\Zn)' "$ask_short" "$rv" "${_TUI_RETRY_COUNT:-1}"
+	printf '(\Z6%s, retry=%s\Zn)' "$rv" "${_TUI_RETRY_COUNT:-1}"
 }
 
 # Settings submenu -- v1-style toggle behavior.

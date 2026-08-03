@@ -675,7 +675,7 @@ mirror_prep_upgrade() {
 
 	# Fetch upgrade targets reachable from the current version
 	local _channel="${ocp_channel:-fast}"
-	local _targets _zstream="" _next="" _next1=""
+	local _zstream="" _next="" _next1=""
 	local _task_id="aba:upgrade-targets:${_current_ver}"
 
 	# Peek: is the background upgrade-target fetch done? Show infobox only if not.
@@ -737,7 +737,7 @@ mirror_prep_upgrade() {
 			local _ch="${_item##*|}"
 			[[ "$_fb_channels" != *"$_ch"* ]] && _fb_channels="${_fb_channels:+$_fb_channels, }$_ch"
 		done
-		if [[ -z "$_targets" ]]; then
+		if [[ -z "$_zstream" && -z "$_next" && -z "$_next1" ]]; then
 			dlg --backtitle "$(ui_backtitle)" --title "No Upgrades on ${_channel}" --msgbox \
 				"No upgrades available on the ${_channel} channel ... yet.\n\n\
 Items marked [switch to ...] will automatically\n\
@@ -932,7 +932,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
-		"Generating ImageSet configuration (operator catalogs may also be refreshed). Please wait." 5 60
+		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to download)" 0 0
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0

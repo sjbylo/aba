@@ -263,7 +263,7 @@ TUI2_MSG_PLATFORM_CONFIG_MISSING="%s configuration not found.\n\nExpected: %s\nR
 # Prompt / Message Text — Mirror / ISC
 # =============================================================================
 
-TUI2_MSG_ISC_GENERATING="Generating imageset-config.yaml (operator catalogs may also be refreshed).\n\nPlease wait."
+TUI2_MSG_ISC_GENERATING="Generating imageset-config.yaml...\n\n(May need to wait for operator catalog indexes to download)"
 TUI2_MSG_ISC_NOT_FOUND="imageset-config.yaml not found.\n\nFile: %s"
 TUI2_MSG_ISC_SAVED="imageset-config.yaml saved.\n\nABA will not overwrite your edits.\nUse 'Regenerate' to rebuild from aba.conf + mirror.conf."
 TUI2_MSG_ISC_RESET="imageset-config.yaml reset to auto-generated.\n\nIt will be regenerated from current settings on next use."
