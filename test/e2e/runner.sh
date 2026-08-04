@@ -786,6 +786,21 @@ _pre_suite_cleanup() {
 	fi
 
 	[ -n "$_had_cleanup" ] && echo "  Pre-suite cleanup complete."
+
+	# Clean up leftover ABA DNS/NTP on disN from a crashed/interrupted suite.
+	# Only airgapped-local-reg sets these up, but any suite may follow on the
+	# same pool.  Safe to run unconditionally -- aba remove is a no-op if not configured.
+	if [ -n "${INTERNAL_BASTION:-}" ]; then
+		if _essh "$INTERNAL_BASTION" "test -f /etc/dnsmasq.d/aba-upstream.conf" 2>/dev/null; then
+			echo "  Cleaning up leftover ABA DNS on disN ..."
+			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove dns -y" 2>/dev/null || true
+		fi
+		if _essh "$INTERNAL_BASTION" "grep -q '^allow ' /etc/chrony.conf" 2>/dev/null; then
+			echo "  Cleaning up leftover ABA NTP on disN ..."
+			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove ntp -y" 2>/dev/null || true
+		fi
+	fi
+
 	return 0
 }
 
