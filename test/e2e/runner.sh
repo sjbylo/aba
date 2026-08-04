@@ -801,6 +801,14 @@ _pre_suite_cleanup() {
 		fi
 	fi
 
+	# Warn if ABA DNS was set up on conN (should never happen -- pool DNS uses
+	# e2e-pool.conf, not aba-upstream.conf).  Don't auto-remove: aba remove dns
+	# would stop dnsmasq and break pool infrastructure DNS.
+	if [ -f /etc/dnsmasq.d/aba-upstream.conf ]; then
+		echo "  WARNING: /etc/dnsmasq.d/aba-upstream.conf found on conN -- leftover from a previous run?"
+		echo "           Pool DNS may be misconfigured. Investigate manually."
+	fi
+
 	return 0
 }
 
