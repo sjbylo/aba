@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.2.0
+ABA_VERSION=1.2.1
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260725220644
+ABA_BUILD=20260804153856
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -120,6 +120,7 @@ while [ $i -le $# ]; do
 				fi
 
 				WORK_DIR=$PWD # Remember so can change config file here - can override existing value (set above)
+				export ABA_TARGET_DIR="$target_dir"
 			else
 				# Skip subsequent --dir/-d and their values
 				echo "[ABA] Warning: ignoring duplicate $arg (only the first --dir/-d is used)" >&2
@@ -370,8 +371,12 @@ do
 			cat $ABA_ROOT/others/help-mirror.txt
 		elif [ "$_ht" = "cluster" -o "$_ht" = "upgrade" ]; then
 			cat $ABA_ROOT/others/help-cluster.txt
-		elif [ "$_ht" = "bundle" ]; then
+		elif [ "$_ht" = "bundle" -o "$_ht" = "bundle-primed" ]; then
 			cat $ABA_ROOT/others/help-bundle.txt
+		elif [ "$_ht" = "deploy-primed" -o "$_ht" = "deploy" ]; then
+			cat $ABA_ROOT/others/help-deploy.txt
+		elif [ "$_ht" = "transfer-primed" -o "$_ht" = "transfer" ]; then
+			cat $ABA_ROOT/others/help-transfer.txt
 		elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
 			cat $ABA_ROOT/others/help-setup.txt
 		else
@@ -942,6 +947,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--shell" ]; then
 		shift
 		BUILD_COMMAND="$BUILD_COMMAND output=shell"
+		upgrade_shell="--shell"
 	elif [ "$1" = "--force" -o "$1" = "-f" ]; then
 		shift
 		opt_force="--force"
@@ -1024,6 +1030,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift
+	elif [ "$1" = "--allow-not-recommended" ]; then
+		upgrade_allow_not_recommended="--allow-not-recommended"
+		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
 		shift
@@ -1072,7 +1081,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 							;;
 					esac
 					;;
-				tui|ssh|run|bundle|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb)
+				tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1119,7 +1128,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb)
+		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1174,6 +1183,20 @@ if [ "$cur_target" ]; then
 			aba_debug Running: $ABA_ROOT/scripts/make-bundle.sh -o "$opt_out" $opt_force $opt_light $opt_primed
 			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light $opt_primed
 			exit 
+		;;
+		bundle-primed)
+			trap - ERR
+			aba_debug "Running: aba bundle-primed"
+			eval $ABA_ROOT/scripts/make-bundle.sh $opt_out $opt_force $opt_light --primed
+			exit
+		;;
+		deploy-primed|deploy)
+			$ABA_ROOT/scripts/deploy-primed.sh
+			exit
+		;;
+		transfer-primed|transfer)
+			$ABA_ROOT/scripts/transfer-primed.sh
+			exit
 		;;
 		info)
 			$ABA_ROOT/scripts/cluster-info.sh
@@ -1236,6 +1259,8 @@ if [ "$cur_target" ]; then
 			[ "$opt_force" ] && upgrade_args+=(--force)
 			[ "$upgrade_dry_run" ] && upgrade_args+=($upgrade_dry_run)
 			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
+			[ "$upgrade_shell" ] && upgrade_args+=($upgrade_shell)
+			[ "$upgrade_allow_not_recommended" ] && upgrade_args+=($upgrade_allow_not_recommended)
 			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
 			exit
 		;;
@@ -1342,7 +1367,8 @@ if [ "$cur_target" ]; then
 
 			if [ "$_del_sd" ] && [ -d "$_del_sd" ]; then
 				rm -rf "$_del_sd"
-				aba_info "Removed cluster state: $_del_sd"
+				aba_info "Cluster state removed"
+				aba_debug "State dir: $_del_sd"
 			fi
 			# Clean generated artifacts so next install starts fresh from current config
 			make -s clean || true

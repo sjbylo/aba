@@ -13,9 +13,8 @@ others/
 cli/Makefile
 tui/
 
-# mirror/ skeleton (Makefile + templates only; data is generated at runtime)
+# mirror/ skeleton (Makefile only; templates symlink is created at runtime → ../templates)
 mirror/Makefile
-mirror/templates/
 
 # test files referenced by suites (NOT test/e2e/logs/ which is 18GB+)
 test/lib.sh

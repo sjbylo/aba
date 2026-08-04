@@ -35,6 +35,34 @@ tui_log() {
 }
 
 # =============================================================================
+# Blanket stdout/stderr redirect — prevent stray output from corrupting TUI
+# =============================================================================
+# After _tui_redirect_init, ALL stdout/stderr goes to the log file.
+# dlg(), show_help(), and _exec_in_terminal() temporarily restore the terminal
+# for dialog rendering / interactive commands, then re-redirect afterward.
+# FD 5 = saved original stdout, FD 6 = saved original stderr.
+
+_TUI_REDIRECT_ACTIVE=""
+
+_tui_redirect_init() {
+	exec 5>&1 6>&2
+	exec 1>>"$_TUI_LOG_FILE" 2>>"$_TUI_LOG_FILE"
+	_TUI_REDIRECT_ACTIVE=1
+}
+
+_tui_redirect_restore() {
+	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		exec 1>&5 2>&6
+	fi
+}
+
+_tui_redirect_activate() {
+	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		exec 1>>"$_TUI_LOG_FILE" 2>>"$_TUI_LOG_FILE"
+	fi
+}
+
+# =============================================================================
 # DISCO mode filters — strip public/internet values from config fields
 # =============================================================================
 
@@ -314,6 +342,17 @@ dlg() {
 	fi
 
 	# Close the flock fd so dialog doesn't inherit it (prevents orphaned lock on kill)
+	# Blanket redirect: save caller's stderr (may be $_TUI_TMP from `dlg ... 2>"$_TUI_TMP"`),
+	# restore terminal for rendering, route dialog selection output to saved FD via --output-fd.
+	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		exec 7>&2
+		_tui_redirect_restore
+		dialog --no-shadow --colors --no-collapse --tab-correct --output-fd 7 "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
+		local _dlg_rc=$?
+		_tui_redirect_activate
+		exec 7>&-
+		return $_dlg_rc
+	fi
 	dialog --no-shadow --colors --no-collapse --tab-correct "${args[@]}" {ABA_TUI_FLOCK_FD}>&-
 }
 
@@ -324,8 +363,8 @@ dlg() {
 _TUI_MODE=""   # Set by mode detection: DISCO, CONNO, DIRECT
 _TUI_INET=""   # Set by mode detection: "yes" or "no" (internet available)
 
-# Session-only: forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
-_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-1}"
+# Forwarded to oc-mirror via `aba mirror save|sync|load --retry N`
+_TUI_RETRY_COUNT="${_TUI_RETRY_COUNT:-${TUI_OC_MIRROR_RETRY_COUNT:-1}}"
 
 # Registry type -- in-memory state, loaded from mirror.conf at startup, persisted on toggle.
 # Values: "auto", "quay", "docker", "quay-ng"
@@ -399,8 +438,10 @@ confirm_quit() {
 show_help() {
 	local title="$1"
 	local body="$2"
+	_tui_redirect_restore
 	dialog --no-shadow --colors --backtitle "$(ui_backtitle)" \
 		--title " $title " --cr-wrap --msgbox "\n$body" 0 0 {ABA_TUI_FLOCK_FD}>&- || true
+	_tui_redirect_activate
 }
 
 # =============================================================================
@@ -531,13 +572,25 @@ _format_cmd_display() {
 	printf '%s' "$out"
 }
 
+# Persist execution mode preference to ~/.aba/config
+_tui_persist_exec_mode() {
+	local conf="$HOME/.aba/config"
+	[[ -f "$conf" ]] && replace-value-conf -q -n TUI_EXEC_MODE -v "$1" -f "$conf"
+}
+
+# Persist oc-mirror retry count to ~/.aba/config
+_tui_persist_retry_count() {
+	local conf="$HOME/.aba/config"
+	[[ -f "$conf" ]] && replace-value-conf -q -n TUI_OC_MIRROR_RETRY_COUNT -v "$1" -f "$conf"
+}
+
 confirm_and_execute() {
 	local cmd="$1"
 	local title="${2:-Confirm Execution}"
 	local post_cmd_hook="${3:-}"
 	tui_log "Confirming command: $cmd"
 
-	local default_item="${_TUI_LAST_EXEC_MODE:-1}"
+	local default_item="${_TUI_LAST_EXEC_MODE:-${TUI_EXEC_MODE:-1}}"
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -546,28 +599,28 @@ confirm_and_execute() {
 			--extra-button --extra-label "Command" \
 			--default-item "$default_item" \
 			--menu "$TUI2_MSG_EXEC_MODE" 0 0 0 \
-			"1" "Run in Terminal" \
-			"2" "Run in Terminal (auto-answer)" \
-			"3" "Run in TUI (auto-answer)" \
+			"1" "Run in Terminal (interactive)" \
+			"2" "Run in Terminal (non-interactive)" \
+			"3" "Run in TUI (non-interactive)" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
 		case "$rc" in
 			2)
 				show_help "$TUI2_HELP_TITLE_EXEC" \
-"• Run in Terminal
+"• Run in Terminal (interactive)
   - Command runs in real terminal
   - Full interactive mode (colors, prompts)
   - Press ENTER to return to TUI
 
-• Run in Terminal (auto-answer)
+• Run in Terminal (non-interactive)
   - Command runs in real terminal with full output
-  - Prompts are auto-answered with defaults (-y)
+  - Prompts are answered with defaults (-y)
   - Press ENTER to return to TUI
 
-• Run in TUI (auto-answer)
+• Run in TUI (non-interactive)
   - Command runs inside dialog interface
-  - All prompts are auto-answered with defaults (-y)
+  - Prompts are answered with defaults (-y)
   - Output shown live in progressbox
   - Scrollable output review after completion"
 				continue
@@ -586,7 +639,7 @@ confirm_and_execute() {
 
 		local choice
 		choice=$(<"$_TUI_TMP")
-		[[ -n "$choice" ]] && default_item="$choice" && _TUI_LAST_EXEC_MODE="$choice"
+		[[ -n "$choice" ]] && default_item="$choice" && _TUI_LAST_EXEC_MODE="$choice" && _tui_persist_exec_mode "$choice"
 
 		case "$choice" in
 			1) _exec_in_terminal "$cmd" "$title" "$post_cmd_hook" ;;
@@ -686,11 +739,14 @@ _exec_in_terminal() {
 	local _title="${2:-}"
 	local post_cmd_hook="${3:-}"
 
+	_tui_redirect_restore
+
 	# Defense-in-depth: reject commands with shell metacharacters that could indicate injection
 	if [[ "$cmd" =~ [\`\$\;\|\>\<]|'&&' ]]; then
 		tui_log "BLOCKED: command contains dangerous metacharacters: $cmd"
 		echo "ERROR: Command blocked — contains invalid characters."
 		read -rp "Press ENTER to return to TUI..."
+		_tui_redirect_activate
 		return 1
 	fi
 
@@ -701,13 +757,12 @@ _exec_in_terminal() {
 
 	tui_log "Executing in terminal: $cmd"
 	cd "$ABA_ROOT"
-
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Executing: $cmd"
 	echo "═══════════════════════════════════════════════════════════════"
 	if [[ "$cmd" != *" --yes"* && "$cmd" != *" -y "* && "$cmd" != *" -y" ]]; then
-		echo "  Tip: Enable auto-answer in TUI Settings to skip prompts"
+		echo "  Tip: Select non-interactive mode to skip prompts"
 	fi
 	echo
 
@@ -731,23 +786,25 @@ _exec_in_terminal() {
 	fi
 
 	echo
+	local _ret=0
 	if [[ "$_term_interrupted" == "true" ]]; then
 		echo "── Command interrupted (Ctrl-C) ──"
 		echo
 		read -rp "Press ENTER to continue..."
-		return 1
+		_ret=1
 	elif [[ $exit_code -eq 0 ]]; then
 		echo "── Command completed successfully ──"
 		echo
 		read -rp "Press ENTER to continue..."
-		return 0
+		_ret=0
 	else
 		echo "── Command FAILED (exit code: $exit_code) ──"
 		echo
 		read -rp "Press R to retry, ENTER to return to menu... " _reply
-		[[ "$_reply" == [Rr] ]] && return 2
-		return 1
+		[[ "$_reply" == [Rr] ]] && _ret=2 || _ret=1
 	fi
+	_tui_redirect_activate
+	return $_ret
 }
 
 # =============================================================================
@@ -792,7 +849,7 @@ _invalidate_mirror_cache() {
 	_TUI_NEED_MIRROR_RECHECK=true
 	aba_mirror_verify_refresh
 	# Internet check uses TTL (aba_inet_check_cached) — no reset needed here.
-	# The menu loop re-triggers automatically if >120s elapsed.
+	# The menu loop re-triggers automatically if >300s elapsed.
 }
 
 # After mirror load/sync, offer to run day2 on clusters using this mirror.
@@ -975,6 +1032,44 @@ is_bundle_mode() {
 	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
+# Feedback: show GitHub URLs, try to open in browser if available.
+_tui_feedback() {
+	local gh_url="https://github.com/sjbylo/aba"
+	local choice
+
+	dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+		--cancel-label "$TUI2_BTN_BACK" \
+		--menu "How would you like to share feedback?" 0 0 0 \
+		"I" "Report an issue" \
+		"D" "Start a discussion" \
+		"S" "Star the project on GitHub" \
+		2>"$_TUI_TMP"
+	[[ $? -ne 0 ]] && return
+
+	choice=$(<"$_TUI_TMP")
+
+	local url=""
+	case "$choice" in
+		I) url="$gh_url/issues/new" ;;
+		D) url="$gh_url/discussions/new?category=general" ;;
+		S) url="$gh_url" ;;
+	esac
+	[[ -z "$url" ]] && return
+
+	if [[ "${_TUI_INET:-no}" == "yes" ]] && command -v xdg-open &>/dev/null; then
+		xdg-open "$url" &>/dev/null &
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "Opening in your browser:\n\n$url" 0 0
+	elif [[ "${_TUI_INET:-no}" != "yes" ]]; then
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "No internet connection detected.\n\nOpen this URL in a browser when you have access:\n\n$url" 0 0
+	else
+		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
+			--msgbox "Open this URL in a browser:\n\n$url" 0 0
+	fi
+	tui_log "Feedback: $url"
+}
+
 # Append ` --retry N` when _TUI_RETRY_COUNT > 0 (for oc-mirror operations).
 _tui_oc_mirror_retry_suffix() {
 	if [[ "${_TUI_RETRY_COUNT:-0}" -gt 0 ]]; then
@@ -1045,56 +1140,6 @@ _tui_abaconf_raw_ask() {
 	echo "$_ask_val"
 }
 
-# Human label for Settings menu Auto-answer row
-_tui_settings_ask_label() {
-	local raw=""
-	raw=$(_tui_abaconf_raw_ask)
-
-	case "${raw,,}" in                               # lowercase for case-insensitive match
-		""|"true"|"1")
-			echo "Ask every time"
-			;;
-		yes)
-			echo "Auto yes"
-			;;
-		no)
-			echo "Auto no"
-			;;
-		false|0)
-			echo "Ask every time"
-			;;
-		*)
-			echo "Ask every time (${raw:-unset})"
-			;;
-	esac
-}
-
-_tui_settings_persist_ask_mode() {
-	local mode="$1"
-	local conf="$ABA_ROOT/aba.conf"
-	if [[ ! -f "$conf" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"No aba.conf found — cannot save settings.\n\nRun setup or copy templates first." 0 0
-		return 1
-	fi
-	case "$mode" in
-		always)
-			replace-value-conf -q -n ask -v true -f "$conf"
-			;;
-		yes)
-			replace-value-conf -q -n ask -v yes -f "$conf"
-			;;
-		no)
-			replace-value-conf -q -n ask -v no -f "$conf"
-			;;
-		*)
-			return 1
-			;;
-	esac
-	source <(cd "$ABA_ROOT" && normalize-aba-conf) 2>/dev/null || true
-	return 0
-}
-
 _tui_settings_menu_reg_vendor() {
 	local vf="$ABA_ROOT/mirror/mirror.conf"
 	if [[ ! -f "$vf" ]]; then
@@ -1145,6 +1190,7 @@ _tui_settings_menu_retry() {
 
 	if [[ "$val" =~ ^[0-9]+$ ]] && [[ "$val" -le 999 ]]; then
 		_TUI_RETRY_COUNT="$val"
+		_tui_persist_retry_count "$val"
 		tui_log "Settings: _TUI_RETRY_COUNT=$val"
 	else
 		dlg --backtitle "$(ui_backtitle)" --msgbox \
@@ -1153,19 +1199,8 @@ _tui_settings_menu_retry() {
 }
 
 # Build a compact settings summary string for the menu item label.
-# DIRECT mode: "(ask)" — no mirror settings shown (Bug #131).
-# CONNO/DISCO:  "(ask, Docker, retry=2)" with color codes.
 _tui_settings_summary() {
-	local ask_short
-	local raw
-	raw=$(_tui_abaconf_raw_ask)
-	case "${raw,,}" in
-		yes) ask_short="-y" ;;
-		*)   ask_short="ask" ;;
-	esac
-
 	if [[ "${_TUI_MODE:-}" == "DIRECT" ]]; then
-		printf '(\Z6%s\Zn)' "$ask_short"
 		return
 	fi
 
@@ -1175,7 +1210,7 @@ _tui_settings_summary() {
 		docker) rv="Docker" ;;
 	esac
 
-	printf '(\Z6%s, %s, retry=%s\Zn)' "$ask_short" "$rv" "${_TUI_RETRY_COUNT:-1}"
+	printf '(\Z6%s, retry=%s\Zn)' "$rv" "${_TUI_RETRY_COUNT:-1}"
 }
 
 # Settings submenu -- v1-style toggle behavior.
@@ -1189,17 +1224,8 @@ _tui_settings_menu() {
 			_TUI_REG_VENDOR="${reg_vendor:-auto}"
 		fi
 
-		# Current auto-answer display (ON = skip prompts, OFF = ask user)
-		local ask_display
-		local raw
-		raw=$(_tui_abaconf_raw_ask)
-		case "${raw,,}" in
-			yes)  ask_display="Auto-answer: \Z2ON\Zn (-y)" ;;
-			*)    ask_display="Auto-answer: \Z1OFF\Zn" ;;
-		esac
-
 		# Mirror-related settings: only relevant when a mirror is in play
-		local _menu_items=("1" "$ask_display")
+		local _menu_items=()
 		local _help_extra=""
 		if [[ "${_TUI_MODE:-}" != "DIRECT" ]]; then
 			local reg_display
@@ -1214,7 +1240,7 @@ _tui_settings_menu() {
 				0)  retry_display="Retry Count: \Z1OFF\Zn" ;;
 				*)  retry_display="Retry Count: \Z2${rc_val}\Zn" ;;
 			esac
-			_menu_items+=("2" "$reg_display" "3" "$retry_display")
+			_menu_items+=("1" "$reg_display" "2" "$retry_display")
 			_help_extra="
 Registry Type:
   Auto   - Let aba choose the registry (recommended).
@@ -1224,6 +1250,12 @@ Registry Type:
 Retry Count:
   How many times to retry failed oc-mirror operations.
   0 = no retries, or set any count (default: 1)."
+		fi
+
+		if [[ ${#_menu_items[@]} -eq 0 ]]; then
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
+				--msgbox "No settings available in this mode." 0 0
+			return 0
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_SETTINGS" \
@@ -1239,10 +1271,8 @@ Retry Count:
 		case "$rc" in
 			2)
 				show_help "$TUI2_TITLE_SETTINGS" \
-"Auto-answer (-y):
-  When ON, aba commands run without confirmation prompts.
-  When OFF, you will be asked to confirm each action.
-${_help_extra}
+"${_help_extra:-No settings available in this mode.}
+
 Toggle a setting by selecting it and pressing Enter."
 				continue
 				;;
@@ -1258,20 +1288,6 @@ Toggle a setting by selecting it and pressing Enter."
 
 		case "$choice" in
 			1)
-				# Toggle: OFF ↔ ON (like v1)
-				raw=$(_tui_abaconf_raw_ask)
-				case "${raw,,}" in
-					yes)
-						_tui_settings_persist_ask_mode always
-						tui_log "Settings: Auto-answer toggled OFF"
-						;;
-					*)
-						_tui_settings_persist_ask_mode yes
-						tui_log "Settings: Auto-answer toggled ON"
-						;;
-				esac
-				;;
-			2)
 				# Toggle in-memory: auto → quay → docker → auto
 				case "$_TUI_REG_VENDOR" in
 					auto)   _TUI_REG_VENDOR="quay";   tui_log "Settings: Registry type toggled to Quay" ;;
@@ -1288,7 +1304,7 @@ Toggle a setting by selecting it and pressing Enter."
 					replace-value-conf -q -n reg_vendor -v "$_TUI_REG_VENDOR" -f "$vf"
 				fi
 				;;
-			3)
+			2)
 				# Toggle: 0 → 1 → 2 → 5 → 0
 				case "${_TUI_RETRY_COUNT:-1}" in
 					0) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count toggled to 1" ;;
@@ -1297,6 +1313,7 @@ Toggle a setting by selecting it and pressing Enter."
 					5) _TUI_RETRY_COUNT=0; tui_log "Settings: Retry count toggled to OFF" ;;
 					*) _TUI_RETRY_COUNT=1; tui_log "Settings: Retry count reset to 1" ;;
 				esac
+				_tui_persist_retry_count "$_TUI_RETRY_COUNT"
 				;;
 		esac
 	done
@@ -1479,6 +1496,8 @@ offer_editor() {
 _TUI_START_EPOCH=$(date +%s)
 
 _show_v2_exit_summary() {
+	_tui_redirect_restore
+	clear
 	echo "TUI v2 complete."
 	echo
 	local f mod_epoch shown=0

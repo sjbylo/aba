@@ -12,6 +12,9 @@
 #   --reset        Reset download task state (forces re-download on next run).
 #   --no-version   Only start downloads for version-independent tools
 #                  (oc-mirror, butane, govc) — used when ocp_version is unknown.
+#   --extra        Use out-download-extra-clis (virtctl, kn, tkn, helm, opm,
+#                  argocd, roxctl). Combine with --wait/--reset as usual.
+#                  Used by make-bundle.sh / reg-save.sh only — not everyday ABA.
 #   --upgrade-to <ver>  Download oc + openshift-install for <ver> (parallel).
 #                  Used by reg-save.sh to fetch CLIs for upgrade target version.
 #
@@ -56,6 +59,13 @@ fi
 
 if [ "${1:-}" = "--no-version" ]; then
 	make_list_target=out-download-no-version
+	shift
+fi
+
+# Optional convenience CLIs (virtctl, kn, tkn, helm, opm, argocd, roxctl).
+# Used by make-bundle / reg-save — NOT the everyday download-all list.
+if [ "${1:-}" = "--extra" ]; then
+	make_list_target=out-download-extra-clis
 	shift
 fi
 
@@ -134,13 +144,17 @@ do
 			showed_wait_msg=true
 		fi
 		# Idempotent start (guarantees cmd.sh exists for the wait)
-		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override
+		# SOFT_EXTRA is set by cli_download_extra_clis for bundle/save (optional CLIs).
+		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override ${SOFT_EXTRA:+SOFT_EXTRA=$SOFT_EXTRA}
 		# Wait without command — run_once reloads from saved cmd.sh
 		if ! run_once -q -w -i "$task_id"; then
 			# Safety net: govc download failure is non-fatal for non-vmw platforms
 			# (normally govc won't be in the tool list for non-vmw, but handle edge cases)
 			if [[ "$tool" == "govc" && "${platform:-}" != "vmw" ]]; then
 				aba_warn "govc failed to download — ignoring since platform != vmw."
+			elif [[ "$make_list_target" == "out-download-extra-clis" ]]; then
+				# Convenience CLIs only — never abort bundle/save for these
+				aba_warn "Optional extra CLI download failed for $tool — continuing."
 			else
 				aba_error "Download failed for $tool"
 				exit 1
@@ -159,6 +173,7 @@ do
 			openshift-install)  inst_task="$TASK_INST_OPENSHIFT_INSTALL" ;;
 			govc)               inst_task="$TASK_INST_GOVC" ;;
 			butane)             inst_task="$TASK_INST_BUTANE" ;;
+			virtctl|kn|tkn|helm|opm|argocd|roxctl) inst_task="cli:install:$tool" ;;
 		esac
 		if [[ -n "$inst_task" ]] && run_once -A -i "$inst_task" 2>/dev/null && ! run_once -p -i "$inst_task" 2>/dev/null; then
 			aba_debug "Skipping download for $tool — install task currently running"
@@ -166,7 +181,7 @@ do
 		fi
 
 		# Start mode: run_once backgrounds internally — no '&' needed
-		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override
+		run_once -i "$task_id" -- make -sC cli download-$tool $make_ocp_override ${SOFT_EXTRA:+SOFT_EXTRA=$SOFT_EXTRA}
 	fi
 done
 aba_debug "All CLI download tasks processed"

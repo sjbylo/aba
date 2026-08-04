@@ -240,9 +240,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.2.0.tar.gz
-tar xzf v1.2.0.tar.gz
-cd aba-1.2.0
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.2.1.tar.gz
+tar xzf v1.2.1.tar.gz
+cd aba-1.2.1
 ./install
 aba
 ```
@@ -250,7 +250,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.2.0 https://github.com/sjbylo/aba.git
+git clone --branch v1.2.1 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -576,6 +576,54 @@ Then continue from the [Load the images from disk into the mirror registry](#loa
 
 [Back to top](#quick-start)
 
+## Primed Bundles (DevOps / Hands-Off Deployment)
+
+Use primed bundles when ALL cluster configuration is prepared in advance on the connected side — ideal for DevOps pipelines, factory imaging, or when you need configs that `cluster.conf` cannot express (per-node rootDeviceHints, custom agent-config.yaml).
+
+### Day 0: Create and deploy a primed bundle
+
+```bash
+# Connected side: create cluster, configure everything, then bundle
+aba cluster -n factory -t compact --starting-ip 10.0.1.50
+# Edit agent-config.yaml, install-config.yaml as needed...
+aba bundle-primed --out /media/usb/ocp-bundle
+
+# Transfer bundle + images to disconnected side
+
+# Disconnected side: one-command deployment
+tar xf ocp-bundle.tar -C ~ && cd ~/aba && ./install
+cp /media/usb/mirror_*.tar mirror/data/
+aba -d factory deploy-primed
+```
+
+The `deploy-primed` command runs the full pipeline: mirror install → image load → cluster install → day-2 config. Each step is idempotent — safe to re-run after interruption.
+
+### Day N: Transfer new cluster configs without re-mirroring images
+
+```bash
+# Connected side: create a new cluster dir
+aba cluster -n edge1 -t sno --starting-ip 10.0.2.10
+aba transfer-primed                    # Creates mirror/data/aba-transfer-configs.tar
+
+# Transfer only the small configs tar (a few KB)
+cp mirror/data/aba-transfer-configs.tar /media/usb/
+
+# Disconnected side:
+cp /media/usb/aba-transfer-configs.tar mirror/data/
+aba -d mirror load                     # Extracts configs (no images = no-op on load)
+aba -d edge1 deploy-primed             # Deploy the new cluster
+```
+
+### Commands reference
+
+| Command | Alias | Purpose |
+|---------|-------|---------|
+| `aba bundle-primed` | `aba bundle --primed` | Full bundle with pre-configured cluster dirs |
+| `aba transfer-primed` | `aba transfer` | Create configs-only tar for day-N updates |
+| `aba -d <cluster> deploy-primed` | `aba -d <cluster> deploy` | One-command deployment pipeline |
+
+[Back to top](#quick-start)
+
 # Connected Installation (No Mirror)
 
 In a connected environment, cluster nodes pull images directly from the Internet (or via an HTTP proxy). No mirror registry is needed.
@@ -718,16 +766,21 @@ oc whoami
 Example output on successful install:
 
 ```
-INFO Install complete!
-INFO To access the cluster as the system:admin user when using 'oc', run
-INFO     export KUBECONFIG=/home/steve/aba/mycluster/iso-agent-based/auth/kubeconfig
-INFO Access the OpenShift web-console here: https://console-openshift-console.apps.mycluster.example.com
-INFO Login to the console with user: "kubeadmin", and password: "XXYZZ-XXYZZ-XXYZZ-XXYZZ"
-Run '. <(aba shell)' to access the cluster using the kubeconfig file, or
-Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
-Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry.
-Run 'aba day2-osus' to configure the OpenShift Update Service.
-Run 'aba day2-ntp' to configure NTP on this cluster.
+[ABA] Cluster installed successfully!
+[ABA]   Name:     mycluster.example.com
+[ABA]   Version:  4.21.20
+[ABA]   Type:     sno (1 node(s))
+[ABA]   Platform: KVM
+[ABA]   API:      https://api.mycluster.example.com:6443
+
+[ABA] Next steps:
+[ABA]   . <(aba shell)     — access cluster (kubeconfig)
+[ABA]   . <(aba login)     — log in as kubeadmin
+[ABA]   aba day2           — configure OperatorHub with mirror registry
+[ABA]   aba day2-osus      — configure OpenShift Update Service
+[ABA]   aba day2-ntp       — configure NTP
+[ABA]   aba info           — view this information again
+[ABA]   aba help           — more options
 ```
 
 If OpenShift fails to install or is not progressing, see the [Troubleshooting](Troubleshooting.md) guide.
@@ -856,7 +909,7 @@ Use `aba -D iso` for debug output.
 > - **Auditability** — `cat aba.conf` shows the main settings at a glance. Some runtime state (credentials, markers, `~/.aba/config` overrides) lives elsewhere, but the core environment configuration is always in these files.
 >
 > A few flags are **runtime-only** (per-invocation choices that do not modify any config file):
-> `-d` (directory), `-D` (debug), `-y` (suppress prompts for this run), `--light`, `--retry`, `--force`, `--out`, `--step`, `--cmd`, `--help`, and the upgrade flags (`--to`, `--dry-run`, `--skip-day2`).
+> `-d` (directory), `-D` (debug), `-y` (suppress prompts for this run), `--light`, `--retry`, `--force`, `--out`, `--step`, `--cmd`, `--help`, and the upgrade flags (`--to`, `--dry-run`, `--shell`, `--skip-day2`).
 
 > **Tip — Per-mirror operator override:** Set `op_sets=` and/or `ops=` in `mirror.conf` to override global values for that specific mirror. Useful for different operators per team or enclave.
 
@@ -1107,6 +1160,38 @@ Run `aba day2` as normal — manifests are applied after oc-mirror resources (ID
 - Empty files are skipped with a warning
 - If a manifest fails to apply, day2 continues with the remaining files
 - Manifests are applied **after** the mirror registry is configured, so they can reference mirrored images
+
+#### Ordered Waves with Readiness Gates
+
+For more advanced deployments requiring ordered dependencies with readiness checks, use numbered subdirectories with optional `.wait` gates:
+
+```bash
+day2-custom-manifests/
+  10-namespaces/
+    ns.yaml
+  20-operator/
+    subscription.yaml
+    .wait                    # Gate: wait for operator before applying wave 30
+  30-app/
+    deployment.yaml
+```
+
+When numbered subdirectories (`[0-9]*`) are present, ABA switches to **waved mode**:
+
+- Waves are applied in numeric order (`sort -V` handles 1, 2, 10, 20 correctly)
+- Top-level flat files are applied before any waves
+- An optional `.wait` file in a wave directory gates the next wave
+
+The `.wait` file contains `oc wait` arguments, one invocation per line:
+
+```bash
+# Wait for the operator deployment to be available (timeout 2 min)
+--for=condition=available deployment/my-operator -n my-namespace --timeout=120s
+```
+
+If a wait gate fails, a warning is issued and the next wave continues (non-fatal).
+
+If no numbered subdirectories exist, the flat (legacy) mode is used automatically.
 
 ## Synchronize NTP Across Cluster Nodes
 
@@ -1448,7 +1533,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
 | `aba day2-ntp`                  | Configure cluster NTP                                         |
 | `aba day2-osus`                 | Configure OpenShift Update Service                            |
-| `aba upgrade [--to <ver>]`      | Upgrade cluster via local mirror. Auto-detects latest z-stream if `--to` omitted. `--dry-run` lists versions. |
+| `aba upgrade [--to <ver>]`      | Upgrade cluster via local mirror. Auto-detects latest z-stream if `--to` omitted. `--dry-run` lists versions. `--dry-run --shell` for machine-readable output. |
 | `aba shutdown`                  | Gracefully shut down a cluster. `--wait` waits for power-off. |
 | `aba startup`                   | Gracefully start up a cluster                                 |
 | `aba rescue`                    | Recover a cluster (uncordon nodes, approve pending CSRs)      |
@@ -1901,6 +1986,23 @@ ABA helps jumpstart installations by generating day-zero image-set configuration
 `aba day2` applies IDMS/ITMS, CatalogSources, and signatures generated by `oc-mirror` during `sync`, `save`, or `load`. These artifacts live in `mirror/data/working-dir/`.
 
 In standard workflows, the host running `oc-mirror` is the same host running `aba day2`, so the directory is already present. If the mirror was set up from a different host, copy `mirror/data/working-dir/` to the host running `aba day2`.
+
+
+## Q: Can I get machine-readable output from aba commands?
+
+Some commands support `--shell` for sourceable key=value output, useful for scripting:
+
+```bash
+eval "$(aba -d mycluster upgrade --dry-run --shell)"
+echo "Current: $upgrade_current_ver"
+echo "Available: $upgrade_versions"
+echo "Conditional: $upgrade_conditional"
+
+eval "$(aba -d mirror transfer-info --shell)"
+echo "OCP version: $transfer_ocp_version"
+```
+
+The `--shell` flag is currently supported by `upgrade --dry-run` and `transfer-info`.
 
 ---
 

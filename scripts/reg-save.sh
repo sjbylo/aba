@@ -77,6 +77,7 @@ sleep 1
 # Start downloads if not already running (non-blocking, parallel)
 aba_debug "Starting CLI downloads"
 scripts/cli-download-all.sh
+cli_download_extra_clis
 
 # Also download CLIs for the upgrade version (needed on disconnected host)
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
@@ -165,6 +166,7 @@ fi
 
 # Ensure all CLI downloads are complete before building transfer bundle
 scripts/cli-download-all.sh --wait
+cli_download_extra_clis --wait
 
 # Create aba-transfer.tar: always includes ISC files so 'cp mirror/data/*.tar'
 # transfers the correct imageset config to the disconnected host.

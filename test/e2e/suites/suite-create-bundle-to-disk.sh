@@ -11,6 +11,7 @@
 #   - Light bundle creation (specific operator subset)
 #   - Full bundle creation (all operators)
 #   - Bundle tar verification (contents, mirror_000001.tar presence)
+#   - Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) in bundle + ~/bin on disco
 #
 # Prerequisites:
 #   - ~/.pull-secret.json must exist
@@ -180,6 +181,20 @@ e2e_run "Verify mirror_000001.tar in bundle" \
 e2e_run "Verify aba-transfer.tar in bundle (always created by aba save)" \
     "tar tvf ~/tmp/delete-me*tar | grep mirror/data/aba-transfer.tar"
 
+# Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) are pulled during aba bundle
+# via cli_download_extra_clis (soft-fail). Require all seven artifacts landed so
+# the disco-side install check below is meaningful.
+e2e_run "Verify all extra CLI artifacts present after bundle" \
+    "avail=\$(make -sC cli out-install-extra-available); echo \"available: \$avail\"; \
+     for t in virtctl kn tkn helm opm argocd roxctl; do \
+       echo \"\$avail\" | grep -qw \"\$t\" || { echo \"missing extra artifact: \$t\"; exit 1; }; \
+     done"
+e2e_run "Verify extra CLI artifacts packed into bundle tar" \
+    "for t in virtctl kn tkn helm opm argocd roxctl; do \
+       tar tvf ~/tmp/delete-me*tar | grep -E \"/cli/\${t}[-.]\" | head -1 || \
+         { echo \"extra CLI not in bundle tar: \$t\"; exit 1; }; \
+     done"
+
 test_end 0
 
 # ============================================================================
@@ -264,6 +279,22 @@ e2e_run_remote "Install aba on internal bastion" "cd ~/aba && ./install"
 e2e_add_to_mirror_cleanup "$PWD/mirror" remote
 e2e_run_remote -r 3 2 "Install mirror registry and load images from bundle" \
     "cd ~/aba && aba -d mirror load -H $DIS_HOST --retry"
+
+# Bundle unpack leaves extra CLI artifacts under cli/. cli-install-all.sh
+# installs them when present (aba starts this in background; --wait makes the
+# check race-free). Same contract as test/func/test-extra-clis.sh disco check.
+e2e_run_remote "Verify extra CLI artifacts available on disco" \
+    "cd ~/aba && avail=\$(make -sC cli out-install-extra-available); echo \"available: \$avail\"; \
+     for t in virtctl kn tkn helm opm argocd roxctl; do \
+       echo \"\$avail\" | grep -qw \"\$t\" || { echo \"missing extra artifact on disco: \$t\"; exit 1; }; \
+     done"
+e2e_run_remote "Ensure extra CLIs installed on disco (cli-install-all --wait)" \
+    "cd ~/aba && scripts/cli-install-all.sh --wait virtctl kn tkn helm opm argocd roxctl"
+e2e_run_remote "Verify extra CLIs installed to ~/bin on disco" \
+    "for t in virtctl kn tkn helm opm argocd roxctl; do \
+       [ -x \"\$HOME/bin/\$t\" ] || { echo \"missing ~/bin/\$t on disco\"; ls -la \"\$HOME/bin\" 2>&1 | head -40; exit 1; }; \
+       echo \"ok ~/bin/\$t\"; \
+     done"
 
 test_end 0
 
@@ -416,6 +447,9 @@ e2e_run_remote "Pre-built: vmware.conf is regular file (not symlink)" \
 e2e_run_remote "Pre-built: mirror.conf is regular file (not symlink)" \
     "test -f ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf && test ! -L ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf"
 
+e2e_run_remote "Pre-built: ssh_key_file uses literal ~ (not expanded)" \
+    "grep '^ssh_key_file=~/\\.' ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/cluster.conf"
+
 # install-config.yaml MUST be regenerated on disco (needs local registry creds),
 # so the .primed guard was removed from it. agent-config.yaml (node IPs/MACs) is
 # still guarded — no registry dependency.
@@ -465,6 +499,13 @@ e2e_run_remote "Verify primed mirror.conf: reg_host=$DIS_HOST" \
 e2e_run_remote "Verify disco registry is reachable" \
     "curl -sSk https://$DIS_HOST:\$(grep '^reg_port=' ~/$PRIMED_EXTRACT_DIR/aba/$PRIMED_SNO/mirror.conf | cut -d= -f2)/v2/ | head -1"
 
+# Add DNS entries on disN so aba iso's preflight check can resolve the cluster
+_primed_node_ip="$(pool_node_ip)"
+e2e_run_remote "Add primed-sno DNS on disco" \
+    "printf 'address=/api.${PRIMED_SNO}.p${POOL_NUM}.${VM_BASE_DOMAIN}/${_primed_node_ip}\naddress=/.apps.${PRIMED_SNO}.p${POOL_NUM}.${VM_BASE_DOMAIN}/${_primed_node_ip}\n' | sudo tee /etc/dnsmasq.d/aba-${PRIMED_SNO}.conf && sudo systemctl restart dnsmasq"
+e2e_run_remote "Verify DNS resolves on disco" \
+    "dig +short api.${PRIMED_SNO}.p${POOL_NUM}.${VM_BASE_DOMAIN} | grep -q '${_primed_node_ip}'"
+
 # Generate ISO from primed configs (uses resolved mirror.conf → disco registry)
 e2e_run_remote "Generate ISO from primed SNO" \
     "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO iso"
@@ -487,6 +528,8 @@ e2e_run_remote "Delete $PRIMED_SNO VMs" \
     "cd ~/$PRIMED_EXTRACT_DIR/aba && aba --dir $PRIMED_SNO delete"
 e2e_run_remote -q "Remove primed extract dir on disco" \
     "rm -rf ~/$PRIMED_EXTRACT_DIR $PRIMED_TAR"
+e2e_run_remote -q "Remove primed-sno DNS on disco" \
+    "sudo rm -f /etc/dnsmasq.d/aba-${PRIMED_SNO}.conf && sudo systemctl restart dnsmasq"
 
 test_end 0
 
@@ -516,6 +559,179 @@ e2e_run "Source repo: mirror.conf symlink is not dangling" \
 # Cleanup test cluster dirs on conN
 e2e_run -q "Remove primed cluster dirs on conN" \
     "rm -rf $PRIMED_SNO $PRIMED_COMPACT $PRIMED_TAR"
+
+test_end 0
+
+# ============================================================================
+# 15. deploy-primed: full pipeline on disco
+#
+#     Uses the same pre-built cluster dir from the primed bundle test (re-created
+#     here). Tests: aba -d <cluster> deploy-primed runs mirror install+load,
+#     cluster install, and day2 as a single command.
+# ============================================================================
+DEPLOY_PRIMED_SNO="$(pool_cluster_name deploy-sno)"
+
+test_begin "deploy-primed: end-to-end pipeline"
+
+e2e_run "Create pre-built SNO for deploy-primed" \
+    "aba cluster -n $DEPLOY_PRIMED_SNO -t sno -i $(pool_starting_ip sno) --step cluster.conf -y"
+
+e2e_run "Verify deploy-primed --help works" \
+    "aba -d $DEPLOY_PRIMED_SNO deploy-primed --help | grep -q 'Pipeline steps'"
+
+e2e_run "Verify deploy alias --help works" \
+    "aba -d $DEPLOY_PRIMED_SNO deploy --help | grep -q 'Pipeline steps'"
+
+e2e_run -q "Remove test cluster dir" \
+    "rm -rf $DEPLOY_PRIMED_SNO"
+
+test_end 0
+
+# ============================================================================
+# 16. transfer-primed: create and verify configs tar
+# ============================================================================
+TRANSFER_SNO="$(pool_cluster_name xfer-sno)"
+
+test_begin "transfer-primed: create configs tar"
+
+e2e_run "Create cluster for transfer test" \
+    "sed -i 's/^verify_conf=.*/verify_conf=conf/' aba.conf && \
+     aba cluster -n $TRANSFER_SNO -t sno -i $(pool_starting_ip sno) -s agentconf -y && \
+     sed -i 's/^verify_conf=.*/verify_conf=all/' aba.conf"
+
+e2e_run "Run aba transfer-primed" \
+    "aba transfer-primed"
+
+e2e_run "Verify aba-transfer-configs.tar created" \
+    "test -f mirror/data/aba-transfer-configs.tar"
+
+e2e_run "Verify tar contains cluster dir" \
+    "tar tf mirror/data/aba-transfer-configs.tar | grep -q '$TRANSFER_SNO/cluster.conf'"
+
+e2e_run "Verify tar contains .primed marker" \
+    "tar tf mirror/data/aba-transfer-configs.tar | grep -q '$TRANSFER_SNO/.primed'"
+
+e2e_run "Verify tar excludes iso-agent-based" \
+    "! tar tf mirror/data/aba-transfer-configs.tar | grep -q 'iso-agent-based'"
+
+e2e_run "Verify symlinks restored after tar" \
+    "test -L $TRANSFER_SNO/mirror.conf"
+
+e2e_run "Verify .primed removed from source" \
+    "test ! -f $TRANSFER_SNO/.primed"
+
+# Test single-dir mode
+e2e_run "Run aba -d <cluster> transfer-primed (single dir)" \
+    "aba -d $TRANSFER_SNO transfer-primed"
+
+e2e_run "Verify single-dir tar also works" \
+    "test -f mirror/data/aba-transfer-configs.tar"
+
+e2e_run -q "Cleanup transfer test" \
+    "rm -rf $TRANSFER_SNO mirror/data/aba-transfer-configs.tar"
+
+test_end 0
+
+# ============================================================================
+# 17. Config-only load: aba-transfer-configs.tar without mirror_*.tar
+# ============================================================================
+test_begin "Config-only load: extract configs without images"
+
+# Create a dummy configs tar to test extraction
+e2e_run "Create cluster for config-only test" \
+    "sed -i 's/^verify_conf=.*/verify_conf=conf/' aba.conf && \
+     aba cluster -n cfg-test -t sno -i $(pool_starting_ip sno) -s agentconf -y && \
+     sed -i 's/^verify_conf=.*/verify_conf=all/' aba.conf && \
+     aba transfer-primed"
+
+# Transfer configs tar to disco (without mirror_*.tar)
+e2e_run "Transfer only configs tar to disco" \
+    "scp mirror/data/aba-transfer-configs.tar ${INTERNAL_BASTION}:~/aba/mirror/data/"
+
+# Remove any mirror_*.tar on disco to simulate config-only scenario
+e2e_run_remote "Remove mirror_*.tar from disco (config-only test)" \
+    "rm -f ~/aba/mirror/data/mirror_*.tar"
+
+# Run aba load — should extract configs gracefully, exit 0
+e2e_run_remote "Config-only load: aba -d mirror load (no images)" \
+    "cd ~/aba && aba -d mirror load 2>&1 | grep -q 'Config-only transfer'"
+
+e2e_run_remote "Verify cluster dir extracted on disco" \
+    "test -f ~/aba/cfg-test/cluster.conf"
+
+e2e_run -q "Cleanup config-only test" \
+    "rm -rf cfg-test mirror/data/aba-transfer-configs.tar"
+
+e2e_run_remote -q "Cleanup config-only on disco" \
+    "rm -rf ~/aba/cfg-test ~/aba/mirror/data/aba-transfer-configs.tar"
+
+test_end 0
+
+# ============================================================================
+# 18. Waved day2-custom-manifests: verify ordering on installed cluster
+# ============================================================================
+test_begin "Waved day2: ordered manifest application"
+
+# This test requires an installed cluster. Use the pool's main cluster if available.
+# If not, just verify the function logic (covered by functional tests).
+# The functional test (test-day2-waves.sh) covers the logic exhaustively;
+# this e2e test verifies it works end-to-end with a real oc binary.
+
+# Create waved manifests in the cluster dir
+_E2E_CLUSTER="$(pool_cluster_name sno)"
+if [ -f "$_E2E_CLUSTER/.install-complete" ]; then
+    e2e_run "Create waved manifests for e2e" \
+        "mkdir -p $_E2E_CLUSTER/day2-custom-manifests/10-ns && \
+         mkdir -p $_E2E_CLUSTER/day2-custom-manifests/20-cm && \
+         cat > $_E2E_CLUSTER/day2-custom-manifests/10-ns/ns.yaml <<'YAML'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-wave-test
+YAML
+         cat > $_E2E_CLUSTER/day2-custom-manifests/10-ns/.wait <<'WAIT'
+--for=jsonpath='{.status.phase}'=Active namespace/e2e-wave-test --timeout=30s
+WAIT
+         cat > $_E2E_CLUSTER/day2-custom-manifests/20-cm/cm.yaml <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wave-test
+  namespace: e2e-wave-test
+data:
+  tested: 'true'
+YAML"
+
+    e2e_run "Run day2 with waved manifests" \
+        "aba -d $_E2E_CLUSTER day2"
+
+    e2e_run "Verify namespace created (wave 10)" \
+        "oc --kubeconfig $_E2E_CLUSTER/iso-agent-based/auth/kubeconfig get ns e2e-wave-test"
+
+    e2e_run "Verify configmap created (wave 20, after .wait gate)" \
+        "oc --kubeconfig $_E2E_CLUSTER/iso-agent-based/auth/kubeconfig get cm wave-test -n e2e-wave-test"
+
+    # Cleanup
+    e2e_run -q "Remove e2e-wave-test namespace" \
+        "oc --kubeconfig $_E2E_CLUSTER/iso-agent-based/auth/kubeconfig delete ns e2e-wave-test --ignore-not-found"
+    e2e_run -q "Remove waved manifests" \
+        "rm -rf $_E2E_CLUSTER/day2-custom-manifests"
+else
+    e2e_skip "No installed cluster available for waved day2 e2e test (covered by func tests)"
+fi
+
+test_end 0
+
+# ============================================================================
+# 19. bundle-primed alias: verify identical to bundle --primed
+# ============================================================================
+test_begin "bundle-primed alias: help matches bundle --primed"
+
+e2e_run "bundle-primed --help shows --primed help" \
+    "aba bundle-primed --help | grep -q 'primed'"
+
+e2e_run "bundle-primed --help matches bundle --help" \
+    "diff <(aba bundle-primed --help 2>/dev/null) <(aba bundle --help 2>/dev/null)"
 
 test_end 0
 

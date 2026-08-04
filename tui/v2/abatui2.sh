@@ -322,6 +322,10 @@ unset -f _tick
 sleep 0.3
 clear
 
+# Blanket redirect: capture all stray stdout/stderr to log, preventing TUI corruption.
+# dlg(), show_help(), _exec_in_terminal() temporarily restore the terminal as needed.
+_tui_redirect_init
+
 # =============================================================================
 # Mode Detection
 # =============================================================================
@@ -502,11 +506,11 @@ _conno_main() {
 	# after the action, so by the time the user presses OK and the menu
 	# redraws, the check is usually already complete.
 	while :; do
-		# Internet: runs independently on 120s TTL cache (fast when warm)
+		# Internet: runs independently on 300s TTL cache (fast when warm)
 		if ! run_once -p -i "aba:check:internet" 2>/dev/null; then
 			dlg --backtitle "$(ui_backtitle)" --infobox "Please wait..." 3 25
 		fi
-		if aba_inet_check_cached 120; then _TUI_INET="yes"; else _TUI_INET="no"; fi
+		if aba_inet_check_cached 300; then _TUI_INET="yes"; else _TUI_INET="no"; fi
 
 		local items=()
 
@@ -612,6 +616,7 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_CONNO_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 			"$TUI2_CONNO_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced"
 		)
@@ -752,8 +757,12 @@ Navigation:
 		"$TUI2_CONNO_TAG_SETTINGS")
 			_tui_settings_menu
 			;;
+		"$TUI2_CONNO_TAG_FEEDBACK")
+			_tui_feedback
+			;;
 		"$TUI2_CONNO_TAG_ADVANCED")
 			tui_advanced_menu
+			[[ "$_TUI_MODE" != "CONNO" ]] && return 0
 			default_item=""
 			;;
 		"$TUI2_CONNO_TAG_RECONFIGURE")
@@ -790,7 +799,7 @@ while :; do
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
-
+Feedback and contributions — in any form — are very welcome!
 
 Navigate with <Tab>, <Enter> and arrow keys. Press <ESC> to quit.
 " 0 0
@@ -855,6 +864,7 @@ while :; do
 			;;
 		CONNO)
 			_conno_main
+			[[ "$_TUI_MODE" != "CONNO" ]] && continue
 			break
 			;;
 		DIRECT)

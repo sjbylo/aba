@@ -10,7 +10,7 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $* from $PWD"
 
-aba_warn "'aba upgrade' is in BETA and may change in future releases."
+aba_warn "'aba upgrade' is in BETA and may change in future releases." >&2
 
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
@@ -19,6 +19,8 @@ target_ver=
 opt_force=
 opt_dry_run=
 opt_skip_day2=
+opt_shell=
+opt_allow_not_recommended=
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -32,6 +34,7 @@ while [ $# -gt 0 ]; do
 			aba_warn "--force bypasses cluster-side upgrade safety checks (release verification, admin ack gates)." \
 				"Only use in test/lab environments or when working around a known CVO bug." \
 				"Do NOT use --force on production clusters!"
+			ask -n --auto-yes "Continue with --force" || exit 1
 			shift
 			;;
 		--dry-run)
@@ -40,6 +43,14 @@ while [ $# -gt 0 ]; do
 			;;
 		--skip-day2)
 			opt_skip_day2=1
+			shift
+			;;
+		--shell)
+			opt_shell=1
+			shift
+			;;
+		--allow-not-recommended)
+			opt_allow_not_recommended=1
 			shift
 			;;
 		*)
@@ -64,7 +75,7 @@ fi
 export KUBECONFIG
 
 # Preflight: cluster access (fast TCP probe, then oc)
-aba_info "Checking cluster access ..."
+aba_info "Checking cluster access ..." >&2
 cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 aba_debug "Running: oc whoami --request-timeout='20s'"
 if ! oc whoami --request-timeout='20s' >/dev/null; then
@@ -78,7 +89,7 @@ current_ver=$(oc get clusterversion version \
 	-o jsonpath='{.status.history[?(@.state=="Completed")].version}' 2>/dev/null \
 	| awk '{print $1}') || current_ver=""
 [ ! "$current_ver" ] && aba_abort "Cannot determine current cluster version (no completed version in history)"
-aba_info "Current cluster version: $current_ver"
+aba_info "Current cluster version: $current_ver" >&2
 
 # Query available versions from mirror.
 # Tags follow the pattern: <version>-<arch> (e.g. 4.21.12-x86_64)
@@ -93,9 +104,73 @@ _list_mirror_versions() {
 	rm -f "$ABA_TMP/skopeo-tags-err.$$"
 	echo "$_tags_json" \
 		| grep -oP '"(\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?)-'"$arch"'"' \
-		| tr -d '"' | sed "s/-${arch}$//" | sort -V
+		| tr -d '"' | sed "s/-${arch}$//" | _semver_sort
 }
 
+
+# Machine-readable output: --dry-run --shell (sourceable key=value pairs)
+if [ "$opt_shell" ] && [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
+	# Query cluster graph via structured JSON (oc adm upgrade has no -o json)
+	_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
+	_graph_recommended=""
+	_graph_conditional=""
+	if [ -n "$_cv_json" ]; then
+		_graph_recommended=$(echo "$_cv_json" | jq -r \
+			'.status.availableUpdates[]?.version' 2>/dev/null) || true
+		_graph_conditional=$(echo "$_cv_json" | jq -r \
+			'.status.conditionalUpdates[]?.release.version' 2>/dev/null) || true
+	fi
+
+	# Check if there are mirrored versions higher than current before polling
+	_mirror_higher=()
+	while IFS= read -r v; do
+		[ -z "$v" ] && continue
+		is_version_greater "$v" "$current_ver" && _mirror_higher+=("$v")
+	done < <(_list_mirror_versions | tac)
+
+	# If OSUS is configured but availableUpdates is empty and there ARE higher
+	# versions in the mirror, the graph may still be loading after install or
+	# channel change. Poll briefly (max 30s). Skip if nothing to upgrade to.
+	if [ ${#_mirror_higher[@]} -gt 0 ]; then
+		_osus_up=$(echo "$_cv_json" | jq -r '.spec.upstream // ""' 2>/dev/null) || _osus_up=""
+		_avail_count=$(echo "$_cv_json" | jq -r '.status.availableUpdates | length' 2>/dev/null) || _avail_count=0
+		if [ -n "$_osus_up" ] && [ "${_avail_count:-0}" -eq 0 ]; then
+			for _wait in 5 10 15; do
+				sleep "$_wait" >&2
+				_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
+				_avail_count=$(echo "$_cv_json" | jq -r '.status.availableUpdates | length' 2>/dev/null) || _avail_count=0
+				[ "${_avail_count:-0}" -gt 0 ] && break
+			done
+			_graph_recommended=$(echo "$_cv_json" | jq -r \
+				'.status.availableUpdates[]?.version' 2>/dev/null) || true
+			_graph_conditional=$(echo "$_cv_json" | jq -r \
+				'.status.conditionalUpdates[]?.release.version' 2>/dev/null) || true
+		fi
+	fi
+
+	# Classify mirrored versions: only include versions the OSUS graph knows about.
+	# When OSUS is not configured, all mirrored versions are shown as recommended.
+	_recommended=() _cond_in_mirror=()
+	_has_graph=$( ([ -n "$_graph_recommended" ] || [ -n "$_graph_conditional" ]) && echo 1 || true)
+	for v in "${_mirror_higher[@]}"; do
+		if [ -n "$_graph_conditional" ] && echo "$_graph_conditional" | grep -qxF "$v"; then
+			_cond_in_mirror+=("$v")
+		elif [ -z "$_has_graph" ] || echo "$_graph_recommended" | grep -qxF "$v"; then
+			_recommended+=("$v")
+		fi
+	done
+
+	# Channel and OSUS status
+	_channel=$(echo "$_cv_json" | jq -r '.spec.channel // ""' 2>/dev/null) || _channel=""
+	_osus_upstream=$(echo "$_cv_json" | jq -r '.spec.upstream // ""' 2>/dev/null) || _osus_upstream=""
+
+	echo "upgrade_current_ver=$current_ver"
+	echo "upgrade_channel=\"$_channel\""
+	[ -n "$_osus_upstream" ] && echo "upgrade_osus=true" || echo "upgrade_osus=false"
+	echo "upgrade_versions=\"${_recommended[*]}\""
+	echo "upgrade_conditional=\"${_cond_in_mirror[*]}\""
+	exit 0
+fi
 # Version-discovery mode: --dry-run without --to just lists what's available
 if [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 	osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || true
@@ -247,6 +322,41 @@ fi
 
 # When upgrade is already running, skip straight to monitoring
 if [ ! "$upgrade_already_running" ]; then
+	# Early check: if OSUS is configured and no channel change will be needed,
+	# verify the target version exists in the graph before running day2.
+	_target_major=$(_ver_minor "$target_ver")
+	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
+	_isc_file="../${mirror_name}/data/imageset-config.yaml"
+	_isc_channel=""
+	[ -f "$_isc_file" ] && _isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
+	if [ -n "$_isc_channel" ]; then
+		_channel_prefix="${_isc_channel%-*}"
+	elif [ -n "$_current_channel" ]; then
+		_channel_prefix="${_current_channel%-*}"
+	else
+		_channel_prefix="${ocp_channel:-stable}"
+	fi
+	_required_channel="${_channel_prefix}-${_target_major}"
+
+	if [ "$osus_upstream" ] && [ "$_current_channel" = "$_required_channel" ]; then
+		_early_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || true
+		_early_avail=$(echo "$_early_text" | awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+		_early_cond=$(echo "$_early_text" | awk '/Conditional updates:|Updates with known issues:/{f=1; next} f && /^  Version:/{print $2}') || true
+		if [ -n "$_early_avail" ] || [ -n "$_early_cond" ]; then
+			if ! echo "$_early_avail" | grep -qxF "$target_ver" && \
+			   ! echo "$_early_cond" | grep -qxF "$target_ver"; then
+				_all_avail=$(echo "$_early_avail" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
+				_all_cond=$(echo "$_early_cond" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
+				aba_abort "Version $target_ver is not an available upgrade from $current_ver (checked OSUS graph)." \
+					${_all_avail:+"Available upgrades: $_all_avail"} \
+					${_all_cond:+"Conditional upgrades: $_all_cond"} \
+					"${_all_avail:- No upgrades found — the version may require intermediate steps.}" \
+					"Check the upgrade path: oc adm upgrade --include-not-recommended" \
+					"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+			fi
+		fi
+	fi
+
 	# Run day2 to ensure IDMS, signatures, and catalog sources are current.
 	if [ ! "$opt_skip_day2" ]; then
 		aba_info "Running 'aba day2' to apply mirror resources, signatures, and catalog sources ..."
@@ -313,7 +423,7 @@ if [ ! "$upgrade_already_running" ]; then
 	_available_versions=$(echo "$_upgrade_text" \
 		| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
 	_conditional_versions=$(echo "$_upgrade_text" \
-		| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+		| awk '/Conditional updates:|Updates with known issues:/{f=1; next} f && /^  Version:/{print $2}') || true
 
 	# Ensure the cluster's update channel matches what was mirrored.
 	# The ISC (imageset-config.yaml) is the source of truth — it contains
@@ -348,39 +458,65 @@ if [ ! "$upgrade_already_running" ]; then
 		_channel_changed=1
 	fi
 
-	# When the channel changed, re-fetch available updates from the new channel.
-	if [ "$_channel_changed" ]; then
-		aba_info "Waiting for update graph to refresh after channel change ..."
-		_graph_ok=""
-		for _try in $(seq 1 12); do
-			_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || true
-			_available_versions=$(echo "$_upgrade_text" \
-				| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
-			_conditional_versions=$(echo "$_upgrade_text" \
-				| awk '/Conditional updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
-			if echo "$_available_versions" | grep -qxF "$target_ver"; then
-				_graph_ok=1
-				break
+	_osus_graph_refresh() {
+		_upgrade_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || return 1
+		_available_versions=$(echo "$_upgrade_text" \
+			| awk '/Recommended updates:/{f=1; next} f && /^[^ ]/{f=0} f && /^  [0-9]/{print $1}') || true
+		_conditional_versions=$(echo "$_upgrade_text" \
+			| awk '/Conditional updates:|Updates with known issues:/{f=1; next} f && /^  Version:/{print $2}' ) || true
+		# Graph is "ready" if it has any versions at all
+		[ -n "$_available_versions" ] || [ -n "$_conditional_versions" ]
+	}
+
+	_osus_graph_has_target() {
+		_osus_graph_refresh || return 1
+		echo "$_available_versions" | grep -qxF "$target_ver" && return 0
+		echo "$_conditional_versions" | grep -qxF "$target_ver"
+	}
+
+	if [ "$osus_upstream" ]; then
+		if [ "$_channel_changed" ]; then
+			aba_wait_show "Waiting for $target_ver to appear in graph after channel change" 5 60 _osus_graph_has_target && _graph_ok=1 || true
+		else
+			_osus_graph_has_target && _graph_ok=1
+		fi
+		[ "$_graph_ok" ] && aba_info "Version $target_ver found in OSUS update graph"
+	fi
+
+	# If no graph and no OSUS, offer to install OSUS now.
+	# day2 already ran (line 253), so CatalogSources exist.
+	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
+		_cincinnati_available=""
+		oc get packagemanifests cincinnati-operator >/dev/null 2>&1 && _cincinnati_available=1
+
+		if [ "$_cincinnati_available" ]; then
+			echo
+			aba_info "The 'cincinnati-operator' package is available in OperatorHub."
+			if ask "Install OSUS (OpenShift Update Service) now before upgrading (recommended)"; then
+				scripts/day2-config-osus.sh
+				osus_upstream=$(oc get clusterversion version \
+					-o jsonpath='{.spec.upstream}' 2>/dev/null) || true
+				if [ "$osus_upstream" ]; then
+					aba_success "OSUS configured — upgrade will use local update graph"
+					upgrade_cmd="oc adm upgrade --to $target_ver $opt_force $_opt_warn"
+				# OSUS install patches CA, proxy, trust -- give the cluster time to settle
+				sleep 15
+				aba_wait_show "Waiting for cluster to finish reconciling" 10 300 cluster_not_progressing
+				fi
 			fi
-			if echo "$_conditional_versions" | grep -qxF "$target_ver"; then
-				_graph_ok=1
-				break
-			fi
-			sleep 5
-		done
-	else
-		# No channel change — check immediately
-		if echo "$_available_versions" | grep -qxF "$target_ver"; then
-			_graph_ok=1
-		elif echo "$_conditional_versions" | grep -qxF "$target_ver"; then
-			_graph_ok=1
 		fi
 	fi
 
-	# Validate that the target is reachable before attempting the upgrade
+	# Wait for OSUS graph to have any data, then check for target immediately
 	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
-		_all_available=$(echo "$_available_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
-		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | sort -V | tr '\n' ', ' | sed 's/,$//')
+		aba_wait_show "Waiting for $target_ver in OSUS update graph" 5 120 _osus_graph_refresh || true
+		_osus_graph_has_target && _graph_ok=1
+	fi
+
+	# OSUS is configured but target version not in graph after waiting
+	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+		_all_available=$(echo "$_available_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
+		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
 		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
 			${_all_available:+"Available upgrades: $_all_available"} \
 			${_all_conditional:+"Conditional upgrades: $_all_conditional"} \
@@ -389,22 +525,41 @@ if [ ! "$upgrade_already_running" ]; then
 			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	fi
 
-	# If no OSUS graph, warn and require explicit user permission.
-	# Without OSUS the cluster has no update graph, so OpenShift cannot
-	# validate the upgrade path or enforce admin acknowledgment gates.
-	# We must get user consent before adding --allow-explicit-upgrade.
+	# No OSUS at all — offer manual override without graph validation
 	if [ -z "$_graph_ok" ] && [ -z "$osus_upstream" ]; then
 		echo
 		aba_warn "No local update graph (OSUS) detected." \
 			"Without OSUS, OpenShift cannot validate the upgrade path or enforce admin acknowledgment gates." \
 			"" \
-			"It is strongly recommended to configure OSUS before upgrading:" \
-			"  aba day2" \
-			"" \
 			"If you proceed, the upgrade will bypass OpenShift's update graph validation."
 		echo
 		ask -n --auto-yes "Proceed with explicit upgrade WITHOUT update graph validation" || exit 1
 		upgrade_cmd="$upgrade_cmd --allow-explicit-upgrade"
+	fi
+
+	# Warn if target is a conditional upgrade (has known issues)
+	if [ "$_graph_ok" ] && ! echo "$_available_versions" | grep -qxF "$target_ver" \
+	   && echo "$_conditional_versions" | grep -qxF "$target_ver"; then
+		# Extract risk details from the "Updates with known issues" block
+		_risk_info=$(echo "$_upgrade_text" | awk -v ver="$target_ver" '
+			/Updates with known issues:/{f=1; next}
+			f && /^  Version:/ && $2==ver {found=1; next}
+			f && found && /^  Version:/{exit}
+			f && found && /^  Reason:/{printf "  %s\n", $0; next}
+			f && found && /^  Message:/{printf "  %s\n", $0; next}
+			f && found && /^  http/{printf "  %s\n", $0; next}
+			f && found && /^   /{printf "  %s\n", $0}
+		')
+		echo
+		aba_warn "Version $target_ver is a conditional upgrade (has known issues):"
+		[ -n "$_risk_info" ] && echo "$_risk_info"
+		echo
+		if [ "$opt_allow_not_recommended" ]; then
+			aba_info "Proceeding (--allow-not-recommended was specified)."
+		else
+			ask -n "Proceed with unrecommended upgrade to $target_ver despite known issues" || exit 1
+		fi
+		upgrade_cmd="$upgrade_cmd --allow-not-recommended"
 	fi
 
 	# Execute upgrade

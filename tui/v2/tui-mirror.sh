@@ -636,7 +636,7 @@ mirror_save() {
 		_tmp_excl=true
 		replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
-		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating ISC (operators only)..." 3 50
+		dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating imageset-config.yaml (operators only)..." 3 60
 		run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 	fi
 
@@ -675,7 +675,7 @@ mirror_prep_upgrade() {
 
 	# Fetch upgrade targets reachable from the current version
 	local _channel="${ocp_channel:-fast}"
-	local _targets _zstream="" _next="" _next1=""
+	local _zstream="" _next="" _next1=""
 	local _task_id="aba:upgrade-targets:${_current_ver}"
 
 	# Peek: is the background upgrade-target fetch done? Show infobox only if not.
@@ -737,7 +737,7 @@ mirror_prep_upgrade() {
 			local _ch="${_item##*|}"
 			[[ "$_fb_channels" != *"$_ch"* ]] && _fb_channels="${_fb_channels:+$_fb_channels, }$_ch"
 		done
-		if [[ -z "$_targets" ]]; then
+		if [[ -z "$_zstream" && -z "$_next" && -z "$_next1" ]]; then
 			dlg --backtitle "$(ui_backtitle)" --title "No Upgrades on ${_channel}" --msgbox \
 				"No upgrades available on the ${_channel} channel ... yet.\n\n\
 Items marked [switch to ...] will automatically\n\
@@ -932,7 +932,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
-		"Generating ImageSet configuration (operator catalogs may also be refreshed). Please wait." 5 60
+		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to download)" 0 0
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0
@@ -1099,43 +1099,59 @@ mirror_view_isc() {
 		source <(normalize-aba-conf) 2>/dev/null
 		_excl_plat="${excl_platform:-false}"
 
-		local _isc_items=("V" "View (read-only)")
+		# Build context summary for the menu prompt
+		local _op_count=0
+		if declare -p OP_BASKET &>/dev/null && [[ ${#OP_BASKET[@]} -gt 0 ]]; then
+			_op_count=${#OP_BASKET[@]}
+		else
+			local _isc_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
+			if [[ -f "$_isc_file" ]]; then
+				_op_count=$(awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}' "$_isc_file")
+			fi
+		fi
+		local _rel_status="included"
+		[[ "$_excl_plat" == "true" ]] && _rel_status="excluded"
+		local _isc_summary="OCP ${ocp_version:-?} · ${_op_count} operator(s) · release images: ${_rel_status}"
+
+		local _isc_items=("V" "View")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
 		_isc_items+=("O" "Select Operators")
 		_isc_items+=("" "──── Advanced ──────────────────────")
-		_isc_items+=("R" "Force regenerate (from aba settings)")
+		_isc_items+=("R" "Regenerate imageset-config.yaml (from aba.conf + mirror.conf)")
 		# Toggle: exclude release images (operators only)
 		local _excl_label
 		if [[ "$_excl_plat" == "true" ]]; then
-			_excl_label="Exclude Release: \Z1ON\Zn (release images excluded)"
+			_excl_label="Release Images: \Z1excluded\Zn"
 		else
-			_excl_label="Exclude Release: \Z2OFF\Zn (all images included)"
+			_excl_label="Release Images: \Z2included\Zn"
 		fi
 		_isc_items+=("X" "$_excl_label")
-		_isc_items+=("E" "Edit (advanced)")
+		_isc_items+=("E" "Edit imageset-config.yaml")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "$TUI2_MSG_ISC_MENU" 0 0 0 \
+			--menu "${TUI2_MSG_ISC_MENU}${_isc_summary}\n" 0 0 0 \
 				"${_isc_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
 			case "$rc" in
 				2)
 					show_help "ImageSet Configuration" \
-"The ImageSet Configuration (ISC) controls which images are mirrored.
+"The imageset-config.yaml (ISC) controls which images oc-mirror will include.
 
-• View: see the current ISC YAML file
+• View: see the current imageset-config.yaml
 • Select Operators: choose which operators to include
-• Force regenerate: rebuild ISC from current aba.conf settings
-• Exclude Release: toggle platform/release images on or off.
-  When ON, only operator images are mirrored — useful when
+• Regenerate: rebuild imageset-config.yaml from aba.conf + mirror.conf
+  settings. Use this to let ABA take back control of the file after
+  manual edits.
+• Release Images: toggle platform/release images on or off.
+  When excluded, only operator images are mirrored — useful when
   release images are already in the mirror and you only need
   to transfer new or updated operators.
-• Edit: manually edit the ISC YAML (advanced users)"
+• Edit imageset-config.yaml: manually edit the ISC YAML (advanced users)"
 					continue
 					;;
 				0) ;;
@@ -1177,7 +1193,7 @@ mirror_view_isc() {
 				R)
 					dlg --backtitle "$(ui_backtitle)" --title "Confirm Regenerate" \
 						--yes-label "Regenerate" --no-label "Cancel" \
-						--yesno "\nThis will discard any manual edits and regenerate the\nImageSet Config from current aba settings\n(version, channel, operators).\n\nAre you sure?" 0 0
+						--yesno "\nThis will discard any manual edits and regenerate\nimageset-config.yaml from aba.conf + mirror.conf\n(version, channel, operators).\n\nAre you sure?" 0 0
 					if [[ $? -eq 0 ]]; then
 						# Touch .created so the script's guard sees it as newer than
 						# the ISC and triggers regeneration — keeps ISC in place
@@ -1193,7 +1209,7 @@ mirror_view_isc() {
 							dlg --backtitle "$(ui_backtitle)" --title "Regeneration Failed" \
 								--msgbox "$_regen_out" 0 0
 						else
-							dlg --backtitle "$(ui_backtitle)" --title "Regenerated ImageSet Config" \
+							dlg --backtitle "$(ui_backtitle)" --title "Regenerated imageset-config.yaml" \
 								--exit-label "OK" --textbox "$isconf_file" 0 0
 						fi
 					fi

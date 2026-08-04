@@ -21,6 +21,7 @@ digitalai-release-operator                              Digital.ai Release      
 dynatrace-operator                                      Dynatrace Operator                                           alpha
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
+ent-small-operator                                      Enterprise Small Operator                                    alpha
 falcon-operator                                         CrowdStrike Falcon Platform - Operator                       certified-1.0
 fujitsu-enterprise-postgres-operator                    Fujitsu Enterprise Postgres Operator                         stable
 function-mesh                                           Function Mesh Operator                                       alpha

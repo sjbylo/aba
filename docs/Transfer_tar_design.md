@@ -72,7 +72,7 @@ However, `aba save` and `aba transfer` both write to `mirror/data/aba-transfer.t
 **New script `scripts/transfer-extract.sh`** called via a new Makefile target `extract-transfer` that is a dependency of `load`. This:
 
 - Moves the 40-line inline extraction block out of [reg-load.sh](scripts/reg-load.sh) (lines 46-85)
-- Adds cluster-dir extraction with smart handling (new dir = extract all, installed dir = only update day2/)
+- Adds cluster-dir extraction with smart handling (new dir = extract all, installed dir = only update day2-custom-manifests/)
 - Can also be run standalone: `aba -d mirror extract-transfer`
 
 ### Q5: What files go into the cluster-dir transfer tar?
@@ -85,9 +85,14 @@ The only large file in a cluster dir is the ISO (1GB+), which gets regenerated o
 - Symlinks: `scripts/`, `templates/`, `cli/`, `mirror/`, `Makefile`, `aba.conf` -- a few bytes each, and they MUST be included or the cluster dir is broken on disco (Make can't find its Makefile/scripts)
 - Markers: `.primed`, `.bm-message`, `.init` -- zero bytes each
 - Lifecycle markers (`.install-complete` etc.) -- won't exist on a new cluster being sent to disco; for the update case, extraction handles it
-- `day2/` subdirectory -- small YAML manifests
+- `day2-custom-manifests/` subdirectory -- small YAML manifests
 
 No clever exclusion list to maintain. The resulting tar is a few KB per cluster dir.
+
+**Decision: Option B chosen.** Separate files: `aba-transfer.tar` (ISC/CLIs from save)
+and `aba-transfer-configs.tar` (cluster dirs from `aba transfer-primed`). No conflict,
+both live in `mirror/data/` so `cp mirror/data/*.tar` still transfers everything.
+The command to create the configs tar is `aba transfer-primed` (alias: `aba transfer`).
 
 ---
 
@@ -141,7 +146,7 @@ Add `transfer` to the bypass list so it maps to a Make target (or handle it like
 - Extracts ISC/CLI files (existing behavior, moved from reg-load.sh)
 - Extracts cluster dirs with smart handling:
   - New dir: extract everything
-  - Installed dir (`.install-complete`): only update `day2/` manifests
+  - Installed dir (`.install-complete`): only update `day2-custom-manifests/` manifests
   - Existing but not installed: overwrite with warning
 - Deletes the transfer tar after extraction
 
@@ -195,6 +200,8 @@ flowchart LR
 
 
 
-## Open question for user
+## Decision
 
-Should `aba transfer` APPEND cluster dirs to an existing `aba-transfer.tar` (Option C above), or should it always create a fresh tar? Appending is elegant (one file to copy) but means the user must run `aba save` before `aba transfer` if they want both images and configs. Creating fresh is simpler but may overwrite the ISC/CLI content from a previous `aba save`.
+Option B chosen: separate files. `aba transfer-primed` (alias `aba transfer`) creates
+`mirror/data/aba-transfer-configs.tar`. `aba save` creates `mirror/data/aba-transfer.tar`
+as before. No conflict; `cp mirror/data/*.tar` copies both.

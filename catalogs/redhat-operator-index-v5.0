@@ -21,9 +21,12 @@ devworkspace-operator                                   DevWorkspace Operator   
 dpu-network-operator                                    DPU Network Operator                                         stable
 eap                                                     JBoss EAP                                                    stable
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
+job-set                                                 Job Set Operator                                             stable-v1.0
 jws-operator                                            WebServer                                                    alpha
 kiali-ossm                                              Kiali Operator                                               stable
 kubevirt-hyperconverged                                 OpenShift Virtualization                                     stable
+kueue-operator                                          Red Hat build of Kueue                                       stable-v1.4
+leader-worker-set                                       Red Hat build of Leader Worker Set                           stable-v1.0
 logic-operator                                          OpenShift Serverless Logic Operator                          stable
 logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
 machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
@@ -43,6 +46,7 @@ openshift-secondary-scheduler-operator                  Secondary Scheduler Oper
 quay-bridge-operator                                    Red Hat Quay Bridge Operator                                 stable-3.17
 quay-operator                                           Red Hat Quay                                                 stable-3.17
 red-hat-hawtio-operator                                 HawtIO Operator                                              v2
+rhacs-operator                                          Advanced Cluster Security for Kubernetes                     stable
 rhpam-kogito-operator                                   RHPAM Kogito Operator                                        7.x
 rh-service-binding-operator                             Service Binding Operator                                     stable
 rhsso-operator                                          Red Hat Single Sign-On Operator                              stable

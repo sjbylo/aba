@@ -562,21 +562,23 @@ if [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 			cp "$HOME/.e2e-harness/bin/govc" "$HOME/bin/govc"
 			chmod 755 "$HOME/bin/govc"
 			export PATH="$HOME/bin:$PATH"
-		elif [ -f "$_ABA_ROOT/cli/Makefile" ] && [ -f "$_ABA_ROOT/aba.conf" ]; then
+		elif [ -f "$_ABA_ROOT/cli/Makefile" ]; then
+			# make govc does not need aba.conf (ensure_govc does, and skips when
+			# platform!=vmw — which is exactly the pre-init / bare-clone case).
 			echo "  Bootstrapping govc ..."
-		make -sC "$_ABA_ROOT/cli" govc || {
-			echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
-			echo "99" > "$RC_FILE"
-			exit 1
-		}
-		export PATH="$HOME/bin:$PATH"
-		command -v govc >/dev/null || {
-			echo "  ERROR: govc not found in PATH after bootstrap." >&2
-			echo "99" > "$RC_FILE"
-			exit 1
-		}
+			make -sC "$_ABA_ROOT/cli" govc || {
+				echo "  ERROR: Failed to bootstrap govc. Cannot revert snapshots without it." >&2
+				echo "99" > "$RC_FILE"
+				exit 1
+			}
+			export PATH="$HOME/bin:$PATH"
+			command -v govc >/dev/null || {
+				echo "  ERROR: govc not found in PATH after bootstrap." >&2
+				echo "99" > "$RC_FILE"
+				exit 1
+			}
 		else
-			echo "  WARNING: ABA not fully initialized (missing cli/Makefile or aba.conf)."
+			echo "  WARNING: ABA not fully initialized (missing cli/Makefile)."
 			echo "           Suite will install/configure ABA before using govc."
 		fi
 	fi
@@ -784,6 +786,29 @@ _pre_suite_cleanup() {
 	fi
 
 	[ -n "$_had_cleanup" ] && echo "  Pre-suite cleanup complete."
+
+	# Clean up leftover ABA DNS/NTP on disN from a crashed/interrupted suite.
+	# Only airgapped-local-reg sets these up, but any suite may follow on the
+	# same pool.  Safe to run unconditionally -- aba remove is a no-op if not configured.
+	if [ -n "${INTERNAL_BASTION:-}" ]; then
+		if _essh "$INTERNAL_BASTION" "test -f /etc/dnsmasq.d/aba-upstream.conf" 2>/dev/null; then
+			echo "  Cleaning up leftover ABA DNS on disN ..."
+			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove dns -y" 2>/dev/null || true
+		fi
+		if _essh "$INTERNAL_BASTION" "grep -q '^allow ' /etc/chrony.conf" 2>/dev/null; then
+			echo "  Cleaning up leftover ABA NTP on disN ..."
+			_essh "$INTERNAL_BASTION" "cd ~/aba && aba remove ntp -y" 2>/dev/null || true
+		fi
+	fi
+
+	# Warn if ABA DNS was set up on conN (should never happen -- pool DNS uses
+	# e2e-pool.conf, not aba-upstream.conf).  Don't auto-remove: aba remove dns
+	# would stop dnsmasq and break pool infrastructure DNS.
+	if [ -f /etc/dnsmasq.d/aba-upstream.conf ]; then
+		echo "  WARNING: /etc/dnsmasq.d/aba-upstream.conf found on conN -- leftover from a previous run?"
+		echo "           Pool DNS may be misconfigured. Investigate manually."
+	fi
+
 	return 0
 }
 
@@ -796,20 +821,22 @@ elif [ "${E2E_SKIP_SNAPSHOT_REVERT:-}" != "1" ]; then
 		if command -v govc >/dev/null; then
 			cp "$(command -v govc)" "$_FRAMEWORK_BIN/govc"
 			echo "  Copied govc to $_FRAMEWORK_BIN/govc"
-		elif [ -f "$_ABA_ROOT/scripts/include_all.sh" ]; then
-			( source "$_ABA_ROOT/scripts/include_all.sh" && ensure_govc )
+		elif [ -f "$_ABA_ROOT/cli/Makefile" ]; then
+			# Prefer make over ensure_govc: ensure_govc no-ops when platform!=vmw
+			# (common before aba.conf exists), which caused exit=99 death spirals.
+			make -sC "$_ABA_ROOT/cli" govc || true
 			if [ -x ~/bin/govc ]; then
 				cp ~/bin/govc "$_FRAMEWORK_BIN/govc"
 				echo "  Installed govc to $_FRAMEWORK_BIN/govc"
 			fi
 		fi
-	if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
-		echo ""
-		echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
-		echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
-		echo "99" > "$RC_FILE"
-		exit 99
-	fi
+		if [ ! -x "$_FRAMEWORK_BIN/govc" ]; then
+			echo ""
+			echo "  FATAL: Failed to install govc to $_FRAMEWORK_BIN/govc"
+			echo "  Cannot run orphan VM checks on VMware pool. Fix govc installation."
+			echo "99" > "$RC_FILE"
+			exit 99
+		fi
 	fi
 
 	# Check for orphan VMs FIRST, before any cleanup runs.

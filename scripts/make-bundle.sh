@@ -17,6 +17,8 @@ _wait_for_cli_downloads() {
 	local _max=3
 	for (( _try=1; _try<=_max; _try++ )); do
 		if scripts/cli-download-all.sh --wait >&2; then
+			# Optional convenience CLIs (warn-and-continue — not required by ABA)
+			cli_download_extra_clis --wait >&2
 			return 0
 		fi
 		[ $_try -lt $_max ] || { aba_info "CLI download failed after $_max attempts." >&2; return 1; }
@@ -96,6 +98,7 @@ aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_cha
 # Kick off CLI downloads early (non-blocking) so they run in parallel with oc-mirror
 aba_debug "Starting CLI downloads in background (will be waited on later)"
 scripts/cli-download-all.sh
+cli_download_extra_clis
 
 if [ "$bundle_dest_file" = "-" ]; then
 	# Be sure the standard output of this command is ONLY tar output and nothing else!

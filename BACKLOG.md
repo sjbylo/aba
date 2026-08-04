@@ -660,14 +660,14 @@ in Makefile) and removed on delete. VIP auto-allocation when ABA manages DNS.
 **Added:** 2026-07-21
 
 **Context:** The Go-based mirror-registry rewrite (currently `quay-ng` in ABA)
-will ship as "mirror-registry v3.0". ABA already supports it as an ALPHA vendor.
+will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
 
 **When GA ships, ABA needs:**
 - Switch `_QUAY_NG_IMAGE` from `quay.io/sjbylo/quay-mirror:dev` to official image
 - Evaluate offline install mode (binary + tar — may eliminate container/Quadlet)
 - Re-test `-init-password-stdin` flag (merged upstream, not in current image)
 - Re-test `-port` flag (PR merged: https://github.com/quay/quay/pull/6543)
-- Rename vendor display from "quay-ng [ALPHA]" (internal name can stay)
+- Rename vendor display from "quay-ng [BETA]" to GA (internal name can stay)
 - Update bundle workflow for official offline delivery format
 
 **Design doc:** `ai/DESIGN-quay-ng-vendor.md`
@@ -848,32 +848,125 @@ to catch new dependencies early. Could also run on any change to
 ## Bundle additional CLI tools (virtctl, etc.)
 
 **Severity:** LOW — UX convenience for air-gapped users
-**Status:** Planned
+**Status:** Done
 **Added:** 2026-07-25
+**Done:** 2026-07-26
 
-**Problem:** ABA bundles only `oc` and `kubectl` for air-gapped transfer.
-Other CLI tools like `virtctl` (OpenShift Virtualization), `tkn` (Tekton/Pipelines),
-`argocd`, `acs-cli` (roxctl), etc. are very useful and often needed on the
-disconnected side but unavailable without internet.
+**Solution:** Optional `download-extra-clis` / `install-extra-clis` in `cli/Makefile`
+(virtctl, kn, tkn, helm, opm, argocd, roxctl). Auto-downloaded on `aba bundle` and
+`aba save` via `cli_download_extra_clis` (warn-and-continue). Not part of everyday
+`download-all`. Disco installs extras when artifacts already exist under `cli/`.
 
-**Question:** Which CLI tools should ABA download and include in the bundle?
-Candidates:
-- `virtctl` — required for OpenShift Virtualization VM management
-- `tkn` — Tekton Pipelines CLI
-- `roxctl` — Red Hat ACS (StackRox) CLI
-- `argocd` — GitOps CLI
-- `helm` — Helm chart management
-- `kustomize` — already bundled with `oc`?
-- `opm` — operator package manager (for catalog maintainers)
+**Follow-ups (optional):** operator-set-conditioned inclusion to shrink download size.
 
-**Proposed approach:** Since ABA already downloads `oc`/`kubectl` via
-`ensure_cli_tools`, it should be straightforward to extend this to additional
-tools — especially those tied to operator sets the user has configured.
-For example, if `operator-set-virt` is selected, automatically include `virtctl`
-in the bundle. If `operator-set-pipelines` is selected, include `tkn`.
+---
 
-**Considerations:**
-- Download size: each tool is 30-100MB; only include tools for configured operator sets
-- Version pinning: tools should match the OCP version where possible
-- Discovery: where are these binaries hosted? (GitHub releases, mirror.openshift.com, etc.)
-- Air-gap delivery: include in `aba-transfer.tar` or as separate binaries in `cli/`?
+## Upgrade: Upgradeable=False pre-flight check in CLI
+
+**Severity:** MEDIUM — CLI silently hits confusing OpenShift errors
+**Status:** Planned
+**Added:** 2026-08-01
+
+**Problem:** The TUI checks `Upgradeable=False` before triggering an upgrade
+(`_upgrade_preflight_check` in `tui-cluster.sh`), but the CLI path (`aba upgrade`)
+does not. When an admin acknowledgment gate is active (e.g. cross-minor upgrade
+4.14→4.15 requiring API removal acknowledgment), the CLI upgrade fails with a
+confusing OpenShift error instead of a clear ABA message.
+
+**Proposed fix:** Add an `Upgradeable=False` check to `cluster-upgrade.sh` before
+executing the upgrade command. If detected:
+1. Show the `Upgradeable=False` reason and message
+2. For admin ack gates: offer to auto-acknowledge with `oc adm upgrade ack`
+3. For other blockers: abort with a clear message
+
+The check already exists in `tui-cluster.sh` (`_upgrade_preflight_check`) — the
+logic should be extracted to a shared function in `include_all.sh` or moved
+into `cluster-upgrade.sh` itself so both TUI and CLI benefit.
+
+**Files to change:**
+- `scripts/cluster-upgrade.sh`: add `Upgradeable=False` check before upgrade
+- `tui/v2/tui-cluster.sh`: refactor `_upgrade_preflight_check` to share logic
+- `scripts/include_all.sh`: optional shared helper
+
+---
+
+## Feature: Per-node / per-role cluster configuration
+
+**Severity:** MEDIUM — blocks some bare-metal use cases without `--primed` workaround
+**Status:** Planned
+**Added:** 2026-08-01
+
+**Problem:** `cluster.conf` provides a single set of config values applied uniformly
+to all nodes of a given role. Some bare-metal deployments need:
+
+- **Per-role NIC names** (`ports_master=ens1f0`, `ports_worker=ens2f1`) — masters
+  boot from one interface, workers from another.
+- **Per-node `rootDeviceHints`** — each physical server has a unique disk identifier
+  (e.g. `/dev/disk/by-path/...` or serial number).
+
+**Current workaround:** Use `aba bundle --primed` to supply a hand-crafted
+`agent-config.yaml` that ABA bundles as-is (the `.primed` marker skips regeneration).
+
+**Proposed approach:**
+- Extend `cluster.conf` syntax to accept per-role and optionally per-node overrides
+- Per-role: `ports_master=`, `ports_worker=` (already partially supported)
+- Per-node: new config file or extended `macs.conf` format with per-node fields
+- Must remain backward compatible with existing single-value `ports=` syntax
+
+**Files likely affected:**
+- `scripts/include_all.sh` (`normalize-cluster-conf`): parse new per-role keys
+- `templates/agent-config.yaml.j2`: conditional per-node rootDeviceHints
+- `scripts/create-cluster-conf.sh`: new prompts/validation
+- `devel/01-SPEC.md`: document the extended config model
+
+---
+
+## TUI upgrade dialog: show conditional versions inline instead of toggle
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-08-03
+
+**Problem:** The upgrade dialog uses a "W" toggle to show/hide conditional
+(not-recommended) versions. This hides available options behind a toggle the
+user may not discover, adding unnecessary complexity.
+
+**Proposed fix:**
+- Remove the "Include conditional versions" (W) toggle entirely
+- Always show all versions in the list, annotating conditional ones
+  (e.g. `4.21.26 (conditional)`)
+- When the user selects a conditional version, show a confirmation dialog
+  with the specific reason/risk from the OSUS graph before proceeding
+- Automatically pass `--allow-not-recommended` to `aba upgrade` for
+  conditional versions (already implemented)
+- Keep the Force (F) toggle as-is — it serves a different purpose
+
+**Benefit:** Simpler dialog, all options visible at once, user makes an
+informed choice without needing to know about the toggle.
+
+## TUI upgrade dialog: warn when versions cannot be validated without OSUS
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-08-03
+
+**Problem:** When OSUS is not installed, the TUI upgrade dialog shows all
+mirrored versions as "recommended" because there is no graph to classify
+them. The user discovers a version is conditional only AFTER day2 runs and
+OSUS is installed mid-upgrade — wasting several minutes. Internet access
+cannot be assumed (the cluster being upgraded is disconnected).
+
+**Proposed fix:**
+- In the TUI upgrade dialog header (where `[no OSUS]` is shown), add a
+  clear warning: "Upgrade recommendations cannot be validated without OSUS.
+  Some versions may have known issues."
+- In `aba upgrade` CLI output (non-TUI), show a similar warning before
+  listing available versions when OSUS is not installed.
+- The existing "Tip: Install OSUS..." message should be more prominent
+  when showing unvalidated versions.
+- Do NOT attempt to query public Cincinnati graph — internet connectivity
+  cannot be assumed on a disconnected cluster's bastion.
+
+**Benefit:** User is informed up-front that version classification is
+best-effort without OSUS, and is encouraged to install OSUS before
+choosing an upgrade target.

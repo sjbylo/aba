@@ -1,0 +1,26 @@
+Create a config-only transfer tar for day-N updates (primed cluster dirs)
+
+Usage:
+  aba transfer-primed                  # Tar all cluster dirs
+  aba -d <cluster> transfer-primed     # Tar a single cluster dir
+  aba transfer                         # Alias for transfer-primed
+
+Creates mirror/data/aba-transfer-configs.tar containing primed cluster directories
+(excluding ISOs). This tar is separate from aba-transfer.tar (ISC/CLIs from 'aba save').
+
+Both live in mirror/data/ so 'cp mirror/data/*.tar' transfers everything needed.
+
+On the disconnected side, 'aba -d mirror load' extracts the configs tar automatically.
+
+Example (add a new cluster to an existing disco site):
+  # Connected side:
+  aba cluster -n factory -t compact --starting-ip 10.0.1.50
+  aba transfer-primed
+
+  # Transfer:
+  cp mirror/data/aba-transfer-configs.tar /path/to/portable/media/
+
+  # Disconnected side:
+  cp /path/to/media/aba-transfer-configs.tar mirror/data/
+  aba -d mirror load
+  aba -d factory deploy-primed

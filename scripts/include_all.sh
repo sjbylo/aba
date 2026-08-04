@@ -498,6 +498,18 @@ cluster_is_accessible() {
 	return 0
 }
 
+# Check that ClusterVersion is not actively reconciling.
+# Use after changes that trigger CVO reconciliation (OSUS install, CA/proxy patches)
+# to wait until the CVO settles before issuing an upgrade command.
+cluster_not_progressing() {
+	local _cv_progressing
+
+	aba_debug "Running: oc get clusterversion (progressing check)"
+
+	_cv_progressing=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null)
+	[ "$_cv_progressing" = "False" ]
+}
+
 # Auto-detect that a cluster install has completed.
 # If kubeconfig exists but .install-complete is missing, probe the cluster API.
 # If the cluster is ready, create the marker and externalize state.
@@ -818,15 +830,15 @@ cluster_state_dir() {
 	echo "$HOME/.aba/clusters/$name.$domain"
 }
 
-# Returns path to kubeconfig (prefers external state, falls back to local)
+# Returns path to kubeconfig (prefers local, falls back to external state)
 cluster_kubeconfig() {
 	local _sd
 	_sd=$(cluster_state_dir "$@") || return 1
 	local local_path="iso-agent-based/auth/kubeconfig"
-	if [[ -f "$_sd/kubeconfig" ]]; then
-		echo "$_sd/kubeconfig"
-	elif [[ -f "$local_path" ]]; then
+	if [[ -f "$local_path" ]]; then
 		echo "$PWD/$local_path"
+	elif [[ -f "$_sd/kubeconfig" ]]; then
+		echo "$_sd/kubeconfig"
 	fi
 }
 
@@ -855,11 +867,12 @@ cluster_api_reachable() {
 # Externalize cluster state to ~/.aba/clusters/<name>.<domain>/
 # Copies auth, config backups, and creates clusterstate symlink.
 # Must be called from the cluster directory (e.g. ~/aba/sno/).
-# Requires: normalize-aba-conf and normalize-cluster-conf already sourced,
-#           or will source them itself.
 externalize_cluster_state() {
-	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
-	[ -z "${cluster_name:-}" ] && source <(normalize-cluster-conf)
+	# Always source both: cluster.conf values must override aba.conf defaults
+	# (e.g. machine_network may differ). Conditional sourcing allowed stale
+	# aba.conf values to leak through the Make/aba.sh environment.
+	source <(normalize-aba-conf)
+	source <(normalize-cluster-conf)
 
 	[ -z "${cluster_name:-}" ] && aba_warn "externalize_cluster_state: cluster_name not set" && return 1
 	[ -z "${base_domain:-}" ] && aba_warn "externalize_cluster_state: base_domain not set" && return 1
@@ -917,7 +930,58 @@ externalize_cluster_state() {
 	# Convenience symlink
 	ln -sfn "$_state_dir" clusterstate
 
-	aba_info "Cluster state saved to $_state_dir/"
+	aba_info "Cluster state saved"
+	aba_debug "State dir: $_state_dir/"
+}
+
+# Display post-install summary and next steps.
+# Accepts both uppercase (CLUSTER_NAME, CP_REPLICAS) from cluster-config.sh
+# and lowercase (cluster_name, num_masters) from normalize-cluster-conf.
+show_cluster_summary() {
+	local _regcreds="${regcreds_dir:-}"
+	local _cn="${CLUSTER_NAME:-${cluster_name:-?}}"
+	local _bd="${BASE_DOMAIN:-${base_domain:-?}}"
+	local _masters="${CP_REPLICAS:-${num_masters:-0}}"
+	local _workers="${WORKER_REPLICAS:-${num_workers:-0}}"
+
+	# Derive cluster type from replica counts
+	local _type="standard"
+	[ "$_workers" -eq 0 ] && [ "$_masters" -eq 1 ] && _type="sno"
+	[ "$_workers" -eq 0 ] && [ "$_masters" -ge 3 ] && _type="compact"
+
+	local _nodes=$(( _masters + _workers ))
+
+	# Platform label
+	local _plat="${platform:-unknown}"
+	case "$_plat" in
+		kvm) _plat="KVM" ;;
+		vmw) _plat="VMware" ;;
+		bm)  _plat="bare-metal" ;;
+	esac
+
+	# Context-aware command prefix: "aba" from inside the cluster dir,
+	# "aba -d <dir>" when invoked via -d flag.
+	local _dir; _dir=$(basename "$PWD")
+	local _p="aba"
+	[ "${ABA_TARGET_DIR:-}" ] && _p="aba -d $_dir"
+
+	echo
+	aba_success "Cluster installed successfully!"
+	aba_info "  Name:     $_cn.$_bd"
+	aba_info "  Version:  ${ocp_version:-?}"
+	aba_info "  Type:     $_type ($_nodes node(s))"
+	aba_info "  Platform: $_plat"
+	aba_info "  API:      https://api.$_cn.$_bd:6443"
+	echo
+	aba_info "Next steps:"
+	aba_info "  . <($_p shell)     — access cluster (kubeconfig)"
+	aba_info "  . <($_p login)     — log in as kubeadmin"
+	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then
+		aba_info "  $_p day2           — configure OperatorHub with mirror registry"
+		aba_info "  $_p day2-osus      — configure OpenShift Update Service"
+	fi
+	aba_info "  $_p day2-ntp       — configure NTP"
+	aba_info "  $_p info           — view this information again"
 }
 
 # Emit export lines for cluster status fields from state.sh.
@@ -1527,17 +1591,20 @@ aba_wait_show() (
 	return "$_rc"
 )
 
+# Semver-aware sort (stdin -> stdout). Handles pre-release: ec < rc < GA.
+# sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver);
+# the -zzz trick tags GA versions so they sort after their pre-release siblings.
+_semver_sort() {
+	sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//'
+}
+
 # Check if version1 is strictly greater than version2 (semver-aware).
-# sort -V puts pre-release suffixes above bare versions (wrong for semver);
-# the -zzz trick makes GA sort after its pre-release siblings.
 is_version_greater() {
 	local version1=$1
 	local version2=$2
 
 	local sorted_versions=$(printf "%s\n%s" "$version1" "$version2" \
-		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
-		| sort -V \
-		| sed 's/-zzz$//' \
+		| _semver_sort \
 		| tr "\n" "|")
 
 	[[ "$sorted_versions" != "$version1|$version2|" ]]
@@ -1781,8 +1848,6 @@ _fetch_graph_cached() {
 # Args:
 #	$1 = channel base (e.g. stable)
 #	$2 = minor (e.g. 4.20) [optional]
-# sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver).
-# The -zzz trick tags GA versions so they sort after their pre-release siblings.
 ############################################
 fetch_all_versions() {
 	local channel="${1:-stable}"
@@ -1791,9 +1856,7 @@ fetch_all_versions() {
 	_fetch_graph_cached "$channel" "$minor" \
 		| jq -r '.nodes[].version' \
 		| grep "^${minor}\." \
-		| sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' \
-		| sort -V \
-		| sed 's/-zzz$//'
+		| _semver_sort
 }
 
 ############################################
@@ -1997,7 +2060,7 @@ verify_upgrade_path_exists() {
 
 	# Output diagnostic for callers to format their own error message
 	local lowest
-	lowest=$(echo "$graph_versions" | sort -V | head -1)
+	lowest=$(echo "$graph_versions" | _semver_sort | head -1)
 	echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
 
 	return 1
@@ -2075,7 +2138,7 @@ fetch_upgrade_targets() {
 			# Find the latest version in this minor
 			local target
 			target=$(echo "$graph_versions" | grep "^${probe_minor}\." |
-				sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//' | tail -n1)
+				_semver_sort | tail -n1)
 			if [[ -n "$target" ]]; then
 				if [[ $next_label -eq 0 ]]; then
 					printf "next\t%s\n" "$target"
@@ -2885,17 +2948,24 @@ run_once() {
 	fi
 
 	# --- TTL CHECK ---
-	# If TTL specified and exit file exists, check if it's expired
+	# If TTL specified and exit file exists, check if it's expired.
+	# Failed tasks (exit != 0) use a shorter TTL (max 30s) so transient
+	# failures recover quickly without caching "down" state for minutes.
 	if [[ -n "$ttl" && -f "$exit_file" ]]; then
 		local now=$(date +%s)
 		local exit_mtime=$(stat -c %Y "$exit_file" 2>/dev/null || stat -f %m "$exit_file" 2>/dev/null)
 		
 		if [[ -n "$exit_mtime" ]]; then
 			local age=$((now - exit_mtime))
-			if [[ $age -gt $ttl ]]; then
-				# Task output is stale, reset it
-				_log_history "TTL_EXPIRED age=${age}s ttl=${ttl}s"
-				aba_debug "run_once: task '$work_id' TTL expired (age=${age}s > ttl=${ttl}s), resetting"
+			local effective_ttl=$ttl
+			local _exit_rc
+			_exit_rc=$(cat "$exit_file" 2>/dev/null) || _exit_rc=0
+			if [[ "$_exit_rc" != "0" && $ttl -gt 30 ]]; then
+				effective_ttl=30
+			fi
+			if [[ $age -gt $effective_ttl ]]; then
+				_log_history "TTL_EXPIRED age=${age}s ttl=${effective_ttl}s exit=${_exit_rc}"
+				aba_debug "run_once: task '$work_id' expired (age=${age}s ttl=${effective_ttl}s exit=${_exit_rc}), resetting"
 				_kill_id "$work_id"
 				mkdir -p "$id_dir"
 				chmod 711 "$id_dir"  # Make directory traversable (execute-only for group/others)
@@ -3593,6 +3663,47 @@ _run_oc_mirror_with_retry() {
 	aba_success -n "Images $_past successfully!"
 	[ $try_tot -gt 1 ] && [ $try -gt 1 ] && echo_white " (after $try attempts!)" || echo
 
+	# Backup cluster-resources after successful oc-mirror run (keep last 5)
+	local _cr_dir="data/working-dir/cluster-resources"
+	local _hist_dir="data/working-dir/.cluster-resources-history"
+	if [ -d "$_cr_dir" ]; then
+		local _ts; _ts=$(date '+%Y%m%d-%H%M%S')
+		mkdir -p "$_hist_dir"
+		cp -a "$_cr_dir" "$_hist_dir/${_ts}-${action}"
+		# Prune oldest beyond 5
+		ls -dt "$_hist_dir"/*/ 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
+		aba_debug "Backed up cluster-resources to $_hist_dir/${_ts}-${action}"
+	fi
+
+	# Accumulate signatures across syncs into an ABA-owned merged file.
+	# oc-mirror regenerates signature-configmap.json from scratch each run,
+	# dropping signatures for versions not in the current sync.
+	local _sig_file="$_cr_dir/signature-configmap.json"
+	local _merged_file="data/working-dir/signature-configmap-merged.json"
+	if [ -s "$_sig_file" ]; then
+		if [ -s "$_merged_file" ]; then
+			jq -s '.[0].binaryData as $old |
+				.[1] | .binaryData = ($old + .binaryData)' \
+				"$_merged_file" "$_sig_file" > "${_merged_file}.tmp"
+
+			local _new_count _merged_count
+			_new_count=$(jq '.binaryData | length' "$_sig_file")
+			_merged_count=$(jq '.binaryData | length' "${_merged_file}.tmp" 2>/dev/null) || _merged_count=0
+			_merged_count=${_merged_count:-0}
+			if [ "$_merged_count" -ge "$_new_count" ]; then
+				mv "${_merged_file}.tmp" "$_merged_file"
+				aba_debug "Merged signatures into $_merged_file ($_merged_count keys)"
+			else
+				rm -f "${_merged_file}.tmp"
+				aba_warn "Signature merge validation failed (got $_merged_count keys, expected >= $_new_count). Removing merged file."
+				rm -f "$_merged_file"
+			fi
+		else
+			cp "$_sig_file" "$_merged_file"
+			aba_debug "Seeded merged signature file: $_merged_file"
+		fi
+	fi
+
 	return 0
 }
 
@@ -4272,6 +4383,41 @@ is_bundle_mode() {
 	[ -f "${ABA_ROOT:-.}/.bundle" ]
 }
 
+# Download optional convenience CLIs (virtctl, kn, tkn, helm, opm, argocd, roxctl).
+# Not required by ABA — warn-and-continue so a flake never fails bundle/save.
+# Usage: cli_download_extra_clis           # start (non-blocking)
+#        cli_download_extra_clis --wait    # wait for completion
+#        cli_download_extra_clis --reset   # reset task state
+cli_download_extra_clis() {
+	local _mode="${1:-}"
+	# Prefer CWD-relative scripts/ (works from aba root and from mirror/ via symlink)
+	local _dl="scripts/cli-download-all.sh"
+	if [ ! -f "$_dl" ] && [ -n "${ABA_ROOT:-}" ] && [ -f "${ABA_ROOT}/scripts/cli-download-all.sh" ]; then
+		_dl="${ABA_ROOT}/scripts/cli-download-all.sh"
+	fi
+
+	# Soft-fail in Make recipes: skip missing extras instead of aborting bundle/save.
+	# Direct "aba -d cli download-extra-clis" leaves SOFT_EXTRA unset → hard fail.
+	export SOFT_EXTRA=1
+
+	case "$_mode" in
+		--wait)
+			if ! "$_dl" --wait --extra; then
+				aba_warn "Optional extra CLI download failed — continuing (not required by ABA)." \
+					"You can retry with: aba -d cli download-extra-clis"
+			fi
+			;;
+		--reset)
+			"$_dl" --reset --extra 2>/dev/null || true
+			;;
+		*)
+			"$_dl" --extra 2>/dev/null || \
+				aba_warn "Optional extra CLI download start failed — continuing (not required by ABA)."
+			;;
+	esac
+	return 0
+}
+
 # Check internet connectivity to required sites
 # Usage: check_internet_connectivity <prefix> [quiet]
 #   prefix: Task ID prefix (e.g., "aba" for shared CLI/TUI probes)
@@ -4291,9 +4437,9 @@ check_internet_connectivity() {
 	fi
 	
 	# Start: 3 connectivity checks in parallel (5-min TTL). Wait: immediately below.
-	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://api.openshift.com/
-	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 5 --max-time 10 https://mirror.openshift.com/
-	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 5 --max-time 10 https://registry.redhat.io/
+	run_once -t 300 -i "${prefix}:check:api.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://api.openshift.com/
+	run_once -t 300 -i "${prefix}:check:mirror.openshift.com" -- curl -sL --head --connect-timeout 8 --max-time 15 https://mirror.openshift.com/
+	run_once -t 300 -i "${prefix}:check:registry.redhat.io" -- curl -sL --head --connect-timeout 8 --max-time 15 https://registry.redhat.io/
 	
 	# Wait: block for the 3 checks started above
 	FAILED_SITES=""

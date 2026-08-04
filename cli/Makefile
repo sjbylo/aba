@@ -1,4 +1,6 @@
-# Makefile to download and install oc, openshift-install, oc-mirror, butane and govc (vmw only)
+# Makefile to download and install oc, openshift-install, oc-mirror, butane and govc (vmw only).
+# Also provides optional "extra" CLIs (virtctl, kn, tkn, helm, opm, argocd, roxctl) for
+# air-gap convenience — see download-extra-clis / install-extra-clis (NOT in download-all).
 #
 # This is PURE MAKE -- no run_once inside recipes. run_once wraps Make from
 # OUTSIDE (cli-download-all.sh, ensure_*() functions). A user running
@@ -146,6 +148,37 @@ define atomic-download
 	mv $$_tmp $@
 endef
 
+# Convenience-CLI download (extras: virtctl/kn/tkn/…).
+# One-shot curl; verify checksum only if the download succeeded.
+# SOFT_EXTRA=1 (bundle/save): on failure delete partials, warn, exit 0.
+# Otherwise (direct aba -d cli download-extra-clis): fail hard.
+# Usage: $(call optional-download,DOWNLOAD_URL,SHA256SUM_URL[,SUM_NAME])
+# SUM_NAME defaults to $@; checksum lines may use an optional "./" prefix (RHACS).
+define optional-download
+	@_tmp=.$@.tmp.$$$$; \
+	rm -f $$_tmp $$_tmp.sha256 $@; \
+	if ! curl -f $(CURL_PROGRESS) -o $$_tmp -L $(1); then \
+		echo "[ABA] Download failed for $@"; \
+		rm -f $$_tmp; \
+		if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; \
+		exit 1; \
+	fi; \
+	echo -n "[ABA] Verifying checksum for $@: "; \
+	if curl -f -sL -o $$_tmp.sha256 $(2) && \
+	   _expected=$$(grep -E "[[:space:]](\./)?$(if $(3),$(3),$@)$$" $$_tmp.sha256 | awk '{print $$1}') && \
+	   _actual=$$(sha256sum $$_tmp | awk '{print $$1}') && \
+	   [ -n "$$_expected" ] && [ "$$_expected" = "$$_actual" ]; then \
+		echo "valid!"; \
+		rm -f $$_tmp.sha256; \
+		mv $$_tmp $@; \
+	else \
+		echo "FAILED!"; \
+		rm -f $$_tmp $$_tmp.sha256 $@; \
+		if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; \
+		exit 1; \
+	fi
+endef
+
 
 ########################################################################
 ##@ Help & Initialization
@@ -251,6 +284,62 @@ out-download-all:
 out-download-no-version:
 	@echo oc-mirror butane $(_govc_name)
 
+# Optional convenience CLIs for air-gap prep (bundle/save). NOT part of download-all.
+# Auto-downloaded only via cli-download-all.sh --extra (make-bundle / reg-save).
+# kn/tkn/helm CDN uses "darwin" (not "mac" like OpenShift client tarballs).
+cdn_os := $(os)
+ifeq ($(os),mac)
+  cdn_os := darwin
+endif
+kn_tar_file := kn-$(cdn_os)-$(ARCH).tar.gz
+tkn_tar_file := tkn-$(cdn_os)-$(ARCH).tar.gz
+helm_tar_file := helm-$(cdn_os)-$(ARCH).tar.gz
+opm_tar_rhel9 := opm-linux-rhel9.tar.gz
+opm_tar_default := opm-linux.tar.gz
+local_opm_tar := $(if $(filter rhel9,$(rhel_ver)),$(opm_tar_rhel9),$(opm_tar_default))
+virtctl_file := virtctl-$(ARCH)
+# OpenShift GitOps argocd CLI (RH Content Gateway). Always resolve newest stable at download time
+# (no latest/ symlink on CGW). Local filename is unversioned like kn/tkn.
+argocd_tar_file := argocd-$(cdn_os)-$(ARCH).tar.gz
+argocd_cgw_index = https://mirror.openshift.com/pub/cgw/openshift-gitops/
+# Remote CDN name is "roxctl" on amd64 and "roxctl-<arch>" elsewhere.
+# Local artifact MUST NOT be named "roxctl" — that collides with the phony install
+# target "roxctl" and creates a circular ~/bin/roxctl <-> roxctl dependency.
+ifeq ($(ARCH),amd64)
+  roxctl_remote := roxctl
+else
+  roxctl_remote := roxctl-$(ARCH)
+endif
+roxctl_file := roxctl-$(ARCH)
+
+.PHONY: download-kn
+download-kn: $(kn_tar_file)  ## Download kn (Serverless) tarball
+
+.PHONY: download-tkn
+download-tkn: $(tkn_tar_file)  ## Download tkn (Pipelines) tarball
+
+.PHONY: download-helm
+download-helm: $(helm_tar_file)  ## Download helm tarball
+
+.PHONY: download-opm
+download-opm: $(opm_tar_default) $(opm_tar_rhel9)  ## Download opm tarballs
+
+.PHONY: download-virtctl
+download-virtctl: $(virtctl_file)  ## Download virtctl binary
+
+.PHONY: download-argocd
+download-argocd: $(argocd_tar_file)  ## Download argocd (OpenShift GitOps) tarball
+
+.PHONY: download-roxctl
+download-roxctl: $(roxctl_file)  ## Download roxctl (ACS) binary
+
+.PHONY: download-extra-clis
+download-extra-clis: download-virtctl download-kn download-tkn download-helm download-opm download-argocd download-roxctl  ## Download optional convenience CLIs (bundle/save)
+
+.PHONY: out-download-extra-clis
+out-download-extra-clis:
+	@echo virtctl kn tkn helm opm argocd roxctl
+
 
 ########################################################################
 ##@ Tarball Recipes — bare curl + verify, no run_once
@@ -325,6 +414,92 @@ $(butane_binary_file):
 	@echo [ABA] Downloading $(butane_binary_file_url)
 	$(call atomic-download,$(butane_binary_file_url),$(butane_binary_url_sha256sum))
 	@chmod +x $@
+
+# --- Extra convenience CLIs (not in download-all) ---
+# One-shot optional-download: never fails the Make target (bundle/save keep going).
+
+kn_base_url = https://mirror.openshift.com/pub/openshift-v4/clients/serverless/latest
+$(kn_tar_file):
+	@echo [ABA] Downloading $(kn_base_url)/$@
+	$(call optional-download,$(kn_base_url)/$@,$(kn_base_url)/sha256sum.txt)
+
+tkn_base_url = https://mirror.openshift.com/pub/openshift-v4/clients/pipelines/latest
+$(tkn_tar_file):
+	@echo [ABA] Downloading $(tkn_base_url)/$@
+	$(call optional-download,$(tkn_base_url)/$@,$(tkn_base_url)/sha256sum.txt)
+
+helm_base_url = https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest
+$(helm_tar_file):
+	@echo [ABA] Downloading $(helm_base_url)/$@
+	$(call optional-download,$(helm_base_url)/$@,$(helm_base_url)/sha256sum.txt)
+
+opm_base_url = https://mirror.openshift.com/pub/openshift-v4/$(arch)/clients/ocp/stable
+opm_sha256sum = $(opm_base_url)/sha256sum.txt
+
+$(opm_tar_default):
+	@echo [ABA] Downloading $(opm_base_url)/$@
+	$(call optional-download,$(opm_base_url)/$@,$(opm_sha256sum))
+
+$(opm_tar_rhel9):
+	@echo [ABA] Downloading $(opm_base_url)/$@
+	$(call optional-download,$(opm_base_url)/$@,$(opm_sha256sum))
+
+# virtctl: no RH CDN / no per-binary checksum — one-shot.
+$(virtctl_file):
+	@echo [ABA] Resolving kubevirt stable version for virtctl
+	@_ver=$$(curl -f -sL https://storage.googleapis.com/kubevirt-prow/release/kubevirt/kubevirt/stable.txt) || \
+		{ echo "[ABA] Failed to resolve kubevirt stable version for $@"; \
+		  if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; exit 1; }; \
+	_url="https://github.com/kubevirt/kubevirt/releases/download/$$_ver/virtctl-$$_ver-linux-$(ARCH)"; \
+	echo "[ABA] Downloading $$_url"; \
+	_tmp=.$@.tmp.$$$$; rm -f $$_tmp $@; \
+	if ! curl -f $(CURL_PROGRESS) -o $$_tmp -L $$_url || [ ! -s $$_tmp ]; then \
+		echo "[ABA] Download failed for $@"; \
+		rm -f $$_tmp; \
+		if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; \
+		exit 1; \
+	fi; \
+	chmod +x $$_tmp; \
+	mv $$_tmp $@
+
+# argocd: RH Content Gateway (newest stable). Inline (URL resolved at runtime).
+$(argocd_tar_file):
+	@echo [ABA] Resolving latest OpenShift GitOps CLI version
+	@_ver=$$(curl -f -sL $(argocd_cgw_index) | \
+		grep -oE '[0-9]+\.[0-9]+\.[0-9]+/' | tr -d '/' | sort -V | tail -1) || true; \
+	if [ -z "$$_ver" ]; then \
+		echo "[ABA] Failed to resolve latest OpenShift GitOps version for $@"; \
+		if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; \
+		exit 1; \
+	fi; \
+	_base="$(argocd_cgw_index)$$_ver"; \
+	echo "[ABA] Downloading $$_base/$@"; \
+	_tmp=.$@.tmp.$$$$; rm -f $$_tmp $$_tmp.sha256 $@; \
+	if ! curl -f $(CURL_PROGRESS) -o $$_tmp -L "$$_base/$@"; then \
+		echo "[ABA] Download failed for $@"; \
+		rm -f $$_tmp; \
+		if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; \
+		exit 1; \
+	fi; \
+	echo -n "[ABA] Verifying checksum for $@: "; \
+	if curl -f -sL -o $$_tmp.sha256 "$$_base/sha256sum.txt" && \
+	   _expected=$$(grep "  $@$$" $$_tmp.sha256 | awk '{print $$1}') && \
+	   _actual=$$(sha256sum $$_tmp | awk '{print $$1}') && \
+	   [ -n "$$_expected" ] && [ "$$_expected" = "$$_actual" ]; then \
+		echo "valid!"; \
+		rm -f $$_tmp.sha256; \
+		mv $$_tmp $@; \
+	else \
+		echo "FAILED!"; \
+		rm -f $$_tmp $$_tmp.sha256 $@; \
+		if [ "$(SOFT_EXTRA)" = "1" ]; then echo "[ABA] Skipping (optional CLI)"; exit 0; fi; \
+		exit 1; \
+	fi
+
+roxctl_base_url = https://mirror.openshift.com/pub/rhacs/assets/latest/bin/Linux
+$(roxctl_file):
+	@echo [ABA] Downloading $(roxctl_base_url)/$(roxctl_remote)
+	$(call optional-download,$(roxctl_base_url)/$(roxctl_remote),$(roxctl_base_url)/sha256sum.txt,$(roxctl_remote))
 
 
 ########################################################################
@@ -420,8 +595,8 @@ butane: ~/bin/butane  ## Install butane to ~/bin/butane
 	mv $$_td/butane $@; \
 	rm -rf $$_td
 
-# install/install-all: extract all tools.
-# govc only included when platform=vmw.
+# install/install-all: extract all core tools.
+# govc only included when platform=vmw. Extra CLIs: see install-extra-clis.
 .PHONY: install
 install: .check-ocp-version oc openshift-install oc-mirror butane $(_govc_install)  ## Install all CLI tools to ~/bin
 
@@ -437,6 +612,121 @@ out-install:
 out-install-all:
 	@echo oc openshift-install oc-mirror butane $(_govc_name)
 
+# --- Extra CLI install (optional; not in install-all) ---
+
+.PHONY: kn
+kn: ~/bin/kn  ## Install kn to ~/bin
+
+~/bin/kn: $(kn_tar_file) | ~/bin
+	@echo [ABA] Extracting $(kn_tar_file) to ~/bin/kn
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td --no-same-owner -xmzf $(kn_tar_file) || { rm -rf $$_td; exit 1; }; \
+	_bin=$$(find $$_td -type f -name 'kn*' ! -name '*.tar.gz' | head -1); \
+	[ -n "$$_bin" ] || { echo "[ABA] Error: kn binary not found in $(kn_tar_file)"; rm -rf $$_td; exit 1; }; \
+	chmod +x $$_bin; \
+	$$_bin --help >/dev/null 2>&1 || { echo "[ABA] Error: kn binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_bin $@; \
+	rm -rf $$_td
+
+.PHONY: tkn
+tkn: ~/bin/tkn  ## Install tkn to ~/bin
+
+~/bin/tkn: $(tkn_tar_file) | ~/bin
+	@echo [ABA] Extracting $(tkn_tar_file) to ~/bin/tkn
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td --no-same-owner -xmzf $(tkn_tar_file) tkn || { rm -rf $$_td; exit 1; }; \
+	chmod +x $$_td/tkn; \
+	$$_td/tkn --help >/dev/null 2>&1 || { echo "[ABA] Error: tkn binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_td/tkn $@; \
+	rm -rf $$_td
+
+.PHONY: helm
+helm: ~/bin/helm  ## Install helm to ~/bin
+
+~/bin/helm: $(helm_tar_file) | ~/bin
+	@echo [ABA] Extracting $(helm_tar_file) to ~/bin/helm
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td --no-same-owner -xmzf $(helm_tar_file) || { rm -rf $$_td; exit 1; }; \
+	_bin=$$(find $$_td -type f -name 'helm*' ! -name '*.tar.gz' | head -1); \
+	[ -n "$$_bin" ] || { echo "[ABA] Error: helm binary not found in $(helm_tar_file)"; rm -rf $$_td; exit 1; }; \
+	chmod +x $$_bin; \
+	$$_bin version --short >/dev/null 2>&1 || $$_bin --help >/dev/null 2>&1 || \
+		{ echo "[ABA] Error: helm binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_bin $@; \
+	rm -rf $$_td
+
+.PHONY: opm
+opm: ~/bin/opm  ## Install opm to ~/bin
+
+~/bin/opm: $(local_opm_tar) | ~/bin
+	@echo [ABA] Extracting $(local_opm_tar) to ~/bin/opm
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td --no-same-owner -xmzf $(local_opm_tar) || { rm -rf $$_td; exit 1; }; \
+	_bin=$$(find $$_td -type f \( -name 'opm' -o -name 'opm-*' \) | head -1); \
+	[ -n "$$_bin" ] || { echo "[ABA] Error: opm binary not found in $(local_opm_tar)"; rm -rf $$_td; exit 1; }; \
+	chmod +x $$_bin; \
+	$$_bin --help >/dev/null 2>&1 || { echo "[ABA] Error: opm binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_bin $@; \
+	rm -rf $$_td
+
+.PHONY: virtctl
+virtctl: ~/bin/virtctl  ## Install virtctl to ~/bin
+
+~/bin/virtctl: $(virtctl_file) | ~/bin
+	@echo [ABA] Installing virtctl to ~/bin/virtctl
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	cp $(virtctl_file) $$_td/virtctl && chmod +x $$_td/virtctl; \
+	$$_td/virtctl --help >/dev/null 2>&1 || \
+		{ echo "[ABA] Error: virtctl binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_td/virtctl $@; \
+	rm -rf $$_td
+
+.PHONY: argocd
+argocd: ~/bin/argocd  ## Install argocd to ~/bin
+
+~/bin/argocd: $(argocd_tar_file) | ~/bin
+	@echo [ABA] Extracting $(argocd_tar_file) to ~/bin/argocd
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	tar -C $$_td --no-same-owner -xmzf $(argocd_tar_file) || { rm -rf $$_td; exit 1; }; \
+	_bin=$$(find $$_td -type f \( -name 'argocd' -o -name 'argocd-linux-*' \) | head -1); \
+	[ -n "$$_bin" ] || { echo "[ABA] Error: argocd binary not found in $(argocd_tar_file)"; rm -rf $$_td; exit 1; }; \
+	chmod +x $$_bin; \
+	$$_bin version --client >/dev/null 2>&1 || $$_bin --help >/dev/null 2>&1 || \
+		{ echo "[ABA] Error: argocd binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_bin $@; \
+	rm -rf $$_td
+
+.PHONY: roxctl
+roxctl: ~/bin/roxctl  ## Install roxctl to ~/bin
+
+~/bin/roxctl: $(roxctl_file) | ~/bin
+	@echo [ABA] Installing roxctl to ~/bin/roxctl
+	@_td=$$(mktemp -d ./.tmp.XXXXXX) && \
+	cp $(roxctl_file) $$_td/roxctl && chmod +x $$_td/roxctl; \
+	$$_td/roxctl --help >/dev/null 2>&1 || \
+		{ echo "[ABA] Error: roxctl binary invalid"; rm -rf $$_td; exit 1; }; \
+	mv $$_td/roxctl $@; \
+	rm -rf $$_td
+
+.PHONY: install-extra-clis
+install-extra-clis: virtctl kn tkn helm opm argocd roxctl  ## Install optional convenience CLIs to ~/bin
+
+.PHONY: out-install-extra-clis
+out-install-extra-clis:
+	@echo virtctl kn tkn helm opm argocd roxctl
+
+# Echo only extra tools whose download artifacts already exist (no download).
+.PHONY: out-install-extra-available
+out-install-extra-available:
+	@[ -s "$(virtctl_file)" ] && echo -n "virtctl " || true
+	@[ -s "$(kn_tar_file)" ] && echo -n "kn " || true
+	@[ -s "$(tkn_tar_file)" ] && echo -n "tkn " || true
+	@[ -s "$(helm_tar_file)" ] && echo -n "helm " || true
+	@[ -s "$(local_opm_tar)" ] && echo -n "opm " || true
+	@[ -s "$(argocd_tar_file)" ] && echo -n "argocd " || true
+	@[ -s "$(roxctl_file)" ] && echo -n "roxctl " || true
+	@echo
+
 
 ########################################################################
 ##@ Cleanup
@@ -445,12 +735,13 @@ out-install-all:
 .PHONY: clean
 clean: ## Clean up installed binaries
 	@../scripts/cli-install-all.sh --reset
-	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane} *sha256sum.txt *.sha256
+	@rm -f ~/bin/{oc,kubectl,oc-mirror,openshift-install,govc,butane,virtctl,kn,tkn,helm,opm,argocd,roxctl} *sha256sum.txt *.sha256
 	@rm -rf .tmp.*
 
 .PHONY: reset
 reset: clean  ## Clean up everything (tarballs + binaries). Only use if you know what you are doing!
 	@../scripts/cli-download-all.sh --reset
-	@rm -f *.tar.gz .init butane* .*.tmp .*.tmp.sha256
+	@../scripts/cli-download-all.sh --reset --extra || true
+	@rm -f *.tar.gz .init butane* virtctl-* roxctl-* .*.tmp .*.tmp.sha256
 	@rm -rf .tmp.*
 	@rm -f scripts

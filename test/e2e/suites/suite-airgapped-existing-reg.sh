@@ -266,13 +266,13 @@ e2e_run_must_fail_remote "Load without data dir should fail" \
 e2e_run_remote -q "Restore data dir" \
 	"cd ~/aba && mv mirror/data.bak mirror/data"
 
-# Negative path: data/ exists but no mirror_*.tar
-e2e_run_remote -q "Move mirror_*.tar aside" \
-	"cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ || true"
+# Negative path: data/ exists but no mirror_*.tar (and no transfer tars)
+e2e_run_remote -q "Move mirror_*.tar and transfer tars aside" \
+	"cd ~/aba && mkdir -p mirror/data/.tmp-bak && mv mirror/data/mirror_*.tar mirror/data/.tmp-bak/ || true && mv mirror/data/aba-transfer*.tar mirror/data/.tmp-bak/ 2>/dev/null || true"
 e2e_run_must_fail_remote "Load without mirror_*.tar should fail" \
 	"cd ~/aba && aba -d mirror load"
-e2e_run_remote -q "Restore mirror_*.tar" \
-	"cd ~/aba && mv mirror/data/.tmp-bak/mirror_*.tar mirror/data/ || true; rmdir mirror/data/.tmp-bak || true"
+e2e_run_remote -q "Restore mirror_*.tar and transfer tars" \
+	"cd ~/aba && mv mirror/data/.tmp-bak/*.tar mirror/data/ || true; rmdir mirror/data/.tmp-bak || true"
 
 test_end
 
@@ -388,8 +388,6 @@ e2e_run_remote "Verify vote-app image in mirror (skopeo)" \
 
 e2e_run_remote "Apply day2 config (vote-app mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"
-
-e2e_run "Sleep 5 pause before new-project" "sleep 5"
 
 e2e_run_remote "Create demo project" \
     "cd ~/aba && aba --dir $SNO run --cmd 'oc get project demo || oc new-project demo'"

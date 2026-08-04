@@ -1929,7 +1929,7 @@ tui_advanced_menu() {
 		source <(normalize-aba-conf) 2>/dev/null || true
 		_plat_label="Platform Settings (${platform:-bm})"
 		adv_items+=("P" "$_plat_label")
-		if mirror_available; then
+		if [[ "${_TUI_MODE:-}" != "DIRECT" ]] && mirror_available; then
 			adv_items+=("U" "Uninstall Mirror Registry (destructive)")
 		fi
 		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
@@ -2054,8 +2054,7 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 					CONNO)
 						_TUI_MODE="DIRECT"
 						tui_log "Advanced: switching to DIRECT mode"
-						direct_main || true
-						_TUI_MODE="CONNO"
+						return 0
 						;;
 					DIRECT)
 						_TUI_MODE="CONNO"
@@ -2074,11 +2073,11 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 						--title "Warning: Switching to Fully Disconnected Mode" \
 						--defaultno \
 						--yesno "\
-Switching from Connected to Disconnected mode on the same host is not\n\
+Switching to Fully Disconnected mode on the same host is not\n\
 the standard workflow.\n\n\
-Disconnected mode is designed for fully disconnected (air-gapped)\n\
-environments. The recommended workflow is:\n\n\
-  1. Create an Install Bundle in Connected mode\n\
+Fully Disconnected mode is designed for air-gapped environments.\n\
+The recommended workflow is:\n\n\
+  1. Create an Install Bundle in Partially Disconnected (this) mode\n\
      (aba bundle, or aba save + aba tar)\n\
   2. Transfer the bundle to the disconnected environment\n\
   3. Unpack the bundle, install aba and run aba/TUI there\n\n\
@@ -2087,9 +2086,7 @@ Continue only if you know what you are doing." 0 0 || continue
 					_TUI_MODE="DISCO"
 					_TUI_DISCO_FROM_CONNO=true
 					tui_log "Advanced: switching to DISCO mode (user confirmed warning)"
-					disco_main || true
-					_TUI_MODE="CONNO"
-					_TUI_DISCO_FROM_CONNO=false
+					return 0
 				fi
 				;;
 		esac
@@ -2291,6 +2288,7 @@ _day2_login() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	tui_log "Cluster Login Terminal: $cl_display"
 
+	_tui_redirect_restore
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  Cluster Login Terminal: $cl_display"
@@ -2306,13 +2304,23 @@ _day2_login() {
 		# Run the login command (best-effort — works without kubeadmin pw too)
 		eval "$(aba --dir "$SELECTED_CLUSTER" login 2>/dev/null)" || true
 		echo
-		exec bash --norc -i
+		_rcfile=$(mktemp)
+		cat > "$_rcfile" <<-'RCEOF'
+		[ -f /etc/bashrc ] && source /etc/bashrc
+		[ -f /usr/share/bash-completion/bash_completion ] && source /usr/share/bash-completion/bash_completion
+		_oc_ns() { oc config view --minify -o jsonpath='{..namespace}' 2>/dev/null; }
+		source <(oc completion bash 2>/dev/null) 2>/dev/null
+		RCEOF
+		echo "PS1='[$cl_display|\$(_oc_ns)] "'\$ '"'" >> "$_rcfile"
+		echo "trap 'rm -f $_rcfile' EXIT" >> "$_rcfile"
+		exec bash --rcfile "$_rcfile" -i
 	) {ABA_TUI_FLOCK_FD}>&-
 	local _login_rc=$?
 	[[ $_login_rc -ne 0 ]] && echo -e "\n\e[31mLogin failed (exit code $_login_rc)\e[0m"
 
 	echo
 	read -rp "Press ENTER to return to TUI..."
+	_tui_redirect_activate
 }
 
 # --- SSH into Rendezvous Server ---
@@ -2324,6 +2332,7 @@ _day2_ssh() {
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 	tui_log "SSH into Rendezvous Server of $cl_display"
 
+	_tui_redirect_restore
 	clear
 	echo "═══════════════════════════════════════════════════════════════"
 	echo "  SSH into Rendezvous Server of: $cl_display"
@@ -2331,14 +2340,47 @@ _day2_ssh() {
 	echo "═══════════════════════════════════════════════════════════════"
 	echo
 
-	cd "$ABA_ROOT"
+	cd "$ABA_ROOT/$SELECTED_CLUSTER"
+
+	# Read SSH key and rendezvous IP from cluster config
+	local _ssh_key _ssh_ip
+	_ssh_key=$(source <(normalize-cluster-conf) && echo "$ssh_key_file")
+	_ssh_ip=$(cat iso-agent-based/rendezvousIP 2>/dev/null)
+
+	if [[ -z "$_ssh_ip" ]]; then
+		echo "Error: rendezvous IP not found for $cl_display"
+		read -rp "Press ENTER to return to TUI..."
+		_tui_redirect_activate
+		return 1
+	fi
+
+	aba_info "Running: ssh -i $_ssh_key core@$_ssh_ip"
+
+	# SSH with session-only KUBECONFIG and oc completion (no changes to core user's env)
 	# Close flock fd so SSH session doesn't inherit and hold the TUI lock
-	bash -c "aba --dir $SELECTED_CLUSTER ssh" {ABA_TUI_FLOCK_FD}>&-
+	ssh -t -F ~/.aba/ssh.conf -i "$_ssh_key" core@"$_ssh_ip" \
+		"bash --rcfile <(echo '
+source /etc/bashrc 2>/dev/null
+_kc=\$(sudo find /etc/kubernetes -name lb-ext.kubeconfig 2>/dev/null | head -1)
+if [ -n \"\$_kc\" ]; then
+	_tmp=\$(mktemp)
+	if sudo cp \"\$_kc\" \"\$_tmp\" && chmod 600 \"\$_tmp\"; then
+		export KUBECONFIG=\"\$_tmp\"
+		trap \"rm -f \$_tmp\" EXIT
+	else
+		rm -f \"\$_tmp\"
+	fi
+fi
+source <(oc completion bash 2>/dev/null) 2>/dev/null
+unset _kc _tmp
+') -i" {ABA_TUI_FLOCK_FD}>&-
 	local _ssh_rc=$?
 	[[ $_ssh_rc -ne 0 ]] && echo -e "\n\e[31mSSH failed (exit code $_ssh_rc)\e[0m"
 
+	cd "$ABA_ROOT"
 	echo
 	read -rp "Press ENTER to return to TUI..."
+	_tui_redirect_activate
 }
 
 # Pre-flight: check for upgrade gates that require manual acknowledgment.
@@ -2375,36 +2417,30 @@ _day2_upgrade() {
 		return 1
 	fi
 
-	# Fetch available versions
-	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY..." 0 0
-	local _versions_raw _dry_rc=0
-	_versions_raw=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run 2>&1) || _dry_rc=$?
+	# Fetch available versions via machine-readable output
+	dlg --backtitle "$(ui_backtitle)" --infobox "\nFetching available upgrade versions for $SELECTED_CLUSTER_DISPLAY...\n\n(If OSUS is installed, may need to wait for the update graph to refresh)" 0 0
+	local _shell_out _shell_err _dry_rc=0
+	_shell_err=$(mktemp)
+	_shell_out=$(aba --dir "$SELECTED_CLUSTER" upgrade --dry-run --shell 2>"$_shell_err") || _dry_rc=$?
+	eval "$_shell_out"
 
-	# Parse version lines — only from the "Versions in mirror" list section
-	local _versions=() _in_list=0
-	while IFS= read -r line; do
-		[[ "$line" =~ Versions\ in\ mirror ]] && _in_list=1 && continue
-		[[ $_in_list -eq 0 ]] && continue
-		local ver
-		ver=$(echo "$line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?' | head -1)
-		[[ -n "$ver" ]] && _versions+=("$ver")
-	done <<< "$_versions_raw"
-
-	# De-duplicate and sort descending
-	local _sorted=()
-	if [[ ${#_versions[@]} -gt 0 ]]; then
-		while IFS= read -r v; do
-			_sorted+=("$v")
-		done < <(printf '%s\n' "${_versions[@]}" | sort -V -r | uniq)
-	fi
+	local _sorted=() _conditional=()
+	read -ra _sorted <<< "${upgrade_versions:-}"
+	read -ra _conditional <<< "${upgrade_conditional:-}"
 
 	if [[ $_dry_rc -ne 0 && ${#_sorted[@]} -eq 0 ]]; then
+		local _err_msg
+		_err_msg=$(<"$_shell_err")
+		rm -f "$_shell_err"
+		_err_msg=$(echo "$_err_msg" | grep -v '^\[ABA\] Warning:' | sed 's/\[ABA\] //')
+		local _err_escaped="${_err_msg//$'\n'/\\n}"
 		dlg --backtitle "$(ui_backtitle)" --title "Upgrade Check Failed" \
-			--msgbox "Failed to query available versions (exit $_dry_rc).\n\nCheck cluster connectivity and credentials.\n\nRaw output:\n${_versions_raw:-(empty)}" 0 0
+			--msgbox "Failed to query available versions (exit $_dry_rc).\n\n${_err_escaped:-(unknown error)}" 0 0
 		return 1
 	fi
+	rm -f "$_shell_err"
 
-	if [[ ${#_sorted[@]} -eq 0 ]]; then
+	if [[ ${#_sorted[@]} -eq 0 && ${#_conditional[@]} -eq 0 ]]; then
 		local _upgrade_hint=""
 		case "$_TUI_MODE" in
 			CONNO)
@@ -2422,60 +2458,129 @@ _day2_upgrade() {
 		return 1
 	fi
 
-	local default_item="${_sorted[0]}"
+	local opt_warnings="OFF" opt_force="OFF"
+	local _cur_minor="${upgrade_current_ver%.*}"
+
+	# Default to the safest choice: z-stream first, then minor, then conditional
+	local default_item="M"
+	for v in "${_sorted[@]}"; do
+		[[ "${v%.*}" == "$_cur_minor" ]] && default_item="$v" && break
+	done
+	[[ "$default_item" == "M" ]] && default_item="${_sorted[0]:-${_conditional[0]:-M}}"
 
 	while :; do
-		if [[ ${#_sorted[@]} -gt 0 ]]; then
-			# Build menu from available versions
-			local items=()
-			local idx=0
-			for v in "${_sorted[@]}"; do
-				if [[ $idx -eq 0 ]]; then
+		# Build menu header
+		local _header="Current: ${upgrade_current_ver:-?}"
+		[[ -n "${upgrade_channel:-}" ]] && _header="$_header (${upgrade_channel})"
+		if [[ "${upgrade_osus:-}" == "true" ]]; then
+			_header="$_header [OSUS]"
+		else
+			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths (recommended)"
+		fi
+
+		# Classify versions into z-stream and minor upgrade groups
+		local _zstream=() _minor=()
+		for v in "${_sorted[@]}"; do
+			if [[ "${v%.*}" == "$_cur_minor" ]]; then
+				_zstream+=("$v")
+			else
+				_minor+=("$v")
+			fi
+		done
+
+		# Build version items: z-stream first (safest), then minor
+		local items=() _first=1
+		if [[ ${#_zstream[@]} -gt 0 ]]; then
+			items+=("" "──── Z-stream (${_cur_minor}) ─────────────")
+			for v in "${_zstream[@]}"; do
+				items+=("$v" "")
+			done
+		fi
+		if [[ ${#_minor[@]} -gt 0 ]]; then
+			local _minor_ver="${_minor[0]%.*}"
+			items+=("" "──── Minor upgrade (${_cur_minor} → ${_minor_ver}) ──")
+			for v in "${_minor[@]}"; do
+				if [[ $_first -eq 1 ]]; then
 					items+=("$v" "(newest)")
+					_first=0
 				else
 					items+=("$v" "")
 				fi
-				idx=$(( idx + 1 ))
 			done
-			items+=("M" "Manual entry...")
-
-			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
-				--ok-label "Upgrade" \
-				--cancel-label "$TUI2_BTN_BACK" \
-				--help-button \
-				--default-item "$default_item" \
-				--menu "Select target version for $SELECTED_CLUSTER_DISPLAY:" 0 0 0 \
-				"${items[@]}" \
-				2>"$_TUI_TMP"
-			local rc=$?
-
-			case $rc in
-				2)
-					# Help — show raw output from dry-run
-					dlg --backtitle "$(ui_backtitle)" --title "Available Versions (raw)" \
-						--msgbox "$_versions_raw" 0 0
-					continue
-					;;
-				1|255) return 1 ;;
-				0) ;;
-			esac
-
-			local choice
-			choice=$(<"$_TUI_TMP")
-			[[ -n "$choice" ]] && default_item="$choice"
-
-			if [[ "$choice" == "M" ]]; then
-				# Fall through to manual entry below
-				:
-			elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
-				_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
-				confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $choice" \
-					"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
-				return
-			fi
 		fi
 
-		# Manual entry (fallback or explicit choice)
+		# Show conditional versions when toggle is ON
+		if [[ "$opt_warnings" == "ON" && ${#_conditional[@]} -gt 0 ]]; then
+			items+=("" "──── Conditional (not recommended) ───")
+			for v in "${_conditional[@]}"; do
+				items+=("$v" "(!) known issues")
+			done
+		fi
+
+		items+=("M" "Manual entry...")
+		items+=("" "──── Options ────────────────────")
+		items+=("W" "Include conditional versions:  $opt_warnings")
+		items+=("F" "Force (bypass safety checks):  $opt_force")
+
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
+			--ok-label "Upgrade" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--help-button \
+			--default-item "$default_item" \
+			--menu "$_header\nSelect target version for $SELECTED_CLUSTER_DISPLAY:" 0 0 0 \
+			"${items[@]}" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case $rc in
+			2)
+				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Help" \
+					--msgbox "\
+Select a target version to upgrade the cluster.\n\n\
+Z-stream upgrades (e.g. 4.21.20 → 4.21.26) are patch updates\n\
+within the same minor version.\n\n\
+Minor upgrades (e.g. 4.21 → 4.22) move to a new feature release.\n\n\
+Versions marked (conditional) have known issues — selecting one\n\
+will show the details before proceeding.\n\n\
+The Force option bypasses cluster-side safety checks.\n\
+Only use Force in test/lab environments.\n\n\
+Tip: Install OSUS (Day-2 → OSUS) for validated upgrade paths\n\
+(recommended). Enforces admin acknowledgment gates." 0 0
+				continue
+				;;
+			1|255) return 1 ;;
+			0) ;;
+		esac
+
+		local choice
+		choice=$(<"$_TUI_TMP")
+		[[ -n "$choice" ]] && default_item="$choice"
+
+		# Handle toggles
+		if [[ "$choice" == "W" ]]; then
+			[[ "$opt_warnings" == "OFF" ]] && opt_warnings="ON" || opt_warnings="OFF"
+			continue
+		elif [[ "$choice" == "F" ]]; then
+			[[ "$opt_force" == "OFF" ]] && opt_force="ON" || opt_force="OFF"
+			continue
+		elif [[ "$choice" == "M" ]]; then
+			:
+		elif [[ "$choice" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+			_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
+			local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $choice"
+			# If the version is conditional, tell ABA core to skip the redundant interactive question
+			local _is_conditional=
+			for _cv in "${_conditional[@]}"; do [[ "$_cv" == "$choice" ]] && _is_conditional=1 && break; done
+			[[ "$_is_conditional" ]] && _cmd="$_cmd --allow-not-recommended"
+			[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
+			confirm_and_execute "$_cmd" \
+				"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $choice"
+			return
+		else
+			continue
+		fi
+
+		# Manual entry
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_UPGRADE" \
 			--ok-label "Upgrade" \
 			--cancel-label "$TUI2_BTN_BACK" \
@@ -2493,20 +2598,20 @@ _day2_upgrade() {
 			dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format: '$target_ver'\n\nExpected format: X.Y.Z or X.Y.Z-rc.N (e.g. 4.21.15 or 4.22.0-rc.1)" 0 0
 			continue
 		fi
-		# Reject downgrades/same-version with a friendly dialog
-		local _cur_ver
-		_cur_ver=$(aba --dir "$SELECTED_CLUSTER" cluster-version 2>/dev/null || echo "")
-		if [[ "$_cur_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] && ! is_version_greater "$target_ver" "$_cur_ver"; then
+		if [[ -n "${upgrade_current_ver:-}" ]] && ! is_version_greater "$target_ver" "$upgrade_current_ver"; then
 			dlg --backtitle "$(ui_backtitle)" --msgbox \
-				"Cannot upgrade: version '$target_ver' is not higher than current '$_cur_ver'." 0 0
+				"Cannot upgrade: version '$target_ver' is not higher than current '$upgrade_current_ver'." 0 0
 			continue
 		fi
 		_upgrade_preflight_check "$SELECTED_CLUSTER" || continue
-		confirm_and_execute "aba --dir $SELECTED_CLUSTER upgrade --to $target_ver" \
+		local _cmd="aba --dir $SELECTED_CLUSTER upgrade --to $target_ver"
+		[[ "$opt_force" == "ON" ]] && _cmd="$_cmd --force"
+		confirm_and_execute "$_cmd" \
 			"$TUI2_TITLE_DAY2_UPGRADE: $SELECTED_CLUSTER_DISPLAY → $target_ver"
 		return
 	done
 }
+
 
 # --- Graceful Cluster Shutdown ---
 _day2_shutdown() {

@@ -1,6 +1,6 @@
 abinitio-runtime-operator                               Co>Operating System Runtime Operator                         stable
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
-airlock-microgateway                                    Airlock Microgateway                                         5.1
+airlock-microgateway                                    Airlock Microgateway                                         "5.1"
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
 amd-gpu-operator                                        amd-gpu-operator                                             alpha
 anzograph-operator                                      Altair Graph Lakehouse Operator                              stable
@@ -32,6 +32,7 @@ eda-k8s-operator                                        eda-openshift-operator  
 edb-hcp-operator                                        EDB Postgres AI                                              stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
+ent-small-operator                                      Enterprise Small Operator                                    alpha
 falcon-operator                                         CrowdStrike Falcon Platform - Operator                       certified-1.0
 fujitsu-enterprise-postgres-operator                    Fujitsu Enterprise Postgres Operator                         stable
 function-mesh                                           Function Mesh Operator                                       alpha
@@ -57,8 +58,10 @@ infoscale-sds-operator                                  InfoScale™ SDS Operato
 instana-agent-operator                                  Instana Agent Operator                                       stable
 intel-device-plugins-operator                           Intel Device Plugins Operator                                stable
 intel-tdx-dcap-operator                                 Intel TDX DCAP Operator                                      alpha
+k8s-triliovault                                         Trilio for Kubernetes                                        5.3.x
 kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
+kubecost-operator                                       Kubecost                                                     stable
 kubeturbo-certified                                     Kubeturbo Operator                                           stable
 kurrentdb-operator                                      KurrentDB Operator                                           stable-v1
 lightbits-operator                                      Lightbits Operator                                           alpha
@@ -86,17 +89,36 @@ nxiq-operator-certified                                 Nexus IQ Operator       
 odigos-operator                                         Odigos Operator                                              alpha
 open-liberty-certified                                  Open Liberty                                                 v1.6
 operator-certification-operator                         Operator Certification Operator                              alpha
+percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
 percona-server-mysql-operator-certified                 Percona Operator for MySQL based on Percona Server for MySQL stable
 portworx-certified                                      Portworx Enterprise                                          stable
+portworx-multi-cluster-certified                        Portworx Multi-Cluster Operator                              stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 rbln-npu-operator                                       RBLN operator                                                stable
 redis-enterprise-operator-cert                          Redis Enterprise Operator                                    production
 runtime-component-operator-certified                    Runtime Component                                            v1.6
+runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 simplyblock-operator                                    Simplyblock Operator                                         alpha
 spyre-operator                                          IBM Spyre Operator                                           stable-v1.3
 sriov-fec                                               SRIOV-FEC Operator for Intel vRAN Boost Accelerators         stable
+stackable-airflow-operator                              Stackable Operator for Apache Airflow                        stable
+stackable-commons-operator                              Stackable Commons Operator                                   stable
+stackable-druid-operator                                Stackable Operator for Apache Druid                          stable
+stackable-hbase-operator                                Stackable Operator for Apache HBase                          stable
+stackable-hdfs-operator                                 Stackable Operator for Apache Hadoop HDFS                    stable
+stackable-hive-operator                                 Stackable Operator for Apache Hive                           stable
+stackable-kafka-operator                                Stackable Operator for Apache Kafka                          stable
+stackable-listener-operator                             Stackable Listener Operator                                  stable
+stackable-nifi-operator                                 Stackable Operator for Apache NiFi                           stable
+stackable-opa-operator                                  Stackable Operator for the Open Policy Agent                 stable
+stackable-opensearch-operator                           Stackable Operator for OpenSearch                            stable
+stackable-secret-operator                               Stackable Secret Operator                                    stable
+stackable-spark-operator                                Stackable Operator for Apache Spark                          stable
+stackable-superset-operator                             Stackable Operator for Apache Superset                       stable
+stackable-trino-operator                                Stackable Operator for Trino                                 stable
+stackable-zookeeper-operator                            Stackable Operator for Apache ZooKeeper                      stable
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable

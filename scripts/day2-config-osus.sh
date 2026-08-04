@@ -153,8 +153,26 @@ cluster_api_reachable "$KUBECONFIG" || aba_abort "Cluster API is not reachable. 
 warn_if_cluster_unstable
 
 #####################
-if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
-	if ! oc get packagemanifests | grep -q ^cincinnati-operator; then
+# Prerequisite: day2 must have run to create CatalogSources.
+# Without CatalogSources there are no packagemanifests — checking for
+# cincinnati-operator would always fail with a confusing message.
+if ! oc get catalogsource -n openshift-marketplace -o name 2>/dev/null | grep -q .; then
+	aba_warn "No CatalogSources found in OperatorHub." \
+		"'aba day2' must run first to configure OperatorHub before OSUS can be installed."
+	if ask "Run 'aba day2' now"; then
+		scripts/day2.sh
+	else
+		aba_abort "Cannot install OSUS without CatalogSources. Run 'aba day2' first."
+	fi
+	if ! oc get catalogsource -n openshift-marketplace -o name 2>/dev/null | grep -q .; then
+		aba_abort "No operator catalogs are mirrored. OSUS requires the 'redhat-operators' catalog." \
+			"Add operators to your imageset-config.yaml, run 'aba -d mirror sync' (or save/load), then 'aba day2'."
+	fi
+fi
+
+if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
+	sleep 5
+	if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 		aba_abort \
 			"cincinnati-operator not available in OperatorHub for this cluster." \
 			"The CatalogSource may still be synchronizing -- wait a few minutes and try again:" \
@@ -204,7 +222,7 @@ fi
 # If the subscription exists but is not healthy/complete (previous failed attempt, stuck,
 # etc.), clean up so we can start fresh. This makes the script safely re-runnable.
 _osus_installed=
-_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' || true)
+_existing_csv=$(oc get sub update-service-subscription -n $NAMESPACE -o jsonpath='{.status.installedCSV}' 2>/dev/null || true)
 if [ "$_existing_csv" ]; then
 	_csv_phase=$(oc get csv "$_existing_csv" -n $NAMESPACE -o jsonpath='{.status.phase}' || true)
 	if [ "$_csv_phase" = "Succeeded" ]; then
@@ -287,11 +305,15 @@ aba_success "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 # queries the wrong channel and OSUS returns an empty graph.
 CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
 aba_debug "Cluster channel: $CH"
-# Derive expected channel from the cluster's actual version, not aba.conf.
-# After a cross-minor upgrade (e.g. 4.20→4.21), aba.conf still says 4.20
-# but the cluster only accepts 4.21+ channels.
-_cluster_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || _cluster_ver=""
-_ocp_ver_major=$(echo "${_cluster_ver:-$ocp_version}" | cut -d. -f1-2)
+# Derive expected channel from the upgrade target (if set), falling back to
+# the cluster's actual version.  When called from cluster-upgrade.sh,
+# ocp_upgrade_to is the target version and the channel must match it.
+_ref_ver="${ocp_upgrade_to:-}"
+if [ -z "$_ref_ver" ]; then
+	_ref_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || true
+fi
+[ -z "$_ref_ver" ] && _ref_ver="$ocp_version"
+_ocp_ver_major=$(echo "$_ref_ver" | cut -d. -f1-2)
 _expected_channel="${ocp_channel}-${_ocp_ver_major}"
 if [ "$CH" != "$_expected_channel" ]; then
 	aba_info "Cluster channel ($CH) does not match mirrored channel ($_expected_channel)"
