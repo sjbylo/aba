@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.1...HEAD)
+
+---
+
+## [1.2.1](https://github.com/sjbylo/aba/releases/tag/v1.2.1) - 2026-08-04
+
+Cluster upgrade workflow, TUI v2 rewrite, primed bundles, accumulated signatures, and air-gap transfer improvements
+
 
 ### Added
 
