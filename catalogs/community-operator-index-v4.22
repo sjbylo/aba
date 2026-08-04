@@ -144,6 +144,7 @@ global-load-balancer-operator                           Global Load Balancer Ope
 grafana-operator                                        Grafana Operator                                             v5
 group-sync-operator                                     Group Sync Operator                                          alpha
 hawtio-operator                                         Hawtio Operator                                              stable-v1
+headscale-operator                                      Headscale Operator                                           alpha
 hedvig-operator                                         Hedvig Operator                                              stable
 hermes-operator                                         Hermes Operator                                              stable
 hive-operator                                           Hive for Red Hat OpenShift                                   alpha
@@ -164,11 +165,13 @@ k8gb                                                    k8gb                    
 kairos-operator                                         Kairos Operator                                              candidate-v2
 keda                                                    [DEPRECATED] KEDA                                            alpha
 keepalived-operator                                     Keepalived Operator                                          alpha
+kepler-operator                                         Kepler                                                       alpha
 keycloak-operator                                       Keycloak Operator                                            fast
 keycloak-permissions-operator                           Keycloak Permissions Operator                                alpha
 klusterlet                                              Klusterlet                                                   stable
 kogito-operator                                         Kogito                                                       1.x
 koku-metrics-operator                                   Koku Metrics Operator                                        beta
+konflux-operator                                        Konflux                                                      stable-v0.2
 konveyor-operator                                       Konveyor Operator                                            alpha
 korrel8r                                                Korrel8r                                                     stable
 kuadrant-operator                                       Kuadrant Operator                                            stable
@@ -180,6 +183,7 @@ l5-operator                                             L5 Operator             
 layer7-operator                                         Layer7 Operator                                              preview
 lbconfig-operator                                       External Load-Balancer Configuration Operator                beta
 lib-bucket-provisioner                                  lib-bucket-provisioner                                       alpha
+libredb-studio-operator                                 LibreDB Studio                                               alpha
 limitador-operator                                      Limitador                                                    stable
 logging-operator                                        Logging Operator                                             beta
 logicmonitor-openshift-operator                         LogicMonitor Container Monitoring                            alpha
@@ -193,6 +197,7 @@ microcks                                                Microcks Operator       
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-operator                                        MongoDB Operator                                             alpha
 move2kube-operator                                      Konveyor Move2Kube                                           stable
+multicluster-global-hub-operator                        Multicluster Global Hub Operator                             release-1.7
 multicluster-operators-subscription                     Multicluster Subscription Operator                           release-2.5
 must-gather-operator                                    Must Gather Operator                                         alpha
 namespace-configuration-operator                        Namespace Configuration Operator                             alpha
@@ -224,6 +229,7 @@ patch-operator                                          Patch Operator          
 patterns-operator                                       Validated Patterns Operator                                  fast
 pcc-operator                                            Prisma Cloud Compute Operator                                stable
 pelorus-operator                                        Pelorus Operator                                             alpha
+percona-server-mongodb-operator                         Percona Distribution for MongoDB Operator                    stable
 percona-server-mysql-operator                           Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator                         Percona XtraDB Cluster Operator                              stable
 proactive-node-scaling-operator                         Proactive Node Scaling Operator                              alpha

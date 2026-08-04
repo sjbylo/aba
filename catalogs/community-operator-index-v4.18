@@ -149,6 +149,7 @@ global-load-balancer-operator                           Global Load Balancer Ope
 grafana-operator                                        Grafana Operator                                             v5
 group-sync-operator                                     Group Sync Operator                                          alpha
 hawtio-operator                                         Hawtio Operator                                              stable-v1
+headscale-operator                                      Headscale Operator                                           alpha
 hedvig-operator                                         Hedvig Operator                                              stable
 hermes-operator                                         Hermes Operator                                              stable
 hive-operator                                           Hive for Red Hat OpenShift                                   alpha
@@ -191,6 +192,7 @@ l5-operator                                             L5 Operator             
 layer7-operator                                         Layer7 Operator                                              preview
 lbconfig-operator                                       External Load-Balancer Configuration Operator                beta
 lib-bucket-provisioner                                  lib-bucket-provisioner                                       alpha
+libredb-studio-operator                                 LibreDB Studio                                               alpha
 limitador-operator                                      Limitador                                                    stable
 logging-operator                                        Logging Operator                                             beta
 logicmonitor-openshift-operator                         LogicMonitor Container Monitoring                            alpha

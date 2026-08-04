@@ -27,7 +27,7 @@ ccm-node-agent-operator                                 CCM Node Agent Operator 
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
 cilium                                                  Cilium                                                       1.15
 cilium-enterprise                                       Isovalent Enterprise for Cilium                              1.16
-clife                                                   Isovalent Networking for Kubernetes                          1.18
+clife                                                   Isovalent Networking for Kubernetes                          1.19
 cloudbees-ci                                            CloudBees CI                                                 alpha
 cloudcasa-operator                                      CloudCasa Operator                                           stable
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
@@ -56,6 +56,7 @@ eda-k8s-operator                                        eda-openshift-operator  
 edb-hcp-operator                                        EDB Postgres AI                                              stable
 eginnovations-operator                                  eG Innovations Universal Agent Operator                      beta
 elasticsearch-eck-operator-certified                    Elasticsearch (ECK) Operator                                 stable
+ent-small-operator                                      Enterprise Small Operator                                    alpha
 eqube-operator                                          eQube® Operator                                             stable
 exascaler-csi-driver-operator                           EXAScaler CSI File Driver                                    alpha
 f5-ai-security-operator                                 F5 AI Security Operator                                      stable
@@ -196,6 +197,7 @@ percona-xtradb-cluster-operator-certified               Percona Operator for MyS
 pg4k-pgd                                                EDB Postgres Distributed for Kubernetes                      stable
 pmem-csi-operator-os                                    Operator for PMEM-CSI driver                                 stable
 portworx-certified                                      Portworx Enterprise                                          stable
+portworx-multi-cluster-certified                        Portworx Multi-Cluster Operator                              stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha
@@ -204,7 +206,7 @@ redis-enterprise-operator-cert                          Redis Enterprise Operato
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.32
+scaleops-operator                                       ScaleOps                                                     stable-v1.33
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 silicom-sts-operator                                    Silicom STS Operator                                         stable
 smilecdr-operator                                       Smilecdr Operator                                            alpha
@@ -241,9 +243,9 @@ tigera-operator                                         Tigera Operator v1.38   
 timemachine-operator                                    Time Machine Operator                                        alpha
 trident-operator                                        NetApp Trident                                               stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
-uma-admin-operator                                      DX APM Universal Monitoring Agent Admin For Multi-tenancy    beta
-uma-operator                                            DX APM Universal Monitoring Agent                            stable
-uma-team-operator                                       DX APM Universal Monitoring Agent Team For Multi-tenancy     stable
+uma-admin-operator                                      DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy stable
+uma-operator                                            DX Operational Observability Universal Monitoring Agent      stable
+uma-team-operator                                       DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy stable
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
