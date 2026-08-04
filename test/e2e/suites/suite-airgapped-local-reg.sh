@@ -75,12 +75,6 @@ test_begin "Setup: install aba and configure"
 
 e2e_install_aba
 
-# Clean up leftover DNS/NTP from a previous interrupted run on disN
-e2e_run_remote -q "Remove leftover ABA DNS on disN" \
-    "cd ~/aba && aba remove dns -y 2>/dev/null || true"
-e2e_run_remote -q "Remove leftover ABA NTP on disN" \
-    "cd ~/aba && aba remove ntp -y 2>/dev/null || true"
-
 e2e_run "Remove oc-mirror caches (conN)" \
     "sudo find /root/ /home/ -maxdepth 3 -type d -name .oc-mirror | xargs sudo rm -rf"
 e2e_run_remote -q "Remove oc-mirror caches (disN)" \
