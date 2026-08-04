@@ -1,0 +1,24 @@
+Deploy a primed cluster (one-command pipeline on the disconnected side)
+
+Usage:
+  aba -d <cluster> deploy-primed       # Full deployment pipeline
+  aba -d <cluster> deploy              # Alias for deploy-primed
+
+Pipeline steps:
+  1. Mirror registry install/connect    (skipped if already available)
+  2. Load images into registry          (skipped if already loaded)
+  3. Cluster installation               (ISO, VMs, bootstrap, monitoring)
+  4. Day-2 configuration                (CatalogSources, IDMS, custom manifests)
+
+Each step is idempotent — safe to re-run after interruption.
+For bare-metal clusters, the install step pauses for manual boot and resumes automatically.
+
+Prerequisites:
+  - Cluster directory with .primed marker (created by 'aba bundle --primed')
+  - Mirror registry images in mirror/data/ (mirror_*.tar files)
+
+Example:
+  # Full air-gapped deployment from a primed bundle:
+  tar xf bundle.tar -C ~ && cd ~/aba && ./install
+  cp /path/to/mirror_*.tar mirror/data/
+  aba -d mycluster deploy-primed

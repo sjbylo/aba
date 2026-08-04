@@ -11,35 +11,25 @@ export regcreds_dir=$HOME/.aba/mirror/$mirror_name
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-cluster-conf || exit 1
 
-# Resolve kubeconfig (prefer externalized state, fall back to local)
+# Resolve kubeconfig (prefers local, falls back to externalized state)
 kc=$(cluster_kubeconfig)
 [ -z "$kc" ] && aba_abort "Cluster not ready! Cannot find kubeconfig."
 
-# Resolve kubeadmin password (externalized or local)
-_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
-if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
-	pw=$(cat "$_sd/kubeadmin-password")
+# Resolve kubeadmin password (prefer local, fall back to externalized state)
+if [ -f "iso-agent-based/auth/kubeadmin-password" ]; then
+	pw=$(cat "iso-agent-based/auth/kubeadmin-password")
 else
-	pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)
+	_sd=$(cluster_state_dir 2>/dev/null) || _sd=""
+	if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
+		pw=$(cat "$_sd/kubeadmin-password")
+	fi
 fi
 
-cat <<END
-[ABA] To access the cluster as the system:admin user when using 'oc', run
-[ABA]     export KUBECONFIG=$kc
-[ABA] Access the OpenShift web-console here: https://console-openshift-console.apps.$cluster_name.$base_domain
-[ABA] Login to the console with user: "kubeadmin", and password: "$pw"
-END
-cat <<END
-[ABA] Run '. <(aba shell)' to access the cluster using the kubeconfig file (auth cert), or
-[ABA] Run '. <(aba login)' to log into the cluster using the 'kubeadmin' password.
-END
-[ -f "$regcreds_dir/pull-secret-mirror.json" ] && \
-	echo "[ABA] Run 'aba day2' to connect this cluster's OperatorHub to your mirror registry (run after adding any operators to your mirror)." && \
-	echo "[ABA] Run 'aba day2-osus' to configure the OpenShift Update Service."
-cat <<END
-[ABA] Run 'aba day2-ntp' to configure NTP on this cluster.
-[ABA] Run 'aba info' to see this information again.
-[ABA] Run 'aba -h' or 'aba help' for more.
-END
+aba_info "To access the cluster as the system:admin user when using 'oc', run"
+aba_info "    export KUBECONFIG=$kc"
+aba_info "Access the OpenShift web-console here: https://console-openshift-console.apps.$cluster_name.$base_domain"
+aba_info "Login to the console with user: \"kubeadmin\", and password: \"$pw\""
+
+show_cluster_summary
 
 

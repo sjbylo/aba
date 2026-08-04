@@ -295,7 +295,17 @@ _e2e_notify_suffix() {
 _e2e_notify() {
     [ -n "$NOTIFY_CMD" ] || return 0
     local _msg="[e2e] $* $(_e2e_notify_suffix)"
-    $NOTIFY_CMD "$_msg" < /dev/null >/dev/null &
+    _e2e_log "NOTIFY: $_msg"
+    (
+        local _try _rc
+        for _try in 1 2 3; do
+            $NOTIFY_CMD "$_msg" < /dev/null >/dev/null 2>&1 && { _e2e_log "NOTIFY: sent (attempt $_try)"; exit 0; }
+            _rc=$?
+            _e2e_log "NOTIFY: attempt $_try failed (rc=$_rc), retrying in 5s ..."
+            sleep 5
+        done
+        _e2e_log "NOTIFY: FAILED after 3 attempts: $_msg"
+    ) &
 }
 
 _e2e_notify_stdin() {
@@ -303,7 +313,18 @@ _e2e_notify_stdin() {
     if [ -n "$NOTIFY_CMD" ]; then
         local _msg="[e2e] $subject $(_e2e_notify_suffix)"
         local _suffix; _suffix="$(_e2e_notify_suffix)"
-        { cat; printf "\n%s\n" "$_suffix"; } | $NOTIFY_CMD "$_msg" >/dev/null
+        local _body; _body=$(cat; printf "\n%s\n" "$_suffix")
+        _e2e_log "NOTIFY(stdin): $_msg"
+        (
+            local _try _rc
+            for _try in 1 2 3; do
+                printf '%s' "$_body" | $NOTIFY_CMD "$_msg" >/dev/null 2>&1 && { _e2e_log "NOTIFY(stdin): sent (attempt $_try)"; exit 0; }
+                _rc=$?
+                _e2e_log "NOTIFY(stdin): attempt $_try failed (rc=$_rc), retrying in 5s ..."
+                sleep 5
+            done
+            _e2e_log "NOTIFY(stdin): FAILED after 3 attempts: $_msg"
+        ) &
     else
         cat > /dev/null  # drain stdin
     fi
@@ -491,10 +512,12 @@ suite_end() {
     elif [ "$_E2E_FAIL_COUNT" -gt 0 ] || [ -n "$_E2E_SUITE_SKIPPED" ]; then
         _e2e_summary "$(_e2e_Red "========== FAILED: $_E2E_SUITE_NAME  (${_E2E_FAIL_COUNT} failures, $_total_dur) ==========")"
         _e2e_notify "FAILED: $_E2E_SUITE_NAME -- ${_E2E_FAIL_COUNT} failures ($_total_dur)"
+        wait
         return 1
     else
         _e2e_summary "$(_e2e_Green "========== PASSED: $_E2E_SUITE_NAME  (${_E2E_PASS_COUNT} passed, $_total_dur) ==========")"
         _e2e_notify "PASSED: $_E2E_SUITE_NAME -- ${_E2E_PASS_COUNT} tests ($_total_dur)"
+        wait
         return 0
     fi
 }

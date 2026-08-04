@@ -43,8 +43,40 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
+# Transfer bundle path (used in both early-exit and normal flow)
+_transfer_tar="data/aba-transfer.tar"
+
 # --- Guard: archive files must be present ---
+# Config-only transfers (aba-transfer-configs.tar without mirror_*.tar) are valid.
+# Extract configs and exit gracefully if no images to load.
 if ! ls data/mirror_*.tar >/dev/null 2>&1; then
+	_has_configs=""
+	[ -f "data/aba-transfer-configs.tar" ] && _has_configs=1
+	[ -f "$_transfer_tar" ] && _has_configs=1
+
+	if [ "$_has_configs" ]; then
+		# Extract transfer tars (configs only, no images)
+		if [ -f "data/aba-transfer-configs.tar" ]; then
+			aba_info "Found config-only transfer: data/aba-transfer-configs.tar"
+			if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
+				aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
+			fi
+			aba_info "Config transfer extracted (cluster directories updated)."
+		fi
+		if [ -f "$_transfer_tar" ]; then
+			aba_info "Found transfer bundle: $_transfer_tar"
+			rm -f data/aba-transfer-metadata.json \
+				data/imageset-config.yaml \
+				data/imageset-config-digest.yaml
+			if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
+				aba_abort "Failed to unpack transfer bundle ($_transfer_tar)."
+			fi
+			aba_info "Transfer bundle unpacked."
+		fi
+		aba_info "Config-only transfer: no images to load. Done."
+		exit 0
+	fi
+
 	aba_abort "No mirror_*.tar archive files found in mirror/data/." \
 		"Copy the archive files from the connected host first:" \
 		"  cp <source>/mirror/data/*.tar mirror/data/"
@@ -54,7 +86,6 @@ fi
 # includes CLI tarballs and metadata).  Created by 'aba save' so that
 # 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
 # Tar paths are relative to aba root (mirror/data/*, cli/*), so unpack from aba root.
-_transfer_tar="data/aba-transfer.tar"
 _transfer_meta_ver=""
 _transfer_meta_chan=""
 
@@ -68,6 +99,14 @@ fi
 
 if [ -f "$_transfer_tar" ]; then
 	aba_info "Found transfer bundle: $_transfer_tar"
+
+	# Drop leftovers from a prior load before unpack. Non-upgrade transfer tars
+	# omit metadata (and sometimes the digest ISC); tar xf will not remove
+	# pre-existing files, so a stale aba-transfer-metadata.json would be
+	# validated against the newly unpacked digest ISC (false checksum mismatch).
+	rm -f data/aba-transfer-metadata.json \
+		data/imageset-config.yaml \
+		data/imageset-config-digest.yaml
 
 	# Unpack from aba root (CWD is mirror/, aba root is ..)
 	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
@@ -98,6 +137,17 @@ if [ -f "$_transfer_tar" ]; then
 	# Transfer bundle unpacked — keep in place for potential re-use
 	# (re-load after registry reinstall, or copy to another mirror)
 	aba_info "Transfer bundle unpacked."
+fi
+
+# Extract configs transfer tar if present (cluster dirs for day-N updates).
+# Only runs in the normal flow (mirror_*.tar exists); the early-exit path
+# above already handles the config-only case.
+if [ -f "data/aba-transfer-configs.tar" ]; then
+	aba_info "Found config transfer: data/aba-transfer-configs.tar"
+	if ! ( cd .. && tar xf "mirror/data/aba-transfer-configs.tar" ); then
+		aba_abort "Failed to unpack aba-transfer-configs.tar. The file may be corrupt."
+	fi
+	aba_info "Config transfer extracted (cluster directories updated)."
 fi
 
 aba_debug "Ensuring oc-mirror is available"
@@ -148,13 +198,44 @@ reg_root=$data_dir/quay-install
 aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 if [ ! -d data ]; then
-	aba_abort "Error: Missing 'mirror/data' directory!  For air-gapped environments, run 'aba -d mirror save' first on an external (Internet connected) bastion/laptop" 
+	aba_abort "No mirror/data/ directory — nothing to load." \
+		"Load needs image archives (mirror_*.tar) under mirror/data/." \
+		"On a connected host:  aba -d mirror save" \
+		"Or copy archives in:  mkdir -p mirror/data && cp <media>/*.tar mirror/data/"
+
 fi
 aba_debug "data/ directory exists"
 
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
+# Reassure the user: summarize what this load will apply (tag-based ISC).
+# Reuse transfer-info.sh (same parser as TUI / aba transfer-info) — do not
+# invent a second ISC parser. Prefer transfer tar content when present.
 echo
+if _ti_out=$(scripts/transfer-info.sh --shell 2>/dev/null); then
+	eval "$_ti_out"
+	_load_ver="${transfer_ocp_version:-}"
+	if [ -n "${transfer_upgrade_to:-}" ] && [ "$transfer_upgrade_to" != "${transfer_ocp_version:-}" ]; then
+		_load_ver="${transfer_ocp_version} → ${transfer_upgrade_to}"
+	fi
+	aba_info "About to load:"
+	if [ -n "$_load_ver" ]; then
+		aba_info "  OCP: ${_load_ver} (${transfer_ocp_channel:-unknown})"
+	fi
+	if [ "${transfer_operator_count:-0}" -gt 0 ] 2>/dev/null; then
+		_ops_preview=$(echo "${transfer_operators:-}" | sed 's/,/, /g')
+		if [ "${transfer_operator_count}" -gt 8 ]; then
+			_ops_preview=$(echo "${transfer_operators:-}" | cut -d, -f1-8 | sed 's/,/, /g')
+			_ops_preview="${_ops_preview}, ... (+$(( transfer_operator_count - 8 )) more)"
+		fi
+		aba_info "  Operators (${transfer_operator_count}): ${_ops_preview}"
+	else
+		aba_info "  Operators: none"
+	fi
+	aba_info "  Registry: ${reg_host}:${reg_port}${reg_path}"
+	echo
+fi
+
 aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
 echo
@@ -213,13 +294,20 @@ if [ "$_loaded_ver" ]; then
 	replace-value-conf -q -n mirror_ocp_version -v "$_loaded_ver" -f "$regcreds_dir/state.sh"
 	if [ "$_loaded_ver" != "$ocp_version" ]; then
 		replace-value-conf -q -n mirror_ocp_upgrade_from -v "$ocp_version" -f "$regcreds_dir/state.sh"
-		aba_info "Mirror state updated: mirror_ocp_version $ocp_version → $_loaded_ver"
 	else
 		replace-value-conf -q -n mirror_ocp_upgrade_from -v "" -f "$regcreds_dir/state.sh"
 	fi
 fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+
+echo
+_loaded_display="${_loaded_ver:-$ocp_version}"
+if [ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ]; then
+	aba_success "Images loaded into $reg_host:$reg_port (upgrade: $ocp_version → $_loaded_ver)"
+else
+	aba_success "Images loaded into $reg_host:$reg_port (OCP $_loaded_display)"
+fi
 
 # Bundle phase complete: unlock ISC so future config changes trigger regeneration.
 # touch .created makes it newer than ISC → reg-create-imageset-config.sh will regenerate.

@@ -172,7 +172,13 @@ endif
 # Fail fast if data/ is missing, before Make triggers 'install' (which would reinstall the registry needlessly).
 .PHONY: .check-data-dir
 .check-data-dir:
-	@[ -d data ] || { echo "[ABA] Error: Missing 'mirror/data' directory!  Run 'aba -d mirror save' first on a connected host."; exit 1; }
+	@[ -d data ] || { \
+		echo "[ABA] Error: No mirror/data/ directory — nothing to load."; \
+		echo "[ABA]        Load needs image archives (mirror_*.tar) under mirror/data/."; \
+		echo "[ABA]        On a connected host:  aba -d mirror save"; \
+		echo "[ABA]        Or copy archives in:  mkdir -p mirror/data && cp <media>/*.tar mirror/data/"; \
+		exit 1; \
+	}
 
 # oc-mirror is idempotent so no need for 'dot' flag files
 .PHONY: load

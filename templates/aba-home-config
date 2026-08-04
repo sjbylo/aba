@@ -51,3 +51,11 @@ OC_MIRROR_PIN_CATALOGS=1
 # $HOME/.config/containers/registries.d/aba-sigstore.yaml
 # (installed automatically by ABA).
 # OC_MIRROR_FLAGS="--remove-signatures=true"
+
+# --- TUI Settings ---
+
+# TUI execution mode: 1=Terminal interactive, 2=Terminal non-interactive, 3=TUI non-interactive.
+TUI_EXEC_MODE=1
+
+# oc-mirror retry count used by the TUI (default: 1, 0=no retries).
+TUI_OC_MIRROR_RETRY_COUNT=1

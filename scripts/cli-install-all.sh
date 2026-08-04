@@ -48,21 +48,21 @@ if [ "$ro_opt" != "-r" ]; then
 fi
 
 showed_msg=false
-for item in $(make --no-print-directory -sC cli out-install-all)
-do
+_install_cli_item() {
+	local item="$1"
+	local task_id="cli:install:$item"
+
 	# If a filter was given, skip tools not in the list
 	if [[ ${#tool_filter[@]} -gt 0 ]] && ! printf '%s\n' "${tool_filter[@]}" | grep -qx "$item"; then
 		aba_debug "Skipping $item (not in filter)"
-		continue
+		return 0
 	fi
-
-	task_id="cli:install:$item"
 
 	# In wait mode, peek first — skip silently if already complete
 	if [[ "$ro_opt" == *"-w"* ]]; then
 		if run_once -p -i "$task_id"; then
 			aba_debug "CLI install already complete: $item"
-			continue
+			return 0
 		fi
 		if ! $showed_msg; then
 			aba_info "Ensuring CLI binaries are installed"
@@ -74,6 +74,29 @@ do
 	aba_debug "run_once $ro_opt -i \"$task_id\" -- make -sC cli $item"
 	# Start: CLI install in background. Wait: ensure_oc(), ensure_openshift_install() etc in include_all.sh
 	run_once $ro_opt -i "$task_id" -- make -sC cli $item
+}
+
+for item in $(make --no-print-directory -sC cli out-install-all)
+do
+	_install_cli_item "$item"
 done
+
+# Optional convenience CLIs
+if [ "$ro_opt" = "-r" ]; then
+	for item in $(make --no-print-directory -sC cli out-install-extra-clis)
+	do
+		[ -n "$item" ] || continue
+		run_once -r -i "cli:install:$item" 2>/dev/null || true
+	done
+else
+	# Install only when download artifacts already exist under cli/ (no download).
+	# Covers bundle unpack and save+transfer trees.
+	for item in $(make --no-print-directory -sC cli out-install-extra-available)
+	do
+		[ -n "$item" ] || continue
+		aba_debug "Extra CLI artifact present — installing $item"
+		_install_cli_item "$item"
+	done
+fi
 
 exit 0

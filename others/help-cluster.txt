@@ -64,11 +64,20 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   aba [-d <cluster>] upgrade
       --to <version>                      # Target OCP version (e.g. 4.22.2). Falls back to mirror.conf:ocp_upgrade_to
       --force                             # Bypass cluster-side upgrade guards (NOT for production!)
+      --allow-not-recommended             # Skip interactive confirmation for conditional upgrades
       --dry-run                           # Show what would happen without executing
+      --dry-run --shell                   # Machine-readable output (sourceable key=value pairs)
       --skip-day2                         # Don't auto-run day2 even if IDMS is missing
   WARNING: --force bypasses OpenShift's safety checks (release verification, admin ack gates).
            Only use it in test/lab environments or when working around a known CVO bug.
   Note: for disconnected upgrades, first load the upgrade images with 'aba -d mirror load'
+  Tip: Install OpenShift Update Service (OSUS) for validated upgrade paths (recommended).
+       OSUS provides a local update graph so OpenShift can verify the upgrade path,
+       enforce admin acknowledgment gates, and flag conditional (not-recommended) versions.
+       Without OSUS, upgrades bypass graph validation entirely.
+       Prerequisites: mirror the 'cincinnati-operator' (include it in your ImageSet Config
+       via 'aba -d mirror imagesetconf' or the TUI Operator selector), then install OSUS
+       via 'aba -d <cluster> day2-osus' or TUI Day-2 → OSUS.
 
   VM lifecycle (platform=vmw or kvm only):
   aba [-d <cluster>] ls                   # List all cluster node VMs

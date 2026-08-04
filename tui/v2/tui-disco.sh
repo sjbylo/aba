@@ -207,6 +207,7 @@ disco_main() {
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
+			"$TUI2_DISCO_TAG_FEEDBACK"    "\ZuF\Zneedback / Issues"
 			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
 			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
@@ -310,10 +311,14 @@ Navigation:
 	"$TUI2_DISCO_TAG_SETTINGS")
 		_tui_settings_menu
 		;;
+	"$TUI2_DISCO_TAG_FEEDBACK")
+		_tui_feedback
+		;;
 	"$TUI2_DISCO_TAG_ADVANCED")
 		tui_advanced_menu
 		local _adv_rc=$?
 		[[ $_adv_rc -eq 2 ]] && return 2
+		[[ "$_TUI_MODE" != "DISCO" ]] && return 0
 		;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
 				mirror_view_isc "true"

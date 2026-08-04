@@ -1,20 +1,71 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.1...HEAD)
+
+---
+
+## [1.2.1](https://github.com/sjbylo/aba/releases/tag/v1.2.1) - 2026-08-04
+
+Cluster upgrade workflow, TUI v2 rewrite, primed bundles, accumulated signatures, and air-gap transfer improvements
+
+
+### Added
+
+- **Bundle optional extra CLIs for air-gap** — `aba save` and `aba bundle` now download virtctl, kn, tkn, helm, opm, argocd, and roxctl (soft-fail so flaky CDNs never block transfer). On the disconnected side, `aba load` installs any extras already present. Extras are excluded from everyday `aba` installs to keep startup fast.
+- **Primed workflow commands** — New `aba prime` and `aba deploy` commands for pre-staged day-2 manifests in fully disconnected environments.
+- **Cluster upgrade support (BETA)** — `aba upgrade` orchestrates disconnected OCP upgrades: mirrors target version images, applies signatures, manages OSUS channel changes, and monitors the upgrade. Supports `--dry-run`, `--dry-run --shell` (machine-readable), `--force`, and `--allow-not-recommended` flags.
+- **Guided dependency chains** — `aba upgrade` offers to run `day2-osus` first if OSUS is not installed; `day2-osus` offers to run `day2` first if needed.
+- **Cluster-resources backup** — Each `oc-mirror` sync/save/load backs up the `cluster-resources/` directory (last 5 retained) for rollback safety.
+- **Accumulated release signatures** — ABA maintains a merged `signature-configmap-merged.json` across syncs so intermediate-version signatures are never lost.
+- **Mirror operation summaries** — `aba sync`, `aba load`, and `aba mirror install` now show a summary of what succeeded at the end of each operation.
+- **Post-install summary banner** — Successful cluster installs display cluster name, version, type, platform, API endpoint, and context-aware next steps.
+- **TUI: Cluster upgrade dialog** — Interactive upgrade version picker with z-stream/minor grouping, OSUS graph validation, conditional version warnings, and force toggle.
+- **TUI: Feedback menu** — "Feedback / Issues" menu item in all modes links to GitHub Issues and Discussions.
+- **TUI: Execution mode persistence** — Execution mode (interactive/non-interactive/TUI) and oc-mirror retry count are saved to `~/.aba/config` across sessions.
+- **TUI: ImageSet Configuration UX** — Improved operator selection dialog with clearer labels, inline help, and catalog refresh hint.
+- **CONTRIBUTING.md** — New contributor guidelines for reporting issues and submitting code.
+
+### Changed
+
+- **`aba load` preflight shows transfer summary** — Before unpacking, `aba load` prints what the transfer contains (OCP version, operator catalogs, registry type) so operators know what they're about to apply.
+- **User-facing messages hide internal paths** — `aba_info` messages now show "Cluster state saved/removed" instead of exposing `~/.aba/` internal paths. Internal paths moved to `aba_debug`.
+- **`aba refresh` single prompt** — Refresh flow asks one confirmation instead of two; the second prompt displays what was auto-answered.
+- **TUI: mode switching returns to top-level menu** — Switching modes from the Advanced menu now returns to the correct main action menu instead of staying in Advanced.
+- **TUI: startup wait message** — Removed misleading "(Ctrl-C to abort)" from `aba startup` wait messages; Ctrl-C handling still works gracefully.
+- **OSUS help tip** — `aba upgrade --help` now explains OSUS benefits, prerequisites, and how to install it.
+
+### Fixed
+
+- **Fix `externalize_cluster_state()` conditional sourcing** — The normalize functions were conditionally skipped when variables (e.g. `platform`) were already set by the Make/aba.sh environment, allowing stale `machine_network` values from `aba.conf` to leak into `state.sh`. Now both normalize functions are always sourced unconditionally so `cluster.conf` values take precedence.
+- **Fix stale transfer metadata on `aba load`** — Leftover ISC/metadata from a prior upgrade transfer caused false digest-checksum mismatches when loading a non-upgrade transfer. Stale files are now cleared before unpacking.
+- **Fix stale `ansible_runner_instance` blocking mirror-registry** — An interrupted `mirror-registry` install or uninstall left its internal Ansible container behind, causing all subsequent `mirror-registry` calls to fail with "container name already in use". Now consistently cleaned up before every `mirror-registry` invocation (local and remote install/uninstall).
+- **Fix upgrade graph classification crash** — `set -e` killed `--dry-run --shell` silently when OSUS graph returned zero versions (empty `_has_graph` subshell exit code 1).
+- **Fix signature loss across syncs** — `oc-mirror` regenerates `signature-configmap.json` from scratch each run, losing intermediate-version signatures. ABA now merges into a separate `signature-configmap-merged.json` that accumulates across syncs.
+- **Fix OSUS stabilization wait** — Increased post-OSUS-install wait from instant to 15s+5m with `Progressing=False` check, preventing premature upgrade attempts.
+- **Fix upgrade early abort** — `aba upgrade` now checks the OSUS graph before running `day2`, failing fast with a clear error if the target version is unreachable.
+- **Fix `--dry-run --shell` offers unreachable versions** — Mirrored versions not in the OSUS update graph are now filtered out instead of being shown as available upgrades.
+- **Fix `ssh_key_file` tilde expansion** — Literal `~` in `ssh_key_file` and `data_dir` config values is now correctly expanded at use time, not at write time.
+- **Fix `day2` oauth-proxy race** — `aba day2` now waits for the `oauth-proxy` imagestream before checking the trust CA, preventing transient `ServiceUnavailable` errors.
+- **Fix "No Upgrades" dialog always showing** — TUI mirror upgrade prep dialog incorrectly showed "No Upgrades on candidate" even when own-channel versions existed (stale unused variable).
+- **Fix internet check resilience** — Shorter failure TTL and longer curl timeout reduce false "no internet" detection on slow connections.
+
+### Community
+
+- Thanks to **Mateusz Slugocki** (@mateuszslugocki) for the feature ideas that led to the `--primed` bundle workflow.
 
 ---
 
 ## [1.2.0](https://github.com/sjbylo/aba/releases/tag/v1.2.0) - 2026-07-25
 
-VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor (alpha), and VMware reliability fixes
+VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor (beta), and VMware reliability fixes.
 
 
-VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor, and VMware reliability fixes.
+VIP auto-allocation, auto DNS/NTP infrastructure, air-gap transfer guardrails, quay-ng vendor (beta), and VMware reliability fixes.
 
 ### Added
 
 - **VIP auto-allocation** — Multi-node clusters get API/Ingress VIPs auto-allocated from the machine network when ABA manages DNS, eliminating manual VIP assignment.
 - **VIP collision detection** — ABA detects IP conflicts (ARP probe) before cluster install and aborts with a clear message rather than proceeding with conflicting addresses.
 - **Auto DNS/NTP infrastructure (`aba setup dns/ntp`)** — New commands configure dnsmasq and chronyd on the bastion. Per-cluster DNS records (API, apps wildcard, nodes) are auto-managed at install time and removed on delete.
-- **Quay-ng registry vendor [ALPHA]** — New mirror registry option backed by the Go-based Quay mirror-registry rewrite (Quadlet-based, rootless). Supports custom credentials and remote install.
+- **Quay-ng registry vendor [BETA]** — New mirror registry option backed by the Go-based Quay mirror-registry rewrite (Quadlet-based, rootless). Supports custom credentials and remote install.
 - **`aba show-operators`** — List all available operators from the cached catalog index without needing internet access.
 - **TUI: Cluster Login Terminal** — New "L" menu item in Day-2 menu opens an interactive shell pre-logged into the selected cluster (KUBECONFIG exported, `oc` ready).
 - **Air-gap transfer guardrails** — `aba load` aborts if no `mirror_*.tar` files exist, warns if `aba-transfer.tar` is missing, and offers to clean up large archives after successful load.
@@ -73,7 +124,7 @@ Smart excl_platform guards, ISC generation rewrite, RFC 1123 domain normalizatio
 
 ## [1.1.5](https://github.com/sjbylo/aba/releases/tag/v1.1.5) - 2026-07-16
 
-Primed bundles (alpha), TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
+Primed bundles (beta), TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
 
 
 Primed bundles, TUI upgrade picker, catalog prefetch, RHEL 10 support, and improved UX
@@ -85,7 +136,7 @@ Primed bundles, TUI upgrade picker, catalog prefetch, RHEL 10 support, and impro
 - **`aba transfer-info`** — New command to show transfer tar contents, metadata, and cluster directory summary.
 - **Suggest `aba unstick` on install failure** — When cluster install fails with stuck pods, the error message now suggests running `aba unstick` as a recovery step.
 - **Container image workflow** — Containerfile and documentation for running ABA inside a container for disconnected deployments.
-- **`aba bundle --primed` (alpha)** — Bundle pre-configured cluster directories (with pre-built `install-config.yaml` and `agent-config.yaml`) alongside the mirror data. On the disconnected side, Make skips regeneration for primed clusters (`.primed` marker), while cluster.conf-only directories still go through normal config generation. Supports mixed bundles with both pre-built and unconfigured clusters.
+- **`aba bundle --primed` (beta)** — Bundle fully primed cluster directories (with ready-to-deploy `install-config.yaml` and `agent-config.yaml`) alongside the mirror data. On the disconnected side, primed clusters install immediately without regeneration — ready for pre-baked ISOs or automated deployment pipelines. Supports mixed bundles with both primed and unconfigured clusters.
 
 ### Improvements
 

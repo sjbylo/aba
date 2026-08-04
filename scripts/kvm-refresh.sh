@@ -10,8 +10,9 @@ aba_debug "Running: $0 $* at $(date) in dir: $PWD"
 # Only prompt about deletion if VMs exist from a previous install.
 # On fresh install, no VMs exist — just proceed to create.
 if scripts/kvm-exists.sh; then
-	ask -n --auto-yes "To re-start the installation, delete, re-create & start the VM(s)" || exit 0
 	scripts/kvm-delete.sh || true
 fi
+
+rm -f .install-complete .autorefresh .auto-agent-up
 
 scripts/kvm-create.sh --start --nomaccheck

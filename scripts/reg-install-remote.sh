@@ -123,6 +123,11 @@ case "$vendor" in
 		_escaped_pw=$(printf '%q' "$reg_pw")
 		cmd="cd $remote_dir && tar xvf mirror-registry-*.tar.gz && ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword '\$_reg_pw' $reg_root_opts"
 
+		# mirror-registry hardcodes --name ansible_runner_instance without
+		# --replace.  A prior interrupted run leaves it behind (--rm is
+		# unreliable on signal kill), blocking all subsequent calls.
+		$_ssh "podman rm -f ansible_runner_instance 2>/dev/null" || true
+
 		aba_info "Extracting and installing Quay registry on remote host ..."
 		aba_info "  ssh $reg_ssh_user@$reg_host: ./mirror-registry install -v --quayHostname $reg_hostport --initUser $reg_user --initPassword *** $reg_root_opts"
 		if ! $_ssh "export _reg_pw=$_escaped_pw && $cmd"; then

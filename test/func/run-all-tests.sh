@@ -57,6 +57,7 @@ unit_tests=(
 	test/func/test-vmware-required-privileges.sh
 	test/func/test-primed-bundle-scenarios.sh
 	test/func/test-reg-stale-report.sh
+	test/func/test-extra-clis.sh
 )
 
 # Integration tests (slow, may download)
