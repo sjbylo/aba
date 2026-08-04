@@ -40,6 +40,10 @@
 - **Fix "No Upgrades" dialog always showing** — TUI mirror upgrade prep dialog incorrectly showed "No Upgrades on candidate" even when own-channel versions existed (stale unused variable).
 - **Fix internet check resilience** — Shorter failure TTL and longer curl timeout reduce false "no internet" detection on slow connections.
 
+### Community
+
+- Thanks to **Mateusz Slugocki** (@mateuszslugocki) for the feature ideas that led to the `--primed` bundle workflow.
+
 ---
 
 ## [1.2.0](https://github.com/sjbylo/aba/releases/tag/v1.2.0) - 2026-07-25
