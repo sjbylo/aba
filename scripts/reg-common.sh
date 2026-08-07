@@ -292,22 +292,30 @@ reg_open_firewall() {
 	# Track whether ABA opened the port (written to state.sh by reg_post_install)
 	_reg_fw_opened=""
 
+	# Use sudo -n (non-interactive) to avoid hanging on password prompts.
+	# If sudo fails, fall through to the warning with manual instructions.
+	local _sudo="${SUDO:+sudo -n}"
+
 	if [ "$via_ssh" ]; then
 		# Remote: run firewall commands over SSH
 		local _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host --"
 
 		if $_ssh "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
-			$_ssh "$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
-				$SUDO firewall-cmd --reload >/dev/null"
-			_reg_fw_opened=1
+			if $_ssh "$_sudo firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
+				$_sudo firewall-cmd --reload >/dev/null" 2>/dev/null; then
+				_reg_fw_opened=1
+			fi
 		elif $_ssh "rpm -q firewalld &>/dev/null"; then
-			$_ssh "$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
-			_reg_fw_opened=1
+			if $_ssh "$_sudo firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null" 2>/dev/null; then
+				_reg_fw_opened=1
+			fi
 		elif $_ssh "command -v iptables &>/dev/null && \
-			$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
+			$_sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
 			aba_info "firewalld not active on $reg_host, opened port $reg_port via iptables."
 			_reg_fw_opened=1
-		else
+		fi
+
+		if [ ! "$_reg_fw_opened" ]; then
 			aba_warn "Could not auto-open firewall port $reg_port on $reg_host." \
 				"If the registry is unreachable, open the port manually on $reg_host, e.g.:" \
 				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
@@ -316,17 +324,21 @@ reg_open_firewall() {
 	else
 		# Local: run firewall commands directly
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-				$SUDO firewall-cmd --reload
-			_reg_fw_opened=1
+			if $_sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
+				$_sudo firewall-cmd --reload; then
+				_reg_fw_opened=1
+			fi
 		elif rpm -q firewalld &>/dev/null; then
-			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
-			_reg_fw_opened=1
+			if $_sudo firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null 2>/dev/null; then
+				_reg_fw_opened=1
+			fi
 		elif command -v iptables &>/dev/null && \
-			$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
+			$_sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
 			aba_info "firewalld not active, opened port $reg_port via iptables."
 			_reg_fw_opened=1
-		else
+		fi
+
+		if [ ! "$_reg_fw_opened" ]; then
 			aba_warn "Could not auto-open firewall port $reg_port." \
 				"If the registry is unreachable, open the port manually, e.g.:" \
 				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
@@ -357,23 +369,25 @@ reg_close_firewall() {
 	local where="${via_ssh:+ on $reg_host}"
 	aba_info "Closing firewall port $reg_port${where} ..."
 
+	local _sudo="${SUDO:+sudo -n}"
+
 	if [ "$via_ssh" ]; then
 		local _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host --"
 
 		if $_ssh "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
-			$_ssh "$SUDO firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
-				$SUDO firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
-				$SUDO firewall-cmd --reload >/dev/null" || true
+			$_ssh "$_sudo firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
+				$_sudo firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
+				$_sudo firewall-cmd --reload >/dev/null" 2>/dev/null || true
 		elif $_ssh "command -v iptables &>/dev/null"; then
-			$_ssh "$SUDO iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null" || true
+			$_ssh "$_sudo iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null" || true
 		fi
 	else
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			$SUDO firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
-				$SUDO firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
-				$SUDO firewall-cmd --reload >/dev/null || true
+			$_sudo firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
+				$_sudo firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
+				$_sudo firewall-cmd --reload >/dev/null 2>/dev/null || true
 		elif command -v iptables &>/dev/null; then
-			$SUDO iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null || true
+			$_sudo iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null || true
 		fi
 	fi
 }
@@ -522,6 +536,33 @@ _reg_probe_set() {
 		1) return 1 ;;
 		*) aba_abort "Registry probe failed ($label, rc=$rc)" ;;
 	esac
+}
+
+# --- reg_rm_data_dir ----------------------------------------------------------
+# Remove registry data directory, using sudo only for vendors that need it.
+# Docker and quay-ng use rootless podman (all files user-owned); quay v2 uses
+# Ansible with become:yes (root-owned + postgres-owned files).
+#
+# Usage: reg_rm_data_dir <vendor> <dir>
+#        reg_rm_data_dir <vendor> <dir> <ssh_cmd>   (remote)
+reg_rm_data_dir() {
+	local vendor="$1" dir="$2" ssh_cmd="${3:-}"
+
+	if [ "$ssh_cmd" ]; then
+		$ssh_cmd "[ -d '$dir' ]" 2>/dev/null || return 0
+		aba_info "Removing registry data at $dir on $reg_host ..."
+		case "$vendor" in
+			quay)  $ssh_cmd "$SUDO rm -rf '$dir'" ;;
+			*)     $ssh_cmd "rm -rf '$dir'" ;;
+		esac
+	else
+		[ -d "$dir" ] || return 0
+		aba_info "Removing registry data at $dir ..."
+		case "$vendor" in
+			quay)  $SUDO rm -rf "$dir" ;;
+			*)     rm -rf "$dir" ;;
+		esac
+	fi
 }
 
 # --- reg_stale_report ---------------------------------------------------------

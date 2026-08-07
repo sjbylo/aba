@@ -234,12 +234,13 @@ case "$vendor" in
 			# Ensure rootless podman containers with --restart=always survive VM reboot
 			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
 				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
-					echo 'Enabling loginctl linger for rootless podman restart persistence ...'
-					$SUDO loginctl enable-linger \"\$USER\"
-				fi
+				echo 'Enabling loginctl linger for rootless podman restart persistence ...'
+				${SUDO:+sudo -n} loginctl enable-linger \"\$USER\" 2>/dev/null || \
+					echo \"WARNING: Could not enable loginctl linger (needs sudo). Registry may not survive reboot. Enable manually: sudo loginctl enable-linger \$USER\" >&2
 			fi
-		"; then
-			aba_abort "Docker registry install failed on remote host $reg_host." \
+		fi
+	"; then
+		aba_abort "Docker registry install failed on remote host $reg_host." \
 				"Check the output above for details."
 		fi
 
@@ -312,7 +313,10 @@ QUADLET
 			[ -f \"\$_abs_root/auth/admin-password\" ] || { echo 'ERROR: admin-password not created'; exit 1; }
 			# Enable linger for rootless persistence
 			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
-				loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes' || $SUDO loginctl enable-linger \"\$USER\"
+				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+				${SUDO:+sudo -n} loginctl enable-linger \"\$USER\" 2>/dev/null || \
+					echo \"WARNING: Could not enable loginctl linger (needs sudo). Registry may not survive reboot. Enable manually: sudo loginctl enable-linger \$USER\" >&2
+				fi
 			fi
 		"; then
 			aba_abort "$_QUAY_NG_VENDOR install failed on remote host $reg_host." \
