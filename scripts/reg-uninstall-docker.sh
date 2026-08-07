@@ -44,10 +44,7 @@ if ask -n --auto-yes "Uninstall Docker registry on localhost at $reg_host:$reg_p
 		aba_info "Registry container '$REGISTRY_NAME' not found (already stopped)."
 	fi
 
-	if [ -d "$reg_root" ]; then
-		aba_info "Removing registry data at $reg_root ..."
-		$SUDO rm -rf "$reg_root"
-	fi
+	reg_rm_data_dir docker "$reg_root"
 
 	reg_close_firewall
 

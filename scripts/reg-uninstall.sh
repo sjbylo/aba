@@ -126,10 +126,11 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 		_ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 		case "$vendor" in
 			docker)
-				aba_info "Removing Docker registry container and data on $reg_host ..."
-				$_ssh "podman rm -f registry; $SUDO rm -rf $reg_root" || \
-					aba_warn "Remote Docker cleanup returned non-zero (container may not have existed)"
-				# Verify container is gone
+			aba_info "Removing Docker registry container and data on $reg_host ..."
+			$_ssh "podman rm -f registry" || \
+				aba_warn "Remote Docker cleanup returned non-zero (container may not have existed)"
+			reg_rm_data_dir docker "$reg_root" "$_ssh"
+			# Verify container is gone
 				if $_ssh "podman ps -a --format '{{.Names}}'" 2>/dev/null | grep -q '^registry$'; then
 					aba_abort "Failed to remove Docker registry container on $reg_host"
 				fi
@@ -141,14 +142,14 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				$cmd || exit 1
 				;;
 			$_QUAY_NG_VENDOR)
-				aba_info "Removing $_QUAY_NG_VENDOR registry on $reg_host ..."
-				$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
-						systemctl --user stop quay.service; \
-					fi; \
-					rm -f ~/.config/containers/systemd/quay.container; \
-					systemctl --user daemon-reload 2>/dev/null; \
-					[ -d '$reg_root' ] && $SUDO rm -rf '$reg_root'" || \
-					aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+			aba_info "Removing $_QUAY_NG_VENDOR registry on $reg_host ..."
+			$_ssh "if systemctl --user is-active quay.service &>/dev/null; then \
+					systemctl --user stop quay.service; \
+				fi; \
+				rm -f ~/.config/containers/systemd/quay.container; \
+				systemctl --user daemon-reload 2>/dev/null" || \
+				aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+			reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
 
 				# Post-uninstall assertions
 				_stale=""
@@ -173,9 +174,9 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^registry$'; then
 					aba_abort "Failed to remove Docker registry container"
 				fi
-				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
-				;;
-			quay)
+			reg_rm_data_dir docker "$reg_root"
+			;;
+		quay)
 				ensure_quay_registry
 				cmd="eval ./mirror-registry uninstall -v --autoApprove $reg_root_opt"
 				aba_info "Running command: $cmd"
@@ -188,10 +189,10 @@ if ask -n --auto-yes "Detected $vendor registry on $_location (data: $reg_root).
 				fi
 				[ -f "$HOME/.config/containers/systemd/quay.container" ] && \
 					rm -f "$HOME/.config/containers/systemd/quay.container"
-				systemctl --user daemon-reload 2>/dev/null || true
-				[ -d "$reg_root" ] && $SUDO rm -rf "$reg_root"
+			systemctl --user daemon-reload 2>/dev/null || true
+			reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
 
-				# Post-uninstall assertions
+			# Post-uninstall assertions
 				_stale=""
 				[ -d "$reg_root" ] && _stale+="  reg_root ($reg_root) still exists"$'\n'
 				ss -tlnp | grep -q ":${reg_port:-8443} " && _stale+="  Port ${reg_port:-8443} still listening"$'\n'

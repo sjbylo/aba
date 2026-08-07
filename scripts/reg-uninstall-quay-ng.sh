@@ -49,10 +49,7 @@ if ask -n --auto-yes "Uninstall $_QUAY_NG_VENDOR registry on localhost at $reg_h
 		systemctl --user daemon-reload 2>/dev/null || true
 	fi
 
-	if [ -d "$reg_root" ]; then
-		aba_info "Removing registry data at $reg_root ..."
-		$SUDO rm -rf "$reg_root"
-	fi
+	reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root"
 
 	reg_close_firewall
 

@@ -1704,8 +1704,8 @@ _fetch_cached() {
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
 	# Retry transient failures (DNS, connection reset) — curl --retry alone skips DNS errors
-	# Worst case: 3 × 8s max-time + 2 × 2s delay = ~28s
-	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 2 -q curl -f -s --connect-timeout 5 --max-time 8 "$url" -o "$tmp"; then
+	# Worst case: 3 × 30s max-time + 2 × 2s delay = ~94s
+	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 2 -q curl -f -s --connect-timeout 5 --max-time 30 "$url" -o "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
@@ -2713,12 +2713,16 @@ get_ntp_servers() {
 
 trust_root_ca() {
 	if [ -s "$1" ]; then
-		if $SUDO diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
+		if ${SUDO:+sudo -n} diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/ 
-			$SUDO update-ca-trust extract
-			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
+			if ${SUDO:+sudo -n} install -m 644 "$1" /etc/pki/ca-trust/source/anchors/ 2>/dev/null && \
+				${SUDO:+sudo -n} update-ca-trust extract 2>/dev/null; then
+				aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
+			else
+				aba_warn "Could not update system CA trust (needs sudo)." \
+					"You may need to run: sudo cp $1 /etc/pki/ca-trust/source/anchors/ && sudo update-ca-trust extract"
+			fi
 		fi
 	else
 		aba_info "No $1 cert file found" 
