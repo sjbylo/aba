@@ -408,6 +408,8 @@ e2e_run "Create conf-only compact cluster dir" \
 e2e_run "Verify conf-only: NO install-config.yaml" \
     "test ! -f $PRIMED_COMPACT/install-config.yaml"
 
+e2e_run -q "Remove leftover primed tarball" "rm -f $PRIMED_TAR"
+
 e2e_run "Create primed tarball (tarrepo, skips mirror save)" \
     "make tarrepo out=$PRIMED_TAR clusters=1"
 

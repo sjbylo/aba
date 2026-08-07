@@ -957,9 +957,11 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
 	elif [ "$1" = "--workers" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND workers=1"
+		opt_workers="--workers"
 		shift
 	elif [ "$1" = "--masters" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND masters=1"
+		opt_masters="--masters"
 		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
@@ -1035,6 +1037,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
+		shift
+	elif [ "$1" = "--all" ]; then
+		opt_all="--all"
 		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
@@ -1170,7 +1175,7 @@ if [ "$cur_target" ]; then
 		;;
 		ssh)
 			trap - ERR  # No need for this anymore
-			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"
+			$ABA_ROOT/scripts/ssh-rendezvous.sh ${opt_all:-} ${opt_masters:-} ${opt_workers:-} "$cmd"
 			exit 
 		;;
 		run)

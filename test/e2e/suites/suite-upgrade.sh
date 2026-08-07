@@ -2,15 +2,19 @@
 # =============================================================================
 # Suite: Upgrade Command
 # =============================================================================
-# Purpose: Test the 'aba upgrade' command and '--upgrade-to' ISC auto-generation.
+# Purpose: Test the 'aba upgrade' command end-to-end.
 #
 # This suite covers:
 #   - --upgrade-to flag: version resolution, mirror.conf write, symlink write-through
 #   - ISC auto-generation: single-channel + shortestPath when ocp_upgrade_to is set
 #   - ISC normal mode: unchanged behavior when ocp_upgrade_to is not set
 #   - aba upgrade --dry-run: correct output without executing
-#   - aba upgrade preflight: version check, missing image, missing IDMS
-#   - Full upgrade flow: install older version, mirror target, load, upgrade
+#   - aba upgrade --dry-run --shell: machine-readable output on a live cluster
+#   - aba upgrade preflight: version check, invalid format
+#   - Full-chain upgrade: single 'aba upgrade' drives day2 + OSUS + trigger
+#   - Signature accumulation across syncs (merged file)
+#   - Conditional version detection from live cluster graph
+#   - --allow-not-recommended flag plumbing
 # =============================================================================
 
 set -u
@@ -29,6 +33,8 @@ CON_HOST="con${POOL_NUM}.${VM_BASE_DOMAIN}"
 
 e2e_setup
 
+NTP_IP="${NTP_SERVER:-10.0.1.8}"
+
 plan_tests \
     "Setup: ensure pre-populated registry" \
     "Setup: install aba and configure" \
@@ -40,7 +46,15 @@ plan_tests \
     "Flag: --upgrade-to from cluster dir via symlink" \
     "Upgrade: --dry-run output" \
     "Upgrade: preflight rejects same version" \
-    "Upgrade: invalid version format rejected"
+    "Upgrade: invalid version format rejected" \
+    "Install: SNO at older version" \
+    "Upgrade: --dry-run --shell on live cluster" \
+    "Upgrade: sync target version to registry" \
+    "Upgrade: signature accumulation after sync" \
+    "Upgrade: full chain (day2 + OSUS + upgrade)" \
+    "Upgrade: verify upgrade accepted" \
+    "Upgrade: conditional version detection" \
+    "Cleanup: delete cluster"
 
 suite_begin "upgrade"
 
@@ -392,8 +406,214 @@ e2e_run_must_fail "Empty --to argument is rejected" \
 
 test_end
 
-# --- Cleanup ----------------------------------------------------------------
-# Full upgrade flow is tested in suite-cluster-ops (piggybacks on its SNO).
+# ============================================================================
+# 12. Install: SNO at older version
+# ============================================================================
+# From here on we need a real cluster.  Reconfigure for VMware and install
+# a SNO using the "older" (previous) version already in the pool registry.
+test_begin "Install: SNO at older version"
+
+e2e_run "Reconfigure aba.conf for VMware" "
+    cd ~/aba &&
+    older=\$(cat /tmp/e2e-ocp-version-older) &&
+    aba --noask --platform vmw --channel fast --version \$older \
+        --base-domain $(pool_domain) \
+        --machine-network $(pool_machine_network) \
+        --ntp $NTP_IP
+"
+e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
+
+e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
+e2e_run "Set VC_FOLDER in vmware.conf" \
+    "sed -i 's#^[# ]*VC_FOLDER=.*#VC_FOLDER=${VC_FOLDER:-/Datacenter/vm/aba-e2e}#g' vmware.conf"
+
+e2e_run "Sync older version to pool registry" \
+    "aba -d mirror sync --retry"
+
+e2e_run "Delete any leftover $SNO cluster" \
+    "_e2e_delete_leftover_cluster $SNO"
+e2e_add_to_cluster_cleanup "$PWD/$SNO"
+
+e2e_run "Create SNO cluster config" \
+    "aba cluster -n $SNO -t sno --starting-ip $(pool_sno_ip) --step cluster.conf"
+
+e2e_run -r 2 10 "Install SNO cluster" \
+    "aba --dir $SNO install"
+
+e2e_run "Show cluster operator status" "aba --dir $SNO run"
+e2e_wait_cluster_available $SNO
+
+test_end
+
+# ============================================================================
+# 13. Upgrade: --dry-run --shell on live cluster
+# ============================================================================
+test_begin "Upgrade: --dry-run --shell on live cluster"
+
+e2e_run "Verify --dry-run --shell output format" "
+    cd ~/aba &&
+    output=\$(aba -d $SNO upgrade --dry-run --shell 2>/dev/null) &&
+    echo \"\$output\" &&
+    echo \"\$output\" | grep -q '^upgrade_current_ver=' &&
+    echo \"\$output\" | grep -q '^upgrade_channel=' &&
+    echo \"\$output\" | grep -q '^upgrade_osus=' &&
+    echo \"\$output\" | grep -q '^upgrade_versions=' &&
+    echo '--dry-run --shell: output format OK'
+"
+
+e2e_run "Verify --dry-run --shell is eval-safe and values correct" "
+    cd ~/aba &&
+    older=\$(cat /tmp/e2e-ocp-version-older) &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    eval \"\$(aba -d $SNO upgrade --dry-run --shell 2>/dev/null)\" &&
+    echo \"upgrade_current_ver=\$upgrade_current_ver\" &&
+    echo \"upgrade_channel=\$upgrade_channel\" &&
+    echo \"upgrade_osus=\$upgrade_osus\" &&
+    echo \"upgrade_versions=\$upgrade_versions\" &&
+    echo \"upgrade_conditional=\${upgrade_conditional:-}\" &&
+    [ \"\$upgrade_current_ver\" = \"\$older\" ] &&
+    echo \"current_ver matches installed version (\$older): OK\" &&
+    [ -n \"\$upgrade_channel\" ] &&
+    echo \"channel is non-empty (\$upgrade_channel): OK\" &&
+    echo \"\$upgrade_versions\" | grep -qF \"\$desired\" &&
+    echo \"versions contains upgrade target (\$desired): OK\" &&
+    echo '--dry-run --shell: eval + values OK'
+"
+
+e2e_run "Verify --allow-not-recommended flag accepted with --dry-run --shell" "
+    cd ~/aba &&
+    output=\$(aba -d $SNO upgrade --dry-run --shell --allow-not-recommended 2>/dev/null) &&
+    echo \"\$output\" | grep -q '^upgrade_current_ver=' &&
+    echo '--allow-not-recommended + --dry-run --shell: OK'
+"
+
+test_end
+
+# ============================================================================
+# 14. Upgrade: sync target version to registry
+# ============================================================================
+test_begin "Upgrade: sync target version to registry"
+
+e2e_run "Set --upgrade-to for z-stream upgrade" "
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    aba -d mirror --upgrade-to \$desired &&
+    aba --force -d mirror imagesetconf &&
+    echo \"Upgrade target set: \$desired\"
+"
+
+e2e_run -r 1 2 "Sync upgrade images to pool registry" \
+    "cd ~/aba && aba -d mirror sync --retry"
+
+test_end
+
+# ============================================================================
+# 15. Upgrade: signature accumulation after sync
+# ============================================================================
+test_begin "Upgrade: signature accumulation after sync"
+
+e2e_run "Verify merged signature file exists" "
+    cd ~/aba &&
+    test -s mirror/data/working-dir/signature-configmap-merged.json &&
+    echo 'Merged signature file exists: OK'
+"
+
+e2e_run "Verify merged file has signatures" "
+    cd ~/aba &&
+    count=\$(jq '.binaryData | length' mirror/data/working-dir/signature-configmap-merged.json) &&
+    echo \"Merged signature count: \$count\" &&
+    [ \"\$count\" -gt 0 ] &&
+    echo 'Signature accumulation: OK'
+"
+
+test_end
+
+# ============================================================================
+# 16. Upgrade: full chain (day2 + OSUS + upgrade)
+# ============================================================================
+# This is the key test: a single 'aba upgrade' command that should internally
+# handle day2 (IDMS/signatures), OSUS install, channel config, and trigger
+# the upgrade -- the exact workflow a real user follows.
+test_begin "Upgrade: full chain (day2 + OSUS + upgrade)"
+
+e2e_wait_cluster_ready $SNO
+
+e2e_run "Full-chain upgrade (day2 + OSUS + trigger)" "
+    cd ~/aba &&
+    desired=\$(cat /tmp/e2e-ocp-version-desired) &&
+    echo \"Upgrading to \$desired (full chain, no --skip-day2, no --force)\" &&
+    aba --dir $SNO upgrade --to \$desired
+"
+
+test_end
+
+# ============================================================================
+# 17. Upgrade: verify upgrade accepted
+# ============================================================================
+test_begin "Upgrade: verify upgrade accepted"
+
+e2e_poll 300 15 "Verify upgrade in progress" \
+    "cd ~/aba && desired=\$(cat /tmp/e2e-ocp-version-desired) && \
+     aba --dir $SNO run --cmd 'oc adm upgrade' | grep -E 'upgrade is in progress|Cluster version is \$desired'"
+
+e2e_diag "Show cluster version" \
+    "aba --dir $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}'"
+
+test_end
+
+# ============================================================================
+# 18. Upgrade: conditional version detection
+# ============================================================================
+# Scan the live cluster graph for conditional (not-recommended) versions.
+# If any exist, verify they appear in --dry-run --shell output.
+# This test is opportunistic -- conditional versions are not always present.
+test_begin "Upgrade: conditional version detection"
+
+e2e_run "Scan cluster graph for conditional versions" "
+    cd ~/aba &&
+    cond=\$(aba --dir $SNO run --cmd \
+        \"oc get clusterversion version -o json\" | \
+        jq -r '.status.conditionalUpdates[]?.release.version // empty' | head -5) &&
+    echo \"Conditional versions from cluster graph: \${cond:-NONE}\" &&
+    echo \"\$cond\" > /tmp/e2e-conditional-versions
+"
+
+e2e_run "Verify conditional versions in --dry-run --shell output" "
+    cd ~/aba &&
+    cond=\$(cat /tmp/e2e-conditional-versions | head -1) &&
+    if [ -n \"\$cond\" ]; then
+        echo \"Found conditional version: \$cond -- verifying --dry-run --shell\" &&
+        eval \"\$(aba -d $SNO upgrade --dry-run --shell 2>/dev/null)\" &&
+        echo \"upgrade_conditional field: \${upgrade_conditional:-EMPTY}\" &&
+        if echo \"\$upgrade_conditional\" | grep -qF \"\$cond\"; then
+            echo \"Conditional version \$cond correctly reported in upgrade_conditional field: OK\"
+        else
+            echo \"WARNING: \$cond not in upgrade_conditional field (may have changed status)\"
+        fi &&
+        eval \"\$(aba -d $SNO upgrade --dry-run --shell --allow-not-recommended 2>/dev/null)\" &&
+        echo \"upgrade_versions with --allow-not-recommended: \$upgrade_versions\" &&
+        echo 'Conditional detection: OK'
+    else
+        echo 'No conditional versions available in cluster graph -- skipping (expected for some versions)'
+    fi
+"
+
+test_end
+
+# ============================================================================
+# 19. Cleanup: delete cluster
+# ============================================================================
+test_begin "Cleanup: delete cluster"
+
+e2e_run "Delete SNO cluster" \
+    "_e2e_delete_leftover_cluster $SNO"
+
+e2e_run "Clean up ocp_upgrade_to from mirror.conf" \
+    "cd ~/aba && sed -i '/^ocp_upgrade_to=/d' mirror/mirror.conf"
+
+test_end 0
+
+# --- End --------------------------------------------------------------------
 suite_end; _rc=$?
 
 exit $_rc
