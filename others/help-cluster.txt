@@ -50,6 +50,11 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
 
   aba [-d <cluster>] mon                  # Monitor installation (runs openshift-install agent wait-for)
   aba [-d <cluster>] day2                 # Configure OperatorHub, signatures, etc (run after load/sync/upgrade)
+  aba [-d <cluster>] ssh --cmd <command>   # Run a command on the rendezvous node (node0) via SSH
+  aba [-d <cluster>] ssh --all --cmd <cmd> # Run a command on all nodes (masters + workers)
+  aba [-d <cluster>] ssh --all --masters --cmd <cmd>  # Run on masters only
+  aba [-d <cluster>] ssh --all --workers --cmd <cmd>  # Run on workers only
+  aba [-d <cluster>] ssh                  # Open interactive SSH session to node0
   aba [-d <cluster>] run --cmd "oc ..."   # Run an 'oc' command against this cluster
   aba [-d <cluster>] info                 # Show cluster information
   aba [-d <cluster>] shell                # Output KUBECONFIG export (use: eval $(aba -d mycluster shell))

@@ -146,6 +146,55 @@ if [ -n "${START_VM:-}" ]; then
 	cp_arr=($CP_NAMES);		cp_cnt=${#cp_arr[*]}
 	wkr_arr=($WORKER_NAMES);	wkr_cnt=${#wkr_arr[*]}
 
+	# Verify all VMs are running and log host resource state for debugging boot hangs
+	_all_names=()
+	_total_vcpus=0
+	_total_mem_gb=0
+	for name in $CP_NAMES $WORKER_NAMES; do
+		_all_names+=("$(vm_name "$CLUSTER_NAME" "$name")")
+	done
+
+	_failed=0
+	for _vm in "${_all_names[@]}"; do
+		_state=$(virsh -c "$LIBVIRT_URI" domstate "$_vm" 2>/dev/null) || _state="unknown"
+		if [ "$_state" != "running" ]; then
+			aba_warn "VM $_vm is '$_state' — expected 'running'"
+			_failed=$(( _failed + 1 ))
+		fi
+		_info=$(virsh -c "$LIBVIRT_URI" dominfo "$_vm" 2>/dev/null) || continue
+		_vcpu=$(echo "$_info" | awk '/^CPU\(s\):/ {print $2}')
+		_mem_kb=$(echo "$_info" | awk '/^Max memory:/ {print $3}')
+		_total_vcpus=$(( _total_vcpus + ${_vcpu:-0} ))
+		_total_mem_gb=$(( _total_mem_gb + ${_mem_kb:-0} / 1048576 ))
+	done
+
+	_host_info=$(virsh -c "$LIBVIRT_URI" nodeinfo 2>/dev/null) || true
+	_host_cpus=$(echo "$_host_info" | awk '/^CPU\(s\):/ {print $2}')
+	_host_mem_kb=$(echo "$_host_info" | awk '/^Memory size:/ {print $3}')
+	_host_mem_gb=$(( ${_host_mem_kb:-0} / 1048576 ))
+
+	aba_debug "KVM host: ${_host_cpus:-?} CPUs, ${_host_mem_gb}GB RAM"
+	aba_debug "VMs total: ${#_all_names[@]} VMs, ${_total_vcpus} vCPUs, ${_total_mem_gb}GB RAM"
+
+	if [ "${_host_cpus:-0}" -gt 0 ]; then
+		_cpu_ratio=$(( _total_vcpus * 100 / _host_cpus ))
+		if [ "$_cpu_ratio" -gt 300 ]; then
+			aba_warn "CPU overcommit: ${_total_vcpus} vCPUs on ${_host_cpus} host cores (${_cpu_ratio}%)" \
+				"High CPU overcommit can cause VMs to hang during UEFI boot."
+		fi
+	fi
+	if [ "${_host_mem_gb}" -gt 0 ]; then
+		_mem_free_gb=$(( _host_mem_gb - _total_mem_gb ))
+		if [ "$_mem_free_gb" -lt 4 ]; then
+			aba_warn "Memory pressure: ${_total_mem_gb}GB allocated on ${_host_mem_gb}GB host (${_mem_free_gb}GB free)" \
+				"Low free memory can cause VMs to hang during UEFI boot."
+		fi
+	fi
+
+	if [ "$_failed" -gt 0 ]; then
+		aba_abort "$_failed VM(s) failed to start. Check 'virsh -c $LIBVIRT_URI list --all' on the KVM host."
+	fi
+
 	calculate_and_show_completion $cp_cnt $wkr_cnt
 else
 	aba_success "To start the VMs and monitor the installation, run: aba start mon"
