@@ -549,11 +549,11 @@ reg_rm_data_dir() {
 	local vendor="$1" dir="$2" ssh_cmd="${3:-}"
 
 	if [ "$ssh_cmd" ]; then
-		$ssh_cmd "[ -d '$dir' ]" 2>/dev/null || return 0
+		$ssh_cmd "[ -d $dir ]" 2>/dev/null || return 0
 		aba_info "Removing registry data at $dir on $reg_host ..."
 		case "$vendor" in
-			quay)  $ssh_cmd "$SUDO rm -rf '$dir'" ;;
-			*)     $ssh_cmd "rm -rf '$dir'" ;;
+			quay)  $ssh_cmd "$SUDO rm -rf $dir" ;;
+			*)     $ssh_cmd "rm -rf $dir" ;;
 		esac
 	else
 		[ -d "$dir" ] || return 0
