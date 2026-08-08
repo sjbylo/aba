@@ -234,13 +234,12 @@ case "$vendor" in
 			# Ensure rootless podman containers with --restart=always survive VM reboot
 			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
 				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
-				echo 'Enabling loginctl linger for rootless podman restart persistence ...'
-				${SUDO:+sudo -n} loginctl enable-linger \"\$USER\" 2>/dev/null || \
-					echo \"WARNING: Could not enable loginctl linger (needs sudo). Registry may not survive reboot. Enable manually: sudo loginctl enable-linger \$USER\" >&2
+					echo 'Enabling loginctl linger for rootless podman restart persistence ...'
+					$SUDO loginctl enable-linger \"\$USER\"
+				fi
 			fi
-		fi
-	"; then
-		aba_abort "Docker registry install failed on remote host $reg_host." \
+		"; then
+			aba_abort "Docker registry install failed on remote host $reg_host." \
 				"Check the output above for details."
 		fi
 
@@ -314,8 +313,7 @@ QUADLET
 			# Enable linger for rootless persistence
 			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
 				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
-				${SUDO:+sudo -n} loginctl enable-linger \"\$USER\" 2>/dev/null || \
-					echo \"WARNING: Could not enable loginctl linger (needs sudo). Registry may not survive reboot. Enable manually: sudo loginctl enable-linger \$USER\" >&2
+					$SUDO loginctl enable-linger \"\$USER\"
 				fi
 			fi
 		"; then

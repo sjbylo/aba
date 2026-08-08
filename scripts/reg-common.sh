@@ -292,30 +292,22 @@ reg_open_firewall() {
 	# Track whether ABA opened the port (written to state.sh by reg_post_install)
 	_reg_fw_opened=""
 
-	# Use sudo -n (non-interactive) to avoid hanging on password prompts.
-	# If sudo fails, fall through to the warning with manual instructions.
-	local _sudo="${SUDO:+sudo -n}"
-
 	if [ "$via_ssh" ]; then
 		# Remote: run firewall commands over SSH
 		local _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host --"
 
 		if $_ssh "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
-			if $_ssh "$_sudo firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
-				$_sudo firewall-cmd --reload >/dev/null" 2>/dev/null; then
-				_reg_fw_opened=1
-			fi
+			$_ssh "$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent >/dev/null && \
+				$SUDO firewall-cmd --reload >/dev/null"
+			_reg_fw_opened=1
 		elif $_ssh "rpm -q firewalld &>/dev/null"; then
-			if $_ssh "$_sudo firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null" 2>/dev/null; then
-				_reg_fw_opened=1
-			fi
+			$_ssh "$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null"
+			_reg_fw_opened=1
 		elif $_ssh "command -v iptables &>/dev/null && \
-			$_sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
+			$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null"; then
 			aba_info "firewalld not active on $reg_host, opened port $reg_port via iptables."
 			_reg_fw_opened=1
-		fi
-
-		if [ ! "$_reg_fw_opened" ]; then
+		else
 			aba_warn "Could not auto-open firewall port $reg_port on $reg_host." \
 				"If the registry is unreachable, open the port manually on $reg_host, e.g.:" \
 				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
@@ -324,21 +316,17 @@ reg_open_firewall() {
 	else
 		# Local: run firewall commands directly
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			if $_sudo firewall-cmd --add-port=$reg_port/tcp --permanent && \
-				$_sudo firewall-cmd --reload; then
-				_reg_fw_opened=1
-			fi
+			$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
+				$SUDO firewall-cmd --reload
+			_reg_fw_opened=1
 		elif rpm -q firewalld &>/dev/null; then
-			if $_sudo firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null 2>/dev/null; then
-				_reg_fw_opened=1
-			fi
+			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
+			_reg_fw_opened=1
 		elif command -v iptables &>/dev/null && \
-			$_sudo iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
+			$SUDO iptables -I INPUT 1 -p tcp --dport $reg_port -j ACCEPT 2>/dev/null; then
 			aba_info "firewalld not active, opened port $reg_port via iptables."
 			_reg_fw_opened=1
-		fi
-
-		if [ ! "$_reg_fw_opened" ]; then
+		else
 			aba_warn "Could not auto-open firewall port $reg_port." \
 				"If the registry is unreachable, open the port manually, e.g.:" \
 				"  sudo nft insert rule ip filter INPUT tcp dport $reg_port accept" \
@@ -369,25 +357,23 @@ reg_close_firewall() {
 	local where="${via_ssh:+ on $reg_host}"
 	aba_info "Closing firewall port $reg_port${where} ..."
 
-	local _sudo="${SUDO:+sudo -n}"
-
 	if [ "$via_ssh" ]; then
 		local _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host --"
 
 		if $_ssh "rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null"; then
-			$_ssh "$_sudo firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
-				$_sudo firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
-				$_sudo firewall-cmd --reload >/dev/null" 2>/dev/null || true
+			$_ssh "$SUDO firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
+				$SUDO firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
+				$SUDO firewall-cmd --reload >/dev/null" || true
 		elif $_ssh "command -v iptables &>/dev/null"; then
-			$_ssh "$_sudo iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null" || true
+			$_ssh "$SUDO iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null" || true
 		fi
 	else
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			$_sudo firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
-				$_sudo firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
-				$_sudo firewall-cmd --reload >/dev/null 2>/dev/null || true
+			$SUDO firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
+				$SUDO firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
+				$SUDO firewall-cmd --reload >/dev/null || true
 		elif command -v iptables &>/dev/null; then
-			$_sudo iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null || true
+			$SUDO iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null || true
 		fi
 	fi
 }

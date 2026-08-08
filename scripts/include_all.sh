@@ -2716,13 +2716,9 @@ trust_root_ca() {
 		if diff "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			if ${SUDO:+sudo -n} install -m 644 "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem 2>/dev/null && \
-				${SUDO:+sudo -n} update-ca-trust extract 2>/dev/null; then
-				aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
-			else
-				aba_warn "Could not update system CA trust (needs sudo)." \
-					"You may need to run: sudo cp $1 /etc/pki/ca-trust/source/anchors/aba-rootCA.pem && sudo update-ca-trust extract"
-			fi
+			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem
+			$SUDO update-ca-trust extract
+			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
 	else
 		aba_info "No $1 cert file found"
