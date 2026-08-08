@@ -350,14 +350,14 @@ e2e_run_remote "Verify ISO not yet created" \
 
 # Phase 1: "aba install" stops after agent configs, shows MAC review instructions
 e2e_run_remote "First aba install (creates configs, stops for MAC review)" \
-    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Review and edit' /tmp/bm-phase1.out"
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep -q 'Review and edit' /tmp/bm-phase1.out"
 e2e_run_remote "Verify .bm-message exists" "test -f ~/aba/$STANDARD/.bm-message"
 e2e_run_remote "Verify ISO not yet created (still)" \
     "! ls ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
 
 # Phase 2: "aba install" creates ISO, shows boot instructions
 e2e_run_remote "Second aba install (creates ISO, stops for server boot)" \
-    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
+    "cd ~/aba && aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep -q 'Boot your servers' /tmp/bm-phase2.out"
 e2e_run_remote "Verify .bm-nextstep exists" "test -f ~/aba/$STANDARD/.bm-nextstep"
 e2e_run_remote "Verify ISO created" \
     "ls -l ~/aba/$STANDARD/iso-agent-based/agent.*.iso"
