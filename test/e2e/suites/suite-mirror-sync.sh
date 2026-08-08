@@ -481,13 +481,13 @@ e2e_run "Verify ISO not yet created" "! ls $STANDARD/iso-agent-based/agent.*.iso
 
 # Phase 1: "aba install" stops after agent configs, shows MAC review instructions
 e2e_run "First aba install (generates configs, stops for MAC review)" \
-    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep 'Review and edit' /tmp/bm-phase1.out"
+    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase1.out && grep -q 'Review and edit' /tmp/bm-phase1.out"
 e2e_run "Verify .bm-message exists" "test -f $STANDARD/.bm-message"
 e2e_run "Verify ISO not yet created (still)" "! ls $STANDARD/iso-agent-based/agent.*.iso"
 
 # Phase 2: "aba install" creates ISO, shows boot instructions
 e2e_run "Second aba install (creates ISO, stops for server boot)" \
-    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep 'Boot your servers' /tmp/bm-phase2.out"
+    "aba --dir $STANDARD install 2>&1 | tee /tmp/bm-phase2.out && grep -q 'Boot your servers' /tmp/bm-phase2.out"
 e2e_run "Verify .bm-nextstep exists" "test -f $STANDARD/.bm-nextstep"
 e2e_run "Verify ISO created" "ls -l $STANDARD/iso-agent-based/agent.*.iso"
 e2e_run "Clean standard cluster dir (2-step done)" "rm -rf $STANDARD"
@@ -524,12 +524,12 @@ e2e_run "Write BM MAC to macs.conf" \
 
 # Phase 1: agent configs
 e2e_run "BM Phase 1: generate agent configs" \
-    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase1.out && grep 'Review and edit' /tmp/bm3-phase1.out"
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase1.out && grep -q 'Review and edit' /tmp/bm3-phase1.out"
 e2e_run "Verify .bm-message exists" "test -f $SNO_BM/.bm-message"
 
 # Phase 2: ISO
 e2e_run "BM Phase 2: generate ISO" \
-    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase2.out && grep 'Boot your servers' /tmp/bm3-phase2.out"
+    "aba --dir $SNO_BM install 2>&1 | tee /tmp/bm3-phase2.out && grep -q 'Boot your servers' /tmp/bm3-phase2.out"
 e2e_run "Verify ISO created" "ls -l $SNO_BM/iso-agent-based/agent.*.iso"
 
 # OOB VM creation using extracted helpers.
