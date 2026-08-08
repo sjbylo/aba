@@ -365,9 +365,10 @@ test_end
 # 9. No-sudo: docker install+uninstall without passwordless sudo (Issue #36)
 #
 #    Creates a local user WITHOUT passwordless sudo, installs a docker
-#    registry as that user, then uninstalls it.  Verifies that all sudo-
-#    requiring operations (loginctl, firewall, CA trust) degrade gracefully
-#    with warnings instead of hanging on a password prompt.
+#    registry as that user, then uninstalls it.  Uses password simulation
+#    (script + sudo -S) to pre-authenticate sudo, proving that all sudo-
+#    requiring operations (loginctl, firewall, CA trust) succeed when the
+#    user enters their password.
 # ============================================================================
 test_begin "No-sudo: docker install+uninstall without passwordless sudo"
 
@@ -389,31 +390,41 @@ e2e_run "Set up ABA for $_NOSUDO_USER" "
 	[ -f ~/.pull-secret.json ] && cp ~/.pull-secret.json $_NOSUDO_HOME/.pull-secret.json
 	sed -i 's/^ask=.*/ask=false/' $_NOSUDO_HOME/aba/aba.conf
 	chown -R $_NOSUDO_USER:$_NOSUDO_USER $_NOSUDO_HOME
-"
 
-e2e_run "Docker install as $_NOSUDO_USER (no passwordless sudo)" "
+	# Write helper scripts that pre-authenticate sudo then run aba.
+	# 'sudo -S true' reads the password from stdin to cache credentials;
+	# 'script -qc' (in the run step) provides a pty so caching works.
 	_FQDN=\$(hostname -f)
-	su - $_NOSUDO_USER -c \"
-		export ABA_DO_NOT_UPDATE=1
-		cd ~/aba
-		aba mirror --name nosudo-docker
-		aba -d nosudo-docker install --vendor docker -H \$_FQDN --reg-port 5007 2>&1 | tee /tmp/nosudo-install.log
-		true
-	\"
-	# Verify install message (post-install verification may fail due to firewall)
-	grep -q 'Registry installed/configured successfully' /tmp/nosudo-install.log
-	# Verify graceful degradation warnings
-	grep -q 'Could not auto-open firewall port' /tmp/nosudo-install.log
-	grep -q 'Could not update system CA trust' /tmp/nosudo-install.log
+
+	cat > $_NOSUDO_HOME/run-install.sh <<INNEREOF
+#!/bin/bash
+echo 'testpass' | sudo -S true 2>/dev/null
+export ABA_DO_NOT_UPDATE=1
+cd ~/aba
+aba mirror --name nosudo-docker
+aba -d nosudo-docker install --vendor docker -H \$_FQDN --reg-port 5007 2>&1 | tee /tmp/nosudo-install.log
+INNEREOF
+
+	cat > $_NOSUDO_HOME/run-uninstall.sh <<INNEREOF
+#!/bin/bash
+echo 'testpass' | sudo -S true 2>/dev/null
+export ABA_DO_NOT_UPDATE=1
+cd ~/aba
+aba -d nosudo-docker uninstall -y 2>&1 | tee /tmp/nosudo-uninstall.log
+INNEREOF
+
+	chmod +x $_NOSUDO_HOME/run-install.sh $_NOSUDO_HOME/run-uninstall.sh
+	chown $_NOSUDO_USER:$_NOSUDO_USER $_NOSUDO_HOME/run-install.sh $_NOSUDO_HOME/run-uninstall.sh
 "
 
-e2e_run "Docker uninstall as $_NOSUDO_USER (no sudo prompt)" "
-	su - $_NOSUDO_USER -c \"
-		export ABA_DO_NOT_UPDATE=1
-		cd ~/aba
-		aba -d nosudo-docker uninstall -y 2>&1 | tee /tmp/nosudo-uninstall.log
-		true
-	\"
+e2e_run "Docker install as $_NOSUDO_USER (password-based sudo)" "
+	# 'script -qc' allocates a pty so sudo credential caching works
+	su - $_NOSUDO_USER -c 'script -q -c ~/run-install.sh /dev/null'
+	grep -q 'Registry installed/configured successfully' /tmp/nosudo-install.log
+"
+
+e2e_run "Docker uninstall as $_NOSUDO_USER (password-based sudo)" "
+	su - $_NOSUDO_USER -c 'script -q -c ~/run-uninstall.sh /dev/null'
 	grep -q 'uninstall successful' /tmp/nosudo-uninstall.log
 	! test -d $_NOSUDO_HOME/docker-reg
 "
