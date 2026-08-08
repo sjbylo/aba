@@ -392,13 +392,13 @@ e2e_run "Set up ABA for $_NOSUDO_USER" "
 "
 
 e2e_run "Docker install as $_NOSUDO_USER (no passwordless sudo)" "
-	su - $_NOSUDO_USER -c '
+	_FQDN=\$(hostname -f)
+	su - $_NOSUDO_USER -c \"
 		export ABA_DO_NOT_UPDATE=1
 		cd ~/aba
 		aba mirror --name nosudo-docker
-		sed -i \"s/^reg_vendor=.*/reg_vendor=docker/\" nosudo-docker/mirror.conf
-		aba -d nosudo-docker install 2>&1 | tee /tmp/nosudo-install.log
-	'
+		aba -d nosudo-docker install --vendor docker -H \$_FQDN --reg-port 5007 2>&1 | tee /tmp/nosudo-install.log
+	\"
 	# Verify install succeeded
 	grep -q 'Registry installed/configured successfully' /tmp/nosudo-install.log
 	# Verify graceful degradation warnings were emitted
