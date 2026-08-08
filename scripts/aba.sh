@@ -48,10 +48,11 @@ if [ "$1" = "--aba-version" -o "$1" = "version" ]; then
 fi
 
 SUDO=
-which sudo 2>/dev/null >&2 && SUDO=sudo
-
-# Check we have sudo or root access 
-[ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+if [ "$(id -u)" -ne 0 ]; then
+	if which sudo 2>/dev/null >&2 && sudo -n true 2>/dev/null; then
+		SUDO=sudo
+	fi
+fi
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
