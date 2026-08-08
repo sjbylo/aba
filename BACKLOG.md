@@ -970,3 +970,49 @@ cannot be assumed (the cluster being upgraded is disconnected).
 **Benefit:** User is informed up-front that version classification is
 best-effort without OSUS, and is encouraged to install OSUS before
 choosing an upgrade target.
+
+---
+
+## TUI "Test Connection" should validate vSphere/KVM resources, not just connectivity
+
+**Severity:** MEDIUM — user discovers misconfigured resources only at install time
+**Status:** Planned
+**Added:** 2026-08-08
+
+**Problem:** The TUI's "Test Connection" button in VMware/ESXi Configuration
+(`_test_vmw_connection` in `tui-cluster.sh`) only runs `govc about`, which
+validates TCP/TLS/auth to vCenter. It does NOT check whether the configured
+Datastore, Cluster, Network, Datacenter, or VM Folder actually exist. A user
+can enter "Datastore4-S4x" (a typo), see "Connection Successful", and only
+discover the error much later during `aba install` when the preflight check
+runs.
+
+The comprehensive validation already exists in `scripts/preflight-check-vsphere.sh`
+(Layer 3: resource existence checks for datastore, cluster, network, datacenter,
+folder, resource pool). The same gap exists for KVM (`_test_kvm_connection`
+only runs `virsh version`).
+
+**Proposed fix:**
+1. Create an ABA core command `aba preflight-conn` (or a `--light` flag on
+   the existing `preflight-check.sh`) that runs only the connectivity and
+   resource-existence checks (Layers 1-3), skipping the slower privilege
+   validation (Layer 4). Silent on success, shows only errors.
+2. TUI's "Test Connection" calls this command via `run_once` in the background.
+   Shows an infobox while running, then displays results: either "all OK" or
+   a list of resources that don't exist.
+3. Extend to KVM: validate that the storage pool, network bridge, and
+   libvirt URI target are reachable.
+4. Keep the code DRY: the TUI is a dumb consumer — it calls the ABA core
+   command, displays the output. No resource validation logic in TUI code.
+5. Design for future platforms (e.g. OpenShift Virtualization): the core
+   command dispatches to platform-specific checks, TUI doesn't need to know.
+
+**Files to change:**
+- `scripts/preflight-check.sh`: add `--light` / `--conn-only` mode
+- `scripts/preflight-check-vsphere.sh`: expose Layers 1-3 as a callable subset
+- `scripts/aba.sh`: add `preflight-conn` subcommand (or route `--light` flag)
+- `tui/v2/tui-cluster.sh`: replace `_test_vmw_connection` / `_test_kvm_connection`
+  with calls to the core command
+- `tui/v2/tui-lib.sh`: optional shared helper for run_once + display pattern
+
+**Ref:** Discussed in [TUI preflight and DRY refactoring](f52568ba-a878-4dfb-aa3d-dfcd6b0ac759) chat.

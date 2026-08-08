@@ -932,7 +932,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
-		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to download)" 0 0
+		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to refresh)" 0 0
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0

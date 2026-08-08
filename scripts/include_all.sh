@@ -306,6 +306,8 @@ show_error() {
 	echo_red "Script error at $(date) in directory $PWD: " >&2
 	echo_red "Error occurred in command: '$_safe_cmd'" >&2
 	echo_red "Error code: $exit_code" >&2
+	echo >&2
+	echo "[ABA] Check the output above for clues. Fix the issue and re-run the same command -- it's safe to retry." >&2
 
 	exit $exit_code
 }
