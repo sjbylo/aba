@@ -128,17 +128,18 @@ if [ "$opt_shell" ] && [ "$opt_dry_run" ] && [ ! "$target_ver" ]; then
 		is_version_greater "$v" "$current_ver" && _mirror_higher+=("$v")
 	done < <(_list_mirror_versions | tac)
 
-	# If OSUS is configured but availableUpdates is empty and there ARE higher
-	# versions in the mirror, the graph may still be loading after install or
-	# channel change. Poll briefly (max 30s). Skip if nothing to upgrade to.
+	# If OSUS is configured but the graph is empty, poll briefly (max 10s)
+	# in case the graph is still loading after install or channel change.
+	# Skip entirely when there's nothing to upgrade to, or when graph data
+	# was already returned (no point re-querying).
 	if [ ${#_mirror_higher[@]} -gt 0 ]; then
 		_osus_up=$(echo "$_cv_json" | jq -r '.spec.upstream // ""' 2>/dev/null) || _osus_up=""
-		_avail_count=$(echo "$_cv_json" | jq -r '.status.availableUpdates | length' 2>/dev/null) || _avail_count=0
+		_avail_count=$(echo "$_cv_json" | jq -r '(.status.availableUpdates | length) + (.status.conditionalUpdates | length)' 2>/dev/null) || _avail_count=0
 		if [ -n "$_osus_up" ] && [ "${_avail_count:-0}" -eq 0 ]; then
-			for _wait in 5 10 15; do
+			for _wait in 3 7; do
 				sleep "$_wait" >&2
 				_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
-				_avail_count=$(echo "$_cv_json" | jq -r '.status.availableUpdates | length' 2>/dev/null) || _avail_count=0
+				_avail_count=$(echo "$_cv_json" | jq -r '(.status.availableUpdates | length) + (.status.conditionalUpdates | length)' 2>/dev/null) || _avail_count=0
 				[ "${_avail_count:-0}" -gt 0 ] && break
 			done
 			_graph_recommended=$(echo "$_cv_json" | jq -r \

@@ -538,7 +538,7 @@ test_begin "Upgrade: full chain (day2 + OSUS + upgrade)"
 
 e2e_wait_cluster_ready $SNO
 
-e2e_run "Full-chain upgrade (day2 + OSUS + trigger)" "
+e2e_run -r 5 2 -d 60 -m 300 "Full-chain upgrade (day2 + OSUS + trigger)" "
     cd ~/aba &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
     echo \"Upgrading to \$desired (full chain, no --skip-day2, no --force)\" &&
