@@ -23,9 +23,13 @@
 
 BASE_NAME=$(basename "${BASH_SOURCE[0]}")  # Needed in case this file is sourced from int. bash shell
 
-# Check is sudo exists 
+# Set SUDO only when passwordless sudo is available (or already root)
 SUDO=
-which sudo 2>/dev/null >&2 && SUDO=sudo
+if [ "$(id -u)" -ne 0 ]; then
+	if which sudo 2>/dev/null >&2 && sudo -n true 2>/dev/null; then
+		SUDO=sudo
+	fi
+fi
 
 # Map uname -m to OpenShift download architecture names.
 # x86_64 -> amd64, aarch64 -> arm64, s390x/ppc64le stay as-is (match OpenShift naming).
