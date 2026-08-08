@@ -52,7 +52,7 @@ which sudo 2>/dev/null >&2 && SUDO=sudo
 
 # Warn (but don't block) if passwordless sudo is not available
 [ "$SUDO" ] && ! sudo -n true 2>/dev/null && \
-	echo "Warning: Passwordless sudo not configured. For some actions, ABA may prompt for a password or skip operations requiring root." >&2
+	echo "Warning: Passwordless sudo not configured. Some operations may prompt for a password or be skipped. Running as root or configuring passwordless sudo is recommended." >&2
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
