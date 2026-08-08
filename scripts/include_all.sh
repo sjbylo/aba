@@ -2713,7 +2713,7 @@ get_ntp_servers() {
 
 trust_root_ca() {
 	if [ -s "$1" ]; then
-		if ${SUDO:+sudo -n} diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
+		if diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
 			if ${SUDO:+sudo -n} install -m 644 "$1" /etc/pki/ca-trust/source/anchors/ 2>/dev/null && \
@@ -2725,7 +2725,7 @@ trust_root_ca() {
 			fi
 		fi
 	else
-		aba_info "No $1 cert file found" 
+		aba_info "No $1 cert file found"
 	fi
 
 	return 0
