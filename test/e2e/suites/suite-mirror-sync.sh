@@ -400,10 +400,11 @@ e2e_run "Docker install as $_NOSUDO_USER (no passwordless sudo)" "
 		aba -d nosudo-docker install --vendor docker -H \$_FQDN --reg-port 5007 2>&1 | tee /tmp/nosudo-install.log
 		true
 	\"
-	# Verify install message (verification may fail due to firewall)
+	# Verify install message (post-install verification may fail due to firewall)
 	grep -q 'Registry installed/configured successfully' /tmp/nosudo-install.log
-	# Verify firewall graceful degradation
+	# Verify graceful degradation warnings
 	grep -q 'Could not auto-open firewall port' /tmp/nosudo-install.log
+	grep -q 'Could not update system CA trust' /tmp/nosudo-install.log
 "
 
 e2e_run "Docker uninstall as $_NOSUDO_USER (no sudo prompt)" "
