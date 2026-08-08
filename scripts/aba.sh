@@ -50,8 +50,9 @@ fi
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
-# Check we have sudo or root access 
-[ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+# Warn (but don't block) if passwordless sudo is not available
+[ "$SUDO" ] && ! sudo -n true 2>/dev/null && \
+	echo "Warning: Passwordless sudo not configured. For some actions, ABA may prompt for a password or skip operations requiring root." >&2
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
