@@ -56,7 +56,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 		aba_abort \
 			"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
 			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
-			"You need to upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
+			"If not already, upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
 			"" \
 			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	elif [[ $_path_rc -eq 2 ]]; then

@@ -888,7 +888,7 @@ change your channel when selected." 0 0
 				"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
 Version ${_current_ver} is not in channel ${_tgt_channel}.\n\
 Lowest entry point: ${_lowest:-unknown}\n\n\
-You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first.\n\n\
+If not already, upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first.\n\n\
 Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_path/" 0 0
 			continue
 		fi

@@ -285,7 +285,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 				aba_abort \
 					"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
 					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
-					"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
+					"If not already, upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
 					"" \
 					"To cancel upgrade mode: aba --upgrade-to ''" \
 					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
