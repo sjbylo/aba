@@ -74,7 +74,9 @@ if ! systemctl --user start "$_SERVICE_NAME"; then
 		"Quadlet: $_QUADLET_FILE"
 fi
 
-# Ensure rootless podman containers survive VM reboot
+# Quay-ng uses a systemd quadlet (WantedBy=default.target) -- systemd handles
+# auto-start directly. Only linger is needed so the user's systemd instance
+# stays alive after logout.
 if [ "$(id -u)" -ne 0 ] && command -v loginctl >/dev/null 2>&1; then
 	if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
 		aba_info "Enabling loginctl linger for $USER (so registry survives reboot) ..."

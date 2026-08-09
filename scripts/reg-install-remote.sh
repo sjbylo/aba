@@ -231,11 +231,22 @@ case "$vendor" in
 				-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
 				docker.io/library/registry:latest
 
-			# Ensure rootless podman containers with --restart=always survive VM reboot
-			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
-				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
-					echo 'Enabling loginctl linger for rootless podman restart persistence ...'
-					$SUDO loginctl enable-linger \"\$USER\"
+			# Ensure podman containers with --restart=always survive VM reboot
+			if [ \"\$(id -u)\" -ne 0 ]; then
+				if command -v loginctl >/dev/null; then
+					if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+						echo 'Enabling loginctl linger for rootless podman restart persistence ...'
+						$SUDO loginctl enable-linger \"\$USER\"
+					fi
+				fi
+				if ! systemctl --user is-enabled podman-restart.service >/dev/null 2>&1; then
+					echo 'Enabling podman-restart service ...'
+					systemctl --user enable podman-restart.service
+				fi
+			else
+				if ! systemctl is-enabled podman-restart.service >/dev/null 2>&1; then
+					echo 'Enabling podman-restart service ...'
+					systemctl enable podman-restart.service
 				fi
 			fi
 		"; then
@@ -310,7 +321,7 @@ QUADLET
 			systemctl --user daemon-reload
 			systemctl --user start quay.service
 			[ -f \"\$_abs_root/auth/admin-password\" ] || { echo 'ERROR: admin-password not created'; exit 1; }
-			# Enable linger for rootless persistence
+			# Quay-ng uses a systemd quadlet -- only linger needed for rootless
 			if [ \"\$(id -u)\" -ne 0 ] && command -v loginctl >/dev/null; then
 				if ! loginctl show-user \"\$USER\" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
 					$SUDO loginctl enable-linger \"\$USER\"
