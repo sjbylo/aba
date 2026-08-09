@@ -282,13 +282,17 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 				_rest="${_path_diag#*|}"
 				_tgt_channel="${_rest%%|*}"
 				_lowest="${_rest##*|}"
+			local _hint="Your version may not be in this channel yet. Try a different channel or target."
+				if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$ocp_version"; then
+					_hint="Upgrade to at least ${_lowest} first."
+				fi
 				aba_abort \
-					"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
-					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
-					"If not already, upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
-					"" \
-					"To cancel upgrade mode: aba --upgrade-to ''" \
-					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+				"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
+				"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
+				"$_hint" \
+				"" \
+				"To cancel upgrade mode: aba --upgrade-to ''" \
+				"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 			elif [[ $_path_rc -eq 2 ]]; then
 				_rest="${_path_diag#*|}"
 				_tgt_channel="${_rest%%|*}"
