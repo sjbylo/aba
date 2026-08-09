@@ -102,7 +102,7 @@ e2e_run "Validate older version is in upgrade graph" "
     older=\$(< /tmp/e2e-ocp-version-older) &&
     desired=\$(< /tmp/e2e-ocp-version-desired) &&
     tgt_minor=\$(echo \$desired | cut -d. -f1-2) &&
-    if verify_upgrade_path \"\$older\" \"\$desired\" fast; then
+    if verify_upgrade_path_exists \"\$older\" \"\$desired\" fast; then
         echo \"Upgrade path OK: \$older -> \$desired\"
     else
         echo \"WARNING: \$older not in fast-\$tgt_minor graph, searching for valid source ...\"
