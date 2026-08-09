@@ -254,15 +254,17 @@ e2e_run "Verify ISC normal mode after first upgrade" "
 e2e_run "Set second upgrade target (graph-validated)" "
     cd ~/aba && source scripts/include_all.sh &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
-    second_target=\$(fetch_all_upgrade_targets \"\$desired\" fast | head -1 | awk '{print \$3}') &&
+    . aba.conf &&
+    channel=\${ocp_channel:-fast} &&
+    second_target=\$(fetch_upgrade_targets \"\$desired\" \"\$channel\" | head -1 | awk '{print \$2}') &&
     if [ -z \"\$second_target\" ]; then
-        echo \"SKIP: \$desired is the latest available version — no upgrade target exists\"
+        echo \"SKIP: \$desired is the latest in \$channel — no same-channel upgrade target\"
         echo '' > /tmp/e2e-ocp-version-second-target
     else
         echo \$second_target > /tmp/e2e-ocp-version-second-target
         aba -d mirror --upgrade-to \$second_target &&
         grep -q \"^ocp_upgrade_to=\$second_target\" mirror/mirror.conf &&
-        echo \"Second upgrade target: \$second_target (from graph)\"
+        echo \"Second upgrade target: \$second_target (from graph, channel=\$channel)\"
     fi
 "
 
