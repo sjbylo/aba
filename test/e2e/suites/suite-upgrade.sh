@@ -251,17 +251,15 @@ e2e_run "Verify ISC normal mode after first upgrade" "
     grep -v '^#' mirror/data/imageset-config.yaml | grep -v '^[[:space:]]*$'
 "
 
-e2e_run "Set second upgrade target (desired + simulated next patch)" "
-    cd ~/aba &&
+e2e_run "Set second upgrade target (graph-validated)" "
+    cd ~/aba && source scripts/include_all.sh &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
-    major_minor=\$(echo \$desired | cut -d. -f1-2) &&
-    patch=\$(echo \$desired | cut -d. -f3) &&
-    next_patch=\$(( patch + 1 )) &&
-    second_target=\"\${major_minor}.\${next_patch}\" &&
+    second_target=\$(fetch_upgrade_targets \"\$desired\" fast | head -1 | awk '{print \$2}') &&
+    [ -n \"\$second_target\" ] || { echo \"FAIL: no valid upgrade target from \$desired in fast channel\"; exit 1; } &&
     echo \$second_target > /tmp/e2e-ocp-version-second-target &&
     aba -d mirror --upgrade-to \$second_target &&
     grep -q \"^ocp_upgrade_to=\$second_target\" mirror/mirror.conf &&
-    echo \"Second upgrade target: \$second_target\"
+    echo \"Second upgrade target: \$second_target (from graph)\"
 "
 
 e2e_run "Regenerate ISC for second upgrade" \
