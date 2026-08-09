@@ -2172,7 +2172,9 @@ fetch_upgrade_targets() {
 	local latest_z
 	latest_z="$(fetch_all_versions "$channel" "$cur_minor" 2>/dev/null | tail -n1)"
 	if [[ -n "$latest_z" ]] && is_version_greater "$latest_z" "$current_ver"; then
-		printf "zstream\t%s\n" "$latest_z"
+		if verify_upgrade_path_exists "$current_ver" "$latest_z" "$channel" >/dev/null 2>&1; then
+			printf "zstream\t%s\n" "$latest_z"
+		fi
 	fi
 
 	# 2) Probe forward minors: is current_ver a node in channel-(cur_minor+N)?
@@ -2204,11 +2206,15 @@ fetch_upgrade_targets() {
 
 		# Is our current version a valid entry point in this minor's graph?
 		if echo "$graph_versions" | grep -qxF "$current_ver"; then
-			# Find the latest version in this minor
-			local target
-			target=$(echo "$graph_versions" | grep "^${probe_minor}\." |
-				_semver_sort | tail -n1)
-			if [[ -n "$target" ]]; then
+			# Find the latest version in this minor that is BFS-reachable
+			local target _candidate
+			for _candidate in $(echo "$graph_versions" | grep "^${probe_minor}\." | _semver_sort -r); do
+				if verify_upgrade_path_exists "$current_ver" "$_candidate" "$channel" >/dev/null 2>&1; then
+					target="$_candidate"
+					break
+				fi
+			done
+			if [[ -n "${target:-}" ]]; then
 				if [[ $next_label -eq 0 ]]; then
 					printf "next\t%s\n" "$target"
 				else
