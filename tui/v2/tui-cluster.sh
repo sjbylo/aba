@@ -2298,9 +2298,14 @@ _day2_login() {
 
 	cd "$ABA_ROOT"
 	# Set KUBECONFIG and run oc login, then drop into interactive shell.
+	# Use a throwaway copy so oc-login tokens don't contaminate the original kubeconfig.
 	# Close flock fd so the subshell doesn't hold the TUI lock.
 	(
 		eval "$(aba --dir "$SELECTED_CLUSTER" shell 2>/dev/null)"
+		_orig_kc="$KUBECONFIG"
+		_tmp_kc=$(mktemp /tmp/.aba-kubeconfig-XXXXXX)
+		cp "$_orig_kc" "$_tmp_kc"
+		export KUBECONFIG="$_tmp_kc"
 		# Run the login command (best-effort — works without kubeadmin pw too)
 		eval "$(aba --dir "$SELECTED_CLUSTER" login 2>/dev/null)" || true
 		echo
@@ -2312,7 +2317,7 @@ _day2_login() {
 		source <(oc completion bash 2>/dev/null) 2>/dev/null
 		RCEOF
 		echo "PS1='[$cl_display|\$(_oc_ns)] "'\$ '"'" >> "$_rcfile"
-		echo "trap 'rm -f $_rcfile' EXIT" >> "$_rcfile"
+		echo "trap 'rm -f $_rcfile $_tmp_kc' EXIT" >> "$_rcfile"
 		exec bash --rcfile "$_rcfile" -i
 	) {ABA_TUI_FLOCK_FD}>&-
 	local _login_rc=$?
