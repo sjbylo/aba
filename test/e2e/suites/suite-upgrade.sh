@@ -254,21 +254,30 @@ e2e_run "Verify ISC normal mode after first upgrade" "
 e2e_run "Set second upgrade target (graph-validated)" "
     cd ~/aba && source scripts/include_all.sh &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
-    second_target=\$(fetch_upgrade_targets \"\$desired\" fast | head -1 | awk '{print \$2}') &&
-    [ -n \"\$second_target\" ] || { echo \"FAIL: no valid upgrade target from \$desired in fast channel\"; exit 1; } &&
-    echo \$second_target > /tmp/e2e-ocp-version-second-target &&
-    aba -d mirror --upgrade-to \$second_target &&
-    grep -q \"^ocp_upgrade_to=\$second_target\" mirror/mirror.conf &&
-    echo \"Second upgrade target: \$second_target (from graph)\"
+    second_target=\$(fetch_all_upgrade_targets \"\$desired\" fast | head -1 | awk '{print \$3}') &&
+    if [ -z \"\$second_target\" ]; then
+        echo \"SKIP: \$desired is the latest available version — no upgrade target exists\"
+        echo '' > /tmp/e2e-ocp-version-second-target
+    else
+        echo \$second_target > /tmp/e2e-ocp-version-second-target
+        aba -d mirror --upgrade-to \$second_target &&
+        grep -q \"^ocp_upgrade_to=\$second_target\" mirror/mirror.conf &&
+        echo \"Second upgrade target: \$second_target (from graph)\"
+    fi
 "
 
-e2e_run "Regenerate ISC for second upgrade" \
-    "cd ~/aba && aba --force -d mirror imagesetconf"
+e2e_run "Regenerate ISC for second upgrade" "
+    cd ~/aba &&
+    second_target=\$(cat /tmp/e2e-ocp-version-second-target) &&
+    [ -n \"\$second_target\" ] || { echo 'SKIP: no second target'; exit 0; } &&
+    aba --force -d mirror imagesetconf
+"
 
 e2e_run "Verify ISC for second upgrade has correct min/max" "
     cd ~/aba &&
     desired=\$(cat /tmp/e2e-ocp-version-desired) &&
     second_target=\$(cat /tmp/e2e-ocp-version-second-target) &&
+    [ -n \"\$second_target\" ] || { echo 'SKIP: no second target'; exit 0; } &&
     grep -q \"minVersion: \$desired\" mirror/data/imageset-config.yaml &&
     grep -q \"maxVersion: \$second_target\" mirror/data/imageset-config.yaml &&
     grep -q '^[^#]*shortestPath: true' mirror/data/imageset-config.yaml &&
