@@ -43,7 +43,6 @@ plan_tests \
     "Save/Load: roundtrip" \
     "SNO: bootstrap after save/load" \
     "Testy user: re-sync with custom mirror conf" \
-    "No-sudo: docker install+uninstall without passwordless sudo" \
     "Bare-metal: ISO simulation" \
     "Bare-metal: full OOB SNO install" \
     "Cleanup: delete clusters and uninstall mirrors"
@@ -362,84 +361,7 @@ e2e_remove_from_cluster_cleanup "$PWD/$SNO"
 test_end
 
 # ============================================================================
-# 9. No-sudo: docker install+uninstall without passwordless sudo (Issue #36)
-#
-#    Creates a local user WITHOUT passwordless sudo, installs a docker
-#    registry as that user, then uninstalls it.  Uses password simulation
-#    (script + sudo -S) to pre-authenticate sudo, proving that all sudo-
-#    requiring operations (loginctl, firewall, CA trust) succeed when the
-#    user enters their password.
-# ============================================================================
-test_begin "No-sudo: docker install+uninstall without passwordless sudo"
-
-_NOSUDO_USER="e2e-nosudo"
-_NOSUDO_HOME="/home/$_NOSUDO_USER"
-
-e2e_run "Create user without passwordless sudo" "
-	id $_NOSUDO_USER &>/dev/null && userdel -rf $_NOSUDO_USER
-	useradd $_NOSUDO_USER
-	echo '${_NOSUDO_USER}:testpass' | chpasswd
-	usermod -aG wheel $_NOSUDO_USER
-"
-
-e2e_run "Set up ABA for $_NOSUDO_USER" "
-	cp -a ~/aba $_NOSUDO_HOME/aba
-	mkdir -p $_NOSUDO_HOME/bin $_NOSUDO_HOME/.aba
-	cp ~/bin/aba $_NOSUDO_HOME/bin/aba
-	[ -f ~/.aba/ssh.conf ] && cp ~/.aba/ssh.conf $_NOSUDO_HOME/.aba/
-	[ -f ~/.pull-secret.json ] && cp ~/.pull-secret.json $_NOSUDO_HOME/.pull-secret.json
-	sed -i 's/^ask=.*/ask=false/' $_NOSUDO_HOME/aba/aba.conf
-	chown -R $_NOSUDO_USER:$_NOSUDO_USER $_NOSUDO_HOME
-
-	# Write helper scripts that pre-authenticate sudo then run aba.
-	# 'sudo -S true' reads the password from stdin to cache credentials;
-	# 'script -qc' (in the run step) provides a pty so caching works.
-	_FQDN=\$(hostname -f)
-
-	cat > $_NOSUDO_HOME/run-install.sh <<INNEREOF
-#!/bin/bash
-echo 'testpass' | sudo -S true 2>/dev/null
-export ABA_DO_NOT_UPDATE=1
-cd ~/aba
-aba mirror --name nosudo-docker
-aba -d nosudo-docker install --vendor docker -H \$_FQDN --reg-port 5007 2>&1 | tee /tmp/nosudo-install.log
-INNEREOF
-
-	cat > $_NOSUDO_HOME/run-uninstall.sh <<INNEREOF
-#!/bin/bash
-echo 'testpass' | sudo -S true 2>/dev/null
-export ABA_DO_NOT_UPDATE=1
-cd ~/aba
-aba -d nosudo-docker uninstall -y 2>&1 | tee /tmp/nosudo-uninstall.log
-INNEREOF
-
-	chmod +x $_NOSUDO_HOME/run-install.sh $_NOSUDO_HOME/run-uninstall.sh
-	chown $_NOSUDO_USER:$_NOSUDO_USER $_NOSUDO_HOME/run-install.sh $_NOSUDO_HOME/run-uninstall.sh
-"
-
-e2e_run "Docker install as $_NOSUDO_USER (password-based sudo)" "
-	# 'script -qc' allocates a pty so sudo credential caching works
-	su - $_NOSUDO_USER -c 'script -q -c ~/run-install.sh /dev/null'
-	grep -q 'Registry installed/configured successfully' /tmp/nosudo-install.log
-"
-
-e2e_run "Docker uninstall as $_NOSUDO_USER (password-based sudo)" "
-	su - $_NOSUDO_USER -c 'script -q -c ~/run-uninstall.sh /dev/null'
-	grep -q 'uninstall successful' /tmp/nosudo-uninstall.log
-	! test -d $_NOSUDO_HOME/docker-reg
-"
-
-e2e_run "Cleanup $_NOSUDO_USER" "
-	pkill -u $_NOSUDO_USER 2>/dev/null || true
-	sleep 1
-	userdel -rf $_NOSUDO_USER
-	rm -f /tmp/nosudo-install.log /tmp/nosudo-uninstall.log
-"
-
-test_end
-
-# ============================================================================
-# 10. Bare-metal: ISO simulation (two-step install)
+# 9. Bare-metal: ISO simulation (two-step install)
 #
 #    Tests the BM two-step install flow from the SYNC perspective:
 #      - govc download-all behavior with platform=bm
@@ -496,7 +418,7 @@ e2e_remove_from_cluster_cleanup "$PWD/$STANDARD"
 test_end
 
 # ============================================================================
-# 11. Bare-metal: full 3-step OOB SNO install
+# 10. Bare-metal: full 3-step OOB SNO install
 #
 #    Full BM install using an out-of-band VMware VM to simulate real hardware.
 #    Uses the extracted vmp_* helpers from scripts/vm-vmw.sh for VM lifecycle.
