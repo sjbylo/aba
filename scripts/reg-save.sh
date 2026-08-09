@@ -46,14 +46,24 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 			"Use 'aba ocp-versions' to list available versions."
 	fi
 	# Fail fast: verify upgrade path exists before starting downloads
-	_path_diag=""
-	if ! _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1); then
-		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"   # middle field (target channel)
-		_lowest="${_path_diag##*|}"                              # last field (lowest entry point)
+	_path_rc=0
+	_path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1) || _path_rc=$?
+	if [[ $_path_rc -eq 1 ]]; then
+		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
+		_lowest="${_path_diag##*|}"
 		aba_abort \
-			"Cannot upgrade directly from $ocp_version to $ocp_upgrade_to." \
+			"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
 			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
 			"You need to upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
+			"" \
+			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+	elif [[ $_path_rc -eq 2 ]]; then
+		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
+		_nearest="${_path_diag##*|}"
+		aba_abort \
+			"No upgrade path from $ocp_version to $ocp_upgrade_to in channel ${_tgt_ch}." \
+			"${_nearest:+Nearest reachable target from $ocp_version: ${_nearest}}" \
+			"Update your upgrade target and try again." \
 			"" \
 			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	fi

@@ -50,9 +50,13 @@ fi
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
-# Warn (but don't block) if passwordless sudo is not available
-[ "$SUDO" ] && ! sudo -n true 2>/dev/null && \
+# Warn once per session (resets on reboot) if passwordless sudo is not available
+_sudo_warn="/tmp/.aba-${USER:-$(id -un)}/.sudo-warned"
+if [ "$SUDO" ] && ! sudo -n true 2>/dev/null && [ ! -f "$_sudo_warn" ]; then
 	echo "Warning: Passwordless sudo not configured. For best results, configure passwordless sudo (recommended) or run as root. With password-based sudo you may be prompted repeatedly." >&2
+	mkdir -p "$(dirname "$_sudo_warn")"
+	touch "$_sudo_warn"
+fi
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
