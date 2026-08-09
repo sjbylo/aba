@@ -96,11 +96,25 @@ podman run -d \
 	-e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
 	docker.io/library/registry:latest
 
-# Ensure rootless podman containers with --restart=always survive VM reboot
-if [ "$(id -u)" -ne 0 ] && command -v loginctl >/dev/null 2>&1; then
-	if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
-		aba_info "Enabling loginctl linger for $USER (so registry survives reboot) ..."
-		$SUDO loginctl enable-linger "$USER"
+# Ensure podman containers with --restart=always survive VM reboot
+if [ "$(id -u)" -ne 0 ]; then
+	# Rootless: keep user session alive after logout
+	if command -v loginctl >/dev/null 2>&1; then
+		if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
+			aba_info "Enabling loginctl linger for $USER (so registry survives reboot) ..."
+			$SUDO loginctl enable-linger "$USER"
+		fi
+	fi
+	# Rootless: enable the user-level restart service
+	if ! systemctl --user is-enabled podman-restart.service >/dev/null 2>&1; then
+		aba_info "Enabling podman-restart service for $USER ..."
+		systemctl --user enable podman-restart.service
+	fi
+else
+	# Root: enable the system-level restart service
+	if ! systemctl is-enabled podman-restart.service >/dev/null 2>&1; then
+		aba_info "Enabling podman-restart service ..."
+		systemctl enable podman-restart.service
 	fi
 fi
 
