@@ -51,12 +51,16 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	if [[ $_path_rc -eq 1 ]]; then
 		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
 		_lowest="${_path_diag##*|}"
-		aba_abort \
-			"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
-			"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
-			"If not already, upgrade to at least ${_lowest:-a version in ${_tgt_ch}} first." \
-			"" \
-			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+	local _hint="Your version may not be in this channel yet. Try a different channel or target."
+	if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$ocp_version"; then
+		_hint="Upgrade to at least ${_lowest} first."
+	fi
+	aba_abort \
+		"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
+		"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
+		"$_hint" \
+		"" \
+		"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	elif [[ $_path_rc -eq 2 ]]; then
 		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
 		_nearest="${_path_diag##*|}"
