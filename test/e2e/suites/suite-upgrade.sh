@@ -329,7 +329,8 @@ e2e_run "Set --upgrade-to (writes to mirror.conf only)" "
 
 e2e_run "Run imagesetconf -- must NOT overwrite user-edited ISC" "
     cd ~/aba &&
-    aba -d mirror imagesetconf 2>&1 | tee /tmp/e2e-isc-skip-output &&
+    mkdir -p ~/tmp &&
+    aba -d mirror imagesetconf 2>&1 | tee ~/tmp/e2e-isc-skip-output &&
     grep -q '# USER EDIT: custom addition' mirror/data/imageset-config.yaml &&
     echo 'User edit preserved: OK' &&
     echo '--- ISC content (should still have user edit) ---' &&
@@ -337,7 +338,7 @@ e2e_run "Run imagesetconf -- must NOT overwrite user-edited ISC" "
 "
 
 e2e_run "Verify warning was emitted about preserving user edits" \
-    "grep -q 'modified by user' /tmp/e2e-isc-skip-output"
+    "grep -q 'modified by user' ~/tmp/e2e-isc-skip-output"
 
 e2e_run "Force regeneration with --force" "
     cd ~/aba &&

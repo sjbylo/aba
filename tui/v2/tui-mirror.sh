@@ -914,11 +914,12 @@ Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_
 		--menu "\nThis will:\n\n\
   1. Set target version to ${_target_ver}\n\
   2. Regenerate the ImageSet Config (if not user-edited)\n\
-  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\
+  3. Download upgrade images (optional)\n\
 ${_switch_note}\n\
 How do you want to mirror the upgrade images?" 0 0 0 \
 		"1" "Sync to registry (direct)" \
 		"2" "Save to tar files (for transfer)" \
+		"3" "Set target only (skip download)" \
 		2>"$_TUI_TMP"
 	[[ $? -ne 0 ]] && return 1
 	_upg_method=$(<"$_TUI_TMP")
@@ -974,6 +975,10 @@ To upgrade a disconnected cluster:\n\n\
      • Day-2 → Configure OperatorHub (D → R)\n\
      • Day-2 → Upgrade (D → U)\n" 0 0
 			fi
+			;;
+		3)
+			dlg --backtitle "$(ui_backtitle)" --title "Target Version Set" \
+				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (S), or\n  • Save to tar files (V)\n\nfrom the Mirror Management menu." 0 0
 			;;
 	esac
 
