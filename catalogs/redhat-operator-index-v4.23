@@ -67,6 +67,7 @@ servicemeshoperator3                                    Red Hat OpenShift Servic
 service-registry-operator                               Red Hat build of Apicurio Registry                           2.x
 skupper-netobs-operator                                 Red Hat Service Interconnect Network Observer                stable-2
 skupper-operator                                        Red Hat Service Interconnect                                 stable-2
+storage-based-remediation                               Storage-Based Remediation Operator                           stable
 tang-operator                                           NBDE Tang Server                                             alpha
 volsync-product                                         VolSync                                                      stable
 web-terminal                                            Web Terminal                                                 fast

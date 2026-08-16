@@ -8,11 +8,11 @@
 
 ### Changed
 
-- **Upgrade path validation uses BFS graph traversal** — `verify_upgrade_path_exists()` now validates actual edge reachability (not just node presence) in the Cincinnati graph via BFS, returning distinct error codes for "version not in graph" vs "no path to target". Warns when upgrade requires 3+ hops.
+- **Upgrade path validation checks full reachability** — `verify_upgrade_path_exists()` now validates that a complete upgrade path exists from the current version to the target (not just node presence) in the Cincinnati graph, returning distinct error codes for "version not in graph" vs "no path to target". Warns when upgrade requires 3+ hops.
 - **`ensure_vmware_conf()` function replaces standalone script** — VMware configuration setup now uses a shared function that calls `ensure_govc()`, eliminating code duplication between the Makefile target and the TUI.
 - **Robust CLI download retries** — `atomic-download` macro now retries 3 times (up from 2) with a 5-second delay between attempts, reducing failures from transient network issues.
 - **`auto_complete_install` retries in CLI** — The install-completion auto-detection gate in `aba.sh` now retries up to 3 times (with 5s sleep) to handle transient API blips on freshly-installed clusters. TUI path remains single-probe for responsiveness.
-- **`fetch_upgrade_targets()` validates graph edges** — Upgrade target proposals now verify BFS reachability before offering versions, preventing proposals of unreachable targets.
+- **`fetch_upgrade_targets()` validates graph reachability** — Upgrade target proposals now verify that a complete upgrade path exists before offering versions, preventing proposals of unreachable targets.
 - **System CA certificate renamed to `aba-rootCA.pem`** — Avoids potential conflicts with other software using the generic `rootCA.pem` name in `/etc/pki/ca-trust/source/anchors/`.
 
 ### Fixed
