@@ -86,12 +86,13 @@ create_node() {
 			aba_info "Adding a 2nd data disk of size ${data_disk}GB"
 		fi
 
-		local net_args="--network bridge=${KVM_NETWORK},model=virtio,mac=${mac}"
+		local _net_extra="${KVM_NETWORK_OPTS:+,$KVM_NETWORK_OPTS}"
+		local net_args="--network bridge=${KVM_NETWORK},model=virtio,mac=${mac}${_net_extra}"
 		local max_ports=$(( num_ports_per_node - 1 ))
 		for cnt in $(seq 1 $max_ports); do
 			local sub_idx=$(( idx + cnt ))
 			local sub_mac=${mac_array[$sub_idx]}
-			net_args="$net_args --network bridge=${KVM_NETWORK},model=virtio,mac=${sub_mac}"
+			net_args="$net_args --network bridge=${KVM_NETWORK},model=virtio,mac=${sub_mac}${_net_extra}"
 			aba_info "Adding network interface [$((cnt + 1))/${num_ports_per_node}] with mac address: $sub_mac"
 		done
 
