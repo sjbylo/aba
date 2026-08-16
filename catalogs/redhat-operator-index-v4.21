@@ -37,7 +37,6 @@ devworkspace-operator                                   DevWorkspace Operator   
 dns-operator                                            DNS Operator                                                 stable
 dpu-network-operator                                    DPU Network Operator                                         stable
 eap                                                     JBoss EAP                                                    stable
-exploit-iq-operator                                     RHTPA exploit intelligence(TechPreview)                      pre-ga
 external-dns-operator                                   ExternalDNS Operator                                         stable-v1
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
 file-integrity-operator                                 File Integrity Operator                                      stable
@@ -71,7 +70,7 @@ mtr-operator                                            Migration Toolkit for Ru
 mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.12
 multiarch-tuning-operator                               Multiarch Tuning Operator                                    stable
 multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.17
-multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.8
+multicluster-global-hub-operator-rh                     Multicluster Global Hub Operator                             release-1.7
 netobserv-operator                                      Network Observability                                        stable
 nfd                                                     Node Feature Discovery Operator                              stable
 node-healthcheck-operator                               Node Health Check Operator                                   stable

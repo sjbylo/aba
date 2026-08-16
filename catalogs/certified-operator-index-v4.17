@@ -197,7 +197,6 @@ percona-xtradb-cluster-operator-certified               Percona Operator for MyS
 pg4k-pgd                                                EDB Postgres Distributed for Kubernetes                      stable
 pmem-csi-operator-os                                    Operator for PMEM-CSI driver                                 stable
 portworx-certified                                      Portworx Enterprise                                          stable
-portworx-multi-cluster-certified                        Portworx Multi-Cluster Operator                              stable
 prometurbo-certified                                    Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha

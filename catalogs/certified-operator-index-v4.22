@@ -1,6 +1,6 @@
 abinitio-runtime-operator                               Co>Operating System Runtime Operator                         stable
 aci-containers-operator                                 Cisco ACI Containers Operator                                stable
-airlock-microgateway                                    Airlock Microgateway                                         "5.1"
+airlock-microgateway                                    Airlock Microgateway                                         5.1
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
 amd-gpu-operator                                        amd-gpu-operator                                             alpha
 anzograph-operator                                      Altair Graph Lakehouse Operator                              stable
@@ -13,6 +13,7 @@ aqua-operator-certified                                 Aqua Security Operator  
 axera-operator                                          Axera Microsegmentation & NDR                                alpha
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
 cilium-enterprise                                       Isovalent Enterprise for Cilium                              1.16
+clife                                                   Isovalent Networking for Kubernetes                          1.19
 cloudera-streams-messaging-kubernetes-operator          Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 cloudnative-pg                                          CloudNativePG                                                stable-v1
 cloud-native-postgresql                                 EDB Postgres for Kubernetes                                  fast
@@ -52,6 +53,7 @@ ibm-application-gateway-operator                        IBM Application Gateway 
 ibm-data-reporter-operator                              IBM Data Reporter Operator                                   stable
 ibm-metrics-operator                                    IBM Metrics Operator                                         stable
 ibm-security-verify-access-operator                     IBM Verify Identity Access Operator                          stable
+infinibox-operator-certified                            InfiniBox CSI Driver - Operator                              stable
 infoscale-dr-manager                                    InfoScale™ DR Manager                                      fast
 infoscale-licensing-operator                            InfoScale™ Licensing Operator                              fast
 infoscale-sds-operator                                  InfoScale™ SDS Operator                                    fast
@@ -126,6 +128,7 @@ tawon-operator                                          Tawon                   
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.9
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
+trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
 tvo-operator                                            Trilio for OpenStack                                         6.0.x
 vast-csi-operator                                       VAST CSI driver operator                                     stable
@@ -133,5 +136,4 @@ vault-secrets-operator                                  Vault Secrets Operator  
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
 wave                                                    Wave                                                         stable
-xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
