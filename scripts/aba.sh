@@ -1163,7 +1163,6 @@ if [ "$cur_target" ]; then
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
-				local _aci_try
 				for _aci_try in 1 2 3; do
 					auto_complete_install "$PWD" 2>/dev/null || true
 					[[ -f .install-complete ]] && break

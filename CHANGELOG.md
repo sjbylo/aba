@@ -18,10 +18,10 @@
 
 ### Fixed
 
-- **Fix sudo UX for non-root users** — The `aba` CLI no longer hard-exits when passwordless sudo is unavailable; it warns and keeps `SUDO=sudo` so users can type their password when prompted. Operations that cannot prompt (firewall, CA trust, loginctl linger) degrade gracefully with warnings. (Thanks to [@msalmanmasood](https://github.com/msalmanmasood) for reporting [#36](https://github.com/sjbylo/aba/issues/36).)
+- **Fix sudo UX for non-root users** — The `aba` CLI no longer prompts for a password on every invocation when passwordless sudo is unavailable; it warns once per session and lets individual commands prompt as needed. Operations that cannot prompt (firewall, CA trust, loginctl linger) degrade gracefully with warnings. (Thanks to [@msalmanmasood](https://github.com/msalmanmasood) for reporting [#36](https://github.com/sjbylo/aba/issues/36).)
 - **Fix `install` script sudo usage** — Option parsing now runs before the sudo gate so `-q` (auto-update) skips the password prompt when no update is needed. The `_run()` helper only escalates when the target directory isn't user-writable.
 - **Fix Docker registry not surviving reboot** — `podman-restart.service` is now enabled (both root and rootless) alongside `loginctl enable-linger` so Docker registries auto-start after VM reboot. Quay-ng uses systemd quadlets and only needs linger for rootless.
-- **Fix remote `reg_rm_data_dir()` tilde expansion** — Single quotes around `$dir` in SSH commands prevented tilde expansion on remote hosts; switched to double quotes.
+- **Fix remote `reg_rm_data_dir()` tilde expansion** — Single quotes around `$dir` in SSH commands prevented tilde expansion on remote hosts; removed the quotes so `~` is expanded by the remote shell.
 - **Fix `reg_open_firewall()` masking failures** — The `&&`-chain between `firewall-cmd` commands masked failures under `set -e`, silently setting `_reg_fw_opened=1` even when sudo failed.
 - **Fix OSUS poll loop timeout** — The TUI upgrade dialog now checks both `availableUpdates` and `conditionalUpdates`, reducing the poll wait from 30s to 10s max.
 - **Fix `trust_root_ca()` unnecessary sudo** — The `diff` comparing the CA cert against the system trust store is a read-only operation; removed sudo from this check.
