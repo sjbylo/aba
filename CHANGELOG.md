@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.2...HEAD)
+
+---
+
+## [1.2.2](https://github.com/sjbylo/aba/releases/tag/v1.2.2) - 2026-08-16
+
+Sudo UX, upgrade path validation, KVM OVS support, robustness fixes
+
 
 ### Added
 
