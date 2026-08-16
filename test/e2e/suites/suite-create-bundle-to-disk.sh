@@ -182,18 +182,23 @@ e2e_run "Verify aba-transfer.tar in bundle (always created by aba save)" \
     "tar tvf ~/tmp/delete-me*tar | grep mirror/data/aba-transfer.tar"
 
 # Extra CLIs (virtctl/kn/tkn/helm/opm/argocd/roxctl) are pulled during aba bundle
-# via cli_download_extra_clis (soft-fail). Require all seven artifacts landed so
-# the disco-side install check below is meaningful.
-e2e_run "Verify all extra CLI artifacts present after bundle" \
+# via cli_download_extra_clis (SOFT_EXTRA=1).  Downloads from GitHub/googleapis
+# can fail transiently, so only require at least 5 of 7 (allow up to 2 soft-fail).
+e2e_run "Verify extra CLI artifacts present after bundle (>=5 of 7)" \
     "avail=\$(make -sC cli out-install-extra-available); echo \"available: \$avail\"; \
+     count=0; missing=''; \
      for t in virtctl kn tkn helm opm argocd roxctl; do \
-       echo \"\$avail\" | grep -qw \"\$t\" || { echo \"missing extra artifact: \$t\"; exit 1; }; \
-     done"
-e2e_run "Verify extra CLI artifacts packed into bundle tar" \
-    "for t in virtctl kn tkn helm opm argocd roxctl; do \
+       if echo \"\$avail\" | grep -qw \"\$t\"; then count=\$((count+1)); \
+       else missing=\"\$missing \$t\"; fi; \
+     done; \
+     echo \"found \$count/7 extras (missing:\$missing)\"; \
+     [ \$count -ge 5 ] || { echo 'FAIL: fewer than 5 extras available'; exit 1; }"
+e2e_run "Verify available extra CLI artifacts packed into bundle tar" \
+    "avail=\$(make -sC cli out-install-extra-available); \
+     for t in \$avail; do \
        tar tvf ~/tmp/delete-me*tar | grep -E \"/cli/\${t}[-.]\" | head -1 || \
          { echo \"extra CLI not in bundle tar: \$t\"; exit 1; }; \
-     done"
+     done; echo \"All available extras found in bundle\""
 
 test_end 0
 
@@ -282,16 +287,23 @@ e2e_run_remote -r 3 2 "Install mirror registry and load images from bundle" \
 
 # Bundle unpack leaves extra CLI artifacts under cli/. cli-install-all.sh
 # installs them when present (aba starts this in background; --wait makes the
-# check race-free). Same contract as test/func/test-extra-clis.sh disco check.
-e2e_run_remote "Verify extra CLI artifacts available on disco" \
+# check race-free). Only verify extras that were actually bundled (soft-fail
+# on the connected side may have skipped some).
+e2e_run_remote "Verify extra CLI artifacts available on disco (>=5 of 7)" \
     "cd ~/aba && avail=\$(make -sC cli out-install-extra-available); echo \"available: \$avail\"; \
+     count=0; missing=''; \
      for t in virtctl kn tkn helm opm argocd roxctl; do \
-       echo \"\$avail\" | grep -qw \"\$t\" || { echo \"missing extra artifact on disco: \$t\"; exit 1; }; \
-     done"
-e2e_run_remote "Ensure extra CLIs installed on disco (cli-install-all --wait)" \
-    "cd ~/aba && scripts/cli-install-all.sh --wait virtctl kn tkn helm opm argocd roxctl"
-e2e_run_remote "Verify extra CLIs installed to ~/bin on disco" \
-    "for t in virtctl kn tkn helm opm argocd roxctl; do \
+       if echo \"\$avail\" | grep -qw \"\$t\"; then count=\$((count+1)); \
+       else missing=\"\$missing \$t\"; fi; \
+     done; \
+     echo \"found \$count/7 extras on disco (missing:\$missing)\"; \
+     [ \$count -ge 5 ] || { echo 'FAIL: fewer than 5 extras on disco'; exit 1; }"
+e2e_run_remote "Ensure available extra CLIs installed on disco" \
+    "cd ~/aba && avail=\$(make -sC cli out-install-extra-available); \
+     scripts/cli-install-all.sh --wait \$avail"
+e2e_run_remote "Verify available extra CLIs installed to ~/bin on disco" \
+    "cd ~/aba && avail=\$(make -sC cli out-install-extra-available); \
+     for t in \$avail; do \
        [ -x \"\$HOME/bin/\$t\" ] || { echo \"missing ~/bin/\$t on disco\"; ls -la \"\$HOME/bin\" 2>&1 | head -40; exit 1; }; \
        echo \"ok ~/bin/\$t\"; \
      done"

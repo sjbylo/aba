@@ -4418,6 +4418,21 @@ ensure_govc() {
 	run_once -w -m "Installing govc" -i "$TASK_INST_GOVC"
 }
 
+ensure_vmware_conf() {
+	local cluster_dir="${1:?usage: ensure_vmware_conf <cluster-dir>}"
+	if [ -f vmware.conf ]; then
+		[ -f "$cluster_dir/vmware.conf" ] || ln -s ../vmware.conf "$cluster_dir/vmware.conf"
+		echo "[ABA] vmware.conf initialized"
+	else
+		ensure_govc
+		make -s vmw
+		if [ -f vmware.conf ] && [ ! -f "$cluster_dir/vmware.conf" ]; then
+			ln -s ../vmware.conf "$cluster_dir/vmware.conf"
+			echo "[ABA] vmware.conf initialized"
+		fi
+	fi
+}
+
 ensure_virsh() {
 	install_rpms libvirt-client virt-install
 }
