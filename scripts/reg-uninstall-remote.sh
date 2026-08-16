@@ -112,8 +112,8 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 
 		docker)
 			aba_info "Uninstalling Docker registry on remote host $reg_host ..."
-			$_ssh "podman rm -f registry 2>/dev/null; \
-				$SUDO rm -rf $reg_root" || true
+			$_ssh "podman rm -f registry 2>/dev/null" || true
+			reg_rm_data_dir docker "$reg_root" "$_ssh"
 
 			_stale=$(reg_stale_report docker "$_ssh")
 			if [ -n "$_stale" ]; then
@@ -130,9 +130,9 @@ if ask -n --auto-yes "Uninstall $vendor registry on remote host $reg_ssh_user@$r
 					systemctl --user stop quay.service; \
 				fi; \
 				rm -f ~/.config/containers/systemd/quay.container; \
-				systemctl --user daemon-reload 2>/dev/null; \
-				[ -d '$reg_root' ] && $SUDO rm -rf '$reg_root'" || \
+				systemctl --user daemon-reload 2>/dev/null" || \
 				aba_warn "Remote $_QUAY_NG_VENDOR cleanup returned non-zero"
+			reg_rm_data_dir "$_QUAY_NG_VENDOR" "$reg_root" "$_ssh"
 
 			_stale=$(reg_stale_report "$_QUAY_NG_VENDOR" "$_ssh")
 			if [ -n "$_stale" ]; then

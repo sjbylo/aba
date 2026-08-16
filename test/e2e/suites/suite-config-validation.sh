@@ -327,22 +327,22 @@ e2e_run "Backup aba.conf and mirror.conf" \
 # --- CLI acceptance ---
 
 e2e_run "RC version accepted by --version" \
-	"aba --noask --channel candidate --version 4.22.0-rc.1 2>&1 | tee /tmp/rc-out.txt && grep -q 'ocp_version=4.22.0-rc.1' aba.conf"
+	"mkdir -p ~/tmp && aba --noask --channel candidate --version 4.22.0-rc.1 2>&1 | tee ~/tmp/rc-out.txt && grep -q 'ocp_version=4.22.0-rc.1' aba.conf"
 
 e2e_run "RC version triggers pre-release warning" \
-	"grep -q 'Pre-release version' /tmp/rc-out.txt"
+	"grep -q 'Pre-release version' ~/tmp/rc-out.txt"
 
 e2e_run "EC version accepted by --version" \
-	"aba --noask --channel candidate --version 5.0.0-ec.2 2>&1 | tee /tmp/ec-out.txt && grep -q 'ocp_version=5.0.0-ec.2' aba.conf"
+	"mkdir -p ~/tmp && aba --noask --channel candidate --version 5.0.0-ec.2 2>&1 | tee ~/tmp/ec-out.txt && grep -q 'ocp_version=5.0.0-ec.2' aba.conf"
 
 e2e_run "EC version triggers pre-release warning" \
-	"grep -q 'Pre-release version' /tmp/ec-out.txt"
+	"grep -q 'Pre-release version' ~/tmp/ec-out.txt"
 
 e2e_run "GA version accepted without warning" \
-	"aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION 2>&1 | tee /tmp/ga-out.txt && grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}' | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\$'"
+	"mkdir -p ~/tmp && aba --noask --channel $TEST_CHANNEL --version $OCP_VERSION 2>&1 | tee ~/tmp/ga-out.txt && grep '^ocp_version=' aba.conf | awk -F= '{print \$2}' | awk '{print \$1}' | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\$'"
 
 e2e_run_must_fail "GA version does NOT trigger pre-release warning" \
-	"grep 'Pre-release version' /tmp/ga-out.txt"
+	"grep 'Pre-release version' ~/tmp/ga-out.txt"
 
 # --- Invalid pre-release formats rejected ---
 
@@ -397,7 +397,7 @@ e2e_run "Restore aba.conf and mirror.conf" \
 	"cp aba.conf.prerel-bak aba.conf && cp mirror/mirror.conf.prerel-bak mirror/mirror.conf && rm -f aba.conf.prerel-bak mirror/mirror.conf.prerel-bak"
 
 e2e_run "Clean up temp files" \
-	"rm -f /tmp/rc-out.txt /tmp/ec-out.txt /tmp/ga-out.txt"
+	"rm -f ~/tmp/rc-out.txt ~/tmp/ec-out.txt ~/tmp/ga-out.txt"
 
 test_end 0
 

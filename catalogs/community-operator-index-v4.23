@@ -127,6 +127,7 @@ etcd                                                    etcd                    
 eventing-kogito                                         Kogito Knative Eventing Source                               alpha
 external-secrets-operator                               External Secrets Operator                                    alpha
 fence-agents-remediation                                Fence Agents Remediation Operator - Community Edition        stable
+file-integrity-console-plugin                           File Integrity Console Plugin                                stable-4.22
 flink-kubernetes-operator                               Flink Kubernetes Operator                                    alpha
 flux                                                    Flux                                                         stable
 fossul-operator                                         Fossul Operator                                              alpha

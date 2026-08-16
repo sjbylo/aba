@@ -144,7 +144,7 @@ _cleanup_dis() {
 	done
 
 	# Remove stale CA trust anchors from previous registry installs
-	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
+	_essh "$dis_host" "sudo rm -f /etc/pki/ca-trust/source/anchors/aba-rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem && sudo update-ca-trust" 2>&1
 
 	# 2. Restore baseline system state (firewalld on, as created by setup-infra)
 	_essh "$dis_host" "sudo systemctl enable firewalld; sudo systemctl start firewalld" 2>&1

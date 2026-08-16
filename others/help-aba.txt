@@ -26,6 +26,8 @@ Other commands:
   aba [-d cli] oc                       # Download and install the oc binary
   aba [-d cli] openshift-install        # Download and install the openshift-install binary
   aba ocp-versions|ocp-ver              # Show a table of the latest versions of OpenShift
+  aba [-d <cluster>] ssh [--all] [--masters|--workers] [--cmd <cmd>]
+                                        # SSH to cluster nodes (default: node0, --all: every node)
   aba show-operators                    # List available operators (Red Hat catalog by default)
   aba show-operators --certified        # List certified operators (or --community/--all)
   aba show-operators --refresh          # Re-download catalogs if stale, then list

@@ -130,11 +130,11 @@ endif
 define atomic-download
 	@_tmp=.$@.tmp.$$$$; \
 	rm -f $$_tmp $$_tmp.sha256; \
-	for _try in 1 2; do \
+	for _try in 1 2 3; do \
 		curl -f --retry 8 $(CURL_PROGRESS) -o $$_tmp -L $(1) || \
 			{ echo "[ABA] Download failed for $@"; rm -f $$_tmp; \
-			  if [ "$$_try" = "2" ]; then exit 1; fi; \
-			  echo "[ABA] Retrying download of $@..."; continue; }; \
+			  if [ "$$_try" = "3" ]; then exit 1; fi; \
+			  echo "[ABA] Retrying download of $@ in 5s..."; sleep 5; continue; }; \
 		echo -n "[ABA] Verifying checksum for $@: "; \
 		curl -f --retry 8 -sL -o $$_tmp.sha256 $(2) && \
 		_expected=$$(grep "  $@$$" $$_tmp.sha256 | awk '{print $$1}') && \
@@ -142,8 +142,8 @@ define atomic-download
 		[ -n "$$_expected" ] && [ "$$_expected" = "$$_actual" ] && \
 		echo "valid!" && rm -f $$_tmp.sha256 && break || \
 		{ echo "FAILED!"; rm -f $$_tmp $$_tmp.sha256; \
-		  if [ "$$_try" = "2" ]; then echo "[ABA] Checksum INVALID for $@!"; exit 1; fi; \
-		  echo "[ABA] Retrying download of $@..."; }; \
+		  if [ "$$_try" = "3" ]; then echo "[ABA] Checksum INVALID for $@!"; exit 1; fi; \
+		  echo "[ABA] Retrying download of $@ in 5s..."; sleep 5; }; \
 	done; \
 	mv $$_tmp $@
 endef

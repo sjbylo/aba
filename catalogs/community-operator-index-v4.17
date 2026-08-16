@@ -110,6 +110,7 @@ coherence-operator                                      Coherence Kubernetes Ope
 community-kubevirt-hyperconverged                       KubeVirt HyperConverged Cluster Operator                     stable
 community-trivy-operator                                Community Trivy Operator                                     stable
 community-windows-machine-config-operator               Community Windows Machine Config Operator                    preview
+commvault-operator                                      Commvault for OpenShift                                      alpha
 customized-user-remediation                             Customized User Remediation Operator - Community Edition     alpha
 dapr-kubernetes-operator                                Dapr Control Plane Operator                                  alpha
 datadog-operator                                        Datadog Operator                                             stable
@@ -133,6 +134,7 @@ etcd                                                    etcd                    
 eventing-kogito                                         Kogito Knative Eventing Source                               alpha
 external-secrets-operator                               External Secrets Operator                                    alpha
 fence-agents-remediation                                Fence Agents Remediation Operator - Community Edition        stable
+file-integrity-console-plugin                           File Integrity Console Plugin                                stable-4.16
 flink-kubernetes-operator                               Flink Kubernetes Operator                                    alpha
 flux                                                    Flux                                                         stable
 flux-operator                                           Flux Operator                                                stable

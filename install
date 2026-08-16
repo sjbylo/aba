@@ -25,8 +25,8 @@ _step() { printf "  ${_CHECK} %s\n" "$1" >&2; }
 # We need git, which, id, diff commands to run this script (not always available in a container) ... 
 # Other rpm packages that ABA requires are copied into the below lines at build time (which aren't available yet!)
 required_pkgs=(which file hostname diffutils git make jq python3 python3-jinja2 python3-pyyaml ncurses)
-required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which dialog diffutils podman httpd-tools skopeo acl)  # Synced from templates/rpms-external.txt
-required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which dialog file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd acl polkit)  # Synced from templates/rpms-internal.txt
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which dialog diffutils podman httpd-tools skopeo acl bash-completion)  # Synced from templates/rpms-external.txt
+required_pkgs+=(make jq python3 python3-jinja2 python3-pyyaml ncurses which dialog file hostname diffutils podman bind-utils nmstate net-tools skopeo openssl coreos-installer httpd acl polkit bash-completion)  # Synced from templates/rpms-internal.txt
 required_pkgs=($(printf '%s\n' "${required_pkgs[@]}" | sort -u))  # Deduplicate
 missing_pkgs=()
 
@@ -67,14 +67,24 @@ if ! which id >/dev/null 2>&1; then
 	exit 1
 fi
 
+# Check options early so $quiet is available for the sudo gate below
+while echo "$1" | grep -q "^-"
+do
+	case "$1" in
+		-q) quiet=1; shift ;;
+		-v) cur_ver=$2; shift 2 ;;
+		*)  shift; break ;;
+	esac
+done
+
 # Now, check sudo or root access.
-# If user is not root ...
-if [ "$(id -u)" != "0" ]; then
+# In quiet mode (-q, auto-update from aba.sh), defer the sudo gate until
+# an update is actually needed -- avoids prompting for a password on every run.
+if [ ! "$quiet" ] && [ "$(id -u)" != "0" ]; then
 	if [ "$SUDO" ]; then
 		# If sudo does not lead to root without using a password prompt (-n)
 		if [ "$($SUDO -n whoami)" != "root" ]; then
-			echo "ABA requires root access, directly or via sudo." >&2
-			# If there is no passwordless access
+			echo "For some actions, ABA requires root access, directly or via sudo." >&2
 			if ! $SUDO -ln 2>/dev/null | grep -q NOPASSWD; then
 				echo "Passwordless sudo access is recommended." >&2
 			fi
@@ -86,14 +96,6 @@ if [ "$(id -u)" != "0" ]; then
 		exit 1  # Should never get here!
 	fi
 fi
-
-# Check options
-while echo "$1" | grep -q "^-"
-do
-	# -q: Quiet mode (suppress verbose output, preserve ~/.aba state, update aba script only if changed)
-	[ "$1" = "-q" ] && quiet=1 && shift
-	[ "$1" = "-v" ] && cur_ver=$2 && shift 2
-done
 
 branch=main
 repo=sjbylo/aba
@@ -254,12 +256,13 @@ do
 		# If it's ~/bin and it's missing create it
 		[ "$d" = "$HOME/bin" -a ! -d $d ] && mkdir -p $d
 
-		# Now, try to install aba
-		if $SUDO cp -p scripts/aba.sh $d/aba; then
-			$SUDO chmod +x $d/aba
+		# Now, try to install aba (only escalate when dir isn't user-writable)
+		_run() { if [ -w "$d" ]; then "$@"; else $SUDO "$@"; fi; }
+		if _run cp -p scripts/aba.sh $d/aba; then
+			_run chmod +x $d/aba
 
 			# Create abatui symlink → aba (TUI entry point)
-			$SUDO ln -sf aba $d/abatui
+			_run ln -sf aba $d/abatui
 
 			if [ ! "$quiet" ]; then
 				_step "aba installed to $d/aba"

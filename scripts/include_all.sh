@@ -306,6 +306,8 @@ show_error() {
 	echo_red "Script error at $(date) in directory $PWD: " >&2
 	echo_red "Error occurred in command: '$_safe_cmd'" >&2
 	echo_red "Error code: $exit_code" >&2
+	echo >&2
+	echo "[ABA] Check the output above for clues. Fix the issue and re-run the same command -- it's safe to retry." >&2
 
 	exit $exit_code
 }
@@ -1704,8 +1706,8 @@ _fetch_cached() {
 	tmp="$(mktemp "${cache_file}.XXXXXX")" || true
 
 	# Retry transient failures (DNS, connection reset) — curl --retry alone skips DNS errors
-	# Worst case: 3 × 8s max-time + 2 × 2s delay = ~28s
-	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 2 -q curl -f -s --connect-timeout 5 --max-time 8 "$url" -o "$tmp"; then
+	# Worst case: 3 × 30s max-time + 2 × 2s delay = ~94s
+	if [[ -n "$tmp" ]] && try_cmd -n 3 -d 2 -q curl -f -s --connect-timeout 5 --max-time 30 "$url" -o "$tmp"; then
 		if [[ -n "$validator_fn" ]]; then
 			if "$validator_fn" "$tmp"; then
 				mv -f "$tmp" "$cache_file"
@@ -2018,20 +2020,25 @@ fetch_latest_prerelease_version() {
 
 ############################################
 # Verify that an upgrade path exists from current → target in the Cincinnati graph.
-# Checks that the current version appears as a node in the target channel's graph.
+# Phase 1: checks that the current version appears as a node in the target channel.
+# Phase 2: BFS to verify a path (direct or multi-hop) exists from current to target.
 # Works for both same-minor (z-stream) and cross-minor upgrades.
 # Args:
 #	$1 = current version (e.g. 4.21.4)
 #	$2 = target version (e.g. 4.22.1 or 4.21.20)
 #	$3 = channel base (e.g. fast, stable, candidate) [optional, default: from aba.conf]
+#	$4 = --shell: machine-parseable output for TUI consumption [optional]
 # Output (on failure):
-#	Prints diagnostic to stderr: "current_ver|target_channel|lowest_entry"
-# Returns: 0 if path exists (current found in target channel), 1 if not
+#	Default: "current_ver|target_channel|lowest_entry" on stderr
+#	--shell:  "REACHABLE=0|1 HOPS=N NEAREST=x.y.z CHANNEL=ch" on stdout
+# Returns: 0 if path exists, 1 if source not in graph, 2 if no path to target
 ############################################
 verify_upgrade_path_exists() {
 	local current_ver="${1:-}"
 	local target_ver="${2:-}"
 	local channel="${3:-${ocp_channel:-fast}}"
+	local shell_mode=""
+	[[ "${4:-}" == "--shell" ]] && shell_mode=1
 
 	[[ -z "$current_ver" || -z "$target_ver" ]] && return 1
 
@@ -2046,24 +2053,86 @@ verify_upgrade_path_exists() {
 		tgt_channel="candidate-${tgt_minor}"
 	fi
 
-	local graph_versions
-	# Strip minor suffix from tgt_channel: "stable-4.22" → "stable"
-	graph_versions=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null |
-		jq -r '.nodes[].version' 2>/dev/null) || return 0
+	local graph_json
+	graph_json=$(_fetch_graph_cached "${tgt_channel%%-*}" "$tgt_minor" 2>/dev/null) || return 0
 
 	# If graph is empty/unreachable, don't block — let later checks handle it
+	[[ -z "$graph_json" ]] && return 0
+
+	local graph_versions
+	graph_versions=$(echo "$graph_json" | jq -r '.nodes[].version' 2>/dev/null) || return 0
 	[[ -z "$graph_versions" ]] && return 0
 
-	if echo "$graph_versions" | grep -qxF "$current_ver"; then
+	# Phase 1: check source version is a node in the graph
+	if ! echo "$graph_versions" | grep -qxF "$current_ver"; then
+		local lowest
+		lowest=$(echo "$graph_versions" | _semver_sort | head -1)
+		if [[ "$shell_mode" ]]; then
+			echo "REACHABLE=0 HOPS=0 NEAREST= CHANNEL=${tgt_channel} REASON=source_not_in_graph LOWEST=${lowest:-unknown}"
+		else
+			echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
+		fi
+		return 1
+	fi
+
+	# Phase 2: BFS — verify a path exists from current_ver to target_ver
+	local bfs_result
+	bfs_result=$(echo "$graph_json" | python3 -c '
+import sys, json
+data = json.load(sys.stdin)
+nodes = {i: n["version"] for i, n in enumerate(data.get("nodes", []))}
+rev = {v: k for k, v in nodes.items()}
+adj = {}
+for e in data.get("edges", []):
+    adj.setdefault(e[0], []).append(e[1])
+src, tgt = rev.get(sys.argv[1]), rev.get(sys.argv[2])
+if src is None or tgt is None:
+    print("REACHABLE=0 HOPS=0")
+    sys.exit(0)
+# BFS with hop tracking (safety limit: 10 hops)
+visited = {src: 0}
+queue = [src]
+while queue:
+    n = queue.pop(0)
+    if visited[n] >= 10:
+        continue
+    for nb in adj.get(n, []):
+        if nb not in visited:
+            visited[nb] = visited[n] + 1
+            queue.append(nb)
+            if nb == tgt:
+                print("REACHABLE=1 HOPS=%d" % visited[nb])
+                sys.exit(0)
+# Not reachable — find nearest valid targets from source
+reachable = sorted([nodes[k] for k in visited if k != src])
+print("REACHABLE=0 HOPS=0 TARGETS=%s" % ",".join(reachable))
+' "$current_ver" "$target_ver" 2>/dev/null) || return 0
+
+	local reachable hops
+	reachable=$(echo "$bfs_result" | grep -oP 'REACHABLE=\K[01]')
+	hops=$(echo "$bfs_result" | grep -oP 'HOPS=\K[0-9]+')
+
+	if [[ "$reachable" == "1" ]]; then
+		if [[ "$shell_mode" ]]; then
+			echo "REACHABLE=1 HOPS=${hops:-1} CHANNEL=${tgt_channel}"
+		fi
+		if [[ "${hops:-1}" -ge 3 ]]; then
+			aba_warn "Upgrade path from $current_ver to $target_ver requires ${hops} intermediate versions."
+		fi
 		return 0
 	fi
 
-	# Output diagnostic for callers to format their own error message
-	local lowest
-	lowest=$(echo "$graph_versions" | _semver_sort | head -1)
-	echo "${current_ver}|${tgt_channel}|${lowest:-unknown}" >&2
+	# No path — extract reachable targets for diagnostic
+	local targets nearest
+	targets=$(echo "$bfs_result" | grep -oP 'TARGETS=\K\S+')
+	nearest=$(echo "$targets" | tr ',' '\n' | _semver_sort | tail -1)
 
-	return 1
+	if [[ "$shell_mode" ]]; then
+		echo "REACHABLE=0 HOPS=0 NEAREST=${nearest:-} CHANNEL=${tgt_channel} REASON=no_path"
+	else
+		echo "${current_ver}|${tgt_channel}|${nearest:-unknown}" >&2
+	fi
+	return 2
 }
 
 ############################################
@@ -2103,7 +2172,9 @@ fetch_upgrade_targets() {
 	local latest_z
 	latest_z="$(fetch_all_versions "$channel" "$cur_minor" 2>/dev/null | tail -n1)"
 	if [[ -n "$latest_z" ]] && is_version_greater "$latest_z" "$current_ver"; then
-		printf "zstream\t%s\n" "$latest_z"
+		if verify_upgrade_path_exists "$current_ver" "$latest_z" "$channel" >/dev/null 2>&1; then
+			printf "zstream\t%s\n" "$latest_z"
+		fi
 	fi
 
 	# 2) Probe forward minors: is current_ver a node in channel-(cur_minor+N)?
@@ -2135,11 +2206,15 @@ fetch_upgrade_targets() {
 
 		# Is our current version a valid entry point in this minor's graph?
 		if echo "$graph_versions" | grep -qxF "$current_ver"; then
-			# Find the latest version in this minor
-			local target
-			target=$(echo "$graph_versions" | grep "^${probe_minor}\." |
-				_semver_sort | tail -n1)
-			if [[ -n "$target" ]]; then
+			# Find the latest version in this minor that is BFS-reachable
+			local target _candidate
+			for _candidate in $(echo "$graph_versions" | grep "^${probe_minor}\." | _semver_sort -r); do
+				if verify_upgrade_path_exists "$current_ver" "$_candidate" "$channel" >/dev/null 2>&1; then
+					target="$_candidate"
+					break
+				fi
+			done
+			if [[ -n "${target:-}" ]]; then
 				if [[ $next_label -eq 0 ]]; then
 					printf "next\t%s\n" "$target"
 				else
@@ -2713,15 +2788,15 @@ get_ntp_servers() {
 
 trust_root_ca() {
 	if [ -s "$1" ]; then
-		if $SUDO diff "$1" /etc/pki/ca-trust/source/anchors/rootCA.pem >/dev/null 2>&1; then
+		if diff "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/ 
+			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem
 			$SUDO update-ca-trust extract
 			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
 	else
-		aba_info "No $1 cert file found" 
+		aba_info "No $1 cert file found"
 	fi
 
 	return 0
@@ -4341,6 +4416,21 @@ ensure_govc() {
 
 	run_once -i "$TASK_INST_GOVC" -- "${CMD_INST_GOVC[@]}"
 	run_once -w -m "Installing govc" -i "$TASK_INST_GOVC"
+}
+
+ensure_vmware_conf() {
+	local cluster_dir="${1:?usage: ensure_vmware_conf <cluster-dir>}"
+	if [ -f vmware.conf ]; then
+		[ -f "$cluster_dir/vmware.conf" ] || ln -s ../vmware.conf "$cluster_dir/vmware.conf"
+		echo "[ABA] vmware.conf initialized"
+	else
+		ensure_govc
+		make -s vmw
+		if [ -f vmware.conf ] && [ ! -f "$cluster_dir/vmware.conf" ]; then
+			ln -s ../vmware.conf "$cluster_dir/vmware.conf"
+			echo "[ABA] vmware.conf initialized"
+		fi
+	fi
 }
 
 ensure_virsh() {

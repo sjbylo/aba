@@ -179,7 +179,7 @@ _kvm_net_test() {
 		"_e2e_delete_leftover_cluster $cname"
 
 	e2e_run "Generate cluster.conf for $cname" \
-		"aba cluster -n $cname -t $ctype --starting-ip $start_ip --mmem 16 --step cluster.conf"
+		"aba cluster -n $cname -t $ctype --starting-ip $start_ip --mcpu 4 --mmem 16 --step cluster.conf"
 
 	e2e_run "Set machine_network=$machine_network" \
 		"sed -i \"s#^machine_network=.*#machine_network=$machine_network #g\" $cname/cluster.conf"
@@ -217,21 +217,21 @@ _kvm_net_test() {
 	e2e_add_to_cluster_cleanup "$PWD/$cname"
 	e2e_run "Boot VMs for $cname" "aba --dir $cname refresh"
 
-	e2e_run -r 1 1 "Wait for node0 SSH ($cname)" \
-		"timeout 8m bash -c 'until aba --dir $cname ssh --cmd hostname; do sleep 10; done'"
+	e2e_run -r 1 1 "Wait for all nodes SSH ($cname)" \
+		"timeout 8m bash -c 'until aba --dir $cname ssh --all --cmd hostname; do sleep 10; done'"
 
 	if echo "$if_check" | grep -q bond0; then
 		e2e_run -q "Wait for bond0 to settle" "sleep 30"
 	fi
 
-	e2e_diag "Show ip a on $cname node" \
-		"aba --dir $cname ssh --cmd 'ip a'"
+	e2e_diag "Show ip a on all $cname nodes" \
+		"aba --dir $cname ssh --all --cmd 'ip a'"
 
-	e2e_run "Verify $if_check on $cname" \
-		"timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
+	e2e_run "Verify $if_check on all $cname nodes" \
+		"timeout 8m bash -c 'until aba --dir $cname ssh --all --cmd \"ip a\" | grep \"$if_check\"; do sleep 10; done'"
 
-	e2e_run "Verify NTP on $cname" \
-		"timeout 8m bash -c 'until aba --dir $cname ssh --cmd \"chronyc -N sources\" | grep ${ntp_ip_test}; do sleep 10; done'"
+	e2e_run "Verify NTP on all $cname nodes" \
+		"timeout 8m bash -c 'until aba --dir $cname ssh --all --cmd \"chronyc -N sources\" | grep ${ntp_ip_test}; do sleep 10; done'"
 
 	e2e_run "Delete $cname VMs" "aba --dir $cname delete"
 	e2e_remove_from_cluster_cleanup "$PWD/$cname"
