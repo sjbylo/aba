@@ -203,7 +203,7 @@ prometurbo-certified                                    Prometurbo Operator     
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 raftt-operator                                          Raftt                                                        alpha
 rbln-npu-operator                                       RBLN operator                                                stable
-redis-enterprise-operator-cert                          Redis Enterprise Operator                                    production
+redis-enterprise-operator-cert                          Redis Enterprise Operator                                    8.0.20
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable

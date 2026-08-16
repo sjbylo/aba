@@ -78,5 +78,4 @@ vast-csi-operator                                       VAST CSI driver operator
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 wave                                                    Wave                                                         stable
-xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts

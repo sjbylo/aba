@@ -38,7 +38,6 @@ dns-operator                                            DNS Operator            
 dpu-network-operator                                    DPU Network Operator                                         stable
 dpu-operator                                            DPU Operator                                                 stable
 eap                                                     JBoss EAP                                                    stable
-exploit-iq-operator                                     RHTPA exploit intelligence(TechPreview)                      pre-ga
 external-dns-operator                                   ExternalDNS Operator                                         stable-v1
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
 file-integrity-operator                                 File Integrity Operator                                      stable

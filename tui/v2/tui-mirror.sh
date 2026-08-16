@@ -884,11 +884,17 @@ change your channel when selected." 0 0
 			local _rest="${_path_diag#*|}"             # everything after first pipe
 			local _tgt_channel="${_rest%%|*}"          # second field (target channel)
 			local _lowest="${_rest##*|}"               # last field (lowest entry point)
+		local _hint=""
+			if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$_current_ver"; then
+				_hint="Upgrade to at least ${_lowest} first.\n\n"
+			else
+				_hint="Your version may not be in this channel yet. Try a different channel or target.\n\n"
+			fi
 			dlg --backtitle "$(ui_backtitle)" --title "Upgrade Path Not Available" --msgbox \
-				"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
+			"Cannot upgrade directly from ${_current_ver} to ${_target_ver}.\n\n\
 Version ${_current_ver} is not in channel ${_tgt_channel}.\n\
 Lowest entry point: ${_lowest:-unknown}\n\n\
-You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first.\n\n\
+${_hint}\
 Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_path/" 0 0
 			continue
 		fi
@@ -908,11 +914,12 @@ Verify upgrade paths at:\nhttps://access.redhat.com/labs/ocpupgradegraph/update_
 		--menu "\nThis will:\n\n\
   1. Set target version to ${_target_ver}\n\
   2. Regenerate the ImageSet Config (if not user-edited)\n\
-  3. Download upgrade images (${_current_ver} → ${_target_ver})\n\
+  3. Download upgrade images (optional)\n\
 ${_switch_note}\n\
 How do you want to mirror the upgrade images?" 0 0 0 \
 		"1" "Sync to registry (direct)" \
 		"2" "Save to tar files (for transfer)" \
+		"3" "Set target only (skip download)" \
 		2>"$_TUI_TMP"
 	[[ $? -ne 0 ]] && return 1
 	_upg_method=$(<"$_TUI_TMP")
@@ -932,7 +939,7 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 
 	tui_kick_isconf_regen
 	dlg --backtitle "$(ui_backtitle)" --infobox \
-		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to download)" 0 0
+		"Generating ImageSet configuration...\n\n(May need to wait for operator catalog indexes to refresh)" 0 0
 	run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 
 	local rc=0
@@ -968,6 +975,10 @@ To upgrade a disconnected cluster:\n\n\
      • Day-2 → Configure OperatorHub (D → R)\n\
      • Day-2 → Upgrade (D → U)\n" 0 0
 			fi
+			;;
+		3)
+			dlg --backtitle "$(ui_backtitle)" --title "Target Version Set" \
+				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (S), or\n  • Save to tar files (V)\n\nfrom the Mirror Management menu." 0 0
 			;;
 	esac
 

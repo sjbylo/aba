@@ -55,8 +55,8 @@ reg_url=https://$reg_host:$reg_port
 #scp -F .ssh.conf -p $reg_ssh_user@$reg_host:$reg_root/quay-rootCA/rootCA.pem ~/.aba/mirror/mirror/
 
 # Check if the cert needs to be updated
-sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/rootCA.pem 2>/dev/null >&2 || \
-	sudo install -m 644 $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/ && \
+sudo diff $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/aba-rootCA.pem 2>/dev/null >&2 || \
+	sudo install -m 644 $reg_root/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/aba-rootCA.pem && \
 		sudo update-ca-trust extract
 
 podman logout --all 

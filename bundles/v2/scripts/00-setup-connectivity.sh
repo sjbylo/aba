@@ -40,6 +40,15 @@ done
 if [ -d "$WORK_DIR/aba" ]; then
 	stale_dirs+=("$WORK_DIR/aba")
 fi
+# Previous-version work dirs of the same bundle type (e.g. 4.22.5-ai when building 4.22.6-ai).
+# These are left behind when a build failed before step 08, or when a new OCP patch supersedes
+# the old one.  Safe to remove: the current build has its own dir, and completed bundles are
+# protected by the CLOUD_DIR check above (line 20).
+for d in "$WORK_DIR"/[0-9]*-"$NAME"/; do
+	[ ! -d "$d" ] && continue
+	[ "$(basename "$d")" = "$BUNDLE_NAME" ] && continue
+	stale_dirs+=("$d")
+done
 
 has_running_registry=
 podman ps 2>/dev/null | grep -q registry && has_running_registry=1

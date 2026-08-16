@@ -26,14 +26,27 @@ fi
 # for all subsequent tests.  The wizard-produced aba.conf and cached state
 # are intentionally LEFT IN PLACE after this test completes.
 
+# Back up aba.conf BEFORE reset so we can restore it if the wizard never
+# creates a new one (e.g. test crashes before completing the wizard).
+_ABA_CONF_BACKUP=""
+if [[ -f aba.conf ]]; then
+	_ABA_CONF_BACKUP=$(mktemp /tmp/tui-test-abaconf-XXXXXX)
+	cp aba.conf "$_ABA_CONF_BACKUP"
+fi
+
 backup_pull_secret
 reset_test_state
 
 cleanup_wizard_v2() {
 	stop_tui
 	restore_pull_secret
-	# NOTE: do NOT restore aba.conf — the wizard-produced config and all
-	# cached state must persist for subsequent tests (basket-v2, actions-v2, etc.)
+	# If the wizard completed, aba.conf exists — leave it for subsequent tests.
+	# If the test crashed before the wizard created aba.conf, restore the backup.
+	if [[ ! -f aba.conf && -n "$_ABA_CONF_BACKUP" && -f "$_ABA_CONF_BACKUP" ]]; then
+		cp "$_ABA_CONF_BACKUP" aba.conf
+		log_info "Restored aba.conf from pre-test backup (wizard did not complete)"
+	fi
+	rm -f "$_ABA_CONF_BACKUP"
 }
 trap cleanup_wizard_v2 EXIT
 

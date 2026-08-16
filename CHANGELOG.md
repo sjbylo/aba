@@ -1,4 +1,41 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.1...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.2...HEAD)
+
+---
+
+## [1.2.2](https://github.com/sjbylo/aba/releases/tag/v1.2.2) - 2026-08-16
+
+Sudo UX, upgrade path validation, KVM OVS support, robustness fixes
+
+
+### Added
+
+- **KVM boot verification and overcommit warnings** — `kvm-create.sh` now verifies all VMs are running after creation, logs CPU/memory allocation, and warns when host resources are overcommitted (>300% CPU or <4GB free RAM).
+- **`aba ssh --all`** — New flag iterates SSH commands across all cluster nodes (with `--masters`/`--workers` filtering) and prefixes output with each node's IP.
+- **TUI: "Set target only" upgrade option** — The Prepare Upgrade dialog now offers a third option to set the upgrade target version and regenerate the ISC without immediately downloading images.
+- **KVM: Open vSwitch bridge support** — New optional `KVM_NETWORK_OPTS` in `kvm.conf` allows appending extra `virt-install --network` sub-options (e.g. `virtualport_type=openvswitch` for OVS bridges). (Thanks to [@msalmanmasood](https://github.com/msalmanmasood) for the suggestion in [#37](https://github.com/sjbylo/aba/discussions/37).)
+
+### Changed
+
+- **Upgrade path validation checks full reachability** — `verify_upgrade_path_exists()` now validates that a complete upgrade path exists from the current version to the target (not just node presence) in the Cincinnati graph, returning distinct error codes for "version not in graph" vs "no path to target". Warns when upgrade requires 3+ hops.
+- **`ensure_vmware_conf()` function replaces standalone script** — VMware configuration setup now uses a shared function that calls `ensure_govc()`, eliminating code duplication between the Makefile target and the TUI.
+- **Robust CLI download retries** — `atomic-download` macro now retries 3 times (up from 2) with a 5-second delay between attempts, reducing failures from transient network issues.
+- **`auto_complete_install` retries in CLI** — The install-completion auto-detection gate in `aba.sh` now retries up to 3 times (with 5s sleep) to handle transient API blips on freshly-installed clusters. TUI path remains single-probe for responsiveness.
+- **`fetch_upgrade_targets()` validates graph reachability** — Upgrade target proposals now verify that a complete upgrade path exists before offering versions, preventing proposals of unreachable targets.
+- **System CA certificate renamed to `aba-rootCA.pem`** — Avoids potential conflicts with other software using the generic `rootCA.pem` name in `/etc/pki/ca-trust/source/anchors/`.
+
+### Fixed
+
+- **Fix sudo UX for non-root users** — The `aba` CLI no longer prompts for a password on every invocation when passwordless sudo is unavailable; it warns once per session and lets individual commands prompt as needed. Operations that cannot prompt (firewall, CA trust, loginctl linger) degrade gracefully with warnings. (Thanks to [@msalmanmasood](https://github.com/msalmanmasood) for reporting [#36](https://github.com/sjbylo/aba/issues/36).)
+- **Fix `install` script sudo usage** — Option parsing now runs before the sudo gate so `-q` (auto-update) skips the password prompt when no update is needed. The `_run()` helper only escalates when the target directory isn't user-writable.
+- **Fix Docker registry not surviving reboot** — `podman-restart.service` is now enabled (both root and rootless) alongside `loginctl enable-linger` so Docker registries auto-start after VM reboot. Quay-ng uses systemd quadlets and only needs linger for rootless.
+- **Fix remote `reg_rm_data_dir()` tilde expansion** — Single quotes around `$dir` in SSH commands prevented tilde expansion on remote hosts; removed the quotes so `~` is expanded by the remote shell.
+- **Fix `reg_open_firewall()` masking failures** — The `&&`-chain between `firewall-cmd` commands masked failures under `set -e`, silently setting `_reg_fw_opened=1` even when sudo failed.
+- **Fix OSUS poll loop timeout** — The TUI upgrade dialog now checks both `availableUpdates` and `conditionalUpdates`, reducing the poll wait from 30s to 10s max.
+- **Fix `trust_root_ca()` unnecessary sudo** — The `diff` comparing the CA cert against the system trust store is a read-only operation; removed sudo from this check.
+- **Fix TUI login contaminating kubeconfig** — The TUI "Login" menu now uses a throwaway kubeconfig copy so `oc login` tokens don't contaminate the original admin kubeconfig, preventing "Unauthorized" errors after token expiry.
+- **Fix upgrade path hint messages** — Context-aware messages now distinguish "upgrade to at least X first" (when below entry point) from "version may not be in this channel" (when above).
+- **Fix `butane` installed to system path** — `day2-config-ntp.sh` now installs `butane` to `~/bin` instead of requiring sudo for `/usr/local/bin`.
+- **Fix `install` script hanging on unknown flags** — Switched option parsing from `if/elif` to `case` with proper `shift`/`break` for unknown flags.
 
 ---
 

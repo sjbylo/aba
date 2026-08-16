@@ -970,3 +970,195 @@ cannot be assumed (the cluster being upgraded is disconnected).
 **Benefit:** User is informed up-front that version classification is
 best-effort without OSUS, and is encouraged to install OSUS before
 choosing an upgrade target.
+
+---
+
+## TUI "Test Connection" should validate vSphere/KVM resources, not just connectivity
+
+**Severity:** MEDIUM — user discovers misconfigured resources only at install time
+**Status:** Planned
+**Added:** 2026-08-08
+
+**Problem:** The TUI's "Test Connection" button in VMware/ESXi Configuration
+(`_test_vmw_connection` in `tui-cluster.sh`) only runs `govc about`, which
+validates TCP/TLS/auth to vCenter. It does NOT check whether the configured
+Datastore, Cluster, Network, Datacenter, or VM Folder actually exist. A user
+can enter "Datastore4-S4x" (a typo), see "Connection Successful", and only
+discover the error much later during `aba install` when the preflight check
+runs.
+
+The comprehensive validation already exists in `scripts/preflight-check-vsphere.sh`
+(Layer 3: resource existence checks for datastore, cluster, network, datacenter,
+folder, resource pool). The same gap exists for KVM (`_test_kvm_connection`
+only runs `virsh version`).
+
+**Proposed fix:**
+1. Create an ABA core command `aba preflight-conn` (or a `--light` flag on
+   the existing `preflight-check.sh`) that runs only the connectivity and
+   resource-existence checks (Layers 1-3), skipping the slower privilege
+   validation (Layer 4). Silent on success, shows only errors.
+2. TUI's "Test Connection" calls this command via `run_once` in the background.
+   Shows an infobox while running, then displays results: either "all OK" or
+   a list of resources that don't exist.
+3. Extend to KVM: validate that the storage pool, network bridge, and
+   libvirt URI target are reachable.
+4. Keep the code DRY: the TUI is a dumb consumer — it calls the ABA core
+   command, displays the output. No resource validation logic in TUI code.
+5. Design for future platforms (e.g. OpenShift Virtualization): the core
+   command dispatches to platform-specific checks, TUI doesn't need to know.
+
+**Files to change:**
+- `scripts/preflight-check.sh`: add `--light` / `--conn-only` mode
+- `scripts/preflight-check-vsphere.sh`: expose Layers 1-3 as a callable subset
+- `scripts/aba.sh`: add `preflight-conn` subcommand (or route `--light` flag)
+- `tui/v2/tui-cluster.sh`: replace `_test_vmw_connection` / `_test_kvm_connection`
+  with calls to the core command
+- `tui/v2/tui-lib.sh`: optional shared helper for run_once + display pattern
+
+**Ref:** Discussed in [TUI preflight and DRY refactoring](f52568ba-a878-4dfb-aa3d-dfcd6b0ac759) chat.
+
+---
+
+## Upgrade: detect stale OSUS graph when cluster version not in graph
+
+**Severity:** MEDIUM — user gets confusing "not an available upgrade" error
+**Status:** Planned
+**Added:** 2026-08-09
+
+**Problem:** When a cluster is upgraded via a connected path (e.g. z-stream
+4.21.27 → 4.21.28) but the mirror's ISC still has `minVersion: 4.21.27` with
+`shortestPath: true`, re-syncing the mirror does NOT add 4.21.28 to the OSUS
+graph. The shortest path from 4.21.27 → 4.22.8 is direct, skipping 4.21.28
+entirely. A subsequent `aba upgrade --to 4.22.8` fails with:
+
+```
+[ABA] Error: Version 4.22.8 is not an available upgrade from 4.21.28.
+```
+
+The user has no indication that the problem is a stale `minVersion` in the ISC.
+
+**Root cause:** The OSUS graph only contains versions that were mirrored.
+With `shortestPath: true`, intermediate z-stream versions (4.21.28) are
+excluded from the graph unless `minVersion` matches or includes them.
+
+**Proposed fix (upgrade pre-flight):** In `cluster-upgrade.sh`, when the
+upgrade fails because the target version is not in the graph, check whether
+the cluster's current version exists as a node in the OSUS graph. If it
+doesn't, show an actionable message:
+
+```
+[ABA] Error: Your cluster is on 4.21.28 but the local update graph has no
+[ABA]        upgrade path from that version (only from 4.21.27).
+[ABA]        Update minVersion in your imageset config to 4.21.28 and re-sync:
+[ABA]          aba -d mirror sync
+```
+
+This tells the user exactly what to fix instead of the generic "not an
+available upgrade" message.
+
+**Partially implemented — gap is edge validation:**
+`verify_upgrade_path_exists()` in `include_all.sh` already checks that the
+source version exists as a **node** in the target channel's Cincinnati graph.
+It's already called in `reg-sync.sh`, `reg-save.sh`, and
+`reg-create-imageset-config.sh` as a pre-flight before oc-mirror.
+
+However, it only checks **node presence**, not **edge existence**. In the
+reproducer scenario, `4.21.28` IS a node in the `candidate-4.22` graph (so
+the check passes), but the only edge from `4.21.28` goes to `4.22.9`, not
+`4.22.8`. The function doesn't catch that.
+
+**Fix: extend `verify_upgrade_path_exists()` to check edges:**
+After confirming the source version is in the graph, also verify that a path
+(direct edge or transitive via shortest-path) exists from `current_ver` to
+the specific `target_ver`. If no path exists, return failure with a
+diagnostic that includes the nearest valid target:
+
+```bash
+# Pseudo-logic addition to verify_upgrade_path_exists():
+# 1. Fetch graph JSON (already done)
+# 2. Check current_ver is a node (already done)
+# 3. NEW: Check target_ver is a node
+# 4. NEW: Check an edge exists from current_ver → target_ver
+#    (walk edges, or at minimum check direct adjacency)
+# 5. NEW: If no edge, find the nearest valid target from current_ver
+#    and include it in the diagnostic output
+```
+
+**Additionally — expose as `aba` subcommand with `--shell` flag:**
+Wrap the function as `aba validate-upgrade-path` (or similar) with a
+`--shell` flag so the TUI can call it and parse the result to show its own
+warning dialog:
+
+```bash
+# CLI usage (human-readable output)
+aba validate-upgrade-path --from 4.21.28 --to 4.22.8 --channel candidate-4.22
+
+# Shell mode (machine-parseable for TUI consumption)
+aba validate-upgrade-path --from 4.21.28 --to 4.22.8 --channel candidate-4.22 --shell
+# Output: VALID=0  NEAREST=4.22.9  (exit code 1 if no path)
+```
+
+The TUI calls this with `--shell` when the user selects or enters an upgrade
+target in the "Prepare Upgrade" dialog, displaying a warning if no path
+exists.
+
+**Files to change:**
+- `scripts/include_all.sh`: extend `verify_upgrade_path_exists()` to check edges
+- `scripts/cluster-upgrade.sh`: add graph-node check when upgrade path not found
+- `scripts/aba.sh`: expose as `aba validate-upgrade-path` subcommand with `--shell`
+- `tui/v2/tui-mirror.sh`: call validator with `--shell` in upgrade dialog
+
+**Reproducer:**
+1. Install cluster at 4.21.27, mirror synced with `minVersion: 4.21.27`
+2. Upgrade cluster to 4.21.28 via connected path
+3. Re-sync mirror with same ISC (`minVersion: 4.21.27, shortestPath: true`)
+4. Run `aba upgrade --to 4.22.8` → fails with "not an available upgrade"
+5. Expected: clear message about stale minVersion
+
+**Additional issue — TUI offers stale upgrade target:** The TUI "Prepare
+Upgrade" dialog shows "Current target (4.22.8)" because that value is stored
+in `mirror.conf` from a previous configuration. The TUI does not validate
+whether that target is reachable from the cluster's actual current version.
+If the cluster has moved (e.g. z-stream 4.21.27 → 4.21.28), the "current
+target" may no longer be a valid upgrade path even though the TUI presents
+it as option 1. The user selects it, syncs, and only discovers the problem
+at upgrade time.
+
+**Proposed TUI fix:** Validate the upgrade target against the Cincinnati
+graph before proceeding with the sync. This applies to both the "Current
+target" option and manual entry:
+
+1. **Graph validation:** After the user selects or enters a target version,
+   query the upstream Cincinnati graph (bastion is in connected mode, so
+   internet is available) to check if a path exists from the cluster's
+   actual version to the target. If no path exists, warn (not block):
+   ```
+   Warning: No upgrade path from 4.21.28 to 4.22.8 found in the
+   candidate-4.22 channel. The nearest target is 4.22.9.
+   Continue anyway? (y/n)
+   ```
+   Warn only — the user may have a legitimate reason to mirror specific
+   versions even without a direct upgrade path.
+
+2. **"Current target" annotation:** When showing the "Current target" option,
+   check if it's still reachable from the cluster's actual version. If not,
+   annotate it (e.g. "Current target (4.22.8) — no path from 4.21.28") or
+   remove it from the list entirely.
+
+3. **Cluster version discovery:** To determine the cluster's current version,
+   use this priority:
+   - If only one cluster directory exists, use that cluster
+   - If the user last selected a cluster (TUI focus), use that one
+   - If the cluster is accessible (kubeconfig works), query `oc get
+     clusterversion` for the live version
+   - If the cluster is not accessible, fall back to the version recorded
+     in the cluster's state (install-time version or last-known version)
+   - If no cluster exists yet, skip the validation (fresh install scenario)
+
+**Files to change (TUI):**
+- `tui/v2/tui-mirror.sh`: validate target against graph, annotate stale targets
+- `tui/v2/tui-cluster.sh` (or shared helper): cluster version discovery logic
+
+**Workaround:** Manually select "Next minor" or "Manual entry" instead of
+"Current target" when the cluster has been z-stream upgraded since the last
+mirror sync.

@@ -316,8 +316,8 @@ reg_open_firewall() {
 	else
 		# Local: run firewall commands directly
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent && \
-				$SUDO firewall-cmd --reload
+			$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent
+			$SUDO firewall-cmd --reload
 			_reg_fw_opened=1
 		elif rpm -q firewalld &>/dev/null; then
 			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
@@ -522,6 +522,33 @@ _reg_probe_set() {
 		1) return 1 ;;
 		*) aba_abort "Registry probe failed ($label, rc=$rc)" ;;
 	esac
+}
+
+# --- reg_rm_data_dir ----------------------------------------------------------
+# Remove registry data directory, using sudo only for vendors that need it.
+# Docker and quay-ng use rootless podman (all files user-owned); quay v2 uses
+# Ansible with become:yes (root-owned + postgres-owned files).
+#
+# Usage: reg_rm_data_dir <vendor> <dir>
+#        reg_rm_data_dir <vendor> <dir> <ssh_cmd>   (remote)
+reg_rm_data_dir() {
+	local vendor="$1" dir="$2" ssh_cmd="${3:-}"
+
+	if [ "$ssh_cmd" ]; then
+		$ssh_cmd "[ -d $dir ]" 2>/dev/null || return 0
+		aba_info "Removing registry data at $dir on $reg_host ..."
+		case "$vendor" in
+			quay)  $ssh_cmd "$SUDO rm -rf $dir" ;;
+			*)     $ssh_cmd "rm -rf $dir" ;;
+		esac
+	else
+		[ -d "$dir" ] || return 0
+		aba_info "Removing registry data at $dir ..."
+		case "$vendor" in
+			quay)  $SUDO rm -rf "$dir" ;;
+			*)     rm -rf "$dir" ;;
+		esac
+	fi
 }
 
 # --- reg_stale_report ---------------------------------------------------------

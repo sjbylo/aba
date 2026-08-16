@@ -224,6 +224,8 @@ _check_pool() {
 	local suite="$2"
 	local rc_content
 
+	_export_pool_ssh_users "$pool_num"
+
 	rc_content=$(_ssh_con "$pool_num" "cat '${_RC_PREFIX}-${suite}.rc'") || rc_content=""
 	if [ -n "$rc_content" ]; then
 		# .rc may appear before the runner fully exits (legacy early write, or EXIT
@@ -275,6 +277,7 @@ _check_hung() {
 	local pool_num="$1"
 	local suite="$2"
 
+	_export_pool_ssh_users "$pool_num"
 	[ -n "${_hung_notified[$pool_num]:-}" ] && return
 	[ -z "${_dispatch_time[$pool_num]:-}" ] && return
 
@@ -332,6 +335,7 @@ _find_free_pool() {
 			fi
 			# Cooldown expired -- clear it
 			unset '_pool_cooldown_until[$_p]'
+			_export_pool_ssh_users "$_p"
 			if _essh "$(_con_target "$_p")" "true"; then
 				local _has_sess=""
 				_has_sess=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || _has_sess=""
@@ -409,6 +413,7 @@ _record_result() {
 
 _collect_pool_logs() {
 	local pool_num="$1"
+	_export_pool_ssh_users "$pool_num"
 	local log_dir="$_RUN_DIR/logs/pool${pool_num}"
 
 	mkdir -p "$log_dir"
@@ -432,6 +437,7 @@ _detect_running_and_completed() {
 	local -A _running_suites=()
 	local _max_ssh_retries=3
 	for _p in $CLI_POOL_LIST; do
+		_export_pool_ssh_users "$_p"
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
 			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
@@ -469,6 +475,7 @@ _detect_running_and_completed() {
 		local _is_cli_pool=""
 		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
 		[ -n "$_is_cli_pool" ] && continue
+		_export_pool_ssh_users "$_p"
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
 			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
@@ -490,6 +497,7 @@ _detect_running_and_completed() {
 
 	# Pass 2: detect completed suites (.rc files)
 	for _p in $CLI_POOL_LIST; do
+		_export_pool_ssh_users "$_p"
 		local rc_files=""
 		rc_files=$(_ssh_con "$_p" "ls ${_RC_PREFIX}-*.rc") || rc_files=""
 		if [ -n "$rc_files" ]; then
@@ -504,6 +512,9 @@ _detect_running_and_completed() {
 				fi
 				rc=$(_ssh_con "$_p" "cat '$rc_file'") || rc=""
 				rc="${rc//[^0-9]/}"
+				if [ -z "$rc" ]; then
+					echo "    WARNING: con${_p}: $suite .rc exists but unreadable (permission denied?) -- recorded as exit=255" >&2
+				fi
 				_completed[$suite]="${rc:-255}"
 				_result_pool[$suite]="$_p"
 				echo "    con${_p}: $suite completed (exit=${_completed[$suite]})"
@@ -522,6 +533,7 @@ _is_running_on_external_pool() {
 _recheck_unreachable_pools() {
 	[ ${#_unreachable_pools[@]} -eq 0 ] && return
 	for _p in "${!_unreachable_pools[@]}"; do
+		_export_pool_ssh_users "$_p"
 		if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 			local sess_exists=""
 			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
@@ -549,6 +561,7 @@ _refresh_external_running() {
 		local _is_cli_pool=""
 		for _cp in $CLI_POOL_LIST; do [ "$_cp" = "$_p" ] && _is_cli_pool=1 && break; done
 		[ -n "$_is_cli_pool" ] && continue
+		_export_pool_ssh_users "$_p"
 		local sess_exists=""
 		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
 		if [ "$sess_exists" = "yes" ]; then
@@ -566,6 +579,7 @@ _refresh_external_running() {
 _force_clean_all() {
 	echo "  --force: wiping all suite state on all pools ..."
 	for _p in $CLI_POOL_LIST; do
+		_export_pool_ssh_users "$_p"
 		_ssh_con "$_p" "
 			tmux kill-session -t '$_TMUX_SESSION'
 			sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
@@ -579,6 +593,7 @@ _force_clean_all() {
 
 _force_clean_pool() {
 	local pool_num="$1"
+	_export_pool_ssh_users "$pool_num"
 	echo "  --force: wiping suite state on con${pool_num} ..."
 	_ssh_con "$pool_num" "
 		tmux kill-session -t '$_TMUX_SESSION'
@@ -603,6 +618,7 @@ _force_clean_suite() {
 
 	echo "  --force: wiping state for suite '$_raw' ..."
 	for _p in $CLI_POOL_LIST; do
+		_export_pool_ssh_users "$_p"
 		for suite in "${_suite_list[@]}"; do
 			_ssh_con "$_p" "
 				running=\$(cat /tmp/e2e-last-suites) || running=''
@@ -775,6 +791,7 @@ _notify_periodic_status() {
 
 	# Show running suites with PAUSED detection (file-based, avoids tmux 3.3a crash on RHEL 10)
 	for _ns in "${!_busy_pools[@]}"; do
+		_export_pool_ssh_users "$_ns"
 		local _pool_state="RUNNING"
 		local _paused_check=""
 		_paused_check=$(_ssh_con "$_ns" "[ -f '/tmp/e2e-paused-${_busy_pools[$_ns]}' ] && echo yes") || _paused_check=""
@@ -1044,7 +1061,10 @@ _dispatch_loop() {
 				if [ "$_rrc" -ne 0 ] && [ "$_rrc" -ne 3 ] && [ "${_retried[$_rs]:-0}" -lt "$_MAX_RETRIES" ]; then
 					_retried[$_rs]=$(( ${_retried[$_rs]:-0} + 1 ))
 					_rp="${_result_pool[$_rs]:-}"
-					[ -n "$_rp" ] && _ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
+					if [ -n "$_rp" ]; then
+						_export_pool_ssh_users "$_rp"
+						_ssh_con "$_rp" "sudo rm -f '${_RC_PREFIX}-${_rs}.rc'"
+					fi
 					unset '_results[$_rs]'; _work_queue+=("$_rs")
 					printf "  [%s] RETRY %d/%d: %s (was exit=%s)\n" "$(date '+%H:%M:%S')" "${_retried[$_rs]}" "$_MAX_RETRIES" "$_rs" "$_rrc"
 					_retry_names="${_retry_names:+$_retry_names, }$_rs"

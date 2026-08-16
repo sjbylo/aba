@@ -38,7 +38,6 @@ devworkspace-operator                                   DevWorkspace Operator   
 dns-operator                                            DNS Operator                                                 stable
 dpu-operator                                            DPU Operator                                                 stable
 eap                                                     JBoss EAP                                                    stable
-exploit-iq-operator                                     RHTPA exploit intelligence(TechPreview)                      pre-ga
 external-dns-operator                                   ExternalDNS Operator                                         stable-v1
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
 file-integrity-operator                                 File Integrity Operator                                      stable

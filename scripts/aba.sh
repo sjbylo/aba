@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.2.1
+ABA_VERSION=1.2.2
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260804153856
+ABA_BUILD=20260816225202
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -50,8 +50,13 @@ fi
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
-# Check we have sudo or root access 
-[ "$SUDO" ] && [ "$(sudo id -run)" != "root" ] && echo "Configure passwordless sudo OR run aba as root, then try again!" >&2 && exit 1
+# Warn once per session (resets on reboot) if passwordless sudo is not available
+_sudo_warn="/tmp/.aba-${USER:-$(id -un)}/.sudo-warned"
+if [ "$SUDO" ] && ! sudo -n true 2>/dev/null && [ ! -f "$_sudo_warn" ]; then
+	echo "Warning: Passwordless sudo not configured. For best results, configure passwordless sudo (recommended) or run as root. With password-based sudo you may be prompted repeatedly." >&2
+	mkdir -p "$(dirname "$_sudo_warn")"
+	touch "$_sudo_warn"
+fi
 
 WORK_DIR=$PWD # Remember so can change config file here 
 
@@ -957,9 +962,11 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND wait=1"  #FIXME: Should only allow this after the appropriate target
 	elif [ "$1" = "--workers" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND workers=1"
+		opt_workers="--workers"
 		shift
 	elif [ "$1" = "--masters" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND masters=1"
+		opt_masters="--masters"
 		shift
 	elif [ "$1" = "--num-workers" -o "$1" = "-W" ]; then
 		if echo "$2" | grep -q -E '^[0-9]+$'; then
@@ -1035,6 +1042,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
+		shift
+	elif [ "$1" = "--all" ]; then
+		opt_all="--all"
 		shift
 	elif [ "$1" = "--cmd" ]; then
 		# Note, -c is used for --channel
@@ -1153,7 +1163,11 @@ if [ "$cur_target" ]; then
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
-				auto_complete_install "$PWD" 2>/dev/null || true
+				for _aci_try in 1 2 3; do
+					auto_complete_install "$PWD" 2>/dev/null || true
+					[[ -f .install-complete ]] && break
+					[[ $_aci_try -lt 3 ]] && sleep 5
+				done
 			fi
 			# If still not marked after auto-detect, warn and ask
 			if [[ ! -f .install-complete && -n "$_kc" ]]; then
@@ -1170,7 +1184,7 @@ if [ "$cur_target" ]; then
 		;;
 		ssh)
 			trap - ERR  # No need for this anymore
-			$ABA_ROOT/scripts/ssh-rendezvous.sh "$cmd"
+			$ABA_ROOT/scripts/ssh-rendezvous.sh ${opt_all:-} ${opt_masters:-} ${opt_workers:-} "$cmd"
 			exit 
 		;;
 		run)

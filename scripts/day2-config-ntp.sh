@@ -120,7 +120,9 @@ if ! which butane >/dev/null 2>&1; then
 	if ! $SUDO dnf install butane -y; then
 		# Butane binary is architecture-independent; hosted under openshift-v4/clients/ regardless of OCP major version
 		if curl --connect-timeout 10 --retry 8 -s https://mirror.openshift.com/pub/openshift-v4/clients/butane/latest/butane --output butane; then
-			$SUDO mv butane /usr/local/bin
+			chmod +x butane
+			mkdir -p ~/bin
+			mv butane ~/bin/
 		else
 			aba_abort \
 				"Please install 'butane' command and try again!" \

@@ -274,21 +274,33 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 		else
 			export tgt_major=$(echo "$ocp_upgrade_to" | cut -d. -f1-2)
 
-			# Validate upgrade path: source version must exist in the target channel graph.
-			# Covers both same-minor (z-stream) and cross-minor upgrades.
-			_path_diag=""
-			if _path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1); then
-				: # path OK
-			else
-				# _path_diag is "src_ver|channel|lowest_ver" — parse pipe-delimited fields
-				_src="${_path_diag%%|*}"                # first field (source version)
-				_rest="${_path_diag#*|}"                # everything after first pipe
-				_tgt_channel="${_rest%%|*}"             # second field (target channel)
-				_lowest="${_rest##*|}"                  # last field (lowest entry point)
+			# Validate upgrade path: source version must exist in the target channel graph
+			# and a path (direct or multi-hop) must exist to the target.
+			_path_rc=0
+			_path_diag=$(verify_upgrade_path_exists "$ocp_version" "$ocp_upgrade_to" "$ocp_channel" 2>&1) || _path_rc=$?
+			if [[ $_path_rc -eq 1 ]]; then
+				_rest="${_path_diag#*|}"
+				_tgt_channel="${_rest%%|*}"
+				_lowest="${_rest##*|}"
+			local _hint="Your version may not be in this channel yet. Try a different channel or target."
+				if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$ocp_version"; then
+					_hint="Upgrade to at least ${_lowest} first."
+				fi
 				aba_abort \
-					"Cannot upgrade directly from $ocp_version to $ocp_upgrade_to." \
-					"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
-					"You need to upgrade to at least ${_lowest:-a version in ${_tgt_channel}} first." \
+				"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
+				"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
+				"$_hint" \
+				"" \
+				"To cancel upgrade mode: aba --upgrade-to ''" \
+				"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+			elif [[ $_path_rc -eq 2 ]]; then
+				_rest="${_path_diag#*|}"
+				_tgt_channel="${_rest%%|*}"
+				_nearest="${_rest##*|}"
+				aba_abort \
+					"No upgrade path from $ocp_version to $ocp_upgrade_to in channel ${_tgt_channel}." \
+					"${_nearest:+Nearest reachable target from $ocp_version: ${_nearest}}" \
+					"Update your upgrade target and try again." \
 					"" \
 					"To cancel upgrade mode: aba --upgrade-to ''" \
 					"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
