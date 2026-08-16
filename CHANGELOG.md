@@ -5,6 +5,7 @@
 - **KVM boot verification and overcommit warnings** — `kvm-create.sh` now verifies all VMs are running after creation, logs CPU/memory allocation, and warns when host resources are overcommitted (>300% CPU or <4GB free RAM).
 - **`aba ssh --all`** — New flag iterates SSH commands across all cluster nodes (with `--masters`/`--workers` filtering) and prefixes output with each node's IP.
 - **TUI: "Set target only" upgrade option** — The Prepare Upgrade dialog now offers a third option to set the upgrade target version and regenerate the ISC without immediately downloading images.
+- **KVM: Open vSwitch bridge support** — New optional `KVM_NETWORK_OPTS` in `kvm.conf` allows appending extra `virt-install --network` sub-options (e.g. `virtualport_type=openvswitch` for OVS bridges). (Thanks to [@msalmanmasood](https://github.com/msalmanmasood) for the suggestion in [#37](https://github.com/sjbylo/aba/discussions/37).)
 
 ### Changed
 
@@ -17,7 +18,7 @@
 
 ### Fixed
 
-- **Fix sudo UX for non-root users** — The `aba` CLI no longer hard-exits when passwordless sudo is unavailable; it warns and keeps `SUDO=sudo` so users can type their password when prompted. Operations that cannot prompt (firewall, CA trust, loginctl linger) degrade gracefully with warnings.
+- **Fix sudo UX for non-root users** — The `aba` CLI no longer hard-exits when passwordless sudo is unavailable; it warns and keeps `SUDO=sudo` so users can type their password when prompted. Operations that cannot prompt (firewall, CA trust, loginctl linger) degrade gracefully with warnings. (Thanks to [@msalmanmasood](https://github.com/msalmanmasood) for reporting [#36](https://github.com/sjbylo/aba/issues/36).)
 - **Fix `install` script sudo usage** — Option parsing now runs before the sudo gate so `-q` (auto-update) skips the password prompt when no update is needed. The `_run()` helper only escalates when the target directory isn't user-writable.
 - **Fix Docker registry not surviving reboot** — `podman-restart.service` is now enabled (both root and rootless) alongside `loginctl enable-linger` so Docker registries auto-start after VM reboot. Quay-ng uses systemd quadlets and only needs linger for rootless.
 - **Fix remote `reg_rm_data_dir()` tilde expansion** — Single quotes around `$dir` in SSH commands prevented tilde expansion on remote hosts; switched to double quotes.
