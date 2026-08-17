@@ -232,6 +232,12 @@ if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
 	exit 0
 fi
 
+# Preflight: wait for cluster operators to settle before checking upgrade readiness.
+# Prior day2 changes (IDMS, CA trust) can leave COs Progressing/Degraded transiently.
+if ! cluster_is_ready; then
+	aba_wait_show "Ensuring cluster operators are stable before upgrade" 15 300 cluster_is_ready || true
+fi
+
 # Preflight: cluster accessibility — only needs API reachable (Available=True).
 # A cluster with Progressing operators or a Degraded operator can still accept upgrades.
 if ! cluster_is_accessible; then
@@ -413,7 +419,7 @@ if [ ! "$upgrade_already_running" ]; then
 			if [ -n "$opt_force" ]; then
 				aba_info "--force specified: proceeding despite Upgradeable=False"
 			else
-				ask -n "Continue with upgrade (only if you have resolved the above)" || exit 1
+				ask -n --auto-yes "Continue with upgrade (only if you have resolved the above)" || exit 1
 			fi
 		fi
 	fi

@@ -1156,6 +1156,15 @@ if [ "$cur_target" ]; then
 			;;
 	esac
 
+	# Command succeeded, so the cluster is clearly installed — create the marker
+	_post_check_install() {
+		if [[ ! -f .install-complete ]]; then
+			touch .install-complete
+			[[ ! -L clusterstate ]] && ( externalize_cluster_state ) 2>/dev/null || true
+			aba_debug "Created .install-complete marker (post-command)."
+		fi
+	}
+
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
 		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|unstick)
@@ -1256,14 +1265,17 @@ if [ "$cur_target" ]; then
 		;;
 		day2)
 			$ABA_ROOT/scripts/day2.sh
+			_post_check_install
 			exit
 		;;
 		day2-ntp)
 			$ABA_ROOT/scripts/day2-config-ntp.sh
+			_post_check_install
 			exit
 		;;
 		day2-osus)
 			$ABA_ROOT/scripts/day2-config-osus.sh
+			_post_check_install
 			exit
 		;;
 		upgrade)
@@ -1275,8 +1287,10 @@ if [ "$cur_target" ]; then
 			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
 			[ "$upgrade_shell" ] && upgrade_args+=($upgrade_shell)
 			[ "$upgrade_allow_not_recommended" ] && upgrade_args+=($upgrade_allow_not_recommended)
-			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
-			exit
+			_rc=0
+			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}" || _rc=$?
+			[ "$_rc" -eq 0 ] && _post_check_install
+			exit $_rc
 		;;
 		shutdown)
 			eval $BUILD_COMMAND

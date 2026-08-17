@@ -460,5 +460,9 @@ apply_custom_manifests
 
 aba_success "Day-2 configuration completed successfully."
 
+# Day2 changes (IDMS, CA trust, ITMS) trigger CO reconciliation and possible node restarts.
+# Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
+aba_wait_show "Ensuring cluster operators are stable after day2 changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
+
 exit 0
 
