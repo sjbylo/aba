@@ -48,26 +48,13 @@ done
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
-if [ ${#missing_pkgs[@]} -gt 0 ]; then
-	# try our luck to install the missing packages ...
-	printf "  ⏳ Installing packages (%d, logging to .dnf-install.log)...\n" "${#missing_pkgs[@]}" >&2
-
-	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
-		printf "\n  Error installing packages. See: .dnf-install.log\n" >&2
-		printf "  Try:  sudo dnf install %s\n\n" "${missing_pkgs[*]}" >&2
-
-		exit 1
-	fi
-	_step "Packages installed (${#missing_pkgs[@]})"
-fi
-
 if ! which id >/dev/null 2>&1; then
 	echo "Please install the command 'id', usually in the coreutils package and try again." >&2
 
 	exit 1
 fi
 
-# Check options early so $quiet is available for the sudo gate below
+# Parse options early so $quiet is available for the sudo check below
 while echo "$1" | grep -q "^-"
 do
 	case "$1" in
@@ -78,7 +65,7 @@ do
 done
 
 # Informational sudo check (no password prompt).
-# Actual sudo calls happen later only when needed (package install, non-writable dir).
+# Shown before any sudo usage so the user knows what to expect.
 if [ ! "$quiet" ] && [ "$(id -u)" != "0" ]; then
 	if [ "$SUDO" ]; then
 		if [ "$($SUDO -n whoami 2>/dev/null)" != "root" ]; then
@@ -91,6 +78,19 @@ if [ ! "$quiet" ] && [ "$(id -u)" != "0" ]; then
 		echo "Error: sudo command is not available and ABA is not running as root!" >&2
 		exit 1  # Should never get here!
 	fi
+fi
+
+if [ ${#missing_pkgs[@]} -gt 0 ]; then
+	# try our luck to install the missing packages ...
+	printf "  ⏳ Installing packages (%d, logging to .dnf-install.log)...\n" "${#missing_pkgs[@]}" >&2
+
+	if ! $SUDO dnf install ${missing_pkgs[*]} -y >.dnf-install.log 2>&1; then
+		printf "\n  Error installing packages. See: .dnf-install.log\n" >&2
+		printf "  Try:  sudo dnf install %s\n\n" "${missing_pkgs[*]}" >&2
+
+		exit 1
+	fi
+	_step "Packages installed (${#missing_pkgs[@]})"
 fi
 
 branch=main
