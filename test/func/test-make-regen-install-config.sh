@@ -48,8 +48,8 @@ cd "$CLUSTER_DIR"
 # Ensure we have a clean state
 rm -f install-config.yaml agent-config.yaml
 
-# --- Test 1: Generate with int_connection=direct ---
-replace-value-conf -n int_connection -v direct -f cluster.conf
+# --- Test 1: Generate with image_source=direct ---
+replace-value-conf -n image_source -v direct -f cluster.conf
 make -s install-config.yaml 2>/dev/null
 
 if [ ! -f install-config.yaml ]; then
@@ -67,7 +67,7 @@ fi
 
 # --- Test 2: Change to mirror mode, verify Make regenerates ---
 sleep 1  # ensure filesystem timestamp advances
-replace-value-conf -n int_connection -v "" -f cluster.conf
+replace-value-conf -n image_source -v mirror -f cluster.conf
 
 # Do NOT manually rm install-config.yaml — Make should detect cluster.conf is newer
 make -s install-config.yaml 2>/dev/null
@@ -81,7 +81,7 @@ fi
 
 # --- Test 3: Change back to direct, confirm regeneration again ---
 sleep 1
-replace-value-conf -n int_connection -v direct -f cluster.conf
+replace-value-conf -n image_source -v direct -f cluster.conf
 make -s install-config.yaml 2>/dev/null
 
 if grep -q "additionalTrustBundle\|ImageDigestSources\|imageContentSources" install-config.yaml; then

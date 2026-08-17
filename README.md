@@ -169,7 +169,7 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 > | ----- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 > | **A** | **[Air-Gapped Installation](#air-gapped-installation)**            | No network between connected and disconnected sides. Data moves via USB, S3, or physical media. | Save images to disk, create a bundle, transfer it        |
 > | **B** | **[Partially Disconnected](#partially-disconnected-installation)** | Bastion can reach both the Internet (or proxy) and the private network.                         | Sync images directly to the mirror registry              |
-> | **C** | **[Connected (no mirror)](#connected-installation-no-mirror)**     | Cluster nodes can pull images from the Internet directly or via a proxy.                        | Set `int_connection=direct` or `proxy` in `cluster.conf` |
+> | **C** | **[Connected (no mirror)](#connected-installation-no-mirror)**     | Cluster nodes can pull images from the Internet directly or via a proxy.                        | Set `image_source=direct` or `proxy` in `cluster.conf`   |
 >
 >
 > **Not sure?** Run `aba` (CLI) or `abatui` (guided wizard) — both walk you through the decision.
@@ -649,13 +649,13 @@ aba cluster --name mycluster [--type sno|compact|standard] [--starting-ip <ip>]
 2. Edit `mycluster/cluster.conf` and set the connection type:
 
 ```
-int_connection=direct      # Nodes pull from the Internet directly (no proxy needed)
+image_source=direct        # Nodes pull from the Internet directly (no proxy needed)
 ```
 
 or, if your nodes require a proxy:
 
 ```
-int_connection=proxy       # Nodes pull via your HTTP proxy
+image_source=proxy         # Nodes pull via your HTTP proxy
 http_proxy=http://proxy.example.com:3128
 https_proxy=http://proxy.example.com:3128
 no_proxy=.example.com,.lan,10.0.0.0/8
@@ -895,7 +895,7 @@ Use `aba -D iso` for debug output.
 | ---------------------------- | --------------------------------------------------------------------------------------------- |
 | `aba/aba.conf`               | Global settings: OpenShift channel/version, base domain, machine network, DNS, NTP, operators |
 | `aba/mirror/mirror.conf`     | Mirror registry settings. Can override `ops` and `op_sets` from `aba.conf` per mirror.        |
-| `aba/<cluster>/cluster.conf` | Cluster topology, node sizes, IPs, bonding, VLAN, `int_connection`                            |
+| `aba/<cluster>/cluster.conf` | Cluster topology, node sizes, IPs, bonding, VLAN, `image_source`                             |
 | `aba/vmware.conf`            | Optional vCenter/ESXi configuration for `govc` CLI                                            |
 | `aba/kvm.conf`               | Optional KVM/libvirt hypervisor configuration (connection URI, storage pool, bridge)          |
 
@@ -1487,7 +1487,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 
 In a *partially disconnected environment*, the *connected bastion* has limited (or proxy-based) Internet access.
 
-> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `int_connection=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/networking/configuring-a-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
+> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `image_source=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/networking/configuring-a-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
 
 #### Connected Bastion
 
@@ -1638,11 +1638,11 @@ aba -d enclave1 verify
 aba cluster \
     -n mycluster \
     --type sno \
-    --mirror-name enclave1 \
+    --image-source enclave1 \
     --starting-ip 10.0.1.50
 ```
 
-The `--mirror-name` flag sets `mirror_name=enclave1` in `cluster.conf`. Each named mirror has its own `mirror.conf` and credentials stored in `~/.aba/mirror/mymirror/`.
+The `--image-source` flag (or legacy `--mirror-name`) sets `image_source=enclave1` in `cluster.conf`. Each named mirror has its own `mirror.conf` and credentials stored in `~/.aba/mirror/<name>/`.
 
 You can also override `ops` and `op_sets` in each mirror's `mirror.conf` to use different operators per mirror.
 

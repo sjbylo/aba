@@ -714,24 +714,58 @@ normalize-cluster-conf()
 	# Output only the values from cluster.conf (with defaults for backwards compat).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 
-	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
+	# --- image_source migration shim ---
+	# New clusters have image_source=.  Legacy clusters have int_connection + mirror_name.
+	# Emit image_source from whichever format is present.
+	if grep -q '^image_source=' cluster.conf 2>/dev/null; then
+		: # New format — image_source will be exported by _normalize_export below
+	elif [ -s cluster.conf ]; then
+		# Legacy format — derive image_source from old keys
+		local _ic _mn
+		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+		[[ "$_ic" == "none" ]] && _ic=""
+		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+		_mn=${_mn:-mirror}
+		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
+			echo "export image_source=$_ic"
+		elif [[ -z "$_ic" ]] && grep -E -q "^proxy=\S" cluster.conf 2>/dev/null; then
+			echo "export image_source=proxy"
+		else
+			echo "export image_source=$_mn"
+		fi
+	else
+		echo export image_source=mirror
+	fi
 
-	[ ! -s cluster.conf ] &&                                                               return 0
+	if [ ! -s cluster.conf ]; then
+		echo 'export int_connection='
+		echo 'export mirror_name=mirror'
+		return 0
+	fi
 
 	# Sanitize config, then:
 	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
-	#   - Normalize old int_connection=none to empty (backward compat)
+	#   - Strip legacy int_connection and mirror_name (replaced by image_source)
 	#   - RFC 1123: base_domain must be lowercase for Kubernetes
 	_normalize_export < cluster.conf | \
 		sed -E	\
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
-			-e 's/^(export )int_connection=none/\1int_connection= /g' \
+			-e '/^export int_connection=/d' \
+			-e '/^export mirror_name=/d' \
 			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
-	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
-	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
+
+	# Backward compat: derive int_connection + mirror_name from image_source
+	# so scripts not yet migrated keep working.
+	echo 'if [[ "${image_source:-mirror}" == "direct" || "${image_source:-mirror}" == "proxy" ]]; then'
+	echo '	export int_connection="$image_source"'
+	echo '	export mirror_name=mirror'
+	echo 'else'
+	echo '	export int_connection='
+	echo '	export mirror_name="${image_source:-mirror}"'
+	echo 'fi'
 
 	# Phase 3 (ADR-007): override immutable fields from installed state.
 	# Only apply if this cluster dir has the 'clusterstate' symlink — it points
@@ -742,6 +776,16 @@ normalize-cluster-conf()
 		_bd=$(grep '^base_domain=' clusterstate/state.sh 2>/dev/null | head -1 | cut -d= -f2)
 		[ "$_cn" ] && [ "$_bd" ] && _state_override_cluster "$_cn" "$_bd"
 	fi
+}
+
+# True if the cluster uses a mirror registry (not direct/proxy).
+image_source_is_mirror() {
+	[[ "${image_source:-mirror}" != "direct" && "${image_source:-mirror}" != "proxy" ]]
+}
+
+# Print the mirror directory name.  Only meaningful when image_source_is_mirror.
+image_source_mirror_name() {
+	echo "${image_source:-mirror}"
 }
 
 # -----------------------------------------------------------------------------
@@ -908,7 +952,7 @@ externalize_cluster_state() {
 	prefix_length=${prefix_length:-}
 	cp_names="${cp_names:-}"
 	worker_names="${worker_names:-}"
-	mirror_name=${mirror_name:-mirror}
+	image_source=${image_source:-mirror}
 	installed_from="$PWD"
 	installed_on="$(date -Iseconds)"
 	EOF
@@ -1198,7 +1242,15 @@ verify-cluster-conf() {
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 
-	[ "$int_connection" ] && { echo "$int_connection" | grep -qxE "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
+	if [ "${image_source:-}" ]; then
+		if [[ "$image_source" == "direct" || "$image_source" == "proxy" ]]; then
+			: # valid
+		elif [[ "$image_source" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+			: # valid mirror dir name
+		else
+			echo_red "Error: image_source is invalid in cluster.conf [$image_source]" >&2; ret=1
+		fi
+	fi
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
 	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warn -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
@@ -4194,7 +4246,7 @@ check_release_image() {
 				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")  # strip :port
 			fi
 		fi
-		_release_check_extra+=("Config: ${mirror_name:-mirror}/mirror.conf (reg_host=$reg_host)")
+		_release_check_extra+=("Config: $(image_source_mirror_name)/mirror.conf (reg_host=$reg_host)")
 		_release_check_extra+=("Pull secret: ${regcreds_display:-$regcreds_dir}/pull-secret-mirror.json")
 		return 1
 	fi

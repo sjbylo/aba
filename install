@@ -77,19 +77,15 @@ do
 	esac
 done
 
-# Now, check sudo or root access.
-# In quiet mode (-q, auto-update from aba.sh), defer the sudo gate until
-# an update is actually needed -- avoids prompting for a password on every run.
+# Informational sudo check (no password prompt).
+# Actual sudo calls happen later only when needed (package install, non-writable dir).
 if [ ! "$quiet" ] && [ "$(id -u)" != "0" ]; then
 	if [ "$SUDO" ]; then
-		# If sudo does not lead to root without using a password prompt (-n)
-		if [ "$($SUDO -n whoami)" != "root" ]; then
+		if [ "$($SUDO -n whoami 2>/dev/null)" != "root" ]; then
 			echo "For some actions, ABA requires root access, directly or via sudo." >&2
 			if ! $SUDO -ln 2>/dev/null | grep -q NOPASSWD; then
 				echo "Passwordless sudo access is recommended." >&2
 			fi
-			echo -n "You must enter your password to install and use ABA: " >&2
-			[ "$($SUDO -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run ABA as root, then try again!" >&2 && exit 1
 		fi
 	else
 		echo "Error: sudo command is not available and ABA is not running as root!" >&2

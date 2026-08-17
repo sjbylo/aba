@@ -59,8 +59,7 @@ CONF="$CLUSTER_DIR/cluster.conf"
 
 assert_conf_value "$CONF" num_workers 7
 assert_conf_value "$CONF" vlan 100
-assert_conf_value "$CONF" mirror_name enclave1
-assert_conf_value "$CONF" int_connection proxy
+assert_conf_value "$CONF" image_source proxy
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 2: Override existing cluster.conf
@@ -70,8 +69,7 @@ echo "--- Test 2: Override existing cluster.conf ---"
 ./aba cluster -n "$CLUSTER_DIR" --num-workers 5 -I direct --mirror-name enclave2 --step cluster.conf >/dev/null 2>&1
 
 assert_conf_value "$CONF" num_workers 5
-assert_conf_value "$CONF" int_connection direct
-assert_conf_value "$CONF" mirror_name enclave2
+assert_conf_value "$CONF" image_source enclave2
 # vlan should be unchanged (not passed this time)
 assert_conf_value "$CONF" vlan 100
 
@@ -92,6 +90,20 @@ if [ "$ts_before" = "$ts_after" ]; then
 else
 	test_fail "cluster.conf timestamp changed (expected no-op)"
 fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 4: New --image-source flag
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Test 4: --image-source flag ---"
+
+./aba cluster -n "$CLUSTER_DIR" --image-source proxy --step cluster.conf >/dev/null 2>&1
+assert_conf_value "$CONF" image_source proxy
+
+./aba cluster -n "$CLUSTER_DIR" --image-source enclave3 --step cluster.conf >/dev/null 2>&1
+assert_conf_value "$CONF" image_source enclave3
+
+./aba cluster -n "$CLUSTER_DIR" --image-source mirror --step cluster.conf >/dev/null 2>&1
+assert_conf_value "$CONF" image_source mirror
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary

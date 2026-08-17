@@ -83,7 +83,7 @@ aba_debug() { :; }
 aba_warn() { echo "[ABA] WARNING: $*" >&2; }
 aba_success() { echo "[ABA] $*" >&2; }
 aba_abort() { echo "[ABA] ERROR: $*" >&2; exit 1; }
-normalize-aba-conf() { echo "export mirror_name=mirror"; }
+normalize-aba-conf() { echo "export image_source=mirror"; }
 STUB
 
 # Create a pre-built cluster dir (has install-config + agent-config)

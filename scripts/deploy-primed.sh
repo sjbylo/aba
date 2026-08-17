@@ -19,7 +19,7 @@ aba_debug "Starting: $0 $*"
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
 
-mirror_dir="../${mirror_name:-mirror}"
+mirror_dir="../$(image_source_mirror_name)"
 
 [ ! -d "$mirror_dir" ] && aba_abort "Mirror directory not found: $mirror_dir"
 [ ! -f cluster.conf ] && aba_abort "Not in a cluster directory (no cluster.conf found)"

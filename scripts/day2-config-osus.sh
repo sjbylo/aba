@@ -10,8 +10,8 @@ umask 077
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
-export regcreds_display="${mirror_name:-mirror}/regcreds"
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_display="$(image_source_mirror_name)/regcreds"
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -21,8 +21,8 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 scripts/cli-install-all.sh --wait oc
 
 # Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
-if [ "$int_connection" ]; then
-	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
+if ! image_source_is_mirror; then
+	aba_info "This cluster connects directly to the internet (image_source=$image_source)."
 	aba_info "OpenShift Update Service is not needed — the cluster can reach update channels directly."
 
 	exit 0

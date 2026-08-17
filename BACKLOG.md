@@ -682,7 +682,7 @@ will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
 
 ## Feature: Merge int_connection and mirror_name into a single config value
 
-**Status:** Planned
+**Status:** Done (v1.2.3)
 **Added:** 2026-07-10
 
 **Problem:** `cluster.conf` has two fields (`int_connection` and `mirror_name`)

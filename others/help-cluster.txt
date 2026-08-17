@@ -26,7 +26,8 @@ Options:
     -G, --ingress-vip <ip>                # IP address for cluster application ingress
     -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20
     -g, --gateway-ip <ip>                 # Gateway IP or next hop address
-    -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror
+        --image-source <mirror|proxy|direct|name>  # Where to pull images (default: mirror)
+    -I, --int-connection [proxy|direct]   # Deprecated alias for --image-source
         --ports [<string> ...]            # Space-separated list of network port names (default: ens160)
                                           # ports in <cluster name>/cluster.conf
 
@@ -43,8 +44,7 @@ Options:
         --master-prefix <name>            # Node name prefix for masters (default: master)
         --worker-prefix <name>            # Node name prefix for workers (default: worker)
         --ssh-key [<path>]                # Path to SSH public key or empty to clear
-        --mirror-name <name>              # Mirror directory this cluster uses (default: mirror)
-                                          # Set to match a named mirror dir (e.g. enclave1)
+        --mirror-name <name>              # Deprecated alias for --image-source <name>
 
 Related commands (run with --dir <cluster> or from inside the cluster directory):
 
@@ -116,7 +116,7 @@ Examples:
     aba cluster --name prod --type standard --mcpu 16 --mmem 32 --num-workers 4 --machine-network 10.0.0.0/20 --step install
 
   Install directly from the Internet (no mirror, 'proxy' or 'direct' mode):
-    aba cluster --name dev --type sno --starting-ip 10.0.1.50 --int-connection proxy --step install
+    aba cluster --name dev --type sno --starting-ip 10.0.1.50 --image-source proxy --step install
 
   Monitor an ongoing installation:
     aba --dir mysno mon
