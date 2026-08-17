@@ -339,3 +339,7 @@ elif [ "$_wait_rc" -ne 0 ]; then
 fi
 
 aba_success "API server available."
+
+# NTP MachineConfig triggers node reboots and CO reconciliation.
+# Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
+aba_wait_show "Ensuring cluster operators are stable after NTP changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true

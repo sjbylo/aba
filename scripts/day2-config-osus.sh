@@ -344,3 +344,7 @@ oc patch clusterversion version -p $PATCH --type merge
 
 aba_success "Update Service configuration completed successfully!"
 aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."
+
+# OSUS install patches CA, proxy, and upstream — triggers CO reconciliation.
+# Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
+aba_wait_show "Ensuring cluster operators are stable after OSUS changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true

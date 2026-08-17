@@ -1162,3 +1162,167 @@ target" option and manual entry:
 **Workaround:** Manually select "Next minor" or "Manual entry" instead of
 "Current target" when the cluster has been z-stream upgraded since the last
 mirror sync.
+
+---
+
+## Upgrade: auto-restart OSUS pod when graph-image content changes
+
+**Severity:** MEDIUM — user gets "not an available upgrade" after a successful sync
+**Status:** Planned (was prototyped and verified on testy@conno, then stashed for v1.2.3)
+**Added:** 2026-08-16
+
+**Problem:** After `aba sync` (or `aba load`) mirrors a new OCP version, the
+`graph-image:latest` in the registry is updated with the new version's graph
+data. However, the running OSUS pod does not pick up the change because:
+- The OSUS operator only redeploys pods when the `graphDataImage` field in the
+  `UpdateService` CR changes (different image reference), not when the content
+  behind a `:latest` tag changes.
+- The OSUS init container has `imagePullPolicy: Always`, but this only takes
+  effect when the pod restarts — not while it's already running.
+
+The user runs `aba upgrade --to 4.22.10` and gets "Version 4.22.10 is not an
+available upgrade" even though the version was just synced successfully.
+
+**Root cause:** Stale graph data in the running OSUS pod. The init container
+cached the old `graph-image:latest` at pod creation time.
+
+**Verified fix (tested on testy@conno 2026-08-16):**
+In `cluster-upgrade.sh`, after the initial OSUS graph check fails to find the
+target version:
+1. Restart the OSUS pod: `oc delete pod -n openshift-update-service -l app=osus`
+2. Wait for the new pod to be ready (init container re-pulls `graph-image:latest`)
+3. Wait for the target version to appear in the graph
+4. If still not found after restart, abort with the existing error message
+
+The pod restart takes ~30-60 seconds (init container pull + graph load).
+Graph data is available immediately after the pod reaches Ready state.
+
+**Detection logic:** The graph is "stale" when:
+- OSUS is installed and configured (`osus_upstream` is set)
+- `oc adm upgrade --include-not-recommended` does not list the target version
+- But we know the version was just synced (it's in the mirror registry)
+
+**Implementation notes:**
+```bash
+# In cluster-upgrade.sh, after initial graph check fails:
+if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+    aba_info "Target version not yet in OSUS graph — restarting OSUS pod ..."
+    oc delete pod -n openshift-update-service -l app=osus 2>/dev/null || true
+    # Wait for new pod Ready, then wait for target in graph
+    aba_wait_show "Waiting for OSUS pod" 5 180 _osus_pod_ready || true
+    aba_wait_show "Waiting for $target_ver in graph" 5 120 _osus_graph_has_target || true
+    _osus_graph_has_target && _graph_ok=1
+fi
+```
+
+**Design consideration:** Could also be triggered proactively after `aba day2`
+(which applies updated CatalogSources/IDMS), since that's the natural point
+where the cluster learns about new mirror content. But `cluster-upgrade.sh` is
+the place where the failure actually manifests, so reactive restart there is
+the minimum viable fix.
+
+**Future enhancement:** Trigger OSUS pod restart from `aba day2` as a
+background `run_once` task, so the graph is already fresh by the time the
+user runs `aba upgrade`. See "Cluster-mirror auto-actions" below.
+
+**Files to change:**
+- `scripts/cluster-upgrade.sh`: add OSUS pod restart logic after graph check
+- Also remove the early `aba_abort` that fires before the pod restart logic
+  can be reached (the early check short-circuits on "some graph data but no
+  target version")
+
+**Workaround:** Manually restart the OSUS pod:
+```bash
+oc delete pod -n openshift-update-service -l app=osus
+# Wait ~60s, then retry:
+aba upgrade --to <version>
+```
+
+---
+
+## Feature: Cluster-mirror auto-actions after sync/load
+
+**Severity:** MEDIUM — reduces manual steps, prevents user confusion
+**Status:** Planned
+**Added:** 2026-08-16
+
+**Problem:** After `aba sync` or `aba load` updates the mirror registry, the
+user must manually determine which clusters need updating and run commands on
+each one. The CLI just prints generic `aba -d <cluster> day2` hints. The TUI
+has `_offer_day2_after_mirror_update()` which discovers clusters, but only
+offers day2 — not other post-mirror actions. Several post-mirror actions are
+needed depending on context.
+
+**Core missing piece:** A shared `clusters_using_mirror()` function in
+`include_all.sh` (not TUI code) that both CLI and TUI can call. The TUI
+already has `list_installed_clusters()` + `int_connection` filtering in
+`tui-lib.sh` — this logic should move to ABA core.
+
+**Use cases requiring cluster discovery + action:**
+
+| # | Trigger | Action on cluster(s) | Priority |
+|---|---------|---------------------|----------|
+| 1 | `sync`/`load` completes | Run `aba day2` (IDMS, CatalogSources, signatures) | HIGH — already prompted in TUI, but CLI is manual |
+| 2 | `sync`/`load` adds new OCP version to graph-image | Restart OSUS pod to refresh graph data | MEDIUM — see "auto-restart OSUS pod" above |
+| 3 | Cross-minor upgrade sync | Update OSUS channel on cluster to match target minor | MEDIUM — currently manual, can break `aba upgrade` |
+| 4 | Mirror reinstall (new CA cert) | Warn that old clusters can't reach new mirror | MEDIUM — already in backlog (cert mismatch) |
+| 5 | `aba day2` after upgrade sync | Skip CatalogSources whose version doesn't match cluster | HIGH — already in backlog (multi-version catalogs) |
+| 6 | `aba upgrade` pre-flight | Query cluster's actual version, not aba.conf | MEDIUM — partially done, needs strengthening |
+
+**Proposed design:**
+
+### Phase 1: Core discovery function (prerequisite for everything else)
+
+```bash
+# include_all.sh
+clusters_using_mirror() {
+    # Returns list of installed cluster dirs that use the mirror
+    # (int_connection is empty or unset = mirror mode)
+    local _dir
+    for _dir in ../*/.install-complete; do
+        [ -f "$_dir" ] || continue
+        _dir=$(dirname "$_dir")
+        _dir=$(basename "$_dir")
+        local _int_conn
+        _int_conn=$(cd "$_dir" && source <(normalize-cluster-conf) 2>/dev/null && echo "${int_connection:-}") || true
+        [ -z "$_int_conn" ] && echo "$_dir"
+    done
+}
+```
+
+Refactor `_offer_day2_after_mirror_update()` in `tui-lib.sh` to call this
+function instead of duplicating the discovery logic.
+
+### Phase 2: Post-mirror hook system
+
+After `aba sync` or `aba load`, call a hook that iterates
+`clusters_using_mirror()` and performs context-aware actions:
+
+- **Always:** Print which clusters need `aba day2` (current behavior, improved)
+- **If OSUS installed:** Restart OSUS pod (via `run_once` background task)
+- **If upgrade sync:** Print upgrade command for each cluster
+- **Future:** Auto-run day2 on single-cluster setups (with `--yes`)
+
+### Phase 3: CLI `aba mirror clusters` subcommand
+
+Expose cluster discovery as a user-facing command:
+```bash
+aba -d mirror clusters          # List clusters using this mirror
+aba -d mirror clusters --json   # Machine-readable for scripting
+```
+
+**Files to change (Phase 1):**
+- `scripts/include_all.sh`: add `clusters_using_mirror()` function
+- `tui/v2/tui-lib.sh`: refactor `_offer_day2_after_mirror_update()` to use it
+- `scripts/reg-sync.sh`: use discovery for smarter post-sync messages
+- `scripts/reg-load.sh`: same
+
+**Files to change (Phase 2):**
+- `scripts/reg-sync.sh`: add post-sync hook calling discovery + actions
+- `scripts/reg-load.sh`: same
+- `scripts/cluster-upgrade.sh`: OSUS pod restart (separate backlog item)
+
+**Dependency:** The OSUS pod restart item (above) can be implemented
+independently as a reactive fix in `cluster-upgrade.sh`. The full auto-action
+framework is additive — it makes the OSUS restart proactive rather than
+reactive.
