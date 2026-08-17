@@ -61,7 +61,7 @@ done
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
 source <(normalize-mirror-conf)
 
 # Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
@@ -333,7 +333,7 @@ if [ ! "$upgrade_already_running" ]; then
 	# verify the target version exists in the graph before running day2.
 	_target_major=$(_ver_minor "$target_ver")
 	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
-	_isc_file="../${mirror_name}/data/imageset-config.yaml"
+	_isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
 	_isc_channel=""
 	[ -f "$_isc_file" ] && _isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
 	if [ -n "$_isc_channel" ]; then
@@ -441,7 +441,7 @@ if [ ! "$upgrade_already_running" ]; then
 	_target_major=$(_ver_minor "$target_ver")
 
 	# Read channel from ISC (what was actually mirrored)
-	_isc_file="../${mirror_name}/data/imageset-config.yaml"
+	_isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
 	_isc_channel=""
 	if [ -f "$_isc_file" ]; then
 		_isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')

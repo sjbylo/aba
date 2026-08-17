@@ -890,21 +890,25 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
+	elif [ "$1" = "--image-source" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf image_source "$2" "$1"
+		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
+		# Deprecated alias for --image-source (direct/proxy)
 		_flag="$1"
-		int_connection=
+		_val=mirror
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
-				int_connection=$2
-				[ "$2" = "p" ] && int_connection=proxy
-				[ "$2" = "d" ] && int_connection=direct
+				_val=$2
+				[ "$2" = "p" ] && _val=proxy
+				[ "$2" = "d" ] && _val=direct
 			else
-				aba_abort "argument invalid [$2] after option: $_flag" 
-				exit 1
+				aba_abort "argument invalid [$2] after option: $_flag"
 			fi
 			shift
 		fi
-		_set_cluster_conf int_connection "$int_connection" "$_flag"
+		_set_cluster_conf image_source "$_val" "$_flag"
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -1017,8 +1021,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		_set_cluster_conf ssh_key_file "$ssh_key_val" "$_flag"
 		shift
 	elif [ "$1" = "--mirror-name" ]; then
+		# Deprecated alias for --image-source <mirror-dir-name>
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
-		_set_cluster_conf mirror_name "$2" "$1"
+		_set_cluster_conf image_source "$2" "$1"
 		shift 2
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
@@ -1990,7 +1995,7 @@ echo "Fully Connected"
 echo_white "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
 echo_yellow "Instructions for installing directly from the Internet"
 echo_white "Example:"
-echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy --step install"
+echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --image-source proxy --step install"
 echo_white "See aba cluster --help for more"
 
 exit 0

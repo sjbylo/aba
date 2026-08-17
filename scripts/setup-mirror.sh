@@ -14,6 +14,9 @@ name=
 
 [ ! "$name" ] && aba_abort "Error: mirror name missing! Usage: aba mirror --name <name>"
 
+[[ "$name" == "direct" || "$name" == "proxy" ]] && \
+	aba_abort "'$name' is a reserved image_source value and cannot be used as a mirror directory name"
+
 if [ ! -d "$name" ]; then
 	mkdir "$name"
 	cd "$name"

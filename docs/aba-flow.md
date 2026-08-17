@@ -32,7 +32,7 @@ flowchart TD
     Q3 -->|No| Q4{Fully<br/>disconnected?}
 
     %% Connected: no mirror, nodes pull direct/proxy
-    Q4 -->|No| SetIntConn["Set int_connection = direct / proxy<br/>(no mirror registry needed)"]
+    Q4 -->|No| SetIntConn["Set image_source = direct / proxy<br/>(no mirror registry needed)"]
     SetIntConn --> InstallCluster
 
     %% Fully disconnected: build bundle on connected side, transfer

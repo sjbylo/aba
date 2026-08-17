@@ -857,18 +857,17 @@ _invalidate_mirror_cache() {
 # One cluster: offer to run day2 now.
 # Multiple clusters: informational dialog (user runs day2 manually).
 _offer_day2_after_mirror_update() {
-	local _cl _int_conn
+	local _cl _is_mirror
 	local -a _clusters=()
 
 	for _cl in $(list_installed_clusters); do
-		# Check if cluster uses the mirror (int_connection empty = mirror mode)
-		_int_conn=$(
-			int_connection=""
+		_is_mirror=$(
+			image_source=mirror
 			# shellcheck disable=SC1090
 			source <(cd "$ABA_ROOT/$_cl" && normalize-cluster-conf) 2>/dev/null || true
-			echo "${int_connection:-}"
+			image_source_is_mirror && echo 1 || echo 0
 		)
-		[[ -n "$_int_conn" ]] && continue
+		[[ "$_is_mirror" -ne 1 ]] && continue
 		_clusters+=("$_cl")
 	done
 

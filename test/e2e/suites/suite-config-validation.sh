@@ -155,9 +155,9 @@ e2e_run "Clean up e2eexist" "rm -rf e2eexist"
 test_end 0
 
 # ============================================================================
-# 2c. NTP fallback for int_connection=direct only
+# 2c. NTP fallback for image_source=direct only
 # ============================================================================
-test_begin "NTP fallback for int_connection=direct only"
+test_begin "NTP fallback for image_source=direct only"
 
 e2e_run "Backup aba.conf" "cp aba.conf aba.conf.ntp-bak"
 
@@ -297,14 +297,14 @@ _OVERRIDE_DIR="e2e-override-test"
 e2e_run "Create cluster with initial flags" \
 	"rm -rf $_OVERRIDE_DIR && aba cluster -n $_OVERRIDE_DIR -t sno --starting-ip $(pool_sno_ip) -I proxy --step cluster.conf"
 
-e2e_run "Verify initial int_connection=proxy" \
-	"grep '^int_connection=proxy' $_OVERRIDE_DIR/cluster.conf"
+e2e_run "Verify initial image_source=proxy" \
+	"grep '^image_source=proxy' $_OVERRIDE_DIR/cluster.conf"
 
-e2e_run "Override int_connection to direct" \
+e2e_run "Override image_source to direct" \
 	"aba cluster -n $_OVERRIDE_DIR -I direct --step cluster.conf"
 
-e2e_run "Verify overridden int_connection=direct" \
-	"grep '^int_connection=direct' $_OVERRIDE_DIR/cluster.conf"
+e2e_run "Verify overridden image_source=direct" \
+	"grep '^image_source=direct' $_OVERRIDE_DIR/cluster.conf"
 
 e2e_run "Verify num_masters unchanged (still 1 = SNO)" \
 	"grep '^num_masters=1' $_OVERRIDE_DIR/cluster.conf"

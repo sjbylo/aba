@@ -96,7 +96,8 @@ _cluster_load_conf() {
 			ntp_servers)      cl_ntp="$val" ;;
 			ports)            cl_ports="$val" ;;
 			vlan)             cl_vlan="$val" ;;
-			int_connection)   cl_connection="$val"; [[ "$cl_connection" == "none" ]] && cl_connection="" ;;
+			image_source)     cl_connection="$val" ;;
+		int_connection)   cl_connection="$val"; [[ "$cl_connection" == "none" ]] && cl_connection="" ;;
 			mac_prefix)       cl_mac_template="$val" ;;
 			num_masters)      _nm="$val" ;;
 			num_workers)      _nw="$val" ;;
@@ -159,10 +160,7 @@ _persist_cluster_draft() {
 	replace-value-conf -q -n worker_mem       -v "$cl_worker_mem"  -f "$_conf"
 	replace-value-conf -q -n data_disk        -v "$cl_disk"        -f "$_conf"
 
-	# int_connection: empty means "use mirror" (the default)
-	local _conn="$cl_connection"
-	[[ "$_conn" == "mirror" ]] && _conn=""
-	replace-value-conf -q -n int_connection   -v "$_conn"          -f "$_conf"
+	replace-value-conf -q -n image_source     -v "${cl_connection:-mirror}" -f "$_conf"
 
 	# Derive num_masters/num_workers from type
 	case "$cl_type" in

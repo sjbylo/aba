@@ -94,7 +94,7 @@ _test_vip() {
 	master_prefix=master
 	worker_prefix=worker
 	ssh_key_file=~/.ssh/id_rsa
-	mirror_name=mirror
+	image_source=mirror
 	ports=ens160
 	master_cpu_count=10
 	master_mem=20
@@ -263,7 +263,7 @@ _test_auto_alloc() {
 	master_prefix=master
 	worker_prefix=worker
 	ssh_key_file=~/.ssh/id_rsa
-	mirror_name=mirror
+	image_source=mirror
 	ports=ens160
 	master_cpu_count=10
 	master_mem=20
