@@ -307,6 +307,12 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 			fi
 
 			aba_info "Upgrade mode: $ocp_version → $ocp_upgrade_to (channel ${ocp_channel}-${tgt_major}, shortestPath)"
+
+			_upath=$(compute_upgrade_path "$ocp_version" "$ocp_upgrade_to" "${ocp_channel}-${tgt_major}" 2>/dev/null) || true
+			export upgrade_path="${_upath:-}"
+			if [[ -n "$_upath" ]]; then
+				aba_info "Upgrade path: $_upath"
+			fi
 		fi
 	fi
 

@@ -728,6 +728,7 @@ mirror_prep_upgrade() {
 
 	[[ "$_channel" != "fast"      ]] && _add_fallback_items "fast" "f"
 	[[ "$_channel" != "candidate" ]] && _add_fallback_items "candidate" "c"
+	[[ "$_channel" != "stable"    ]] && _add_fallback_items "stable" "s"
 
 	# Show informational hint if there are fallback-channel versions
 	if [[ ${#_fb_items[@]} -gt 0 ]]; then
@@ -745,41 +746,34 @@ change your channel when selected." 0 0
 		fi
 	fi
 
-	# Build menu items with numbered tags (1, 2, 3, ...)
+	# Build unsorted version entries: "version\tlabel\tchannel" lines
+	# Then sort by version, assign sequential tag numbers, and build the menu.
 	local -A _tag_channel_map=() _tag_version_map=()
 	local items=() _default_tag="m" _tag_num=0
+	local _ver_entries=()
 
 	# Existing target from mirror.conf
 	if [[ -n "$_existing_target" ]]; then
-		_tag_num=$(( _tag_num + 1 ))
+		local _et_label
 		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
-			items+=("$_tag_num" "Current target ($_existing_target)")
+			_et_label="Current target ($_existing_target)"
 		else
-			items+=("$_tag_num" "Current target ($_existing_target) [NOT IN CHANNEL]")
+			_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
 		fi
-		_tag_version_map[$_tag_num]="$_existing_target"
-		_default_tag="$_tag_num"
+		_ver_entries+=("${_existing_target}	${_et_label}	")
 	fi
 	# Own-channel: next minor
 	if [[ -n "$_next" && "$_next" != "$_existing_target" && "$_next" != "$_current_ver" ]]; then
-		_tag_num=$(( _tag_num + 1 ))
 		local _hop="minor"; [[ "${_next%%.*}" != "${_current_ver%%.*}" ]] && _hop="major"
-		items+=("$_tag_num" "Next $_hop ($(_ver_minor "$_next") latest: $_next)")
-		_tag_version_map[$_tag_num]="$_next"
-		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+		_ver_entries+=("${_next}	Next $_hop ($(_ver_minor "$_next") latest: $_next)	")
 	fi
 	# Own-channel: z-stream
 	if [[ -n "$_zstream" && "$_zstream" != "$_existing_target" && "$_zstream" != "$_current_ver" && "$_zstream" != "$_next" ]]; then
-		_tag_num=$(( _tag_num + 1 ))
-		items+=("$_tag_num" "Z-stream   ($(_ver_minor "$_zstream") latest: $_zstream)")
-		_tag_version_map[$_tag_num]="$_zstream"
-		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+		_ver_entries+=("${_zstream}	Z-stream   ($(_ver_minor "$_zstream") latest: $_zstream)	")
 	fi
 	# Own-channel: next+1
 	if [[ -n "$_next1" && "$_next1" != "$_existing_target" && "$_next1" != "$_current_ver" ]]; then
-		_tag_num=$(( _tag_num + 1 ))
-		items+=("$_tag_num" "Minor $(_ver_minor "$_next1")  (latest: $_next1)")
-		_tag_version_map[$_tag_num]="$_next1"
+		_ver_entries+=("${_next1}	Minor $(_ver_minor "$_next1")  (latest: $_next1)	")
 	fi
 	# Fallback channel items
 	for _item in "${_fb_items[@]}"; do
@@ -789,7 +783,6 @@ change your channel when selected." 0 0
 		local _ch="${_rest##*|}"
 		local _minor _label
 		_minor="$(_ver_minor "$_ver")"
-		_tag_num=$(( _tag_num + 1 ))
 		if [[ "$_fb_tag" == *n ]]; then
 			local _fhop="minor"; [[ "${_ver%%.*}" != "${_current_ver%%.*}" ]] && _fhop="major"
 			_label="Next $_fhop ($_minor latest: $_ver) [switch to $_ch]"
@@ -798,12 +791,35 @@ change your channel when selected." 0 0
 		else
 			_label="Minor $_minor  (latest: $_ver) [switch to $_ch]"
 		fi
-		items+=("$_tag_num" "$_label")
-		_tag_version_map[$_tag_num]="$_ver"
-		_tag_channel_map[$_tag_num]="$_ch"
-		[[ "$_default_tag" == "m" ]] && _default_tag="$_tag_num"
+		_ver_entries+=("${_ver}	${_label}	${_ch}")
 	done
+
+	# Sort entries by version (ascending) and assign sequential tags
+	local _sorted_entries
+	_sorted_entries=$(printf '%s\n' "${_ver_entries[@]}" | sort -t$'\t' -k1,1Vr)
+	while IFS=$'\t' read -r _sv _sl _sc; do
+		[[ -z "$_sv" ]] && continue
+		_tag_num=$(( _tag_num + 1 ))
+		items+=("$_tag_num" "$_sl")
+		_tag_version_map[$_tag_num]="$_sv"
+		[[ -n "$_sc" ]] && _tag_channel_map[$_tag_num]="$_sc"
+		if [[ "$_sv" == "$_existing_target" ]]; then
+			_default_tag="$_tag_num"
+		elif [[ "$_default_tag" == "m" ]]; then
+			_default_tag="$_tag_num"
+		fi
+	done <<< "$_sorted_entries"
+
+	# If no version targets were found, show a clear message
+	if [[ $_tag_num -eq 0 ]]; then
+		items+=("!" "No upgrade versions available from ${_current_ver}")
+		_default_tag="b"
+	fi
+
+	# Separator and utility items
+	items+=("-" "─────────────────────────────────")
 	items+=("m" "Manual entry (x.y or x.y.z)")
+	items+=("b" "Change base version (${_current_ver})")
 	if [[ -n "$_existing_target" ]]; then
 		items+=("c" "Clear target (disable upgrade mode)")
 	fi
@@ -814,7 +830,7 @@ change your channel when selected." 0 0
 			--default-item "$_default_tag" \
 			--ok-label "$TUI2_BTN_NEXT" \
 			--cancel-label "$TUI2_BTN_CANCEL" \
-			--menu "Select target upgrade version ($_channel channel):\n\nCurrent configured: ${_current_ver}" 0 0 0 \
+			--menu "Select target upgrade version ($_channel channel):\n\n\\ZbBase version (aba.conf): ${_current_ver}\\Zn\n\nNote: target versions are based on the base version in aba.conf,\nnot any live cluster. If all your clusters have been upgraded\npast this version, update the base version (b)." 0 0 0 \
 			"${items[@]}" \
 			2>"$_TUI_TMP"
 		[[ $? -ne 0 ]] && return 1
@@ -822,7 +838,8 @@ change your channel when selected." 0 0
 		local _choice
 		_choice=$(<"$_TUI_TMP")
 		case "$_choice" in
-			c)
+		-|!) continue ;;
+		c)
 				replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 				ocp_upgrade_to=""
 				tui_kick_isconf_regen
@@ -856,10 +873,35 @@ change your channel when selected." 0 0
 							"Invalid format.\n\nExpected: x.y, x.y.z, or x.y.z-rc.N" 0 0
 					fi
 				done
-				[[ -z "$_target_ver" ]] && continue
-				;;
-			*)
-				# Numbered tags: lookup version (and optional channel switch) from maps
+			[[ -z "$_target_ver" ]] && continue
+			;;
+		b)
+			dlg --backtitle "$(ui_backtitle)" --title "Change Base Version" \
+				--inputbox "Enter new base version (x.y.z or x.y.z-rc.N):\n\nSet this to the lowest version among your running clusters." \
+				0 0 "${_current_ver}" \
+				2>"$_TUI_TMP"
+			[[ $? -ne 0 ]] && continue
+			local _new_base
+			_new_base=$(<"$_TUI_TMP")
+			_new_base=$(echo "$_new_base" | tr -d ' ')
+			if [[ ! "$_new_base" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox "Invalid version format. Use x.y.z or x.y.z-rc.N" 0 0
+				continue
+			fi
+			if ! verify_release_version_exists "$_new_base" "$_channel" 2>/dev/null; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Version $_new_base not found in the $_channel channel.\n\nCheck the version number and try again." 0 0
+				continue
+			fi
+			replace-value-conf -q -n ocp_version -v "$_new_base" -f "$ABA_ROOT/aba.conf"
+			ocp_version="$_new_base"
+			run_once -r -i "aba:upgrade-targets:${_new_base}" 2>/dev/null || true
+			aba_upgrade_targets_start "$_new_base" "$_channel"
+			mirror_prep_upgrade
+			return $?
+			;;
+		*)
+			# Numbered tags: lookup version (and optional channel switch) from maps
 				_target_ver="${_tag_version_map[$_choice]:-}"
 				if [[ -n "${_tag_channel_map[$_choice]:-}" ]]; then
 					_channel="${_tag_channel_map[$_choice]}"

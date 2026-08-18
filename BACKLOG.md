@@ -1326,3 +1326,184 @@ aba -d mirror clusters --json   # Machine-readable for scripting
 independently as a reactive fix in `cluster-upgrade.sh`. The full auto-action
 framework is additive — it makes the OSUS restart proactive rather than
 reactive.
+
+---
+
+## Feature: Auto-update base version when all clusters have upgraded
+
+**Severity:** MEDIUM — prevents stale base version causing wrong sync behavior
+**Status:** Planned
+**Added:** 2026-08-18
+**Depends on:** Cluster-mirror auto-actions (clusters_using_mirror)
+
+**Problem:** After upgrading all clusters from 4.21.28 to 4.22.9, the base
+`ocp_version` in `aba.conf` still says `4.21.28`. Future `aba sync` operations
+use this stale base version, and new cluster installs default to 4.21.28. The
+user must manually update `aba.conf` on both the disconnected and connected
+bastions.
+
+**Proposed behavior:**
+
+1. Query all clusters using this mirror (`clusters_using_mirror()`)
+2. Get each cluster's running version (from externalized state in
+   `~/.aba/clusters/` or live via `oc get clusterversion`)
+3. Find the **lowest** running version across all clusters
+4. If lowest > `ocp_version` in `aba.conf`:
+   - Auto-update `ocp_version` in `aba.conf` on the local (disco) side
+   - Tell the user to do the same on the connected bastion:
+     ```
+     [ABA] All clusters using this mirror are at 4.22.9 or higher.
+     [ABA] Updated ocp_version in aba.conf: 4.21.28 → 4.22.9
+     [ABA] Remember to update ocp_version on the connected bastion as well.
+     ```
+
+**When to trigger:** After `aba sync`, `aba load`, `aba day2`, or as part of
+the post-mirror hook system (Phase 2 of Cluster-mirror auto-actions).
+
+**Considerations:**
+- Only update when ALL clusters are confirmed above the old version
+- Use lowest version, not highest — safety net for mixed-version environments
+- The connected-side update must be manual (ABA can't reach it from disco)
+- Could also trigger after a successful `aba upgrade` completes
+
+**Architecture:** All discovery, version comparison, and config update logic
+lives in ABA core (`scripts/include_all.sh`, dedicated scripts). The TUI is a
+dumb consumer — it calls core functions and displays results. No version
+comparison or `aba.conf` mutation logic in TUI code.
+
+**Files likely affected:**
+- `scripts/include_all.sh`: version comparison logic across clusters
+- `scripts/reg-sync.sh` / `scripts/reg-load.sh`: trigger point
+- `scripts/aba.sh`: `ocp_version` update in `aba.conf`
+
+---
+
+## Feature: Purge unused images from mirror after all clusters upgrade
+
+**Severity:** LOW — UX improvement, reclaims storage on constrained hosts
+**Status:** Planned
+**Added:** 2026-08-18
+**Depends on:** Auto-update base version (above), clusters_using_mirror
+
+**Problem:** After upgrading all clusters from 4.21 to 4.22, the old 4.21
+release images and operator catalogs remain in the mirror registry, consuming
+10-15GB+ of storage. In disconnected environments where mirror hosts have
+limited disk, this waste adds up across multiple upgrade cycles.
+
+**Proposed behavior:**
+
+After confirming all clusters are at a higher version (see auto-update base
+version item above), offer to purge unused images:
+
+```
+[ABA] Old release images for 4.21.x are no longer used by any cluster.
+[ABA] Purge old images to reclaim disk space? (y/n) [n]:
+```
+
+**Critical safety warnings (must show before purge):**
+- Purging is **destructive and irreversible** in a disconnected environment —
+  there is no way to re-download the images without connectivity
+- Old images are needed not just for installing new clusters at that version,
+  but also for **running** existing clusters — if any cluster still references
+  those images (e.g. for pod restarts, node reboots, operator reconciliation),
+  pulling will fail
+- Only safe when ALL clusters have fully completed the upgrade AND the old
+  version's images are no longer referenced by any running workload
+
+**Implementation approach:**
+- Default to "no" — opt-in only
+- Could use `oc-mirror` pruning or direct registry garbage collection
+- Could expose as `aba -d mirror prune` command
+- In `--yes`/non-interactive mode: **never auto-purge** — always require
+  explicit interactive confirmation for destructive operations
+
+---
+
+## Feature: Manage additional images in ISC
+
+**Severity:** MEDIUM — reduces manual YAML editing and ISC regeneration issues
+**Status:** Planned
+**Added:** 2026-08-18
+
+**Problem:** The `additionalImages` section in the imageset-config.yaml (ISC)
+is currently just commented-out examples. Users must manually edit the YAML to
+add images like `ose-cli`, `support-tools`, or OpenShift Virtualization
+container disks. Manual edits are error-prone and get overwritten when the ISC
+is regenerated (e.g. after operator changes or upgrade prep).
+
+**Proposed behavior:**
+
+### ABA Core (CLI commands)
+
+- `aba image add <image:tag>` — adds to a tracked list
+- `aba image remove <image:tag>` — removes from tracked list
+- `aba image list` — shows configured additional images
+- The tracked list is stored persistently (e.g. `templates/additional-images`
+  or a key in `mirror.conf`) and rendered into the ISC `additionalImages:`
+  section automatically during ISC generation, just like operator sets.
+- Images persist across ISC regeneration.
+
+### Auto-add images based on operator sets
+
+When the user selects an operator set, ABA should automatically add commonly
+needed companion images. Examples:
+
+| Operator set | Auto-added images |
+|---|---|
+| `operator-set-virt` | `quay.io/containerdisks/centos-stream:10`, `centos-stream:9`, `fedora:latest` |
+| (all) | `registry.redhat.io/openshift4/ose-cli:latest`, `registry.redhat.io/rhel9/support-tools:latest` |
+| (testing) | `quay.io/openshifttest/hello-openshift:1.2.0` |
+
+Auto-added images should be presented to the user for confirmation (not
+silently injected). The user can remove any they don't want.
+
+### TUI (dumb consumer)
+
+- Menu item under Mirror configuration to add/remove/view additional images
+- Calls core commands, displays results
+- No ISC editing or image list management logic in TUI code
+
+**Architecture:** All image list management, operator-set association, and ISC
+rendering lives in ABA core (`scripts/include_all.sh`, ISC template). The TUI
+only calls core commands and displays results.
+
+### Remove commented-out image examples from ISC template
+
+Once `aba image add` is implemented, the commented-out `additionalImages`
+block in `imageset-config.yaml.j2` (lines 26-35) should be removed. These
+comments are currently used as **anchors** by the bundle build scripts
+(`bundles/v2/scripts/02-configure-aba-and-imageset.sh` and
+`bundles/bundle-create-test.sh`) via `uncomment_line`. Removing them before
+migrating the bundle scripts to `aba image add` would **break the bundle
+build pipeline**.
+
+**Migration order:**
+1. Implement `aba image add/remove/list` in ABA core
+2. Migrate bundle scripts from `uncomment_line` to `aba image add`
+3. Remove commented-out examples from the ISC template
+4. Users who manually uncommented lines in generated ISCs will automatically
+   get the clean format on next ISC regeneration
+
+**Files likely affected:**
+- `templates/imageset-config.yaml.j2`: render tracked image list, then remove
+  commented-out examples (step 3)
+- `scripts/reg-create-imageset-config.sh`: export image list for Jinja
+- `scripts/aba.sh`: `image add/remove/list` subcommands
+- `scripts/include_all.sh`: image list management functions
+- `templates/additional-images` (new): persistent image list file
+- `bundles/v2/scripts/02-configure-aba-and-imageset.sh`: migrate from
+  `uncomment_line` to `aba image add` (step 2)
+- `bundles/bundle-create-test.sh`: same migration (step 2)
+- `tui/v2/tui-mirror.sh`: UI for image management (calls core)
+
+---
+
+**Architecture:** All cluster discovery, version checking, and pruning logic
+lives in ABA core. The TUI only calls core commands and displays the result —
+no pruning decisions, safety checks, or registry operations in TUI code.
+
+**Files likely affected:**
+- `scripts/include_all.sh`: cluster version discovery (shared with auto-update)
+- New script `scripts/reg-prune.sh` or addition to existing reg-*.sh
+- `scripts/aba.sh`: `prune` subcommand
+- `tui/v2/tui-mirror.sh`: optional TUI integration (calls core, displays result)
