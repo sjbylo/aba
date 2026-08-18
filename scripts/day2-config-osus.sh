@@ -174,11 +174,11 @@ if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 	sleep 5
 	if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 		aba_abort \
-			"cincinnati-operator not available in OperatorHub for this cluster." \
-			"The CatalogSource may still be synchronizing -- wait a few minutes and try again:" \
+			"cincinnati-operator not available in OperatorHub." \
+			"Run 'aba -d $(basename "$PWD") day2' first to configure mirror-backed operator catalogs." \
+			"If day2 has already run, the CatalogSource may still be synchronizing:" \
 			"  oc get catalogsource -n openshift-marketplace" \
-			"  oc get packagemanifests | grep cincinnati" \
-			"If the operator is not loaded, run: aba day2"
+			"  oc get packagemanifests | grep cincinnati"
 	fi
 fi
 
