@@ -978,7 +978,7 @@ To upgrade a disconnected cluster:\n\n\
 			;;
 		3)
 			dlg --backtitle "$(ui_backtitle)" --title "Target Version Set" \
-				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (S), or\n  • Save to tar files (V)\n\nfrom the Mirror Management menu." 0 0
+				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (S), or\n  • Save to tar files (V)\n\nfrom the main menu." 0 0
 			;;
 	esac
 

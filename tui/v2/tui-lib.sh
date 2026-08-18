@@ -1429,6 +1429,12 @@ select_installed_cluster() {
 		return 1
 	fi
 
+	if [[ $idx -eq 1 ]]; then
+		SELECTED_CLUSTER="${_cl_dirs[0]}"
+		SELECTED_CLUSTER_DISPLAY=$(cluster_display_name "$SELECTED_CLUSTER")
+		return 0
+	fi
+
 	dlg --backtitle "$(ui_backtitle)" --title "$title" \
 		--cancel-label "$TUI2_BTN_BACK" \
 		--menu "$prompt" 0 0 0 \
