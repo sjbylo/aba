@@ -26,7 +26,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/sjbylo/aba)](https://github.com/sjbylo/aba/releases)
-[![Platform](https://img.shields.io/badge/Platform-RHEL_8%20|%209%20|%2010%20|%20Fedora-red.svg)](#common-requirements)
+[![Platform](https://img.shields.io/badge/Platform-RHEL_8%20|%209%20|%2010-red.svg)](#common-requirements)
 [![OpenShift](https://img.shields.io/badge/OpenShift-4.14--4.22-ee0000.svg)](https://www.redhat.com/en/technologies/cloud-computing/openshift)
 
 The complete disconnected OpenShift workflow — from mirror to cluster to Day-2 — in a single tool.
