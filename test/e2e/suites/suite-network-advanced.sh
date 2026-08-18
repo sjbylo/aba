@@ -88,9 +88,9 @@ e2e_run "Verify / available space > ${E2E_MIN_DISK_GB}GB after reset" \
 
 e2e_run "Install aba" "./install"
 
-suite_configure_aba
+suite_configure_aba --version "$_ocp_version"
 e2e_run "Verify aba.conf: platform=vmw" "grep ^platform=vmw aba.conf"
-e2e_run "Verify aba.conf: version format" "grep -E '^ocp_version=[0-9]+(\.[0-9]+){2}' aba.conf"
+e2e_run "Verify aba.conf: version matches registry" "grep '^ocp_version=${_ocp_version}' aba.conf"
 
 e2e_run "Copy vmware.conf" "cp -v ${VMWARE_CONF:-~/.vmware.conf} vmware.conf"
 e2e_run "Set VC_FOLDER" \
