@@ -44,16 +44,16 @@ The complete disconnected OpenShift workflow — from mirror to cluster to Day-2
 
 # Quick Start
 
+> **Prerequisites:** RHEL 8/9/10, sudo access (passwordless recommended) or root, Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
+
 ```bash
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"
 cd aba
 aba          # Interactive CLI — ABA guides you through the workflow
 abatui       # Or use the TUI wizard for a guided experience
 ```
 
 That's it. ABA will prompt you for your OpenShift version, operators, registry type, and deployment scenario.
-
-> **Prerequisites:** RHEL 8/9/10, sudo access (passwordless recommended) or root, Internet access, and a Red Hat pull secret at `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)). See the full [Prerequisites](#prerequisites) section for details.
 
 **Contents** <!-- omit in toc -->
 
