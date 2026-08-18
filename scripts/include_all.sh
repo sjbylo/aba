@@ -1649,7 +1649,7 @@ aba_wait_show() (
 # sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver);
 # the -zzz trick tags GA versions so they sort after their pre-release siblings.
 _semver_sort() {
-	sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//'
+	sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V "$@" | sed 's/-zzz$//'
 }
 
 # Check if version1 is strictly greater than version2 (semver-aware).
@@ -2302,7 +2302,7 @@ fetch_all_upgrade_targets() {
 	_tmpdir=$(mktemp -d) || return 1
 
 	# Fetch each channel in parallel (max 3 concurrent processes)
-	for ch in "$channel" fast candidate; do
+	for ch in "$channel" fast candidate stable; do
 		[[ "$_seen_ch" == *" $ch "* ]] && continue
 		_seen_ch+="$ch "
 		( fetch_upgrade_targets "$ver" "$ch" 2>/dev/null | while IFS=$'\t' read -r _label _tgt_ver; do
@@ -2366,6 +2366,66 @@ verify_release_version_exists() {
 	fi
 
 	return 1
+}
+
+############################################
+# Compute the shortest upgrade path between two versions using BFS on the
+# Cincinnati graph.  Prints the path as "v1 → v2 → v3" (arrow-separated).
+# Returns 1 (and prints nothing) if no path exists or the graph is unavailable.
+# Args:
+#	$1 = source version (e.g. 4.20.0)
+#	$2 = target version (e.g. 4.22.8)
+#	$3 = channel (e.g. candidate-4.22)  [uses target minor's graph]
+############################################
+compute_upgrade_path() {
+	local src="$1" dst="$2" channel="${3:-}"
+	[[ -z "$src" || -z "$dst" || "$src" == "$dst" ]] && return 1
+
+	local ch_base="${channel%%-*}"
+	[[ -z "$ch_base" ]] && ch_base="${ocp_channel:-fast}"
+	local tgt_minor="${dst%.*}"
+	[[ "$dst" == *-* ]] && tgt_minor="${dst%%-*}" && tgt_minor="${tgt_minor%.*}"
+
+	local graph_json
+	graph_json=$(_fetch_graph_cached "$ch_base" "$tgt_minor" 2>/dev/null) || return 1
+	[[ -z "$graph_json" ]] && return 1
+
+	local result
+	result=$(echo "$graph_json" | jq -r --arg src "$src" --arg dst "$dst" '
+		.nodes as $nodes |
+		($nodes | to_entries | map({(.value.version): .key}) | add) as $idx |
+		($idx[$src] // -1) as $si |
+		($idx[$dst] // -1) as $di |
+		if $si == -1 or $di == -1 then empty
+		else
+			[.edges[] | {from: .[0], to: .[1]}] as $edges |
+			(reduce $edges[] as $e ({}; .[$e.from | tostring] += [$e.to])) as $adj |
+			{queue: [$si], visited: {($si|tostring): true}, parent: {}, found: false} |
+			until(.found or (.queue | length) == 0;
+				.queue[0] as $cur |
+				.queue[1:] as $rest |
+				if $cur == $di then .found = true | .queue = $rest
+				else
+					($adj[$cur|tostring] // []) as $nbrs |
+					reduce $nbrs[] as $n (. | .queue = $rest;
+						if .visited[$n|tostring] then .
+						else .visited[$n|tostring] = true | .parent[$n|tostring] = $cur | .queue += [$n]
+							| (if $n == $di then .found = true else . end)
+						end
+					)
+				end
+			) |
+			if .found then
+				.parent as $par |
+				[$di] | until(.[0] == $si; [$par[.[0]|tostring]] + .) |
+				map($nodes[.].version) | join(" \u2192 ")
+			else empty
+			end
+		end
+	' 2>/dev/null) || return 1
+
+	[[ -z "$result" ]] && return 1
+	echo "$result"
 }
 
 # Escape characters that are special in sed replacement strings.

@@ -2480,6 +2480,7 @@ _day2_upgrade() {
 		else
 			_header="$_header [no OSUS]\nTip: Install OSUS via Day-2 → OSUS for validated upgrade paths (recommended)"
 		fi
+		_header="$_header\nNote: The update channel will be switched automatically if needed."
 
 		# Classify versions into z-stream and minor upgrade groups
 		local _zstream=() _minor=()
