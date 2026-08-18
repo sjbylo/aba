@@ -9,6 +9,9 @@
       https://developers.redhat.com/articles/2025/10/14/simplify-openshift-installation-air-gapped-environments
       Links to: #day-2-operations, #common-prerequisites-for-both-environments,
       #existing-registry-prerequisites, #internal-bastion-prerequisites
+    - Red Hat Developers article (Mar 2026):
+      https://developers.redhat.com/articles/2026/03/19/how-operate-openshift-air-gapped-environments
+      Referenced from: "Further Reading" section (before FAQ)
     - Bundle maker README_FIRST.md (located in the install bundle archives under
       the top-level directory, e.g. aba/README_FIRST.md):
       Links to: #downloading-an-install-bundle, #creating-a-custom-install-bundle
@@ -19,20 +22,25 @@
   are kept for backward compatibility with any shared or bookmarked URLs.
 -->
 
-# ABA — Install OpenShift in Disconnected Environments <!-- omit in toc -->
+# ABA — Install and Manage OpenShift in Disconnected Environments <!-- omit in toc -->
 
-Quickly install an OpenShift cluster into a fully or partially disconnected environment, on bare-metal, VMware (vSphere/ESXi), or KVM (libvirt).
-ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/disconnected_environments/about-disconnected-environments#preferred-methods_about-disconnected-environments) into a single workflow.
-It simplifies image mirroring for disconnected environments and provides the essential Day-2 capabilities needed to make an air-gapped OpenShift environment fully usable.
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/sjbylo/aba)](https://github.com/sjbylo/aba/releases)
+[![Platform](https://img.shields.io/badge/Platform-RHEL_8%20|%209%20|%2010%20|%20Fedora-red.svg)](#common-requirements)
+[![OpenShift](https://img.shields.io/badge/OpenShift-4.14--4.22-ee0000.svg)](https://www.redhat.com/en/technologies/cloud-computing/openshift)
 
-Because ABA is based on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1), no load balancer, bootstrap node, or DHCP is required.
+The complete disconnected OpenShift workflow — from mirror to cluster to Day-2 — in a single tool.
 
-> **Download ready-made ABA install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
+- **Mirror** — sync or bundle OpenShift releases, operators, and catalogs for air-gapped transfer
+- **Install** — agent-based clusters on bare-metal, VMware, or KVM (no bootstrap, no DHCP)
+- **Day-2** — ongoing content updates, cluster upgrades (OSUS), OperatorHub, NTP, shutdown/startup
 
 <div align="center">
 <img src="images/aba-tui-screenshot-action-menu.png" alt="TUI Action Menu" title="TUI Action Menu" height="300">&nbsp;&nbsp;<img src="images/aba-tui-screenshot-op-sets-selection.png" alt="TUI Operator Sets Selection" title="TUI Operator Sets Selection" height="300">
 <br><sub>The ABA TUI — a guided wizard for the complete OpenShift installation workflow (<code>abatui</code>)</sub>
 </div>
+
+> **Download ready-made ABA install bundles from: [https://red.ht/disco-easy](https://red.ht/disco-easy) (requires Google account)**
 
 # Quick Start
 
@@ -91,6 +99,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Pre-release Versions (RC / EC)](#pre-release-versions-rc--ec)
   - [Installing from the Dev Branch](#installing-from-the-dev-branch)
   - [Uninstalling ABA](#uninstalling-aba)
+- [Further Reading](#further-reading)
 - [FAQ](#faq)
   - [Setup and Platform](#setup-and-platform)
   - [Configuration](#configuration)
@@ -101,6 +110,8 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
 [Back to top](#quick-start)
 
 # What ABA Does
+
+ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/disconnected_environments/about-disconnected-environments#preferred-methods_about-disconnected-environments) into a single workflow, built on the [Agent-based installer](https://www.redhat.com/en/blog/meet-the-new-agent-based-openshift-installer-1).
 
 **Getting Started**
 
@@ -1831,6 +1842,11 @@ rm -rf ~/.aba              # Remove externalized state
 To re-install ABA, see [Install ABA](#install-aba).
 
 [Back to top](#quick-start)
+
+# Further Reading
+
+- [How to operate OpenShift in air-gapped environments](https://developers.redhat.com/articles/2026/03/19/how-operate-openshift-air-gapped-environments) (Red Hat Developers, Mar 2026)
+- [Simplify OpenShift installation in air-gapped environments](https://developers.redhat.com/articles/2025/10/14/simplify-openshift-installation-air-gapped-environments) (Red Hat Developers, Oct 2025)
 
 <!-- perma-link: backward compatibility -->
 <a id="frequently-asked-questions-faq"></a>
