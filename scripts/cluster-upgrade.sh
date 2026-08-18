@@ -569,15 +569,22 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$upgrade_cmd --allow-not-recommended"
 	fi
 
-	# Execute upgrade
+	# Execute upgrade (retry once if the cluster needs time to settle)
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
 	_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
-	echo "$_upgrade_out"
 	if [ $_upgrade_rc -ne 0 ]; then
-		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
-			"Check: oc adm upgrade"
+		echo "$_upgrade_out" >&2
+		aba_info "Cluster not ready for upgrade, waiting 30s and retrying..."
+		sleep 30
+		_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
+		if [ $_upgrade_rc -ne 0 ]; then
+			echo "$_upgrade_out"
+			aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
+				"Check: oc adm upgrade"
+		fi
 	fi
+	echo "$_upgrade_out"
 
 	aba_success "Upgrade command accepted by cluster"
 fi

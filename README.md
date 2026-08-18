@@ -236,7 +236,7 @@ You can also [create your own bundle](#custom-bundles).
 ## Method 1: Single command
 
 ```
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"
 ```
 
 ```
@@ -1701,7 +1701,7 @@ ABA supports the following architectures, automatically detecting the host and d
 
 ```
 podman run -it --rm --name centos9 quay.io/centos/centos:stream9
-bash-5.1# bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"
+bash-5.1# bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"
 bash-5.1# cd aba
 bash-5.1# aba
 ```
@@ -1789,7 +1789,7 @@ ABA uses `make` to define and process all dependencies. Because of this, ABA usu
 ## Installing from the Dev Branch
 
 ```
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/dev/install)" -- dev
 ```
 
 ## Pre-release Versions (RC / EC)

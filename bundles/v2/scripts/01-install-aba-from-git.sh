@@ -13,5 +13,6 @@ rm -rf aba
 
 echo_step "Install Aba from branch $GIT_BRANCH"
 set +x
-bash -c "$(gitrepo=sjbylo/aba; gitbranch=$GIT_BRANCH; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- $GIT_BRANCH
+install_script=$(curl -fsSL "https://raw.githubusercontent.com/sjbylo/aba/refs/heads/$GIT_BRANCH/install")
+bash -c "$install_script" -- $GIT_BRANCH
 set -x
