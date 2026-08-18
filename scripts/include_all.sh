@@ -2903,8 +2903,7 @@ trust_root_ca() {
 		if diff "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem
-			$SUDO update-ca-trust extract
+			$SUDO bash -c "install -m 644 '$1' /etc/pki/ca-trust/source/anchors/aba-rootCA.pem && update-ca-trust extract"
 			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
 	else
