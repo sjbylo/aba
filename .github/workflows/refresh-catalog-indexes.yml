@@ -110,14 +110,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Image: \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Catalog | Version | Operators |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|---------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | redhat-operator | certified-operator | community-operator |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----------------|--------------------|--------------------|" >> $GITHUB_STEP_SUMMARY
           for ver in $OCP_VERSIONS; do
-            for catalog in redhat-operator certified-operator community-operator; do
-              f=".index/${catalog}-index-v${ver}"
-              if [ -s "$f" ]; then
-                count=$(wc -l < "$f")
-                echo "| $catalog | $ver | $count |" >> $GITHUB_STEP_SUMMARY
-              fi
-            done
+            rh="-"; ce="-"; co="-"
+            [ -s ".index/redhat-operator-index-v${ver}" ] && rh=$(wc -l < ".index/redhat-operator-index-v${ver}")
+            [ -s ".index/certified-operator-index-v${ver}" ] && ce=$(wc -l < ".index/certified-operator-index-v${ver}")
+            [ -s ".index/community-operator-index-v${ver}" ] && co=$(wc -l < ".index/community-operator-index-v${ver}")
+            echo "| $ver | $rh | $ce | $co |" >> $GITHUB_STEP_SUMMARY
           done
