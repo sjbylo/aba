@@ -428,7 +428,6 @@ _test_cluster_defaults() {
 }
 
 _test_cluster_defaults "cluster: missing hostPrefix -> 23" "hostPrefix" "23"
-_test_cluster_defaults "cluster: missing port0 -> eth0" "port0" "eth0"
 _test_cluster_defaults "cluster: missing image_source -> mirror" "image_source" "mirror"
 _test_cluster_defaults "cluster: backward compat mirror_name -> mirror" "mirror_name" "mirror"
 

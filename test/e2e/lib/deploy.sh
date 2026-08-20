@@ -211,6 +211,20 @@ sync_extras() {
 		_escp "$HOME/.vmware.conf.esxi" "${target}:~/.vmware.conf.esxi"
 	fi
 
+	# Patch ~/.kvm.conf with per-pool KVM_STORAGE_POOL from pools.conf
+	if [ -n "${KVM_STORAGE_POOL:-}" ]; then
+		_essh "$target" "
+			if [ -f ~/.kvm.conf ]; then
+				sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${KVM_STORAGE_POOL}|' ~/.kvm.conf
+			fi" || true
+		if [ "$user" != "root" ]; then
+			_essh "root@${target#*@}" "
+				if [ -f ~/.kvm.conf ]; then
+					sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${KVM_STORAGE_POOL}|' ~/.kvm.conf
+				fi" || true
+		fi
+	fi
+
 	# Ensure KVM VLAN route survives provisioning gaps or snapshot reverts.
 	local _root_target="root@${target#*@}"
 	_essh "$_root_target" \
@@ -286,6 +300,10 @@ _export_pool_ssh_users() {
 	[ -n "${CLI_DIS_USER:-}" ] && _dis_u="$CLI_DIS_USER"
 	export CON_SSH_USER="${_con_u:-${CON_SSH_USER:-steve}}"
 	export DIS_SSH_USER="${_dis_u:-${DIS_SSH_USER:-steve}}"
+
+	local _kvm_pool=""
+	_kvm_pool=$(_pool_conf_get "$_pools" "$pool_num" KVM_STORAGE_POOL) || true
+	export KVM_STORAGE_POOL="${_kvm_pool:-${KVM_STORAGE_POOL:-}}"
 }
 
 # Full deploy to one pool: source (if --dev) + harness + extras.

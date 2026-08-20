@@ -1,0 +1,121 @@
+name: Refresh Catalog Indexes
+
+on:
+  schedule:
+    - cron: '15 */4 * * *'  # Every 4 hours at :15
+  workflow_dispatch:         # Manual trigger
+
+env:
+  IMAGE: quay.io/sjbylo/aba-catalog-indexes:latest
+  # OCP versions to include (space-separated)
+  OCP_VERSIONS: "4.17 4.18 4.19 4.20 4.21 4.22 4.23 5.0"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman skopeo jq
+
+      - name: Log in to Red Hat registry
+        run: |
+          echo "${{ secrets.RH_REGISTRY_TOKEN }}" | \
+            podman login -u '${{ secrets.RH_REGISTRY_USER }}' --password-stdin registry.redhat.io
+
+      - name: Log in to Quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | \
+            podman login -u '${{ secrets.QUAY_USER }}' --password-stdin quay.io
+
+      - name: Pull and extract catalog indexes
+        run: |
+          mkdir -p .index
+          for ver in $OCP_VERSIONS; do
+            for catalog in redhat-operator certified-operator community-operator; do
+              img="registry.redhat.io/redhat/${catalog}-index:v${ver}"
+              outfile=".index/${catalog}-index-v${ver}"
+              echo "::group::${catalog} v${ver}"
+              echo "Pulling $img ..."
+              if ! podman pull --quiet "$img" 2>/dev/null; then
+                echo "Warning: $img not available, skipping"
+                echo "::endgroup::"
+                continue
+              fi
+              cid=$(podman create "$img" true 2>/dev/null)
+              # Extract operator list: name, display-name, default-channel
+              podman cp "$cid":/configs/. /tmp/configs-$$ 2>/dev/null || true
+              podman rm "$cid" >/dev/null 2>&1
+              if [ -d /tmp/configs-$$ ]; then
+                for d in /tmp/configs-$$/*/; do
+                  [ -d "$d" ] || continue
+                  op_name=$(basename "$d")
+                  # Get display name and default channel from catalog.json
+                  catalog_json=$(find "$d" -name 'catalog.json' -o -name '*.json' 2>/dev/null | head -1)
+                  if [ -n "$catalog_json" ]; then
+                    display=$(jq -r 'select(.schema=="olm.package") | .name // empty' "$catalog_json" 2>/dev/null | head -1)
+                    def_ch=$(jq -r 'select(.schema=="olm.package") | .defaultChannel // empty' "$catalog_json" 2>/dev/null | head -1)
+                  fi
+                  [ -z "$display" ] && display="$op_name"
+                  [ -z "$def_ch" ] && def_ch="-"
+                  printf '%-55s %-55s %s\n' "$op_name" "$display" "$def_ch"
+                done | sort > "$outfile"
+                rm -rf /tmp/configs-$$
+              fi
+              count=$(wc -l < "$outfile" 2>/dev/null || echo 0)
+              echo "Extracted $count operators"
+              echo "::endgroup::"
+            done
+          done
+
+      - name: Verify indexes
+        run: |
+          echo "=== Catalog index summary ==="
+          fail=0
+          for ver in $OCP_VERSIONS; do
+            for catalog in redhat-operator certified-operator community-operator; do
+              f=".index/${catalog}-index-v${ver}"
+              if [ ! -s "$f" ]; then
+                echo "MISSING: $f"
+                fail=1
+              else
+                printf "  %-25s v%-6s %3d operators\n" "$catalog" "$ver" "$(wc -l < "$f")"
+              fi
+            done
+          done
+          [ $fail -eq 1 ] && echo "::warning::Some catalogs missing (may not exist for this version)"
+
+      - name: Build and push image
+        run: |
+          builddir=$(mktemp -d)
+          cp -r .index "$builddir/catalogs"
+          cat > "$builddir/Containerfile" << 'CEOF'
+          FROM scratch
+          COPY catalogs/ /catalogs/
+          CEOF
+          podman build -f "$builddir/Containerfile" -t "$IMAGE" "$builddir"
+          podman push "$IMAGE"
+          echo "Pushed $IMAGE"
+          rm -rf "$builddir"
+
+      - name: Summary
+        run: |
+          echo "### Catalog Index Image Updated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Catalog | Version | Operators |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------|-----------|" >> $GITHUB_STEP_SUMMARY
+          for ver in $OCP_VERSIONS; do
+            for catalog in redhat-operator certified-operator community-operator; do
+              f=".index/${catalog}-index-v${ver}"
+              if [ -s "$f" ]; then
+                count=$(wc -l < "$f")
+                echo "| $catalog | $ver | $count |" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          done

@@ -16,6 +16,7 @@ ack-cloudwatch-controller                               AWS Controllers for Kube
 ack-cloudwatchlogs-controller                           AWS Controllers for Kubernetes - Amazon CloudWatch Logs      alpha
 ack-codeartifact-controller                             AWS Controllers for Kubernetes - Amazon codeartifact         alpha
 ack-cognitoidentityprovider-controller                  AWS Controllers for Kubernetes - Amazon Cognito Identity Provider alpha
+ack-dms-controller                                      AWS Controllers for Kubernetes - Amazon Database Migration Service alpha
 ack-documentdb-controller                               AWS Controllers for Kubernetes - Amazon DocumentDB           alpha
 ack-dsql-controller                                     AWS Controllers for Kubernetes - Amazon Aurora DSQL          alpha
 ack-dynamodb-controller                                 AWS Controllers for Kubernetes - Amazon DynamoDB             alpha
@@ -183,7 +184,6 @@ kuadrant-operator                                       Kuadrant Operator       
 kubecost                                                Kubecost                                                     alpha
 kube-green                                              kube-green                                                   alpha
 kubernetes-imagepuller-operator                         Kubernetes Image Puller Operator                             stable
-kubeturbo                                               Kubeturbo Operator                                           stable
 kubevirt-wol                                            Kubevirt Wake on Lan                                         stable-v0
 l5-operator                                             L5 Operator                                                  alpha
 layer7-operator                                         Layer7 Operator                                              preview
@@ -245,7 +245,6 @@ project-onboarding-operator                             Project Onboarding      
 project-quay                                            Quay                                                         stable-3.17
 prometheus-exporter-operator                            Prometheus Exporter Operator                                 alpha
 prometheus                                              Prometheus Operator                                          beta
-prometurbo                                              Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 pulp-operator                                           Pulp Project                                                 stable
 rabbitmq-cluster-operator                               RabbitMQ-cluster-operator                                    stable

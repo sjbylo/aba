@@ -1,6 +1,28 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.2...HEAD)
 
----
+### Added
+
+- **Upgrade path preview** — `compute_upgrade_path()` uses BFS on the Cincinnati graph to display the intermediate versions `oc-mirror` will fetch via `shortestPath`, shown in CLI output and as an inline comment in `imageset-config.yaml`.
+- **Cluster operator stability waits** — `aba_wait_show` CO stability checks added at the end of `day2`, `day2-ntp`, and `day2-osus`, and at the start of `cluster-upgrade` preflight (Ctrl-C to skip post-day2; mandatory before upgrade).
+- **Post-command install marker** — `_post_check_install()` in `aba.sh` creates the `.install-complete` marker after successful `day2`/`day2-ntp`/`day2-osus`/`upgrade` commands, with proper exit code propagation.
+- **TUI: upgrade channel-switch note** — The upgrade dialog now shows "Note: The update channel will be switched automatically if needed."
+- **README redesign** — Badges (license, release, platform, OpenShift versions), scannable tagline and bullets, prerequisites moved above install command.
+
+### Changed
+
+- **`image_source` replaces `int_connection` + `mirror_name`** — Single `cluster.conf` field (`direct`/`proxy`/`<mirror-name>`) replaces two interdependent fields. Migration shim preserves backward compatibility. CLI flag `--image-source` added; old flags kept as deprecated aliases. (ADR-012)
+- **Upgrade retry on transient failure** — `cluster-upgrade.sh` retries once (30s wait) if `oc adm upgrade` rejects the request due to transient `ClusterOperatorsNotAvailable`.
+- **Upgradeable=False auto-default changed to yes** — Non-interactive upgrades now proceed past admin-ack gates by default.
+- **TUI: auto-select single cluster** — Skip cluster selection dialog when only one cluster is installed.
+
+### Fixed
+
+- **Batch sudo calls to reduce password prompts** — `trust_root_ca()`, `reg_open_firewall()`, `reg_close_firewall()`, and `infra-dns.sh` dnsmasq operations now combine consecutive `$SUDO` calls into single `sudo bash -c` invocations (2-3 prompts → 1 each). (Follow-up to [#36](https://github.com/sjbylo/aba/issues/36), thanks [@msalmanmasood](https://github.com/msalmanmasood).)
+- **Fix `install` script premature sudo prompt** — Sudo guidance now appears before the first actual `sudo` usage; deferred sudo validation to point of need.
+- **Fix `normalize-cluster-conf` emitting control flow** — Backward-compat shim now resolves `image_source` at emit time so output is pure `export K=V` lines, fixing corrupted "Showing existing values" table display.
+- **Fix OSUS error message** — `day2-config-osus.sh` now clearly promotes `aba day2` when `cincinnati-operator` is not available in OperatorHub.
+- **Fix bundle install curl robustness** — `01-install-aba-from-git.sh` captures `curl` output before `bash -c` so `set -e` catches download failures and prevents false `.done-` marker creation.
+- **Fix TUI menu reference wording** — "Mirror Management menu" → "main menu" in upgrade target dialog.
 
 ## [1.2.2](https://github.com/sjbylo/aba/releases/tag/v1.2.2) - 2026-08-16
 

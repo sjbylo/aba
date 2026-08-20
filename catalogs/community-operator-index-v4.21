@@ -16,6 +16,7 @@ ack-cloudwatch-controller                               AWS Controllers for Kube
 ack-cloudwatchlogs-controller                           AWS Controllers for Kubernetes - Amazon CloudWatch Logs      alpha
 ack-codeartifact-controller                             AWS Controllers for Kubernetes - Amazon codeartifact         alpha
 ack-cognitoidentityprovider-controller                  AWS Controllers for Kubernetes - Amazon Cognito Identity Provider alpha
+ack-dms-controller                                      AWS Controllers for Kubernetes - Amazon Database Migration Service alpha
 ack-documentdb-controller                               AWS Controllers for Kubernetes - Amazon DocumentDB           alpha
 ack-dsql-controller                                     AWS Controllers for Kubernetes - Amazon Aurora DSQL          alpha
 ack-dynamodb-controller                                 AWS Controllers for Kubernetes - Amazon DynamoDB             alpha
@@ -178,6 +179,7 @@ keycloak-permissions-operator                           Keycloak Permissions Ope
 klusterlet                                              Klusterlet                                                   stable
 kogito-operator                                         Kogito                                                       1.x
 koku-metrics-operator                                   Koku Metrics Operator                                        beta
+kollect                                                 Kollect                                                      stable
 konflux-operator                                        Konflux                                                      stable-v0.2
 konveyor-operator                                       Konveyor Operator                                            alpha
 korrel8r                                                Korrel8r                                                     stable
@@ -187,7 +189,6 @@ kubecost                                                Kubecost                
 kube-green                                              kube-green                                                   alpha
 kubernaut-operator                                      Kubernaut Operator                                           candidate-v1
 kubernetes-imagepuller-operator                         Kubernetes Image Puller Operator                             stable
-kubeturbo                                               Kubeturbo Operator                                           stable
 l5-operator                                             L5 Operator                                                  alpha
 layer7-operator                                         Layer7 Operator                                              preview
 lbconfig-operator                                       External Load-Balancer Configuration Operator                beta
@@ -248,7 +249,6 @@ project-onboarding-operator                             Project Onboarding      
 project-quay                                            Quay                                                         stable-3.17
 prometheus-exporter-operator                            Prometheus Exporter Operator                                 alpha
 prometheus                                              Prometheus Operator                                          beta
-prometurbo                                              Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 pulp-operator                                           Pulp Project                                                 beta
 rabbitmq-cluster-operator                               RabbitMQ-cluster-operator                                    stable

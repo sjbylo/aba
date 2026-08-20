@@ -60,7 +60,7 @@ infoscale-sds-operator                                  InfoScale™ SDS Operato
 instana-agent-operator                                  Instana Agent Operator                                       stable
 intel-device-plugins-operator                           Intel Device Plugins Operator                                stable
 intel-tdx-dcap-operator                                 Intel TDX DCAP Operator                                      alpha
-k8s-triliovault                                         Trilio for Kubernetes                                        5.3.x
+k8s-triliovault                                         Trilio for Kubernetes                                        5.4.x
 kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
 kubecost-operator                                       Kubecost                                                     stable
@@ -136,4 +136,5 @@ vault-secrets-operator                                  Vault Secrets Operator  
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 victoriametrics-operator                                VictoriaMetrics Operator                                     beta
 wave                                                    Wave                                                         stable
+xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts

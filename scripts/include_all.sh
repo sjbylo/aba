@@ -759,13 +759,20 @@ normalize-cluster-conf()
 
 	# Backward compat: derive int_connection + mirror_name from image_source
 	# so scripts not yet migrated keep working.
-	echo 'if [[ "${image_source:-mirror}" == "direct" || "${image_source:-mirror}" == "proxy" ]]; then'
-	echo '	export int_connection="$image_source"'
-	echo '	export mirror_name=mirror'
-	echo 'else'
-	echo '	export int_connection='
-	echo '	export mirror_name="${image_source:-mirror}"'
-	echo 'fi'
+	# Resolve at emit time so output is pure "export K=V" lines (no control flow).
+	local _is
+	_is=$(grep -m1 '^image_source=' cluster.conf 2>/dev/null | cut -d= -f2 || true)
+	_is="${_is:-mirror}"
+	case "$_is" in
+		direct|proxy)
+			echo "export int_connection=$_is"
+			echo "export mirror_name=mirror"
+			;;
+		*)
+			echo "export int_connection="
+			echo "export mirror_name=$_is"
+			;;
+	esac
 
 	# Phase 3 (ADR-007): override immutable fields from installed state.
 	# Only apply if this cluster dir has the 'clusterstate' symlink — it points

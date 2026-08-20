@@ -77,7 +77,7 @@ intel-device-plugins-operator                           Intel Device Plugins Ope
 intel-tdx-dcap-operator                                 Intel TDX DCAP Operator                                      alpha
 ipm-controller                                          Intel® Infrastructure Power Manager                         stable
 k10-kasten-operator-rhmp                                Veeam Kasten                                                 stable
-k8s-triliovault                                         Trilio for Kubernetes                                        5.3.x
+k8s-triliovault                                         Trilio for Kubernetes                                        5.4.x
 kedify-agent-helm-operator                              kedify-agent-helm-operator                                   stable
 kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
