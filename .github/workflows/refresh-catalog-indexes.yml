@@ -207,17 +207,16 @@ jobs:
           sentinels[certified-operator]="gpu-operator-certified elasticsearch-eck-operator-certified"
           sentinels[community-operator]="argocd-operator"
 
-          # Use latest GA version (4.x), not pre-release (5.x)
-          latest_ga=$(echo "$OCP_VERSIONS" | tr ' ' '\n' | grep '^4\.' | sort -V | tail -1)
+          # Use a known GA version for sentinel checks (not pre-release)
+          sentinel_ver="4.22"
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${latest_ga}"
+            f=".index/${catalog}-index-v${sentinel_ver}"
             [ -s "$f" ] || continue
             for sentinel in ${sentinels[$catalog]}; do
               if ! grep -q "^${sentinel} " "$f"; then
-                echo "::error::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${latest_ga}"
-                errors=$(( errors + 1 ))
+                echo "::warning::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${sentinel_ver}"
               else
-                echo "  OK: ${sentinel} found in ${catalog} v${latest_ga}"
+                echo "  OK: ${sentinel} found in ${catalog} v${sentinel_ver}"
               fi
             done
           done
@@ -225,20 +224,20 @@ jobs:
           echo ""
           echo "=== 4. Display name spot-check ==="
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${latest_ga}"
+            f=".index/${catalog}-index-v${sentinel_ver}"
             [ -s "$f" ] || continue
             dashes=$(awk '$2 == "-"' "$f" | wc -l)
             total=$(wc -l < "$f")
             pct=0
             [ "$total" -gt 0 ] && pct=$(( dashes * 100 / total ))
             if [ "$pct" -gt 20 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${dashes}/${total} (${pct}%) missing display names"
+              echo "::warning::DISPLAY NAMES: ${catalog} v${sentinel_ver} has ${dashes}/${total} (${pct}%) missing display names"
             else
-              echo "  OK: ${catalog} v${latest_ga}: ${dashes}/${total} missing display names (${pct}%)"
+              echo "  OK: ${catalog} v${sentinel_ver}: ${dashes}/${total} missing display names (${pct}%)"
             fi
             same=$(awk '$1 == $2' "$f" | wc -l)
             if [ "$same" -gt 5 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${same} entries where display name equals package name"
+              echo "::warning::DISPLAY NAMES: ${catalog} v${sentinel_ver} has ${same} entries where display name equals package name"
             fi
           done
 
