@@ -61,12 +61,12 @@ jobs:
           _extract_from_json() {
             local dir="$1" pkg_src="$2"
             local pkg="" def_ch=""
-            read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$pkg_src" 2>/dev/null)
+            read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$pkg_src" 2>/dev/null) || true
             if [ -z "$pkg" ] || [ -z "$def_ch" ]; then
               for f in "$dir"/*.json; do
                 [ -f "$f" ] || continue
                 [ "$f" = "$pkg_src" ] && continue
-                read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$f" 2>/dev/null)
+                read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$f" 2>/dev/null) || true
                 [ -n "$pkg" ] && [ -n "$def_ch" ] && break
               done
             fi
@@ -91,7 +91,7 @@ jobs:
               /^defaultChannel: / { defch=$2 }
               /^schema: / { schema=$2 }
               END { if (schema == "olm.package" && name && defch) print name, defch }
-            ' "$yf" 2>/dev/null)
+            ' "$yf" 2>/dev/null) || true
             [ -z "$pkg" ] || [ -z "$def_ch" ] && return 1
             local display_name="" dir_path
             dir_path="$(dirname "$yf")"
@@ -126,6 +126,7 @@ jobs:
                 expected=$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -not -name '_*' | wc -l)
                 echo "$expected" > ".index/.${catalog}-index-v${ver}.expected-count"
                 (
+                  set +e
                   for dir in "$tmpdir"/*/; do
                     [ -d "$dir" ] || continue
                     [[ "$(basename "$dir")" == _* ]] && continue
