@@ -123,6 +123,8 @@ jobs:
               podman cp "$cid":/configs/. "$tmpdir" 2>/dev/null || true
               podman rm "$cid" >/dev/null 2>&1
               if [ -d "$tmpdir" ]; then
+                expected=$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -not -name '_*' | wc -l)
+                echo "$expected" > ".index/.${catalog}-index-v${ver}.expected-count"
                 (
                   for dir in "$tmpdir"/*/; do
                     [ -d "$dir" ] || continue
@@ -158,22 +160,92 @@ jobs:
 
       - name: Verify indexes
         run: |
-          echo "=== Catalog index summary ==="
-          fail=0
+          errors=0
+
+          echo "=== 1. Presence and expected-count check ==="
           for ver in $OCP_VERSIONS; do
             for catalog in redhat-operator certified-operator community-operator; do
               f=".index/${catalog}-index-v${ver}"
+              ec_file=".index/.${catalog}-index-v${ver}.expected-count"
               if [ ! -s "$f" ]; then
-                echo "MISSING: $f"
-                fail=1
+                echo "::error::MISSING: $f"
+                errors=$(( errors + 1 ))
+                continue
+              fi
+              actual=$(wc -l < "$f")
+              expected=0
+              [ -f "$ec_file" ] && expected=$(< "$ec_file")
+              if [ "$expected" -gt 0 ] && [ "$actual" -ne "$expected" ]; then
+                echo "::warning::COUNT MISMATCH: ${catalog} v${ver}: extracted ${actual}, expected ${expected}"
+              fi
+              printf "  %-25s v%-6s %3d / %3d operators\n" "$catalog" "$ver" "$actual" "$expected"
+            done
+          done
+
+          echo ""
+          echo "=== 2. Syntax validation (every line: name display-text channel) ==="
+          for f in .index/*-operator-index-v*; do
+            [ -f "$f" ] || continue
+            fname=$(basename "$f")
+            bad_lines=$(grep -cvE '^[a-z][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" || true)
+            if [ "$bad_lines" -gt 0 ]; then
+              echo "::error::SYNTAX: $fname has $bad_lines malformed line(s):"
+              grep -vnE '^[a-z][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" | head -5
+              errors=$(( errors + 1 ))
+            fi
+            dup_names=$(awk '{print $1}' "$f" | sort | uniq -d)
+            if [ -n "$dup_names" ]; then
+              echo "::warning::DUPLICATES in $fname: $dup_names"
+            fi
+          done
+
+          echo ""
+          echo "=== 3. Sentinel operator checks ==="
+          declare -A sentinels
+          sentinels[redhat-operator]="cincinnati-operator cluster-logging advanced-cluster-management"
+          sentinels[certified-operator]="cert-manager gpu-operator-certified"
+          sentinels[community-operator]="argocd-operator prometheus"
+
+          latest_ver=$(echo "$OCP_VERSIONS" | tr ' ' '\n' | sort -V | tail -1)
+          for catalog in redhat-operator certified-operator community-operator; do
+            f=".index/${catalog}-index-v${latest_ver}"
+            [ -s "$f" ] || continue
+            for sentinel in ${sentinels[$catalog]}; do
+              if ! grep -q "^${sentinel} " "$f"; then
+                echo "::error::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${latest_ver}"
+                errors=$(( errors + 1 ))
               else
-                printf "  %-25s v%-6s %3d operators\n" "$catalog" "$ver" "$(wc -l < "$f")"
+                echo "  OK: ${sentinel} found in ${catalog} v${latest_ver}"
               fi
             done
           done
-          if [ $fail -eq 1 ]; then
-            echo "::warning::Some catalogs missing (may not exist for this version)"
+
+          echo ""
+          echo "=== 4. Display name spot-check ==="
+          for catalog in redhat-operator certified-operator community-operator; do
+            f=".index/${catalog}-index-v${latest_ver}"
+            [ -s "$f" ] || continue
+            dashes=$(awk '$2 == "-"' "$f" | wc -l)
+            total=$(wc -l < "$f")
+            pct=0
+            [ "$total" -gt 0 ] && pct=$(( dashes * 100 / total ))
+            if [ "$pct" -gt 20 ]; then
+              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ver} has ${dashes}/${total} (${pct}%) missing display names"
+            else
+              echo "  OK: ${catalog} v${latest_ver}: ${dashes}/${total} missing display names (${pct}%)"
+            fi
+            same=$(awk '$1 == $2' "$f" | wc -l)
+            if [ "$same" -gt 5 ]; then
+              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ver} has ${same} entries where display name equals package name"
+            fi
+          done
+
+          echo ""
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::Validation failed with $errors error(s)"
+            exit 1
           fi
+          echo "=== All checks passed ==="
 
       - name: Build and push image
         run: |
