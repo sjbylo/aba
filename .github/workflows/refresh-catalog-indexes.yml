@@ -87,7 +87,9 @@ jobs:
               fi
             done
           done
-          [ $fail -eq 1 ] && echo "::warning::Some catalogs missing (may not exist for this version)"
+          if [ $fail -eq 1 ]; then
+            echo "::warning::Some catalogs missing (may not exist for this version)"
+          fi
 
       - name: Build and push image
         run: |
