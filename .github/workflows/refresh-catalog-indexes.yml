@@ -2,7 +2,7 @@ name: Refresh Catalog Indexes
 
 on:
   schedule:
-    - cron: '15 */4 * * *'  # Every 4 hours at :15
+    - cron: '15 */8 * * *'  # Every 8 hours at :15
   workflow_dispatch:         # Manual trigger
 
 env:
