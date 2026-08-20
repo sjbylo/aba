@@ -282,7 +282,7 @@ _extract_from_json() {
 	local dir="$1" pkg_src="$2"
 
 	local pkg def_ch
-	read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$pkg_src" 2>/dev/null)
+	read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$pkg_src" 2>/dev/null) || true
 
 	# Some catalogs split olm.package into channel-specific JSON files
 	if [ -z "$pkg" ] || [ -z "$def_ch" ]; then
@@ -290,7 +290,7 @@ _extract_from_json() {
 		for f in "$dir"/*.json; do
 			[ -f "$f" ] || continue
 			[ "$f" = "$pkg_src" ] && continue
-			read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$f" 2>/dev/null)
+			read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$f" 2>/dev/null) || true
 			[ -n "$pkg" ] && [ -n "$def_ch" ] && break
 		done
 	fi
@@ -330,7 +330,7 @@ _extract_from_yaml() {
 		END {
 			if (schema == "olm.package" && name && defch) print name, defch
 		}
-	' "$yaml_file" 2>/dev/null)
+	' "$yaml_file" 2>/dev/null) || true
 	[ -z "$pkg" ] || [ -z "$def_ch" ] && return 1
 
 	# Display name from CSV annotation in bundle documents.
