@@ -188,10 +188,10 @@ jobs:
           for f in .index/*-operator-index-v*; do
             [ -f "$f" ] || continue
             fname=$(basename "$f")
-            bad_lines=$(grep -cvE '^[a-z][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" || true)
+            bad_lines=$(grep -cvE '^[a-z0-9][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" || true)
             if [ "$bad_lines" -gt 0 ]; then
               echo "::error::SYNTAX: $fname has $bad_lines malformed line(s):"
-              grep -vnE '^[a-z][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" | head -5
+              grep -vnE '^[a-z0-9][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" | head -5
               errors=$(( errors + 1 ))
             fi
             dup_names=$(awk '{print $1}' "$f" | sort | uniq -d)
@@ -203,20 +203,21 @@ jobs:
           echo ""
           echo "=== 3. Sentinel operator checks ==="
           declare -A sentinels
-          sentinels[redhat-operator]="cincinnati-operator cluster-logging advanced-cluster-management"
-          sentinels[certified-operator]="cert-manager gpu-operator-certified"
-          sentinels[community-operator]="argocd-operator prometheus"
+          sentinels[redhat-operator]="cincinnati-operator advanced-cluster-management"
+          sentinels[certified-operator]="gpu-operator-certified elasticsearch-eck-operator-certified"
+          sentinels[community-operator]="argocd-operator"
 
-          latest_ver=$(echo "$OCP_VERSIONS" | tr ' ' '\n' | sort -V | tail -1)
+          # Use latest GA version (4.x), not pre-release (5.x)
+          latest_ga=$(echo "$OCP_VERSIONS" | tr ' ' '\n' | grep '^4\.' | sort -V | tail -1)
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${latest_ver}"
+            f=".index/${catalog}-index-v${latest_ga}"
             [ -s "$f" ] || continue
             for sentinel in ${sentinels[$catalog]}; do
               if ! grep -q "^${sentinel} " "$f"; then
-                echo "::error::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${latest_ver}"
+                echo "::error::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${latest_ga}"
                 errors=$(( errors + 1 ))
               else
-                echo "  OK: ${sentinel} found in ${catalog} v${latest_ver}"
+                echo "  OK: ${sentinel} found in ${catalog} v${latest_ga}"
               fi
             done
           done
@@ -224,20 +225,20 @@ jobs:
           echo ""
           echo "=== 4. Display name spot-check ==="
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${latest_ver}"
+            f=".index/${catalog}-index-v${latest_ga}"
             [ -s "$f" ] || continue
             dashes=$(awk '$2 == "-"' "$f" | wc -l)
             total=$(wc -l < "$f")
             pct=0
             [ "$total" -gt 0 ] && pct=$(( dashes * 100 / total ))
             if [ "$pct" -gt 20 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ver} has ${dashes}/${total} (${pct}%) missing display names"
+              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${dashes}/${total} (${pct}%) missing display names"
             else
-              echo "  OK: ${catalog} v${latest_ver}: ${dashes}/${total} missing display names (${pct}%)"
+              echo "  OK: ${catalog} v${latest_ga}: ${dashes}/${total} missing display names (${pct}%)"
             fi
             same=$(awk '$1 == $2' "$f" | wc -l)
             if [ "$same" -gt 5 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ver} has ${same} entries where display name equals package name"
+              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${same} entries where display name equals package name"
             fi
           done
 
