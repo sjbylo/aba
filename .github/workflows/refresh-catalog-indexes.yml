@@ -34,77 +34,7 @@ jobs:
 
       - name: Pull and extract catalog indexes
         run: |
-          # Display name extraction — mirrors scripts/download-catalog-index.sh logic
-          _display_name_from_bundles() {
-            local search_dir="$1" dn=""
-            while IFS= read -r -d '' f; do
-              local candidate=""
-              candidate=$(jq -r '
-                if .schema == "olm.bundle" then
-                  (.properties[]? | select(.type=="olm.csv.metadata") | .value.displayName // empty)
-                elif .properties then
-                  (.properties[]? | select(.type=="olm.csv.metadata") | .value.displayName // empty)
-                else empty end
-              ' "$f" 2>/dev/null | head -1)
-              if [ -z "$candidate" ]; then
-                candidate=$(jq -r '
-                  select(.schema == "olm.bundle") |
-                  .properties[]? | select(.type == "olm.bundle.object") |
-                  .value.data
-                ' "$f" 2>/dev/null | base64 -d 2>/dev/null | jq -r '.spec.displayName // empty' 2>/dev/null | head -1)
-              fi
-              [ -n "$candidate" ] && dn="$candidate"
-            done < <(find "$search_dir" -name '*.json' -print0 2>/dev/null)
-            echo "$dn"
-          }
-
-          _extract_from_json() {
-            local dir="$1" pkg_src="$2"
-            local pkg="" def_ch=""
-            read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$pkg_src" 2>/dev/null) || true
-            if [ -z "$pkg" ] || [ -z "$def_ch" ]; then
-              for f in "$dir"/*.json; do
-                [ -f "$f" ] || continue
-                [ "$f" = "$pkg_src" ] && continue
-                read -r pkg def_ch < <(jq -r 'select(.schema=="olm.package") | "\(.name) \(.defaultChannel)"' "$f" 2>/dev/null) || true
-                [ -n "$pkg" ] && [ -n "$def_ch" ] && break
-              done
-            fi
-            [ -z "$pkg" ] || [ -z "$def_ch" ] && return 1
-            local display_name=""
-            display_name=$(jq -r 'select(.schema=="olm.bundle") | .properties[]? | select(.type=="olm.csv.metadata") | .value.displayName // empty' "$pkg_src" 2>/dev/null | tail -1)
-            if [ -z "$display_name" ]; then
-              display_name=$(jq -r 'select(.schema=="olm.bundle") | .properties[]? | select(.type=="olm.bundle.object") | .value.data' "$pkg_src" 2>/dev/null | base64 -d 2>/dev/null | jq -r '.spec.displayName // empty' 2>/dev/null | tail -1)
-            fi
-            if [ -z "$display_name" ]; then
-              display_name=$(_display_name_from_bundles "$dir")
-            fi
-            printf "%-55s %-60s %s\n" "$pkg" "${display_name:--}" "$def_ch"
-          }
-
-          _extract_from_yaml() {
-            local yf="$1"
-            local pkg="" def_ch=""
-            read pkg def_ch < <(awk '
-              /^---/ { if (schema == "olm.package" && name && defch) { print name, defch; exit } name=""; defch=""; schema="" }
-              /^name: / { name=$2 }
-              /^defaultChannel: / { defch=$2 }
-              /^schema: / { schema=$2 }
-              END { if (schema == "olm.package" && name && defch) print name, defch }
-            ' "$yf" 2>/dev/null) || true
-            [ -z "$pkg" ] || [ -z "$def_ch" ] && return 1
-            local display_name="" dir_path
-            dir_path="$(dirname "$yf")"
-            display_name=$(grep '^ *displayName:' "$yf" 2>/dev/null | grep -v 'x-descriptors' | tail -1 | sed 's/.*displayName: *//' | sed "s/^['\"]//;s/['\"]$//")
-            if [ -z "$display_name" ]; then
-              while IFS= read -r -d '' _sf; do
-                [ "$_sf" = "$yf" ] && continue
-                display_name=$(grep '^ *displayName:' "$_sf" 2>/dev/null | grep -v 'x-descriptors' | tail -1 | sed 's/.*displayName: *//' | sed "s/^['\"]//;s/['\"]$//")
-                [ -n "$display_name" ] && break
-              done < <(find "$dir_path" \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) -print0 2>/dev/null)
-            fi
-            printf "%-55s %-60s %s\n" "$pkg" "${display_name:--}" "$def_ch"
-          }
+          source scripts/catalog-extract-functions.sh
 
           mkdir -p .index
           for ver in $OCP_VERSIONS; do
@@ -125,32 +55,7 @@ jobs:
               if [ -d "$tmpdir" ]; then
                 expected=$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -not -name '_*' | wc -l)
                 echo "$expected" > ".index/.${catalog}-index-v${ver}.expected-count"
-                (
-                  set +e
-                  for dir in "$tmpdir"/*/; do
-                    [ -d "$dir" ] || continue
-                    [[ "$(basename "$dir")" == _* ]] && continue
-                    if [ -f "$dir/package.json" ]; then
-                      _extract_from_json "$dir" "$dir/package.json"
-                    elif [ -f "$dir/catalog.json" ]; then
-                      _extract_from_json "$dir" "$dir/catalog.json"
-                    elif [ -f "$dir/index.json" ]; then
-                      _extract_from_json "$dir" "$dir/index.json"
-                    elif [ -f "$dir/package.yaml" ]; then
-                      _extract_from_yaml "$dir/package.yaml"
-                    elif compgen -G "$dir"'*.yaml' >/dev/null 2>&1 || compgen -G "$dir"'*.yml' >/dev/null 2>&1; then
-                      for yf in "$dir"/*.yaml "$dir"/*.yml; do
-                        [ -f "$yf" ] || continue
-                        _extract_from_yaml "$yf" && break
-                      done
-                    else
-                      for f in "$dir"/*.json; do
-                        [ -f "$f" ] || continue
-                        _extract_from_json "$dir" "$f" && break
-                      done
-                    fi
-                  done
-                ) | sort > "$outfile"
+                _extract_catalog_dir "$tmpdir" "$outfile"
                 rm -rf "$tmpdir"
               fi
               count=$(wc -l < "$outfile" 2>/dev/null || echo 0)
