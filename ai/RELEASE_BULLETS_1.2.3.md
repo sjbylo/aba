@@ -6,4 +6,3 @@
 - Consecutive sudo calls batched into single invocations — fewer password prompts for non-root users
 - `cluster-upgrade` retries once on transient `oc adm upgrade` rejection instead of aborting immediately
 - Install script no longer prompts for sudo password before it's actually needed
-- README redesigned with badges, scannable bullets, and prerequisites before install

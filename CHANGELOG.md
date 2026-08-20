@@ -6,7 +6,6 @@
 - **Cluster operator stability waits** — `aba_wait_show` CO stability checks added at the end of `day2`, `day2-ntp`, and `day2-osus`, and at the start of `cluster-upgrade` preflight (Ctrl-C to skip post-day2; mandatory before upgrade).
 - **Post-command install marker** — `_post_check_install()` in `aba.sh` creates the `.install-complete` marker after successful `day2`/`day2-ntp`/`day2-osus`/`upgrade` commands, with proper exit code propagation.
 - **TUI: upgrade channel-switch note** — The upgrade dialog now shows "Note: The update channel will be switched automatically if needed."
-- **README redesign** — Badges (license, release, platform, OpenShift versions), scannable tagline and bullets, prerequisites moved above install command.
 
 ### Changed
 
