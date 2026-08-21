@@ -227,15 +227,15 @@ if [ "$_is_upgrade" ]; then
 	_bundle_files+=("mirror/data/aba-transfer-metadata.json")
 fi
 
-aba_info "Creating transfer bundle: $_transfer_tar"
+aba_debug "Packing transfer config: $_transfer_tar"
 
 # Create the tar from aba root so paths are correct for unpack from aba root.
 # CWD is mirror/ so aba root is ..
 if ( cd .. && tar cf "mirror/$_transfer_tar" "${_bundle_files[@]}" ); then
 	_tar_size=$(du -sh "$_transfer_tar" | awk '{print $1}')
-	aba_success "Transfer bundle created: $_transfer_tar ($_tar_size)"
+	aba_debug "Transfer config packed: $_transfer_tar ($_tar_size)"
 else
-	aba_warn "Failed to create transfer bundle ($_transfer_tar)." \
+	aba_warn "Failed to create transfer config ($_transfer_tar)." \
 		"The image archives (mirror_*.tar) are still valid." \
 		"You can manually copy ISC and CLI files to the disconnected host."
 fi
@@ -248,7 +248,7 @@ if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info "Copy all *.tar files from mirror/data/ to the disconnected host:"
 	aba_info "  cp mirror/data/*.tar /transfer-media/"
 	echo
-	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (ISC, CLIs, metadata)"
+	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (config, CLIs)"
 	echo
 	aba_info "On the disconnected host:"
 	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"
