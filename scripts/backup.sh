@@ -299,6 +299,7 @@ if [ -f "${repo_dir}/mirror/data/imageset-config.yaml" ] && [ -f "${repo_dir}/mi
 fi
 
 aba_debug "Running: 'tar cf $dest $out_file_list...' from inside $PWD"
+[ "$dest" != "-" ] && aba_info "Packaging archive, this may take several minutes for large image sets ..." >&2
 
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list

@@ -1747,7 +1747,8 @@ mirror_create_bundle() {
 	fi
 	_summary+="\nEnter output path (version suffix added automatically):"
 
-	local default_bundle="/tmp/ocp-bundle"
+	local default_bundle
+	default_bundle=$(cat "$HOME/.aba/bundle-path" 2>/dev/null) || default_bundle="/tmp/ocp-bundle"
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
@@ -1779,6 +1780,9 @@ mirror_create_bundle() {
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
 	[[ -d "$bundle_path" ]] && bundle_path="$bundle_path/ocp-bundle"
 	bundle_path="${bundle_path%.tar}"              # strip .tar suffix if present
+
+	mkdir -p "$HOME/.aba" 2>/dev/null
+	echo "$bundle_path" > "$HOME/.aba/bundle-path"
 
 	# Check same-device for --light option
 	local output_dir
