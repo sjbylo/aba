@@ -117,10 +117,10 @@ _dispatch_suite() {
 	# Resolve per-pool SSH users: CLI flags > pools.conf > config.env default
 	_export_pool_ssh_users "$pool_num"
 
-	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION'"
-	sleep 1  # Let tmux fully release the session name before new-session
-	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num'"
-	_ssh_con "$pool_num" "sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' /tmp/e2e-paused-*"
+	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION'" || true
+	sleep 1
+	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num'" || true
+	_ssh_con "$pool_num" "sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*"
 
 	# Detect SSH user change since last run on this pool (con or dis)
 	local _prev_user="" _prev_dis_user=""
@@ -175,8 +175,12 @@ _dispatch_suite() {
 	local target
 	target=$(_con_target "$pool_num")
 	if ! sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
-		echo "    ERROR: harness sync to con${pool_num} failed -- skipping dispatch"
-		return 1
+		echo "    DIAG: sync_harness attempt 1 failed on pool ${pool_num} -- retrying in 5s" >&2
+		sleep 5
+		if ! sync_harness "$target" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"; then
+			echo "    ERROR: harness sync to con${pool_num} failed (both attempts) -- skipping dispatch" >&2
+			return 1
+		fi
 	fi
 
 	# After user-change revert, the new user's ~/aba is empty (snapshot
@@ -200,8 +204,13 @@ _dispatch_suite() {
 	[ -n "${_retried[$suite]:-}" ] && _retry_arg=" retry"
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
 	if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on"; then
-		echo "    INFRA FAIL: tmux launch failed on con${pool_num}" >&2
-		return 1
+		echo "    DIAG: tmux launch attempt 1 failed on con${pool_num} -- retrying in 3s" >&2
+		_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION'" || true
+		sleep 3
+		if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on"; then
+			echo "    INFRA FAIL: tmux launch failed on con${pool_num} (both attempts)" >&2
+			return 1
+		fi
 	fi
 
 	# Verify the session actually exists (catches silent SSH failures)

@@ -64,7 +64,10 @@ sync_harness() {
 		return 1
 	fi
 
-	_essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" || return 1
+	if ! _essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}"; then
+		echo "    DIAG: sync_harness: dir cleanup/create failed on ${target}" >&2
+		return 1
+	fi
 
 	# Clean stale regular-file *-summary.log and summary.log left by old rsync deploys.
 	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
@@ -72,13 +75,13 @@ sync_harness() {
 
 	# Atomic replace of runner.sh (scp to tmp + mv) so a still-open bash FD cannot
 	# observe a truncated in-place write if the lock check races.
-	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh.new" &&
-	_essh "$target" "mv -f ~/.e2e-harness/runner.sh.new ~/.e2e-harness/runner.sh" &&
-	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env" &&
-	_escp "${aba_root}/test/e2e/pools.conf"          "${target}:~/.e2e-harness/pools.conf" &&
-	_escp "${aba_root}/test/e2e/lib/"*.sh            "${target}:~/.e2e-harness/lib/" &&
-	_escp "${aba_root}/test/e2e/suites/"suite-*.sh   "${target}:~/.e2e-harness/suites/" &&
-	_escp "${aba_root}/test/e2e/scripts/"*.sh        "${target}:~/.e2e-harness/scripts/"
+	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh.new" || { echo "    DIAG: sync_harness: scp runner.sh failed to ${target}" >&2; return 1; }
+	_essh "$target" "mv -f ~/.e2e-harness/runner.sh.new ~/.e2e-harness/runner.sh"            || { echo "    DIAG: sync_harness: mv runner.sh failed on ${target}" >&2; return 1; }
+	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env"   || { echo "    DIAG: sync_harness: scp config.env failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/pools.conf"          "${target}:~/.e2e-harness/pools.conf"   || { echo "    DIAG: sync_harness: scp pools.conf failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/lib/"*.sh            "${target}:~/.e2e-harness/lib/"         || { echo "    DIAG: sync_harness: scp lib/*.sh failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/suites/"suite-*.sh   "${target}:~/.e2e-harness/suites/"      || { echo "    DIAG: sync_harness: scp suites/*.sh failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/scripts/"*.sh        "${target}:~/.e2e-harness/scripts/"     || { echo "    DIAG: sync_harness: scp scripts/*.sh failed to ${target}" >&2; return 1; }
 }
 
 # Deploy infra-owned aba binary to ~/.e2e-harness/bin/aba on both conN and disN.
