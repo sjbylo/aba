@@ -54,6 +54,45 @@ declare -A _pool_cooldown_until=()
 _POOL_INFRA_FAIL_THRESHOLD=3
 _POOL_COOLDOWN_SECONDS=300
 
+# --- User-aware tmux helpers --------------------------------------------------
+# tmux sessions live under /tmp/tmux-<uid>/. When CON_SSH_USER changes between
+# dispatches (e.g. root -> steve), the new user can't see the old user's tmux.
+# These helpers check/kill as both the current user and the stored suite user
+# (/tmp/e2e-suite-user) in a single SSH call via sudo -u.
+
+_tmux_has_session() {
+	local pool_num="$1"
+	_ssh_con "$pool_num" "
+		tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes && exit 0
+		_su=\$(cat /tmp/e2e-suite-user 2>/dev/null) || true
+		[ -z \"\$_su\" ] && exit 1
+		[ \"\$_su\" = \"\$(whoami)\" ] && exit 1
+		sudo -u \"\$_su\" tmux has-session -t '$_TMUX_SESSION' 2>/dev/null && echo yes || exit 1
+	"
+}
+
+_tmux_kill_session() {
+	local pool_num="$1"
+	_ssh_con "$pool_num" "
+		tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+		_su=\$(cat /tmp/e2e-suite-user 2>/dev/null) || true
+		[ -z \"\$_su\" ] && exit 0
+		[ \"\$_su\" = \"\$(whoami)\" ] && exit 0
+		sudo -u \"\$_su\" tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+	"
+}
+
+_kill_runner_any_user() {
+	local pool_num="$1"
+	_ssh_con "$pool_num" "
+		pkill -f 'runner\\.sh.*$pool_num' 2>/dev/null || true
+		_su=\$(cat /tmp/e2e-suite-user 2>/dev/null) || true
+		[ -z \"\$_su\" ] && exit 0
+		[ \"\$_su\" = \"\$(whoami)\" ] && exit 0
+		sudo -u \"\$_su\" pkill -f 'runner\\.sh.*$pool_num' 2>/dev/null || true
+	"
+}
+
 # --- Process cleanup files on a remote host -----------------------------------
 # Fetches ~/.e2e-harness/logs/*cleanup* from the host, runs the shared aba-based
 # cleanup helpers (lib/cleanup.sh), then deletes successfully processed files
@@ -117,9 +156,9 @@ _dispatch_suite() {
 	# Resolve per-pool SSH users: CLI flags > pools.conf > config.env default
 	_export_pool_ssh_users "$pool_num"
 
-	_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION'" || true
+	_tmux_kill_session "$pool_num"
 	sleep 1
-	_ssh_con "$pool_num" "pkill -f 'runner\.sh.*$pool_num'" || true
+	_kill_runner_any_user "$pool_num"
 	_ssh_con "$pool_num" "sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*"
 
 	# Detect SSH user change since last run on this pool (con or dis)
@@ -205,7 +244,7 @@ _dispatch_suite() {
 	local runner_cmd="bash ~/.e2e-harness/runner.sh $pool_num $suite$_retry_arg"
 	if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on"; then
 		echo "    DIAG: tmux launch attempt 1 failed on con${pool_num} -- retrying in 3s" >&2
-		_ssh_con "$pool_num" "tmux kill-session -t '$_TMUX_SESSION'" || true
+		_tmux_kill_session "$pool_num"
 		sleep 3
 		if ! _ssh_con "$pool_num" "tmux set-option -g history-limit 200000; tmux new-session -d -s '$_TMUX_SESSION' '$runner_cmd'; tmux rename-window -t '$_TMUX_SESSION' '$suite'; tmux set-option -t '$_TMUX_SESSION' remain-on-exit on; tmux set-window-option -t '$_TMUX_SESSION' remain-on-exit on"; then
 			echo "    INFRA FAIL: tmux launch failed on con${pool_num} (both attempts)" >&2
@@ -260,11 +299,11 @@ _check_pool() {
 	local _grace=60
 
 	local sess_alive="" _ssh_rc=0
-	sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || { _ssh_rc=$?; sess_alive=""; }
+	sess_alive=$(_tmux_has_session "$pool_num") || { _ssh_rc=$?; sess_alive=""; }
 	if [ "$sess_alive" != "yes" ]; then
 		echo "  DIAG: pool $pool_num tmux check 1 failed (ssh_rc=$_ssh_rc, got='$sess_alive')" >&2
 		sleep 5
-		sess_alive=$(_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || { _ssh_rc=$?; sess_alive=""; }
+		sess_alive=$(_tmux_has_session "$pool_num") || { _ssh_rc=$?; sess_alive=""; }
 		if [ "$sess_alive" = "yes" ]; then
 			return
 		fi
@@ -347,7 +386,7 @@ _find_free_pool() {
 			_export_pool_ssh_users "$_p"
 			if _essh "$(_con_target "$_p")" "true"; then
 				local _has_sess=""
-				_has_sess=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || _has_sess=""
+				_has_sess=$(_tmux_has_session "$_p") || _has_sess=""
 				[ "$_has_sess" = "yes" ] && continue
 				echo "$_p"
 				return 0
@@ -449,9 +488,8 @@ _detect_running_and_completed() {
 		_export_pool_ssh_users "$_p"
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
-			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
+			sess_exists=$(_tmux_has_session "$_p") || sess_exists=""
 			[ -n "$sess_exists" ] && break
-			# Distinguish "no tmux session" (SSH succeeded) from "SSH failed"
 			if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 				break
 			fi
@@ -468,7 +506,6 @@ _detect_running_and_completed() {
 			fi
 			unset '_unreachable_pools[$_p]'
 		elif _ssh_con "$_p" "echo reachable" | grep -q reachable; then
-			# SSH works but no tmux session -- pool is genuinely free
 			unset '_unreachable_pools[$_p]'
 		else
 			_unreachable_pools[$_p]=1
@@ -487,7 +524,7 @@ _detect_running_and_completed() {
 		_export_pool_ssh_users "$_p"
 		local sess_exists="" _attempt
 		for _attempt in $(seq 1 $_max_ssh_retries); do
-			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
+			sess_exists=$(_tmux_has_session "$_p") || sess_exists=""
 			[ -n "$sess_exists" ] && break
 			if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 				break
@@ -545,7 +582,7 @@ _recheck_unreachable_pools() {
 		_export_pool_ssh_users "$_p"
 		if _ssh_con "$_p" "echo reachable" | grep -q reachable; then
 			local sess_exists=""
-			sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
+			sess_exists=$(_tmux_has_session "$_p") || sess_exists=""
 			if [ "$sess_exists" = "yes" ]; then
 				local suite=""
 				suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites") || suite=""
@@ -572,7 +609,7 @@ _refresh_external_running() {
 		[ -n "$_is_cli_pool" ] && continue
 		_export_pool_ssh_users "$_p"
 		local sess_exists=""
-		sess_exists=$(_ssh_con "$_p" "tmux has-session -t '$_TMUX_SESSION' && echo yes") || sess_exists=""
+		sess_exists=$(_tmux_has_session "$_p") || sess_exists=""
 		if [ "$sess_exists" = "yes" ]; then
 			local suite=""
 			suite=$(_ssh_con "$_p" "cat /tmp/e2e-last-suites") || suite=""
@@ -589,10 +626,8 @@ _force_clean_all() {
 	echo "  --force: wiping all suite state on all pools ..."
 	for _p in $CLI_POOL_LIST; do
 		_export_pool_ssh_users "$_p"
-		_ssh_con "$_p" "
-			tmux kill-session -t '$_TMUX_SESSION'
-			sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-		"
+		_tmux_kill_session "$_p"
+		_ssh_con "$_p" "sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*"
 		_process_pool_cleanup_files "$_p"
 		echo "    con${_p}: cleaned"
 	done
@@ -604,10 +639,8 @@ _force_clean_pool() {
 	local pool_num="$1"
 	_export_pool_ssh_users "$pool_num"
 	echo "  --force: wiping suite state on con${pool_num} ..."
-	_ssh_con "$pool_num" "
-		tmux kill-session -t '$_TMUX_SESSION'
-		sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*
-	"
+	_tmux_kill_session "$pool_num"
+	_ssh_con "$pool_num" "sudo rm -f ${_RC_PREFIX}-*.rc ${_RC_PREFIX}-*.lock /tmp/e2e-paused-*"
 	_process_pool_cleanup_files "$pool_num"
 	local suite_on_pool="${_busy_pools[$pool_num]:-}"
 	[ -n "$suite_on_pool" ] && unset '_busy_pools[$pool_num]'
@@ -632,7 +665,11 @@ _force_clean_suite() {
 			_ssh_con "$_p" "
 				running=\$(cat /tmp/e2e-last-suites) || running=''
 				if [ \"\$running\" = '$suite' ]; then
-					tmux kill-session -t '$_TMUX_SESSION'
+					tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+					_su=\$(cat /tmp/e2e-suite-user 2>/dev/null) || true
+					if [ -n \"\$_su\" ] && [ \"\$_su\" != \"\$(whoami)\" ]; then
+						sudo -u \"\$_su\" tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
+					fi
 				fi
 				sudo rm -f '${_RC_PREFIX}-${suite}.rc' '${_RC_PREFIX}-${suite}.lock' '/tmp/e2e-paused-${suite}'
 			"
@@ -951,7 +988,7 @@ _dispatch_loop() {
 				unset '_pool_dead_count[$_p]'
 				_record_result "$local_suite" "$rc"
 				_collect_pool_logs "$_p"
-				_ssh_con "$_p" "tmux kill-session -t '$_TMUX_SESSION'"
+				_tmux_kill_session "$_p"
 				unset '_busy_pools[$_p]'
 				_state_changed=1
 			fi

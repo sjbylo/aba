@@ -9,6 +9,8 @@
 
 source scripts/include_all.sh
 
+ensure_oc
+
 source <(normalize-cluster-conf)
 
 _kc=$(cluster_kubeconfig)

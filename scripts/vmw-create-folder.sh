@@ -5,6 +5,8 @@
 
 source scripts/include_all.sh
 
+ensure_govc
+
 folder_list=
 vc_folder=$1
 msg_folder=$1

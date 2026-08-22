@@ -746,12 +746,7 @@ preflight_check_vsphere() {
 		_vsphere_label="vSphere"
 	fi
 
-	# govc presence probe. `command -v` writes only to stdout; >/dev/null suppresses
-	# stdout, not stderr - so this is NOT a stderr-suppression-ban violation.
-	if ! command -v govc >/dev/null; then
-		aba_abort "$_vsphere_label: govc CLI not found on PATH" \
-			"Run: make -C cli govc  (or: aba -d cli/ install)"
-	fi
+	ensure_govc
 
 	# CON-03 (moved from Phase 2 per D-09): required-field presence check.
 	# DC / Cluster are vCenter-only; normalize-vmware-conf strips them and sets

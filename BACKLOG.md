@@ -1507,3 +1507,53 @@ no pruning decisions, safety checks, or registry operations in TUI code.
 - New script `scripts/reg-prune.sh` or addition to existing reg-*.sh
 - `scripts/aba.sh`: `prune` subcommand
 - `tui/v2/tui-mirror.sh`: optional TUI integration (calls core, displays result)
+
+---
+
+## Optimization: CLI download --wait should be instant after oc-mirror
+
+**Severity:** LOW — UX improvement, saves ~60s during bundle creation
+**Status:** Planned
+**Added:** 2026-08-21
+
+**Problem:** During `aba bundle` (or `aba save`), CLI downloads are kicked off
+in background (`scripts/cli-download-all.sh` without `--wait`) before oc-mirror
+starts. oc-mirror typically runs for 10-20 minutes, which should be more than
+enough time for all CLI tarballs to finish downloading. However, when
+`scripts/cli-download-all.sh --wait` is called after oc-mirror completes,
+it blocks for ~60 seconds. The user sees:
+
+```
+[ABA] Ensuring all CLI installation files are downloaded...
+```
+
+followed by a visible delay before the bundle is written.
+
+**Root cause (likely):** The extra/optional CLIs (`cli_download_extra_clis` —
+virtctl, kn, tkn, helm, opm, argocd, roxctl) are 7 additional downloads. If
+these aren't already cached, they are started fresh during the `--wait` call
+rather than having been started earlier. Each `run_once` invocation also has
+overhead (subshell, source scripts, check state files).
+
+**Investigation areas:**
+1. Verify that `cli_download_extra_clis` (no `--wait`) at `reg-save.sh` line 94
+   actually starts background tasks for all 7 extra CLIs
+2. Check if the internet-connectivity cache guard (`aba:check:internet`) is
+   blocking the start mode from initiating downloads
+3. Profile `run_once` overhead — 7 tools × 2 calls each (start + wait) = 14
+   `run_once` invocations, each sourcing `include_all.sh`
+4. Consider pre-warming the extra CLI downloads earlier (e.g. in TUI startup
+   or `aba bundle` before calling `make -C mirror save`)
+
+**Proposed fixes (pick one or combine):**
+- Ensure extra CLI downloads are started alongside regular CLIs at the earliest
+  opportunity (currently `make-bundle.sh` line 100-101 starts both — verify
+  the extra downloads actually begin)
+- Reduce `run_once` per-call overhead for status checks (cached PID file reads
+  instead of full subshell + source)
+- Show progress during the wait instead of a blank pause
+
+**Files likely affected:**
+- `scripts/cli-download-all.sh`: verify start mode initiates all tasks
+- `scripts/make-bundle.sh`: ensure early kickoff covers extras
+- `scripts/reg-save.sh`: same

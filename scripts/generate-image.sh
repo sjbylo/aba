@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+ensure_openshift_install
+
 aba_debug "Starting: $0 $*"
 
 aba_debug "Loading configuration files"
