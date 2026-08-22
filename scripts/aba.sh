@@ -1243,6 +1243,7 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		getco)
+			ensure_oc
 			_cn=$(basename "$PWD")
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)

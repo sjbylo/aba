@@ -326,9 +326,15 @@ deploy_pool() {
 
 	echo -n "    con${pool_num} (${user}): "
 
-	# Check for running suite (skip unless --force)
+	# Check for running suite under any user (skip unless --force)
 	local _running_sess=""
-	_running_sess=$(_essh "$target" "tmux has-session -t '$E2E_TMUX_SESSION' && echo yes") || _running_sess=""
+	_running_sess=$(_essh "$target" "
+		tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes && exit 0
+		_su=\$(cat /tmp/e2e-suite-user 2>/dev/null) || true
+		[ -z \"\$_su\" ] && exit 1
+		[ \"\$_su\" = \"\$(whoami)\" ] && exit 1
+		sudo -u \"\$_su\" tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes || exit 1
+	") || _running_sess=""
 	if [ "$_running_sess" = "yes" ]; then
 		if [ -z "${CLI_FORCE:-}" ]; then
 			echo "RUNNING (skipped -- use --force to deploy anyway)"

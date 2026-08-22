@@ -313,8 +313,8 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-# If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
+trap 'show_error' ERR
+[ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 vm_name() {
 	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
@@ -717,8 +717,12 @@ normalize-cluster-conf()
 	# --- image_source migration shim ---
 	# New clusters have image_source=.  Legacy clusters have int_connection + mirror_name.
 	# Emit image_source from whichever format is present.
+	# Capture _is here for the backward-compat shim below (int_connection/mirror_name).
+	local _is=""
 	if grep -q '^image_source=' cluster.conf 2>/dev/null; then
-		: # New format — image_source will be exported by _normalize_export below
+		# New format — _normalize_export below will emit export image_source=...
+		# Extract the sanitized value for the backward-compat shim.
+		_is=$(grep -m1 '^image_source=' cluster.conf | _normalize_export | cut -d= -f2)
 	elif [ -s cluster.conf ]; then
 		# Legacy format — derive image_source from old keys
 		local _ic _mn
@@ -727,14 +731,16 @@ normalize-cluster-conf()
 		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
 		_mn=${_mn:-mirror}
 		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
-			echo "export image_source=$_ic"
+			_is="$_ic"
 		elif [[ -z "$_ic" ]] && grep -E -q "^proxy=\S" cluster.conf 2>/dev/null; then
-			echo "export image_source=proxy"
+			_is="proxy"
 		else
-			echo "export image_source=$_mn"
+			_is="$_mn"
 		fi
+		echo "export image_source=$_is"
 	else
-		echo export image_source=mirror
+		_is="mirror"
+		echo "export image_source=mirror"
 	fi
 
 	if [ ! -s cluster.conf ]; then
@@ -759,9 +765,6 @@ normalize-cluster-conf()
 
 	# Backward compat: derive int_connection + mirror_name from image_source
 	# so scripts not yet migrated keep working.
-	# Resolve at emit time so output is pure "export K=V" lines (no control flow).
-	local _is
-	_is=$(grep -m1 '^image_source=' cluster.conf 2>/dev/null | cut -d= -f2 || true)
 	_is="${_is:-mirror}"
 	case "$_is" in
 		direct|proxy)
@@ -4221,6 +4224,8 @@ ensure_sigstore_mirror_config() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
+	command -v oc-mirror >/dev/null && return 0
+
 	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
 	# Liberal bg kick-off (idempotent — fast no-op if already running/done)
 	run_once -i "$TASK_DL_OC_MIRROR" -- "${CMD_DL_OC_MIRROR[@]}"
@@ -4233,6 +4238,8 @@ ensure_oc_mirror() {
 
 # Ensure oc CLI is installed in ~/bin
 ensure_oc() {
+	command -v oc >/dev/null && return 0
+
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_oc: ocp_version not set, skipping"
 		return 0
@@ -4250,6 +4257,8 @@ ensure_oc() {
 
 # Ensure openshift-install is installed in ~/bin
 ensure_openshift_install() {
+	command -v openshift-install >/dev/null && return 0
+
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
 		return 0
@@ -4520,6 +4529,8 @@ aba_bg_cleanup() {
 
 # Ensure govc is installed in ~/bin (VMware only)
 ensure_govc() {
+	command -v govc >/dev/null && return 0
+
 	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
 	if [ "${platform:-}" != "vmw" ]; then
 		aba_debug "ensure_govc: skipping (platform=${platform:-unset}, not vmw)"
@@ -4557,6 +4568,8 @@ ensure_virsh() {
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
+	command -v butane >/dev/null && return 0
+
 	aba_debug "ensure_butane: downloading and installing butane"
 	# Liberal bg kick-off (idempotent)
 	run_once -i "$TASK_DL_BUTANE" -- "${CMD_DL_BUTANE[@]}"

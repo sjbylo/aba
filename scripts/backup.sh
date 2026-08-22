@@ -299,7 +299,7 @@ if [ -f "${repo_dir}/mirror/data/imageset-config.yaml" ] && [ -f "${repo_dir}/mi
 fi
 
 aba_debug "Running: 'tar cf $dest $out_file_list...' from inside $PWD"
-[ "$dest" != "-" ] && aba_info "Packaging archive, this may take several minutes for large image sets ..." >&2
+[ "$dest" != "-" ] && aba_info "Writing bundle, this may take several minutes for large image sets ..." >&2
 
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
@@ -332,5 +332,10 @@ set -e
 # Upon success, make a note of the time FIXME: Remove the 'inc' feature
 touch ~/.aba.previous.backup
 
-[ "$dest" != "-" ] && aba_success "Install bundle written successfully to $dest!" >&2 || aba_success "Install bundle streamed successfully to stdout!" >&2
+if [ "$dest" != "-" ]; then
+	_sz=$(du -sh "$dest" 2>/dev/null | awk '{print $1}') || _sz=""
+	aba_success "Install bundle written successfully to ${dest}${_sz:+ ($_sz)}!" >&2
+else
+	aba_success "Install bundle streamed successfully to stdout!" >&2
+fi
 

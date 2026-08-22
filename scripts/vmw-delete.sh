@@ -3,6 +3,7 @@
 
 source scripts/include_all.sh
 
+ensure_govc
 
 if [ -s vmware.conf ]; then
 	source <(normalize-vmware-conf)  # This is needed for $VC_FOLDER variable
