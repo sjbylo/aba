@@ -110,8 +110,8 @@ TUI2_TITLE_ADVANCED="Advanced"
 TUI2_TITLE_CLUSTER_OSUS_WARN="OSUS Warning"
 TUI2_TITLE_CONN_FAILED="Connection Failed"
 TUI2_TITLE_MIRROR_REQUIRED="Mirror Required"
-TUI2_TITLE_MIRROR_NOT_SYNCED="Mirror Not Synced"
-TUI2_TITLE_MIRROR_NOT_LOADED="Mirror Not Loaded"
+TUI2_TITLE_MIRROR_NOT_SYNCED="Release Image Missing"
+TUI2_TITLE_MIRROR_NOT_LOADED="Release Image Missing"
 TUI2_TITLE_UNINSTALL_MIRROR="Uninstall Mirror"
 TUI2_TITLE_CLEAR_BASKET="Clear Basket"
 TUI2_TITLE_PREPARING="Preparing"
@@ -230,6 +230,7 @@ TUI2_STATUS_INSTALL_CLUSTER="\Z1[install cluster]\Zn"
 TUI2_STATUS_INSTALL_MIRROR="\Z1[install mirror]\Zn"
 TUI2_STATUS_SYNC_FIRST="\Z3[sync mirror first]\Zn"
 TUI2_STATUS_LOAD_FIRST="\Z3[load mirror first]\Zn"
+TUI2_STATUS_NO_RELEASE="\Z3[release image missing]\Zn"
 
 # =============================================================================
 # Legacy aliases (for existing references)
@@ -379,7 +380,7 @@ TUI2_MSG_DIRECT_MENU="Install from internet (no mirror):"
 TUI2_MSG_DISCO_MENU="Fully Disconnected — Choose an action:"
 TUI2_MSG_DISCO_REG_FIRST="Registry is not installed.\n\nUse 'Install Registry' to set up the mirror registry before loading images."
 TUI2_MSG_DISCO_NO_INTERNET="This action requires internet access.\n\nRestore internet connectivity to switch to connected mode."
-TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThis will switch the TUI to connected mode, which\nrequires internet access. ABA will sync images\ndirectly instead of using transfer bundles.\n\nYour mirror registry and clusters are not affected.\n\nContinue?"
+TUI2_MSG_DISCO_RESET_CONFIRM="Switch to connected mode?\n\nThis will switch the TUI to connected mode, which\nrequires internet access. ABA will sync images\ndirectly from the internet.\n\nYour mirror registry and clusters are not affected.\n\nContinue?"
 TUI2_MSG_DISCO_LIGHT="No image archive files found.\n\nIf you used 'light' mode to create the bundle,\ncopy the image archive file(s) (mirror_*.tar) from your\ntransfer media to:\n\n  %s/mirror/data/\n\nThen select 'Check again'."
 
 # =============================================================================

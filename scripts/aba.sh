@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.2.2
+ABA_VERSION=1.2.3
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260816225202
+ABA_BUILD=20260823230842
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -890,21 +890,25 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 			aba_abort "argument invalid [$2] after option $1" 
 		fi
 		shift 2
+	elif [ "$1" = "--image-source" ]; then
+		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
+		_set_cluster_conf image_source "$2" "$1"
+		shift 2
 	elif [ "$1" = "--int-connection" -o "$1" = "-I" ]; then
+		# Deprecated alias for --image-source (direct/proxy)
 		_flag="$1"
-		int_connection=
+		_val=mirror
 		if [ "$2" ] && ! echo "$2" | grep -q "^-"; then
 			if echo "$2" | grep -q -E '^(proxy|p|direct|d)$'; then
-				int_connection=$2
-				[ "$2" = "p" ] && int_connection=proxy
-				[ "$2" = "d" ] && int_connection=direct
+				_val=$2
+				[ "$2" = "p" ] && _val=proxy
+				[ "$2" = "d" ] && _val=direct
 			else
-				aba_abort "argument invalid [$2] after option: $_flag" 
-				exit 1
+				aba_abort "argument invalid [$2] after option: $_flag"
 			fi
 			shift
 		fi
-		_set_cluster_conf int_connection "$int_connection" "$_flag"
+		_set_cluster_conf image_source "$_val" "$_flag"
 		shift
 	elif [ "$1" = "--name" -o "$1" = "-n" ]; then
 		[[ "$2" =~ ^- || -z "$2" ]] && aba_abort "missing argument after option $1" 
@@ -1017,8 +1021,9 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		_set_cluster_conf ssh_key_file "$ssh_key_val" "$_flag"
 		shift
 	elif [ "$1" = "--mirror-name" ]; then
+		# Deprecated alias for --image-source <mirror-dir-name>
 		[[ -z "$2" || "$2" =~ ^- ]] && aba_abort "missing argument after option $1"
-		_set_cluster_conf mirror_name "$2" "$1"
+		_set_cluster_conf image_source "$2" "$1"
 		shift 2
 	elif [ "$1" = "--start" ]; then
 		BUILD_COMMAND="$BUILD_COMMAND start=--start"
@@ -1091,7 +1096,11 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 							;;
 					esac
 					;;
-				tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
+				import)
+				shift
+				exec $ABA_ROOT/scripts/cluster-import.sh "$@"
+				;;
+			tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1155,6 +1164,15 @@ if [ "$cur_target" ]; then
 			fi
 			;;
 	esac
+
+	# Command succeeded, so the cluster is clearly installed — create the marker
+	_post_check_install() {
+		if [[ ! -f .install-complete ]]; then
+			touch .install-complete
+			[[ ! -L clusterstate ]] && ( externalize_cluster_state ) 2>/dev/null || true
+			aba_debug "Created .install-complete marker (post-command)."
+		fi
+	}
 
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
@@ -1221,17 +1239,16 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		shell)
-			_cn=$(basename "$PWD")
-			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
-			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			source <(normalize-cluster-conf)
+			_kc=$(cluster_kubeconfig 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			echo "export KUBECONFIG=$_kc"
 			exit
 		;;
 		getco)
-			_cn=$(basename "$PWD")
-			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
-			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			ensure_oc
+			source <(normalize-cluster-conf)
+			_kc=$(cluster_kubeconfig 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			cluster_api_reachable "$_kc" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 			OC="oc --kubeconfig $_kc"
@@ -1256,14 +1273,17 @@ if [ "$cur_target" ]; then
 		;;
 		day2)
 			$ABA_ROOT/scripts/day2.sh
+			_post_check_install
 			exit
 		;;
 		day2-ntp)
 			$ABA_ROOT/scripts/day2-config-ntp.sh
+			_post_check_install
 			exit
 		;;
 		day2-osus)
 			$ABA_ROOT/scripts/day2-config-osus.sh
+			_post_check_install
 			exit
 		;;
 		upgrade)
@@ -1275,8 +1295,10 @@ if [ "$cur_target" ]; then
 			[ "$upgrade_skip_day2" ] && upgrade_args+=($upgrade_skip_day2)
 			[ "$upgrade_shell" ] && upgrade_args+=($upgrade_shell)
 			[ "$upgrade_allow_not_recommended" ] && upgrade_args+=($upgrade_allow_not_recommended)
-			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}"
-			exit
+			_rc=0
+			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}" || _rc=$?
+			[ "$_rc" -eq 0 ] && _post_check_install
+			exit $_rc
 		;;
 		shutdown)
 			eval $BUILD_COMMAND
@@ -1976,7 +1998,7 @@ echo "Fully Connected"
 echo_white "Optionally, configure a proxy or use direct Internet access through NAT or a transparent proxy."
 echo_yellow "Instructions for installing directly from the Internet"
 echo_white "Example:"
-echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --int-connection proxy --step install"
+echo_white "aba cluster --name mycluster --type sno --starting-ip 10.0.1.203 --image-source proxy --step install"
 echo_white "See aba cluster --help for more"
 
 exit 0

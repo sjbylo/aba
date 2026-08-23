@@ -32,8 +32,8 @@ rm -f ~/.aba/.first_cluster_success
 
 # Install aba
 cd $TEST_DIR_CONN
-#set +x; bash -c "$(gitrepo=sjbylo/aba; gitbranch=main; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)"; set -x
-set +x; bash -c "$(gitrepo=sjbylo/aba; gitbranch=dev; curl -fsSL https://raw.githubusercontent.com/$gitrepo/refs/heads/$gitbranch/install)" -- dev; set -x
+#set +x; bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/main/install)"; set -x
+set +x; bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/dev/install)" -- dev; set -x
 cd aba
 sed -i 's/^OC_MIRROR_SINCE=.*/OC_MIRROR_SINCE=/' ~/.aba/config
 echo group-sync-operator > templates/operator-set-abatest   # Create a test "operator set"

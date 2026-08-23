@@ -81,7 +81,7 @@ if [ -s cluster.conf ]; then
 	[ ! "$ntp_servers" ]     && [ "$_aba_ntp" ] && replace-value-conf -q -n ntp_servers -v "$_aba_ntp" -f cluster.conf
 
 	# NTP fallback: only direct-connected clusters can reach public NTP (UDP 123 not proxied)
-	if [ ! "$ntp_servers" ] && [ "$int_connection" = "direct" ]; then
+	if [ ! "$ntp_servers" ] && [ "$image_source" = "direct" ]; then
 		replace-value-conf -q -n ntp_servers -v "pool.ntp.org" -f cluster.conf
 	fi
 
@@ -122,18 +122,17 @@ fi
 [ ! "$master_prefix" ]		&& export master_prefix=master
 [ ! "$worker_prefix" ]		&& export worker_prefix=worker
 [ ! "$ssh_key_file" ]		&& export ssh_key_file='~/.ssh/id_rsa'
-[ ! "$mirror_name" ]		&& export mirror_name=mirror
+[ ! "$image_source" ]		&& export image_source=mirror
 [ ! "$ports" ]			&& export ports=ens160
 [ ! "$vlan" ]			&& export vlan=
 [ ! "$master_cpu_count" ]	&& export master_cpu_count=10
 [ ! "$master_mem" ]		&& export master_mem=20
 [ ! "$worker_cpu_count" ]	&& export worker_cpu_count=5
 [ ! "$worker_mem" ]		&& export worker_mem=10
-[ ! "$int_connection" ]		&& export int_connection=
 [ ! "$data_disk" ]		&& export data_disk=500
 
 # NTP fallback: only direct-connected clusters can reach public NTP (UDP 123 not proxied)
-if [ ! "$ntp_servers" ] && [ "$int_connection" = "direct" ]; then
+if [ ! "$ntp_servers" ] && [ "$image_source" = "direct" ]; then
 	export ntp_servers="pool.ntp.org"
 fi
 

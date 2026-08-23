@@ -19,7 +19,7 @@
 #   3. Display cluster.conf summary table to stdout
 #   4. Set rendezvous_ip = starting_ip (first master IP)
 #   5. Adjust hostPrefix 23->22 for bare-metal platforms
-#   6. Resolve connectivity mode (int_connection: direct / proxy / mirror):
+#   6. Resolve connectivity mode (image_source: direct / proxy / mirror):
 #      - direct: use public pull secret, no mirror
 #      - proxy:  use public pull secret + cluster-wide proxy settings
 #      - mirror (default): use mirror pull secret + rootCA + imageContentSources
@@ -41,8 +41,8 @@ aba_debug "Starting: $0 $* at $(date) in dir: $PWD"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
-export regcreds_display="${mirror_name:-mirror}/regcreds"
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_display="$(image_source_mirror_name)/regcreds"
 source <(normalize-mirror-conf)
 [ "$platform" = "vmw" ] && source <(normalize-vmware-conf)  # vSphere values needed for install-config.yaml
 [ "$platform" = "kvm" ] && source <(normalize-kvm-conf)
@@ -82,26 +82,23 @@ fi
 
 # Read in the needed files ...
 
-# Which pull secret file to use?  If int_connection=proxy, then use the public pull secret, otherwise use the "mirror" pull secret by default.
+# Determine install mode from image_source: direct, proxy, or mirror (default).
 
 use_mirror=1
 
-# See if the cluster wide proxy should be added to install_config.yaml or not
-if [ "$int_connection" = "direct" ]; then
-	aba_info "Using direct internet access: int_connection=direct"
+if [ "$image_source" = "direct" ]; then
+	aba_info "Using direct internet access: image_source=direct"
 
 	use_mirror=
-elif [ "$int_connection" = "proxy" ]; then
-	# Else, if proxy is otherwise set, e.g. to 1 or true
+elif [ "$image_source" = "proxy" ]; then
 	if [ "$http_proxy" ] || [ "$https_proxy" ]; then
-		# This means we will do an ONLINE install, using the public Red Hat registry. 
 		if [ -s $pull_secret_file ]; then
 			export pull_secret=$(jq . "$pull_secret_file")
 			aba_info "Found pull secret file at $pull_secret_file.  Assuming online installation using public Red Hat registry."
 		else
 			aba_abort \
 				"No pull secret found at $pull_secret_file.  Aborting!  See the README.md file for help!" \
-				"Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)" 
+				"Get your pull secret from: https://console.redhat.com/openshift/downloads#tool-pull-secret (select 'Tokens' in the pull-down)"
 		fi
 
 		aba_success "Configuring the cluster wide proxy using the following settings:"
@@ -109,7 +106,6 @@ elif [ "$int_connection" = "proxy" ]; then
 		aba_info "  https_proxy=$https_proxy"
 		aba_info "  no_proxy=$no_proxy"
 
-		# Using proxy! No need for these
 		image_content_sources=
 		additional_trust_bundle=
 
@@ -117,17 +113,14 @@ elif [ "$int_connection" = "proxy" ]; then
 		use_mirror=
 	else
 		aba_warn \
-			"Ignoring value: proxy in cluster.conf! It is set but not all required proxy vars are set or available." \
-			"If you want to configure the cluster wide proxy, set 'int_connection=proxy' or override by" \
-			"setting the '*_proxy' values directly in 'cluster.conf'." 
+			"Ignoring image_source=proxy! Proxy vars (http_proxy/https_proxy) are not set." \
+			"If you want to configure the cluster wide proxy, set the '*_proxy' values" \
+			"in cluster.conf or in the environment."
 
 		sleep 2
 	fi
-elif [ "$int_connection" ]; then
-	aba_warn "Internet connection incorrectly defined in cluster.conf" >&2
-#else
-#	aba_info "Not configuring the Internet connectivity (proxy or direct) since value: int_connection not set in cluster.conf"
-# Added Validating availability... below to make more sense!
+elif ! image_source_is_mirror; then
+	aba_warn "image_source value not recognized in cluster.conf [$image_source]" >&2
 fi
 
 # If the proxy is not in use (usually the case in disco env), find the pull secret to use/prioritize the mirror ...
@@ -143,7 +136,7 @@ if [ "$use_mirror" ]; then
 			aba_warn \
 				"Pull secret has no credentials for $reg_host:$reg_port" \
 				"Pull secret contains: ${_ps_hosts:-(empty)}" \
-				"Check that reg_host/reg_port in ${mirror_name:-mirror}/mirror.conf match your registry" \
+				"Check that reg_host/reg_port in $(image_source_mirror_name)/mirror.conf match your registry" \
 				"Pull secret: $regcreds_display/pull-secret-mirror.json"
 		fi
 
@@ -195,7 +188,7 @@ if [ "$use_mirror" ]; then
 			"If this is *unexpected*, you should do one of the following:" \
 			"  1) Install a mirror registry: see aba mirror --help" \
 			"  2) Integrate an existing mirror registry or" \
-			"  3) Define int_connection in $PWD/cluster.conf for an online installation" \
+			"  3) Set image_source=proxy or image_source=direct in $PWD/cluster.conf for an online installation" \
 			"Refer to the README.md for more" 
 
 		sleep 2

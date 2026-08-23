@@ -24,15 +24,6 @@ source "$_SCRIPT_DIR/include_all.sh"
 
 _MARKER="/etc/dnsmasq.d/aba-upstream.conf"
 
-_dnsmasq_restart() {
-	$SUDO systemctl reset-failed dnsmasq 2>/dev/null || true
-	local _restart_err
-	if ! _restart_err=$($SUDO systemctl restart dnsmasq 2>&1); then
-		aba_debug "dnsmasq restart failed: $_restart_err"
-		aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
-	fi
-}
-
 case "${1:-}" in
 	add-cluster)
 		# No-op if ABA doesn't own dnsmasq
@@ -64,12 +55,13 @@ case "${1:-}" in
 
 		_conf="/etc/dnsmasq.d/aba-${cluster_name}.${base_domain}.conf"
 
-		$SUDO tee "$_conf" >/dev/null <<-EOF
-		address=/api.${cluster_name}.${base_domain}/${api_ip}
-		address=/.apps.${cluster_name}.${base_domain}/${apps_ip}
-		EOF
-
-		_dnsmasq_restart
+		$SUDO bash -c "cat > '$_conf' <<DNSEOF
+address=/api.${cluster_name}.${base_domain}/${api_ip}
+address=/.apps.${cluster_name}.${base_domain}/${apps_ip}
+DNSEOF
+systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
+		systemctl is-active --quiet dnsmasq 2>/dev/null || \
+			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
 		aba_info "DNS records added: api.${cluster_name}.${base_domain} → ${api_ip}, *.apps → ${apps_ip}"
 		;;
 
@@ -85,8 +77,9 @@ case "${1:-}" in
 		_conf="/etc/dnsmasq.d/aba-${local_name}.${local_domain}.conf"
 		[ -f "$_conf" ] || exit 0
 
-		$SUDO rm -f "$_conf"
-		_dnsmasq_restart
+		$SUDO bash -c "rm -f '$_conf'; systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
+		systemctl is-active --quiet dnsmasq 2>/dev/null || \
+			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
 		aba_info "DNS records removed for cluster: ${local_name}.${local_domain}"
 		;;
 
@@ -108,11 +101,12 @@ case "${1:-}" in
 
 		_conf="/etc/dnsmasq.d/aba-mirror.conf"
 
-		$SUDO tee "$_conf" >/dev/null <<-EOF
-		address=/${reg_host}/${mirror_ip}
-		EOF
-
-		_dnsmasq_restart
+		$SUDO bash -c "cat > '$_conf' <<DNSEOF
+address=/${reg_host}/${mirror_ip}
+DNSEOF
+systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
+		systemctl is-active --quiet dnsmasq 2>/dev/null || \
+			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
 		aba_info "DNS record added: ${reg_host} → ${mirror_ip}"
 		;;
 
@@ -123,8 +117,9 @@ case "${1:-}" in
 		_conf="/etc/dnsmasq.d/aba-mirror.conf"
 		[ -f "$_conf" ] || exit 0
 
-		$SUDO rm -f "$_conf"
-		_dnsmasq_restart
+		$SUDO bash -c "rm -f '$_conf'; systemctl reset-failed dnsmasq 2>/dev/null; systemctl restart dnsmasq || true"
+		systemctl is-active --quiet dnsmasq 2>/dev/null || \
+			aba_warn "Failed to restart dnsmasq. Check: systemctl status dnsmasq"
 		aba_info "DNS record removed for mirror registry"
 		;;
 

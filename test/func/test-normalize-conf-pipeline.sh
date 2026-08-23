@@ -348,17 +348,61 @@ _test_cluster "cluster: machine_network no CIDR" \
 
 # =========================================================================
 echo
-echo "--- normalize-cluster-conf: int_connection backward compat ---"
+echo "--- normalize-cluster-conf: image_source ---"
 # =========================================================================
 
-_test_cluster "cluster: int_connection=none -> empty" \
-	"int_connection=none" "int_connection" ""
+_test_cluster "cluster: image_source=mirror" \
+	"image_source=mirror" "image_source" "mirror"
 
-_test_cluster "cluster: int_connection=proxy stays proxy" \
-	"int_connection=proxy" "int_connection" "proxy"
+_test_cluster "cluster: image_source=direct" \
+	"image_source=direct" "image_source" "direct"
 
-_test_cluster "cluster: int_connection= stays empty" \
-	"int_connection=" "int_connection" ""
+_test_cluster "cluster: image_source=proxy" \
+	"image_source=proxy" "image_source" "proxy"
+
+_test_cluster "cluster: image_source=enclave1 (named mirror)" \
+	"image_source=enclave1" "image_source" "enclave1"
+
+# Backward compat: int_connection still emitted from image_source
+_test_cluster "cluster: image_source=direct -> int_connection=direct" \
+	"image_source=direct" "int_connection" "direct"
+
+_test_cluster "cluster: image_source=proxy -> int_connection=proxy" \
+	"image_source=proxy" "int_connection" "proxy"
+
+_test_cluster "cluster: image_source=mirror -> int_connection empty" \
+	"image_source=mirror" "int_connection" ""
+
+# Backward compat: mirror_name still emitted from image_source
+_test_cluster "cluster: image_source=enclave1 -> mirror_name=enclave1" \
+	"image_source=enclave1" "mirror_name" "enclave1"
+
+_test_cluster "cluster: image_source=direct -> mirror_name=mirror" \
+	"image_source=direct" "mirror_name" "mirror"
+
+# =========================================================================
+echo
+echo "--- normalize-cluster-conf: legacy int_connection migration ---"
+# =========================================================================
+
+_test_cluster "cluster: legacy int_connection=none -> image_source=mirror" \
+	"int_connection=none" "image_source" "mirror"
+
+_test_cluster "cluster: legacy int_connection=proxy -> image_source=proxy" \
+	"int_connection=proxy" "image_source" "proxy"
+
+_test_cluster "cluster: legacy int_connection=direct -> image_source=direct" \
+	"int_connection=direct" "image_source" "direct"
+
+_test_cluster "cluster: legacy int_connection= -> image_source=mirror" \
+	"int_connection=" "image_source" "mirror"
+
+# Legacy mirror_name migration
+_test_cluster "cluster: legacy mirror_name=foo -> image_source=foo" \
+	"mirror_name=foo" "image_source" "foo"
+
+_test_cluster "cluster: legacy mirror_name=enclave1 -> image_source=enclave1" \
+	"mirror_name=enclave1" "image_source" "enclave1"
 
 # =========================================================================
 echo
@@ -384,8 +428,8 @@ _test_cluster_defaults() {
 }
 
 _test_cluster_defaults "cluster: missing hostPrefix -> 23" "hostPrefix" "23"
-_test_cluster_defaults "cluster: missing port0 -> eth0" "port0" "eth0"
-_test_cluster_defaults "cluster: missing mirror_name -> mirror" "mirror_name" "mirror"
+_test_cluster_defaults "cluster: missing image_source -> mirror" "image_source" "mirror"
+_test_cluster_defaults "cluster: backward compat mirror_name -> mirror" "mirror_name" "mirror"
 
 # =========================================================================
 echo

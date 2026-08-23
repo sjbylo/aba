@@ -325,8 +325,8 @@ e2e_run "Create SNO config with -I proxy (proxy-only bastion)" \
     "aba cluster -n $SNO_PROXY_ONLY -t sno -i $(pool_sno_ip) -I proxy --step cluster.conf"
 
 assert_file_exists "$SNO_PROXY_ONLY/cluster.conf"
-e2e_run "Verify int_connection=proxy in cluster.conf" \
-    "grep 'int_connection=proxy' $SNO_PROXY_ONLY/cluster.conf"
+e2e_run "Verify image_source=proxy in cluster.conf" \
+    "grep 'image_source=proxy' $SNO_PROXY_ONLY/cluster.conf"
 
 e2e_run "Clean up sno-proxyonly cluster dir" "aba --dir $SNO_PROXY_ONLY clean"
 

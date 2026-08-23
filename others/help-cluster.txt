@@ -4,6 +4,7 @@ Usage:
   aba cluster --name <name> [options]         # Create cluster directory (with cluster.conf)
   aba cluster --name <name> --step <step>     # Create cluster directory and run up to <step>
   aba --dir <cluster> <command>               # Operate on an existing cluster
+  aba import --kubeconfig <path> [options]    # Import an existing cluster (installed via UPI, IPI, etc.)
   Or run 'abatui' for a guided experience
 
   Steps (in order): cluster.conf → agentconf → iso → install → mon
@@ -26,7 +27,8 @@ Options:
     -G, --ingress-vip <ip>                # IP address for cluster application ingress
     -M, --machine-network <cidr>          # CIDR of node machine network, such as 10.0.0.0/20
     -g, --gateway-ip <ip>                 # Gateway IP or next hop address
-    -I, --int-connection [proxy|direct]   # Install from the public registry or set empty to use mirror
+        --image-source <mirror|proxy|direct|name>  # Where to pull images (default: mirror)
+    -I, --int-connection [proxy|direct]   # Deprecated alias for --image-source
         --ports [<string> ...]            # Space-separated list of network port names (default: ens160)
                                           # ports in <cluster name>/cluster.conf
 
@@ -43,8 +45,7 @@ Options:
         --master-prefix <name>            # Node name prefix for masters (default: master)
         --worker-prefix <name>            # Node name prefix for workers (default: worker)
         --ssh-key [<path>]                # Path to SSH public key or empty to clear
-        --mirror-name <name>              # Mirror directory this cluster uses (default: mirror)
-                                          # Set to match a named mirror dir (e.g. enclave1)
+        --mirror-name <name>              # Deprecated alias for --image-source <name>
 
 Related commands (run with --dir <cluster> or from inside the cluster directory):
 
@@ -84,6 +85,13 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
        via 'aba -d mirror imagesetconf' or the TUI Operator selector), then install OSUS
        via 'aba -d <cluster> day2-osus' or TUI Day-2 → OSUS.
 
+  Import an existing cluster (installed via UPI, IPI, or any method):
+  aba import --kubeconfig <path>            # Auto-detect and import a running cluster
+      --name <dir-name>                     # Cluster directory name (default: cluster_name from API)
+      --image-source <mirror|direct|proxy>  # Override image source (default: auto-detect from IDMS/ITMS)
+      --force                               # Overwrite existing cluster directory
+  After import, use aba -d <name> day2|day2-osus|day2-ntp|upgrade|getco|shell|shutdown etc.
+
   VM lifecycle (platform=vmw or kvm only):
   aba [-d <cluster>] ls                   # List all cluster node VMs
   aba [-d <cluster>] shutdown [--wait]    # Gracefully shut down cluster and VMs
@@ -116,7 +124,7 @@ Examples:
     aba cluster --name prod --type standard --mcpu 16 --mmem 32 --num-workers 4 --machine-network 10.0.0.0/20 --step install
 
   Install directly from the Internet (no mirror, 'proxy' or 'direct' mode):
-    aba cluster --name dev --type sno --starting-ip 10.0.1.50 --int-connection proxy --step install
+    aba cluster --name dev --type sno --starting-ip 10.0.1.50 --image-source proxy --step install
 
   Monitor an ongoing installation:
     aba --dir mysno mon

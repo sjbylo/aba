@@ -14,8 +14,7 @@ source <(normalize-cluster-conf)
 
 echo "$cmd" | grep -q "^oc " && cmd=$(echo "$cmd" | cut -f2-  -d" ")  # Fix command if needed
 
-#aba_info "Downloading CLI installation binaries"
-#scripts/cli-install-all.sh --wait oc
+ensure_oc
 
 _kc=$(cluster_kubeconfig 2>/dev/null)
 [ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"

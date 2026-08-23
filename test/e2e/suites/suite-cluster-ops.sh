@@ -41,7 +41,7 @@ plan_tests \
     "Setup: sync operators to registry" \
     "ABI config: sno/compact/standard" \
     "ABI config: diff against known-good examples" \
-    "Make regen: install-config.yaml tracks int_connection" \
+    "Make regen: install-config.yaml tracks image_source" \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
     "SNO: IP conflict detection" \
@@ -236,9 +236,9 @@ e2e_run "Remove standard cluster dir" "rm -rf $STANDARD"
 test_end
 
 # ============================================================================
-# 7. Make dependency: install-config.yaml regenerated on int_connection change
+# 7. Make dependency: install-config.yaml regenerated on image_source change
 # ============================================================================
-test_begin "Make regen: install-config.yaml tracks int_connection"
+test_begin "Make regen: install-config.yaml tracks image_source"
 
 _REGEN_DIR="e2e-regen-test"
 
@@ -247,8 +247,8 @@ e2e_run "Backup aba.conf" "cp aba.conf aba.conf.regen-bak"
 e2e_run "Skip DNS checks for synthetic cluster" \
 	"sed -i 's/^#*verify_conf=.*/verify_conf=conf/' aba.conf"
 
-e2e_run "Create SNO cluster dir with int_connection=direct" \
-	"rm -rf $_REGEN_DIR && aba cluster -n $_REGEN_DIR -t sno --starting-ip $(pool_sno_ip) -I direct --step cluster.conf"
+e2e_run "Create SNO cluster dir with image_source=direct" \
+	"rm -rf $_REGEN_DIR && aba cluster -n $_REGEN_DIR -t sno --starting-ip $(pool_sno_ip) --image-source direct --step cluster.conf"
 
 e2e_run "Generate install-config.yaml (direct mode)" \
 	"cd $_REGEN_DIR && make install-config.yaml"
@@ -259,8 +259,8 @@ e2e_run "Direct mode: no additionalTrustBundle" \
 e2e_run "Direct mode: no ImageDigestSources" \
 	"! grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
 
-e2e_run "Change int_connection to mirror mode (sed)" \
-	"sleep 1 && sed -i 's/^int_connection=direct/#int_connection=/' $_REGEN_DIR/cluster.conf"
+e2e_run "Change image_source to mirror mode (sed)" \
+	"sleep 1 && sed -i 's/^image_source=direct/image_source=mirror/' $_REGEN_DIR/cluster.conf"
 
 e2e_run "Regenerate install-config.yaml (mirror mode)" \
 	"cd $_REGEN_DIR && make install-config.yaml"
@@ -272,7 +272,7 @@ e2e_run "Mirror mode: has ImageDigestSources" \
 	"grep -q 'ImageDigestSources' $_REGEN_DIR/install-config.yaml"
 
 e2e_run "Change back to direct (sed)" \
-	"sleep 1 && sed -i 's/^#*int_connection=.*/int_connection=direct/' $_REGEN_DIR/cluster.conf"
+	"sleep 1 && sed -i 's/^image_source=.*/image_source=direct/' $_REGEN_DIR/cluster.conf"
 
 e2e_run "Regenerate install-config.yaml (direct again)" \
 	"cd $_REGEN_DIR && make install-config.yaml"
@@ -631,7 +631,7 @@ e2e_run "Fix mac_prefix for enclave SNO" \
 e2e_diag "Show enclave SNO cluster.conf" "grep -E '^\w' $ENCLAVE_SNO/cluster.conf"
 
 e2e_run "Verify cluster.conf references enclave mirror" \
-    "grep -q 'mirror_name=$ENCLAVE_MIRROR' $ENCLAVE_SNO/cluster.conf"
+    "grep -q 'image_source=$ENCLAVE_MIRROR' $ENCLAVE_SNO/cluster.conf"
 
 e2e_run -q "Skip DNS for enclave SNO" "aba --verify conf"
 e2e_run "Generate ISO for enclave SNO" "aba --dir $ENCLAVE_SNO iso"

@@ -3,6 +3,8 @@
 
 source scripts/include_all.sh
 
+ensure_govc
+
 ARCH=$(uname -m)
 [ "$ARCH" = "amd64" ] && ARCH=x86_64
 
