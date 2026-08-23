@@ -232,7 +232,7 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 
 ### New Features
 
-- **Disconnected upgrade transfer bundle** — `aba save` now creates an `aba-transfer.tar` bundle containing the ImageSet Config, digest-pinned ISC, CLI binaries, and metadata. On the disconnected host, `aba load` unpacks the bundle automatically. Transfer is now simply `cp mirror/data/*.tar` — no manual ISC or CLI copying needed.
+- **Disconnected upgrade transfer config** — `aba save` now creates an `aba-transfer.tar` transfer config containing the ImageSet Config, digest-pinned ISC, CLI binaries, and metadata. On the disconnected host, `aba load` unpacks the transfer config automatically. Transfer is now simply `cp mirror/data/*.tar` — no manual ISC or CLI copying needed. This is not an install bundle (`aba bundle`).
 - **Mirror state tracking** — Mirror operational state (`ocp_version`, `last_action`, `last_action_at`) is now tracked in per-mirror `state.sh` files. Previously, `reg-load.sh`/`reg-sync.sh` wrote the loaded version back to `aba.conf`, overwriting user intent with operational fact. State is now cleanly separated from configuration.
 - **`aba write-usb`** — New command for bare-metal installs that displays ISO details (path, size, SHA256), lists block devices with mount point warnings, refuses system disks, and shows the exact `dd` command before executing. Improved bare-metal guidance throughout the install flow.
 - **`aba unstick`** — New command to bounce not-ready pods during stuck cluster installs. Detects pods in error states (`CrashLoopBackOff`, `ImagePullBackOff`, `ContainerStatusUnknown`, `Init:*` prefixed states) and deletes them to trigger rescheduling.
@@ -245,7 +245,7 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 - **Upgrade `--force` tolerates warnings** — `aba upgrade --force` now adds `--allow-upgrade-with-warnings` to bypass transiently degraded operators, matching the intent of forcing an upgrade. Prominent warnings added about `--force` not being for production.
 - **Upgrade `--force` bypasses admin ack** — `--force` now skips the interactive `AdminAckRequired` prompt for cross-minor upgrades, enabling fully automated upgrade workflows.
 - **Rename `--target-version` to `--upgrade-to`** — The CLI flag and config variable (`ocp_version_target` → `ocp_upgrade_to`) are renamed to unambiguously indicate upgrade intent. Old names are not accepted (clean break).
-- **`aba-transfer.tar` always bundles ISC** — The transfer bundle is now created for all save operations (not just upgrades), ensuring incremental saves (e.g. `additionalImages`) transfer the correct ISC to the disconnected host.
+- **`aba-transfer.tar` always includes ISC** — The transfer config is now created for all save operations (not just upgrades), ensuring incremental saves (e.g. `additionalImages`) transfer the correct ISC to the disconnected host.
 - **TUI: Prepare Upgrade (beta) label** — The upgrade workflow menu item is labeled as beta to set expectations.
 - **TUI: upgrade hints point to Prepare Upgrade (U)** — Instead of directing users to manually edit ISC → sync → day2, the hint points to the guided Prepare Upgrade flow.
 - **TUI: improved DISCO bundle wizard** — Cleaner no-archives path (loop with "Check Again" / "Exit"), tighter payload summary, back-navigation to local/remote choice.
@@ -276,7 +276,7 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 - **Fix `aba delete` cleanup visibility** — Removed `2>/dev/null` from `make clean` in delete so cleanup failures are visible.
 - **Fix TUI SSH deadlock** — Set `StrictHostKeyChecking=accept-new` and `BatchMode=yes` for libvirt connection tests, preventing host-key prompts from deadlocking the TUI.
 - **Fix ISC hint crash in bundle mode** — ISC hint guard no longer crashes with `exit 1` when running inside a bundle workflow.
-- **Fix stale ISC on incremental save** — Non-upgrade incremental saves now bundle the ISC in `aba-transfer.tar`, preventing `aba load` from using a stale local ISC that silently skips images.
+- **Fix stale ISC on incremental save** — Non-upgrade incremental saves now include the ISC in `aba-transfer.tar`, preventing `aba load` from using a stale local ISC that silently skips images.
 
 ### Known Issues
 

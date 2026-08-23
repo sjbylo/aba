@@ -122,7 +122,7 @@ scripts/create-containers-auth.sh || exit 1
 aba_debug "Checking disk space in data/ directory"
 mkdir -p data
 
-# Remove stale transfer bundle to prevent mismatch if this save fails partway
+# Remove stale aba-transfer.tar to prevent mismatch if this save fails partway
 rm -f data/aba-transfer.tar data/aba-transfer-metadata.json
 aba_debug "Removed any stale aba-transfer.tar from data/"
 
@@ -178,7 +178,7 @@ if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
-# Ensure all CLI downloads are complete before building transfer bundle
+# Ensure all CLI downloads are complete before packing aba-transfer.tar
 scripts/cli-download-all.sh --wait
 cli_download_extra_clis --wait
 

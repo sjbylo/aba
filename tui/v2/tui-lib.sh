@@ -825,6 +825,12 @@ _mirror_has_release_image() {
 	[[ "$exit_code" == "0" ]]
 }
 
+# Last completed mirror action from state.sh (install | load | sync | register).
+# Empty if the mirror is not installed or state is missing.
+_mirror_last_action() {
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "${last_action:-}"
+}
+
 # Return human-readable mirror state for the menu title.
 # States: "no mirror" → "mirror installed" → "mirror ready"
 # "mirror ready" means the release image is actually present in the registry.
@@ -1106,14 +1112,18 @@ tui_cluster_menu_flags() {
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_MIRROR"
 			elif ! _mirror_has_release_image; then
-				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_SYNC_FIRST"
+				# Release image may be absent after a successful sync/load
+				# (e.g. excl_platform=true / operators-only archive).
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_RELEASE"
 			fi
 			;;
 		DISCO)
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_INSTALL_REGISTRY"
 			elif ! _mirror_has_release_image; then
-				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_LOAD_FIRST"
+				# Same check as CONNO: "not loaded" is wrong when the archive
+				# was loaded but intentionally omitted platform/release images.
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_RELEASE"
 			fi
 			;;
 		DIRECT|"")

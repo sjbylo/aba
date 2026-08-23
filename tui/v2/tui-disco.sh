@@ -167,11 +167,16 @@ disco_main() {
 			_TUI_NEED_MIRROR_RECHECK=false
 		fi
 
-		# Refresh registry/load labels from cached state (non-blocking)
+		# Refresh registry/load labels from cached state (non-blocking).
+		# "(loaded)" follows last_action, not the release-image probe: an
+		# operators-only archive (excl_platform=true) is a successful load
+		# even when the registry has no release image.
 		if mirror_available; then
 			reg_label="$TUI2_LABEL_INSTALL_REGISTRY $TUI2_STATUS_INSTALLED"
 			reg_avail=false
-			if _mirror_has_release_image; then
+			local _last_action=""
+			_last_action="$(_mirror_last_action)"
+			if _mirror_has_release_image || [[ "$_last_action" == "load" ]]; then
 				load_label="$TUI2_LABEL_LOAD $TUI2_STATUS_LOADED"
 			fi
 		else

@@ -52,6 +52,11 @@ plan_tests \
     "Primed bundle: verify on disco" \
     "Primed bundle: deploy SNO from disco" \
     "Primed bundle: verify source repo restored" \
+    "deploy-primed: end-to-end pipeline" \
+    "transfer-primed: create configs tar" \
+    "Config-only load: extract configs without images" \
+    "Waved day2: ordered manifest application" \
+    "bundle-primed alias: help matches bundle --primed" \
     "Cleanup: delete cluster and uninstall mirror on disN"
 
 suite_begin "create-bundle-to-disk"
@@ -731,7 +736,7 @@ YAML"
     e2e_run -q "Remove waved manifests" \
         "rm -rf $_E2E_CLUSTER/day2-custom-manifests"
 else
-    e2e_skip "No installed cluster available for waved day2 e2e test (covered by func tests)"
+    test_skip "No installed cluster available for waved day2 e2e test (covered by func tests)"
 fi
 
 test_end 0

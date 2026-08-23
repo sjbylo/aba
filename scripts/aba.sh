@@ -1096,7 +1096,11 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 							;;
 					esac
 					;;
-				tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
+				import)
+				shift
+				exec $ABA_ROOT/scripts/cluster-import.sh "$@"
+				;;
+			tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1235,18 +1239,16 @@ if [ "$cur_target" ]; then
 			exit
 		;;
 		shell)
-			_cn=$(basename "$PWD")
-			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
-			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			source <(normalize-cluster-conf)
+			_kc=$(cluster_kubeconfig 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			echo "export KUBECONFIG=$_kc"
 			exit
 		;;
 		getco)
 			ensure_oc
-			_cn=$(basename "$PWD")
-			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
-			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
+			source <(normalize-cluster-conf)
+			_kc=$(cluster_kubeconfig 2>/dev/null)
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			cluster_api_reachable "$_kc" || aba_abort "Cluster API is not reachable. Is the cluster running?"
 			OC="oc --kubeconfig $_kc"

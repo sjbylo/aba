@@ -18,6 +18,7 @@ Main commands:
   aba [-d <cluster>] deploy-primed      # One-command primed deployment pipeline. See 'aba deploy --help'
   aba transfer-primed                   # Create config-only transfer tar. See 'aba transfer --help'
   aba [-d <cluster>] upgrade --to <ver> # Upgrade a cluster to a target OCP version. See 'aba cluster --help'
+  aba import                            # Import an existing OpenShift cluster. See 'aba import --help'
 
 Other commands:
   aba clean                             # Clean up all generated files

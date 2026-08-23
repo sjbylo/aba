@@ -313,7 +313,8 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-trap 'show_error' ERR
+# "no-trap" argument suppresses the ERR trap (used by E2E framework)
+[ "${1:-}" != "no-trap" ] && trap 'show_error' ERR
 [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 vm_name() {
