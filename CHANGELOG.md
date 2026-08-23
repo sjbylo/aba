@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.3...HEAD)
+
+---
+
+## [1.2.3](https://github.com/sjbylo/aba/releases/tag/v1.2.3) - 2026-08-23
+
+aba import, self-healing CLI guards, TUI mirror status fix
+
 
 ### Added
 
