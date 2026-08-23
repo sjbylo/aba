@@ -90,6 +90,7 @@ nvidia-network-operator                                 NVIDIA Network Operator 
 nxiq-operator-certified                                 Nexus IQ Operator                                            stable
 odigos-operator                                         Odigos Operator                                              alpha
 open-liberty-certified                                  Open Liberty                                                 v1.6
+operator-aims-mobile                                    AIMS Mobile Operator                                         alpha
 operator-certification-operator                         Operator Certification Operator                              alpha
 percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
 percona-server-mysql-operator-certified                 Percona Operator for MySQL based on Percona Server for MySQL stable
@@ -130,7 +131,6 @@ tenant-operator                                         Multi Tenant Operator   
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
 trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
-tvo-operator                                            Trilio for OpenStack                                         6.0.x
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable

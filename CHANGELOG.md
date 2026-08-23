@@ -6,6 +6,7 @@
 - **Cluster operator stability waits** — `aba_wait_show` CO stability checks added at the end of `day2`, `day2-ntp`, and `day2-osus`, and at the start of `cluster-upgrade` preflight (Ctrl-C to skip post-day2; mandatory before upgrade).
 - **Post-command install marker** — `_post_check_install()` in `aba.sh` creates the `.install-complete` marker after successful `day2`/`day2-ntp`/`day2-osus`/`upgrade` commands, with proper exit code propagation.
 - **TUI: upgrade channel-switch note** — The upgrade dialog now shows "Note: The update channel will be switched automatically if needed."
+- **`aba import`** — Import existing OpenShift clusters (installed via UPI, IPI, Assisted Installer, or any other method) into ABA for lifecycle management (`day2`, `upgrade`, `shutdown`, etc.). Auto-detects cluster name, base domain, topology, network, and image source from the live cluster API. Supports `--kubeconfig`, `--name`, `--image-source`, and `--force` flags.
 
 ### Changed
 
@@ -13,6 +14,8 @@
 - **Upgrade retry on transient failure** — `cluster-upgrade.sh` retries once (30s wait) if `oc adm upgrade` rejects the request due to transient `ClusterOperatorsNotAvailable`.
 - **Upgradeable=False auto-default changed to yes** — Non-interactive upgrades now proceed past admin-ack gates by default.
 - **TUI: auto-select single cluster** — Skip cluster selection dialog when only one cluster is installed.
+- **Self-healing CLI guards (`ensure_*()`)** — All downloaded CLI binaries (oc, govc, oc-mirror, openshift-install, butane) are verified before every use and automatically reinstalled if missing, preventing failures after cache invalidation or partial installs. Silent when binaries are present.
+- **"Transfer bundle" → "transfer config"** — Renamed user-facing terminology from "transfer bundle" to "transfer config" / "transfer tar" to avoid confusion with install bundles (`aba bundle`).
 
 ### Fixed
 
@@ -22,6 +25,9 @@
 - **Fix OSUS error message** — `day2-config-osus.sh` now clearly promotes `aba day2` when `cincinnati-operator` is not available in OperatorHub.
 - **Fix bundle install curl robustness** — `01-install-aba-from-git.sh` captures `curl` output before `bash -c` so `set -e` catches download failures and prevents false `.done-` marker creation.
 - **Fix TUI menu reference wording** — "Mirror Management menu" → "main menu" in upgrade target dialog.
+- **Fix TUI "load/sync mirror first" for operators-only mirrors** — When a mirror was loaded without release images (`excl_platform=true`), the TUI incorrectly showed "load mirror first" or "sync mirror first". Now shows "release image missing" to reflect the configuration, not a failure.
+- **Fix ERR trap breaking E2E framework** — Restored conditional ERR trap suppression (`no-trap` argument) in `include_all.sh`, fixing a regression where the unconditional trap caused `exit=127` in test suites that use their own error handling.
+- **Fix `aba getco`/`shell` on imported clusters** — These commands now use `normalize-cluster-conf` to resolve the cluster name instead of assuming it matches the directory name.
 
 ## [1.2.2](https://github.com/sjbylo/aba/releases/tag/v1.2.2) - 2026-08-16
 

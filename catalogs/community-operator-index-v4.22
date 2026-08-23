@@ -242,7 +242,6 @@ project-onboarding-operator                             Project Onboarding      
 project-quay                                            Quay                                                         stable-3.17
 prometheus-exporter-operator                            Prometheus Exporter Operator                                 alpha
 prometheus                                              Prometheus Operator                                          beta
-prometurbo                                              Prometurbo Operator                                          stable
 pubsubplus-eventbroker-operator                         Solace PubSub+ Event Broker Operator                         stable
 pulp-operator                                           Pulp Project                                                 beta
 rabbitmq-cluster-operator                               RabbitMQ-cluster-operator                                    stable

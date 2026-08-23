@@ -243,7 +243,6 @@ tenant-operator                                         Multi Tenant Operator   
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.40
 timemachine-operator                                    Time Machine Operator                                        alpha
 trident-operator                                        NetApp Trident                                               stable
-tvo-operator                                            Trilio for OpenStack                                         6.0.x
 uma-admin-operator                                      DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy beta
 uma-operator                                            DX Operational Observability Universal Monitoring Agent      beta
 uma-team-operator                                       DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy beta

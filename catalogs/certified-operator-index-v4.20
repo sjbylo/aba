@@ -122,6 +122,7 @@ odigos-operator                                         Odigos Operator         
 open-liberty-certified                                  Open Liberty                                                 v1.6
 openshiftartifactoryha-operator                         JFrog Artifactory Enterprise Operator                        alpha
 openshift-fusion-access-operator                        Fusion Access for SAN                                        stable-v1
+operator-aims-mobile                                    AIMS Mobile Operator                                         alpha
 operator-certification-operator                         Operator Certification Operator                              alpha
 percona-postgresql-operator-certified                   Percona Operator for PostgreSQL                              stable
 percona-server-mongodb-operator-certified               Percona Distribution for MongoDB Operator                    stable
@@ -173,7 +174,6 @@ tenant-operator                                         Multi Tenant Operator   
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
 trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
-tvo-operator                                            Trilio for OpenStack                                         6.0.x
 uma-admin-operator                                      DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy beta
 uma-operator                                            DX Operational Observability Universal Monitoring Agent      beta
 uma-team-operator                                       DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy beta
