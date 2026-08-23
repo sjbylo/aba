@@ -48,6 +48,38 @@ done
 SUDO=
 which sudo 2>/dev/null >&2 && SUDO=sudo
 
+if ! which id >/dev/null 2>&1; then
+	echo "Please install the command 'id', usually in the coreutils package and try again." >&2
+
+	exit 1
+fi
+
+# Parse options early so $quiet is available for the sudo check below
+while echo "$1" | grep -q "^-"
+do
+	case "$1" in
+		-q) quiet=1; shift ;;
+		-v) cur_ver=$2; shift 2 ;;
+		*)  shift; break ;;
+	esac
+done
+
+# Informational sudo check (no password prompt).
+# Shown before any sudo usage so the user knows what to expect.
+if [ ! "$quiet" ] && [ "$(id -u)" != "0" ]; then
+	if [ "$SUDO" ]; then
+		if [ "$($SUDO -n whoami 2>/dev/null)" != "root" ]; then
+			echo "For some actions, ABA requires root access, directly or via sudo." >&2
+			if ! $SUDO -ln 2>/dev/null | grep -q NOPASSWD; then
+				echo "Passwordless sudo access is recommended." >&2
+			fi
+		fi
+	else
+		echo "Error: sudo command is not available and ABA is not running as root!" >&2
+		exit 1  # Should never get here!
+	fi
+fi
+
 if [ ${#missing_pkgs[@]} -gt 0 ]; then
 	# try our luck to install the missing packages ...
 	printf "  ⏳ Installing packages (%d, logging to .dnf-install.log)...\n" "${#missing_pkgs[@]}" >&2
@@ -59,42 +91,6 @@ if [ ${#missing_pkgs[@]} -gt 0 ]; then
 		exit 1
 	fi
 	_step "Packages installed (${#missing_pkgs[@]})"
-fi
-
-if ! which id >/dev/null 2>&1; then
-	echo "Please install the command 'id', usually in the coreutils package and try again." >&2
-
-	exit 1
-fi
-
-# Check options early so $quiet is available for the sudo gate below
-while echo "$1" | grep -q "^-"
-do
-	case "$1" in
-		-q) quiet=1; shift ;;
-		-v) cur_ver=$2; shift 2 ;;
-		*)  shift; break ;;
-	esac
-done
-
-# Now, check sudo or root access.
-# In quiet mode (-q, auto-update from aba.sh), defer the sudo gate until
-# an update is actually needed -- avoids prompting for a password on every run.
-if [ ! "$quiet" ] && [ "$(id -u)" != "0" ]; then
-	if [ "$SUDO" ]; then
-		# If sudo does not lead to root without using a password prompt (-n)
-		if [ "$($SUDO -n whoami)" != "root" ]; then
-			echo "For some actions, ABA requires root access, directly or via sudo." >&2
-			if ! $SUDO -ln 2>/dev/null | grep -q NOPASSWD; then
-				echo "Passwordless sudo access is recommended." >&2
-			fi
-			echo -n "You must enter your password to install and use ABA: " >&2
-			[ "$($SUDO -p "Enter %p's password: " id -run)" != "root" ] && echo "Configure passwordless sudo OR run ABA as root, then try again!" >&2 && exit 1
-		fi
-	else
-		echo "Error: sudo command is not available and ABA is not running as root!" >&2
-		exit 1  # Should never get here!
-	fi
 fi
 
 branch=main

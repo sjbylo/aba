@@ -16,6 +16,7 @@ businessautomation-operator                             Business Automation     
 cephcsi-operator                                        CephCSI operator                                             stable-4.22
 cincinnati-operator                                     OpenShift Update Service                                     v1
 cluster-logging                                         Red Hat OpenShift Logging                                    stable-6.6
+compliance-operator                                     Compliance Operator                                          stable
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
 devworkspace-operator                                   DevWorkspace Operator                                        fast

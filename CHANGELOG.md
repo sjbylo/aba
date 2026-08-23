@@ -1,6 +1,40 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.3...HEAD)
 
 ---
+
+## [1.2.3](https://github.com/sjbylo/aba/releases/tag/v1.2.3) - 2026-08-23
+
+aba import, self-healing CLI guards, TUI mirror status fix
+
+
+### Added
+
+- **Upgrade path preview** — `compute_upgrade_path()` uses BFS on the Cincinnati graph to display the intermediate versions `oc-mirror` will fetch via `shortestPath`, shown in CLI output and as an inline comment in `imageset-config.yaml`.
+- **Cluster operator stability waits** — `aba_wait_show` CO stability checks added at the end of `day2`, `day2-ntp`, and `day2-osus`, and at the start of `cluster-upgrade` preflight (Ctrl-C to skip post-day2; mandatory before upgrade).
+- **Post-command install marker** — `_post_check_install()` in `aba.sh` creates the `.install-complete` marker after successful `day2`/`day2-ntp`/`day2-osus`/`upgrade` commands, with proper exit code propagation.
+- **TUI: upgrade channel-switch note** — The upgrade dialog now shows "Note: The update channel will be switched automatically if needed."
+- **`aba import`** — Import existing OpenShift clusters (installed via UPI, IPI, Assisted Installer, or any other method) into ABA for lifecycle management (`day2`, `upgrade`, `shutdown`, etc.). Auto-detects cluster name, base domain, topology, network, and image source from the live cluster API. Supports `--kubeconfig`, `--name`, `--image-source`, and `--force` flags.
+
+### Changed
+
+- **`image_source` replaces `int_connection` + `mirror_name`** — Single `cluster.conf` field (`direct`/`proxy`/`<mirror-name>`) replaces two interdependent fields. Migration shim preserves backward compatibility. CLI flag `--image-source` added; old flags kept as deprecated aliases. (ADR-012)
+- **Upgrade retry on transient failure** — `cluster-upgrade.sh` retries once (30s wait) if `oc adm upgrade` rejects the request due to transient `ClusterOperatorsNotAvailable`.
+- **Upgradeable=False auto-default changed to yes** — Non-interactive upgrades now proceed past admin-ack gates by default.
+- **TUI: auto-select single cluster** — Skip cluster selection dialog when only one cluster is installed.
+- **Self-healing CLI guards (`ensure_*()`)** — All downloaded CLI binaries (oc, govc, oc-mirror, openshift-install, butane) are verified before every use and automatically reinstalled if missing, preventing failures after cache invalidation or partial installs. Silent when binaries are present.
+- **"Transfer bundle" → "transfer config"** — Renamed user-facing terminology from "transfer bundle" to "transfer config" / "transfer tar" to avoid confusion with install bundles (`aba bundle`).
+
+### Fixed
+
+- **Batch sudo calls to reduce password prompts** — `trust_root_ca()`, `reg_open_firewall()`, `reg_close_firewall()`, and `infra-dns.sh` dnsmasq operations now combine consecutive `$SUDO` calls into single `sudo bash -c` invocations (2-3 prompts → 1 each). (Follow-up to [#36](https://github.com/sjbylo/aba/issues/36), thanks [@msalmanmasood](https://github.com/msalmanmasood).)
+- **Fix `install` script premature sudo prompt** — Sudo guidance now appears before the first actual `sudo` usage; deferred sudo validation to point of need.
+- **Fix `normalize-cluster-conf` emitting control flow** — Backward-compat shim now resolves `image_source` at emit time so output is pure `export K=V` lines, fixing corrupted "Showing existing values" table display.
+- **Fix OSUS error message** — `day2-config-osus.sh` now clearly promotes `aba day2` when `cincinnati-operator` is not available in OperatorHub.
+- **Fix bundle install curl robustness** — `01-install-aba-from-git.sh` captures `curl` output before `bash -c` so `set -e` catches download failures and prevents false `.done-` marker creation.
+- **Fix TUI menu reference wording** — "Mirror Management menu" → "main menu" in upgrade target dialog.
+- **Fix TUI "load/sync mirror first" for operators-only mirrors** — When a mirror was loaded without release images (`excl_platform=true`), the TUI incorrectly showed "load mirror first" or "sync mirror first". Now shows "release image missing" to reflect the configuration, not a failure.
+- **Fix ERR trap breaking E2E framework** — Restored conditional ERR trap suppression (`no-trap` argument) in `include_all.sh`, fixing a regression where the unconditional trap caused `exit=127` in test suites that use their own error handling.
+- **Fix `aba getco`/`shell` on imported clusters** — These commands now use `normalize-cluster-conf` to resolve the cluster name instead of assuming it matches the directory name.
 
 ## [1.2.2](https://github.com/sjbylo/aba/releases/tag/v1.2.2) - 2026-08-16
 
@@ -211,7 +245,7 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 
 ### New Features
 
-- **Disconnected upgrade transfer bundle** — `aba save` now creates an `aba-transfer.tar` bundle containing the ImageSet Config, digest-pinned ISC, CLI binaries, and metadata. On the disconnected host, `aba load` unpacks the bundle automatically. Transfer is now simply `cp mirror/data/*.tar` — no manual ISC or CLI copying needed.
+- **Disconnected upgrade transfer config** — `aba save` now creates an `aba-transfer.tar` transfer config containing the ImageSet Config, digest-pinned ISC, CLI binaries, and metadata. On the disconnected host, `aba load` unpacks the transfer config automatically. Transfer is now simply `cp mirror/data/*.tar` — no manual ISC or CLI copying needed. This is not an install bundle (`aba bundle`).
 - **Mirror state tracking** — Mirror operational state (`ocp_version`, `last_action`, `last_action_at`) is now tracked in per-mirror `state.sh` files. Previously, `reg-load.sh`/`reg-sync.sh` wrote the loaded version back to `aba.conf`, overwriting user intent with operational fact. State is now cleanly separated from configuration.
 - **`aba write-usb`** — New command for bare-metal installs that displays ISO details (path, size, SHA256), lists block devices with mount point warnings, refuses system disks, and shows the exact `dd` command before executing. Improved bare-metal guidance throughout the install flow.
 - **`aba unstick`** — New command to bounce not-ready pods during stuck cluster installs. Detects pods in error states (`CrashLoopBackOff`, `ImagePullBackOff`, `ContainerStatusUnknown`, `Init:*` prefixed states) and deletes them to trigger rescheduling.
@@ -224,7 +258,7 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 - **Upgrade `--force` tolerates warnings** — `aba upgrade --force` now adds `--allow-upgrade-with-warnings` to bypass transiently degraded operators, matching the intent of forcing an upgrade. Prominent warnings added about `--force` not being for production.
 - **Upgrade `--force` bypasses admin ack** — `--force` now skips the interactive `AdminAckRequired` prompt for cross-minor upgrades, enabling fully automated upgrade workflows.
 - **Rename `--target-version` to `--upgrade-to`** — The CLI flag and config variable (`ocp_version_target` → `ocp_upgrade_to`) are renamed to unambiguously indicate upgrade intent. Old names are not accepted (clean break).
-- **`aba-transfer.tar` always bundles ISC** — The transfer bundle is now created for all save operations (not just upgrades), ensuring incremental saves (e.g. `additionalImages`) transfer the correct ISC to the disconnected host.
+- **`aba-transfer.tar` always includes ISC** — The transfer config is now created for all save operations (not just upgrades), ensuring incremental saves (e.g. `additionalImages`) transfer the correct ISC to the disconnected host.
 - **TUI: Prepare Upgrade (beta) label** — The upgrade workflow menu item is labeled as beta to set expectations.
 - **TUI: upgrade hints point to Prepare Upgrade (U)** — Instead of directing users to manually edit ISC → sync → day2, the hint points to the guided Prepare Upgrade flow.
 - **TUI: improved DISCO bundle wizard** — Cleaner no-archives path (loop with "Check Again" / "Exit"), tighter payload summary, back-navigation to local/remote choice.
@@ -255,7 +289,7 @@ Disconnected upgrade workflow, mirror state tracking, bare-metal write-usb, and 
 - **Fix `aba delete` cleanup visibility** — Removed `2>/dev/null` from `make clean` in delete so cleanup failures are visible.
 - **Fix TUI SSH deadlock** — Set `StrictHostKeyChecking=accept-new` and `BatchMode=yes` for libvirt connection tests, preventing host-key prompts from deadlocking the TUI.
 - **Fix ISC hint crash in bundle mode** — ISC hint guard no longer crashes with `exit 1` when running inside a bundle workflow.
-- **Fix stale ISC on incremental save** — Non-upgrade incremental saves now bundle the ISC in `aba-transfer.tar`, preventing `aba load` from using a stale local ISC that silently skips images.
+- **Fix stale ISC on incremental save** — Non-upgrade incremental saves now include the ISC in `aba-transfer.tar`, preventing `aba load` from using a stale local ISC that silently skips images.
 
 ### Known Issues
 

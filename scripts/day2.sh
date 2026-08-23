@@ -15,9 +15,9 @@ aba_debug "Starting: $0 $*"
 umask 077
 
 source <(normalize-aba-conf)
-source <(normalize-cluster-conf)  # used to check int_connection value
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
-export regcreds_display="${mirror_name:-mirror}/regcreds"
+source <(normalize-cluster-conf)
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_display="$(image_source_mirror_name)/regcreds"
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -25,8 +25,8 @@ verify-cluster-conf || exit 1
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 
 # Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
-if [ "$int_connection" ]; then
-	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
+if ! image_source_is_mirror; then
+	aba_info "This cluster connects directly to the internet (image_source=$image_source)."
 	aba_info "OperatorHub is already configured to pull from public registries — no mirror integration needed."
 
 	exit 0
@@ -74,7 +74,7 @@ echo
 
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
-if [ ! "$int_connection" ]; then
+if image_source_is_mirror; then
 	aba_debug "Running: oc patch OperatorHub cluster --type json (disable default sources)"
 	oc patch OperatorHub cluster --type json \
 		-p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]' >/dev/null
@@ -459,6 +459,10 @@ fi
 apply_custom_manifests
 
 aba_success "Day-2 configuration completed successfully."
+
+# Day2 changes (IDMS, CA trust, ITMS) trigger CO reconciliation and possible node restarts.
+# Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
+aba_wait_show "Ensuring cluster operators are stable after day2 changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
 
 exit 0
 

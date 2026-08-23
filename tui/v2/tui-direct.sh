@@ -382,6 +382,11 @@ _direct_version() {
 			ocp_version="${ocp_version##[[:space:]]}"    # trim leading whitespace
 			ocp_version="${ocp_version%%[[:space:]]}"    # trim trailing whitespace
 			if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+				if ! verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox \
+						"Version $ocp_version not found in the $ocp_channel channel.\n\nCheck the version number and try again." 0 0
+					continue
+				fi
 				tui_log "Manual version entry: $ocp_version"
 				DIALOG_RC="next"
 				return
@@ -476,6 +481,11 @@ _direct_version() {
 						ocp_version="${ocp_version##[[:space:]]}"  # trim leading whitespace
 						ocp_version="${ocp_version%%[[:space:]]}"  # trim trailing whitespace
 						if [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+							if ! verify_release_version_exists "$ocp_version" "$ocp_channel" 2>/dev/null; then
+								dlg --backtitle "$(ui_backtitle)" --msgbox \
+									"Version $ocp_version not found in the $ocp_channel channel.\n\nCheck the version number and try again." 0 0
+								continue
+							fi
 							break
 						elif [[ "$ocp_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
 							# x.y format — resolve to latest z-stream

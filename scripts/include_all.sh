@@ -313,8 +313,9 @@ show_error() {
 }
 
 # Set the trap to call the show_error function on ERR signal
-# If no first argument is provided, set a trap for errors
-[ -z "${1-}" ] && trap 'show_error' ERR && [ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
+# "no-trap" argument suppresses the ERR trap (used by E2E framework)
+[ "${1:-}" != "no-trap" ] && trap 'show_error' ERR
+[ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 vm_name() {
 	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
@@ -714,24 +715,68 @@ normalize-cluster-conf()
 	# Output only the values from cluster.conf (with defaults for backwards compat).
 	# Derived/computed values (e.g. regcreds_dir) belong in the calling script, not here.
 
-	grep -q ^mirror_name= cluster.conf 2>/dev/null	|| echo export mirror_name=mirror
+	# --- image_source migration shim ---
+	# New clusters have image_source=.  Legacy clusters have int_connection + mirror_name.
+	# Emit image_source from whichever format is present.
+	# Capture _is here for the backward-compat shim below (int_connection/mirror_name).
+	local _is=""
+	if grep -q '^image_source=' cluster.conf 2>/dev/null; then
+		# New format — _normalize_export below will emit export image_source=...
+		# Extract the sanitized value for the backward-compat shim.
+		_is=$(grep -m1 '^image_source=' cluster.conf | _normalize_export | cut -d= -f2)
+	elif [ -s cluster.conf ]; then
+		# Legacy format — derive image_source from old keys
+		local _ic _mn
+		_ic=$(grep '^int_connection=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+		[[ "$_ic" == "none" ]] && _ic=""
+		_mn=$(grep '^mirror_name=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2- | xargs)
+		_mn=${_mn:-mirror}
+		if [[ "$_ic" == "direct" || "$_ic" == "proxy" ]]; then
+			_is="$_ic"
+		elif [[ -z "$_ic" ]] && grep -E -q "^proxy=\S" cluster.conf 2>/dev/null; then
+			_is="proxy"
+		else
+			_is="$_mn"
+		fi
+		echo "export image_source=$_is"
+	else
+		_is="mirror"
+		echo "export image_source=mirror"
+	fi
 
-	[ ! -s cluster.conf ] &&                                                               return 0
+	if [ ! -s cluster.conf ]; then
+		echo 'export int_connection='
+		echo 'export mirror_name=mirror'
+		return 0
+	fi
 
 	# Sanitize config, then:
 	#   - Split machine_network CIDR (e.g. 10.0.1.0/24) into machine_network + prefix_length
-	#   - Normalize old int_connection=none to empty (backward compat)
+	#   - Strip legacy int_connection and mirror_name (replaced by image_source)
 	#   - RFC 1123: base_domain must be lowercase for Kubernetes
 	_normalize_export < cluster.conf | \
 		sed -E	\
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
-			-e 's/^(export )int_connection=none/\1int_connection= /g' \
+			-e '/^export int_connection=/d' \
+			-e '/^export mirror_name=/d' \
 			-e 's/^(export base_domain=)(.*)/\1\L\2/'
 
 	# Add any missing default values, mainly for backwards compat.
 	grep -q ^hostPrefix= cluster.conf	|| echo export hostPrefix=23
-	# If int_connection does not exist or has no value and proxy is available, then output int_connection=proxy
-	grep -q "^int_connection=\S*" cluster.conf || { grep -E -q "^proxy=\S" cluster.conf	&& echo export int_connection=proxy; }
+
+	# Backward compat: derive int_connection + mirror_name from image_source
+	# so scripts not yet migrated keep working.
+	_is="${_is:-mirror}"
+	case "$_is" in
+		direct|proxy)
+			echo "export int_connection=$_is"
+			echo "export mirror_name=mirror"
+			;;
+		*)
+			echo "export int_connection="
+			echo "export mirror_name=$_is"
+			;;
+	esac
 
 	# Phase 3 (ADR-007): override immutable fields from installed state.
 	# Only apply if this cluster dir has the 'clusterstate' symlink — it points
@@ -742,6 +787,16 @@ normalize-cluster-conf()
 		_bd=$(grep '^base_domain=' clusterstate/state.sh 2>/dev/null | head -1 | cut -d= -f2)
 		[ "$_cn" ] && [ "$_bd" ] && _state_override_cluster "$_cn" "$_bd"
 	fi
+}
+
+# True if the cluster uses a mirror registry (not direct/proxy).
+image_source_is_mirror() {
+	[[ "${image_source:-mirror}" != "direct" && "${image_source:-mirror}" != "proxy" ]]
+}
+
+# Print the mirror directory name.  Only meaningful when image_source_is_mirror.
+image_source_mirror_name() {
+	echo "${image_source:-mirror}"
 }
 
 # -----------------------------------------------------------------------------
@@ -908,7 +963,7 @@ externalize_cluster_state() {
 	prefix_length=${prefix_length:-}
 	cp_names="${cp_names:-}"
 	worker_names="${worker_names:-}"
-	mirror_name=${mirror_name:-mirror}
+	image_source=${image_source:-mirror}
 	installed_from="$PWD"
 	installed_on="$(date -Iseconds)"
 	EOF
@@ -1198,7 +1253,15 @@ verify-cluster-conf() {
 
 	[[ -z "$vlan" || ( "$vlan" =~ ^[0-9]+$ && vlan -ge 1 && vlan -le 4094 ) ]] || { echo_red "Error: vlan is invalid in cluster.conf: [$vlan]" >&2; ret=1; }
 
-	[ "$int_connection" ] && { echo "$int_connection" | grep -qxE "none|proxy|direct" || { echo_red "Error: int_connection incorrectly set [$int_connection] in cluster.conf" >&2; ret=1; }; }
+	if [ "${image_source:-}" ]; then
+		if [[ "$image_source" == "direct" || "$image_source" == "proxy" ]]; then
+			: # valid
+		elif [[ "$image_source" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+			: # valid mirror dir name
+		else
+			echo_red "Error: image_source is invalid in cluster.conf [$image_source]" >&2; ret=1
+		fi
+	fi
 
 	# Match a mac *prefix*, e.g. 00:52:11:00:xx: (x is replaced by random number)
 	[ "$mac_prefix" ] && ! echo $mac_prefix | grep -q -E '^([0-9A-Fa-fXx]{2}:){5}$' && { aba_warn -p "Error" "mac_prefix is invalid in cluster.conf: [$mac_prefix]" "Expected: 5 octets + trailing colon, e.g. 52:54:00:1a:2b: (use 'x' for random hex, e.g. 52:54:00:xx:xx:)"; ret=1; }
@@ -1597,7 +1660,7 @@ aba_wait_show() (
 # sort -V puts pre-release suffixes ABOVE bare versions (wrong for semver);
 # the -zzz trick tags GA versions so they sort after their pre-release siblings.
 _semver_sort() {
-	sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V | sed 's/-zzz$//'
+	sed 's/^\([0-9]*\.[0-9]*\.[0-9]*\)$/\1-zzz/' | sort -V "$@" | sed 's/-zzz$//'
 }
 
 # Check if version1 is strictly greater than version2 (semver-aware).
@@ -2250,7 +2313,7 @@ fetch_all_upgrade_targets() {
 	_tmpdir=$(mktemp -d) || return 1
 
 	# Fetch each channel in parallel (max 3 concurrent processes)
-	for ch in "$channel" fast candidate; do
+	for ch in "$channel" fast candidate stable; do
 		[[ "$_seen_ch" == *" $ch "* ]] && continue
 		_seen_ch+="$ch "
 		( fetch_upgrade_targets "$ver" "$ch" 2>/dev/null | while IFS=$'\t' read -r _label _tgt_ver; do
@@ -2314,6 +2377,66 @@ verify_release_version_exists() {
 	fi
 
 	return 1
+}
+
+############################################
+# Compute the shortest upgrade path between two versions using BFS on the
+# Cincinnati graph.  Prints the path as "v1 → v2 → v3" (arrow-separated).
+# Returns 1 (and prints nothing) if no path exists or the graph is unavailable.
+# Args:
+#	$1 = source version (e.g. 4.20.0)
+#	$2 = target version (e.g. 4.22.8)
+#	$3 = channel (e.g. candidate-4.22)  [uses target minor's graph]
+############################################
+compute_upgrade_path() {
+	local src="$1" dst="$2" channel="${3:-}"
+	[[ -z "$src" || -z "$dst" || "$src" == "$dst" ]] && return 1
+
+	local ch_base="${channel%%-*}"
+	[[ -z "$ch_base" ]] && ch_base="${ocp_channel:-fast}"
+	local tgt_minor="${dst%.*}"
+	[[ "$dst" == *-* ]] && tgt_minor="${dst%%-*}" && tgt_minor="${tgt_minor%.*}"
+
+	local graph_json
+	graph_json=$(_fetch_graph_cached "$ch_base" "$tgt_minor" 2>/dev/null) || return 1
+	[[ -z "$graph_json" ]] && return 1
+
+	local result
+	result=$(echo "$graph_json" | jq -r --arg src "$src" --arg dst "$dst" '
+		.nodes as $nodes |
+		($nodes | to_entries | map({(.value.version): .key}) | add) as $idx |
+		($idx[$src] // -1) as $si |
+		($idx[$dst] // -1) as $di |
+		if $si == -1 or $di == -1 then empty
+		else
+			[.edges[] | {from: .[0], to: .[1]}] as $edges |
+			(reduce $edges[] as $e ({}; .[$e.from | tostring] += [$e.to])) as $adj |
+			{queue: [$si], visited: {($si|tostring): true}, parent: {}, found: false} |
+			until(.found or (.queue | length) == 0;
+				.queue[0] as $cur |
+				.queue[1:] as $rest |
+				if $cur == $di then .found = true | .queue = $rest
+				else
+					($adj[$cur|tostring] // []) as $nbrs |
+					reduce $nbrs[] as $n (. | .queue = $rest;
+						if .visited[$n|tostring] then .
+						else .visited[$n|tostring] = true | .parent[$n|tostring] = $cur | .queue += [$n]
+							| (if $n == $di then .found = true else . end)
+						end
+					)
+				end
+			) |
+			if .found then
+				.parent as $par |
+				[$di] | until(.[0] == $si; [$par[.[0]|tostring]] + .) |
+				map($nodes[.].version) | join(" \u2192 ")
+			else empty
+			end
+		end
+	' 2>/dev/null) || return 1
+
+	[[ -z "$result" ]] && return 1
+	echo "$result"
 }
 
 # Escape characters that are special in sed replacement strings.
@@ -2791,8 +2914,7 @@ trust_root_ca() {
 		if diff "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem >/dev/null 2>&1; then
 			aba_debug "$1 already in system trust"
 		else
-			$SUDO install -m 644 "$1" /etc/pki/ca-trust/source/anchors/aba-rootCA.pem
-			$SUDO update-ca-trust extract
+			$SUDO bash -c "install -m 644 '$1' /etc/pki/ca-trust/source/anchors/aba-rootCA.pem && update-ca-trust extract"
 			aba_info "Cert '${regcreds_display:-regcreds}/rootCA.pem' updated in system trust"
 		fi
 	else
@@ -4103,6 +4225,8 @@ ensure_sigstore_mirror_config() {
 
 # Ensure oc-mirror is installed in ~/bin
 ensure_oc_mirror() {
+	command -v oc-mirror >/dev/null && return 0
+
 	aba_debug "ensure_oc_mirror: downloading and installing oc-mirror"
 	# Liberal bg kick-off (idempotent — fast no-op if already running/done)
 	run_once -i "$TASK_DL_OC_MIRROR" -- "${CMD_DL_OC_MIRROR[@]}"
@@ -4115,6 +4239,8 @@ ensure_oc_mirror() {
 
 # Ensure oc CLI is installed in ~/bin
 ensure_oc() {
+	command -v oc >/dev/null && return 0
+
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_oc: ocp_version not set, skipping"
 		return 0
@@ -4132,6 +4258,8 @@ ensure_oc() {
 
 # Ensure openshift-install is installed in ~/bin
 ensure_openshift_install() {
+	command -v openshift-install >/dev/null && return 0
+
 	if [[ -z "${ocp_version:-}" ]]; then
 		aba_debug "ensure_openshift_install: ocp_version not set, skipping"
 		return 0
@@ -4194,7 +4322,7 @@ check_release_image() {
 				_release_check_extra+=("Did you mean reg_host=${_same_port%:*} in mirror.conf?")  # strip :port
 			fi
 		fi
-		_release_check_extra+=("Config: ${mirror_name:-mirror}/mirror.conf (reg_host=$reg_host)")
+		_release_check_extra+=("Config: $(image_source_mirror_name)/mirror.conf (reg_host=$reg_host)")
 		_release_check_extra+=("Pull secret: ${regcreds_display:-$regcreds_dir}/pull-secret-mirror.json")
 		return 1
 	fi
@@ -4402,6 +4530,8 @@ aba_bg_cleanup() {
 
 # Ensure govc is installed in ~/bin (VMware only)
 ensure_govc() {
+	command -v govc >/dev/null && return 0
+
 	[ -z "${platform:-}" ] && source <(normalize-aba-conf)
 	if [ "${platform:-}" != "vmw" ]; then
 		aba_debug "ensure_govc: skipping (platform=${platform:-unset}, not vmw)"
@@ -4439,6 +4569,8 @@ ensure_virsh() {
 
 # Ensure butane is installed in ~/bin
 ensure_butane() {
+	command -v butane >/dev/null && return 0
+
 	aba_debug "ensure_butane: downloading and installing butane"
 	# Liberal bg kick-off (idempotent)
 	run_once -i "$TASK_DL_BUTANE" -- "${CMD_DL_BUTANE[@]}"

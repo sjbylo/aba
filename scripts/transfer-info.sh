@@ -115,9 +115,9 @@ if [[ "$_shell_mode" == "true" ]]; then
 	echo "transfer_created=\"$_created\""
 else
 	if [[ "$_source" == "transfer" ]]; then
-		echo "Transfer bundle: $_transfer_tar"
+		echo "Transfer config: $_transfer_tar"
 	else
-		echo "No transfer bundle found. Showing local ISC."
+		echo "No transfer config found. Showing local ISC."
 	fi
 
 	local_ver="$_ocp_version"

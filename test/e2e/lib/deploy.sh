@@ -64,7 +64,10 @@ sync_harness() {
 		return 1
 	fi
 
-	_essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}" || return 1
+	if ! _essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}"; then
+		echo "    DIAG: sync_harness: dir cleanup/create failed on ${target}" >&2
+		return 1
+	fi
 
 	# Clean stale regular-file *-summary.log and summary.log left by old rsync deploys.
 	# suite_start creates these as symlinks; a regular file blocks ln -sf and tail -F.
@@ -72,13 +75,13 @@ sync_harness() {
 
 	# Atomic replace of runner.sh (scp to tmp + mv) so a still-open bash FD cannot
 	# observe a truncated in-place write if the lock check races.
-	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh.new" &&
-	_essh "$target" "mv -f ~/.e2e-harness/runner.sh.new ~/.e2e-harness/runner.sh" &&
-	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env" &&
-	_escp "${aba_root}/test/e2e/pools.conf"          "${target}:~/.e2e-harness/pools.conf" &&
-	_escp "${aba_root}/test/e2e/lib/"*.sh            "${target}:~/.e2e-harness/lib/" &&
-	_escp "${aba_root}/test/e2e/suites/"suite-*.sh   "${target}:~/.e2e-harness/suites/" &&
-	_escp "${aba_root}/test/e2e/scripts/"*.sh        "${target}:~/.e2e-harness/scripts/"
+	_escp "${aba_root}/test/e2e/runner.sh"          "${target}:~/.e2e-harness/runner.sh.new" || { echo "    DIAG: sync_harness: scp runner.sh failed to ${target}" >&2; return 1; }
+	_essh "$target" "mv -f ~/.e2e-harness/runner.sh.new ~/.e2e-harness/runner.sh"            || { echo "    DIAG: sync_harness: mv runner.sh failed on ${target}" >&2; return 1; }
+	_escp "$deploy_config"                           "${target}:~/.e2e-harness/config.env"   || { echo "    DIAG: sync_harness: scp config.env failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/pools.conf"          "${target}:~/.e2e-harness/pools.conf"   || { echo "    DIAG: sync_harness: scp pools.conf failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/lib/"*.sh            "${target}:~/.e2e-harness/lib/"         || { echo "    DIAG: sync_harness: scp lib/*.sh failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/suites/"suite-*.sh   "${target}:~/.e2e-harness/suites/"      || { echo "    DIAG: sync_harness: scp suites/*.sh failed to ${target}" >&2; return 1; }
+	_escp "${aba_root}/test/e2e/scripts/"*.sh        "${target}:~/.e2e-harness/scripts/"     || { echo "    DIAG: sync_harness: scp scripts/*.sh failed to ${target}" >&2; return 1; }
 }
 
 # Deploy infra-owned aba binary to ~/.e2e-harness/bin/aba on both conN and disN.
@@ -211,6 +214,20 @@ sync_extras() {
 		_escp "$HOME/.vmware.conf.esxi" "${target}:~/.vmware.conf.esxi"
 	fi
 
+	# Patch ~/.kvm.conf with per-pool KVM_STORAGE_POOL from pools.conf
+	if [ -n "${KVM_STORAGE_POOL:-}" ]; then
+		_essh "$target" "
+			if [ -f ~/.kvm.conf ]; then
+				sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${KVM_STORAGE_POOL}|' ~/.kvm.conf
+			fi" || true
+		if [ "$user" != "root" ]; then
+			_essh "root@${target#*@}" "
+				if [ -f ~/.kvm.conf ]; then
+					sed -i 's|^KVM_STORAGE_POOL=.*|KVM_STORAGE_POOL=${KVM_STORAGE_POOL}|' ~/.kvm.conf
+				fi" || true
+		fi
+	fi
+
 	# Ensure KVM VLAN route survives provisioning gaps or snapshot reverts.
 	local _root_target="root@${target#*@}"
 	_essh "$_root_target" \
@@ -286,6 +303,10 @@ _export_pool_ssh_users() {
 	[ -n "${CLI_DIS_USER:-}" ] && _dis_u="$CLI_DIS_USER"
 	export CON_SSH_USER="${_con_u:-${CON_SSH_USER:-steve}}"
 	export DIS_SSH_USER="${_dis_u:-${DIS_SSH_USER:-steve}}"
+
+	local _kvm_pool=""
+	_kvm_pool=$(_pool_conf_get "$_pools" "$pool_num" KVM_STORAGE_POOL) || true
+	export KVM_STORAGE_POOL="${_kvm_pool:-${KVM_STORAGE_POOL:-}}"
 }
 
 # Full deploy to one pool: source (if --dev) + harness + extras.
@@ -305,9 +326,15 @@ deploy_pool() {
 
 	echo -n "    con${pool_num} (${user}): "
 
-	# Check for running suite (skip unless --force)
+	# Check for running suite under any user (skip unless --force)
 	local _running_sess=""
-	_running_sess=$(_essh "$target" "tmux has-session -t '$E2E_TMUX_SESSION' && echo yes") || _running_sess=""
+	_running_sess=$(_essh "$target" "
+		tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes && exit 0
+		_su=\$(cat /tmp/e2e-suite-user 2>/dev/null) || true
+		[ -z \"\$_su\" ] && exit 1
+		[ \"\$_su\" = \"\$(whoami)\" ] && exit 1
+		sudo -u \"\$_su\" tmux has-session -t '$E2E_TMUX_SESSION' 2>/dev/null && echo yes || exit 1
+	") || _running_sess=""
 	if [ "$_running_sess" = "yes" ]; then
 		if [ -z "${CLI_FORCE:-}" ]; then
 			echo "RUNNING (skipped -- use --force to deploy anyway)"

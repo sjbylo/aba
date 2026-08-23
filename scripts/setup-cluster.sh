@@ -51,7 +51,7 @@ else
 	aba_info "Creating '$name/cluster.conf' file for cluster type '${type:-standard}'."
 fi
 
-exec_cmd="scripts/create-cluster-conf.sh name=$name type=${type:-standard} domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip num_workers=$num_workers num_masters=$num_masters vlan=$vlan ssh_key_file=$ssh_key_file mirror_name=$mirror_name"
+exec_cmd="scripts/create-cluster-conf.sh name=$name type=${type:-standard} domain=$domain starting_ip=$starting_ip ports=$ports ingress_vip=$ingress_vip master_cpu_count=$master_cpu_count master_mem=$master_mem worker_cpu_count=$worker_cpu_count worker_mem=$worker_mem data_disk=$data_disk api_vip=$api_vip ingress_vip=$ingress_vip num_workers=$num_workers num_masters=$num_masters vlan=$vlan ssh_key_file=$ssh_key_file image_source=$image_source"
 
 aba_debug "Running: $exec_cmd"
 
@@ -74,9 +74,9 @@ fi
 _updated=""
 [ "$num_masters" ]       && _updated="${_updated}num_masters=$num_masters "
 [ "$num_workers" ]       && _updated="${_updated}num_workers=$num_workers "
-[ "$int_connection" ]    && _updated="${_updated}int_connection=$int_connection "
+[ "$image_source" ]      && _updated="${_updated}image_source=$image_source "
 
-[ "$int_connection" ]    && replace-value-conf -q -n int_connection    -v "$int_connection"    -f cluster.conf
+[ "$image_source" ]      && replace-value-conf -q -n image_source      -v "$image_source"      -f cluster.conf
 [ "$api_vip" ]           && replace-value-conf -q -n api_vip           -v "$api_vip"           -f cluster.conf
 [ "$ingress_vip" ]       && replace-value-conf -q -n ingress_vip       -v "$ingress_vip"       -f cluster.conf
 [ "$starting_ip" ]       && replace-value-conf -q -n starting_ip       -v "$starting_ip"       -f cluster.conf
@@ -89,19 +89,19 @@ _updated=""
 [ "$num_masters" ]       && replace-value-conf -q -n num_masters       -v "$num_masters"       -f cluster.conf
 [ "$vlan" ]              && replace-value-conf -q -n vlan              -v "$vlan"              -f cluster.conf
 [ "$ssh_key_file" ]      && replace-value-conf -q -n ssh_key_file      -v "$ssh_key_file"      -f cluster.conf
-[ "$mirror_name" ]       && replace-value-conf -q -n mirror_name       -v "$mirror_name"       -f cluster.conf
-
 [ "$_updated" ] && $_existing_conf && aba_info "Updated $name/cluster.conf: ${_updated% }"  # trim trailing space
 
-# Re-link mirror/regcreds/mirror.conf to match the final mirror_name in cluster.conf.
+# Re-link mirror/regcreds/mirror.conf to match image_source in cluster.conf.
 # This is necessary because .init (above) ran before cluster.conf existed, so it
 # defaulted mirror to ../mirror.  The Makefile.cluster cluster.conf recipe has the
 # same logic, but Make skips it here because create-cluster-conf.sh already created
 # cluster.conf -- the target file exists, so Make considers it up-to-date.
 source <(normalize-cluster-conf)
-_mn=${mirror_name:-mirror}
-ln -sfn ../$_mn mirror
-ln -sfn ~/.aba/mirror/$_mn regcreds
+if image_source_is_mirror; then
+	_mn=$(image_source_mirror_name)
+	ln -sfn ../$_mn mirror
+	ln -sfn ~/.aba/mirror/$_mn regcreds
+fi
 if [ -f mirror/mirror.conf ]; then ln -fs mirror/mirror.conf
 else rm -f mirror.conf && touch mirror.conf; fi
 

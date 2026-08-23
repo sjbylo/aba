@@ -43,7 +43,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
-# Transfer bundle path (used in both early-exit and normal flow)
+# aba-transfer.tar path (used in both early-exit and normal flow)
 _transfer_tar="data/aba-transfer.tar"
 
 # --- Guard: archive files must be present ---
@@ -64,14 +64,14 @@ if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 			aba_info "Config transfer extracted (cluster directories updated)."
 		fi
 		if [ -f "$_transfer_tar" ]; then
-			aba_info "Found transfer bundle: $_transfer_tar"
+			aba_debug "Found transfer config: $_transfer_tar"
 			rm -f data/aba-transfer-metadata.json \
 				data/imageset-config.yaml \
 				data/imageset-config-digest.yaml
 			if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
-				aba_abort "Failed to unpack transfer bundle ($_transfer_tar)."
+				aba_abort "Failed to unpack transfer config ($_transfer_tar)."
 			fi
-			aba_info "Transfer bundle unpacked."
+			aba_debug "Transfer config applied."
 		fi
 		aba_info "Config-only transfer: no images to load. Done."
 		exit 0
@@ -82,7 +82,7 @@ if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 		"  cp <source>/mirror/data/*.tar mirror/data/"
 fi
 
-# Unpack transfer bundle if present (always contains ISC; for upgrades also
+# Unpack aba-transfer.tar if present (always contains ISC; for upgrades also
 # includes CLI tarballs and metadata).  Created by 'aba save' so that
 # 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
 # Tar paths are relative to aba root (mirror/data/*, cli/*), so unpack from aba root.
@@ -92,13 +92,13 @@ _transfer_meta_chan=""
 # --- Guard: warn if transfer tar is missing (user may have copied only mirror_*.tar) ---
 if [ ! -f "$_transfer_tar" ]; then
 	aba_warn "No aba-transfer.tar found alongside mirror_*.tar archives." \
-		"The transfer tar contains the matching ISC and metadata." \
+		"This file contains the matching config and metadata." \
 		"Ensure you copied ALL *.tar files from mirror/data/." \
 		"Continuing with existing local ISC."
 fi
 
 if [ -f "$_transfer_tar" ]; then
-	aba_info "Found transfer bundle: $_transfer_tar"
+	aba_debug "Found transfer config: $_transfer_tar"
 
 	# Drop leftovers from a prior load before unpack. Non-upgrade transfer tars
 	# omit metadata (and sometimes the digest ISC); tar xf will not remove
@@ -110,7 +110,7 @@ if [ -f "$_transfer_tar" ]; then
 
 	# Unpack from aba root (CWD is mirror/, aba root is ..)
 	if ! ( cd .. && tar xf "mirror/$_transfer_tar" ); then
-		aba_abort "Failed to unpack transfer bundle ($_transfer_tar)." \
+		aba_abort "Failed to unpack transfer config ($_transfer_tar)." \
 			"The file may be corrupt. Re-copy mirror/data/*.tar from the connected host."
 	fi
 
@@ -120,23 +120,21 @@ if [ -f "$_transfer_tar" ]; then
 		_transfer_meta_chan=$(grep '"ocp_channel"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
 		_expected_sha=$(grep '"digest_isc_sha256"' data/aba-transfer-metadata.json | sed 's/.*: *"//; s/".*//')
 
-		aba_info "Transfer bundle: OCP ${_transfer_meta_ver} (${_transfer_meta_chan})"
+		aba_debug "Transfer config: OCP ${_transfer_meta_ver} (${_transfer_meta_chan})"
 
 		# Verify digest ISC integrity if checksum is available
 		if [ "$_expected_sha" ] && [ -f "data/imageset-config-digest.yaml" ]; then
 			_actual_sha=$(sha256sum "data/imageset-config-digest.yaml" | awk '{print $1}')
 			if [ "$_actual_sha" != "$_expected_sha" ]; then
 				aba_abort "imageset-config-digest.yaml checksum mismatch." \
-					"The digest ISC does not match the transfer bundle metadata." \
+					"The digest ISC does not match the transfer config metadata." \
 					"Re-copy mirror/data/*.tar from the connected host."
 			fi
 			aba_debug "Digest ISC checksum verified OK"
 		fi
 	fi
 
-	# Transfer bundle unpacked — keep in place for potential re-use
-	# (re-load after registry reinstall, or copy to another mirror)
-	aba_info "Transfer bundle unpacked."
+	aba_debug "Transfer config applied."
 fi
 
 # Extract configs transfer tar if present (cluster dirs for day-N updates).
@@ -268,7 +266,7 @@ _loaded_chan=""
 if [ "$_transfer_meta_ver" ]; then
 	_loaded_ver="$_transfer_meta_ver"
 	_loaded_chan="$_transfer_meta_chan"
-	aba_debug "Version from transfer bundle metadata: ver=$_loaded_ver chan=$_loaded_chan"
+	aba_debug "Version from transfer config metadata: ver=$_loaded_ver chan=$_loaded_chan"
 else
 	_isc_file="data/imageset-config.yaml"
 	if [ -f "$_isc_file" ]; then

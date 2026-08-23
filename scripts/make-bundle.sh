@@ -28,22 +28,6 @@ _wait_for_cli_downloads() {
 	done
 }
 
-# Defense-in-depth: verify all .tar.gz files in cli/ are not truncated
-_verify_cli_tarballs() {
-	local f fail=0
-	for f in cli/*.tar.gz; do
-		[ -f "$f" ] || continue
-		if ! gzip -t "$f" 2>/dev/null; then
-			aba_info "ERROR: Corrupt tarball detected: $f (truncated or incomplete)" >&2
-			fail=1
-		fi
-	done
-	if [ $fail -ne 0 ]; then
-		aba_info "Refusing to create bundle with corrupt CLI tarballs. Re-download with: make -C cli clean && aba cli" >&2
-		return 1
-	fi
-	aba_debug "All CLI tarballs passed integrity check (gzip -t)"
-}
 
 aba_debug "Parsing command-line arguments: $#"
 while [[ $# -gt 0 ]]; do
@@ -112,9 +96,25 @@ else
 	fi
 	aba_info "Creating install bundle with:" >&2
 	if [[ "$bundle_dest_file" == *.tar ]]; then
-		bundle_dest_file="${bundle_dest_file%.tar}-$ocp_version.tar"  # strip .tar, append version, re-add .tar
+		: # User provided explicit .tar filename — use as-is
 	else
-		bundle_dest_file="$bundle_dest_file-$ocp_version.tar"
+		# Append metadata suffixes to the basename only (not directory components)
+		_dir=$(dirname "$bundle_dest_file")
+		_base=$(basename "$bundle_dest_file")
+		[[ "$_base" != *"$ocp_version"* ]] && _base="$_base-$ocp_version"
+		[[ "$_base" != *"$ARCH"* ]] && _base="$_base-$ARCH"
+		if [ "$light_bundle" ]; then
+			[[ "$_base" != *-lite* ]] && _base="$_base-lite"
+		elif [ "${excl_platform:-}" != "true" ]; then
+			[[ "$_base" != *-rel* ]] && _base="$_base-rel"
+		fi
+		_op_count=0
+		[ -f mirror/data/imageset-config.yaml ] && \
+			_op_count=$(awk '/^  operators:/{o=1} o && /^    - name: /{c++} END{print c+0}' mirror/data/imageset-config.yaml 2>/dev/null) || _op_count=0
+		if [ "$_op_count" -gt 0 ] 2>/dev/null && [[ "$_base" != *op[0-9]* ]]; then
+			_base="$_base-op${_op_count}"
+		fi
+		bundle_dest_file="$_dir/$_base.tar"
 	fi
 	aba_debug "Final bundle destination: $bundle_dest_file"
 
@@ -254,8 +254,7 @@ if [ "$light_bundle" ]; then
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
 	_wait_for_cli_downloads || exit 1
-	_verify_cli_tarballs || exit 1
-	aba_debug "All CLI tarballs downloaded and verified"
+	aba_debug "All CLI tarballs downloaded"
 	
 	aba_info "Creating *light* install bundle archive ..."
 	rm -f "$bundle_dest_file"
@@ -298,9 +297,8 @@ else
 	aba_info "Ensuring all CLI installation files are downloaded..."
 	aba_debug "Waiting for all CLI tarball downloads to complete"
 	_wait_for_cli_downloads || exit 1
-	_verify_cli_tarballs || exit 1
-	aba_debug "All CLI tarballs downloaded and verified"
-	
+	aba_debug "All CLI tarballs downloaded"
+
 	aba_info "Creating install bundle archive ..."
 	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tar out=$bundle_dest_file $with_clusters"

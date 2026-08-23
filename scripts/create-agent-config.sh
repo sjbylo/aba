@@ -9,7 +9,7 @@ aba_debug "Starting: $0 $*"
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"

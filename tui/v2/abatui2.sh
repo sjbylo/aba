@@ -554,7 +554,9 @@ _conno_main() {
 			_TUI_NEED_MIRROR_RECHECK=false
 		fi
 
-		# Refresh mirror labels from cached state (non-blocking)
+		# Refresh mirror labels from cached state (non-blocking).
+		# "(synced)" follows last_action, not the release-image probe: an
+		# operators-only sync (excl_platform=true) is still a successful sync.
 		if mirror_available && _mirror_has_release_image; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_INSTALLED"
@@ -564,6 +566,9 @@ _conno_main() {
 		elif mirror_available; then
 			mirr_avail=false
 			mirr_label="$TUI2_LABEL_INSTALL_MIRROR $TUI2_STATUS_NOT_VERIFIED"
+			if [[ "$sync_avail" == "true" && "$(_mirror_last_action)" == "sync" ]]; then
+				sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_SYNCED"
+			fi
 		fi
 
 		# Save status: tar archives exist in mirror/data/

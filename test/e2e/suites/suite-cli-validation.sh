@@ -40,7 +40,8 @@ plan_tests \
     "Invalid network arguments" \
     "Unknown flags" \
     "Bundle output collision" \
-    "Debug mode on/off"
+    "Debug mode on/off" \
+    "ABA installer: git and curl"
 
 suite_begin "cli-validation"
 

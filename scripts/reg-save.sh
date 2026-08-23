@@ -122,7 +122,7 @@ scripts/create-containers-auth.sh || exit 1
 aba_debug "Checking disk space in data/ directory"
 mkdir -p data
 
-# Remove stale transfer bundle to prevent mismatch if this save fails partway
+# Remove stale aba-transfer.tar to prevent mismatch if this save fails partway
 rm -f data/aba-transfer.tar data/aba-transfer-metadata.json
 aba_debug "Removed any stale aba-transfer.tar from data/"
 
@@ -178,7 +178,7 @@ if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
 	exit 1
 fi
 
-# Ensure all CLI downloads are complete before building transfer bundle
+# Ensure all CLI downloads are complete before packing aba-transfer.tar
 scripts/cli-download-all.sh --wait
 cli_download_extra_clis --wait
 
@@ -227,15 +227,15 @@ if [ "$_is_upgrade" ]; then
 	_bundle_files+=("mirror/data/aba-transfer-metadata.json")
 fi
 
-aba_info "Creating transfer bundle: $_transfer_tar"
+aba_debug "Packing transfer config: $_transfer_tar"
 
 # Create the tar from aba root so paths are correct for unpack from aba root.
 # CWD is mirror/ so aba root is ..
 if ( cd .. && tar cf "mirror/$_transfer_tar" "${_bundle_files[@]}" ); then
 	_tar_size=$(du -sh "$_transfer_tar" | awk '{print $1}')
-	aba_success "Transfer bundle created: $_transfer_tar ($_tar_size)"
+	aba_debug "Transfer config packed: $_transfer_tar ($_tar_size)"
 else
-	aba_warn "Failed to create transfer bundle ($_transfer_tar)." \
+	aba_warn "Failed to create transfer config ($_transfer_tar)." \
 		"The image archives (mirror_*.tar) are still valid." \
 		"You can manually copy ISC and CLI files to the disconnected host."
 fi
@@ -248,7 +248,7 @@ if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info "Copy all *.tar files from mirror/data/ to the disconnected host:"
 	aba_info "  cp mirror/data/*.tar /transfer-media/"
 	echo
-	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (ISC, CLIs, metadata)"
+	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (config, CLIs)"
 	echo
 	aba_info "On the disconnected host:"
 	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"

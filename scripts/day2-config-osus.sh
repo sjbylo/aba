@@ -10,8 +10,8 @@ umask 077
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
-export regcreds_display="${mirror_name:-mirror}/regcreds"
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
+export regcreds_display="$(image_source_mirror_name)/regcreds"
 source <(normalize-mirror-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
@@ -21,8 +21,8 @@ verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the er
 scripts/cli-install-all.sh --wait oc
 
 # Stop processing (CatalogSources and Signatures etc) if this cluster is a connected cluster!
-if [ "$int_connection" ]; then
-	aba_info "This cluster connects directly to the internet (int_connection=$int_connection)."
+if ! image_source_is_mirror; then
+	aba_info "This cluster connects directly to the internet (image_source=$image_source)."
 	aba_info "OpenShift Update Service is not needed — the cluster can reach update channels directly."
 
 	exit 0
@@ -174,11 +174,11 @@ if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 	sleep 5
 	if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 		aba_abort \
-			"cincinnati-operator not available in OperatorHub for this cluster." \
-			"The CatalogSource may still be synchronizing -- wait a few minutes and try again:" \
+			"cincinnati-operator not available in OperatorHub." \
+			"Run 'aba -d $(basename "$PWD") day2' first to configure mirror-backed operator catalogs." \
+			"If day2 has already run, the CatalogSource may still be synchronizing:" \
 			"  oc get catalogsource -n openshift-marketplace" \
-			"  oc get packagemanifests | grep cincinnati" \
-			"If the operator is not loaded, run: aba day2"
+			"  oc get packagemanifests | grep cincinnati"
 	fi
 fi
 
@@ -344,3 +344,7 @@ oc patch clusterversion version -p $PATCH --type merge
 
 aba_success "Update Service configuration completed successfully!"
 aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."
+
+# OSUS install patches CA, proxy, and upstream — triggers CO reconciliation.
+# Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
+aba_wait_show "Ensuring cluster operators are stable after OSUS changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true

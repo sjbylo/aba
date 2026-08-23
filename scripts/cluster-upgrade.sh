@@ -61,7 +61,7 @@ done
 
 source <(normalize-aba-conf)
 source <(normalize-cluster-conf)
-export regcreds_dir=$HOME/.aba/mirror/$mirror_name
+export regcreds_dir=$HOME/.aba/mirror/$(image_source_mirror_name)
 source <(normalize-mirror-conf)
 
 # Ensure container auth is configured (skopeo needs mirror creds in ~/.docker/config.json)
@@ -73,6 +73,8 @@ if [ -z "$KUBECONFIG" ]; then
 	aba_abort "kubeconfig not found. Expected at ~/.aba/clusters/$cluster_name.$base_domain/kubeconfig or iso-agent-based/auth/kubeconfig"
 fi
 export KUBECONFIG
+
+ensure_oc
 
 # Preflight: cluster access (fast TCP probe, then oc)
 aba_info "Checking cluster access ..." >&2
@@ -232,6 +234,12 @@ if [ "$current_ver" = "$target_ver" ] && [ ! "$opt_dry_run" ]; then
 	exit 0
 fi
 
+# Preflight: wait for cluster operators to settle before checking upgrade readiness.
+# Prior day2 changes (IDMS, CA trust) can leave COs Progressing/Degraded transiently.
+if ! cluster_is_ready; then
+	aba_wait_show "Ensuring cluster operators are stable before upgrade" 15 300 cluster_is_ready || true
+fi
+
 # Preflight: cluster accessibility — only needs API reachable (Available=True).
 # A cluster with Progressing operators or a Degraded operator can still accept upgrades.
 if ! cluster_is_accessible; then
@@ -327,7 +335,7 @@ if [ ! "$upgrade_already_running" ]; then
 	# verify the target version exists in the graph before running day2.
 	_target_major=$(_ver_minor "$target_ver")
 	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
-	_isc_file="../${mirror_name}/data/imageset-config.yaml"
+	_isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
 	_isc_channel=""
 	[ -f "$_isc_file" ] && _isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
 	if [ -n "$_isc_channel" ]; then
@@ -413,7 +421,7 @@ if [ ! "$upgrade_already_running" ]; then
 			if [ -n "$opt_force" ]; then
 				aba_info "--force specified: proceeding despite Upgradeable=False"
 			else
-				ask -n "Continue with upgrade (only if you have resolved the above)" || exit 1
+				ask -n --auto-yes "Continue with upgrade (only if you have resolved the above)" || exit 1
 			fi
 		fi
 	fi
@@ -435,7 +443,7 @@ if [ ! "$upgrade_already_running" ]; then
 	_target_major=$(_ver_minor "$target_ver")
 
 	# Read channel from ISC (what was actually mirrored)
-	_isc_file="../${mirror_name}/data/imageset-config.yaml"
+	_isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
 	_isc_channel=""
 	if [ -f "$_isc_file" ]; then
 		_isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
@@ -563,15 +571,22 @@ if [ ! "$upgrade_already_running" ]; then
 		upgrade_cmd="$upgrade_cmd --allow-not-recommended"
 	fi
 
-	# Execute upgrade
+	# Execute upgrade (retry once if the cluster needs time to settle)
 	aba_info "Triggering cluster upgrade: $current_ver → $target_ver ..."
 	aba_debug "Running: $upgrade_cmd"
 	_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
-	echo "$_upgrade_out"
 	if [ $_upgrade_rc -ne 0 ]; then
-		aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
-			"Check: oc adm upgrade"
+		echo "$_upgrade_out" >&2
+		aba_info "Cluster not ready for upgrade, waiting 30s and retrying..."
+		sleep 30
+		_upgrade_out=$(eval "$upgrade_cmd" 2>&1) && _upgrade_rc=0 || _upgrade_rc=$?
+		if [ $_upgrade_rc -ne 0 ]; then
+			echo "$_upgrade_out"
+			aba_abort "Upgrade command failed (exit=$_upgrade_rc): $upgrade_cmd" \
+				"Check: oc adm upgrade"
+		fi
 	fi
+	echo "$_upgrade_out"
 
 	aba_success "Upgrade command accepted by cluster"
 fi

@@ -682,7 +682,7 @@ will ship as "mirror-registry v3.0". ABA already supports it as a BETA vendor.
 
 ## Feature: Merge int_connection and mirror_name into a single config value
 
-**Status:** Planned
+**Status:** Done (v1.2.3)
 **Added:** 2026-07-10
 
 **Problem:** `cluster.conf` has two fields (`int_connection` and `mirror_name`)
@@ -1162,3 +1162,398 @@ target" option and manual entry:
 **Workaround:** Manually select "Next minor" or "Manual entry" instead of
 "Current target" when the cluster has been z-stream upgraded since the last
 mirror sync.
+
+---
+
+## Upgrade: auto-restart OSUS pod when graph-image content changes
+
+**Severity:** MEDIUM — user gets "not an available upgrade" after a successful sync
+**Status:** Planned (was prototyped and verified on testy@conno, then stashed for v1.2.3)
+**Added:** 2026-08-16
+
+**Problem:** After `aba sync` (or `aba load`) mirrors a new OCP version, the
+`graph-image:latest` in the registry is updated with the new version's graph
+data. However, the running OSUS pod does not pick up the change because:
+- The OSUS operator only redeploys pods when the `graphDataImage` field in the
+  `UpdateService` CR changes (different image reference), not when the content
+  behind a `:latest` tag changes.
+- The OSUS init container has `imagePullPolicy: Always`, but this only takes
+  effect when the pod restarts — not while it's already running.
+
+The user runs `aba upgrade --to 4.22.10` and gets "Version 4.22.10 is not an
+available upgrade" even though the version was just synced successfully.
+
+**Root cause:** Stale graph data in the running OSUS pod. The init container
+cached the old `graph-image:latest` at pod creation time.
+
+**Verified fix (tested on testy@conno 2026-08-16):**
+In `cluster-upgrade.sh`, after the initial OSUS graph check fails to find the
+target version:
+1. Restart the OSUS pod: `oc delete pod -n openshift-update-service -l app=osus`
+2. Wait for the new pod to be ready (init container re-pulls `graph-image:latest`)
+3. Wait for the target version to appear in the graph
+4. If still not found after restart, abort with the existing error message
+
+The pod restart takes ~30-60 seconds (init container pull + graph load).
+Graph data is available immediately after the pod reaches Ready state.
+
+**Detection logic:** The graph is "stale" when:
+- OSUS is installed and configured (`osus_upstream` is set)
+- `oc adm upgrade --include-not-recommended` does not list the target version
+- But we know the version was just synced (it's in the mirror registry)
+
+**Implementation notes:**
+```bash
+# In cluster-upgrade.sh, after initial graph check fails:
+if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
+    aba_info "Target version not yet in OSUS graph — restarting OSUS pod ..."
+    oc delete pod -n openshift-update-service -l app=osus 2>/dev/null || true
+    # Wait for new pod Ready, then wait for target in graph
+    aba_wait_show "Waiting for OSUS pod" 5 180 _osus_pod_ready || true
+    aba_wait_show "Waiting for $target_ver in graph" 5 120 _osus_graph_has_target || true
+    _osus_graph_has_target && _graph_ok=1
+fi
+```
+
+**Design consideration:** Could also be triggered proactively after `aba day2`
+(which applies updated CatalogSources/IDMS), since that's the natural point
+where the cluster learns about new mirror content. But `cluster-upgrade.sh` is
+the place where the failure actually manifests, so reactive restart there is
+the minimum viable fix.
+
+**Future enhancement:** Trigger OSUS pod restart from `aba day2` as a
+background `run_once` task, so the graph is already fresh by the time the
+user runs `aba upgrade`. See "Cluster-mirror auto-actions" below.
+
+**Files to change:**
+- `scripts/cluster-upgrade.sh`: add OSUS pod restart logic after graph check
+- Also remove the early `aba_abort` that fires before the pod restart logic
+  can be reached (the early check short-circuits on "some graph data but no
+  target version")
+
+**Workaround:** Manually restart the OSUS pod:
+```bash
+oc delete pod -n openshift-update-service -l app=osus
+# Wait ~60s, then retry:
+aba upgrade --to <version>
+```
+
+---
+
+## Feature: Cluster-mirror auto-actions after sync/load
+
+**Severity:** MEDIUM — reduces manual steps, prevents user confusion
+**Status:** Planned
+**Added:** 2026-08-16
+
+**Problem:** After `aba sync` or `aba load` updates the mirror registry, the
+user must manually determine which clusters need updating and run commands on
+each one. The CLI just prints generic `aba -d <cluster> day2` hints. The TUI
+has `_offer_day2_after_mirror_update()` which discovers clusters, but only
+offers day2 — not other post-mirror actions. Several post-mirror actions are
+needed depending on context.
+
+**Core missing piece:** A shared `clusters_using_mirror()` function in
+`include_all.sh` (not TUI code) that both CLI and TUI can call. The TUI
+already has `list_installed_clusters()` + `int_connection` filtering in
+`tui-lib.sh` — this logic should move to ABA core.
+
+**Use cases requiring cluster discovery + action:**
+
+| # | Trigger | Action on cluster(s) | Priority |
+|---|---------|---------------------|----------|
+| 1 | `sync`/`load` completes | Run `aba day2` (IDMS, CatalogSources, signatures) | HIGH — already prompted in TUI, but CLI is manual |
+| 2 | `sync`/`load` adds new OCP version to graph-image | Restart OSUS pod to refresh graph data | MEDIUM — see "auto-restart OSUS pod" above |
+| 3 | Cross-minor upgrade sync | Update OSUS channel on cluster to match target minor | MEDIUM — currently manual, can break `aba upgrade` |
+| 4 | Mirror reinstall (new CA cert) | Warn that old clusters can't reach new mirror | MEDIUM — already in backlog (cert mismatch) |
+| 5 | `aba day2` after upgrade sync | Skip CatalogSources whose version doesn't match cluster | HIGH — already in backlog (multi-version catalogs) |
+| 6 | `aba upgrade` pre-flight | Query cluster's actual version, not aba.conf | MEDIUM — partially done, needs strengthening |
+
+**Proposed design:**
+
+### Phase 1: Core discovery function (prerequisite for everything else)
+
+```bash
+# include_all.sh
+clusters_using_mirror() {
+    # Returns list of installed cluster dirs that use the mirror
+    # (int_connection is empty or unset = mirror mode)
+    local _dir
+    for _dir in ../*/.install-complete; do
+        [ -f "$_dir" ] || continue
+        _dir=$(dirname "$_dir")
+        _dir=$(basename "$_dir")
+        local _int_conn
+        _int_conn=$(cd "$_dir" && source <(normalize-cluster-conf) 2>/dev/null && echo "${int_connection:-}") || true
+        [ -z "$_int_conn" ] && echo "$_dir"
+    done
+}
+```
+
+Refactor `_offer_day2_after_mirror_update()` in `tui-lib.sh` to call this
+function instead of duplicating the discovery logic.
+
+### Phase 2: Post-mirror hook system
+
+After `aba sync` or `aba load`, call a hook that iterates
+`clusters_using_mirror()` and performs context-aware actions:
+
+- **Always:** Print which clusters need `aba day2` (current behavior, improved)
+- **If OSUS installed:** Restart OSUS pod (via `run_once` background task)
+- **If upgrade sync:** Print upgrade command for each cluster
+- **Future:** Auto-run day2 on single-cluster setups (with `--yes`)
+
+### Phase 3: CLI `aba mirror clusters` subcommand
+
+Expose cluster discovery as a user-facing command:
+```bash
+aba -d mirror clusters          # List clusters using this mirror
+aba -d mirror clusters --json   # Machine-readable for scripting
+```
+
+**Files to change (Phase 1):**
+- `scripts/include_all.sh`: add `clusters_using_mirror()` function
+- `tui/v2/tui-lib.sh`: refactor `_offer_day2_after_mirror_update()` to use it
+- `scripts/reg-sync.sh`: use discovery for smarter post-sync messages
+- `scripts/reg-load.sh`: same
+
+**Files to change (Phase 2):**
+- `scripts/reg-sync.sh`: add post-sync hook calling discovery + actions
+- `scripts/reg-load.sh`: same
+- `scripts/cluster-upgrade.sh`: OSUS pod restart (separate backlog item)
+
+**Dependency:** The OSUS pod restart item (above) can be implemented
+independently as a reactive fix in `cluster-upgrade.sh`. The full auto-action
+framework is additive — it makes the OSUS restart proactive rather than
+reactive.
+
+---
+
+## Feature: Auto-update base version when all clusters have upgraded
+
+**Severity:** MEDIUM — prevents stale base version causing wrong sync behavior
+**Status:** Planned
+**Added:** 2026-08-18
+**Depends on:** Cluster-mirror auto-actions (clusters_using_mirror)
+
+**Problem:** After upgrading all clusters from 4.21.28 to 4.22.9, the base
+`ocp_version` in `aba.conf` still says `4.21.28`. Future `aba sync` operations
+use this stale base version, and new cluster installs default to 4.21.28. The
+user must manually update `aba.conf` on both the disconnected and connected
+bastions.
+
+**Proposed behavior:**
+
+1. Query all clusters using this mirror (`clusters_using_mirror()`)
+2. Get each cluster's running version (from externalized state in
+   `~/.aba/clusters/` or live via `oc get clusterversion`)
+3. Find the **lowest** running version across all clusters
+4. If lowest > `ocp_version` in `aba.conf`:
+   - Auto-update `ocp_version` in `aba.conf` on the local (disco) side
+   - Tell the user to do the same on the connected bastion:
+     ```
+     [ABA] All clusters using this mirror are at 4.22.9 or higher.
+     [ABA] Updated ocp_version in aba.conf: 4.21.28 → 4.22.9
+     [ABA] Remember to update ocp_version on the connected bastion as well.
+     ```
+
+**When to trigger:** After `aba sync`, `aba load`, `aba day2`, or as part of
+the post-mirror hook system (Phase 2 of Cluster-mirror auto-actions).
+
+**Considerations:**
+- Only update when ALL clusters are confirmed above the old version
+- Use lowest version, not highest — safety net for mixed-version environments
+- The connected-side update must be manual (ABA can't reach it from disco)
+- Could also trigger after a successful `aba upgrade` completes
+
+**Architecture:** All discovery, version comparison, and config update logic
+lives in ABA core (`scripts/include_all.sh`, dedicated scripts). The TUI is a
+dumb consumer — it calls core functions and displays results. No version
+comparison or `aba.conf` mutation logic in TUI code.
+
+**Files likely affected:**
+- `scripts/include_all.sh`: version comparison logic across clusters
+- `scripts/reg-sync.sh` / `scripts/reg-load.sh`: trigger point
+- `scripts/aba.sh`: `ocp_version` update in `aba.conf`
+
+---
+
+## Feature: Purge unused images from mirror after all clusters upgrade
+
+**Severity:** LOW — UX improvement, reclaims storage on constrained hosts
+**Status:** Planned
+**Added:** 2026-08-18
+**Depends on:** Auto-update base version (above), clusters_using_mirror
+
+**Problem:** After upgrading all clusters from 4.21 to 4.22, the old 4.21
+release images and operator catalogs remain in the mirror registry, consuming
+10-15GB+ of storage. In disconnected environments where mirror hosts have
+limited disk, this waste adds up across multiple upgrade cycles.
+
+**Proposed behavior:**
+
+After confirming all clusters are at a higher version (see auto-update base
+version item above), offer to purge unused images:
+
+```
+[ABA] Old release images for 4.21.x are no longer used by any cluster.
+[ABA] Purge old images to reclaim disk space? (y/n) [n]:
+```
+
+**Critical safety warnings (must show before purge):**
+- Purging is **destructive and irreversible** in a disconnected environment —
+  there is no way to re-download the images without connectivity
+- Old images are needed not just for installing new clusters at that version,
+  but also for **running** existing clusters — if any cluster still references
+  those images (e.g. for pod restarts, node reboots, operator reconciliation),
+  pulling will fail
+- Only safe when ALL clusters have fully completed the upgrade AND the old
+  version's images are no longer referenced by any running workload
+
+**Implementation approach:**
+- Default to "no" — opt-in only
+- Could use `oc-mirror` pruning or direct registry garbage collection
+- Could expose as `aba -d mirror prune` command
+- In `--yes`/non-interactive mode: **never auto-purge** — always require
+  explicit interactive confirmation for destructive operations
+
+---
+
+## Feature: Manage additional images in ISC
+
+**Severity:** MEDIUM — reduces manual YAML editing and ISC regeneration issues
+**Status:** Planned
+**Added:** 2026-08-18
+
+**Problem:** The `additionalImages` section in the imageset-config.yaml (ISC)
+is currently just commented-out examples. Users must manually edit the YAML to
+add images like `ose-cli`, `support-tools`, or OpenShift Virtualization
+container disks. Manual edits are error-prone and get overwritten when the ISC
+is regenerated (e.g. after operator changes or upgrade prep).
+
+**Proposed behavior:**
+
+### ABA Core (CLI commands)
+
+- `aba image add <image:tag>` — adds to a tracked list
+- `aba image remove <image:tag>` — removes from tracked list
+- `aba image list` — shows configured additional images
+- The tracked list is stored persistently (e.g. `templates/additional-images`
+  or a key in `mirror.conf`) and rendered into the ISC `additionalImages:`
+  section automatically during ISC generation, just like operator sets.
+- Images persist across ISC regeneration.
+
+### Auto-add images based on operator sets
+
+When the user selects an operator set, ABA should automatically add commonly
+needed companion images. Examples:
+
+| Operator set | Auto-added images |
+|---|---|
+| `operator-set-virt` | `quay.io/containerdisks/centos-stream:10`, `centos-stream:9`, `fedora:latest` |
+| (all) | `registry.redhat.io/openshift4/ose-cli:latest`, `registry.redhat.io/rhel9/support-tools:latest` |
+| (testing) | `quay.io/openshifttest/hello-openshift:1.2.0` |
+
+Auto-added images should be presented to the user for confirmation (not
+silently injected). The user can remove any they don't want.
+
+### TUI (dumb consumer)
+
+- Menu item under Mirror configuration to add/remove/view additional images
+- Calls core commands, displays results
+- No ISC editing or image list management logic in TUI code
+
+**Architecture:** All image list management, operator-set association, and ISC
+rendering lives in ABA core (`scripts/include_all.sh`, ISC template). The TUI
+only calls core commands and displays results.
+
+### Remove commented-out image examples from ISC template
+
+Once `aba image add` is implemented, the commented-out `additionalImages`
+block in `imageset-config.yaml.j2` (lines 26-35) should be removed. These
+comments are currently used as **anchors** by the bundle build scripts
+(`bundles/v2/scripts/02-configure-aba-and-imageset.sh` and
+`bundles/bundle-create-test.sh`) via `uncomment_line`. Removing them before
+migrating the bundle scripts to `aba image add` would **break the bundle
+build pipeline**.
+
+**Migration order:**
+1. Implement `aba image add/remove/list` in ABA core
+2. Migrate bundle scripts from `uncomment_line` to `aba image add`
+3. Remove commented-out examples from the ISC template
+4. Users who manually uncommented lines in generated ISCs will automatically
+   get the clean format on next ISC regeneration
+
+**Files likely affected:**
+- `templates/imageset-config.yaml.j2`: render tracked image list, then remove
+  commented-out examples (step 3)
+- `scripts/reg-create-imageset-config.sh`: export image list for Jinja
+- `scripts/aba.sh`: `image add/remove/list` subcommands
+- `scripts/include_all.sh`: image list management functions
+- `templates/additional-images` (new): persistent image list file
+- `bundles/v2/scripts/02-configure-aba-and-imageset.sh`: migrate from
+  `uncomment_line` to `aba image add` (step 2)
+- `bundles/bundle-create-test.sh`: same migration (step 2)
+- `tui/v2/tui-mirror.sh`: UI for image management (calls core)
+
+---
+
+**Architecture:** All cluster discovery, version checking, and pruning logic
+lives in ABA core. The TUI only calls core commands and displays the result —
+no pruning decisions, safety checks, or registry operations in TUI code.
+
+**Files likely affected:**
+- `scripts/include_all.sh`: cluster version discovery (shared with auto-update)
+- New script `scripts/reg-prune.sh` or addition to existing reg-*.sh
+- `scripts/aba.sh`: `prune` subcommand
+- `tui/v2/tui-mirror.sh`: optional TUI integration (calls core, displays result)
+
+---
+
+## Optimization: CLI download --wait should be instant after oc-mirror
+
+**Severity:** LOW — UX improvement, saves ~60s during bundle creation
+**Status:** Planned
+**Added:** 2026-08-21
+
+**Problem:** During `aba bundle` (or `aba save`), CLI downloads are kicked off
+in background (`scripts/cli-download-all.sh` without `--wait`) before oc-mirror
+starts. oc-mirror typically runs for 10-20 minutes, which should be more than
+enough time for all CLI tarballs to finish downloading. However, when
+`scripts/cli-download-all.sh --wait` is called after oc-mirror completes,
+it blocks for ~60 seconds. The user sees:
+
+```
+[ABA] Ensuring all CLI installation files are downloaded...
+```
+
+followed by a visible delay before the bundle is written.
+
+**Root cause (likely):** The extra/optional CLIs (`cli_download_extra_clis` —
+virtctl, kn, tkn, helm, opm, argocd, roxctl) are 7 additional downloads. If
+these aren't already cached, they are started fresh during the `--wait` call
+rather than having been started earlier. Each `run_once` invocation also has
+overhead (subshell, source scripts, check state files).
+
+**Investigation areas:**
+1. Verify that `cli_download_extra_clis` (no `--wait`) at `reg-save.sh` line 94
+   actually starts background tasks for all 7 extra CLIs
+2. Check if the internet-connectivity cache guard (`aba:check:internet`) is
+   blocking the start mode from initiating downloads
+3. Profile `run_once` overhead — 7 tools × 2 calls each (start + wait) = 14
+   `run_once` invocations, each sourcing `include_all.sh`
+4. Consider pre-warming the extra CLI downloads earlier (e.g. in TUI startup
+   or `aba bundle` before calling `make -C mirror save`)
+
+**Proposed fixes (pick one or combine):**
+- Ensure extra CLI downloads are started alongside regular CLIs at the earliest
+  opportunity (currently `make-bundle.sh` line 100-101 starts both — verify
+  the extra downloads actually begin)
+- Reduce `run_once` per-call overhead for status checks (cached PID file reads
+  instead of full subshell + source)
+- Show progress during the wait instead of a blank pause
+
+**Files likely affected:**
+- `scripts/cli-download-all.sh`: verify start mode initiates all tasks
+- `scripts/make-bundle.sh`: ensure early kickoff covers extras
+- `scripts/reg-save.sh`: same

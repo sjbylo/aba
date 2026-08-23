@@ -12,7 +12,7 @@ public_pull_secret_file_needed=1  # Only needed for 'save' and 'sync'
 umask 077
 
 source <(normalize-aba-conf)
-# $regcreds_dir is derived by mirror-side callers from $PWD, or by cluster-side callers from $mirror_name in cluster.conf.
+# $regcreds_dir is derived by mirror-side callers from $PWD, or by cluster-side callers from image_source in cluster.conf.
 
 # Default regcreds_dir if caller didn't set it — prevents the Red Hat-only fallback
 # from silently overwriting ~/.docker/config.json and destroying mirror credentials.

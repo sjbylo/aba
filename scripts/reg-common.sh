@@ -316,8 +316,7 @@ reg_open_firewall() {
 	else
 		# Local: run firewall commands directly
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			$SUDO firewall-cmd --add-port=$reg_port/tcp --permanent
-			$SUDO firewall-cmd --reload
+			$SUDO bash -c "firewall-cmd --add-port=$reg_port/tcp --permanent && firewall-cmd --reload"
 			_reg_fw_opened=1
 		elif rpm -q firewalld &>/dev/null; then
 			$SUDO firewall-offline-cmd --add-port=$reg_port/tcp >/dev/null
@@ -369,9 +368,9 @@ reg_close_firewall() {
 		fi
 	else
 		if rpm -q firewalld &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-			$SUDO firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
-				$SUDO firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
-				$SUDO firewall-cmd --reload >/dev/null || true
+			$SUDO bash -c "firewall-cmd --query-port=$reg_port/tcp --permanent &>/dev/null && \
+				firewall-cmd --remove-port=$reg_port/tcp --permanent >/dev/null && \
+				firewall-cmd --reload >/dev/null" || true
 		elif command -v iptables &>/dev/null; then
 			$SUDO iptables -D INPUT -p tcp --dport $reg_port -j ACCEPT 2>/dev/null || true
 		fi

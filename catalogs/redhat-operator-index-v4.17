@@ -37,7 +37,7 @@ dpu-network-operator                                    DPU Network Operator    
 dpu-operator                                            DPU Operator                                                 stable
 eap                                                     JBoss EAP                                                    stable
 elasticsearch-operator                                  OpenShift Elasticsearch Operator                             stable-5.8
-exploit-iq-operator                                     RHTPA exploit intelligence(TechPreview)                      pre-ga
+exploit-iq-operator                                     Red Hat Trusted Profile Analyzer exploit intelligence        stable
 external-dns-operator                                   ExternalDNS Operator                                         stable-v1
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
 file-integrity-operator                                 File Integrity Operator                                      stable

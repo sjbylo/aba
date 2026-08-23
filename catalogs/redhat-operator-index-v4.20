@@ -12,7 +12,7 @@ ansible-cloud-addons-operator                           Ansible Cloud Addons    
 apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.16
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
 authorino-operator                                      Authorino Operator                                           stable
-automation-orchestrator-operator                        Automation Orchestrator Operator                             candidate
+automation-orchestrator-operator                        Automation Orchestrator Operator                             stable
 aws-efs-csi-driver-operator                             AWS EFS CSI Driver Operator                                  stable
 aws-load-balancer-operator                              AWS Load Balancer Operator                                   stable-v1
 bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable
@@ -38,6 +38,7 @@ dns-operator                                            DNS Operator            
 dpu-network-operator                                    DPU Network Operator                                         stable
 dpu-operator                                            DPU Operator                                                 stable
 eap                                                     JBoss EAP                                                    stable
+exploit-iq-operator                                     Red Hat Trusted Profile Analyzer exploit intelligence        stable
 external-dns-operator                                   ExternalDNS Operator                                         stable-v1
 fence-agents-remediation                                Fence Agents Remediation Operator                            stable
 file-integrity-operator                                 File Integrity Operator                                      stable

@@ -825,6 +825,12 @@ _mirror_has_release_image() {
 	[[ "$exit_code" == "0" ]]
 }
 
+# Last completed mirror action from state.sh (install | load | sync | register).
+# Empty if the mirror is not installed or state is missing.
+_mirror_last_action() {
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null && echo "${last_action:-}"
+}
+
 # Return human-readable mirror state for the menu title.
 # States: "no mirror" → "mirror installed" → "mirror ready"
 # "mirror ready" means the release image is actually present in the registry.
@@ -857,18 +863,17 @@ _invalidate_mirror_cache() {
 # One cluster: offer to run day2 now.
 # Multiple clusters: informational dialog (user runs day2 manually).
 _offer_day2_after_mirror_update() {
-	local _cl _int_conn
+	local _cl _is_mirror
 	local -a _clusters=()
 
 	for _cl in $(list_installed_clusters); do
-		# Check if cluster uses the mirror (int_connection empty = mirror mode)
-		_int_conn=$(
-			int_connection=""
+		_is_mirror=$(
+			image_source=mirror
 			# shellcheck disable=SC1090
 			source <(cd "$ABA_ROOT/$_cl" && normalize-cluster-conf) 2>/dev/null || true
-			echo "${int_connection:-}"
+			image_source_is_mirror && echo 1 || echo 0
 		)
-		[[ -n "$_int_conn" ]] && continue
+		[[ "$_is_mirror" -ne 1 ]] && continue
 		_clusters+=("$_cl")
 	done
 
@@ -1107,14 +1112,18 @@ tui_cluster_menu_flags() {
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_MIRROR"
 			elif ! _mirror_has_release_image; then
-				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_SYNC_FIRST"
+				# Release image may be absent after a successful sync/load
+				# (e.g. excl_platform=true / operators-only archive).
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_RELEASE"
 			fi
 			;;
 		DISCO)
 			if ! mirror_available; then
 				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_INSTALL_REGISTRY"
 			elif ! _mirror_has_release_image; then
-				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_LOAD_FIRST"
+				# Same check as CONNO: "not loaded" is wrong when the archive
+				# was loaded but intentionally omitted platform/release images.
+				_lbl="$TUI2_LABEL_INSTALL_CLUSTER $TUI2_STATUS_NO_RELEASE"
 			fi
 			;;
 		DIRECT|"")
@@ -1428,6 +1437,12 @@ select_installed_cluster() {
 	if [[ ${#clusters[@]} -eq 0 ]]; then
 		dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INSTALLED_CLUSTERS" 0 0
 		return 1
+	fi
+
+	if [[ $idx -eq 1 ]]; then
+		SELECTED_CLUSTER="${_cl_dirs[0]}"
+		SELECTED_CLUSTER_DISPLAY=$(cluster_display_name "$SELECTED_CLUSTER")
+		return 0
 	fi
 
 	dlg --backtitle "$(ui_backtitle)" --title "$title" \
