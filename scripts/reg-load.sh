@@ -43,7 +43,7 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 verify-mirror-conf || aba_abort "Invalid or incomplete mirror.conf. Check the errors above and fix mirror/mirror.conf."
 aba_debug "Configuration validated"
 
-# Transfer bundle path (used in both early-exit and normal flow)
+# aba-transfer.tar path (used in both early-exit and normal flow)
 _transfer_tar="data/aba-transfer.tar"
 
 # --- Guard: archive files must be present ---
@@ -82,7 +82,7 @@ if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 		"  cp <source>/mirror/data/*.tar mirror/data/"
 fi
 
-# Unpack transfer bundle if present (always contains ISC; for upgrades also
+# Unpack aba-transfer.tar if present (always contains ISC; for upgrades also
 # includes CLI tarballs and metadata).  Created by 'aba save' so that
 # 'cp mirror/data/*.tar' transfers the correct ISC to the disconnected host.
 # Tar paths are relative to aba root (mirror/data/*, cli/*), so unpack from aba root.
@@ -266,7 +266,7 @@ _loaded_chan=""
 if [ "$_transfer_meta_ver" ]; then
 	_loaded_ver="$_transfer_meta_ver"
 	_loaded_chan="$_transfer_meta_chan"
-	aba_debug "Version from transfer bundle metadata: ver=$_loaded_ver chan=$_loaded_chan"
+	aba_debug "Version from transfer config metadata: ver=$_loaded_ver chan=$_loaded_chan"
 else
 	_isc_file="data/imageset-config.yaml"
 	if [ -f "$_isc_file" ]; then

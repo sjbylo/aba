@@ -421,7 +421,8 @@ The universal rule:
 
 **Notes:**
 
-- Always copy ALL `*.tar` files from `mirror/data/` — both `mirror_*.tar` (images) and `aba-transfer.tar` (matching ISC and CLIs).
+- Always copy ALL `*.tar` files from `mirror/data/` — both `mirror_*.tar` (images) and `aba-transfer.tar` (transfer config: matching ISC and CLIs).
+- `aba-transfer.tar` is a small transfer config created by `aba save`. It is **not** an install bundle. The install bundle (`aba bundle` / `aba tar`) is the full archive used for first-time air-gapped bootstrap.
 - It is safe to overwrite existing tar files on the disconnected side — each `aba save` produces a fresh set. Back up old files first if you need them (e.g. for another mirror).
 - After a successful load, you will be asked whether to delete the archive files to free disk space.
 - `aba bundle` is for initial bootstrap only. Use save/transfer/load for all ongoing updates.
@@ -598,7 +599,7 @@ aba cluster -n factory -t compact --starting-ip 10.0.1.50
 # Edit agent-config.yaml, install-config.yaml as needed...
 aba bundle-primed --out /media/usb/ocp-bundle
 
-# Transfer bundle + images to disconnected side
+# Transfer the install bundle + images to the disconnected side
 
 # Disconnected side: one-command deployment
 tar xf ocp-bundle.tar -C ~ && cd ~/aba && ./install
@@ -1014,6 +1015,39 @@ aba info
 
 - Displays access information: Console URL, kubeadmin credentials, and next-step guidance.
 
+## Importing Existing Clusters
+
+If you already have a running OpenShift cluster — installed via UPI, IPI, Assisted Installer, or any other method — you can import it into ABA so you can use `day2`, `upgrade`, `shutdown`, and other lifecycle commands.
+
+```bash
+aba import --kubeconfig /path/to/kubeconfig
+```
+
+ABA auto-detects the cluster name, base domain, network topology (SNO/compact/standard), machine network, and image source (mirror/direct/proxy) from the live cluster API. It creates a fully managed cluster directory with all the symlinks and configuration needed for ABA operations.
+
+Options:
+
+```
+--name <dir-name>                     Override the cluster directory name (default: cluster_name from API)
+--image-source <mirror|direct|proxy>  Override image source detection
+--force                               Overwrite an existing cluster directory
+```
+
+After import:
+
+```bash
+aba -d mycluster day2          # Integrate with mirror registry (IDMS, CatalogSources, signatures)
+aba -d mycluster upgrade       # Upgrade the cluster
+aba -d mycluster getco         # Show cluster version and operators
+aba -d mycluster shell         # Get KUBECONFIG export
+aba -d mycluster shutdown      # Graceful shutdown
+aba -d mycluster startup       # Start up the cluster
+```
+
+> **Note:** VM lifecycle commands (`create`, `delete`, `refresh`) are not available for imported clusters — those apply only to clusters whose VMs were created by ABA.
+
+---
+
 ## Login and Verify Cluster State
 
 ### Option A: Use kubeadmin credentials
@@ -1071,7 +1105,7 @@ aba -d mirror sync
 For fully disconnected (save to disk, transfer, load):
 ```
 aba -d mirror save    # on the connected workstation
-# Transfer mirror/data/*.tar to the bastion (mirror_*.tar images + aba-transfer.tar bundle)
+# Transfer mirror/data/*.tar to the bastion (mirror_*.tar images + aba-transfer.tar config)
 aba -d mirror load    # on the internal bastion
 ```
 
@@ -1245,14 +1279,14 @@ aba day2-osus
 aba -d mirror --upgrade-to 4.22.1 save
 ```
 
-This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images. A transfer bundle (`aba-transfer.tar`) is also created alongside the image archives, containing the ISC files, CLI binaries for the target version, and metadata.
+This automatically configures the ImageSetConfiguration with `shortestPath`, `minVersion` (current) and `maxVersion` (target), then mirrors the required release images. A transfer config (`aba-transfer.tar`) is also created alongside the image archives, containing the ISC files, CLI binaries for the target version, and metadata. This is not an install bundle (`aba bundle`).
 
 2. Copy all `*.tar` files to the *internal bastion*: `cp aba/mirror/data/*.tar /transfer-media/`
    - `mirror_*.tar` — OCP images archive
-   - `aba-transfer.tar` — transfer bundle (ISC, CLIs, metadata)
+   - `aba-transfer.tar` — transfer config (ISC, CLIs, metadata)
 3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
-4. (Optional) Inspect the transfer bundle: `aba -d mirror transfer-info`
-5. Load images: `aba -d mirror load` (automatically unpacks upgrade bundle, updates version)
+4. (Optional) Inspect the transfer config: `aba -d mirror transfer-info`
+5. Load images: `aba -d mirror load` (automatically unpacks the transfer config, updates version)
 6. Integrate new mirrored content with the cluster: `aba -d <cluster name> day2`
 7. Upgrade the cluster:
 
@@ -1273,9 +1307,9 @@ aba -d <cluster name> upgrade --to 4.22.1      # Upgrade to a specific version (
 
 1. Edit `aba/aba.conf` on the *connected workstation* to add operators/operator sets, then run `aba -d mirror save`.
   - Or, manually edit `aba/mirror/data/imageset-config.yaml` to add images or newer platform versions. To mirror for upgrades, adjust `min` and `max` versions manually — ABA does not manage these.
-2. Copy all tar files to the *internal bastion*: `cp aba/mirror/data/*.tar /transfer-media/` (includes `mirror_*.tar` images and `aba-transfer.tar` bundle with ISC, CLIs, and metadata).
+2. Copy all tar files to the *internal bastion*: `cp aba/mirror/data/*.tar /transfer-media/` (includes `mirror_*.tar` images and `aba-transfer.tar` transfer config with ISC, CLIs, and metadata).
 3. On the bastion, place files in `mirror/data/`: `cp /transfer-media/*.tar ~/aba/mirror/data/`
-4. (Optional) Inspect the transfer bundle: `aba -d mirror transfer-info`
+4. (Optional) Inspect the transfer config: `aba -d mirror transfer-info`
 5. Load images: `aba -d mirror load`
 6. Integrate new mirrored content (operators, release images) with the cluster: `aba -d <cluster name> day2`
 7. Add operators or upgrade OpenShift via the Console, `oc adm upgrade`, or `aba upgrade` (see [alternative upgrade methods](#updating-a-cluster-in-a-fully-disconnected-environment)).
@@ -1527,7 +1561,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba -d mirror unregister` | Deregister a registry (removes local creds only)              |
 | `aba -d mirror password`   | Regenerate pull secret for existing registry                  |
 | `aba -d mirror tidy`       | Clean up stale metadata from a previous run                   |
-| `aba -d mirror transfer-info` | Inspect a pending transfer bundle (version, operators, upgrade target) |
+| `aba -d mirror transfer-info` | Inspect a pending transfer config (version, operators, upgrade target) |
 | `aba -d mirror uninstall`  | Uninstall the registry                                        |
 
 
@@ -1902,7 +1936,13 @@ See `scripts/reg-install-docker.sh` and `scripts/reg-install.sh` for details.
 
 ## Q: Can I use ABA to install OpenShift on User Provisioned Infrastructure (UPI)?
 
-**Partially, yes.** ABA can set up the registry and generate `install-config.yaml` for UPI. With additional configuration, Day-2 operations also work for UPI.
+**Yes.** ABA can set up the registry and generate `install-config.yaml` for UPI. Once your cluster is running (regardless of how it was installed — UPI, IPI, Assisted Installer, or any other method), use `aba import` to bring it under ABA management:
+
+```bash
+aba import --kubeconfig /path/to/kubeconfig
+```
+
+This auto-detects the cluster's identity, network topology, and image source from the live API, then creates a fully managed cluster directory. After import, all ABA lifecycle commands work: `day2`, `upgrade`, `getco`, `shell`, `shutdown`, `startup`, etc. See `aba import --help` for all options.
 
 ---
 

@@ -30,6 +30,8 @@ e2e_setup
 plan_tests \
 	"Setup: install and configure" \
 	"Auto-detect network values" \
+	"Existing cluster.conf: fill empty network fields" \
+	"NTP fallback for image_source=direct only" \
 	"cluster.conf validation" \
 	"mirror.conf validation" \
 	"mirror.conf ops/op_sets override" \

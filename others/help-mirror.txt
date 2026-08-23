@@ -82,7 +82,7 @@ Upgrade transfer workflow (disconnected):
 
   On the disconnected host:
     cp /transfer-media/*.tar ~/aba/mirror/data/
-    aba -d mirror load                  # unpacks transfer bundle, loads images
+    aba -d mirror load                  # unpacks aba-transfer.tar, loads images
     aba -d <cluster> day2               # configures OperatorHub
     aba -d <cluster> upgrade --to 4.22.2
 

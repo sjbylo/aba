@@ -518,7 +518,6 @@ _mirror_op_confirm() {
 	[[ -n "$_target" && "$_target" != "$_ver" ]] && _ver="${_ver} → ${_target}"
 
 	local _summary=""
-	[[ "$_from_transfer" == "true" ]] && _summary+="(from transfer bundle)\n"
 	_summary+="OCP: $_ver ($_chan)\n"
 	if [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
@@ -544,10 +543,10 @@ _mirror_op_confirm() {
 				_tmp_isc=$(mktemp)
 				tar xf "$ABA_ROOT/mirror/data/aba-transfer.tar" -O "mirror/data/imageset-config.yaml" > "$_tmp_isc" 2>/dev/null || true
 				if [[ -s "$_tmp_isc" ]]; then
-					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration (from transfer bundle)" \
+					dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 						--exit-label "OK" --textbox "$_tmp_isc" 0 0
 				else
-					dlg --backtitle "$(ui_backtitle)" --msgbox "Could not extract ISC from transfer bundle." 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Could not read the ImageSet Configuration." 0 0
 				fi
 				rm -f "$_tmp_isc"
 			elif [[ -f "$_isc_for_view" ]]; then

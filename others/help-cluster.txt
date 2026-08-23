@@ -4,6 +4,7 @@ Usage:
   aba cluster --name <name> [options]         # Create cluster directory (with cluster.conf)
   aba cluster --name <name> --step <step>     # Create cluster directory and run up to <step>
   aba --dir <cluster> <command>               # Operate on an existing cluster
+  aba import --kubeconfig <path> [options]    # Import an existing cluster (installed via UPI, IPI, etc.)
   Or run 'abatui' for a guided experience
 
   Steps (in order): cluster.conf → agentconf → iso → install → mon
@@ -83,6 +84,13 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
        Prerequisites: mirror the 'cincinnati-operator' (include it in your ImageSet Config
        via 'aba -d mirror imagesetconf' or the TUI Operator selector), then install OSUS
        via 'aba -d <cluster> day2-osus' or TUI Day-2 → OSUS.
+
+  Import an existing cluster (installed via UPI, IPI, or any method):
+  aba import --kubeconfig <path>            # Auto-detect and import a running cluster
+      --name <dir-name>                     # Cluster directory name (default: cluster_name from API)
+      --image-source <mirror|direct|proxy>  # Override image source (default: auto-detect from IDMS/ITMS)
+      --force                               # Overwrite existing cluster directory
+  After import, use aba -d <name> day2|day2-osus|day2-ntp|upgrade|getco|shell|shutdown etc.
 
   VM lifecycle (platform=vmw or kvm only):
   aba [-d <cluster>] ls                   # List all cluster node VMs
