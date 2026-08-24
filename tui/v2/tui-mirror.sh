@@ -751,15 +751,20 @@ change your channel when selected." 0 0
 	local items=() _default_tag="m" _tag_num=0
 	local _ver_entries=()
 
-	# Existing target from mirror.conf
+	# Existing target from mirror.conf — auto-clear if base version caught up
 	if [[ -n "$_existing_target" ]]; then
-		local _et_label
-		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
-			_et_label="Current target ($_existing_target)"
+		if is_version_greater "$_existing_target" "$_current_ver"; then
+			local _et_label
+			if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
+				_et_label="Current target ($_existing_target)"
+			else
+				_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
+			fi
+			_ver_entries+=("${_existing_target}	${_et_label}	")
 		else
-			_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
+			replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null
+			_existing_target=""
 		fi
-		_ver_entries+=("${_existing_target}	${_et_label}	")
 	fi
 	# Own-channel: next minor
 	if [[ -n "$_next" && "$_next" != "$_existing_target" && "$_next" != "$_current_ver" ]]; then
