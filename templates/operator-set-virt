@@ -12,4 +12,4 @@ metallb-operator
 fence-agents-remediation
 self-node-remediation
 
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades

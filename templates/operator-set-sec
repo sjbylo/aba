@@ -1,7 +1,7 @@
 # Name: OpenShift Security
 # Please let us know if there any missing dependencies
 
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades
 rhacs-operator
 openshift-cert-manager-operator
 compliance-operator

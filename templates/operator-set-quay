@@ -1,6 +1,6 @@
 # Name: Red Hat Quay
 # Please let us know if there any missing dependencies
 
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades
 quay-bridge-operator
 quay-operator
