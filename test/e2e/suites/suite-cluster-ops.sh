@@ -44,6 +44,7 @@ plan_tests \
     "Make regen: install-config.yaml tracks image_source" \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
+    "Import: day2 injects mirror creds on imported cluster" \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
@@ -329,7 +330,70 @@ e2e_diag "Show all packagemanifests" "aba --dir $SNO run --cmd 'oc get packagema
 test_end
 
 # ============================================================================
-# 9. SNO: IP conflict detection
+# 9. Import: aba import + day2 pull secret injection
+# ============================================================================
+# The SNO cluster is running with day2 applied.  Import it into a separate
+# directory, strip mirror creds from the cluster pull secret (simulating an
+# externally installed cluster), run day2, and verify creds are re-injected.
+test_begin "Import: day2 injects mirror creds on imported cluster"
+
+IMPORT_DIR="e2e-imported"
+_KUBECONFIG="$SNO/iso-agent-based/auth/kubeconfig"
+
+e2e_run "Import running SNO cluster" \
+    "aba import --kubeconfig $_KUBECONFIG --name $IMPORT_DIR --force"
+
+e2e_run "Verify imported cluster.conf exists" \
+    "test -f $IMPORT_DIR/cluster.conf"
+
+e2e_run "Verify imported cluster_name matches" \
+    "grep -q '^cluster_name=$SNO' $IMPORT_DIR/cluster.conf"
+
+e2e_run "Verify image_source=mirror in imported config" \
+    "grep -q '^image_source=mirror' $IMPORT_DIR/cluster.conf"
+
+e2e_run "Verify getco works on imported cluster" \
+    "aba --dir $IMPORT_DIR getco"
+
+# Read mirror host:port for pull secret verification
+_REG_HOST_IMPORT=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_REG_PORT_IMPORT=$(grep '^reg_port=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_REG_HOSTPORT="${_REG_HOST_IMPORT}:${_REG_PORT_IMPORT}"
+
+e2e_run "Strip mirror creds from cluster pull secret" "
+    export KUBECONFIG=$_KUBECONFIG
+    _ps=\$(oc get secret/pull-secret -n openshift-config -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d)
+    _stripped=\$(echo \"\$_ps\" | jq 'del(.auths[\"$_REG_HOSTPORT\"])')
+    _tmp=\$(mktemp)
+    echo \"\$_stripped\" > \"\$_tmp\"
+    oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson=\"\$_tmp\"
+    rm -f \"\$_tmp\"
+    echo 'Mirror creds stripped'
+"
+
+e2e_run "Verify mirror creds are gone" "
+    export KUBECONFIG=$_KUBECONFIG
+    _auth=\$(oc get secret/pull-secret -n openshift-config -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d | jq -r '.auths[\"$_REG_HOSTPORT\"].auth // empty')
+    [ -z \"\$_auth\" ] || { echo \"FAIL: mirror creds still present: \$_auth\"; exit 1; }
+    echo 'Confirmed: no mirror creds in pull secret'
+"
+
+e2e_run "Run day2 on imported cluster (must inject creds)" \
+    "aba --dir $IMPORT_DIR day2"
+
+e2e_run "Verify mirror creds injected after day2" "
+    export KUBECONFIG=$_KUBECONFIG
+    _auth=\$(oc get secret/pull-secret -n openshift-config -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d | jq -r '.auths[\"$_REG_HOSTPORT\"].auth // empty')
+    [ -n \"\$_auth\" ] || { echo \"FAIL: mirror creds NOT injected by day2\"; exit 1; }
+    echo \"Mirror creds present after day2: \$_auth\"
+"
+
+e2e_run "Clean up imported cluster dir" "rm -rf $IMPORT_DIR"
+
+test_end
+
+# ============================================================================
+# 10. SNO: IP conflict detection
 # ============================================================================
 # The SNO cluster from test 7 is still running.  Attempt to create another
 # cluster on the same IP and verify the preflight check catches the conflict.

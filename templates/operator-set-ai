@@ -14,7 +14,7 @@ servicemeshoperator3
 rhcl-operator
 
 # Required for OSUS
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades
 
 # Other required operators
 cluster-observability-operator

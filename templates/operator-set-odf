@@ -23,4 +23,4 @@ odf-external-snapshotter-operator
 local-storage-operator
 
 # Required for OSUS
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades
