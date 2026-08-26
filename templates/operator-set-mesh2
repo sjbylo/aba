@@ -5,4 +5,4 @@ kiali-ossm
 jaeger-product
 servicemeshoperator
 
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades

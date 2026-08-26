@@ -6,4 +6,4 @@ nfd
 gpu-operator-certified
 
 # Required for OSUS
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades

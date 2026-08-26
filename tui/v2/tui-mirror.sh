@@ -677,14 +677,12 @@ mirror_prep_upgrade() {
 	local _zstream="" _next="" _next1=""
 	local _task_id="aba:upgrade-targets:${_current_ver}"
 
-	# Peek: is the background upgrade-target fetch done? Show infobox only if not.
+	# Ensure upgrade targets are fresh (TTL-based; no-op if cache is current)
+	aba_upgrade_targets_start "$_current_ver" "$_channel"
 	if ! run_once -p -i "$_task_id" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"Checking available upgrade versions for v${_current_ver}..." 3 60
-		run_once -q -w -S -i "$_task_id" 2>/dev/null || {
-			aba_upgrade_targets_start "$_current_ver" "$_channel"
-			run_once -q -w -i "$_task_id" 2>/dev/null || true
-		}
+		run_once -q -w -S -i "$_task_id" 2>/dev/null || true
 	fi
 
 	# Read combined output: CHANNEL\tLABEL\tVERSION
@@ -751,15 +749,20 @@ change your channel when selected." 0 0
 	local items=() _default_tag="m" _tag_num=0
 	local _ver_entries=()
 
-	# Existing target from mirror.conf
+	# Existing target from mirror.conf — auto-clear if base version caught up
 	if [[ -n "$_existing_target" ]]; then
-		local _et_label
-		if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
-			_et_label="Current target ($_existing_target)"
+		if is_version_greater "$_existing_target" "$_current_ver"; then
+			local _et_label
+			if verify_release_version_exists "$_existing_target" "$_channel" 2>/dev/null; then
+				_et_label="Current target ($_existing_target)"
+			else
+				_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
+			fi
+			_ver_entries+=("${_existing_target}	${_et_label}	")
 		else
-			_et_label="Current target ($_existing_target) [NOT IN CHANNEL]"
+			replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null
+			_existing_target=""
 		fi
-		_ver_entries+=("${_existing_target}	${_et_label}	")
 	fi
 	# Own-channel: next minor
 	if [[ -n "$_next" && "$_next" != "$_existing_target" && "$_next" != "$_current_ver" ]]; then

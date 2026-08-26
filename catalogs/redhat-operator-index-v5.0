@@ -15,6 +15,7 @@ bamoe-kogito-operator                                   IBM BAMOE Kogito Operato
 businessautomation-operator                             Business Automation                                          stable
 cincinnati-operator                                     OpenShift Update Service                                     v1
 cli-manager                                             CLI Manager                                                  tech-preview
+compliance-operator                                     Compliance Operator                                          stable
 container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.17
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
@@ -33,7 +34,6 @@ logic-operator-rhel8                                    OpenShift Serverless Log
 machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
 mta-operator                                            Migration Toolkit for Applications Operator                  stable-v8.0
 mtr-operator                                            Migration Toolkit for Runtimes Operator                      alpha
-mtv-operator                                            Migration Toolkit for Virtualization Operator                release-v2.8
 multicluster-engine                                     multicluster engine for Kubernetes                           stable-2.17
 netobserv-operator                                      Network Observability                                        stable
 node-healthcheck-operator                               Node Health Check Operator                                   stable

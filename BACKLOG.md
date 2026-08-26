@@ -1510,6 +1510,62 @@ no pruning decisions, safety checks, or registry operations in TUI code.
 
 ---
 
+## TUI upgrade dialog: add option to change OCP channel
+
+**Severity:** LOW — UX convenience
+**Status:** Planned
+**Added:** 2026-08-26
+
+**Problem:** The "Prepare Upgrade for Transfer" dialog lets the user select a
+target version and change the base version, but does not offer a way to change
+the OCP channel (`ocp_channel` in `aba.conf`). If the user wants to switch
+from `fast` to `stable` (or vice versa), they must exit the TUI, edit
+`aba.conf` manually, and restart.
+
+**Proposed fix:** Add a menu item (e.g. `c  Change channel (fast)`) to the
+upgrade dialog. When selected, show a sub-dialog listing available channels
+(`fast`, `stable`, `candidate`, `eus`) and update `ocp_channel` in `aba.conf`
+via `replace-value-conf`. The upgrade target list should then refresh to
+reflect the new channel's available versions.
+
+**Files likely affected:**
+- `tui/v2/tui-mirror.sh`: add channel menu item to upgrade dialog, call
+  `replace-value-conf` to update `aba.conf`, invalidate upgrade target cache
+- `scripts/include_all.sh`: no change needed (channel is already read from
+  `aba.conf` by `fetch_upgrade_targets`)
+
+---
+
+## TUI upgrade dialog: auto-refresh cached upgrade targets
+
+**Severity:** MEDIUM — user must restart TUI to see newly available versions
+**Status:** Planned
+**Added:** 2026-08-26
+
+**Problem:** When a new OCP version becomes available (e.g. 4.22.11 appears
+in the Cincinnati graph), the TUI's "Prepare Upgrade" dialog does not show it
+until the TUI is restarted. The upgrade targets are cached via `run_once`
+under `~/.aba/runner/aba:upgrade-targets:*` and are not refreshed while the
+TUI is running.
+
+**Proposed fix:** Invalidate the `run_once` cache for `aba:upgrade-targets:*`
+each time the user opens the upgrade dialog, so it always fetches fresh data
+from the Cincinnati graph API. This ensures newly released versions appear
+without requiring a TUI restart, while still caching within a single dialog
+session to avoid redundant API calls.
+
+**Alternative:** Use a TTL-based cache (e.g. 1 hour) in `run_once` for
+upgrade targets, so they auto-refresh periodically even if the user stays
+in the TUI.
+
+**Files likely affected:**
+- `tui/v2/tui-mirror.sh`: clear `run_once` cache before calling
+  `fetch_upgrade_targets` in the upgrade dialog
+- `scripts/include_all.sh` (`run_once`): optionally support a `--ttl` flag
+  for time-based cache invalidation
+
+---
+
 ## Optimization: CLI download --wait should be instant after oc-mirror
 
 **Severity:** LOW — UX improvement, saves ~60s during bundle creation
