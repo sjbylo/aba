@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.3...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.4...HEAD)
+
+---
+
+## [1.2.4](https://github.com/sjbylo/aba/releases/tag/v1.2.4) - 2026-08-26
+
+Day-2 pull secret injection, mirror resilience, TUI upgrade cache refresh
+
 
 ### Added
 
