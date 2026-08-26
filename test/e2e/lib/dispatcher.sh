@@ -80,6 +80,12 @@ _tmux_kill_session() {
 		[ \"\$_su\" = \"\$(whoami)\" ] && exit 0
 		sudo -u \"\$_su\" tmux kill-session -t '$_TMUX_SESSION' 2>/dev/null || true
 	"
+	# Wait for session to fully disappear (remain-on-exit can delay cleanup)
+	local _i
+	for _i in 1 2 3 4 5; do
+		_ssh_con "$pool_num" "tmux has-session -t '$_TMUX_SESSION' 2>/dev/null" || return 0
+		sleep 1
+	done
 }
 
 _kill_runner_any_user() {
