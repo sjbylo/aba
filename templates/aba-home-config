@@ -31,9 +31,10 @@ CATALOG_INDEX_DOWNLOAD_TIMEOUT=20m
 # archive must be loaded in order and may need network access for catalog resolution).
 OC_MIRROR_SINCE=2020-01-01
 
-# oc-mirror --image-timeout value (default: 30m).
-# Increase for slow networks or large operator images.
-# OC_MIRROR_IMAGE_TIMEOUT=30m
+# oc-mirror --image-timeout value (default: 40m, upstream default: 10m).
+# Increase for slow networks or large operator images (e.g. RHOAI).
+# ABA automatically increases this by 10m per retry (up to 90m).
+# OC_MIRROR_IMAGE_TIMEOUT=40m
 
 # oc-mirror --parallel-images value (default: 8).
 # Number of images to mirror concurrently. Reduce on slow or unreliable networks.
