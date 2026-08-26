@@ -10,4 +10,4 @@ web-terminal
 devworkspace-operator		# Required by web-terminal
 cli-manager
 
-cincinnati-operator
+cincinnati-operator        # Included for easier cluster upgrades

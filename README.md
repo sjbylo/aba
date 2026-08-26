@@ -229,7 +229,7 @@ You can also [create your own bundle](#custom-bundles).
 ### Prerequisites
 
 - RHEL 8/9/10, CentOS Stream 8/9/10, or Fedora (see [Supported Architectures](#supported-architectures))
-- Passwordless sudo (or root)
+- Sudo or root access (passwordless sudo recommended)
 - Internet access (for download)
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret))
 
@@ -250,9 +250,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.2.3.tar.gz
-tar xzf v1.2.3.tar.gz
-cd aba-1.2.3
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.2.4.tar.gz
+tar xzf v1.2.4.tar.gz
+cd aba-1.2.4
 ./install
 aba
 ```
@@ -260,7 +260,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.2.3 https://github.com/sjbylo/aba.git
+git clone --branch v1.2.4 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1413,7 +1413,15 @@ These commands control VMs directly without performing any OpenShift-level drain
 #### Root Access
 
 - ABA runs as a normal (non-root) user and only invokes `sudo` for system-level operations (e.g. installing RPMs, configuring firewall rules, managing libvirt VMs). Alternatively, ABA can run entirely as root if preferred.
-- Passwordless sudo is required for non-root operation. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
+- Passwordless sudo is recommended for non-root operation but not required — ABA will prompt for a password when needed. See [How to configure passwordless sudo](#q-how-to-configure-passwordless-sudo).
+
+#### Registry Host Resources
+
+The registry (mirror) host is the server that runs your container image registry (Quay or Docker Registry) and stores all mirrored OpenShift and operator images.
+
+- **Minimum**: 4 vCPUs, 8 GB RAM — sufficient for platform release images and most operators.
+- **Recommended for large operator workloads** (e.g. RHOAI, GPU, AI/ML): 16 GB RAM minimum, ideally 24+ GB. These operators include very large image layers that cause Quay's gunicorn workers to buffer significant data in memory during upload. Insufficient RAM can trigger OOM kills mid-upload, leading to mirroring failures and corrupted image data in the registry that persists across retries — see the [troubleshooting FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai).
+- **Docker Registry** has a much lower memory footprint than Quay and is a good alternative when resources are constrained.
 
 #### Registry Storage
 
@@ -1508,7 +1516,7 @@ To install OpenShift in a fully disconnected environment, you need one connected
 #### Connected Workstation
 
 - RHEL 8/9/10 or Fedora with Internet access. See [Supported Architectures](#supported-architectures).
-- Passwordless sudo or root access (see [Common Requirements](#common-requirements)).
+- Sudo or root access; passwordless sudo recommended (see [Common Requirements](#common-requirements)).
 - [Install ABA](#install-aba).
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
@@ -1520,7 +1528,7 @@ To install OpenShift in a fully disconnected environment, you need one connected
 #### Internal Bastion
 
 - RHEL 8, 9, or 10 within the disconnected environment.
-- Passwordless sudo or root access (see [Common Requirements](#common-requirements)).
+- Sudo or root access; passwordless sudo recommended (see [Common Requirements](#common-requirements)).
 - Install RPMs listed in `aba/templates/rpms-internal.txt`. See [Installing RPMs](#installing-rpms).
 - For Quay or Docker on the Internal Bastion: passwordless SSH from the bastion to itself.
 - For Quay or Docker on a remote host: passwordless SSH from the Internal Bastion to that host.
@@ -1536,7 +1544,7 @@ In a *partially disconnected environment*, the *connected bastion* has limited (
 #### Connected Bastion
 
 - RHEL 8, 9, or 10 with access to both the Internet and the disconnected environment.
-- Passwordless sudo or root access (see [Common Requirements](#common-requirements)).
+- Sudo or root access; passwordless sudo recommended (see [Common Requirements](#common-requirements)).
 - [Install ABA](#install-aba).
 - Red Hat pull secret saved to `~/.pull-secret.json` ([download here](https://console.redhat.com/openshift/install/pull-secret)).
 - Install RPMs listed in `aba/templates/rpms-external.txt`, or let ABA use dnf. See [Installing RPMs](#installing-rpms).
@@ -1784,7 +1792,7 @@ ABA creates a user-level configuration file at `~/.aba/config` during installati
 | `CATALOG_INDEX_DOWNLOAD_TIMEOUT` | `20m`        | Timeout for catalog index downloads                                                                     |
 | `CATALOG_CACHE_TTL`              | `12h`        | Cache TTL for downloaded catalog indexes                                                                |
 | `CATALOG_MAX_PARALLEL`           | `3`          | Concurrent catalog downloads (max 3)                                                                    |
-| `OC_MIRROR_IMAGE_TIMEOUT`        | `30m`        | Per-image timeout for `oc-mirror`                                                                       |
+| `OC_MIRROR_IMAGE_TIMEOUT`        | `40m`        | Per-image timeout for `oc-mirror` — increase for large operators (e.g. RHOAI); see [FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai) |
 | `OC_MIRROR_PARALLEL_IMAGES`      | `8`          | Concurrent images during mirroring                                                                      |
 | `OC_MIRROR_SINCE`                | `2020-01-01` | Date for `--since` during save (ensures self-contained archives)                                        |
 | `OC_MIRROR_FLAGS`                | *(empty)*    | Extra flags for every `oc-mirror` invocation                                                            |
@@ -2078,6 +2086,35 @@ aba -d mirror verify                           # Verify, then use as usual
 To uninstall: `aba -d mirror uninstall`
 
 Note: The Quay mirror registry is supported by Red Hat but the Docker Registry is not.
+
+---
+
+## Q: `aba load` or `aba sync` fails with "context deadline exceeded" when pushing large images (e.g. RHOAI)
+
+This typically means the Quay registry ran out of memory. Quay's gunicorn workers buffer upload data in memory, and large image layers (common with AI/ML operators like RHOAI) can cause the Linux OOM killer to terminate the registry process mid-upload.
+
+**Diagnose** by checking the kernel log on the registry host:
+
+```
+sudo dmesg -T | grep -iE 'out of mem|killed'
+```
+
+If you see output like this, the OOM killer terminated Quay:
+
+```
+[Mon Aug 24 20:37:15 2026] Out of memory: Killed process 1482427 (gunicorn) total-vm:22652560kB, anon-rss:10455192kB
+```
+
+**Fixes** (in order of preference):
+
+1. **Add more RAM** to the registry host — at least 16 GB, ideally 24+ GB for AI/ML operator workloads.
+2. **Increase swap space** — a larger swap partition lets gunicorn survive memory spikes (slower but prevents OOM kills).
+3. **Switch to Docker Registry** — much lower memory footprint (see the FAQ entry above).
+4. **Increase the per-image timeout** — if transfers are slow but not OOM-related, increase the timeout by adding `OC_MIRROR_IMAGE_TIMEOUT=60m` (or higher) to `~/.aba/config`. The default is `40m`; the upstream `oc-mirror` default is only `10m`.
+
+In general, if you experience timeouts or failures during mirroring, consider increasing the registry host's resources — more RAM, faster CPUs, and better disk I/O (e.g. SSD) all help with large image workloads.
+
+After fixing the issue, retry with `aba -d mirror load --retry` (or `sync --retry`).
 
 ---
 

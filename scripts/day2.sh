@@ -62,7 +62,41 @@ fi
 
 warn_if_cluster_unstable
 
+# Ensure the cluster's global pull secret includes mirror registry credentials.
+# ABA-installed clusters already have these from install-config, but imported
+# clusters (aba import) or externally installed clusters will not.
+_mirror_ps="$regcreds_dir/pull-secret-mirror.json"
+if [ -s "$_mirror_ps" ]; then
+	_mirror_auth=$(jq -r ".auths[\"$reg_host:$reg_port\"].auth // empty" "$_mirror_ps" 2>/dev/null)
+	if [ "$_mirror_auth" ]; then
+		_cluster_ps=$(oc get secret/pull-secret -n openshift-config \
+			--template='{{index .data ".dockerconfigjson" | base64decode}}' 2>/dev/null)
+
+		if [ -z "$_cluster_ps" ] || ! echo "$_cluster_ps" | jq empty 2>/dev/null; then
+			aba_warn "Could not read cluster global pull secret — skipping credential injection"
+		else
+			_cluster_auth=$(echo "$_cluster_ps" | jq -r ".auths[\"$reg_host:$reg_port\"].auth // empty" 2>/dev/null)
+			if [ "$_cluster_auth" != "$_mirror_auth" ]; then
+				aba_info "Adding mirror registry credentials ($reg_host:$reg_port) to cluster global pull secret ..."
+				_merged_ps=$(echo "$_cluster_ps" | jq --argjson mirror "$(cat "$_mirror_ps")" '.auths += $mirror.auths')
+				if [ -z "$_merged_ps" ] || ! echo "$_merged_ps" | jq empty 2>/dev/null; then
+					aba_warn "Failed to merge mirror credentials into pull secret — skipping"
+				else
+					_tmp_ps=$(mktemp)
+					echo "$_merged_ps" > "$_tmp_ps"
+					oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson="$_tmp_ps"
+					rm -f "$_tmp_ps"
+					aba_success "Mirror registry credentials added to cluster global pull secret"
+				fi
+			else
+				aba_debug "Cluster global pull secret already contains mirror registry credentials"
+			fi
+		fi
+	fi
+fi
+
 aba_info "What this 'day2' script does:"
+aba_info "- Ensure the cluster's global pull secret includes mirror registry credentials."
 aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
 aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
 aba_info "- Apply any/all idms/itms resource files under aba/mirror/data/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync or load)."

@@ -23,7 +23,7 @@
 
 printf 'Initializing ABA TUI v2...\n'
 printf '  [ ] Loading modules\n'
-printf '  [ ] Please wait...\n'
+printf '  [ ] Checking mirror\n'
 printf '  [ ] Checking packages\n'
 printf '  [ ] Loading config\n'
 
@@ -157,7 +157,7 @@ aba_inet_check_start
 tui_log "Kicking off background mirror verify"
 aba_mirror_verify_start
 
-_tick "Please wait..."
+_tick "Checking mirror"
 
 # Auto-install required packages if missing
 "$ABA_ROOT/scripts/install-rpms.sh" external
