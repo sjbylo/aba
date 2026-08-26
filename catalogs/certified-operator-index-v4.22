@@ -24,6 +24,7 @@ cp-fko                                                  Confluent Distribution o
 crunchy-postgres-operator                               Crunchy Postgres for Kubernetes                              v5
 cte-k8s-operator                                        Thales CipherTrust Transparent Encryption for Kubernetes (CTE-K8s) Operator stable
 datadog-operator-certified                              Datadog Operator                                             stable
+dell-csm-operator-certified                             Dell Container Storage Modules                               stable
 digitalai-deploy-operator                               Digital.ai Deploy                                            stable-v24.3
 digitalai-release-operator                              Digital.ai Release                                           stable-v24.3
 dxoperator                                              DxOperator V1 Legacy                                         alpha
@@ -60,6 +61,7 @@ infoscale-sds-operator                                  InfoScale™ SDS Operato
 instana-agent-operator                                  Instana Agent Operator                                       stable
 intel-device-plugins-operator                           Intel Device Plugins Operator                                stable
 intel-tdx-dcap-operator                                 Intel TDX DCAP Operator                                      alpha
+k10-kasten-operator-rhmp                                Veeam Kasten                                                 stable
 k8s-triliovault                                         Trilio for Kubernetes                                        5.4.x
 kubearmor-operator-certified                            KubeArmor Operator                                           stable
 kubeblocks                                              KubeBlocks                                                   stable
@@ -131,6 +133,7 @@ tenant-operator                                         Multi Tenant Operator   
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
 trident-operator                                        NetApp Trident                                               stable
 truenas-csi                                             TrueNAS CSI Driver                                           stable
+tvo-operator                                            Trilio for OpenStack                                         6.0.x
 vast-csi-operator                                       VAST CSI driver operator                                     stable
 vault-secrets-operator                                  Vault Secrets Operator                                       stable
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable

@@ -200,6 +200,7 @@ mariadb-operator                                        MariaDB Operator        
 marin3r                                                 MARIN3R                                                      stable
 mercury-operator                                        Mercury Operator                                             1.0.x
 microcks                                                Microcks Operator                                            stable
+mirror-operator                                         The Silvermatic                                              alpha
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-operator                                        MongoDB Operator                                             alpha
 move2kube-operator                                      Konveyor Move2Kube                                           stable

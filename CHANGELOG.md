@@ -15,11 +15,11 @@ Day-2 pull secret injection, mirror resilience, TUI upgrade cache refresh
 ### Changed
 
 - **Auto-escalating image timeout** — `oc-mirror` retries now automatically increase `--image-timeout` by 10 minutes per attempt (up to 90m), alongside the existing parallelism reduction and retry backoff.
-- **Default image timeout raised to 40m** — Up from 30m (upstream default is 10m), reducing timeouts for large AI/ML operator images.
-- **TUI upgrade targets auto-refresh** — The "Prepare Upgrade" dialog now honours the `run_once` TTL cache, so newly released OCP versions appear without restarting the TUI.
+- **Default image timeout raised to 40m** — Up from 30m (upstream default is 10m), preventing premature timeouts when mirroring large AI/ML operator images.
+- **TUI upgrade targets auto-refresh** — The "Prepare Upgrade" dialog now honors the `run_once` TTL cache, so newly released OCP versions appear without restarting the TUI.
 - **TUI auto-clear stale upgrade target** — `ocp_upgrade_to` in `mirror.conf` is silently cleared when it's no longer greater than the current base version.
 - **TUI init message** — Replaced vague "Please wait..." with "Checking mirror" during TUI startup.
-- **Sudo wording** — All README/prerequisites references changed from "passwordless sudo required" to "passwordless sudo recommended".
+- **Sudo wording** — All prerequisites references changed from "passwordless sudo required" to "recommended".
 
 ### Fixed
 
