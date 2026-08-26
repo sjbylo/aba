@@ -3795,7 +3795,7 @@ _run_oc_mirror_with_retry() {
 	local parallel_images="${OC_MIRROR_PARALLEL_IMAGES:-8}"
 	local retry_delay=2
 	local retry_times=2
-	local image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-30m}"
+	local image_timeout="${OC_MIRROR_IMAGE_TIMEOUT:-40m}"
 	aba_debug "Initial tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
 
 	local try=1
@@ -3831,11 +3831,15 @@ _run_oc_mirror_with_retry() {
 		decoded=$(_oc_mirror_decode_exit $ret)
 		exit_history="${exit_history:+$exit_history, }$ret"
 
-		# Reduce oc-mirror parallelism and increase retry backoff on failure
+		# Reduce parallelism and increase timeouts/retries on failure
 		parallel_images=$(( parallel_images - 2 < 2 ? 2 : parallel_images - 2 ))
 		retry_delay=$(( retry_delay + 2 > 10 ? 10 : retry_delay + 2 ))
 		retry_times=$(( retry_times + 2 > 10 ? 10 : retry_times + 2 ))
-		aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times"
+		if [[ "$image_timeout" =~ ^([0-9]+)m$ ]]; then
+			_tm=$(( ${BASH_REMATCH[1]} + 10 > 90 ? 90 : ${BASH_REMATCH[1]} + 10 ))
+			image_timeout="${_tm}m"
+		fi
+		aba_debug "New tuning: parallel_images=$parallel_images retry_delay=$retry_delay retry_times=$retry_times image_timeout=$image_timeout"
 
 		try=$(( try + 1 ))
 		if [ $try -le $try_tot ]; then

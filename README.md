@@ -1792,7 +1792,7 @@ ABA creates a user-level configuration file at `~/.aba/config` during installati
 | `CATALOG_INDEX_DOWNLOAD_TIMEOUT` | `20m`        | Timeout for catalog index downloads                                                                     |
 | `CATALOG_CACHE_TTL`              | `12h`        | Cache TTL for downloaded catalog indexes                                                                |
 | `CATALOG_MAX_PARALLEL`           | `3`          | Concurrent catalog downloads (max 3)                                                                    |
-| `OC_MIRROR_IMAGE_TIMEOUT`        | `30m`        | Per-image timeout for `oc-mirror`                                                                       |
+| `OC_MIRROR_IMAGE_TIMEOUT`        | `40m`        | Per-image timeout for `oc-mirror` — increase for large operators (e.g. RHOAI); see [FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai) |
 | `OC_MIRROR_PARALLEL_IMAGES`      | `8`          | Concurrent images during mirroring                                                                      |
 | `OC_MIRROR_SINCE`                | `2020-01-01` | Date for `--since` during save (ensures self-contained archives)                                        |
 | `OC_MIRROR_FLAGS`                | *(empty)*    | Extra flags for every `oc-mirror` invocation                                                            |
@@ -2110,6 +2110,7 @@ If you see output like this, the OOM killer terminated Quay:
 1. **Add more RAM** to the registry host — at least 16 GB, ideally 24+ GB for AI/ML operator workloads.
 2. **Increase swap space** — a larger swap partition lets gunicorn survive memory spikes (slower but prevents OOM kills).
 3. **Switch to Docker Registry** — much lower memory footprint (see the FAQ entry above).
+4. **Increase the per-image timeout** — if transfers are slow but not OOM-related, increase the timeout by adding `OC_MIRROR_IMAGE_TIMEOUT=60m` (or higher) to `~/.aba/config`. The default is `40m`; the upstream `oc-mirror` default is only `10m`.
 
 In general, if you experience timeouts or failures during mirroring, consider increasing the registry host's resources — more RAM, faster CPUs, and better disk I/O (e.g. SSD) all help with large image workloads.
 

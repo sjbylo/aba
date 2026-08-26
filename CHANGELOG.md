@@ -1,6 +1,29 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.3...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.4...HEAD)
 
 ---
+
+## [1.2.4](https://github.com/sjbylo/aba/releases/tag/v1.2.4) - 2026-08-26
+
+Day-2 pull secret injection, mirror resilience, TUI upgrade cache refresh
+
+### Added
+
+- **Day-2 pull secret injection** — `aba day2` now detects when the cluster's global pull secret is missing mirror registry credentials and merges them automatically. Essential for imported clusters (`aba import`) and externally installed clusters.
+- **Registry host resource guidance** — README prerequisites now document minimum (8 GB) and recommended (16–24+ GB) RAM for the mirror registry host, with warnings about OOM-induced corruption for large operators like RHOAI.
+- **`skopeo-bulk.sh` utility** — New tool under `tools/` for bulk saving and loading container images via skopeo, useful for manually fixing corrupted mirror images.
+
+### Changed
+
+- **Auto-escalating image timeout** — `oc-mirror` retries now automatically increase `--image-timeout` by 10 minutes per attempt (up to 90m), alongside the existing parallelism reduction and retry backoff.
+- **Default image timeout raised to 40m** — Up from 30m (upstream default is 10m), reducing timeouts for large AI/ML operator images.
+- **TUI upgrade targets auto-refresh** — The "Prepare Upgrade" dialog now honours the `run_once` TTL cache, so newly released OCP versions appear without restarting the TUI.
+- **TUI auto-clear stale upgrade target** — `ocp_upgrade_to` in `mirror.conf` is silently cleared when it's no longer greater than the current base version.
+- **TUI init message** — Replaced vague "Please wait..." with "Checking mirror" during TUI startup.
+- **Sudo wording** — All README/prerequisites references changed from "passwordless sudo required" to "passwordless sudo recommended".
+
+### Fixed
+
+- **Fix E2E dispatcher race condition** — `_tmux_kill_session()` now waits up to 5 seconds for the tmux session to fully disappear before returning, preventing "INFRA FAIL" when dispatching new suites immediately after cleanup.
 
 ## [1.2.3](https://github.com/sjbylo/aba/releases/tag/v1.2.3) - 2026-08-23
 

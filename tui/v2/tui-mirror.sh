@@ -677,14 +677,12 @@ mirror_prep_upgrade() {
 	local _zstream="" _next="" _next1=""
 	local _task_id="aba:upgrade-targets:${_current_ver}"
 
-	# Peek: is the background upgrade-target fetch done? Show infobox only if not.
+	# Ensure upgrade targets are fresh (TTL-based; no-op if cache is current)
+	aba_upgrade_targets_start "$_current_ver" "$_channel"
 	if ! run_once -p -i "$_task_id" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"Checking available upgrade versions for v${_current_ver}..." 3 60
-		run_once -q -w -S -i "$_task_id" 2>/dev/null || {
-			aba_upgrade_targets_start "$_current_ver" "$_channel"
-			run_once -q -w -i "$_task_id" 2>/dev/null || true
-		}
+		run_once -q -w -S -i "$_task_id" 2>/dev/null || true
 	fi
 
 	# Read combined output: CHANNEL\tLABEL\tVERSION
