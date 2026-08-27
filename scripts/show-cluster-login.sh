@@ -14,7 +14,11 @@ _sd=$(cluster_state_dir 2>/dev/null) || _sd=""
 if [ -n "$_sd" ] && [ -f "$_sd/kubeadmin-password" ]; then
 	_pw=$(cat "$_sd/kubeadmin-password")
 else
-	_pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null)
+	_pw=$(cat iso-agent-based/auth/kubeadmin-password 2>/dev/null) || true
+fi
+
+if [ -z "$_pw" ]; then
+	aba_abort "No kubeadmin password available. Use 'aba shell' instead."
 fi
 
 # Ensure oc is available (only wait for oc, not all CLIs)
