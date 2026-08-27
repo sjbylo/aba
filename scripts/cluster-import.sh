@@ -174,17 +174,21 @@ echo "  starting_ip     = $_starting_ip"
 echo "  image_source    = $_image_source"
 [ -n "$_ocp_version" ] && echo "  ocp_version     = $_ocp_version"
 
-# --- Create cluster directory ---
+# --- Check for existing state ---
 _dir_name="${_name:-$_cluster_name}"
-if [ -d "$_dir_name" ]; then
-	if [ "$_force" = true ]; then
-		aba_info "Overwriting existing directory: $_dir_name/"
-	else
-		aba_abort "Directory '$_dir_name' already exists. Use --force to overwrite, or --name to pick a different name."
-	fi
+_state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
+
+if [ "$_force" = true ]; then
+	[ -d "$_dir_name" ] && aba_info "Overwriting existing directory: $_dir_name/"
+	[ -d "$_state_dir" ] && aba_info "Cleaning existing state: $_state_dir/"
+	rm -rf "$_dir_name" "$_state_dir"
 else
-	mkdir -p "$_dir_name"
+	[ -d "$_dir_name" ] && aba_abort "Directory '$_dir_name' already exists. Use --force to overwrite, or --name to pick a different name."
+	[ -d "$_state_dir" ] && aba_abort "Cluster state directory already exists: $_state_dir/
+       This may be from a previous install. Use --force to overwrite."
 fi
+
+mkdir -p "$_dir_name"
 
 cd "$_dir_name"
 
@@ -234,7 +238,6 @@ EOF
 make -s init
 
 # --- Externalize state ---
-_state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
 mkdir -p "$_state_dir/backup"
 chmod 700 "$_state_dir"
 chmod 700 "$(dirname "$_state_dir")"
@@ -264,6 +267,10 @@ cp -p cluster.conf "$_state_dir/backup/"
 
 # Convenience symlink
 ln -sfn "$_state_dir" clusterstate
+
+# Create rendezvousIP so 'aba ssh' works
+mkdir -p iso-agent-based
+echo "$_starting_ip" > iso-agent-based/rendezvousIP
 
 # Mark as installed (cluster already exists)
 touch .install-complete
