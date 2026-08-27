@@ -318,16 +318,11 @@ rm -f ../.bundle data/.isc-pinned
 
 echo
 
-# Offer to delete large archive files to free disk space
+# Notify about archive files that can be cleaned up
 _archive_files=( data/mirror_*.tar )
 if [ -e "${_archive_files[0]}" ]; then
 	_archive_size=$(du -sh data/mirror_*.tar 2>/dev/null | tail -1 | awk '{print $1}')
-	if ask -n --auto-no "Delete mirror_*.tar files (${_archive_size:-?} total) to free disk space"; then
-		rm -f data/mirror_*.tar data/aba-transfer.tar data/aba-transfer-metadata.json
-		aba_info "Archive and transfer files deleted."
-	else
-		aba_info "Archive files kept. Delete manually when no longer needed: rm mirror/data/mirror_*.tar"
-	fi
+	aba_warn "Archive files (${_archive_size:-?}) can now be deleted to free disk space: rm mirror/data/mirror_*.tar"
 fi
 echo
 

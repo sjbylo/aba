@@ -45,6 +45,7 @@ plan_tests \
     "SNO: install cluster" \
     "SNO: verify operators from all catalogs" \
     "Import: day2 injects mirror creds on imported cluster" \
+    "Import: multi-mirror day2 CA and CatalogSource naming" \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
@@ -389,6 +390,150 @@ e2e_run "Verify mirror creds injected after day2" "
 "
 
 e2e_run "Clean up imported cluster dir" "rm -rf $IMPORT_DIR"
+
+test_end
+
+# ============================================================================
+# 9b. Import: multi-mirror day2 CA trust and CatalogSource naming
+# ============================================================================
+# The SNO from test 8 has day2 applied with CatalogSources pointing to our
+# pool registry.  Simulate a multi-mirror scenario by patching one existing
+# CS to appear to belong to a different mirror host and removing our CA key.
+# Then re-run day2 and verify:
+#   (a) Our CA key is patched in alongside the other key (not overwritten)
+#   (b) All our CatalogSources receive a hostname suffix for clarity
+#   (c) Our CA value has no go-template "<no value>" garbage
+#   (d) A second run is fully idempotent
+test_begin "Import: multi-mirror day2 CA and CatalogSource naming"
+
+IMPORT_MM="e2e-multi-mirror"
+_KC_MM="$SNO/iso-agent-based/auth/kubeconfig"
+_RH_MM=$(grep '^reg_host=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_RP_MM=$(grep '^reg_port=' mirror/mirror.conf | cut -d= -f2 | awk '{print $1}')
+_HP_MM="${_RH_MM}:${_RP_MM}"
+_CM_KEY_MM="${_RH_MM}..${_RP_MM}"
+_SUFFIX_MM="${_RH_MM%%.*}"
+
+e2e_run "Import SNO for multi-mirror test" \
+    "aba import --kubeconfig $_KC_MM --name $IMPORT_MM --force"
+
+# Save original redhat-operators CS image for cleanup
+e2e_run "Save original redhat-operators CS image" "
+    export KUBECONFIG=$_KC_MM
+    oc get catalogsource redhat-operators -n openshift-marketplace \
+        -o jsonpath='{.spec.image}' > /tmp/e2e-mm-orig-image.txt
+    echo \"Saved: \$(cat /tmp/e2e-mm-orig-image.txt)\"
+"
+
+# Simulate another mirror: patch redhat-operators so its image host differs
+e2e_run "Patch redhat-operators to simulate other mirror" "
+    export KUBECONFIG=$_KC_MM
+    oc get catalogsource redhat-operators -n openshift-marketplace -o yaml \
+        | sed 's|$_HP_MM|other-mirror.example.com:9443|' \
+        | oc apply -f -
+    echo \"Patched: $_HP_MM -> other-mirror.example.com:9443\"
+"
+
+# Remove our CA key from registry-config; add a fake key for 'other mirror'.
+# This forces the _cert_new_key code path in day2.sh.
+e2e_run "Replace registry-config: remove our key, add fake key" "
+    export KUBECONFIG=$_KC_MM
+    oc create configmap registry-config -n openshift-config \
+        --from-literal='other-mirror.example.com..9443=fake-ca-placeholder' \
+        --dry-run=client -o yaml | oc apply -f -
+    echo 'registry-config now has only other-mirror key'
+"
+
+# Changing registry-config triggers apiserver restart (and MCO activity on SNO).
+# Wait for the cluster API to stabilize before running day2.
+e2e_poll 600 20 "Wait for cluster to stabilize after configmap change" \
+    "export KUBECONFIG=$_KC_MM && oc get nodes -o jsonpath='{.items[0].status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null | grep -q True"
+
+# Run day2 -- multi-mirror detection should:
+# 1. Patch our CA key into registry-config (preserving the other key)
+# 2. Suffix all our CatalogSource names with our hostname
+e2e_run "Run day2 (multi-mirror scenario)" \
+    "aba --dir $IMPORT_MM day2"
+
+# Verify CA trust: both keys must be present
+e2e_run "Verify both CA keys in registry-config" "
+    export KUBECONFIG=$_KC_MM
+    oc get cm registry-config -n openshift-config -o json \
+        | jq -r '.data | keys[]' | sort | tee /tmp/e2e-mm-keys.txt
+    grep -q '$_CM_KEY_MM' /tmp/e2e-mm-keys.txt \
+        || { echo 'FAIL: our CA key ($_CM_KEY_MM) missing'; exit 1; }
+    grep -q 'other-mirror' /tmp/e2e-mm-keys.txt \
+        || { echo 'FAIL: other mirror key was overwritten'; exit 1; }
+    echo 'PASS: both CA keys present'
+"
+
+# Verify our CA value is a real certificate (no go-template "<no value>" bug)
+e2e_run "Verify our CA is a valid certificate (no go-template garbage)" "
+    export KUBECONFIG=$_KC_MM
+    oc get cm registry-config -n openshift-config -o json \
+        | jq -r '.data[\"$_CM_KEY_MM\"]' > /tmp/e2e-mm-ca.txt
+    grep -q 'BEGIN CERTIFICATE' /tmp/e2e-mm-ca.txt \
+        || { echo 'FAIL: not a certificate'; cat /tmp/e2e-mm-ca.txt; exit 1; }
+    ! grep -q '<no value>' /tmp/e2e-mm-ca.txt \
+        || { echo 'FAIL: contains go-template garbage'; exit 1; }
+    echo 'PASS: CA is a valid certificate'
+"
+
+# Verify CatalogSource naming: all CS from our mirror should have the suffix
+e2e_run "Verify CatalogSources from our mirror are suffixed" "
+    export KUBECONFIG=$_KC_MM
+    oc get catalogsource -n openshift-marketplace --no-headers \
+        -o custom-columns='NAME:.metadata.name'
+    _suffixed=\$(oc get catalogsource -n openshift-marketplace \
+        -o jsonpath='{.items[*].metadata.name}' \
+        | tr ' ' '\n' | grep -c '${_SUFFIX_MM}\$' || true)
+    [ \"\$_suffixed\" -gt 0 ] \
+        || { echo 'FAIL: no CatalogSource with suffix $_SUFFIX_MM'; exit 1; }
+    echo \"PASS: \$_suffixed CatalogSource(s) suffixed with $_SUFFIX_MM\"
+"
+
+# Idempotency: run day2 again -- everything should be unchanged
+e2e_run "Save CS count before idempotency run" "
+    export KUBECONFIG=$_KC_MM
+    oc get catalogsource -n openshift-marketplace --no-headers | wc -l \
+        > /tmp/e2e-mm-cs-count.txt
+    echo \"CS count: \$(cat /tmp/e2e-mm-cs-count.txt)\"
+"
+
+e2e_run "Run day2 again (idempotency check)" \
+    "aba --dir $IMPORT_MM day2"
+
+e2e_run "Verify idempotent: CS count unchanged" "
+    export KUBECONFIG=$_KC_MM
+    _before=\$(cat /tmp/e2e-mm-cs-count.txt)
+    _after=\$(oc get catalogsource -n openshift-marketplace --no-headers | wc -l)
+    [ \"\$_before\" = \"\$_after\" ] \
+        || { echo \"FAIL: CS count changed: \$_before -> \$_after\"; exit 1; }
+    echo \"PASS: CS count unchanged (\$_after)\"
+"
+
+# Cleanup: restore cluster state for subsequent tests.
+# Avoid changing registry-config (would trigger MCO reboot on SNO).
+e2e_run "Cleanup: restore redhat-operators CS image" "
+    export KUBECONFIG=$_KC_MM
+    oc get catalogsource redhat-operators -n openshift-marketplace -o yaml \
+        | sed 's|other-mirror.example.com:9443|$_HP_MM|' \
+        | oc apply -f -
+    echo \"Restored redhat-operators to $_HP_MM\"
+"
+
+e2e_run "Cleanup: delete suffixed CatalogSources" "
+    export KUBECONFIG=$_KC_MM
+    for _cs in \$(oc get catalogsource -n openshift-marketplace \
+            -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' \
+            | grep '${_SUFFIX_MM}\$'); do
+        oc delete catalogsource \"\$_cs\" -n openshift-marketplace
+        echo \"Deleted: \$_cs\"
+    done
+"
+
+e2e_run "Cleanup: remove import dir and temp files" \
+    "rm -rf $IMPORT_MM /tmp/e2e-mm-orig-image.txt /tmp/e2e-mm-cs-count.txt /tmp/e2e-mm-keys.txt /tmp/e2e-mm-ca.txt"
 
 test_end
 
