@@ -30,26 +30,7 @@ while [ $# -gt 0 ]; do
 		--force|-f)
 			_force=true; shift ;;
 		--help|-h)
-			cat >&2 <<-'USAGE'
-			Import an existing OpenShift cluster into ABA.
-
-			Usage:
-			  aba import --kubeconfig <path> [--image-source mirror|direct|proxy|<name>]
-			             [--name <dir-name>] [--force]
-
-			Options:
-			  --kubeconfig, -k   Path to cluster kubeconfig (required)
-			  --image-source     Where this cluster pulls images (default: auto-detect)
-			  --name, -n         Cluster directory name (default: cluster_name from API)
-			  --force, -f        Overwrite existing cluster directory
-
-			After import, you can run:
-			  aba -d <name> day2          Integrate with mirror registry
-			  aba -d <name> day2-ntp      Configure NTP
-			  aba -d <name> upgrade       Upgrade the cluster
-			  aba -d <name> shutdown      Graceful shutdown
-			  aba -d <name> getco         Show cluster operators
-			USAGE
+			cat others/help-cluster.txt >&2
 			exit 0 ;;
 		*)
 			aba_abort "Unknown option: $1. Use --help for usage." ;;
