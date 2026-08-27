@@ -123,37 +123,56 @@ fi
 aba_info "Adding mirror registry CA to cluster trust store"
 aba_debug "Running: oc get cm registry-config -n openshift-config"
 cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
-# Detect cert mismatch: registry was reinstalled with new CA but cluster has the old one.
+# Detect whether this mirror's CA needs to be added to the cluster trust bundle.
+# Cases: (a) configmap doesn't exist at all, (b) configmap exists but has no key
+# for this mirror (multi-mirror: another mirror's CA is already there), or
+# (c) key exists but cert content has changed (registry reinstalled with new CA).
 _cert_changed=""
+_cert_new_key=""
 _existing_bundle=""
 if [ -s "$regcreds_dir/rootCA.pem" ] && [ "$cm_existing" ]; then
 	_cm_key="${reg_host}..${reg_port}"
 	_existing_bundle=$(oc get cm registry-config -n openshift-config -o go-template='{{index .data "'"$_cm_key"'"}}' 2>/dev/null || true)
-	# Compare the base64 body (unique per cert) to check if the new cert is already in the bundle
+	# go-template returns literal "<no value>" for missing keys
+	[ "$_existing_bundle" = "<no value>" ] && _existing_bundle=""
 	_new_cert_body=$(grep -v '^-' "$regcreds_dir/rootCA.pem" | tr -d '[:space:]')
-	_bundle_body=$(echo "$_existing_bundle" | grep -v '^-' | tr -d '[:space:]')
-	if [ -n "$_new_cert_body" ] && [ -n "$_bundle_body" ] && \
-	   ! echo "$_bundle_body" | grep -qF "$_new_cert_body"; then
-		_local_fp=$(openssl x509 -noout -fingerprint -in "$regcreds_dir/rootCA.pem" 2>/dev/null || true)
-		aba_warn "Registry CA has changed. Appending new CA to the cluster trust bundle." \
-			"New CA:  $_local_fp"
+	if [ -z "$_existing_bundle" ]; then
+		_cert_new_key=1
 		_cert_changed=1
+	else
+		_bundle_body=$(echo "$_existing_bundle" | grep -v '^-' | tr -d '[:space:]')
+		if [ -n "$_new_cert_body" ] && [ -n "$_bundle_body" ] && \
+		   ! echo "$_bundle_body" | grep -qF "$_new_cert_body"; then
+			_local_fp=$(openssl x509 -noout -fingerprint -in "$regcreds_dir/rootCA.pem" 2>/dev/null || true)
+			aba_warn "Registry CA has changed. Appending new CA to the cluster trust bundle." \
+				"New CA:  $_local_fp"
+			_cert_changed=1
+		fi
 	fi
 fi
 if [ -s "$regcreds_dir/rootCA.pem" ] && { [ ! "$cm_existing" ] || [ "$_cert_changed" ]; }; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
-	if [ "$_cert_changed" ] && [ -n "$_existing_bundle" ]; then
-		# Append new cert to existing bundle so both old and new CAs are trusted
+	if [ "$_cert_new_key" ]; then
+		# Configmap exists but has no key for this mirror (multi-mirror scenario).
+		# Patch to add the new key without overwriting other mirrors' CAs.
+		aba_info "Adding mirror CA ($reg_host:$reg_port) to existing trust bundle"
+		_ca_value=$(awk '{printf "%s\\n", $0}' "$regcreds_dir/rootCA.pem")
+		oc patch configmap registry-config -n openshift-config \
+			--type merge -p '{"data":{"'"${reg_host}..${reg_port}"'":"'"$_ca_value"'"}}'
+	elif [ "$_cert_changed" ] && [ -n "$_existing_bundle" ]; then
+		# Same key, different cert -- append new cert to existing bundle
 		export additional_trust_bundle="${_existing_bundle}
 $(cat "$regcreds_dir/rootCA.pem")"
 		aba_info "Appending new CA to existing trust bundle"
+		aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
+		scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 	else
+		# No configmap at all -- create fresh
 		export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
+		aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
+		scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 	fi
 	aba_info "Using root CA file at $regcreds_display/rootCA.pem"
-
-	aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
-	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	_day2_patch_additional_ca() {
 		aba_debug "Running: oc patch image.config.openshift.io cluster (additionalTrustedCA)"
@@ -363,6 +382,22 @@ if [ -d "$working_dir/cluster-resources" ]; then
 
 	cs_pids=()
 
+	# Pre-scan: detect multi-mirror scenario. If any existing CatalogSource
+	# (not managed by marketplace-operator) points to a different registry,
+	# suffix ALL of our CatalogSources for visual consistency.
+	_multi_mirror=""
+	_our_host="${reg_host}:${reg_port}"
+	while IFS='|' read -r _cs_name _cs_image _cs_managed; do
+		[ -z "$_cs_image" ] && continue
+		_cs_host=$(echo "$_cs_image" | cut -d/ -f1)
+		if [ "$_cs_host" != "$_our_host" ] && [ "$_cs_managed" != "marketplace-operator" ]; then
+			_multi_mirror=1
+			aba_info "Multi-mirror detected: existing CatalogSource '$_cs_name' serves from $_cs_host"
+			break
+		fi
+	done < <(oc get catalogsource -n "$ns" \
+		-o jsonpath='{range .items[*]}{.metadata.name}|{.spec.image}|{.metadata.annotations.operatorframework\.io/managed-by}{"\n"}{end}' 2>/dev/null || true)
+
 	for f in $cs_file_list
 	do
 		if [ ! -s "$f" ]; then
@@ -388,6 +423,10 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
 
 			continue
+		fi
+
+		if [ "$_multi_mirror" ]; then
+			cs_name="${cs_name}-${reg_host%%.*}"
 		fi
 
 		aba_info Applying CatalogSource: $cs_name

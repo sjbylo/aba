@@ -1566,6 +1566,49 @@ in the TUI.
 
 ---
 
+## Makefile: skip mirror-registry tarball extraction when already extracted
+
+**Severity:** LOW — unnecessary work, adds ~10s to every `aba load`
+**Status:** Planned
+**Added:** 2026-08-27
+
+**Problem:** Running `aba -d mirror load` always extracts
+`mirror-registry-amd64.tar.gz` (1GB) even when the `mirror-registry` binary
+already exists and the registry is already installed and running. The user
+sees:
+
+```
+[ABA] Extracting mirror-registry-amd64.tar.gz into /home/user/aba/mirror
+image-archive.tar
+execution-environment.tar
+mirror-registry
+sqlite3.tar
+```
+
+**Root cause:** The `mirror-registry` Make target in `Makefile.mirror` has a
+normal dependency on `$(MR_TARBALL)`. When the tarball gets a fresh timestamp
+(e.g. transferred as part of a bundle, re-downloaded, or touched by a
+previous make step), Make sees the tarball is newer than the extracted binary
+and re-runs the extraction recipe — even though `.available` (which depends
+on `mirror-registry` as order-only) already exists.
+
+**Proposed fix:** Add an existence guard to the `mirror-registry` recipe:
+
+```makefile
+mirror-registry: $(MR_TARBALL)
+	@[ -f mirror-registry ] && exit 0 || true
+	@$(SCRIPTS)/run-once.sh ...
+	tar xmvzf $(MR_TARBALL) ...
+```
+
+Or change `mirror-registry` from a file target to a `.PHONY` + marker file
+pattern, so extraction is skipped once the marker exists.
+
+**Files to change:**
+- `templates/Makefile.mirror`: guard the `mirror-registry` recipe
+
+---
+
 ## Optimization: CLI download --wait should be instant after oc-mirror
 
 **Severity:** LOW — UX improvement, saves ~60s during bundle creation

@@ -141,6 +141,13 @@ aba_info() {
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_white -n "[ABA] $@"
+	elif [ "$1" = "-m" ]; then
+		shift
+		local main_msg="$1"; shift
+		echo_white "[ABA] $main_msg"
+		for line in "$@"; do
+			echo_white "[ABA] $line"
+		done
 	else
 		echo_white "[ABA] $@"
 	fi

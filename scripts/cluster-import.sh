@@ -128,6 +128,8 @@ if [ -z "$_image_source" ]; then
 
 	if [ "$(( _has_idms + _has_itms + _has_icsp ))" -gt 0 ]; then
 		_image_source="mirror"
+	elif [ -f mirror/.available ]; then
+		_image_source="mirror"
 	else
 		_proxy_http=$(oc get proxy/cluster -o jsonpath='{.spec.httpProxy}' 2>/dev/null) || true
 		if [ -n "$_proxy_http" ]; then
@@ -223,9 +225,12 @@ mkdir -p "$_state_dir/backup"
 chmod 700 "$_state_dir"
 chmod 700 "$(dirname "$_state_dir")"
 
-# Copy kubeconfig
+# Copy kubeconfig to state dir and local cluster dir
 cp -p "$_kubeconfig" "$_state_dir/kubeconfig"
 chmod 600 "$_state_dir/kubeconfig"
+mkdir -p iso-agent-based/auth
+cp -p "$_kubeconfig" iso-agent-based/auth/kubeconfig
+chmod 600 iso-agent-based/auth/kubeconfig
 
 # Write state.sh
 cat > "$_state_dir/state.sh" <<EOF
@@ -257,6 +262,14 @@ echo "$_starting_ip" > iso-agent-based/rendezvousIP
 touch .install-complete
 
 aba_info "Cluster '$_cluster_name' imported into $_dir_name/"
+
+if [ "$_image_source" = "direct" ] && [ ! -f mirror/.available ]; then
+	aba_info ""
+	aba_info -m "Note: No mirror registry detected. To integrate this cluster with a" \
+		"mirror later, set up a mirror (aba mirror) and re-import with:" \
+		"  aba import -k <kubeconfig> --force --image-source mirror"
+fi
+
 aba_info ""
 aba_info "Available commands:"
 aba_info "  aba -d $_dir_name day2          Integrate with mirror registry"
