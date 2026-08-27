@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do
 		--force|-f)
 			_force=true; shift ;;
 		--help|-h)
-			cat others/help-cluster.txt >&2
+			cat others/help-import.txt >&2
 			exit 0 ;;
 		*)
 			aba_abort "Unknown option: $1. Use --help for usage." ;;

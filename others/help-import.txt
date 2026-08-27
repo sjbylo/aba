@@ -1,0 +1,20 @@
+Import an existing OpenShift cluster into ABA.
+
+Usage:
+  aba import --kubeconfig <path> [--image-source mirror|direct|proxy|<name>]
+             [--name <dir-name>] [--force]
+
+Options:
+  --kubeconfig, -k   Path to cluster kubeconfig (required)
+  --image-source     Where this cluster pulls images (default: auto-detect)
+  --name, -n         Cluster directory name (default: cluster_name from API)
+  --force, -f        Overwrite existing cluster directory
+
+After import, you can run:
+  aba -d <name> day2          Integrate with mirror registry
+  aba -d <name> day2-ntp      Configure NTP
+  aba -d <name> day2-osus     Configure update service
+  aba -d <name> upgrade       Upgrade the cluster
+  aba -d <name> getco         Show cluster operators
+  aba -d <name> shell         Open oc shell
+  aba -d <name> shutdown      Graceful shutdown
