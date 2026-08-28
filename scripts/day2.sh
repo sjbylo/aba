@@ -350,14 +350,41 @@ working_dir="mirror/data/working-dir"
 ns=openshift-marketplace
 
 if [ -d "$working_dir/cluster-resources" ]; then
-	# Apply any idms/itms files created by oc-mirror v2
+	_our_host="${reg_host}:${reg_port}"
+	_our_host_short="${reg_host%%.*}"
+
+	# Apply any idms/itms files created by oc-mirror v2.
+	# Detect name collisions: if an existing resource with the same name points
+	# to a different registry, suffix ours to avoid overwriting the other mirror's entries.
 	for f in $(ls $working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 	do
-		if [ -s $f ]; then
-			aba_info oc apply -f $f
-			exec_cmd="oc apply -f $f"
-			aba_debug "Running: $exec_cmd"
-			$exec_cmd
+		if [ -s "$f" ]; then
+			_res_name=$(awk '/^  name:/{print $2; exit}' "$f")
+			_res_kind=$(awk '/^kind:/{print $2; exit}' "$f")
+			_needs_rename=""
+			if [ "$_res_name" ]; then
+				_existing_mirror=""
+				case "$_res_kind" in
+					ImageDigestMirrorSet)
+						_existing_mirror=$(oc get imagedigestmirrorset "$_res_name" \
+							-o jsonpath='{.spec.imageDigestMirrors[0].mirrors[0]}' 2>/dev/null) || true ;;
+					ImageTagMirrorSet)
+						_existing_mirror=$(oc get imagetagmirrorset "$_res_name" \
+							-o jsonpath='{.spec.imageTagMirrors[0].mirrors[0]}' 2>/dev/null) || true ;;
+				esac
+				if [ "$_existing_mirror" ]; then
+					_existing_host="${_existing_mirror%%/*}"
+					[ "$_existing_host" != "$_our_host" ] && _needs_rename=1
+				fi
+			fi
+			if [ "$_needs_rename" ]; then
+				_new_name="${_res_name}-${_our_host_short}"
+				aba_info "Renaming $_res_kind '$_res_name' -> '$_new_name' (existing resource serves from ${_existing_host})"
+				sed "s/  name: ${_res_name}$/  name: ${_new_name}/" "$f" | oc apply -f -
+			else
+				aba_info "oc apply -f $f"
+				oc apply -f "$f"
+			fi
 		else
 			aba_warn "no such file: $f"
 		fi
@@ -386,7 +413,6 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	# (not managed by marketplace-operator) points to a different registry,
 	# suffix ALL of our CatalogSources for visual consistency.
 	_multi_mirror=""
-	_our_host="${reg_host}:${reg_port}"
 	while IFS='|' read -r _cs_name _cs_image _cs_managed; do
 		[ -z "$_cs_image" ] && continue
 		_cs_host=$(echo "$_cs_image" | cut -d/ -f1)
@@ -426,7 +452,7 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		fi
 
 		if [ "$_multi_mirror" ]; then
-			cs_name="${cs_name}-${reg_host%%.*}"
+			cs_name="${cs_name}-${_our_host_short}"
 		fi
 
 		aba_info Applying CatalogSource: $cs_name

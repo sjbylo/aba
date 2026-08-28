@@ -97,7 +97,7 @@ metadata:
 spec:
   channel: v1
   installPlanApproval: "Automatic"
-  source: "redhat-operators"
+  source: "$_osus_catalog"
   sourceNamespace: "openshift-marketplace"
   name: "cincinnati-operator"
 END
@@ -182,6 +182,9 @@ if ! oc get packagemanifests cincinnati-operator >/dev/null 2>&1; then
 	fi
 fi
 
+# Resolve which CatalogSource provides cincinnati-operator (may be suffixed in multi-mirror setups)
+_osus_catalog=$(oc get packagemanifests cincinnati-operator -o jsonpath='{.status.catalogSource}')
+
 #####################
 aba_info -n "Adding cluster ingress CA cert to the CA trust bundle ... "
 
@@ -199,7 +202,12 @@ if echo "$ca_bundle_crt" | grep -q "$tmp_line8" && echo "$ca_bundle_crt" | grep 
 	echo_white "CA cert already added"
 else
 	ca_bundle_crt="$ca_bundle_crt\n$ingress_cert_json"
-	oc patch cm user-ca-bundle -n openshift-config --type='merge' -p '{"data":{"ca-bundle.crt":"'"$ca_bundle_crt"'"}}'
+	# Patch via temp file: the CA bundle can exceed ARG_MAX when passed on the command line
+	_patch_file="$ABA_TMP/osus-ca-bundle-patch.json"
+	mkdir -p "$ABA_TMP"
+	printf '{"data":{"ca-bundle.crt":"%s"}}' "$ca_bundle_crt" > "$_patch_file"
+	oc patch cm user-ca-bundle -n openshift-config --type='merge' --patch-file "$_patch_file"
+	rm -f "$_patch_file"
 	aba_info "CA cert added"
 fi
 
