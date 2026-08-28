@@ -750,7 +750,7 @@ e2e_run "bundle-primed --help shows --primed help" \
     "aba bundle-primed --help | grep -q 'primed'"
 
 e2e_run "bundle-primed --help matches bundle --help" \
-    "diff <(aba bundle-primed --help 2>/dev/null) <(aba bundle --help 2>/dev/null)"
+    "aba bundle-primed --help > /tmp/e2e-help-bp.txt 2>/dev/null && aba bundle --help > /tmp/e2e-help-b.txt 2>/dev/null && diff /tmp/e2e-help-bp.txt /tmp/e2e-help-b.txt"
 
 test_end 0
 
