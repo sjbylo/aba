@@ -384,6 +384,8 @@ do
 			cat $ABA_ROOT/others/help-transfer.txt
 		elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
 			cat $ABA_ROOT/others/help-setup.txt
+		elif [ "$_ht" = "import" ]; then
+			cat $ABA_ROOT/others/help-import.txt
 		else
 			# If some other target, then show the main help
 			cat $ABA_ROOT/others/help-aba.txt

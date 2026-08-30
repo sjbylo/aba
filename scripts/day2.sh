@@ -62,6 +62,17 @@ fi
 
 warn_if_cluster_unstable
 
+aba_info "What this 'day2' script does:"
+aba_info "- Ensure the cluster's global pull secret includes mirror registry credentials."
+aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
+aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
+aba_info "- Apply any/all idms/itms resource files under aba/mirror/data/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync or load)."
+aba_info "- For fully disconnected environments, disable online public catalog sources."
+aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
+aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
+aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/ directory."
+echo
+
 # Ensure the cluster's global pull secret includes mirror registry credentials.
 # ABA-installed clusters already have these from install-config, but imported
 # clusters (aba import) or externally installed clusters will not.
@@ -94,17 +105,6 @@ if [ -s "$_mirror_ps" ]; then
 		fi
 	fi
 fi
-
-aba_info "What this 'day2' script does:"
-aba_info "- Ensure the cluster's global pull secret includes mirror registry credentials."
-aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
-aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
-aba_info "- Apply any/all idms/itms resource files under aba/mirror/data/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync or load)."
-aba_info "- For fully disconnected environments, disable online public catalog sources."
-aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
-aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
-aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/ directory."
-echo
 
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
