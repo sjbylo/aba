@@ -54,6 +54,15 @@ One `oc wait` invocation per line. Comments (#) and blank lines are ignored.
 
 - Backward compatible: no numbered subdirs = flat mode (no behavior change)
 - `sort -V` for numeric ordering (handles 1, 2, 10, 20 correctly)
-- `.wait` failures are non-fatal — deployment continues
+- `.wait` failures abort the run (see amendment below)
 - Inner helper `_apply_manifest_list()` extracted for DRY
 - No new configuration needed — structure-as-convention
+
+## Amendment (2026-09-02): gate failures changed to fatal
+
+End-user feedback identified that non-fatal `.wait` gates defeat the purpose of
+waved ordering: if wave 10 installs an operator and wave 20 creates CRs using
+its CRDs, a failed gate means wave 20 fails with confusing "no matches for kind"
+errors — just later and noisier. Since `day2` is idempotent and safe to re-run,
+aborting on a failed gate is the correct behavior — the user fixes the issue and
+re-runs `aba day2`.

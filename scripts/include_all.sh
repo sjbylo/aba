@@ -3582,22 +3582,23 @@ wait_for_all_catalogs() {
 	# Wait: block for catalogs started by download_all_catalogs() above
 	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
 	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
+	CATALOG_ERROR=""
+	local _failed_cat=""
 	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
-		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
+		_failed_cat="redhat-operator"
+	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
+		_failed_cat="certified-operator"
+	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
+		_failed_cat="community-operator"
+	fi
+
+	if [[ -n "$_failed_cat" ]]; then
+		CATALOG_ERROR=$(get_task_error "catalog:${version_short}:${_failed_cat}" 2>/dev/null | tail -8 | tail -c 600)
+		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
-	
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
-		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
-		return 1
-	fi
 	aba_debug "certified-operator catalog ready"
-	
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
-		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
-		return 1
-	fi
 	aba_debug "community-operator catalog ready"
 	
 	# Must use stderr since stdout may be redirected to YAML file
@@ -4523,6 +4524,15 @@ aba_version_fetch_start() {
 	done
 }
 
+# --- ISC helpers ---
+
+# Returns 0 if the ISC file has been manually edited by the user (newer than .created).
+# The .created sentinel is touched after every ABA-managed ISC generation.
+aba_isc_is_user_managed() {
+	local _isc="${1:-mirror/data/imageset-config.yaml}"
+	[[ -f "$_isc" && "$_isc" -nt "${_isc%/*}/.created" ]]
+}
+
 # --- ISC generation ---
 
 # Start ISC generation in background (non-blocking)
@@ -4530,6 +4540,27 @@ aba_version_fetch_start() {
 aba_isconf_generate_start() {
 	run_once -i "aba:isconf:generate" -- \
 		make -sC "${ABA_ROOT:-.}/mirror" isconf
+}
+
+# --- Podman preflight (TUI background check) ---
+
+# Fire a lightweight podman pull in the background to verify the podman stack:
+# podman binary, rootless subuid/subgid, network, DNS.
+# Uses a public image (no pull secret needed) so the check can run early.
+# TTL-cached: re-checks every 2 hours.
+aba_podman_check_start() {
+	run_once -i "aba:preflight:podman" -t 7200 -- \
+		podman pull registry.access.redhat.com/ubi9/ubi-micro:latest
+}
+
+# Wait for the podman preflight result.  Sets PODMAN_CHECK_ERROR on failure.
+# Returns 0=ok, 1=failed.
+aba_podman_check_wait() {
+	if ! run_once -q -w -S -i "aba:preflight:podman" 2>/dev/null; then
+		PODMAN_CHECK_ERROR=$(get_task_error "aba:preflight:podman" 2>/dev/null)
+		return 1
+	fi
+	return 0
 }
 
 # --- Cleanup ---
