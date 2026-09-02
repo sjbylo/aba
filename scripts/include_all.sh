@@ -3818,8 +3818,12 @@ _run_oc_mirror_with_retry() {
 		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
 
 		echo
-		aba_info -n "Attempt ($try/$try_tot)."
-		[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
+		if [ $try -gt 1 ]; then
+			aba_info "Attempt ($try/$try_tot). [timeout=${image_timeout}, parallel=${parallel_images}]"
+		else
+			aba_info -n "Attempt ($try/$try_tot)."
+			[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
+		fi
 		aba_info "Running: $cmd"
 
 		aba_debug "Running oc-mirror $action"
@@ -3861,7 +3865,8 @@ _run_oc_mirror_with_retry() {
 		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
 		aba_warn \
 			"Check the output above for specific errors (auth, network, timeout). Resolve any issues and try again." \
-			"View https://status.redhat.com/ for any current issues or planned maintenance."
+			"View https://status.redhat.com/ for any current issues or planned maintenance." \
+			"Tuning: see ~/.aba/config (image timeout, parallelism) or README.md 'Troubleshooting'."
 		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 
 		return 1
