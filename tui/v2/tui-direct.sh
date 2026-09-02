@@ -587,6 +587,7 @@ _direct_platform() {
 
 # --- Operator selection (wizard step; blocks until catalog indexes are ready) ---
 _direct_operators_step() {
+	_require_podman || { DIALOG_RC="back"; return; }
 	DIALOG_RC=""
 	local _cat_ver="${1:-}"
 
@@ -602,11 +603,14 @@ _direct_operators_step() {
 		"Downloading operator catalog indexes...\n\nPlease wait." 0 0
 
 	if ! tui_ensure_catalogs_ready "$_cat_ver"; then
-		dlg --backtitle "$(ui_backtitle)" \
+		local _cat_err="${CATALOG_ERROR:-Unknown error}"
+		_cat_err="${_cat_err//$'\n'/\\n}"
+		local _dlg_msg="Operator catalog download failed."
+		_dlg_msg="${_dlg_msg}\n\n${_cat_err}"
+		_dlg_msg="${_dlg_msg}\n\n$(_tui_catalog_error_hints)"
+		dlg --backtitle "$(ui_backtitle)" --title "Catalog Download Failed" \
 			--yes-label "Retry" --no-label "Back" \
-			--yesno \
-			"Failed to download operator catalog indexes.\n\nCheck your network and pull secret, then try again." \
-			0 0
+			--yesno "$_dlg_msg" 0 0
 		local _err_rc=$?
 		case "$_err_rc" in
 			0)

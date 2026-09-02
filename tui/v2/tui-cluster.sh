@@ -2051,11 +2051,13 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				case "$_TUI_MODE" in
 					CONNO)
 						_TUI_MODE="DIRECT"
+						aba_podman_check_start
 						tui_log "Advanced: switching to DIRECT mode"
 						return 0
 						;;
 					DIRECT)
 						_TUI_MODE="CONNO"
+						aba_podman_check_start
 						tui_log "Advanced: switching to CONNO mode"
 						return 0
 						;;

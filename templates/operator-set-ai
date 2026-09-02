@@ -25,6 +25,6 @@ kueue-operator
 leader-worker-set
 openshift-custom-metrics-autoscaler-operator
 job-set
-cert-manager
+openshift-cert-manager-operator
 spyre-operator
 

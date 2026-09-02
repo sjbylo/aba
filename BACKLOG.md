@@ -33,6 +33,22 @@ Issues or Pull Requests.
 
 ---
 
+## TUI: Sync/Save confirm dialog shows OP_BASKET count, not actual ISC operator count
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-09-02
+
+**Problem:** The "Sync images to mirror" (and "Save images") confirmation dialog shows the operator count from the in-memory `OP_BASKET` associative array, not from the actual `imageset-config.yaml` file. If the user manually edits the ISC to add operators, the dialog still shows the old basket count (e.g. "Operators (9)" when the ISC has many more).
+
+**Root cause:** `tui-mirror.sh` line ~501: `_op_count=${#OP_BASKET[@]}` counts the TUI's in-memory basket. The basket is populated from `aba.conf`'s `ops=` value at TUI startup and updated by the operator selection UI, but it is never reconciled with manual ISC edits.
+
+**Proposed fix:** When computing the summary for the confirm dialog, also count operators from the ISC file itself (e.g. `awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}'`) and use whichever count is higher, or always use the ISC file count. At minimum, if the ISC exists and its count differs from `OP_BASKET`, note it in the summary (e.g. "Operators (9 in basket, 14 in ISC)").
+
+**Workaround:** The actual sync/save uses the ISC file, not the basket — the operation itself is correct. Only the confirmation dialog count is wrong.
+
+---
+
 ## Validate SSH key files (private vs public)
 
 **Severity:** LOW

@@ -1654,6 +1654,71 @@ tui_install_cluster_gate() {
 	return 1
 }
 
+# Advisory gate for operations that need podman (catalog index downloads).
+# Waits for the background check started at mode entry.  If the previous check
+# failed, retries once (user may have fixed auth/network since mode entry).
+# On failure: warns the user and offers Continue/Retry/Back.
+# "Continue" is remembered for the rest of the session (no repeat prompts).
+# Returns 0=ok (or user chose Continue), 1=back.
+# Session flag: once the user dismisses the podman warning with "Continue",
+# don't prompt again (the registry may be permanently unreachable).
+_PODMAN_WARN_DISMISSED=""
+_require_podman() {
+	[[ "$_PODMAN_WARN_DISMISSED" == "1" ]] && return 0
+
+	# Ensure the check has been started
+	aba_podman_check_start
+
+	# If still running, show "Please wait..." until it completes
+	if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Verifying podman connectivity...\n\nPlease wait." 5 45
+	fi
+
+	# Block until result is available
+	if ! aba_podman_check_wait; then
+		# Failed — retry once (user may have fixed auth/network since mode entry)
+		run_once -r -i "aba:preflight:podman" 2>/dev/null || true
+		aba_podman_check_start
+		if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Retrying podman check...\n\nPlease wait." 5 45
+		fi
+	fi
+
+	if ! aba_podman_check_wait; then
+		local _err="${PODMAN_CHECK_ERROR//$'\n'/\\n}"
+		dlg --backtitle "$(ui_backtitle)" --title "Podman Preflight Warning" \
+			--yes-label "Continue" --no-label "Back" \
+			--extra-button --extra-label "Retry" \
+			--yesno "Podman preflight check failed:\n\n${_err}\n\nThis may not affect your workflow if the required\nregistries are accessible.\n\nContinue anyway?" 0 0
+		local _rc=$?
+		case "$_rc" in
+			0) _PODMAN_WARN_DISMISSED=1; return 0 ;;
+			3)
+				run_once -r -i "aba:preflight:podman" 2>/dev/null || true
+				aba_podman_check_start
+				_require_podman
+				return $?
+				;;
+			*) return 1 ;;
+		esac
+	fi
+}
+
+# Generic troubleshooting hints for catalog download failures.
+_tui_catalog_error_hints() {
+	local _h="To fix, check:"
+	_h="${_h}\n  - Internet connectivity (can you reach registry.redhat.io?)"
+	_h="${_h}\n  - Pull secret is valid and not expired"
+	_h="${_h}\n  - Podman rootless setup (/etc/subuid, /etc/subgid)"
+	_h="${_h}\n  - Sufficient disk space for container storage"
+	_h="${_h}\n  - DNS resolution is working"
+	_h="${_h}\n"
+	_h="${_h}\nAfter fixing, run './install' to clear the cache and retry."
+	echo "$_h"
+}
+
 # Ensure catalog indexes are available for a given OCP version.
 # If shipped/downloaded files already exist in .index/, proceed immediately
 # (downloads still run in background for freshness). Only blocks if no files

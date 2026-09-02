@@ -138,6 +138,7 @@ _tick "Loading modules"
 for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf \
 	aba_mirror_verify_start aba_mirror_verify_refresh aba_mirror_verify_exit \
 	aba_inet_check_start aba_inet_check_wait aba_inet_check_wait_status \
+	aba_podman_check_start aba_podman_check_wait \
 	aba_version_fetch_start aba_isconf_generate_start aba_prefetch_catalogs aba_bg_cleanup; do
 	type -t "$fn" >/dev/null 2>&1 || { echo "FATAL: required function '$fn' not found in include_all.sh"; exit 1; }
 done
@@ -438,6 +439,7 @@ _detect_mode() {
 				rm -f "$ABA_ROOT/.bundle"
 				tui_log "User chose connected mode, removed .bundle"
 				_TUI_MODE="CONNO"
+				aba_podman_check_start
 				return
 			fi
 		else
@@ -453,6 +455,7 @@ _detect_mode() {
 	if check_internet_connectivity "aba" quiet 2>/dev/null; then
 		_TUI_INET="yes"
 		_TUI_MODE="CONNO"
+		aba_podman_check_start
 		tui_log "Mode detected: CONNO (internet available, default to mirror)"
 	else
 		_TUI_INET="no"

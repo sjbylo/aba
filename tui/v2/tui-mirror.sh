@@ -498,18 +498,23 @@ _mirror_op_confirm() {
 			fi
 		fi
 
-		_op_count=${#OP_BASKET[@]}
-		_op_preview=""
-		if [[ $_op_count -gt 0 ]]; then
-			local _shown=() _i=0
-			for _op in "${!OP_BASKET[@]}"; do
-				_shown+=("$_op")
-				_i=$(( _i + 1 ))
-				[[ $_i -ge 5 ]] && break
-			done
-			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-			if [[ $_op_count -gt 5 ]]; then
-				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+		if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
+			_op_count=-1
+			_op_preview=""
+		else
+			_op_count=${#OP_BASKET[@]}
+			_op_preview=""
+			if [[ $_op_count -gt 0 ]]; then
+				local _shown=() _i=0
+				for _op in "${!OP_BASKET[@]}"; do
+					_shown+=("$_op")
+					_i=$(( _i + 1 ))
+					[[ $_i -ge 5 ]] && break
+				done
+				_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+				if [[ $_op_count -gt 5 ]]; then
+					_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+				fi
 			fi
 		fi
 	fi
@@ -519,7 +524,9 @@ _mirror_op_confirm() {
 
 	local _summary=""
 	_summary+="OCP: $_ver ($_chan)\n"
-	if [[ $_op_count -gt 0 ]]; then
+	if [[ $_op_count -eq -1 ]]; then
+		_summary+="Operators: (user-edited ISC)\n"
+	elif [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
 		_summary+="Operators: none\n"
@@ -1120,6 +1127,7 @@ _persist_operator_basket() {
 
 mirror_view_isc() {
 	local readonly="${1:-false}"
+	[[ "$readonly" != "true" ]] && { _require_podman || return 0; }
 	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	tui_log "Action: View ISC (readonly=$readonly)"
 
@@ -1135,8 +1143,19 @@ mirror_view_isc() {
 			make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _gen_rc=$?
 		if [[ $_gen_rc -ne 0 ]]; then
 			tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
-			dlg --backtitle "$(ui_backtitle)" --title "ImageSet Config Error" \
-				--msgbox "$_gen_out" 0 0
+			local _isconf_err="${_gen_out}"
+			if [[ -z "$_isconf_err" ]]; then
+				_isconf_err=$(get_task_error "aba:isconf:generate" 2>/dev/null | tail -8 | tail -c 600)
+			fi
+			if [[ -z "$_isconf_err" && -n "$CATALOG_ERROR" ]]; then
+				_isconf_err="$CATALOG_ERROR"
+			fi
+			_isconf_err="${_isconf_err//$'\n'/\\n}"
+			local _dlg_msg="Operator catalog download failed."
+			_dlg_msg="${_dlg_msg}\n\n${_isconf_err:-Unknown error}"
+			_dlg_msg="${_dlg_msg}\n\n$(_tui_catalog_error_hints)"
+			dlg --backtitle "$(ui_backtitle)" --title "Catalog Download Failed" \
+				--msgbox "$_dlg_msg" 0 0
 			return 0
 		fi
 	fi
@@ -1293,6 +1312,7 @@ mirror_view_isc() {
 # =============================================================================
 
 mirror_select_operators() {
+	_require_podman || return 0
 	local wizard_mode="${1:-}"
 
 	tui_log "Action: Select Operators"
@@ -1303,8 +1323,13 @@ mirror_select_operators() {
 	# Ensure catalogs are available
 	if ! tui_ensure_catalogs_ready "$version_short"; then
 		tui_log "ERROR: Catalog download failed (see log)"
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"Failed to download operator catalog indexes.\n\nCheck your network and pull secret, then try again from the Operators menu.\nSee log: $_TUI_LOG_FILE" 0 0
+		local _cat_err="${CATALOG_ERROR:-Unknown error}"
+		_cat_err="${_cat_err//$'\n'/\\n}"
+		local _dlg_msg="Operator catalog download failed."
+		_dlg_msg="${_dlg_msg}\n\n${_cat_err}"
+		_dlg_msg="${_dlg_msg}\n\n$(_tui_catalog_error_hints)"
+		dlg --backtitle "$(ui_backtitle)" --title "Catalog Download Failed" \
+			--msgbox "$_dlg_msg" 0 0
 		return 1
 	fi
 
@@ -1725,24 +1750,31 @@ mirror_create_bundle() {
 	source <(normalize-aba-conf) 2>/dev/null
 	local _ver="${ocp_version:-unknown}"
 	local _chan="${ocp_channel:-stable}"
-	local _op_count=${#OP_BASKET[@]}
-	local _op_preview=""
-	if [[ $_op_count -gt 0 ]]; then
-		local _shown=()
-		local _i=0
-		for _op in "${!OP_BASKET[@]}"; do
-			_shown+=("$_op")
-			_i=$(( _i + 1 ))
-			[[ $_i -ge 5 ]] && break
-		done
-		_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-		if [[ $_op_count -gt 5 ]]; then
-			_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+	local _op_count _op_preview=""
+
+	if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
+		_op_count=-1
+	else
+		_op_count=${#OP_BASKET[@]}
+		if [[ $_op_count -gt 0 ]]; then
+			local _shown=()
+			local _i=0
+			for _op in "${!OP_BASKET[@]}"; do
+				_shown+=("$_op")
+				_i=$(( _i + 1 ))
+				[[ $_i -ge 5 ]] && break
+			done
+			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+			if [[ $_op_count -gt 5 ]]; then
+				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+			fi
 		fi
 	fi
 
 	local _summary="OCP: $_ver ($_chan)\n"
-	if [[ $_op_count -gt 0 ]]; then
+	if [[ $_op_count -eq -1 ]]; then
+		_summary+="Operators: (user-edited ISC)\n"
+	elif [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
 		_summary+="Operators: none\n"
