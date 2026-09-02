@@ -1795,7 +1795,7 @@ ABA creates a user-level configuration file at `~/.aba/config` during installati
 | `OC_MIRROR_IMAGE_TIMEOUT`        | `40m`        | Per-image timeout for `oc-mirror` — increase for large operators (e.g. RHOAI); see [FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai) |
 | `OC_MIRROR_PARALLEL_IMAGES`      | `8`          | Concurrent images during mirroring                                                                      |
 | `OC_MIRROR_SINCE`                | `2020-01-01` | Date for `--since` during save (ensures self-contained archives)                                        |
-| `OC_MIRROR_FLAGS`                | *(empty)*    | Extra flags for every `oc-mirror` invocation                                                            |
+| `OC_MIRROR_FLAGS`                | *(empty)*    | Extra flags for every `oc-mirror` invocation (e.g. `--remove-signatures=true`)                          |
 | `OC_MIRROR_PIN_CATALOGS`         | `1`          | Pin catalogs by digest (workaround for [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)) |
 
 

@@ -20,6 +20,12 @@ Options:
       --ca-cert <file>                 # Path to an existing registry's root CA certificate.
   -r, --retry [<count>]                # Retry <count> times on oc-mirror error.
 
+Tuning (in ~/.aba/config):
+  OC_MIRROR_IMAGE_TIMEOUT=40m          # Per-image timeout (auto-escalates on retry, up to 90m).
+  OC_MIRROR_PARALLEL_IMAGES=8          # Concurrent image copies (auto-reduces on retry, down to 2).
+  OC_MIRROR_FLAGS=""                   # Extra flags passed to every oc-mirror invocation.
+  See README.md 'Troubleshooting' for more.
+
 Related commands:
   aba [-d mirror] sync [--retry #]     # Copy images from the Internet into the mirror registry (mirror2mirror).
 
