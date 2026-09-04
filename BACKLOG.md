@@ -1438,26 +1438,29 @@ version item above), offer to purge unused images:
 ## Feature: Manage additional images in ISC
 
 **Severity:** MEDIUM — reduces manual YAML editing and ISC regeneration issues
-**Status:** Planned
+**Status:** Planned — design in [ADR-013](devel/adr/013-additional-images-conf.md)
 **Added:** 2026-08-18
+**Updated:** 2026-09-02
 
 **Problem:** The `additionalImages` section in the imageset-config.yaml (ISC)
 is currently just commented-out examples. Users must manually edit the YAML to
 add images like `ose-cli`, `support-tools`, or OpenShift Virtualization
-container disks. Manual edits are error-prone and get overwritten when the ISC
-is regenerated (e.g. after operator changes or upgrade prep).
+container disks. Manual edits trip the `.created` guard and ABA stops managing
+platform/operators.
 
-**Proposed behavior:**
+**Design:** Do not store extras in the ISC or as an `aba.conf` key. Use
+`images.conf` next to `aba.conf` and optional `mirror/images.conf`. Merge
+(union, dedupe). Generator renders `additionalImages` with comments naming
+the source file(s). See ADR-013. Do not implement until that ADR is accepted.
+
+**Proposed behavior (implementation, after ADR accepted):**
 
 ### ABA Core (CLI commands)
 
-- `aba image add <image:tag>` — adds to a tracked list
+- `aba image add <image:tag>` — appends to `images.conf` (flag for mirror file)
 - `aba image remove <image:tag>` — removes from tracked list
-- `aba image list` — shows configured additional images
-- The tracked list is stored persistently (e.g. `templates/additional-images`
-  or a key in `mirror.conf`) and rendered into the ISC `additionalImages:`
-  section automatically during ISC generation, just like operator sets.
-- Images persist across ISC regeneration.
+- `aba image list` — shows merged list (with source)
+- Files are the source of truth; CLI is optional. Users may edit the files.
 
 ### Auto-add images based on operator sets
 
