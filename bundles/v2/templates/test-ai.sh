@@ -1,6 +1,10 @@
 #!/bin/bash -e
 # test-ai.sh -- OpenShift AI (RHODS) operator + DataScienceCluster operand
 
+# See: Chapter 3. Deploy OpenShift AI in a disconnected environment
+# https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/installing_and_uninstalling_openshift_ai_self-managed_in_a_disconnected_environment/deploying-openshift-ai-in-a-disconnected-environment_install
+# https://github.com/red-hat-data-services/rhoai-disconnected-install-helper  =>  rhoai-3\.[0-9]-imagesetconfig.yaml
+
 source "$(dirname "$0")/bundle-test-lib.sh"
 
 OP=rhods-operator
