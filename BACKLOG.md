@@ -1509,7 +1509,8 @@ build pipeline**.
 - `scripts/reg-create-imageset-config.sh`: export image list for Jinja
 - `scripts/aba.sh`: `image add/remove/list` subcommands
 - `scripts/include_all.sh`: image list management functions
-- `templates/additional-images` (new): persistent image list file
+- `images.conf` / `mirror/images.conf` (new): persistent lists; see ADR-013
+- `templates/images.conf` (new): commented examples
 - `bundles/v2/scripts/02-configure-aba-and-imageset.sh`: migrate from
   `uncomment_line` to `aba image add` (step 2)
 - `bundles/bundle-create-test.sh`: same migration (step 2)
@@ -1675,3 +1676,54 @@ overhead (subshell, source scripts, check state files).
 - `scripts/cli-download-all.sh`: verify start mode initiates all tasks
 - `scripts/make-bundle.sh`: ensure early kickoff covers extras
 - `scripts/reg-save.sh`: same
+
+---
+
+## Use FQDN node hostnames in agent-based installs
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-09-04
+
+**Problem:** ABA creates nodes with bare short hostnames (e.g. `mesh1`,
+`master1`) in the agent-config. These short names are not resolvable via
+standard DNS from inside pods. Any in-cluster software that resolves the
+Kubernetes node name (e.g. the SPIRE agent's kubelet workload attestor)
+fails with `lookup mesh1: no such host`.
+
+**Root cause:** The `agent-config.yaml.j2` template sets
+`hostname: {{ cluster_name }}` (SNO) or
+`hostname: {{ prefix }}{{ loop.index }}` (multi-node) — no domain suffix.
+Since the SPIRE agent (ZTIDM) runs without `hostNetwork` and uses
+`dnsPolicy: ClusterFirst`, it resolves node names through CoreDNS, which
+cannot resolve bare short names.
+
+**Proposed fix:**
+1. Append the base domain to node hostnames in all `agent-config*.yaml.j2`
+   templates:
+   - SNO: `hostname: {{ cluster_name }}.{{ domain }}`
+   - Multi-node: `hostname: {{ prefix }}{{ loop.index }}.{{ domain }}`
+2. Add per-node A records to dnsmasq (ABA already knows all node IPs from
+   `cluster.conf` and already manages dnsmasq for API/apps records in
+   `infra-dns.sh`).
+3. Verify the agent-based installer handles FQDN hostnames correctly
+   across SNO, compact, and standard topologies.
+
+**Workaround:** Manually add node hostname records to an upstream DNS
+server (or dnsmasq on bastion) and configure the OpenShift DNS Operator
+to forward to it. See the `ztidm-federation-demo` repo README for
+detailed steps.
+
+**Notes:**
+- This is a breaking change for new clusters only — existing clusters
+  keep their current short hostnames.
+- The `{{ domain }}` variable is already available in the Jinja2
+  templating context (used by `mirror.conf.j2`).
+- IPI and cloud installs already use FQDNs for node names.
+
+**Files likely affected:**
+- `templates/agent-config.yaml.j2`
+- `templates/agent-config-bond.yaml.j2`
+- `templates/agent-config-vlan.yaml.j2`
+- `templates/agent-config-vlan-bond.yaml.j2`
+- `scripts/infra-dns.sh` (add per-node A records)
