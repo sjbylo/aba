@@ -29,6 +29,7 @@ ack-eks-controller                                      AWS Controllers for Kube
 ack-elasticache-controller                              AWS Controllers for Kubernetes - Amazon ElastiCache          alpha
 ack-elbv2-controller                                    AWS Controllers for Kubernetes - Amazon ELB                  alpha
 ack-emrcontainers-controller                            AWS Controllers for Kubernetes - Amazon EMR on EKS           alpha
+ack-emr-controller                                      AWS Controllers for Kubernetes - Amazon EMR                  alpha
 ack-emrserverless-controller                            AWS Controllers for Kubernetes - Amazon EMR Serverless       alpha
 ack-eventbridge-controller                              AWS Controllers for Kubernetes - Amazon EventBridge          alpha
 ack-firehose-controller                                 AWS Controllers for Kubernetes - Amazon Firehose             alpha
@@ -204,6 +205,7 @@ mariadb-operator                                        MariaDB Operator        
 marin3r                                                 MARIN3R                                                      stable
 mercury-operator                                        Mercury Operator                                             1.0.x
 microcks                                                Microcks Operator                                            stable
+mirror-operator                                         The Silvermatic                                              alpha
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-operator                                        MongoDB Operator                                             alpha
 move2kube-operator                                      Konveyor Move2Kube                                           stable

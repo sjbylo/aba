@@ -33,6 +33,7 @@ container-security-operator                             Red Hat Quay Container S
 costmanagement-metrics-operator                         Cost Management Metrics Operator                             stable
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
+deployment-validation-operator                          Deployment Validation Operator                               alpha
 devspaces                                               Red Hat OpenShift Dev Spaces                                 stable
 devworkspace-operator                                   DevWorkspace Operator                                        fast
 dns-operator                                            DNS Operator                                                 stable

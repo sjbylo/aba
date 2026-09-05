@@ -207,7 +207,7 @@ redis-enterprise-operator-cert                          Redis Enterprise Operato
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
 sanstoragecsi-operator-bundle                           NEC Storage M Series CSI Operator                            stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.33
+scaleops-operator                                       ScaleOps                                                     stable-v1.34
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 silicom-sts-operator                                    Silicom STS Operator                                         stable
 smilecdr-operator                                       Smilecdr Operator                                            alpha
@@ -259,3 +259,4 @@ webserver-operator                                      WebServer Operator      
 xcrypt-operator                                         Zettaset XCrypt Operator                                     alpha
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
+zk-operator                                             ZooKeeper Operator                                           stable
