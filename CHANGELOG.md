@@ -1,20 +1,35 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.4...HEAD)
 
-Multi-mirror day2 fixes, import hardening, OSUS ARG_MAX fix
+Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hints
+
+### Added
+
+- **`oc-mirror` tuning hints on failure** — When `oc-mirror` exhausts retries, the failure message now shows the config knobs (`OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, `OC_MIRROR_FLAGS`) and references the README Tuning section. Retry output also shows the escalated timeout and parallelism values. (Suggested by [@eanylin](https://github.com/eanylin).)
+- **`aba mirror --help` tuning section** — The mirror help output now includes a Tuning section documenting `OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, and `OC_MIRROR_FLAGS`.
+- **ISC user-managed detection** — New `aba_isc_is_user_managed()` core function detects when the ImageSet Config has been hand-edited (newer than the `.created` sentinel). Sync/save/bundle confirm dialogs show "(user-edited ISC)" when applicable.
 
 ### Changed
 
 - **Day-2 summary banner prints before actions** — The "What this day2 script does" overview now appears before the first step executes, not after the pull-secret injection.
 - **`aba import --help` routed to dedicated help file** — `aba import -h` and `aba --help import` now display `help-import.txt` instead of falling through to generic help.
+- **Podman preflight redesigned** — Removed the startup podman check (Bug #961). Now fires after internet is confirmed at mode entry, with 2-hour TTL, using a public image (`registry.access.redhat.com`, no auth needed). Shows advisory warning with Continue/Retry/Back and session-level dismissal instead of hard-blocking.
+- **Removed unnecessary podman gates** — `mirror_save`, `mirror_sync`, and `prepare_upgrade` no longer call `_require_podman` (they use `oc-mirror`, not podman directly).
+- **ADR-011 amendment** — Day-2 wait gate failures changed from non-fatal to fatal, based on end-user feedback.
+- **Fix operator-set-ai** — Corrected `cert-manager` to `openshift-cert-manager-operator` in the AI operator set.
 
 ### Fixed
 
+- **Fix podman gate blocking ISC view in DISCO mode** — Skip podman check in `mirror_view_isc` when `readonly=true` (Bug #960).
 - **Fix multi-mirror day2 CA trust overwrite** — When a cluster already had a `registry-config` configmap from another mirror (e.g. OVE installer), `aba day2` would overwrite it instead of merging. Now uses `oc patch` to add the new CA key alongside existing entries.
 - **Fix multi-mirror CatalogSource naming** — `aba day2` now detects existing CatalogSources from other registries and suffixes ABA's CatalogSources with the mirror hostname to avoid collisions.
 - **Fix multi-mirror IDMS/ITMS name collisions** — When an existing IDMS or ITMS with the same name serves a different registry, ABA renames its resource (appending `-<hostname>`) instead of overwriting.
 - **Fix day2-osus `Argument list too long`** — Large CA bundles (140+ certs from OVE installer) exceeded `ARG_MAX` when passed on the command line. Now uses `oc patch --patch-file` with a temporary file.
 - **Fix day2-osus hardcoded CatalogSource name** — OSUS subscription now resolves the CatalogSource from `packagemanifests` instead of hardcoding `redhat-operators`, fixing multi-mirror clusters where ABA's catalog is suffixed.
 - **Harden `aba import`** — Abort if cluster state dir already exists (use `--force` to override); create `rendezvousIP` so `aba ssh` works on imported clusters; show clear message when kubeadmin password is unavailable.
+
+### Community
+
+- Thanks to [@eanylin](https://github.com/eanylin) (Anthony Lin) for suggesting the `oc-mirror` tuning hints.
 
 ---
 
