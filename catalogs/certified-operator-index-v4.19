@@ -142,7 +142,7 @@ rbln-npu-operator                                       RBLN operator           
 redis-enterprise-operator-cert                          Redis Enterprise Operator                                    production
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.33
+scaleops-operator                                       ScaleOps                                                     stable-v1.34
 scylladb-operator                                       ScyllaDB Operator                                            alpha
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 simplyblock-operator                                    Simplyblock Operator                                         alpha
@@ -191,3 +191,4 @@ wave                                                    Wave                    
 webserver-operator                                      WebServer Operator                                           stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
+zk-operator                                             ZooKeeper Operator                                           stable

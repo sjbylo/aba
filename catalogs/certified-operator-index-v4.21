@@ -10,6 +10,7 @@ anzounstructured-operator                               Altair Graph Studio Unst
 apelocal-csi                                            ApeLocal CSI Driver                                          stable
 appdynamics-operator                                    AppDynamics Operator for Kubernetes                          alpha
 appian-operator                                         Appian operator                                              alpha
+appsentinels-sslsniffer-operator                        AppSentinels SSL Sniffer                                     alpha
 aqua-operator-certified                                 Aqua Security Operator                                       2022.4
 axera-operator                                          Axera Microsegmentation & NDR                                alpha
 cass-operator                                           DataStax Kubernetes Operator for Apache Cassandra            stable
@@ -59,6 +60,7 @@ hibernation-operator                                    Hibernation Operator    
 hnas-csi-operator                                       Hitachi NAS CSI Driver Operator                              stable
 hpe-csi-operator                                        HPE CSI Operator for OpenShift                               stable
 hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric CSI Operator for Kubernetes          stable
+hpeoneview-operator                                     Hpeoneview Operator                                          alpha
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 hulft                                                   HULFT10 for Container Platform                               stable
 iax-webhook-router                                      ITRS Analytics Webhook Router                                stable
@@ -154,7 +156,7 @@ sumologic-kubernetes-collection-helm-operator           Sumo Logic Kubernetes Co
 synaxg-operator                                         SynaXG vDU card 102X Operator                                alpha
 t8c-certified                                           Turbonomic Platform Operator                                 stable
 t8c-tsc-client-certified                                Turbonomic Secure Connect Client                             stable
-tawon-operator                                          Tawon                                                        alpha
+tawon-operator                                          Tawon                                                        candidate-v3
 template-operator                                       Template Operator                                            release-0.1
 tenant-operator                                         Multi Tenant Operator                                        release-1.9
 tigera-operator                                         Tigera Operator v1.38                                        release-v1.42
@@ -169,3 +171,4 @@ visionone-containersecurity                             TrendAI Vision One Conta
 wave                                                    Wave                                                         stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
+zk-operator                                             ZooKeeper Operator                                           stable

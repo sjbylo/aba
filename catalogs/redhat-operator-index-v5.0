@@ -12,13 +12,16 @@ apicurio-registry-3                                     Red Hat build of Apicuri
 authorino-operator                                      Red Hat - Authorino Operator                                 stable
 bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable
 bamoe-kogito-operator                                   IBM BAMOE Kogito Operator                                    8.x
+bgp-cloud-connector                                     BGP cloud connector                                          alpha
 businessautomation-operator                             Business Automation                                          stable
 cincinnati-operator                                     OpenShift Update Service                                     v1
 cli-manager                                             CLI Manager                                                  tech-preview
+cluster-observability-operator                          Cluster Observability Operator                               stable
 compliance-operator                                     Compliance Operator                                          stable
 container-security-operator                             Red Hat Quay Container Security Operator                     stable-3.17
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
+devspaces                                               Red Hat OpenShift Dev Spaces                                 stable
 devworkspace-operator                                   DevWorkspace Operator                                        fast
 dpu-network-operator                                    DPU Network Operator                                         stable
 eap                                                     JBoss EAP                                                    stable
@@ -29,6 +32,7 @@ kiali-ossm                                              Kiali Operator          
 kubevirt-hyperconverged                                 OpenShift Virtualization                                     stable
 kueue-operator                                          Red Hat build of Kueue                                       stable-v1.4
 leader-worker-set                                       Red Hat build of Leader Worker Set                           stable-v1.0
+lifecycle-agent                                         Lifecycle Agent                                              stable
 logic-operator                                          OpenShift Serverless Logic Operator                          stable
 logic-operator-rhel8                                    OpenShift Serverless Logic Operator (Alpha)                  alpha
 machine-deletion-remediation                            Machine Deletion Remediation operator                        stable
@@ -39,6 +43,7 @@ netobserv-operator                                      Network Observability   
 node-healthcheck-operator                               Node Health Check Operator                                   stable
 node-maintenance-operator                               Node Maintenance Operator                                    stable
 node-observability-operator                             Node Observability Operator                                  alpha
+numaresources-operator                                  NUMA Resources Operator                                      4.22
 openshift-cert-manager-operator                         cert-manager Operator for Red Hat OpenShift                  stable-v1
 openshift-custom-metrics-autoscaler-operator            Custom Metrics Autoscaler                                    stable
 openshift-external-secrets-operator                     External Secrets Operator for Red Hat OpenShift              stable-v1

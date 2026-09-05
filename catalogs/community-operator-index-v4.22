@@ -29,6 +29,7 @@ ack-eks-controller                                      AWS Controllers for Kube
 ack-elasticache-controller                              AWS Controllers for Kubernetes - Amazon ElastiCache          alpha
 ack-elbv2-controller                                    AWS Controllers for Kubernetes - Amazon ELB                  alpha
 ack-emrcontainers-controller                            AWS Controllers for Kubernetes - Amazon EMR on EKS           alpha
+ack-emr-controller                                      AWS Controllers for Kubernetes - Amazon EMR                  alpha
 ack-emrserverless-controller                            AWS Controllers for Kubernetes - Amazon EMR Serverless       alpha
 ack-eventbridge-controller                              AWS Controllers for Kubernetes - Amazon EventBridge          alpha
 ack-firehose-controller                                 AWS Controllers for Kubernetes - Amazon Firehose             alpha
@@ -182,6 +183,7 @@ konveyor-operator                                       Konveyor Operator       
 korrel8r                                                Korrel8r                                                     stable
 kuadrant-operator                                       Kuadrant Operator                                            stable
 kubecost                                                Kubecost                                                     alpha
+kube-green                                              kube-green                                                   alpha
 kubernaut-operator                                      Kubernaut Operator                                           candidate-v1
 kubernetes-imagepuller-operator                         Kubernetes Image Puller Operator                             stable
 l5-operator                                             L5 Operator                                                  alpha
@@ -199,6 +201,7 @@ mariadb-operator                                        MariaDB Operator        
 marin3r                                                 MARIN3R                                                      stable
 mercury-operator                                        Mercury Operator                                             1.0.x
 microcks                                                Microcks Operator                                            stable
+mirror-operator                                         The Silvermatic                                              alpha
 mongodb-atlas-kubernetes                                MongoDB Atlas Operator                                       stable
 mongodb-operator                                        MongoDB Operator                                             alpha
 move2kube-operator                                      Konveyor Move2Kube                                           stable
@@ -224,6 +227,7 @@ oci-ccm-operator                                        oci-ccm-operator        
 ocp-kea-dhcp                                            Kea DHCP Operator                                            alpha
 odoo-operator                                           Odoo Operator                                                alpha
 openclaw-operator                                       OpenClaw Operator                                            stable
+opendatahub-operator                                    Open Data Hub Operator                                       fast-3
 openebs                                                 OpenEBS                                                      alpha
 openshift-integration-operator                          OpenShift Integration Operator                               candidate-v0
 openshift-node-upgrade-mutex-operator                   OpenShift Node Upgrade Mutex Operator                        alpha
