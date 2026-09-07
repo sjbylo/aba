@@ -148,7 +148,7 @@ ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat
 - [Custom config files](#customizing-install-configuration) (ImageSetConfiguration, agent-based config)
 - [Custom manifests embedded in the boot ISO](#embedding-custom-manifests-day-0) (e.g. MachineConfig)
 - Automatic handling of disconnected-environment pitfalls (catalog sources, release signatures)
-- Full cluster lifecycle management: install, configure, delete VMs and clean up
+- Full cluster lifecycle management: install, configure, upgrade, delete (VMs) and clean up
 
 All ABA commands are designed to be idempotent. If something goes wrong, fix it and run the command again.
 
@@ -167,8 +167,8 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 
 **Linux OS Requirements:**
 
-- **Workstation**: RHEL 8, 9, or 10, CentOS Stream 8, 9, or 10, or Fedora.
-- **Bastion**: RHEL 8, 9, or 10 for disconnected OpenShift installation.
+- **Workstation** (connected bastion in diagram): RHEL 8, 9, or 10, CentOS Stream 8, 9, or 10, or Fedora.
+- **Bastion** (internal bastion in diagram): RHEL 8, 9, or 10 for disconnected OpenShift installation.
 
 ## Choose Your Path
 

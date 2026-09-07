@@ -51,59 +51,109 @@ fi
 
 # --- Below runs only when verify_conf=all ---
 
-# Dig DNS to validate records match expected IPs
-aba_debug "Running: dig +time=8 +short $cl_api_domain"
-_dig_err=""
-actual_ip_of_api=$(dig +time=8 +short $cl_api_domain 2>"$ABA_TMP/dig-api.$$") || true
-[ -s "$ABA_TMP/dig-api.$$" ] && { _dig_err=$(cat "$ABA_TMP/dig-api.$$"); aba_debug "dig api stderr: $_dig_err"; }
-rm -f "$ABA_TMP/dig-api.$$"
-aba_debug "dig result for $cl_api_domain: '${actual_ip_of_api:-<empty>}'"
+# Helper: resolve a hostname via the cluster's DNS servers (dns_servers from aba.conf).
+# Returns the IPv4 address on stdout, or empty if no cluster DNS server could resolve it.
+# Sets _vc_cluster_dns_used to the server that resolved, or empty.
+_vc_cluster_dns_used=""
+_vc_resolve_via_cluster_dns() {
+	local host="$1"
+	local _ipv4_re='([0-9]{1,3}\.){3}[0-9]{1,3}'
+	_vc_cluster_dns_used=""
+	[ -z "$dns_servers" ] && return
+	local servers
+	servers=$(echo "$dns_servers" | tr ',' ' ')
+	local ns ns_ip
+	for ns in $servers; do
+		ns_ip=$(dig +short +time=5 +tries=1 "@$ns" "$host" 2>/dev/null \
+			| grep -v '^;;' | grep -Eo "$_ipv4_re" | head -1) || true
+		if [ -n "$ns_ip" ]; then
+			_vc_cluster_dns_used="$ns"
+			echo "$ns_ip"
+			return
+		fi
+	done
+}
 
+# _vc_check_dns: Two-step DNS validation for a hostname against an expected IP.
+# Step 1: bastion's own DNS (warn on fail — bastion may not have cluster DNS records)
+# Step 2: cluster DNS from dns_servers (abort on fail — this is what nodes will use)
+_vc_skip_hint="To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
+_vc_check_dns() {
+	local fqdn="$1" expected_ip="$2" label="$3"
+
+	# Step 1: bastion's own DNS
+	local _ipv4_re='([0-9]{1,3}\.){3}[0-9]{1,3}'
+	aba_debug "Running: dig +time=8 +short $fqdn (bastion DNS)"
+	local bastion_ip
+	bastion_ip=$(dig +time=8 +short "$fqdn" 2>/dev/null \
+		| grep -v '^;;' | grep -Eo "$_ipv4_re" | head -1) || true
+	aba_debug "Bastion DNS result for $fqdn: '${bastion_ip:-<empty>}'"
+
+	if [ "$bastion_ip" = "$expected_ip" ]; then
+		aba_success "DNS record for $label ($fqdn) exists: $bastion_ip"
+		return
+	fi
+
+	# Bastion DNS failed — warn (bastion may not have cluster DNS records)
+	aba_warn "$fqdn: bastion DNS returned '${bastion_ip:-<empty>}' (expected $expected_ip)"
+
+	# Step 2: cluster DNS (if configured and different from bastion's result)
+	local cluster_ip
+	cluster_ip=$(_vc_resolve_via_cluster_dns "$fqdn")
+
+	if [ "$cluster_ip" = "$expected_ip" ]; then
+		aba_success "DNS record for $label ($fqdn) resolved via cluster DNS ($dns_servers): $cluster_ip"
+		return
+	fi
+
+	if [ -n "$cluster_ip" ]; then
+		# Cluster DNS returned a different IP
+		aba_abort "DNS record: $fqdn resolves to $cluster_ip via cluster DNS ($dns_servers), expected $expected_ip!" \
+			"$_vc_skip_hint"
+	fi
+
+	# Cluster DNS also failed — check if cluster DNS is even reachable
+	if [ -n "$dns_servers" ]; then
+		local servers ns _reachable=""
+		servers=$(echo "$dns_servers" | tr ',' ' ')
+		for ns in $servers; do
+			if dig +time=3 +tries=1 "@$ns" version.bind chaos txt >/dev/null 2>&1; then
+				_reachable=1
+				break
+			fi
+		done
+		if [ -z "$_reachable" ]; then
+			aba_warn "$fqdn: cluster DNS ($dns_servers) not reachable from this host — cannot verify"
+			return
+		fi
+	fi
+
+	# Cluster DNS is reachable but can't resolve the hostname
+	aba_abort "DNS record: $fqdn does not resolve via cluster DNS ($dns_servers), expected $expected_ip!" \
+		"Neither bastion DNS nor cluster DNS could resolve this hostname." \
+		"$_vc_skip_hint"
+}
+
+# Validate API and ingress DNS records
 _apps_domain="$RANDOM.apps.$cl_domain"
-aba_debug "Running: dig +time=8 +short $_apps_domain"
-actual_ip_of_ingress=$(dig +time=8 +short $_apps_domain 2>"$ABA_TMP/dig-apps.$$") || true
-[ -s "$ABA_TMP/dig-apps.$$" ] && { _dig_err=$(cat "$ABA_TMP/dig-apps.$$"); aba_debug "dig apps stderr: $_dig_err"; }
-rm -f "$ABA_TMP/dig-apps.$$"
-aba_debug "dig result for $_apps_domain: '${actual_ip_of_ingress:-<empty>}'"
-
-[ ! "$actual_ip_of_api" ] && actual_ip_of_api="<empty>"
-[ ! "$actual_ip_of_ingress" ] && actual_ip_of_ingress="<empty>"
 
 if [ ! "$SNO" ]; then
-	# Non-SNO: DNS must resolve to the configured VIPs
-	[ "$actual_ip_of_api" != "$api_vip" ] && \
-		aba_abort "DNS record: $cl_api_domain does not resolve to $api_vip, it resolves to $actual_ip_of_api!" \
-			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
-
-	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
-
-	[ "$actual_ip_of_ingress" != "$ingress_vip" ] && \
-		aba_abort "DNS record: $cl_ingress_domain does not resolve to $ingress_vip, it resolves to $actual_ip_of_ingress!" \
-			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
-
-	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	_vc_check_dns "$cl_api_domain" "$api_vip" "OpenShift api"
+	_vc_check_dns "$_apps_domain" "$ingress_vip" "apps ingress"
 else
-	# SNO: DNS must resolve to the rendezvous_ip (starting_ip)
-	[ "$actual_ip_of_api" != "$rendezvous_ip" ] && \
-		aba_abort "DNS record $cl_api_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_api!" \
-			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
-
-	aba_info "DNS record for OpenShift api ($cl_api_domain) exists: $actual_ip_of_api"
-
-	[ "$actual_ip_of_ingress" != "$rendezvous_ip" ] && \
-		aba_abort "DNS record $cl_ingress_domain does not resolve to the rendezvous ip: $rendezvous_ip, it resolves to $actual_ip_of_ingress!" \
-			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
-
-	aba_info "DNS record for apps ingress ($cl_ingress_domain) exists: $actual_ip_of_ingress"
+	_vc_check_dns "$cl_api_domain" "$rendezvous_ip" "OpenShift api"
+	_vc_check_dns "$_apps_domain" "$rendezvous_ip" "apps ingress"
 fi
 
 # Wildcard shadow detection: verify that api.X and *.apps.X are distinct
 # records, not just caught by a parent wildcard like *.X
 _wc_probe="aba-dns-wildcard-check.$cl_domain"
-aba_debug "Running: dig +time=8 +short $_wc_probe (wildcard shadow check)"
-_wc_ip=$(dig +time=8 +short "$_wc_probe" 2>"$ABA_TMP/dig-wc.$$") || true
-[ -s "$ABA_TMP/dig-wc.$$" ] && aba_debug "dig wildcard stderr: $(cat "$ABA_TMP/dig-wc.$$")"
-rm -f "$ABA_TMP/dig-wc.$$"
+aba_debug "Running wildcard shadow check for $_wc_probe"
+
+# Check via bastion DNS first, then cluster DNS
+_wc_ip=$(dig +time=8 +short "$_wc_probe" 2>/dev/null \
+	| grep -v '^;;' | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1) || true
+[ -z "$_wc_ip" ] && _wc_ip=$(_vc_resolve_via_cluster_dns "$_wc_probe")
 
 if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 	aba_abort \
@@ -111,7 +161,7 @@ if [ "$_wc_ip" ] && echo "$_wc_ip" | grep -q -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$';
 		"A catch-all record like *.$cl_domain exists -- OpenShift requires explicit records." \
 		"Create distinct DNS records for:" \
 		"  api.$cl_domain  and  *.apps.$cl_domain" \
-		"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
+		"$_vc_skip_hint"
 fi
 
 aba_success "Cluster configuration is valid"

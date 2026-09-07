@@ -59,41 +59,80 @@ reg_load_config() {
 }
 
 # --- reg_check_fqdn ----------------------------------------------------------
-# Verify reg_host resolves to an IP address. Uses dig with getent as fallback.
-# Sets: fqdn_ip (the resolved IP)
+# Verify reg_host resolves to an IPv4 address via DNS (dig).
+# ABA only uses DNS resolution — not local system lookups (getent/myhostname)
+# — because cluster nodes resolve the registry hostname via DNS.
+# Sets: fqdn_ip (the resolved IPv4 address)
 # Also adjusts no_proxy if a proxy is configured.
-# Aborts with a clear error if the hostname cannot be resolved.
 reg_check_fqdn() {
-	aba_debug "Verifying resolution of mirror hostname: $reg_host"
+	aba_debug "Verifying DNS resolution of mirror hostname: $reg_host"
 
-	# Primary: dig (most common on RHEL systems)
+	install_rpms bind-utils   # provides dig
+
+	local _ipv4_re='([0-9]{1,3}\.){3}[0-9]{1,3}'
+
+	# Try default system DNS resolution (all nameservers in resolv.conf)
 	aba_debug "Running: dig +short $reg_host"
-	local _dig_err=""
-	fqdn_ip=$(dig +short "$reg_host" 2>"$ABA_TMP/dig-reg.$$" \
-		| grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1) || true
-	[ -s "$ABA_TMP/dig-reg.$$" ] && { _dig_err=$(cat "$ABA_TMP/dig-reg.$$"); aba_debug "dig stderr: $_dig_err"; }
-	rm -f "$ABA_TMP/dig-reg.$$"
+	fqdn_ip=$(dig +short "$reg_host" 2>/dev/null \
+		| grep -Eo "$_ipv4_re" | head -1) || true
 	aba_debug "dig result for $reg_host: '${fqdn_ip:-<empty>}'"
 
-	# Fallback: getent (works when dig is unavailable, e.g. minimal installs)
-	if [ ! "$fqdn_ip" ]; then
-		aba_debug "dig returned empty, falling back to: getent hosts $reg_host"
-		fqdn_ip=$(getent hosts "$reg_host" 2>/dev/null \
-			| awk '{print $1}' | head -1) || true
-		aba_debug "getent result for $reg_host: '${fqdn_ip:-<empty>}'"
+	if [ "$fqdn_ip" ]; then
+		# Add registry host to no_proxy when a proxy is in use
+		if [ "$http_proxy" ]; then export no_proxy="${no_proxy:+$no_proxy,}$reg_host"; fi
+		return
 	fi
 
-	if [ ! "$fqdn_ip" ]; then
-		aba_abort \
-			"Hostname '$reg_host' does not resolve to an IP address!" \
-			"Commands tried: dig $reg_host +short; getent hosts $reg_host" \
-			"The registry requires a valid DNS record (FQDN)." \
-			"OpenShift itself also requires DNS records for API and App ingress." \
-			"Please add/correct your DNS entries or update $PWD/mirror.conf and try again."
+	# dig failed — diagnose by querying each nameserver individually
+	local ns_list ns_results="" ns_found=""
+	ns_list=$(grep '^nameserver' /etc/resolv.conf 2>/dev/null \
+		| awk '{print $2}') || true
+
+	aba_info "DNS lookup for '$reg_host' returned no result. Checking each nameserver ..."
+	local ns ns_ip ns_status
+	for ns in $ns_list; do
+		# Query with verbose output to distinguish NOERROR/NXDOMAIN/timeout
+		ns_ip=$(dig +short +time=5 +tries=1 "@$ns" "$reg_host" 2>/dev/null \
+			| grep -Eo "$_ipv4_re" | head -1) || true
+		if [ -n "$ns_ip" ]; then
+			ns_results="${ns_results}${ns_results:+, }$ns -> $ns_ip"
+			[ -z "$ns_found" ] && ns_found="$ns_ip"
+			aba_info "  $ns  ->  $ns_ip"
+		else
+			ns_status=$(dig +time=5 +tries=1 "@$ns" "$reg_host" 2>/dev/null \
+				| grep -o 'status: [A-Z]*' | head -1) || true
+			ns_status="${ns_status#status: }"
+			case "$ns_status" in
+				NOERROR)  ns_results="${ns_results}${ns_results:+, }$ns -> no record"
+				          aba_info "  $ns  ->  no record (NOERROR, no A record)" ;;
+				NXDOMAIN) ns_results="${ns_results}${ns_results:+, }$ns -> domain not found"
+				          aba_info "  $ns  ->  domain not found (NXDOMAIN)" ;;
+				REFUSED)  ns_results="${ns_results}${ns_results:+, }$ns -> refused"
+				          aba_info "  $ns  ->  query refused" ;;
+				*)        ns_results="${ns_results}${ns_results:+, }$ns -> ${ns_status:-timed out}"
+				          aba_info "  $ns  ->  ${ns_status:-timed out / unreachable}" ;;
+			esac
+		fi
+	done
+
+	if [ -n "$ns_found" ]; then
+		fqdn_ip="$ns_found"
+		aba_warn \
+			"'$reg_host' not resolved by the first nameserver in /etc/resolv.conf." \
+			"Resolved to $fqdn_ip after checking all nameservers:" \
+			"$ns_results"
+		if [ "$http_proxy" ]; then export no_proxy="${no_proxy:+$no_proxy,}$reg_host"; fi
+		return
 	fi
 
-	# Add registry host to no_proxy when a proxy is in use
-	if [ "$http_proxy" ]; then export no_proxy="${no_proxy:+$no_proxy,}$reg_host"; fi
+	# No nameserver returned an IPv4 address
+	aba_abort \
+		"Hostname '$reg_host' does not resolve to an IPv4 address via DNS!" \
+		"Nameserver results: ${ns_results:-no nameservers found in /etc/resolv.conf}" \
+		"The registry hostname must be resolvable via DNS — cluster nodes depend on it." \
+		"OpenShift also requires DNS records for API and App ingress." \
+		"Please add an A record for '$reg_host' in your DNS server and verify with:" \
+		"  dig $reg_host +short"
 }
 
 # --- reg_detect_existing ------------------------------------------------------
