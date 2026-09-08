@@ -4555,7 +4555,7 @@ aba_isconf_generate_start() {
 # TTL-cached: re-checks every 2 hours.
 aba_podman_check_start() {
 	run_once -i "aba:preflight:podman" -t 7200 -- \
-		podman pull registry.access.redhat.com/ubi9/ubi-micro:latest
+		bash -c 'podman rmi -f quay.io/podman/hello &>/dev/null; podman pull quay.io/podman/hello'
 }
 
 # Wait for the podman preflight result.  Sets PODMAN_CHECK_ERROR on failure.
