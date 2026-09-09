@@ -1727,3 +1727,46 @@ detailed steps.
 - `templates/agent-config-vlan.yaml.j2`
 - `templates/agent-config-vlan-bond.yaml.j2`
 - `scripts/infra-dns.sh` (add per-node A records)
+
+---
+
+## Breaking change: Rename CLI commands for clarity
+
+**Severity:** LOW — cosmetic, but improves discoverability
+**Status:** Planned for v1.3.0 or v2.0
+**Added:** 2026-09-09
+
+**Problem:** Current naming is unintuitive:
+- `aba shell` doesn't give you a shell — it prints `export KUBECONFIG=...`
+- `aba login` doesn't log you in — it prints an `oc login` command
+- `aba terminal` (new) is the only one that does what the name implies
+
+**Proposed rename:**
+
+| Current | New | What it does |
+|---------|-----|-------------|
+| `aba shell` | `aba kc` (or `aba kubeconfig`) | Source-able: `. <(aba kc)` |
+| `aba login` | `aba env` | Source-able: `. <(aba env)` |
+| `aba terminal` | `aba login` | Interactive login + bash shell |
+
+**Implementation plan:**
+1. Add new names as primary commands
+2. Keep old names as silent aliases for one release cycle (deprecated but working)
+3. Log a deprecation notice on first use of old names
+4. Remove old aliases in the following release
+
+**Blast radius (all need updating):**
+- `scripts/aba.sh` (CLI routing)
+- `scripts/show-cluster-login.sh`, `scripts/cluster-terminal.sh`
+- `scripts/include_all.sh` (`show_cluster_summary` hints)
+- `scripts/cluster-import.sh` (available commands)
+- `scripts/cluster-upgrade.sh`, `scripts/day2.sh` (eval login/shell)
+- `tui/v2/tui-cluster.sh` (login terminal)
+- `others/help-*.txt` (all help files)
+- `README.md`, `CHANGELOG.md`
+- `test/e2e/suites/*` (all suites using `. <(aba shell)` or `eval "$(aba login)"`)
+- `test/func/*`
+- User-facing docs and examples
+
+**Risk:** HIGH churn, must be a dedicated commit with full e2e verification.
+Do NOT mix with other changes.

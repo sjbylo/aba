@@ -74,7 +74,7 @@ aba_debug rendezvous_ip: $starting_ip
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" ] && [ $hostPrefix -eq 23 ]; then
-	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers"
+	aba_info "Adjusting hostPrefix from 23 to 22 for bare-metal (allows more pods per node on large servers)"
 	export hostPrefix=22
 fi
 

@@ -63,7 +63,11 @@ logfile=.shutdown.log
 aba_info Start of shutdown $(date) > $logfile
 
 # Load cluster config (provides CP_IP_ADDRESSES, WKR_IP_ADDR, ssh_key_file)
-eval "$(scripts/cluster-config.sh)" 2>/dev/null || true
+# For imported clusters, install-config.yaml/agent-config.yaml don't exist —
+# fall back to discovering node IPs from the live cluster API.
+if [ -s install-config.yaml ] && [ -s agent-config.yaml ]; then
+	eval "$(scripts/cluster-config.sh)" 2>/dev/null || true
+fi
 
 # --- Certificate expiry warnings ---
 # Show the soonest-expiring cert so the user knows the safe shutdown window.
@@ -149,14 +153,25 @@ fi
 
 aba_info "Shutting down all nodes ..." 2>&1 | tee -a $logfile
 
-# Build a map of node name -> IP for SSH (node names and IPs come from cluster-config.sh)
+# Build a map of node name -> IP for SSH.
+# Prefer cluster-config.sh data (from install-config/agent-config), fall back
+# to querying the live cluster API (needed for imported clusters).
 declare -A _node_ip=()
-_all_ips="$CP_IP_ADDRESSES $WKR_IP_ADDR"
 _all_nodes=$($OC get nodes -o jsonpath='{.items[*].metadata.name}')
+_all_ips="${CP_IP_ADDRESSES:-} ${WKR_IP_ADDR:-}"
+_all_ips=$(echo "$_all_ips" | xargs)  # trim whitespace
+
+if [ -z "$_all_ips" ]; then
+	# Imported cluster — get node IPs from the cluster API
+	_all_ips=$($OC get nodes -o jsonpath='{range .items[*]}{.status.addresses[?(@.type=="InternalIP")].address} {end}' 2>/dev/null) || true
+	_all_ips=$(echo "$_all_ips" | xargs)
+	aba_debug "Node IPs from cluster API: $_all_ips"
+fi
+
 aba_debug "Node names: $_all_nodes"
 aba_debug "Node IPs: $_all_ips"
 
-# Pair each node name with its IP (same order from cluster-config.sh)
+# Pair each node name with its IP
 _idx=0
 _ip_arr=($_all_ips)
 for _n in $_all_nodes; do
@@ -272,6 +287,9 @@ _shutdown_all_nodes_off() {
 }
 
 # Only wait for power-off if platform supports it (VMware or KVM)
+if [ "$wait" ] && ! { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
+	aba_info "--wait: bare-metal has no hypervisor to query power state — cannot wait for power-off"
+fi
 if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	_wait_mins=40
 	_wait_timeout=$(( 60 * _wait_mins ))

@@ -354,14 +354,7 @@ if [ ! "$upgrade_already_running" ]; then
 		if [ -n "$_early_avail" ] || [ -n "$_early_cond" ]; then
 			if ! echo "$_early_avail" | grep -qxF "$target_ver" && \
 			   ! echo "$_early_cond" | grep -qxF "$target_ver"; then
-				_all_avail=$(echo "$_early_avail" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
-				_all_cond=$(echo "$_early_cond" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
-				aba_abort "Version $target_ver is not an available upgrade from $current_ver (checked OSUS graph)." \
-					${_all_avail:+"Available upgrades: $_all_avail"} \
-					${_all_cond:+"Conditional upgrades: $_all_cond"} \
-					"${_all_avail:- No upgrades found — the version may require intermediate steps.}" \
-					"Check the upgrade path: oc adm upgrade --include-not-recommended" \
-					"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+				aba_info "Version $target_ver not yet in OSUS graph — will retry after day2 (graph data may be stale)"
 			fi
 		fi
 	fi
@@ -462,8 +455,8 @@ if [ ! "$upgrade_already_running" ]; then
 	_channel_changed=""
 	if [ "$_current_channel" != "$_required_channel" ]; then
 		aba_info "Setting upgrade channel: ${_current_channel:-<unset>} → $_required_channel"
-		aba_debug "Running: oc adm upgrade channel $_required_channel"
-		oc adm upgrade channel "$_required_channel"
+		aba_debug "Running: oc adm upgrade channel --allow-explicit-channel $_required_channel"
+		oc adm upgrade channel --allow-explicit-channel "$_required_channel"
 		_channel_changed=1
 	fi
 
@@ -485,7 +478,7 @@ if [ ! "$upgrade_already_running" ]; then
 
 	if [ "$osus_upstream" ]; then
 		if [ "$_channel_changed" ]; then
-			aba_wait_show "Waiting for $target_ver to appear in graph after channel change" 5 60 _osus_graph_has_target && _graph_ok=1 || true
+			aba_wait_show "Waiting for $target_ver to appear in graph after channel change" 5 300 _osus_graph_has_target && _graph_ok=1 || true
 		else
 			_osus_graph_has_target && _graph_ok=1
 		fi
@@ -518,7 +511,7 @@ if [ ! "$upgrade_already_running" ]; then
 
 	# Wait for OSUS graph to have any data, then check for target immediately
 	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
-		aba_wait_show "Waiting for $target_ver in OSUS update graph" 5 120 _osus_graph_refresh || true
+		aba_wait_show "Waiting for $target_ver in OSUS update graph" 10 300 _osus_graph_has_target || true
 		_osus_graph_has_target && _graph_ok=1
 	fi
 
@@ -526,12 +519,12 @@ if [ ! "$upgrade_already_running" ]; then
 	if [ -z "$_graph_ok" ] && [ "$osus_upstream" ]; then
 		_all_available=$(echo "$_available_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
 		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
-		aba_abort "Version $target_ver is not an available upgrade from $current_ver." \
-			${_all_available:+"Available upgrades: $_all_available"} \
-			${_all_conditional:+"Conditional upgrades: $_all_conditional"} \
-			"${_all_available:- No upgrades found — the upgrade may require intermediate versions.}" \
-			"Check the upgrade path: oc adm upgrade" \
-			"Graph checker: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
+		aba_abort "Version $target_ver is not available in the OSUS update graph." \
+			"The OSUS pod was restarted by 'aba day2' but the graph data may still be loading." \
+			${_all_available:+"Currently available: $_all_available"} \
+			${_all_conditional:+"Conditional: $_all_conditional"} \
+			"Wait a few minutes and retry:  aba -d $(basename "$PWD") upgrade --to $target_ver" \
+			"Or check manually:  oc adm upgrade --include-not-recommended"
 	fi
 
 	# No OSUS at all — offer manual override without graph validation

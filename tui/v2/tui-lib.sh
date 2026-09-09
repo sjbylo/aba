@@ -983,29 +983,54 @@ _probe_undetected_clusters() {
 	mapfile -t candidates < <(list_undetected_clusters)
 	[[ ${#candidates[@]} -eq 0 ]] && return 0
 
-	local names="${candidates[*]}"
-	dlg --backtitle "$(ui_backtitle)" \
-		--infobox "\nDetecting installation status: ${names// /, }..." 5 55  # spaces → commas
+	# Filter out recently-probed failures (2 min cooldown)
+	local -a _to_probe=()
+	local _now _marker _probe_ts _age
+	_now=$(date +%s)
 	for dir in "${candidates[@]}"; do
-		if [[ ! -f "$ABA_ROOT/$dir/.install-complete" ]]; then
-			auto_complete_install "$dir" >/dev/null 2>&1 || true
-			# Newly transitioned to ready — offer day2 in mirror modes
-			if [[ -f "$ABA_ROOT/$dir/.install-complete" && "$_TUI_MODE" != "DIRECT" ]]; then
-				local _fqdn
-				_fqdn=$(cluster_display_name "$dir")
-				dlg --backtitle "$(ui_backtitle)" --title "Cluster Ready!" \
-					--yes-label "Yes, apply now" \
-					--no-label "No, later" \
-					--yesno "Cluster $_fqdn just completed installation!\n\n\
+		_marker="$ABA_ROOT/$dir/.probe-attempted"
+		if [[ -f "$_marker" ]]; then
+			_probe_ts=$(stat -c %Y "$_marker" 2>/dev/null) || _probe_ts=0
+			_age=$(( _now - _probe_ts ))
+			[[ $_age -lt 120 ]] && continue
+		fi
+		_to_probe+=("$dir")
+	done
+	[[ ${#_to_probe[@]} -eq 0 ]] && return 0
+
+	local names="${_to_probe[*]}"
+	dlg --backtitle "$(ui_backtitle)" \
+		--infobox "\nDetecting installation status: ${names// /, }..." 5 55
+
+	# Probe in parallel
+	for dir in "${_to_probe[@]}"; do
+		touch "$ABA_ROOT/$dir/.probe-attempted"
+		auto_complete_install "$dir" >/dev/null 2>&1 &
+	done
+	wait
+
+	# Clean up probe marker for clusters that completed
+	for dir in "${_to_probe[@]}"; do
+		[[ -f "$ABA_ROOT/$dir/.install-complete" ]] && rm -f "$ABA_ROOT/$dir/.probe-attempted"
+	done
+
+	# Check results and offer day2 for newly completed clusters
+	for dir in "${candidates[@]}"; do
+		if [[ -f "$ABA_ROOT/$dir/.install-complete" && "$_TUI_MODE" != "DIRECT" ]]; then
+			local _fqdn
+			_fqdn=$(cluster_display_name "$dir")
+			dlg --backtitle "$(ui_backtitle)" --title "Cluster Ready!" \
+				--yes-label "Yes, apply now" \
+				--no-label "No, later" \
+				--yesno "Cluster $_fqdn just completed installation!\n\n\
 Run 'Configure OperatorHub' (aba day2) to set up:\n\
   • OperatorHub catalog sources\n\
   • Image content source policies\n\
   • Release signature verification\n\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
-				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
-				fi
+			if [[ $? -eq 0 ]]; then
+				confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
 			fi
 		fi
 	done
@@ -1509,6 +1534,7 @@ offer_editor() {
 # =============================================================================
 
 _TUI_START_EPOCH=$(date +%s)
+_TUI_EXIT_MESSAGE=""
 
 _show_v2_exit_summary() {
 	_tui_redirect_restore
@@ -1546,6 +1572,12 @@ _show_v2_exit_summary() {
 	echo "Log file: $_TUI_LOG_FILE"
 	echo
 	echo "Run 'aba --help' for available commands."
+
+	# Show deferred exit message (e.g. pull secret instructions)
+	if [[ -n "${_TUI_EXIT_MESSAGE:-}" ]]; then
+		echo
+		echo "$_TUI_EXIT_MESSAGE"
+	fi
 }
 
 # =============================================================================

@@ -1317,8 +1317,13 @@ mirror_select_operators() {
 
 	tui_log "Action: Select Operators"
 
+	# Use the upgrade target's catalog when in upgrade mode (matches ISC generator logic)
 	local version_short
-	version_short=$(_ver_minor "$ocp_version")
+	if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+		version_short=$(_ver_minor "$ocp_upgrade_to")
+	else
+		version_short=$(_ver_minor "$ocp_version")
+	fi
 
 	# Ensure catalogs are available
 	if ! tui_ensure_catalogs_ready "$version_short"; then
@@ -1645,7 +1650,11 @@ _operator_view_basket() {
 	fi
 
 	local version_short
-	version_short=$(_ver_minor "$ocp_version")
+	if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+		version_short=$(_ver_minor "$ocp_upgrade_to")
+	else
+		version_short=$(_ver_minor "$ocp_version")
+	fi
 	local items=()
 	local op display_name line
 	for op in $(echo "${!OP_BASKET[@]}" | tr ' ' '\n' | sort); do

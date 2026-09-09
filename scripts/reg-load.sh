@@ -322,7 +322,8 @@ echo
 _archive_files=( data/mirror_*.tar )
 if [ -e "${_archive_files[0]}" ]; then
 	_archive_size=$(du -sh data/mirror_*.tar 2>/dev/null | tail -1 | awk '{print $1}')
-	aba_warn "Archive files (${_archive_size:-?}) can now be deleted to free disk space: rm mirror/data/mirror_*.tar"
+	aba_info "Tip: Archive files (${_archive_size:-?}) are no longer needed and can be deleted to free disk space:"
+	aba_info "  rm mirror/data/mirror_*.tar"
 fi
 echo
 

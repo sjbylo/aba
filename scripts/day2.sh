@@ -62,6 +62,30 @@ fi
 
 warn_if_cluster_unstable
 
+# Restart OSUS pod early if graph-image was updated since the pod started.
+# oc-mirror creates updateService.yaml when it builds/updates the graph-image.
+# If that file is newer than the running OSUS pod, the pod has stale graph data.
+# Restarting here lets the pod rebuild in parallel with the rest of day2 work.
+_us_file="mirror/data/working-dir/cluster-resources/updateService.yaml"
+_osus_restarted=""
+if [ -f "$_us_file" ]; then
+	_osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || _osus_upstream=""
+	if [ -n "$_osus_upstream" ]; then
+		_us_ts=$(stat -c %Y "$_us_file" 2>/dev/null) || _us_ts=0
+		_pod_start_iso=$(oc get pod -n openshift-update-service -l app=osus \
+			-o jsonpath='{.items[0].status.startTime}' 2>/dev/null) || _pod_start_iso=""
+		_pod_start_ts=0
+		[ -n "$_pod_start_iso" ] && _pod_start_ts=$(date -d "$_pod_start_iso" +%s 2>/dev/null) || _pod_start_ts=0
+		if [ "$_us_ts" -gt "$_pod_start_ts" ] 2>/dev/null; then
+			aba_info "Graph data updated since OSUS pod started — restarting OSUS pod to refresh update graph ..."
+			oc delete pod -n openshift-update-service -l app=osus --grace-period=0 2>/dev/null || true
+			_osus_restarted=1
+		else
+			aba_debug "OSUS pod already newer than updateService.yaml — no restart needed"
+		fi
+	fi
+fi
+
 aba_info "What this 'day2' script does:"
 aba_info "- Ensure the cluster's global pull secret includes mirror registry credentials."
 aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
@@ -556,6 +580,24 @@ fi
 
 # Apply user-provided custom manifests (if any)
 apply_custom_manifests
+
+# If we restarted the OSUS pod at the start, verify it's ready before finishing.
+# The pod rebuilt in parallel with the day2 work above, so this wait is usually short.
+if [ "$_osus_restarted" ]; then
+	_osus_pod_ready() {
+		local _ready
+		_ready=$(oc get pod -n openshift-update-service -l app=osus \
+			-o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null) || return 1
+		[ "$_ready" = "True" ]
+	}
+	if _osus_pod_ready; then
+		aba_info "OSUS pod is ready — update graph refreshed"
+	else
+		aba_wait_show "Waiting for OSUS pod to be ready" 10 300 _osus_pod_ready || \
+			aba_warn "OSUS pod did not become ready in 5 minutes — upgrade may need to wait for graph data"
+		_osus_pod_ready && aba_info "OSUS pod is ready — update graph refreshed"
+	fi
+fi
 
 aba_success "Day-2 configuration completed successfully."
 
