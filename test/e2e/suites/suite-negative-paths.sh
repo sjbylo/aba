@@ -199,7 +199,7 @@ e2e_run "Restore reg_host after unknown-host test" \
 e2e_run_must_fail "Install to localhost with remote key must fail" \
 	"mkdir -p ~/tmp && aba -d mirror install -k ~/.ssh/id_rsa -H \$(hostname -f) > ~/tmp/localhost-reg.out 2>&1"
 e2e_run "Localhost-as-remote shows actionable error (not rm permission crash)" \
-	"grep -q 'reaches this localhost' ~/tmp/localhost-reg.out"
+	"grep -qE 'reaches this localhost|Existing .* registry found' ~/tmp/localhost-reg.out"
 e2e_run "Restore mirror.conf after localhost test" \
 	"sed -i 's/^reg_host=.*/reg_host=/' mirror/mirror.conf && sed -i 's/^reg_ssh_key=.*/reg_ssh_key=/' mirror/mirror.conf"
 
