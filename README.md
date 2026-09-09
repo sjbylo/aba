@@ -785,6 +785,7 @@ Example output on successful install:
 [ABA]   API:      https://api.mycluster.example.com:6443
 
 [ABA] Next steps:
+[ABA]   aba terminal       — open interactive cluster shell
 [ABA]   . <(aba shell)     — access cluster (kubeconfig)
 [ABA]   . <(aba login)     — log in as kubeadmin
 [ABA]   aba day2           — configure OperatorHub with mirror registry
@@ -1580,6 +1581,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | ------------------------------- | ------------------------------------------------------------- |
 | `aba cluster --name <name> --type <sno\|compact\|standard>` | Create cluster directory and configure |
 | `aba info`                      | Display kubeadmin password and cluster information            |
+| `aba terminal`                  | Interactive shell logged into the cluster (oc ready, bash completion) |
 | `aba login`                     | Display `oc login` command. Use: `. <(aba login)`             |
 | `aba shell`                     | Display kubeconfig export. Use: `. <(aba shell)`              |
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
