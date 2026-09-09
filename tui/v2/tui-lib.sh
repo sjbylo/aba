@@ -1062,42 +1062,21 @@ is_bundle_mode() {
 	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
-# Feedback: show GitHub URLs, try to open in browser if available.
+# Feedback: show all GitHub links in a single dialog.
 _tui_feedback() {
 	local gh_url="https://github.com/sjbylo/aba"
-	local choice
 
 	dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--menu "How would you like to share feedback?" 0 0 0 \
-		"I" "Report an issue" \
-		"D" "Start a discussion" \
-		"S" "Star the project on GitHub" \
-		2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return
+		--msgbox "\
+Open any of these URLs in a browser:\n\n\
+  Report a bug or request a feature:\n\
+    ${gh_url}/issues/new\n\n\
+  Start a discussion:\n\
+    ${gh_url}/discussions/new?category=general\n\n\
+  Star the project on GitHub:\n\
+    ${gh_url}" 0 0
 
-	choice=$(<"$_TUI_TMP")
-
-	local url=""
-	case "$choice" in
-		I) url="$gh_url/issues/new" ;;
-		D) url="$gh_url/discussions/new?category=general" ;;
-		S) url="$gh_url" ;;
-	esac
-	[[ -z "$url" ]] && return
-
-	if [[ "${_TUI_INET:-no}" == "yes" ]] && command -v xdg-open &>/dev/null; then
-		xdg-open "$url" &>/dev/null &
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "Opening in your browser:\n\n$url" 0 0
-	elif [[ "${_TUI_INET:-no}" != "yes" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "No internet connection detected.\n\nOpen this URL in a browser when you have access:\n\n$url" 0 0
-	else
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "Open this URL in a browser:\n\n$url" 0 0
-	fi
-	tui_log "Feedback: $url"
+	tui_log "Feedback: shown"
 }
 
 # Append ` --retry N` when _TUI_RETRY_COUNT > 0 (for oc-mirror operations).
