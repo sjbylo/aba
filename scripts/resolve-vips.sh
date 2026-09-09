@@ -119,11 +119,8 @@ else
 	elif ! { [ "$api_vip" ] && echo "$api_vip" | grep -q -E "$_is_ip"; }; then
 		# api_vip not set — try to back-fill from DNS
 		if [ "$actual_ip_of_api" ] && echo "$actual_ip_of_api" | grep -q -E "$_is_ip"; then
-			aba_warn -p Attention \
-				"inserting actual IP address ($actual_ip_of_api) into cluster.conf" \
-				"Please verify this is correct! If not, edit cluster.conf file and try again!"
-			replace-value-conf -n api_vip -v "$actual_ip_of_api" cluster.conf
-			sleep 1
+			aba_info "Resolved $cl_api_domain → $actual_ip_of_api (saved to $cluster_name/cluster.conf)"
+			replace-value-conf -q -n api_vip -v "$actual_ip_of_api" cluster.conf
 			api_vip=$actual_ip_of_api
 		else
 			aba_abort "Missing DNS record $cl_api_domain" \
@@ -134,11 +131,8 @@ else
 	# Resolve ingress_vip (may already be set from auto-allocation above)
 	if ! { [ "$ingress_vip" ] && echo "$ingress_vip" | grep -q -E "$_is_ip"; }; then
 		if [ "$actual_ip_of_ingress" ] && echo "$actual_ip_of_ingress" | grep -q -E "$_is_ip"; then
-			aba_warn -p Attention \
-				"inserting actual IP address ($actual_ip_of_ingress) into cluster.conf" \
-				"Please verify this is correct! If not, edit cluster.conf file and try again!"
-			replace-value-conf -n ingress_vip -v "$actual_ip_of_ingress" cluster.conf
-			sleep 1
+			aba_info "Resolved $cl_ingress_domain → $actual_ip_of_ingress (saved to $cluster_name/cluster.conf)"
+			replace-value-conf -q -n ingress_vip -v "$actual_ip_of_ingress" cluster.conf
 			ingress_vip=$actual_ip_of_ingress
 		else
 			aba_abort "Missing DNS record $cl_ingress_domain!" \

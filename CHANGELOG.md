@@ -1,6 +1,6 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.4...HEAD)
 
-Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hints
+Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hints, cluster DNS verification
 
 ### Added
 
@@ -15,7 +15,7 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 - **Podman preflight redesigned** — Removed the startup podman check (Bug #961). Now fires after internet is confirmed at mode entry, with 2-hour TTL, using a public image (`registry.access.redhat.com`, no auth needed). Shows advisory warning with Continue/Retry/Back and session-level dismissal instead of hard-blocking.
 - **Removed unnecessary podman gates** — `mirror_save`, `mirror_sync`, and `prepare_upgrade` no longer call `_require_podman` (they use `oc-mirror`, not podman directly).
 - **ADR-011 amendment** — Day-2 wait gate failures changed from non-fatal to fatal, based on end-user feedback.
-- **Fix operator-set-ai** — Corrected `cert-manager` to `openshift-cert-manager-operator` in the AI operator set.
+- **`aba load` archive cleanup is informational** — After a successful load, leftover `mirror_*.tar` files are reported with a delete command instead of an interactive prompt.
 
 ### Fixed
 
@@ -25,7 +25,9 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 - **Fix multi-mirror IDMS/ITMS name collisions** — When an existing IDMS or ITMS with the same name serves a different registry, ABA renames its resource (appending `-<hostname>`) instead of overwriting.
 - **Fix day2-osus `Argument list too long`** — Large CA bundles (140+ certs from OVE installer) exceeded `ARG_MAX` when passed on the command line. Now uses `oc patch --patch-file` with a temporary file.
 - **Fix day2-osus hardcoded CatalogSource name** — OSUS subscription now resolves the CatalogSource from `packagemanifests` instead of hardcoding `redhat-operators`, fixing multi-mirror clusters where ABA's catalog is suffixed.
-- **Harden `aba import`** — Abort if cluster state dir already exists (use `--force` to override); create `rendezvousIP` so `aba ssh` works on imported clusters; show clear message when kubeadmin password is unavailable.
+- **Harden `aba import`** — Abort if cluster state dir already exists (use `--force` to override); create `rendezvousIP` so `aba ssh` works on imported clusters; copy kubeconfig into `iso-agent-based/auth/` for `aba shell`; auto-detect `image_source=mirror` when `mirror/.available` exists; show a clear message when kubeadmin password is unavailable.
+- **Fix AI operator set `cert-manager` name** — Corrected `cert-manager` to `openshift-cert-manager-operator` in `operator-set-ai`.
+- **Fix cluster DNS verification** — API, apps, and registry hostname checks use cluster `dns_servers` (what nodes use), not bastion `getent`/NSS. Per-nameserver diagnosis when the registry FQDN fails. Hint at `verify_conf=conf` / `aba --verify conf` to skip network checks.
 
 ### Community
 

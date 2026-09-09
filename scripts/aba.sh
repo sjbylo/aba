@@ -1102,7 +1102,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				shift
 				exec $ABA_ROOT/scripts/cluster-import.sh "$@"
 				;;
-			tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
+			tui|ssh|run|bundle|bundle-primed|info|login|shell|terminal|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1149,7 +1149,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
+		info|login|shell|terminal|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1246,6 +1246,9 @@ if [ "$cur_target" ]; then
 			[ -z "$_kc" ] && _kc="$PWD/iso-agent-based/auth/kubeconfig"
 			echo "export KUBECONFIG=$_kc"
 			exit
+		;;
+		terminal)
+			exec $ABA_ROOT/scripts/cluster-terminal.sh
 		;;
 		getco)
 			ensure_oc

@@ -77,10 +77,10 @@ direct_wizard() {
 				tui_log "Resuming with existing config"
 				return 0
 			fi
-			dlg --backtitle "$(ui_backtitle)" --title "Incomplete configuration" \
-				--msgbox "Continue requires a pull secret path in aba.conf and a valid secret file.\nComplete the wizard to finish setup." 0 0
+			# Config exists but pull secret missing — go straight to pull secret step
+			tui_log "Resume: pull secret missing, running pull secret step"
 		fi
-		# Else: fall through to wizard steps
+		# Fall through to wizard steps
 	fi
 
 	local step="pull_secret"
@@ -225,42 +225,72 @@ _direct_pull_secret() {
 		fi
 	fi
 
-	# Prompt for pull secret
+	# Info dialog: how to get the pull secret
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET" \
-		--ok-label "$TUI2_BTN_NEXT" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--msgbox "$TUI2_MSG_PULL_SECRET_INFO" 0 0
+		--yes-label "Enter file path" \
+		--no-label "$TUI2_BTN_EXIT" \
+		--yesno "$TUI2_MSG_PULL_SECRET_INFO" 0 0
+	local rc=$?
+	if [[ $rc -ne 0 ]]; then
+		_print_pull_secret_instructions "$ps_file"
+		return 1
+	fi
 
-	# Loop until valid JSON entered or user presses Back
+	# Loop until valid file path entered or user exits
 	while :; do
-		echo "" > "${_TUI_TMP}.edit"
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET_PASTE" \
-			--ok-label "$TUI2_BTN_SAVE" \
-			--cancel-label "$TUI2_BTN_BACK" \
-			--editbox "${_TUI_TMP}.edit" 20 76 \
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_PULL_SECRET_PATH" \
+			--ok-label "OK" \
+			--cancel-label "$TUI2_BTN_EXIT" \
+			--inputbox "$TUI2_MSG_PULL_SECRET_PATH_PROMPT" 0 60 "$ps_file" \
 			2>"$_TUI_TMP"
-		local rc=$?
-		[[ $rc -ne 0 ]] && return 1
+		rc=$?
+		if [[ $rc -ne 0 ]]; then
+			_print_pull_secret_instructions "$ps_file"
+			return 1
+		fi
 
-		local secret
-		secret=$(<"$_TUI_TMP")
+		local entered_path
+		entered_path=$(<"$_TUI_TMP")
+		entered_path="${entered_path/#\~/$HOME}"
 
-		if [[ -z "$secret" ]]; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_PULL_SECRET_EMPTY" 0 0
+		if [[ -z "$entered_path" || ! -f "$entered_path" ]]; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"$(printf "$TUI2_MSG_PULL_SECRET_NOT_FOUND" "$entered_path")" 0 0
 			continue
 		fi
 
-		if ! echo "$secret" | jq . >/dev/null 2>&1; then
-			dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_PULL_SECRET_INVALID" 0 0
+		if ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$entered_path" >/dev/null 2>&1; then
+			dlg --backtitle "$(ui_backtitle)" --msgbox \
+				"$(printf "$TUI2_MSG_PULL_SECRET_INVALID" "$entered_path")" 0 0
 			continue
 		fi
 
-		# Valid JSON — save and exit loop
-		echo "$secret" > "$ps_file"
-		chmod 600 "$ps_file"
-		tui_log "Pull secret saved to $ps_file"
+		# Valid pull secret — update aba.conf with ~ for $HOME
+		chmod 600 "$entered_path"
+		ps_file="$entered_path"
+		local conf_path="${entered_path/#$HOME/\~}"
+		if [[ -f "$ABA_ROOT/aba.conf" ]]; then
+			replace-value-conf -q -n pull_secret_file -v "$conf_path" -f "$ABA_ROOT/aba.conf"
+		fi
+		tui_log "Pull secret validated at $entered_path (aba.conf: $conf_path)"
 		return 0
 	done
+}
+
+# Store pull secret instructions for display after TUI exits (survives clear)
+_print_pull_secret_instructions() {
+	local _ps_path="${1:-~/.pull-secret.json}"
+	_TUI_EXIT_MESSAGE="\
+  Pull secret required. Download yours from:
+
+    https://console.redhat.com/openshift/downloads#tool-pull-secret
+    (select 'Tokens' in the pull-down)
+
+  Save the file to this host as:
+    $_ps_path
+
+  Then re-run: abatui
+"
 }
 
 # --- Channel Selection ---

@@ -160,15 +160,42 @@ echo "  image_source    = $_image_source"
 # --- Check for existing state ---
 _dir_name="${_name:-$_cluster_name}"
 _state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
+_cluster_fqdn="${_cluster_name}.${_base_domain}"
 
-if [ "$_force" = true ]; then
-	[ -d "$_dir_name" ] && aba_info "Overwriting existing directory: $_dir_name/"
-	[ -d "$_state_dir" ] && aba_info "Cleaning existing state: $_state_dir/"
-	rm -rf "$_dir_name" "$_state_dir"
-else
-	[ -d "$_dir_name" ] && aba_abort "Directory '$_dir_name' already exists. Use --force to overwrite, or --name to pick a different name."
-	[ -d "$_state_dir" ] && aba_abort "Cluster state directory already exists: $_state_dir/
-       This may be from a previous install. Use --force to overwrite."
+if [ -d "$_state_dir" ]; then
+	if [ "$_force" = true ]; then
+		aba_info "Overwriting existing state: $_state_dir/"
+		rm -rf "$_state_dir"
+	else
+		# Find which working directory already manages this cluster
+		_existing_dir=""
+		for _candidate in */clusterstate; do
+			[ -L "$_candidate" ] || continue
+			_target=$(readlink -f "$_candidate" 2>/dev/null) || continue
+			if [ "$_target" = "$(readlink -f "$_state_dir" 2>/dev/null)" ]; then
+				_existing_dir="$(dirname "$_candidate")"
+				break
+			fi
+		done
+
+		if [ -n "$_existing_dir" ]; then
+			aba_abort "Cluster '$_cluster_fqdn' is already managed by ABA at '$_existing_dir/'." \
+				"Use 'aba -d $_existing_dir <command>' to manage it."
+		else
+			aba_abort "Stale state found for '$_cluster_fqdn' at $_state_dir/" \
+				"This is left over from a previous install or import." \
+				"Remove it and retry:  rm -rf $_state_dir"
+		fi
+	fi
+fi
+
+if [ -d "$_dir_name" ]; then
+	if [ "$_force" = true ]; then
+		aba_info "Overwriting existing directory: $_dir_name/"
+		rm -rf "$_dir_name"
+	else
+		aba_abort "Directory '$_dir_name' already exists. Use --name to pick a different name."
+	fi
 fi
 
 mkdir -p "$_dir_name"
@@ -266,16 +293,17 @@ aba_info "Cluster '$_cluster_name' imported into $_dir_name/"
 if [ "$_image_source" = "direct" ] && [ ! -f mirror/.available ]; then
 	aba_info ""
 	aba_info -m "Note: No mirror registry detected. To integrate this cluster with a" \
-		"mirror later, set up a mirror (aba mirror) and re-import with:" \
-		"  aba import -k <kubeconfig> --force --image-source mirror"
+		"mirror later, set up a mirror (aba mirror) and run:" \
+		"  aba -d $_dir_name day2"
 fi
 
 aba_info ""
 aba_info "Available commands:"
+aba_info "  aba -d $_dir_name terminal      Interactive cluster shell"
 aba_info "  aba -d $_dir_name day2          Integrate with mirror registry"
 aba_info "  aba -d $_dir_name day2-ntp      Configure NTP"
 aba_info "  aba -d $_dir_name day2-osus     Configure update service"
 aba_info "  aba -d $_dir_name upgrade       Upgrade the cluster"
 aba_info "  aba -d $_dir_name getco         Show cluster operators"
-aba_info "  aba -d $_dir_name shell         Open oc shell"
+aba_info "  aba -d $_dir_name shell         Export KUBECONFIG (source this)"
 aba_info "  aba -d $_dir_name shutdown      Graceful shutdown"

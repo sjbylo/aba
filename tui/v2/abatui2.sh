@@ -221,8 +221,12 @@ OP_SET_ADDED=()
 
 # Restore basket from aba.conf (config files = single source of truth)
 # Handles both ops= (comma-separated operators) and op_sets= (comma-separated set names)
-# Validates each operator against the catalog index for the current OCP version
-_ver_short=$(_ver_minor "$ocp_version")
+# Validates each operator against the catalog for the effective OCP version (upgrade target if set)
+if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+	_ver_short=$(_ver_minor "$ocp_upgrade_to")
+else
+	_ver_short=$(_ver_minor "$ocp_version")
+fi
 
 # Restore individual operators from ops=
 if [[ -n "${ops:-}" ]]; then
@@ -487,8 +491,8 @@ _detect_mode() {
 _conno_main() {
 	tui_log "Entering CONNO mode"
 
-	# Run initial wizard if config not complete
-	if [[ -z "${ocp_channel:-}" || -z "${ocp_version:-}" ]]; then
+	# Run initial wizard if config not complete (channel + version + pull secret file)
+	if ! _direct_config_complete; then
 		tui_log "CONNO: config incomplete, running wizard"
 		direct_wizard || return 1
 		# Reload config (normalized to avoid trailing whitespace from comments)

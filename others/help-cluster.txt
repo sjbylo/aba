@@ -58,6 +58,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   aba [-d <cluster>] ssh                  # Open interactive SSH session to node0
   aba [-d <cluster>] run --cmd "oc ..."   # Run an 'oc' command against this cluster
   aba [-d <cluster>] info                 # Show cluster information
+  aba [-d <cluster>] terminal             # Interactive shell logged into the cluster (oc ready)
   aba [-d <cluster>] shell                # Output KUBECONFIG export (use: eval $(aba -d mycluster shell))
   aba [-d <cluster>] login                # Show cluster login credentials
   aba [-d <cluster>] getco                # Show cluster version and operator status
@@ -90,7 +91,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
       --name <dir-name>                     # Cluster directory name (default: cluster_name from API)
       --image-source <mirror|direct|proxy>  # Override image source (default: auto-detect from IDMS/ITMS)
       --force                               # Overwrite existing cluster directory
-  After import, use aba -d <name> day2|day2-osus|day2-ntp|upgrade|getco|shell|shutdown etc.
+  After import, use aba -d <name> terminal|day2|day2-osus|day2-ntp|upgrade|getco|shell|shutdown etc.
 
   VM lifecycle (platform=vmw or kvm only):
   aba [-d <cluster>] ls                   # List all cluster node VMs

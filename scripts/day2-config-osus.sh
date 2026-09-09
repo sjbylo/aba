@@ -326,7 +326,7 @@ _expected_channel="${ocp_channel}-${_ocp_ver_major}"
 if [ "$CH" != "$_expected_channel" ]; then
 	aba_info "Cluster channel ($CH) does not match mirrored channel ($_expected_channel)"
 	aba_info "Setting cluster channel: $CH → $_expected_channel"
-	oc adm upgrade channel "$_expected_channel"
+	oc adm upgrade channel --allow-explicit-channel "$_expected_channel"
 	CH="$_expected_channel"
 fi
 aba_debug CH=$CH

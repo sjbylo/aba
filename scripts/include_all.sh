@@ -1030,7 +1030,11 @@ show_cluster_summary() {
 	[ "${ABA_TARGET_DIR:-}" ] && _p="aba -d $_dir"
 
 	echo
-	aba_success "Cluster installed successfully!"
+	if [ "${installed_from:-}" = "imported" ]; then
+		aba_success "Cluster imported successfully!"
+	else
+		aba_success "Cluster installed successfully!"
+	fi
 	aba_info "  Name:     $_cn.$_bd"
 	aba_info "  Version:  ${ocp_version:-?}"
 	aba_info "  Type:     $_type ($_nodes node(s))"
@@ -1038,6 +1042,7 @@ show_cluster_summary() {
 	aba_info "  API:      https://api.$_cn.$_bd:6443"
 	echo
 	aba_info "Next steps:"
+	aba_info "  $_p terminal       — open interactive cluster shell"
 	aba_info "  . <($_p shell)     — access cluster (kubeconfig)"
 	aba_info "  . <($_p login)     — log in as kubeadmin"
 	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then

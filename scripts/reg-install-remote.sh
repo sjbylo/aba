@@ -26,7 +26,7 @@ _ssh="ssh -i $reg_ssh_key -F $ssh_conf_file $reg_ssh_user@$reg_host"
 
 # Use /tmp/ directly — $ABA_TMP is user-specific and remote user may differ
 flag_file="/tmp/.aba-ssh-probe-${reg_ssh_user}.$$.$RANDOM"
-rm -f "$flag_file"
+rm -f "$flag_file" 2>/dev/null || sudo rm -f "$flag_file" 2>/dev/null || true
 
 if ! $_ssh "touch $flag_file"; then
 	aba_abort \
@@ -38,7 +38,7 @@ fi
 
 # Verify the FQDN reaches a *remote* host, not this localhost
 if [ -f $flag_file ]; then
-	rm -f $flag_file
+	rm -f "$flag_file" 2>/dev/null || sudo rm -f "$flag_file" 2>/dev/null || true
 	aba_abort \
 		"Registry configured for *remote* install (reg_ssh_key is defined)." \
 		"But $reg_host ($fqdn_ip) reaches this localhost ($(hostname -s)) instead!" \
