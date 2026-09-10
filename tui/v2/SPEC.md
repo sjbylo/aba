@@ -365,10 +365,9 @@ When the menu renders in CONNO and a mirror is installed, the code reads cached 
 2. Prompt for output path (default `/tmp/ocp-bundle`)
 3. Same-device check: if output and `mirror/data` are on the same filesystem, offer Light vs Full bundle choice
 4. **Image reuse check:** if `mirror/data/mirror_*.tar` already exists:
-   - Present dialog: "Reuse (fast)" vs "Clean Rebuild"
-   - **Reuse** (default): incremental — oc-mirror only downloads changed/new images
-   - **Clean Rebuild**: passes `--force` — deletes existing data, re-downloads everything
-   - Help explains when to use each option
+   - Present dialog: "Update (fast)" vs "Start Fresh"
+   - **Update** (default): incremental — oc-mirror only downloads changed/new images
+   - **Start Fresh**: passes `--force` — deletes existing data, re-downloads everything
    - If no existing data: skip dialog, run without `--force`
 5. Execute: `aba bundle --out <path> [--light] [--force]`
 

@@ -243,7 +243,7 @@ if [ "$light_bundle" ]; then
 	# User wants to create a *light* bundle...
 	aba_debug "Creating LIGHT bundle (excluding image-set archives)"
 
-	aba_info "A *light* install bundle will be created (image-set archives excluded)."
+	aba_info "Creating light bundle (image archives excluded)."
 
 	# Create light bundle with "aba tarrepo..."
 	aba_info "Pulling images ..."
@@ -256,7 +256,6 @@ if [ "$light_bundle" ]; then
 	_wait_for_cli_downloads || exit 1
 	aba_debug "All CLI tarballs downloaded"
 	
-	aba_info "Creating *light* install bundle archive ..."
 	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tarrepo out=$bundle_dest_file $with_clusters"
 	make -s tarrepo out="$bundle_dest_file" $with_clusters			# Create install bundle containing the repo ONLY and excluding large imageset file(s).
@@ -268,22 +267,18 @@ else
 	if files_on_same_device mirror "$bundle_dest_file"; then
 		aba_debug "Mirror and bundle destination are on same filesystem - disk space warning"
 		_mount_point=$(df --output=target "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1)
-		# FIXME: Do rough calculation of available vs required disk space ... and check ...
-		aba_warn \
-			"Make sure there is enough free disk space under: $PWD" \
-			"The image-set archive file(s) created by oc-mirror will first be written to" \
-			"aba/mirror/data/mirror_000001.tar, and then a full copy of the Aba repository will be written" \
-			"to the bundle file you specified: $bundle_dest_file" \
-			"Because both files *reside on the same filesystem* (${_mount_point:-unknown}), you may temporarily" \
-			"need roughly double the required space (or more if you consider the oc-mirror cache). " \
-			">> IMPORTANT: <<" \
-			"If disk space is limited, consider using the '--light' option." \
-			"It excludes the large image-set archive file(s) from the final install bundle." \
-			"This is also useful in restricted environments where large archives cannot be stored or" \
-			"moved via portable media (for example, Cloud instances or locked-down laptops)."
-
-		ask "Continue anyway" || exit 1
-		aba_debug "User confirmed to continue with full bundle on same filesystem"
+		_free_gb=$(df --output=avail -BG "$(dirname "$bundle_dest_file")" 2>/dev/null | tail -1 | tr -d ' G')
+		if [ "${_free_gb:-999}" -lt 50 ]; then
+			aba_warn \
+				"Bundle and mirror data are on the same filesystem (${_mount_point:-unknown})." \
+				"Only ${_free_gb}G free. A full bundle duplicates the image archives," \
+				"requiring roughly double the space." \
+				"" \
+				"To save space, use 'aba bundle --light' (excludes image archives" \
+				"from the bundle — you transfer them separately)."
+			ask "Continue with full bundle anyway" || exit 1
+			aba_debug "User confirmed to continue with full bundle on same filesystem"
+		fi
 	else
 		aba_debug "Mirror and bundle destination are on different filesystems - no disk space concern"
 	fi
@@ -299,15 +294,11 @@ else
 	_wait_for_cli_downloads || exit 1
 	aba_debug "All CLI tarballs downloaded"
 
-	aba_info "Creating install bundle archive ..."
 	rm -f "$bundle_dest_file"
 	aba_debug "Calling: make tar out=$bundle_dest_file $with_clusters"
 	make -s tar out="$bundle_dest_file" $with_clusters	   		# Create all-in-one archive, including all files.
 	aba_debug "Full bundle created successfully: $bundle_dest_file"
 fi
-
-echo >&2
-aba_info "For subsequent updates: aba save, then transfer mirror/data/*.tar to the disconnected host. See README.md 'Air-Gapped Transfer'." >&2
 
 aba_debug "Bundle creation completed, exiting successfully"
 exit 0

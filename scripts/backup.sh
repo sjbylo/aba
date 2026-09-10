@@ -247,31 +247,13 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 [ ! "$file_list" ] && aba_info "No new files to backup!" && exit 0
 # Example: For incremental backup, there may be no new files 
 
-# Output reminder message
-if [ "$repo_only" ]; then
-	aba_warn "This is a *light* bundle (image-set archives NOT included)." >&2
-	aba_info "Also transfer: ${PWD}/${repo_dir}/mirror/data/mirror_*.tar" >&2
-fi
-
-# If destination is NOT stdout (i.e. if in interactive mode)
+# Pre-tar progress message (instructions moved to after success)
 if [ "$dest" != "-" ]; then
+	echo >&2
 	if [ "$repo_only" ]; then
-		echo >&2
-		aba_info "Writing *light* bundle to $dest ..." >&2
-		echo >&2
-		aba_info "On your disconnected bastion:" >&2
-		aba_info "  tar xf $(basename $dest)" >&2
-		aba_info "  mv mirror_*.tar aba/mirror/data/" >&2
-		aba_info "  cd aba && ./install && aba (or abatui)" >&2
-		echo >&2
+		aba_info "Creating light bundle (image archives excluded) ..." >&2
 	else
-		echo >&2
-		aba_info "Writing install bundle to $dest ..." >&2
-		echo >&2
-		aba_info "On your disconnected bastion:" >&2
-		aba_info "  tar xf $(basename $dest)" >&2
-		aba_info "  cd aba && ./install && aba (or abatui)" >&2
-		echo >&2
+		aba_info "Creating install bundle ..." >&2
 	fi
 fi
 
@@ -299,7 +281,6 @@ if [ -f "${repo_dir}/mirror/data/imageset-config.yaml" ] && [ -f "${repo_dir}/mi
 fi
 
 aba_debug "Running: 'tar cf $dest $out_file_list...' from inside $PWD"
-[ "$dest" != "-" ] && aba_info "Writing bundle, this may take several minutes for large image sets ..." >&2
 
 set +e   # Needed so we can capture the return code from tar and not just exit (bash -e)
 tar cf "${dest}" --transform "s,^${repo_dir},aba," $file_list
@@ -334,7 +315,30 @@ touch ~/.aba.previous.backup
 
 if [ "$dest" != "-" ]; then
 	_sz=$(du -sh "$dest" 2>/dev/null | awk '{print $1}') || _sz=""
-	aba_success "Install bundle written successfully to ${dest}${_sz:+ ($_sz)}!" >&2
+	echo >&2
+	aba_success "Bundle written: ${dest}${_sz:+ ($_sz)}" >&2
+	echo >&2
+
+	if [ "$repo_only" ]; then
+		aba_info "Next steps — transfer TWO things to your disconnected bastion:" >&2
+		echo >&2
+		aba_info "  1. The bundle:   $(basename $dest)" >&2
+		aba_info "  2. The archives: mirror/data/mirror_*.tar" >&2
+		echo >&2
+		aba_info "  On the disconnected bastion:" >&2
+		aba_info "    tar xf $(basename $dest)" >&2
+		aba_info "    mv mirror_*.tar aba/mirror/data/" >&2
+		aba_info "    cd aba && ./install && aba (or abatui)" >&2
+	else
+		aba_info "Next steps — transfer to your disconnected bastion:" >&2
+		echo >&2
+		aba_info "  1. Copy: $(basename $dest)" >&2
+		echo >&2
+		aba_info "  On the disconnected bastion:" >&2
+		aba_info "    tar xf $(basename $dest)" >&2
+		aba_info "    cd aba && ./install && aba (or abatui)" >&2
+	fi
+	echo >&2
 else
 	aba_success "Install bundle streamed successfully to stdout!" >&2
 fi
