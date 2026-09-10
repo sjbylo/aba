@@ -414,110 +414,8 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		fi
 	done
 
-	# ---- Version-aware CatalogSource selection ----
-	#
-	# Problem: oc-mirror overwrites cs-*-index*.yaml in working-dir/cluster-resources/
-	# with the LATEST synced/loaded version.  After an upgrade sync (e.g. v5.0), those
-	# CS files point to v5.0 catalogs — but the cluster is still running v4.21.  Applying
-	# v5.0 CatalogSources to a v4.21 cluster might break operator resolution (most
-	# operators are backwards-compatible, but some may require the matching version).
-	#
-	# Solution: 3-tier version matching.  Each sync/load archives the full
-	# cluster-resources/ directory into mirror/data/.cluster-resources-v<minor>/.
-	#
-	#   Tier 1 (fastest): Use the archived cluster-resources matching the cluster's
-	#           minor version.  This is the happy path after normal sync/load.
-	#
-	#   Tier 2 (fallback): No archive exists.  Inspect the CS file's image digest via
-	#           skopeo to read its com.redhat.index.delivery.version label.  If it
-	#           doesn't match the cluster, search all tags in the mirror registry for
-	#           one that does, and substitute it into a temp copy of the CS file.
-	#
-	#   Tier 3 (last resort): No matching version found anywhere.  Apply the available
-	#           (newer) CS files with a warning.  Most operators are backwards-compatible.
-	#
-	# Escape hatch: --force-catalog skips all version matching and applies CS files
-	# from working-dir/cluster-resources/ as-is.  Use when intentionally installing
-	# a newer catalog onto an older cluster.
-	#
-	_cluster_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || _cluster_ver=""
-	_cluster_minor=$(_ver_minor "${_cluster_ver:-$ocp_version}")
-
-	_cs_archive_dir="mirror/data/.cluster-resources-v${_cluster_minor}"
-	_cs_source_dir="$working_dir/cluster-resources"  # default: whatever oc-mirror wrote last
-
-	if [ "${ABA_FORCE_CATALOG:-}" ]; then
-		# User explicitly wants the latest CS files, regardless of version match
-		aba_info "Applying CatalogSource files as-is (--force-catalog)"
-
-	elif [ -d "$_cs_archive_dir" ] && ls "$_cs_archive_dir"/cs-*-index*yaml &>/dev/null; then
-		# Tier 1: archived cluster-resources exist for this cluster's minor version
-		aba_info "Using archived CatalogSource files for v${_cluster_minor} (matched to cluster version)"
-		_cs_source_dir="$_cs_archive_dir"
-
-	else
-		# Tier 2: no archive — inspect the CS file's image to check its catalog version.
-		# Only the first CS file is probed; if it mismatches, all CS files are searched
-		# individually (each catalog repo may have different available versions).
-		_cs_first=$(ls "$working_dir"/cluster-resources/cs-*-index*yaml 2>/dev/null | head -1)
-		if [ "$_cs_first" ]; then
-			_cs_image=$(awk '/image:/{print $2; exit}' "$_cs_first")
-			_cs_label_ver=""
-			if [ "$_cs_image" ]; then
-				_cs_label_ver=$(skopeo inspect "docker://${_cs_image}" 2>/dev/null \
-					| jq -r '.Labels["com.redhat.index.delivery.version"] // empty' 2>/dev/null) || true
-			fi
-			if [ "$_cs_label_ver" ] && [ "$_cs_label_ver" != "v${_cluster_minor}" ]; then
-				aba_info "CatalogSource files reference ${_cs_label_ver} but cluster is v${_cluster_minor}"
-
-				# Build corrected CS files in a temp directory
-				_cs_source_dir=$(mktemp -d "$ABA_TMP/cs-fixup-XXXXXX")
-				_any_match=
-				_any_miss=
-				for _csf in $working_dir/cluster-resources/cs-*-index*yaml; do
-					_csf_image=$(awk '/image:/{print $2; exit}' "$_csf")
-					# Split image ref into repo and tag at the LAST colon
-					# (host:port/path/name:tag — %:* removes shortest suffix from the end)
-					_csf_repo="${_csf_image%:*}"
-					_csf_old_tag="${_csf_image##*:}"
-					_csf_match=""
-
-					# Enumerate all tags in this catalog's repo, inspect each for its
-					# delivery version label, stop at the first match for the cluster version
-					while IFS= read -r _tag; do
-						[ -z "$_tag" ] && continue
-						_tag_ver=$(skopeo inspect "docker://${_csf_repo}:${_tag}" 2>/dev/null \
-							| jq -r '.Labels["com.redhat.index.delivery.version"] // empty' 2>/dev/null) || true
-						if [ "$_tag_ver" = "v${_cluster_minor}" ]; then
-							_csf_match="$_tag"
-							break
-						fi
-					done < <(skopeo list-tags "docker://${_csf_repo}" 2>/dev/null | jq -r '.Tags[]' 2>/dev/null)
-
-					if [ "$_csf_match" ]; then
-						# Replace the digest/tag in the CS YAML with the matching one
-						sed "s|${_csf_old_tag}|${_csf_match}|g" "$_csf" > "$_cs_source_dir/$(basename "$_csf")"
-						_any_match=1
-					else
-						# Tier 3 for this catalog: no matching version in mirror — keep as-is
-						cp "$_csf" "$_cs_source_dir/"
-						_any_miss=1
-					fi
-				done
-				if [ "$_any_match" ]; then
-					aba_info "Found matching v${_cluster_minor} catalog(s) in mirror — substituting"
-				fi
-				if [ "$_any_miss" ]; then
-					aba_warn "Some catalogs have no v${_cluster_minor} version in the mirror." \
-						"Applying available catalogs — most operators are backwards-compatible," \
-						"but some may require the target version." \
-						"To apply the newer catalog instead, re-run with: aba day2 --force-catalog"
-				fi
-			fi
-		fi
-	fi
-
-	cs_file_list=$(ls "$_cs_source_dir"/cs-*-index*yaml 2>/dev/null || true)
+	# Apply any CatalogSource files created by oc-mirror v2
+	cs_file_list=$(ls $working_dir/cluster-resources/cs-*-index*yaml 2>/dev/null || true)
 
 	# Only warn about missing CatalogSources when operators are actually in the ISC.
 	# If the ISC has no operators section, CatalogSource files are expected to be absent.
@@ -560,12 +458,10 @@ if [ -d "$working_dir/cluster-resources" ]; then
 			continue
 		fi
 
-		# Extract the base catalog name from the filename and normalize it.
-		# Must use basename first: $f may be a full path (e.g. /tmp/.../cs-fixup-XXX/cs-redhat-...)
-		# and ${f#*cs-} would match the FIRST "cs-" in the path, not the filename.
-		# Example filename: cs-redhat-operator-index-sha256-a2bac.yaml → redhat-operator
-		_cs_basename=$(basename "$f")
-		cs_name=${_cs_basename#*cs-}  # remove everything up to 'cs-'
+		# Fetch the catalog (index) names and adjust them to suit the standard names
+		# Extract the base catalog name and normalize it
+		# Example filename: cs-redhat-operator-index.yaml
+		cs_name=${f#*cs-}            # remove everything up to 'cs-'
 		cs_name=${cs_name%-index*}    # remove everything from '-index' onward
 
 		# Normalize standard names

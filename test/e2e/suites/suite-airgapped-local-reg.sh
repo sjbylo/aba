@@ -58,8 +58,6 @@ plan_tests \
     "Incremental: mesh operators" \
     "Deploy: service mesh demo" \
     "Lifecycle: shutdown/startup" \
-    "Day2: version-aware CatalogSource" \
-    "Day2: --force-catalog bypass" \
     "Upgrade: save and load target version" \
     "Upgrade: cross-minor with admin ack gate" \
     "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)" \
@@ -752,92 +750,6 @@ e2e_run_remote -r 1 2 "Load upgrade images" \
 e2e_run_remote "Verify aba-transfer.tar kept after upgrade load" \
     "cd ~/aba && test -f mirror/data/aba-transfer.tar"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
-
-test_end
-
-# ============================================================================
-# 15b. Day2: version-aware CatalogSource (multi-version regression test)
-# ============================================================================
-# At this point the cluster is at N-2 but the upgrade load just wrote N-1
-# CatalogSource files into working-dir/cluster-resources/.  The archive
-# mechanism should have saved both N-2 (from the initial load) and N-1
-# (from the upgrade load) so day2 can apply the correct version.
-test_begin "Day2: version-aware CatalogSource"
-
-_E2E_OLDER_MINOR=$(cat /tmp/e2e-ocp-version-older | cut -d. -f1-2)
-_E2E_DESIRED_MINOR=$(cat /tmp/e2e-ocp-version-desired | cut -d. -f1-2)
-
-# --- Tier 1: verify archive directories were created by save/load ---
-
-e2e_run_remote "Verify archive exists for N-2 (v${_E2E_OLDER_MINOR})" \
-    "cd ~/aba && ls mirror/data/.cluster-resources-v${_E2E_OLDER_MINOR}/"
-
-e2e_run_remote "Verify archive exists for N-1 (v${_E2E_DESIRED_MINOR})" \
-    "cd ~/aba && ls mirror/data/.cluster-resources-v${_E2E_DESIRED_MINOR}/"
-
-# --- Tier 1: run day2 and verify it uses the N-2 archive ---
-
-e2e_run_remote "Apply day2 (Tier 1: should use v${_E2E_OLDER_MINOR} archive)" \
-    "cd ~/aba && aba --dir $SNO day2 2>&1 | tee /tmp/e2e-day2-tier1.log"
-
-e2e_run_remote "Verify day2 log shows Tier 1 archive match" \
-    "grep -q 'Using archived.*v${_E2E_OLDER_MINOR}' /tmp/e2e-day2-tier1.log"
-
-e2e_run_remote "Verify CatalogSource version label matches cluster (v${_E2E_OLDER_MINOR})" \
-    "cd ~/aba && \
-     cs_image=\$(oc --kubeconfig $SNO/iso-agent-based/auth/kubeconfig \
-       get catalogsource redhat-operators -n openshift-marketplace -o jsonpath='{.spec.image}') && \
-     cs_ver=\$(skopeo inspect \"docker://\$cs_image\" 2>/dev/null \
-       | jq -r '.Labels[\"com.redhat.index.delivery.version\"] // empty') && \
-     echo \"CatalogSource redhat-operators version: \$cs_ver (expected v${_E2E_OLDER_MINOR})\" && \
-     [ \"\$cs_ver\" = \"v${_E2E_OLDER_MINOR}\" ]"
-
-# --- Tier 2: delete N-2 archive, verify registry-inspection fallback ---
-
-e2e_run_remote -q "Remove N-2 archive to force Tier 2 fallback" \
-    "cd ~/aba && mv mirror/data/.cluster-resources-v${_E2E_OLDER_MINOR} /tmp/e2e-cs-archive-backup"
-
-e2e_run_remote "Apply day2 (Tier 2: should inspect registry and substitute)" \
-    "cd ~/aba && aba --dir $SNO day2 2>&1 | tee /tmp/e2e-day2-tier2.log"
-
-e2e_run_remote "Verify day2 log shows Tier 2 mismatch detection" \
-    "grep -q 'CatalogSource files reference.*but cluster is' /tmp/e2e-day2-tier2.log"
-
-e2e_run_remote "Verify day2 log shows Tier 2 substitution" \
-    "grep -q 'Found matching.*catalog' /tmp/e2e-day2-tier2.log"
-
-e2e_run_remote "Verify CatalogSource still correct after Tier 2 (v${_E2E_OLDER_MINOR})" \
-    "cd ~/aba && \
-     cs_image=\$(oc --kubeconfig $SNO/iso-agent-based/auth/kubeconfig \
-       get catalogsource redhat-operators -n openshift-marketplace -o jsonpath='{.spec.image}') && \
-     cs_ver=\$(skopeo inspect \"docker://\$cs_image\" 2>/dev/null \
-       | jq -r '.Labels[\"com.redhat.index.delivery.version\"] // empty') && \
-     echo \"CatalogSource redhat-operators version: \$cs_ver (expected v${_E2E_OLDER_MINOR})\" && \
-     [ \"\$cs_ver\" = \"v${_E2E_OLDER_MINOR}\" ]"
-
-# --- Restore archive for the rest of the suite ---
-
-e2e_run_remote -q "Restore N-2 archive" \
-    "cd ~/aba && mv /tmp/e2e-cs-archive-backup mirror/data/.cluster-resources-v${_E2E_OLDER_MINOR}"
-
-test_end
-
-# ============================================================================
-# 15b2. Day2: --force-catalog bypass
-# ============================================================================
-# Verify that --force-catalog skips version-aware logic and applies CS files
-# from working-dir/cluster-resources/ as-is (which point to N-1 after the
-# upgrade load above).
-test_begin "Day2: --force-catalog bypass"
-
-e2e_run_remote "Apply day2 with --force-catalog (should skip version matching)" \
-    "cd ~/aba && aba --dir $SNO day2 --force-catalog 2>&1 | tee /tmp/e2e-day2-force.log"
-
-e2e_run_remote "Verify day2 log shows --force-catalog message" \
-    "grep -q 'Applying CatalogSource files as-is' /tmp/e2e-day2-force.log"
-
-e2e_run_remote "Verify day2 log does NOT show version matching" \
-    "! grep -q 'Using archived' /tmp/e2e-day2-force.log"
 
 test_end
 

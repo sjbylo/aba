@@ -51,7 +51,6 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
 
   aba [-d <cluster>] mon                  # Monitor installation (runs openshift-install agent wait-for)
   aba [-d <cluster>] day2                 # Configure OperatorHub, signatures, etc (run after load/sync/upgrade)
-      --force-catalog                     # Apply CatalogSource files as-is, skip version matching
   aba [-d <cluster>] ssh --cmd <command>   # Run a command on the rendezvous node (node0) via SSH
   aba [-d <cluster>] ssh --all --cmd <cmd> # Run a command on all nodes (masters + workers)
   aba [-d <cluster>] ssh --all --masters --cmd <cmd>  # Run on masters only

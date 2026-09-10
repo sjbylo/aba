@@ -1041,12 +1041,6 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--validate" ]; then
 		_cli_validate_only=true
 		shift
-	elif [ "$1" = "--force-catalog" ]; then
-		# day2: skip version-aware CatalogSource matching and apply CS files
-		# from working-dir/cluster-resources/ as-is.  Use when intentionally
-		# installing a newer catalog version onto an older cluster.
-		export ABA_FORCE_CATALOG=1
-		shift
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift

@@ -736,8 +736,8 @@ and direct become reserved dir names. The key name itself might deserve a rename
 
 ## Multi-version operator catalogs: day2 applies wrong catalog after upgrade sync
 
-**Severity:** HIGH — can break operators on existing clusters
-**Status:** Planned
+**Severity:** LOW — theoretical; operator catalogs are backwards-compatible in practice
+**Status:** REVERTED (2026-09-10) — version-aware logic removed; see below
 **Added:** 2026-07-11
 **Related:** ISC upgrade mode / state.sh override (above), day2-osus channel bug (above)
 
@@ -1285,7 +1285,7 @@ already has `list_installed_clusters()` + `int_connection` filtering in
 | 2 | `sync`/`load` adds new OCP version to graph-image | Restart OSUS pod to refresh graph data | MEDIUM — see "auto-restart OSUS pod" above |
 | 3 | Cross-minor upgrade sync | Update OSUS channel on cluster to match target minor | MEDIUM — currently manual, can break `aba upgrade` |
 | 4 | Mirror reinstall (new CA cert) | Warn that old clusters can't reach new mirror | MEDIUM — already in backlog (cert mismatch) |
-| 5 | `aba day2` after upgrade sync | Skip CatalogSources whose version doesn't match cluster | HIGH — already in backlog (multi-version catalogs) |
+| 5 | `aba day2` after upgrade sync | Apply as-is (catalogs are backwards-compatible); debug-log mismatch | LOW — reverted version-aware logic (2026-09-10) |
 | 6 | `aba upgrade` pre-flight | Query cluster's actual version, not aba.conf | MEDIUM — partially done, needs strengthening |
 
 **Proposed design:**
