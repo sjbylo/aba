@@ -1147,23 +1147,50 @@ mirror_view_isc() {
 		local _gen_out _gen_rc=0
 		_gen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
 			make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _gen_rc=$?
-		if [[ $_gen_rc -ne 0 ]]; then
-			tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
-			local _isconf_err="${_gen_out}"
-			if [[ -z "$_isconf_err" ]]; then
-				_isconf_err=$(get_task_error "aba:isconf:generate" 2>/dev/null | tail -8 | tail -c 600)
-			fi
-			if [[ -z "$_isconf_err" && -n "$CATALOG_ERROR" ]]; then
-				_isconf_err="$CATALOG_ERROR"
-			fi
-			_isconf_err="${_isconf_err//$'\n'/\\n}"
-			local _dlg_msg="Operator catalog download failed."
+	else
+		# Task completed previously — check if it failed
+		local _gen_out="" _gen_rc
+		_gen_rc=$(run_once -E -i "aba:isconf:generate" 2>/dev/null) || _gen_rc=""
+		_gen_rc="${_gen_rc:-0}"
+	fi
+	if [[ "${_gen_rc:-0}" -ne 0 ]]; then
+		tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
+		local _isconf_err="${_gen_out}"
+		if [[ -z "$_isconf_err" ]]; then
+			_isconf_err=$(run_once -o -i "aba:isconf:generate" 2>/dev/null | tail -12 | tail -c 800)
+		fi
+		if [[ -z "$_isconf_err" ]]; then
+			_isconf_err=$(run_once -e -i "aba:isconf:generate" 2>/dev/null | tail -8 | tail -c 600)
+		fi
+		if [[ -z "$_isconf_err" && -n "$CATALOG_ERROR" ]]; then
+			_isconf_err="$CATALOG_ERROR"
+		fi
+		_isconf_err="${_isconf_err//$'\n'/\\n}"
+
+		# Check structured error tag written by aba_abort --tag
+		local _abort_tag=""
+		[[ -f "$HOME/.aba/.abort-tag" ]] && _abort_tag=$(<"$HOME/.aba/.abort-tag")
+		rm -f "$HOME/.aba/.abort-tag"
+
+		local _dlg_title _dlg_msg
+		if [[ "$_abort_tag" == "upgrade-path" ]]; then
+			_dlg_title="Upgrade Path Error"
+			_dlg_msg="The upgrade target cannot be reached.\n\n"
+			_dlg_msg="${_dlg_msg}${_isconf_err:-Unknown error}"
+			_dlg_msg="${_dlg_msg}\n\nTo fix in the TUI:"
+			_dlg_msg="${_dlg_msg}\n  • Prepare Upgrade (U) → clear or change target"
+			_dlg_msg="${_dlg_msg}\n  • Rerun Wizard (W) → change channel/version"
+		else
+			_dlg_title="ImageSet Generation Failed"
+			_dlg_msg="ImageSet configuration generation failed."
 			_dlg_msg="${_dlg_msg}\n\n${_isconf_err:-Unknown error}"
 			_dlg_msg="${_dlg_msg}\n\n$(_tui_catalog_error_hints)"
-			dlg --backtitle "$(ui_backtitle)" --title "Catalog Download Failed" \
-				--msgbox "$_dlg_msg" 0 0
-			return 0
 		fi
+		dlg --backtitle "$(ui_backtitle)" --title "$_dlg_title" \
+			--msgbox "$_dlg_msg" 0 0
+		# Clear the failed task so a retry re-runs generation
+		run_once -c -i "aba:isconf:generate" 2>/dev/null || true
+		return 0
 	fi
 
 	if [[ "$readonly" == "true" ]]; then

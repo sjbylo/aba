@@ -209,8 +209,25 @@ aba_debug() {
 }
 
 aba_abort() {
-	local main_msg="$1"
-	shift
+	# Usage: aba_abort [--tag TAG] "message" ["detail" ...]
+	# Prints error + details to stderr, then exits 1.
+	# --tag TAG writes TAG to ~/.aba/.abort-tag so callers (e.g. TUI) can
+	# identify the error category without parsing message strings.
+	# Known tags: upgrade-path (config mismatch, not an infra problem)
+	local _tag=""
+	local _args=()
+	while [[ $# -gt 0 ]]; do
+		if [[ "$1" == "--tag" ]]; then
+			_tag="$2"; shift 2
+		elif [[ "$1" == "--rc" ]]; then
+			shift 2  # ignored (Make eats exit codes)
+		else
+			_args+=("$1"); shift
+		fi
+	done
+
+	local main_msg="${_args[0]:-Error}"
+	unset '_args[0]'
 
 	echo >&2
 
@@ -218,15 +235,20 @@ aba_abort() {
 	echo_red "[ABA] Error: $main_msg" >&2
 
 	# Indented follow-up lines, also red, to stderr
-	for line in "$@"; do
+	for line in "${_args[@]}"; do
 		echo_red "[ABA]        $line" >&2
 	done
 	echo >&2
 
+	# Write error tag for structured detection by callers (TUI, scripts)
+	if [[ -n "$_tag" ]]; then
+		mkdir -p ~/.aba
+		echo "$_tag" > ~/.aba/.abort-tag
+	fi
+
 	sleep 1
 
-	# FIXME: Have a way to exit a diff. value
-        exit 1
+	exit 1
 }
 
 # Non-fatal error (like aba_abort but does NOT exit)
