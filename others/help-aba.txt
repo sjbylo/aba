@@ -59,7 +59,7 @@ Options:
   -o, --out <file|->                    # Output Install Bundle to destination, e.g. file or stdout (-). See 'aba bundle -h'
   -f, --force                           # Only used with 'aba reset --force' and 'aba bundle --force'
   -V, --vmware                          # Apply this VMware config file (for govc)
-      --force-catalog                   # day2: apply CatalogSource files as-is, skip version matching
+      --force-catalog                   # day2: apply CatalogSource files as-is, skip cluster version matching
       --verify <all|conf|off>           # Control validation: all (default), conf (config only), off (skip)
   -D, --debug                           # Increase output
   -q, --quiet                           # Less output

@@ -59,6 +59,7 @@ plan_tests \
     "Deploy: service mesh demo" \
     "Lifecycle: shutdown/startup" \
     "Day2: version-aware CatalogSource" \
+    "Day2: --force-catalog bypass" \
     "Upgrade: save and load target version" \
     "Upgrade: cross-minor with admin ack gate" \
     "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)" \
@@ -818,6 +819,25 @@ e2e_run_remote "Verify CatalogSource still correct after Tier 2 (v${_E2E_OLDER_M
 
 e2e_run_remote -q "Restore N-2 archive" \
     "cd ~/aba && mv /tmp/e2e-cs-archive-backup mirror/data/.cluster-resources-v${_E2E_OLDER_MINOR}"
+
+test_end
+
+# ============================================================================
+# 15b2. Day2: --force-catalog bypass
+# ============================================================================
+# Verify that --force-catalog skips version-aware logic and applies CS files
+# from working-dir/cluster-resources/ as-is (which point to N-1 after the
+# upgrade load above).
+test_begin "Day2: --force-catalog bypass"
+
+e2e_run_remote "Apply day2 with --force-catalog (should skip version matching)" \
+    "cd ~/aba && aba --dir $SNO day2 --force-catalog 2>&1 | tee /tmp/e2e-day2-force.log"
+
+e2e_run_remote "Verify day2 log shows --force-catalog message" \
+    "grep -q 'Applying CatalogSource files as-is' /tmp/e2e-day2-force.log"
+
+e2e_run_remote "Verify day2 log does NOT show version matching" \
+    "! grep -q 'Using archived' /tmp/e2e-day2-force.log"
 
 test_end
 

@@ -46,6 +46,7 @@ plan_tests \
     "SNO: verify operators from all catalogs" \
     "Import: day2 injects mirror creds on imported cluster" \
     "Import: multi-mirror day2 CA and CatalogSource naming" \
+    "Import: stale kubeconfig detection" \
     "SNO: IP conflict detection" \
     "verify_conf=conf skips network checks" \
     "Regression: verify_conf=conf extracts mirror binary" \
@@ -500,8 +501,8 @@ e2e_run "Save CS count before idempotency run" "
     echo \"CS count: \$(cat /tmp/e2e-mm-cs-count.txt)\"
 "
 
-e2e_run "Run day2 again (idempotency check)" \
-    "aba --dir $IMPORT_MM day2"
+e2e_run "Run day2 again (idempotency + dedup check)" \
+    "aba --dir $IMPORT_MM day2 2>&1 | tee /tmp/e2e-mm-day2-idem.log"
 
 e2e_run "Verify idempotent: CS count unchanged" "
     export KUBECONFIG=$_KC_MM
@@ -511,6 +512,9 @@ e2e_run "Verify idempotent: CS count unchanged" "
         || { echo \"FAIL: CS count changed: \$_before -> \$_after\"; exit 1; }
     echo \"PASS: CS count unchanged (\$_after)\"
 "
+
+e2e_run "Verify dedup: day2 skipped duplicate CatalogSources" \
+    "grep -q 'already served by an existing CatalogSource, skipping' /tmp/e2e-mm-day2-idem.log"
 
 # Cleanup: restore cluster state for subsequent tests.
 # Avoid changing registry-config (would trigger MCO reboot on SNO).
@@ -533,7 +537,46 @@ e2e_run "Cleanup: delete suffixed CatalogSources" "
 "
 
 e2e_run "Cleanup: remove import dir and temp files" \
-    "rm -rf $IMPORT_MM /tmp/e2e-mm-orig-image.txt /tmp/e2e-mm-cs-count.txt /tmp/e2e-mm-keys.txt /tmp/e2e-mm-ca.txt"
+    "rm -rf $IMPORT_MM /tmp/e2e-mm-orig-image.txt /tmp/e2e-mm-cs-count.txt /tmp/e2e-mm-keys.txt /tmp/e2e-mm-ca.txt /tmp/e2e-mm-day2-idem.log"
+
+test_end
+
+# ============================================================================
+# 9c. Import: stale kubeconfig detection
+# ============================================================================
+# When importing a cluster that ABA already manages, verify that:
+#   - Valid kubeconfig: blocks with "already managed" message
+#   - Stale kubeconfig: detects invalid auth and suggests --force
+test_begin "Import: stale kubeconfig detection"
+
+_KC_STALE="$SNO/iso-agent-based/auth/kubeconfig"
+_STALE_DIR="$HOME/.aba/clusters/${cluster_name}.${base_domain}"
+
+# Test 1: valid kubeconfig should block with "already managed"
+e2e_run "Import with valid kubeconfig (should block)" "
+    cd ~/aba &&
+    output=\$(aba import --kubeconfig $_KC_STALE 2>&1) && exit 1 || true
+    echo \"\$output\"
+    echo \"\$output\" | grep -q 'already managed by ABA' \
+        || { echo 'FAIL: expected already-managed message'; exit 1; }
+    echo 'PASS: correctly blocked with already-managed'
+"
+
+# Test 2: corrupt the state kubeconfig, import should detect stale auth
+e2e_run "Import with stale kubeconfig (should suggest --force)" "
+    cd ~/aba &&
+    cp $_STALE_DIR/kubeconfig $_STALE_DIR/kubeconfig.e2e-bak &&
+    echo 'BROKEN' > $_STALE_DIR/kubeconfig &&
+    output=\$(aba import --kubeconfig $_KC_STALE 2>&1) && exit 1 || true
+    echo \"\$output\"
+    cp $_STALE_DIR/kubeconfig.e2e-bak $_STALE_DIR/kubeconfig &&
+    rm -f $_STALE_DIR/kubeconfig.e2e-bak
+    echo \"\$output\" | grep -q 'kubeconfig is no longer valid' \
+        || { echo 'FAIL: expected stale-kubeconfig message'; exit 1; }
+    echo \"\$output\" | grep -q 'force' \
+        || { echo 'FAIL: expected --force suggestion'; exit 1; }
+    echo 'PASS: correctly detected stale kubeconfig and suggested --force'
+"
 
 test_end
 

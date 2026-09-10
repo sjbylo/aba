@@ -520,11 +520,11 @@ if [ ! "$upgrade_already_running" ]; then
 		_all_available=$(echo "$_available_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
 		_all_conditional=$(echo "$_conditional_versions" | grep -v '^$' | _semver_sort | tr '\n' ', ' | sed 's/,$//')
 		aba_abort "Version $target_ver is not available in the OSUS update graph." \
-			"The OSUS pod was restarted by 'aba day2' but the graph data may still be loading." \
 			${_all_available:+"Currently available: $_all_available"} \
 			${_all_conditional:+"Conditional: $_all_conditional"} \
-			"Wait a few minutes and retry:  aba -d $(basename "$PWD") upgrade --to $target_ver" \
-			"Or check manually:  oc adm upgrade --include-not-recommended"
+			"If you recently ran 'aba day2' or 'aba day2-osus', the graph data may still be loading — wait a few minutes and retry." \
+			"Otherwise, ensure the upgrade images were mirrored:  aba -d mirror sync --upgrade-to $target_ver" \
+			"Check manually:  oc adm upgrade --include-not-recommended"
 	fi
 
 	# No OSUS at all — offer manual override without graph validation
@@ -656,7 +656,7 @@ if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
 	aba_success "Upgrade complete! Cluster is now at version $target_ver"
 	oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 	echo
-	aba_info "Next step: run 'aba day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
+	aba_info "Next step: run 'aba -d $(basename "$PWD") day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
 	exit 0
 fi
 
@@ -668,6 +668,6 @@ aba_info "To monitor the upgrade, run:"
 aba_info "  oc adm upgrade status"
 aba_info "  oc get clusterversion"
 echo
-aba_info "After upgrade completes, run 'aba day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
+aba_info "After upgrade completes, run 'aba -d $(basename "$PWD") day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
 
 exit 0
