@@ -10,6 +10,9 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 - **`oc-mirror` tuning hints on failure** — When `oc-mirror` exhausts retries, the failure message now shows the config knobs (`OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, `OC_MIRROR_FLAGS`) and references the README Tuning section. Retry output also shows the escalated timeout and parallelism values. (Suggested by [@eanylin](https://github.com/eanylin).)
 - **`aba mirror --help` tuning section** — The mirror help output now includes a Tuning section documenting `OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, and `OC_MIRROR_FLAGS`.
 - **ISC user-managed detection** — New `aba_isc_is_user_managed()` core function detects when the ImageSet Config has been hand-edited (newer than the `.created` sentinel). Sync/save/bundle confirm dialogs show "(user-edited ISC)" when applicable.
+- **`aba upgrade-mon`** — New command to monitor an in-progress upgrade until completion. Polls every 30s showing operator progress. Ctrl-C detaches (upgrade continues). On completion, prompts to run `aba day2` to update CatalogSources. Also available as `aba upgrade --wait` (`-w`) to trigger and monitor in one step.
+- **Smarter `aba import` when cluster exists** — When re-importing a cluster that ABA already manages, the error message now checks whether the existing kubeconfig is still valid. If stale (e.g. cluster was reinstalled), suggests `--force` re-import instead of the generic "already managed" message.
+- **Fix duplicate CatalogSources in multi-mirror** — Running `aba day2` from the same mirror a second time no longer creates a suffixed duplicate CatalogSource when the unsuffixed original already serves the same image.
 
 ### Changed
 

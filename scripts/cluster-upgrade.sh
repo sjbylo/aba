@@ -655,6 +655,8 @@ echo
 if [ "$cv_ver" = "$target_ver" ] && [ "$cv_prog" = "False" ]; then
 	aba_success "Upgrade complete! Cluster is now at version $target_ver"
 	oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
+	echo
+	aba_info "Next step: run 'aba day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
 	exit 0
 fi
 
@@ -665,5 +667,7 @@ echo
 aba_info "To monitor the upgrade, run:"
 aba_info "  oc adm upgrade status"
 aba_info "  oc get clusterversion"
+echo
+aba_info "After upgrade completes, run 'aba day2' to update CatalogSources for v$(_ver_minor "$target_ver")"
 
 exit 0
