@@ -131,13 +131,13 @@ aba_debug "Available disk space: $avail MB"
 
 # Stark warning if very low (incremental saves may still succeed, so don't abort)
 if [ $avail -lt 20500 ]; then
-	aba_warn "Very low disk space under $PWD/data (only $avail MB free)" \
+	aba_warn "Very low disk space under $PWD/data (only $(( avail / 1024 ))GB free)" \
 		"A first-time save requires at least 20GB for the base platform alone" \
 		"Operators require additional 40-400GB of space" \
 		"Incremental saves may succeed with less space"
 	echo >&2
 elif [ $avail -lt 51250 ]; then
-	aba_warn "Less than 50GB of space available under $PWD/data (only $avail MB)" \
+	aba_warn "Less than 50GB of space available under $PWD/data (only $(( avail / 1024 ))GB free)" \
 		"Operator images require between ~40 to ~400GB of disk space!"
 	echo >&2
 fi
