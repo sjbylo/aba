@@ -243,19 +243,32 @@ rm -f data/aba-transfer-metadata.json
 
 echo >&2
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
-	aba_success "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
+	aba_success "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})!"
 	echo
-	aba_info "Copy all *.tar files from mirror/data/ to the disconnected host:"
+	aba_info "Next: copy all *.tar files to the disconnected host:"
 	aba_info "  cp mirror/data/*.tar /transfer-media/"
 	echo
-	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (config, CLIs)"
+	aba_info "  mirror_*.tar = images, aba-transfer.tar = config + CLIs"
 	echo
 	aba_info "On the disconnected host:"
 	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"
 	aba_info "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
 elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
-	aba_success "Images saved to mirror/data/."
-	aba_info "Next: 'aba tar --out /path/to/portable/media/install-bundle.tar'"
+	aba_success "Images saved successfully!"
+	echo
+	aba_info "Next steps — choose one:"
+	echo
+	aba_info "  Option A: Create a portable install bundle (first-time transfer only)"
+	aba_info "    aba bundle --out /path/to/portable/media/"
+	echo
+	aba_info "  Option B: Transfer archive files manually"
+	aba_info "    cp mirror/data/*.tar /transfer-media/"
+	aba_info "    On the disconnected bastion:"
+	aba_info "      cp /transfer-media/*.tar ~/aba/mirror/data/"
+	aba_info "      cd aba && ./install && aba"
+	echo
+	aba_info "  mirror_*.tar = images, aba-transfer.tar = config (ISC)"
+	aba_info "  For ongoing updates, always use Option B (save/transfer/load)."
 fi
 echo >&2
 
