@@ -66,4 +66,5 @@ skupper-netobs-operator                                 Red Hat Service Intercon
 skupper-operator                                        Red Hat Service Interconnect                                 stable-2
 storage-based-remediation                               Storage-Based Remediation Operator                           stable
 tang-operator                                           NBDE Tang Server                                             alpha
+tempo-product                                           Tempo Operator                                               stable
 web-terminal                                            Web Terminal                                                 fast

@@ -19,7 +19,7 @@ Main commands:
   aba transfer-primed                   # Create config-only transfer tar. See 'aba transfer --help'
   aba [-d <cluster>] upgrade --to <ver> # Upgrade a cluster to a target OCP version. See 'aba cluster --help'
   aba import                            # Import an existing OpenShift cluster. See 'aba import --help'
-  aba [-d <cluster>] terminal           # Interactive shell logged into the cluster (oc ready, bash completion)
+  aba [-d <cluster>] terminal|term      # Interactive shell logged into the cluster (oc ready, bash completion)
 
 Other commands:
   aba clean                             # Clean up all generated files

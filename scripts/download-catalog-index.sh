@@ -214,20 +214,34 @@ else
 fi
 
 # Run container and extract /configs (retry once on transient Podman errors)
-# "no such container" errors are typically caused by stale container IDs from
-# interrupted previous runs — sweeping and retrying resolves them.
+# "no such container" errors are typically caused by BoltDB race conditions
+# when many parallel download-catalog-index.sh processes all do podman create/cp
+# simultaneously. Serializing the critical section with flock prevents this.
+_podman_lock="/tmp/.aba-podman-catalog.lock"
 _extract_catalog() {
 	local _cname="$1"
-	podman rm -f "$_cname" >/dev/null 2>&1 || true
-	local _err
-	_err=$(podman create -q --name "$_cname" "$catalog_url" 2>&1 >/dev/null) || {
-		echo "$_err"; return 1
-	}
-	_err=$(podman cp "$_cname:/configs" "$tmp_dir/configs" 2>&1) || {
-		echo "$_err"; return 1
-	}
-	podman rm -f "$_cname" >/dev/null 2>&1 || true
-	return 0
+	# Serialize create+cp+rm — podman's BoltDB can't handle many concurrent writers.
+	# Multiple download-catalog-index.sh processes run in parallel (one per catalog
+	# per OCP version); without serialization, concurrent podman create/cp causes
+	# "no container with ID ... found in database" errors.
+	local _err_file="$tmp_dir/.extract-err"
+	(
+		flock -w 120 9 || { echo "flock timeout" > "$_err_file"; exit 1; }
+		podman rm -f "$_cname" >/dev/null 2>&1 || true
+		if ! podman create -q --name "$_cname" "$catalog_url" >/dev/null 2>"$_err_file"; then
+			exit 1
+		fi
+		if ! podman cp "$_cname:/configs" "$tmp_dir/configs" 2>"$_err_file"; then
+			exit 1
+		fi
+		podman rm -f "$_cname" >/dev/null 2>&1 || true
+	) 9>"$_podman_lock"
+	local _rc=$?
+	if [[ $_rc -ne 0 && -s "$_err_file" ]]; then
+		cat "$_err_file"
+	fi
+	rm -f "$_err_file"
+	return $_rc
 }
 
 aba_info "Extracting catalog data for $catalog_name v$ocp_ver_major..."

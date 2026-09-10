@@ -304,7 +304,7 @@ operators. These are distinct concerns — a user might want one without the oth
 ## Upgrade UX: pre-flight and monitoring improvements
 
 **Severity:** MEDIUM — UX gaps that cause confusion during upgrades
-**Status:** Planned
+**Status:** Partially Done (A: --allow-upgrade-with-warnings auto-added with --force; B/C/D still open)
 **Added:** 2026-07-10
 
 **Current state:** `cluster-upgrade.sh` pre-flight checks ClusterVersion-level
@@ -527,8 +527,9 @@ which terminal to run it in) and runs:
 ## day2-ntp: apply NTP config without node reboot where possible
 
 **Severity:** MEDIUM — reduces downtime during NTP configuration
-**Status:** Planned
+**Status:** Done (v1.2.5: NodeDisruptionPolicy for OCP 4.17+ — chronyd restart instead of reboot)
 **Added:** 2026-07-13
+**Closed:** 2026-09-09
 
 **Problem:** `aba day2-ntp` applies NTP configuration via MachineConfig, which
 triggers the MCO to drain, reboot, and reconcile every node. On a 3-node
@@ -880,8 +881,9 @@ to catch new dependencies early. Could also run on any change to
 ## Upgrade: Upgradeable=False pre-flight check in CLI
 
 **Severity:** MEDIUM — CLI silently hits confusing OpenShift errors
-**Status:** Planned
+**Status:** Done (cluster-upgrade.sh now checks Upgradeable=False, warns with reason/message, prompts to continue or aborts)
 **Added:** 2026-08-01
+**Closed:** 2026-09-09
 
 **Problem:** The TUI checks `Upgradeable=False` before triggering an upgrade
 (`_upgrade_preflight_check` in `tui-cluster.sh`), but the CLI path (`aba upgrade`)
@@ -1038,7 +1040,7 @@ only runs `virsh version`).
 ## Upgrade: detect stale OSUS graph when cluster version not in graph
 
 **Severity:** MEDIUM — user gets confusing "not an available upgrade" error
-**Status:** Planned
+**Status:** Partially Done (verify_upgrade_path_exists now does BFS edge validation; remaining: actionable "stale minVersion" diagnostic in cluster-upgrade.sh when source version missing from graph)
 **Added:** 2026-08-09
 
 **Problem:** When a cluster is upgraded via a connected path (e.g. z-stream
@@ -1184,8 +1186,9 @@ mirror sync.
 ## Upgrade: auto-restart OSUS pod when graph-image content changes
 
 **Severity:** MEDIUM — user gets "not an available upgrade" after a successful sync
-**Status:** Planned (was prototyped and verified on testy@conno, then stashed for v1.2.3)
+**Status:** Done (v1.2.5: `day2.sh` proactively restarts OSUS pod when `updateService.yaml` is newer than running pod)
 **Added:** 2026-08-16
+**Closed:** 2026-09-09
 
 **Problem:** After `aba sync` (or `aba load`) mirrors a new OCP version, the
 `graph-image:latest` in the registry is updated with the new version's graph
