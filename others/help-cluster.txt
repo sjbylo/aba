@@ -84,7 +84,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
   Upgrade lifecycle (disconnected):
     1. aba -d mirror sync/save --upgrade-to <ver>   # Mirror upgrade images
     2. aba -d mirror load                            # (air-gapped only) Load into registry
-    3. aba -d <cluster> day2                         # Apply CatalogSources for CURRENT version
+    3. aba -d <cluster> day2                         # Apply signatures & IDMS for upgrade images
     4. aba -d <cluster> upgrade --to <ver>           # Trigger the upgrade
     5. aba -d <cluster> day2                         # After upgrade: update CatalogSources for NEW version
   Note: for disconnected upgrades, first load the upgrade images with 'aba -d mirror load'

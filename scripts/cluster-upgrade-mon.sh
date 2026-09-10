@@ -58,13 +58,14 @@ fi
 _current_ver=$(oc get clusterversion version -o jsonpath='{.status.history[0].version}' 2>/dev/null) || _current_ver="unknown"
 
 # Check if already at target (no upgrade in progress)
-_cv_prog=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null) || true
-_cv_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || true
+_cv_init=$(oc get clusterversion version -o json 2>/dev/null) || true
+_cv_ver=$(echo "$_cv_init" | jq -r '.status.desired.version // empty' 2>/dev/null)
+_cv_prog=$(echo "$_cv_init" | jq -r '.status.conditions[] | select(.type=="Progressing") | .status // empty' 2>/dev/null)
 
 if [ "$_cv_ver" = "$_target_ver" ] && [ "$_cv_prog" = "False" ]; then
 	aba_success "Cluster is already at version $_target_ver (no upgrade in progress)"
 	echo
-	aba_info "If CatalogSources need updating, run: aba day2"
+	aba_info "If CatalogSources need updating, run: aba -d $(basename "$PWD") day2"
 	exit 0
 fi
 
@@ -99,23 +100,29 @@ while true; do
 	_elapsed=$(( $(date +%s) - _start_ts ))
 	_elapsed_fmt=$(_aba_format_elapsed "$_elapsed")
 
-	# Read cluster version state
-	_cv_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || _cv_ver=""
-	_cv_prog=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null) || _cv_prog=""
-	_cv_avail=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null) || _cv_avail=""
-	_cv_deg=$(oc get clusterversion version -o jsonpath='{.status.conditions[?(@.type=="Degraded")].status}' 2>/dev/null) || _cv_deg=""
+	# Read cluster version state in a single API call
+	_cv_json=$(oc get clusterversion version -o json 2>/dev/null) || _cv_json=""
+	if [ "$_cv_json" ]; then
+		_cv_ver=$(echo "$_cv_json" | jq -r '.status.desired.version // empty')
+		_cv_prog=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Progressing") | .status // empty')
+		_cv_avail=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Available") | .status // empty')
+		_cv_deg=$(echo "$_cv_json" | jq -r '.status.conditions[] | select(.type=="Degraded") | .status // empty')
+	else
+		_cv_ver="" _cv_prog="" _cv_avail="" _cv_deg=""
+	fi
 
-	# Count operator progress: total COs vs updated (Available=True, Progressing=False)
-	_co_total=0
-	_co_updated=0
-	_co_progressing=0
-	_co_degraded=0
-	while IFS=' ' read -r _a _p _d; do
-		_co_total=$(( _co_total + 1 ))
-		[ "$_a" = "True" ] && [ "$_p" = "False" ] && _co_updated=$(( _co_updated + 1 ))
-		[ "$_p" = "True" ] && _co_progressing=$(( _co_progressing + 1 ))
-		[ "$_d" = "True" ] && _co_degraded=$(( _co_degraded + 1 ))
-	done < <(oc get co -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Available")].status} {.status.conditions[?(@.type=="Progressing")].status} {.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}' 2>/dev/null)
+	# Count operator progress in a single API call
+	_co_json=$(oc get co -o json 2>/dev/null) || _co_json=""
+	_co_total=0 _co_updated=0 _co_progressing=0 _co_degraded=0
+	if [ "$_co_json" ]; then
+		while IFS=' ' read -r _a _p _d; do
+			[ -z "$_a" ] && continue
+			_co_total=$(( _co_total + 1 ))
+			[ "$_a" = "True" ] && [ "$_p" = "False" ] && _co_updated=$(( _co_updated + 1 ))
+			[ "$_p" = "True" ] && _co_progressing=$(( _co_progressing + 1 ))
+			[ "$_d" = "True" ] && _co_degraded=$(( _co_degraded + 1 ))
+		done < <(echo "$_co_json" | jq -r '.items[] | "\(.status.conditions[] | select(.type=="Available") | .status) \(.status.conditions[] | select(.type=="Progressing") | .status) \(.status.conditions[] | select(.type=="Degraded") | .status)"' 2>/dev/null)
+	fi
 
 	# Build status line
 	_status="[${_elapsed_fmt}] Operators: ${_co_updated}/${_co_total} updated"
@@ -130,7 +137,7 @@ while true; do
 		echo
 		oc adm upgrade status 2>/dev/null || oc get clusterversion 2>/dev/null
 		echo
-		aba_info "Next step: run 'aba day2' to update CatalogSources for v$(_ver_minor "$_target_ver")"
+		aba_info "Next step: run 'aba -d $(basename "$PWD") day2' to update CatalogSources for v$(_ver_minor "$_target_ver")"
 		exit 0
 	fi
 
