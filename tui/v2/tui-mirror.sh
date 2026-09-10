@@ -1821,7 +1821,9 @@ mirror_create_bundle() {
 	else
 		_summary+="Operators: none\n"
 	fi
-	_summary+="\nEnter output path (version suffix added automatically):"
+	_summary+="\nEnter output path (version suffix added automatically):\n"
+	_summary+="\nTip: For best results, use a USB drive or a separate"
+	_summary+="\nfilesystem with plenty of free space."
 
 	local default_bundle
 	default_bundle=$(cat "$HOME/.aba/bundle-path" 2>/dev/null) || default_bundle="/tmp/ocp-bundle"
@@ -1876,26 +1878,28 @@ mirror_create_bundle() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
 			--yes-label "$TUI2_BTN_LIGHT_BUNDLE" \
 			--no-label "$TUI2_BTN_FULL_BUNDLE" \
+			--extra-button --extra-label "$TUI2_BTN_BACK" \
 			--yesno "$TUI2_MSG_BUNDLE_LIGHT_CONFIRM" 0 0
 		local _bundle_rc=$?
-		if [[ $_bundle_rc -eq 255 ]]; then
+		if [[ $_bundle_rc -eq 3 || $_bundle_rc -eq 255 ]]; then
 			return 1
 		elif [[ $_bundle_rc -eq 0 ]]; then
 			light_flag="--light"
 		else
-			# Full bundle on same device — warn about disk space
-			dlg --backtitle "$(ui_backtitle)" --title "Disk Space Warning" \
-				--yes-label "$TUI2_BTN_CONTINUE" \
-				--no-label "$TUI2_BTN_CANCEL" \
-				--yesno "\Z3Disk Space Consideration\Zn\n\n\
-Bundle and mirror are on the same filesystem (${_mount_point:-unknown}).\n\n\
-Creating a full bundle requires:\n\
-  • Mirror image-set archives in mirror/data/\n\
-  • Complete bundle copy written to: $bundle_path\n\n\
-You may temporarily need roughly \Zbdouble the space\Zn.\n\n\
-\ZbRecommendation:\Zn Use light bundle to avoid this.\n\n\
-Continue with full bundle anyway?" 0 0
-			[[ $? -ne 0 ]] && return 1
+			# Full bundle on same device — warn only if free space is low
+			local _free_gb=999
+			_free_gb=$(df --output=avail -BG "$output_dir" 2>/dev/null | tail -1 | tr -d ' G')
+			if [[ "${_free_gb:-999}" -lt 50 ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Low Disk Space Warning" \
+					--yes-label "$TUI2_BTN_CONTINUE" \
+					--no-label "$TUI2_BTN_CANCEL" \
+					--yesno "\n\
+Only ${_free_gb}G free on this filesystem.\n\n\
+A full bundle duplicates the image archives\ninto: $bundle_path\n\n\
+You may run out of disk space.\n\n\
+Continue with full bundle?" 0 0
+				[[ $? -ne 0 ]] && return 1
+			fi
 		fi
 	fi
 
@@ -1904,19 +1908,20 @@ Continue with full bundle anyway?" 0 0
 	if ls "$ABA_ROOT"/mirror/data/mirror_*.tar >/dev/null 2>&1; then
 		local _bundle_data_choice=""
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
-			--yes-label "Reuse (fast)" \
-			--no-label "Clean Rebuild" \
-			--yesno "Existing image data found in mirror/data/.\n\n\
-Reuse: only download changed/new images (incremental, fast).\n\
-Clean Rebuild: delete existing data and re-download everything.\n\n\
-Reuse is recommended unless you changed OpenShift version or suspect corruption." 0 0
+			--yes-label "Start Fresh" \
+			--no-label "Incremental" \
+			--extra-button --extra-label "$TUI2_BTN_BACK" \
+			--yesno "Previous image data found.\n\n\
+\\ZbStart Fresh\\ZB: delete existing data and re-download\neverything (recommended).\n\n\
+\\ZbIncremental\\ZB: only download what changed since\nlast time (faster, but may be incomplete).\n\n\
+\\ZbStart Fresh\\ZB is recommended to ensure a\ncomplete bundle." 0 0
 		local choice_rc=$?
 		case $choice_rc in
-			0) tui_log "Bundle: reusing existing image data (incremental)"
-			   _bundle_data_choice="reuse" ;;
-			1) force_flag="--force"
-			   tui_log "Bundle: clean rebuild (--force)"
+			0) force_flag="--force"
+			   tui_log "Bundle: starting fresh (--force)"
 			   _bundle_data_choice="rebuild" ;;
+			1) tui_log "Bundle: incremental update (reusing existing data)"
+			   _bundle_data_choice="reuse" ;;
 			*) return 1 ;;
 		esac
 		[[ -z "$_bundle_data_choice" ]] && return 1
