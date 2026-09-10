@@ -16,6 +16,11 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 
 ### Changed
 
+- **TUI: first-run base domain dialog** — On first launch, the TUI now shows an interactive dialog (after the splash screen) to verify or change the auto-detected base domain before creating `aba.conf`.
+- **TUI: structured ISC error handling** — ISC generation failures now show context-aware error dialogs: "Upgrade Path Error" with TUI-specific fix steps vs generic catalog troubleshooting. Uses structured error tags instead of brittle string matching.
+- **TUI: improved bundle dialogs** — Light vs Full bundle dialog now explains same-disk duplication trade-off with bold keywords and a Back button. "Start Fresh" (recommended) replaces "Reuse" as the default for image data. Disk space warning only shown when free space is below 50GB.
+- **Bundle output streamlined** — Success message appears first, followed by clear numbered next steps. Light bundles emphasize "transfer TWO things". Removed redundant progress messages and alarming warnings for the user's own choices.
+- **Disk space warnings in GB** — Low disk space messages now display in GB instead of raw MB values.
 - **Day-2 summary banner prints before actions** — The "What this day2 script does" overview now appears before the first step executes, not after the pull-secret injection.
 - **`aba import --help` routed to dedicated help file** — `aba import -h` and `aba --help import` now display `help-import.txt` instead of falling through to generic help.
 - **Podman preflight redesigned** — Removed the startup podman check (Bug #961). Now fires after internet is confirmed at mode entry, with 2-hour TTL, using a public image (`registry.access.redhat.com`, no auth needed). Shows advisory warning with Continue/Retry/Back and session-level dismissal instead of hard-blocking.
