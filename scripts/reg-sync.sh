@@ -174,6 +174,20 @@ fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 
+# Archive the entire cluster-resources/ directory per OCP minor version.
+# oc-mirror overwrites these files on every sync, so after an upgrade sync
+# (e.g. v5.0), the CS files point to v5.0 — but existing clusters may still
+# be on v4.21.  day2.sh checks these versioned archives to apply the correct
+# CatalogSources for each cluster's actual version.
+# See: day2.sh "Version-aware CatalogSource selection" block.
+_cs_archive_ver=$(_ver_minor "$_synced_ver")
+_cs_archive_dir="data/.cluster-resources-v${_cs_archive_ver}"
+if [ -d "data/working-dir/cluster-resources" ]; then
+	rm -rf "$_cs_archive_dir"
+	cp -a "data/working-dir/cluster-resources" "$_cs_archive_dir"
+	aba_debug "Archived cluster-resources to $_cs_archive_dir"
+fi
+
 echo
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	aba_success "Images synced to $reg_host:$reg_port (upgrade: $ocp_version → $_synced_ver)"

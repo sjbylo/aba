@@ -51,6 +51,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
 
   aba [-d <cluster>] mon                  # Monitor installation (runs openshift-install agent wait-for)
   aba [-d <cluster>] day2                 # Configure OperatorHub, signatures, etc (run after load/sync/upgrade)
+      --force-catalog                     # Apply CatalogSource files as-is, skip version matching
   aba [-d <cluster>] ssh --cmd <command>   # Run a command on the rendezvous node (node0) via SSH
   aba [-d <cluster>] ssh --all --cmd <cmd> # Run a command on all nodes (masters + workers)
   aba [-d <cluster>] ssh --all --masters --cmd <cmd>  # Run on masters only
@@ -70,13 +71,22 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
 
   aba [-d <cluster>] upgrade
       --to <version>                      # Target OCP version (e.g. 4.22.2). Falls back to mirror.conf:ocp_upgrade_to
+      --wait, -w                          # After triggering, monitor until upgrade completes (Ctrl-C to detach)
       --force                             # Bypass cluster-side upgrade guards (NOT for production!)
       --allow-not-recommended             # Skip interactive confirmation for conditional upgrades
       --dry-run                           # Show what would happen without executing
       --dry-run --shell                   # Machine-readable output (sourceable key=value pairs)
       --skip-day2                         # Don't auto-run day2 even if IDMS is missing
+  aba [-d <cluster>] upgrade-mon          # Monitor an in-progress upgrade until completion (Ctrl-C to detach)
+      --to <version>                      # Target version to wait for (default: cluster's desired version)
   WARNING: --force bypasses OpenShift's safety checks (release verification, admin ack gates).
            Only use it in test/lab environments or when working around a known CVO bug.
+  Upgrade lifecycle (disconnected):
+    1. aba -d mirror sync/save --upgrade-to <ver>   # Mirror upgrade images
+    2. aba -d mirror load                            # (air-gapped only) Load into registry
+    3. aba -d <cluster> day2                         # Apply CatalogSources for CURRENT version
+    4. aba -d <cluster> upgrade --to <ver>           # Trigger the upgrade
+    5. aba -d <cluster> day2                         # After upgrade: update CatalogSources for NEW version
   Note: for disconnected upgrades, first load the upgrade images with 'aba -d mirror load'
   Tip: Install OpenShift Update Service (OSUS) for validated upgrade paths (recommended).
        OSUS provides a local update graph so OpenShift can verify the upgrade path,
@@ -132,6 +142,12 @@ Examples:
 
   Upgrade a cluster (first mirror the upgrade images with 'aba -d mirror sync' or 'load'):
     aba --dir mysno upgrade --to 4.22.2
+
+  Upgrade and wait for completion:
+    aba --dir mysno upgrade --to 4.22.2 --wait
+
+  Monitor an in-progress upgrade (re-attach after Ctrl-C):
+    aba --dir mysno upgrade-mon
 
   Gracefully shut down and start up a cluster:
     aba --dir mysno shutdown

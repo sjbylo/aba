@@ -179,6 +179,15 @@ if [ -d "$_state_dir" ]; then
 		done
 
 		if [ -n "$_existing_dir" ]; then
+			# Check if the existing kubeconfig still works.
+			# If stale (e.g. cluster was reinstalled), suggest --force instead of
+			# the generic "already managed" message.
+			_existing_kc="$_state_dir/kubeconfig"
+			if [ -f "$_existing_kc" ] && ! oc --kubeconfig "$_existing_kc" whoami --request-timeout=10s &>/dev/null; then
+				aba_abort "Cluster '$_cluster_fqdn' exists at '$_existing_dir/' but the kubeconfig is no longer valid." \
+					"The cluster may have been reinstalled." \
+					"To re-import, run:  aba import -k $_kubeconfig --force"
+			fi
 			aba_abort "Cluster '$_cluster_fqdn' is already managed by ABA at '$_existing_dir/'." \
 				"Use 'aba -d $_existing_dir <command>' to manage it."
 		else

@@ -1773,3 +1773,54 @@ detailed steps.
 
 **Risk:** HIGH churn, must be a dedicated commit with full e2e verification.
 Do NOT mix with other changes.
+
+---
+
+## Feature: Unified `aba status` command
+
+**Severity:** MEDIUM — UX improvement, central diagnostic/preflight tool
+**Status:** Planned
+**Added:** 2026-09-10
+
+**Problem:** ABA lacks a single command to show the state of the mirror,
+cluster, upgrade readiness, or day2 prerequisites. Users must piece together
+information from multiple commands (`oc get clusterversion`, `oc get
+catalogsource`, `skopeo list-tags`, etc.) to diagnose issues like
+CatalogSource version mismatches, stale OSUS graphs, or missing mirror
+content.
+
+**Proposed design:**
+
+```bash
+aba status                    # Overview of everything
+aba status mirror             # Registry health, versions synced, catalog versions
+aba status cluster            # Cluster version, CO health, CatalogSource versions
+aba status upgrade            # OSUS graph, upgrade path, pre-flight
+aba status day2               # CS version match check, prerequisites
+```
+
+Each subcommand supports:
+- **Human-readable output** (default): formatted for the terminal
+- **`--shell` output**: key-value pairs for TUI/script consumption
+
+Example `aba status day2 --shell`:
+```
+CLUSTER_VER=4.21 CS_VER=5.0 CS_MISMATCH=1 CS_MATCH_AVAILABLE=4.21
+```
+
+The TUI calls `aba status day2 --shell` before running day2 to detect
+mismatches and show a dialog. The CLI prints human-readable diagnostics.
+
+**Architecture:** All logic in ABA core. TUI is a dumb consumer — calls
+`aba status <sub> --shell`, parses output, displays result.
+
+**Implementation:** Extract existing diagnostic logic from various scripts
+(cluster_is_ready, verify_upgrade_path_exists, warn_if_cluster_unstable,
+day2 CS version check) into a unified `scripts/aba-status.sh` dispatcher.
+
+**Files likely affected:**
+- New `scripts/aba-status.sh` (or `scripts/status-*.sh` per subcommand)
+- `scripts/aba.sh`: route `status` subcommand
+- `scripts/include_all.sh`: shared status helpers
+- `tui/v2/tui-cluster.sh`: call `aba status --shell` for preflight
+- `others/help-aba.txt`: document `aba status`

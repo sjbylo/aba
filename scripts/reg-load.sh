@@ -299,6 +299,22 @@ fi
 replace-value-conf -q -n last_action -v "load" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
 
+# Archive the entire cluster-resources/ directory per OCP minor version.
+# oc-mirror overwrites these files on every load, so after an upgrade load
+# (e.g. v5.0), the CS files point to v5.0 — but existing clusters may still
+# be on v4.21.  day2.sh checks these versioned archives to apply the correct
+# CatalogSources for each cluster's actual version.
+# Falls back to $ocp_version when _loaded_ver is empty (incremental loads
+# that only add additionalImages and don't change operator catalogs).
+# See: day2.sh "Version-aware CatalogSource selection" block.
+_cs_archive_ver=$(_ver_minor "${_loaded_ver:-$ocp_version}")
+_cs_archive_dir="data/.cluster-resources-v${_cs_archive_ver}"
+if [ -d "data/working-dir/cluster-resources" ]; then
+	rm -rf "$_cs_archive_dir"
+	cp -a "data/working-dir/cluster-resources" "$_cs_archive_dir"
+	aba_debug "Archived cluster-resources to $_cs_archive_dir"
+fi
+
 echo
 _loaded_display="${_loaded_ver:-$ocp_version}"
 if [ "$_loaded_ver" ] && [ "$_loaded_ver" != "$ocp_version" ]; then

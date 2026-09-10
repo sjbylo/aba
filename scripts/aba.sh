@@ -1041,11 +1041,21 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--validate" ]; then
 		_cli_validate_only=true
 		shift
+	elif [ "$1" = "--force-catalog" ]; then
+		# day2: skip version-aware CatalogSource matching and apply CS files
+		# from working-dir/cluster-resources/ as-is.  Use when intentionally
+		# installing a newer catalog version onto an older cluster.
+		export ABA_FORCE_CATALOG=1
+		shift
 	elif [ "$1" = "--skip-day2" ]; then
 		upgrade_skip_day2="--skip-day2"
 		shift
 	elif [ "$1" = "--allow-not-recommended" ]; then
 		upgrade_allow_not_recommended="--allow-not-recommended"
+		shift
+	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
+		# upgrade --wait: keep monitoring after triggering the upgrade
+		upgrade_wait=1
 		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
@@ -1102,7 +1112,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				shift
 				exec $ABA_ROOT/scripts/cluster-import.sh "$@"
 				;;
-			tui|ssh|run|bundle|bundle-primed|info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
+			tui|ssh|run|bundle|bundle-primed|info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1149,7 +1159,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
+		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1178,7 +1188,7 @@ if [ "$cur_target" ]; then
 
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
-		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|unstick)
+		day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|unstick)
 			_cn=$(basename "$PWD")
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
@@ -1303,7 +1313,22 @@ if [ "$cur_target" ]; then
 			_rc=0
 			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}" || _rc=$?
 			[ "$_rc" -eq 0 ] && _post_check_install
+
+			# --wait: keep monitoring until the upgrade completes
+			if [ "$upgrade_wait" ] && [ "$_rc" -eq 0 ]; then
+				_mon_args=()
+				[ "$upgrade_to" ] && _mon_args+=(--to "$upgrade_to")
+				$ABA_ROOT/scripts/cluster-upgrade-mon.sh "${_mon_args[@]}" || true
+			fi
+
 			exit $_rc
+		;;
+		upgrade-mon)
+			trap - ERR
+			_mon_args=()
+			[ "$upgrade_to" ] && _mon_args+=(--to "$upgrade_to")
+			$ABA_ROOT/scripts/cluster-upgrade-mon.sh "${_mon_args[@]}"
+			exit
 		;;
 		shutdown)
 			eval $BUILD_COMMAND
