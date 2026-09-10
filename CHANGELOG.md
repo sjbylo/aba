@@ -4,7 +4,7 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 
 ### Added
 
-- **`aba terminal`** — New command: opens an interactive bash shell logged into the cluster with `oc` bash completion and a cluster-aware PS1 prompt. Retries login if the cluster API is not yet ready. Available from the CLI (`aba -d mycluster terminal`) and the TUI (Day-2 → Login Terminal).
+- **`aba terminal`** — New command (alias: `aba term`): opens an interactive bash shell logged into the cluster with `oc` bash completion and a cluster-aware PS1 prompt. Retries login if the cluster API is not yet ready. Available from the CLI (`aba -d mycluster terminal`) and the TUI (Day-2 → Login Terminal).
 - **OSUS graph auto-refresh** — `aba day2` now detects when the OSUS graph-image was updated (by `aba sync` or `aba load`) and proactively restarts the OSUS pod so the update graph is current before `aba upgrade` runs.
 - **NodeDisruptionPolicy for NTP** — `aba day2-ntp` now sets a `NodeDisruptionPolicy` (OCP 4.17+) so that NTP configuration changes restart `chronyd` instead of rebooting nodes. Silently ignored on older clusters.
 - **`oc-mirror` tuning hints on failure** — When `oc-mirror` exhausts retries, the failure message now shows the config knobs (`OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, `OC_MIRROR_FLAGS`) and references the README Tuning section. Retry output also shows the escalated timeout and parallelism values. (Suggested by [@eanylin](https://github.com/eanylin).)
@@ -46,6 +46,11 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 - **Fix `aba shutdown` for imported clusters** — Shutdown no longer requires `install-config.yaml`/`agent-config.yaml`. For imported clusters, node IPs are fetched from the live cluster API.
 - **Fix `/tmp` sticky bit permission error** — `reg-install-remote.sh` now uses a `sudo` fallback for `/tmp` probe file cleanup, so the intended "reaches this localhost" error message is shown instead of a raw permission error.
 - **Fix `aba upgrade` channel switch** — Added `--allow-explicit-channel` to `oc adm upgrade channel` for cases where the local OSUS graph doesn't list a channel that exists upstream.
+- **Fix intermittent catalog download failure** — Serialized podman `create`/`cp` operations with `flock` to prevent BoltDB race conditions when many catalog versions are downloaded in parallel.
+- **Fix SSH key overwrite prompt** — `create-install-config.sh` no longer prompts to overwrite an existing SSH private key when only the `.pub` file is missing. Regenerates the public key from the private key instead.
+- **Fix TUI delete dialog for bare-metal** — Delete confirmation now shows platform-appropriate messages: bare-metal explains only local state is removed (servers keep running); virt platforms explain VMs are destroyed.
+- **Fix TUI Prepare Upgrade shortcut keys** — "Target Version Set" dialog now shows correct main menu shortcuts (`Y` for Sync, `S` for Save).
+- **Fix TUI Prepare Upgrade sync without mirror** — Selecting "Sync to registry" when no mirror is installed now shows the mirror config review dialog (same as the main menu Sync path) instead of proceeding blindly.
 
 ### Community
 

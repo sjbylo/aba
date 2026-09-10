@@ -13,6 +13,7 @@ apicast-operator                                        Red Hat Integration - 3s
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
 authorino-operator                                      Authorino Operator                                           stable
 automation-orchestrator-operator                        Automation Orchestrator Operator                             stable
+automation-portal-operator                              Ansible automation portal (Technology Preview)               fast
 aws-efs-csi-driver-operator                             AWS EFS CSI Driver Operator                                  stable
 aws-load-balancer-operator                              AWS Load Balancer Operator                                   stable-v1
 bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable

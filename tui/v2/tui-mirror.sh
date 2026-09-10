@@ -996,6 +996,12 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	local rc=0
 	case "$_upg_method" in
 		1)
+			if ! mirror_available; then
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then upgrade images will be synced.\n\nContinue?" 0 0
+				[[ $? -ne 0 ]] && return 1
+				_mirror_config_review || return 1
+			fi
 			confirm_and_execute \
 				"aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
@@ -1029,7 +1035,7 @@ To upgrade a disconnected cluster:\n\n\
 			;;
 		3)
 			dlg --backtitle "$(ui_backtitle)" --title "Target Version Set" \
-				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (S), or\n  • Save to tar files (V)\n\nfrom the main menu." 0 0
+				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (Y), or\n  • Save to tar files (S)\n\nfrom the main menu." 0 0
 			;;
 	esac
 

@@ -44,6 +44,7 @@ ack-lambdamicrovms-controller                           AWS Controllers for Kube
 ack-memorydb-controller                                 AWS Controllers for Kubernetes - MemoryDB                    alpha
 ack-mq-controller                                       AWS Controllers for Kubernetes - Amazon MQ                   alpha
 ack-mwaa-controller                                     AWS Controllers for Kubernetes - Amazon Managed Workflows for Apache Airflow alpha
+ack-mwaaserverless-controller                           AWS Controllers for Kubernetes - Amazon MWAA Serverless      alpha
 ack-networkfirewall-controller                          AWS Controllers for Kubernetes - Amazon Network Firewall     alpha
 ack-opensearchserverless-controller                     AWS Controllers for Kubernetes - Amazon OpenSearchServerless alpha
 ack-opensearchservice-controller                        AWS Controllers for Kubernetes - Amazon OpenSearch Service   alpha

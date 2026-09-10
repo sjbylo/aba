@@ -1897,21 +1897,31 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	local _del_msg _del_help
+	if [[ "${platform:-bm}" == "bm" ]]; then
+		_del_msg="Delete cluster '$cl_display'?\n\nThis removes the local cluster directory and state files only.\nThe physical servers are left running — decommission them manually."
+		_del_help="Delete removes the cluster directory and all generated resources\n\
+(kubeconfig, manifests, ISOs, state markers).\n\n\
+On bare-metal, nodes are left powered — decommission them manually.\n\
+To fully decommission, reinstall or wipe the servers yourself."
+	else
+		_del_msg="Delete cluster '$cl_display'?\n\nThis removes all cluster state and destroys the VMs.\nThis action cannot be undone."
+		_del_help="Delete removes the cluster directory and all generated resources\n\
+(kubeconfig, manifests, ISOs, state markers).\n\n\
+On virtualized platforms (VMware, KVM), the VMs are also destroyed."
+	fi
+
 	while true; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
 			--yes-label "Delete" --no-label "$TUI2_BTN_CANCEL" \
 			--help-button --help-label "Help" \
-			--yesno "Delete cluster '$cl_display'?\n\nThis removes all cluster state and resources.\nThis action cannot be undone." 0 0
+			--yesno "$_del_msg" 0 0
 		local rc=$?
 		case $rc in
 			0) break ;;
 			2)
 				dlg --backtitle "$(ui_backtitle)" --title "Delete Cluster – Help" \
-					--msgbox "\
-Delete removes the cluster directory and all generated resources\n\
-(kubeconfig, manifests, ISOs, state markers).\n\n\
-On virtualized platforms (VMware, KVM), the VMs are also destroyed.\n\
-On bare-metal, nodes are left powered — decommission them manually." 0 0
+					--msgbox "$_del_help" 0 0
 				continue
 				;;
 			*) return 1 ;;
