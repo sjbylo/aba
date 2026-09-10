@@ -550,7 +550,7 @@ test_end
 test_begin "Import: stale kubeconfig detection"
 
 _KC_STALE="$SNO/iso-agent-based/auth/kubeconfig"
-_STALE_DIR="$HOME/.aba/clusters/${cluster_name}.${base_domain}"
+_STALE_DIR="$HOME/.aba/clusters/${SNO}.$(pool_domain)"
 
 # Test 1: valid kubeconfig should block with "already managed"
 e2e_run "Import with valid kubeconfig (should block)" "
