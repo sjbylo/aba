@@ -251,9 +251,9 @@ file_list=$(echo "$file_list" | sed "s/^ *$//g")  # Just in case file_list="  " 
 if [ "$dest" != "-" ]; then
 	echo >&2
 	if [ "$repo_only" ]; then
-		aba_info "Creating light bundle (image archives excluded) ..." >&2
+		aba_info "Creating light bundle (image archives excluded), please wait ..." >&2
 	else
-		aba_info "Creating install bundle ..." >&2
+		aba_info "Creating install bundle, please wait (this can take several minutes) ..." >&2
 	fi
 fi
 
