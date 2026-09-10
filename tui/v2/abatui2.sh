@@ -277,10 +277,12 @@ aba_version_fetch_start
 
 # Ensure aba.conf exists so background catalog downloads can read pull_secret_file
 # (mirrors v1's resume_from_conf — config must exist BEFORE prefetch)
+_TUI_FIRST_RUN=""
 if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
 	if [[ -f "$ABA_ROOT/templates/aba.conf.j2" ]]; then
+		_TUI_FIRST_RUN=1
 		_domain=$(get_domain 2>/dev/null) || true
-		export domain="${_domain}"
+		export domain="${_domain:-example.com}"
 		machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
 			"$ABA_ROOT/scripts/j2" "$ABA_ROOT/templates/aba.conf.j2" > "$ABA_ROOT/aba.conf" 2>>"$_TUI_LOG_FILE"
 		tui_log "Created aba.conf from template (pull_secret_file set)"
@@ -857,6 +859,24 @@ Tip: You can also run any step from the CLI:
 			;;
 	esac
 done
+
+# --- First-run: let the user verify/change the auto-detected base domain ---
+if [[ "$_TUI_FIRST_RUN" ]]; then
+	_cur_domain=$(source <(normalize-aba-conf) && echo "$domain")
+	_user_domain=""
+	if dlg --backtitle "$(ui_backtitle)" --title "Base Domain" \
+		--inputbox "\nDetected base domain: ${_cur_domain:-example.com}\n\nThis domain is used for all cluster FQDNs,\ne.g. mycluster.${_cur_domain:-example.com}\n\nVerify and adjust if needed." \
+		12 60 "${_cur_domain:-example.com}" \
+		2>"$_TUI_TMP"; then
+		_user_domain=$(<"$_TUI_TMP")
+	fi
+	_new_domain="${_user_domain:-${_cur_domain:-example.com}}"
+	if [[ "$_new_domain" != "$_cur_domain" ]]; then
+		replace-value-conf -q -n domain -v "$_new_domain" -f "$ABA_ROOT/aba.conf"
+		tui_log "User changed domain: $_cur_domain -> $_new_domain"
+	fi
+	unset _cur_domain _user_domain _new_domain
+fi
 
 # --- Detect mode (uses internet check result started during startup) ---
 _detect_mode

@@ -286,7 +286,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 				if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$ocp_version"; then
 					_hint="Upgrade to at least ${_lowest} first."
 				fi
-				aba_abort \
+				aba_abort --tag upgrade-path \
 				"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
 				"Version $ocp_version is not in channel ${_tgt_channel} (lowest entry: ${_lowest:-unknown})." \
 				"$_hint" \
@@ -297,7 +297,7 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 				_rest="${_path_diag#*|}"
 				_tgt_channel="${_rest%%|*}"
 				_nearest="${_rest##*|}"
-				aba_abort \
+				aba_abort --tag upgrade-path \
 					"No upgrade path from $ocp_version to $ocp_upgrade_to in channel ${_tgt_channel}." \
 					"${_nearest:+Nearest reachable target from $ocp_version: ${_nearest}}" \
 					"Update your upgrade target and try again." \

@@ -290,7 +290,7 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	# Auto-detect domain only (needed by mirror.conf). Other network values deferred to cluster creation.
 	export domain=$(get_domain)
 
-	aba_debug domain:		$domain
+	aba_info "Auto-detected domain: $domain (override with: aba --domain <domain>)"
 
 	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else

@@ -1726,7 +1726,7 @@ _tui_catalog_error_hints() {
 	_h="${_h}\n  - Sufficient disk space for container storage"
 	_h="${_h}\n  - DNS resolution is working"
 	_h="${_h}\n"
-	_h="${_h}\nAfter fixing, run './install' to clear the cache and retry."
+	_h="${_h}\nAfter fixing, retry the same action."
 	echo "$_h"
 }
 
