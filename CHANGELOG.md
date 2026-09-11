@@ -7,7 +7,7 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 - **`aba terminal`** — New command (alias: `aba term`): opens an interactive bash shell logged into the cluster with `oc` bash completion and a cluster-aware PS1 prompt. Retries login if the cluster API is not yet ready. Available from the CLI (`aba -d mycluster terminal`) and the TUI (Day-2 → Login Terminal).
 - **OSUS graph auto-refresh** — `aba day2` now detects when the OSUS graph-image was updated (by `aba sync` or `aba load`) and proactively restarts the OSUS pod so the update graph is current before `aba upgrade` runs.
 - **NodeDisruptionPolicy for NTP** — `aba day2-ntp` now sets a `NodeDisruptionPolicy` (OCP 4.17+) so that NTP configuration changes restart `chronyd` instead of rebooting nodes. Silently ignored on older clusters.
-- **`oc-mirror` tuning hints on failure** — When `oc-mirror` exhausts retries, the failure message now shows the config knobs (`OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, `OC_MIRROR_FLAGS`) and references the README Tuning section. Retry output also shows the escalated timeout and parallelism values. (Suggested by [@eanylin](https://github.com/eanylin).)
+- **`oc-mirror` tuning hints on failure** — When `oc-mirror` exhausts retries, the failure message now shows the config knobs (`OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, `OC_MIRROR_FLAGS`) and references the README Tuning section. Retry output also shows the escalated timeout and parallelism values. (Contributed by [@eanylin](https://github.com/eanylin), Anthony Lin.)
 - **`aba mirror --help` tuning section** — The mirror help output now includes a Tuning section documenting `OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, and `OC_MIRROR_FLAGS`.
 - **ISC user-managed detection** — New `aba_isc_is_user_managed()` core function detects when the ImageSet Config has been hand-edited (newer than the `.created` sentinel). Sync/save/bundle confirm dialogs show "(user-edited ISC)" when applicable.
 - **`aba upgrade-mon`** — New command to monitor an in-progress upgrade until completion. Polls every 30s showing operator progress. Ctrl-C detaches (upgrade continues). On completion, prompts to run `aba day2` to update CatalogSources. Also available as `aba upgrade --wait` (`-w`) to trigger and monitor in one step.
@@ -60,10 +60,6 @@ Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hi
 - **Fix TUI delete dialog for bare-metal** — Delete confirmation now shows platform-appropriate messages: bare-metal explains only local state is removed (servers keep running); virt platforms explain VMs are destroyed.
 - **Fix TUI Prepare Upgrade shortcut keys** — "Target Version Set" dialog now shows correct main menu shortcuts (`Y` for Sync, `S` for Save).
 - **Fix TUI Prepare Upgrade sync without mirror** — Selecting "Sync to registry" when no mirror is installed now shows the mirror config review dialog (same as the main menu Sync path) instead of proceeding blindly.
-
-### Community
-
-- Thanks to [@eanylin](https://github.com/eanylin) (Anthony Lin) for suggesting the `oc-mirror` tuning hints.
 
 ---
 
