@@ -111,7 +111,6 @@ jobs:
       - name: Download and extract catalog indexes
         env:
           OCP_VERSIONS: ${{ steps.versions.outputs.versions }}
-          PRE_VERSIONS: ${{ steps.versions.outputs.pre_versions }}
         run: |
           source scripts/catalog-extract-functions.sh
 
@@ -147,8 +146,6 @@ jobs:
 
           mkdir -p .index
           _podman_lock="/tmp/.aba-podman-catalog.lock"
-          skipped=0
-          downloaded=0
           failed_list=()
 
           for ver in $OCP_VERSIONS; do
@@ -166,7 +163,6 @@ jobs:
                 remote_cld=$(_get_content_layer_digest "$remote_ref") || remote_cld=""
                 if [[ -n "$remote_cld" && "$remote_cld" == "$stored_cld" ]]; then
                   echo "SKIP: content layer unchanged"
-                  skipped=$((skipped + 1))
                   echo "::endgroup::"
                   continue
                 fi
@@ -216,13 +212,9 @@ jobs:
               new_cld=$(_get_content_layer_digest "$remote_ref") || new_cld=""
               [[ -n "$new_cld" ]] && echo "$new_cld" > "$cld_file"
 
-              downloaded=$((downloaded + 1))
               echo "::endgroup::"
             done
           done
-
-          echo ""
-          echo "Summary: downloaded=$downloaded, skipped=$skipped, failed=${#failed_list[@]}"
 
           if [[ ${#failed_list[@]} -gt 0 ]]; then
             echo "::error::${#failed_list[@]} catalog(s) failed: ${failed_list[*]}"
@@ -314,13 +306,14 @@ jobs:
 
           echo ""
           echo "=== 2. Syntax validation (every line: name display-text channel) ==="
+          _syntax='!/^[a-z0-9][a-z0-9._-]+[[:space:]]/ || NF < 3 || $NF !~ /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/'
           for f in .index/*-operator-index-v*; do
             [ -f "$f" ] || continue
             fname=$(basename "$f")
-            bad_lines=$(grep -cvE '^[a-z0-9][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" || true)
+            bad_lines=$(awk "$_syntax" "$f" | wc -l)
             if [ "$bad_lines" -gt 0 ]; then
               echo "::error::SYNTAX: $fname has $bad_lines malformed line(s):"
-              grep -vnE '^[a-z0-9][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" | head -5
+              awk "$_syntax" "$f" | head -5
               errors=$(( errors + 1 ))
             fi
             dup_names=$(awk '{print $1}' "$f" | sort | uniq -d)
