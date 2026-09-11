@@ -137,6 +137,12 @@ _test_combo() {
 		if (( bad_lines > 0 )); then
 			errors+=("${bad_lines} lines with blank name or channel")
 		fi
+		source scripts/catalog-extract-functions.sh
+		local syn
+		syn=$(_index_syntax_bad_lines "$index_file" | wc -l)
+		if (( syn > 0 )); then
+			errors+=("${syn} lines failed index syntax (quoted name/channel)")
+		fi
 	fi
 
 	# Display name coverage
