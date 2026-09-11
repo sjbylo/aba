@@ -59,9 +59,12 @@ aba_debug "Catalog: $catalog_name, version: $ocp_ver_major"
 
 # Prepare container auth — regcreds_dir must be set so create-containers-auth.sh
 # merges mirror credentials into ~/.docker/config.json (not overwrites with Red Hat-only)
-export regcreds_dir=$HOME/.aba/mirror/mirror
-aba_debug "Creating container auth file (regcreds_dir=$regcreds_dir)"
-scripts/create-containers-auth.sh >/dev/null || exit 1
+# Skip in CI where podman login has already been done (e.g. GH Action)
+if [[ -z "${_ABA_SKIP_AUTH:-}" ]]; then
+	export regcreds_dir=$HOME/.aba/mirror/mirror
+	aba_debug "Creating container auth file (regcreds_dir=$regcreds_dir)"
+	scripts/create-containers-auth.sh >/dev/null || exit 1
+fi
 
 # Setup paths - must be run from aba root directory
 mkdir -p .index
@@ -283,6 +286,25 @@ rm -rf "$tmp_dir"
 # Validate output
 if [ ! -s "$tmp_file" ]; then
 	aba_abort "Catalog extraction produced empty index for $catalog_name v$ocp_ver_major"
+fi
+
+# Per-line syntax validation: <op_name> <display_name...> <channel>
+# $1 = operator name (lowercase, digits, dots, hyphens, underscores)
+# $2..$NF-1 = display name (any words, or "-" if unknown)
+# $NF = default channel (single word: alphanumeric with dots, hyphens, underscores)
+_syntax_check='!/^[a-z0-9][a-z0-9._-]+[[:space:]]/ || NF < 3 || $NF !~ /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/'
+bad_lines=$(awk "$_syntax_check" "$tmp_file" | wc -l)
+if [ "$bad_lines" -gt 0 ]; then
+	aba_warn "Syntax check failed: $bad_lines malformed line(s) in $catalog_name v$ocp_ver_major:"
+	awk "$_syntax_check" "$tmp_file" | head -5 >&2
+	aba_abort "Catalog index for $catalog_name v$ocp_ver_major failed syntax validation"
+fi
+
+# Warn about missing display names — a "-" means extraction failed to find one
+dash_count=$(awk '$2 == "-"' "$tmp_file" | wc -l)
+if [ "$dash_count" -gt 0 ]; then
+	aba_warn "$catalog_name v$ocp_ver_major: $dash_count operator(s) with missing display name — investigate extraction:"
+	awk '$2 == "-" {print "  " $1}' "$tmp_file" >&2
 fi
 
 # Atomic rename: consumers never see a partial file
