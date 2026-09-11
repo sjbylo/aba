@@ -31,8 +31,9 @@
 # PLATFORM SELECTION (in template):
 #   1. SNO (1 master, 0 workers) -> platform: none
 #   2. s390x / ppc64le -> platform: none (baremetal unsupported on these arches)
-#   3. VMware + vCenter (platform=vmw, VC=1) -> platform: vsphere
-#   4. Everything else (BM, KVM, ESXi-direct) -> platform: baremetal
+#   3. VMware + vCenter (VC=1) + (OCP < 4.22 or vCenter > 8.0.0) -> platform: vsphere
+#   4. VMware + vCenter + OCP >= 4.22 + vCenter < 8.0 U1 -> platform: baremetal (CSI unsupported)
+#   5. Everything else (BM, KVM, ESXi-direct) -> platform: baremetal
 #   See devel/01-SPEC.md "install-config.yaml Platform Selection"
 
 source scripts/include_all.sh
@@ -233,6 +234,24 @@ if [ "$additional_trust_bundle" ] && [ "$image_content_sources" ]; then
 	scripts/create-containers-auth.sh --load || exit 1
 	scripts/verify-release-image.sh
 fi
+
+# OCP 4.22+ CSI requires vSphere 8.0 U1+. Older vCenter still hosts the VMs;
+# install-config must not use platform: vsphere or storage stays False forever.
+USE_VSPHERE_PLATFORM=0
+VSPHERE_PLATFORM_FALLBACK=0
+if [ "$platform" = "vmw" ] && [ "${VC:-}" = "1" ]; then
+	_vc_ver=$(govc about 2>/dev/null | awk '/^Version:/{print $2; exit}') || true
+	_ocp_mm=$(_ver_minor "${ocp_version:-}")
+	if is_version_greater "${_ocp_mm}.0" "4.21.0" && { [ -z "${_vc_ver:-}" ] || ! is_version_greater "$_vc_ver" "8.0.0"; }; then
+		VSPHERE_PLATFORM_FALLBACK=1
+		aba_warn "OCP ${ocp_version} requires vSphere 8.0 U1+ for platform: vsphere (CSI)." \
+			"vCenter reports ${_vc_ver:-unknown}; generating platform: baremetal (apiVIPs)." \
+			"VMs still run on this hypervisor; OpenShift will not integrate with vCenter."
+	else
+		USE_VSPHERE_PLATFORM=1
+	fi
+fi
+export USE_VSPHERE_PLATFORM VSPHERE_PLATFORM_FALLBACK
 
 aba_info
 aba_info Generating Agent-based configuration file: $PWD/install-config.yaml 
