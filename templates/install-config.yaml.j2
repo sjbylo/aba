@@ -37,7 +37,7 @@ platform:
 # {{ ARCH }} requires user-provisioned infrastructure (UPI).
 # You must configure an external load balancer for the API ({{ api_vip }})
 # and ingress ({{ ingress_vip }}) endpoints.
-  {%- elif platform == 'vmw' and VC == '1' %}
+  {%- elif platform == 'vmw' and USE_VSPHERE_PLATFORM == '1' %}
   vsphere:
     apiVIP: {{ api_vip }}
     ingressVIP: {{ ingress_vip }}
@@ -78,6 +78,9 @@ platform:
 #    diskType: thin 
   {%- else %}
   baremetal:
+{%- if VSPHERE_PLATFORM_FALLBACK == '1' %}
+# platform: vsphere omitted: OCP >= 4.22 requires vSphere 8.0 U1+ for CSI.
+{%- endif %}
 #    apiVIP: "{{ api_vip }}"
     apiVIPs:
     - {{ api_vip }}

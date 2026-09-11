@@ -1,5 +1,9 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.0...HEAD)
 
+### Changed
+
+- **OCP 4.22+ on vCenter 7 uses `platform: baremetal`** — OpenShift 4.22 dropped vSphere 7.x CSI support. When `ocp_version` is 4.22+ and vCenter is older than 8.0 U1, `install-config.yaml` is generated with `platform: baremetal` (apiVIPs) instead of `platform: vsphere`, so the storage ClusterOperator is not stuck on vSphere CSI. VMs still run on the existing hypervisor.
+
 ---
 
 ## [1.3.0](https://github.com/sjbylo/aba/releases/tag/v1.3.0) - 2026-09-11
