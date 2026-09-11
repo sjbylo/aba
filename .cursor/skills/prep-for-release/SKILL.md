@@ -57,10 +57,10 @@ feature releases; can skip for docs-only or trivial fixes.
 git shortlog -sne $(git describe --tags --abbrev=0)..HEAD | grep -v sjbylo
 ```
 
-Every external contributor must be credited **inline** — put `(@handle)` or
+Where it makes sense, credit external contributors **inline** — put `(@handle)` or
 `(Contributed by @handle)` right next to the item they contributed to, in both
 the CHANGELOG entry AND the release bullets (if the item appears there).
-Do NOT relegate attribution to a separate `### Community` section at the bottom.
+Prefer inline attribution over a separate `### Community` section at the bottom.
 
 ### 5. Write CHANGELOG entries
 
