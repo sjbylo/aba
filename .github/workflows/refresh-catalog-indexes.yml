@@ -111,107 +111,21 @@ jobs:
       - name: Download and extract catalog indexes
         env:
           OCP_VERSIONS: ${{ steps.versions.outputs.versions }}
+          _ABA_SKIP_AUTH: 1
         run: |
-          source scripts/catalog-extract-functions.sh
-
-          # Content-layer digest check — same logic as download-catalog-index.sh.
-          # FBC catalog images have ~5 layers; layers[-1] is the catalog-specific
-          # data layer. Comparing this digest skips re-downloading when only the
-          # base OS layer was patched (security rebuild).
-          _get_content_layer_digest() {
-            local _ref="$1"
-            local _arch_digest _manifest _layer_count
-
-            _arch_digest=$(skopeo inspect --raw "$_ref" 2>/dev/null | \
-              jq -r '.manifests[]? | select(.platform.architecture=="amd64") | .digest')
-
-            if [[ -z "$_arch_digest" ]]; then
-              _manifest=$(skopeo inspect --raw "$_ref" 2>/dev/null)
-              _layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
-              if [[ "${_layer_count:-0}" -ge 4 ]]; then
-                echo "$_manifest" | jq -r '.layers[-1].digest'
-                return 0
-              fi
-              return 1
-            fi
-
-            local _base_ref="${_ref%:*}"
-            _manifest=$(skopeo inspect --raw "${_base_ref}@${_arch_digest}" 2>/dev/null)
-            _layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
-            if [[ -z "$_layer_count" ]] || [[ "$_layer_count" -lt 4 ]]; then
-              return 1
-            fi
-            echo "$_manifest" | jq -r '.layers[-1].digest'
-          }
-
-          mkdir -p .index
-          _podman_lock="/tmp/.aba-podman-catalog.lock"
+          # Reuse the same download-catalog-index.sh that runs locally.
+          # _ABA_SKIP_AUTH=1 skips ABA auth setup (podman login already done above).
+          # The script handles: content-layer skip, flock, extraction, syntax
+          # validation, digest caching — all in one place (DRY).
           failed_list=()
 
           for ver in $OCP_VERSIONS; do
             for catalog in redhat-operator certified-operator community-operator; do
-              img="registry.redhat.io/redhat/${catalog}-index:v${ver}"
-              remote_ref="docker://${img}"
-              index_file=".index/${catalog}-index-v${ver}"
-              cld_file=".index/.${catalog}-index-v${ver}.content-layer-digest"
-
               echo "::group::${catalog} v${ver}"
-
-              # Content-layer change detection: skip if unchanged
-              if [[ -s "$index_file" && -f "$cld_file" ]]; then
-                stored_cld=$(< "$cld_file")
-                remote_cld=$(_get_content_layer_digest "$remote_ref") || remote_cld=""
-                if [[ -n "$remote_cld" && "$remote_cld" == "$stored_cld" ]]; then
-                  echo "SKIP: content layer unchanged"
-                  echo "::endgroup::"
-                  continue
-                fi
-                echo "Content layer changed — downloading"
-              fi
-
-              # Pull with permissive signature policy (some catalogs are unsigned)
-              _sig_policy="/tmp/policy-$$.json"
-              echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
-
-              if ! podman pull --signature-policy="$_sig_policy" --quiet "$img" 2>/dev/null; then
-                echo "::warning::Failed to pull $img, skipping"
+              if ! scripts/download-catalog-index.sh "$catalog" "$ver"; then
+                echo "::warning::Failed: ${catalog} v${ver}"
                 failed_list+=("${catalog}:${ver}")
-                echo "::endgroup::"
-                continue
               fi
-
-              # Serialize create+cp+rm with flock (prevent BoltDB race)
-              tmpdir=$(mktemp -d "/tmp/catalog-XXXXXX")
-              (
-                flock -w 120 9 || exit 1
-                cid=$(podman create --quiet "$img" true 2>/dev/null)
-                podman cp "$cid":/configs/. "$tmpdir/configs" 2>/dev/null || true
-                podman rm -f "$cid" >/dev/null 2>&1
-              ) 9>"$_podman_lock"
-
-              if [[ ! -d "$tmpdir/configs" ]]; then
-                echo "::warning::Failed to extract configs from $img"
-                failed_list+=("${catalog}:${ver}")
-                rm -rf "$tmpdir"
-                echo "::endgroup::"
-                continue
-              fi
-
-              # Record expected count
-              expected=$(find "$tmpdir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' | wc -l)
-              echo "$expected" > ".index/.${catalog}-index-v${ver}.expected-count"
-
-              # Extract using shared functions
-              _extract_catalog_dir "$tmpdir/configs" "$index_file"
-              rm -rf "$tmpdir"
-
-              count=$(wc -l < "$index_file" 2>/dev/null || echo 0)
-              echo "Extracted $count operators (expected: $expected)"
-
-              # Save content layer digest for future runs
-              new_cld=$(_get_content_layer_digest "$remote_ref") || new_cld=""
-              [[ -n "$new_cld" ]] && echo "$new_cld" > "$cld_file"
-
               echo "::endgroup::"
             done
           done

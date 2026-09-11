@@ -1,5 +1,8 @@
 #!/bin/bash -e
 # go.sh - Orchestrate bundle creation for multiple OCP versions and bundle types
+# Tip: 
+# podman pod rm -f $(podman pod ps -q)	# Wipe all podman containers
+# podman secret rm redis_pass 		# Wipe the redis secret
 
 mkdir -p ~/tmp
 
