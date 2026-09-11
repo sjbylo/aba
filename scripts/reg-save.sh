@@ -243,7 +243,7 @@ rm -f data/aba-transfer-metadata.json
 
 echo >&2
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
-	aba_success "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})!"
+	aba_info "Upgrade: ${ocp_version} → ${ocp_upgrade_to}"
 	echo
 	aba_info "Next: copy all *.tar files to the disconnected host:"
 	aba_info "  cp mirror/data/*.tar /transfer-media/"
@@ -254,8 +254,6 @@ if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
 	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"
 	aba_info "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
 elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
-	aba_success "Images saved successfully!"
-	echo
 	aba_info "Next steps — choose one:"
 	echo
 	aba_info "  Option A: Create a portable install bundle (first-time transfer only)"
