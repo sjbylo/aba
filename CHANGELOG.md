@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.0...HEAD)
+
+---
+
+## [1.3.0](https://github.com/sjbylo/aba/releases/tag/v1.3.0) - 2026-09-11
+
+Multi-mirror day2, upgrade monitoring, TUI UX improvements, cluster DNS verification
+
 
 Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hints, cluster DNS verification, TUI UX improvements
 
