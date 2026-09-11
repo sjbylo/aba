@@ -1,4 +1,72 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.2.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.0...HEAD)
+
+---
+
+## [1.3.0](https://github.com/sjbylo/aba/releases/tag/v1.3.0) - 2026-09-11
+
+Multi-mirror day2, upgrade monitoring, TUI UX improvements, cluster DNS verification
+
+
+Multi-mirror day2 fixes, import hardening, podman preflight, oc-mirror tuning hints, cluster DNS verification, TUI UX improvements
+
+### Added
+
+- **`aba terminal`** — New command (alias: `aba term`): opens an interactive bash shell logged into the cluster with `oc` bash completion and a cluster-aware PS1 prompt. Retries login if the cluster API is not yet ready. Available from the CLI (`aba -d mycluster terminal`) and the TUI (Day-2 → Login Terminal).
+- **OSUS graph auto-refresh** — `aba day2` now detects when the OSUS graph-image was updated (by `aba sync` or `aba load`) and proactively restarts the OSUS pod so the update graph is current before `aba upgrade` runs.
+- **NodeDisruptionPolicy for NTP** — `aba day2-ntp` now sets a `NodeDisruptionPolicy` (OCP 4.17+) so that NTP configuration changes restart `chronyd` instead of rebooting nodes. Silently ignored on older clusters.
+- **`oc-mirror` tuning hints on failure** — When `oc-mirror` exhausts retries, the failure message now shows the config knobs (`OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, `OC_MIRROR_FLAGS`) and references the README Tuning section. Retry output also shows the escalated timeout and parallelism values. (Contributed by [@eanylin](https://github.com/eanylin), Anthony Lin.)
+- **`aba mirror --help` tuning section** — The mirror help output now includes a Tuning section documenting `OC_MIRROR_IMAGE_TIMEOUT`, `OC_MIRROR_PARALLEL_IMAGES`, and `OC_MIRROR_FLAGS`.
+- **ISC user-managed detection** — New `aba_isc_is_user_managed()` core function detects when the ImageSet Config has been hand-edited (newer than the `.created` sentinel). Sync/save/bundle confirm dialogs show "(user-edited ISC)" when applicable.
+- **`aba upgrade-mon`** — New command to monitor an in-progress upgrade until completion. Polls every 30s showing operator progress. Ctrl-C detaches (upgrade continues). On completion, prompts to run `aba day2` to update CatalogSources. Also available as `aba upgrade --wait` (`-w`) to trigger and monitor in one step.
+- **Smarter `aba import` when cluster exists** — When re-importing a cluster that ABA already manages, the error message now checks whether the existing kubeconfig is still valid. If stale (e.g. cluster was reinstalled), suggests `--force` re-import instead of the generic "already managed" message.
+- **Fix duplicate CatalogSources in multi-mirror** — Running `aba day2` from the same mirror a second time no longer creates a suffixed duplicate CatalogSource when the unsuffixed original already serves the same image.
+
+### Changed
+
+- **TUI: first-run base domain dialog** — On first launch, the TUI now shows an interactive dialog (after the splash screen) to verify or change the auto-detected base domain before creating `aba.conf`.
+- **TUI: structured ISC error handling** — ISC generation failures now show context-aware error dialogs: "Upgrade Path Error" with TUI-specific fix steps vs generic catalog troubleshooting. Uses structured error tags instead of brittle string matching.
+- **TUI: improved bundle dialogs** — Light vs Full bundle dialog now explains same-disk duplication trade-off with bold keywords and a Back button. "Start Fresh" (recommended) replaces "Reuse" as the default for image data. Disk space warning only shown when free space is below 50GB.
+- **`aba save` next-steps output** — Non-upgrade save now shows both options: portable bundle (first-time only) or manual `cp mirror/data/*.tar` transfer. Explains that `aba-transfer.tar` contains the ISC config. Upgrade save output streamlined.
+- **Bundle output streamlined** — Success message appears first, followed by clear numbered next steps. Light bundles emphasize "transfer TWO things". Removed redundant progress messages and alarming warnings for the user's own choices.
+- **Disk space warnings in GB** — Low disk space messages now display in GB instead of raw MB values.
+- **Day-2 summary banner prints before actions** — The "What this day2 script does" overview now appears before the first step executes, not after the pull-secret injection.
+- **`aba import --help` routed to dedicated help file** — `aba import -h` and `aba --help import` now display `help-import.txt` instead of falling through to generic help.
+- **Podman preflight redesigned** — Removed the startup podman check (Bug #961). Now fires after internet is confirmed at mode entry, with 2-hour TTL, using a public image (`registry.access.redhat.com`, no auth needed). Shows advisory warning with Continue/Retry/Back and session-level dismissal instead of hard-blocking.
+- **Removed unnecessary podman gates** — `mirror_save`, `mirror_sync`, and `prepare_upgrade` no longer call `_require_podman` (they use `oc-mirror`, not podman directly).
+- **ADR-011 amendment** — Day-2 wait gate failures changed from non-fatal to fatal, based on end-user feedback.
+- **`aba load` archive cleanup is informational** — After a successful load, leftover `mirror_*.tar` files are reported with a delete command instead of an interactive prompt.
+- **`aba upgrade` tolerates stale OSUS graph** — Instead of aborting immediately when the target version is not in the OSUS graph, waits up to 5 minutes for the graph to refresh and provides a clear retry hint.
+- **Bare-metal startup timeout increased** — `aba startup` now waits up to 20 minutes (was 5) for bare-metal and 10 minutes for virt platforms.
+- **Bare-metal shutdown `--wait` message** — `aba shutdown --wait` now informs the user that bare-metal has no hypervisor to query power state, instead of silently ignoring the flag.
+- **VIP resolution messages calmer** — Replaced alarming "Attention: inserting actual IP address" warnings with informative "Resolved FQDN → IP" messages.
+- **TUI: operator catalog uses upgrade target** — When in upgrade mode, operator selection and basket display now use the target version's catalog, matching ISC generation. Prevents selecting operators that don't exist in the target version.
+- **TUI: pull secret via file path** — Replaced the broken `--editbox` paste dialog with a file path `--inputbox`. Shows download instructions on exit if the user backs out.
+- **TUI: bare-metal install creates ISO only** — Removed the misleading "Full Install" option for bare-metal. ISO creation dialog now shows boot instructions for virtual media, USB, and PXE.
+- **TUI: cluster name defaults to latest** — The cluster name field now defaults to the most recently modified cluster instead of always "ocp".
+- **TUI: SSH to rendezvous skips probe** — SSHs directly if only one cluster has a rendezvous IP, instead of running a slow install-status probe.
+- **TUI: login terminal delegates to core** — TUI's "Login Terminal" now calls `aba terminal` instead of duplicating the logic. Retries on failure and returns to TUI cleanly.
+- **TUI: MAC count warning for bonding** — Warning now accounts for multiple ports per node (nodes × ports), not just node count.
+- **TUI: parallel cluster probes with cooldown** — `_probe_undetected_clusters` runs in parallel and caches failed probes for 2 minutes to reduce annoying popups.
+
+### Fixed
+
+- **Fix podman gate blocking ISC view in DISCO mode** — Skip podman check in `mirror_view_isc` when `readonly=true` (Bug #960).
+- **Fix multi-mirror day2 CA trust overwrite** — When a cluster already had a `registry-config` configmap from another mirror (e.g. OVE installer), `aba day2` would overwrite it instead of merging. Now uses `oc patch` to add the new CA key alongside existing entries.
+- **Fix multi-mirror CatalogSource naming** — `aba day2` now detects existing CatalogSources from other registries and suffixes ABA's CatalogSources with the mirror hostname to avoid collisions.
+- **Fix multi-mirror IDMS/ITMS name collisions** — When an existing IDMS or ITMS with the same name serves a different registry, ABA renames its resource (appending `-<hostname>`) instead of overwriting.
+- **Fix day2-osus `Argument list too long`** — Large CA bundles (140+ certs from OVE installer) exceeded `ARG_MAX` when passed on the command line. Now uses `oc patch --patch-file` with a temporary file.
+- **Fix day2-osus hardcoded CatalogSource name** — OSUS subscription now resolves the CatalogSource from `packagemanifests` instead of hardcoding `redhat-operators`, fixing multi-mirror clusters where ABA's catalog is suffixed.
+- **Harden `aba import`** — Abort if cluster state dir already exists (use `--force` to override); create `rendezvousIP` so `aba ssh` works on imported clusters; copy kubeconfig into `iso-agent-based/auth/` for `aba shell`; auto-detect `image_source=mirror` when `mirror/.available` exists; show a clear message when kubeadmin password is unavailable.
+- **Fix AI operator set `cert-manager` name** — Corrected `cert-manager` to `openshift-cert-manager-operator` in `operator-set-ai`.
+- **Fix cluster DNS verification** — API, apps, and registry hostname checks use cluster `dns_servers` (what nodes use), not bastion `getent`/NSS. Per-nameserver diagnosis when the registry FQDN fails. Hint at `verify_conf=conf` / `aba --verify conf` to skip network checks.
+- **Fix `aba shutdown` for imported clusters** — Shutdown no longer requires `install-config.yaml`/`agent-config.yaml`. For imported clusters, node IPs are fetched from the live cluster API.
+- **Fix `/tmp` sticky bit permission error** — `reg-install-remote.sh` now uses a `sudo` fallback for `/tmp` probe file cleanup, so the intended "reaches this localhost" error message is shown instead of a raw permission error.
+- **Fix `aba upgrade` channel switch** — Added `--allow-explicit-channel` to `oc adm upgrade channel` for cases where the local OSUS graph doesn't list a channel that exists upstream.
+- **Fix intermittent catalog download failure** — Serialized podman `create`/`cp` operations with `flock` to prevent BoltDB race conditions when many catalog versions are downloaded in parallel.
+- **Fix SSH key overwrite prompt** — `create-install-config.sh` no longer prompts to overwrite an existing SSH private key when only the `.pub` file is missing. Regenerates the public key from the private key instead.
+- **Fix TUI delete dialog for bare-metal** — Delete confirmation now shows platform-appropriate messages: bare-metal explains only local state is removed (servers keep running); virt platforms explain VMs are destroyed.
+- **Fix TUI Prepare Upgrade shortcut keys** — "Target Version Set" dialog now shows correct main menu shortcuts (`Y` for Sync, `S` for Save).
+- **Fix TUI Prepare Upgrade sync without mirror** — Selecting "Sync to registry" when no mirror is installed now shows the mirror config review dialog (same as the main menu Sync path) instead of proceeding blindly.
 
 ---
 

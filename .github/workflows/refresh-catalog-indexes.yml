@@ -7,8 +7,14 @@ on:
 
 env:
   IMAGE: quay.io/sjbylo/aba-catalog-indexes:latest
-  # OCP versions to include (space-separated)
-  OCP_VERSIONS: "4.17 4.18 4.19 4.20 4.21 4.22 4.23 5.0"
+  # Number of recent GA minor versions to include
+  DEPTH: 6
+  # Minimum operators expected per catalog (sanity check)
+  MIN_OPERATORS: 50
+  MIN_OPERATORS_PRERELEASE: 10
+  # Max drift percentage before warning (both size AND line count must exceed)
+  MAX_DRIFT: 5
+  MAX_DRIFT_PRERELEASE: 30
 
 jobs:
   refresh:
@@ -32,39 +38,238 @@ jobs:
           echo "${{ secrets.QUAY_TOKEN }}" | \
             podman login -u '${{ secrets.QUAY_USER }}' --password-stdin quay.io
 
-      - name: Pull and extract catalog indexes
+      - name: Restore catalog cache
+        uses: actions/cache@v4
+        with:
+          path: .index
+          key: catalog-indexes-${{ github.run_id }}
+          restore-keys: |
+            catalog-indexes-
+
+      - name: Auto-detect OCP versions
+        id: versions
+        run: |
+          # Detect latest GA minor versions from the stable channel release.txt
+          # Uses mirror.openshift.com — no ABA runtime dependency needed.
+          _prev_minor() {
+            local x="${1%%.*}" y="${1#*.}"
+            [[ "$y" =~ ^[0-9]+$ ]] && (( y > 0 )) && echo "${x}.$((y - 1))"
+          }
+
+          _next_minor() {
+            local x="${1%%.*}" y="${1#*.}"
+            [[ "$y" =~ ^[0-9]+$ ]] && echo "${x}.$((y + 1))"
+          }
+
+          # Get latest stable version from release.txt
+          latest=$(curl -sL "https://mirror.openshift.com/pub/openshift-v4/amd64/clients/ocp/stable/release.txt" \
+            | grep -Eo 'Version: +[0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | head -1)
+
+          if [[ -z "$latest" ]]; then
+            echo "::error::Cannot determine latest OCP version from mirror.openshift.com"
+            exit 1
+          fi
+
+          latest_minor="${latest%.*}"
+          echo "Latest stable: $latest (minor: $latest_minor)"
+
+          # Walk backwards to find DEPTH GA minors
+          ga_versions=()
+          minor="$latest_minor"
+          for (( i = 0; i < DEPTH; i++ )); do
+            [[ -z "$minor" ]] && break
+            ga_versions+=("$minor")
+            minor=$(_prev_minor "$minor")
+          done
+
+          # Sort ascending
+          IFS=$'\n' ga_sorted=($(printf '%s\n' "${ga_versions[@]}" | sort -V)); unset IFS
+          echo "GA versions: ${ga_sorted[*]}"
+
+          # Detect pre-release: probe registry for next minor and next major
+          pre_versions=()
+          next=$(_next_minor "$latest_minor")
+          major="${latest_minor%%.*}"
+          next_major="$((major + 1)).0"
+
+          for candidate in $next $next_major; do
+            [[ -z "$candidate" ]] && continue
+            # Skip if already a GA version
+            printf '%s\n' "${ga_sorted[@]}" | grep -qxF "$candidate" && continue
+            # Probe registry for the tag
+            if skopeo inspect --raw "docker://registry.redhat.io/redhat/redhat-operator-index:v${candidate}" &>/dev/null; then
+              pre_versions+=("$candidate")
+              echo "Pre-release detected: $candidate"
+            fi
+          done
+
+          all_versions=("${ga_sorted[@]}" "${pre_versions[@]}")
+          echo "All versions: ${all_versions[*]}"
+          echo "versions=${all_versions[*]}" >> "$GITHUB_OUTPUT"
+          echo "pre_versions=${pre_versions[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Download and extract catalog indexes
+        env:
+          OCP_VERSIONS: ${{ steps.versions.outputs.versions }}
         run: |
           source scripts/catalog-extract-functions.sh
 
+          # Content-layer digest check — same logic as download-catalog-index.sh.
+          # FBC catalog images have ~5 layers; layers[-1] is the catalog-specific
+          # data layer. Comparing this digest skips re-downloading when only the
+          # base OS layer was patched (security rebuild).
+          _get_content_layer_digest() {
+            local _ref="$1"
+            local _arch_digest _manifest _layer_count
+
+            _arch_digest=$(skopeo inspect --raw "$_ref" 2>/dev/null | \
+              jq -r '.manifests[]? | select(.platform.architecture=="amd64") | .digest')
+
+            if [[ -z "$_arch_digest" ]]; then
+              _manifest=$(skopeo inspect --raw "$_ref" 2>/dev/null)
+              _layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
+              if [[ "${_layer_count:-0}" -ge 4 ]]; then
+                echo "$_manifest" | jq -r '.layers[-1].digest'
+                return 0
+              fi
+              return 1
+            fi
+
+            local _base_ref="${_ref%:*}"
+            _manifest=$(skopeo inspect --raw "${_base_ref}@${_arch_digest}" 2>/dev/null)
+            _layer_count=$(echo "$_manifest" | jq '.layers | length' 2>/dev/null)
+            if [[ -z "$_layer_count" ]] || [[ "$_layer_count" -lt 4 ]]; then
+              return 1
+            fi
+            echo "$_manifest" | jq -r '.layers[-1].digest'
+          }
+
           mkdir -p .index
+          _podman_lock="/tmp/.aba-podman-catalog.lock"
+          failed_list=()
+
           for ver in $OCP_VERSIONS; do
             for catalog in redhat-operator certified-operator community-operator; do
               img="registry.redhat.io/redhat/${catalog}-index:v${ver}"
-              outfile=".index/${catalog}-index-v${ver}"
+              remote_ref="docker://${img}"
+              index_file=".index/${catalog}-index-v${ver}"
+              cld_file=".index/.${catalog}-index-v${ver}.content-layer-digest"
+
               echo "::group::${catalog} v${ver}"
-              echo "Pulling $img ..."
-              if ! podman pull --quiet "$img" 2>/dev/null; then
-                echo "Warning: $img not available, skipping"
+
+              # Content-layer change detection: skip if unchanged
+              if [[ -s "$index_file" && -f "$cld_file" ]]; then
+                stored_cld=$(< "$cld_file")
+                remote_cld=$(_get_content_layer_digest "$remote_ref") || remote_cld=""
+                if [[ -n "$remote_cld" && "$remote_cld" == "$stored_cld" ]]; then
+                  echo "SKIP: content layer unchanged"
+                  echo "::endgroup::"
+                  continue
+                fi
+                echo "Content layer changed — downloading"
+              fi
+
+              # Pull with permissive signature policy (some catalogs are unsigned)
+              _sig_policy="/tmp/policy-$$.json"
+              echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$_sig_policy"
+
+              if ! podman pull --signature-policy="$_sig_policy" --quiet "$img" 2>/dev/null; then
+                echo "::warning::Failed to pull $img, skipping"
+                failed_list+=("${catalog}:${ver}")
                 echo "::endgroup::"
                 continue
               fi
-              cid=$(podman create "$img" true 2>/dev/null)
-              tmpdir="/tmp/configs-$$"
-              podman cp "$cid":/configs/. "$tmpdir" 2>/dev/null || true
-              podman rm "$cid" >/dev/null 2>&1
-              if [ -d "$tmpdir" ]; then
-                expected=$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d -not -name '_*' | wc -l)
-                echo "$expected" > ".index/.${catalog}-index-v${ver}.expected-count"
-                _extract_catalog_dir "$tmpdir" "$outfile"
+
+              # Serialize create+cp+rm with flock (prevent BoltDB race)
+              tmpdir=$(mktemp -d "/tmp/catalog-XXXXXX")
+              (
+                flock -w 120 9 || exit 1
+                cid=$(podman create --quiet "$img" true 2>/dev/null)
+                podman cp "$cid":/configs/. "$tmpdir/configs" 2>/dev/null || true
+                podman rm -f "$cid" >/dev/null 2>&1
+              ) 9>"$_podman_lock"
+
+              if [[ ! -d "$tmpdir/configs" ]]; then
+                echo "::warning::Failed to extract configs from $img"
+                failed_list+=("${catalog}:${ver}")
                 rm -rf "$tmpdir"
+                echo "::endgroup::"
+                continue
               fi
-              count=$(wc -l < "$outfile" 2>/dev/null || echo 0)
-              echo "Extracted $count operators"
+
+              # Record expected count
+              expected=$(find "$tmpdir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' | wc -l)
+              echo "$expected" > ".index/.${catalog}-index-v${ver}.expected-count"
+
+              # Extract using shared functions
+              _extract_catalog_dir "$tmpdir/configs" "$index_file"
+              rm -rf "$tmpdir"
+
+              count=$(wc -l < "$index_file" 2>/dev/null || echo 0)
+              echo "Extracted $count operators (expected: $expected)"
+
+              # Save content layer digest for future runs
+              new_cld=$(_get_content_layer_digest "$remote_ref") || new_cld=""
+              [[ -n "$new_cld" ]] && echo "$new_cld" > "$cld_file"
+
               echo "::endgroup::"
             done
           done
 
+          if [[ ${#failed_list[@]} -gt 0 ]]; then
+            echo "::error::${#failed_list[@]} catalog(s) failed: ${failed_list[*]}"
+            exit 1
+          fi
+
+      - name: Drift check
+        env:
+          OCP_VERSIONS: ${{ steps.versions.outputs.versions }}
+          PRE_VERSIONS: ${{ steps.versions.outputs.pre_versions }}
+        run: |
+          drift_warnings=0
+          for ver in $OCP_VERSIONS; do
+            for catalog in redhat-operator certified-operator community-operator; do
+              new_file=".index/${catalog}-index-v${ver}"
+              old_file="catalogs/${catalog}-index-v${ver}"
+
+              [[ -s "$old_file" ]] || continue
+              [[ -s "$new_file" ]] || continue
+
+              # Relaxed threshold for pre-release catalogs (large swings expected)
+              threshold=$MAX_DRIFT
+              for _pv in $PRE_VERSIONS; do
+                [[ "$ver" == "$_pv" ]] && threshold=$MAX_DRIFT_PRERELEASE
+              done
+
+              old_lines=$(wc -l < "$old_file")
+              new_lines=$(wc -l < "$new_file")
+              old_size=$(wc -c < "$old_file")
+              new_size=$(wc -c < "$new_file")
+
+              line_drift=0; size_drift=0
+              (( old_lines > 0 )) && line_drift=$(( (new_lines - old_lines) * 100 / old_lines ))
+              (( old_size > 0 )) && size_drift=$(( (new_size - old_size) * 100 / old_size ))
+              # Absolute value
+              (( line_drift < 0 )) && line_drift=$(( -line_drift ))
+              (( size_drift < 0 )) && size_drift=$(( -size_drift ))
+
+              if (( line_drift > threshold && size_drift > threshold )); then
+                echo "::warning::DRIFT: ${catalog} v${ver}: lines ${old_lines}->${new_lines} (${line_drift}%), size ${old_size}->${new_size} (${size_drift}%) [threshold: ${threshold}%]"
+                drift_warnings=$((drift_warnings + 1))
+              fi
+            done
+          done
+
+          if [[ $drift_warnings -gt 0 ]]; then
+            echo "::warning::${drift_warnings} catalog(s) exceeded drift threshold — review before trusting"
+          else
+            echo "No significant drift detected"
+          fi
+
       - name: Verify indexes
+        env:
+          OCP_VERSIONS: ${{ steps.versions.outputs.versions }}
+          PRE_VERSIONS: ${{ steps.versions.outputs.pre_versions }}
         run: |
           errors=0
 
@@ -84,19 +289,31 @@ jobs:
               if [ "$expected" -gt 0 ] && [ "$actual" -ne "$expected" ]; then
                 echo "::warning::COUNT MISMATCH: ${catalog} v${ver}: extracted ${actual}, expected ${expected}"
               fi
+
+              # Min operator check (lower threshold for pre-release)
+              _min=$MIN_OPERATORS
+              for _pv in $PRE_VERSIONS; do
+                [[ "$ver" == "$_pv" ]] && _min=$MIN_OPERATORS_PRERELEASE
+              done
+              if (( actual < _min )); then
+                echo "::error::TOO FEW: ${catalog} v${ver} has only ${actual} operators (min: ${_min})"
+                errors=$(( errors + 1 ))
+              fi
+
               printf "  %-25s v%-6s %3d / %3d operators\n" "$catalog" "$ver" "$actual" "$expected"
             done
           done
 
           echo ""
           echo "=== 2. Syntax validation (every line: name display-text channel) ==="
+          _syntax='!/^[a-z0-9][a-z0-9._-]+[[:space:]]/ || NF < 3 || $NF !~ /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/'
           for f in .index/*-operator-index-v*; do
             [ -f "$f" ] || continue
             fname=$(basename "$f")
-            bad_lines=$(grep -cvE '^[a-z0-9][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" || true)
+            bad_lines=$(awk "$_syntax" "$f" | wc -l)
             if [ "$bad_lines" -gt 0 ]; then
               echo "::error::SYNTAX: $fname has $bad_lines malformed line(s):"
-              grep -vnE '^[a-z0-9][a-z0-9._-]+\s+\S+.*\S+\s*$' "$f" | head -5
+              awk "$_syntax" "$f" | head -5
               errors=$(( errors + 1 ))
             fi
             dup_names=$(awk '{print $1}' "$f" | sort | uniq -d)
@@ -112,16 +329,16 @@ jobs:
           sentinels[certified-operator]="gpu-operator-certified elasticsearch-eck-operator-certified"
           sentinels[community-operator]="argocd-operator"
 
-          # Use a known GA version for sentinel checks (not pre-release)
-          sentinel_ver="4.22"
+          # Use the latest GA version for sentinel checks (dynamic, not hardcoded)
+          latest_ga=$(echo "$OCP_VERSIONS" | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1)
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${sentinel_ver}"
+            f=".index/${catalog}-index-v${latest_ga}"
             [ -s "$f" ] || continue
             for sentinel in ${sentinels[$catalog]}; do
               if ! grep -q "^${sentinel} " "$f"; then
-                echo "::warning::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${sentinel_ver}"
+                echo "::warning::SENTINEL MISSING: ${sentinel} not found in ${catalog} v${latest_ga}"
               else
-                echo "  OK: ${sentinel} found in ${catalog} v${sentinel_ver}"
+                echo "  OK: ${sentinel} found in ${catalog} v${latest_ga}"
               fi
             done
           done
@@ -129,20 +346,20 @@ jobs:
           echo ""
           echo "=== 4. Display name spot-check ==="
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${sentinel_ver}"
+            f=".index/${catalog}-index-v${latest_ga}"
             [ -s "$f" ] || continue
             dashes=$(awk '$2 == "-"' "$f" | wc -l)
             total=$(wc -l < "$f")
             pct=0
             [ "$total" -gt 0 ] && pct=$(( dashes * 100 / total ))
             if [ "$pct" -gt 20 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${sentinel_ver} has ${dashes}/${total} (${pct}%) missing display names"
+              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${dashes}/${total} (${pct}%) missing display names"
             else
-              echo "  OK: ${catalog} v${sentinel_ver}: ${dashes}/${total} missing display names (${pct}%)"
+              echo "  OK: ${catalog} v${latest_ga}: ${dashes}/${total} missing display names (${pct}%)"
             fi
             same=$(awk '$1 == $2' "$f" | wc -l)
             if [ "$same" -gt 5 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${sentinel_ver} has ${same} entries where display name equals package name"
+              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${same} entries where display name equals package name"
             fi
           done
 
@@ -167,10 +384,13 @@ jobs:
           rm -rf "$builddir"
 
       - name: Summary
+        env:
+          OCP_VERSIONS: ${{ steps.versions.outputs.versions }}
         run: |
           echo "### Catalog Index Image Updated" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Image: \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
+          echo "Versions: $OCP_VERSIONS" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Version | redhat-operator | certified-operator | community-operator |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-----------------|--------------------|--------------------|" >> $GITHUB_STEP_SUMMARY

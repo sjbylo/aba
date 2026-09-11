@@ -74,7 +74,7 @@ aba_debug rendezvous_ip: $starting_ip
 
 # Change the default of bare-metal host prefix
 if [ "$platform" = "bm" ] && [ $hostPrefix -eq 23 ]; then
-	aba_info "Adjusting the default host prefix from 23 to 22 for bare-metal servers"
+	aba_info "Adjusting hostPrefix from 23 to 22 for bare-metal (allows more pods per node on large servers)"
 	export hostPrefix=22
 fi
 
@@ -209,11 +209,15 @@ if [ ! "$pull_secret" ]; then
 	fi
 fi
 
-# Check for ssh key files 
-if [ -s "$ssh_key_file.pub" ]; then
-	aba_info Using existing ssh key files: $ssh_key_file ... 
+# Check for ssh key files
+if [ -s "$ssh_key_file" ] && [ -s "$ssh_key_file.pub" ]; then
+	aba_info "Using existing ssh key files: $ssh_key_file"
+elif [ -s "$ssh_key_file" ] && [ ! -s "$ssh_key_file.pub" ]; then
+	# Private key exists but public key missing — regenerate .pub from private key
+	aba_info "Regenerating public key from existing $ssh_key_file ..."
+	ssh-keygen -y -f "$ssh_key_file" > "$ssh_key_file.pub"
 else
-	aba_info "Creating ssh key files for $ssh_key_file ..."
+	aba_info "Creating ssh key files: $ssh_key_file ..."
 	ssh-keygen -t rsa -f "$ssh_key_file" -N ''
 fi
 export ssh_key_pub=$(cat "$ssh_key_file.pub")

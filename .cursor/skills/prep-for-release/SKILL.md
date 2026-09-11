@@ -57,8 +57,10 @@ feature releases; can skip for docs-only or trivial fixes.
 git shortlog -sne $(git describe --tags --abbrev=0)..HEAD | grep -v sjbylo
 ```
 
-Every external contributor must be credited in CHANGELOG under `[Unreleased]`
-with `(@handle)` and in a `### Community` section.
+Where it makes sense, credit external contributors **inline** — put `(@handle)` or
+`(Contributed by @handle)` right next to the item they contributed to, in both
+the CHANGELOG entry AND the release bullets (if the item appears there).
+Prefer inline attribution over a separate `### Community` section at the bottom.
 
 ### 5. Write CHANGELOG entries
 
@@ -71,11 +73,13 @@ Add entries under `## [Unreleased]` in `CHANGELOG.md`. Group by:
 ### 6. Write release bullets
 
 Create `ai/RELEASE_BULLETS_<version>.md` with user-facing highlights.
-Rules (from workspace rules):
-- User-facing and brief only
+Rules:
+- **Strictly user-facing** — only features and fixes a user would notice or care about
+- No internal jargon, no implementation details, no developer-only changes
 - Significant items only (not exhaustive)
 - State the fact, not documentation
 - One-liner per item
+- If an item was contributed by an external contributor, credit them inline
 
 ### 7. Ensure clean working tree
 

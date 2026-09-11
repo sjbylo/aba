@@ -55,7 +55,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$ocp_version"; then
 		_hint="Upgrade to at least ${_lowest} first."
 	fi
-	aba_abort \
+	aba_abort --tag upgrade-path \
 		"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
 		"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
 		"$_hint" \
@@ -64,7 +64,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	elif [[ $_path_rc -eq 2 ]]; then
 		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
 		_nearest="${_path_diag##*|}"
-		aba_abort \
+		aba_abort --tag upgrade-path \
 			"No upgrade path from $ocp_version to $ocp_upgrade_to in channel ${_tgt_ch}." \
 			"${_nearest:+Nearest reachable target from $ocp_version: ${_nearest}}" \
 			"Update your upgrade target and try again." \
@@ -131,13 +131,13 @@ aba_debug "Available disk space: $avail MB"
 
 # Stark warning if very low (incremental saves may still succeed, so don't abort)
 if [ $avail -lt 20500 ]; then
-	aba_warn "Very low disk space under $PWD/data (only $avail MB free)" \
+	aba_warn "Very low disk space under $PWD/data (only $(( avail / 1024 ))GB free)" \
 		"A first-time save requires at least 20GB for the base platform alone" \
 		"Operators require additional 40-400GB of space" \
 		"Incremental saves may succeed with less space"
 	echo >&2
 elif [ $avail -lt 51250 ]; then
-	aba_warn "Less than 50GB of space available under $PWD/data (only $avail MB)" \
+	aba_warn "Less than 50GB of space available under $PWD/data (only $(( avail / 1024 ))GB free)" \
 		"Operator images require between ~40 to ~400GB of disk space!"
 	echo >&2
 fi
@@ -243,19 +243,30 @@ rm -f data/aba-transfer-metadata.json
 
 echo >&2
 if [ ! "${_ABA_BUNDLE_MODE:-}" ] && [ "$_is_upgrade" ]; then
-	aba_success "Upgrade images saved (${ocp_version} → ${ocp_upgrade_to})."
+	aba_info "Upgrade: ${ocp_version} → ${ocp_upgrade_to}"
 	echo
-	aba_info "Copy all *.tar files from mirror/data/ to the disconnected host:"
+	aba_info "Next: copy all *.tar files to the disconnected host:"
 	aba_info "  cp mirror/data/*.tar /transfer-media/"
 	echo
-	aba_info "  Files: mirror_*.tar (images), aba-transfer.tar (config, CLIs)"
+	aba_info "  mirror_*.tar = images, aba-transfer.tar = config + CLIs"
 	echo
 	aba_info "On the disconnected host:"
 	aba_info "  cp /transfer-media/*.tar ~/aba/mirror/data/"
 	aba_info "  aba -d mirror load → aba -d <cluster> day2 → aba -d <cluster> upgrade --to ${ocp_upgrade_to}"
 elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
-	aba_success "Images saved to mirror/data/."
-	aba_info "Next: 'aba tar --out /path/to/portable/media/install-bundle.tar'"
+	aba_info "Next steps — choose one:"
+	echo
+	aba_info "  Option A: Create a portable install bundle (first-time transfer only)"
+	aba_info "    aba bundle --out /path/to/portable/media/"
+	echo
+	aba_info "  Option B: Transfer archive files manually"
+	aba_info "    cp mirror/data/*.tar /transfer-media/"
+	aba_info "    On the disconnected bastion:"
+	aba_info "      cp /transfer-media/*.tar ~/aba/mirror/data/"
+	aba_info "      cd aba && ./install && aba (or abatui)"
+	echo
+	aba_info "  mirror_*.tar = images, aba-transfer.tar = config (ISC)"
+	aba_info "  For ongoing updates, always use Option B (save/transfer/load)."
 fi
 echo >&2
 

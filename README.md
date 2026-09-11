@@ -148,7 +148,7 @@ ABA integrates several [Red Hat preferred methods and tools](https://docs.redhat
 - [Custom config files](#customizing-install-configuration) (ImageSetConfiguration, agent-based config)
 - [Custom manifests embedded in the boot ISO](#embedding-custom-manifests-day-0) (e.g. MachineConfig)
 - Automatic handling of disconnected-environment pitfalls (catalog sources, release signatures)
-- Full cluster lifecycle management: install, configure, delete VMs and clean up
+- Full cluster lifecycle management: install, configure, upgrade, delete (VMs) and clean up
 
 All ABA commands are designed to be idempotent. If something goes wrong, fix it and run the command again.
 
@@ -167,8 +167,8 @@ Each scenario has two network zones: a **Connected Network** (left side, Interne
 
 **Linux OS Requirements:**
 
-- **Workstation**: RHEL 8, 9, or 10, CentOS Stream 8, 9, or 10, or Fedora.
-- **Bastion**: RHEL 8, 9, or 10 for disconnected OpenShift installation.
+- **Workstation** (connected bastion in diagram): RHEL 8, 9, or 10, CentOS Stream 8, 9, or 10, or Fedora.
+- **Bastion** (internal bastion in diagram): RHEL 8, 9, or 10 for disconnected OpenShift installation.
 
 ## Choose Your Path
 
@@ -250,9 +250,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.2.4.tar.gz
-tar xzf v1.2.4.tar.gz
-cd aba-1.2.4
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.0.tar.gz
+tar xzf v1.3.0.tar.gz
+cd aba-1.3.0
 ./install
 aba
 ```
@@ -260,7 +260,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.2.4 https://github.com/sjbylo/aba.git
+git clone --branch v1.3.0 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -785,6 +785,7 @@ Example output on successful install:
 [ABA]   API:      https://api.mycluster.example.com:6443
 
 [ABA] Next steps:
+[ABA]   aba terminal       — open interactive cluster shell
 [ABA]   . <(aba shell)     — access cluster (kubeconfig)
 [ABA]   . <(aba login)     — log in as kubeadmin
 [ABA]   aba day2           — configure OperatorHub with mirror registry
@@ -1580,6 +1581,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | ------------------------------- | ------------------------------------------------------------- |
 | `aba cluster --name <name> --type <sno\|compact\|standard>` | Create cluster directory and configure |
 | `aba info`                      | Display kubeadmin password and cluster information            |
+| `aba terminal`                  | Interactive shell logged into the cluster (oc ready, bash completion) |
 | `aba login`                     | Display `oc login` command. Use: `. <(aba login)`             |
 | `aba shell`                     | Display kubeconfig export. Use: `. <(aba shell)`              |
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
@@ -1795,7 +1797,7 @@ ABA creates a user-level configuration file at `~/.aba/config` during installati
 | `OC_MIRROR_IMAGE_TIMEOUT`        | `40m`        | Per-image timeout for `oc-mirror` — increase for large operators (e.g. RHOAI); see [FAQ](#q-aba-load-or-aba-sync-fails-with-context-deadline-exceeded-when-pushing-large-images-eg-rhoai) |
 | `OC_MIRROR_PARALLEL_IMAGES`      | `8`          | Concurrent images during mirroring                                                                      |
 | `OC_MIRROR_SINCE`                | `2020-01-01` | Date for `--since` during save (ensures self-contained archives)                                        |
-| `OC_MIRROR_FLAGS`                | *(empty)*    | Extra flags for every `oc-mirror` invocation                                                            |
+| `OC_MIRROR_FLAGS`                | *(empty)*    | Extra flags for every `oc-mirror` invocation (e.g. `--remove-signatures=true`)                          |
 | `OC_MIRROR_PIN_CATALOGS`         | `1`          | Pin catalogs by digest (workaround for [OCPBUGS-81712](https://issues.redhat.com/browse/OCPBUGS-81712)) |
 
 

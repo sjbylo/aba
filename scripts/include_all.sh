@@ -141,6 +141,13 @@ aba_info() {
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_white -n "[ABA] $@"
+	elif [ "$1" = "-m" ]; then
+		shift
+		local main_msg="$1"; shift
+		echo_white "[ABA] $main_msg"
+		for line in "$@"; do
+			echo_white "[ABA] $line"
+		done
 	else
 		echo_white "[ABA] $@"
 	fi
@@ -202,8 +209,25 @@ aba_debug() {
 }
 
 aba_abort() {
-	local main_msg="$1"
-	shift
+	# Usage: aba_abort [--tag TAG] "message" ["detail" ...]
+	# Prints error + details to stderr, then exits 1.
+	# --tag TAG writes TAG to ~/.aba/.abort-tag so callers (e.g. TUI) can
+	# identify the error category without parsing message strings.
+	# Known tags: upgrade-path (config mismatch, not an infra problem)
+	local _tag=""
+	local _args=()
+	while [[ $# -gt 0 ]]; do
+		if [[ "$1" == "--tag" ]]; then
+			_tag="$2"; shift 2
+		elif [[ "$1" == "--rc" ]]; then
+			shift 2  # ignored (Make eats exit codes)
+		else
+			_args+=("$1"); shift
+		fi
+	done
+
+	local main_msg="${_args[0]:-Error}"
+	unset '_args[0]'
 
 	echo >&2
 
@@ -211,15 +235,20 @@ aba_abort() {
 	echo_red "[ABA] Error: $main_msg" >&2
 
 	# Indented follow-up lines, also red, to stderr
-	for line in "$@"; do
+	for line in "${_args[@]}"; do
 		echo_red "[ABA]        $line" >&2
 	done
 	echo >&2
 
+	# Write error tag for structured detection by callers (TUI, scripts)
+	if [[ -n "$_tag" ]]; then
+		mkdir -p ~/.aba
+		echo "$_tag" > ~/.aba/.abort-tag
+	fi
+
 	sleep 1
 
-	# FIXME: Have a way to exit a diff. value
-        exit 1
+	exit 1
 }
 
 # Non-fatal error (like aba_abort but does NOT exit)
@@ -1023,7 +1052,11 @@ show_cluster_summary() {
 	[ "${ABA_TARGET_DIR:-}" ] && _p="aba -d $_dir"
 
 	echo
-	aba_success "Cluster installed successfully!"
+	if [ "${installed_from:-}" = "imported" ]; then
+		aba_success "Cluster imported successfully!"
+	else
+		aba_success "Cluster installed successfully!"
+	fi
 	aba_info "  Name:     $_cn.$_bd"
 	aba_info "  Version:  ${ocp_version:-?}"
 	aba_info "  Type:     $_type ($_nodes node(s))"
@@ -1031,6 +1064,7 @@ show_cluster_summary() {
 	aba_info "  API:      https://api.$_cn.$_bd:6443"
 	echo
 	aba_info "Next steps:"
+	aba_info "  $_p terminal       — open interactive cluster shell"
 	aba_info "  . <($_p shell)     — access cluster (kubeconfig)"
 	aba_info "  . <($_p login)     — log in as kubeadmin"
 	if [ "$_regcreds" ] && [ -f "$_regcreds/pull-secret-mirror.json" ]; then
@@ -3575,22 +3609,23 @@ wait_for_all_catalogs() {
 	# Wait: block for catalogs started by download_all_catalogs() above
 	# Skip run_once validation (-S): download_all_catalogs() already ensures tasks
 	# are started. Validation re-runs the full podman pull+extract (~15s per catalog).
+	CATALOG_ERROR=""
+	local _failed_cat=""
 	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for redhat-operator catalog download to complete" -i "catalog:${version_short}:redhat-operator"; then
-		echo_red "[ABA] Error: Failed to download redhat-operator catalog for OCP $version_short" >&2
+		_failed_cat="redhat-operator"
+	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
+		_failed_cat="certified-operator"
+	elif ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
+		_failed_cat="community-operator"
+	fi
+
+	if [[ -n "$_failed_cat" ]]; then
+		CATALOG_ERROR=$(get_task_error "catalog:${version_short}:${_failed_cat}" 2>/dev/null | tail -8 | tail -c 600)
+		echo_red "[ABA] Error: Failed to download ${_failed_cat} catalog for OCP $version_short" >&2
 		return 1
 	fi
 	aba_debug "redhat-operator catalog ready"
-	
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for certified-operator catalog download to complete" -i "catalog:${version_short}:certified-operator"; then
-		echo_red "[ABA] Error: Failed to download certified-operator catalog for OCP $version_short" >&2
-		return 1
-	fi
 	aba_debug "certified-operator catalog ready"
-	
-	if ! run_once -S -w -W "$timeout_secs" -m "Waiting for community-operator catalog download to complete" -i "catalog:${version_short}:community-operator"; then
-		echo_red "[ABA] Error: Failed to download community-operator catalog for OCP $version_short" >&2
-		return 1
-	fi
 	aba_debug "community-operator catalog ready"
 	
 	# Must use stderr since stdout may be redirected to YAML file
@@ -3810,8 +3845,12 @@ _run_oc_mirror_with_retry() {
 		local cmd="$base_cmd --image-timeout $image_timeout --parallel-images $parallel_images --retry-delay ${retry_delay}s --retry-times $retry_times ${OC_MIRROR_FLAGS-}"
 
 		echo
-		aba_info -n "Attempt ($try/$try_tot)."
-		[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
+		if [ $try -gt 1 ]; then
+			aba_info "Attempt ($try/$try_tot). [timeout=${image_timeout}, parallel=${parallel_images}]"
+		else
+			aba_info -n "Attempt ($try/$try_tot)."
+			[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
+		fi
 		aba_info "Running: $cmd"
 
 		aba_debug "Running oc-mirror $action"
@@ -3853,7 +3892,8 @@ _run_oc_mirror_with_retry() {
 		[ $try_tot -gt 1 ] && echo_white " (after $try/$try_tot attempts, history: [$exit_history])" || echo
 		aba_warn \
 			"Check the output above for specific errors (auth, network, timeout). Resolve any issues and try again." \
-			"View https://status.redhat.com/ for any current issues or planned maintenance."
+			"View https://status.redhat.com/ for any current issues or planned maintenance." \
+			"Tuning: see ~/.aba/config (image timeout, parallelism) or README.md 'Troubleshooting'."
 		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 
 		return 1
@@ -4516,6 +4556,15 @@ aba_version_fetch_start() {
 	done
 }
 
+# --- ISC helpers ---
+
+# Returns 0 if the ISC file has been manually edited by the user (newer than .created).
+# The .created sentinel is touched after every ABA-managed ISC generation.
+aba_isc_is_user_managed() {
+	local _isc="${1:-mirror/data/imageset-config.yaml}"
+	[[ -f "$_isc" && "$_isc" -nt "${_isc%/*}/.created" ]]
+}
+
 # --- ISC generation ---
 
 # Start ISC generation in background (non-blocking)
@@ -4523,6 +4572,27 @@ aba_version_fetch_start() {
 aba_isconf_generate_start() {
 	run_once -i "aba:isconf:generate" -- \
 		make -sC "${ABA_ROOT:-.}/mirror" isconf
+}
+
+# --- Podman preflight (TUI background check) ---
+
+# Fire a lightweight podman pull in the background to verify the podman stack:
+# podman binary, rootless subuid/subgid, network, DNS.
+# Uses a public image (no pull secret needed) so the check can run early.
+# TTL-cached: re-checks every 2 hours.
+aba_podman_check_start() {
+	run_once -i "aba:preflight:podman" -t 7200 -- \
+		bash -c 'podman rmi -f quay.io/podman/hello &>/dev/null; podman pull quay.io/podman/hello'
+}
+
+# Wait for the podman preflight result.  Sets PODMAN_CHECK_ERROR on failure.
+# Returns 0=ok, 1=failed.
+aba_podman_check_wait() {
+	if ! run_once -q -w -S -i "aba:preflight:podman" 2>/dev/null; then
+		PODMAN_CHECK_ERROR=$(get_task_error "aba:preflight:podman" 2>/dev/null)
+		return 1
+	fi
+	return 0
 }
 
 # --- Cleanup ---

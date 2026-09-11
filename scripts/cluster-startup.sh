@@ -33,12 +33,12 @@ if [ ! -s vmware.conf ] && [ ! -s kvm.conf ]; then
 	if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
 		aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 		_wait_rc=0
-		aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up || _wait_rc=$?
+		aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 1200 _cluster_startup_api_up || _wait_rc=$?
 		if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 			aba_info "Aborted. Power on the servers and try again."
 			exit 0
 		elif [ "$_wait_rc" -ne 0 ]; then
-			aba_abort "Cluster API not available at $server_url after 5 min. Power on all servers and try again."
+			aba_abort "Cluster API not available at $server_url after 20 min. Power on all servers and try again."
 		fi
 	fi
 else
@@ -48,14 +48,14 @@ fi
 
 # Have quick check if endpoint is available (cluster may already be running)
 if ! curl --connect-timeout 10 --retry 2 -skIL "$server_url" >/dev/null; then
-	aba_info Waiting for cluster API endpoint to become alive at $server_url ...
+	aba_info "Waiting for cluster API endpoint to become alive at $server_url ..."
 	_wait_rc=0
-	aba_wait_show "Waiting for cluster API" 5 300 _cluster_startup_api_up || _wait_rc=$?
+	aba_wait_show "Waiting for cluster API (Ctrl-C to abort)" 5 600 _cluster_startup_api_up || _wait_rc=$?
 	if [ "$_wait_rc" -eq 130 ] || [ "$_wait_rc" -eq 143 ]; then
 		aba_info "Aborted. Cluster may still be starting up."
 		exit 0
 	elif [ "$_wait_rc" -ne 0 ]; then
-		aba_abort "Cluster API not available at $server_url after 5 min." \
+		aba_abort "Cluster API not available at $server_url after 10 min." \
 			"Check that VMs are powered on ('aba ls') and the cluster is healthy."
 	fi
 fi

@@ -33,6 +33,22 @@ Issues or Pull Requests.
 
 ---
 
+## TUI: Sync/Save confirm dialog shows OP_BASKET count, not actual ISC operator count
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-09-02
+
+**Problem:** The "Sync images to mirror" (and "Save images") confirmation dialog shows the operator count from the in-memory `OP_BASKET` associative array, not from the actual `imageset-config.yaml` file. If the user manually edits the ISC to add operators, the dialog still shows the old basket count (e.g. "Operators (9)" when the ISC has many more).
+
+**Root cause:** `tui-mirror.sh` line ~501: `_op_count=${#OP_BASKET[@]}` counts the TUI's in-memory basket. The basket is populated from `aba.conf`'s `ops=` value at TUI startup and updated by the operator selection UI, but it is never reconciled with manual ISC edits.
+
+**Proposed fix:** When computing the summary for the confirm dialog, also count operators from the ISC file itself (e.g. `awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}'`) and use whichever count is higher, or always use the ISC file count. At minimum, if the ISC exists and its count differs from `OP_BASKET`, note it in the summary (e.g. "Operators (9 in basket, 14 in ISC)").
+
+**Workaround:** The actual sync/save uses the ISC file, not the basket — the operation itself is correct. Only the confirmation dialog count is wrong.
+
+---
+
 ## Validate SSH key files (private vs public)
 
 **Severity:** LOW
@@ -288,7 +304,7 @@ operators. These are distinct concerns — a user might want one without the oth
 ## Upgrade UX: pre-flight and monitoring improvements
 
 **Severity:** MEDIUM — UX gaps that cause confusion during upgrades
-**Status:** Planned
+**Status:** Partially Done (A: --allow-upgrade-with-warnings auto-added with --force; B/C/D still open)
 **Added:** 2026-07-10
 
 **Current state:** `cluster-upgrade.sh` pre-flight checks ClusterVersion-level
@@ -511,8 +527,9 @@ which terminal to run it in) and runs:
 ## day2-ntp: apply NTP config without node reboot where possible
 
 **Severity:** MEDIUM — reduces downtime during NTP configuration
-**Status:** Planned
+**Status:** Done (v1.2.5: NodeDisruptionPolicy for OCP 4.17+ — chronyd restart instead of reboot)
 **Added:** 2026-07-13
+**Closed:** 2026-09-09
 
 **Problem:** `aba day2-ntp` applies NTP configuration via MachineConfig, which
 triggers the MCO to drain, reboot, and reconcile every node. On a 3-node
@@ -719,8 +736,8 @@ and direct become reserved dir names. The key name itself might deserve a rename
 
 ## Multi-version operator catalogs: day2 applies wrong catalog after upgrade sync
 
-**Severity:** HIGH — can break operators on existing clusters
-**Status:** Planned
+**Severity:** LOW — theoretical; operator catalogs are backwards-compatible in practice
+**Status:** REVERTED (2026-09-10) — version-aware logic removed; see below
 **Added:** 2026-07-11
 **Related:** ISC upgrade mode / state.sh override (above), day2-osus channel bug (above)
 
@@ -864,8 +881,9 @@ to catch new dependencies early. Could also run on any change to
 ## Upgrade: Upgradeable=False pre-flight check in CLI
 
 **Severity:** MEDIUM — CLI silently hits confusing OpenShift errors
-**Status:** Planned
+**Status:** Done (cluster-upgrade.sh now checks Upgradeable=False, warns with reason/message, prompts to continue or aborts)
 **Added:** 2026-08-01
+**Closed:** 2026-09-09
 
 **Problem:** The TUI checks `Upgradeable=False` before triggering an upgrade
 (`_upgrade_preflight_check` in `tui-cluster.sh`), but the CLI path (`aba upgrade`)
@@ -1022,7 +1040,7 @@ only runs `virsh version`).
 ## Upgrade: detect stale OSUS graph when cluster version not in graph
 
 **Severity:** MEDIUM — user gets confusing "not an available upgrade" error
-**Status:** Planned
+**Status:** Partially Done (verify_upgrade_path_exists now does BFS edge validation; remaining: actionable "stale minVersion" diagnostic in cluster-upgrade.sh when source version missing from graph)
 **Added:** 2026-08-09
 
 **Problem:** When a cluster is upgraded via a connected path (e.g. z-stream
@@ -1168,8 +1186,9 @@ mirror sync.
 ## Upgrade: auto-restart OSUS pod when graph-image content changes
 
 **Severity:** MEDIUM — user gets "not an available upgrade" after a successful sync
-**Status:** Planned (was prototyped and verified on testy@conno, then stashed for v1.2.3)
+**Status:** Done (v1.2.5: `day2.sh` proactively restarts OSUS pod when `updateService.yaml` is newer than running pod)
 **Added:** 2026-08-16
+**Closed:** 2026-09-09
 
 **Problem:** After `aba sync` (or `aba load`) mirrors a new OCP version, the
 `graph-image:latest` in the registry is updated with the new version's graph
@@ -1266,7 +1285,7 @@ already has `list_installed_clusters()` + `int_connection` filtering in
 | 2 | `sync`/`load` adds new OCP version to graph-image | Restart OSUS pod to refresh graph data | MEDIUM — see "auto-restart OSUS pod" above |
 | 3 | Cross-minor upgrade sync | Update OSUS channel on cluster to match target minor | MEDIUM — currently manual, can break `aba upgrade` |
 | 4 | Mirror reinstall (new CA cert) | Warn that old clusters can't reach new mirror | MEDIUM — already in backlog (cert mismatch) |
-| 5 | `aba day2` after upgrade sync | Skip CatalogSources whose version doesn't match cluster | HIGH — already in backlog (multi-version catalogs) |
+| 5 | `aba day2` after upgrade sync | Apply as-is (catalogs are backwards-compatible); debug-log mismatch | LOW — reverted version-aware logic (2026-09-10) |
 | 6 | `aba upgrade` pre-flight | Query cluster's actual version, not aba.conf | MEDIUM — partially done, needs strengthening |
 
 **Proposed design:**
@@ -1422,26 +1441,29 @@ version item above), offer to purge unused images:
 ## Feature: Manage additional images in ISC
 
 **Severity:** MEDIUM — reduces manual YAML editing and ISC regeneration issues
-**Status:** Planned
+**Status:** Planned — design in [ADR-013](devel/adr/013-additional-images-conf.md)
 **Added:** 2026-08-18
+**Updated:** 2026-09-02
 
 **Problem:** The `additionalImages` section in the imageset-config.yaml (ISC)
 is currently just commented-out examples. Users must manually edit the YAML to
 add images like `ose-cli`, `support-tools`, or OpenShift Virtualization
-container disks. Manual edits are error-prone and get overwritten when the ISC
-is regenerated (e.g. after operator changes or upgrade prep).
+container disks. Manual edits trip the `.created` guard and ABA stops managing
+platform/operators.
 
-**Proposed behavior:**
+**Design:** Do not store extras in the ISC or as an `aba.conf` key. Use
+`images.conf` next to `aba.conf` and optional `mirror/images.conf`. Merge
+(union, dedupe). Generator renders `additionalImages` with comments naming
+the source file(s). See ADR-013. Do not implement until that ADR is accepted.
+
+**Proposed behavior (implementation, after ADR accepted):**
 
 ### ABA Core (CLI commands)
 
-- `aba image add <image:tag>` — adds to a tracked list
+- `aba image add <image:tag>` — appends to `images.conf` (flag for mirror file)
 - `aba image remove <image:tag>` — removes from tracked list
-- `aba image list` — shows configured additional images
-- The tracked list is stored persistently (e.g. `templates/additional-images`
-  or a key in `mirror.conf`) and rendered into the ISC `additionalImages:`
-  section automatically during ISC generation, just like operator sets.
-- Images persist across ISC regeneration.
+- `aba image list` — shows merged list (with source)
+- Files are the source of truth; CLI is optional. Users may edit the files.
 
 ### Auto-add images based on operator sets
 
@@ -1490,7 +1512,8 @@ build pipeline**.
 - `scripts/reg-create-imageset-config.sh`: export image list for Jinja
 - `scripts/aba.sh`: `image add/remove/list` subcommands
 - `scripts/include_all.sh`: image list management functions
-- `templates/additional-images` (new): persistent image list file
+- `images.conf` / `mirror/images.conf` (new): persistent lists; see ADR-013
+- `templates/images.conf` (new): commented examples
 - `bundles/v2/scripts/02-configure-aba-and-imageset.sh`: migrate from
   `uncomment_line` to `aba image add` (step 2)
 - `bundles/bundle-create-test.sh`: same migration (step 2)
@@ -1566,6 +1589,49 @@ in the TUI.
 
 ---
 
+## Makefile: skip mirror-registry tarball extraction when already extracted
+
+**Severity:** LOW — unnecessary work, adds ~10s to every `aba load`
+**Status:** Planned
+**Added:** 2026-08-27
+
+**Problem:** Running `aba -d mirror load` always extracts
+`mirror-registry-amd64.tar.gz` (1GB) even when the `mirror-registry` binary
+already exists and the registry is already installed and running. The user
+sees:
+
+```
+[ABA] Extracting mirror-registry-amd64.tar.gz into /home/user/aba/mirror
+image-archive.tar
+execution-environment.tar
+mirror-registry
+sqlite3.tar
+```
+
+**Root cause:** The `mirror-registry` Make target in `Makefile.mirror` has a
+normal dependency on `$(MR_TARBALL)`. When the tarball gets a fresh timestamp
+(e.g. transferred as part of a bundle, re-downloaded, or touched by a
+previous make step), Make sees the tarball is newer than the extracted binary
+and re-runs the extraction recipe — even though `.available` (which depends
+on `mirror-registry` as order-only) already exists.
+
+**Proposed fix:** Add an existence guard to the `mirror-registry` recipe:
+
+```makefile
+mirror-registry: $(MR_TARBALL)
+	@[ -f mirror-registry ] && exit 0 || true
+	@$(SCRIPTS)/run-once.sh ...
+	tar xmvzf $(MR_TARBALL) ...
+```
+
+Or change `mirror-registry` from a file target to a `.PHONY` + marker file
+pattern, so extraction is skipped once the marker exists.
+
+**Files to change:**
+- `templates/Makefile.mirror`: guard the `mirror-registry` recipe
+
+---
+
 ## Optimization: CLI download --wait should be instant after oc-mirror
 
 **Severity:** LOW — UX improvement, saves ~60s during bundle creation
@@ -1613,3 +1679,148 @@ overhead (subshell, source scripts, check state files).
 - `scripts/cli-download-all.sh`: verify start mode initiates all tasks
 - `scripts/make-bundle.sh`: ensure early kickoff covers extras
 - `scripts/reg-save.sh`: same
+
+---
+
+## Use FQDN node hostnames in agent-based installs
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-09-04
+
+**Problem:** ABA creates nodes with bare short hostnames (e.g. `mesh1`,
+`master1`) in the agent-config. These short names are not resolvable via
+standard DNS from inside pods. Any in-cluster software that resolves the
+Kubernetes node name (e.g. the SPIRE agent's kubelet workload attestor)
+fails with `lookup mesh1: no such host`.
+
+**Root cause:** The `agent-config.yaml.j2` template sets
+`hostname: {{ cluster_name }}` (SNO) or
+`hostname: {{ prefix }}{{ loop.index }}` (multi-node) — no domain suffix.
+Since the SPIRE agent (ZTIDM) runs without `hostNetwork` and uses
+`dnsPolicy: ClusterFirst`, it resolves node names through CoreDNS, which
+cannot resolve bare short names.
+
+**Proposed fix:**
+1. Append the base domain to node hostnames in all `agent-config*.yaml.j2`
+   templates:
+   - SNO: `hostname: {{ cluster_name }}.{{ domain }}`
+   - Multi-node: `hostname: {{ prefix }}{{ loop.index }}.{{ domain }}`
+2. Add per-node A records to dnsmasq (ABA already knows all node IPs from
+   `cluster.conf` and already manages dnsmasq for API/apps records in
+   `infra-dns.sh`).
+3. Verify the agent-based installer handles FQDN hostnames correctly
+   across SNO, compact, and standard topologies.
+
+**Workaround:** Manually add node hostname records to an upstream DNS
+server (or dnsmasq on bastion) and configure the OpenShift DNS Operator
+to forward to it. See the `ztidm-federation-demo` repo README for
+detailed steps.
+
+**Notes:**
+- This is a breaking change for new clusters only — existing clusters
+  keep their current short hostnames.
+- The `{{ domain }}` variable is already available in the Jinja2
+  templating context (used by `mirror.conf.j2`).
+- IPI and cloud installs already use FQDNs for node names.
+
+**Files likely affected:**
+- `templates/agent-config.yaml.j2`
+- `templates/agent-config-bond.yaml.j2`
+- `templates/agent-config-vlan.yaml.j2`
+- `templates/agent-config-vlan-bond.yaml.j2`
+- `scripts/infra-dns.sh` (add per-node A records)
+
+---
+
+## Breaking change: Rename CLI commands for clarity
+
+**Severity:** LOW — cosmetic, but improves discoverability
+**Status:** Planned for v1.3.0 or v2.0
+**Added:** 2026-09-09
+
+**Problem:** Current naming is unintuitive:
+- `aba shell` doesn't give you a shell — it prints `export KUBECONFIG=...`
+- `aba login` doesn't log you in — it prints an `oc login` command
+- `aba terminal` (new) is the only one that does what the name implies
+
+**Proposed rename:**
+
+| Current | New | What it does |
+|---------|-----|-------------|
+| `aba shell` | `aba kc` (or `aba kubeconfig`) | Source-able: `. <(aba kc)` |
+| `aba login` | `aba env` | Source-able: `. <(aba env)` |
+| `aba terminal` | `aba login` | Interactive login + bash shell |
+
+**Implementation plan:**
+1. Add new names as primary commands
+2. Keep old names as silent aliases for one release cycle (deprecated but working)
+3. Log a deprecation notice on first use of old names
+4. Remove old aliases in the following release
+
+**Blast radius (all need updating):**
+- `scripts/aba.sh` (CLI routing)
+- `scripts/show-cluster-login.sh`, `scripts/cluster-terminal.sh`
+- `scripts/include_all.sh` (`show_cluster_summary` hints)
+- `scripts/cluster-import.sh` (available commands)
+- `scripts/cluster-upgrade.sh`, `scripts/day2.sh` (eval login/shell)
+- `tui/v2/tui-cluster.sh` (login terminal)
+- `others/help-*.txt` (all help files)
+- `README.md`, `CHANGELOG.md`
+- `test/e2e/suites/*` (all suites using `. <(aba shell)` or `eval "$(aba login)"`)
+- `test/func/*`
+- User-facing docs and examples
+
+**Risk:** HIGH churn, must be a dedicated commit with full e2e verification.
+Do NOT mix with other changes.
+
+---
+
+## Feature: Unified `aba status` command
+
+**Severity:** MEDIUM — UX improvement, central diagnostic/preflight tool
+**Status:** Planned
+**Added:** 2026-09-10
+
+**Problem:** ABA lacks a single command to show the state of the mirror,
+cluster, upgrade readiness, or day2 prerequisites. Users must piece together
+information from multiple commands (`oc get clusterversion`, `oc get
+catalogsource`, `skopeo list-tags`, etc.) to diagnose issues like
+CatalogSource version mismatches, stale OSUS graphs, or missing mirror
+content.
+
+**Proposed design:**
+
+```bash
+aba status                    # Overview of everything
+aba status mirror             # Registry health, versions synced, catalog versions
+aba status cluster            # Cluster version, CO health, CatalogSource versions
+aba status upgrade            # OSUS graph, upgrade path, pre-flight
+aba status day2               # CS version match check, prerequisites
+```
+
+Each subcommand supports:
+- **Human-readable output** (default): formatted for the terminal
+- **`--shell` output**: key-value pairs for TUI/script consumption
+
+Example `aba status day2 --shell`:
+```
+CLUSTER_VER=4.21 CS_VER=5.0 CS_MISMATCH=1 CS_MATCH_AVAILABLE=4.21
+```
+
+The TUI calls `aba status day2 --shell` before running day2 to detect
+mismatches and show a dialog. The CLI prints human-readable diagnostics.
+
+**Architecture:** All logic in ABA core. TUI is a dumb consumer — calls
+`aba status <sub> --shell`, parses output, displays result.
+
+**Implementation:** Extract existing diagnostic logic from various scripts
+(cluster_is_ready, verify_upgrade_path_exists, warn_if_cluster_unstable,
+day2 CS version check) into a unified `scripts/aba-status.sh` dispatcher.
+
+**Files likely affected:**
+- New `scripts/aba-status.sh` (or `scripts/status-*.sh` per subcommand)
+- `scripts/aba.sh`: route `status` subcommand
+- `scripts/include_all.sh`: shared status helpers
+- `tui/v2/tui-cluster.sh`: call `aba status --shell` for preflight
+- `others/help-aba.txt`: document `aba status`

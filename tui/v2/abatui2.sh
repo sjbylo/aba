@@ -138,6 +138,7 @@ _tick "Loading modules"
 for fn in check_internet_connectivity get_domain get_machine_network run_once replace-value-conf \
 	aba_mirror_verify_start aba_mirror_verify_refresh aba_mirror_verify_exit \
 	aba_inet_check_start aba_inet_check_wait aba_inet_check_wait_status \
+	aba_podman_check_start aba_podman_check_wait \
 	aba_version_fetch_start aba_isconf_generate_start aba_prefetch_catalogs aba_bg_cleanup; do
 	type -t "$fn" >/dev/null 2>&1 || { echo "FATAL: required function '$fn' not found in include_all.sh"; exit 1; }
 done
@@ -220,8 +221,12 @@ OP_SET_ADDED=()
 
 # Restore basket from aba.conf (config files = single source of truth)
 # Handles both ops= (comma-separated operators) and op_sets= (comma-separated set names)
-# Validates each operator against the catalog index for the current OCP version
-_ver_short=$(_ver_minor "$ocp_version")
+# Validates each operator against the catalog for the effective OCP version (upgrade target if set)
+if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+	_ver_short=$(_ver_minor "$ocp_upgrade_to")
+else
+	_ver_short=$(_ver_minor "$ocp_version")
+fi
 
 # Restore individual operators from ops=
 if [[ -n "${ops:-}" ]]; then
@@ -272,10 +277,12 @@ aba_version_fetch_start
 
 # Ensure aba.conf exists so background catalog downloads can read pull_secret_file
 # (mirrors v1's resume_from_conf — config must exist BEFORE prefetch)
+_TUI_FIRST_RUN=""
 if [[ ! -f "$ABA_ROOT/aba.conf" ]]; then
 	if [[ -f "$ABA_ROOT/templates/aba.conf.j2" ]]; then
+		_TUI_FIRST_RUN=1
 		_domain=$(get_domain 2>/dev/null) || true
-		export domain="${_domain}"
+		export domain="${_domain:-example.com}"
 		machine_network="" dns_servers="" next_hop_address="" ntp_servers="" \
 			"$ABA_ROOT/scripts/j2" "$ABA_ROOT/templates/aba.conf.j2" > "$ABA_ROOT/aba.conf" 2>>"$_TUI_LOG_FILE"
 		tui_log "Created aba.conf from template (pull_secret_file set)"
@@ -438,6 +445,7 @@ _detect_mode() {
 				rm -f "$ABA_ROOT/.bundle"
 				tui_log "User chose connected mode, removed .bundle"
 				_TUI_MODE="CONNO"
+				aba_podman_check_start
 				return
 			fi
 		else
@@ -453,6 +461,7 @@ _detect_mode() {
 	if check_internet_connectivity "aba" quiet 2>/dev/null; then
 		_TUI_INET="yes"
 		_TUI_MODE="CONNO"
+		aba_podman_check_start
 		tui_log "Mode detected: CONNO (internet available, default to mirror)"
 	else
 		_TUI_INET="no"
@@ -484,8 +493,8 @@ _detect_mode() {
 _conno_main() {
 	tui_log "Entering CONNO mode"
 
-	# Run initial wizard if config not complete
-	if [[ -z "${ocp_channel:-}" || -z "${ocp_version:-}" ]]; then
+	# Run initial wizard if config not complete (channel + version + pull secret file)
+	if ! _direct_config_complete; then
 		tui_log "CONNO: config incomplete, running wizard"
 		direct_wizard || return 1
 		# Reload config (normalized to avoid trailing whitespace from comments)
@@ -850,6 +859,24 @@ Tip: You can also run any step from the CLI:
 			;;
 	esac
 done
+
+# --- First-run: let the user verify/change the auto-detected base domain ---
+if [[ "$_TUI_FIRST_RUN" ]]; then
+	_cur_domain=$(source <(normalize-aba-conf) && echo "$domain")
+	_user_domain=""
+	if dlg --backtitle "$(ui_backtitle)" --title "Base Domain" \
+		--inputbox "\nDetected base domain: ${_cur_domain:-example.com}\n\nThis domain is used for all cluster FQDNs,\ne.g. mycluster.${_cur_domain:-example.com}\n\nVerify and adjust if needed." \
+		12 60 "${_cur_domain:-example.com}" \
+		2>"$_TUI_TMP"; then
+		_user_domain=$(<"$_TUI_TMP")
+	fi
+	_new_domain="${_user_domain:-${_cur_domain:-example.com}}"
+	if [[ "$_new_domain" != "$_cur_domain" ]]; then
+		replace-value-conf -q -n domain -v "$_new_domain" -f "$ABA_ROOT/aba.conf"
+		tui_log "User changed domain: $_cur_domain -> $_new_domain"
+	fi
+	unset _cur_domain _user_domain _new_domain
+fi
 
 # --- Detect mode (uses internet check result started during startup) ---
 _detect_mode

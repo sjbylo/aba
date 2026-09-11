@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.2.4
+ABA_VERSION=1.3.0
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260826213840
+ABA_BUILD=20260911090958
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -290,7 +290,7 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	# Auto-detect domain only (needed by mirror.conf). Other network values deferred to cluster creation.
 	export domain=$(get_domain)
 
-	aba_debug domain:		$domain
+	aba_info "Auto-detected domain: $domain (override with: aba --domain <domain>)"
 
 	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
 else
@@ -384,6 +384,8 @@ do
 			cat $ABA_ROOT/others/help-transfer.txt
 		elif [ "$_ht" = "setup" -o "$_ht" = "remove" ]; then
 			cat $ABA_ROOT/others/help-setup.txt
+		elif [ "$_ht" = "import" ]; then
+			cat $ABA_ROOT/others/help-import.txt
 		else
 			# If some other target, then show the main help
 			cat $ABA_ROOT/others/help-aba.txt
@@ -1045,6 +1047,10 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "--allow-not-recommended" ]; then
 		upgrade_allow_not_recommended="--allow-not-recommended"
 		shift
+	elif [ "$1" = "--wait" -o "$1" = "-w" ]; then
+		# upgrade --wait: keep monitoring after triggering the upgrade
+		upgrade_wait=1
+		shift
 	elif [ "$1" = "--primed" ]; then
 		opt_primed="--primed"
 		shift
@@ -1100,7 +1106,7 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 				shift
 				exec $ABA_ROOT/scripts/cluster-import.sh "$@"
 				;;
-			tui|ssh|run|bundle|bundle-primed|info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
+			tui|ssh|run|bundle|bundle-primed|info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1147,7 +1153,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|getco|unstick|day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
+		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1176,7 +1182,7 @@ if [ "$cur_target" ]; then
 
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
-		day2|day2-ntp|day2-osus|upgrade|shutdown|startup|rescue|unstick)
+		day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|unstick)
 			_cn=$(basename "$PWD")
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
@@ -1245,7 +1251,10 @@ if [ "$cur_target" ]; then
 			echo "export KUBECONFIG=$_kc"
 			exit
 		;;
-		getco)
+	terminal|term)
+		exec $ABA_ROOT/scripts/cluster-terminal.sh
+	;;
+	getco)
 			ensure_oc
 			source <(normalize-cluster-conf)
 			_kc=$(cluster_kubeconfig 2>/dev/null)
@@ -1298,7 +1307,22 @@ if [ "$cur_target" ]; then
 			_rc=0
 			$ABA_ROOT/scripts/cluster-upgrade.sh "${upgrade_args[@]}" || _rc=$?
 			[ "$_rc" -eq 0 ] && _post_check_install
+
+			# --wait: keep monitoring until the upgrade completes
+			if [ "$upgrade_wait" ] && [ "$_rc" -eq 0 ]; then
+				_mon_args=()
+				[ "$upgrade_to" ] && _mon_args+=(--to "$upgrade_to")
+				$ABA_ROOT/scripts/cluster-upgrade-mon.sh "${_mon_args[@]}" || true
+			fi
+
 			exit $_rc
+		;;
+		upgrade-mon)
+			trap - ERR
+			_mon_args=()
+			[ "$upgrade_to" ] && _mon_args+=(--to "$upgrade_to")
+			$ABA_ROOT/scripts/cluster-upgrade-mon.sh "${_mon_args[@]}"
+			exit
 		;;
 		shutdown)
 			eval $BUILD_COMMAND

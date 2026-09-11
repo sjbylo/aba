@@ -45,7 +45,33 @@ preflight_check_dns() {
 		_preflight_errors=$((_preflight_errors + 1))
 		# Undo the warnings that were already counted, replace with single error
 		_preflight_warnings=$((_preflight_warnings - failed))
-		aba_warn "All $total DNS server(s) are unreachable!"
+		aba_warn "All $total DNS server(s) are unreachable!" \
+			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
+	fi
+
+	# Verify cluster DNS can resolve the registry hostname (if mirror-based)
+	local _reg_host=""
+	if [ -f "$(image_source_mirror_name)/mirror.conf" ]; then
+		_reg_host=$(source <(normalize-mirror-conf) && echo "$reg_host") 2>/dev/null || true
+	fi
+	if [ -n "$_reg_host" ]; then
+		local _resolved=0
+		for ip in $servers; do
+			local _reg_ip
+			_reg_ip=$(dig +short +time=5 +tries=1 "@$ip" "$_reg_host" 2>/dev/null \
+				| grep -v '^;;' | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1) || true
+			if [ -n "$_reg_ip" ]; then
+				aba_success "DNS server $ip resolves registry '$_reg_host' -> $_reg_ip"
+				_resolved=1
+			else
+				aba_warn "DNS server $ip cannot resolve registry hostname '$_reg_host'"
+				_preflight_warnings=$((_preflight_warnings + 1))
+			fi
+		done
+		if [ "$_resolved" = 0 ]; then
+			aba_warn "No cluster DNS server resolved registry '$_reg_host' from this host"
+			_preflight_warnings=$((_preflight_warnings + 1))
+		fi
 	fi
 }
 
@@ -96,7 +122,8 @@ preflight_check_ntp() {
 	if [ $failed -eq $total ]; then
 		_preflight_errors=$((_preflight_errors + 1))
 		_preflight_warnings=$((_preflight_warnings - failed))
-		aba_warn "All $total NTP server(s) are unreachable!"
+		aba_warn "All $total NTP server(s) are unreachable!" \
+			"To skip network checks: aba --verify conf  (or set verify_conf=conf in aba.conf)"
 	fi
 }
 

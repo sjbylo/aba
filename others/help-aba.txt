@@ -18,7 +18,9 @@ Main commands:
   aba [-d <cluster>] deploy-primed      # One-command primed deployment pipeline. See 'aba deploy --help'
   aba transfer-primed                   # Create config-only transfer tar. See 'aba transfer --help'
   aba [-d <cluster>] upgrade --to <ver> # Upgrade a cluster to a target OCP version. See 'aba cluster --help'
+  aba [-d <cluster>] upgrade-mon         # Monitor an in-progress upgrade (Ctrl-C to detach)
   aba import                            # Import an existing OpenShift cluster. See 'aba import --help'
+  aba [-d <cluster>] terminal|term      # Interactive shell logged into the cluster (oc ready, bash completion)
 
 Other commands:
   aba clean                             # Clean up all generated files
@@ -57,6 +59,7 @@ Options:
   -o, --out <file|->                    # Output Install Bundle to destination, e.g. file or stdout (-). See 'aba bundle -h'
   -f, --force                           # Only used with 'aba reset --force' and 'aba bundle --force'
   -V, --vmware                          # Apply this VMware config file (for govc)
+      --force-catalog                   # day2: apply CatalogSource files as-is, skip cluster version matching
       --verify <all|conf|off>           # Control validation: all (default), conf (config only), off (skip)
   -D, --debug                           # Increase output
   -q, --quiet                           # Less output

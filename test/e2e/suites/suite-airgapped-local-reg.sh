@@ -58,6 +58,7 @@ plan_tests \
     "Incremental: mesh operators" \
     "Deploy: service mesh demo" \
     "Lifecycle: shutdown/startup" \
+    "Upgrade: save and load target version" \
     "Upgrade: cross-minor with admin ack gate" \
     "Standard: macs.conf + auto-DNS VIP allocation (no explicit VIPs)" \
     "Cleanup: uninstall registry on disN" \
@@ -707,9 +708,9 @@ e2e_wait_cluster_available $SNO remote
 test_end
 
 # ============================================================================
-# 15. Upgrade: cross-minor with admin ack gate
+# 15. Upgrade: save and load target version
 # ============================================================================
-test_begin "Upgrade: cross-minor with admin ack gate"
+test_begin "Upgrade: save and load target version"
 
 # Save the target (N-1) version images using --upgrade-to (auto-generates
 # ISC with shortestPath, minVersion=current, maxVersion=target).
@@ -749,6 +750,13 @@ e2e_run_remote -r 1 2 "Load upgrade images" \
 e2e_run_remote "Verify aba-transfer.tar kept after upgrade load" \
     "cd ~/aba && test -f mirror/data/aba-transfer.tar"
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
+
+test_end
+
+# ============================================================================
+# 15c. Continue upgrade: day2 + OSUS + upgrade trigger
+# ============================================================================
+test_begin "Upgrade: cross-minor with admin ack gate"
 
 e2e_run_remote "Apply day2 config (upgrade mirror resources)" \
     "cd ~/aba && aba --dir $SNO day2"

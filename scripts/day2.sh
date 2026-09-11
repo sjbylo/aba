@@ -62,6 +62,41 @@ fi
 
 warn_if_cluster_unstable
 
+# Restart OSUS pod early if graph-image was updated since the pod started.
+# oc-mirror creates updateService.yaml when it builds/updates the graph-image.
+# If that file is newer than the running OSUS pod, the pod has stale graph data.
+# Restarting here lets the pod rebuild in parallel with the rest of day2 work.
+_us_file="mirror/data/working-dir/cluster-resources/updateService.yaml"
+_osus_restarted=""
+if [ -f "$_us_file" ]; then
+	_osus_upstream=$(oc get clusterversion version -o jsonpath='{.spec.upstream}' 2>/dev/null) || _osus_upstream=""
+	if [ -n "$_osus_upstream" ]; then
+		_us_ts=$(stat -c %Y "$_us_file" 2>/dev/null) || _us_ts=0
+		_pod_start_iso=$(oc get pod -n openshift-update-service -l app=osus \
+			-o jsonpath='{.items[0].status.startTime}' 2>/dev/null) || _pod_start_iso=""
+		_pod_start_ts=0
+		[ -n "$_pod_start_iso" ] && _pod_start_ts=$(date -d "$_pod_start_iso" +%s 2>/dev/null) || _pod_start_ts=0
+		if [ "$_us_ts" -gt "$_pod_start_ts" ] 2>/dev/null; then
+			aba_info "Graph data updated since OSUS pod started — restarting OSUS pod to refresh update graph ..."
+			oc delete pod -n openshift-update-service -l app=osus --grace-period=0 2>/dev/null || true
+			_osus_restarted=1
+		else
+			aba_debug "OSUS pod already newer than updateService.yaml — no restart needed"
+		fi
+	fi
+fi
+
+aba_info "What this 'day2' script does:"
+aba_info "- Ensure the cluster's global pull secret includes mirror registry credentials."
+aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
+aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
+aba_info "- Apply any/all idms/itms resource files under aba/mirror/data/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync or load)."
+aba_info "- For fully disconnected environments, disable online public catalog sources."
+aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
+aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
+aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/ directory."
+echo
+
 # Ensure the cluster's global pull secret includes mirror registry credentials.
 # ABA-installed clusters already have these from install-config, but imported
 # clusters (aba import) or externally installed clusters will not.
@@ -95,17 +130,6 @@ if [ -s "$_mirror_ps" ]; then
 	fi
 fi
 
-aba_info "What this 'day2' script does:"
-aba_info "- Ensure the cluster's global pull secret includes mirror registry credentials."
-aba_info "- Add the internal mirror registry's Root CA to the cluster trust store."
-aba_info "- Configure OperatorHub to integrate with the internal mirror registry."
-aba_info "- Apply any/all idms/itms resource files under aba/mirror/data/working-dir/cluster-resources that were created by oc-mirror (aba -d mirror sync or load)."
-aba_info "- For fully disconnected environments, disable online public catalog sources."
-aba_info "- Install any CatalogSources found under working-dir/cluster-resources."
-aba_info "- Apply any release image signatures found under working-dir/cluster-resources."
-aba_info "- Apply any user-provided custom manifests from day2-custom-manifests/ directory."
-echo
-
 
 # Check if the default catalog sources need to be disabled (e.g. air-gapped)
 if image_source_is_mirror; then
@@ -123,37 +147,56 @@ fi
 aba_info "Adding mirror registry CA to cluster trust store"
 aba_debug "Running: oc get cm registry-config -n openshift-config"
 cm_existing=$(oc get cm registry-config -n openshift-config 2>/dev/null || true)
-# Detect cert mismatch: registry was reinstalled with new CA but cluster has the old one.
+# Detect whether this mirror's CA needs to be added to the cluster trust bundle.
+# Cases: (a) configmap doesn't exist at all, (b) configmap exists but has no key
+# for this mirror (multi-mirror: another mirror's CA is already there), or
+# (c) key exists but cert content has changed (registry reinstalled with new CA).
 _cert_changed=""
+_cert_new_key=""
 _existing_bundle=""
 if [ -s "$regcreds_dir/rootCA.pem" ] && [ "$cm_existing" ]; then
 	_cm_key="${reg_host}..${reg_port}"
 	_existing_bundle=$(oc get cm registry-config -n openshift-config -o go-template='{{index .data "'"$_cm_key"'"}}' 2>/dev/null || true)
-	# Compare the base64 body (unique per cert) to check if the new cert is already in the bundle
+	# go-template returns literal "<no value>" for missing keys
+	[ "$_existing_bundle" = "<no value>" ] && _existing_bundle=""
 	_new_cert_body=$(grep -v '^-' "$regcreds_dir/rootCA.pem" | tr -d '[:space:]')
-	_bundle_body=$(echo "$_existing_bundle" | grep -v '^-' | tr -d '[:space:]')
-	if [ -n "$_new_cert_body" ] && [ -n "$_bundle_body" ] && \
-	   ! echo "$_bundle_body" | grep -qF "$_new_cert_body"; then
-		_local_fp=$(openssl x509 -noout -fingerprint -in "$regcreds_dir/rootCA.pem" 2>/dev/null || true)
-		aba_warn "Registry CA has changed. Appending new CA to the cluster trust bundle." \
-			"New CA:  $_local_fp"
+	if [ -z "$_existing_bundle" ]; then
+		_cert_new_key=1
 		_cert_changed=1
+	else
+		_bundle_body=$(echo "$_existing_bundle" | grep -v '^-' | tr -d '[:space:]')
+		if [ -n "$_new_cert_body" ] && [ -n "$_bundle_body" ] && \
+		   ! echo "$_bundle_body" | grep -qF "$_new_cert_body"; then
+			_local_fp=$(openssl x509 -noout -fingerprint -in "$regcreds_dir/rootCA.pem" 2>/dev/null || true)
+			aba_warn "Registry CA has changed. Appending new CA to the cluster trust bundle." \
+				"New CA:  $_local_fp"
+			_cert_changed=1
+		fi
 	fi
 fi
 if [ -s "$regcreds_dir/rootCA.pem" ] && { [ ! "$cm_existing" ] || [ "$_cert_changed" ]; }; then
 	aba_info "Adding the trust CA of the registry ($reg_host) ..."
-	if [ "$_cert_changed" ] && [ -n "$_existing_bundle" ]; then
-		# Append new cert to existing bundle so both old and new CAs are trusted
+	if [ "$_cert_new_key" ]; then
+		# Configmap exists but has no key for this mirror (multi-mirror scenario).
+		# Patch to add the new key without overwriting other mirrors' CAs.
+		aba_info "Adding mirror CA ($reg_host:$reg_port) to existing trust bundle"
+		_ca_value=$(awk '{printf "%s\\n", $0}' "$regcreds_dir/rootCA.pem")
+		oc patch configmap registry-config -n openshift-config \
+			--type merge -p '{"data":{"'"${reg_host}..${reg_port}"'":"'"$_ca_value"'"}}'
+	elif [ "$_cert_changed" ] && [ -n "$_existing_bundle" ]; then
+		# Same key, different cert -- append new cert to existing bundle
 		export additional_trust_bundle="${_existing_bundle}
 $(cat "$regcreds_dir/rootCA.pem")"
 		aba_info "Appending new CA to existing trust bundle"
+		aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
+		scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 	else
+		# No configmap at all -- create fresh
 		export additional_trust_bundle=$(cat "$regcreds_dir/rootCA.pem")
+		aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
+		scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 	fi
 	aba_info "Using root CA file at $regcreds_display/rootCA.pem"
-
-	aba_debug "Running: scripts/j2 ... | oc apply -f - (trust bundle configmap)"
-	scripts/j2 templates/cm-additional-trust-bundle.j2 | oc apply -f -
 
 	_day2_patch_additional_ca() {
 		aba_debug "Running: oc patch image.config.openshift.io cluster (additionalTrustedCA)"
@@ -331,14 +374,41 @@ working_dir="mirror/data/working-dir"
 ns=openshift-marketplace
 
 if [ -d "$working_dir/cluster-resources" ]; then
-	# Apply any idms/itms files created by oc-mirror v2
+	_our_host="${reg_host}:${reg_port}"
+	_our_host_short="${reg_host%%.*}"
+
+	# Apply any idms/itms files created by oc-mirror v2.
+	# Detect name collisions: if an existing resource with the same name points
+	# to a different registry, suffix ours to avoid overwriting the other mirror's entries.
 	for f in $(ls $working_dir/cluster-resources/{idms,itms}*yaml 2>/dev/null || true) 
 	do
-		if [ -s $f ]; then
-			aba_info oc apply -f $f
-			exec_cmd="oc apply -f $f"
-			aba_debug "Running: $exec_cmd"
-			$exec_cmd
+		if [ -s "$f" ]; then
+			_res_name=$(awk '/^  name:/{print $2; exit}' "$f")
+			_res_kind=$(awk '/^kind:/{print $2; exit}' "$f")
+			_needs_rename=""
+			if [ "$_res_name" ]; then
+				_existing_mirror=""
+				case "$_res_kind" in
+					ImageDigestMirrorSet)
+						_existing_mirror=$(oc get imagedigestmirrorset "$_res_name" \
+							-o jsonpath='{.spec.imageDigestMirrors[0].mirrors[0]}' 2>/dev/null) || true ;;
+					ImageTagMirrorSet)
+						_existing_mirror=$(oc get imagetagmirrorset "$_res_name" \
+							-o jsonpath='{.spec.imageTagMirrors[0].mirrors[0]}' 2>/dev/null) || true ;;
+				esac
+				if [ "$_existing_mirror" ]; then
+					_existing_host="${_existing_mirror%%/*}"
+					[ "$_existing_host" != "$_our_host" ] && _needs_rename=1
+				fi
+			fi
+			if [ "$_needs_rename" ]; then
+				_new_name="${_res_name}-${_our_host_short}"
+				aba_info "Renaming $_res_kind '$_res_name' -> '$_new_name' (existing resource serves from ${_existing_host})"
+				sed "s/  name: ${_res_name}$/  name: ${_new_name}/" "$f" | oc apply -f -
+			else
+				aba_info "oc apply -f $f"
+				oc apply -f "$f"
+			fi
 		else
 			aba_warn "no such file: $f"
 		fi
@@ -362,6 +432,23 @@ if [ -d "$working_dir/cluster-resources" ]; then
 	fi
 
 	cs_pids=()
+
+	# Pre-scan: detect multi-mirror scenario and collect existing CS images.
+	# If any existing CatalogSource (not managed by marketplace-operator)
+	# points to a different registry, suffix ALL of our CatalogSources.
+	# Also build an image list so we can skip duplicates later.
+	_multi_mirror=""
+	_existing_cs_images=""
+	while IFS='|' read -r _cs_name _cs_image _cs_managed; do
+		[ -z "$_cs_image" ] && continue
+		_existing_cs_images="${_existing_cs_images}${_cs_image}"$'\n'
+		_cs_host=$(echo "$_cs_image" | cut -d/ -f1)
+		if [ "$_cs_host" != "$_our_host" ] && [ "$_cs_managed" != "marketplace-operator" ]; then
+			_multi_mirror=1
+			aba_info "Multi-mirror detected: existing CatalogSource '$_cs_name' serves from $_cs_host"
+		fi
+	done < <(oc get catalogsource -n "$ns" \
+		-o jsonpath='{range .items[*]}{.metadata.name}|{.spec.image}|{.metadata.annotations.operatorframework\.io/managed-by}{"\n"}{end}' 2>/dev/null || true)
 
 	for f in $cs_file_list
 	do
@@ -387,6 +474,19 @@ if [ -d "$working_dir/cluster-resources" ]; then
 		if [ ! "$cs_name" ]; then
 			echo_red "Error: Cannot parse CatalogSource name: [$f]" >&2
 
+			continue
+		fi
+
+		if [ "$_multi_mirror" ]; then
+			cs_name="${cs_name}-${_our_host_short}"
+		fi
+
+		# Skip if an existing CatalogSource already serves the same image.
+		# This avoids duplicates when day2 runs again from the same mirror
+		# after multi-mirror suffixing was triggered by another mirror's CS.
+		_cs_file_image=$(awk '/image:/{print $2; exit}' "$f")
+		if [ "$_cs_file_image" ] && echo "$_existing_cs_images" | grep -qxF "$_cs_file_image"; then
+			aba_info "CatalogSource image already served by an existing CatalogSource, skipping: $cs_name"
 			continue
 		fi
 
@@ -491,6 +591,24 @@ fi
 
 # Apply user-provided custom manifests (if any)
 apply_custom_manifests
+
+# If we restarted the OSUS pod at the start, verify it's ready before finishing.
+# The pod rebuilt in parallel with the day2 work above, so this wait is usually short.
+if [ "$_osus_restarted" ]; then
+	_osus_pod_ready() {
+		local _ready
+		_ready=$(oc get pod -n openshift-update-service -l app=osus \
+			-o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null) || return 1
+		[ "$_ready" = "True" ]
+	}
+	if _osus_pod_ready; then
+		aba_info "OSUS pod is ready — update graph refreshed"
+	else
+		aba_wait_show "Waiting for OSUS pod to be ready" 10 300 _osus_pod_ready || \
+			aba_warn "OSUS pod did not become ready in 5 minutes — upgrade may need to wait for graph data"
+		_osus_pod_ready && aba_info "OSUS pod is ready — update graph refreshed"
+	fi
+fi
 
 aba_success "Day-2 configuration completed successfully."
 
