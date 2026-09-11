@@ -4,6 +4,7 @@ airlock-microgateway                                    Airlock Microgateway    
 aiu-operator                                            AIU Operator                                                 stable-v2.3
 alloydb-omni-operator-certified                         AlloyDB Omni Operator                                        stable
 amd-gpu-operator                                        amd-gpu-operator                                             alpha
+amd-network-operator                                    amd-network-operator                                         alpha
 anzograph-operator                                      Altair Graph Lakehouse Operator                              stable
 anzo-operator                                           Altair Graph Studio Operator                                 stable
 anzounstructured-operator                               Altair Graph Studio Unstructured Operator                    stable
