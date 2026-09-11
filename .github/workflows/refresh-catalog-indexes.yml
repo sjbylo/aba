@@ -201,7 +201,8 @@ jobs:
               expected=0
               [ -f "$ec_file" ] && expected=$(< "$ec_file")
               if [ "$expected" -gt 0 ] && [ "$actual" -ne "$expected" ]; then
-                echo "::warning::COUNT MISMATCH: ${catalog} v${ver}: extracted ${actual}, expected ${expected}"
+                echo "::error::COUNT MISMATCH: ${catalog} v${ver}: extracted ${actual}, expected ${expected}"
+                errors=$(( errors + 1 ))
               fi
 
               # Min operator check (lower threshold for pre-release)
@@ -219,15 +220,15 @@ jobs:
           done
 
           echo ""
-          echo "=== 2. Syntax validation (every line: name display-text channel) ==="
-          _syntax='!/^[a-z0-9][a-z0-9._-]+[[:space:]]/ || NF < 3 || $NF !~ /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/'
+          echo "=== 2. Syntax validation (package display channel; no quoted name/channel) ==="
+          source scripts/catalog-extract-functions.sh
           for f in .index/*-operator-index-v*; do
             [ -f "$f" ] || continue
             fname=$(basename "$f")
-            bad_lines=$(awk "$_syntax" "$f" | wc -l)
+            bad_lines=$(_index_syntax_bad_lines "$f" | wc -l)
             if [ "$bad_lines" -gt 0 ]; then
               echo "::error::SYNTAX: $fname has $bad_lines malformed line(s):"
-              awk "$_syntax" "$f" | head -5
+              _index_syntax_bad_lines "$f" | head -5
               errors=$(( errors + 1 ))
             fi
             dup_names=$(awk '{print $1}' "$f" | sort | uniq -d)
@@ -258,23 +259,21 @@ jobs:
           done
 
           echo ""
-          echo "=== 4. Display name spot-check ==="
+          echo "=== 4. Display names must be present (not '-') ==="
           for catalog in redhat-operator certified-operator community-operator; do
-            f=".index/${catalog}-index-v${latest_ga}"
-            [ -s "$f" ] || continue
-            dashes=$(awk '$2 == "-"' "$f" | wc -l)
-            total=$(wc -l < "$f")
-            pct=0
-            [ "$total" -gt 0 ] && pct=$(( dashes * 100 / total ))
-            if [ "$pct" -gt 20 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${dashes}/${total} (${pct}%) missing display names"
-            else
-              echo "  OK: ${catalog} v${latest_ga}: ${dashes}/${total} missing display names (${pct}%)"
-            fi
-            same=$(awk '$1 == $2' "$f" | wc -l)
-            if [ "$same" -gt 5 ]; then
-              echo "::warning::DISPLAY NAMES: ${catalog} v${latest_ga} has ${same} entries where display name equals package name"
-            fi
+            for ver in $OCP_VERSIONS; do
+              f=".index/${catalog}-index-v${ver}"
+              [ -s "$f" ] || continue
+              dashes=$(_index_missing_display_lines "$f" | wc -l)
+              total=$(wc -l < "$f")
+              if [ "$dashes" -gt 0 ]; then
+                echo "::error::DISPLAY NAMES: ${catalog} v${ver} has ${dashes}/${total} missing display names:"
+                _index_missing_display_lines "$f" | awk '{print "  " $1}' | head -10
+                errors=$(( errors + 1 ))
+              else
+                echo "  OK: ${catalog} v${ver}: ${total} operators, all have display names"
+              fi
+            done
           done
 
           echo ""

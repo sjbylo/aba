@@ -58,6 +58,7 @@ unit_tests=(
 	test/func/test-primed-bundle-scenarios.sh
 	test/func/test-reg-stale-report.sh
 	test/func/test-extra-clis.sh
+	test/func/test-catalog-index-format.sh
 )
 
 # Integration tests (slow, may download)

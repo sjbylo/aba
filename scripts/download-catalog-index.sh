@@ -27,12 +27,12 @@
 #             immediately (~2s probe vs ~15s full download).
 #             Uses atomic rename (.downloading -> final) so consumers never see partial data.
 #
-# INDEX FORMAT (3 columns, whitespace-separated):
-#   <package_name>  <display_name_or_dash>  <default_channel>
+# INDEX FORMAT (whitespace-separated, not padded):
+#   <package_name> <display_name_or_dash> <default_channel>
 #
-# Backward compatible with existing consumers that use:
-#   awk '{print $1, $NF}'  => gets name (first) and channel (last)
-#   grep "^$op "           => matches by operator name prefix
+# Consumers:
+#   awk '{print $1, $NF}'  => name (first) and channel (last)
+#   grep "^$op "           => match by operator name prefix
 #
 # STEPS:
 #   1. Verify connectivity to registry.redhat.io
@@ -280,53 +280,42 @@ _extract_catalog_dir "$tmp_dir/configs" "$tmp_file" "$_skipped_file"
 expected_count_file=".index/.${catalog_name}-index-v${ocp_ver_major}.expected-count"
 find "$tmp_dir/configs" -mindepth 1 -maxdepth 1 -type d -not -name '_*' 2>/dev/null | wc -l > "$expected_count_file"
 
-# Cleanup temp dir
-rm -rf "$tmp_dir"
-
-# Validate output
 if [ ! -s "$tmp_file" ]; then
 	aba_abort "Catalog extraction produced empty index for $catalog_name v$ocp_ver_major"
 fi
 
-# Per-line syntax validation: <op_name> <display_name...> <channel>
-# $1 = operator name (lowercase, digits, dots, hyphens, underscores)
-# $2..$NF-1 = display name (any words, or "-" if unknown)
-# $NF = default channel (single word: alphanumeric with dots, hyphens, underscores)
-_syntax_check='!/^[a-z0-9][a-z0-9._-]+[[:space:]]/ || NF < 3 || $NF !~ /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/'
-bad_lines=$(awk "$_syntax_check" "$tmp_file" | wc -l)
+# Per-line syntax validation (see _index_syntax_bad_lines). Quoted channel/name fails.
+bad_lines=$(_index_syntax_bad_lines "$tmp_file" | wc -l)
 if [ "$bad_lines" -gt 0 ]; then
 	aba_warn "Syntax check failed: $bad_lines malformed line(s) in $catalog_name v$ocp_ver_major:"
-	awk "$_syntax_check" "$tmp_file" | head -5 >&2
+	_index_syntax_bad_lines "$tmp_file" | head -5 >&2
 	aba_abort "Catalog index for $catalog_name v$ocp_ver_major failed syntax validation"
 fi
 
-# Warn about missing display names — a "-" means extraction failed to find one
-dash_count=$(awk '$2 == "-"' "$tmp_file" | wc -l)
-if [ "$dash_count" -gt 0 ]; then
-	aba_warn "$catalog_name v$ocp_ver_major: $dash_count operator(s) with missing display name — investigate extraction:"
-	awk '$2 == "-" {print "  " $1}' "$tmp_file" >&2
+missing_dn=$(_index_missing_display_lines "$tmp_file" | wc -l)
+if [ "$missing_dn" -gt 0 ]; then
+	aba_warn "$catalog_name v$ocp_ver_major: $missing_dn operator(s) with missing display name:"
+	_index_missing_display_lines "$tmp_file" | awk '{print "  " $1}' >&2
+	aba_abort "Catalog index for $catalog_name v$ocp_ver_major has missing display names — extractor bug"
 fi
+
+skipped_count=0
+[ -s "$_skipped_file" ] && skipped_count=$(wc -l < "$_skipped_file")
+op_count=$(wc -l < "$tmp_file")
+expected_count=$(< "$expected_count_file")
+if [ "$skipped_count" -gt 0 ] || [ "$op_count" -ne "$expected_count" ]; then
+	if [ "$skipped_count" -gt 0 ]; then
+		aba_warn "Skipped directories (no olm.package found):"
+		sed 's/^/  /' "$_skipped_file" >&2
+	fi
+	aba_abort "Catalog extraction incomplete for $catalog_name v$ocp_ver_major: ${op_count}/${expected_count} operators"
+fi
+
+# Cleanup temp dir
+rm -rf "$tmp_dir"
 
 # Atomic rename: consumers never see a partial file
 mv "$tmp_file" "$index_file"
-
-op_count=$(wc -l < "$index_file")
-expected_count=0
-[ -f "$expected_count_file" ] && expected_count=$(< "$expected_count_file")
-skipped_count=0
-[ -s "$_skipped_file" ] && skipped_count=$(wc -l < "$_skipped_file")
-
-# End-of-extraction summary (only when there are issues)
-if (( skipped_count > 0 )) || { (( expected_count > 0 )) && (( op_count != expected_count )); }; then
-	aba_info "Warning: Catalog extraction summary for $catalog_name v$ocp_ver_major:"
-	aba_info "  Extracted: ${op_count}/${expected_count} operators"
-	if (( skipped_count > 0 )); then
-		aba_info "  Skipped directories (no olm.package found):"
-		while IFS= read -r d; do
-			aba_info "    - $d"
-		done < "$_skipped_file"
-	fi
-fi
 
 aba_success "Extracted $catalog_name index v$ocp_ver_major ($op_count operators)"
 

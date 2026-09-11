@@ -401,6 +401,7 @@ echo ""
 echo "=== Phase 2: Verifying catalogs ==="
 verify_failed=()
 _prev_ver=""
+source scripts/catalog-extract-functions.sh
 
 for ver in "${VERSIONS[@]}"; do
 	for catalog in "${CATALOGS[@]}"; do
@@ -439,10 +440,20 @@ for ver in "${VERSIONS[@]}"; do
 			fi
 		fi
 
-		# Display name coverage
-		has_display=$(awk '$2 != "-" {count++} END {print count+0}' "$index")
-		pct=0
-		[[ "$count" -gt 0 ]] && pct=$((has_display * 100 / count))
+		# Display names are required (not "-")
+		missing_dn=$(_index_missing_display_lines "$index" | wc -l)
+		if (( missing_dn > 0 )); then
+			echo "  FAIL: ${catalog} v${ver} has ${missing_dn} missing display names" >&2
+			_index_missing_display_lines "$index" | awk '{print "    " $1}' >&2
+			verify_failed+=("${catalog}:${ver}")
+			continue
+		fi
+		if [ "$(_index_syntax_bad_lines "$index" | wc -l)" -gt 0 ]; then
+			echo "  FAIL: ${catalog} v${ver} failed index syntax check" >&2
+			_index_syntax_bad_lines "$index" | head -5 >&2
+			verify_failed+=("${catalog}:${ver}")
+			continue
+		fi
 
 		# Group output by version
 		if [[ "$ver" != "$_prev_ver" ]]; then
@@ -453,7 +464,6 @@ for ver in "${VERSIONS[@]}"; do
 		# Short catalog name, padded for alignment
 		short="${catalog%-operator}"
 		printf "  %-11s=%3d/%-3d" "$short" "$count" "${expected:-$count}"
-		(( pct < 100 )) && printf " [%d%% names]" "$pct"
 	done
 done
 echo ""
