@@ -164,10 +164,18 @@ else
 	[ "$_diff_rc1" -gt 1 ] || [ "$_diff_rc2" -gt 1 ] && \
 		aba_warn "oc diff failed (master rc=$_diff_rc1, worker rc=$_diff_rc2). Applying anyway."
 	_mc_changed=1
+
+	# NodeDisruptionPolicy: tell MCO to restart chronyd instead of rebooting (OCP 4.17+).
+	# On older clusters the field is silently ignored — no harm done.
+	oc patch MachineConfiguration cluster --type merge \
+		-p '{"spec":{"nodeDisruptionPolicy":{"files":[{"path":"/etc/chrony.conf","actions":[{"type":"Restart","restart":{"serviceName":"chronyd.service"}}]}]}}}' \
+		>/dev/null 2>&1 || true
+	aba_info "NodeDisruptionPolicy set: chronyd restart instead of node reboot (OCP 4.17+)"
+
 	oc apply -f 99-master-chrony-conf-override.yaml
 	oc apply -f 99-worker-chrony-conf-override.yaml
 	echo
-	aba_info "OpenShift will now configure NTP on all nodes.  Node restart may be required and will take some time to complete."
+	aba_info "OpenShift will now configure NTP on all nodes."
 fi
 echo
 

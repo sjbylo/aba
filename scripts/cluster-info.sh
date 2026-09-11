@@ -28,7 +28,11 @@ fi
 aba_info "To access the cluster as the system:admin user when using 'oc', run"
 aba_info "    export KUBECONFIG=$kc"
 aba_info "Access the OpenShift web-console here: https://console-openshift-console.apps.$cluster_name.$base_domain"
-aba_info "Login to the console with user: \"kubeadmin\", and password: \"$pw\""
+if [ -n "$pw" ]; then
+	aba_info "Login to the console with user: \"kubeadmin\", and password: \"$pw\""
+else
+	aba_info "Login to the console with user: \"kubeadmin\" (password not available)"
+fi
 
 show_cluster_summary
 

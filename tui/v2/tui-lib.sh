@@ -983,29 +983,54 @@ _probe_undetected_clusters() {
 	mapfile -t candidates < <(list_undetected_clusters)
 	[[ ${#candidates[@]} -eq 0 ]] && return 0
 
-	local names="${candidates[*]}"
-	dlg --backtitle "$(ui_backtitle)" \
-		--infobox "\nDetecting installation status: ${names// /, }..." 5 55  # spaces → commas
+	# Filter out recently-probed failures (2 min cooldown)
+	local -a _to_probe=()
+	local _now _marker _probe_ts _age
+	_now=$(date +%s)
 	for dir in "${candidates[@]}"; do
-		if [[ ! -f "$ABA_ROOT/$dir/.install-complete" ]]; then
-			auto_complete_install "$dir" >/dev/null 2>&1 || true
-			# Newly transitioned to ready — offer day2 in mirror modes
-			if [[ -f "$ABA_ROOT/$dir/.install-complete" && "$_TUI_MODE" != "DIRECT" ]]; then
-				local _fqdn
-				_fqdn=$(cluster_display_name "$dir")
-				dlg --backtitle "$(ui_backtitle)" --title "Cluster Ready!" \
-					--yes-label "Yes, apply now" \
-					--no-label "No, later" \
-					--yesno "Cluster $_fqdn just completed installation!\n\n\
+		_marker="$ABA_ROOT/$dir/.probe-attempted"
+		if [[ -f "$_marker" ]]; then
+			_probe_ts=$(stat -c %Y "$_marker" 2>/dev/null) || _probe_ts=0
+			_age=$(( _now - _probe_ts ))
+			[[ $_age -lt 120 ]] && continue
+		fi
+		_to_probe+=("$dir")
+	done
+	[[ ${#_to_probe[@]} -eq 0 ]] && return 0
+
+	local names="${_to_probe[*]}"
+	dlg --backtitle "$(ui_backtitle)" \
+		--infobox "\nDetecting installation status: ${names// /, }..." 5 55
+
+	# Probe in parallel
+	for dir in "${_to_probe[@]}"; do
+		touch "$ABA_ROOT/$dir/.probe-attempted"
+		auto_complete_install "$dir" >/dev/null 2>&1 &
+	done
+	wait
+
+	# Clean up probe marker for clusters that completed
+	for dir in "${_to_probe[@]}"; do
+		[[ -f "$ABA_ROOT/$dir/.install-complete" ]] && rm -f "$ABA_ROOT/$dir/.probe-attempted"
+	done
+
+	# Check results and offer day2 for newly completed clusters
+	for dir in "${candidates[@]}"; do
+		if [[ -f "$ABA_ROOT/$dir/.install-complete" && "$_TUI_MODE" != "DIRECT" ]]; then
+			local _fqdn
+			_fqdn=$(cluster_display_name "$dir")
+			dlg --backtitle "$(ui_backtitle)" --title "Cluster Ready!" \
+				--yes-label "Yes, apply now" \
+				--no-label "No, later" \
+				--yesno "Cluster $_fqdn just completed installation!\n\n\
 Run 'Configure OperatorHub' (aba day2) to set up:\n\
   • OperatorHub catalog sources\n\
   • Image content source policies\n\
   • Release signature verification\n\n\
 This is needed for operators and upgrades to work\n\
 from your mirror registry." 0 0
-				if [[ $? -eq 0 ]]; then
-					confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
-				fi
+			if [[ $? -eq 0 ]]; then
+				confirm_and_execute "aba --dir $dir day2" "Configure OperatorHub: $_fqdn"
 			fi
 		fi
 	done
@@ -1037,42 +1062,21 @@ is_bundle_mode() {
 	[[ -f "$ABA_ROOT/.bundle" ]]
 }
 
-# Feedback: show GitHub URLs, try to open in browser if available.
+# Feedback: show all GitHub links in a single dialog.
 _tui_feedback() {
 	local gh_url="https://github.com/sjbylo/aba"
-	local choice
 
 	dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-		--cancel-label "$TUI2_BTN_BACK" \
-		--menu "How would you like to share feedback?" 0 0 0 \
-		"I" "Report an issue" \
-		"D" "Start a discussion" \
-		"S" "Star the project on GitHub" \
-		2>"$_TUI_TMP"
-	[[ $? -ne 0 ]] && return
+		--msgbox "\
+Open any of these URLs in a browser:\n\n\
+  Report a bug or request a feature:\n\
+    ${gh_url}/issues/new\n\n\
+  Start a discussion:\n\
+    ${gh_url}/discussions/new?category=general\n\n\
+  Star the project on GitHub:\n\
+    ${gh_url}" 0 0
 
-	choice=$(<"$_TUI_TMP")
-
-	local url=""
-	case "$choice" in
-		I) url="$gh_url/issues/new" ;;
-		D) url="$gh_url/discussions/new?category=general" ;;
-		S) url="$gh_url" ;;
-	esac
-	[[ -z "$url" ]] && return
-
-	if [[ "${_TUI_INET:-no}" == "yes" ]] && command -v xdg-open &>/dev/null; then
-		xdg-open "$url" &>/dev/null &
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "Opening in your browser:\n\n$url" 0 0
-	elif [[ "${_TUI_INET:-no}" != "yes" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "No internet connection detected.\n\nOpen this URL in a browser when you have access:\n\n$url" 0 0
-	else
-		dlg --backtitle "$(ui_backtitle)" --title "Feedback" \
-			--msgbox "Open this URL in a browser:\n\n$url" 0 0
-	fi
-	tui_log "Feedback: $url"
+	tui_log "Feedback: shown"
 }
 
 # Append ` --retry N` when _TUI_RETRY_COUNT > 0 (for oc-mirror operations).
@@ -1509,6 +1513,7 @@ offer_editor() {
 # =============================================================================
 
 _TUI_START_EPOCH=$(date +%s)
+_TUI_EXIT_MESSAGE=""
 
 _show_v2_exit_summary() {
 	_tui_redirect_restore
@@ -1546,6 +1551,12 @@ _show_v2_exit_summary() {
 	echo "Log file: $_TUI_LOG_FILE"
 	echo
 	echo "Run 'aba --help' for available commands."
+
+	# Show deferred exit message (e.g. pull secret instructions)
+	if [[ -n "${_TUI_EXIT_MESSAGE:-}" ]]; then
+		echo
+		echo "$_TUI_EXIT_MESSAGE"
+	fi
 }
 
 # =============================================================================
@@ -1652,6 +1663,71 @@ tui_install_cluster_gate() {
 	esac
 
 	return 1
+}
+
+# Advisory gate for operations that need podman (catalog index downloads).
+# Waits for the background check started at mode entry.  If the previous check
+# failed, retries once (user may have fixed auth/network since mode entry).
+# On failure: warns the user and offers Continue/Retry/Back.
+# "Continue" is remembered for the rest of the session (no repeat prompts).
+# Returns 0=ok (or user chose Continue), 1=back.
+# Session flag: once the user dismisses the podman warning with "Continue",
+# don't prompt again (the registry may be permanently unreachable).
+_PODMAN_WARN_DISMISSED=""
+_require_podman() {
+	[[ "$_PODMAN_WARN_DISMISSED" == "1" ]] && return 0
+
+	# Ensure the check has been started
+	aba_podman_check_start
+
+	# If still running, show "Please wait..." until it completes
+	if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
+		dlg --backtitle "$(ui_backtitle)" --infobox \
+			"Verifying podman connectivity...\n\nPlease wait." 5 45
+	fi
+
+	# Block until result is available
+	if ! aba_podman_check_wait; then
+		# Failed — retry once (user may have fixed auth/network since mode entry)
+		run_once -r -i "aba:preflight:podman" 2>/dev/null || true
+		aba_podman_check_start
+		if ! run_once -p -i "aba:preflight:podman" 2>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Retrying podman check...\n\nPlease wait." 5 45
+		fi
+	fi
+
+	if ! aba_podman_check_wait; then
+		local _err="${PODMAN_CHECK_ERROR//$'\n'/\\n}"
+		dlg --backtitle "$(ui_backtitle)" --title "Podman Preflight Warning" \
+			--yes-label "Continue" --no-label "Back" \
+			--extra-button --extra-label "Retry" \
+			--yesno "Podman preflight check failed:\n\n${_err}\n\nThis may not affect your workflow if the required\nregistries are accessible.\n\nContinue anyway?" 0 0
+		local _rc=$?
+		case "$_rc" in
+			0) _PODMAN_WARN_DISMISSED=1; return 0 ;;
+			3)
+				run_once -r -i "aba:preflight:podman" 2>/dev/null || true
+				aba_podman_check_start
+				_require_podman
+				return $?
+				;;
+			*) return 1 ;;
+		esac
+	fi
+}
+
+# Generic troubleshooting hints for catalog download failures.
+_tui_catalog_error_hints() {
+	local _h="To fix, check:"
+	_h="${_h}\n  - Internet connectivity (can you reach registry.redhat.io?)"
+	_h="${_h}\n  - Pull secret is valid and not expired"
+	_h="${_h}\n  - Podman rootless setup (/etc/subuid, /etc/subgid)"
+	_h="${_h}\n  - Sufficient disk space for container storage"
+	_h="${_h}\n  - DNS resolution is working"
+	_h="${_h}\n"
+	_h="${_h}\nAfter fixing, retry the same action."
+	echo "$_h"
 }
 
 # Ensure catalog indexes are available for a given OCP version.

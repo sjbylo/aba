@@ -53,6 +53,7 @@ plan_tests \
     "Upgrade: signature accumulation after sync" \
     "Upgrade: full chain (day2 + OSUS + upgrade)" \
     "Upgrade: verify upgrade accepted" \
+    "Upgrade: upgrade-mon on live cluster" \
     "Upgrade: conditional version detection" \
     "Cleanup: delete cluster"
 
@@ -568,6 +569,21 @@ e2e_poll 300 15 "Verify upgrade in progress" \
 
 e2e_diag "Show cluster version" \
     "aba --dir $SNO run --cmd 'oc get clusterversion version -o jsonpath={.status.desired.version}'"
+
+test_end
+
+# ============================================================================
+# 17b. Upgrade: upgrade-mon on live cluster
+# ============================================================================
+# The cluster is either mid-upgrade or already completed. Either way,
+# upgrade-mon should run without errors and produce meaningful output.
+test_begin "Upgrade: upgrade-mon on live cluster"
+
+e2e_run "Run upgrade-mon (should show status or already-complete)" \
+    "cd ~/aba && aba --dir $SNO upgrade-mon 2>&1 | tee /tmp/e2e-upgrade-mon.log; true"
+
+e2e_run "Verify upgrade-mon produced expected output" \
+    "grep -qE 'already at version|Monitoring upgrade|Operators:' /tmp/e2e-upgrade-mon.log"
 
 test_end
 

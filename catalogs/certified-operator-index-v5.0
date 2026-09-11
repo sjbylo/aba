@@ -6,6 +6,7 @@ anzo-operator                                           Altair Graph Studio Oper
 anzounstructured-operator                               Altair Graph Studio Unstructured Operator                    stable
 apelocal-csi                                            ApeLocal CSI Driver                                          stable
 appdynamics-operator                                    AppDynamics Operator for Kubernetes                          alpha
+appsentinels-sslsniffer-operator                        AppSentinels SSL Sniffer                                     alpha
 aqua-operator-certified                                 Aqua Security Operator                                       2022.4
 axera-operator                                          Axera Microsegmentation & NDR                                alpha
 cfm-operator                                            Cloudera Flow Management - Kubernetes Operator for Apache NiFi stable
@@ -81,3 +82,4 @@ vault-secrets-operator                                  Vault Secrets Operator  
 vcp-operator                                            CyberArk Certificate Manager Operator                        stable
 wave                                                    Wave                                                         stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
+zk-operator                                             ZooKeeper Operator                                           stable

@@ -13,6 +13,7 @@ apicast-operator                                        Red Hat Integration - 3s
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
 authorino-operator                                      Authorino Operator                                           stable
 automation-orchestrator-operator                        Automation Orchestrator Operator                             stable
+automation-portal-operator                              Ansible automation portal (Technology Preview)               fast
 aws-efs-csi-driver-operator                             AWS EFS CSI Driver Operator                                  stable
 aws-load-balancer-operator                              AWS Load Balancer Operator                                   stable-v1
 bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable
@@ -33,6 +34,7 @@ container-security-operator                             Red Hat Quay Container S
 costmanagement-metrics-operator                         Cost Management Metrics Operator                             stable
 cryostat-operator                                       Red Hat build of Cryostat                                    stable
 datagrid                                                Data Grid                                                    stable
+deployment-validation-operator                          Deployment Validation Operator                               alpha
 devspaces                                               Red Hat OpenShift Dev Spaces                                 stable
 devworkspace-operator                                   DevWorkspace Operator                                        fast
 dns-operator                                            DNS Operator                                                 stable

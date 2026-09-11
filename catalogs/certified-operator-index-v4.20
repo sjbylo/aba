@@ -64,7 +64,7 @@ hnas-csi-operator                                       Hitachi NAS CSI Driver O
 hpe-csi-operator                                        HPE CSI Operator for OpenShift                               stable
 hpe-ezmeral-csi-operator                                HPE Ezmeral Data Fabric CSI Operator for Kubernetes          stable
 hpe-filex-csi-operator                                  HPE GreenLake File Storage CSI Operator                      stable
-hpeoneview-operator                                     HPEOneView                                                   alpha
+hpeoneview-operator                                     Hpeoneview Operator                                          alpha
 hspc-operator                                           Hitachi Storage Plug-in for Containers                       stable
 hulft                                                   HULFT10 for Container Platform                               stable
 iax-webhook-router                                      ITRS Analytics Webhook Router                                stable
@@ -138,7 +138,7 @@ rbln-npu-operator                                       RBLN operator           
 redis-enterprise-operator-cert                          Redis Enterprise Operator                                    production
 runtime-component-operator-certified                    Runtime Component                                            v1.6
 runtime-fabric-operator                                 Runtime Fabric Operator                                      stable
-scaleops-operator                                       ScaleOps                                                     stable-v1.33
+scaleops-operator                                       ScaleOps                                                     stable-v1.34
 scylladb-operator                                       ScyllaDB Operator                                            stable
 seawise-backup-operator                                 Seawise Backup Dashboard                                     alpha
 simplyblock-operator                                    Simplyblock Operator                                         alpha
@@ -188,3 +188,4 @@ wave                                                    Wave                    
 webserver-operator                                      WebServer Operator                                           stable
 xspc-operator                                           HPE XP Storage Plug-in for Containers                        stable
 zabbix-operator-certified                               Zabbix Operator                                              lts
+zk-operator                                             ZooKeeper Operator                                           stable

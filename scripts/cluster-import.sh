@@ -30,26 +30,7 @@ while [ $# -gt 0 ]; do
 		--force|-f)
 			_force=true; shift ;;
 		--help|-h)
-			cat >&2 <<-'USAGE'
-			Import an existing OpenShift cluster into ABA.
-
-			Usage:
-			  aba import --kubeconfig <path> [--image-source mirror|direct|proxy|<name>]
-			             [--name <dir-name>] [--force]
-
-			Options:
-			  --kubeconfig, -k   Path to cluster kubeconfig (required)
-			  --image-source     Where this cluster pulls images (default: auto-detect)
-			  --name, -n         Cluster directory name (default: cluster_name from API)
-			  --force, -f        Overwrite existing cluster directory
-
-			After import, you can run:
-			  aba -d <name> day2          Integrate with mirror registry
-			  aba -d <name> day2-ntp      Configure NTP
-			  aba -d <name> upgrade       Upgrade the cluster
-			  aba -d <name> shutdown      Graceful shutdown
-			  aba -d <name> getco         Show cluster operators
-			USAGE
+			cat others/help-import.txt >&2
 			exit 0 ;;
 		*)
 			aba_abort "Unknown option: $1. Use --help for usage." ;;
@@ -147,6 +128,8 @@ if [ -z "$_image_source" ]; then
 
 	if [ "$(( _has_idms + _has_itms + _has_icsp ))" -gt 0 ]; then
 		_image_source="mirror"
+	elif [ -f mirror/.available ]; then
+		_image_source="mirror"
 	else
 		_proxy_http=$(oc get proxy/cluster -o jsonpath='{.spec.httpProxy}' 2>/dev/null) || true
 		if [ -n "$_proxy_http" ]; then
@@ -174,17 +157,57 @@ echo "  starting_ip     = $_starting_ip"
 echo "  image_source    = $_image_source"
 [ -n "$_ocp_version" ] && echo "  ocp_version     = $_ocp_version"
 
-# --- Create cluster directory ---
+# --- Check for existing state ---
 _dir_name="${_name:-$_cluster_name}"
+_state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
+_cluster_fqdn="${_cluster_name}.${_base_domain}"
+
+if [ -d "$_state_dir" ]; then
+	if [ "$_force" = true ]; then
+		aba_info "Overwriting existing state: $_state_dir/"
+		rm -rf "$_state_dir"
+	else
+		# Find which working directory already manages this cluster
+		_existing_dir=""
+		for _candidate in */clusterstate; do
+			[ -L "$_candidate" ] || continue
+			_target=$(readlink -f "$_candidate" 2>/dev/null) || continue
+			if [ "$_target" = "$(readlink -f "$_state_dir" 2>/dev/null)" ]; then
+				_existing_dir="$(dirname "$_candidate")"
+				break
+			fi
+		done
+
+		if [ -n "$_existing_dir" ]; then
+			# Check if the existing kubeconfig still works.
+			# If stale (e.g. cluster was reinstalled), suggest --force instead of
+			# the generic "already managed" message.
+			_existing_kc="$_state_dir/kubeconfig"
+			if [ -f "$_existing_kc" ] && ! oc --kubeconfig "$_existing_kc" whoami --request-timeout=10s &>/dev/null; then
+				aba_abort "Cluster '$_cluster_fqdn' exists at '$_existing_dir/' but the kubeconfig is no longer valid." \
+					"The cluster may have been reinstalled." \
+					"To re-import, run:  aba import -k $_kubeconfig --force"
+			fi
+			aba_abort "Cluster '$_cluster_fqdn' is already managed by ABA at '$_existing_dir/'." \
+				"Use 'aba -d $_existing_dir <command>' to manage it."
+		else
+			aba_abort "Stale state found for '$_cluster_fqdn' at $_state_dir/" \
+				"This is left over from a previous install or import." \
+				"Remove it and retry:  rm -rf $_state_dir"
+		fi
+	fi
+fi
+
 if [ -d "$_dir_name" ]; then
 	if [ "$_force" = true ]; then
 		aba_info "Overwriting existing directory: $_dir_name/"
+		rm -rf "$_dir_name"
 	else
-		aba_abort "Directory '$_dir_name' already exists. Use --force to overwrite, or --name to pick a different name."
+		aba_abort "Directory '$_dir_name' already exists. Use --name to pick a different name."
 	fi
-else
-	mkdir -p "$_dir_name"
 fi
+
+mkdir -p "$_dir_name"
 
 cd "$_dir_name"
 
@@ -234,14 +257,16 @@ EOF
 make -s init
 
 # --- Externalize state ---
-_state_dir="$HOME/.aba/clusters/${_cluster_name}.${_base_domain}"
 mkdir -p "$_state_dir/backup"
 chmod 700 "$_state_dir"
 chmod 700 "$(dirname "$_state_dir")"
 
-# Copy kubeconfig
+# Copy kubeconfig to state dir and local cluster dir
 cp -p "$_kubeconfig" "$_state_dir/kubeconfig"
 chmod 600 "$_state_dir/kubeconfig"
+mkdir -p iso-agent-based/auth
+cp -p "$_kubeconfig" iso-agent-based/auth/kubeconfig
+chmod 600 iso-agent-based/auth/kubeconfig
 
 # Write state.sh
 cat > "$_state_dir/state.sh" <<EOF
@@ -265,16 +290,29 @@ cp -p cluster.conf "$_state_dir/backup/"
 # Convenience symlink
 ln -sfn "$_state_dir" clusterstate
 
+# Create rendezvousIP so 'aba ssh' works
+mkdir -p iso-agent-based
+echo "$_starting_ip" > iso-agent-based/rendezvousIP
+
 # Mark as installed (cluster already exists)
 touch .install-complete
 
 aba_info "Cluster '$_cluster_name' imported into $_dir_name/"
+
+if [ "$_image_source" = "direct" ] && [ ! -f mirror/.available ]; then
+	aba_info ""
+	aba_info -m "Note: No mirror registry detected. To integrate this cluster with a" \
+		"mirror later, set up a mirror (aba mirror) and run:" \
+		"  aba -d $_dir_name day2"
+fi
+
 aba_info ""
 aba_info "Available commands:"
+aba_info "  aba -d $_dir_name terminal      Interactive cluster shell"
 aba_info "  aba -d $_dir_name day2          Integrate with mirror registry"
 aba_info "  aba -d $_dir_name day2-ntp      Configure NTP"
 aba_info "  aba -d $_dir_name day2-osus     Configure update service"
 aba_info "  aba -d $_dir_name upgrade       Upgrade the cluster"
 aba_info "  aba -d $_dir_name getco         Show cluster operators"
-aba_info "  aba -d $_dir_name shell         Open oc shell"
+aba_info "  aba -d $_dir_name shell         Export KUBECONFIG (source this)"
 aba_info "  aba -d $_dir_name shutdown      Graceful shutdown"

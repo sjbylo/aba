@@ -34,7 +34,7 @@ TUI2_TITLE_DEAD_END="Cannot Proceed"
 # =============================================================================
 
 TUI2_TITLE_PULL_SECRET="Red Hat Pull Secret"
-TUI2_TITLE_PULL_SECRET_PASTE="Pull Secret – Paste JSON"
+TUI2_TITLE_PULL_SECRET_PATH="Pull Secret – File Path"
 TUI2_TITLE_CHANNEL="OpenShift Channel"
 TUI2_TITLE_VERSION="OpenShift Version"
 TUI2_TITLE_VERSION_MANUAL="Manual Version"
@@ -103,7 +103,7 @@ TUI2_TITLE_CLUSTER_MAC_TEMPLATE="MAC Template"
 TUI2_TITLE_CLUSTER_SELECT="Select Cluster"
 TUI2_TITLE_CLUSTER_MAC_ADDRS="MAC Addresses"
 TUI2_TITLE_CLUSTER_INSTALL="Install Cluster"
-TUI2_TITLE_CLUSTER_INSTALL_ACTION="Install Action"
+# TUI2_TITLE_CLUSTER_INSTALL_ACTION removed — bare-metal always creates ISO only
 TUI2_TITLE_CLUSTER_MONITOR="Monitor Cluster Installation"
 TUI2_TITLE_CLUSTER_DELETE="Delete Cluster"
 TUI2_TITLE_ADVANCED="Advanced"
@@ -353,9 +353,9 @@ TUI2_MSG_NO_INSTALLED_CLUSTERS="No installed clusters found."
 # =============================================================================
 
 TUI2_MSG_PULL_SECRET_FOUND="Pull secret found at:\n\n  %s\n"
-TUI2_MSG_PULL_SECRET_PASTE="Paste your pull secret JSON:"
-TUI2_MSG_PULL_SECRET_EMPTY="No pull secret entered."
-TUI2_MSG_PULL_SECRET_INVALID="Invalid JSON. Please try again."
+TUI2_MSG_PULL_SECRET_NOT_FOUND="File not found: %s\n\nSave your pull secret to this host and try again."
+TUI2_MSG_PULL_SECRET_INVALID="Invalid JSON in: %s\n\nPlease check the file contents and try again."
+TUI2_MSG_PULL_SECRET_PATH_PROMPT="Enter the path to your pull secret file:"
 TUI2_MSG_VERSION_ENTRY="Enter version (x.y.z or x.y.z-rc.N):"
 TUI2_MSG_VERSION_MENU="Select OpenShift version (%s channel):"
 TUI2_MSG_VERSION_MANUAL_PROMPT="Cannot fetch versions automatically.\n\nEnter OpenShift version manually (x.y.z or x.y.z-rc.N):"
@@ -398,8 +398,8 @@ TUI2_MSG_OPERATOR_BASKET_MENU="Select to remove from basket:"
 TUI2_MSG_NO_OPERATOR_SETS="No operator set files found."
 TUI2_MSG_NO_SEARCH_RESULTS="No operators matching '%s' found."
 TUI2_MSG_BASKET_EMPTY="Basket is empty.\n\nUse 'Select Operator Sets' or 'Search' to add operators."
-TUI2_MSG_BUNDLE_PATH_PROMPT="Create a portable bundle (tar) containing the ABA repo,\nCLI tools, registry installer, and container images.\n\nThis bundle can be transferred to a disconnected\nenvironment via USB or other media.\n\nEnter output path (version suffix added automatically):"
-TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Output and mirror are on the same filesystem.\n\nUse --light to exclude large archives (saves disk space)?"
+TUI2_MSG_BUNDLE_PATH_PROMPT="Create a portable bundle (tar) containing the ABA repo,\nCLI tools, registry installer, and container images.\n\nThis bundle can be transferred to a disconnected\nenvironment via USB or other media.\n\nEnter output path (version suffix added automatically):\n\nTip: For best results, use a USB drive or a separate\nfilesystem with plenty of free space."
+TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Bundle output and mirror data are on the same\ndisk (same filesystem). A full bundle would\nduplicate the image archives, requiring roughly\ndouble the space.\n\n\\ZbLight\\ZB: excludes image archives from the bundle.\nYou must transfer them separately and copy\nthem into mirror/data/ on the internal bastion.\n\n\\ZbFull\\ZB: everything in one file (needs more space).\n\nChoose \\ZbLight\\ZB if disk space is limited."
 
 TUI2_MSG_UPGRADE_NEEDS_RELEASE="Upgrade requires release images.\n\nRelease image exclusion (excl_platform) has been\nswitched off automatically so the upgrade target\nimages will be included."
 TUI2_MSG_EXCL_PLATFORM_OFFER="Release images for v%s are already in the\nmirror registry.\n\nExclude them from this save to reduce\ntransfer size?\n\n(Only new/changed operators will be saved)"
@@ -417,7 +417,13 @@ TUI2_MSG_EDITOR_PROMPT="How would you like to edit?\n\n  %s"
 # Messages — Pull Secret (multiline)
 # =============================================================================
 
-TUI2_MSG_PULL_SECRET_INFO="A Red Hat pull secret is required.\n\nGet yours from:\n  https://console.redhat.com/openshift/downloads#tool-pull-secret\n\nIt will be saved to:\n  ~/.pull-secret.json"
+TUI2_MSG_PULL_SECRET_INFO="A Red Hat pull secret is required.\n\n\
+1. Download from:\n\
+   https://console.redhat.com/openshift/downloads#tool-pull-secret\n\
+   (select 'Tokens' in the pull-down)\n\n\
+2. Save the file to this host as:\n\
+   ~/.pull-secret.json\n\n\
+3. Then select 'Enter file path' below."
 
 # =============================================================================
 # Help Titles

@@ -653,7 +653,15 @@ cluster_install_flow() {
 
 	# Initialize state once per session; subsequent calls reuse previous values
 	if [[ "$_CL_STATE_INIT" != "true" ]]; then
-		_cl_name="ocp"
+		# Default cluster name: most recently modified cluster.conf, or "ocp"
+		local _latest_conf
+		_latest_conf=$(ls -t "$ABA_ROOT"/*/cluster.conf 2>/dev/null | head -1)
+		if [[ -n "$_latest_conf" ]]; then
+			_cl_name="$(basename "$(dirname "$_latest_conf")")"
+			tui_log "Auto-detected latest cluster: $_cl_name"
+		else
+			_cl_name="ocp"
+		fi
 		_cl_domain="${domain:-}"
 		_cl_type="sno"
 		_cl_workers="2"
@@ -1419,16 +1427,19 @@ ${_conn_help}
 				fi
 				cl_macs="$_new_macs"
 				tui_log "MAC addresses entered: $(echo "$cl_macs" | wc -l)"
-				# Warn if count doesn't match expected nodes
-				local _mac_count _expected_nodes
+				# Warn if count doesn't match expected MACs (nodes × ports)
+				local _mac_count _node_count _port_count _expected_macs
 				_mac_count=$(echo "$cl_macs" | wc -l)
 				case "$cl_type" in
-					sno) _expected_nodes=1 ;; compact) _expected_nodes=3 ;;
-					standard) _expected_nodes=$(( 3 + ${cl_workers:-2} )) ;; *) _expected_nodes=1 ;;
+					sno) _node_count=1 ;; compact) _node_count=3 ;;
+					standard) _node_count=$(( 3 + ${cl_workers:-2} )) ;; *) _node_count=1 ;;
 				esac
-				if [[ $_mac_count -ne $_expected_nodes ]]; then
+				_port_count=$(echo "$cl_ports" | tr ',' '\n' | grep -c .)
+				[ "$_port_count" -lt 1 ] && _port_count=1
+				_expected_macs=$(( _node_count * _port_count ))
+				if [[ $_mac_count -ne $_expected_macs ]]; then
 					dlg --backtitle "$(ui_backtitle)" --msgbox \
-						"Warning: $_mac_count MAC(s) entered, but $cl_type needs $_expected_nodes (one per node)." 0 0 || true
+						"Warning: $_mac_count MAC(s) entered, but $cl_type needs $_expected_macs ($_node_count nodes × $_port_count port(s) each)." 0 0 || true
 				fi
 			fi
 			rm -f "$_mac_edit"
@@ -1718,23 +1729,10 @@ _cluster_execute() {
 		esac
 	done
 
-	# For bare-metal: offer choice between ISO creation only or full install
+	# Bare-metal: create ISO only (user must boot servers manually)
+	# VMware/KVM: full install (ABA automates VM lifecycle)
 	if [[ "$cl_platform" == "bm" ]]; then
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_INSTALL_ACTION" \
-			--menu "Choose the install action:" 0 0 0 \
-			"F" "Full Install (create ISO + monitor until complete)" \
-			"I" "Create ISO only (download ISO, then boot servers manually)" \
-			2>"$_TUI_TMP"
-		case $? in
-			0)
-				local _action=$(<"$_TUI_TMP")
-				case "$_action" in
-					F) install_step="install" ;;
-					I) install_step="iso" ;;
-				esac
-				;;
-			1|255) return 1 ;;
-		esac
+		install_step="iso"
 	fi
 	cmd="$cmd --step $install_step"
 
@@ -1758,19 +1756,30 @@ _cluster_execute() {
 	confirm_and_execute "$cmd" "Install Cluster: $fqdn"
 	local rc=$?
 
-	# After successful ISO creation (bare-metal, ISO-only step): show write-usb guidance
+	# After successful ISO creation (bare-metal, ISO-only step): show boot guidance
 	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
 		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
-		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Writing to USB" \
+		local _node_count=$(( ${cl_masters:-3} + ${cl_workers:-0} ))
+		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Boot Your Servers" \
 			--msgbox "ISO file created:\n\n\
   $_iso_path\n\n\
-To write to a USB drive, use raw/direct mode (byte-for-byte copy):\n\n\
-  sudo dd if=$_iso_path of=/dev/sdX bs=4M conv=fsync status=progress\n\n\
-Or run: aba --dir $cl_name write-usb\n\n\
-IMPORTANT: The ISO must be written as a raw disk image.\n\
-Any tool that copies the image byte-for-byte to the entire device\n\
-(e.g. dd, balenaEtcher 'Flash', Fedora Media Writer) will work.\n\
-Tools that reformat the USB or extract files will NOT boot." 0 0
+Boot all $_node_count server(s) from this ISO using one of:\n\n\
+  • Virtual media (iLO, iDRAC, BMC) — mount the ISO over\n\
+    the management network (no physical media needed)\n\
+  • USB drive — write in raw/direct mode (byte-for-byte copy):\n\n\
+    sudo dd if=$_iso_path of=/dev/sdX bs=4M conv=fsync status=progress\n\
+    (replace /dev/sdX with your actual USB device, e.g. /dev/sdb)\n\n\
+    Or run: aba --dir $cl_name write-usb\n\n\
+    The ISO must be written as a raw disk image. Any tool that copies\n\
+    byte-for-byte to the entire device (dd, balenaEtcher, Fedora Media\n\
+    Writer) will work. Tools that reformat or extract files will NOT boot.\n\n\
+  • PXE — serve the ISO via your PXE infrastructure\n\n\
+IMPORTANT: The ISO expires 24 hours after creation.\n\
+Boot all servers and complete the install within that window.\n\n\
+Once installation completes, use Day-2 to configure the cluster.\n\
+ABA auto-detects when the cluster is ready.\n\n\
+Tip: To watch installation progress, use Advanced → Monitor\n\
+Cluster Installation (A → F)." 0 0
 	fi
 
 	# After successful install in mirror mode, offer to configure OperatorHub
@@ -1888,21 +1897,31 @@ cluster_delete() {
 
 	local cl_display="$SELECTED_CLUSTER_DISPLAY"
 
+	local _del_msg _del_help
+	if [[ "${platform:-bm}" == "bm" ]]; then
+		_del_msg="Delete cluster '$cl_display'?\n\nThis removes the local cluster directory and state files only.\nThe physical servers are left running — decommission them manually."
+		_del_help="Delete removes the cluster directory and all generated resources\n\
+(kubeconfig, manifests, ISOs, state markers).\n\n\
+On bare-metal, nodes are left powered — decommission them manually.\n\
+To fully decommission, reinstall or wipe the servers yourself."
+	else
+		_del_msg="Delete cluster '$cl_display'?\n\nThis removes all cluster state and destroys the VMs.\nThis action cannot be undone."
+		_del_help="Delete removes the cluster directory and all generated resources\n\
+(kubeconfig, manifests, ISOs, state markers).\n\n\
+On virtualized platforms (VMware, KVM), the VMs are also destroyed."
+	fi
+
 	while true; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLUSTER_DELETE" \
 			--yes-label "Delete" --no-label "$TUI2_BTN_CANCEL" \
 			--help-button --help-label "Help" \
-			--yesno "Delete cluster '$cl_display'?\n\nThis removes all cluster state and resources.\nThis action cannot be undone." 0 0
+			--yesno "$_del_msg" 0 0
 		local rc=$?
 		case $rc in
 			0) break ;;
 			2)
 				dlg --backtitle "$(ui_backtitle)" --title "Delete Cluster – Help" \
-					--msgbox "\
-Delete removes the cluster directory and all generated resources\n\
-(kubeconfig, manifests, ISOs, state markers).\n\n\
-On virtualized platforms (VMware, KVM), the VMs are also destroyed.\n\
-On bare-metal, nodes are left powered — decommission them manually." 0 0
+					--msgbox "$_del_help" 0 0
 				continue
 				;;
 			*) return 1 ;;
@@ -2051,11 +2070,13 @@ R - Reset ABA: Removes ALL configuration, clusters, mirror data, and\n\
 				case "$_TUI_MODE" in
 					CONNO)
 						_TUI_MODE="DIRECT"
+						aba_podman_check_start
 						tui_log "Advanced: switching to DIRECT mode"
 						return 0
 						;;
 					DIRECT)
 						_TUI_MODE="CONNO"
+						aba_podman_check_start
 						tui_log "Advanced: switching to CONNO mode"
 						return 0
 						;;
@@ -2283,56 +2304,47 @@ _day2_login() {
 		return 1
 	fi
 
-	local cl_display="$SELECTED_CLUSTER_DISPLAY"
-	tui_log "Cluster Login Terminal: $cl_display"
+	tui_log "Cluster Login Terminal: $SELECTED_CLUSTER_DISPLAY"
 
 	_tui_redirect_restore
 	clear
-	echo "═══════════════════════════════════════════════════════════════"
-	echo "  Cluster Login Terminal: $cl_display"
-	echo "  Type 'exit' to return to TUI"
-	echo "═══════════════════════════════════════════════════════════════"
-	echo
 
 	cd "$ABA_ROOT"
-	# Set KUBECONFIG and run oc login, then drop into interactive shell.
-	# Use a throwaway copy so oc-login tokens don't contaminate the original kubeconfig.
 	# Close flock fd so the subshell doesn't hold the TUI lock.
-	(
-		eval "$(aba --dir "$SELECTED_CLUSTER" shell 2>/dev/null)"
-		_orig_kc="$KUBECONFIG"
-		_tmp_kc=$(mktemp /tmp/.aba-kubeconfig-XXXXXX)
-		cp "$_orig_kc" "$_tmp_kc"
-		export KUBECONFIG="$_tmp_kc"
-		# Run the login command (best-effort — works without kubeadmin pw too)
-		eval "$(aba --dir "$SELECTED_CLUSTER" login 2>/dev/null)" || true
-		echo
-		_rcfile=$(mktemp)
-		cat > "$_rcfile" <<-'RCEOF'
-		[ -f /etc/bashrc ] && source /etc/bashrc
-		[ -f /usr/share/bash-completion/bash_completion ] && source /usr/share/bash-completion/bash_completion
-		_oc_ns() { oc config view --minify -o jsonpath='{..namespace}' 2>/dev/null; }
-		source <(oc completion bash 2>/dev/null) 2>/dev/null
-		RCEOF
-		echo "PS1='[$cl_display|\$(_oc_ns)] "'\$ '"'" >> "$_rcfile"
-		echo "trap 'rm -f $_rcfile $_tmp_kc' EXIT" >> "$_rcfile"
-		exec bash --rcfile "$_rcfile" -i
-	) {ABA_TUI_FLOCK_FD}>&-
+	(aba --dir "$SELECTED_CLUSTER" terminal) {ABA_TUI_FLOCK_FD}>&-
 	local _login_rc=$?
-	[[ $_login_rc -ne 0 ]] && echo -e "\n\e[31mLogin failed (exit code $_login_rc)\e[0m"
 
-	echo
-	read -rp "Press ENTER to return to TUI..."
+	# Only show "Press ENTER" if the shell exited normally (login failure already handled)
+	if [[ $_login_rc -eq 0 ]]; then
+		echo
+		read -rp "Press ENTER to return to TUI..."
+	fi
 	_tui_redirect_activate
 }
 
 # --- SSH into Rendezvous Server ---
 _day2_ssh() {
-	if ! select_installed_cluster "$TUI2_TITLE_DAY2_SSH" "Select cluster for SSH:"; then
+	# Find clusters that have a rendezvousIP (no install-complete probe needed)
+	local -a _ssh_candidates=()
+	local dir
+	for dir in $(list_cluster_dirs); do
+		[[ -f "$ABA_ROOT/$dir/iso-agent-based/rendezvousIP" ]] && _ssh_candidates+=("$dir")
+	done
+
+	if [[ ${#_ssh_candidates[@]} -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "No clusters with a rendezvous IP found.\nCreate an ISO first." 0 0
 		return 1
+	elif [[ ${#_ssh_candidates[@]} -eq 1 ]]; then
+		SELECTED_CLUSTER="${_ssh_candidates[0]}"
+	else
+		# Multiple candidates — let user choose (no install probe)
+		if ! select_cluster "$TUI2_TITLE_DAY2_SSH" "Select cluster for SSH:"; then
+			return 1
+		fi
 	fi
 
-	local cl_display="$SELECTED_CLUSTER_DISPLAY"
+	local cl_display
+	cl_display=$(cluster_display_name "$SELECTED_CLUSTER")
 	tui_log "SSH into Rendezvous Server of $cl_display"
 
 	_tui_redirect_restore

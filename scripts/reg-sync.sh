@@ -57,7 +57,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	if [[ -n "${_lowest:-}" ]] && is_version_greater "$_lowest" "$ocp_version"; then
 		_hint="Upgrade to at least ${_lowest} first."
 	fi
-	aba_abort \
+	aba_abort --tag upgrade-path \
 		"Cannot upgrade from $ocp_version to $ocp_upgrade_to." \
 		"Version $ocp_version is not in channel ${_tgt_ch} (lowest entry: ${_lowest:-unknown})." \
 		"$_hint" \
@@ -66,7 +66,7 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 	elif [[ $_path_rc -eq 2 ]]; then
 		_tgt_ch="${_path_diag#*|}" && _tgt_ch="${_tgt_ch%%|*}"
 		_nearest="${_path_diag##*|}"
-		aba_abort \
+		aba_abort --tag upgrade-path \
 			"No upgrade path from $ocp_version to $ocp_upgrade_to in channel ${_tgt_ch}." \
 			"${_nearest:+Nearest reachable target from $ocp_version: ${_nearest}}" \
 			"Update your upgrade target and try again." \
@@ -173,6 +173,20 @@ else
 fi
 replace-value-conf -q -n last_action -v "sync" -f "$regcreds_dir/state.sh"
 replace-value-conf -q -n last_action_at -v "$(date '+%Y-%m-%d %H:%M:%S')" -f "$regcreds_dir/state.sh"
+
+# Archive the entire cluster-resources/ directory per OCP minor version.
+# oc-mirror overwrites these files on every sync, so after an upgrade sync
+# (e.g. v5.0), the CS files point to v5.0 — but existing clusters may still
+# be on v4.21.  day2.sh checks these versioned archives to apply the correct
+# CatalogSources for each cluster's actual version.
+# See: day2.sh "Version-aware CatalogSource selection" block.
+_cs_archive_ver=$(_ver_minor "$_synced_ver")
+_cs_archive_dir="data/.cluster-resources-v${_cs_archive_ver}"
+if [ -d "data/working-dir/cluster-resources" ]; then
+	rm -rf "$_cs_archive_dir"
+	cp -a "data/working-dir/cluster-resources" "$_cs_archive_dir"
+	aba_debug "Archived cluster-resources to $_cs_archive_dir"
+fi
 
 echo
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then

@@ -498,18 +498,23 @@ _mirror_op_confirm() {
 			fi
 		fi
 
-		_op_count=${#OP_BASKET[@]}
-		_op_preview=""
-		if [[ $_op_count -gt 0 ]]; then
-			local _shown=() _i=0
-			for _op in "${!OP_BASKET[@]}"; do
-				_shown+=("$_op")
-				_i=$(( _i + 1 ))
-				[[ $_i -ge 5 ]] && break
-			done
-			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-			if [[ $_op_count -gt 5 ]]; then
-				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+		if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
+			_op_count=-1
+			_op_preview=""
+		else
+			_op_count=${#OP_BASKET[@]}
+			_op_preview=""
+			if [[ $_op_count -gt 0 ]]; then
+				local _shown=() _i=0
+				for _op in "${!OP_BASKET[@]}"; do
+					_shown+=("$_op")
+					_i=$(( _i + 1 ))
+					[[ $_i -ge 5 ]] && break
+				done
+				_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+				if [[ $_op_count -gt 5 ]]; then
+					_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+				fi
 			fi
 		fi
 	fi
@@ -519,7 +524,9 @@ _mirror_op_confirm() {
 
 	local _summary=""
 	_summary+="OCP: $_ver ($_chan)\n"
-	if [[ $_op_count -gt 0 ]]; then
+	if [[ $_op_count -eq -1 ]]; then
+		_summary+="Operators: (user-edited ISC)\n"
+	elif [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
 		_summary+="Operators: none\n"
@@ -989,6 +996,12 @@ How do you want to mirror the upgrade images?" 0 0 0 \
 	local rc=0
 	case "$_upg_method" in
 		1)
+			if ! mirror_available; then
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_MIRROR_REQUIRED" \
+					--yesno "Mirror registry is not installed.\n\nA mirror will be installed first, then upgrade images will be synced.\n\nContinue?" 0 0
+				[[ $? -ne 0 ]] && return 1
+				_mirror_config_review || return 1
+			fi
 			confirm_and_execute \
 				"aba --dir mirror --upgrade-to $_target_ver sync$(_tui_oc_mirror_retry_suffix)" \
 				"Prepare Upgrade: ${_current_ver} → ${_target_ver}" _invalidate_mirror_cache
@@ -1022,7 +1035,7 @@ To upgrade a disconnected cluster:\n\n\
 			;;
 		3)
 			dlg --backtitle "$(ui_backtitle)" --title "Target Version Set" \
-				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (S), or\n  • Save to tar files (V)\n\nfrom the main menu." 0 0
+				--msgbox "\nUpgrade target set to ${_target_ver}.\n\nImageSet Config has been regenerated.\n\nWhen ready, mirror the upgrade images using:\n  • Sync to registry (Y), or\n  • Save to tar files (S)\n\nfrom the main menu." 0 0
 			;;
 	esac
 
@@ -1120,6 +1133,7 @@ _persist_operator_basket() {
 
 mirror_view_isc() {
 	local readonly="${1:-false}"
+	[[ "$readonly" != "true" ]] && { _require_podman || return 0; }
 	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	tui_log "Action: View ISC (readonly=$readonly)"
 
@@ -1133,12 +1147,50 @@ mirror_view_isc() {
 		local _gen_out _gen_rc=0
 		_gen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
 			make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _gen_rc=$?
-		if [[ $_gen_rc -ne 0 ]]; then
-			tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
-			dlg --backtitle "$(ui_backtitle)" --title "ImageSet Config Error" \
-				--msgbox "$_gen_out" 0 0
-			return 0
+	else
+		# Task completed previously — check if it failed
+		local _gen_out="" _gen_rc
+		_gen_rc=$(run_once -E -i "aba:isconf:generate" 2>/dev/null) || _gen_rc=""
+		_gen_rc="${_gen_rc:-0}"
+	fi
+	if [[ "${_gen_rc:-0}" -ne 0 ]]; then
+		tui_log "ERROR: ISC generation failed (rc=$_gen_rc): $_gen_out"
+		local _isconf_err="${_gen_out}"
+		if [[ -z "$_isconf_err" ]]; then
+			_isconf_err=$(run_once -o -i "aba:isconf:generate" 2>/dev/null | tail -12 | tail -c 800)
 		fi
+		if [[ -z "$_isconf_err" ]]; then
+			_isconf_err=$(run_once -e -i "aba:isconf:generate" 2>/dev/null | tail -8 | tail -c 600)
+		fi
+		if [[ -z "$_isconf_err" && -n "$CATALOG_ERROR" ]]; then
+			_isconf_err="$CATALOG_ERROR"
+		fi
+		_isconf_err="${_isconf_err//$'\n'/\\n}"
+
+		# Check structured error tag written by aba_abort --tag
+		local _abort_tag=""
+		[[ -f "$HOME/.aba/.abort-tag" ]] && _abort_tag=$(<"$HOME/.aba/.abort-tag")
+		rm -f "$HOME/.aba/.abort-tag"
+
+		local _dlg_title _dlg_msg
+		if [[ "$_abort_tag" == "upgrade-path" ]]; then
+			_dlg_title="Upgrade Path Error"
+			_dlg_msg="The upgrade target cannot be reached.\n\n"
+			_dlg_msg="${_dlg_msg}${_isconf_err:-Unknown error}"
+			_dlg_msg="${_dlg_msg}\n\nTo fix in the TUI:"
+			_dlg_msg="${_dlg_msg}\n  • Prepare Upgrade (U) → clear or change target"
+			_dlg_msg="${_dlg_msg}\n  • Rerun Wizard (W) → change channel/version"
+		else
+			_dlg_title="ImageSet Generation Failed"
+			_dlg_msg="ImageSet configuration generation failed."
+			_dlg_msg="${_dlg_msg}\n\n${_isconf_err:-Unknown error}"
+			_dlg_msg="${_dlg_msg}\n\n$(_tui_catalog_error_hints)"
+		fi
+		dlg --backtitle "$(ui_backtitle)" --title "$_dlg_title" \
+			--msgbox "$_dlg_msg" 0 0
+		# Clear the failed task so a retry re-runs generation
+		run_once -c -i "aba:isconf:generate" 2>/dev/null || true
+		return 0
 	fi
 
 	if [[ "$readonly" == "true" ]]; then
@@ -1293,18 +1345,29 @@ mirror_view_isc() {
 # =============================================================================
 
 mirror_select_operators() {
+	_require_podman || return 0
 	local wizard_mode="${1:-}"
 
 	tui_log "Action: Select Operators"
 
+	# Use the upgrade target's catalog when in upgrade mode (matches ISC generator logic)
 	local version_short
-	version_short=$(_ver_minor "$ocp_version")
+	if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+		version_short=$(_ver_minor "$ocp_upgrade_to")
+	else
+		version_short=$(_ver_minor "$ocp_version")
+	fi
 
 	# Ensure catalogs are available
 	if ! tui_ensure_catalogs_ready "$version_short"; then
 		tui_log "ERROR: Catalog download failed (see log)"
-		dlg --backtitle "$(ui_backtitle)" --msgbox \
-			"Failed to download operator catalog indexes.\n\nCheck your network and pull secret, then try again from the Operators menu.\nSee log: $_TUI_LOG_FILE" 0 0
+		local _cat_err="${CATALOG_ERROR:-Unknown error}"
+		_cat_err="${_cat_err//$'\n'/\\n}"
+		local _dlg_msg="Operator catalog download failed."
+		_dlg_msg="${_dlg_msg}\n\n${_cat_err}"
+		_dlg_msg="${_dlg_msg}\n\n$(_tui_catalog_error_hints)"
+		dlg --backtitle "$(ui_backtitle)" --title "Catalog Download Failed" \
+			--msgbox "$_dlg_msg" 0 0
 		return 1
 	fi
 
@@ -1620,7 +1683,11 @@ _operator_view_basket() {
 	fi
 
 	local version_short
-	version_short=$(_ver_minor "$ocp_version")
+	if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+		version_short=$(_ver_minor "$ocp_upgrade_to")
+	else
+		version_short=$(_ver_minor "$ocp_version")
+	fi
 	local items=()
 	local op display_name line
 	for op in $(echo "${!OP_BASKET[@]}" | tr ' ' '\n' | sort); do
@@ -1725,29 +1792,38 @@ mirror_create_bundle() {
 	source <(normalize-aba-conf) 2>/dev/null
 	local _ver="${ocp_version:-unknown}"
 	local _chan="${ocp_channel:-stable}"
-	local _op_count=${#OP_BASKET[@]}
-	local _op_preview=""
-	if [[ $_op_count -gt 0 ]]; then
-		local _shown=()
-		local _i=0
-		for _op in "${!OP_BASKET[@]}"; do
-			_shown+=("$_op")
-			_i=$(( _i + 1 ))
-			[[ $_i -ge 5 ]] && break
-		done
-		_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
-		if [[ $_op_count -gt 5 ]]; then
-			_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+	local _op_count _op_preview=""
+
+	if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
+		_op_count=-1
+	else
+		_op_count=${#OP_BASKET[@]}
+		if [[ $_op_count -gt 0 ]]; then
+			local _shown=()
+			local _i=0
+			for _op in "${!OP_BASKET[@]}"; do
+				_shown+=("$_op")
+				_i=$(( _i + 1 ))
+				[[ $_i -ge 5 ]] && break
+			done
+			_op_preview=$(IFS=","; echo "${_shown[*]}" | sed 's/,/, /g')
+			if [[ $_op_count -gt 5 ]]; then
+				_op_preview="$_op_preview, ... (+$(( _op_count - 5 )) more)"
+			fi
 		fi
 	fi
 
 	local _summary="OCP: $_ver ($_chan)\n"
-	if [[ $_op_count -gt 0 ]]; then
+	if [[ $_op_count -eq -1 ]]; then
+		_summary+="Operators: (user-edited ISC)\n"
+	elif [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
 		_summary+="Operators: none\n"
 	fi
-	_summary+="\nEnter output path (version suffix added automatically):"
+	_summary+="\nEnter output path (version suffix added automatically):\n"
+	_summary+="\nTip: For best results, use a USB drive or a separate"
+	_summary+="\nfilesystem with plenty of free space."
 
 	local default_bundle
 	default_bundle=$(cat "$HOME/.aba/bundle-path" 2>/dev/null) || default_bundle="/tmp/ocp-bundle"
@@ -1802,26 +1878,28 @@ mirror_create_bundle() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
 			--yes-label "$TUI2_BTN_LIGHT_BUNDLE" \
 			--no-label "$TUI2_BTN_FULL_BUNDLE" \
+			--extra-button --extra-label "$TUI2_BTN_BACK" \
 			--yesno "$TUI2_MSG_BUNDLE_LIGHT_CONFIRM" 0 0
 		local _bundle_rc=$?
-		if [[ $_bundle_rc -eq 255 ]]; then
+		if [[ $_bundle_rc -eq 3 || $_bundle_rc -eq 255 ]]; then
 			return 1
 		elif [[ $_bundle_rc -eq 0 ]]; then
 			light_flag="--light"
 		else
-			# Full bundle on same device — warn about disk space
-			dlg --backtitle "$(ui_backtitle)" --title "Disk Space Warning" \
-				--yes-label "$TUI2_BTN_CONTINUE" \
-				--no-label "$TUI2_BTN_CANCEL" \
-				--yesno "\Z3Disk Space Consideration\Zn\n\n\
-Bundle and mirror are on the same filesystem (${_mount_point:-unknown}).\n\n\
-Creating a full bundle requires:\n\
-  • Mirror image-set archives in mirror/data/\n\
-  • Complete bundle copy written to: $bundle_path\n\n\
-You may temporarily need roughly \Zbdouble the space\Zn.\n\n\
-\ZbRecommendation:\Zn Use light bundle to avoid this.\n\n\
-Continue with full bundle anyway?" 0 0
-			[[ $? -ne 0 ]] && return 1
+			# Full bundle on same device — warn only if free space is low
+			local _free_gb=999
+			_free_gb=$(df --output=avail -BG "$output_dir" 2>/dev/null | tail -1 | tr -d ' G')
+			if [[ "${_free_gb:-999}" -lt 50 ]]; then
+				dlg --backtitle "$(ui_backtitle)" --title "Low Disk Space Warning" \
+					--yes-label "$TUI2_BTN_CONTINUE" \
+					--no-label "$TUI2_BTN_CANCEL" \
+					--yesno "\n\
+Only ${_free_gb}G free on this filesystem.\n\n\
+A full bundle duplicates the image archives\ninto: $bundle_path\n\n\
+You may run out of disk space.\n\n\
+Continue with full bundle?" 0 0
+				[[ $? -ne 0 ]] && return 1
+			fi
 		fi
 	fi
 
@@ -1830,19 +1908,20 @@ Continue with full bundle anyway?" 0 0
 	if ls "$ABA_ROOT"/mirror/data/mirror_*.tar >/dev/null 2>&1; then
 		local _bundle_data_choice=""
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
-			--yes-label "Reuse (fast)" \
-			--no-label "Clean Rebuild" \
-			--yesno "Existing image data found in mirror/data/.\n\n\
-Reuse: only download changed/new images (incremental, fast).\n\
-Clean Rebuild: delete existing data and re-download everything.\n\n\
-Reuse is recommended unless you changed OpenShift version or suspect corruption." 0 0
+			--yes-label "Start Fresh" \
+			--no-label "Incremental" \
+			--extra-button --extra-label "$TUI2_BTN_BACK" \
+			--yesno "Previous image data found.\n\n\
+\\ZbStart Fresh\\ZB: delete existing data and re-download\neverything (recommended).\n\n\
+\\ZbIncremental\\ZB: only download what changed since\nlast time (faster, but may be incomplete).\n\n\
+\\ZbStart Fresh\\ZB is recommended to ensure a\ncomplete bundle." 0 0
 		local choice_rc=$?
 		case $choice_rc in
-			0) tui_log "Bundle: reusing existing image data (incremental)"
-			   _bundle_data_choice="reuse" ;;
-			1) force_flag="--force"
-			   tui_log "Bundle: clean rebuild (--force)"
+			0) force_flag="--force"
+			   tui_log "Bundle: starting fresh (--force)"
 			   _bundle_data_choice="rebuild" ;;
+			1) tui_log "Bundle: incremental update (reusing existing data)"
+			   _bundle_data_choice="reuse" ;;
 			*) return 1 ;;
 		esac
 		[[ -z "$_bundle_data_choice" ]] && return 1

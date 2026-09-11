@@ -29,6 +29,7 @@ ack-eks-controller                                      AWS Controllers for Kube
 ack-elasticache-controller                              AWS Controllers for Kubernetes - Amazon ElastiCache          alpha
 ack-elbv2-controller                                    AWS Controllers for Kubernetes - Amazon ELB                  alpha
 ack-emrcontainers-controller                            AWS Controllers for Kubernetes - Amazon EMR on EKS           alpha
+ack-emr-controller                                      AWS Controllers for Kubernetes - Amazon EMR                  alpha
 ack-emrserverless-controller                            AWS Controllers for Kubernetes - Amazon EMR Serverless       alpha
 ack-eventbridge-controller                              AWS Controllers for Kubernetes - Amazon EventBridge          alpha
 ack-firehose-controller                                 AWS Controllers for Kubernetes - Amazon Firehose             alpha
@@ -43,6 +44,7 @@ ack-lambdamicrovms-controller                           AWS Controllers for Kube
 ack-memorydb-controller                                 AWS Controllers for Kubernetes - MemoryDB                    alpha
 ack-mq-controller                                       AWS Controllers for Kubernetes - Amazon MQ                   alpha
 ack-mwaa-controller                                     AWS Controllers for Kubernetes - Amazon Managed Workflows for Apache Airflow alpha
+ack-mwaaserverless-controller                           AWS Controllers for Kubernetes - Amazon MWAA Serverless      alpha
 ack-networkfirewall-controller                          AWS Controllers for Kubernetes - Amazon Network Firewall     alpha
 ack-opensearchserverless-controller                     AWS Controllers for Kubernetes - Amazon OpenSearchServerless alpha
 ack-opensearchservice-controller                        AWS Controllers for Kubernetes - Amazon OpenSearch Service   alpha

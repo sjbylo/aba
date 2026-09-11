@@ -10,6 +10,7 @@ ansible-cloud-addons-operator                           Ansible Cloud Addons    
 apicast-operator                                        Red Hat Integration - 3scale APIcast gateway                 threescale-2.14
 apicurio-registry-3                                     Red Hat build of Apicurio Registry 3                         3.x
 authorino-operator                                      Red Hat - Authorino Operator                                 stable
+automation-portal-operator                              Ansible automation portal (Technology Preview)               fast
 bamoe-businessautomation-operator                       IBM Business Automation                                      8.x-stable
 bamoe-kogito-operator                                   IBM BAMOE Kogito Operator                                    8.x
 businessautomation-operator                             Business Automation                                          stable
@@ -53,8 +54,11 @@ odf-prometheus-operator                                 Prometheus Operator     
 odr-cluster-operator                                    Openshift DR Cluster Operator                                stable-4.22
 odr-hub-operator                                        Openshift DR Hub Operator                                    stable-4.22
 odr-volsync-plugin-operator                             OpenShift DR VolSync Plugin Operator                         stable-4.22
+openshift-cert-manager-operator                         cert-manager Operator for Red Hat OpenShift                  stable-v1
+openshift-external-secrets-operator                     External Secrets Operator for Red Hat OpenShift              stable-v1
 openshift-pipelines-operator-rh                         Red Hat OpenShift Pipelines                                  latest
 openshift-secondary-scheduler-operator                  Secondary Scheduler Operator for Red Hat OpenShift           stable
+opentelemetry-product                                   Red Hat build of OpenTelemetry                               stable
 recipe                                                  Recipe                                                       stable-4.22
 red-hat-hawtio-operator                                 HawtIO Operator                                              v2
 rhpam-kogito-operator                                   RHPAM Kogito Operator                                        7.x
@@ -70,5 +74,6 @@ skupper-netobs-operator                                 Red Hat Service Intercon
 skupper-operator                                        Red Hat Service Interconnect                                 stable-2
 storage-based-remediation                               Storage-Based Remediation Operator                           stable
 tang-operator                                           NBDE Tang Server                                             alpha
+tempo-product                                           Tempo Operator                                               stable
 volsync-product                                         VolSync                                                      stable
 web-terminal                                            Web Terminal                                                 fast
