@@ -23,16 +23,12 @@ mirror:
 #      shortestPath: true
 {%- endif %}
     graph: true
-#  additionalImages:
-#  - name: registry.redhat.io/openshift4/ose-cli:latest
-#  - name: registry.redhat.io/rhel9/support-tools:latest
-#  - name: quay.io/openshifttest/hello-openshift:1.2.0
-#  - name: registry.redhat.io/ubi9/ubi:latest
-# Useful images for testing OpenShift Virtualization
-#  - name: quay.io/containerdisks/centos-stream:10
-#  - name: quay.io/containerdisks/centos-stream:9
-#  - name: quay.io/containerdisks/fedora:latest
-#  helm: {}
+{%- if additional_images is defined and additional_images %}
+  additionalImages:
+{%- for img in additional_images %}
+  - name: {{ img.name }}  # {{ img.source }}
+{%- endfor %}
+{%- endif %}
 {%- if has_operators == 'true' and operators_data %}
   operators:
 {%- for cat in operators_data %}
