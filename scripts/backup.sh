@@ -98,6 +98,8 @@ rm -f "${repo_dir}/.aba.conf.seen"   # Ensure user can be offered to edit this c
 # .primed marker in fully pre-built dirs so Make skips regeneration on disco.
 _cluster_paths=""
 _hv_conf_path=""
+_images_conf_path=""
+[ -f "${repo_dir}/images.conf" ] && _images_conf_path="${repo_dir}/images.conf"
 _resolved_copies=""
 _include_mirror_conf=""
 # Parallel arrays: _resolved_copies has the file paths, _original_targets has
@@ -186,6 +188,7 @@ file_list=$(find				\
 	"${repo_dir}/mirror"			\
 	$_cluster_paths				\
 	${_hv_conf_path:+"$_hv_conf_path"}	\
+	${_images_conf_path:+"$_images_conf_path"}	\
 								\
 	\( -path "${repo_dir}/mirror/data/working-dir*" -o	\
 	   -path "${repo_dir}/mirror/data/oc-mirror-workspace*" -o \

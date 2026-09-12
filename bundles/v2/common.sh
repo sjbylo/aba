@@ -80,6 +80,47 @@ mypause() {
 	set -x
 }
 
+# Fetch RHOAI additional images and add to images.conf.
+# Tries GitHub first; falls back to shipped static file.
+# Usage: fetch_rhoai_images <rhoai-version>  (e.g. "3.5")
+fetch_rhoai_images() {
+	local rhoai_ver="$1"
+	local github_url="https://raw.githubusercontent.com/red-hat-data-services/rhoai-disconnected-install-helper/main/rhoai-${rhoai_ver}-imagesetconfig.yaml"
+	local static_file="$V2_DIR/data/rhoai-images-${rhoai_ver}.txt"
+	local tmp_images
+	tmp_images=$(mktemp)
+
+	echo "Fetching RHOAI ${rhoai_ver} additional images ..."
+
+	# Try GitHub first
+	if curl -fsSL --retry 3 --max-time 30 "$github_url" 2>/dev/null | \
+	   grep '^\s*- name:' | awk '{print $3}' | \
+	   grep -E '^(quay\.io|registry\.redhat\.io)/' | sort -u > "$tmp_images" && \
+	   [ -s "$tmp_images" ]; then
+		echo "Fetched $(wc -l < "$tmp_images") RHOAI images from GitHub"
+	elif [ -f "$static_file" ]; then
+		# Fall back to shipped static list
+		echo "GitHub fetch failed — using shipped static list: $static_file"
+		grep -v '^#' "$static_file" | grep -v '^$' > "$tmp_images"
+	else
+		echo "WARNING: No RHOAI image list available for version $rhoai_ver" >&2
+		rm -f "$tmp_images"
+		return 1
+	fi
+
+	# Add images via aba image add
+	local _imgs=()
+	while IFS= read -r _img; do
+		[ -n "$_img" ] && _imgs+=("$_img")
+	done < "$tmp_images"
+	rm -f "$tmp_images"
+
+	if [ ${#_imgs[@]} -gt 0 ]; then
+		echo "Adding ${#_imgs[@]} RHOAI companion images ..."
+		aba image add "${_imgs[@]}"
+	fi
+}
+
 # Safety net ONLY -- call AFTER 'aba -d mirror uninstall'.
 # Removes quay-* systemd user services left by older mirror-registry versions
 # that the current uninstaller does not know about (e.g. quay-postgres).

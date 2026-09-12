@@ -145,7 +145,7 @@ isconf: imagesetconf ## Same as imagesetconf
 #   - ISC is always regenerated UNLESS the user has edited it after generation.
 #   - The .created file is touched after each generation; if the ISC file is newer
 #     than .created, it means the user modified it and their changes are preserved.
-data/imageset-config.yaml: ../aba.conf $(wildcard mirror.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
+data/imageset-config.yaml: ../aba.conf $(wildcard mirror.conf) $(wildcard ../images.conf) $(wildcard images.conf) catalogs-download catalogs-wait $(wildcard ../.index/*-operator-index-*)
 	$(SCRIPTS)/reg-create-imageset-config.sh -f $(force)
 
 

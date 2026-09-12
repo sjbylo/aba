@@ -619,6 +619,7 @@ _conno_main() {
 			"" "──── Mirror ────────────────────────"
 			"$TUI2_CONNO_TAG_VIEW_ISC"       "$visc_label"
 			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
+			"$TUI2_CONNO_TAG_IMAGES"         "$TUI2_LABEL_IMAGES"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
 			"" "──── Transfer ──────────────────────"
@@ -653,6 +654,7 @@ _conno_main() {
 Mirror:
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
+  • Additional Images — add extra container images (ose-cli, support-tools, etc.)
   • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
 
@@ -746,6 +748,9 @@ Navigation:
 				mirror_select_operators
 				default_item=""
 			fi
+			;;
+		"$TUI2_CONNO_TAG_IMAGES")
+			mirror_manage_images
 			;;
 		"$TUI2_CONNO_TAG_BUNDLE")
 			if [[ "$bndl_avail" == "false" ]]; then

@@ -179,6 +179,7 @@ TUI2_CONNO_TAG_SWITCH_DISCO="Z"
 TUI2_CONNO_TAG_PREP_UPGRADE="U"
 TUI2_CONNO_TAG_SETTINGS="C"
 TUI2_CONNO_TAG_FEEDBACK="F"
+TUI2_CONNO_TAG_IMAGES="G"
 
 # =============================================================================
 # Menu Tags — DIRECT Action Menu
@@ -210,6 +211,7 @@ TUI2_LABEL_LOAD="Load images to mirror"
 TUI2_LABEL_VIEW_ISC="View/Edit imageset-config.yaml"
 TUI2_LABEL_VIEW_ISC_RO="View imageset-config.yaml"
 TUI2_LABEL_OPERATORS="Select Operators"
+TUI2_LABEL_IMAGES="Additional Images"
 TUI2_LABEL_BUNDLE="Create Install Bundle"
 TUI2_LABEL_INSTALL_CLUSTER="Install Cluster"
 TUI2_LABEL_DAY2="Day-2 / Cluster Management"
