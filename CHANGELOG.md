@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.1...HEAD)
+
+---
+
+## [1.3.1](https://github.com/sjbylo/aba/releases/tag/v1.3.1) - 2026-09-12
+
+Catalog fixes, vCenter 7 support for OCP 4.22+
+
 
 ### Changed
 
