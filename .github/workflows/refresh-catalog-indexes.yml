@@ -303,6 +303,7 @@ jobs:
           echo "### Catalog Index Image Updated" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Image: \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
+          echo "Updated: $(TZ=Asia/Singapore date '+%Y-%m-%d %H:%M GMT+8')" >> $GITHUB_STEP_SUMMARY
           echo "Versions: $OCP_VERSIONS" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Version | redhat-operator | certified-operator | community-operator |" >> $GITHUB_STEP_SUMMARY
