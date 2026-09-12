@@ -1,4 +1,23 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.0...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.1...HEAD)
+
+---
+
+## [1.3.1](https://github.com/sjbylo/aba/releases/tag/v1.3.1) - 2026-09-12
+
+Catalog fixes, vCenter 7 support for OCP 4.22+
+
+
+### Changed
+
+- **OCP 4.22+ on vCenter 7 uses `platform: baremetal`** — OpenShift 4.22 dropped vSphere 7.x CSI support. When `ocp_version` is 4.22+ and vCenter is older than 8.0 U1, `install-config.yaml` is generated with `platform: baremetal` (apiVIPs) instead of `platform: vsphere`, so the storage ClusterOperator is not stuck on vSphere CSI. VMs still run on the existing hypervisor.
+- **TUI version picker omits duplicate Previous/Older** — Those extra rows are hidden when they would repeat Latest.
+
+### Fixed
+
+- **Fix catalog index quoted channels aborting sync** — YAML FBC quotes numeric-looking channels (`defaultChannel: "5.1"`). Those quotes were copied into the operator index, and `aba -d mirror sync` aborted on syntax check. Wrapping YAML quotes are stripped before the index is written; package name and channel must still be unquoted in the index.
+- **Fix missing operator display names** — Some catalog packages store `displayName` only inside base64 `olm.bundle.object` ClusterServiceVersion data (no `olm.csv.metadata`, and YAML catalogs have no top-level `displayName:`). The extractor now decodes those blobs, so `aba show-operators` and the TUI show the real name instead of `-`. Extract aborts if any display name is still missing or if the operator count does not match the catalog image.
+- **Catalog index is not column-padded** — Lines are `package display-name channel` (single spaces). Consumers already use `$1` and `$NF`; padding only fought UTF-8 marks and long names.
+- **Catalog index syntax validation** — Downloaded catalog indexes are now validated line-by-line before use. Malformed entries (bad operator name, missing channel, truncated lines) are caught immediately instead of silently breaking downstream commands.
 
 ---
 

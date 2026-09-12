@@ -121,11 +121,18 @@ for ver in $VERSIONS; do
 			echo -e "  ${YELLOW}WARN${NC}: $bad_cols lines with fewer than 3 columns"
 		fi
 
-		# Display name coverage (best effort)
+		# Display names are required
 		has_display=$(awk '$2 != "-" {count++} END {print count+0}' "$podman_file")
 		no_display=$((total_ops - has_display))
 		pct=0
 		[ "$total_ops" -gt 0 ] && pct=$((has_display * 100 / total_ops))
+		if [ "$no_display" -gt 0 ]; then
+			echo -e "  ${RED}FAIL${NC}: $no_display operators missing display names"
+			_fail=$((_fail + 1))
+			summary_lines+=("FAIL  ${label}  missing display names=${no_display}")
+			echo ""
+			continue
+		fi
 
 		# Compare name+channel against oc-mirror reference
 		if [ "$has_ref" -eq 1 ]; then

@@ -832,26 +832,28 @@ The TUI wizard walks you through installing OpenShift
 in connected, partially disconnected, or fully air-gapped
 environments.
 
-Workflow:
-  1. Pull secret     — Configure Red Hat registry credentials
-  2. Version         — Choose OCP channel and version
-  3. Platform        — Select bare-metal, VMware, or KVM
-  4. Operators       — Pick operators to include in the mirror
-  5. Mirror registry — Set up a local Quay or Docker registry
-  6. Cluster install — Create, install, and monitor your cluster
+Setup wizard:
+  1. Base domain     — Auto-detected; verify on first run
+  2. Pull secret     — Red Hat registry credentials
+  3. Version         — OCP channel and version
+  4. Platform        — Bare-metal, VMware, or KVM
+  5. Operators       — Pick operators for the mirror
+  6. Mirror registry — Set up a Quay or Docker registry
+  7. Cluster install — Create, install, and monitor
 
-After installation, Day-2 operations are available:
-  - Add/remove operators, sync registry, apply updates
-  - Connect OperatorHub, configure NTP, trust registry CA
+Key operations:
+  Save / Sync      — Mirror images to tar files or registry
+  Bundle           — Create a portable install package
+  Load             — Load images into air-gapped registry
+  Upgrade          — Cross-minor and z-stream upgrades
+  Import           — Bring in an existing cluster
+  Day-2            — OperatorHub, NTP, signatures, OSUS
+  Shutdown/Startup — Graceful cluster lifecycle
 
 Navigation:
-  Tab / Arrows  — Move between items
-  Enter         — Select / confirm
-  Next          — Proceed to next step
-  Back          — Return to previous step
-  ESC           — Exit the TUI
+  Tab/Arrows — Move    Enter — Select    ESC — Exit
 
-Tip: You can also run any step from the CLI:
+Tip: You can also run any step — and more — from the CLI:
      aba --help"
 			;;
 		*)
