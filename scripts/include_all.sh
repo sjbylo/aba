@@ -4473,6 +4473,107 @@ check_release_image() {
 }
 
 # =============================================================================
+# Additional Images (images.conf) — ADR-013
+# =============================================================================
+# Plain-text image lists merged into the ISC additionalImages section.
+# Two files: images.conf (repo-wide, next to aba.conf) and mirror/images.conf (per-mirror).
+# See: devel/adr/013-additional-images-conf.md
+
+# Read one images.conf file: strip comments, blank lines, leading/trailing whitespace.
+# Returns one image ref per line on stdout.  Returns 1 if file does not exist.
+_read_images_conf() {
+	local file="$1"
+	[ -f "$file" ] || return 1
+	sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$file"
+}
+
+# Resolve the images.conf path for the current context.
+# With -d <dir>: returns <dir>/images.conf (per-mirror file).
+# Without -d:    returns images.conf (repo-wide, next to aba.conf).
+_images_conf_path() {
+	local dir="${1:-}"
+	if [ -n "$dir" ]; then
+		echo "$dir/images.conf"
+	else
+		echo "images.conf"
+	fi
+}
+
+# Merge repo-wide + per-mirror images.conf, deduplicate, output JSON array for j2.
+# Each element: {"name":"<image-ref>","source":"<origin>"}
+# Source is "images.conf", "mirror/images.conf", or "both".
+# Stdout: JSON array (empty [] if no images).
+# Usage: json_additional_images=$(_merge_images_conf [mirror-dir])
+_merge_images_conf() {
+	local mirror_dir="${1:-.}"
+
+	# Locate repo-wide images.conf (next to the real aba.conf, not a symlink)
+	local repo_file=""
+	local _aba_dir=""
+	if [ -f "aba.conf" ] && [ ! -L "aba.conf" ]; then
+		_aba_dir="."
+	elif [ -f "../aba.conf" ] && [ ! -L "../aba.conf" ]; then
+		_aba_dir=".."
+	fi
+	[ -n "$_aba_dir" ] && [ -f "$_aba_dir/images.conf" ] && repo_file="$_aba_dir/images.conf"
+
+	# Per-mirror images.conf
+	local mirror_file="$mirror_dir/images.conf"
+
+	# Don't read the same file twice (happens when mirror_dir=. at repo root)
+	if [ -n "$repo_file" ] && [ -f "$mirror_file" ] && \
+	   [ "$(readlink -f "$repo_file")" = "$(readlink -f "$mirror_file")" ]; then
+		mirror_file=""
+	fi
+
+	declare -A _seen_images
+	declare -A _image_source
+	local _ordered_images=()
+
+	# Read repo-wide file
+	local _line
+	if [ -n "$repo_file" ]; then
+		while IFS= read -r _line; do
+			if [ -z "${_seen_images[$_line]+x}" ]; then
+				_seen_images["$_line"]=1
+				_image_source["$_line"]="images.conf"
+				_ordered_images+=("$_line")
+			fi
+		done < <(_read_images_conf "$repo_file" 2>/dev/null || true)
+	fi
+
+	# Read per-mirror file
+	if [ -n "$mirror_file" ]; then
+		while IFS= read -r _line; do
+			if [ -z "${_seen_images[$_line]+x}" ]; then
+				_seen_images["$_line"]=1
+				_image_source["$_line"]="mirror/images.conf"
+				_ordered_images+=("$_line")
+			else
+				# Already seen from repo file — mark as "both"
+				_image_source["$_line"]="both"
+			fi
+		done < <(_read_images_conf "$mirror_file" 2>/dev/null || true)
+	fi
+
+	# Build JSON array
+	if [ ${#_ordered_images[@]} -eq 0 ]; then
+		echo '[]'
+		return 0
+	fi
+
+	local _json="["
+	local _first=true
+	for _img in "${_ordered_images[@]}"; do
+		$_first || _json+=","
+		_json+='{"name":"'"$_img"'","source":"'"${_image_source[$_img]}"'"}'
+		_first=false
+	done
+	_json+="]"
+	echo "$_json"
+}
+
+# =============================================================================
 # Background task wrappers (for TUI and CLI callers)
 # =============================================================================
 # These wrap run_once() so callers don't need to know task IDs or flags.
