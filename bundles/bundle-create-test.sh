@@ -187,16 +187,17 @@ set -x
 
 echo_step Create image set config file ...
 
-aba isconf --dir mirror
+# Add additional images via images.conf (replaces uncomment_line approach)
+aba image add registry.redhat.io/openshift4/ose-cli:latest \
+              registry.redhat.io/rhel9/support-tools:latest \
+              quay.io/openshifttest/hello-openshift:1.2.0 \
+              registry.redhat.io/ubi9/ubi:latest
 
-uncomment_line additionalImages:			mirror/data/imageset-config.yaml
-uncomment_line registry.redhat.io/openshift4/ose-cli	mirror/data/imageset-config.yaml
-uncomment_line registry.redhat.io/rhel9/support-tools	mirror/data/imageset-config.yaml
-uncomment_line quay.io/openshifttest/hello-openshift	mirror/data/imageset-config.yaml
-uncomment_line registry.redhat.io/ubi9/ubi		mirror/data/imageset-config.yaml
-#[ "$NAME" = "ocpv" ] && uncomment_line quay.io/containerdisks/centos-stream:10	mirror/data/imageset-config.yaml
-[ "$NAME" = "virt" ] && uncomment_line quay.io/containerdisks/centos-stream:9	mirror/data/imageset-config.yaml
-[ "$NAME" = "virt" ] && uncomment_line quay.io/containerdisks/fedora:latest	mirror/data/imageset-config.yaml
+# Virt companion images
+[ "$NAME" = "virt" ] && aba image add quay.io/containerdisks/centos-stream:9 \
+                                      quay.io/containerdisks/fedora:latest
+
+aba isconf --dir mirror
 
 # START - Exception since issue with v2.10 #########
 # Replace release-v2.10 with release-v2.9 - in the 2 lines - after mtv-operator found:

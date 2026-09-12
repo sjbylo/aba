@@ -336,6 +336,14 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 		aba_info "No operators to add to the image-set config file since values ops or op_sets not defined in aba.conf or mirror.conf."
 	fi
 
+	# Merge additional images from images.conf files
+	export json_additional_images
+	json_additional_images=$(_merge_images_conf .)
+	if [ "$json_additional_images" != "[]" ]; then
+		_img_count=$(echo "$json_additional_images" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+		aba_info "Additional images: $_img_count image(s) from images.conf"
+	fi
+
 	# Atomic write: render to temp file, then move into place
 	_tmp_isc=$(mktemp data/imageset-config.yaml.XXXXXX) || aba_abort "Cannot create temp file in data/"
 	scripts/j2 ./templates/imageset-config.yaml.j2 > "$_tmp_isc"
