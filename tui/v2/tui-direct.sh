@@ -473,8 +473,8 @@ _direct_version() {
 		items+=("c" "Current   ($ocp_version)")
 	fi
 	items+=("l" "Latest    ($latest)")
-	[[ -n "$previous" ]] && items+=("p" "Previous  ($previous)")
-	[[ -n "$older" ]] && items+=("o" "Older     ($older)")
+	[[ -n "$previous" && "$previous" != "$latest" ]] && items+=("p" "Previous  ($previous)")
+	[[ -n "$older" && "$older" != "$latest" && "$older" != "${previous:-}" ]] && items+=("o" "Older     ($older)")
 	items+=("m" "Manual entry (x.y or x.y.z)")
 
 	dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_VERSION" \

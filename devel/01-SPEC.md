@@ -222,8 +222,9 @@ the `platform:` section based on cluster type, architecture, and hypervisor:
 |----------|-----------|-----------------|
 | 1 | SNO (1 master, 0 workers) | `none: {}` |
 | 2 | ARCH is s390x or ppc64le | `none: {}` |
-| 3 | VMware + vCenter (platform=vmw, VC=1) | `vsphere:` (full vCenter block) |
-| 4 | Everything else (BM, KVM, ESXi-direct) | `baremetal:` (apiVIPs/ingressVIPs) |
+| 3 | VMware + vCenter (VC=1) and (OCP < 4.22 or vCenter > 8.0.0) | `vsphere:` (full vCenter block) |
+| 4 | VMware + vCenter + OCP >= 4.22 + vCenter < 8.0 U1 | `baremetal:` (apiVIPs; CSI unsupported on vSphere 7) |
+| 5 | Everything else (BM, KVM, ESXi-direct) | `baremetal:` (apiVIPs/ingressVIPs) |
 
 s390x and ppc64le only support `platform: none` because the OpenShift installer
 on these architectures does not support the baremetal platform type. Multi-node
@@ -232,8 +233,10 @@ The generated install-config.yaml includes a comment reminding the user to
 configure an external load balancer for the API and ingress endpoints.
 
 ESXi-direct (`VC` empty) uses the baremetal platform block, same as bare-metal
-and KVM. Only vCenter deployments get the full vsphere block with
-failureDomains/vcenters.
+and KVM. vCenter deployments get the full vsphere block with
+failureDomains/vcenters, except OpenShift 4.22+ on vCenter older than 8.0 U1:
+OCP 4.22 dropped vSphere 7.x CSI support, so those clusters use `baremetal:`
+(VMs still run on the hypervisor; OpenShift does not integrate with vCenter).
 
 ---
 
