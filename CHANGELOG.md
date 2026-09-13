@@ -2,6 +2,21 @@
 
 ---
 
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.1...HEAD)
+
+### Added
+
+- **`images.conf` — config-based additional images** — Plain-text config file for adding extra container images to the ImageSet Configuration (ISC). Two levels: repo-wide `images.conf` (next to `aba.conf`) and per-mirror `mirror/images.conf`. Images are merged, deduplicated, and rendered into the ISC `additionalImages` section automatically. Replaces the fragile `uncomment_line` approach. ISC template cleaned up — no more commented-out image/helm examples.
+- **`aba image add/remove/list`** — CLI commands to manage `images.conf`. Validates image reference syntax (registry/repo with optional tag or digest). `aba image list` shows merged images from both config files with source tracking. Use `aba -d mirror image add` for per-mirror images.
+- **RHOAI companion images for AI bundles** — `fetch_rhoai_images()` fetches Red Hat OpenShift AI workbench and pipeline images from GitHub, falling back to a shipped static list. AI install bundles now include ~38 RHOAI companion images automatically.
+- **TUI: Additional Images menu** — Manage extra images from the TUI via the ImageSet Configuration dialog (List/Add/Remove/Edit) and from the main action menu.
+
+### Fixed
+
+- **Fix `day2-osus` timeout after `day2`** — Running `aba day2-osus` immediately after `aba day2` could time out because MCP rolling restarts (triggered by IDMS/ITMS changes) outlasted the CO stability check, evicting CatalogSource pods mid-roll. All three day2 scripts (`day2`, `day2-ntp`, `day2-osus`) now wait for MachineConfigPools to finish updating before returning (Ctrl-C to skip).
+
+---
+
 ## [1.3.1](https://github.com/sjbylo/aba/releases/tag/v1.3.1) - 2026-09-12
 
 Catalog fixes, vCenter 7 support for OCP 4.22+
