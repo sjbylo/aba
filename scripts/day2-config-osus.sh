@@ -356,3 +356,7 @@ aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the '
 # OSUS install patches CA, proxy, and upstream — triggers CO reconciliation.
 # Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
 aba_wait_show "Ensuring cluster operators are stable after OSUS changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
+
+if ! mcp_is_updated; then
+	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
+fi

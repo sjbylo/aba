@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.3.1
+ABA_VERSION=1.3.2
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260912164359
+ABA_BUILD=20260913092855
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -293,6 +293,9 @@ if [ ! -s $ABA_ROOT/aba.conf ]; then
 	aba_info "Auto-detected domain: $domain (override with: aba --domain <domain>)"
 
 	$ABA_ROOT/scripts/j2 $ABA_ROOT/templates/aba.conf.j2 > $ABA_ROOT/aba.conf
+
+	# Create images.conf from template (if not already present)
+	[ ! -f "$ABA_ROOT/images.conf" ] && cp "$ABA_ROOT/templates/images.conf" "$ABA_ROOT/images.conf"
 else
 	source <(cd $ABA_ROOT && normalize-aba-conf)
 	# Only auto-fill empty network values in bundle mode (on internal/disconnected network).
@@ -327,7 +330,7 @@ source <(cd $ABA_ROOT && normalize-aba-conf)
 # Skip for housekeeping commands that never need CLI tools.
 if [ ! "$interactive_mode" ]; then
 	case " $* " in
-		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*)
+		*" clean "*|*" reset "*|*" help "*|*" version "*|*" show-op-sets "*|*" op-sets "*|*" show-ops "*|*" show-operators "*|*" image "*)
 			aba_debug "Housekeeping command - skipping early CLI downloads"
 			;;
 		*)
@@ -452,6 +455,87 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		shift
 		cd "$ABA_ROOT"
 		exec $ABA_ROOT/scripts/show-ops.sh "$@"
+	elif [ "$1" = "image" ]; then
+		shift
+		_img_action="${1:-}"
+		[ -z "$_img_action" ] && aba_abort "Usage: aba image {add|remove|list} [<image:tag> ...]"
+		shift
+
+		# Resolve which images.conf to edit
+		if [ "$target_dir" ]; then
+			_img_file="$target_dir/images.conf"
+		else
+			_img_file="$ABA_ROOT/images.conf"
+		fi
+
+		case "$_img_action" in
+			add)
+				[ $# -eq 0 ] && aba_abort "Usage: aba image add <image:tag> [<image:tag> ...]"
+				touch "$_img_file"
+				_added=0
+				for _img in "$@"; do
+					# Basic syntax: registry/repo (with optional tag or digest)
+					# e.g. quay.io/ns/img:tag, registry.redhat.io/ubi9/ubi@sha256:abc...
+					if ! echo "$_img" | grep -qE '^[a-zA-Z0-9][-a-zA-Z0-9.]*(/[-a-zA-Z0-9._]+)+(:[a-zA-Z0-9][-a-zA-Z0-9._]*|@sha256:[0-9a-fA-F]+)?$'; then
+						aba_abort "Invalid image reference: $_img" \
+							"Expected format: registry/repo/image:tag  or  registry/repo/image@sha256:digest" \
+							"Examples:" \
+							"  registry.redhat.io/ubi9/ubi:latest" \
+							"  quay.io/openshift/hello-openshift:1.2.0" \
+							"  registry.redhat.io/rhel9/support-tools@sha256:abc123..."
+					fi
+					# Skip if already present (exact match)
+					if grep -qxF "$_img" "$_img_file" 2>/dev/null; then
+						aba_info "Image already in $_img_file: $_img"
+					else
+						echo "$_img" >> "$_img_file"
+						_added=$(( _added + 1 ))
+						aba_info "Added to $_img_file: $_img"
+					fi
+				done
+				[ $_added -gt 0 ] && aba_success "$_added image(s) added to $_img_file"
+				exit 0
+				;;
+			remove|rm)
+				[ $# -eq 0 ] && aba_abort "Usage: aba image remove <image:tag>"
+				[ ! -f "$_img_file" ] && aba_abort "No images.conf found at $_img_file"
+				_removed=0
+				for _img in "$@"; do
+					if grep -qxF "$_img" "$_img_file" 2>/dev/null; then
+						# Remove exact line (fixed-string match avoids regex escaping pitfalls)
+						grep -vxF "$_img" "$_img_file" > "${_img_file}.tmp" || true
+						mv -f "${_img_file}.tmp" "$_img_file"
+						_removed=$(( _removed + 1 ))
+						aba_info "Removed from $_img_file: $_img"
+					else
+						aba_warn "Image not found in $_img_file: $_img"
+					fi
+				done
+				[ $_removed -gt 0 ] && aba_success "$_removed image(s) removed from $_img_file"
+				exit 0
+				;;
+			list|ls)
+				cd "$ABA_ROOT"
+				_mirror_dir="${target_dir:-.}"
+				_merged=$(_merge_images_conf "$_mirror_dir")
+				if [ "$_merged" = "[]" ]; then
+					echo "No additional images configured."
+					echo "Add images with: aba image add <image:tag>"
+				else
+					printf "%-70s  %s\n" "IMAGE" "SOURCE"
+					printf "%-70s  %s\n" "-----" "------"
+					echo "$_merged" | python3 -c "
+import sys, json
+for img in json.load(sys.stdin):
+    print(f\"{img['name']:<70s}  {img['source']}\")
+"
+				fi
+				exit 0
+				;;
+			*)
+				aba_abort "Unknown image action '$_img_action'. Usage: aba image {add|remove|list}"
+				;;
+		esac
 	elif [ "$1" = "--out" -o "$1" = "-o" ]; then
 		shift
 		if [ "$1" = "-" ]; then
