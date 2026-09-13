@@ -102,6 +102,7 @@ odigos-operator Odigos Operator alpha
 open-liberty-certified Open Liberty v1.6
 operator-aims-mobile AIMS Mobile Operator alpha
 operator-certification-operator Operator Certification Operator alpha
+percona-postgresql-operator-certified Percona Operator for PostgreSQL stable
 percona-server-mongodb-operator-certified Percona Distribution for MongoDB Operator stable
 percona-server-mysql-operator-certified Percona Operator for MySQL based on Percona Server for MySQL stable
 portworx-certified Portworx Enterprise stable

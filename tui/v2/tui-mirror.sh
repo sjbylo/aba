@@ -1223,6 +1223,7 @@ mirror_view_isc() {
 		local _isc_items=("V" "View")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
 		_isc_items+=("O" "Select Operators")
+		_isc_items+=("$TUI2_CONNO_TAG_IMAGES" "$TUI2_LABEL_IMAGES")
 		_isc_items+=("" "──── Advanced ──────────────────────")
 		_isc_items+=("R" "Regenerate imageset-config.yaml (from aba.conf + mirror.conf)")
 		# Toggle: exclude release images (operators only)
@@ -1251,6 +1252,7 @@ mirror_view_isc() {
 
 • View: see the current imageset-config.yaml
 • Select Operators: choose which operators to include
+• Additional Images: add extra container images (ose-cli, UBI, etc.)
 • Regenerate: rebuild imageset-config.yaml from aba.conf + mirror.conf
   settings. Use this to let ABA take back control of the file after
   manual edits.
@@ -1323,6 +1325,9 @@ mirror_view_isc() {
 					;;
 			O)
 				mirror_select_operators
+				;;
+			"$TUI2_CONNO_TAG_IMAGES")
+				mirror_manage_images
 				;;
 			X)
 				if [[ "$_excl_plat" == "true" ]]; then
@@ -1735,6 +1740,133 @@ _operator_view_basket() {
 	done
 
 	tui_log "Basket after edit: ${#OP_BASKET[@]} operators"
+}
+
+# =============================================================================
+# Additional Images (images.conf management — dumb consumer of core commands)
+# =============================================================================
+
+mirror_manage_images() {
+	tui_log "Action: Additional Images"
+	local _img_file="$ABA_ROOT/images.conf"
+	local default_item="L"
+
+	while :; do
+		# Count current images
+		local _count=0
+		if [[ -f "$_img_file" ]]; then
+			_count=$(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$_img_file" | wc -l)
+		fi
+
+		dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--ok-label "$TUI2_BTN_SELECT" \
+			--help-button \
+			--default-item "$default_item" \
+			--menu "Extra container images included in the ISC.\nCurrently: $_count image(s) in images.conf\n" 0 0 0 \
+			"L" "List images" \
+			"A" "Add image" \
+			"R" "Remove image" \
+			"E" "Edit images.conf" \
+			2>"$_TUI_TMP"
+		local rc=$?
+
+		case "$rc" in
+			2)
+				show_help "Additional Images" \
+"Manage extra container images to include in your ImageSet configuration.
+
+These images are added to the 'additionalImages' section of the ISC
+and will be mirrored alongside OpenShift platform and operator images.
+
+• List: show all configured additional images
+• Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
+• Remove: remove a previously added image
+• Edit: open images.conf directly in the editor
+
+Images are stored in images.conf (next to aba.conf).
+Use 'aba image add/remove/list' on the CLI for the same functionality."
+				continue
+				;;
+			1|255) return 0 ;;
+			0) ;;
+		esac
+
+		local choice
+		choice=$(<"$_TUI_TMP")
+		[[ -n "$choice" ]] && default_item="$choice"
+
+		case "$choice" in
+			L)
+				local _list_output
+				_list_output=$(cd "$ABA_ROOT" && aba image list 2>&1) || true
+				dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
+					--exit-label "OK" --msgbox "$_list_output" 0 0
+				;;
+			A)
+				dlg --backtitle "$(ui_backtitle)" --title "Add Image" \
+					--inputbox "Enter container image reference:\n\n(e.g. registry.redhat.io/ubi9/ubi:latest)" \
+					0 0 "" 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					local _new_img
+					_new_img=$(<"$_TUI_TMP")
+					_new_img=$(echo "$_new_img" | tr -d ' ')
+					if [[ -n "$_new_img" ]]; then
+						local _add_out
+						_add_out=$(cd "$ABA_ROOT" && aba image add "$_new_img" 2>&1) || true
+						dlg --backtitle "$(ui_backtitle)" --msgbox "$_add_out" 0 0
+						tui_kick_isconf_regen
+						tui_log "Added image: $_new_img"
+					fi
+				fi
+				;;
+			R)
+				if [[ $_count -eq 0 ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "No images to remove." 0 0
+					continue
+				fi
+				# Build checklist from current images
+				local _rm_items=()
+				while IFS= read -r _line; do
+					[[ -n "$_line" ]] && _rm_items+=("$_line" "" "off")
+				done < <(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$_img_file")
+				local _rm_h=$(( ${#_rm_items[@]} / 3 ))
+				[[ $_rm_h -gt 18 ]] && _rm_h=18
+				dlg --backtitle "$(ui_backtitle)" --title "Remove Images" \
+					--cancel-label "$TUI2_BTN_BACK" \
+					--ok-label "Remove" \
+					--separate-output \
+					--checklist "Select images to remove:" 0 0 $_rm_h \
+					"${_rm_items[@]}" \
+					2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					local _rm_out=""
+					while IFS= read -r _line; do
+						_line="${_line##[[:space:]]}"
+						_line="${_line%%[[:space:]]}"
+						[[ -n "$_line" ]] && _rm_out+=$(cd "$ABA_ROOT" && aba image remove "$_line" 2>&1)$'\n'
+					done < "$_TUI_TMP"
+					[[ -n "$_rm_out" ]] && dlg --backtitle "$(ui_backtitle)" --msgbox "$_rm_out" 0 0
+					tui_kick_isconf_regen
+					tui_log "Removed images from images.conf"
+				fi
+				;;
+			E)
+				[[ ! -f "$_img_file" ]] && touch "$_img_file"
+				dlg --backtitle "$(ui_backtitle)" --title "Edit images.conf" \
+					--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
+					--editbox "$_img_file" 0 0 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					if ! diff -q "$_TUI_TMP" "$_img_file" >/dev/null 2>&1; then
+						cp "$_TUI_TMP" "$_img_file"
+						tui_kick_isconf_regen
+						tui_log "images.conf saved by user"
+						dlg --backtitle "$(ui_backtitle)" --msgbox "images.conf saved. ISC will be regenerated." 0 0
+					fi
+				fi
+				;;
+		esac
+	done
 }
 
 # =============================================================================
