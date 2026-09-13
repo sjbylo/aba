@@ -612,9 +612,15 @@ fi
 
 aba_success "Day-2 configuration completed successfully."
 
-# Day2 changes (IDMS, CA trust, ITMS) trigger CO reconciliation and possible node restarts.
-# Wait for operators to settle so subsequent commands (e.g. upgrade) see a stable cluster.
+# Day2 changes (IDMS, CA trust, ITMS) trigger CO reconciliation and MCP rolling restarts.
+# Wait for operators to settle so subsequent commands (e.g. day2-osus, upgrade) see a stable cluster.
 aba_wait_show "Ensuring cluster operators are stable after day2 changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
+
+# MCP restarts can outlast the CO stability check. Wait for nodes to finish updating
+# so that CatalogSources are healthy before the user runs day2-osus or upgrade.
+if ! mcp_is_updated; then
+	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
+fi
 
 exit 0
 
