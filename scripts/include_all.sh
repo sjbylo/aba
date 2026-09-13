@@ -515,6 +515,11 @@ cluster_is_ready() {
 	[ "$_unavail" -eq 0 ] && [ "$_progressing" -eq 0 ] && [ "$_degraded" -eq 0 ]
 }
 
+# Returns 0 when no MachineConfigPool is updating (all nodes settled).
+mcp_is_updated() {
+	! oc get mcp -o jsonpath='{.items[*].status.conditions[?(@.type=="Updating")].status}' 2>/dev/null | grep -q True
+}
+
 # Relaxed health check: only verifies the cluster API is reachable and functional.
 # Use for upgrade pre-checks where "Available=True" is sufficient — a cluster with
 # Progressing operators or a flapping Degraded operator can still accept upgrades.
