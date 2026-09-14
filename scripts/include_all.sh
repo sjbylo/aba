@@ -730,6 +730,17 @@ verify-mirror-conf() {
 	return $ret
 }
 
+# An empty reg_user reaches the registry install verbatim (--initUser, -init-user
+# and htpasswd, locally and over SSH), creating the appliance with a blank admin
+# user, while reg_post_install() goes on to record init in regcreds and state.sh.
+# templates/mirror.conf.j2 ships reg_user=init; apply the same default here, to
+# the resolved value, so it does not depend on how the assignment was spelled.
+resolved_reg_user() {
+	local user="$reg_user"
+	if [ ! "$user" ]; then user=init; fi
+	printf '%s\n' "$user"
+}
+
 # Resolve reg_vendor to the actual registry type for this host.
 # User intent (auto/quay/docker/quay-ng/existing) stays in mirror.conf unchanged.
 # This function is the ONLY place where "auto" is resolved to a concrete vendor.

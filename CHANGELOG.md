@@ -1,5 +1,9 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.2...HEAD)
 
+### Fixed
+
+- **An empty `reg_user` reached the registry install** - When `mirror.conf` left `reg_user` empty, the value was passed through verbatim, so the registry was created with a blank admin user (or, on the unquoted remote paths, with the argument dropped) while `reg_post_install()` recorded `init` in the pull secret and `state.sh`. `reg_load_config()` now resolves an empty `reg_user` to `init` before any install path reads it, covering all three vendors and the remote paths; a user recorded in installed state still takes precedence.
+
 ---
 
 ## [1.3.2](https://github.com/sjbylo/aba/releases/tag/v1.3.2) - 2026-09-13
