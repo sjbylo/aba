@@ -303,6 +303,93 @@ _test_mirror "mirror: reg_path=/deep/path/here stays" \
 
 # =========================================================================
 echo
+echo "--- resolved_reg_user: the registry user that reaches the install ---"
+# =========================================================================
+
+# reg_load_config() sources normalize-mirror-conf and then resolves reg_user, so
+# the helper below mirrors those two steps. Resolving the value instead of the
+# mirror.conf text is what makes the spelling of the assignment irrelevant.
+_test_reg_user() {
+	local test_name="$1" conf_line="$2" expected="$3"
+
+	local d="$_tmp/reguser-$RANDOM"
+	mkdir -p "$d"
+
+	cat > "$d/mirror.conf" <<-EOF
+	reg_host=bastion.example.com
+	reg_port=8443
+	reg_vendor=docker
+	$conf_line
+	EOF
+
+	local actual
+	actual=$(cd "$d" && unset reg_user && eval "$(normalize-mirror-conf 2>/dev/null)" 2>/dev/null; export reg_user=$(resolved_reg_user); printf '%s\n' "$reg_user")
+
+	if [ "$actual" = "$expected" ]; then
+		test_pass "$test_name"
+	else
+		test_fail "$test_name" "expected [$expected], got [$actual]"
+	fi
+}
+
+# A configured user is never replaced, however it is spelled.
+_test_reg_user "reg_user: plain value"              "reg_user=myuser"                       "myuser"
+_test_reg_user "reg_user: indented key"             "  reg_user=myuser"                     "myuser"
+_test_reg_user "reg_user: export prefix"            "export reg_user=myuser"                "myuser"
+_test_reg_user "reg_user: value with a comment"     "reg_user=myuser # comment"             "myuser"
+_test_reg_user "reg_user: quoted, contains a space" 'reg_user="my user"'                    "my user"
+_test_reg_user "reg_user: value that looks like a flag" "reg_user=-n"                            "-n"
+_test_reg_user "reg_user: value -e survives"        "reg_user=-e"                           "-e"
+_test_reg_user "reg_user: append is the only form"  "reg_user+=admin"                       "admin"
+_test_reg_user "reg_user: empty then append"        "$(printf 'reg_user=\nreg_user+=admin')" "admin"
+_test_reg_user "reg_user: last assignment wins"     "$(printf 'reg_user=\nreg_user=myuser')" "myuser"
+
+# Every way of leaving it empty ends up at the default.
+_test_reg_user "reg_user: empty"                    "reg_user="                             "init"
+_test_reg_user "reg_user: absent"                   "# no reg_user here"                    "init"
+_test_reg_user "reg_user: double-quoted empty"      'reg_user=""'                           "init"
+_test_reg_user "reg_user: single-quoted empty"      "reg_user=''"                           "init"
+_test_reg_user "reg_user: tab after ="              "$(printf 'reg_user=\tmyuser')"         "init"
+_test_reg_user "reg_user: empty with a comment"     "reg_user= # comment"                   "init"
+_test_reg_user "reg_user: export prefix, empty"     "export reg_user="                      "init"
+_test_reg_user "reg_user: export prefix, quoted"    'export reg_user=""'                    "init"
+_test_reg_user "reg_user: append with no value"     "reg_user+="                            "init"
+_test_reg_user "reg_user: expands to nothing"       'reg_user="${nosuchvar:-}"'             "init"
+_test_reg_user "reg_user: set then emptied"         "$(printf 'reg_user=myuser\nreg_user=')" "init"
+
+# Installed state is resolved before this runs, so a recorded user still wins.
+_test_reg_user_state() {
+	local test_name="$1" conf_line="$2" state_line="$3" expected="$4"
+
+	local name="reguser-state-$RANDOM"
+	local d="$_tmp/$name"
+	local h="$_tmp/home-$RANDOM"
+	mkdir -p "$d" "$h/.aba/mirror/$name"
+
+	cat > "$d/mirror.conf" <<-EOF
+	reg_host=bastion.example.com
+	reg_port=8443
+	reg_vendor=docker
+	$conf_line
+	EOF
+
+	echo "$state_line" > "$h/.aba/mirror/$name/state.sh"
+
+	local actual
+	actual=$(cd "$d" && export HOME="$h" && unset reg_user && eval "$(normalize-mirror-conf 2>/dev/null)" 2>/dev/null; export reg_user=$(resolved_reg_user); printf '%s\n' "$reg_user")
+
+	if [ "$actual" = "$expected" ]; then
+		test_pass "$test_name"
+	else
+		test_fail "$test_name" "expected [$expected], got [$actual]"
+	fi
+}
+
+_test_reg_user_state "reg_user: installed user beats the default" \
+	"reg_user=" "reg_user=stateuser" "stateuser"
+
+# =========================================================================
+echo
 echo "--- normalize-mirror-conf: defaults ---"
 # =========================================================================
 
