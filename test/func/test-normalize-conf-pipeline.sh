@@ -303,6 +303,54 @@ _test_mirror "mirror: reg_path=/deep/path/here stays" \
 
 # =========================================================================
 echo
+echo "--- normalize-mirror-conf: reg_user default ---"
+# =========================================================================
+
+# An empty reg_user used to reach the registry install verbatim, creating the
+# appliance with a blank admin user while aba wrote 'init' into its own creds.
+_test_mirror "mirror: reg_user= (empty) -> init" \
+	"reg_user=" "reg_user" "init"
+
+_test_mirror "mirror: reg_user=myuser stays" \
+	"reg_user=myuser" "reg_user" "myuser"
+
+_test_mirror "mirror: reg_user=init stays init" \
+	"reg_user=init" "reg_user" "init"
+
+# Installed state still wins over the default. This guards the default's
+# position: emitted after the config values but before the state override.
+_test_mirror_state() {
+	local test_name="$1" conf_line="$2" state_line="$3" var_name="$4" expected="$5"
+
+	local name="mirror-state-$RANDOM"
+	local d="$_tmp/$name"
+	local h="$_tmp/home-$RANDOM"
+	mkdir -p "$d" "$h/.aba/mirror/$name"
+
+	cat > "$d/mirror.conf" <<-EOF
+	reg_host=bastion.example.com
+	reg_port=8443
+	reg_vendor=docker
+	$conf_line
+	EOF
+
+	echo "$state_line" > "$h/.aba/mirror/$name/state.sh"
+
+	local actual
+	actual=$(cd "$d" && export HOME="$h" && eval "$(normalize-mirror-conf 2>/dev/null)" && eval "echo \$$var_name")
+
+	if [ "$actual" = "$expected" ]; then
+		test_pass "$test_name"
+	else
+		test_fail "$test_name" "expected [$expected], got [$actual]"
+	fi
+}
+
+_test_mirror_state "mirror: installed reg_user beats the default" \
+	"reg_user=" "reg_user=stateuser" "reg_user" "stateuser"
+
+# =========================================================================
+echo
 echo "--- normalize-mirror-conf: defaults ---"
 # =========================================================================
 
@@ -328,6 +376,8 @@ _test_mirror_default() {
 }
 
 _test_mirror_default "mirror: missing reg_vendor -> auto" "reg_vendor" "auto"
+
+_test_mirror_default "mirror: missing reg_user -> init" "reg_user" "init"
 
 # =========================================================================
 echo
