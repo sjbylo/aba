@@ -1,5 +1,9 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.2...HEAD)
 
+### Fixed
+
+- **Empty `reg_user` installed a registry with a blank admin user** - An empty `reg_user` in `mirror.conf` reached the registry install verbatim (`--initUser`, `-init-user` and `htpasswd`, locally and over SSH) while `reg_post_install()` wrote `init` into `regcreds/pull-secret-mirror.json` and `state.sh`. The appliance and aba's own credentials disagreed and registry authentication failed until the user was set by hand. `normalize-mirror-conf()` now defaults an empty or missing `reg_user` to `init` before any install path reads it, covering all three registry vendors and the remote install paths; a user recorded in installed state still takes precedence.
+
 ---
 
 ## [1.3.2](https://github.com/sjbylo/aba/releases/tag/v1.3.2) - 2026-09-13

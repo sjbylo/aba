@@ -674,6 +674,13 @@ normalize-mirror-conf()
 				-e 's#^(export reg_path=)([^/ \t])#\1/\2#g'
 	)
 
+	# templates/mirror.conf.j2 ships reg_user=init and reg_post_install() assumes
+	# it, but an empty value used to reach the registry install verbatim, creating
+	# the appliance with a blank admin user while aba recorded 'init' in its creds.
+	# Emitted after the config values so an empty one is filled, and before the
+	# state override so an installed user still wins.
+	echo 'export reg_user="${reg_user:-init}"'
+
 	# Phase 3 (ADR-007): override immutable fields from installed state
 	# Resolve the mirror dir name: when called from a cluster dir (where mirror.conf
 	# is a symlink to ../mirror/mirror.conf), follow the symlink to find the actual
