@@ -336,11 +336,11 @@ _direct_channel() {
 			# Ensure version fetches are running (already started at TUI boot;
 			# run_once -i is non-blocking and skips if task already completed)
 			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $ocp_channel"
 			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $ocp_channel"
 			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_older_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $ocp_channel"
 			;;
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
@@ -376,13 +376,13 @@ _direct_version() {
 		# Wait for background tasks started from channel step (or start them if not yet running)
 		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version" 2>/dev/null || \
 			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $ocp_channel"
 		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version_previous" 2>/dev/null || \
 			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $ocp_channel"
 		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version_older" 2>/dev/null || \
 			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_older_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $ocp_channel"
 	fi
 
 	local latest previous older

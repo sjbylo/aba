@@ -4669,9 +4669,9 @@ aba_inet_check_cached() {
 aba_version_fetch_start() {
 	local _ch
 	for _ch in stable fast candidate; do
-		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; fetch_latest_version $_ch"
-		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; fetch_previous_version $_ch"
-		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; fetch_older_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version"          -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_previous" -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $_ch"
+		run_once -i "ocp:${_ch}:latest_version_older"    -- bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $_ch"
 	done
 }
 
