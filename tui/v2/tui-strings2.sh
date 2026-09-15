@@ -170,6 +170,7 @@ TUI2_CONNO_TAG_VIEW_ISC="V"
 TUI2_CONNO_TAG_OPERATORS="O"
 TUI2_CONNO_TAG_BUNDLE="B"
 TUI2_CONNO_TAG_INSTALL="I"
+TUI2_CONNO_TAG_MONITOR="N"
 TUI2_CONNO_TAG_DAY2="D"
 TUI2_CONNO_TAG_DELETE="K"
 TUI2_CONNO_TAG_ADVANCED="A"
@@ -186,6 +187,7 @@ TUI2_CONNO_TAG_IMAGES="G"
 # =============================================================================
 
 TUI2_DIRECT_TAG_INSTALL="I"
+TUI2_DIRECT_TAG_MONITOR="N"
 TUI2_DIRECT_TAG_DAY2="D"
 TUI2_DIRECT_TAG_DELETE="K"
 TUI2_DIRECT_TAG_ADVANCED="A"
@@ -214,6 +216,7 @@ TUI2_LABEL_OPERATORS="Select Operators"
 TUI2_LABEL_IMAGES="Additional Images"
 TUI2_LABEL_BUNDLE="Create Install Bundle"
 TUI2_LABEL_INSTALL_CLUSTER="Install Cluster"
+TUI2_LABEL_MONITOR="Monitor Installation"
 TUI2_LABEL_DAY2="Day-2 / Cluster Management"
 
 # =============================================================================

@@ -1088,7 +1088,7 @@ _tui_oc_mirror_retry_suffix() {
 
 # Compute cluster-related menu greying/state for DISCO / CONNO / DIRECT main menus.
 # Sets globals (readable from any sourcing script):
-#   _CLUSTER_HAS_ANY, _CLUSTER_HAS_INSTALLED,
+#   _CLUSTER_HAS_ANY, _CLUSTER_HAS_INSTALLED, _CLUSTER_HAS_INSTALLING,
 #   _CLUSTER_DAY2_AVAIL, _CLUSTER_MON_AVAIL,
 #   _CLUSTER_INST_LABEL
 # Optional arg: workflow hint — CONNO | DISCO | DIRECT (default DIRECT).
@@ -1097,17 +1097,21 @@ tui_cluster_menu_flags() {
 
 	_CLUSTER_HAS_ANY=false
 	_CLUSTER_HAS_INSTALLED=false
+	_CLUSTER_HAS_INSTALLING=false
 	local dir=""
 	for dir in $(list_cluster_dirs); do
 		_CLUSTER_HAS_ANY=true
-		cluster_installed "$dir" && _CLUSTER_HAS_INSTALLED=true
+		if cluster_installed "$dir"; then
+			_CLUSTER_HAS_INSTALLED=true
+		else
+			_CLUSTER_HAS_INSTALLING=true
+		fi
 	done
 
 	_CLUSTER_DAY2_AVAIL=true
-	_CLUSTER_MON_AVAIL=true
+	_CLUSTER_MON_AVAIL=$_CLUSTER_HAS_INSTALLING
 	if [[ "$_CLUSTER_HAS_ANY" != "true" ]]; then
 		_CLUSTER_DAY2_AVAIL=false
-		_CLUSTER_MON_AVAIL=false
 	fi
 
 	local _lbl="$TUI2_LABEL_INSTALL_CLUSTER"
@@ -1578,8 +1582,8 @@ _resolve_minor_to_patch() {
 	# x.y format — resolve to latest z (include_all expects channel then minor)
 	if [[ "$_ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
 		local _resolved
-		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null)
-		if [[ -n "$_resolved" && "$_resolved" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+		_resolved=$(fetch_latest_z_version "$_channel" "$_ver" 2>/dev/null) || true
+		if [[ -n "$_resolved" ]]; then
 			echo "$_resolved"
 			return 0
 		fi

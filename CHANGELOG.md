@@ -1,4 +1,21 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.3...HEAD)
+
+---
+
+## [1.3.3](https://github.com/sjbylo/aba/releases/tag/v1.3.3) - 2026-09-14
+
+Version fetch robustness, CLI download guard, TUI screen clear fix
+
+### Fixed
+
+- **Version fetch functions return non-zero on failure** — `fetch_latest_version`, `fetch_previous_version`, `fetch_older_version`, and `fetch_latest_z_version` now return 1 when they cannot produce a valid version string. Previously they always returned 0, causing `run_once` to cache empty or error output as a "successful" result that persisted across restarts.
+- **Version output validated before display** — All version fetch functions validate their output with `_is_version_string()` (matches `X.Y.Z` or `X.Y.Z-(rc|ec).N`) before echoing. Error messages from failed HTTP requests can no longer leak into version strings.
+- **CLI download guard against empty version** — `cli-download-all.sh` now skips versioned CLI downloads when `ocp_version` is not set, preventing broken `cli:download:oc:` tasks with empty version strings from being cached after an offline run.
+- **TUI screen not clearing after "Internet Access Required"** — The `clear` command was running while stdout was still redirected to a log file. Stdout is now restored before clearing the screen.
+
+### Changed
+
+- **Bundle: clear oc-mirror cache after AI bundle save** — The AI bundle is the last bundle type built per OCP version. The oc-mirror cache is now cleared after its save step to reclaim disk space for the bundle-tar step.
 
 ### Fixed
 

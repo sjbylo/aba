@@ -133,6 +133,7 @@ unregister: .init
 #	@make -sC ../cli ~/bin/oc-mirror
 
 imagesetconf: data/imageset-config.yaml ## Create the initial image set config file with all provided values and operators
+isc: imagesetconf
 isconf: imagesetconf ## Same as imagesetconf
 
 # ISC (ImageSet Config) generation dependencies:

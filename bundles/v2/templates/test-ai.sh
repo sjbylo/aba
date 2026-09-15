@@ -97,4 +97,92 @@ echo_step "Showing deployments and pods in project redhat-ods-applications"
 oc get deployment,pod -n redhat-ods-applications
 
 result_out "OpenShift AI operand installation test: ok"
+
+echo_step "Verifying installed components in DataScienceCluster status"
+
+for comp in codeflare dashboard datasciencepipelines trainingoperator trustyai workbenches; do
+	val=$(oc get datasciencecluster default-dsc -o jsonpath="{.status.installedComponents.$comp}")
+	echo "  $comp = $val"
+	[ "$val" = "true" ] || { echo "ERROR: component $comp not installed (got: $val)" >&2; exit 1; }
+done
+
+result_out "DataScienceCluster installed components verification: ok"
+
+echo_step "Waiting for pods in redhat-ods-applications"
+
+wait_all_pods redhat-ods-applications 900
+
+echo_step "Verifying key deployments in redhat-ods-applications"
+
+for dep in rhods-dashboard data-science-pipelines-operator-controller-manager \
+           notebook-controller-deployment odh-model-controller; do
+	oc get deployment "$dep" -n redhat-ods-applications --no-headers || \
+		{ echo "ERROR: deployment $dep missing" >&2; exit 1; }
+done
+
+echo
+oc get deployment -n redhat-ods-applications
+echo
+
+result_out "OpenShift AI key deployments verification: ok"
+
+echo_step "Verifying RHOAI dashboard route is accessible"
+
+_dash_host=$(oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}')
+echo "Dashboard URL: https://$_dash_host"
+curl -k -sf "https://$_dash_host" > /dev/null || \
+	{ echo "ERROR: RHOAI dashboard not reachable at https://$_dash_host" >&2; exit 1; }
+
+result_out "OpenShift AI dashboard route accessible: ok"
+
+echo_step "Creating minimal workbench to verify notebook image is pullable"
+
+oc new-project test-workbench || true
+
+cat << EOF | oc apply -f -
+apiVersion: kubeflow.org/v1
+kind: Notebook
+metadata:
+  name: test-wb
+  namespace: test-workbench
+  annotations:
+    notebooks.opendatahub.io/inject-oauth: "false"
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-wb
+        image: registry.redhat.io/rhoai/odh-workbench-jupyter-minimal-cpu-py312-rhel9:latest
+        ports:
+        - containerPort: 8888
+          name: notebook-port
+        resources:
+          limits:
+            cpu: "1"
+            memory: 2Gi
+          requests:
+            cpu: "1"
+            memory: 2Gi
+EOF
+
+wait_all_pods test-workbench 300
+
+echo_step "Showing workbench pod"
+oc get po -n test-workbench
+
+echo_step "Verifying Jupyter is responding"
+oc port-forward -n test-workbench notebook-test-wb-0 8888:8888 &
+_pf_pid=$!
+sleep 3
+curl -sf http://localhost:8888/api > /dev/null || \
+	{ kill $_pf_pid 2>/dev/null; echo "ERROR: Jupyter not responding on port 8888" >&2; exit 1; }
+kill $_pf_pid 2>/dev/null
+
+result_out "Workbench notebook image pull, start and liveness: ok"
+
+echo_step "Cleaning up test workbench"
+oc delete project test-workbench --wait=false
+
 result_out "OpenShift AI installation test: ok"
