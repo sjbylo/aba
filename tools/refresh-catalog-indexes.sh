@@ -131,12 +131,17 @@ latest_ga="${VERSIONS[-1]}"
 mapfile -t PRERELEASE_VERSIONS < <(detect_prerelease_versions "$latest_ga")
 declare -A IS_PRERELEASE
 
-if [[ ${#PRERELEASE_VERSIONS[@]} -gt 0 ]]; then
+# mapfile on empty output produces ("") not () — check for real content
+_has_prerelease=false
+for _pv in "${PRERELEASE_VERSIONS[@]}"; do
+	[[ -n "$_pv" ]] || continue
+	_has_prerelease=true
+	VERSIONS+=("$_pv")
+	IS_PRERELEASE["$_pv"]=1
+done
+
+if [[ "$_has_prerelease" == "true" ]]; then
 	echo "Found pre-release: ${PRERELEASE_VERSIONS[*]}"
-	for _pv in "${PRERELEASE_VERSIONS[@]}"; do
-		VERSIONS+=("$_pv")
-		IS_PRERELEASE["$_pv"]=1
-	done
 else
 	echo "No pre-release catalogs detected"
 fi

@@ -209,6 +209,11 @@ disco_main() {
 			"$TUI2_DISCO_TAG_LOAD"        "$load_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DISCO_TAG_INSTALL"     "$inst_label"
+		)
+		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
+			items+=("$TUI2_DISCO_TAG_MONITOR" "$TUI2_LABEL_MONITOR")
+		fi
+		items+=(
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
@@ -223,6 +228,7 @@ disco_main() {
 			if mirror_available && ! _mirror_has_release_image;  then default_item="$TUI2_DISCO_TAG_LOAD"; fi
 			if _mirror_has_release_image;                         then default_item="$TUI2_DISCO_TAG_INSTALL"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];         then default_item="$TUI2_DISCO_TAG_DAY2"; fi
+			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];        then default_item="$TUI2_DISCO_TAG_MONITOR"; fi
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_MENU" \
@@ -304,6 +310,10 @@ Navigation:
 				0) cluster_install_flow; default_item="" ;;
 				3) default_item="" ;;
 				esac
+				;;
+			"$TUI2_DISCO_TAG_MONITOR")
+				cluster_monitor
+				default_item=""
 				;;
 			"$TUI2_DISCO_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then

@@ -477,8 +477,9 @@ _detect_mode() {
 			dlg --backtitle "$(ui_backtitle)" --title "Internet Access Required" \
 				--no-collapse \
 				--msgbox "\Z1ERROR: Internet access required\Zn\n\nCannot access: $FAILED_SITES\n\nError details:\n  $_err_details\n\nEnsure you have Internet access to download the required images.\nTo get started with ABA run it on a connected workstation/laptop\nwith Fedora, RHEL or CentOS Stream and try again.\n\nRequired sites:                    Other sites:\n  mirror.openshift.com               docker.io\n  api.openshift.com                  docker.com\n  registry.redhat.io                 hub.docker.com\n  quay.io and *.quay.io              index.docker.io\n  console.redhat.com\n  registry.access.redhat.com\n\nExiting..." 0 0
+			_tui_redirect_restore
 			clear
-			exit 1
+			exit 0
 		fi
 	fi
 }
@@ -599,6 +600,7 @@ _conno_main() {
 			default_item="$TUI2_CONNO_TAG_VIEW_ISC"
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];           then default_item="$TUI2_CONNO_TAG_DAY2"; fi
 			if _mirror_has_release_image;                            then default_item="$TUI2_CONNO_TAG_INSTALL"; fi
+			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];          then default_item="$TUI2_CONNO_TAG_MONITOR"; fi
 			if mirror_available && ! _mirror_has_release_image;      then default_item="$TUI2_CONNO_TAG_SYNC"; fi
 			if ! mirror_available;                                   then default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"; fi
 			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_VIEW_ISC"; fi
@@ -628,6 +630,11 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_PREP_UPGRADE"   "$upg_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
+		)
+		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
+			items+=("$TUI2_CONNO_TAG_MONITOR" "$TUI2_LABEL_MONITOR")
+		fi
+		items+=(
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
@@ -765,6 +772,10 @@ Navigation:
 			0) cluster_install_flow; default_item="" ;;
 			3) default_item="" ;;
 			esac
+			;;
+		"$TUI2_CONNO_TAG_MONITOR")
+			cluster_monitor
+			default_item=""
 			;;
 		"$TUI2_CONNO_TAG_DAY2")
 			if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then

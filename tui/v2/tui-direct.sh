@@ -760,6 +760,11 @@ _direct_action_menu() {
 		items+=(
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
+		)
+		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
+			items+=("$TUI2_DIRECT_TAG_MONITOR" "$TUI2_LABEL_MONITOR")
+		fi
+		items+=(
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DIRECT_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
@@ -815,6 +820,11 @@ Navigation:
 				continue ;;
 			"$TUI2_DIRECT_TAG_INSTALL")
 				cluster_install_flow
+				default_item=""
+				;;
+			"$TUI2_DIRECT_TAG_MONITOR")
+				cluster_monitor
+				default_item=""
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then

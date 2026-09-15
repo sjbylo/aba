@@ -454,6 +454,7 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
+			-e "s/excl_additional=0\b/excl_additional=/g" -e "s/excl_additional=false/excl_additional=/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
@@ -1846,6 +1847,11 @@ _is_ga_version() {
 	[[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
+# X.Y.Z or X.Y.Z-(rc|ec).N
+_is_version_string() {
+	[[ "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|ec)\.[0-9]+)?$ ]]
+}
+
 # decrement minor: "4.21" -> "4.20" ; "4.0" -> "" (no prev)
 _prev_minor() {
 	local minor="$1"
@@ -1870,7 +1876,7 @@ _candidate_nth_exclusive() {
 	local minor scanned=0 found=0
 
 	minor="$(fetch_latest_minor_version candidate)"
-	[[ -n "$minor" ]] || return 0
+	[[ -n "$minor" ]] || return 1
 
 	while [[ $scanned -lt $max_scan ]]; do
 		local cand fast
@@ -1882,8 +1888,8 @@ _candidate_nth_exclusive() {
 		if [[ "$cand" != "${fast:-}" ]]; then
 			found=$(( found + 1 ))
 			if [[ $found -eq $pos ]]; then
-				echo "$cand"
-				return 0
+				_is_version_string "$cand" && echo "$cand" && return 0
+				return 1
 			fi
 		fi
 
@@ -1892,7 +1898,7 @@ _candidate_nth_exclusive() {
 		scanned=$(( scanned + 1 ))
 	done
 
-	return 0
+	return 1
 }
 
 # return 0 if v contains prerelease suffix (has '-') else 1
@@ -1988,12 +1994,12 @@ fetch_latest_version() {
 	local minor v prev prerel
 
 	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || { echo ""; return 0; }
+	[[ -n "$minor" ]] || return 1
 
 	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
 	if [[ -z "$v" ]]; then
 		prev="$(_prev_minor "$minor")"
-		[[ -n "$prev" ]] || { echo ""; return 0; }
+		[[ -n "$prev" ]] || return 1
 		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	fi
 
@@ -2001,13 +2007,12 @@ fetch_latest_version() {
 	if [[ "$channel" = "candidate" && -n "$v" ]]; then
 		prerel=$(fetch_latest_prerelease_version "$channel" 2>/dev/null)
 		if [[ -n "$prerel" ]] && is_version_greater "$prerel" "$v"; then
-			echo "$prerel"
-			return 0
+			v="$prerel"
 		fi
 	fi
 
-	[[ -n "$v" ]] && echo "$v"
-	return 0
+	_is_version_string "$v" && echo "$v" && return 0
+	return 1
 }
 
 ############################################
@@ -2023,20 +2028,17 @@ fetch_latest_z_version() {
 	local v prev
 
 	[[ -n "$minor" ]] || minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || { echo ""; return 0; }
+	[[ -n "$minor" ]] || return 1
 
 	v="$(fetch_all_versions "$channel" "$minor" | tail -n1)"
-	if [[ -n "$v" ]]; then
-		echo "$v"
-		return 0
+	if [[ -z "$v" ]]; then
+		prev="$(_prev_minor "$minor")"
+		[[ -n "$prev" ]] || return 1
+		v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
 	fi
 
-	prev="$(_prev_minor "$minor")"
-	[[ -n "$prev" ]] || { echo ""; return 0; }
-
-	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
-	[[ -n "$v" ]] && echo "$v"
-	return 0
+	_is_version_string "$v" && echo "$v" && return 0
+	return 1
 }
 
 ############################################
@@ -2052,18 +2054,18 @@ fetch_previous_version() {
 	# Candidate channel: show only versions not yet promoted to fast
 	if [[ "$channel" = "candidate" ]]; then
 		_candidate_nth_exclusive 1
-		return 0
+		return
 	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || { echo ""; return 0; }
+	[[ -n "$minor" ]] || return 1
 
 	prev="$(_prev_minor "$minor")"
-	[[ -n "$prev" ]] || { echo ""; return 0; }
+	[[ -n "$prev" ]] || return 1
 
 	v="$(fetch_all_versions "$channel" "$prev" | tail -n1)"
-	[[ -n "$v" ]] && echo "$v"
-	return 0
+	_is_version_string "$v" && echo "$v" && return 0
+	return 1
 }
 
 ############################################
@@ -2078,21 +2080,21 @@ fetch_older_version() {
 	# Candidate channel: show only versions not yet promoted to fast
 	if [[ "$channel" = "candidate" ]]; then
 		_candidate_nth_exclusive 2
-		return 0
+		return
 	fi
 
 	minor="$(fetch_latest_minor_version "$channel")"
-	[[ -n "$minor" ]] || { echo ""; return 0; }
+	[[ -n "$minor" ]] || return 1
 
 	prev="$(_prev_minor "$minor")"
-	[[ -n "$prev" ]] || { echo ""; return 0; }
+	[[ -n "$prev" ]] || return 1
 
 	older="$(_prev_minor "$prev")"
-	[[ -n "$older" ]] || { echo ""; return 0; }
+	[[ -n "$older" ]] || return 1
 
 	v="$(fetch_all_versions "$channel" "$older" | tail -n1)"
-	[[ -n "$v" ]] && echo "$v"
-	return 0
+	_is_version_string "$v" && echo "$v" && return 0
+	return 1
 }
 
 

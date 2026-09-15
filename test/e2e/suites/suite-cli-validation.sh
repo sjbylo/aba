@@ -41,6 +41,7 @@ plan_tests \
     "Unknown flags" \
     "Bundle output collision" \
     "Debug mode on/off" \
+    "images.conf: CLI and merge" \
     "ABA installer: git and curl"
 
 suite_begin "cli-validation"
@@ -210,6 +211,79 @@ e2e_run "Debug mode with make target produces ABA_DEBUG" \
 # Same target without debug: no ABA_DEBUG in output
 e2e_run "Non-debug mode: no ABA_DEBUG in output" \
     "unset DEBUG_ABA; aba -d mirror init 2>&1 | { ! grep -q ABA_DEBUG; }"
+
+test_end 0
+
+# ============================================================================
+# images.conf: CLI add/remove/list and merge logic
+# ============================================================================
+test_begin "images.conf: CLI and merge"
+
+# --- aba image add: syntax validation ---
+e2e_run_must_fail "Reject garbage image ref" \
+    "aba image add notvalid"
+
+e2e_run_must_fail "Reject image with no repo" \
+    "aba image add just-a-name"
+
+e2e_run "Add valid image (registry/repo:tag)" \
+    "aba image add registry.redhat.io/ubi9/ubi:latest"
+
+e2e_run "Add valid image (registry/repo@digest)" \
+    "aba image add quay.io/openshift/cli@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+e2e_run "Add valid image (nested repo path)" \
+    "aba image add registry.redhat.io/rhel9/support-tools:latest"
+
+# --- aba image add: dedup ---
+e2e_run "Add duplicate is idempotent" \
+    "aba image add registry.redhat.io/ubi9/ubi:latest 2>&1 | grep -i 'already'"
+
+# --- aba image list ---
+e2e_run "List shows added images" \
+    "aba image list | grep 'registry.redhat.io/ubi9/ubi:latest'"
+
+e2e_run "List shows source column" \
+    "aba image list | grep 'images.conf'"
+
+# --- Verify images.conf file content ---
+e2e_run "images.conf has 3 entries" \
+    "grep -c '^[^#]' images.conf | grep -q 3"
+
+# --- aba image remove ---
+e2e_run "Remove an image" \
+    "aba image remove quay.io/openshift/cli@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+e2e_run "Removed image is gone from file" \
+    "! grep -q 'openshift/cli@sha256' images.conf"
+
+e2e_run "List shows 2 remaining" \
+    "[ \$(aba image list | grep -c '/') -eq 2 ]"
+
+e2e_run_must_fail "Remove non-existent image fails" \
+    "aba image remove no.such/image:v1"
+
+# --- Per-mirror images.conf ---
+e2e_run "Add image to mirror-level images.conf" \
+    "aba -d mirror image add docker.io/library/nginx:latest"
+
+e2e_run "Mirror images.conf exists" \
+    "test -f mirror/images.conf && grep -q 'nginx' mirror/images.conf"
+
+e2e_run "List from mirror dir shows both sources" \
+    "aba -d mirror image list | grep 'images.conf' && aba -d mirror image list | grep 'mirror/images.conf'"
+
+# --- _merge_images_conf: JSON output ---
+e2e_run "Merge produces valid JSON with all images" \
+    "source scripts/include_all.sh && cd mirror && json=\$(_merge_images_conf .) && echo \"\$json\" | python3 -m json.tool > /dev/null && [ \$(echo \"\$json\" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))') -eq 3 ]"
+
+# --- ISC generation includes additionalImages ---
+e2e_run "ISC contains additionalImages from images.conf" \
+    "aba -d mirror imagesetconf && grep -A5 'additionalImages' mirror/data/imageset-config.yaml | grep -q 'ubi9/ubi'"
+
+# --- Cleanup ---
+e2e_run -q "Remove test images.conf files" \
+    "rm -f images.conf mirror/images.conf"
 
 test_end 0
 
