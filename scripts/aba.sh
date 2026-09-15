@@ -515,8 +515,12 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 						aba_warn "Image not found in $_img_file: $_img"
 					fi
 				done
-				[ $_removed -gt 0 ] && aba_success "$_removed image(s) removed from $_img_file"
-				exit 0
+				if [ $_removed -gt 0 ]; then
+					aba_success "$_removed image(s) removed from $_img_file"
+					exit 0
+				else
+					exit 1
+				fi
 				;;
 			list|ls)
 				cd "$ABA_ROOT"

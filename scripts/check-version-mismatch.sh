@@ -3,9 +3,9 @@
 # Warns if there is a mismatch that needs to be addressed.
 # Only if the ISC file has been updated by user.
 
-# Called from mirror/Makefile — CWD is already the mirror directory.
-# Do NOT cd to a hardcoded path: the mirror dir may be named differently.
-[ -f mirror.conf ] || { echo "Error: must be run from a mirror directory (mirror.conf not found)" >&2; exit 1; }
+# Called from mirror/Makefile (CWD = mirror dir) or via aba.sh
+# (make -C mirror, which also sets CWD = mirror dir).
+# No explicit cd needed — rely on Make's CWD.
 
 source scripts/include_all.sh
 
@@ -25,9 +25,11 @@ yaml2json()
 
 source <(normalize-aba-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
-source <(normalize-mirror-conf)
-
-verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+# mirror.conf is optional — the version comparison only needs aba.conf values
+if [ -f mirror.conf ]; then
+	source <(normalize-mirror-conf)
+	verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+fi
 
 aba_ocp_ver=$ocp_version
 aba_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
