@@ -1,5 +1,7 @@
 # ABA 1.3.3 Release Highlights
 
+More reliable version handling, improved TUI usability, and community-contributed registry and day2 fixes.
+
 - **Version fetch no longer caches errors** — If the internet is down when fetching OCP versions, the next online run re-fetches cleanly instead of showing stale error text.
 - **TUI version wizard fix** — The version selection dialog no longer shows "Script error..." for candidate channel versions.
 - **Additional images toggle** — Additional images can now be included or excluded from the ISC via a TUI toggle, like platform images.
