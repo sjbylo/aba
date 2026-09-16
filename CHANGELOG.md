@@ -19,6 +19,8 @@
 - **Version mismatch warning path** — Warning messages from `check-version-mismatch.sh` now show the correct mirror directory path dynamically instead of a hardcoded `mirror/`.
 - **An empty `reg_user` reached the registry install** — When `mirror.conf` left `reg_user` empty, the value was passed through verbatim, so the registry was created with a blank admin user while `reg_post_install()` recorded `init`. `reg_load_config()` now resolves an empty `reg_user` to `init` before any install path reads it. (Contributed by [@mateuszslugocki](https://github.com/mateuszslugocki))
 - **`day2` stopped at the first batch of custom manifests that applied cleanly** — The manifest batch helper ended on `[ $_fail -gt 0 ] && aba_warn ...`, so a clean batch returned 1 and aborted the script under `-e`, leaving later waves unapplied. The helper now returns success explicitly. (Contributed by [@mateuszslugocki](https://github.com/mateuszslugocki))
+- **`aba image list` column width** — The IMAGE column was hardcoded to 70 characters, pushing SOURCE off-screen in narrow terminals and TUI dialogs. Now dynamically sized to content.
+- **TUI: Feedback menu placement** — "Feedback / Issues" moved after "Advanced" in all TUI modes to reduce clutter in the main menu area.
 
 ---
 
