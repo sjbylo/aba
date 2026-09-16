@@ -6,13 +6,14 @@ amq-broker-rhel9 Red Hat Integration - AMQ Broker for RHEL 9 (Multiarch) 7.14.x
 amq-streams-console Streams for Apache Kafka Console stable
 amq-streams-proxy Streams for Apache Kafka Proxy stable
 amq-streams Streams for Apache Kafka stable
+ansible-automation-platform-operator Ansible Automation Platform stable-2.7
 ansible-cloud-addons-operator Ansible Cloud Addons stable-2.5-cluster-scoped
 apicast-operator Red Hat Integration - 3scale APIcast gateway threescale-2.14
 apicurio-registry-3 Red Hat build of Apicurio Registry 3 3.x
 authorino-operator Red Hat - Authorino Operator stable
 bamoe-businessautomation-operator IBM Business Automation 8.x-stable
 bamoe-kogito-operator IBM BAMOE Kogito Operator 8.x
-bgp-cloud-connector BGP cloud connector alpha
+bgp-cloud-connector BGP cloud connector stable
 businessautomation-operator Business Automation stable
 cephcsi-operator CephCSI operator stable-4.22
 cincinnati-operator OpenShift Update Service v1
@@ -72,6 +73,7 @@ rhacs-operator Advanced Cluster Security for Kubernetes stable
 rhpam-kogito-operator RHPAM Kogito Operator 7.x
 rh-service-binding-operator Service Binding Operator stable
 rhsso-operator Red Hat Single Sign-On Operator stable
+rhtas-operator Red Hat Trusted Artifact Signer stable
 rook-ceph-operator Rook-Ceph stable-4.22
 run-once-duration-override-operator Run Once Duration Override Operator stable
 self-node-remediation Self Node Remediation Operator stable

@@ -18,7 +18,7 @@ aws-efs-csi-driver-operator AWS EFS CSI Driver Operator stable
 aws-load-balancer-operator AWS Load Balancer Operator stable-v1
 bamoe-businessautomation-operator IBM Business Automation 8.x-stable
 bamoe-kogito-operator IBM BAMOE Kogito Operator 8.x
-bgp-cloud-connector BGP cloud connector alpha
+bgp-cloud-connector BGP cloud connector stable
 bpfman-operator eBPF Manager Operator stable
 businessautomation-operator Business Automation stable
 cephcsi-operator CephCSI operator stable-4.22

@@ -94,6 +94,7 @@ lightbits-operator Lightbits Operator alpha
 linstor-operator LINSTOR Operator stable-v2
 mariadb-enterprise-operator MariaDB Enterprise Operator stable
 mediation-openstack-operator Turbonomic OpenStack Probe Operator stable
+minio-directpv DirectPV stable
 minio-minkms-operator Minio AIStor Key management System (KMS) stable
 minio-object-store-operator MinIO AIStor stable
 mongodb-atlas-kubernetes MongoDB Atlas Operator stable

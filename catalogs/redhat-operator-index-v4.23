@@ -6,6 +6,7 @@ amq-broker-rhel9 Red Hat Integration - AMQ Broker for RHEL 9 (Multiarch) 7.14.x
 amq-streams-console Streams for Apache Kafka Console stable
 amq-streams-proxy Streams for Apache Kafka Proxy stable
 amq-streams Streams for Apache Kafka stable
+ansible-automation-platform-operator Ansible Automation Platform stable-2.7
 ansible-cloud-addons-operator Ansible Cloud Addons stable-2.5-cluster-scoped
 apicast-operator Red Hat Integration - 3scale APIcast gateway threescale-2.14
 apicurio-registry-3 Red Hat build of Apicurio Registry 3 3.x

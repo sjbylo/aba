@@ -45,6 +45,7 @@ kubeturbo-certified Kubeturbo Operator stable
 lightbits-operator Lightbits Operator alpha
 mariadb-enterprise-operator MariaDB Enterprise Operator stable
 mediation-openstack-operator Turbonomic OpenStack Probe Operator stable
+minio-directpv DirectPV stable
 mongodb-atlas-kubernetes MongoDB Atlas Operator stable
 mongodb-kubernetes MongoDB Controllers for Kubernetes stable
 mto-dependencies-operator MTO Dependencies Operator alpha
