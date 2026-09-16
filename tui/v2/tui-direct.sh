@@ -767,9 +767,9 @@ _direct_action_menu() {
 		items+=(
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_DIRECT_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced"
+			"$TUI2_DIRECT_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DIRECT_MENU" \

@@ -638,9 +638,9 @@ _conno_main() {
 			"$TUI2_CONNO_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_CONNO_TAG_SETTINGS"       "\ZuC\Znonfigure...  $(_tui_settings_summary)"
-			"$TUI2_CONNO_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 			"$TUI2_CONNO_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_CONNO_TAG_ADVANCED"       "Advanced"
+			"$TUI2_CONNO_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_MENU" \
