@@ -33,6 +33,50 @@ Issues or Pull Requests.
 
 ---
 
+## Bundle without release images: warn the user
+
+**Severity:** MEDIUM
+**Status:** Planned
+**Added:** 2026-09-16
+
+**Problem:** When `excl_platform=true` (release images excluded from ISC), `aba bundle` creates a bundle that cannot install a new cluster. The user may not realize this until they try to install on the disconnected bastion.
+
+**Root cause:** The `excl_platform` toggle was designed for incremental operator updates via `aba save` + `aba load`, not for bundles. But nothing prevents the user from running `aba bundle` with release images excluded.
+
+**Proposed fix:** Show a prominent warning before `oc-mirror` runs when `excl_platform=true` and the command is `aba bundle` (or `aba save` in bundle mode):
+
+```
+[ABA] Warning: Release images are EXCLUDED from the ISC.
+[ABA]          This bundle cannot install a new cluster — it only contains operator images.
+[ABA]          To include release images: set excl_platform= (empty) in aba.conf
+[ABA]          or toggle "Release Images: included" in the TUI.
+```
+
+- **ABA core (reg-save.sh):** Red warning + confirmation prompt (bypass with `-y`)
+- **TUI:** `--yesno` dialog before starting the bundle, same message
+- Do NOT auto-switch `excl_platform` — the user set it intentionally. An operator-only bundle is a valid (if rare) use case for updating a bastion that already has a cluster installed.
+
+**Files likely affected:**
+- `scripts/reg-save.sh`: add `excl_platform` check and warning
+- `tui/v2/tui-mirror.sh`: add dialog before bundle/save action
+
+---
+
+## `aba ocp-ver`: deduplicate candidate versions
+
+**Severity:** LOW
+**Status:** Planned
+**Added:** 2026-09-16
+
+**Problem:** `aba ocp-ver` shows "Previous candidate: 5.0.0-rc.2" when it's the same as "Latest candidate: 5.0.0-rc.2". The TUI already deduplicates these, but the CLI command does not.
+
+**Proposed fix:** Skip displaying "Previous" when it equals "Latest" for the same channel, matching the TUI behavior.
+
+**Files likely affected:**
+- `scripts/aba.sh`: add dedup check in the `ocp-versions` handler (~line 433)
+
+---
+
 ## TUI: Sync/Save confirm dialog shows OP_BASKET count, not actual ISC operator count
 
 **Severity:** MEDIUM
