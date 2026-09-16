@@ -44,6 +44,7 @@ e2e_setup
 plan_tests \
     "Setup: install aba and configure" \
     "Setup: calculate older version for upgrade" \
+    "Setup: images.conf additional images" \
     "Bundle: create with older version" \
     "Bundle: transfer to bastion" \
     "Infra: setup DNS and NTP on internal bastion" \
@@ -121,7 +122,7 @@ test_begin "Setup: calculate older version for upgrade"
 e2e_run "Compute cross-minor versions (N-2 install, N-1 upgrade target)" "
     source scripts/include_all.sh
     desired=\$(grep '^ocp_version=' aba.conf | cut -d= -f2 | awk '{print \$1}')
-    older=\$(fetch_older_version fast)
+    older=\$(fetch_older_version fast) || true
     [ -n \"\$desired\" ] || { echo 'FAIL: N-1 version not set in aba.conf'; exit 1; }
     [ -n \"\$older\" ] || { echo 'FAIL: cannot resolve N-2 version'; exit 1; }
     older_minor=\$(echo \$older | cut -d. -f1-2)
@@ -152,6 +153,34 @@ e2e_run "Compute cross-minor versions (N-2 install, N-1 upgrade target)" "
 e2e_run "Set aba.conf to N-2 version for install" \
     "aba -v \$(cat /tmp/e2e-ocp-version-older)"
 e2e_run "Verify aba.conf: version matches N-2" "grep ^ocp_version=\$(cat /tmp/e2e-ocp-version-older) aba.conf"
+
+test_end
+
+# ============================================================================
+# 2b. Setup: images.conf additional images
+# ============================================================================
+test_begin "Setup: images.conf additional images"
+
+e2e_run "Add UBI image to repo-level images.conf" \
+    "aba image add registry.redhat.io/ubi9/ubi:latest"
+
+e2e_run "Add support-tools to mirror-level images.conf" \
+    "aba -d mirror image add registry.redhat.io/rhel9/support-tools:latest"
+
+e2e_run "Verify images.conf files exist" \
+    "test -f images.conf && test -f mirror/images.conf"
+
+e2e_run "List shows both images from both sources" \
+    "aba -d mirror image list | grep 'ubi9/ubi' && aba -d mirror image list | grep 'support-tools'"
+
+e2e_run "ISC contains additionalImages" \
+    "aba -d mirror imagesetconf && grep -q 'additionalImages' mirror/data/imageset-config.yaml"
+
+e2e_run "ISC has UBI image" \
+    "grep 'ubi9/ubi' mirror/data/imageset-config.yaml"
+
+e2e_run "ISC has support-tools image" \
+    "grep 'support-tools' mirror/data/imageset-config.yaml"
 
 test_end
 
@@ -341,6 +370,12 @@ e2e_run_remote "Verify mirror_*.tar kept after load (ask --auto-no in non-intera
     "cd ~/aba && ls mirror/data/mirror_*.tar >/dev/null"
 
 e2e_run_remote -q "Remove loaded archives" "cd ~/aba && rm -f mirror/data/mirror_*.tar"
+
+# Verify additional images from images.conf are in the registry
+e2e_run_remote "Verify UBI image in registry (from images.conf)" \
+    "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && skopeo inspect --tls-verify=false --authfile ~/.aba/mirror/mirror/pull-secret-mirror.json docker://\${reg_host}:\${reg_port}\${reg_path}/ubi9/ubi:latest | grep -q latest"
+e2e_run_remote "Verify support-tools in registry (from mirror/images.conf)" \
+    "cd ~/aba/mirror && source ../scripts/include_all.sh && source <(normalize-mirror-conf) && skopeo inspect --tls-verify=false --authfile ~/.aba/mirror/mirror/pull-secret-mirror.json docker://\${reg_host}:\${reg_port}\${reg_path}/rhel9/support-tools:latest | grep -q latest"
 
 test_end
 

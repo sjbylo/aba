@@ -1201,10 +1201,11 @@ mirror_view_isc() {
 		# Editable — offer view/edit/reset/operators-only toggle
 		local default_item="V"
 		while :; do
-		# Read current excl_platform state from aba.conf
-		local _excl_plat="false"
+		# Read current exclusion states from aba.conf
+		local _excl_plat="false" _excl_addl="false"
 		source <(normalize-aba-conf) 2>/dev/null
 		_excl_plat="${excl_platform:-false}"
+		_excl_addl="${excl_additional:-false}"
 
 		# Build context summary for the menu prompt
 		local _op_count=0
@@ -1216,9 +1217,10 @@ mirror_view_isc() {
 				_op_count=$(awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}' "$_isc_file")
 			fi
 		fi
-		local _rel_status="included"
+		local _rel_status="included" _addl_status="included"
 		[[ "$_excl_plat" == "true" ]] && _rel_status="excluded"
-		local _isc_summary="OCP ${ocp_version:-?} · ${_op_count} operator(s) · release images: ${_rel_status}"
+		[[ "$_excl_addl" == "true" ]] && _addl_status="excluded"
+		local _isc_summary="OCP ${ocp_version:-?} · ${_op_count} operator(s) · release: ${_rel_status} · additional: ${_addl_status}"
 
 		local _isc_items=("V" "View")
 		local _created_flag="$ABA_ROOT/mirror/data/.created"
@@ -1234,6 +1236,14 @@ mirror_view_isc() {
 			_excl_label="Release Images: \Z2included\Zn"
 		fi
 		_isc_items+=("X" "$_excl_label")
+		# Toggle: exclude additional images
+		local _excl_addl_label
+		if [[ "$_excl_addl" == "true" ]]; then
+			_excl_addl_label="Additional Images: \Z1excluded\Zn"
+		else
+			_excl_addl_label="Additional Images: \Z2included\Zn"
+		fi
+		_isc_items+=("T" "$_excl_addl_label")
 		_isc_items+=("E" "Edit imageset-config.yaml")
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
@@ -1260,6 +1270,9 @@ mirror_view_isc() {
   When excluded, only operator images are mirrored — useful when
   release images are already in the mirror and you only need
   to transfer new or updated operators.
+• Additional Images: toggle extra container images on or off.
+  When excluded, images from images.conf are not included in the ISC.
+  The images.conf file is kept intact — toggle back on to re-include.
 • Edit imageset-config.yaml: manually edit the ISC YAML (advanced users)"
 					continue
 					;;
@@ -1336,6 +1349,16 @@ mirror_view_isc() {
 				else
 					replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 					tui_log "Settings: excl_platform=true (operators only)"
+				fi
+				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+				;;
+			T)
+				if [[ "$_excl_addl" == "true" ]]; then
+					replace-value-conf -n excl_additional -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_additional=false (additional images included)"
+				else
+					replace-value-conf -n excl_additional -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_additional=true (additional images excluded)"
 				fi
 				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 				;;
@@ -1752,10 +1775,20 @@ mirror_manage_images() {
 	local default_item="L"
 
 	while :; do
-		# Count current images
+		# Count current images and read exclusion state
 		local _count=0
 		if [[ -f "$_img_file" ]]; then
 			_count=$(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$_img_file" | wc -l)
+		fi
+		local _excl_addl="false"
+		source <(normalize-aba-conf) 2>/dev/null
+		_excl_addl="${excl_additional:-false}"
+
+		local _incl_label
+		if [[ "$_excl_addl" == "true" ]]; then
+			_incl_label="Include in ISC: \Z1excluded\Zn"
+		else
+			_incl_label="Include in ISC: \Z2included\Zn"
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
@@ -1767,6 +1800,8 @@ mirror_manage_images() {
 			"L" "List images" \
 			"A" "Add image" \
 			"R" "Remove image" \
+			"D" "Delete all images" \
+			"X" "$_incl_label" \
 			"E" "Edit images.conf" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -1782,6 +1817,10 @@ and will be mirrored alongside OpenShift platform and operator images.
 • List: show all configured additional images
 • Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
 • Remove: remove a previously added image
+• Delete all: clear all additional images from images.conf
+• Include in ISC: toggle whether additional images are included in the
+  ImageSet configuration. When excluded, images.conf is kept intact but
+  the images are not mirrored. Toggle back on to re-include them.
 • Edit: open images.conf directly in the editor
 
 Images are stored in images.conf (next to aba.conf).
@@ -1850,6 +1889,32 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					tui_kick_isconf_regen
 					tui_log "Removed images from images.conf"
 				fi
+				;;
+			D)
+				if [[ $_count -eq 0 ]]; then
+					dlg --backtitle "$(ui_backtitle)" --msgbox "No images to delete." 0 0
+					continue
+				fi
+				dlg --backtitle "$(ui_backtitle)" --title "Delete All Images" \
+					--yes-label "Delete All" \
+					--no-label "Cancel" \
+					--yesno "Remove all $_count image(s) from images.conf?\n\nThis cannot be undone." 0 0
+				if [[ $? -eq 0 ]]; then
+					> "$_img_file"
+					tui_kick_isconf_regen
+					tui_log "Deleted all images from images.conf"
+					dlg --backtitle "$(ui_backtitle)" --msgbox "All additional images removed.\nISC will be regenerated." 0 0
+				fi
+				;;
+			X)
+				if [[ "$_excl_addl" == "true" ]]; then
+					replace-value-conf -n excl_additional -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_additional=false (additional images included)"
+				else
+					replace-value-conf -n excl_additional -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_additional=true (additional images excluded)"
+				fi
+				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 				;;
 			E)
 				[[ ! -f "$_img_file" ]] && touch "$_img_file"

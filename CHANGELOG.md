@@ -1,40 +1,39 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.2...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.3...HEAD)
+
+---
+
+## [1.3.3](https://github.com/sjbylo/aba/releases/tag/v1.3.3) - 2026-09-16
+
+Version fetch fixes, TUI improvements, contributed fixes
+
+
+### Added
+
+- **TUI: Additional images exclusion toggle** — Additional images can now be excluded from or included in the ISC via a toggle in the Additional Images menu and the ISC View/Edit menu, mirroring the existing platform images toggle. Uses `excl_additional` in `aba.conf`.
+- **TUI: Monitor Installation in main menu** — "Monitor Installation" moved from Advanced to the main Cluster menu section. Automatically highlighted when a cluster is actively installing. The ISO Created dialog now offers "Monitor Installation" and "Back to Menu" buttons.
+- **TUI: ISO Created dialog improvements** — Shows correct node count for SNO ("Boot your server") vs multi-node ("Boot all N servers"). Improved Day-2 terminology.
+
+### Fixed
+
+- **Version fetch functions return non-zero on failure** — `fetch_latest_version`, `fetch_previous_version`, `fetch_older_version`, and `fetch_latest_z_version` now return 1 when they cannot produce a valid version string. Previously they always returned 0, causing `run_once` to cache empty or error output as a "successful" result that persisted across restarts.
+- **Version output validated before display** — All version fetch functions validate their output with `_is_version_string()` (matches `X.Y.Z` or `X.Y.Z-(rc|ec).N`) before echoing. Error messages from failed HTTP requests can no longer leak into version strings.
+- **TUI version wizard ERR trap regression** — The ERR trap from `include_all.sh` was firing when version fetch functions returned 1 (no version found), writing `show_error` output into `run_once` logs. The TUI then displayed error text as the version string. Fixed by adding `trap - ERR` in the `bash -lc` commands at all call sites, including `aba_version_fetch_start()` which runs at TUI boot.
+- **CLI download guard against empty version** — `cli-download-all.sh` now skips versioned CLI downloads when `ocp_version` is not set, preventing broken `cli:download:oc:` tasks with empty version strings from being cached after an offline run.
+- **TUI screen not clearing after "Internet Access Required"** — The `clear` command was running while stdout was still redirected to a log file. Stdout is now restored before clearing the screen.
+- **`check-version-mismatch.sh` regression** — The script required `mirror.conf` to exist, failing when called from contexts where only `aba.conf` and `imageset-config.yaml` are present. `mirror.conf` is now optional; version comparison proceeds without it.
+- **`aba image remove` exit code** — `aba image remove` now returns non-zero when the specified image was not found, instead of always returning 0.
+- **`aba save` next-steps wording** — After `aba save`, the "Next steps" message now suggests `aba tar --out ...` (the correct two-step flow) instead of `aba bundle --out ...`.
+- **Version mismatch warning path** — Warning messages from `check-version-mismatch.sh` now show the correct mirror directory path dynamically instead of a hardcoded `mirror/`.
+- **An empty `reg_user` reached the registry install** — When `mirror.conf` left `reg_user` empty, the value was passed through verbatim, so the registry was created with a blank admin user while `reg_post_install()` recorded `init`. `reg_load_config()` now resolves an empty `reg_user` to `init` before any install path reads it. (Contributed by [@mateuszslugocki](https://github.com/mateuszslugocki))
+- **`day2` stopped at the first batch of custom manifests that applied cleanly** — The manifest batch helper ended on `[ $_fail -gt 0 ] && aba_warn ...`, so a clean batch returned 1 and aborted the script under `-e`, leaving later waves unapplied. The helper now returns success explicitly. (Contributed by [@mateuszslugocki](https://github.com/mateuszslugocki))
+- **`aba image list` column width** — The IMAGE column was hardcoded to 70 characters, pushing SOURCE off-screen in narrow terminals and TUI dialogs. Now dynamically sized to content.
+- **TUI: Feedback menu placement** — "Feedback / Issues" moved after "Advanced" in all TUI modes to reduce clutter in the main menu area.
 
 ---
 
 ## [1.3.2](https://github.com/sjbylo/aba/releases/tag/v1.3.2) - 2026-09-13
 
 Additional images config, AI bundle companions, MCP wait fix
-
-
----
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.1...HEAD)
-
-### Added
-
-- **`images.conf` — config-based additional images** — Plain-text config file for adding extra container images to the ImageSet Configuration (ISC). Two levels: repo-wide `images.conf` (next to `aba.conf`) and per-mirror `mirror/images.conf`. Images are merged, deduplicated, and rendered into the ISC `additionalImages` section automatically. Replaces the fragile `uncomment_line` approach. ISC template cleaned up — no more commented-out image/helm examples.
-- **`aba image add/remove/list`** — CLI commands to manage `images.conf`. Validates image reference syntax (registry/repo with optional tag or digest). `aba image list` shows merged images from both config files with source tracking. Use `aba -d mirror image add` for per-mirror images.
-- **RHOAI companion images for AI bundles** — `fetch_rhoai_images()` fetches Red Hat OpenShift AI workbench and pipeline images from GitHub, falling back to a shipped static list. AI install bundles now include ~38 RHOAI companion images automatically.
-- **TUI: Additional Images menu** — Manage extra images from the TUI via the ImageSet Configuration dialog (List/Add/Remove/Edit) and from the main action menu.
-
-### Fixed
-
-- **Fix `day2-osus` timeout after `day2`** — Running `aba day2-osus` immediately after `aba day2` could time out because MCP rolling restarts (triggered by IDMS/ITMS changes) outlasted the CO stability check, evicting CatalogSource pods mid-roll. All three day2 scripts (`day2`, `day2-ntp`, `day2-osus`) now wait for MachineConfigPools to finish updating before returning (Ctrl-C to skip).
-
----
-
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.1...HEAD)
-
-### Added
-
-- **`images.conf` — config-based additional images** — Plain-text config file for adding extra container images to the ImageSet Configuration (ISC). Two levels: repo-wide `images.conf` (next to `aba.conf`) and per-mirror `mirror/images.conf`. Images are merged, deduplicated, and rendered into the ISC `additionalImages` section automatically. Replaces the fragile `uncomment_line` approach. ISC template cleaned up — no more commented-out image/helm examples.
-- **`aba image add/remove/list`** — CLI commands to manage `images.conf`. Validates image reference syntax (registry/repo with optional tag or digest). `aba image list` shows merged images from both config files with source tracking. Use `aba -d mirror image add` for per-mirror images.
-- **RHOAI companion images for AI bundles** — `fetch_rhoai_images()` fetches Red Hat OpenShift AI workbench and pipeline images from GitHub, falling back to a shipped static list. AI install bundles now include ~38 RHOAI companion images automatically.
-- **TUI: Additional Images menu** — Manage extra images from the TUI via the ImageSet Configuration dialog (List/Add/Remove/Edit) and from the main action menu.
-
-### Fixed
-
-- **Fix `day2-osus` timeout after `day2`** — Running `aba day2-osus` immediately after `aba day2` could time out because MCP rolling restarts (triggered by IDMS/ITMS changes) outlasted the CO stability check, evicting CatalogSource pods mid-roll. All three day2 scripts (`day2`, `day2-ntp`, `day2-osus`) now wait for MachineConfigPools to finish updating before returning (Ctrl-C to skip).
 
 ---
 
