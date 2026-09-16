@@ -530,12 +530,15 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 					echo "No additional images configured."
 					echo "Add images with: aba image add <image:tag>"
 				else
-					printf "%-70s  %s\n" "IMAGE" "SOURCE"
-					printf "%-70s  %s\n" "-----" "------"
 					echo "$_merged" | python3 -c "
 import sys, json
-for img in json.load(sys.stdin):
-    print(f\"{img['name']:<70s}  {img['source']}\")
+imgs = json.load(sys.stdin)
+w = max((len(i['name']) for i in imgs), default=5)
+w = max(w, 5)
+print(f\"{'IMAGE':<{w}}  SOURCE\")
+print(f\"{'-----':<{w}}  ------\")
+for i in imgs:
+    print(f\"{i['name']:<{w}}  {i['source']}\")
 "
 				fi
 				exit 0
