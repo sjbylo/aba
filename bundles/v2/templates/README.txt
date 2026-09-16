@@ -23,7 +23,7 @@ of the bundle build/test and this install bundle's test script.
 
 # How to use this install bundle
 
-Download and transfer all bundle files to a RHEL 8 or 9 bastion host in the *disconnected environment*.
+Download and transfer all bundle files to a RHEL 8, 9 or 10 bastion host in the *disconnected environment*.
 
 ## Verify integrity of all archive files:
 

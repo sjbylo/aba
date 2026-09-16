@@ -105,6 +105,16 @@ if run_once -p -i "aba:check:internet" 2>/dev/null && \
 	fi
 fi
 
+# Versioned downloads need ocp_version — bail out early if it's unset
+# Shell var may be empty even when aba.conf has the value (Makefile reads it directly)
+if [[ -z "${ocp_version:-}" && -f aba.conf ]]; then
+	ocp_version=$(grep -m1 '^ocp_version=' aba.conf 2>/dev/null | cut -d= -f2 | awk '{print $1}')
+fi
+if [[ "$make_list_target" != "out-download-no-version" && -z "${target_ocp_version:-}" && -z "${ocp_version:-}" ]]; then
+	aba_debug "ocp_version not set — skipping versioned CLI downloads"
+	exit 0
+fi
+
 aba_debug "Fetching download list from cli/Makefile ($make_list_target)"
 items=$(make --no-print-directory -sC cli "$make_list_target" $make_ocp_override) || {
 	aba_abort "Failed to get download list from cli/Makefile ($make_list_target)"

@@ -3,8 +3,9 @@
 # Warns if there is a mismatch that needs to be addressed.
 # Only if the ISC file has been updated by user.
 
-# Scripts called from mirror/Makefile should cd to mirror/
-cd "$(dirname "$0")/../mirror" || exit 1
+# Called from mirror/Makefile (CWD = mirror dir) or via aba.sh
+# (make -C mirror, which also sets CWD = mirror dir).
+# No explicit cd needed — rely on Make's CWD.
 
 source scripts/include_all.sh
 
@@ -24,9 +25,11 @@ yaml2json()
 
 source <(normalize-aba-conf)
 export regcreds_dir=$HOME/.aba/mirror/$(basename "$PWD")
-source <(normalize-mirror-conf)
-
-verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+# mirror.conf is optional — the version comparison only needs aba.conf values
+if [ -f mirror.conf ]; then
+	source <(normalize-mirror-conf)
+	verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
+fi
 
 aba_ocp_ver=$ocp_version
 aba_ocp_ver_major=$(echo "$ocp_version" | cut -d. -f1-2)
@@ -42,13 +45,14 @@ om_ocp_max_ver=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].maxVersio
 om_ocp_channel=$(yaml2json < "$f" | jq -r .mirror.platform.channels[0].name)
 
 if is_version_greater "$om_ocp_min_ver" "$aba_ocp_ver" || is_version_greater $aba_ocp_ver "$om_ocp_max_ver" || [ "$om_ocp_channel" != "$aba_ocp_channel" ]; then
+	_mdir=$(basename "$PWD")
 	echo
-	echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in '$f'." >&2
-	echo_red "         Settings in '$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel" >&2
+	echo_red "Warning: The version of 'openshift-install' ($aba_ocp_ver) no longer matches the version defined in '$_mdir/$f'." >&2
+	echo_red "         Settings in '$_mdir/$f' are currently min=$om_ocp_min_ver, max=$om_ocp_max_ver and channel=$om_ocp_channel" >&2
 	echo_red "         Before syncing or saving images (again), this mismatch must be corrected." >&2
 	echo_red "         Your options are:" >&2
-	echo_red "         - edit the image set config file ($f) to match the ocp version set in aba.conf ($aba_ocp_ver)" >&2
-	echo_red "         - delete mirror/$f and have aba re-create it for you" >&2
+	echo_red "         - edit '$_mdir/$f' to match the ocp version set in aba.conf ($aba_ocp_ver)" >&2
+	echo_red "         - delete '$_mdir/$f' and have aba re-create it for you" >&2
 	echo_red "         - edit aba.conf to match the version set in the image set config file." >&2
 	echo_red "         Fix the mismatch and try again!" >&2
 	echo

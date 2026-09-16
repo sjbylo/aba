@@ -338,10 +338,15 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 
 	# Merge additional images from images.conf files
 	export json_additional_images
-	json_additional_images=$(_merge_images_conf .)
-	if [ "$json_additional_images" != "[]" ]; then
-		_img_count=$(echo "$json_additional_images" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
-		aba_info "Additional images: $_img_count image(s) from images.conf"
+	if [ "${excl_additional:-}" ]; then
+		json_additional_images='[]'
+		aba_debug "Additional images excluded (excl_additional=$excl_additional)"
+	else
+		json_additional_images=$(_merge_images_conf .)
+		if [ "$json_additional_images" != "[]" ]; then
+			_img_count=$(echo "$json_additional_images" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+			aba_info "Additional images: $_img_count image(s) from images.conf"
+		fi
 	fi
 
 	# Atomic write: render to temp file, then move into place

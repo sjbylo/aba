@@ -287,6 +287,12 @@ apply_custom_manifests() {
 		done
 		[ $_success -gt 0 ] && aba_success "Applied $_success manifest(s) in this batch"
 		[ $_fail -gt 0 ] && aba_warn "Failed $_fail manifest(s) in this batch"
+
+		# This helper always succeeds: per-file failures are warnings, not errors.
+		# Without an explicit return, a batch with no failures ends on a false test
+		# and returns 1, which under this script's `-e` aborted the wave loop after
+		# the first wave that worked.
+		return 0
 	}
 
 	# Detect waved mode: any numbered subdir?

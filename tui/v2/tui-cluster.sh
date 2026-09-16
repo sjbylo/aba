@@ -1760,10 +1760,18 @@ _cluster_execute() {
 	if [[ $rc -eq 0 && "$cl_platform" == "bm" && "$install_step" == "iso" ]]; then
 		local _iso_path="$ABA_ROOT/$cl_name/iso-agent-based/agent.$(uname -m).iso"
 		local _node_count=$(( ${cl_masters:-3} + ${cl_workers:-0} ))
+		local _boot_msg
+		if [ "$_node_count" -eq 1 ]; then
+			_boot_msg="Boot your server from this ISO using one of:"
+		else
+			_boot_msg="Boot all $_node_count servers at the same time using one of:"
+		fi
 		dlg --backtitle "$(ui_backtitle)" --title "ISO Created — Boot Your Servers" \
-			--msgbox "ISO file created:\n\n\
+			--yes-label "Monitor Installation" \
+			--no-label "Back to Menu" \
+			--yesno "ISO file created:\n\n\
   $_iso_path\n\n\
-Boot all $_node_count server(s) from this ISO using one of:\n\n\
+$_boot_msg\n\n\
   • Virtual media (iLO, iDRAC, BMC) — mount the ISO over\n\
     the management network (no physical media needed)\n\
   • USB drive — write in raw/direct mode (byte-for-byte copy):\n\n\
@@ -1776,10 +1784,12 @@ Boot all $_node_count server(s) from this ISO using one of:\n\n\
   • PXE — serve the ISO via your PXE infrastructure\n\n\
 IMPORTANT: The ISO expires 24 hours after creation.\n\
 Boot all servers and complete the install within that window.\n\n\
-Once installation completes, use Day-2 to configure the cluster.\n\
-ABA auto-detects when the cluster is ready.\n\n\
-Tip: To watch installation progress, use Advanced → Monitor\n\
-Cluster Installation (A → F)." 0 0
+Once installation completes, use Day-2 / Cluster Management\n\
+to configure OperatorHub and apply cluster resources.\n\
+ABA auto-detects when the cluster is ready." 0 0
+		if [[ $? -eq 0 ]]; then
+			cluster_monitor
+		fi
 	fi
 
 	# After successful install in mirror mode, offer to configure OperatorHub

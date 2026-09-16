@@ -55,6 +55,7 @@ reg_load_config() {
 	export reg_hostport="$reg_host:$reg_port"
 	export reg_url="https://$reg_hostport"
 
+	export reg_user=$(resolved_reg_user)
 	if [ ! "$reg_ssh_user" ]; then reg_ssh_user=$(whoami); fi
 }
 

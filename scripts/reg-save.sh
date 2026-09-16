@@ -257,7 +257,7 @@ elif [ ! "${_ABA_BUNDLE_MODE:-}" ]; then
 	aba_info "Next steps — choose one:"
 	echo
 	aba_info "  Option A: Create a portable install bundle (first-time transfer only)"
-	aba_info "    aba bundle --out /path/to/portable/media/"
+	aba_info "    aba tar --out /path/to/portable/media/"
 	echo
 	aba_info "  Option B: Transfer archive files manually"
 	aba_info "    cp mirror/data/*.tar /transfer-media/"

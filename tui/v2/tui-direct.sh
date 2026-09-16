@@ -336,11 +336,11 @@ _direct_channel() {
 			# Ensure version fetches are running (already started at TUI boot;
 			# run_once -i is non-blocking and skips if task already completed)
 			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $ocp_channel"
 			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $ocp_channel"
 			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_older_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $ocp_channel"
 			;;
 		2)
 			show_help "$TUI2_HELP_TITLE_CHANNEL" \
@@ -376,13 +376,13 @@ _direct_version() {
 		# Wait for background tasks started from channel step (or start them if not yet running)
 		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version" 2>/dev/null || \
 			run_once -i "ocp:${ocp_channel}:latest_version" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_latest_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_latest_version $ocp_channel"
 		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version_previous" 2>/dev/null || \
 			run_once -i "ocp:${ocp_channel}:latest_version_previous" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_previous_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_previous_version $ocp_channel"
 		run_once -q -w -S -i "ocp:${ocp_channel}:latest_version_older" 2>/dev/null || \
 			run_once -i "ocp:${ocp_channel}:latest_version_older" -- \
-				bash -lc "source ./scripts/include_all.sh; fetch_older_version $ocp_channel"
+				bash -lc "source ./scripts/include_all.sh; trap - ERR; fetch_older_version $ocp_channel"
 	fi
 
 	local latest previous older
@@ -760,11 +760,16 @@ _direct_action_menu() {
 		items+=(
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_DIRECT_TAG_INSTALL"        "$inst_label"
+		)
+		if [[ "${_CLUSTER_MON_AVAIL}" == "true" ]]; then
+			items+=("$TUI2_DIRECT_TAG_MONITOR" "$TUI2_LABEL_MONITOR")
+		fi
+		items+=(
 			"$TUI2_DIRECT_TAG_DAY2"           "$day2_label"
 			"" "──── Advanced ──────────────────────"
-			"$TUI2_DIRECT_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 			"$TUI2_DIRECT_TAG_RECONFIGURE"    "Rerun Wizard"
 			"$TUI2_DIRECT_TAG_ADVANCED"       "Advanced"
+			"$TUI2_DIRECT_TAG_FEEDBACK"       "\ZuF\Zneedback / Issues"
 		)
 
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DIRECT_MENU" \
@@ -815,6 +820,11 @@ Navigation:
 				continue ;;
 			"$TUI2_DIRECT_TAG_INSTALL")
 				cluster_install_flow
+				default_item=""
+				;;
+			"$TUI2_DIRECT_TAG_MONITOR")
+				cluster_monitor
+				default_item=""
 				;;
 			"$TUI2_DIRECT_TAG_DAY2")
 				if [[ "${_CLUSTER_DAY2_AVAIL}" != "true" ]]; then

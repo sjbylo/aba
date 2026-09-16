@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.3.2
+ABA_VERSION=1.3.3
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260913092855
+ABA_BUILD=20260916091843
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -418,14 +418,18 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 	elif [ "$1" = "ocp-versions" -o "$1" = "ocp-ver" ]; then
 		shift
 		_prev_s="" ; _prev_f="" ; _prev_c=""
+		_lat_s="" ; _lat_f="" ; _lat_c=""
 		echo_yellow "Available OpenShift versions:"
-		echo_white  "Latest stable:      $(fetch_latest_version stable)"
-		echo_white  "Latest fast:        $(fetch_latest_version fast)"
-		echo_white  "Latest candidate:   $(fetch_latest_version candidate)"
+		_lat_s=$(fetch_latest_version stable) || true
+		_lat_f=$(fetch_latest_version fast) || true
+		_lat_c=$(fetch_latest_version candidate) || true
+		[ -n "$_lat_s" ] && echo_white  "Latest stable:      $_lat_s"
+		[ -n "$_lat_f" ] && echo_white  "Latest fast:        $_lat_f"
+		[ -n "$_lat_c" ] && echo_white  "Latest candidate:   $_lat_c"
 		echo
-		_prev_s=$(fetch_previous_version stable)
-		_prev_f=$(fetch_previous_version fast)
-		_prev_c=$(fetch_previous_version candidate)
+		_prev_s=$(fetch_previous_version stable) || true
+		_prev_f=$(fetch_previous_version fast) || true
+		_prev_c=$(fetch_previous_version candidate) || true
 		[ -n "$_prev_s" ] && echo_white  "Previous stable:    $_prev_s"
 		[ -n "$_prev_f" ] && echo_white  "Previous fast:      $_prev_f"
 		[ -n "$_prev_c" ] && echo_white  "Previous candidate: $_prev_c"
@@ -511,8 +515,12 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 						aba_warn "Image not found in $_img_file: $_img"
 					fi
 				done
-				[ $_removed -gt 0 ] && aba_success "$_removed image(s) removed from $_img_file"
-				exit 0
+				if [ $_removed -gt 0 ]; then
+					aba_success "$_removed image(s) removed from $_img_file"
+					exit 0
+				else
+					exit 1
+				fi
 				;;
 			list|ls)
 				cd "$ABA_ROOT"
@@ -522,12 +530,15 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 					echo "No additional images configured."
 					echo "Add images with: aba image add <image:tag>"
 				else
-					printf "%-70s  %s\n" "IMAGE" "SOURCE"
-					printf "%-70s  %s\n" "-----" "------"
 					echo "$_merged" | python3 -c "
 import sys, json
-for img in json.load(sys.stdin):
-    print(f\"{img['name']:<70s}  {img['source']}\")
+imgs = json.load(sys.stdin)
+w = max((len(i['name']) for i in imgs), default=5)
+w = max(w, 5)
+print(f\"{'IMAGE':<{w}}  SOURCE\")
+print(f\"{'-----':<{w}}  ------\")
+for i in imgs:
+    print(f\"{i['name']:<{w}}  {i['source']}\")
 "
 				fi
 				exit 0
@@ -585,16 +596,16 @@ for img in json.load(sys.stdin):
 		case "$arg" in
 			latest | l)
 				tmp_out="latest "
-				ver=$(fetch_latest_version "$chan")
+				ver=$(fetch_latest_version "$chan") || true
 			;;
 			previous | p)
 				tmp_out="previous "
-				ver=$(fetch_previous_version "$chan")
+				ver=$(fetch_previous_version "$chan") || true
 			;;
 		esac
 
 		# Expand ver to latest, if it's just a point version (x.y)
-		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && ver=$(fetch_latest_z_version "$ocp_channel" "$ver")
+		echo $ver | grep -q -E "^[0-9]+\.[0-9]+$" && { ver=$(fetch_latest_z_version "$ocp_channel" "$ver") || true; }
 
 		# Extract version: accept x.y.z or x.y.z-prerelease (e.g. 4.22.0-rc.1)
 		ver=$(echo "$ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
@@ -645,14 +656,14 @@ for img in json.load(sys.stdin):
 		case "$arg" in
 			latest | l)
 				tgt_tmp_out="latest "
-				tgt_ver=$(fetch_latest_version "$chan")
+				tgt_ver=$(fetch_latest_version "$chan") || true
 			;;
 			previous | p)
 				tgt_tmp_out="previous "
-				tgt_ver=$(fetch_previous_version "$chan")
+				tgt_ver=$(fetch_previous_version "$chan") || true
 			;;
 		esac
-		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver")
+		echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+$" && { tgt_ver=$(fetch_latest_z_version "$ocp_channel" "$tgt_ver") || true; }
 		tgt_ver=$(echo "$tgt_ver" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$' || true)
 		[ ! "$tgt_ver" ] && aba_abort "failed to look up the${tgt_tmp_out}version for channel [$chan] after option [$opt $arg]"
 		! echo $tgt_ver | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$" && aba_abort "incorrect version format: [$tgt_ver] for channel [$chan] after option [$opt $arg]"
@@ -1836,12 +1847,12 @@ fi
 	## Get the latest stable OpenShift version number, e.g. 4.14.6
 	#channel_ver=$(echo "$release_text" | grep -E -o "Version: +[0-9]+\.[0-9]+\.[0-9]+" | awk '{print $2}')
 	aba_debug "Looking up latest version using fetch_latst_version() $ocp_channel"
-	channel_ver=$(fetch_latest_version "$ocp_channel")
+	channel_ver=$(fetch_latest_version "$ocp_channel") || true
 	default_ver=$channel_ver
 
 	aba_debug "Looking up previous version using fetch_previous_version() $ocp_channel"
 
-	channel_ver_prev=$(fetch_previous_version "$ocp_channel")
+	channel_ver_prev=$(fetch_previous_version "$ocp_channel") || true
 
 	# Determine any already installed tool versions
 	which openshift-install >/dev/null 2>&1 && cur_ver=$(openshift-install version | grep ^openshift-install | grep -E -o "[0-9]+\.[0-9]+\.[0-9]+")
@@ -1917,7 +1928,7 @@ fi
 		# If user enters just a point version, x.y, fetch the latest .z value for that point version of OpenShift
 		if echo $target_ver | grep -E -q "^[0-9]+\.[0-9]+$"; then
 			aba_debug "Detected x.y format, resolving to latest z-stream: $target_ver"
-			resolved_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver")
+			resolved_ver=$(fetch_latest_z_version "$ocp_channel" "$target_ver") || true
 			if [ -n "$resolved_ver" ]; then
 				aba_debug "Resolved $target_ver -> $resolved_ver"
 				target_ver="$resolved_ver"
