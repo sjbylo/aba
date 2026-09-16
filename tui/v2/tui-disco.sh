@@ -217,8 +217,8 @@ disco_main() {
 			"$TUI2_DISCO_TAG_DAY2"        "$day2_label"
 			"" "──── Advanced ──────────────────────"
 			"$TUI2_DISCO_TAG_SETTINGS"    "\ZuC\Znonfigure...  $(_tui_settings_summary)"
-			"$TUI2_DISCO_TAG_FEEDBACK"    "\ZuF\Zneedback / Issues"
 			"$TUI2_DISCO_TAG_ADVANCED"    "Advanced"
+			"$TUI2_DISCO_TAG_FEEDBACK"    "\ZuF\Zneedback / Issues"
 			"$TUI2_DISCO_TAG_VIEW_ISC"    "$isc_label"
 		)
 
