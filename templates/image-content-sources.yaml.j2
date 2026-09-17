@@ -2,6 +2,11 @@
 - mirrors:
   - {{ reg_host }}:{{ reg_port }}{{ reg_path }}/openshift/release
   source: quay.io/openshift-release-dev/ocp-v{{ ocp_major }}.0-art-dev
+{%- if ocp_major | int >= 5 %}
+- mirrors:
+  - {{ reg_host }}:{{ reg_port }}{{ reg_path }}/openshift/release
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+{%- endif %}
 - mirrors:
   - {{ reg_host }}:{{ reg_port }}{{ reg_path }}/openshift/release-images
   source: quay.io/openshift-release-dev/ocp-release
