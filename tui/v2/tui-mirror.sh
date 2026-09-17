@@ -436,11 +436,28 @@ _mirror_install_remote() {
 # Pre-operation confirmation with OCP/operator summary + View ISC
 # =============================================================================
 
+# Stdout of transfer-info.sh --shell for the TUI to eval.
+#
+# Default (no extra arg): if mirror/data/aba-transfer.tar exists, parse the ISC
+# inside that tar. That is the Load path — "what will aba load apply?"
+#
+# Pass --local when the operation uses the yaml on this machine (Save, Sync,
+# Create Bundle). transfer-info otherwise prefers an old leftover tar over
+# imageset-config.yaml, so Sync would summarize the wrong file.
+#
+# Caller must eval the output so `local transfer_*` in the caller is set.
+_tui_transfer_info_shell() {
+	(cd "$ABA_ROOT/mirror" && "$ABA_ROOT/scripts/transfer-info.sh" --shell ${1:+"$1"}) 2>/dev/null || true
+}
+
 # Shows a summary dialog before save/sync/load/bundle operations.
 # Lets the user confirm, go back, or view the ISC file.
-# For "Load" operations: if an aba-transfer.tar is pending, shows its contents
-# (via transfer-info.sh) instead of the local config, so the user sees what
-# will actually be loaded.
+#
+# OCP line is always the ISC oc-mirror will use (minVersion / maxVersion / channel):
+#   pending transfer tar → tar ISC; otherwise local imageset-config.yaml.
+# Arrow only if transfer-info reports an upgrade (max strictly newer than min).
+# Never mix aba.conf with ISC maxVersion.
+#
 # Returns 0 if confirmed, 1 if cancelled.
 _mirror_op_confirm() {
 	local title="$1"
@@ -451,7 +468,7 @@ _mirror_op_confirm() {
 	if [[ "$_TUI_MODE" == "DISCO" && -f "$ABA_ROOT/mirror/data/aba-transfer.tar" ]]; then
 		local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
 		local transfer_upgrade_to="" transfer_operator_count="" transfer_operators=""
-		eval "$(make -sC "$ABA_ROOT/mirror" transfer-info output=shell 2>/dev/null)"
+		eval "$(_tui_transfer_info_shell)"
 		if [[ "$transfer_pending" == "true" ]]; then
 			_ver="$transfer_ocp_version"
 			_chan="$transfer_ocp_channel"
@@ -468,30 +485,31 @@ _mirror_op_confirm() {
 		fi
 	fi
 
-	# Fall back to local config if no transfer tar
+	# Local yaml on this host (Save/Sync). --local: do not read aba-transfer.tar;
+	# that tar is only for Load, and a leftover copy would hide this yaml.
 	if [[ "$_from_transfer" != "true" ]]; then
 		source <(normalize-aba-conf) 2>/dev/null
 		source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
-		_ver="${ocp_version:-unknown}"
-		_chan="${ocp_channel:-stable}"
-		_target="${ocp_upgrade_to:-}"
-		if [[ -z "$_target" && -f "$ABA_ROOT/mirror/data/imageset-config.yaml" ]]; then
-			_target=$(grep '^\s*maxVersion:' "$ABA_ROOT/mirror/data/imageset-config.yaml" 2>/dev/null | head -1 | sed 's/.*maxVersion: *//')
-		fi
 
-		# Pre-flight: validate target version exists in the configured channel
+		local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
+		local transfer_upgrade_to="" transfer_operator_count="" transfer_operators=""
+		eval "$(_tui_transfer_info_shell --local)"  # --local: yaml on disk, not aba-transfer.tar
+		_ver="${transfer_ocp_version:-${ocp_version:-unknown}}"
+		_chan="${transfer_ocp_channel:-${ocp_channel:-stable}}"
+		_target="${transfer_upgrade_to:-}"
+
+		# Config check only — ocp_upgrade_to in mirror.conf, not ISC maxVersion.
 		# Skip on DISCO — no internet to query Cincinnati, and the bundle already has the images.
-		if [[ "$_TUI_MODE" != "DISCO" && -n "$_target" && "$_target" != "$_ver" ]]; then
-			if ! verify_release_version_exists "$_target" "$_chan" 2>/dev/null; then
+		if [[ "$_TUI_MODE" != "DISCO" && -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
+			if ! verify_release_version_exists "$ocp_upgrade_to" "${ocp_channel:-stable}" 2>/dev/null; then
 				dlg --backtitle "$(ui_backtitle)" --title "Upgrade Target Invalid" \
 					--yes-label "Clear Target" --no-label "Cancel" \
-					--yesno "\nUpgrade target $_target is not available in the '$_chan' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
+					--yesno "\nUpgrade target $ocp_upgrade_to is not available in the '${ocp_channel:-}' channel.\n\nThis can happen when the channel is changed after setting a target.\n\nClear the target and continue without upgrade mode?" 0 0
 				if [[ $? -eq 0 ]]; then
 					replace-value-conf -q -n ocp_upgrade_to -v "" -f "$ABA_ROOT/mirror/mirror.conf"
 					ocp_upgrade_to=""
-					_target=""
 					tui_kick_isconf_regen
-					tui_log "Cleared stale upgrade target (not in $_chan channel)"
+					tui_log "Cleared stale upgrade target (not in ${ocp_channel:-} channel)"
 				else
 					return 1
 				fi
@@ -672,12 +690,11 @@ mirror_save() {
 mirror_prep_upgrade() {
 	tui_log "Action: Prepare Upgrade for Transfer"
 
+	source <(normalize-aba-conf) 2>/dev/null
+	source <(cd "$ABA_ROOT/mirror" && normalize-mirror-conf) 2>/dev/null
 	local _current_ver="${ocp_version:-unknown}"
 	local _target_ver
-	local _existing_target=""
-	if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-		_existing_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
-	fi
+	local _existing_target="${ocp_upgrade_to:-}"
 
 	# Fetch upgrade targets reachable from the current version
 	local _channel="${ocp_channel:-fast}"
@@ -1067,11 +1084,7 @@ _OP_BASKET_DIRTY=false
 _persist_operator_basket() {
 	# If basket hasn't changed, just ensure ISC generation is running/done
 	if [[ "$_OP_BASKET_DIRTY" != "true" ]]; then
-		# Start ISC gen if it was never started (first View ISC call)
-		if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-			run_once -i "aba:isconf:generate" -- \
-				make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 &
-		fi
+		(cd "$ABA_ROOT" && aba_isconf_generate_start) {ABA_TUI_FLOCK_FD}>&-
 		return
 	fi
 
@@ -1778,7 +1791,7 @@ mirror_manage_images() {
 		# Count current images and read exclusion state
 		local _count=0
 		if [[ -f "$_img_file" ]]; then
-			_count=$(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$_img_file" | wc -l)
+			_count=$(_read_images_conf "$_img_file" | wc -l)
 		fi
 		local _excl_addl="false"
 		source <(normalize-aba-conf) 2>/dev/null
@@ -1837,10 +1850,15 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 
 		case "$choice" in
 			L)
-				local _list_output
-				_list_output=$(cd "$ABA_ROOT" && aba image list 2>&1) || true
+				local _list_msg="No additional images configured."
+				if [[ $_count -gt 0 ]]; then
+					_list_msg="Additional images:\n"
+					while IFS= read -r _line; do
+						[[ -n "$_line" ]] && _list_msg+="\n  ${_line}"
+					done < <(_read_images_conf "$_img_file")
+				fi
 				dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
-					--exit-label "OK" --msgbox "$_list_output" 0 0
+					--exit-label "OK" --msgbox "$_list_msg" 0 0
 				;;
 			A)
 				dlg --backtitle "$(ui_backtitle)" --title "Add Image" \
@@ -1851,11 +1869,16 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					_new_img=$(<"$_TUI_TMP")
 					_new_img=$(echo "$_new_img" | tr -d ' ')
 					if [[ -n "$_new_img" ]]; then
-						local _add_out
-						_add_out=$(cd "$ABA_ROOT" && aba image add "$_new_img" 2>&1) || true
-						dlg --backtitle "$(ui_backtitle)" --msgbox "$_add_out" 0 0
-						tui_kick_isconf_regen
-						tui_log "Added image: $_new_img"
+						local _add_out _add_rc=0
+						_add_out=$(cd "$ABA_ROOT" && aba image add "$_new_img" 2>&1) || _add_rc=$?
+						if [[ $_add_rc -eq 0 ]]; then
+							dlg --backtitle "$(ui_backtitle)" --msgbox "Added:\n$_new_img" 0 0
+							tui_kick_isconf_regen
+							tui_log "Added image: $_new_img"
+						else
+							dlg --backtitle "$(ui_backtitle)" --msgbox "${_add_out:-Failed to add image.}" 0 0
+							tui_log "Add image failed: $_new_img"
+						fi
 					fi
 				fi
 				;;
@@ -1868,7 +1891,7 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 				local _rm_items=()
 				while IFS= read -r _line; do
 					[[ -n "$_line" ]] && _rm_items+=("$_line" "" "off")
-				done < <(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$_img_file")
+				done < <(_read_images_conf "$_img_file")
 				local _rm_h=$(( ${#_rm_items[@]} / 3 ))
 				[[ $_rm_h -gt 18 ]] && _rm_h=18
 				dlg --backtitle "$(ui_backtitle)" --title "Remove Images" \
@@ -1879,13 +1902,27 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					"${_rm_items[@]}" \
 					2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
-					local _rm_out=""
+					local _rm_names=() _rm_fail=""
 					while IFS= read -r _line; do
 						_line="${_line##[[:space:]]}"
 						_line="${_line%%[[:space:]]}"
-						[[ -n "$_line" ]] && _rm_out+=$(cd "$ABA_ROOT" && aba image remove "$_line" 2>&1)$'\n'
+						[[ -z "$_line" ]] && continue
+						if (cd "$ABA_ROOT" && aba image remove "$_line" >>"$_TUI_LOG_FILE" 2>&1); then
+							_rm_names+=("$_line")
+						else
+							_rm_fail+="\n  ${_line}"
+						fi
 					done < "$_TUI_TMP"
-					[[ -n "$_rm_out" ]] && dlg --backtitle "$(ui_backtitle)" --msgbox "$_rm_out" 0 0
+					local _rm_msg=""
+					if [[ ${#_rm_names[@]} -gt 0 ]]; then
+						_rm_msg="Removed:\n"
+						local _n
+						for _n in "${_rm_names[@]}"; do
+							_rm_msg+="\n  ${_n}"
+						done
+					fi
+					[[ -n "$_rm_fail" ]] && _rm_msg+="${_rm_msg:+\n\n}Could not remove:${_rm_fail}"
+					[[ -n "$_rm_msg" ]] && dlg --backtitle "$(ui_backtitle)" --msgbox "$_rm_msg" 0 0
 					tui_kick_isconf_regen
 					tui_log "Removed images from images.conf"
 				fi
@@ -1985,10 +2022,16 @@ mirror_create_bundle() {
 
 	_ensure_offline_prereqs || return 1
 
-	# Build summary: OCP version/channel + operator list
+	# OCP line from local yaml (Save/Sync/bundle), not from a leftover transfer tar.
 	source <(normalize-aba-conf) 2>/dev/null
-	local _ver="${ocp_version:-unknown}"
-	local _chan="${ocp_channel:-stable}"
+	local transfer_pending="" transfer_ocp_version="" transfer_ocp_channel=""
+	local transfer_upgrade_to=""
+	eval "$(_tui_transfer_info_shell --local)"  # --local: yaml on disk, not aba-transfer.tar
+	local _ver="${transfer_ocp_version:-${ocp_version:-unknown}}"
+	local _chan="${transfer_ocp_channel:-${ocp_channel:-stable}}"
+	if [[ -n "${transfer_upgrade_to:-}" && "$transfer_upgrade_to" != "$_ver" ]]; then
+		_ver="${_ver} → ${transfer_upgrade_to}"
+	fi
 	local _op_count _op_preview=""
 
 	if aba_isc_is_user_managed "$ABA_ROOT/mirror/data/imageset-config.yaml"; then
