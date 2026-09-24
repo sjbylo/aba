@@ -1,5 +1,13 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.3...HEAD)
 
+Safer cluster delete and honest TUI version confirmations
+
+### Fixed
+
+- **Cluster delete skipped leftover VMs when vCenter was flaky** — A vCenter query error was treated as "no VMs exist", so `aba delete` left VMs running. The next install could then rebuild the ISO against a live node and fail with certificate errors. Delete now aborts if vCenter cannot be reached, and only skips cleanup when VMs are confirmed absent.
+- **TUI mirror confirm showed a reverse-upgrade arrow** — After editing `aba.conf`, Save/Sync/bundle confirmations could show `5.0 → 4.22`. They now show the versions from the ImageSet Config, and only report an upgrade when the max version is newer than the min.
+- **OCP 5 clusters dropped a still-required OCP 4 image source** — The release payload still pulls `ocp-v4.0-art-dev` images. That source is kept in the fallback IDMS/ICSP template so OCP 5 installs can pull them.
+
 ---
 
 ## [1.3.3](https://github.com/sjbylo/aba/releases/tag/v1.3.3) - 2026-09-16
