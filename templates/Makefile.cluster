@@ -276,11 +276,11 @@ vmw: vmware.conf ## Configure vCenter/ESXi API credentials in vmware.conf file.
 kvm: kvm.conf ## Configure KVM/libvirt connection in kvm.conf file.
 
 .PHONY: noask
-noask:  ## Set 'ask' in aba.conf to 'false'.  Aba will assume all defaults and not prompt you for anything (allows for fully automated installations on vmw).
+noask:  ## Set 'ask' in aba.conf to 'false'.  ABA will assume all defaults and not prompt you for anything (allows for fully automated installations on vmw).
 	@make -sC .. noask
 
 .PHONY: ask
-ask: ## Set 'ask' in aba.conf to 'true'  Aba will prompt you for certain actions. 
+ask: ## Set 'ask' in aba.conf to 'true'  ABA will prompt you for certain actions. 
 	@make -sC .. ask
 
 # Only delete 'vmware.conf/regcreds/aba.conf' if they are symbolic links (credentials in ~/.aba/mirror/ are persistent)

@@ -370,6 +370,14 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	fi
 else
 	aba_debug "Using existing imageset-config.yaml (not regenerating)"
+
+	# Insert user-managed notice if the user edited the ISC and it's not already marked.
+	# When the user deletes the file (or resets via TUI), ABA regenerates from the
+	# template and the notice is naturally absent.
+	if ! grep -q "^# This file is user-managed" data/imageset-config.yaml 2>/dev/null; then
+		sed -i '1a # This file is user-managed. Delete it and re-run to return to ABA control.' data/imageset-config.yaml
+	fi
+
 	if [ -f ../.bundle ]; then
 		if [ -f data/.isc-pinned ]; then
 			aba_info "Preserving user-customized imageset-config from bundle (pinned)."

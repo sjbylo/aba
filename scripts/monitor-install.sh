@@ -95,7 +95,7 @@ if [ ! -f ~/.aba_first_cluster_success ]; then
 	echo_bright_green  "  ╔${_bdr}╗"
 	echo               "$(_boxl '')"
 	echo               "$(_boxc 15 'Congratulations!')"
-	echo               "$(_boxc 15 "You've installed your first OpenShift cluster using Aba!")"
+	echo               "$(_boxc 15 "You've installed your first OpenShift cluster using ABA!")"
 	echo               "$(_boxl '')"
 	echo               "$(_boxc 15 'Please consider giving our project a star to let us know:')"
 	echo               "$(_boxc 14 'https://github.com/sjbylo/aba')"

@@ -1,0 +1,29 @@
+---
+description: Use run.sh for all E2E pool operations instead of govc/SSH directly
+alwaysApply: true
+---
+
+# E2E pool operations: always use run.sh
+
+When managing E2E test pool VMs (con1-4, dis1-4), **always use `test/e2e/run.sh`** — never run `govc`, `virsh`, or manual SSH for operations that `run.sh` already handles.
+
+## Command reference
+
+| Intent | Correct | Wrong |
+|--------|---------|-------|
+| Power on pool VMs | `run.sh start -p 3,4` | `govc vm.power -on con3` |
+| Power off / destroy | `run.sh destroy -p 3,4` | `govc vm.power -off con3` |
+| Deploy code | `run.sh deploy -p 3,4 --dev` | `rsync`/`scp` to conN |
+| Check status | `run.sh status` | SSH + manual checks |
+| Stop suites | `run.sh stop -p 3` | `ssh conN kill …` |
+| Run suites | `run.sh run -a -p 1-4 --dev --loop` | manual tmux/runner.sh |
+| Verify pools healthy | `run.sh verify -p 1-4` | ad-hoc SSH probes |
+| Reclone pool VMs | `run.sh run -a -p 3 -R` | manual govc clone |
+
+## Why
+
+`run.sh` handles VM discovery, power management, per-pool config, SSH user resolution, harness sync, lock management, and cleanup atomically. Bypassing it risks partial state, wrong SSH user, missed setup steps, or lock conflicts with the running dispatcher.
+
+## When govc is acceptable
+
+Only use `govc` directly for operations `run.sh` does NOT cover — e.g. inspecting vCenter inventory, checking VM info for debugging, or managing non-pool VMs (conno, disco, ESXi hosts).
