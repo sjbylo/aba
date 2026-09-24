@@ -825,7 +825,7 @@ while :; do
   __   ____   __
  / _\\ (  _ \\ / _\\     ABA v${_aba_ver}
 /    \\ ) _ (/    \\    Install & configure
-\\_/\\_/(____/\\_/\\_/    air-gapped OpenShift quickly!
+\\_/\\_/(____/\\_/\\_/    air-gapped OpenShift easily!
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions
