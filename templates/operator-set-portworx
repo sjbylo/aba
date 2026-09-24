@@ -1,0 +1,8 @@
+# Name: Portworx Enterprise Storage
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+# Note: These operators are from the certified-operators catalog.
+
+portworx-certified
+portworx-multi-cluster-certified  # Multi-cluster replication
+
+cincinnati-operator        # Included for easier cluster upgrades

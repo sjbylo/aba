@@ -614,7 +614,7 @@ verify-aba-conf() {
 	[ ! "$pull_secret_file" ] && { echo_red "Error: pull_secret_file missing in aba.conf" >&2; ret=1; }
 
 	if [ "$op_sets" ]; then
-		echo "$op_sets" | grep -q -E "^[a-z,]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
+		echo "$op_sets" | grep -q -E "^[a-z0-9,-]+" || { echo_red "Error: op_sets invalid in aba.conf: [$op_sets]" >&2; ret=1; }
 		for f in $(echo $op_sets | tr , " ")
 		do
 			[ "$f" = "all" ] && continue # Skip checking this since 'all' means all operators

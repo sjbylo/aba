@@ -1,7 +1,23 @@
 # Name: OpenShift Security
-# Please let us know if there any missing dependencies
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
-cincinnati-operator        # Included for easier cluster upgrades
+cincinnati-operator             # Included for easier cluster upgrades
+
 rhacs-operator
 openshift-cert-manager-operator
 compliance-operator
+file-integrity-operator
+container-security-operator
+gatekeeper-operator-product
+security-profiles-operator
+
+# Identity & secrets
+rhbk-operator                        # Red Hat build of Keycloak (SSO/identity)
+openshift-zero-trust-workload-identity-manager
+openshift-external-secrets-operator  # Sync secrets from Vault/AWS SM/Azure KV
+secrets-store-csi-driver-operator    # CSI-based secret injection
+
+# Supply chain security
+rhtas-operator                       # Trusted Artifact Signer (Sigstore)
+rhtpa-operator                       # Trusted Profile Analyzer (SBOM/CVE)
+policy-controller-operator           # Cosign signature verification at admission

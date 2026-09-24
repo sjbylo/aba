@@ -1491,7 +1491,7 @@ version item above), offer to purge unused images:
 
 **Problem:** The `additionalImages` section in the imageset-config.yaml (ISC)
 is currently just commented-out examples. Users must manually edit the YAML to
-add images like `ose-cli`, `support-tools`, or OpenShift Virtualization
+add images like UBI, `support-tools`, or OpenShift Virtualization
 container disks. Manual edits trip the `.created` guard and ABA stops managing
 platform/operators.
 
@@ -1517,7 +1517,7 @@ needed companion images. Examples:
 | Operator set | Auto-added images |
 |---|---|
 | `operator-set-virt` | `quay.io/containerdisks/centos-stream:10`, `centos-stream:9`, `fedora:latest` |
-| (all) | `registry.redhat.io/openshift4/ose-cli:latest`, `registry.redhat.io/rhel9/support-tools:latest` |
+| (all) | `registry.redhat.io/rhel9/support-tools:latest` |
 | (testing) | `quay.io/openshifttest/hello-openshift:1.2.0` |
 
 Auto-added images should be presented to the user for confirmation (not

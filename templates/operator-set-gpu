@@ -1,9 +1,8 @@
-# Name: GPU Support for Red Hat AI
-# Please let us know if there any missing dependencies
+# Name: GPU Support
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
-# GPU
-nfd
-gpu-operator-certified
+nfd                         # Node Feature Discovery (vendor-neutral)
+gpu-operator-certified      # NVIDIA GPU Operator
+#amd-gpu-operator            # AMD GPU Operator
 
-# Required for OSUS
 cincinnati-operator        # Included for easier cluster upgrades

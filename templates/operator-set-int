@@ -1,0 +1,16 @@
+# Name: Integration & Middleware
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+3scale-operator            # API management
+apicast-operator           # 3scale APIcast gateway
+amq-broker-rhel9           # AMQ Broker (messaging)
+amq-streams                # Streams for Apache Kafka
+apicurio-registry-3        # Schema / API registry
+rhcl-operator              # Connectivity Link (API gateway)
+authorino-operator         # Authorization service (rhcl-operator dependency)
+dns-operator               # DNS Operator (rhcl-operator dependency)
+limitador-operator         # Rate limiting (rhcl-operator dependency)
+skupper-operator           # Service Interconnect (multi-cluster networking)
+datagrid                   # In-memory data grid (Infinispan)
+
+cincinnati-operator        # Included for easier cluster upgrades
