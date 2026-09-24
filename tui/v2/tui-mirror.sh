@@ -1320,7 +1320,6 @@ mirror_view_isc() {
 						if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
 							cp "$_TUI_TMP" "$isconf_file"
 							tui_kick_isconf_regen
-							run_once -q -w -i "aba:isconf:generate" 2>/dev/null || true
 							tui_log "ISC saved by user"
 							dlg --backtitle "$(ui_backtitle)" --msgbox \
 								"$TUI2_MSG_ISC_SAVED" 0 0 || true
