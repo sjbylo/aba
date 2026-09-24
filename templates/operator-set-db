@@ -1,0 +1,11 @@
+# Name: Databases
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+# Note: These operators are from the certified-operators catalog.
+
+crunchy-postgres-operator
+percona-server-mongodb-operator-certified
+percona-server-mysql-operator-certified
+redis-enterprise-operator-cert
+mariadb-enterprise-operator
+
+cincinnati-operator        # Included for easier cluster upgrades

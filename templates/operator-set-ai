@@ -1,20 +1,19 @@
 # Name: Red Hat AI
-# Please let us know if there any missing dependencies
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
 rhods-operator
 authorino-operator
 gpu-operator-certified
 nfd
 
-# Mesh v2 operators are also needed
+# Service Mesh v3
 kiali-ossm
 servicemeshoperator3
 
 # Red Hat Connectivity Link
 rhcl-operator
-
-# Required for OSUS
-cincinnati-operator        # Included for easier cluster upgrades
+dns-operator               # rhcl-operator dependency
+limitador-operator         # rhcl-operator dependency
 
 # Other required operators
 cluster-observability-operator
@@ -28,3 +27,5 @@ job-set
 openshift-cert-manager-operator
 spyre-operator
 
+# Required for OSUS
+cincinnati-operator        # Included for easier cluster upgrades

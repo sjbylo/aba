@@ -1074,11 +1074,11 @@ mirror_sync() {
 }
 
 # =============================================================================
-# Persist operator basket to aba.conf (so `aba isconf` picks it up)
+# Persist operator selection to aba.conf (so `aba isconf` picks it up)
 # =============================================================================
 
-# Tracks whether basket changed since last persist (avoids unnecessary ISC regen)
-# Starts false: basket loaded from aba.conf matches what ISC was generated from
+# Tracks whether selection changed since last persist (avoids unnecessary ISC regen)
+# Starts false: selection loaded from aba.conf matches what ISC was generated from
 _OP_BASKET_DIRTY=false
 
 _persist_operator_basket() {
@@ -1091,7 +1091,7 @@ _persist_operator_basket() {
 	if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
 		replace-value-conf -q -n ops     -v "" -f "$ABA_ROOT/aba.conf"
 		replace-value-conf -q -n op_sets -v "" -f "$ABA_ROOT/aba.conf"
-		tui_log "Persisted empty operator basket to aba.conf"
+		tui_log "Persisted empty operator selection to aba.conf"
 	else
 		# Generate sorted operator list for dedup comparison
 		local new_op_list
@@ -1150,7 +1150,7 @@ mirror_view_isc() {
 	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	tui_log "Action: View ISC (readonly=$readonly)"
 
-	# Ensure basket is persisted and ISC gen is running
+	# Ensure selection is persisted and ISC gen is running
 	_persist_operator_basket
 
 	# Wait for background ISC generation (kicked off at startup or after config change)
@@ -1275,7 +1275,7 @@ mirror_view_isc() {
 
 • View: see the current imageset-config.yaml
 • Select Operators: choose which operators to include
-• Additional Images: add extra container images (ose-cli, UBI, etc.)
+• Additional Images: add extra container images (UBI, support-tools, etc.)
 • Regenerate: rebuild imageset-config.yaml from aba.conf + mirror.conf
   settings. Use this to let ABA take back control of the file after
   manual edits.
@@ -1447,8 +1447,8 @@ _operator_menu() {
 			--menu "Available catalogs:\n\n${_cat_stats}" 0 0 0 \
 			1 "Select Operator Sets" \
 			2 "Search Operator Names" \
-			3 "View/Edit Basket ($basket_count operator$( [[ $basket_count -ne 1 ]] && echo s))" \
-			4 "Clear Basket" \
+			3 "View/Edit Selection ($basket_count operator$( [[ $basket_count -ne 1 ]] && echo s))" \
+			4 "Clear Selection" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
@@ -1459,8 +1459,8 @@ _operator_menu() {
 
 • Operator Sets: pre-defined groups (ocp, odf, virt, acm, quay...)
 • Search: find operators by name in the catalog
-• View/Edit Basket: see and modify your current selection
-• Clear: remove all operators from the basket
+• View/Edit Selection: see and modify your current selection
+• Clear: remove all operators from the selection
 
 Selected operators will be included in the ImageSet config."
 				continue
@@ -1527,18 +1527,18 @@ Selected operators will be included in the ImageSet config."
 			   ;;
 			4)
 				if [[ ${#OP_BASKET[@]} -eq 0 ]]; then
-					dlg --backtitle "$(ui_backtitle)" --msgbox "Basket is already empty." 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "Selection is already empty." 0 0
 				else
 					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CLEAR_BASKET" \
 						--yes-label "Clear" --no-label "$TUI2_BTN_CANCEL" \
-						--yesno "Remove all ${#OP_BASKET[@]} operators from basket?" 0 0
+						--yesno "Remove all ${#OP_BASKET[@]} operators from selection?" 0 0
 					if [[ $? -eq 0 ]]; then
 						OP_BASKET=()
 						OP_SET_ADDED=()
 						_OP_BASKET_DIRTY=true
 						_persist_operator_basket
-						tui_log "Basket cleared"
-						dlg --backtitle "$(ui_backtitle)" --msgbox "Basket cleared." 0 0
+						tui_log "Selection cleared"
+						dlg --backtitle "$(ui_backtitle)" --msgbox "Selection cleared." 0 0
 					fi
 				fi
 				;;
@@ -1559,7 +1559,7 @@ _operator_sets() {
 		[[ -z "$display" ]] && display="$set_key"
 		state="off"
 		[[ "${OP_SET_ADDED[$set_key]:-}" == "1" ]] && state="on"
-		items+=("$set_key" "$display" "$state")
+		items+=("$set_key" " $display" "$state")
 	done
 
 	if [[ ${#items[@]} -eq 0 ]]; then
@@ -1584,8 +1584,8 @@ _operator_sets() {
 	declare -A _newly_selected=()
 	local k
 	while IFS= read -r k; do
-		k="${k##[[:space:]]}"                   # trim leading whitespace
-		k="${k%%[[:space:]]}"                   # trim trailing whitespace
+		k="${k#"${k%%[![:space:]]*}"}"          # trim all leading whitespace
+		k="${k%"${k##*[![:space:]]}"}"          # trim all trailing whitespace
 		[[ -n "$k" ]] && _newly_selected["$k"]=1
 	done < "$_TUI_TMP"
 
@@ -1632,7 +1632,7 @@ _operator_sets() {
 		OP_SET_ADDED["$new_set"]=1
 		tui_log "Added operator set: $new_set"
 	done
-	tui_log "After set selection — basket: ${#OP_BASKET[@]}, sets: ${!OP_SET_ADDED[*]}"
+	tui_log "After set selection — selection: ${#OP_BASKET[@]}, sets: ${!OP_SET_ADDED[*]}"
 }
 
 _operator_search() {
@@ -1656,12 +1656,20 @@ _operator_search() {
 	# Search across all catalog indexes (format: "op-name  Display Name  channel")
 	# Priority order: redhat, certified, community — first match per operator wins
 	local items=()
-	local line op_name display_name state
+	local line op_name display_name state catalog_label
 	declare -A _seen_ops=()
 	while IFS= read -r line; do
 		line="${line##[[:space:]]}"              # trim leading whitespace
 		line="${line%%[[:space:]]}"              # trim trailing whitespace
 		[[ -z "$line" ]] && continue
+		# Multi-file grep prepends "filename:line" — extract catalog from the filename
+		catalog_label=""
+		case "${line%%:*}" in
+			*redhat-operator*)    catalog_label="redhat" ;;
+			*certified-operator*) catalog_label="certified" ;;
+			*community-operator*) catalog_label="community" ;;
+		esac
+		line="${line#*:}"                        # strip filename prefix
 		op_name="${line%%[[:space:]]*}"          # first word = operator name
 		[[ -z "$op_name" ]] && continue
 		[[ -n "${_seen_ops[$op_name]:-}" ]] && continue
@@ -1669,9 +1677,9 @@ _operator_search() {
 		display_name=$(echo "$line" | awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}')
 		state="off"
 		[[ -n "${OP_BASKET[$op_name]:-}" ]] && state="on"
-		items+=("$op_name" "${display_name:--}" "$state")
-	# -h suppresses filename prefix; search redhat/certified before community
-	done < <(grep -hiF "$query" \
+		items+=("$op_name" "$(printf '%-48s %s' "${display_name:--}" "${catalog_label:+($catalog_label)}")" "$state")
+	# -H includes filename prefix for catalog detection
+	done < <(grep -HiF "$query" \
 		"$ABA_ROOT"/.index/redhat-operator-index-v${version_short} \
 		"$ABA_ROOT"/.index/certified-operator-index-v${version_short} \
 		"$ABA_ROOT"/.index/community-operator-index-v${version_short} \
@@ -1687,7 +1695,7 @@ _operator_search() {
 
 	dlg --backtitle "$(ui_backtitle)" --title "Search Results: $query" \
 		--cancel-label "$TUI2_BTN_BACK" \
-		--ok-label "Add to Basket" \
+		--ok-label "Add to Selection" \
 		--separate-output \
 		--checklist "$TUI2_MSG_OPERATOR_SEARCH_MENU" 0 0 $list_h \
 		"${items[@]}" \
@@ -1714,7 +1722,7 @@ _operator_search() {
 			tui_log "Removed operator: $op"
 		fi
 	done
-	tui_log "Search complete, basket now: ${#OP_BASKET[@]} operators"
+	tui_log "Search complete, selection now: ${#OP_BASKET[@]} operators"
 }
 
 _operator_view_basket() {
@@ -1730,25 +1738,33 @@ _operator_view_basket() {
 		version_short=$(_ver_minor "$ocp_version")
 	fi
 	local items=()
-	local op display_name line
+	local op display_name line catalog_label
 	for op in $(echo "${!OP_BASKET[@]}" | tr ' ' '\n' | sort); do
 		display_name=""
-		# Search redhat first, then certified, then community (priority order)
+		catalog_label=""
+		# Multi-file grep prepends "filename:line" — extract catalog from the filename
+		# -m1 returns one match per file; head -1 ensures a single result
 		line=$(grep -m1 "^${op}[[:space:]]" \
 			"$ABA_ROOT"/.index/redhat-operator-index-v${version_short} \
 			"$ABA_ROOT"/.index/certified-operator-index-v${version_short} \
 			"$ABA_ROOT"/.index/community-operator-index-v${version_short} \
-			2>/dev/null)
+			2>/dev/null | head -1)
 		if [[ -n "$line" ]]; then
+			case "${line%%:*}" in
+				*redhat-operator*)    catalog_label="redhat" ;;
+				*certified-operator*) catalog_label="certified" ;;
+				*community-operator*) catalog_label="community" ;;
+			esac
+			line="${line#*:}"
 			display_name=$(echo "$line" | awk '{$1=""; $NF=""; gsub(/^ +| +$/, ""); print}')
 		fi
-		items+=("$op" "${display_name:--}" "on")
+		items+=("$op" "$(printf '%-48s %s' "${display_name:--}" "${catalog_label:+($catalog_label)}")" "on")
 	done
 
 	local num_ops=$((${#items[@]} / 3))
 	local list_h=$((num_ops < 18 ? num_ops + 2 : 18))
 
-	dlg --backtitle "$(ui_backtitle)" --title "Operator Basket (${#OP_BASKET[@]})" \
+	dlg --backtitle "$(ui_backtitle)" --title "Operator Selection (${#OP_BASKET[@]})" \
 		--cancel-label "$TUI2_BTN_BACK" \
 		--ok-label "Apply" \
 		--separate-output \
@@ -1758,7 +1774,7 @@ _operator_view_basket() {
 	local rc=$?
 	[[ $rc -ne 0 ]] && return
 
-	# Rebuild basket from what remains checked
+	# Rebuild selection from what remains checked
 	declare -A _KEPT=()
 	local line
 	while IFS= read -r line; do
@@ -1771,11 +1787,11 @@ _operator_view_basket() {
 	for op in "${!OP_BASKET[@]}"; do
 		if [[ -z "${_KEPT[$op]:-}" ]]; then
 			unset 'OP_BASKET[$op]'
-			tui_log "Removed from basket: $op"
+			tui_log "Removed from selection: $op"
 		fi
 	done
 
-	tui_log "Basket after edit: ${#OP_BASKET[@]} operators"
+	tui_log "Selection after edit: ${#OP_BASKET[@]} operators"
 }
 
 # =============================================================================

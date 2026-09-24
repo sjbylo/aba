@@ -188,8 +188,7 @@ set -x
 echo_step Create image set config file ...
 
 # Add additional images via images.conf (replaces uncomment_line approach)
-aba image add registry.redhat.io/openshift4/ose-cli:latest \
-              registry.redhat.io/rhel9/support-tools:latest \
+aba image add registry.redhat.io/rhel9/support-tools:latest \
               quay.io/openshifttest/hello-openshift:1.2.0 \
               registry.redhat.io/ubi9/ubi:latest
 
@@ -214,7 +213,6 @@ aba isconf --dir mirror
 echo_step Show image set config file ...
 
 #  additionalImages:
-#  - name: registry.redhat.io/openshift4/ose-cli
 #  - name: registry.redhat.io/rhel9/support-tools:latest
 #  - name: quay.io/openshifttest/hello-openshift:1.2.0
 #  - name: registry.redhat.io/ubi9/ubi:latest

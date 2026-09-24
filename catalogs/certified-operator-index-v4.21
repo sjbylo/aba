@@ -174,6 +174,7 @@ uma-team-operator DX Operational Observability Universal Monitoring Agent Team F
 vast-csi-operator VAST CSI driver operator stable
 vault-secrets-operator Vault Secrets Operator stable
 vcp-operator CyberArk Certificate Manager Operator stable
+vfunction-server-operator vFunction Operator stable
 victoriametrics-operator VictoriaMetrics Operator beta
 visionone-containersecurity TrendAI Vision One Container Security stable
 wave Wave stable

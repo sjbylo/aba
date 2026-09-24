@@ -2198,6 +2198,45 @@ Every `aba` invocation logs full output to `~/.aba/logs/trace.log` (last 5 rotat
 
 ---
 
+## Q: How can I get the `oc` binary for other operating systems (e.g. Windows or Mac)?
+
+The OpenShift release payload includes a `cli-artifacts` image that contains pre-built binaries for Linux, Mac, and Windows.
+After mirroring images to your internal registry, extract all tool archives with:
+
+```bash
+# Extract all tool archives from the mirrored release payload
+oc adm release extract --tools \
+   --from=<registry>:<port>/<path>/release-images:<version>-<arch> \
+   --to=/tmp/ocp-tools
+
+# Example with a typical ABA mirror setup
+oc adm release extract --tools \
+   --from=registry.example.com:8443/openshift/release-images:4.22.14-x86_64 \
+   --to=/tmp/ocp-tools
+```
+
+This produces archives for every OS and architecture, including:
+
+| Archive | Contents |
+|---|---|
+| `openshift-client-linux-amd64-*.tar.gz` | `oc` + `kubectl` for Linux x86_64 |
+| `openshift-client-linux-amd64-rhel8-*.tar.gz` | `oc` built for RHEL 8 (older glibc) |
+| `openshift-client-linux-amd64-rhel9-*.tar.gz` | `oc` built for RHEL 9 |
+| `openshift-client-mac-*.tar.gz` | `oc` + `kubectl` for macOS (Intel) |
+| `openshift-client-mac-arm64-*.tar.gz` | `oc` + `kubectl` for macOS (Apple Silicon) |
+| `openshift-client-windows-*.zip` | `oc.exe` for Windows |
+| `openshift-install-linux-*.tar.gz` | `openshift-install` |
+| `ccoctl-linux-*.tar.gz` | Cloud Credential Operator utility (`ccoctl`) |
+| `sha256sum.txt` | Checksums for all archives |
+
+For example, to get the Windows `oc.exe`:
+
+```bash
+unzip /tmp/ocp-tools/openshift-client-windows-*.zip -d /tmp/oc-windows
+```
+
+---
+
 [Back to top](#quick-start)
 
 # Feature Backlog and Ideas

@@ -6,7 +6,7 @@ Proposed
 ## Context
 
 Users often need extra container images in the oc-mirror ImageSet
-Configuration (`mirror/data/imageset-config.yaml`, the ISC) — UBI, `ose-cli`,
+Configuration (`mirror/data/imageset-config.yaml`, the ISC) — UBI,
 support-tools, virt container disks, and similar. Today those are commented
 examples in `templates/imageset-config.yaml.j2`. The only way to include them
 is to edit the generated ISC.
@@ -52,7 +52,7 @@ does not silently overwrite the YAML; warn and require
 # Edit this file. Do not add additionalImages by hand in imageset-config.yaml.
 
 registry.redhat.io/ubi9/ubi-micro:latest
-registry.redhat.io/openshift4/ose-cli:latest
+registry.redhat.io/rhel9/support-tools:latest
 ```
 
 Do not funnel this list through `normalize-aba-conf` (ADR-005: normalize
@@ -68,7 +68,7 @@ the YAML to “add” images:
   # additionalImages: generated from images.conf. Edit images.conf, not this file.
   additionalImages:
   - name: registry.redhat.io/ubi9/ubi-micro:latest  # aba/images.conf
-  - name: registry.redhat.io/openshift4/ose-cli:latest  # aba/images.conf, mirror/images.conf
+  - name: registry.redhat.io/rhel9/support-tools:latest  # aba/images.conf, mirror/images.conf
   - name: quay.io/containerdisks/fedora:latest  # mirror/images.conf
 ```
 

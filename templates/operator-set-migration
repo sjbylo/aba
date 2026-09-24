@@ -1,0 +1,12 @@
+# Name: Migration Toolkit
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+mtv-operator                # Migration Toolkit for Virtualization (VMware/RHV/oVirt to OpenShift)
+mta-operator                # Migration Toolkit for Applications (Java/app modernization)
+mtr-operator                # Migration Toolkit for Runtimes (runtime analysis)
+
+# Dependencies (mta-operator)
+rhbk-operator               # Keycloak (mta-operator dependency)
+rhsso-operator              # Red Hat SSO (mta-operator dependency)
+
+cincinnati-operator        # Included for easier cluster upgrades

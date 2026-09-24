@@ -1,6 +1,7 @@
-# Name: DELL Container Storage Modules
+# Name: IBM Block Storage
 # Please let the ABA project maintainers know if there are any missing operators or dependencies!
+# Note: This operator is from the certified-operators catalog.
 
-dell-csm-operator-certified
+ibm-block-csi-operator
 
 cincinnati-operator        # Included for easier cluster upgrades

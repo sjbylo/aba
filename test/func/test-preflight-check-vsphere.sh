@@ -19,7 +19,7 @@ set -e
 # | Wrong password (auth)       | G     | 'authentication to'        + errors += 1 |
 # | Missing datastore           | J     | 'datastore ... not found'  + errors += 1 |
 # | Missing network             | I     | 'network ... not attached' + errors += 1 |
-# | Missing folder              | H+AA  | 'datacenter not found' DC-cascade (Path H); dedicated folder-missing Path AA added |
+# | Missing folder              | H+AA  | 'datacenter not found' DC-cascade (Path H); Path AA is warn-only (folder created at install) |
 # | Missing privilege           | Q-Z   | "missing privilege '..."   + errors += N |
 #
 # Traceability: grep this file for 'Path <letter>:' to reach each assertion.
@@ -135,15 +135,15 @@ else
 	test_pass "No banned stderr-suppression patterns"
 fi
 
-# 14. Every aba_* user-visible call passes a message starting with "vSphere:" (D-12, UX-03).
-# Collect all aba_* output calls; flag any whose first string arg does NOT start with 'vSphere:'.
+# 14. Every aba_* user-visible call prefixes the message with vSphere: or
+# $_vsphere_label: (the latter is "vSphere" or "ESXi" at runtime).
 calls=$(grep -nE 'aba_(info|info_ok|warning|abort|debug)[[:space:]]+"' "$SCRIPT" || true)
-bad_prefix=$(echo "$calls" | grep -vE 'aba_(info|info_ok|warning|abort|debug)[[:space:]]+"vSphere:' || true)
+bad_prefix=$(echo "$calls" | grep -vE 'aba_(info|info_ok|warning|abort|debug)[[:space:]]+"(\$_vsphere_label:|vSphere:)' || true)
 [ -z "$calls" ] && bad_prefix=""
 if [ -n "$bad_prefix" ]; then
-	test_fail "aba_* calls found that don't prefix message with 'vSphere:'"
+	test_fail "aba_* calls found that don't prefix message with 'vSphere:' / '\$_vsphere_label:'"
 else
-	test_pass "All aba_* messages are prefixed with vSphere:"
+	test_pass "All aba_* messages are prefixed with vSphere:/\$\_vsphere_label:"
 fi
 
 # 15. No internal-ticket tokens in the shipped code (DOC-03)
@@ -161,11 +161,11 @@ else
 	test_fail "Missing normalize-vmware-conf invocation"
 fi
 
-# 17. Uses the allowed narrow exception for govc probe (comment required)
-if grep -q 'command -v govc >/dev/null' "$SCRIPT"; then
-	test_pass "Probes govc via allowed narrow exception"
+# 17. govc is available before probes (ensure_govc or an explicit PATH check)
+if grep -qE 'command -v govc >/dev/null|ensure_govc' "$SCRIPT"; then
+	test_pass "Probes govc via ensure_govc or allowed PATH check"
 else
-	test_fail "Missing 'command -v govc >/dev/null' probe"
+	test_fail "Missing govc availability probe"
 fi
 
 # -------- Behavioural smoke (three runtime paths) ----------------------------
@@ -193,6 +193,7 @@ aba_warn() {
 }
 aba_abort()     { echo "ABORT: $*"; return 0; }
 aba_debug()     { :; }
+ensure_govc()   { :; }
 # Stub normalize-vmware-conf: the function is invoked as a command inside source <(...)
 # The process substitution runs normalize-vmware-conf and sources its stdout as shell code.
 # Outputting nothing from the stub produces a source of an empty stream (no-op).
@@ -887,19 +888,24 @@ fi
 
 # (TEST-02 scenario: Missing folder)
 # 44. Path AA: VC_FOLDER points at a folder that does not exist on an otherwise
-# healthy DC -> 1 "folder ... not found" warning + errors=1. Proves the missing-
-# folder scenario is detectable independent of the DC-cascade (Path H).
+# healthy DC -> 1 "does not exist yet (will be created at install time)" warning
+# + errors delta=0. Folder is created by vmw-create-folder.sh at VM-create time,
+# so a miss must not abort ISO generation.
 _reset_path_state
 export VC_FOLDER=/MissingFolder
 err_before=$_preflight_errors
+warn_before=$_preflight_warnings
 preflight_check_vsphere >"$_smoke_out" 2>&1 || true
 err_after=$_preflight_errors
-delta=$(( err_after - err_before ))
-folder_warn=$(grep -cE "^WARN: vSphere: .*folder.*not found|folder '/MissingFolder' not found" "$_smoke_out" || true)
-if [ "$folder_warn" -ge 1 ] && [ "$delta" -eq 1 ]; then
-	test_pass "Path AA: missing folder -> 'folder ... not found' warning + errors delta=1"
+warn_after=$_preflight_warnings
+err_delta=$(( err_after - err_before ))
+warn_delta=$(( warn_after - warn_before ))
+folder_warn=$(grep -cE "folder '/MissingFolder' does not exist yet \(will be created at install time\)" "$_smoke_out" || true)
+folder_err=$(grep -c "^ERROR: vSphere: folder '/MissingFolder'" "$_smoke_out" || true)
+if [ "$folder_warn" -eq 1 ] && [ "$folder_err" -eq 0 ] && [ "$err_delta" -eq 0 ] && [ "$warn_delta" -eq 1 ]; then
+	test_pass "Path AA: missing folder -> warn-only (created at install), errors delta=0"
 else
-	test_fail "Path AA broken: folder_warn=$folder_warn delta=$delta out='$(cat "$_smoke_out")'"
+	test_fail "Path AA broken: folder_warn=$folder_warn folder_err=$folder_err err_delta=$err_delta warn_delta=$warn_delta out='$(cat "$_smoke_out")'"
 fi
 # Restore VC_FOLDER to the default known-good value for any subsequent Paths.
 export VC_FOLDER=/GoodDC/vm/folder
