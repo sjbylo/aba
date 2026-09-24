@@ -3725,7 +3725,7 @@ aba_prefetch_catalogs() {
 	done
 }
 
-# --- Aba-facing cleanup ---
+# --- ABA-facing cleanup ---
 # Note: No automatic cleanup on Ctrl-C. Background tasks continue naturally.
 # Use 'aba reset' to explicitly kill all background tasks and clean up.
 

@@ -1127,6 +1127,21 @@ This connects OperatorHub to your mirror and applies the CatalogSource files gen
 
 > **Per-mirror override:** Set `op_sets=` and/or `ops=` in a mirror's `mirror.conf` to use different operators per enclave. See [Named Mirror Directories](#named-mirror-directories-enclaves).
 
+### Additional Container Images
+
+To mirror extra container images (UBI, `support-tools`, container disks, etc.) alongside OpenShift platform and operator images, use `images.conf`:
+
+```bash
+aba image add registry.redhat.io/ubi9/ubi:latest
+aba image add registry.redhat.io/rhel9/support-tools:latest
+aba image list                         # Show all configured additional images
+aba image remove <image:tag>           # Remove an image
+```
+
+Images are stored in `images.conf` (next to `aba.conf`). You can also create a per-mirror `mirror/images.conf` for overrides — both files are merged at ISC generation time. Edit the files directly or use the `aba image` commands above.
+
+After adding images, run `aba -d mirror sync` (or `save`/`load`) to mirror them.
+
 [Back to top](#quick-start)
 
 ## Connect OperatorHub to Internal Mirror Registry
