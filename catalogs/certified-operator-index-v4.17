@@ -65,7 +65,6 @@ f5-ipam-controller-operator F5 Ipam controller stable
 falcon-operator CrowdStrike Falcon Platform - Operator certified-1.0
 federatorai-certified Federator.ai stable
 fujitsu-enterprise-postgres-operator Fujitsu Enterprise Postgres Operator stable
-fujitsu-enterprise-postgres-operator-with-cg-module Fujitsu Enterprise Postgres Operator with Cryptographic Module stable
 function-mesh Function Mesh Operator alpha
 gitlab-operator-kubernetes GitLab stable
 gitlab-runner-operator GitLab Runner stable
@@ -235,16 +234,16 @@ sumologic-kubernetes-collection-helm-operator Sumo Logic Kubernetes Collection H
 synaxg-operator SynaXG vDU card 102X Operator alpha
 t8c-certified Turbonomic Platform Operator stable
 t8c-tsc-client-certified Turbonomic Secure Connect Client stable
-tawon-operator Tawon fast-v3
+tawon-operator Tawon candidate-v3
 template-operator Template Operator release-0.1
-tenant-operator Multi Tenant Operator release-1.9
+tenant-operator Multi Tenant Operator release-1.10
 tigera-operator Tigera Operator v1.38 release-v1.38
 timemachine-operator Time Machine Operator alpha
 trident-operator NetApp Trident stable
 tvo-operator Trilio for OpenStack 6.0.x
-uma-admin-operator DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy beta
-uma-operator DX Operational Observability Universal Monitoring Agent beta
-uma-team-operator DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy beta
+uma-admin-operator DX Operational Observability Universal Monitoring Agent Admin For Multi-tenancy alpha
+uma-operator DX Operational Observability Universal Monitoring Agent alpha
+uma-team-operator DX Operational Observability Universal Monitoring Agent Team For Multi-tenancy alpha
 vast-csi-operator VAST CSI driver operator stable
 vault-secrets-operator Vault Secrets Operator stable
 vcp-operator CyberArk Certificate Manager Operator stable

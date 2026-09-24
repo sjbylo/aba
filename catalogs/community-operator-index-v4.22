@@ -157,6 +157,7 @@ hermes-operator Hermes Operator stable
 hive-operator Hive for Red Hat OpenShift alpha
 horreum-operator Horreum alpha
 hyperfoil-bundle Hyperfoil alpha
+ibm-block-csi-operator-community IBM block storage CSI driver operator stable
 ibmcloud-operator IBM Cloud Operator stable
 ibm-security-verify-access-operator IBM Security Verify Access Operator stable
 ibm-spectrum-scale-csi-operator IBM Spectrum Scale CSI Plugin Operator stable
@@ -240,6 +241,7 @@ patch-operator Patch Operator alpha
 patterns-operator Validated Patterns Operator fast
 pcc-operator Prisma Cloud Compute Operator stable
 pelorus-operator Pelorus Operator alpha
+percona-postgresql-operator Percona Operator for PostgreSQL stable
 percona-server-mongodb-operator Percona Distribution for MongoDB Operator stable
 percona-server-mysql-operator Percona Operator for MySQL based on Percona Server for MySQL stable
 percona-xtradb-cluster-operator Percona XtraDB Cluster Operator stable
