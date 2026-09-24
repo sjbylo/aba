@@ -374,8 +374,8 @@ else
 	# Insert user-managed notice if the user edited the ISC and it's not already marked.
 	# When the user deletes the file (or resets via TUI), ABA regenerates from the
 	# template and the notice is naturally absent.
-	if ! grep -q "^# This file is user-managed" data/imageset-config.yaml 2>/dev/null; then
-		sed -i '1a # This file is user-managed. Delete it and re-run to return to ABA control.' data/imageset-config.yaml
+	if ! grep -q "^# This file .* is user-managed" data/imageset-config.yaml 2>/dev/null; then
+		sed -i '1a # This file (mirror/data/imageset-config.yaml) is user-managed. To regenerate: delete this file, or run aba --force -d mirror imagesetconf' data/imageset-config.yaml
 	fi
 
 	if [ -f ../.bundle ]; then
