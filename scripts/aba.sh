@@ -186,7 +186,7 @@ else
 	_cmd=$(basename "$0")
 	(
 		echo "  __   ____   __  "
-		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the ABA utility!"
+		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift easily with the ABA utility!"
 		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
 		echo "\_/\_/(____/\_/\_/"
 		echo
