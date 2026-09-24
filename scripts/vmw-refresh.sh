@@ -10,7 +10,13 @@ aba_debug "Running: $0 $* at $(date) in dir: $PWD"
 
 # Only prompt about deletion if VMs exist from a previous install.
 # On fresh install, no VMs exist — just proceed to create.
-if scripts/vmw-exists.sh; then
+# Exit 2 from vmw-exists = hypervisor unreachable — must abort, not skip.
+# Capture via || so set -e / ERR trap do not treat "no VMs" (exit 1) as fatal.
+_exists_rc=0
+scripts/vmw-exists.sh || _exists_rc=$?
+if [ $_exists_rc -eq 2 ]; then
+	aba_abort "Cannot reach vCenter — refusing to refresh (existing VMs may still be running)"
+elif [ $_exists_rc -eq 0 ]; then
 	scripts/vmw-delete.sh || true
 fi
 

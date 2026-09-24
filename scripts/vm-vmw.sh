@@ -23,22 +23,42 @@ _govc_retry() {
 	try_cmd -n 3 -d 3 -D 3 -m "govc $1" -- govc "$@"
 }
 
-# Cached lookup of a VM's runtime+hardware as JSON; empty on lookup failure.
+# Query a VM's runtime+hardware as JSON via govc with retry.
+# Returns 0 with JSON on stdout when the VM is found (even if powered off).
+# Returns 0 with empty stdout when the VM genuinely does not exist.
+# Returns non-zero (abort) when vCenter is unreachable or govc fails — callers
+# must NOT treat this as "VM absent".
+# stdout MUST stay pure JSON: never 2>&1 — try_cmd and govc warnings on
+# stderr would make jq fail (Invalid numeric literal).
 _vmw_vm_json() {
-	govc vm.info -json "$1" 2>/dev/null
+	local out err_file rc=0
+	err_file=$(mktemp)
+	out=$(_govc_retry vm.info -json "$1" 2>"$err_file") || rc=$?
+	if [ $rc -ne 0 ]; then
+		aba_warn "govc vm.info failed for '$1' (rc=$rc) — vCenter may be unreachable"
+		aba_debug "govc stderr: $(cat "$err_file")"
+		rm -f "$err_file"
+		return 1
+	fi
+	rm -f "$err_file"
+	echo "$out"
 }
 
 vmp_exists() {
-	local vm=$1 ps
+	local vm=$1 json ps
 	aba_debug "Running: govc vm.info -json $vm"
-	ps=$(_vmw_vm_json "$vm" | jq -r '.virtualMachines[0].runtime.powerState')
-	[ "$ps" != "null" ] && [ -n "$ps" ]
+	json=$(_vmw_vm_json "$vm") || return 2   # 2 = hypervisor unreachable
+	[ -n "$json" ] || return 1
+	ps=$(echo "$json" | jq -r '.virtualMachines[0].runtime.powerState') || return 1
+	[ "$ps" != "null" ] && [ -n "$ps" ]      # 0 = exists, 1 = not found
 }
 
 vmp_is_on() {
-	local vm=$1 ps
+	local vm=$1 json ps
 	aba_debug "Running: govc vm.info -json $vm"
-	ps=$(_vmw_vm_json "$vm" | jq -r '.virtualMachines[0].runtime.powerState')
+	json=$(_vmw_vm_json "$vm") || return 1
+	[ -n "$json" ] || return 1
+	ps=$(echo "$json" | jq -r '.virtualMachines[0].runtime.powerState') || return 1
 	[ "$ps" = "poweredOn" ]
 }
 
@@ -46,9 +66,9 @@ vmp_is_on() {
 vmp_info() {
 	local vm=$1 json ps num_cpu memory_mb memory_gb
 	aba_debug "Running: govc vm.info -json $vm"
-	json=$(_vmw_vm_json "$vm")
+	json=$(_vmw_vm_json "$vm") || return $?
 	[ "$json" ] || return 1
-	ps=$(echo "$json" | jq -r '.virtualMachines[0].runtime.powerState')
+	ps=$(echo "$json" | jq -r '.virtualMachines[0].runtime.powerState') || return 1
 	[ "$ps" = "null" ] && return 1
 	num_cpu=$(echo "$json" | jq -r '.virtualMachines[0].config.hardware.numCPU')
 	memory_mb=$(echo "$json" | jq -r '.virtualMachines[0].config.hardware.memoryMB')
@@ -220,13 +240,17 @@ vmp_ensure_cdrom_connected() {
 # Destroy a VM and verify it no longer exists.
 #   vmp_destroy <vm_name>
 vmp_destroy() {
-	local vm=$1 power_state
+	local vm=$1 json ps
 	aba_debug "Running: govc vm.destroy $vm"
 	_govc_retry vm.destroy "$vm" || true
 
-	power_state=$(govc vm.info -json "$vm" 2>&1 | jq -r '.virtualMachines[0].runtime.powerState')
-	if [ "$power_state" != "null" ] && [ -n "$power_state" ]; then
-		echo "vmp_destroy: VM $vm still exists after destroy (state=$power_state)" >&2
+	json=$(_vmw_vm_json "$vm") || {
+		aba_warn "Cannot verify VM '$vm' was destroyed (vCenter unreachable)"
+		return 1
+	}
+	ps=$(echo "$json" | jq -r '.virtualMachines[0].runtime.powerState') || return 1
+	if [ "$ps" != "null" ] && [ -n "$ps" ]; then
+		echo "vmp_destroy: VM $vm still exists after destroy (state=$ps)" >&2
 		return 1
 	fi
 }

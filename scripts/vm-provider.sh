@@ -54,10 +54,16 @@ _vm_hosts() {
 _vm_full_name() { vm_name "$CLUSTER_NAME" "$1"; }
 
 # Exit 0 if at least one of the cluster's VMs exists.
+# Exit 1 if none exist.  Exit 2 if the hypervisor is unreachable (callers must
+# distinguish "no VMs" from "can't tell").
 vm_exists_any() {
-	local name
+	local name rc
 	for name in $(_vm_hosts all); do
-		vmp_exists "$(_vm_full_name "$name")" && return 0
+		rc=0
+		vmp_exists "$(_vm_full_name "$name")" && return 0 || rc=$?
+		# rc=1 from vmp_exists means "VM not found" — keep checking.
+		# rc>1 means the hypervisor query itself failed — propagate immediately.
+		[ $rc -gt 1 ] && return 2
 	done
 	return 1
 }
