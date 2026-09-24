@@ -188,6 +188,8 @@ koku-metrics-operator Koku Metrics Operator beta
 kollect Kollect stable
 konveyor-operator Konveyor Operator alpha
 korrel8r Korrel8r stable
+krkn-operator-acm Krkn Operator ACM stable-acm
+krkn-operator Krkn Operator stable-ocp
 kruize-operator Kruize Operator alpha
 kuadrant-operator Kuadrant Operator stable
 kubebrowser KubeBrowser Operator alpha

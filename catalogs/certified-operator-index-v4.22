@@ -38,13 +38,15 @@ eginnovations-operator eG Innovations Universal Agent Operator beta
 elasticsearch-eck-operator-certified Elasticsearch (ECK) Operator stable
 ent-small-operator Enterprise Small Operator alpha
 eqube-operator eQube® Operator stable
+exascaler-csi-driver-operator EXAScaler CSI File Driver alpha
 f5-ai-security-operator F5 AI Security Operator stable
 falcon-operator CrowdStrike Falcon Platform - Operator certified-1.0
+flow-cni-operator nutanix-flow-cni alpha
 fujitsu-enterprise-postgres-operator Fujitsu Enterprise Postgres Operator stable
 function-mesh Function Mesh Operator alpha
 gitlab-operator-kubernetes GitLab stable
 google-cloud-cluster-services-for-openshift-telemetry Cluster Services for OpenShift Telemetry stable
-gpu-operator-certified NVIDIA GPU Operator v26.3
+gpu-operator-certified NVIDIA GPU Operator v26.7
 habana-ai-operator Intel Gaudi Base Operator stable
 hammu-platform Hammu Platform alpha
 harness-gitops-operator Harness GitOps Operator alpha
@@ -58,6 +60,7 @@ hpeoneview-operator Hpeoneview Operator alpha
 hspc-operator Hitachi Storage Plug-in for Containers stable
 hulft HULFT10 for Container Platform stable
 ibm-application-gateway-operator IBM Application Gateway Operator stable
+ibm-block-csi-operator IBM block storage CSI driver operator stable
 ibm-data-reporter-operator IBM Data Reporter Operator stable
 ibm-metrics-operator IBM Metrics Operator stable
 ibm-security-verify-access-operator IBM Verify Identity Access Operator stable
@@ -70,6 +73,7 @@ intel-device-plugins-operator Intel Device Plugins Operator stable
 intel-tdx-dcap-operator Intel TDX DCAP Operator alpha
 k10-kasten-operator-rhmp Veeam Kasten stable
 k8s-triliovault Trilio for Kubernetes 5.4.x
+kalybr-ent-operator Kalybr Enterprise operator stable
 kove-operator Kove:SDM™ Operator stable
 kubearmor-operator-certified KubeArmor Operator stable
 kubeblocks KubeBlocks stable
@@ -134,13 +138,14 @@ stackable-spark-operator Stackable Operator for Apache Spark stable
 stackable-superset-operator Stackable Operator for Apache Superset stable
 stackable-trino-operator Stackable Operator for Trino stable
 stackable-zookeeper-operator Stackable Operator for Apache ZooKeeper stable
+stackgres-certified StackGres stable
 synaxg-operator SynaXG vDU card 102X Operator alpha
 synology-csi-operator Synology CSI Operator alpha
 t8c-certified Turbonomic Platform Operator stable
 t8c-tsc-client-certified Turbonomic Secure Connect Client stable
-tawon-operator Tawon fast-v3
+tawon-operator Tawon candidate-v3
 template-operator Template Operator release-0.1
-tenant-operator Multi Tenant Operator release-1.9
+tenant-operator Multi Tenant Operator release-1.10
 tigera-operator Tigera Operator v1.38 release-v1.42
 trident-operator NetApp Trident stable
 truenas-csi TrueNAS CSI Driver stable
