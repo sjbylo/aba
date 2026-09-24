@@ -375,7 +375,7 @@ else
 	# When the user deletes the file (or resets via TUI), ABA regenerates from the
 	# template and the notice is naturally absent.
 	if ! grep -q "^# This file .* is user-managed" data/imageset-config.yaml 2>/dev/null; then
-		local _mir_name; _mir_name=$(basename "$PWD")
+		_mir_name=$(basename "$PWD")
 		sed -i "1a # This file (${_mir_name}/data/imageset-config.yaml) is user-managed. To regenerate: delete this file, or run aba --force -d ${_mir_name} imagesetconf" data/imageset-config.yaml
 	fi
 
