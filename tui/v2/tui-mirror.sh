@@ -1977,10 +1977,25 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					--editbox "$_img_file" 0 0 2>"$_TUI_TMP"
 				if [[ $? -eq 0 ]]; then
 					if ! diff -q "$_TUI_TMP" "$_img_file" >/dev/null 2>&1; then
-						cp "$_TUI_TMP" "$_img_file"
-						tui_kick_isconf_regen
-						tui_log "images.conf saved by user"
-						dlg --backtitle "$(ui_backtitle)" --msgbox "images.conf saved. ISC will be regenerated." 0 0
+						# Validate: each non-blank, non-comment line must be a valid image ref
+						local _bad_lines=""
+						while IFS= read -r _line; do
+							_line="${_line#"${_line%%[![:space:]]*}"}"
+							_line="${_line%"${_line##*[![:space:]]}"}"
+							[[ -z "$_line" || "$_line" == \#* ]] && continue
+							if ! echo "$_line" | grep -qE '^[a-zA-Z0-9][-a-zA-Z0-9.]*(/[-a-zA-Z0-9._]+)+(:[a-zA-Z0-9][-a-zA-Z0-9._]*|@sha256:[0-9a-fA-F]+)?$'; then
+								_bad_lines+="  $_line\n"
+							fi
+						done < "$_TUI_TMP"
+						if [[ -n "$_bad_lines" ]]; then
+							dlg --backtitle "$(ui_backtitle)" --msgbox \
+								"Invalid image reference(s) — not saved:\n\n${_bad_lines}\nExpected format: registry/repo/image:tag" 0 0
+						else
+							cp "$_TUI_TMP" "$_img_file"
+							tui_kick_isconf_regen
+							tui_log "images.conf saved by user"
+							dlg --backtitle "$(ui_backtitle)" --msgbox "images.conf saved. ISC will be regenerated." 0 0
+						fi
 					fi
 				fi
 				;;
