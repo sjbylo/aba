@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.3...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.4...HEAD)
+
+---
+
+## [1.3.4](https://github.com/sjbylo/aba/releases/tag/v1.3.4) - 2026-09-25
+
+Operator sets overhaul, TUI operator UX improvements, ISC file ownership UX, preflight and bundle fixes
+
 
 Operator sets overhaul, TUI operator UX improvements, file ownership UX, preflight and bundle fixes
 
