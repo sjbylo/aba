@@ -1,0 +1,13 @@
+# Name: Developer Tools & Experience
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+rhdh                       # Developer Hub (Backstage) — service catalog, templates
+devspaces                  # Cloud IDE (Eclipse Che)
+web-terminal               # In-browser CLI shell
+cryostat-operator          # Java profiling (JFR)
+rhbk-operator              # Keycloak (modern SSO)
+
+# Dependencies
+devworkspace-operator
+
+cincinnati-operator        # Included for easier cluster upgrades

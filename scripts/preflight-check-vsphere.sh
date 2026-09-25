@@ -71,6 +71,18 @@ _vsphere_warn() {
 	_preflight_warnings=$(( _preflight_warnings + 1 ))
 }
 
+# Resolver miss: folder is created later by vmw-create-folder.sh (cluster
+# subfolder plus any missing parents), so a missing folder must not abort
+# ISO generation. Other kinds remain blocking errors.
+_vsphere_resolve_missing() {
+	local kind="$1" shown="$2"
+	if [ "$kind" = "folder" ]; then
+		_vsphere_warn "$kind '$shown' does not exist yet (will be created at install time)"
+	else
+		_vsphere_err "$kind '$shown' not found"
+	fi
+}
+
 # --- Phase 2 Layer 1 helpers (private to this file) -----------------------
 
 # Extract host + port from GOVC_URL into two fields echoed on stdout.
@@ -220,7 +232,7 @@ _vsphere_object_exists() {
 #      to resource pools rather than any object sharing the leaf name)
 #
 # On success: writes the resolved absolute path to _vsphere_resolver_result and returns 0.
-# On failure: emits one aba_warn, bumps _preflight_errors, returns 1.
+# On failure: emits one aba_warn, bumps _preflight_errors (folder: warning only), returns 1.
 #
 # Important: the resolved path is returned via the module variable
 # _vsphere_resolver_result, NOT via stdout. aba_warn / aba_debug helpers
@@ -245,7 +257,7 @@ _vsphere_resolve_object() {
 			_vsphere_resolver_result="$hint"
 			return 0
 		fi
-		_vsphere_err "$kind '$hint' not found"
+		_vsphere_resolve_missing "$kind" "$hint"
 		return 1
 	fi
 
@@ -295,7 +307,7 @@ _vsphere_resolve_object() {
 	# Neither flat-path nor find found anything. Use the flat path in the
 	# warning message for backward compatibility with existing tests /
 	# tooling that matches on the old "$kind '$flat' not found" wording.
-	_vsphere_err "$kind '$flat' not found"
+	_vsphere_resolve_missing "$kind" "$flat"
 	return 1
 }
 
@@ -436,9 +448,11 @@ _vsphere_probe_resources() {
 	fi
 
 	# RES-05: VM folder. VC_FOLDER is optional (commented-out config is valid;
-	# the installer creates the default folder). Skip the probe when empty
-	# rather than running the resolver with an empty hint, which would land on
-	# '/<DC>/vm/' and falsely bump the error counter.
+	# vmw-create-folder.sh creates the cluster folder and any missing parents
+	# at VM-create time). Skip the probe when empty rather than running the
+	# resolver with an empty hint, which would land on '/<DC>/vm/' and
+	# falsely bump the warning counter. A missing folder is a warning, not
+	# an error — ISO generation must not abort because the folder is created later.
 	if [ -z "${VC_FOLDER:-}" ]; then
 		aba_info "$_vsphere_label: VC_FOLDER not set, installer will create the default folder per cluster"
 	elif _vsphere_resolve_object folder "$VC_FOLDER" "/$GOVC_DATACENTER/vm"; then

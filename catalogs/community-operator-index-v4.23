@@ -147,6 +147,7 @@ hedvig-operator Hedvig Operator stable
 hermes-operator Hermes Operator stable
 horreum-operator Horreum alpha
 hyperfoil-bundle Hyperfoil alpha
+ibm-block-csi-operator-community IBM block storage CSI driver operator stable
 ibmcloud-operator IBM Cloud Operator stable
 ibm-security-verify-access-operator IBM Security Verify Access Operator stable
 ibm-spectrum-scale-csi-operator IBM Spectrum Scale CSI Plugin Operator stable

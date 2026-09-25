@@ -1,0 +1,9 @@
+# Name: Backup & Disaster Recovery
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+# Note: Veeam Kasten is from the certified-operators catalog.
+
+redhat-oadp-operator        # OADP — OpenShift backup/restore (Velero-based)
+k10-kasten-operator-rhmp    # Veeam Kasten — application-centric backup
+volsync-product             # Asynchronous volume replication
+
+cincinnati-operator        # Included for easier cluster upgrades

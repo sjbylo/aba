@@ -22,7 +22,8 @@ fi
 
 source scripts/vm-provider.sh
 vm_provider_load vmw
-# || exit 1 keeps the call in a conditional context so the ERR trap doesn't
-# fire on the expected "no VMs exist" return code (which is a normal result,
-# not a script error).
-vm_exists_any || exit 1
+# vm_exists_any returns: 0 = found, 1 = none exist, 2 = hypervisor unreachable.
+# Capture via || so the ERR trap does not treat "no VMs" as a script error.
+_rc=0
+vm_exists_any || _rc=$?
+exit $_rc

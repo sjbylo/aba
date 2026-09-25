@@ -1,5 +1,5 @@
-# Name: OpenShift Operations
-# Please let us know if there any missing dependencies
+# Name: Useful OpenShift Operators
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
 kubernetes-nmstate-operator
 node-maintenance-operator
@@ -9,5 +9,6 @@ cluster-kube-descheduler-operator
 web-terminal
 devworkspace-operator		# Required by web-terminal
 cli-manager
+lightspeed-operator		# OpenShift AI assistant (console integration)
 
 cincinnati-operator        # Included for easier cluster upgrades

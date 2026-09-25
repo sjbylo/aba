@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.3.3
+ABA_VERSION=1.3.4
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260916091843
+ABA_BUILD=20260925090017
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -186,7 +186,7 @@ else
 	_cmd=$(basename "$0")
 	(
 		echo "  __   ____   __  "
-		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift quickly with the ABA utility!"
+		echo " / _\ (  _ \ / _\     Install & manage air-gapped OpenShift easily with the ABA utility!"
 		echo "/    \ ) _ (/    \    Follow the instructions below or see the aba/README.md file for more."
 		echo "\_/\_/(____/\_/\_/"
 		echo
@@ -444,15 +444,15 @@ elif [ "$1" = "--light" ] || [ "$1" = "--lite" ]; then
 		shift
 		echo_yellow "Available operator sets:"
 		echo
-		printf "  %-12s %s\n" "SET" "DESCRIPTION"
-		printf "  %-12s %s\n" "---" "-----------"
+		printf "  %-16s %s\n" "SET" "DESCRIPTION"
+		printf "  %-16s %s\n" "---" "-----------"
 		for f in "$ABA_ROOT"/templates/operator-set-*; do
 			[ -f "$f" ] || continue
 			set_name="${f##*operator-set-}"   # extract set name from full path
 			# Skip auto-generated custom sets
 			echo "$set_name" | grep -q "^custom-" && continue
 			desc=$(grep "^# Name:" "$f" | head -1 | sed 's/^# Name: *//')
-			printf "  %-12s %s\n" "$set_name" "$desc"
+			printf "  %-16s %s\n" "$set_name" "$desc"
 		done
 		exit 0
 	elif [ "$1" = "show-ops" ] || [ "$1" = "show-operators" ]; then
@@ -870,8 +870,9 @@ for i in imgs:
 				else
 					aba_warn "No such operator set: $1" >&2
 				aba_info -n "Available operator sets are: " >&2
-				ls templates/operator-set-* -1| cut -d- -f3| tr "\n" " " >&2
-				echo_white "(as defined in files: aba/templates/operator-sets-*)" >&2
+				for _f in "$ABA_ROOT"/templates/operator-set-*; do [ -f "$_f" ] && echo -n "${_f##*operator-set-} "; done >&2
+				echo >&2
+				echo_white "(as defined in files: aba/templates/operator-set-*)" >&2
 
 					exit 1
 				fi

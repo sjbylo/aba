@@ -24,15 +24,20 @@ source <(normalize-aba-conf)
 
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 
-if scripts/kvm-exists.sh; then
+# Capture via || so the ERR trap does not treat "no VMs" (exit 1) as fatal.
+_exists_rc=0
+scripts/kvm-exists.sh || _exists_rc=$?
+if [ $_exists_rc -eq 2 ]; then
+	aba_abort "Cannot reach KVM host — refusing to skip VM cleanup (VMs may still exist)"
+elif [ $_exists_rc -ne 0 ]; then
+	aba_info "No VMs found -- nothing to delete"
+	exit 0
+else
 	if [ "$ask" ]; then
 		for name in $CP_NAMES $WORKER_NAMES; do
 			echo "$(vm_name "$CLUSTER_NAME" "$name")"
 		done
 	fi
-else
-	aba_info "No VMs found -- nothing to delete"
-	exit 0
 fi
 
 ask -n --auto-yes "Delete the above virtual machine(s)" || exit 1

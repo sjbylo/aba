@@ -1,0 +1,11 @@
+# Name: Observability
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+cluster-observability-operator  # Metrics, dashboards, alerting
+tempo-product                   # Distributed tracing (Tempo)
+opentelemetry-product
+netobserv-operator              # Network observability (eBPF flow data)
+cluster-logging                 # Vector forwarder
+loki-operator                   # Log storage backend
+
+cincinnati-operator        # Included for easier cluster upgrades

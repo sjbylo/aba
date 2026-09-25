@@ -1,5 +1,5 @@
 # Name: ODF Multi Cluster Orchestration
-# Please let us know if there any missing dependencies
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
 odr-cluster-operator
 odr-hub-operator

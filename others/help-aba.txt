@@ -1,11 +1,11 @@
 Install & manage air-gapped OpenShift. 
 
-  Aba makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially
-  disconnected environment, on bare-metal, VMware (vSphere/ESXi) or KVM (libvirt). Because Aba uses
+  ABA makes it easier to install an OpenShift cluster - 'Cluster Zero' - into a fully or partially
+  disconnected environment, on bare-metal, VMware (vSphere/ESXi) or KVM (libvirt). Because ABA uses
   the Agent-based installer, no load balancer, bootstrap node, or DHCP is required.
 
 Main commands: 
-  aba                                   # Interactive mode.  Let Aba guide you through the process
+  aba                                   # Interactive mode.  Let ABA guide you through the process
   aba [-d mirror] install               # Install Quay (or connect to existing) mirror registry. See 'aba mirror --help'.
   aba [-d mirror] verify                # Verify connectivity with the mirror registry
   aba [-d mirror] sync                  # Copy images from the Internet into the mirror registry (m2m)
@@ -31,6 +31,9 @@ Other commands:
   aba ocp-versions|ocp-ver              # Show a table of the latest versions of OpenShift
   aba [-d <cluster>] ssh [--all] [--masters|--workers] [--cmd <cmd>]
                                         # SSH to cluster nodes (default: node0, --all: every node)
+  aba image add <image:tag> ...         # Add extra container images to mirror (stored in images.conf)
+  aba image remove <image:tag>          # Remove an image from images.conf
+  aba image list                        # List all additional images (from images.conf)
   aba show-operators                    # List available operators (Red Hat catalog by default)
   aba show-operators --certified        # List certified operators (or --community/--all)
   aba show-operators --refresh          # Re-download catalogs if stale, then list

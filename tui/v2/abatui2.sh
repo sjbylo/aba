@@ -213,13 +213,13 @@ if [[ -f "$ABA_ROOT/aba.conf" ]]; then
 	source <(cd "$ABA_ROOT" && normalize-aba-conf) || true
 fi
 
-# Global operator basket (for CONNO mode operator selection)
+# Global operator selection (for CONNO mode operator selection)
 declare -gA OP_BASKET
 declare -gA OP_SET_ADDED
 OP_BASKET=()
 OP_SET_ADDED=()
 
-# Restore basket from aba.conf (config files = single source of truth)
+# Restore selection from aba.conf (config files = single source of truth)
 # Handles both ops= (comma-separated operators) and op_sets= (comma-separated set names)
 # Validates each operator against the catalog for the effective OCP version (upgrade target if set)
 if [[ -n "${ocp_upgrade_to:-}" && "$ocp_upgrade_to" != "${ocp_version:-}" ]]; then
@@ -661,7 +661,7 @@ _conno_main() {
 Mirror:
   • View/Edit ISC — manage the ImageSet configuration
   • Operators — select which operators to include
-  • Additional Images — add extra container images (ose-cli, support-tools, etc.)
+  • Additional Images — add extra container images (UBI, support-tools, etc.)
   • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
 
@@ -825,7 +825,7 @@ while :; do
   __   ____   __
  / _\\ (  _ \\ / _\\     ABA v${_aba_ver}
 /    \\ ) _ (/    \\    Install & configure
-\\_/\\_/(____/\\_/\\_/    air-gapped OpenShift quickly!
+\\_/\\_/(____/\\_/\\_/    air-gapped OpenShift easily!
 
 Follow the setup wizard or see the README.md file for more.
 Get help: https://github.com/sjbylo/aba/discussions

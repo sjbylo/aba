@@ -1,0 +1,8 @@
+# Name: HPE Storage
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+# Note: These operators are from the certified-operators catalog.
+
+hpe-csi-operator
+hspc-operator               # Hitachi Storage Plug-in for Containers
+
+cincinnati-operator        # Included for easier cluster upgrades

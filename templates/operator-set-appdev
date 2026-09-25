@@ -1,8 +1,10 @@
 # Name: Application Development
-# Please let us know if there any missing dependencies
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
 openshift-gitops-operator
 openshift-pipelines-operator-rh
+openshift-builds-operator
+rh-service-binding-operator
 devspaces
 serverless-operator
 rhsso-operator

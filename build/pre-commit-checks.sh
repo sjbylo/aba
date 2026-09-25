@@ -258,4 +258,54 @@ else
     echo -e "${YELLOW}[7/7] Skipping README.md permalink check (file not changed)${NC}\n"
 fi
 
+# =============================================================================
+# Step 8: Verify operator set entries exist in shipped catalogs
+# =============================================================================
+# Checks every operator name in templates/operator-set-* against the shipped
+# catalog index files in catalogs/.  Catches typos, removed operators, and
+# missing catalog entries before they reach users.
+# Uses the latest v4.x catalog available (highest version).
+# Use the latest v4.x catalog with 100+ entries (skip sparse pre-release catalogs)
+_latest_catalog=""
+for _cat_candidate in $(ls catalogs/redhat-operator-index-v4.* 2>/dev/null | sort -rV); do
+    [ "$(wc -l < "$_cat_candidate")" -ge 100 ] && _latest_catalog="$_cat_candidate" && break
+done
+if [ -n "$_latest_catalog" ]; then
+    _cat_ver=$(echo "$_latest_catalog" | grep -oE 'v[0-9]+\.[0-9]+')
+    echo -e "${YELLOW}[8/8] Verifying operator set entries against catalogs (${_cat_ver})...${NC}"
+
+    # Build lookup of all known operators
+    _all_catalog_ops=$(mktemp)
+    cat catalogs/redhat-operator-index-${_cat_ver} catalogs/certified-operator-index-${_cat_ver} catalogs/community-operator-index-${_cat_ver} 2>/dev/null | awk '{print $1}' | sort -u > "$_all_catalog_ops"
+
+    _opset_failed=0
+    _opset_checked=0
+    for _setfile in templates/operator-set-*; do
+        [ -f "$_setfile" ] || continue
+        _setname="${_setfile##*operator-set-}"
+        while IFS= read -r _line; do
+            [[ "$_line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "$_line" ]] && continue
+            _op="${_line%%#*}"
+            _op="${_op#"${_op%%[![:space:]]*}"}"
+            _op="${_op%"${_op##*[![:space:]]}"}"
+            [[ -z "$_op" ]] && continue
+            _opset_checked=$(( _opset_checked + 1 ))
+            if ! grep -qx "$_op" "$_all_catalog_ops"; then
+                echo -e "  ${RED}✗ '$_op' (in set '$_setname') not found in any ${_cat_ver} catalog${NC}"
+                _opset_failed=1
+            fi
+        done < "$_setfile"
+    done
+    rm -f "$_all_catalog_ops"
+
+    if [ $_opset_failed -eq 1 ]; then
+        echo -e "${YELLOW}      ⚠ Some operators not in ${_cat_ver} catalogs (may be valid for older versions)${NC}\n"
+    else
+        echo -e "${GREEN}      ✓ All $_opset_checked operators verified in ${_cat_ver} catalogs${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}[8/8] Skipping operator set check (no catalog index files found)${NC}\n"
+fi
+
 echo -e "${GREEN}=== All Pre-Commit Checks Passed! ===${NC}"
