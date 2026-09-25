@@ -406,6 +406,32 @@ fi
 echo
 
 # -----------------------------------------------------------------------------
+# Step 1b: Verify operator set dependencies (requires podman + registry access)
+# -----------------------------------------------------------------------------
+# Runs tools/verify-operator-deps.sh to ensure every operator set has all OLM
+# dependencies included.  Uses the latest GA v4.x catalog.
+if command -v podman >/dev/null 2>&1; then
+    _dep_ver=""
+    for _f in $(ls catalogs/redhat-operator-index-v4.* 2>/dev/null | sort -rV); do
+        [ "$(wc -l < "$_f")" -ge 100 ] && _dep_ver=$(echo "$_f" | grep -oE '[0-9]+\.[0-9]+') && break
+    done
+    if [ -n "$_dep_ver" ]; then
+        echo -e "${YELLOW}[1b] Verifying operator set dependencies (OCP ${_dep_ver})...${NC}"
+        if tools/verify-operator-deps.sh "$_dep_ver"; then
+            echo
+        else
+            echo -e "${RED}       ✗ Operator set dependency check failed!${NC}"
+            echo -e "${RED}         Fix missing dependencies before releasing.${NC}\n"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}[1b] Skipping operator dep check (no GA catalog found)${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}[1b] Skipping operator dep check (podman not available)${NC}\n"
+fi
+
+# -----------------------------------------------------------------------------
 # Step 2: Update VERSION file
 # -----------------------------------------------------------------------------
 # VERSION is a single-line file read by various scripts to know the current

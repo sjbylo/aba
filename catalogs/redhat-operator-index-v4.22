@@ -56,7 +56,7 @@ kiali-ossm Kiali Operator stable
 kubernetes-nmstate-operator Kubernetes NMState Operator stable
 kubevirt-hyperconverged OpenShift Virtualization stable
 kueue-operator Red Hat build of Kueue stable-v1.4
-leader-worker-set Red Hat build of Leader Worker Set stable-v1.0
+leader-worker-set Leader Worker Set Operator stable-v1.0
 lifecycle-agent Lifecycle Agent stable
 lightspeed-operator OpenShift Lightspeed Operator stable
 limitador-operator Limitador Operator stable

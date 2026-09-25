@@ -188,7 +188,7 @@ if [ -d mirror/data ]; then
 			[ "$image_set_files_exist" ] && \
 			aba_warn "Image set archive file(s) also exist." >&2
 			aba_warn "Back up any required files and try again with '--force' to delete all existing files under mirror/data." \
-				"Or, use a fresh Aba repo and try again!" >&2
+				"Or, use a fresh ABA repo and try again!" >&2
 			ask "         Files will be overwritten. Continue anyway" >&2 || exit 1
 			aba_debug "User confirmed to continue with existing files"
 		else

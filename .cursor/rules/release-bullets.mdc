@@ -1,0 +1,18 @@
+---
+description: Enforce skill reading before writing release bullets or CHANGELOG entries
+globs: ai/RELEASE_BULLETS_*.md, CHANGELOG.md
+alwaysApply: false
+---
+
+# Release documentation rules
+
+Before creating or editing `ai/RELEASE_BULLETS_*.md` or CHANGELOG `[Unreleased]` entries:
+
+1. **Read the skill first**: `.cursor/skills/prep-for-release/SKILL.md` — follow it exactly
+2. **Release bullets are strictly user-facing**:
+   - Only features and fixes a user would directly encounter
+   - No internal tooling, no developer-only changes, no implementation details
+   - No jargon (e.g. "OLM dependencies" → "dependencies", "IDMS/ICSP" → don't mention)
+   - If a user wouldn't notice it was broken/missing, it's not a bullet
+3. **Format**: match existing `ai/RELEASE_BULLETS_*.md` files (header, summary line, bold-lead bullets)
+4. **CHANGELOG can be detailed** — internal items belong in CHANGELOG, not release bullets

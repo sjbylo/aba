@@ -1,0 +1,11 @@
+# Name: Networking
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+metallb-operator                # Load balancer for bare-metal clusters
+sriov-network-operator          # High-performance networking
+kubernetes-nmstate-operator     # Node network configuration
+ingress-node-firewall           # XDP/eBPF packet filtering
+external-dns-operator           # Automated DNS record management
+ptp-operator                    # Precision Time Protocol (PTP) for telco/low-latency
+
+cincinnati-operator        # Included for easier cluster upgrades

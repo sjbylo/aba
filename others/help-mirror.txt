@@ -42,6 +42,18 @@ Related commands:
 
   aba [-d mirror] unregister           # Deregister an existing registry (removes local creds only).
 
+Additional images:
+  Extra container images (UBI, support-tools, container disks, etc.) can be mirrored
+  alongside OpenShift platform and operator images.
+
+  aba image add <image:tag>            # Add an image (writes to images.conf)
+  aba image remove <image:tag>         # Remove an image
+  aba image list                       # Show all configured additional images
+
+  Images are stored in images.conf (next to aba.conf) and optionally in
+  mirror/images.conf (per-mirror overrides). Both files are merged at ISC
+  generation time. Edit the files directly or use the 'aba image' commands.
+
 Examples of fully disconnected mode (air-gapped):
 
   Configure mirror registry on the local bastion (the -H flag sets the registry FQDN):

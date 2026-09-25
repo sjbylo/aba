@@ -29,7 +29,15 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 cluster_folder=$VC_FOLDER/$CLUSTER_NAME
 
 # If at least one VM exists, then show vms.
-if scripts/vmw-exists.sh; then
+# Capture via || so the ERR trap does not treat "no VMs" (exit 1) as fatal.
+_exists_rc=0
+scripts/vmw-exists.sh || _exists_rc=$?
+if [ $_exists_rc -eq 2 ]; then
+	aba_abort "Cannot reach vCenter — refusing to skip VM cleanup (VMs may still exist)"
+elif [ $_exists_rc -ne 0 ]; then
+	aba_info "No VMs found -- nothing to delete"
+	exit 0
+else
 	# Only show list of existing vms if ask=1
 	if [ "$ask" ]; then
 		for name in $CP_NAMES $WORKER_NAMES; do
@@ -37,9 +45,6 @@ if scripts/vmw-exists.sh; then
 			[ "$VC" ] && echo $cluster_folder/$vm || echo $vm
 		done
 	fi
-else
-	aba_info "No VMs found -- nothing to delete"
-	exit 0
 fi
 
 ask -n --auto-yes "Delete the above virtual machine(s)" || exit 1
@@ -48,7 +53,11 @@ source scripts/vm-vmw.sh
 
 for name in $CP_NAMES $WORKER_NAMES; do
 	vm=$(vm_name "$CLUSTER_NAME" "$name")
-	if ! vmp_exists "$vm"; then
+	_ex=0
+	vmp_exists "$vm" || _ex=$?
+	if [ $_ex -gt 1 ]; then
+		aba_abort "Cannot reach vCenter — cannot verify VM $vm"
+	elif [ $_ex -ne 0 ]; then
 		aba_info "VM $vm does not exist (skipping)"
 		continue
 	fi

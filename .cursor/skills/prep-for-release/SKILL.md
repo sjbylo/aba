@@ -74,9 +74,10 @@ Add entries under `## [Unreleased]` in `CHANGELOG.md`. Group by:
 
 Create `ai/RELEASE_BULLETS_<version>.md` with user-facing highlights.
 Rules:
-- **Strictly user-facing** — only features and fixes a user would notice or care about
-- No internal jargon, no implementation details, no developer-only changes
-- Significant items only (not exhaustive)
+- **Start with a one-liner summary** after the `# ABA X.Y.Z Release Highlights` heading — describe the business benefits of this release in plain language (e.g. "More reliable version handling, improved TUI usability, and community-contributed fixes.")
+- **Strictly user-facing, high-level** — only features and fixes a user would notice or care about
+- **No internal details** — no function names, variable names, file names, error codes, exit codes, script names, or implementation mechanics. Describe the user-visible symptom and the fix, not how it was fixed.
+- **Significant items only** — not exhaustive. Cosmetic changes (wording tweaks, minor renames, trivial reformatting) do NOT belong in release notes or CHANGELOG, even if they touch user-facing text
 - State the fact, not documentation
 - One-liner per item
 - If an item was contributed by an external contributor, credit them inline

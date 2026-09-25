@@ -1491,7 +1491,7 @@ version item above), offer to purge unused images:
 
 **Problem:** The `additionalImages` section in the imageset-config.yaml (ISC)
 is currently just commented-out examples. Users must manually edit the YAML to
-add images like `ose-cli`, `support-tools`, or OpenShift Virtualization
+add images like UBI, `support-tools`, or OpenShift Virtualization
 container disks. Manual edits trip the `.created` guard and ABA stops managing
 platform/operators.
 
@@ -1517,7 +1517,7 @@ needed companion images. Examples:
 | Operator set | Auto-added images |
 |---|---|
 | `operator-set-virt` | `quay.io/containerdisks/centos-stream:10`, `centos-stream:9`, `fedora:latest` |
-| (all) | `registry.redhat.io/openshift4/ose-cli:latest`, `registry.redhat.io/rhel9/support-tools:latest` |
+| (all) | `registry.redhat.io/rhel9/support-tools:latest` |
 | (testing) | `quay.io/openshifttest/hello-openshift:1.2.0` |
 
 Auto-added images should be presented to the user for confirmation (not
@@ -1868,3 +1868,54 @@ day2 CS version check) into a unified `scripts/aba-status.sh` dispatcher.
 - `scripts/include_all.sh`: shared status helpers
 - `tui/v2/tui-cluster.sh`: call `aba status --shell` for preflight
 - `others/help-aba.txt`: document `aba status`
+
+---
+
+## Agent-config / install-config: remove "ownership invitation" comment, add dynamic user-managed notice
+
+**Severity:** LOW — UX improvement, consistency with ISC behavior
+**Status:** Planned
+**Added:** 2026-09-24
+
+**Problem:** All agent-config and install-config templates contain a static
+comment that reads: `# If you edit this file, ownership transfers to you.
+Aba will respect your changes and stop automatic updates.` This line
+*invites* users to edit the file directly, when the intended workflow is to
+use `cluster.conf` and let ABA regenerate.
+
+The ISC (`imageset-config.yaml`) already had this fixed: the invitation was
+removed from the template, and a `# This file is user-managed` notice is
+inserted dynamically only when ABA detects user ownership. When the user
+deletes the file (or resets via TUI), ABA regenerates from the template and
+the notice is naturally absent.
+
+**Proposed fix:** Apply the same pattern to agent-config and install-config:
+
+1. Remove the `# If you edit this file, ownership transfers...` line from
+   all agent-config and install-config Jinja2 templates.
+2. Add a `.created`-style sentinel for agent-config/install-config ownership
+   detection (currently these rely on Make's dependency timestamps, which
+   don't distinguish "user edited" from "deps haven't changed").
+3. Add a shared `aba_file_is_user_managed()` helper (generalized from
+   `aba_isc_is_user_managed()`) that works for any file + sentinel pair.
+4. When ownership is detected, dynamically insert: `# This file is
+   user-managed. Delete it and re-run to return to aba control.`
+5. Update test examples under `test/` and `test/e2e/examples/` to remove
+   the old invitation line.
+
+**Gap:** agent-config and install-config have no ownership detection today
+beyond Make's dependency system. A sentinel file (e.g.
+`.agent-config-created`, `.install-config-created`) is needed, similar to
+the ISC's `data/.created`.
+
+**Files likely affected:**
+- `templates/agent-config.yaml.j2` (and bond/vlan/vlan-bond variants)
+- `templates/agent-config-vlan-bond.yaml.j2.with.NTPSource`
+- `templates/install-config.yaml.j2`
+- `templates/install-config.yaml.j2.example.for.vsphere`
+- `scripts/create-agent-config.sh`: touch sentinel after generation
+- `scripts/create-install-config.sh`: touch sentinel after generation
+- `templates/Makefile.cluster`: add ownership guard to recipes
+- `scripts/include_all.sh`: shared `aba_file_is_user_managed()` helper
+- `test/` and `test/e2e/examples/`: update all `.example` files
+- `test/func/test-tui-v2-04-isconf.sh`: may need updates for label checks

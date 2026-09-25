@@ -583,12 +583,12 @@ else
 	aba_warn "Missing oc-mirror working directory: $PWD/mirror/data/working-dir"
 	aba_warn -p IMPORTANT \
 		"No cluster resource files found (CatalogSource, idms/itms ...) " \
-		"This usually occurs when Aba has not yet pushed any operator images to your mirror registry — either because mirroring" \
+		"This usually occurs when ABA has not yet pushed any operator images to your mirror registry — either because mirroring" \
 		"hasn’t been run, or it wasn’t done from this host." \
 		"If the registry was filled using another method, you must manually create and apply the required CatalogSources for the operators." \
 		"If the oc-mirror data/working-dir/ is on another host, copy the directory to this host and try again!" 
 
-		#"This usually means that Aba has not yet pushed any operator images to your mirror registry (or not from this host)." \
+		#"This usually means that ABA has not yet pushed any operator images to your mirror registry (or not from this host)." \
 		#"If your mirror registry was populated with images separately, you will need to apply the CatalogSources manually."
 
 fi

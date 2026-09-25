@@ -24,8 +24,7 @@ aba -d cli oc-mirror
 echo_step "Add additional images ..."
 
 # Default images for all bundles
-aba image add registry.redhat.io/openshift4/ose-cli:latest \
-              registry.redhat.io/rhel9/support-tools:latest \
+aba image add registry.redhat.io/rhel9/support-tools:latest \
               quay.io/openshifttest/hello-openshift:1.2.0 \
               registry.redhat.io/ubi9/ubi:latest
 

@@ -1,0 +1,109 @@
+#!/bin/bash 
+
+usage="\
+$(basename "$0") lists operator dependencies
+Usage: $(basename "$0") [-hc] <version> <operator name> [catalog name]
+   <version>       is OpenShift version.  Ex: 4.18
+   <operator name> is Operator name.  Ex: odf-operator
+Options:
+   -h     help
+   -c     clean
+"
+
+clean=
+# -c will clean the old pod and data
+if [ "$1" = "-h" ]; then
+	echo "$usage" >&2
+
+	exit 0
+elif [ "$1" = "-c" ]; then
+	clean=1
+	shift
+fi
+
+[ ! "$1" ] && echo "Error: Parameters missing" && echo && echo "$usage" >&2 && exit 1
+
+version=$1
+shift
+if ! echo "$version" | grep -q -E "^[0-9]\.[0-9]+$"; then
+	echo "Error: OpenShift version format is incorrect [$version]" >&2
+	echo >&2
+	echo "$usage" >&2
+
+	exit 1
+fi
+
+! command -v podman >/dev/null 2>&1 && echo "Please install podman!" >&2 && exit 1
+
+[ ! "$1" ] && echo "Error: Operator missing" && echo && echo "$usage" >&2 && exit 1
+operator=$1
+shift
+
+catalog=redhat-operator
+[ "$1" ] && catalog=$1
+
+if [ "$clean" ]; then
+	existing_id=$(podman ps -a | grep registry.redhat.io/redhat/$catalog-index:v$version | awk '{print $1}')
+	[ "$existing_id" ] && podman stop "$existing_id" >/dev/null && sleep 1 && podman rm "$existing_id" >/dev/null
+	rm -rf configs-$version
+fi
+
+configs_dir="/tmp/aba-configs-$catalog-$version"
+
+existing_id=$(podman ps -a | grep "registry.redhat.io/redhat/$catalog-index:v$version" | awk '{print $1}')
+if [ ! "$existing_id" ]; then
+	podman create -q --replace --name "${catalog}-catalog" "registry.redhat.io/redhat/$catalog-index:v$version" >/dev/null || exit 1
+	existing_id=$(podman ps -a | grep "registry.redhat.io/redhat/$catalog-index:v$version" | awk '{print $1}')
+fi
+
+if [ ! -d "$configs_dir/$operator" ]; then
+	podman cp "${existing_id}:/configs" "$configs_dir"
+fi
+
+# Look up direct deps for one operator; prints to stdout
+_get_deps() {
+	local op="$1"
+	local op_dir="$configs_dir/$op"
+	[ -d "$op_dir" ] || return
+
+	if [ -f "$op_dir/catalog.json" ]; then
+		jq -r 'select(.package=="'"$op"'") | .properties[]? | select(.type=="olm.package.required") | .value.packageName' "$op_dir/catalog.json" 2>/dev/null | sort -u
+	elif [ -d "$op_dir/bundles" ]; then
+		local latest
+		latest=$(ls "$op_dir/bundles/" | sort -V | tail -1)
+		[ -n "$latest" ] && jq -r '.properties[]? | select(.type=="olm.package.required") | .value.packageName' "$op_dir/bundles/$latest" 2>/dev/null | sort -u
+	fi
+}
+
+op_dir="$configs_dir/$operator"
+if [ ! -d "$op_dir" ]; then
+	echo "Error: Operator '$operator' not found in $catalog catalog v$version" >&2
+	exit 1
+fi
+
+# Recursive dependency walk (BFS)
+declare -A visited=()
+queue=("$operator")
+all_deps=()
+
+while [ ${#queue[@]} -gt 0 ]; do
+	current="${queue[0]}"
+	queue=("${queue[@]:1}")
+	[ -n "${visited[$current]:-}" ] && continue
+	visited["$current"]=1
+
+	deps=$(_get_deps "$current")
+	for dep in $deps; do
+		if [ -z "${visited[$dep]:-}" ]; then
+			all_deps+=("$dep")
+			queue+=("$dep")
+		fi
+	done
+done
+
+if [ ${#all_deps[@]} -eq 0 ]; then
+	echo "No dependencies found for '$operator'" >&2
+else
+	printf '%s\n' "${all_deps[@]}" | sort -u
+fi
+

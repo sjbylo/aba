@@ -1,0 +1,9 @@
+# Name: Edge & Telco
+# Please let the ABA project maintainers know if there are any missing operators or dependencies!
+
+lifecycle-agent                 # Image-Based Upgrade for single-node OpenShift
+topology-aware-lifecycle-manager  # Cluster fleet upgrades
+numaresources-operator          # NUMA-aware scheduling for low-latency workloads
+multiarch-tuning-operator
+
+cincinnati-operator        # Included for easier cluster upgrades

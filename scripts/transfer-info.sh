@@ -7,17 +7,22 @@
 #            not the local config which may be stale.
 # CALLED BY: make -C mirror transfer-info, aba transfer-info, TUI (--shell mode)
 # CWD:       mirror/ directory
-# REQUIRES:  tar, grep, sed
+# REQUIRES:  tar, grep, sed, scripts/include_all.sh (is_version_greater)
 # PRODUCES:  Human-readable summary (default) or sourceable key=value (--shell)
 # SIDE EFFECTS: None (read-only; temp files cleaned up)
 # IDEMPOTENT: Yes
 
 set -eo pipefail
 
+# is_version_greater lives here — used so a backwards min/max is not reported as an upgrade.
+source scripts/include_all.sh
+
 _shell_mode=false
+_force_local=false
 for arg in "$@"; do
 	case "$arg" in
 		shell|--shell) _shell_mode=true ;;
+		local|--local) _force_local=true ;;
 	esac
 done
 
@@ -33,8 +38,9 @@ _cleanup_tmp() {
 }
 trap _cleanup_tmp EXIT
 
-# If a transfer tar exists, extract ISC and metadata to a temp dir
-if [[ -f "$_transfer_tar" ]]; then
+# If a transfer tar exists, extract ISC and metadata to a temp dir.
+# --local skips the tar and reads data/imageset-config.yaml.
+if [[ "$_force_local" != "true" && -f "$_transfer_tar" ]]; then
 	_tmpdir=$(mktemp -d)
 
 	# Extract just the ISC and metadata files (paths are relative to aba root)
@@ -68,7 +74,9 @@ if [[ -f "$_isc_file" ]]; then
 	_max_ver=$(grep '^\s*maxVersion:' "$_isc_file" | head -1 | sed 's/.*maxVersion: *//' | xargs) || true
 	_ocp_version="$_min_ver"
 
-	if [[ -n "$_max_ver" && "$_max_ver" != "$_min_ver" ]]; then
+	# Arrow/upgrade only if max is strictly newer than min (semver).
+	# String inequality is not enough: a user-edited ISC can have 5.0 max 4.22.
+	if [[ -n "$_min_ver" && -n "$_max_ver" ]] && is_version_greater "$_max_ver" "$_min_ver"; then
 		_upgrade_to="$_max_ver"
 	fi
 

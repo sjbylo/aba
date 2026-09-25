@@ -250,9 +250,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.3.tar.gz
-tar xzf v1.3.3.tar.gz
-cd aba-1.3.3
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.4.tar.gz
+tar xzf v1.3.4.tar.gz
+cd aba-1.3.4
 ./install
 aba
 ```
@@ -260,7 +260,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.3.3 https://github.com/sjbylo/aba.git
+git clone --branch v1.3.4 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1126,6 +1126,21 @@ This connects OperatorHub to your mirror and applies the CatalogSource files gen
 > - **Online:** Search the Red Hat [Ecosystem Catalog](https://catalog.redhat.com/software/operators/search). Use the *package name* (e.g. `odf-operator`, not the display name).
 
 > **Per-mirror override:** Set `op_sets=` and/or `ops=` in a mirror's `mirror.conf` to use different operators per enclave. See [Named Mirror Directories](#named-mirror-directories-enclaves).
+
+### Additional Container Images
+
+To mirror extra container images (UBI, `support-tools`, container disks, etc.) alongside OpenShift platform and operator images, use `images.conf`:
+
+```bash
+aba image add registry.redhat.io/ubi9/ubi:latest
+aba image add registry.redhat.io/rhel9/support-tools:latest
+aba image list                         # Show all configured additional images
+aba image remove <image:tag>           # Remove an image
+```
+
+Images are stored in `images.conf` (next to `aba.conf`). You can also create a per-mirror `mirror/images.conf` for overrides — both files are merged at ISC generation time. Edit the files directly or use the `aba image` commands above.
+
+After adding images, run `aba -d mirror sync` (or `save`/`load`) to mirror them.
 
 [Back to top](#quick-start)
 
@@ -2195,6 +2210,45 @@ cat $HOME/.ssh/quay_installer.pub >> $HOME/.ssh/authorized_keys
 ## Q: How do I get a trace log for debugging?
 
 Every `aba` invocation logs full output to `~/.aba/logs/trace.log` (last 5 rotated as `trace.log.0` … `trace.log.4`). When requesting help, attach the relevant trace file — but **review and redact sensitive data first** (kubeadmin passwords, registry credentials).
+
+---
+
+## Q: How can I get the `oc` binary for other operating systems (e.g. Windows or Mac)?
+
+The OpenShift release payload includes a `cli-artifacts` image that contains pre-built binaries for Linux, Mac, and Windows.
+After mirroring images to your internal registry, extract all tool archives with:
+
+```bash
+# Extract all tool archives from the mirrored release payload
+oc adm release extract --tools \
+   --from=<registry>:<port>/<path>/release-images:<version>-<arch> \
+   --to=/tmp/ocp-tools
+
+# Example with a typical ABA mirror setup
+oc adm release extract --tools \
+   --from=registry.example.com:8443/openshift/release-images:4.22.14-x86_64 \
+   --to=/tmp/ocp-tools
+```
+
+This produces archives for every OS and architecture, including:
+
+| Archive | Contents |
+|---|---|
+| `openshift-client-linux-amd64-*.tar.gz` | `oc` + `kubectl` for Linux x86_64 |
+| `openshift-client-linux-amd64-rhel8-*.tar.gz` | `oc` built for RHEL 8 (older glibc) |
+| `openshift-client-linux-amd64-rhel9-*.tar.gz` | `oc` built for RHEL 9 |
+| `openshift-client-mac-*.tar.gz` | `oc` + `kubectl` for macOS (Intel) |
+| `openshift-client-mac-arm64-*.tar.gz` | `oc` + `kubectl` for macOS (Apple Silicon) |
+| `openshift-client-windows-*.zip` | `oc.exe` for Windows |
+| `openshift-install-linux-*.tar.gz` | `openshift-install` |
+| `ccoctl-linux-*.tar.gz` | Cloud Credential Operator utility (`ccoctl`) |
+| `sha256sum.txt` | Checksums for all archives |
+
+For example, to get the Windows `oc.exe`:
+
+```bash
+unzip /tmp/ocp-tools/openshift-client-windows-*.zip -d /tmp/oc-windows
+```
 
 ---
 
