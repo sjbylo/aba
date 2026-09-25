@@ -16,7 +16,6 @@ rhbk-operator                        # Red Hat build of Keycloak (SSO/identity)
 openshift-zero-trust-workload-identity-manager
 openshift-external-secrets-operator  # Sync secrets from Vault/AWS SM/Azure KV
 secrets-store-csi-driver-operator    # CSI-based secret injection
-red-hat-build-of-keycloak-operator
 
 # Supply chain security
 rhtas-operator                       # Trusted Artifact Signer (Sigstore)
