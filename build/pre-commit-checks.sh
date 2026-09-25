@@ -261,24 +261,29 @@ fi
 # =============================================================================
 # Step 8: Verify operator set entries exist in shipped catalogs
 # =============================================================================
-# Checks every operator name in templates/operator-set-* against the shipped
-# catalog index files in catalogs/.  Catches typos, removed operators, and
-# missing catalog entries before they reach users.
-# Uses the latest v4.x catalog available (highest version).
-# Use the latest v4.x catalog with 100+ entries (skip sparse pre-release catalogs)
+# Two-tier check against ALL shipped catalog index files:
+#   - FAIL (exit 1) if an operator is not in ANY catalog version (typo/invalid)
+#   - WARN if an operator exists in older catalogs but not the latest (deprecated)
 _latest_catalog=""
 for _cat_candidate in $(ls catalogs/redhat-operator-index-v4.* 2>/dev/null | sort -rV); do
     [ "$(wc -l < "$_cat_candidate")" -ge 100 ] && _latest_catalog="$_cat_candidate" && break
 done
 if [ -n "$_latest_catalog" ]; then
     _cat_ver=$(echo "$_latest_catalog" | grep -oE 'v[0-9]+\.[0-9]+')
-    echo -e "${YELLOW}[8/8] Verifying operator set entries against catalogs (${_cat_ver})...${NC}"
+    echo -e "${YELLOW}[8/8] Verifying operator set entries against all shipped catalogs...${NC}"
 
-    # Build lookup of all known operators
-    _all_catalog_ops=$(mktemp)
-    cat catalogs/redhat-operator-index-${_cat_ver} catalogs/certified-operator-index-${_cat_ver} catalogs/community-operator-index-${_cat_ver} 2>/dev/null | awk '{print $1}' | sort -u > "$_all_catalog_ops"
+    # Build lookup from ALL catalog versions (union across every version)
+    _all_versions_ops=$(mktemp)
+    cat catalogs/redhat-operator-index-v* catalogs/certified-operator-index-v* catalogs/community-operator-index-v* 2>/dev/null \
+        | awk '{print $1}' | sort -u > "$_all_versions_ops"
 
-    _opset_failed=0
+    # Build lookup from latest catalog only (for deprecation warnings)
+    _latest_ops=$(mktemp)
+    cat catalogs/redhat-operator-index-${_cat_ver} catalogs/certified-operator-index-${_cat_ver} catalogs/community-operator-index-${_cat_ver} 2>/dev/null \
+        | awk '{print $1}' | sort -u > "$_latest_ops"
+
+    _opset_invalid=0
+    _opset_deprecated=0
     _opset_checked=0
     for _setfile in templates/operator-set-*; do
         [ -f "$_setfile" ] || continue
@@ -291,18 +296,35 @@ if [ -n "$_latest_catalog" ]; then
             _op="${_op%"${_op##*[![:space:]]}"}"
             [[ -z "$_op" ]] && continue
             _opset_checked=$(( _opset_checked + 1 ))
-            if ! grep -qx "$_op" "$_all_catalog_ops"; then
-                echo -e "  ${RED}✗ '$_op' (in set '$_setname') not found in any ${_cat_ver} catalog${NC}"
-                _opset_failed=1
+            if ! grep -qx "$_op" "$_all_versions_ops"; then
+                echo -e "  ${RED}✗ '$_op' (in set '$_setname') not found in ANY catalog${NC}"
+                _opset_invalid=1
+            elif ! grep -qx "$_op" "$_latest_ops"; then
+                # Find which versions still have it
+                _found_in=""
+                for _cf in catalogs/redhat-operator-index-v* catalogs/certified-operator-index-v* catalogs/community-operator-index-v*; do
+                    [ -f "$_cf" ] || continue
+                    if awk '{print $1}' "$_cf" | grep -qx "$_op"; then
+                        _v=$(echo "$_cf" | grep -oE 'v[0-9]+\.[0-9]+')
+                        _found_in="${_found_in:+$_found_in, }$_v"
+                    fi
+                done
+                echo -e "  ${YELLOW}⚠ '$_op' (in set '$_setname') not in ${_cat_ver} (found in: $_found_in)${NC}"
+                _opset_deprecated=$(( _opset_deprecated + 1 ))
             fi
         done < "$_setfile"
     done
-    rm -f "$_all_catalog_ops"
+    rm -f "$_all_versions_ops" "$_latest_ops"
 
-    if [ $_opset_failed -eq 1 ]; then
-        echo -e "${YELLOW}      ⚠ Some operators not in ${_cat_ver} catalogs (may be valid for older versions)${NC}\n"
+    if [ $_opset_invalid -eq 1 ]; then
+        echo -e "${RED}      ✗ Operator set entries not found in ANY shipped catalog!${NC}"
+        echo -e "${RED}        Fix typos or remove invalid entries before committing.${NC}\n"
+        exit 1
+    elif [ $_opset_deprecated -gt 0 ]; then
+        echo -e "${YELLOW}      ⚠ $_opset_deprecated operator(s) only in older catalogs (see above)${NC}"
+        echo -e "${GREEN}      ✓ All $_opset_checked operators exist in at least one catalog${NC}\n"
     else
-        echo -e "${GREEN}      ✓ All $_opset_checked operators verified in ${_cat_ver} catalogs${NC}\n"
+        echo -e "${GREEN}      ✓ All $_opset_checked operators verified across all catalogs${NC}\n"
     fi
 else
     echo -e "${YELLOW}[8/8] Skipping operator set check (no catalog index files found)${NC}\n"
