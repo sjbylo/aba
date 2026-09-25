@@ -4,7 +4,7 @@ Operator sets overhaul, TUI operator UX improvements, file ownership UX, preflig
 
 ### Added
 
-- **14 new operator sets** — `backup`, `conf`, `db`, `devtools`, `edge`, `hpe`, `ibmstorage`, `int`, `migration`, `net`, `netapp`, `obs`, `portworx`, and new operators in existing sets (`sec`, `appdev`, `gpu`, `virt`, `ocp`). ABA now ships 27 curated operator sets covering Red Hat, ISV storage, networking, edge/telco, security, observability, migration, databases, and more.
+- **14 new operator sets** — `backup`, `conf`, `db`, `devtools`, `edge`, `hpe`, `ibmstorage`, `int`, `migration`, `net`, `netapp`, `obs`, `portworx`, and new operators in existing sets (`sec`, `appdev`, `gpu`, `virt`, `ocp`). ABA now ships 27 curated operator sets covering Red Hat, ISV storage, networking, edge/telco, security, observability, migration, databases, and more. Security set expanded with 6 operators (Suggested by [@rach228](https://github.com/rach228) in [#41](https://github.com/sjbylo/aba/issues/41)).
 - **TUI: Catalog column in operator selection** — The operator selection and search dialogs now show which catalog each operator belongs to (`redhat`, `certified`, or `community`), making it easy to see at a glance.
 - **TUI: Operator Sets help text** — The operator sets checklist now explains that selecting a set adds its operators to the selection.
 - **FAQ: Extracting `oc` binary for other OSes** — README FAQ explains how to use `oc adm release extract --tools` to get client binaries (Linux/Mac/Windows) from the mirrored release payload.
