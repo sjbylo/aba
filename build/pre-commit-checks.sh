@@ -300,7 +300,9 @@ if [ -n "$_latest_catalog" ]; then
     rm -f "$_all_catalog_ops"
 
     if [ $_opset_failed -eq 1 ]; then
-        echo -e "${YELLOW}      ⚠ Some operators not in ${_cat_ver} catalogs (may be valid for older versions)${NC}\n"
+        echo -e "${RED}      ✗ Operator set entries not found in ${_cat_ver} catalogs!${NC}"
+        echo -e "${RED}        Fix or remove invalid entries before committing.${NC}\n"
+        exit 1
     else
         echo -e "${GREEN}      ✓ All $_opset_checked operators verified in ${_cat_ver} catalogs${NC}\n"
     fi
