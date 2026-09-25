@@ -2,7 +2,6 @@
 # Please let the ABA project maintainers know if there are any missing operators or dependencies!
 
 kiali-ossm
-jaeger-product
 servicemeshoperator
 tempo-product               # Distributed tracing (Jaeger replacement)
 opentelemetry-product       # OpenTelemetry collector
