@@ -23,7 +23,7 @@ hostPrefix={{ hostPrefix }}				# Pod subnet per node; 23 gives 510 pod IPs
 					# Use 22 or lower for more pod IPs (bare metal)
 
 master_prefix={{ master_prefix }}			# Node name prefix for masters
-worker_prefix={{ worker_prefix }} 			# Node name prefix for workers
+worker_prefix={{ worker_prefix }}			# Node name prefix for workers
 
 num_masters={{ num_masters }} 				# Number of masters (control plane)
 num_workers={{ num_workers }}				# Number of workers (compute)
@@ -64,10 +64,10 @@ mac_prefix={{ mac_prefix }}		# MAC prefix for VMs; replaced by random hex if 'x'
 					# Ensure addresses are unique and unused
 					# For bare metal, MACs can be edited in agent-config.yaml
 
-master_cpu_count={{ master_cpu_count }}			# CPU cores and memory per master (>16GB on vSphere)
-master_mem={{ master_mem }}				# Minimum for SNO: 8 CPUs.
-worker_cpu_count={{ worker_cpu_count }}			# CPU cores and memory per worker
-worker_mem={{ worker_mem }}				# Ignored for SNO
+master_cpu_count={{ master_cpu_count }}			# CPU cores per master (min 8 on s390x)
+master_mem={{ master_mem }}				# Memory per master in GB (min 20 on vSphere, min 24 on s390x)
+worker_cpu_count={{ worker_cpu_count }}			# CPU cores per worker (ignored for SNO)
+worker_mem={{ worker_mem }}				# Memory per worker in GB (ignored for SNO)
 
 data_disk={{ data_disk }}				# Optional thin-provisioned data disk
 					# Leave undefined for no data disk
