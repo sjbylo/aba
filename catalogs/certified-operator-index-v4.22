@@ -36,7 +36,6 @@ eda-k8s-operator eda-openshift-operator 6.0
 edb-hcp-operator EDB Postgres AI stable
 eginnovations-operator eG Innovations Universal Agent Operator beta
 elasticsearch-eck-operator-certified Elasticsearch (ECK) Operator stable
-ent-small-operator Enterprise Small Operator alpha
 eqube-operator eQube® Operator stable
 exascaler-csi-driver-operator EXAScaler CSI File Driver alpha
 f5-ai-security-operator F5 AI Security Operator stable
