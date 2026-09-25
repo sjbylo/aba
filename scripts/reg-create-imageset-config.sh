@@ -325,7 +325,9 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	export json_operators_data='[]'
 	export has_operators=false
 	_op_catalog_ver="${tgt_major:-$ocp_ver_major}"
-	if [ "$ops" ] || [ "$op_sets" ]; then
+	if [ "${excl_operators:-}" ]; then
+		aba_debug "Operators excluded (excl_operators=$excl_operators)"
+	elif [ "$ops" ] || [ "$op_sets" ]; then
 		# For cross-minor upgrades, use the target version's catalog
 		if [ "${tgt_major:-}" ] && [ "$tgt_major" != "$ocp_ver_major" ]; then
 			aba_info "Upgrade mode: using operator catalog index v$tgt_major (target) instead of v$ocp_ver_major"
@@ -354,6 +356,17 @@ if [ "${_isc_force:-}" != "no" ] && [ -n "${_isc_force:-}" ] || \
 	scripts/j2 ./templates/imageset-config.yaml.j2 > "$_tmp_isc"
 
 	[ "$excl_platform" ] && sed -i -E "/ platform:/,/ graph: true/ s/^/#/" "$_tmp_isc" && aba_debug "Excluded platform images (excl_platform=$excl_platform)"
+
+	# Add friendly comments when sections are excluded (aba.conf toggles)
+	if [ "$excl_platform" ]; then
+		sed -i '1a # NOTE: Platform/release images excluded (excl_platform in aba.conf)' "$_tmp_isc"
+	fi
+	if [ "${excl_operators:-}" ]; then
+		sed -i '/^#  operators:/i # NOTE: Operator images excluded (excl_operators in aba.conf)' "$_tmp_isc"
+	fi
+	if [ "${excl_additional:-}" ] && ! grep -q 'additionalImages:' "$_tmp_isc"; then
+		echo '# NOTE: Additional images excluded (excl_additional in aba.conf)' >> "$_tmp_isc"
+	fi
 
 	mv -f "$_tmp_isc" data/imageset-config.yaml
 	touch data/.created

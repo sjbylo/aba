@@ -131,6 +131,12 @@ fi
 [ ! "$worker_mem" ]		&& export worker_mem=10
 [ ! "$data_disk" ]		&& export data_disk=500
 
+# s390x (IBM Z / LinuxONE) needs more RAM per node to avoid bootstrap OOM
+if [ "$ARCH" = "s390x" ] && [ "$master_mem" -lt 24 ]; then
+	aba_info "s390x detected: increasing master_mem from ${master_mem}GB to 24GB (bootstrap requires extra RAM on IBM Z)"
+	export master_mem=24
+fi
+
 # NTP fallback: only direct-connected clusters can reach public NTP (UDP 123 not proxied)
 if [ ! "$ntp_servers" ] && [ "$image_source" = "direct" ]; then
 	export ntp_servers="pool.ntp.org"

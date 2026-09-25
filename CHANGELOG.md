@@ -1,5 +1,21 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.4...HEAD)
 
+### Added
+
+- **TUI: Mirror Payload menu** — New sub-menu (`P` in main menu) consolidates all mirror content controls: OCP version/channel, operator selection, additional images, upgrade prep, inclusion toggles, and advanced ISC options. Replaces the previous flat V/O/G items in the main menu.
+- **TUI: OCP version change without full wizard** — `W` in the Mirror Payload menu opens a focused channel → version picker (reusing wizard internals with zero code duplication) instead of re-running the full setup wizard.
+- **TUI: Operator images exclusion toggle** — New `K` toggle in Mirror Payload to exclude/include operator images via `excl_operators` in `aba.conf`, matching the existing platform (`P`) and additional images (`T`) toggles.
+- **ISC exclusion comments** — When payload sections are excluded via `aba.conf` toggles, the generated `imageset-config.yaml` includes a `# NOTE:` comment indicating what was excluded and which config variable controls it.
+- **`excl_operators` / `excl_additional` in `aba.conf` template** — Both variables now ship in `templates/aba.conf.j2` so `replace-value-conf` works on fresh installs.
+
+### Changed
+
+- **TUI: De-jargoned user-facing text** — Replaced bare "ISC" abbreviation with "Config", "ImageSet config", or "mirror payload" in all user-facing dialogs, menu items, and help text. The full term "ImageSet Configuration" and the literal filename `imageset-config.yaml` are kept where appropriate.
+- **TUI: DISCO mode menu** — "View imageset-config.yaml" renamed to "View Mirror Payload".
+- **TUI: Upgrade hint in cluster menu** — Updated from `main menu → U` to `Mirror Payload (P) → Prepare Upgrade (U)`.
+- **`aba reset -f` cleanup message** — "Cleaning up background tasks and runner cache..." now only prints when there are actually tasks to clean up.
+- **`cluster.conf` template comments** — Improved CPU/memory guidance and fixed trailing whitespace.
+
 ---
 
 ## [1.3.4](https://github.com/sjbylo/aba/releases/tag/v1.3.4) - 2026-09-25

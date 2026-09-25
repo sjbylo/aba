@@ -52,6 +52,51 @@ _direct_config_complete() {
 }
 
 # =============================================================================
+# Change OCP Version/Channel (reuses wizard steps, no full wizard flow)
+# =============================================================================
+
+tui_change_version() {
+	tui_log "Action: Change OCP Version/Channel"
+
+	local step="channel"
+	while :; do
+		case "$step" in
+		channel)
+			_direct_channel
+			case "$DIALOG_RC" in
+				next) step="version" ;;
+				*) return 0 ;;
+			esac
+			;;
+		version)
+			_direct_version
+			case "$DIALOG_RC" in
+				next)
+					dlg --backtitle "$(ui_backtitle)" \
+						--title "Confirm Version Change" \
+						--yesno "Channel: ${ocp_channel}\nVersion: ${ocp_version}\n\nApply this change?" \
+						10 50 || { step="channel"; continue; }
+
+					_direct_save_config
+
+					local _ver_short
+					_ver_short=$(_ver_minor "$ocp_version")
+					tui_log "Starting catalog downloads for OpenShift $_ver_short"
+					download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
+
+					tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+					return 0
+					;;
+				back) step="channel" ;;
+				repeat) ;;
+				*) return 0 ;;
+			esac
+			;;
+		esac
+	done
+}
+
+# =============================================================================
 # DIRECT Mode Wizard (pull secret, channel, version, platform, operators)
 # =============================================================================
 

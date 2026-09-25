@@ -336,7 +336,7 @@ Navigation:
 		[[ "$_TUI_MODE" != "DISCO" ]] && return 0
 		;;
 			"$TUI2_DISCO_TAG_VIEW_ISC")
-				mirror_view_isc "true"
+				mirror_payload_menu "true"
 				;;
 	esac
 done

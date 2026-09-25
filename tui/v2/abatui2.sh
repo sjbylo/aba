@@ -312,7 +312,7 @@ fi
 tui_log "Kicking off background CLI tool downloads (version-independent)"
 "$ABA_ROOT/scripts/cli-download-all.sh" --no-version >>"$_TUI_LOG_FILE" 2>&1
 
-# Background ISC generation (so it's ready before user opens View/Edit ISC)
+# Background ISC generation (so it's ready before user opens Mirror Payload)
 if [[ -f "$ABA_ROOT/aba.conf" ]]; then
 	tui_log "Kicking off background ISC generation"
 	aba_isconf_generate_start
@@ -528,30 +528,19 @@ _conno_main() {
 		local mirr_avail=true
 		local save_label="$TUI2_LABEL_SAVE"
 		local sync_label="$TUI2_LABEL_SYNC"
-		local visc_label="$TUI2_LABEL_VIEW_ISC"
-		local ops_label="$TUI2_LABEL_OPERATORS"
+		local payload_label="$TUI2_LABEL_PAYLOAD"
 		local bndl_label="$TUI2_LABEL_BUNDLE"
 		local save_avail=true sync_avail=true
-		local ops_avail=true bndl_avail=true
+		local bndl_avail=true
 
 		# Internet-dependent items greyed out in offline mode
-		local upg_label="Prepare Upgrade (beta)"
-		local _upg_target=""
-		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
-			_upg_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
-		fi
 		if [[ "$_TUI_INET" == "no" ]]; then
 			save_avail=false
 			save_label="$TUI2_LABEL_SAVE $TUI2_STATUS_NO_INTERNET"
 			sync_avail=false
 			sync_label="$TUI2_LABEL_SYNC $TUI2_STATUS_NO_INTERNET"
-			ops_avail=false
-			ops_label="$TUI2_LABEL_OPERATORS $TUI2_STATUS_NO_INTERNET"
 			bndl_avail=false
 			bndl_label="$TUI2_LABEL_BUNDLE $TUI2_STATUS_NO_INTERNET"
-			upg_label="Prepare Upgrade (beta) $TUI2_STATUS_NO_INTERNET"
-		elif [[ -n "$_upg_target" && "$_upg_target" != "${ocp_version:-}" ]]; then
-			upg_label="Prepare Upgrade (beta) [→ ${_upg_target}]"
 		fi
 
 		# Mirror recheck: only when _invalidate_mirror_cache fired after a
@@ -595,15 +584,32 @@ _conno_main() {
 			day2_label="$TUI2_LABEL_DAY2 $TUI2_STATUS_INSTALL_CLUSTER"
 		fi
 
+		# Build payload summary for the menu label
+		local _payload_summary=""
+		if [[ -n "${ocp_version:-}" ]]; then
+			_payload_summary="${ocp_version%%.*}.${ocp_version#*.}"
+			_payload_summary="${_payload_summary%%.*}"
+			_payload_summary="${ocp_version%.*} ${ocp_channel:-}"
+		fi
+		local _op_count=0
+		if [[ ${#OP_BASKET[@]} -gt 0 ]]; then
+			_op_count=${#OP_BASKET[@]}
+		fi
+		if [[ -n "$_payload_summary" || $_op_count -gt 0 ]]; then
+			local _ops_part=""
+			[[ $_op_count -gt 0 ]] && _ops_part=", ${_op_count} ops"
+			payload_label="$TUI2_LABEL_PAYLOAD  (${ocp_version:-?} ${ocp_channel:-}${_ops_part})"
+		fi
+
 		# Smart focus: last assignment wins = highest priority (read bottom-to-top)
 		if [[ -z "$default_item" ]]; then
-			default_item="$TUI2_CONNO_TAG_VIEW_ISC"
+			default_item="$TUI2_CONNO_TAG_PAYLOAD"
 			if [[ "$_CLUSTER_HAS_INSTALLED" == "true" ]];           then default_item="$TUI2_CONNO_TAG_DAY2"; fi
 			if _mirror_has_release_image;                            then default_item="$TUI2_CONNO_TAG_INSTALL"; fi
 			if [[ "$_CLUSTER_HAS_INSTALLING" == "true" ]];          then default_item="$TUI2_CONNO_TAG_MONITOR"; fi
 			if mirror_available && ! _mirror_has_release_image;      then default_item="$TUI2_CONNO_TAG_SYNC"; fi
 			if ! mirror_available;                                   then default_item="$TUI2_CONNO_TAG_INSTALL_MIRROR"; fi
-			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_VIEW_ISC"; fi
+			if [[ "$_TUI_ISC_UPDATED" == "true" ]];                 then default_item="$TUI2_CONNO_TAG_PAYLOAD"; fi
 		fi
 
 		# Dynamic menu title with mirror state
@@ -619,15 +625,12 @@ _conno_main() {
 
 		items+=(
 			"" "──── Mirror ────────────────────────"
-			"$TUI2_CONNO_TAG_VIEW_ISC"       "$visc_label"
-			"$TUI2_CONNO_TAG_OPERATORS"      "$ops_label"
-			"$TUI2_CONNO_TAG_IMAGES"         "$TUI2_LABEL_IMAGES"
+			"$TUI2_CONNO_TAG_PAYLOAD"        "$payload_label"
 			"$TUI2_CONNO_TAG_INSTALL_MIRROR" "$mirr_label"
 			"$TUI2_CONNO_TAG_SYNC"           "$sync_label"
 			"" "──── Transfer ──────────────────────"
 			"$TUI2_CONNO_TAG_BUNDLE"         "$bndl_label"
 			"$TUI2_CONNO_TAG_SAVE"           "$save_label"
-			"$TUI2_CONNO_TAG_PREP_UPGRADE"   "$upg_label"
 			"" "──── Cluster ───────────────────────"
 			"$TUI2_CONNO_TAG_INSTALL"        "$inst_label"
 		)
@@ -659,16 +662,13 @@ _conno_main() {
 "Partially disconnected mode with a mirror registry. Full ABA workflow:
 
 Mirror:
-  • View/Edit ISC — manage the ImageSet configuration
-  • Operators — select which operators to include
-  • Additional Images — add extra container images (UBI, support-tools, etc.)
+  • Mirror Payload — manage OCP version, operators, additional images, and upgrade targets
   • Install Mirror — set up registry (local or remote)
   • Sync — mirror-to-mirror (m2m): push images directly to registry
 
 Transfer:
   • Bundle — create a portable bundle (tar) for USB transfer
   • Save — mirror-to-disk (m2d): download images to local archive
-  • Prepare Upgrade — set target version and sync or save upgrade images
 
 Cluster:
   • Install Cluster — configure, review, and provision OpenShift
@@ -723,13 +723,6 @@ Navigation:
 				default_item=""
 			fi
 			;;
-		"$TUI2_CONNO_TAG_PREP_UPGRADE")
-			if [[ "$_TUI_INET" == "no" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-			else
-				mirror_prep_upgrade
-			fi
-			;;
 		"$TUI2_CONNO_TAG_SYNC")
 			if [[ "$_TUI_INET" == "no" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
@@ -744,20 +737,9 @@ Navigation:
 			fi
 			default_item=""
 			;;
-		"$TUI2_CONNO_TAG_VIEW_ISC")
-			mirror_view_isc "false"
+		"$TUI2_CONNO_TAG_PAYLOAD")
+			mirror_payload_menu "false"
 			_TUI_ISC_UPDATED=false
-			;;
-		"$TUI2_CONNO_TAG_OPERATORS")
-			if [[ "$ops_avail" == "false" ]]; then
-				dlg --backtitle "$(ui_backtitle)" --msgbox "$TUI2_MSG_NO_INTERNET" 0 0
-			else
-				mirror_select_operators
-				default_item=""
-			fi
-			;;
-		"$TUI2_CONNO_TAG_IMAGES")
-			mirror_manage_images
 			;;
 		"$TUI2_CONNO_TAG_BUNDLE")
 			if [[ "$bndl_avail" == "false" ]]; then
