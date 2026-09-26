@@ -62,7 +62,7 @@ echo "Running aba (should start background extractions)..."
 ./aba > /tmp/test-bundle-aba.out 2>&1 || true
 
 # Check that it detected the bundle
-if ! grep -q "Aba install bundle detected" /tmp/test-bundle-aba.out; then
+if ! grep -q "ABA install bundle detected" /tmp/test-bundle-aba.out; then
 	echo "ERROR: Bundle not detected!" >&2
 	cat /tmp/test-bundle-aba.out >&2
 	rm -f .bundle

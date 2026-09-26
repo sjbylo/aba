@@ -29,6 +29,7 @@ mirror.conf
 .index
 .index-test/
 .index-backup/
+images.conf
 
 # -----------------------------------------------------------------------------
 # mirror/ directory (generated/downloaded content)
@@ -70,6 +71,7 @@ mirror/quay-ng-image.tgz
 mirror/cli
 mirror/mirror
 mirror/reg-uninstall.sh.provision
+mirror/images.conf
 
 # -----------------------------------------------------------------------------
 # cli/ directory (downloaded binaries)

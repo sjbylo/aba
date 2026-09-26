@@ -155,13 +155,13 @@ mypause 2
 rm -rf $CLOUD_DIR_BUNDLE
 
 # Install aba
-echo_step Install Aba to $PWD/aba ...
+echo_step Install ABA to $PWD/aba ...
 
 rm -rf aba
 
 # Install aba from the Internet
 export GIT_BRANCH=${GIT_BRANCH:-main}
-echo_step Install Aba from branch $GIT_BRANCH
+echo_step Install ABA from branch $GIT_BRANCH
 set +x
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/sjbylo/aba/refs/heads/$GIT_BRANCH/install)" -- $GIT_BRANCH
 set -x

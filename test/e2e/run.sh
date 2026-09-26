@@ -749,6 +749,10 @@ if [ -z "${CLI_QUIET:-}" ] && [ "$_npool" -gt 1 ] && { [ ${#_work_queue[@]} -gt 
 	for _p in $CLI_POOL_LIST; do _pools_arr+=("$_p"); done
 	_create_tmux_dashboard "$DASH_SESSION" "$_npool" "summary.log" "${_pools_arr[@]}"
 	echo "  Summary dashboard opened (run.sh dash to reattach)"
+
+	# Auto-open live session (interactive attach to pool tmux sessions)
+	_create_live_session "$CLI_POOL_LIST" "$_RUN_DIR"
+	echo "  Live session opened (run.sh live to reattach)"
 	echo ""
 fi
 

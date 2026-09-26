@@ -1,4 +1,4 @@
   __   ____   __  
- / _\ (  _ \ / _\     Welcome to the Aba utility container
-/    \ ) _ (/    \    It contains all the needed components to work with Aba
+ / _\ (  _ \ / _\     Welcome to the ABA utility container
+/    \ ) _ (/    \    It contains all the needed components to work with ABA
 \_/\_/(____/\_/\_/    Please run the following for more information: ./aba 

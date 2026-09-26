@@ -1,0 +1,6 @@
+# Name: OpenShift Virtualization
+# Container disk images for running VMs with OpenShift Virtualization.
+
+quay.io/containerdisks/centos-stream:10
+quay.io/containerdisks/centos-stream:9
+quay.io/containerdisks/fedora:latest

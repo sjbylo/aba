@@ -1,7 +1,7 @@
 #!/bin/bash -e
 # Simple script to verify the archive files (tar) 
 
-[ "$1" = "-h" -o "$1" = "--help" ] && echo -e "Verify Aba install bundle\n\nUsage: $(basename $0)" && exit 1
+[ "$1" = "-h" -o "$1" = "--help" ] && echo -e "Verify ABA install bundle\n\nUsage: $(basename $0)" && exit 1
 
 cd $(dirname $0)
 
