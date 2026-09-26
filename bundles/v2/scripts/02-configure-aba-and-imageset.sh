@@ -33,7 +33,11 @@ aba image add registry.redhat.io/rhel9/support-tools:latest \
                                       quay.io/containerdisks/fedora:latest
 
 # AI companion images (fetch from GitHub, fall back to static list)
-[ "$NAME" = "ai" ] && fetch_rhoai_images "3.5"
+# Also add minio for DSP testing (not in the RHOAI image list but needed by DSPA)
+if [ "$NAME" = "ai" ]; then
+	fetch_rhoai_images "3.5"
+	aba image add quay.io/opendatahub/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
+fi
 
 echo_step "Create image set config file ..."
 

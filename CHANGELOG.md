@@ -2,6 +2,8 @@
 
 ### Added
 
+- **TUI: Recommended Images** — New `S` menu item in Additional Images lets users add curated image sets (AI/RHOAI, OpenShift Virtualization, OCP utilities) via a checklist dialog. AI set auto-detects the latest RHOAI GA version from GitHub. After adding operator sets, the TUI prompts to add companion image sets for related workloads.
+- **Image Sets core** — `scripts/image-sets.sh` provides `image_set_add`, `image_set_remove`, `image_set_list`, and `image_set_is_present` functions for managing curated image blocks in `images.conf`. Templates in `templates/image-set-{ai,ocp,virt}`.
 - **TUI: Mirror Payload menu** — New sub-menu (`P` in main menu) consolidates all mirror content controls: OCP version/channel, operator selection, additional images, upgrade prep, inclusion toggles, and advanced ISC options. Replaces the previous flat V/O/G items in the main menu.
 - **TUI: OCP version change without full wizard** — `W` in the Mirror Payload menu opens a focused channel → version picker (reusing wizard internals with zero code duplication) instead of re-running the full setup wizard.
 - **TUI: Operator images exclusion toggle** — New `K` toggle in Mirror Payload to exclude/include operator images via `excl_operators` in `aba.conf`, matching the existing platform (`P`) and additional images (`T`) toggles.
@@ -10,11 +12,17 @@
 
 ### Changed
 
+- **Branding: "Aba" → "ABA"** — User-facing text in install scripts, bundle README/UNPACK/VERIFY templates, build tools, and configuration file headers now consistently uses "ABA" as the project name. The CLI command remains lowercase `aba`.
 - **TUI: De-jargoned user-facing text** — Replaced bare "ISC" abbreviation with "Config", "ImageSet config", or "mirror payload" in all user-facing dialogs, menu items, and help text. The full term "ImageSet Configuration" and the literal filename `imageset-config.yaml` are kept where appropriate.
 - **TUI: DISCO mode menu** — "View imageset-config.yaml" renamed to "View Mirror Payload".
 - **TUI: Upgrade hint in cluster menu** — Updated from `main menu → U` to `Mirror Payload (P) → Prepare Upgrade (U)`.
 - **`aba reset -f` cleanup message** — "Cleaning up background tasks and runner cache..." now only prints when there are actually tasks to clean up.
 - **`cluster.conf` template comments** — Improved CPU/memory guidance and fixed trailing whitespace.
+- **Operator set validation** — Pre-commit check now validates operators against all shipped catalog versions (not just the latest). Operators found only in older catalogs produce a warning; operators not found anywhere produce a hard failure.
+
+### Fixed
+
+- **TUI: Mirror Payload cursor position** — Toggling P/K/T inclusion switches in the Mirror Payload menu no longer jumps the cursor to the default item; it stays on the toggled item.
 
 ---
 
