@@ -1,6 +1,6 @@
-# Aba install bundle for OpenShift v<VERSION>
+# ABA install bundle for OpenShift v<VERSION> (http://github.com/sjbylo/aba)
 
-This Aba install bundle was created on: <DATETIME>
+This ABA install bundle was created on: <DATETIME>
 
 Content of this OpenShift install bundle:
 
@@ -10,8 +10,9 @@ Content of this OpenShift install bundle:
   - <CLIS>
 - Installation file for Quay Mirror Registry: mirror/mirror-registry.tar.gz
 - Installation file for Docker Registry: mirror/docker-reg-image.tgz
-- Scripts to install/configure mirror reg. and install OpenShift.
+- 'aba' and 'abatui' commands to install/configure & load mirror registry and install OpenShift.
 
+==============================================================================================================================
 
 This install bundle has been tested. 
 
@@ -20,6 +21,7 @@ This install bundle has been tested.
 See the files in the build folder for all test results, full log
 of the bundle build/test and this install bundle's test script.
 
+==============================================================================================================================
 
 # How to use this install bundle
 
@@ -63,5 +65,7 @@ aba                                                                    # Install
 
 aba cluster -h                                                         # See help on how to install a cluster.
 
-## See Aba's README.md for help:
+## See ABA's README.md for help:
 https://github.com/sjbylo/aba/blob/main/README.md
+
+==============================================================================================================================

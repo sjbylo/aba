@@ -1334,6 +1334,7 @@ Include / Exclude toggles:
 			local choice
 			choice=$(<"$_TUI_TMP")
 			[[ -z "$choice" ]] && continue
+			default_item="$choice"
 
 			case "$choice" in
 			W)
@@ -1512,6 +1513,13 @@ _operator_menu() {
 	local version_short="$1"
 	local wizard_mode="${2:-}"
 
+	# Capture operator sets at entry for companion image prompt
+	local _entry_op_sets=""
+	local _k
+	for _k in "${!OP_SET_ADDED[@]}"; do
+		_entry_op_sets+="$_k "
+	done
+
 	local default_item="1"
 	while :; do
 		local basket_count="${#OP_BASKET[@]}"
@@ -1570,6 +1578,8 @@ Selected operators will be included in the ImageSet config."
 					[[ $_nb_rc -ne 0 ]] && continue
 				fi
 				tui_log "Operator selection done with $basket_count operators"
+				# Check for companion image sets for newly added operator sets
+				_tui_offer_companion_images "$_entry_op_sets"
 				return 0
 				;;
 			1|255)
@@ -1886,6 +1896,232 @@ _operator_view_basket() {
 }
 
 # =============================================================================
+# Image Set Checklist (TUI wrapper for image_set_* core functions)
+# =============================================================================
+# Dumb consumer: calls core functions, renders dialog, passes choices back.
+
+_tui_image_set_checklist() {
+	tui_log "Action: Add Recommended Images"
+
+	# Read available sets from core
+	local _sets_raw _items=() _set_name _display _status _count _detail _state
+	while IFS=$'\t' read -r _set_name _display _status _count _detail; do
+		[[ -z "$_set_name" ]] && continue
+		_state="off"
+		[[ "$_status" == "added" ]] && _state="on"
+		local _label="$_display"
+		if [[ -n "$_detail" ]]; then
+			_label+=" ($_detail)"
+		fi
+		_label+=" — $_count images"
+		_items+=("$_set_name" "$_label" "$_state")
+	done < <(image_set_list)
+
+	if [[ ${#_items[@]} -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "No image sets available." 0 0
+		return
+	fi
+
+	local _list_h=$(( ${#_items[@]} / 3 + 2 ))
+	[[ $_list_h -gt 12 ]] && _list_h=12
+
+	dlg --backtitle "$(ui_backtitle)" --title "Recommended Image Sets" \
+		--cancel-label "$TUI2_BTN_BACK" \
+		--ok-label "Apply" \
+		--separate-output \
+		--checklist "Select image sets to include in the mirror payload.\nChecked sets will be added; unchecked sets will be removed.\n" \
+		0 0 $_list_h \
+		"${_items[@]}" \
+		2>"$_TUI_TMP"
+	local rc=$?
+	[[ $rc -ne 0 ]] && return
+
+	# Parse selected sets
+	declare -A _selected=()
+	while IFS= read -r _set_name; do
+		_set_name="${_set_name#"${_set_name%%[![:space:]]*}"}"
+		_set_name="${_set_name%"${_set_name##*[![:space:]]}"}"
+		[[ -n "$_set_name" ]] && _selected["$_set_name"]=1
+	done < "$_TUI_TMP"
+
+	# Determine adds and removes
+	local _to_add=() _to_remove=()
+	while IFS=$'\t' read -r _set_name _display _status _count _detail; do
+		[[ -z "$_set_name" ]] && continue
+		if [[ -n "${_selected[$_set_name]:-}" ]]; then
+			# Selected: add if not already present
+			if [[ "$_status" != "added" ]]; then
+				_to_add+=("$_set_name")
+			fi
+		else
+			# Not selected: remove if currently present
+			if [[ "$_status" == "added" ]]; then
+				_to_remove+=("$_set_name")
+			fi
+		fi
+	done < <(image_set_list)
+
+	# Nothing to do?
+	if [[ ${#_to_add[@]} -eq 0 && ${#_to_remove[@]} -eq 0 ]]; then
+		return
+	fi
+
+	# Process removes
+	local _rm_name
+	for _rm_name in "${_to_remove[@]}"; do
+		image_set_remove "$_rm_name"
+		tui_log "Removed image set: $_rm_name"
+	done
+
+	# Process adds
+	local _add_name _add_count _add_msg="" _failed=false
+	for _add_name in "${_to_add[@]}"; do
+		if _image_set_is_dynamic "$_add_name"; then
+			# Dynamic set (AI): auto-detect version, confirm
+			local _ver
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Detecting RHOAI version..." 3 40
+			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
+			if [[ -z "$_ver" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Could not detect RHOAI version.\n\nCheck internet connectivity and try again." 0 0
+				tui_log "Failed to detect RHOAI version for image set: $_add_name"
+				_failed=true
+				continue
+			fi
+			# Fetch count for confirm
+			local _preview_count
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Fetching RHOAI $_ver image list from GitHub..." 3 55
+			_preview_count=$(fetch_rhoai_images "$_ver" 2>/dev/null | wc -l)
+			if [[ $_preview_count -eq 0 ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Could not fetch RHOAI $_ver images from GitHub.\n\nCheck internet connectivity and try again." 0 0
+				tui_log "Failed to fetch RHOAI $_ver images"
+				_failed=true
+				continue
+			fi
+			# Confirm
+			dlg --backtitle "$(ui_backtitle)" --title "Add RHOAI Images" \
+				--yes-label "Add" --no-label "Skip" \
+				--yesno "Adding $_preview_count RHOAI $_ver additional images.\n\nThese images are required for Red Hat OpenShift AI\nin disconnected environments.\n\nContinue?" 0 0
+			if [[ $? -ne 0 ]]; then
+				tui_log "User skipped RHOAI image set"
+				continue
+			fi
+			_add_count=$(image_set_add "$_add_name" "$_ver" 2>/dev/null) || _add_count=0
+		else
+			_add_count=$(image_set_add "$_add_name" 2>/dev/null) || _add_count=0
+		fi
+		if [[ $_add_count -gt 0 ]]; then
+			_add_msg+="  $_add_name: $_add_count images added\n"
+			tui_log "Added image set: $_add_name ($_add_count images)"
+		fi
+	done
+
+	# Summary
+	local _summary=""
+	[[ ${#_to_remove[@]} -gt 0 ]] && _summary+="Removed: ${_to_remove[*]}\n"
+	[[ -n "$_add_msg" ]] && _summary+="Added:\n$_add_msg"
+	if [[ -n "$_summary" ]]; then
+		_summary+="\nConfig will be regenerated."
+		dlg --backtitle "$(ui_backtitle)" --msgbox "$_summary" 0 0
+		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+	fi
+}
+
+# Post-operator companion image prompt.
+# Called when user finishes operator selection. Shows a pre-checked checklist
+# of companion image sets for any newly added operator sets.
+_tui_offer_companion_images() {
+	local _entry_op_sets="$1"
+
+	# Find newly added operator sets (in OP_SET_ADDED but not in _entry_op_sets)
+	local _new_sets=() _k
+	for _k in "${!OP_SET_ADDED[@]}"; do
+		if [[ ! " $_entry_op_sets " == *" $_k "* ]]; then
+			_new_sets+=("$_k")
+		fi
+	done
+
+	# Nothing new? Skip.
+	[[ ${#_new_sets[@]} -eq 0 ]] && return
+
+	# Ask core which companion image sets are needed
+	local _needed
+	_needed=$(image_set_companions_needed "${_new_sets[@]}" 2>/dev/null) || return
+	[[ -z "$_needed" ]] && return
+
+	# Build checklist: all companions pre-checked
+	local _items=() _set_name _display _status _count _detail
+	while IFS= read -r _set_name; do
+		[[ -z "$_set_name" ]] && continue
+		local _found=false
+		while IFS=$'\t' read -r _sn _display _status _count _detail; do
+			if [[ "$_sn" == "$_set_name" ]]; then
+				local _label="$_display"
+				[[ -n "$_detail" ]] && _label+=" ($_detail)"
+				_label+=" — $_count images"
+				_items+=("$_set_name" "$_label" "on")
+				_found=true
+				break
+			fi
+		done < <(image_set_list)
+		# If not in list (shouldn't happen), still offer it
+		$_found || _items+=("$_set_name" "$_set_name" "on")
+	done <<< "$_needed"
+
+	[[ ${#_items[@]} -eq 0 ]] && return
+
+	local _list_h=$(( ${#_items[@]} / 3 + 2 ))
+	[[ $_list_h -gt 10 ]] && _list_h=10
+
+	dlg --backtitle "$(ui_backtitle)" \
+		--title "Recommended Additional Images" \
+		--cancel-label "Skip" \
+		--ok-label "Add" \
+		--separate-output \
+		--checklist "The selected operator sets have recommended companion images.\nThese are additional container images needed in disconnected environments.\n\nTo manage these later: Mirror Payload (P) → Additional Images (G) → Recommended Images (S)\n" \
+		0 0 $_list_h \
+		"${_items[@]}" \
+		2>"$_TUI_TMP"
+	local rc=$?
+	[[ $rc -ne 0 ]] && { tui_log "User skipped companion image sets"; return; }
+
+	# Process selections
+	local _added_any=false
+	while IFS= read -r _set_name; do
+		_set_name="${_set_name#"${_set_name%%[![:space:]]*}"}"
+		_set_name="${_set_name%"${_set_name##*[![:space:]]}"}"
+		[[ -z "$_set_name" ]] && continue
+
+		if _image_set_is_dynamic "$_set_name"; then
+			local _ver
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Detecting RHOAI version..." 3 40
+			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
+			if [[ -z "$_ver" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Could not detect RHOAI version.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
+				tui_log "Failed to detect RHOAI version"
+				continue
+			fi
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Fetching RHOAI $_ver images..." 3 45
+			image_set_add "$_set_name" "$_ver" >/dev/null 2>&1 && _added_any=true
+			tui_log "Added companion image set: $_set_name (RHOAI $_ver)"
+		else
+			image_set_add "$_set_name" >/dev/null 2>&1 && _added_any=true
+			tui_log "Added companion image set: $_set_name"
+		fi
+	done < "$_TUI_TMP"
+
+	if $_added_any; then
+		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+	fi
+}
+
+# =============================================================================
 # Additional Images (images.conf management — dumb consumer of core commands)
 # =============================================================================
 
@@ -1921,6 +2157,7 @@ mirror_manage_images() {
 			"A" "Add image" \
 			"R" "Remove image" \
 			"D" "Delete all images" \
+			"S" "Add Recommended Images" \
 			"X" "$_incl_label" \
 			"E" "Edit images.conf" \
 			2>"$_TUI_TMP"
@@ -1938,6 +2175,8 @@ and will be mirrored alongside OpenShift platform and operator images.
 • Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
 • Remove: remove a previously added image
 • Delete all: clear all additional images from images.conf
+• Recommended Images: add or remove curated image sets (AI, Virt, OCP)
+  that complement selected operator sets
 • Additional Images: toggle whether additional images are included in the
   ImageSet configuration. When excluded, images.conf is kept intact but
   the images are not mirrored. Toggle back on to re-include them.
@@ -2049,6 +2288,9 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					tui_log "Deleted all images from images.conf"
 					dlg --backtitle "$(ui_backtitle)" --msgbox "All additional images removed.\nConfig will be regenerated." 0 0
 				fi
+				;;
+			S)
+				_tui_image_set_checklist
 				;;
 			X)
 				if [[ "$_excl_addl" == "true" ]]; then

@@ -1,4 +1,4 @@
-# Folder containing Aba install bundles for OpenShift (x86_64)
+# Folder containing ABA install bundles for OpenShift (x86_64)
 
 Select one of the below install bundles to install OpenShift into a fully disconnected (air-gapped) environment.
 

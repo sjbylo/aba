@@ -128,7 +128,7 @@ $DRY_RUN && HEADER_SUFFIX=" (DRY RUN — no changes will be made)"
 [ -n "$REF_COMMIT" ] && HEADER_SUFFIX="$HEADER_SUFFIX (--ref $REF_COMMIT)"
 $HOTFIX && HEADER_SUFFIX="$HEADER_SUFFIX (--hotfix from main)"
 
-echo -e "${CYAN}=== Aba Release Process${HEADER_SUFFIX} ===${NC}\n"
+echo -e "${CYAN}=== ABA Release Process${HEADER_SUFFIX} ===${NC}\n"
 echo -e "${YELLOW}New version: $NEW_VERSION${NC}"
 echo -e "${YELLOW}Description: $RELEASE_DESC${NC}"
 [ -n "$REF_COMMIT" ] && echo -e "${YELLOW}Target ref:  $REF_COMMIT${NC}"

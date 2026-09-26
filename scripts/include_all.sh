@@ -4492,6 +4492,12 @@ check_release_image() {
 }
 
 # =============================================================================
+# Image Sets (curated additional images for operator sets)
+# =============================================================================
+_ABA_SCRIPTS="${_ABA_SCRIPTS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+[[ -f "$_ABA_SCRIPTS/image-sets.sh" ]] && source "$_ABA_SCRIPTS/image-sets.sh"
+
+# =============================================================================
 # Additional Images (images.conf) — ADR-013
 # =============================================================================
 # Plain-text image lists merged into the ISC additionalImages section.
