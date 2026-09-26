@@ -29,9 +29,6 @@ aba image add quay.io/openshifttest/hello-openshift:1.2.0
 # Add curated image sets based on bundle type
 source scripts/include_all.sh
 
-# Ensure .index/ exists (detect_rhoai_version reads from it; catalogs/ has the same data)
-[ ! -d .index ] && [ -d catalogs ] && ln -sf catalogs .index
-
 # OCP utility images (support-tools, ubi) for all bundles
 image_set_add ocp
 

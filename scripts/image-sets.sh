@@ -129,8 +129,9 @@ detect_rhoai_version() {
 		return 0
 	fi
 
-	# Read rhods-operator channel from catalog index
+	# Read rhods-operator channel from catalog index (.index/ preferred, catalogs/ fallback)
 	local index_file="$ABA_ROOT/.index/redhat-operator-index-v${ocp_ver}"
+	[ -f "$index_file" ] || index_file="$ABA_ROOT/catalogs/redhat-operator-index-v${ocp_ver}"
 	[ -f "$index_file" ] || { aba_debug "No catalog index for OCP $ocp_ver"; return 1; }
 
 	local channel
