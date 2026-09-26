@@ -16,6 +16,7 @@ cfm-operator Cloudera Flow Management - Kubernetes Operator for Apache NiFi stab
 cilium-enterprise Isovalent Enterprise for Cilium 1.16
 cisco-intersight Cisco Intersight stable
 clife Isovalent Networking for Kubernetes 1.19
+cloudcasa-operator CloudCasa Operator stable
 cloudera-streams-messaging-kubernetes-operator Cloudera Streams Messaging - Kubernetes Operator for Apache Kafka stable
 cloudnative-pg CloudNativePG stable-v1
 cloud-native-postgresql EDB Postgres for Kubernetes fast

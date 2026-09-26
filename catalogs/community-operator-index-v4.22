@@ -184,6 +184,7 @@ kollect Kollect stable
 konflux-operator Konflux stable-v0.2
 konveyor-operator Konveyor Operator alpha
 korrel8r Korrel8r stable
+krkn-operator-acm Krkn Operator ACM stable-acm
 krkn-operator Krkn Operator stable-ocp
 kuadrant-operator Kuadrant Operator stable
 kubecost Kubecost alpha
