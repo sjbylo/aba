@@ -24,18 +24,24 @@ aba -d cli oc-mirror
 echo_step "Add additional images ..."
 
 # Default images for all bundles
-aba image add registry.redhat.io/rhel9/support-tools:latest \
-              quay.io/openshifttest/hello-openshift:1.2.0 \
-              registry.redhat.io/ubi9/ubi:latest
+aba image add quay.io/openshifttest/hello-openshift:1.2.0
 
-# Virt companion images
-[ "$NAME" = "virt" ] && aba image add quay.io/containerdisks/centos-stream:9 \
-                                      quay.io/containerdisks/fedora:latest
+# Add curated image sets based on bundle type
+source scripts/include_all.sh
 
-# AI companion images (fetch from GitHub, fall back to static list)
+# Ensure .index/ exists (detect_rhoai_version reads from it; catalogs/ has the same data)
+[ ! -d .index ] && [ -d catalogs ] && ln -sf catalogs .index
+
+# OCP utility images (support-tools, ubi) for all bundles
+image_set_add ocp
+
+# Virt companion images (container disks for VMs)
+[ "$NAME" = "virt" ] && image_set_add virt
+
+# AI companion images (RHOAI workbench/pipeline images from GitHub)
 # Also add minio for DSP testing (not in the RHOAI image list but needed by DSPA)
 if [ "$NAME" = "ai" ]; then
-	fetch_rhoai_images "3.5"
+	image_set_add ai
 	aba image add quay.io/opendatahub/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
 fi
 
