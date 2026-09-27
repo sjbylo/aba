@@ -174,8 +174,14 @@ base_cmd="oc-mirror --v2 --config imageset-config.yaml file://. ${OC_MIRROR_SINC
 [ "$TMPDIR" ] && mkdir -p "$TMPDIR"
 [ "$OC_MIRROR_CACHE" ] && mkdir -p "$OC_MIRROR_CACHE"
 
-if ! _run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd"; then
-	exit 1
+_save_rc=0
+_run_oc_mirror_with_retry "save" "$try_tot" "$base_cmd" || _save_rc=$?
+
+# Persist the real exit code so callers can read it even through make's exit-code masking
+echo "$_save_rc" > .oc-mirror-exit-code
+
+if [ $_save_rc -ne 0 ]; then
+	exit $_save_rc
 fi
 
 # Ensure all CLI downloads are complete before packing aba-transfer.tar

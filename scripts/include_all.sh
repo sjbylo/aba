@@ -3915,7 +3915,7 @@ _run_oc_mirror_with_retry() {
 			"Tuning: see ~/.aba/config (image timeout, parallelism) or README.md 'Troubleshooting'."
 		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 
-		return 1
+		return $ret
 	fi
 
 	echo
