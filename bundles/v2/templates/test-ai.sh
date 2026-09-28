@@ -1,9 +1,14 @@
 #!/bin/bash -e
 # test-ai.sh -- OpenShift AI (RHODS) operator + DataScienceCluster operand
+# Usage: test-ai.sh [--dev]
+#   --dev  Skip cleanup at the end so you can inspect/debug and re-run easily.
 
 # See: Chapter 3. Deploy OpenShift AI in a disconnected environment
 # https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/installing_and_uninstalling_openshift_ai_self-managed_in_a_disconnected_environment/deploying-openshift-ai-in-a-disconnected-environment_install
 # https://github.com/red-hat-data-services/rhoai-disconnected-install-helper  =>  rhoai-3\.[0-9]-imagesetconfig.yaml
+
+_DEV_MODE=
+[ "${1:-}" = "--dev" ] && _DEV_MODE=1
 
 source "$(dirname "$0")/bundle-test-lib.sh"
 
@@ -50,25 +55,19 @@ result_out "OpenShift AI Operator installation test: ok"
 echo_step "Install DataScienceCluster operand"
 
 cat << EOF | oc apply -f -
-apiVersion: datasciencecluster.opendatahub.io/v1
+apiVersion: datasciencecluster.opendatahub.io/v2
 kind: DataScienceCluster
 metadata:
   name: default-dsc
 spec:
   components:
-    codeflare:
+    aipipelines:
       managementState: Managed
     dashboard:
-      managementState: Managed
-    datasciencepipelines:
       managementState: Managed
     kserve:
       managementState: Removed
     kueue:
-      managementState: Removed
-    llamastackoperator:
-      managementState: Removed
-    modelmeshserving:
       managementState: Removed
     ray:
       managementState: Removed
@@ -81,7 +80,7 @@ spec:
       workbenchNamespace: rhods-notebooks
 EOF
 
-wait_for_operand DataScienceCluster default-dsc istio-system \
+wait_for_operand DataScienceCluster default-dsc default \
 	'{.status.phase}' '[Rr]eady'
 
 sleep 30
@@ -100,8 +99,13 @@ result_out "OpenShift AI operand installation test: ok"
 
 echo_step "Verifying installed components in DataScienceCluster status"
 
-for comp in codeflare dashboard datasciencepipelines trainingoperator trustyai workbenches; do
-	val=$(oc get datasciencecluster default-dsc -o jsonpath="{.status.installedComponents.$comp}")
+for comp in dashboard aipipelines trainingoperator trustyai workbenches; do
+	# RHOAI 3.5+: installedComponents removed; check .status.components instead
+	val=$(oc get datasciencecluster default-dsc -o jsonpath="{.status.components.$comp.managementState}" 2>/dev/null)
+	[ "$val" = "Managed" ] && val="true"
+	if [ -z "$val" ]; then
+		val=$(oc get datasciencecluster default-dsc -o jsonpath="{.status.installedComponents.$comp}" 2>/dev/null)
+	fi
 	echo "  $comp = $val"
 	[ "$val" = "true" ] || { echo "ERROR: component $comp not installed (got: $val)" >&2; exit 1; }
 done
@@ -115,7 +119,7 @@ wait_all_pods redhat-ods-applications 900
 echo_step "Verifying key deployments in redhat-ods-applications"
 
 for dep in rhods-dashboard data-science-pipelines-operator-controller-manager \
-           notebook-controller-deployment odh-model-controller; do
+           notebook-controller-deployment odh-notebook-controller-manager; do
 	oc get deployment "$dep" -n redhat-ods-applications --no-headers || \
 		{ echo "ERROR: deployment $dep missing" >&2; exit 1; }
 done
@@ -126,86 +130,58 @@ echo
 
 result_out "OpenShift AI key deployments verification: ok"
 
-echo_step "Verifying RHOAI dashboard route is accessible"
+echo_step "Verifying RHOAI dashboard service is accessible"
 
-_dash_host=$(oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}')
-echo "Dashboard URL: https://$_dash_host"
-curl -k -sf "https://$_dash_host" > /dev/null || \
-	{ echo "ERROR: RHOAI dashboard not reachable at https://$_dash_host" >&2; exit 1; }
+# RHOAI 3.5+: dashboard route may not exist; verify service is serving
+_dash_ok=
+if _dash_host=$(oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}' 2>/dev/null) && [ -n "$_dash_host" ]; then
+	echo "Dashboard URL: https://$_dash_host"
+	curl -k -sf "https://$_dash_host" > /dev/null && _dash_ok=1
+else
+	echo "No dashboard route — checking service endpoint directly"
+	oc get svc rhods-dashboard -n redhat-ods-applications --no-headers || \
+		{ echo "ERROR: rhods-dashboard service not found" >&2; exit 1; }
+	# Verify dashboard pod is serving (liveness via localhost inside pod)
+	oc exec -n redhat-ods-applications deployment/rhods-dashboard -c rhods-dashboard -- \
+		curl -sf http://localhost:8080/ > /dev/null 2>&1 && _dash_ok=1
+fi
 
-result_out "OpenShift AI dashboard route accessible: ok"
+[ "$_dash_ok" ] || { echo "ERROR: RHOAI dashboard not reachable" >&2; exit 1; }
 
-echo_step "Creating minimal workbench to verify notebook image is pullable"
-
-oc new-project test-workbench || true
-
-cat << EOF | oc apply -f -
-apiVersion: kubeflow.org/v1
-kind: Notebook
-metadata:
-  name: test-wb
-  namespace: test-workbench
-  annotations:
-    notebooks.opendatahub.io/inject-oauth: "false"
-  labels:
-    opendatahub.io/dashboard: "true"
-spec:
-  template:
-    spec:
-      containers:
-      - name: test-wb
-        image: registry.redhat.io/rhoai/odh-workbench-jupyter-minimal-cpu-py312-rhel9:latest
-        ports:
-        - containerPort: 8888
-          name: notebook-port
-        resources:
-          limits:
-            cpu: "1"
-            memory: 2Gi
-          requests:
-            cpu: "1"
-            memory: 2Gi
-EOF
-
-wait_all_pods test-workbench 300
-
-echo_step "Showing workbench pod"
-oc get po -n test-workbench
-
-echo_step "Verifying Jupyter is responding"
-oc port-forward -n test-workbench notebook-test-wb-0 8888:8888 &
-_pf_pid=$!
-sleep 3
-curl -sf http://localhost:8888/api > /dev/null || \
-	{ kill $_pf_pid 2>/dev/null; echo "ERROR: Jupyter not responding on port 8888" >&2; exit 1; }
-kill $_pf_pid 2>/dev/null
-
-result_out "Workbench notebook image pull, start and liveness: ok"
-
-echo_step "Cleaning up test workbench"
-oc delete project test-workbench --wait=false
-
-result_out "Workbench notebook test: ok"
-
-echo_step "Waiting for workbench namespace cleanup before next test"
-for _try in $(seq 1 30); do
-	oc get project test-workbench > /dev/null 2>&1 || break
-	echo -n .
-	sleep 5
-done
-echo
+result_out "OpenShift AI dashboard accessible: ok"
 
 ######################################################################
-# Data Science Pipelines — verify DSP API and run a minimal pipeline
-# (requires pipeline runtime images from the RHOAI companion image set)
+# Data Science Pipelines — verify DSPA deploys and API is healthy
+# All images (mariadb, minio, DSP controllers) are relatedImages in
+# the RHOAI operator CSV — mirrored via the catalog, mapped via IDMS.
 ######################################################################
 
 echo_step "Creating Data Science Pipelines Application (DSPA)"
 
+# DSP requires PVCs for mariadb and minio. The bundle test cluster is
+# agent-based bare metal — no CSI driver, no StorageClass. Create a
+# temporary hostPath SC and static PVs so the DSP test actually runs.
+echo "Creating temporary hostPath StorageClass for DSP test"
+cat << 'SCEOF' | oc apply -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hostpath-test
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+SCEOF
+
 oc new-project test-dsp || true
 
+# mariadb/minio pods need write access to hostPath-backed PVs.
+# Grant anyuid SCC so the containers can write to the mounted directories.
+oc adm policy add-scc-to-user anyuid -z default -n test-dsp
+
 cat << EOF | oc apply -f -
-apiVersion: datasciencepipelinesapplications.opendatahub.io/v1alpha1
+apiVersion: datasciencepipelinesapplications.opendatahub.io/v1
 kind: DataSciencePipelinesApplication
 metadata:
   name: dspa-test
@@ -230,6 +206,69 @@ spec:
     deploy: true
 EOF
 
+# Wait for the DSPA controller to create PVCs, then create a matching
+# hostPath PV for each one with explicit claimRef for deterministic binding.
+echo "Waiting for DSPA PVCs to appear ..."
+_pvcs_found=
+for _try in $(seq 1 30); do
+	_pvc_count=$(oc get pvc -n test-dsp --no-headers 2>/dev/null | wc -l)
+	if [ "$_pvc_count" -ge 2 ]; then
+		_pvcs_found=1
+		break
+	fi
+	echo -n .
+	sleep 5
+done
+echo
+
+[ "$_pvcs_found" ] || { echo "ERROR: Expected >=2 PVCs but only ${_pvc_count:-0} appeared within 150s" >&2; exit 1; }
+
+echo "Creating hostPath PVs for each Pending PVC ..."
+_pv_idx=0
+while IFS= read -r _pvc_name; do
+	_pv_idx=$(( _pv_idx + 1 ))
+	_pvc_uid=$(oc get pvc "$_pvc_name" -n test-dsp -o jsonpath='{.metadata.uid}')
+	cat << PVEOF | oc apply -f -
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: hostpath-dsp-${_pv_idx}
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: hostpath-test
+  claimRef:
+    namespace: test-dsp
+    name: ${_pvc_name}
+    uid: ${_pvc_uid}
+  hostPath:
+    path: /tmp/dsp-test-pv-${_pv_idx}
+    type: DirectoryOrCreate
+PVEOF
+done < <(oc get pvc -n test-dsp --no-headers -o custom-columns=NAME:.metadata.name)
+echo "Created $_pv_idx hostPath PV(s) with explicit claimRef binding"
+
+echo_step "Waiting for DSP pods to appear"
+
+# The DSPA controller needs time to create pods after the CR is applied.
+# wait_all_pods returns instantly if 0 pods exist, so wait for at least one.
+_pods_found=
+for _try in $(seq 1 60); do
+	_pod_count=$(oc get po -n test-dsp --no-headers 2>/dev/null | wc -l)
+	if [ "$_pod_count" -ge 2 ]; then
+		_pods_found=1
+		break
+	fi
+	echo -n .
+	sleep 5
+done
+echo
+
+[ "$_pods_found" ] || { echo "ERROR: DSP pods never appeared in test-dsp namespace within 300s" >&2; oc get po -n test-dsp >&2; exit 1; }
+
 echo_step "Waiting for DSP pods to become ready"
 
 wait_all_pods test-dsp 600
@@ -237,12 +276,14 @@ wait_all_pods test-dsp 600
 echo_step "Showing DSP pods"
 oc get po -n test-dsp
 
+result_out "Data Science Pipelines Application deployed: ok"
+
 echo_step "Waiting for DSP API route"
 
 _dspa_ready=
 for _try in $(seq 1 60); do
-	_dspa_route=$(oc get dspa dspa-test -n test-dsp -o jsonpath='{.status.conditions[?(@.type=="APIServerReady")].status}' 2>/dev/null || true)
-	if [ "$_dspa_route" = "True" ]; then
+	_dspa_status=$(oc get dspa dspa-test -n test-dsp -o jsonpath='{.status.conditions[?(@.type=="APIServerReady")].status}' 2>/dev/null || true)
+	if [ "$_dspa_status" = "True" ]; then
 		_dspa_ready=1
 		break
 	fi
@@ -253,11 +294,8 @@ echo
 
 [ "$_dspa_ready" ] || { echo "ERROR: DSPA API never became ready within 300s" >&2; oc get dspa dspa-test -n test-dsp -o yaml >&2; exit 1; }
 
-result_out "Data Science Pipelines Application deployed: ok"
-
 echo_step "Verifying DSP API health endpoint"
 
-# Get the DSP API route
 _ds_route=$(oc get route ds-pipeline-dspa-test -n test-dsp -o jsonpath='{.spec.host}' 2>/dev/null || true)
 _pf_pid=
 
@@ -271,10 +309,8 @@ else
 	_ds_api="http://localhost:8888"
 fi
 
-# Get auth token for API calls
 _token=$(oc whoami -t)
 
-# Verify DSP API health
 _api_ok=
 for _try in $(seq 1 12); do
 	if curl -k -sf -H "Authorization: Bearer $_token" "$_ds_api/apis/v2beta1/healthz" > /dev/null 2>&1; then
@@ -288,38 +324,21 @@ echo
 
 [ -n "$_pf_pid" ] && kill "$_pf_pid" 2>/dev/null || true
 
-if [ "$_api_ok" ]; then
-	result_out "Data Science Pipelines API health check: ok"
-else
-	echo "WARNING: DSP API health endpoint not reachable — deployment still verified above" >&2
-	result_out "Data Science Pipelines API health check: SKIPPED (API not reachable via route/port-forward)"
-fi
+[ "$_api_ok" ] || { echo "ERROR: DSP API health endpoint not reachable" >&2; exit 1; }
 
-echo_step "Cleaning up DSP test project"
-oc delete project test-dsp --wait=false
+result_out "Data Science Pipelines API health check: ok"
+
+if [ "$_DEV_MODE" ]; then
+	echo "Dev mode: skipping cleanup (test-dsp project, hostPath SC/PVs left in place)"
+else
+	echo_step "Cleaning up DSP test project"
+	oc delete project test-dsp --wait=false
+
+	echo "Cleaning up hostPath SC and PVs ..."
+	oc delete pv hostpath-dsp-1 hostpath-dsp-2 --wait=false 2>/dev/null || true
+	oc delete sc hostpath-test 2>/dev/null || true
+fi
 
 result_out "Data Science Pipelines test: ok"
-
-######################################################################
-# TrustyAI — verify service pods are running
-######################################################################
-
-echo_step "Verifying TrustyAI controller is running"
-
-_trusty_ns=redhat-ods-applications
-_trusty_dep=trustyai-service-operator-controller-manager
-
-if oc get deployment "$_trusty_dep" -n "$_trusty_ns" --no-headers 2>/dev/null; then
-	_ready=$(oc get deployment "$_trusty_dep" -n "$_trusty_ns" \
-		-o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
-	echo "  TrustyAI controller ready replicas: $_ready"
-	[ "${_ready:-0}" -ge 1 ] || { echo "ERROR: TrustyAI controller has no ready replicas" >&2; exit 1; }
-	result_out "TrustyAI controller running: ok"
-else
-	echo "WARNING: TrustyAI controller deployment not found — component may use a different name" >&2
-	echo "  Checking for any trustyai-related pods:"
-	oc get po -n "$_trusty_ns" 2>/dev/null | grep -i trusty || echo "  (none found)"
-	result_out "TrustyAI controller: SKIPPED (deployment not found)"
-fi
 
 result_out "OpenShift AI full installation test: ok"

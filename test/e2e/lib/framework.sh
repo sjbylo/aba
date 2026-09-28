@@ -1065,6 +1065,40 @@ _e2e_fix_image_pruner_if_needed() {
 	return 1
 }
 
+# Workaround for bare-metal/SNO installs with no StorageClass: image-registry
+# auto-sets managementState=Removed and reports Degraded=True ("The registry is
+# removed"), which blocks e2e_wait_cluster_ready.
+# Fix: patch to Managed with emptyDir storage so the operator goes healthy.
+_e2e_fix_image_registry_if_removed() {
+	local output_file="$1"
+	[ ! -s "$output_file" ] && return 1
+
+	# Only act when the output shows at least one Degraded CO
+	grep -q "Degraded=[1-9]" "$output_file" || return 1
+
+	local kc
+	for kc in */iso-agent-based/auth/kubeconfig; do
+		[ -f "$kc" ] || continue
+
+		local mgmt_state
+		mgmt_state=$(KUBECONFIG="$kc" oc get configs.imageregistry.operator.openshift.io cluster \
+			-o jsonpath='{.spec.managementState}' 2>/dev/null) || continue
+
+		[ "$mgmt_state" = "Removed" ] || return 1
+
+		_e2e_log "  Detected image-registry managementState=Removed with Degraded=True"
+		_e2e_log "  Applying workaround: patch to Managed + emptyDir storage"
+
+		KUBECONFIG="$kc" oc patch configs.imageregistry.operator.openshift.io cluster \
+			--type=merge --patch '{"spec":{"managementState":"Managed","storage":{"emptyDir":{}}}}' && \
+		KUBECONFIG="$kc" oc patch imagepruner.imageregistry/cluster \
+			--patch '{"spec":{"suspend":true}}' --type=merge 2>/dev/null
+		_e2e_log "  Workaround applied -- image-registry set to Managed+emptyDir, pruner suspended"
+		return 0
+	done
+	return 1
+}
+
 e2e_run() {
     [ -n "$_E2E_SKIP_BLOCK" ] && return 0
     [ -n "$_E2E_SUITE_SKIPPED" ] && return 0
@@ -1234,6 +1268,9 @@ e2e_run() {
 
             _e2e_fix_image_pruner_if_needed "$_cmd_output_file" && \
                 _e2e_log_and_print "  Applied ImagePrunerJobFailed workaround before retry"
+
+            _e2e_fix_image_registry_if_removed "$_cmd_output_file" && \
+                _e2e_log_and_print "  Applied image-registry Removed workaround before retry"
 
             attempt=$(( attempt + 1 ))
             if [[ "$cmd" == *$'\n'* ]]; then
