@@ -7,4 +7,3 @@ Curated image sets for common workloads, a reorganized mirror payload menu, and 
 - **OCP version change without full wizard** — Change the target OpenShift version and channel directly from the Mirror Payload menu.
 - **Operator exclusion toggle** — Operator images can now be excluded from or included in the mirror payload via a toggle, matching the existing platform and additional images toggles.
 - **Improved text throughout** — Replaced technical jargon ("ISC") with plain language in all TUI dialogs. Consistent "ABA" branding across all user-facing text.
-- **Better error reporting for image mirror failures** — `aba save`, `load`, and `sync` now decode and display the specific oc-mirror failure category (release, operator, or additional images) instead of a generic error, making it easier to diagnose what went wrong.
