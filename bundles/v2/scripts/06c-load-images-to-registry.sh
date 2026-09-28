@@ -31,7 +31,7 @@ fi
 # bypassing make's exit-code masking (make always returns 2 for recipe failures).
 #   oc-mirror bitmask: bit 2 = release, bit 4 = operator, bit 8 = additional, bit 16 = helm
 load_rc=0
-aba -d mirror load --retry 3 -H $TEST_HOST || load_rc=$?
+aba -d mirror load --retry 1 -H $TEST_HOST || load_rc=$?
 
 if [ $load_rc -ne 0 ]; then
 	# Read the real oc-mirror exit code from the file ABA writes
