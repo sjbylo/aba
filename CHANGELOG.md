@@ -23,7 +23,7 @@
 ### Fixed
 
 - **TUI: Mirror Payload cursor position** — Toggling P/K/T inclusion switches in the Mirror Payload menu no longer jumps the cursor to the default item; it stays on the toggled item.
-- **`aba save`/`load`/`sync` now report real oc-mirror exit codes** — Previously, Make masked oc-mirror's exit code (always returning 2 on recipe failure). ABA now writes the actual oc-mirror bitmask exit code to `.oc-mirror-exit-code` and decodes the failure category (release, operator, additional images) in retry messages.
+- **`aba save`/`load`/`sync` propagate real oc-mirror exit codes** — `_run_oc_mirror_with_retry` was returning 1 on failure instead of the actual oc-mirror bitmask. Now returns the real exit code and writes it to `.oc-mirror-exit-code` so callers (e.g. bundle test scripts) can distinguish failure types through Make's exit-code masking.
 - **RHOAI version detection fallback** — The AI image set's auto-detection of the latest RHOAI GA version now falls back to the shipped catalog indexes when `.index/` data is unavailable, preventing empty version errors on freshly installed systems.
 
 ---
