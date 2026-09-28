@@ -69,12 +69,32 @@ fi
 
 TEST_LOG_06D="$WORK_BUNDLE_DIR_BUILD/tests-06d.txt"
 
+# Check if the image load had partial failures
+_load_rc=0
+[ -f "$WORK_BUNDLE_DIR_BUILD/load-exit-code" ] && _load_rc=$(cat "$WORK_BUNDLE_DIR_BUILD/load-exit-code")
+
 # Truncate this phase's log (idempotent on retry)
 : > "$TEST_LOG_06D"
 
 # set -e is active (#!/bin/bash -e) -- any failure aborts immediately.
 # Cluster VMs are left alive on failure so you can debug.
 # On re-run, the cluster health check above handles stale/leftover clusters.
+
+# Wrap tests in a handler that hints about partial load failures
+_test_failed() {
+	local rc=$?
+	if [ "$_load_rc" -ne 0 ] 2>/dev/null; then
+		echo
+		echo "##########################################################################"
+		echo "NOTE: The image load step (06c) completed with errors (exit $_load_rc)."
+		echo "      Not all images were loaded into the registry successfully."
+		echo "      This may be the cause of the test failure above."
+		echo "##########################################################################"
+		echo
+	fi
+	exit $rc
+}
+trap '_test_failed' ERR
 
 cd "$CLUSTER_NAME"
 
