@@ -251,6 +251,15 @@ PVEOF
 done < <(oc get pvc -n test-dsp --no-headers -o custom-columns=NAME:.metadata.name)
 echo "Created $_pv_idx hostPath PV(s) with explicit claimRef binding"
 
+# Fix hostPath directory permissions on the node so pods running as random UIDs
+# can write (OCP default: random UID + SELinux enforcing).
+_node=$(oc get nodes -o jsonpath='{.items[0].metadata.name}')
+for _i in $(seq 1 $_pv_idx); do
+	oc debug "node/$_node" --quiet -- chroot /host bash -c \
+		"mkdir -p /tmp/dsp-test-pv-$_i && chmod 0777 /tmp/dsp-test-pv-$_i && chcon -t container_file_t /tmp/dsp-test-pv-$_i" 2>/dev/null
+done
+echo "Fixed hostPath permissions on $_node ($_pv_idx dirs)"
+
 echo_step "Waiting for DSP pods to appear"
 
 # The DSPA controller needs time to create pods after the CR is applied.
