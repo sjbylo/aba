@@ -1,26 +1,34 @@
-# Folder containing ABA install bundles for OpenShift (x86_64)
+╔══════════════════════════════════════════════════════════════════════╗
+   ABA Install Bundles for OpenShift (x86_64)
+   http://github.com/sjbylo/aba
+╚══════════════════════════════════════════════════════════════════════╝
 
-Select one of the below install bundles to install OpenShift into a fully disconnected (air-gapped) environment.
+Select one of the install bundles below to install OpenShift into a
+fully disconnected (air-gapped) environment.
 
-Content:
+  IMPORTANT: Only ONE bundle can be used at a time. They cannot be
+  combined. To include different operators or images, create your own
+  custom install bundle (see link below).
 
-  "release"  - all files needed to install just OpenShift, no Operators included.
-  "ocp"      - all files needed to install OpenShift and some useful Operators.
-  "ocpv"     - OpenShift and Operators for OpenShift Virtualization.
-  "ai"       - OpenShift and Operators for OpenShift AI.
-  "opp"      - OpenShift and Operators for ACM, ACS and ODF.
-  "mesh3"    - OpenShift and Operators for Service Mesh v3.
-  "sec"      - OpenShift and Operators for Security.
+─── AVAILABLE BUNDLES ─────────────────────────────────────────────────
 
-For all details, including bundle build log and test results, see the README.txt file in each bundle folder.
+  "release"  - OpenShift only, no Operators.               (~26 GB)
+  "ocp"      - OpenShift + useful day-2 Operators.         (~38 GB)
+  "mesh3"    - OpenShift + Service Mesh v3 Operators.      (~51 GB)
+  "virt"     - OpenShift + OCP Virtualization + ODF.       (~98 GB)
+  "opp"      - OpenShift + ACM, ACS, and ODF Operators.   (~120 GB)
+  "ai"       - OpenShift + OpenShift AI + GPU Operators.  (~608 GB)
 
-Only ONE bundle can be used at a time, they cannot be combined. If you need different operators and/or 
-imaages you can create your own install bundle.
+  For full details, including build logs and test results, see the
+  README.txt file inside each bundle folder.
 
-Should these bundles be missing important images and/or operators, please let us know at:
-  https://github.com/sjbylo/aba/issues/new 
-and we'll consider adding them to the bundle.
+─── CUSTOM BUNDLES ────────────────────────────────────────────────────
 
-Read how to create your own custom install bundle here:
-  https://github.com/sjbylo/aba/blob/main/README.md#creating-a-custom-install-bundle
+  Should these bundles be missing important images or operators,
+  please let us know:
+    https://github.com/sjbylo/aba/issues/new
 
+  Create your own custom install bundle:
+    https://github.com/sjbylo/aba/blob/main/README.md#custom-bundles
+
+════════════════════════════════════════════════════════════════════════
