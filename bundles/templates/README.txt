@@ -1,6 +1,6 @@
-# Aba install bundle for OpenShift v<VERSION>
+# ABA install bundle for OpenShift v<VERSION>
 
-This Aba install bundle was created on: <DATETIME>
+This ABA install bundle was created on: <DATETIME>
 
 Content of this OpenShift install bundle:
 
@@ -63,5 +63,5 @@ aba                                                               # Install Open
 
 aba cluster -h                                                    # See help on how to install a cluster.
 
-## See Aba's README.md for help:
+## See ABA's README.md for help:
 https://github.com/sjbylo/aba/blob/main/README.md

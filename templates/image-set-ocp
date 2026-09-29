@@ -1,0 +1,6 @@
+# Name: Useful OpenShift Images
+# General-purpose utility and base images for OpenShift clusters.
+
+registry.redhat.io/ubi9/ubi:latest
+registry.redhat.io/ubi9/ubi-micro:latest
+registry.redhat.io/rhel9/support-tools:latest

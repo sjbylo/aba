@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.3.4
+ABA_VERSION=1.3.5
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260925090017
+ABA_BUILD=20260929191750
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -1202,7 +1202,7 @@ for i in imgs:
 				shift
 				exec $ABA_ROOT/scripts/cluster-import.sh "$@"
 				;;
-			tui|ssh|run|bundle|bundle-primed|info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
+			tui|ssh|run|bundle|bundle-primed|info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|day2-virt|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|install|write-usb|deploy-primed|deploy|transfer-primed|transfer)
 					# These are processed directly in code below, bypassing Make
 					:
 					;;
@@ -1249,7 +1249,7 @@ if [ "$cur_target" ]; then
 	# Externalized targets require a cluster directory (cluster.conf present)
 	# ADR-007: if cluster.conf is missing, try restoring from state backup
 	case $cur_target in
-		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
+		info|login|shell|terminal|term|getco|unstick|day2|day2-ntp|day2-osus|day2-virt|upgrade|upgrade-mon|shutdown|startup|rescue|create|ls|start|stop|kill|poweroff|delete|refresh|upload|write-usb|deploy-primed|deploy)
 			if [ ! -f cluster.conf ]; then
 				_cn=$(basename "$PWD")
 				_recreated=false
@@ -1278,7 +1278,7 @@ if [ "$cur_target" ]; then
 
 	# Auto-detect install completion for commands that operate on installed clusters
 	case $cur_target in
-		day2|day2-ntp|day2-osus|upgrade|upgrade-mon|shutdown|startup|rescue|unstick)
+		day2|day2-ntp|day2-osus|day2-virt|upgrade|upgrade-mon|shutdown|startup|rescue|unstick)
 			_cn=$(basename "$PWD")
 			_bd=$(grep '^base_domain=' cluster.conf 2>/dev/null | head -1 | cut -d= -f2 | sed 's/[[:space:]]*#.*//' | xargs)
 			_kc=$(cluster_kubeconfig "$_cn" "$_bd" 2>/dev/null)
@@ -1388,6 +1388,11 @@ if [ "$cur_target" ]; then
 		;;
 		day2-osus)
 			$ABA_ROOT/scripts/day2-config-osus.sh
+			_post_check_install
+			exit
+		;;
+		day2-virt)
+			$ABA_ROOT/scripts/day2-config-virt.sh
 			_post_check_install
 			exit
 		;;

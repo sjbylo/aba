@@ -9,7 +9,7 @@ cd "$SCRIPT_DIR/.." || exit 1
 source scripts/include_all.sh
 
 # Kill all background run_once tasks and clean runner directory
-echo "[ABA] Cleaning up background tasks and runner cache..."
-run_once -G || true
-
-echo "[ABA] Cleanup complete"
+if ls "$HOME/.aba/runner"/*/ &>/dev/null; then
+	echo "[ABA] Cleaning up background tasks and runner cache..."
+	run_once -G || true
+fi

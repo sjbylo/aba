@@ -1,5 +1,5 @@
 #!/bin/bash
-# Simple Aba installer.  Copy aba command somewhere into the $PATH
+# ABA installer.  Copy aba command somewhere into the $PATH
 #
 # Usage:
 #   ./install          - Manual install (verbose, resets ~/.aba/*, forces reinstall)

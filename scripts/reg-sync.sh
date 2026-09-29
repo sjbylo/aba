@@ -156,8 +156,14 @@ base_cmd="oc-mirror --v2 --config imageset-config.yaml --workspace file://. dock
 
 [ "$TMPDIR" ] && mkdir -p "$TMPDIR"
 
-if ! _run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd"; then
-	exit 1
+_sync_rc=0
+_run_oc_mirror_with_retry "sync" "$try_tot" "$base_cmd" || _sync_rc=$?
+
+# Persist the real exit code so callers can read it even through make's exit-code masking
+echo "$_sync_rc" > .oc-mirror-exit-code
+
+if [ $_sync_rc -ne 0 ]; then
+	exit $_sync_rc
 fi
 
 # After successful sync: update state.sh with mirror facts.

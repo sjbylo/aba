@@ -124,14 +124,14 @@ echo -e "${YELLOW}Creating GitHub release...${NC}"
 
 if [ "$DRAFT_FLAG" ]; then
     gh release create "$TAG" \
-        --title "Aba $TAG" \
+        --title "ABA $TAG" \
         --notes-file "$RELEASE_BULLETS_FILE" \
         --draft
     echo -e "${GREEN}✓ Draft release created: $TAG${NC}"
     echo -e "${CYAN}Review and publish at: https://github.com/sjbylo/aba/releases${NC}"
 else
     gh release create "$TAG" \
-        --title "Aba $TAG" \
+        --title "ABA $TAG" \
         --notes-file "$RELEASE_BULLETS_FILE" \
         --latest
     echo -e "${GREEN}✓ Release published: $TAG${NC}"

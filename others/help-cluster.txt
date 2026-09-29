@@ -51,6 +51,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
 
   aba [-d <cluster>] mon                  # Monitor installation (runs openshift-install agent wait-for)
   aba [-d <cluster>] day2                 # Configure OperatorHub, signatures, etc (run after load/sync/upgrade)
+  aba [-d <cluster>] day2-virt            # Configure OCP Virtualization boot sources to use the mirror registry
   aba [-d <cluster>] ssh --cmd <command>   # Run a command on the rendezvous node (node0) via SSH
   aba [-d <cluster>] ssh --all --cmd <cmd> # Run a command on all nodes (masters + workers)
   aba [-d <cluster>] ssh --all --masters --cmd <cmd>  # Run on masters only
@@ -100,7 +101,7 @@ Related commands (run with --dir <cluster> or from inside the cluster directory)
       --name <dir-name>                     # Cluster directory name (default: cluster_name from API)
       --image-source <mirror|direct|proxy>  # Override image source (default: auto-detect from IDMS/ITMS)
       --force                               # Overwrite existing cluster directory
-  After import, use aba -d <name> terminal|day2|day2-osus|day2-ntp|upgrade|getco|shell|shutdown etc.
+  After import, use aba -d <name> terminal|day2|day2-osus|day2-ntp|day2-virt|upgrade|getco|shell|shutdown etc.
 
   VM lifecycle (platform=vmw or kvm only):
   aba [-d <cluster>] ls                   # List all cluster node VMs

@@ -543,7 +543,7 @@ _mirror_op_confirm() {
 	local _summary=""
 	_summary+="OCP: $_ver ($_chan)\n"
 	if [[ $_op_count -eq -1 ]]; then
-		_summary+="Operators: (user-edited ISC)\n"
+		_summary+="Operators: (user-edited config)\n"
 	elif [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
@@ -558,7 +558,7 @@ _mirror_op_confirm() {
 		dlg --backtitle "$(ui_backtitle)" --title "$title" \
 			--yes-label "$TUI2_BTN_CONTINUE" \
 			--no-label "$TUI2_BTN_BACK" \
-			--help-button --help-label "View ISC" \
+			--help-button --help-label "View Config" \
 			--yesno "$_summary" 0 0
 		local rc=$?
 		if [[ $rc -eq 2 ]]; then
@@ -578,7 +578,7 @@ _mirror_op_confirm() {
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc_for_view" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 0 0
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config not yet generated." 0 0
 			fi
 			continue
 		fi
@@ -1144,11 +1144,15 @@ _persist_operator_basket() {
 # View ImageSet Config (read-only or editable)
 # =============================================================================
 
-mirror_view_isc() {
+# =============================================================================
+# Mirror Payload Menu (was: View ImageSet Config)
+# =============================================================================
+
+mirror_payload_menu() {
 	local readonly="${1:-false}"
 	[[ "$readonly" != "true" ]] && { _require_podman || return 0; }
 	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
-	tui_log "Action: View ISC (readonly=$readonly)"
+	tui_log "Action: Mirror Payload (readonly=$readonly)"
 
 	# Ensure selection is persisted and ISC gen is running
 	_persist_operator_basket
@@ -1211,16 +1215,15 @@ mirror_view_isc() {
 			--exit-label "OK" \
 			--textbox "$isconf_file" 0 0
 	else
-		# Editable — offer view/edit/reset/operators-only toggle
-		local default_item="V"
+		local default_item="O"
 		while :; do
 		# Read current exclusion states from aba.conf
-		local _excl_plat="false" _excl_addl="false"
 		source <(normalize-aba-conf) 2>/dev/null
-		_excl_plat="${excl_platform:-false}"
-		_excl_addl="${excl_additional:-false}"
+		local _excl_plat="${excl_platform:-false}"
+		local _excl_addl="${excl_additional:-false}"
+		local _excl_ops="${excl_operators:-false}"
 
-		# Build context summary for the menu prompt
+		# Build context summary
 		local _op_count=0
 		if declare -p OP_BASKET &>/dev/null && [[ ${#OP_BASKET[@]} -gt 0 ]]; then
 			_op_count=${#OP_BASKET[@]}
@@ -1230,63 +1233,98 @@ mirror_view_isc() {
 				_op_count=$(awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}' "$_isc_file")
 			fi
 		fi
-		local _rel_status="included" _addl_status="included"
-		[[ "$_excl_plat" == "true" ]] && _rel_status="excluded"
-		[[ "$_excl_addl" == "true" ]] && _addl_status="excluded"
-		local _isc_summary="OCP ${ocp_version:-?} · ${_op_count} operator(s) · release: ${_rel_status} · additional: ${_addl_status}"
 
-		local _isc_items=("V" "View")
-		local _created_flag="$ABA_ROOT/mirror/data/.created"
-		_isc_items+=("O" "Select Operators")
-		_isc_items+=("$TUI2_CONNO_TAG_IMAGES" "$TUI2_LABEL_IMAGES")
-		_isc_items+=("" "──── Advanced ──────────────────────")
-		_isc_items+=("R" "Regenerate imageset-config.yaml (from aba.conf + mirror.conf)")
-		# Toggle: exclude release images (operators only)
-		local _excl_label
+		# Toggle labels: release images
+		local _excl_plat_label
 		if [[ "$_excl_plat" == "true" ]]; then
-			_excl_label="Release Images: \Z1excluded\Zn"
+			_excl_plat_label="Release Images: \Z1excluded\Zn"
 		else
-			_excl_label="Release Images: \Z2included\Zn"
+			_excl_plat_label="Release Images: \Z2included\Zn"
 		fi
-		_isc_items+=("X" "$_excl_label")
-		# Toggle: exclude additional images
+
+		# Toggle labels: additional images
 		local _excl_addl_label
 		if [[ "$_excl_addl" == "true" ]]; then
 			_excl_addl_label="Additional Images: \Z1excluded\Zn"
 		else
 			_excl_addl_label="Additional Images: \Z2included\Zn"
 		fi
-		_isc_items+=("T" "$_excl_addl_label")
-		_isc_items+=("E" "Edit imageset-config.yaml")
 
-		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
+		# Toggle labels: operator images
+		local _excl_ops_label
+		if [[ "$_excl_ops" == "true" ]]; then
+			_excl_ops_label="Operator Images: \Z1excluded\Zn"
+		else
+			_excl_ops_label="Operator Images: \Z2included\Zn"
+		fi
+
+		# Prepare Upgrade label
+		local _upg_label="Prepare Upgrade (beta)"
+		local _upg_target=""
+		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
+			_upg_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
+		fi
+		if [[ -n "$_upg_target" && "$_upg_target" != "${ocp_version:-}" ]]; then
+			_upg_label="Prepare Upgrade (beta) [→ ${_upg_target}]"
+		fi
+
+		local _payload_summary="OCP ${ocp_version:-?} ${ocp_channel:-}"
+		[[ $_op_count -gt 0 ]] && _payload_summary+=" · ${_op_count} operator(s)"
+		[[ "$_excl_plat" == "true" ]] && _payload_summary+=" · release: excluded"
+		[[ "$_excl_ops" == "true" ]] && _payload_summary+=" · operators: excluded"
+		[[ "$_excl_addl" == "true" ]] && _payload_summary+=" · additional: excluded"
+
+		# Count additional images
+		local _img_count=0
+		if [[ -f "$ABA_ROOT/images.conf" ]]; then
+			_img_count=$(_read_images_conf "$ABA_ROOT/images.conf" | wc -l)
+		fi
+
+		local _op_suffix="" _img_suffix=""
+		[[ $_op_count -gt 0 ]] && _op_suffix=" (${_op_count})"
+		[[ $_img_count -gt 0 ]] && _img_suffix=" (${_img_count})"
+
+		local _payload_items=()
+		_payload_items+=("W" "OCP Version / Channel (${ocp_version:-?} ${ocp_channel:-})")
+		_payload_items+=("O" "Select Operators${_op_suffix}")
+		_payload_items+=("G" "$TUI2_LABEL_IMAGES${_img_suffix}")
+		_payload_items+=("U" "$_upg_label")
+		_payload_items+=("" "──── Include / Exclude ─────────────")
+		_payload_items+=("P" "$_excl_plat_label")
+		_payload_items+=("K" "$_excl_ops_label")
+		_payload_items+=("T" "$_excl_addl_label")
+		_payload_items+=("" "────────────────────────────────────")
+		_payload_items+=("A" "Advanced (View/Edit/Reset Config)")
+
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_PAYLOAD" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "Select" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "${TUI2_MSG_ISC_MENU}${_isc_summary}\n" 0 0 0 \
-				"${_isc_items[@]}" \
+			--menu "${_payload_summary}\n" 0 0 0 \
+				"${_payload_items[@]}" \
 				2>"$_TUI_TMP"
 			local rc=$?
 			case "$rc" in
 				2)
-					show_help "ImageSet Configuration" \
-"The imageset-config.yaml (ISC) controls which images oc-mirror will include.
+					show_help "Mirror Payload" \
+"Configure what gets mirrored. The imageset-config.yaml (ISC) is built from these settings.
 
-• View: see the current imageset-config.yaml
-• Select Operators: choose which operators to include
-• Additional Images: add extra container images (UBI, support-tools, etc.)
-• Regenerate: rebuild imageset-config.yaml from aba.conf + mirror.conf
-  settings. Use this to let ABA take back control of the file after
-  manual edits.
-• Release Images: toggle platform/release images on or off.
-  When excluded, only operator images are mirrored — useful when
-  release images are already in the mirror and you only need
-  to transfer new or updated operators.
-• Additional Images: toggle extra container images on or off.
-  When excluded, images from images.conf are not included in the ISC.
+• OCP Version / Channel — change the OCP version or update channel
+• Select Operators — choose which operators to include
+• Additional Images — add extra container images (UBI, support-tools, etc.)
+• Prepare Upgrade — set an upgrade target version
+
+Include / Exclude toggles:
+• Release Images — toggle platform/release images on or off.
+  When excluded, only operators are mirrored — useful when release
+  images are already in the mirror.
+• Operator Images — toggle operator images on or off.
+  When excluded, operators are skipped entirely.
+• Additional Images — toggle additional images on or off.
   The images.conf file is kept intact — toggle back on to re-include.
-• Edit imageset-config.yaml: manually edit the ISC YAML (advanced users)"
+
+• Advanced — view, edit, or reset the raw imageset-config.yaml"
 					continue
 					;;
 				0) ;;
@@ -1295,74 +1333,39 @@ mirror_view_isc() {
 
 			local choice
 			choice=$(<"$_TUI_TMP")
-			# Skip separator items (empty tag)
 			[[ -z "$choice" ]] && continue
+			default_item="$choice"
 
 			case "$choice" in
-				V|E)
-					# Wait for any in-flight ISC regeneration to finish
-					if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
-						dlg --backtitle "$(ui_backtitle)" --infobox \
-							"$TUI2_MSG_ISC_GENERATING" 0 0
-						run_once -q -w -i "aba:isconf:generate" -- \
-							make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
-					fi
-					;;&
-				V)
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
-						--exit-label "OK" --textbox "$isconf_file" 0 0
-					;;
-				E)
-					dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
-						--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
-						--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
-					if [[ $? -eq 0 ]]; then
-						if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
-							cp "$_TUI_TMP" "$isconf_file"
-							tui_kick_isconf_regen
-							tui_log "ISC saved by user"
-							dlg --backtitle "$(ui_backtitle)" --msgbox \
-								"$TUI2_MSG_ISC_SAVED" 0 0 || true
-						fi
-					fi
-					;;
-				R)
-					dlg --backtitle "$(ui_backtitle)" --title "Confirm Regenerate" \
-						--yes-label "Regenerate" --no-label "Cancel" \
-						--yesno "\nThis will discard any manual edits and regenerate\nimageset-config.yaml from aba.conf + mirror.conf\n(version, channel, operators).\n\nAre you sure?" 0 0
-					if [[ $? -eq 0 ]]; then
-						# Touch .created so the script's guard sees it as newer than
-						# the ISC and triggers regeneration — keeps ISC in place
-						touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
-						rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
-						run_once -r -i "aba:isconf:generate" 2>/dev/null || true
-						dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating..." 3 20
-						local _regen_out _regen_rc=0
-						_regen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
-							make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _regen_rc=$?
-						tui_log "ISC regeneration output (rc=$_regen_rc): $_regen_out"
-						if [[ $_regen_rc -ne 0 ]]; then
-							dlg --backtitle "$(ui_backtitle)" --title "Regeneration Failed" \
-								--msgbox "$_regen_out" 0 0
-						else
-							dlg --backtitle "$(ui_backtitle)" --title "Regenerated imageset-config.yaml" \
-								--exit-label "OK" --textbox "$isconf_file" 0 0
-						fi
-					fi
-					;;
+			W)
+				tui_change_version
+				;;
 			O)
 				mirror_select_operators
 				;;
-			"$TUI2_CONNO_TAG_IMAGES")
+			G)
 				mirror_manage_images
 				;;
-			X)
+			U)
+				mirror_prep_upgrade
+				;;
+			P)
 				if [[ "$_excl_plat" == "true" ]]; then
 					replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 					tui_log "Settings: excl_platform=false (all images)"
 				else
 					replace-value-conf -n excl_platform -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
 					tui_log "Settings: excl_platform=true (operators only)"
+				fi
+				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+				;;
+			K)
+				if [[ "$_excl_ops" == "true" ]]; then
+					replace-value-conf -n excl_operators -v "false" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_operators=false (operators included)"
+				else
+					replace-value-conf -n excl_operators -v "true" -f "$ABA_ROOT/aba.conf" >>"$_TUI_LOG_FILE" 2>&1
+					tui_log "Settings: excl_operators=true (operators excluded)"
 				fi
 				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 				;;
@@ -1376,10 +1379,98 @@ mirror_view_isc() {
 				fi
 				tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
 				;;
+			A)
+				_mirror_isc_advanced
+				;;
 		esac
 		done
 	fi
 	return 0
+}
+
+# =============================================================================
+# Advanced ISC Options (View / Edit / Reset)
+# =============================================================================
+
+_mirror_isc_advanced() {
+	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
+	local default_item="V"
+	while :; do
+		local _adv_items=()
+		_adv_items+=("V" "View imageset-config.yaml")
+		_adv_items+=("E" "Edit imageset-config.yaml")
+		_adv_items+=("R" "Reset Config (regenerate from aba.conf + mirror.conf)")
+
+		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_ISC_ADVANCED" \
+			--cancel-label "$TUI2_BTN_BACK" \
+			--ok-label "Select" \
+			--default-item "$default_item" \
+			--menu "\n" 0 0 0 \
+				"${_adv_items[@]}" \
+				2>"$_TUI_TMP"
+		local rc=$?
+		case "$rc" in
+			0) ;;
+			*) return 0 ;;
+		esac
+
+		local choice
+		choice=$(<"$_TUI_TMP")
+		[[ -z "$choice" ]] && continue
+		default_item="$choice"
+
+		case "$choice" in
+			V|E)
+				# Wait for any in-flight ISC regeneration to finish
+				if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
+					dlg --backtitle "$(ui_backtitle)" --infobox \
+						"$TUI2_MSG_ISC_GENERATING" 0 0
+					run_once -q -w -i "aba:isconf:generate" -- \
+						make -sC "$ABA_ROOT/mirror" isconf >>"$_TUI_LOG_FILE" 2>&1 || true
+				fi
+				;;&
+			V)
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_VIEW_ISC" \
+					--exit-label "OK" --textbox "$isconf_file" 0 0
+				;;
+			E)
+				dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_EDIT_ISC" \
+					--ok-label "$TUI2_BTN_SAVE" --cancel-label "$TUI2_BTN_CANCEL" \
+					--editbox "$isconf_file" 0 0 2>"$_TUI_TMP"
+				if [[ $? -eq 0 ]]; then
+					if ! diff -q "$_TUI_TMP" "$isconf_file" >/dev/null 2>&1; then
+						cp "$_TUI_TMP" "$isconf_file"
+						tui_kick_isconf_regen
+						tui_log "ISC saved by user"
+						dlg --backtitle "$(ui_backtitle)" --msgbox \
+							"$TUI2_MSG_ISC_SAVED" 0 0 || true
+					fi
+				fi
+				;;
+			R)
+				dlg --backtitle "$(ui_backtitle)" --title "Confirm Reset" \
+					--yes-label "Reset" --no-label "Cancel" \
+					--yesno "\nThis will discard any manual edits and regenerate\nimageset-config.yaml from aba.conf + mirror.conf\n(version, channel, operators).\n\nAre you sure?" 0 0
+				if [[ $? -eq 0 ]]; then
+					touch "$ABA_ROOT/mirror/data/.created" 2>/dev/null
+					rm -f "$ABA_ROOT/mirror/imageset-config-save.yaml" 2>/dev/null
+					run_once -r -i "aba:isconf:generate" 2>/dev/null || true
+					dlg --backtitle "$(ui_backtitle)" --infobox "Regenerating..." 3 20
+					local _regen_out _regen_rc=0
+					_regen_out=$(run_once -q -w -i "aba:isconf:generate" -- \
+						make -sC "$ABA_ROOT/mirror" isconf 2>&1) || _regen_rc=$?
+					tui_log "ISC regeneration output (rc=$_regen_rc): $_regen_out"
+					if [[ $_regen_rc -ne 0 ]]; then
+						dlg --backtitle "$(ui_backtitle)" --title "Reset Failed" \
+							--msgbox "$_regen_out" 0 0
+					else
+						dlg --backtitle "$(ui_backtitle)" --title "Regenerated imageset-config.yaml" \
+							--exit-label "OK" --textbox "$isconf_file" 0 0
+					fi
+				fi
+				;;
+		esac
+	done
 }
 
 # =============================================================================
@@ -1421,6 +1512,13 @@ mirror_select_operators() {
 _operator_menu() {
 	local version_short="$1"
 	local wizard_mode="${2:-}"
+
+	# Capture operator sets at entry for companion image prompt
+	local _entry_op_sets=""
+	local _k
+	for _k in "${!OP_SET_ADDED[@]}"; do
+		_entry_op_sets+="$_k "
+	done
 
 	local default_item="1"
 	while :; do
@@ -1480,6 +1578,8 @@ Selected operators will be included in the ImageSet config."
 					[[ $_nb_rc -ne 0 ]] && continue
 				fi
 				tui_log "Operator selection done with $basket_count operators"
+				# Check for companion image sets for newly added operator sets
+				_tui_offer_companion_images "$_entry_op_sets"
 				return 0
 				;;
 			1|255)
@@ -1796,6 +1896,232 @@ _operator_view_basket() {
 }
 
 # =============================================================================
+# Image Set Checklist (TUI wrapper for image_set_* core functions)
+# =============================================================================
+# Dumb consumer: calls core functions, renders dialog, passes choices back.
+
+_tui_image_set_checklist() {
+	tui_log "Action: Add Recommended Images"
+
+	# Read available sets from core
+	local _sets_raw _items=() _set_name _display _status _count _detail _state
+	while IFS=$'\t' read -r _set_name _display _status _count _detail; do
+		[[ -z "$_set_name" ]] && continue
+		_state="off"
+		[[ "$_status" == "added" ]] && _state="on"
+		local _label="$_display"
+		if [[ -n "$_detail" ]]; then
+			_label+=" ($_detail)"
+		fi
+		_label+=" — $_count images"
+		_items+=("$_set_name" "$_label" "$_state")
+	done < <(image_set_list)
+
+	if [[ ${#_items[@]} -eq 0 ]]; then
+		dlg --backtitle "$(ui_backtitle)" --msgbox "No image sets available." 0 0
+		return
+	fi
+
+	local _list_h=$(( ${#_items[@]} / 3 + 2 ))
+	[[ $_list_h -gt 12 ]] && _list_h=12
+
+	dlg --backtitle "$(ui_backtitle)" --title "Recommended Image Sets" \
+		--cancel-label "$TUI2_BTN_BACK" \
+		--ok-label "Apply" \
+		--separate-output \
+		--checklist "Select image sets to include in the mirror payload.\nChecked sets will be added; unchecked sets will be removed.\n" \
+		0 0 $_list_h \
+		"${_items[@]}" \
+		2>"$_TUI_TMP"
+	local rc=$?
+	[[ $rc -ne 0 ]] && return
+
+	# Parse selected sets
+	declare -A _selected=()
+	while IFS= read -r _set_name; do
+		_set_name="${_set_name#"${_set_name%%[![:space:]]*}"}"
+		_set_name="${_set_name%"${_set_name##*[![:space:]]}"}"
+		[[ -n "$_set_name" ]] && _selected["$_set_name"]=1
+	done < "$_TUI_TMP"
+
+	# Determine adds and removes
+	local _to_add=() _to_remove=()
+	while IFS=$'\t' read -r _set_name _display _status _count _detail; do
+		[[ -z "$_set_name" ]] && continue
+		if [[ -n "${_selected[$_set_name]:-}" ]]; then
+			# Selected: add if not already present
+			if [[ "$_status" != "added" ]]; then
+				_to_add+=("$_set_name")
+			fi
+		else
+			# Not selected: remove if currently present
+			if [[ "$_status" == "added" ]]; then
+				_to_remove+=("$_set_name")
+			fi
+		fi
+	done < <(image_set_list)
+
+	# Nothing to do?
+	if [[ ${#_to_add[@]} -eq 0 && ${#_to_remove[@]} -eq 0 ]]; then
+		return
+	fi
+
+	# Process removes
+	local _rm_name
+	for _rm_name in "${_to_remove[@]}"; do
+		image_set_remove "$_rm_name"
+		tui_log "Removed image set: $_rm_name"
+	done
+
+	# Process adds
+	local _add_name _add_count _add_msg="" _failed=false
+	for _add_name in "${_to_add[@]}"; do
+		if _image_set_is_dynamic "$_add_name"; then
+			# Dynamic set (AI): auto-detect version, confirm
+			local _ver
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Detecting RHOAI version..." 3 40
+			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
+			if [[ -z "$_ver" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Could not detect RHOAI version.\n\nCheck internet connectivity and try again." 0 0
+				tui_log "Failed to detect RHOAI version for image set: $_add_name"
+				_failed=true
+				continue
+			fi
+			# Fetch count for confirm
+			local _preview_count
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Fetching RHOAI $_ver image list from GitHub..." 3 55
+			_preview_count=$(fetch_rhoai_images "$_ver" 2>/dev/null | wc -l)
+			if [[ $_preview_count -eq 0 ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Could not fetch RHOAI $_ver images from GitHub.\n\nCheck internet connectivity and try again." 0 0
+				tui_log "Failed to fetch RHOAI $_ver images"
+				_failed=true
+				continue
+			fi
+			# Confirm
+			dlg --backtitle "$(ui_backtitle)" --title "Add RHOAI Images" \
+				--yes-label "Add" --no-label "Skip" \
+				--yesno "Adding $_preview_count RHOAI $_ver additional images.\n\nThese images are required for Red Hat OpenShift AI\nin disconnected environments.\n\nContinue?" 0 0
+			if [[ $? -ne 0 ]]; then
+				tui_log "User skipped RHOAI image set"
+				continue
+			fi
+			_add_count=$(image_set_add "$_add_name" "$_ver" 2>/dev/null) || _add_count=0
+		else
+			_add_count=$(image_set_add "$_add_name" 2>/dev/null) || _add_count=0
+		fi
+		if [[ $_add_count -gt 0 ]]; then
+			_add_msg+="  $_add_name: $_add_count images added\n"
+			tui_log "Added image set: $_add_name ($_add_count images)"
+		fi
+	done
+
+	# Summary
+	local _summary=""
+	[[ ${#_to_remove[@]} -gt 0 ]] && _summary+="Removed: ${_to_remove[*]}\n"
+	[[ -n "$_add_msg" ]] && _summary+="Added:\n$_add_msg"
+	if [[ -n "$_summary" ]]; then
+		_summary+="\nConfig will be regenerated."
+		dlg --backtitle "$(ui_backtitle)" --msgbox "$_summary" 0 0
+		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+	fi
+}
+
+# Post-operator companion image prompt.
+# Called when user finishes operator selection. Shows a pre-checked checklist
+# of companion image sets for any newly added operator sets.
+_tui_offer_companion_images() {
+	local _entry_op_sets="$1"
+
+	# Find newly added operator sets (in OP_SET_ADDED but not in _entry_op_sets)
+	local _new_sets=() _k
+	for _k in "${!OP_SET_ADDED[@]}"; do
+		if [[ ! " $_entry_op_sets " == *" $_k "* ]]; then
+			_new_sets+=("$_k")
+		fi
+	done
+
+	# Nothing new? Skip.
+	[[ ${#_new_sets[@]} -eq 0 ]] && return
+
+	# Ask core which companion image sets are needed
+	local _needed
+	_needed=$(image_set_companions_needed "${_new_sets[@]}" 2>/dev/null) || return
+	[[ -z "$_needed" ]] && return
+
+	# Build checklist: all companions pre-checked
+	local _items=() _set_name _display _status _count _detail
+	while IFS= read -r _set_name; do
+		[[ -z "$_set_name" ]] && continue
+		local _found=false
+		while IFS=$'\t' read -r _sn _display _status _count _detail; do
+			if [[ "$_sn" == "$_set_name" ]]; then
+				local _label="$_display"
+				[[ -n "$_detail" ]] && _label+=" ($_detail)"
+				_label+=" — $_count images"
+				_items+=("$_set_name" "$_label" "on")
+				_found=true
+				break
+			fi
+		done < <(image_set_list)
+		# If not in list (shouldn't happen), still offer it
+		$_found || _items+=("$_set_name" "$_set_name" "on")
+	done <<< "$_needed"
+
+	[[ ${#_items[@]} -eq 0 ]] && return
+
+	local _list_h=$(( ${#_items[@]} / 3 + 2 ))
+	[[ $_list_h -gt 10 ]] && _list_h=10
+
+	dlg --backtitle "$(ui_backtitle)" \
+		--title "Recommended Additional Images" \
+		--cancel-label "Skip" \
+		--ok-label "Add" \
+		--separate-output \
+		--checklist "The selected operator sets have recommended companion images.\nThese are additional container images needed in disconnected environments.\n\nTo manage these later: Mirror Payload (P) → Additional Images (G) → Recommended Images (S)\n" \
+		0 0 $_list_h \
+		"${_items[@]}" \
+		2>"$_TUI_TMP"
+	local rc=$?
+	[[ $rc -ne 0 ]] && { tui_log "User skipped companion image sets"; return; }
+
+	# Process selections
+	local _added_any=false
+	while IFS= read -r _set_name; do
+		_set_name="${_set_name#"${_set_name%%[![:space:]]*}"}"
+		_set_name="${_set_name%"${_set_name##*[![:space:]]}"}"
+		[[ -z "$_set_name" ]] && continue
+
+		if _image_set_is_dynamic "$_set_name"; then
+			local _ver
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Detecting RHOAI version..." 3 40
+			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
+			if [[ -z "$_ver" ]]; then
+				dlg --backtitle "$(ui_backtitle)" --msgbox \
+					"Could not detect RHOAI version.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
+				tui_log "Failed to detect RHOAI version"
+				continue
+			fi
+			dlg --backtitle "$(ui_backtitle)" --infobox \
+				"Fetching RHOAI $_ver images..." 3 45
+			image_set_add "$_set_name" "$_ver" >/dev/null 2>&1 && _added_any=true
+			tui_log "Added companion image set: $_set_name (RHOAI $_ver)"
+		else
+			image_set_add "$_set_name" >/dev/null 2>&1 && _added_any=true
+			tui_log "Added companion image set: $_set_name"
+		fi
+	done < "$_TUI_TMP"
+
+	if $_added_any; then
+		tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
+	fi
+}
+
+# =============================================================================
 # Additional Images (images.conf management — dumb consumer of core commands)
 # =============================================================================
 
@@ -1816,9 +2142,9 @@ mirror_manage_images() {
 
 		local _incl_label
 		if [[ "$_excl_addl" == "true" ]]; then
-			_incl_label="Include in ISC: \Z1excluded\Zn"
+			_incl_label="Additional Images: \Z1excluded\Zn"
 		else
-			_incl_label="Include in ISC: \Z2included\Zn"
+			_incl_label="Additional Images: \Z2included\Zn"
 		fi
 
 		dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
@@ -1826,11 +2152,12 @@ mirror_manage_images() {
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
-			--menu "Extra container images included in the ISC.\nCurrently: $_count image(s) in images.conf\n" 0 0 0 \
+			--menu "Extra container images included in the mirror payload.\nCurrently: $_count image(s) in images.conf\n" 0 0 0 \
 			"L" "List images" \
 			"A" "Add image" \
 			"R" "Remove image" \
 			"D" "Delete all images" \
+			"S" "Add Recommended Images" \
 			"X" "$_incl_label" \
 			"E" "Edit images.conf" \
 			2>"$_TUI_TMP"
@@ -1841,14 +2168,16 @@ mirror_manage_images() {
 				show_help "Additional Images" \
 "Manage extra container images to include in your ImageSet configuration.
 
-These images are added to the 'additionalImages' section of the ISC
+These images are added to the 'additionalImages' section of the ImageSet config
 and will be mirrored alongside OpenShift platform and operator images.
 
 • List: show all configured additional images
 • Add: add a container image reference (e.g. registry.redhat.io/ubi9/ubi:latest)
 • Remove: remove a previously added image
 • Delete all: clear all additional images from images.conf
-• Include in ISC: toggle whether additional images are included in the
+• Recommended Images: add or remove curated image sets (AI, Virt, OCP)
+  that complement selected operator sets
+• Additional Images: toggle whether additional images are included in the
   ImageSet configuration. When excluded, images.conf is kept intact but
   the images are not mirrored. Toggle back on to re-include them.
 • Edit: open images.conf directly in the editor
@@ -1957,8 +2286,11 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 					> "$_img_file"
 					tui_kick_isconf_regen
 					tui_log "Deleted all images from images.conf"
-					dlg --backtitle "$(ui_backtitle)" --msgbox "All additional images removed.\nISC will be regenerated." 0 0
+					dlg --backtitle "$(ui_backtitle)" --msgbox "All additional images removed.\nConfig will be regenerated." 0 0
 				fi
+				;;
+			S)
+				_tui_image_set_checklist
 				;;
 			X)
 				if [[ "$_excl_addl" == "true" ]]; then
@@ -1994,7 +2326,7 @@ Use 'aba image add/remove/list' on the CLI for the same functionality."
 							cp "$_TUI_TMP" "$_img_file"
 							tui_kick_isconf_regen
 							tui_log "images.conf saved by user"
-							dlg --backtitle "$(ui_backtitle)" --msgbox "images.conf saved. ISC will be regenerated." 0 0
+							dlg --backtitle "$(ui_backtitle)" --msgbox "images.conf saved. Config will be regenerated." 0 0
 						fi
 					fi
 				fi
@@ -2087,7 +2419,7 @@ mirror_create_bundle() {
 
 	local _summary="OCP: $_ver ($_chan)\n"
 	if [[ $_op_count -eq -1 ]]; then
-		_summary+="Operators: (user-edited ISC)\n"
+		_summary+="Operators: (user-edited config)\n"
 	elif [[ $_op_count -gt 0 ]]; then
 		_summary+="Operators ($_op_count): $_op_preview\n"
 	else
@@ -2104,7 +2436,7 @@ mirror_create_bundle() {
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_NEXT" \
-			--help-button --help-label "View ISC" \
+			--help-button --help-label "View Config" \
 			--inputbox "$_summary" 0 0 "$default_bundle" \
 			2>"$_TUI_TMP"
 		local rc=$?
@@ -2115,7 +2447,7 @@ mirror_create_bundle() {
 				dlg --backtitle "$(ui_backtitle)" --title "ImageSet Configuration" \
 					--exit-label "OK" --textbox "$_isc" 0 0
 			else
-				dlg --backtitle "$(ui_backtitle)" --msgbox "ISC file not yet generated." 0 0
+				dlg --backtitle "$(ui_backtitle)" --msgbox "ImageSet config not yet generated." 0 0
 			fi
 			continue
 		fi

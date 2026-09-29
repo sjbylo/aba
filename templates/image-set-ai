@@ -1,0 +1,7 @@
+# Name: Red Hat OpenShift AI (RHOAI)
+# Dynamic: images fetched from GitHub per RHOAI version.
+# Source: https://github.com/red-hat-data-services/rhoai-disconnected-install-helper
+#
+# This is not a static image list. ABA fetches the appropriate image list
+# at runtime based on the rhods-operator channel version detected in the
+# operator catalog index.

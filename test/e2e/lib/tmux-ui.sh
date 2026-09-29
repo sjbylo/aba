@@ -40,6 +40,39 @@ cmd_dash() {
 cmd_live() {
 	local pool_list="$1"
 	local run_dir="$2"
+	local _sess="e2e-live"
+
+	local _np=0
+	local _p
+	for _p in $pool_list; do _np=$(( _np + 1 )); done
+
+	# Reuse existing live session if it has the right number of panes
+	local _existing_panes=0
+	_existing_panes=$(tmux list-panes -t "$_sess" 2>/dev/null | wc -l) || _existing_panes=0
+	if [ "$_existing_panes" -eq "$_np" ]; then
+		echo "Live session already running with $_np panes -- reattaching."
+		if [ -n "${TMUX:-}" ]; then
+			exec tmux switch-client -t "$_sess"
+		else
+			exec tmux attach -t "$_sess"
+		fi
+	fi
+
+	_create_live_session "$pool_list" "$run_dir"
+
+	echo "Live dashboard (${_np} pools) -- Ctrl-a + arrow to switch panes, Ctrl-a Ctrl-a [ to scroll remote"
+	if [ -n "${TMUX:-}" ]; then
+		exec tmux switch-client -t "$_sess"
+	else
+		exec tmux attach -t "$_sess"
+	fi
+}
+
+# Create (or recreate) the e2e-live tmux session without attaching.
+# Called by cmd_live and by the daemon at startup.
+_create_live_session() {
+	local pool_list="$1"
+	local run_dir="$2"
 	local _default_user="${CON_SSH_USER:-steve}"
 	local _domain="${VM_BASE_DOMAIN}"
 	local _sess="e2e-live"
@@ -52,19 +85,7 @@ cmd_live() {
 		_pools+=("$_p")
 	done
 
-	# Reuse existing live session if it has the right number of panes
-	local _existing_panes=0
-	_existing_panes=$(tmux list-panes -t "$_sess" | wc -l) || _existing_panes=0
-	if [ "$_existing_panes" -eq "$_np" ]; then
-		echo "Live session already running with $_np panes -- reattaching."
-		if [ -n "${TMUX:-}" ]; then
-			exec tmux switch-client -t "$_sess"
-		else
-			exec tmux attach -t "$_sess"
-		fi
-	fi
-
-	tmux kill-session -t "$_sess"
+	tmux kill-session -t "$_sess" 2>/dev/null || true
 	tmux set-option -g history-limit 50000
 
 	# Claim ownership on each conN (prevents competing live dashboards)
@@ -86,13 +107,6 @@ cmd_live() {
 	tmux set-option -t "$_sess" allow-rename on
 	tmux set-option -t "$_sess" pane-border-status top
 	tmux set-option -t "$_sess" pane-border-format " #{pane_title} "
-
-	echo "Live dashboard (${_np} pools) -- Ctrl-a + arrow to switch panes, Ctrl-a Ctrl-a [ to scroll remote"
-	if [ -n "${TMUX:-}" ]; then
-		exec tmux switch-client -t "$_sess"
-	else
-		exec tmux attach -t "$_sess"
-	fi
 }
 
 # Helper: create a per-pool live pane script.

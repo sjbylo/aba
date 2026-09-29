@@ -78,6 +78,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
   - [Custom Manifests for Day-2](#custom-manifests-for-day-2)
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
+  - [OpenShift Virtualization Boot Sources](#openshift-virtualization-boot-sources)
   - [Cluster Updates (OSUS)](#cluster-updates-osus)
   - [Cluster Shutdown & Startup](#cluster-shutdown--startup)
 - [Prerequisites](#prerequisites)
@@ -250,9 +251,9 @@ aba          # Interactive mode — ABA guides you through the workflow
 
 <!-- note that the below versions (vX.Y.Z) are updated at release time -->
 ```bash
-wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.4.tar.gz
-tar xzf v1.3.4.tar.gz
-cd aba-1.3.4
+wget https://github.com/sjbylo/aba/archive/refs/tags/v1.3.5.tar.gz
+tar xzf v1.3.5.tar.gz
+cd aba-1.3.5
 ./install
 aba
 ```
@@ -260,7 +261,7 @@ aba
 Or clone a specific release tag:
 
 ```bash
-git clone --branch v1.3.4 https://github.com/sjbylo/aba.git
+git clone --branch v1.3.5 https://github.com/sjbylo/aba.git
 cd aba
 ./install
 aba
@@ -1261,6 +1262,18 @@ aba day2-ntp
 
 - Ensures all nodes are connected to NTP servers. Time drift can cause installation or operation failures.
 
+## OpenShift Virtualization Boot Sources
+
+```
+aba day2-virt
+```
+
+- Makes it easy to create RHEL, CentOS, or Fedora VMs from boot source images in your disconnected environment.
+- Configures OpenShift Virtualization VM boot sources (RHEL, CentOS, Fedora) to import from your mirror registry instead of the unreachable upstream registries.
+- **Prerequisite:** OpenShift Virtualization (`kubevirt-hyperconverged`) installed, and the boot source images from `templates/image-set-virt` mirrored (via `aba -d mirror sync` or `save`/`load`).
+
+> **Why is this needed?** The OpenShift ImageStream import controller does [not use IDMS/ITMS mirror rules](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/postinstallation_configuration/post-install-image-config) — it contacts upstream registries directly. This command works around that limitation.
+
 <!-- perma-link: backward compatibility -->
 <a id="enable-openshift-update-service-osus"></a>
 
@@ -1453,7 +1466,7 @@ The registry (mirror) host is the server that runs your container image registry
   - For SNO: both records point to the *same IP address*
   - `registry.example.com` pointing to your mirror registry host
 - **Registry Connectivity**: Cluster nodes must have network access to the mirror registry on its configured port (default 8443).
-- **mDNS (Multicast DNS)**: The agent-based installer requires mDNS (UDP port 5353) to be allowed between cluster nodes. Ensure firewalls and switch ACLs do not block multicast traffic on the cluster network. See [this blog post](https://www.redhat.com/en/blog/fully-automated-openshift-deployments-with-vmware-vsphere) for details.
+- **mDNS (Multicast DNS)**: The agent-based installer requires mDNS (UDP port 5353) to be allowed between cluster nodes. Ensure firewalls and switch ACLs do not block multicast traffic on the cluster network. See the "DNS" section in [this blog post](https://www.redhat.com/en/blog/fully-automated-openshift-deployments-with-vmware-vsphere) for details on how mDNS works in OpenShift deployments.
 - **NTP**: An NTP server is required for time synchronization across all nodes.
 - **Hardened hosts (DISA STIG, fapolicyd)**: ABA has been tested with DISA STIG profiles. If `fapolicyd` is active, you may need to add allow rules for ABA's tools and `openshift-install` under `/etc/fapolicyd/rules.d/`.
 
@@ -1555,7 +1568,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 
 In a *partially disconnected environment*, the *connected bastion* has limited (or proxy-based) Internet access.
 
-> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `image_source=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/networking/configuring-a-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
+> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `image_source=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html/networking/enable-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
 
 #### Connected Bastion
 
@@ -1601,6 +1614,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba shell`                     | Display kubeconfig export. Use: `. <(aba shell)`              |
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
 | `aba day2-ntp`                  | Configure cluster NTP                                         |
+| `aba day2-virt`                 | Configure OpenShift Virtualization boot sources for disconnected |
 | `aba day2-osus`                 | Configure OpenShift Update Service                            |
 | `aba upgrade [--to <ver>]`      | Upgrade cluster via local mirror. Auto-detects latest z-stream if `--to` omitted. `--dry-run` lists versions. `--dry-run --shell` for machine-readable output. |
 | `aba shutdown`                  | Gracefully shut down a cluster. `--wait` waits for power-off. |
