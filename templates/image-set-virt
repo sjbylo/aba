@@ -1,0 +1,9 @@
+# Name: OpenShift Virtualization
+# Boot source and container disk images for running VMs with OpenShift Virtualization.
+# In disconnected environments, also run 'aba day2-virt' to configure boot sources.
+
+registry.redhat.io/rhel9/rhel-guest-image:latest
+registry.redhat.io/rhel10/rhel-guest-image:latest
+quay.io/containerdisks/centos-stream:10
+quay.io/containerdisks/centos-stream:9
+quay.io/containerdisks/fedora:latest

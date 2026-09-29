@@ -64,8 +64,8 @@ sync_harness() {
 		return 1
 	fi
 
-	if ! _essh "$target" "rm -rf ~/.e2e-harness/{lib,suites,scripts,config.env,pools.conf} && mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}"; then
-		echo "    DIAG: sync_harness: dir cleanup/create failed on ${target}" >&2
+	if ! _essh "$target" "mkdir -p ~/.e2e-harness/{lib,suites,scripts,logs}"; then
+		echo "    DIAG: sync_harness: dir create failed on ${target}" >&2
 		return 1
 	fi
 

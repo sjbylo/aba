@@ -277,7 +277,7 @@ init_bastion() {
 		whoami
 		rm -vrf ~/.cache/agent/   # Just to be sure, remove old images
 		rm -vrf ~/bin/*    	 # To make sure we do things from scratch!
-		rm -f  $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
+		rm -f  $HOME/.ssh/quay_installer*  # Ensure ABA creates a better key than the quay installer
 		rm -rf $HOME/.oc-mirror/.cache   # Ensure all cache gone
 		rm -rf $HOME/*/.oc-mirror/.cache
 
@@ -318,7 +318,7 @@ init_bastion() {
 		set -ex
 		whoami
 
-		rm -f $HOME/.ssh/quay_installer*  # Ensure Aba creates a better key than the quay installer
+		rm -f $HOME/.ssh/quay_installer*  # Ensure ABA creates a better key than the quay installer
 
 		# Keep SELinux turned on
 		getenforce

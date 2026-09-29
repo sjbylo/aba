@@ -1,4 +1,50 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.5...HEAD)
+
+---
+
+## [1.3.5](https://github.com/sjbylo/aba/releases/tag/v1.3.5) - 2026-09-29
+
+Curated image sets, Day-2 OCP Virtualization boot sources, mirror payload menu, many fixes
+
+
+### Added
+
+- **TUI: Recommended Images** — New `S` menu item in Additional Images lets users add curated image sets (AI/RHOAI, OpenShift Virtualization, OCP utilities) via a checklist dialog. AI set auto-detects the latest RHOAI GA version from GitHub. After adding operator sets, the TUI prompts to add companion image sets for related workloads.
+- **Image Sets core** — `scripts/image-sets.sh` provides `image_set_add`, `image_set_remove`, `image_set_list`, and `image_set_is_present` functions for managing curated image blocks in `images.conf`. Templates in `templates/image-set-{ai,ocp,virt}`.
+- **TUI: Mirror Payload menu** — New sub-menu (`P` in main menu) consolidates all mirror content controls: OCP version/channel, operator selection, additional images, upgrade prep, inclusion toggles, and advanced ISC options. Replaces the previous flat V/O/G items in the main menu.
+- **TUI: OCP version change without full wizard** — `W` in the Mirror Payload menu opens a focused channel → version picker (reusing wizard internals with zero code duplication) instead of re-running the full setup wizard.
+- **TUI: Operator images exclusion toggle** — New `K` toggle in Mirror Payload to exclude/include operator images via `excl_operators` in `aba.conf`, matching the existing platform (`P`) and additional images (`T`) toggles.
+- **ISC exclusion comments** — When payload sections are excluded via `aba.conf` toggles, the generated `imageset-config.yaml` includes a `# NOTE:` comment indicating what was excluded and which config variable controls it.
+- **`excl_operators` / `excl_additional` in `aba.conf` template** — Both variables now ship in `templates/aba.conf.j2` so `replace-value-conf` works on fresh installs.
+- **`aba day2-virt` command** — New cluster-level command configures OpenShift Virtualization boot sources to import from the mirror registry in disconnected environments. Creates custom ImageStreams for RHEL images pointing to the mirror, overrides CentOS/Fedora sources with direct mirror URLs, and patches the HyperConverged CR. Automatically skips RHEL versions not yet available in the mirror. Exits gracefully when OCP Virt is not installed.
+- **RHEL guest boot source images** — The `virt` image set now includes `rhel9/rhel-guest-image` and `rhel10/rhel-guest-image` alongside the existing CentOS Stream and Fedora container disk images, enabling RHEL-based VM boot sources in disconnected environments.
+- **Bundle virt test: boot source verification** — `test-virt.sh` now verifies that `aba day2-virt` succeeds, DataImportCrons import successfully, and a VM can boot from a CentOS Stream 9 boot source DataSource.
+- **Bundle README redesign** — `README.txt` template now includes a banner with OCP version, build date, bundle size, and ABA version; a numbered quick start; disk space guidance; and test results. `README_FIRST.txt` includes approximate sizes for each bundle type.
+- **Bundle AI test: pre-create hostPath dirs** — `test-ai.sh` pre-creates the 2 required hostPath directories before PV creation, eliminating the two-phase permission fix and reducing test time.
+
+### Changed
+
+- **Branding: "Aba" → "ABA"** — User-facing text in install scripts, bundle README/UNPACK/VERIFY templates, build tools, and configuration file headers now consistently uses "ABA" as the project name. The CLI command remains lowercase `aba`.
+- **TUI: De-jargoned user-facing text** — Replaced bare "ISC" abbreviation with "Config", "ImageSet config", or "mirror payload" in all user-facing dialogs, menu items, and help text. The full term "ImageSet Configuration" and the literal filename `imageset-config.yaml` are kept where appropriate.
+- **TUI: DISCO mode menu** — "View imageset-config.yaml" renamed to "View Mirror Payload".
+- **TUI: Upgrade hint in cluster menu** — Updated from `main menu → U` to `Mirror Payload (P) → Prepare Upgrade (U)`.
+- **`aba reset -f` cleanup message** — "Cleaning up background tasks and runner cache..." now only prints when there are actually tasks to clean up.
+- **`cluster.conf` template comments** — Improved CPU/memory guidance and fixed trailing whitespace.
+- **Operator set validation** — Pre-commit check now validates operators against all shipped catalog versions (not just the latest). Operators found only in older catalogs produce a warning; operators not found anywhere produce a hard failure.
+- **`day2-virt` custom ImageStream approach** — Creates mirror-backed ImageStreams for RHEL boot sources instead of relying on IDMS/ITMS (which the ImageStream import controller does not use). CentOS/Fedora images use direct mirror URLs with `pullMethod=node`. Detects the correct HyperConverged CR field path for OCP 4.22+ (`spec.workloadSources`) vs older versions (`spec.dataImportCronTemplates`).
+- **Bundle load `--retry` changed to 2** — Balanced between resilience and avoiding redundant retries with oc-mirror's own internal retry logic.
+- **Bundle `07-upload` adds size and ABA version** — The upload script now calculates bundle size and reads ABA version, substituting `<SIZE>` and `<ABA_VERSION>` placeholders in the README template.
+- **`VERIFY.sh` diff argument order** — Corrected `diff` to compare expected (CHECKSUM.txt) vs actual, so `+`/`-` signs make sense on failure.
+- **`UNPACK.sh` mentions `abatui`** — Post-unpack instructions now show `aba or abatui`.
+
+### Fixed
+
+- **TUI: Mirror Payload cursor position** — Toggling P/K/T inclusion switches in the Mirror Payload menu no longer jumps the cursor to the default item; it stays on the toggled item.
+- **`aba save`/`load`/`sync` propagate real oc-mirror exit codes** — `_run_oc_mirror_with_retry` was returning 1 on failure instead of the actual oc-mirror bitmask. Now returns the real exit code and writes it to `.oc-mirror-exit-code` so callers (e.g. bundle test scripts) can distinguish failure types through Make's exit-code masking.
+- **RHOAI version detection fallback** — The AI image set's auto-detection of the latest RHOAI GA version now falls back to the shipped catalog indexes when `.index/` data is unavailable, preventing empty version errors on freshly installed systems.
+- **README: broken proxy docs URL** — Fixed dead link to Red Hat cluster-wide proxy documentation (4.17 URL restructured by Red Hat).
+- **README: mDNS blog post link context** — Clarified that the linked VMware blog post covers mDNS under the "DNS" section, not the agent-based installer specifically.
+- **Bundle `README_FIRST.txt` corrections** — Fixed incorrect bundle name (`ocpv` → `virt`), removed non-existent `sec` bundle, added ODF to virt/opp descriptions.
 
 ---
 

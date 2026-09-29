@@ -280,8 +280,14 @@ else
 	fi
 fi
 
-if ! _run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd"; then
-	exit 1
+_load_rc=0
+_run_oc_mirror_with_retry "load" "$try_tot" "$base_cmd" || _load_rc=$?
+
+# Persist the real exit code so callers can read it even through make's exit-code masking
+echo "$_load_rc" > .oc-mirror-exit-code
+
+if [ $_load_rc -ne 0 ]; then
+	exit $_load_rc
 fi
 
 # After successful load: update state.sh with the loaded version.

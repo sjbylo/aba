@@ -454,6 +454,7 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
+			-e "s/excl_operators=0\b/excl_operators=/g" -e "s/excl_operators=false/excl_operators=/g" \
 			-e "s/excl_additional=0\b/excl_additional=/g" -e "s/excl_additional=false/excl_additional=/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
@@ -3914,7 +3915,7 @@ _run_oc_mirror_with_retry() {
 			"Tuning: see ~/.aba/config (image timeout, parallelism) or README.md 'Troubleshooting'."
 		[ $try_tot -eq 1 ] && aba_warn "         Consider using the --retry option!" >&2
 
-		return 1
+		return $ret
 	fi
 
 	echo
@@ -4489,6 +4490,12 @@ check_release_image() {
 
 	return 1
 }
+
+# =============================================================================
+# Image Sets (curated additional images for operator sets)
+# =============================================================================
+_ABA_SCRIPTS="${_ABA_SCRIPTS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+[[ -f "$_ABA_SCRIPTS/image-sets.sh" ]] && source "$_ABA_SCRIPTS/image-sets.sh"
 
 # =============================================================================
 # Additional Images (images.conf) — ADR-013

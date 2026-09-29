@@ -1,67 +1,67 @@
-# Aba install bundle for OpenShift v<VERSION>
+╔══════════════════════════════════════════════════════════════════════╗
+   ABA Install Bundle for OpenShift v<VERSION>                        
+   Created: <DATETIME>                                                
+   Size:     <SIZE>
+   ABA:      v<ABA_VERSION>
+   Platform: x86_64
+   http://github.com/sjbylo/aba                                       
+╚══════════════════════════════════════════════════════════════════════╝
 
-This Aba install bundle was created on: <DATETIME>
+─── CONTENTS ──────────────────────────────────────────────────────────
 
-Content of this OpenShift install bundle:
+  - CLI tools:
+    - <CLIS>
+  - Mirror registry installers:
+      mirror/mirror-registry.tar.gz  (Quay)
+      mirror/docker-reg-image.tgz   (Docker)
+  - Operators included in this bundle (see list below)
+  - Image set config: imageset-config.yaml (see below)
 
-- List of Operators in this install bundle (see below):
-- The imageset-config.yaml file shows the image sets contained in this bundle (see below).
-- CLI Install files:
-  - <CLIS>
-- Installation file for Quay Mirror Registry: mirror/mirror-registry.tar.gz
-- Installation file for Docker Registry: mirror/docker-reg-image.tgz
-- Scripts to install/configure mirror reg. and install OpenShift.
+─── TEST RESULTS ──────────────────────────────────────────────────────
 
-
-This install bundle has been tested. 
+This install bundle has been tested.
 
 <TEST_RESULTS>
 
-See the files in the build folder for all test results, full log
-of the bundle build/test and this install bundle's test script.
+See the build folder for full test logs and the test script used.
 
+─── QUICK START ───────────────────────────────────────────────────────
 
-# How to use this install bundle
+  DISK SPACE: The bastion host needs approximately 3-4x the bundle
+  size (~<SIZE> x 3) for unpacked content, oc-mirror cache, and
+  mirror registry images.
 
-Download and transfer all bundle files to a RHEL 8, 9 or 10 bastion host in the *disconnected environment*.
+  1. Transfer the bundle files to the disconnected environment.
 
-## Verify integrity of all archive files:
+  2. Verify integrity:
 
-./VERIFY.sh
+       ./VERIFY.sh
 
-## Unpack with:
+  3. Unpack:
 
-./UNPACK.sh [destination directory]
+       ./UNPACK.sh [destination-dir]
 
-or run:
+  4. Install and configure ABA:
 
-cat ocp_<VERSION>* | tar -C <destination-dir> -xvf -
+       cd <destination-dir>/aba
+       ./install
+       aba                                          # CLI workflow
+       abatui                                       # Or use the interactive TUI
 
+  5. Load images into a mirror registry:
 
-## If unpacking is successful, install and run aba:
+       aba -d mirror load -H registry.example.com   # Install Quay & load images
+       aba load -h                                  # Read under "Examples ..."
 
-cd <destination-dir>/aba
-./install 
-aba                                                                    # Follow the instructions.
-                                                                       # Verify all parameters aba.conf are set correctly.
+  6. Install OpenShift:
 
+       aba cluster --name sno --type sno            # Create cluster config
+       cd sno
+       aba                                          # Install the cluster
 
-## Install & load Quay with the images (either local or remote):
+       aba cluster -h                               # See all cluster options
 
-aba -d mirror load --retry 8 -H registry.example.com                   # Replace with your registry's FQDN which
-                                                                       # normally points to the default local IP address.
-aba -d mirror load --retry 8 -H registry.example.com -k ~/.ssh/id_rsa  # Install Quay on a *remote* host using your ssh key.
+  See ABA's full documentation:
+  https://github.com/sjbylo/aba/blob/main/README.md
 
-aba load -h                                                            # See more options.
-
-
-## Example of installing OpenShift:
-
-aba cluster --name sno --type sno                                      # Init sno/cluster.conf file, then follow instructions.
-cd sno
-aba                                                                    # Install OpenShift, follow instructions.
-
-aba cluster -h                                                         # See help on how to install a cluster.
-
-## See Aba's README.md for help:
-https://github.com/sjbylo/aba/blob/main/README.md
+════════════════════════════════════════════════════════════════════════

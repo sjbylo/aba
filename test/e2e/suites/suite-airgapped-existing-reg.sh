@@ -52,6 +52,7 @@ plan_tests \
     "ACM: install operators" \
     "ACM: MultiClusterHub" \
     "NTP: day2 and chronyc verify" \
+    "day2-virt: skip when OCP Virt not installed" \
     "Delete cluster" \
     "Cleanup: deregister pool registry"
 
@@ -501,6 +502,18 @@ e2e_run_remote -r 10 2 -d 30 "Verify chrony.conf contains ntp.lan" \
 
 e2e_run_remote -r 10 2 -d 30 "Verify old NTP IP no longer in chrony.conf" \
     "cd ~/aba && aba --dir $SNO ssh --cmd 'cat /etc/chrony.conf' | grep -v '$NTP_IP'"
+
+test_end
+
+# ============================================================================
+# 14b. day2-virt: graceful exit when OCP Virt not installed
+# ============================================================================
+# Verify day2-virt exits cleanly when HyperConverged is not present.
+# Full boot source testing is done in the virt bundle test (test-virt.sh).
+test_begin "day2-virt: skip when OCP Virt not installed"
+
+e2e_run_remote "day2-virt exits gracefully without OCP Virt" \
+    "cd ~/aba && aba --dir $SNO day2-virt 2>&1 | tee /dev/stderr | grep -q 'not installed'"
 
 test_end
 
