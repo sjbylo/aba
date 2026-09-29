@@ -16,5 +16,5 @@ echo
 echo "Now run these commands and follow the instructions or see https://github.com/sjbylo/aba.git:"
 echo "$ cd $dir/aba" | tr -s /
 echo "$ ./install"
-echo "$ aba"
+echo "$ aba or abatui"
 

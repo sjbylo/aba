@@ -7,8 +7,8 @@ cd $(dirname $0)
 
 echo "Verifying file checksums ... (please wait!)"
 cksum ocp_* > .CHECKSUM.txt
-if ! diff .CHECKSUM.txt CHECKSUM.txt; then
-	echo
+if ! diff CHECKSUM.txt .CHECKSUM.txt; then
+	echo >&2
 	echo "Verification failed!  Do not use this copy of the install bundle!" >&2
 
 	exit 1

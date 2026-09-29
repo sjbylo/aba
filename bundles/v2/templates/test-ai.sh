@@ -161,6 +161,26 @@ echo_step "Creating Data Science Pipelines Application (DSPA)"
 # DSP requires PVCs for mariadb and minio. The bundle test cluster is
 # agent-based bare metal — no CSI driver, no StorageClass. Create a
 # temporary hostPath SC and static PVs so the DSP test actually runs.
+
+# Pre-cleanup: remove stale resources from any previous failed run.
+# Without this, old hostPath dirs with wrong permissions cause CrashLoopBackOff.
+if oc get project test-dsp &>/dev/null; then
+	echo "Cleaning up stale test-dsp project ..."
+	oc delete project test-dsp --wait=false 2>/dev/null || true
+	# Wait for the project to fully disappear (can take 30s+)
+	for _w in $(seq 1 60); do
+		oc get project test-dsp &>/dev/null || break
+		echo -n .
+		sleep 5
+	done
+	echo
+fi
+oc delete pv hostpath-dsp-1 hostpath-dsp-2 --wait=false 2>/dev/null || true
+oc delete sc hostpath-test 2>/dev/null || true
+_pre_node=$(oc get nodes -o jsonpath='{.items[0].metadata.name}')
+for _i in 1 2; do
+	oc debug "node/$_pre_node" --quiet -- chroot /host rm -rf "/tmp/dsp-test-pv-$_i" 2>/dev/null || true
+done
 echo "Creating temporary hostPath StorageClass for DSP test"
 cat << 'SCEOF' | oc apply -f -
 apiVersion: storage.k8s.io/v1
@@ -223,6 +243,19 @@ echo
 
 [ "$_pvcs_found" ] || { echo "ERROR: Expected >=2 PVCs but only ${_pvc_count:-0} appeared within 150s" >&2; exit 1; }
 
+# Pin all PVs to one node so chmod + pod scheduling are consistent.
+_node=$(oc get nodes -o jsonpath='{.items[0].metadata.name}')
+echo "Target node for hostPath PVs: $_node"
+
+# Pre-create the hostPath dirs with wide-open permissions before the PVs exist.
+# We know DSP always creates exactly 2 PVCs (mariadb + minio).
+echo "Pre-creating hostPath directories on $_node ..."
+for _i in 1 2; do
+	oc debug "node/$_node" --quiet -- chroot /host bash -c \
+		"mkdir -p /tmp/dsp-test-pv-$_i && chmod 1777 /tmp/dsp-test-pv-$_i && chcon -Rt container_file_t /tmp/dsp-test-pv-$_i" 2>&1 || \
+		echo "WARNING: Failed to pre-create /tmp/dsp-test-pv-$_i on $_node" >&2
+done
+
 echo "Creating hostPath PVs for each Pending PVC ..."
 _pv_idx=0
 while IFS= read -r _pvc_name; do
@@ -247,18 +280,17 @@ spec:
   hostPath:
     path: /tmp/dsp-test-pv-${_pv_idx}
     type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ${_node}
 PVEOF
 done < <(oc get pvc -n test-dsp --no-headers -o custom-columns=NAME:.metadata.name)
-echo "Created $_pv_idx hostPath PV(s) with explicit claimRef binding"
-
-# Fix hostPath directory permissions on the node so pods running as random UIDs
-# can write (OCP default: random UID + SELinux enforcing).
-_node=$(oc get nodes -o jsonpath='{.items[0].metadata.name}')
-for _i in $(seq 1 $_pv_idx); do
-	oc debug "node/$_node" --quiet -- chroot /host bash -c \
-		"mkdir -p /tmp/dsp-test-pv-$_i && chmod 0777 /tmp/dsp-test-pv-$_i && chcon -t container_file_t /tmp/dsp-test-pv-$_i" 2>/dev/null
-done
-echo "Fixed hostPath permissions on $_node ($_pv_idx dirs)"
+echo "Created $_pv_idx hostPath PV(s) pinned to $_node"
 
 echo_step "Waiting for DSP pods to appear"
 
@@ -343,9 +375,12 @@ else
 	echo_step "Cleaning up DSP test project"
 	oc delete project test-dsp --wait=false
 
-	echo "Cleaning up hostPath SC and PVs ..."
+	echo "Cleaning up hostPath SC, PVs, and node directories ..."
 	oc delete pv hostpath-dsp-1 hostpath-dsp-2 --wait=false 2>/dev/null || true
 	oc delete sc hostpath-test 2>/dev/null || true
+	for _i in $(seq 1 2); do
+		oc debug "node/$_node" --quiet -- chroot /host rm -rf "/tmp/dsp-test-pv-$_i" 2>/dev/null || true
+	done
 fi
 
 result_out "Data Science Pipelines test: ok"

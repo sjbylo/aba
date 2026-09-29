@@ -1268,10 +1268,8 @@ aba day2-ntp
 aba day2-virt
 ```
 
+- Makes it easy to create RHEL, CentOS, or Fedora VMs from boot source images in your disconnected environment.
 - Configures OpenShift Virtualization VM boot sources (RHEL, CentOS, Fedora) to import from your mirror registry instead of the unreachable upstream registries.
-- Required in disconnected environments because the default boot source DataImportCron jobs reference `registry.redhat.io` and `quay.io`, which are not reachable.
-- Creates custom ImageStreams for RHEL images pointing to the mirror, and overrides CentOS/Fedora sources with direct mirror URLs using `pullMethod: node`.
-- RHEL versions not yet available in the mirror are automatically skipped.
 - **Prerequisite:** OpenShift Virtualization (`kubevirt-hyperconverged`) installed, and the boot source images from `templates/image-set-virt` mirrored (via `aba -d mirror sync` or `save`/`load`).
 
 > **Why is this needed?** The OpenShift ImageStream import controller does [not use IDMS/ITMS mirror rules](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/postinstallation_configuration/post-install-image-config) — it contacts upstream registries directly. This command works around that limitation.
@@ -1468,7 +1466,7 @@ The registry (mirror) host is the server that runs your container image registry
   - For SNO: both records point to the *same IP address*
   - `registry.example.com` pointing to your mirror registry host
 - **Registry Connectivity**: Cluster nodes must have network access to the mirror registry on its configured port (default 8443).
-- **mDNS (Multicast DNS)**: The agent-based installer requires mDNS (UDP port 5353) to be allowed between cluster nodes. Ensure firewalls and switch ACLs do not block multicast traffic on the cluster network. See [this blog post](https://www.redhat.com/en/blog/fully-automated-openshift-deployments-with-vmware-vsphere) for details.
+- **mDNS (Multicast DNS)**: The agent-based installer requires mDNS (UDP port 5353) to be allowed between cluster nodes. Ensure firewalls and switch ACLs do not block multicast traffic on the cluster network. See the "DNS" section in [this blog post](https://www.redhat.com/en/blog/fully-automated-openshift-deployments-with-vmware-vsphere) for details on how mDNS works in OpenShift deployments.
 - **NTP**: An NTP server is required for time synchronization across all nodes.
 - **Hardened hosts (DISA STIG, fapolicyd)**: ABA has been tested with DISA STIG profiles. If `fapolicyd` is active, you may need to add allow rules for ABA's tools and `openshift-install` under `/etc/fapolicyd/rules.d/`.
 
@@ -1570,7 +1568,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 
 In a *partially disconnected environment*, the *connected bastion* has limited (or proxy-based) Internet access.
 
-> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `image_source=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.17/html/networking/configuring-a-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
+> **Proxy note:** If the bastion reaches the Internet through a proxy, you can either export the standard proxy environment variables (`http_proxy`, `https_proxy`, `no_proxy`) in your shell before running ABA, or set them in `cluster.conf`. Either way, set `image_source=proxy` in `cluster.conf` — this tells ABA to configure the [Cluster-wide Proxy](https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html/networking/enable-cluster-wide-proxy) so cluster nodes route traffic through the proxy. CLI tools on the bastion (`oc-mirror`, `oc`, `curl`, etc.) inherit proxy settings from the shell environment.
 
 #### Connected Bastion
 
