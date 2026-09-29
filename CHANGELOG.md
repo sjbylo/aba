@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.4...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.5...HEAD)
+
+---
+
+## [1.3.5](https://github.com/sjbylo/aba/releases/tag/v1.3.5) - 2026-09-29
+
+Curated image sets, Day-2 OCP Virtualization boot sources, mirror payload menu, many fixes
+
 
 ### Added
 
