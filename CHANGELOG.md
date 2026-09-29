@@ -9,6 +9,9 @@
 - **TUI: Operator images exclusion toggle** — New `K` toggle in Mirror Payload to exclude/include operator images via `excl_operators` in `aba.conf`, matching the existing platform (`P`) and additional images (`T`) toggles.
 - **ISC exclusion comments** — When payload sections are excluded via `aba.conf` toggles, the generated `imageset-config.yaml` includes a `# NOTE:` comment indicating what was excluded and which config variable controls it.
 - **`excl_operators` / `excl_additional` in `aba.conf` template** — Both variables now ship in `templates/aba.conf.j2` so `replace-value-conf` works on fresh installs.
+- **`aba day2-virt` command** — New cluster-level command configures OpenShift Virtualization boot sources to import from the mirror registry in disconnected environments. Creates custom ImageStreams for RHEL images pointing to the mirror, overrides CentOS/Fedora sources with direct mirror URLs, and patches the HyperConverged CR. Automatically skips RHEL versions not yet available in the mirror. Exits gracefully when OCP Virt is not installed.
+- **RHEL guest boot source images** — The `virt` image set now includes `rhel9/rhel-guest-image` and `rhel10/rhel-guest-image` alongside the existing CentOS Stream and Fedora container disk images, enabling RHEL-based VM boot sources in disconnected environments.
+- **Bundle virt test: boot source verification** — `test-virt.sh` now verifies that `aba day2-virt` succeeds, DataImportCrons import successfully, and a VM can boot from a CentOS Stream 9 boot source DataSource.
 
 ### Changed
 
@@ -19,6 +22,8 @@
 - **`aba reset -f` cleanup message** — "Cleaning up background tasks and runner cache..." now only prints when there are actually tasks to clean up.
 - **`cluster.conf` template comments** — Improved CPU/memory guidance and fixed trailing whitespace.
 - **Operator set validation** — Pre-commit check now validates operators against all shipped catalog versions (not just the latest). Operators found only in older catalogs produce a warning; operators not found anywhere produce a hard failure.
+- **`day2-virt` custom ImageStream approach** — Creates mirror-backed ImageStreams for RHEL boot sources instead of relying on IDMS/ITMS (which the ImageStream import controller does not use). CentOS/Fedora images use direct mirror URLs with `pullMethod=node`. Detects the correct HyperConverged CR field path for OCP 4.22+ (`spec.workloadSources`) vs older versions (`spec.dataImportCronTemplates`).
+- **Bundle load `--retry` changed to 2** — Balanced between resilience and avoiding redundant retries with oc-mirror's own internal retry logic.
 
 ### Fixed
 

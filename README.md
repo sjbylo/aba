@@ -78,6 +78,7 @@ That's it. ABA will prompt you for your OpenShift version, operators, registry t
   - [Connect OperatorHub to Internal Mirror Registry](#connect-operatorhub-to-internal-mirror-registry)
   - [Custom Manifests for Day-2](#custom-manifests-for-day-2)
   - [Synchronize NTP Across Cluster Nodes](#synchronize-ntp-across-cluster-nodes)
+  - [OpenShift Virtualization Boot Sources](#openshift-virtualization-boot-sources)
   - [Cluster Updates (OSUS)](#cluster-updates-osus)
   - [Cluster Shutdown & Startup](#cluster-shutdown--startup)
 - [Prerequisites](#prerequisites)
@@ -1261,6 +1262,20 @@ aba day2-ntp
 
 - Ensures all nodes are connected to NTP servers. Time drift can cause installation or operation failures.
 
+## OpenShift Virtualization Boot Sources
+
+```
+aba day2-virt
+```
+
+- Configures OpenShift Virtualization VM boot sources (RHEL, CentOS, Fedora) to import from your mirror registry instead of the unreachable upstream registries.
+- Required in disconnected environments because the default boot source DataImportCron jobs reference `registry.redhat.io` and `quay.io`, which are not reachable.
+- Creates custom ImageStreams for RHEL images pointing to the mirror, and overrides CentOS/Fedora sources with direct mirror URLs using `pullMethod: node`.
+- RHEL versions not yet available in the mirror are automatically skipped.
+- **Prerequisite:** OpenShift Virtualization (`kubevirt-hyperconverged`) installed, and the boot source images from `templates/image-set-virt` mirrored (via `aba -d mirror sync` or `save`/`load`).
+
+> **Why is this needed?** The OpenShift ImageStream import controller does [not use IDMS/ITMS mirror rules](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/postinstallation_configuration/post-install-image-config) — it contacts upstream registries directly. This command works around that limitation.
+
 <!-- perma-link: backward compatibility -->
 <a id="enable-openshift-update-service-osus"></a>
 
@@ -1601,6 +1616,7 @@ After configuring these prerequisites, run `aba` (or `abatui`) to start the work
 | `aba shell`                     | Display kubeconfig export. Use: `. <(aba shell)`              |
 | `aba day2`                      | Integrate mirror into OpenShift (IDMS, catalogs, signatures)  |
 | `aba day2-ntp`                  | Configure cluster NTP                                         |
+| `aba day2-virt`                 | Configure OpenShift Virtualization boot sources for disconnected |
 | `aba day2-osus`                 | Configure OpenShift Update Service                            |
 | `aba upgrade [--to <ver>]`      | Upgrade cluster via local mirror. Auto-detects latest z-stream if `--to` omitted. `--dry-run` lists versions. `--dry-run --shell` for machine-readable output. |
 | `aba shutdown`                  | Gracefully shut down a cluster. `--wait` waits for power-off. |

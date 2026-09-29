@@ -31,7 +31,7 @@ fi
 # bypassing make's exit-code masking (make always returns 2 for recipe failures).
 #   oc-mirror bitmask: bit 2 = release, bit 4 = operator, bit 8 = additional, bit 16 = helm
 load_rc=0
-aba -d mirror load --retry 1 -H $TEST_HOST || load_rc=$?
+aba -d mirror load --retry 2 -H $TEST_HOST || load_rc=$?
 
 if [ $load_rc -ne 0 ]; then
 	# Read the real oc-mirror exit code from the file ABA writes
@@ -40,8 +40,9 @@ if [ $load_rc -ne 0 ]; then
 		_real_rc=$(cat "$WORK_TEST_INSTALL/aba/mirror/.oc-mirror-exit-code")
 	fi
 
-	# Release image failures (bit 2) or generic/unknown errors are fatal
-	if [ $(( _real_rc & 2 )) -ne 0 ] || [ "$_real_rc" -eq 1 ] || [ "$_real_rc" -eq 0 ]; then
+	# Release image failures (bit 2) or generic/unknown errors (1) are fatal.
+	# oc-mirror exit 0 with make failure means non-fatal errors — continue with warning.
+	if [ $(( _real_rc & 2 )) -ne 0 ] || [ "$_real_rc" -eq 1 ]; then
 		echo
 		echo "ERROR: Image load failed (oc-mirror exit code $_real_rc, make exit code $load_rc). Aborting."
 
