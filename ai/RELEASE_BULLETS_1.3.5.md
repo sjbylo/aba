@@ -7,4 +7,6 @@ Curated image sets, OCP Virtualization boot source support, reorganized mirror p
 - **Mirror Payload menu** — All mirror content controls (version, operators, images, toggles, advanced options) are now in a single organized sub-menu instead of scattered across the main menu.
 - **OCP version change without full wizard** — Change the target OpenShift version and channel directly from the Mirror Payload menu.
 - **Operator exclusion toggle** — Operator images can now be excluded from or included in the mirror payload via a toggle, matching the existing platform and additional images toggles.
+- **Redesigned install bundle README files** — Bundle README now shows test results, bundle size, disk space guidance, and a numbered quick start. The README_FIRST overview includes approximate sizes for each bundle type.
+- **Improved oc-mirror error handling** — `aba save`/`load`/`sync` now propagate real oc-mirror exit codes instead of a generic failure, making it easier to diagnose mirroring issues.
 - **Improved text throughout** — Replaced technical jargon ("ISC") with plain language in all TUI dialogs. Consistent "ABA" branding across all user-facing text.
