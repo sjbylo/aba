@@ -1158,6 +1158,8 @@ mirror_payload_menu() {
 	_persist_operator_basket
 
 	# Wait for background ISC generation (kicked off at startup or after config change)
+	# Skip in DISCO mode (readonly) — ISC is already baked into the bundle
+	if [[ "$readonly" != "true" ]]; then
 	if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"$TUI2_MSG_ISC_GENERATING" 0 0
@@ -1209,6 +1211,7 @@ mirror_payload_menu() {
 		run_once -c -i "aba:isconf:generate" 2>/dev/null || true
 		return 0
 	fi
+	fi  # readonly guard
 
 	if [[ "$readonly" == "true" ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_VIEW_ISC" \
