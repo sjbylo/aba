@@ -25,6 +25,7 @@ if ! ip route show default | grep -q .; then
 		$SUDO ip route add default dev "$_def_iface" scope link || \
 			aba_warn "Failed to add default route. Registry install may fail."
 	else
+		# No suitable interface — can't create a route
 		aba_warn "No default route and no suitable interface found. Registry install may fail."
 	fi
 fi
