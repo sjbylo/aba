@@ -1,5 +1,26 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.5...HEAD)
 
+### Added
+
+- **TUI: Day-2 Virtualization Boot Sources** — New menu item in Day-2 cluster management for configuring OCP Virtualization boot sources via the TUI.
+- **Day-2 success messages** — `aba day2`, `aba shutdown`, and `aba startup` now print a clear success message on completion.
+- **MachineConfigPool progress indicator** — Shows when MCP is still reconciling after Day-2 changes, so users know to wait.
+- **`excl_platform` bundle guard** — `aba bundle` now warns and prompts for confirmation when release images are excluded, preventing accidental operator-only install bundles.
+
+### Changed
+
+- **`aba.conf` boolean convention** — Normalizer now converts `excl_*=1` to `true` alongside existing `0`/`false` → empty handling, so `excl_platform=1` works the same as `excl_platform=true`.
+- **BETA warning removed** — ABA no longer shows the beta disclaimer on startup.
+- **Legacy v1 tests moved** — Old test scripts moved to `test/deprecated/` to reduce clutter.
+- **Bundle README improvements** — Fixed CLI indent, operator deduplication guidance, and removed dead references.
+
+### Fixed
+
+- **DISCO mode ISC generation hang** — TUI in Fully Disconnected mode attempted background ISC generation and catalog downloads that require internet access, causing hangs. Fixed at three layers: startup guard, mirror menu guard, and core catalog scripts.
+- **Stdout buffering hid interactive prompts** — Block-buffered `tee` in the CLI wrapper made `ask` prompts invisible (blank cursor). Now uses line-buffered output.
+- **Quay mirror install on air-gapped hosts** — Quay's pasta networking needs a default route for hairpin connections. The installer now auto-creates one if missing.
+- **OSUS could undo upgrade channel changes** — `day2-config-osus.sh` and `cluster-upgrade.sh` derived the update channel independently with different logic. Extracted a shared function so both use the same source of truth (the ISC file).
+
 ---
 
 ## [1.3.5](https://github.com/sjbylo/aba/releases/tag/v1.3.5) - 2026-09-29
