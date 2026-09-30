@@ -625,7 +625,7 @@ aba_wait_show "Ensuring cluster operators are stable after day2 changes (Ctrl-C 
 # MCP restarts can outlast the CO stability check. Wait for nodes to finish updating
 # so that CatalogSources are healthy before the user runs day2-osus or upgrade.
 if ! mcp_is_updated; then
-	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
+	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
 
 aba_success "Day-2 configuration completed successfully."
