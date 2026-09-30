@@ -1,4 +1,11 @@
-## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.5...HEAD)
+## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.6...HEAD)
+
+---
+
+## [1.3.6](https://github.com/sjbylo/aba/releases/tag/v1.3.6) - 2026-09-30
+
+Disconnected mode reliability, Day-2 improvements, bug fixes
+
 
 ### Added
 
