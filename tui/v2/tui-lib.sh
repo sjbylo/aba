@@ -58,6 +58,7 @@ _tui_redirect_restore() {
 
 _tui_redirect_activate() {
 	if [[ "${_TUI_REDIRECT_ACTIVE:-}" == "1" ]]; then
+		mkdir -p "$_TUI_LOG_DIR" 2>/dev/null || true
 		exec 1>>"$_TUI_LOG_FILE" 2>>"$_TUI_LOG_FILE"
 	fi
 }
