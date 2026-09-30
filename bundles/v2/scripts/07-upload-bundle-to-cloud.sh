@@ -12,6 +12,26 @@ int_down
 
 cd "$WORK_TEST_INSTALL/aba"
 
+# Dev-mode bundles must NEVER be uploaded to NAS (built from dev branch, not release-quality).
+if [ "${BUNDLE_DEV_MODE:-}" = "1" ]; then
+	echo
+	echo "##########################################################################"
+	echo "DEV MODE: Bundle built from branch 'dev' — skipping NAS upload."
+	echo "          This bundle is for local testing only."
+	echo "##########################################################################"
+	echo
+
+	# Still assemble the test log for review
+	{
+		echo "## Test results for install bundle: $BUNDLE_NAME (DEV MODE — not uploaded)"
+		echo
+		cat "$WORK_BUNDLE_DIR_BUILD"/tests-06*.txt
+	} > "$WORK_TEST_LOG"
+
+	cat "$WORK_TEST_LOG"
+	exit 0
+fi
+
 # Assemble the final test log from per-phase results
 {
 	echo "## Test results for install bundle: $BUNDLE_NAME"

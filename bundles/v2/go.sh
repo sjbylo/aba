@@ -33,6 +33,14 @@ cd "$(dirname "$0")"
 
 source bundle.conf
 
+# --dev flag: build bundle from dev branch (for testing dev-branch features).
+# Dev bundles are NEVER uploaded to NAS — only used for local validation.
+if [[ "${1:-}" == "--dev" ]]; then
+	export GIT_BRANCH=dev
+	export BUNDLE_DEV_MODE=1
+	echo "*** DEV MODE: building bundles from branch 'dev' — NAS upload disabled ***"
+fi
+
 vers_track="22 21"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
@@ -120,8 +128,9 @@ do
 		echo
 		# Skip if bundle already exists and is complete in cloud dir
 		# (To force a rebuild, delete or rename the cloud dir first)
+		# In dev mode, always rebuild — we're testing dev features, not NAS state.
 		cloud_bundle="$CLOUD_DIR/$bundle_name"
-		if [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
+		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
 			echo "Install bundle already exists: $cloud_bundle -- skipping"
 			continue
 		fi
