@@ -355,7 +355,7 @@ aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the '
 aba_wait_show "Ensuring cluster operators are stable after OSUS changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
 
 if ! mcp_is_updated; then
-	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
+	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
 
 aba_success "Update Service configuration completed successfully."

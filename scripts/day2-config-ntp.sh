@@ -353,7 +353,7 @@ aba_success "API server available."
 aba_wait_show "Ensuring cluster operators are stable after NTP changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
 
 if ! mcp_is_updated; then
-	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
+	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
 
 aba_success "NTP configuration completed successfully."
