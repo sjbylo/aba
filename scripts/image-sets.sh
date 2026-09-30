@@ -3,7 +3,7 @@
 # INTENT:      Manage curated image sets (AI, Virt, OCP) in images.conf
 # CALLED BY:   TUI (tui-mirror.sh), sourced via include_all.sh
 # CWD:         Varies (caller's working directory)
-# REQUIRES:    ABA_ROOT set, templates/image-set-* files, internet for AI set
+# REQUIRES:    templates/image-set-* files, internet for AI set
 # PRODUCES:    Modifications to images.conf (marker blocks)
 # =============================================================================
 # Image sets are curated lists of additional container images that complement
@@ -36,7 +36,7 @@ _RHOAI_CACHE_DIR="$HOME/.aba/cache/rhoai"
 #   Returns 0 if the set is dynamic (fetched at runtime), 1 if static.
 # ---------------------------------------------------------------------------
 _image_set_is_dynamic() {
-	local set_file="$ABA_ROOT/templates/image-set-$1"
+	local set_file="${ABA_ROOT:-.}/templates/image-set-$1"
 	[ -f "$set_file" ] || return 1
 	grep -q '^# Dynamic:' "$set_file" 2>/dev/null
 }
@@ -46,7 +46,7 @@ _image_set_is_dynamic() {
 #   Reads the "# Name: ..." line from the template file.
 # ---------------------------------------------------------------------------
 _image_set_display_name() {
-	local set_file="$ABA_ROOT/templates/image-set-$1"
+	local set_file="${ABA_ROOT:-.}/templates/image-set-$1"
 	[ -f "$set_file" ] || return 1
 	local name
 	name=$(head -n1 "$set_file" 2>/dev/null | sed 's/^# *//' | sed 's/^Name: *//')
@@ -58,7 +58,7 @@ _image_set_display_name() {
 #   Reads a static image set template, outputs one image ref per line.
 # ---------------------------------------------------------------------------
 _image_set_static_images() {
-	local set_file="$ABA_ROOT/templates/image-set-$1"
+	local set_file="${ABA_ROOT:-.}/templates/image-set-$1"
 	[ -f "$set_file" ] || return 1
 	sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$set_file"
 }
@@ -69,7 +69,7 @@ _image_set_static_images() {
 # ---------------------------------------------------------------------------
 _image_set_marker_exists() {
 	local set_name="$1"
-	local img_file="${2:-$ABA_ROOT/images.conf}"
+	local img_file="${2:-${ABA_ROOT:-.}/images.conf}"
 	[ -f "$img_file" ] || return 1
 	grep -q "^# image-set: $set_name" "$img_file" 2>/dev/null
 }
@@ -80,7 +80,7 @@ _image_set_marker_exists() {
 # ---------------------------------------------------------------------------
 _image_set_marker_detail() {
 	local set_name="$1"
-	local img_file="${2:-$ABA_ROOT/images.conf}"
+	local img_file="${2:-${ABA_ROOT:-.}/images.conf}"
 	[ -f "$img_file" ] || return 1
 	local line
 	line=$(grep "^# image-set: $set_name" "$img_file" 2>/dev/null | head -1)
@@ -95,7 +95,7 @@ _image_set_marker_detail() {
 # ---------------------------------------------------------------------------
 _image_set_marker_count() {
 	local set_name="$1"
-	local img_file="${2:-$ABA_ROOT/images.conf}"
+	local img_file="${2:-${ABA_ROOT:-.}/images.conf}"
 	[ -f "$img_file" ] || { echo 0; return; }
 	awk -v name="$set_name" '
 		/^# image-set: / && $3 == name { capture=1; next }
@@ -130,8 +130,8 @@ detect_rhoai_version() {
 	fi
 
 	# Read rhods-operator channel from catalog index (.index/ preferred, catalogs/ fallback)
-	local index_file="$ABA_ROOT/.index/redhat-operator-index-v${ocp_ver}"
-	[ -f "$index_file" ] || index_file="$ABA_ROOT/catalogs/redhat-operator-index-v${ocp_ver}"
+	local index_file="${ABA_ROOT:-.}/.index/redhat-operator-index-v${ocp_ver}"
+	[ -f "$index_file" ] || index_file="${ABA_ROOT:-.}/catalogs/redhat-operator-index-v${ocp_ver}"
 	[ -f "$index_file" ] || { aba_debug "No catalog index for OCP $ocp_ver"; return 1; }
 
 	local channel
@@ -211,10 +211,10 @@ fetch_rhoai_images() {
 #   detail: e.g. "rhoai-3.5.1" for AI, empty for static sets
 # ---------------------------------------------------------------------------
 image_set_list() {
-	local img_file="${1:-$ABA_ROOT/images.conf}"
+	local img_file="${1:-${ABA_ROOT:-.}/images.conf}"
 	local set_file set_name display status count detail
 
-	for set_file in "$ABA_ROOT"/templates/image-set-*; do
+	for set_file in "${ABA_ROOT:-.}"/templates/image-set-*; do
 		[ -f "$set_file" ] || continue
 		set_name="${set_file##*image-set-}"
 		display=$(_image_set_display_name "$set_name")
@@ -248,8 +248,8 @@ image_set_list() {
 image_set_add() {
 	local set_name="$1"
 	local version="${2:-}"
-	local img_file="$ABA_ROOT/images.conf"
-	local set_file="$ABA_ROOT/templates/image-set-$set_name"
+	local img_file="${ABA_ROOT:-.}/images.conf"
+	local set_file="${ABA_ROOT:-.}/templates/image-set-$set_name"
 
 	[ -f "$set_file" ] || { aba_debug "image_set_add: no template for '$set_name'"; return 1; }
 
@@ -302,7 +302,7 @@ image_set_add() {
 # ---------------------------------------------------------------------------
 image_set_remove() {
 	local set_name="$1"
-	local img_file="${2:-$ABA_ROOT/images.conf}"
+	local img_file="${2:-${ABA_ROOT:-.}/images.conf}"
 
 	[ -f "$img_file" ] || return 1
 	_image_set_marker_exists "$set_name" "$img_file" || return 1
@@ -329,7 +329,7 @@ image_set_remove() {
 # ---------------------------------------------------------------------------
 image_set_status() {
 	local set_name="$1"
-	local img_file="${2:-$ABA_ROOT/images.conf}"
+	local img_file="${2:-${ABA_ROOT:-.}/images.conf}"
 
 	_image_set_marker_exists "$set_name" "$img_file" || return 1
 
@@ -345,14 +345,14 @@ image_set_status() {
 #   in images.conf. Output: one set name per line.
 # ---------------------------------------------------------------------------
 image_set_companions_needed() {
-	local img_file="$ABA_ROOT/images.conf"
+	local img_file="${ABA_ROOT:-.}/images.conf"
 	local op_set companion
 
 	for op_set in "$@"; do
 		companion="${_IMAGE_SET_COMPANIONS[$op_set]:-}"
 		[ -z "$companion" ] && continue
 		# Only offer if the template exists and not already added
-		[ -f "$ABA_ROOT/templates/image-set-$companion" ] || continue
+		[ -f "${ABA_ROOT:-.}/templates/image-set-$companion" ] || continue
 		_image_set_marker_exists "$companion" "$img_file" && continue
 		echo "$companion"
 	done | sort -u

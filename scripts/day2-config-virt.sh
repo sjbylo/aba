@@ -306,4 +306,4 @@ else
 fi
 
 echo
-aba_success "OpenShift Virtualization boot source configuration complete."
+aba_success "OpenShift Virtualization boot source configuration completed successfully."

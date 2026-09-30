@@ -30,19 +30,23 @@ fi
 # ABA writes the real oc-mirror exit code to mirror/.oc-mirror-exit-code,
 # bypassing make's exit-code masking (make always returns 2 for recipe failures).
 #   oc-mirror bitmask: bit 2 = release, bit 4 = operator, bit 8 = additional, bit 16 = helm
+# NOTE: The bundled ABA may be an older version (main) that doesn't produce
+# this file.  Always handle "file missing" gracefully — see bundle.conf for
+# the full branch architecture explanation.
 load_rc=0
 aba -d mirror load --retry 2 -H $TEST_HOST || load_rc=$?
 
 if [ $load_rc -ne 0 ]; then
-	# Read the real oc-mirror exit code from the file ABA writes
-	_real_rc=0
-	if [ -f "$WORK_TEST_INSTALL/aba/mirror/.oc-mirror-exit-code" ]; then
-		_real_rc=$(cat "$WORK_TEST_INSTALL/aba/mirror/.oc-mirror-exit-code")
+	# Read the real oc-mirror exit code from the file ABA writes.
+	# Older ABA versions (e.g. in a pre-built bundle) may not produce this file.
+	_real_rc=""
+	_exit_file="$WORK_TEST_INSTALL/aba/mirror/.oc-mirror-exit-code"
+	if [ -f "$_exit_file" ]; then
+		_real_rc=$(cat "$_exit_file")
 	fi
 
 	# Release image failures (bit 2) or generic/unknown errors (1) are fatal.
-	# oc-mirror exit 0 with make failure means non-fatal errors — continue with warning.
-	if [ $(( _real_rc & 2 )) -ne 0 ] || [ "$_real_rc" -eq 1 ]; then
+	if [ -n "$_real_rc" ] && { [ $(( _real_rc & 2 )) -ne 0 ] || [ "$_real_rc" -eq 1 ]; }; then
 		echo
 		echo "ERROR: Image load failed (oc-mirror exit code $_real_rc, make exit code $load_rc). Aborting."
 
@@ -57,10 +61,11 @@ if [ $load_rc -ne 0 ]; then
 		exit 1
 	fi
 
-	# Operator/additional failures only — continue with warning
+	# Non-fatal: operator/additional image failures, or exit code unavailable.
+	_rc_display="${_real_rc:-unavailable}"
 	echo
 	echo "##########################################################################"
-	echo "WARNING: Image load completed with errors (oc-mirror exit code $_real_rc)."
+	echo "WARNING: Image load completed with errors (oc-mirror exit code $_rc_display)."
 	echo "         Some images may have failed to load into the registry."
 	echo "         Possible causes: upstream image format issues, registry"
 	echo "         compatibility, network timeouts, or transient errors."
@@ -92,8 +97,8 @@ done
 oc-mirror --v2 --help > /dev/null
 
 if [ $load_rc -ne 0 ]; then
-	echo "Images loaded with warnings (oc-mirror exit $_real_rc) -- some images may have failed to load" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
-	echo "$_real_rc" > "$WORK_BUNDLE_DIR_BUILD/load-exit-code"
+	echo "Images loaded with warnings (oc-mirror exit ${_real_rc:-unavailable}) -- some images may have failed to load" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
+	echo "${_real_rc:-unknown}" > "$WORK_BUNDLE_DIR_BUILD/load-exit-code"
 else
 	echo "All images loaded (disk2mirror) into Quay: ok" > "$WORK_BUNDLE_DIR_BUILD/tests-06c.txt"
 fi

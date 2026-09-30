@@ -10,8 +10,6 @@ source scripts/include_all.sh
 
 aba_debug "Starting: $0 $* from $PWD"
 
-aba_warn "'aba upgrade' is in BETA and may change in future releases." >&2
-
 [ ! -f cluster.conf ] && aba_abort "$PWD/cluster.conf file missing! Cluster directory $PWD not yet initialized! See: aba cluster --help"
 
 # Parse flags
@@ -333,19 +331,8 @@ fi
 if [ ! "$upgrade_already_running" ]; then
 	# Early check: if OSUS is configured and no channel change will be needed,
 	# verify the target version exists in the graph before running day2.
-	_target_major=$(_ver_minor "$target_ver")
+	_required_channel=$(resolve_cluster_channel "$target_ver")
 	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
-	_isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
-	_isc_channel=""
-	[ -f "$_isc_file" ] && _isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
-	if [ -n "$_isc_channel" ]; then
-		_channel_prefix="${_isc_channel%-*}"
-	elif [ -n "$_current_channel" ]; then
-		_channel_prefix="${_current_channel%-*}"
-	else
-		_channel_prefix="${ocp_channel:-stable}"
-	fi
-	_required_channel="${_channel_prefix}-${_target_major}"
 
 	if [ "$osus_upstream" ] && [ "$_current_channel" = "$_required_channel" ]; then
 		_early_text=$(oc adm upgrade --include-not-recommended 2>/dev/null) || true
@@ -428,30 +415,10 @@ if [ ! "$upgrade_already_running" ]; then
 		| awk '/Conditional updates:|Updates with known issues:/{f=1; next} f && /^  Version:/{print $2}') || true
 
 	# Ensure the cluster's update channel matches what was mirrored.
-	# The ISC (imageset-config.yaml) is the source of truth — it contains
-	# the channel used for save/sync (e.g. fast-4.22). On disconnected hosts
-	# aba.conf may still have the original install channel (e.g. stable),
-	# not the upgrade channel, so we read from the ISC instead.
+	# resolve_cluster_channel reads the ISC (verified against the mirror),
+	# falling back to aba.conf.  See the function's header comment for why.
+	_required_channel=$(resolve_cluster_channel "$target_ver")
 	_current_channel=$(oc get clusterversion version -o jsonpath='{.spec.channel}' 2>/dev/null) || _current_channel=""
-	_target_major=$(_ver_minor "$target_ver")
-
-	# Read channel from ISC (what was actually mirrored)
-	_isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
-	_isc_channel=""
-	if [ -f "$_isc_file" ]; then
-		_isc_channel=$(grep '^\s*- name:.*-[0-9]' "$_isc_file" | head -1 | awk '{print $NF}')
-	fi
-	if [ -n "$_isc_channel" ]; then
-		_channel_prefix="${_isc_channel%-*}"                # "stable-4.22" → "stable"
-		aba_debug "Channel from ISC: $_isc_channel (prefix: $_channel_prefix)"
-	elif [ -n "$_current_channel" ]; then
-		_channel_prefix="${_current_channel%-*}"            # "fast-4.21" → "fast"
-		aba_debug "No ISC channel found — using cluster channel prefix: $_channel_prefix"
-	else
-		_channel_prefix="${ocp_channel:-stable}"
-		aba_warn "No update channel set on cluster or ISC — using '$_channel_prefix' from aba.conf"
-	fi
-	_required_channel="${_channel_prefix}-${_target_major}"
 	_channel_changed=""
 	if [ "$_current_channel" != "$_required_channel" ]; then
 		aba_info "Setting upgrade channel: ${_current_channel:-<unset>} → $_required_channel"

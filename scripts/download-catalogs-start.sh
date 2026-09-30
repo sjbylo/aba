@@ -22,6 +22,11 @@ verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 # Build version list (current + target if cross-minor upgrade)
 read -ra _versions <<< "$(_catalog_versions_to_mirror)"
 
+# No internet — nothing to download (e.g. disconnected bastion)
+if ! check_internet_connectivity aba quiet 2>/dev/null; then
+	exit 0
+fi
+
 # Start downloads in parallel (non-blocking, TTL from ~/.aba/config)
 for _ver in "${_versions[@]}"; do
 	download_all_catalogs "$_ver"

@@ -79,6 +79,13 @@ source <(normalize-aba-conf)
 verify-aba-conf || aba_abort "$_ABA_CONF_ERR"
 aba_debug "Configuration verified: ocp_version=$ocp_version ocp_channel=$ocp_channel"
 
+# Warn if release images are excluded — bundle can't install a cluster
+if [ "${excl_platform:-}" ]; then
+	aba_warn "Release images are excluded (excl_platform=true in aba.conf)." \
+		"This bundle cannot be used to install a new cluster."
+	ask "Continue without release images" || exit 1
+fi
+
 # Kick off CLI downloads early (non-blocking) so they run in parallel with oc-mirror
 aba_debug "Starting CLI downloads in background (will be waited on later)"
 scripts/cli-download-all.sh
@@ -105,7 +112,7 @@ else
 		[[ "$_base" != *"$ARCH"* ]] && _base="$_base-$ARCH"
 		if [ "$light_bundle" ]; then
 			[[ "$_base" != *-lite* ]] && _base="$_base-lite"
-		elif [ "${excl_platform:-}" != "true" ]; then
+		elif [ ! "${excl_platform:-}" ]; then
 			[[ "$_base" != *-rel* ]] && _base="$_base-rel"
 		fi
 		_op_count=0

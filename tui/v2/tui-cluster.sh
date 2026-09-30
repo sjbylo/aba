@@ -2140,6 +2140,7 @@ cluster_day2_menu() {
 			"R" "Configure OperatorHub (after mirror load/sync)" \
 			"N" "Network Time Protocol" \
 			"O" "OpenShift Update Service (OSUS)" \
+			"V" "Virtualization Boot Sources" \
 			"" "──── Status ───────────────────────" \
 			"S" "Cluster status" \
 			"L" "Cluster Login Terminal" \
@@ -2161,6 +2162,7 @@ cluster_day2_menu() {
 • Configure OperatorHub: applies Day-2 config (IDMS, CatalogSources, OperatorHub, etc.)
 • NTP: configures Network Time Protocol on all cluster nodes
 • OSUS: installs the OpenShift Update Service operator for upgrades
+• Virtualization Boot Sources: configures VM boot source images for disconnected OCP Virt
 
 Status:
 • Cluster status: shows cluster operators and node status
@@ -2194,6 +2196,7 @@ Navigation:
 			R) _day2_run "day2" ;;
 			N) _day2_run "day2-ntp" ;;
 			O) _day2_run_osus ;;
+			V) _day2_run_virt ;;
 			S) _day2_status ;;
 			L) _day2_login ;;
 			H) _day2_ssh ;;
@@ -2230,6 +2233,22 @@ _day2_run_osus() {
 	fi
 
 	_day2_run "day2-osus"
+}
+
+_day2_run_virt() {
+	# Pre-check: warn if kubevirt-hyperconverged operator not in ISC
+	local isconf_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
+	if [[ -f "$isconf_file" ]]; then
+		if ! grep -q "kubevirt-hyperconverged" "$isconf_file" 2>/dev/null; then
+			dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DAY2_VIRT" \
+				--yes-label "$TUI2_BTN_CONTINUE" \
+				--no-label "$TUI2_BTN_CANCEL" \
+				--yesno "The 'kubevirt-hyperconverged' operator was not found in the ImageSet config.\n\nOpenShift Virtualization must be installed before configuring boot sources.\n\nContinue anyway?" 0 0
+			[[ $? -ne 0 ]] && return 0
+		fi
+	fi
+
+	_day2_run "day2-virt"
 }
 
 # --- Status: oc get co + oc get nodes ---

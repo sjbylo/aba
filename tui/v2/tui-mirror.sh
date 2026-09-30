@@ -1158,6 +1158,8 @@ mirror_payload_menu() {
 	_persist_operator_basket
 
 	# Wait for background ISC generation (kicked off at startup or after config change)
+	# Skip in DISCO mode (readonly) — ISC is already baked into the bundle
+	if [[ "$readonly" != "true" ]]; then
 	if ! run_once -p -i "aba:isconf:generate" 2>/dev/null; then
 		dlg --backtitle "$(ui_backtitle)" --infobox \
 			"$TUI2_MSG_ISC_GENERATING" 0 0
@@ -1209,6 +1211,7 @@ mirror_payload_menu() {
 		run_once -c -i "aba:isconf:generate" 2>/dev/null || true
 		return 0
 	fi
+	fi  # readonly guard
 
 	if [[ "$readonly" == "true" ]]; then
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_DISCO_VIEW_ISC" \
@@ -2430,7 +2433,7 @@ mirror_create_bundle() {
 	_summary+="\nfilesystem with plenty of free space."
 
 	local default_bundle
-	default_bundle=$(cat "$HOME/.aba/bundle-path" 2>/dev/null) || default_bundle="/tmp/ocp-bundle"
+	default_bundle=$(cat "$HOME/.aba/.bundle-path" 2>/dev/null) || default_bundle="/tmp/ocp-bundle"
 
 	while :; do
 		dlg --backtitle "$(ui_backtitle)" --title "$TUI2_TITLE_CONNO_BUNDLE" \
@@ -2460,11 +2463,10 @@ mirror_create_bundle() {
 	_tui_reject_squote "$bundle_path" || return 1
 	bundle_path="${bundle_path/#\~/$HOME}"         # ~/foo → /home/user/foo
 	[[ -z "$bundle_path" ]] && bundle_path="$default_bundle"
-	[[ -d "$bundle_path" ]] && bundle_path="$bundle_path/ocp-bundle"
 	bundle_path="${bundle_path%.tar}"              # strip .tar suffix if present
 
 	mkdir -p "$HOME/.aba" 2>/dev/null
-	echo "$bundle_path" > "$HOME/.aba/bundle-path"
+	echo "$bundle_path" > "$HOME/.aba/.bundle-path"
 
 	# Check same-device for --light option
 	local output_dir

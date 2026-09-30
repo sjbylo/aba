@@ -307,22 +307,19 @@ fi
 POLICY_ENGINE_GRAPH_URI="$(oc -n "${NAMESPACE}" get -o jsonpath='{.status.policyEngineURI}/api/upgrades_info/v1/graph' updateservice "${NAME}")"
 aba_success "Policy engine: $POLICY_ENGINE_GRAPH_URI"
 
-# Ensure the cluster channel matches what was mirrored (ocp_channel from aba.conf).
-# OpenShift defaults to stable-X.Y at install time, but images/graph may have been
-# mirrored from a different channel (e.g. candidate). Without this, oc adm upgrade
-# queries the wrong channel and OSUS returns an empty graph.
-CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
-aba_debug "Cluster channel: $CH"
-# Derive expected channel from the upgrade target (if set), falling back to
-# the cluster's actual version.  When called from cluster-upgrade.sh,
-# ocp_upgrade_to is the target version and the channel must match it.
+# Ensure the cluster channel matches what was mirrored.
+# Uses shared resolve_cluster_channel() which reads the ISC (verified against
+# the mirror), falling back to aba.conf.  This is critical when called from
+# cluster-upgrade.sh — aba.conf may say "stable" but the ISC says "fast"
+# because the upgrade target is only on the fast channel.
 _ref_ver="${ocp_upgrade_to:-}"
 if [ -z "$_ref_ver" ]; then
 	_ref_ver=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null) || true
 fi
 [ -z "$_ref_ver" ] && _ref_ver="$ocp_version"
-_ocp_ver_major=$(echo "$_ref_ver" | cut -d. -f1-2)
-_expected_channel="${ocp_channel}-${_ocp_ver_major}"
+_expected_channel=$(resolve_cluster_channel "$_ref_ver")
+CH=$(kubectl get clusterversion version -o jsonpath='{.spec.channel}')
+aba_debug "Cluster channel: $CH, expected: $_expected_channel"
 if [ "$CH" != "$_expected_channel" ]; then
 	aba_info "Cluster channel ($CH) does not match mirrored channel ($_expected_channel)"
 	aba_info "Setting cluster channel: $CH → $_expected_channel"
@@ -350,7 +347,7 @@ aba_info "Updating cluster version with $POLICY_ENGINE_GRAPH_URI ..."
 PATCH="{\"spec\":{\"upstream\":\"${POLICY_ENGINE_GRAPH_URI}\"}}"
 oc patch clusterversion version -p $PATCH --type merge
 
-aba_success "Update Service configuration completed successfully!"
+aba_success "Update Service configuration applied."
 aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the 'Update Graph' under 'Administration -> Cluster Settings' ..."
 
 # OSUS install patches CA, proxy, and upstream — triggers CO reconciliation.
@@ -358,5 +355,7 @@ aba_info "Please wait about *10 MINUTES* for the OpenShift Console to show the '
 aba_wait_show "Ensuring cluster operators are stable after OSUS changes (Ctrl-C to skip)" 15 600 cluster_is_ready || true
 
 if ! mcp_is_updated; then
-	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
+	aba_wait_show "Waiting for node updates to finish (mcp) (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
+
+aba_success "Update Service configuration completed successfully."

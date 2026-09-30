@@ -280,6 +280,7 @@ self-node-remediation Self Node Remediation Operator - Community Edition stable
 service-binding-operator Service Binding Operator stable
 sigstore-helm-operator sigstore alpha
 silicom-sts-operator Silicom STS Operator alpha
+simplyblock-operator Simplyblock Operator alpha
 skupper-operator Skupper stable
 slurm-operator Slurm Operator release-1.0
 snapscheduler SnapScheduler stable
