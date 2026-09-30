@@ -173,6 +173,9 @@ do
 		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" clean; then
 			echo "WARNING: cleanup failed for $bundle_name -- next run's 00-setup.sh will retry" >&2
 		fi
+
+		echo "=== Bundle $bundle_name completed at $(date) ==="
+		read -p "Press Enter to continue to the next bundle..."
 	done
 done
 
