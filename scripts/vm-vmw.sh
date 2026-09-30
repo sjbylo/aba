@@ -20,7 +20,7 @@
 # Retry a govc command on transient vCenter errors (task conflicts, locks, etc.).
 # Waits with linear backoff (3s, 6s, 9s) for up to ~18s total.
 _govc_retry() {
-	try_cmd -n 3 -d 3 -D 3 -m "govc $1" -- govc "$@"
+	try_cmd -q -n 3 -d 3 -D 3 -m "govc $1" -- govc "$@"
 }
 
 # Query a VM's runtime+hardware as JSON via govc with retry.
