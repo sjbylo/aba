@@ -2448,10 +2448,12 @@ resolve_cluster_channel() {
 	local prefix=""
 
 	if [ -f "$isc_file" ]; then
-		# Read the last platform channel entry (upgrade channels are appended)
-		local isc_ch isc_max
-		isc_ch=$(grep '^\s*- name:.*-[0-9]' "$isc_file" | tail -1 | awk '{print $NF}')
-		isc_max=$(awk '/maxVersion:/{print $NF; exit}' "$isc_file")
+		# Read the last platform channel entry (upgrade channels are appended).
+		# Use yaml2json + jq to reliably extract from the platform section only.
+		local isc_ch isc_max _isc_json
+		_isc_json=$(python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$isc_file")
+		isc_ch=$(echo "$_isc_json" | jq -r '[.mirror.platform.channels[].name] | last')
+		isc_max=$(echo "$_isc_json" | jq -r '.mirror.platform.channels[-1].maxVersion')
 
 		if [ -n "$isc_ch" ] && [ -n "$isc_max" ]; then
 			# Only trust the ISC channel if its maxVersion image is in the mirror.
