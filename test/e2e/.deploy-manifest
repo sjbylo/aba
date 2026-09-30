@@ -18,7 +18,6 @@ mirror/Makefile
 
 # test files referenced by suites (NOT test/e2e/logs/ which is 18GB+)
 test/lib.sh
-test/Makefile
 test/basic-interactive-test.sh
 test/acm-subs.yaml
 test/acm-mch.yaml
