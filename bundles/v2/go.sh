@@ -35,10 +35,57 @@ source bundle.conf
 
 # --dev flag: build bundle from dev branch (for testing dev-branch features).
 # Dev bundles are NEVER uploaded to NAS — only used for local validation.
-if [[ "${1:-}" == "--dev" ]]; then
-	export GIT_BRANCH=dev
-	export BUNDLE_DEV_MODE=1
-	echo "*** DEV MODE: building bundles from branch 'dev' — NAS upload disabled ***"
+BUNDLE_NAME_FILTER=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--dev)
+			export GIT_BRANCH=dev
+			export BUNDLE_DEV_MODE=1
+			echo "*** DEV MODE: building bundles from branch 'dev' — NAS upload disabled ***"
+			shift
+			;;
+		--name)
+			BUNDLE_NAME_FILTER="$2"
+			echo "*** FILTER: building only bundle type '$BUNDLE_NAME_FILTER' ***"
+			shift 2
+			;;
+		-h|--help)
+			cat <<-EOF
+			Usage: $(basename "$0") [--dev] [--name <type>]
+
+			Build ABA install bundles for multiple OCP versions.
+
+			Options:
+			  --dev          Build from dev branch (NAS upload disabled)
+			  --name <type>  Build only the specified bundle type
+			  -h, --help     Show this help
+
+			Bundle types:
+			  release   OCP release images only (no operators)
+			  ocp       OCP + common operators
+			  mesh3     OCP + Service Mesh v3
+			  opp       OCP + ODF + Security + ACM
+			  virt      OCP + ODF + Virtualization
+			  ai        OCP + GPU + AI (RHOAI)
+
+			Examples:
+			  $(basename "$0")                  # build all bundles (production)
+			  $(basename "$0") --dev            # build all from dev branch
+			  $(basename "$0") --dev --name ai  # build only AI bundle from dev
+			EOF
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			echo "Run '$(basename "$0") --help' for usage." >&2
+			exit 1
+			;;
+	esac
+done
+
+if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
 
 	# Guard: ensure the local workspace is on the dev branch.
 	# Phase/test scripts run from this workspace, not from the bundle.
@@ -144,6 +191,11 @@ do
 		name=${arr_name[$i]}
 		tests=${arr_tests[$i]}
 		bundle_name="${ver}-$name"
+
+		# --name filter: skip bundle types that don't match
+		if [ -n "$BUNDLE_NAME_FILTER" ] && [ "$name" != "$BUNDLE_NAME_FILTER" ]; then
+			continue
+		fi
 
 		echo
 		# Skip if bundle already exists and is complete in cloud dir
