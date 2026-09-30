@@ -132,7 +132,13 @@ else
 	echo "OpenShift Update Service (OSUS) integration test: n/a" >> "$TEST_LOG_06D"
 fi
 
-# Run modular test scripts from bundles/v2/templates/
+# Run modular test scripts from bundles/v2/templates/.
+# These run from the WORKSPACE (dev branch), not from the unpacked bundle.
+# The bundle doesn't contain test scripts — they're test harness infrastructure.
+# This is correct: test improvements (e.g. new assertions, bug workarounds)
+# should take effect immediately without waiting for a merge to main.
+# If a test calls an ABA feature only in dev, use 'go.sh --dev' to build
+# the bundle from dev too.
 V2_TEMPLATES="$V2_DIR/templates"
 
 cp -p "$V2_TEMPLATES/bundle-test-lib.sh" "$WORK_BUNDLE_DIR_BUILD/"
