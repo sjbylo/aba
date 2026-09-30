@@ -35,9 +35,16 @@ for _ver in "${_versions_to_wait[@]}"; do
 done
 
 if [[ "$_have_all" == true ]]; then
-	for _ver in "${_versions_to_wait[@]}"; do
-		download_all_catalogs "$_ver" >/dev/null 2>&1 || true
-	done
+	if check_internet_connectivity aba quiet 2>/dev/null; then
+		# Internet available — ensure downloads started (no-op if already running)
+		for _ver in "${_versions_to_wait[@]}"; do
+			download_all_catalogs "$_ver" >/dev/null 2>&1 || true
+		done
+	else
+		# No internet — existing catalogs are all we have
+		aba_success "All operator catalogs ready for OCP ${_versions_to_wait[*]} (cached)"
+		exit 0
+	fi
 fi
 
 # Wait: catalogs started by download_all_catalogs() in include_all.sh
