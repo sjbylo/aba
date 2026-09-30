@@ -504,6 +504,7 @@ Submenu title: **Day-2 / Cluster Management** (`cluster_day2_menu` in `tui-clust
 | Cluster Resources (day2) | `aba -d <cluster> day2`         | DISCO, CONNO       | None                                       |
 | NTP            | `aba -d <cluster> day2-ntp`     | ALL modes          | None                                       |
 | OSUS           | `aba -d <cluster> day2-osus`    | DISCO, CONNO       | Warn if Cincinnati operator not in ISC     |
+| Virt Boot Sources | `aba -d <cluster> day2-virt` | DISCO, CONNO       | Warn if kubevirt-hyperconverged not in ISC |
 | **Cluster status** (`S`) | `oc get co`, `oc get nodes` (via kubeconfig) | ALL modes | Cluster must exist (selector)        |
 | **SSH to Rendezvous** (`H`) | `aba -d <cluster> ssh` (interactive shell) | ALL modes | Cluster must exist; ends with `Press ENTER to return to TUI` |
 | Upgrade        | `aba -d <cluster> upgrade --to <ver>` | ALL modes   | Prompts for target version                 |
