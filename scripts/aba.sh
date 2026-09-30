@@ -20,10 +20,10 @@
 # =============================================================================
 
 # Semantic version (updated by build/release.sh at release time)
-ABA_VERSION=1.3.5
+ABA_VERSION=1.3.6
 
 # Build timestamp (updated by build/pre-commit-checks.sh)
-ABA_BUILD=20260929191750
+ABA_BUILD=20260930211915
 
 # Sanity check version and build timestamp at startup
 # FIXME: Can only use 'echo' here since can't locate the include_all.sh file yet
@@ -258,8 +258,11 @@ fi
 # Duplicate stdout+stderr to the trace file for post-mortem debugging.
 # When stdout is piped (e.g. 'aba tar --out - | ssh ...'), only trace stderr
 # to avoid capturing binary tar data (which caused 29GB+ trace files).
+# Use stdbuf to force line-buffering on tee — without it, process substitution
+# replaces stdout with a pipe (block-buffered ~4KB), causing interactive prompts
+# (ask(), aba_info, etc.) to be invisible until the buffer fills.
 if [ -t 1 ]; then
-	exec > >(tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
+	exec > >(stdbuf -oL tee -a "$ABA_TRACE_FILE") 2> >(tee -a "$ABA_TRACE_FILE" >&2)
 else
 	exec 2> >(tee -a "$ABA_TRACE_FILE" >&2)
 fi

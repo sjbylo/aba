@@ -13,7 +13,7 @@ apelocal-csi ApeLocal CSI Driver stable
 appdynamics-cloud-operator Cisco AppDynamics Cloud Operator alpha
 appdynamics-operator AppDynamics Operator for Kubernetes alpha
 appian-operator Appian operator alpha
-app-insights-operator Randoli Agent stable
+app-insights-operator Randoli Data Plane & Observability Agent stable
 aqua-operator-certified Aqua Security Operator 2022.4
 axera-operator Axera Microsegmentation & NDR alpha
 cass-operator DataStax Kubernetes Operator for Apache Cassandra stable

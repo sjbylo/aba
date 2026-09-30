@@ -33,6 +33,81 @@ cd "$(dirname "$0")"
 
 source bundle.conf
 
+# --dev flag: build bundle from dev branch (for testing dev-branch features).
+# Dev bundles are NEVER uploaded to NAS — only used for local validation.
+BUNDLE_NAME_FILTER=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--dev)
+			export GIT_BRANCH=dev
+			export BUNDLE_DEV_MODE=1
+			echo "*** DEV MODE: building bundles from branch 'dev' — NAS upload disabled ***"
+			shift
+			;;
+		--name)
+			BUNDLE_NAME_FILTER="$2"
+			echo "*** FILTER: building only bundle type '$BUNDLE_NAME_FILTER' ***"
+			shift 2
+			;;
+		-h|--help)
+			cat <<-EOF
+			Usage: $(basename "$0") [--dev] [--name <type>]
+
+			Build ABA install bundles for multiple OCP versions.
+
+			Options:
+			  --dev          Build from dev branch (NAS upload disabled)
+			  --name <type>  Build only the specified bundle type
+			  -h, --help     Show this help
+
+			Bundle types:
+			  release   OCP release images only (no operators)
+			  ocp       OCP + common operators
+			  mesh3     OCP + Service Mesh v3
+			  opp       OCP + ODF + Security + ACM
+			  virt      OCP + ODF + Virtualization
+			  ai        OCP + GPU + AI (RHOAI)
+
+			Examples:
+			  $(basename "$0")                  # build all bundles (production)
+			  $(basename "$0") --dev            # build all from dev branch
+			  $(basename "$0") --dev --name ai  # build only AI bundle from dev
+			EOF
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			echo "Run '$(basename "$0") --help' for usage." >&2
+			exit 1
+			;;
+	esac
+done
+
+if [[ "${BUNDLE_DEV_MODE:-}" == "1" ]]; then
+
+	# Guard: ensure the local workspace is on the dev branch.
+	# Phase/test scripts run from this workspace, not from the bundle.
+	_current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || true
+	if [ "$_current_branch" != "dev" ]; then
+		echo "ERROR: --dev requires the workspace to be on the 'dev' branch (currently on '$_current_branch')" >&2
+		exit 1
+	fi
+	# Warn if workspace is behind origin or has local modifications.
+	# Don't auto-pull — the user may have manually copied files for testing.
+	git -C "$REPO_ROOT" fetch origin dev --quiet 2>/dev/null || true
+	_local=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null)
+	_remote=$(git -C "$REPO_ROOT" rev-parse origin/dev 2>/dev/null)
+	if [ "$_local" != "$_remote" ]; then
+		echo "WARNING: local dev ($_local) differs from origin/dev ($_remote)"
+		echo "         Run 'git pull' if you want the latest, or ignore if testing local edits."
+	fi
+	if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
+		echo "WARNING: workspace has uncommitted changes (local edits or manual copies)"
+	fi
+fi
+
 vers_track="22 21"
 
 which notify.sh >/dev/null && NOTIFY=1 || NOTIFY=
@@ -117,11 +192,17 @@ do
 		tests=${arr_tests[$i]}
 		bundle_name="${ver}-$name"
 
+		# --name filter: skip bundle types that don't match
+		if [ -n "$BUNDLE_NAME_FILTER" ] && [ "$name" != "$BUNDLE_NAME_FILTER" ]; then
+			continue
+		fi
+
 		echo
 		# Skip if bundle already exists and is complete in cloud dir
 		# (To force a rebuild, delete or rename the cloud dir first)
+		# In dev mode, always rebuild — we're testing dev features, not NAS state.
 		cloud_bundle="$CLOUD_DIR/$bundle_name"
-		if [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
+		if [ "${BUNDLE_DEV_MODE:-}" != "1" ] && [ -d "$cloud_bundle" ] && [ ! -f "$cloud_bundle/INSTALL-BUNDLE-UPLOADING-OR-INCOMPLETE.txt" ] && [ -f "$cloud_bundle/README.txt" ]; then
 			echo "Install bundle already exists: $cloud_bundle -- skipping"
 			continue
 		fi
@@ -144,6 +225,9 @@ do
 		if ! make VER="$ver" NAME="$name" OP_SETS="$op_sets" TESTS="$tests" clean; then
 			echo "WARNING: cleanup failed for $bundle_name -- next run's 00-setup.sh will retry" >&2
 		fi
+
+		echo "=== Bundle $bundle_name completed at $(date) ==="
+		read -p "Press Enter to continue to the next bundle..."
 	done
 done
 

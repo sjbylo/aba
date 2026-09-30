@@ -12,6 +12,26 @@ int_down
 
 cd "$WORK_TEST_INSTALL/aba"
 
+# Dev-mode bundles must NEVER be uploaded to NAS (built from dev branch, not release-quality).
+if [ "${BUNDLE_DEV_MODE:-}" = "1" ]; then
+	echo
+	echo "##########################################################################"
+	echo "DEV MODE: Bundle built from branch 'dev' — skipping NAS upload."
+	echo "          This bundle is for local testing only."
+	echo "##########################################################################"
+	echo
+
+	# Still assemble the test log for review
+	{
+		echo "## Test results for install bundle: $BUNDLE_NAME (DEV MODE — not uploaded)"
+		echo
+		cat "$WORK_BUNDLE_DIR_BUILD"/tests-06*.txt
+	} > "$WORK_TEST_LOG"
+
+	cat "$WORK_TEST_LOG"
+	exit 0
+fi
+
 # Assemble the final test log from per-phase results
 {
 	echo "## Test results for install bundle: $BUNDLE_NAME"
@@ -50,7 +70,7 @@ mkdir -p "$CLOUD_DIR_BUNDLE"
 mypause 60
 
 # Generate README with bundle version and list of install files
-s=$(cd cli && echo $(ls -r *.gz) | sed "s/ /\\\n  - /g")
+s=$(cd cli && echo $(ls -r *.gz) | sed "s/ /\\\n    - /g")
 d=$(date -u)
 bundle_size=$(du -shc "$WORK_BUNDLE_DIR"/ocp_* 2>/dev/null | tail -1 | awk '{print $1}')
 [ -z "$bundle_size" ] && bundle_size="unknown"
@@ -58,7 +78,7 @@ aba_ver=$(cat "$REPO_ROOT/VERSION" 2>/dev/null)
 [ -z "$aba_ver" ] && aba_ver="unknown"
 
 # Fetch list of available operators
-op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed "/^[ \t]*$/d" | sort | uniq | sed "s/^/  - /g")
+op_list=$(for i in $OP_SETS; do cat "$WORK_TEST_INSTALL/aba/templates/operator-set-$i"; done | cut -d'#' -f1 | sed 's/[[:space:]]*$//; /^[[:space:]]*$/d' | sort | uniq | sed "s/^/  - /g")
 [ ! "$op_list" ] && op_list="  - No Operators!"
 
 # Create readme file from template

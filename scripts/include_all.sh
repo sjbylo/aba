@@ -454,8 +454,11 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
+			-e "s/excl_platform=1\b/excl_platform=true/g" \
 			-e "s/excl_operators=0\b/excl_operators=/g" -e "s/excl_operators=false/excl_operators=/g" \
+			-e "s/excl_operators=1\b/excl_operators=true/g" \
 			-e "s/excl_additional=0\b/excl_additional=/g" -e "s/excl_additional=false/excl_additional=/g" \
+			-e "s/excl_additional=1\b/excl_additional=true/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
@@ -2397,6 +2400,83 @@ aba_upgrade_targets_start() {
 	[[ -n "$ver" ]] || return 0
 	run_once -i "aba:upgrade-targets:${ver}" -t "$(parse_duration "$ABA_CACHE_TTL")" -- \
 		bash -lc "source ./scripts/include_all.sh; fetch_all_upgrade_targets '$ver' '$channel'"
+}
+
+############################################
+# Resolve the update channel the cluster should be set to, based on what
+# is actually mirrored — NOT just what aba.conf says.
+#
+# WHY THIS EXISTS (Bug found 2026-09-30):
+#   cluster-upgrade.sh and day2-config-osus.sh both need to set the cluster's
+#   update channel (via 'oc adm upgrade channel').  They were deriving the
+#   channel independently — cluster-upgrade.sh read the ISC (correct),
+#   day2-config-osus.sh read aba.conf (wrong when upgrading across channels,
+#   e.g. stable install → fast upgrade).  When day2-config-osus.sh was called
+#   from inside the upgrade flow, it would UNDO the channel change that
+#   cluster-upgrade.sh had just made, causing OSUS to serve the wrong graph.
+#
+# PRIORITY:
+#   1. ISC (imageset-config.yaml) — what was actually mirrored.  But only
+#      trusted if the ISC's maxVersion release image exists in the mirror
+#      (guards against the ISC being updated for an upgrade whose images
+#      haven't been loaded yet).
+#   2. aba.conf ocp_channel — the install-time default (fallback).
+#
+# NOTE: This function is ONLY for "what channel should the live cluster be
+#   set to?"  Other uses of ocp_channel (Cincinnati queries, ISC generation,
+#   version lookups, display) should continue reading aba.conf directly.
+#
+# Args:
+#	$1 = reference version (optional, defaults to $ocp_version) — the version
+#	     whose channel we're resolving (upgrade target during upgrade,
+#	     current cluster version otherwise)
+# Returns: channel name on stdout (e.g. "fast-4.22")
+# Requires: reg_host, reg_port, reg_path, ocp_channel (from normalize-*-conf)
+# Safe:    falls back to aba.conf if ISC missing, mirror unreachable, or no version
+############################################
+resolve_cluster_channel() {
+	local ver="${1:-${ocp_version:-}}"
+	if [ -z "$ver" ]; then
+		aba_debug "resolve_cluster_channel: no version provided and ocp_version not set — using aba.conf channel"
+		echo "${ocp_channel:-stable}"
+		return
+	fi
+	local major
+	major=$(echo "$ver" | cut -d. -f1-2)
+
+	local isc_file="../$(image_source_mirror_name)/data/imageset-config.yaml"
+	local prefix=""
+
+	if [ -f "$isc_file" ]; then
+		# Read the last platform channel entry (upgrade channels are appended).
+		# Use yaml2json + jq to reliably extract from the platform section only.
+		local isc_ch isc_max _isc_json
+		_isc_json=$(python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$isc_file")
+		isc_ch=$(echo "$_isc_json" | jq -r '[.mirror.platform.channels[].name] | last')
+		isc_max=$(echo "$_isc_json" | jq -r '.mirror.platform.channels[-1].maxVersion')
+
+		if [ -n "$isc_ch" ] && [ -n "$isc_max" ]; then
+			# Only trust the ISC channel if its maxVersion image is in the mirror.
+			# This prevents setting the cluster to a channel whose images haven't
+			# been loaded yet (e.g. ISC updated for upgrade, but 'aba load' not run).
+			# Check .available first to avoid a 15s timeout when the mirror isn't installed.
+			local _mirror_dir="${isc_file%/data/imageset-config.yaml}"
+			local _repo="$reg_host:$reg_port$reg_path/openshift/release-images"
+			local _arch
+			_arch=$(uname -m)
+			if [ ! -f "$_mirror_dir/.available" ]; then
+				aba_debug "resolve_cluster_channel: mirror not installed ($_mirror_dir/.available missing) — using aba.conf"
+			elif timeout 15 skopeo inspect "docker://${_repo}:${isc_max}-${_arch}" >/dev/null 2>&1; then
+				prefix="${isc_ch%-*}"
+				aba_debug "resolve_cluster_channel: ISC channel=$isc_ch (maxVersion $isc_max verified in mirror)"
+			else
+				aba_debug "resolve_cluster_channel: ISC channel=$isc_ch but maxVersion $isc_max not in mirror (or unreachable) — falling back to aba.conf"
+			fi
+		fi
+	fi
+
+	[ -z "$prefix" ] && prefix="${ocp_channel:-stable}"
+	echo "${prefix}-${major}"
 }
 
 ############################################

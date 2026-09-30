@@ -141,7 +141,6 @@ noask:  # Disable prompts. Use 'aba --noask' or 'aba -Y' instead.
 .PHONY: clean
 clean: ## Clean up all temporary files.
 	test -f mirror/Makefile && make -sC mirror clean || true
-	test -f test/Makefile && make -sC test clean || true
 	rm -f ~/.aba.previous.backup
 	rm -f ~/.aba.conf.created
 	rm -f .aba.conf.seen
@@ -150,7 +149,6 @@ clean: ## Clean up all temporary files.
 reset: # Clean up *everything*.  Only use if you know what you are doing! Note that this does not run 'aba uninstall' to uninstall the mirror.
 	$(SCRIPTS)/reset-gate.sh $(force)
 	$(SCRIPTS)/cleanup-runner.sh
-	test -f test/Makefile && make -sC test clean || true
 	make -sC cli reset
 	test -f mirror/Makefile && make -sC mirror reset || true
 	test -f vmware.conf && mv vmware.conf vmware.conf.bk || true
