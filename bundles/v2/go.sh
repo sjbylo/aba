@@ -39,6 +39,19 @@ if [[ "${1:-}" == "--dev" ]]; then
 	export GIT_BRANCH=dev
 	export BUNDLE_DEV_MODE=1
 	echo "*** DEV MODE: building bundles from branch 'dev' — NAS upload disabled ***"
+
+	# Guard: ensure the local workspace is on dev and up-to-date.
+	# Phase/test scripts run from this workspace, not from the bundle.
+	_current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || true
+	if [ "$_current_branch" != "dev" ]; then
+		echo "ERROR: --dev requires the workspace to be on the 'dev' branch (currently on '$_current_branch')" >&2
+		exit 1
+	fi
+	echo "Pulling latest 'dev' from origin ..."
+	if ! git -C "$REPO_ROOT" pull --ff-only origin dev; then
+		echo "ERROR: git pull failed — resolve local changes and try again" >&2
+		exit 1
+	fi
 fi
 
 vers_track="22 21"
