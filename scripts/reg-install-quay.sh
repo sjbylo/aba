@@ -14,6 +14,21 @@ reg_generate_password
 reg_verify_localhost
 reg_check_quay_resources
 
+# Quay requires a default route to exist, even on air-gapped hosts where no
+# actual routing is needed.  Without it, container networking fails silently.
+aba_debug "Checking for default route: $(ip route show default 2>/dev/null)"
+if ! ip route show default | grep -q .; then
+	_def_iface=$(ip -o -4 addr show up | grep -v ' lo ' | head -1 | awk '{print $2}')
+	if [ -n "$_def_iface" ]; then
+		aba_warn "No default route found — Quay registry requires one to function."
+		aba_info "Adding default route: default dev $_def_iface scope link"
+		$SUDO ip route add default dev "$_def_iface" scope link || \
+			aba_warn "Failed to add default route. Registry install may fail."
+	else
+		aba_warn "No default route and no suitable interface found. Registry install may fail."
+	fi
+fi
+
 # --- Quay-specific: verify SSH to localhost ---
 # The Quay mirror-registry installer uses Ansible, which requires SSH to localhost.
 # Try SSH first. Only attempt remediation if it fails.
