@@ -355,3 +355,5 @@ aba_wait_show "Ensuring cluster operators are stable after NTP changes (Ctrl-C t
 if ! mcp_is_updated; then
 	aba_wait_show "Waiting for node updates to finish (Ctrl-C to skip)" 15 900 mcp_is_updated || true
 fi
+
+aba_success "NTP configuration completed successfully."

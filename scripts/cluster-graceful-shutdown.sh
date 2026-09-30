@@ -312,4 +312,6 @@ if [ "$wait" ] && { [ -s vmware.conf ] || [ -s kvm.conf ]; }; then
 	fi
 fi
 
+aba_success "Cluster shutdown completed successfully."
+
 exit 0
