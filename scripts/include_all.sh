@@ -454,8 +454,11 @@ normalize-aba-conf() {
 			-e "s/ask=0\b/ask=/g" -e "s/ask=false/ask=/g" \
 			-e "s/ask=1\b/ask=true/g" \
 			-e "s/excl_platform=0\b/excl_platform=/g" -e "s/excl_platform=false/excl_platform=/g" \
+			-e "s/excl_platform=1\b/excl_platform=true/g" \
 			-e "s/excl_operators=0\b/excl_operators=/g" -e "s/excl_operators=false/excl_operators=/g" \
+			-e "s/excl_operators=1\b/excl_operators=true/g" \
 			-e "s/excl_additional=0\b/excl_additional=/g" -e "s/excl_additional=false/excl_additional=/g" \
+			-e "s/excl_additional=1\b/excl_additional=true/g" \
 			-e "s/verify_conf=0\b/verify_conf=off/g" -e "s/verify_conf=false/verify_conf=off/g" \
 			-e "s/verify_conf=1\b/verify_conf=all/g" -e "s/verify_conf=true/verify_conf=all/g" \
 			-e 's#(machine_network=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/#\1\nexport prefix_length=#g' \
