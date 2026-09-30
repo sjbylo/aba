@@ -312,12 +312,6 @@ fi
 tui_log "Kicking off background CLI tool downloads (version-independent)"
 "$ABA_ROOT/scripts/cli-download-all.sh" --no-version >>"$_TUI_LOG_FILE" 2>&1
 
-# Background ISC generation (so it's ready before user opens Mirror Payload)
-if [[ -f "$ABA_ROOT/aba.conf" ]]; then
-	tui_log "Kicking off background ISC generation"
-	aba_isconf_generate_start
-fi
-
 # Wait for internet check to complete (this is the slow part)
 aba_inet_check_wait
 
@@ -882,6 +876,13 @@ fi
 _detect_mode
 
 tui_log "Final mode: $_TUI_MODE"
+
+# Background ISC generation (so it's ready before user opens Mirror Payload)
+# Only in connected modes — in DISCO the ISC is already baked into the bundle
+if [[ "$_TUI_MODE" != "DISCO" && -f "$ABA_ROOT/aba.conf" ]]; then
+	tui_log "Kicking off background ISC generation"
+	aba_isconf_generate_start
+fi
 
 while :; do
 	case "$_TUI_MODE" in
