@@ -40,17 +40,24 @@ if [[ "${1:-}" == "--dev" ]]; then
 	export BUNDLE_DEV_MODE=1
 	echo "*** DEV MODE: building bundles from branch 'dev' — NAS upload disabled ***"
 
-	# Guard: ensure the local workspace is on dev and up-to-date.
+	# Guard: ensure the local workspace is on the dev branch.
 	# Phase/test scripts run from this workspace, not from the bundle.
 	_current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || true
 	if [ "$_current_branch" != "dev" ]; then
 		echo "ERROR: --dev requires the workspace to be on the 'dev' branch (currently on '$_current_branch')" >&2
 		exit 1
 	fi
-	echo "Pulling latest 'dev' from origin ..."
-	if ! git -C "$REPO_ROOT" pull --ff-only origin dev; then
-		echo "ERROR: git pull failed — resolve local changes and try again" >&2
-		exit 1
+	# Warn if workspace is behind origin or has local modifications.
+	# Don't auto-pull — the user may have manually copied files for testing.
+	git -C "$REPO_ROOT" fetch origin dev --quiet 2>/dev/null || true
+	_local=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null)
+	_remote=$(git -C "$REPO_ROOT" rev-parse origin/dev 2>/dev/null)
+	if [ "$_local" != "$_remote" ]; then
+		echo "WARNING: local dev ($_local) differs from origin/dev ($_remote)"
+		echo "         Run 'git pull' if you want the latest, or ignore if testing local edits."
+	fi
+	if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
+		echo "WARNING: workspace has uncommitted changes (local edits or manual copies)"
 	fi
 fi
 
