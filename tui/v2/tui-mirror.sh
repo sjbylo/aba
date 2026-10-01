@@ -601,9 +601,16 @@ _ensure_platform_for_upgrade() {
 	[[ "$_excl" != "true" ]] && return 0
 	[[ -z "$_target" || "$_target" == "${ocp_version:-}" ]] && return 0
 
-	dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
-		--msgbox "$TUI2_MSG_UPGRADE_NEEDS_RELEASE" 0 0
-	tui_log "Guard: excl_platform auto-switched to false for upgrade to $_target"
+	local _msg="${TUI2_MSG_UPGRADE_NEEDS_RELEASE//%s/$_target}"
+
+	if dlg --backtitle "$(ui_backtitle)" --title "Release Images Required" \
+		--yes-label "Yes" --no-label "No" \
+		--yesno "$_msg" 0 0; then
+		replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
+		tui_log "Guard: excl_platform switched to false for upgrade to $_target"
+	else
+		tui_log "Guard: user chose to keep excl_platform=true for upgrade to $_target"
+	fi
 }
 
 # =============================================================================
@@ -631,9 +638,7 @@ _offer_excl_platform_for_save() {
 	[[ "$_mirror_ver" != "${ocp_version:-}" ]] && return 1
 
 	# All conditions met: version unchanged, no new upgrade target
-	local _msg
-	# shellcheck disable=SC2059
-	printf -v _msg "$TUI2_MSG_EXCL_PLATFORM_OFFER" "${ocp_version:-}"
+	local _msg="${TUI2_MSG_EXCL_PLATFORM_OFFER//%s/${ocp_version:-}}"
 
 	dlg --backtitle "$(ui_backtitle)" --title "Exclude Release Images?" \
 		--yes-label "Exclude" --no-label "Include All" \
