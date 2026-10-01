@@ -1233,7 +1233,7 @@ mirror_payload_menu() {
 		else
 			local _isc_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
 			if [[ -f "$_isc_file" ]]; then
-				_op_count=$(awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}' "$_isc_file")
+				_op_count=$(_isc_operator_count "$_isc_file")
 			fi
 		fi
 
