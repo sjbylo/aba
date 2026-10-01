@@ -165,6 +165,10 @@ case "$CLI_COMMAND" in
 		cmd_deploy "$CLI_POOL_LIST" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV"
 		exit 0
 		;;
+	verify-code)
+		cmd_verify_code "$CLI_POOL_LIST" "$_ABA_ROOT"
+		exit 0
+		;;
 	reschedule)
 		local_suites=()
 		read -ra local_suites <<< "$(resolve_suites "$_RUN_DIR")" || exit 1
@@ -527,7 +531,12 @@ if [ "$CLI_COMMAND" = "restart" ]; then
 	for p in $CLI_POOL_LIST; do
 		deploy_pool "$p" "$_ABA_ROOT" "$_DEPLOY_CONFIG_ENV" "$_source_tar"
 	done
-	[ -n "$_source_tar" ] && rm -f "$_source_tar"
+	if [ -n "$_source_tar" ]; then
+		rm -f "$_source_tar"
+		local _cksum
+		_cksum=$(_source_checksum "$_ABA_ROOT")
+		echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
+	fi
 
 	# 4) Re-launch last suite on each pool
 	echo ""
