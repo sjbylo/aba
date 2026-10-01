@@ -3880,6 +3880,13 @@ _isc_operator_count() {
 		jq -r '[.mirror.operators[]?.packages[]?.name] | length' 2>/dev/null || echo 0
 }
 
+_isc_additional_count() {
+	local _isc="${1:?Usage: _isc_additional_count <isc-path>}"
+	[ -f "$_isc" ] || { echo 0; return 0; }
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+		jq -r '[.mirror.additionalImages[]?.name] | length' 2>/dev/null || echo 0
+}
+
 # --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
 #
 # Usage: _run_oc_mirror_with_retry <action> <try_tot> <oc_mirror_cmd>
