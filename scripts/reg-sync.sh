@@ -138,7 +138,7 @@ ensure_sigstore_mirror_config "$reg_host:$reg_port"
 echo
 aba_info "Using oc-mirror version $(oc_mirror_version)"
 
-_print_operation_summary "sync" "$reg_host:$reg_port$reg_path"
+scripts/mirror-status.sh
 
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 

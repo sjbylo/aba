@@ -3858,55 +3858,39 @@ _oc_mirror_pin_catalogs_by_digest() {
 	fi
 }
 
-# --- Pre-operation summary (shared by reg-save.sh, reg-sync.sh) ---
+# --- ISC operator-parsing helpers (DRY -- shared by mirror-status.sh, etc.) ---
 #
-# Usage: _print_operation_summary <action> [registry]
-#   action:   "save" or "sync"
-#   registry: registry host:port/path (sync only)
-# Reads: ocp_version, ocp_channel, ocp_upgrade_to, excl_platform, excl_operators,
-#         excl_additional from caller's environment; ISC from data/imageset-config.yaml.
-_print_operation_summary() {
-	local _action="${1:-save}" _registry="${2:-}"
-	local _isc="data/imageset-config.yaml"
-	local _ver="${ocp_version:-?}"
-	local _chan="${ocp_channel:-?}"
+# Parse operator names from an ImageSet Configuration YAML.
+# Each package block has "- name: op-name" then "channels:" then "- name: chan".
+# The awk skips channel "- name:" entries by tracking "channels:" sections.
 
-	# Version display (with upgrade target if set)
-	local _ver_display="$_ver ($_chan)"
-	if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$_ver" ]; then
-		_ver_display="$_ver → $ocp_upgrade_to ($_chan)"
-	fi
+# Usage: _isc_operator_list <isc-path>
+# Prints: comma-separated sorted operator names (empty string if none)
+_isc_operator_list() {
+	local _isc="${1:?Usage: _isc_operator_list <isc-path>}"
+	[ -f "$_isc" ] || return 0
+	awk '
+		/packages:/ { in_pkg=1; skip=0; next }
+		/catalog:/ { in_pkg=0 }
+		in_pkg && /channels:/ { skip=1; next }
+		in_pkg && skip && /- name:/ { skip=0; next }
+		in_pkg && /- name:/ { sub(/.*- name: */, ""); sub(/ *#.*/, ""); print }
+	' "$_isc" | sort | paste -sd, -
+}
 
-	# Operator count + preview from ISC
-	local _op_count=0 _ops_preview="none"
-	if [ -f "$_isc" ]; then
-		_op_count=$(awk '/packages:/{p=1} p && /- name:/{n++} /^[^ ]/{p=0} END{print n+0}' "$_isc")
-		if [ "$_op_count" -gt 0 ]; then
-			_ops_preview=$(awk '/packages:/{p=1} p && /- name:/{gsub(/.*- name: */,""); names=names sep $0; sep=", "; n++} /^[^ ]/{p=0} END{print names}' "$_isc")
-			if [ "$_op_count" -gt 8 ]; then
-				_ops_preview=$(echo "$_ops_preview" | cut -d, -f1-8 | sed 's/,/, /g')
-				_ops_preview="${_ops_preview}, ... (+$(( _op_count - 8 )) more)"
-			fi
-		fi
-	fi
-
-	# Excluded sections
-	local _excl=""
-	[ "${excl_platform:-}" = "true" ] && _excl="${_excl:+$_excl, }release images"
-	[ "${excl_operators:-}" = "true" ] && _excl="${_excl:+$_excl, }operators"
-	[ "${excl_additional:-}" = "true" ] && _excl="${_excl:+$_excl, }additional images"
-
-	echo
-	aba_info "About to ${_action}:"
-	aba_info "  OCP: ${_ver_display}"
-	if [ "$_op_count" -gt 0 ]; then
-		aba_info "  Operators (${_op_count}): ${_ops_preview}"
-	else
-		aba_info "  Operators: none"
-	fi
-	[ -n "$_registry" ] && aba_info "  Registry: ${_registry}"
-	[ -n "$_excl" ] && aba_warn "  Excluded: ${_excl}"
-	echo
+# Usage: _isc_operator_count <isc-path>
+# Prints: integer count of operators (0 if none or file missing)
+_isc_operator_count() {
+	local _isc="${1:?Usage: _isc_operator_count <isc-path>}"
+	[ -f "$_isc" ] || { echo 0; return 0; }
+	awk '
+		/packages:/ { in_pkg=1; skip=0; next }
+		/catalog:/ { in_pkg=0 }
+		in_pkg && /channels:/ { skip=1; next }
+		in_pkg && skip && /- name:/ { skip=0; next }
+		in_pkg && /- name:/ { n++ }
+		END { print n+0 }
+	' "$_isc"
 }
 
 # --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
