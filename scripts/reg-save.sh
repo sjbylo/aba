@@ -139,7 +139,7 @@ fi
 
 aba_info "Using oc-mirror version $(oc_mirror_version)"
 
-scripts/mirror-status.sh
+scripts/mirror-status.sh op=save
 
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 

@@ -9,6 +9,7 @@
 # CWD:       mirror/ directory
 # REQUIRES:  scripts/include_all.sh (normalize functions, ask(), ISC helpers)
 # PRODUCES:  Human-readable summary (default), sourceable key=value (--shell),
+#            compact operation summary (op=save, op=sync),
 #            or interactive preflight checks (--preflight)
 # SIDE EFFECTS: --preflight may update aba.conf and regenerate ISC
 # IDEMPOTENT: Yes (default and --shell are read-only)
@@ -20,10 +21,13 @@ source scripts/include_all.sh
 [ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
 
 _mode="human"
+_op=""
 for arg in "$@"; do
 	case "$arg" in
-		shell|--shell)       _mode="shell" ;;
+		shell|--shell)         _mode="shell" ;;
 		preflight|--preflight) _mode="preflight" ;;
+		op=save)               _mode="op"; _op="save" ;;
+		op=sync)               _mode="op"; _op="sync" ;;
 	esac
 done
 
@@ -73,6 +77,9 @@ _excl_additional="${excl_additional:-}"
 # Operators from ISC
 _op_count=$(_isc_operator_count "$_isc")
 _operators=$(_isc_operator_list "$_isc")
+
+# Additional images from ISC
+_add_count=$(_isc_additional_count "$_isc")
 
 # ISC state
 _isc_exists=false
@@ -130,6 +137,41 @@ preflight)
 			aba_warn "Continuing WITHOUT release images. The upgrade may fail on the disconnected side."
 		fi
 	fi
+	;;
+
+op)
+	# Compact operation-specific summary (called by reg-save.sh / reg-sync.sh)
+	_ver_display="$_ver"
+	if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
+		_ver_display="$_ver → $_upgrade_to"
+	fi
+	[ -n "$_chan" ] && _ver_display="$_ver_display ($_chan)"
+
+	# Build payload description
+	_parts=""
+	if [ "$_excl_platform" != "true" ]; then
+		_parts="release"
+	fi
+	if [ "$_op_count" -gt 0 ] && [ "$_excl_operators" != "true" ]; then
+		_parts="${_parts:+$_parts, }$_op_count operator(s)"
+	fi
+	if [ "$_add_count" -gt 0 ] && [ "$_excl_additional" != "true" ]; then
+		_parts="${_parts:+$_parts, }$_add_count additional image(s)"
+	fi
+	[ -z "$_parts" ] && _parts="(nothing — all sections excluded)"
+
+	if [ "$_op" = "save" ]; then
+		aba_info "Saving to disk: OCP $_ver_display — $_parts"
+	else
+		aba_info "Syncing to registry: OCP $_ver_display — $_parts"
+	fi
+
+	# Warn about exclusions
+	_excl_list=""
+	[ "$_excl_platform" = "true" ] && _excl_list="release images"
+	[ "$_excl_operators" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }operators"
+	[ "$_excl_additional" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }additional images"
+	[ -n "$_excl_list" ] && aba_warn "Excluded: $_excl_list"
 	;;
 
 *)
@@ -194,3 +236,5 @@ preflight)
 	echo
 	;;
 esac
+
+exit 0
