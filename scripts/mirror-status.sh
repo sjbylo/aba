@@ -17,6 +17,8 @@ set -eo pipefail
 
 source scripts/include_all.sh
 
+[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1
+
 _mode="human"
 for arg in "$@"; do
 	case "$arg" in
@@ -172,23 +174,23 @@ preflight)
 		[ "$_isc_user_managed" = "true" ] && _isc_display="$_isc_display (user-managed)"
 	fi
 
-	echo >&2
-	echo "[ABA] Mirror status:" >&2
-	echo "[ABA]   OCP:          ${local_ver_display}" >&2
-	echo "[ABA]   Registry:     ${_reg_display}" >&2
+	echo
+	aba_info "Mirror status:"
+	aba_info "  OCP:          ${local_ver_display}"
+	aba_info "  Registry:     ${_reg_display}"
 	if [ "$_op_count" -gt 0 ]; then
-		echo "[ABA]   Operators (${_op_count}): ${_ops_display}" >&2
+		aba_info "  Operators (${_op_count}): ${_ops_display}"
 	else
-		echo "[ABA]   Operators:    none" >&2
+		aba_info "  Operators:    none"
 	fi
-	echo "[ABA]   ISC:          ${_isc_display}" >&2
-	[ -n "$_excl_display" ] && echo "[ABA]   Excluded:     ${_excl_display}" >&2
+	aba_info "  ISC:          ${_isc_display}"
+	[ -n "$_excl_display" ] && aba_warn "  Excluded:     ${_excl_display}"
 	if [ "$_upgrade_needs_platform" = "true" ]; then
-		echo "[ABA]   Warning:      upgrade requires release images but they are excluded!" >&2
+		aba_warn "  Warning:      upgrade requires release images but they are excluded!"
 	fi
 	if [ -n "$_last_action" ]; then
-		echo "[ABA]   Last action:  ${_last_action}${_last_action_at:+ (${_last_action_at})}" >&2
+		aba_info "  Last action:  ${_last_action}${_last_action_at:+ (${_last_action_at})}"
 	fi
-	echo >&2
+	echo
 	;;
 esac
