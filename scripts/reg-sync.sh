@@ -32,7 +32,9 @@ aba_debug "Configuration validated"
 require_internet_and_pull_secret "$regcreds_dir/pull-secret-mirror.json"
 
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
-aba_info "Verifying release image availability for v${ocp_version} ..."
+_verify_versions="v${ocp_version}"
+[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
+aba_info "Verifying release image availability for ${_verify_versions} ..."
 if ! verify_release_version_exists "$ocp_version"; then
 	aba_abort \
 		"Release version $ocp_version not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
@@ -40,7 +42,6 @@ if ! verify_release_version_exists "$ocp_version"; then
 		"Use 'aba ocp-versions' to list available versions."
 fi
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
-	aba_info "Verifying release image availability for upgrade target v${ocp_upgrade_to} ..."
 	if ! verify_release_version_exists "$ocp_upgrade_to"; then
 		aba_abort \
 			"Upgrade target version $ocp_upgrade_to not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
@@ -135,9 +136,6 @@ aba_debug "data_dir=$data_dir reg_root=$reg_root"
 
 ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
-echo
-aba_info "Using oc-mirror version $(oc_mirror_version)"
-
 scripts/mirror-status.sh op=sync
 
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
@@ -148,7 +146,6 @@ if [ -s ./reg-uninstall.sh ]; then
 		"Ensure there is enough disk space under $reg_root." \
 		"This can take 5 to 20 minutes to complete or even longer if Operator images are being copied!"
 fi
-echo
 
 # NOTE: that the cache is always used *except* for mirror-to-mirror (sync) workflows, where it is not used! See reg-save.sh and reg-load.sh.
 # Set TMPDIR path (defer mkdir to just before oc-mirror needs it)
