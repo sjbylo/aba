@@ -66,13 +66,12 @@ Then restart the TUI." 0 0
 	local _op_summary="Operators: none"
 	local _isc="$ABA_ROOT/mirror/data/imageset-config.yaml"
 	if [[ -f "$_isc" ]]; then
-		local _op_names
-		_op_names=$(awk '/packages:/,0 { if (/^[[:space:]]*- name:/ && !/\"/) { sub(/.*- name: */, ""); sub(/ *#.*/, ""); print } }' "$_isc" | sort -u)
-		local _op_count
-		_op_count=$(echo "$_op_names" | grep -c '.' || true)
+		local _op_names _op_count
+		_op_names=$(_isc_operator_list "$_isc")
+		_op_count=$(_isc_operator_count "$_isc")
 		if [[ $_op_count -gt 0 ]]; then
 			local _op_list _op_short
-			_op_list=$(echo "$_op_names" | tr '\n' ', ' | sed 's/,$//')
+			_op_list=$(echo "$_op_names" | sed 's/,/, /g')
 			_op_short=$(echo "$_op_list" | cut -c1-60)
 			[[ ${#_op_list} -gt 60 ]] && _op_short="${_op_short}..."
 			_op_summary="Operators: ${_op_count} (${_op_short})"

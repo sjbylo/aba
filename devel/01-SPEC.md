@@ -693,3 +693,6 @@ not mandatory for every script.
 - `[ABA]` prefix only on operational messages, not banners
 - Prefer `if ! cmd; then` over disabling `set -e` / ERR traps
 - Comments explain WHY, not WHAT
+- Scripts invoked by Makefile recipes must default `INFO_ABA=1` so
+  `aba_info`/`aba_warn` output works both via `aba` CLI and `make` directly:
+  `[ -z "${INFO_ABA+x}" ] && export INFO_ABA=1`
