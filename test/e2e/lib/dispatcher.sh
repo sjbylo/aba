@@ -236,6 +236,9 @@ _dispatch_suite() {
 		_tar=$(_make_source_tar "$_ABA_ROOT")
 		if sync_source "$target" "$_tar"; then
 			echo "    Source deployed to con${pool_num}"
+			local _cksum
+			_cksum=$(_source_checksum "$_ABA_ROOT")
+			echo "$_cksum $(date '+%Y-%m-%d %H:%M:%S')" > /tmp/e2e-last-deploy.meta
 		else
 			echo "    WARNING: source deploy to con${pool_num} failed"
 		fi
