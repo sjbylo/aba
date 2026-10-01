@@ -232,34 +232,9 @@ ensure_sigstore_mirror_config "$reg_host:$reg_port"
 # Reassure the user: summarize what this load will apply (tag-based ISC).
 # Reuse transfer-info.sh (same parser as TUI / aba transfer-info) — do not
 # invent a second ISC parser. Prefer transfer tar content when present.
-echo
-if _ti_out=$(scripts/transfer-info.sh --shell 2>/dev/null); then
-	eval "$_ti_out"
-	_load_ver="${transfer_ocp_version:-}"
-	if [ -n "${transfer_upgrade_to:-}" ] && [ "$transfer_upgrade_to" != "${transfer_ocp_version:-}" ]; then
-		_load_ver="${transfer_ocp_version} → ${transfer_upgrade_to}"
-	fi
-	aba_info "About to load:"
-	if [ -n "$_load_ver" ]; then
-		aba_info "  OCP: ${_load_ver} (${transfer_ocp_channel:-unknown})"
-	fi
-	if [ "${transfer_operator_count:-0}" -gt 0 ] 2>/dev/null; then
-		_ops_preview=$(echo "${transfer_operators:-}" | sed 's/,/, /g')
-		if [ "${transfer_operator_count}" -gt 8 ]; then
-			_ops_preview=$(echo "${transfer_operators:-}" | cut -d, -f1-8 | sed 's/,/, /g')
-			_ops_preview="${_ops_preview}, ... (+$(( transfer_operator_count - 8 )) more)"
-		fi
-		aba_info "  Operators (${transfer_operator_count}): ${_ops_preview}"
-	else
-		aba_info "  Operators: none"
-	fi
-	aba_info "  Registry: ${reg_host}:${reg_port}${reg_path}"
-	echo
-fi
+scripts/mirror-status.sh op=load
 
-aba_info "Using oc-mirror version $(oc_mirror_version)"
 aba_info "Now loading (disk2mirror) the images from mirror/data/ directory to registry $reg_host:$reg_port$reg_path."
-echo
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)
 if [ -s ./reg-uninstall.sh ]; then
@@ -267,7 +242,6 @@ if [ -s ./reg-uninstall.sh ]; then
 		"Ensure there is enough disk space under $reg_root." \
 		"This can take 5 to 20 minutes to complete or even longer if Operator images are being loaded!"
 fi
-echo
 
 # Now using data_dir so reg_root=$data_dir/quay-install
 # Set TMPDIR and OC_MIRROR_CACHE paths (defer mkdir to just before oc-mirror needs them)

@@ -3976,7 +3976,7 @@ _run_oc_mirror_with_retry() {
 		if [ $try -gt 1 ]; then
 			aba_info "Attempt ($try/$try_tot). [timeout=${image_timeout}, parallel=${parallel_images}]"
 		else
-			aba_info -n "Attempt ($try/$try_tot)."
+			aba_info -n "Attempt ($try/$try_tot) using oc-mirror v$(oc_mirror_version)."
 			[ $try_tot -le 1 ] && echo_white " Set number of retries with 'aba -d mirror $action --retry <count>'" || echo
 		fi
 		aba_info "Running: $cmd"

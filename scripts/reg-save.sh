@@ -30,7 +30,9 @@ aba_debug "Configuration validated"
 require_internet_and_pull_secret
 
 # Pre-flight: verify release version(s) exist in Cincinnati graph before running oc-mirror
-aba_info "Verifying release image availability for v${ocp_version} ..."
+_verify_versions="v${ocp_version}"
+[ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ] && _verify_versions="$_verify_versions + upgrade target v${ocp_upgrade_to}"
+aba_info "Verifying release image availability for ${_verify_versions} ..."
 if ! verify_release_version_exists "$ocp_version"; then
 	aba_abort \
 		"Release version $ocp_version not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
@@ -38,7 +40,6 @@ if ! verify_release_version_exists "$ocp_version"; then
 		"Use 'aba ocp-versions' to list available versions."
 fi
 if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
-	aba_info "Verifying release image availability for upgrade target v${ocp_upgrade_to} ..."
 	if ! verify_release_version_exists "$ocp_upgrade_to"; then
 		aba_abort \
 			"Upgrade target version $ocp_upgrade_to not found in '${ocp_channel}' channel (arch: ${ARCH:-amd64})." \
@@ -137,8 +138,6 @@ elif [ $avail -lt 51250 ]; then
 	echo >&2
 fi
 
-aba_info "Using oc-mirror version $(oc_mirror_version)"
-
 scripts/mirror-status.sh op=save
 
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
@@ -146,7 +145,6 @@ aba_info "Now saving (mirror2disk) images from external network to mirror/data/ 
 aba_warn \
 	"Ensure there is enough disk space under $PWD/data." \
 	"This can take 5 to 20 minutes to complete or even longer if Operator images are being saved!"
-echo >&2
 
 [ ! "$data_dir" ] && data_dir=\~
 reg_root=$data_dir/quay-install

@@ -4,7 +4,7 @@
 # INTENT:    Unified source of truth for all mirror status queries and
 #            pre-operation validation. Follows the transfer-info.sh pattern.
 # CALLED BY: make -C mirror status, make -C mirror status-preflight,
-#            reg-save.sh (inline summary), reg-sync.sh (inline summary),
+#            reg-save.sh, reg-sync.sh, reg-load.sh (inline summary),
 #            TUI (--shell mode)
 # CWD:       mirror/ directory
 # REQUIRES:  scripts/include_all.sh (normalize functions, ask(), ISC helpers)
@@ -28,6 +28,7 @@ for arg in "$@"; do
 		preflight|--preflight) _mode="preflight" ;;
 		op=save)               _mode="op"; _op="save" ;;
 		op=sync)               _mode="op"; _op="sync" ;;
+		op=load)               _mode="op"; _op="load" ;;
 	esac
 done
 
@@ -140,38 +141,57 @@ preflight)
 	;;
 
 op)
-	# Compact operation-specific summary (called by reg-save.sh / reg-sync.sh)
-	_ver_display="$_ver"
-	if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
-		_ver_display="$_ver → $_upgrade_to"
-	fi
-	[ -n "$_chan" ] && _ver_display="$_ver_display ($_chan)"
+	# Compact operation-specific summary (called by reg-save.sh / reg-sync.sh / reg-load.sh)
+	if [ "$_op" = "load" ]; then
+		# Load reads from transfer archive metadata, not config
+		if _ti_out=$(scripts/transfer-info.sh --shell 2>/dev/null); then
+			eval "$_ti_out"
+			_ver_display="${transfer_ocp_version:-unknown}"
+			if [ -n "${transfer_upgrade_to:-}" ] && [ "${transfer_upgrade_to}" != "${transfer_ocp_version:-}" ]; then
+				_ver_display="${transfer_ocp_version} → ${transfer_upgrade_to}"
+			fi
+			[ -n "${transfer_ocp_channel:-}" ] && _ver_display="$_ver_display (${transfer_ocp_channel})"
 
-	# Build payload description
-	_parts=""
-	if [ "$_excl_platform" != "true" ]; then
-		_parts="release"
-	fi
-	if [ "$_op_count" -gt 0 ] && [ "$_excl_operators" != "true" ]; then
-		_parts="${_parts:+$_parts, }$_op_count operator(s)"
-	fi
-	if [ "$_add_count" -gt 0 ] && [ "$_excl_additional" != "true" ]; then
-		_parts="${_parts:+$_parts, }$_add_count additional image(s)"
-	fi
-	[ -z "$_parts" ] && _parts="(nothing — all sections excluded)"
-
-	if [ "$_op" = "save" ]; then
-		aba_info "Saving to disk: OCP $_ver_display — $_parts"
+			_parts=""
+			[ "${transfer_operator_count:-0}" -gt 0 ] 2>/dev/null && _parts="${transfer_operator_count} operator(s)"
+			aba_info "Loading to registry: OCP $_ver_display${_parts:+ — $_parts}"
+		else
+			aba_info "Loading to registry: ${_reg_host}:${_reg_port}${_reg_path}"
+		fi
 	else
-		aba_info "Syncing to registry: OCP $_ver_display — $_parts"
-	fi
+		# Save/sync read from config + ISC
+		_ver_display="$_ver"
+		if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
+			_ver_display="$_ver → $_upgrade_to"
+		fi
+		[ -n "$_chan" ] && _ver_display="$_ver_display ($_chan)"
 
-	# Warn about exclusions
-	_excl_list=""
-	[ "$_excl_platform" = "true" ] && _excl_list="release images"
-	[ "$_excl_operators" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }operators"
-	[ "$_excl_additional" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }additional images"
-	[ -n "$_excl_list" ] && aba_warn "Excluded: $_excl_list"
+		# Build payload description
+		_parts=""
+		if [ "$_excl_platform" != "true" ]; then
+			_parts="release"
+		fi
+		if [ "$_op_count" -gt 0 ] && [ "$_excl_operators" != "true" ]; then
+			_parts="${_parts:+$_parts, }$_op_count operator(s)"
+		fi
+		if [ "$_add_count" -gt 0 ] && [ "$_excl_additional" != "true" ]; then
+			_parts="${_parts:+$_parts, }$_add_count additional image(s)"
+		fi
+		[ -z "$_parts" ] && _parts="(nothing — all sections excluded)"
+
+		if [ "$_op" = "save" ]; then
+			aba_info "Saving to disk: OCP $_ver_display — $_parts"
+		else
+			aba_info "Syncing to registry: OCP $_ver_display — $_parts"
+		fi
+
+		# Warn about exclusions
+		_excl_list=""
+		[ "$_excl_platform" = "true" ] && _excl_list="release images"
+		[ "$_excl_operators" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }operators"
+		[ "$_excl_additional" = "true" ] && _excl_list="${_excl_list:+$_excl_list, }additional images"
+		[ -n "$_excl_list" ] && aba_warn "Excluded: $_excl_list"
+	fi
 	;;
 
 *)
