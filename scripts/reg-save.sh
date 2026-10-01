@@ -72,20 +72,8 @@ if [ "${ocp_upgrade_to:-}" ] && [ "$ocp_upgrade_to" != "$ocp_version" ]; then
 			"Verify upgrade paths at: https://access.redhat.com/labs/ocpupgradegraph/update_path/"
 	fi
 
-	# Guard: upgrade requires release images — excl_platform=true would omit them
-	if [ "${excl_platform:-}" = "true" ]; then
-		aba_warn "Upgrade target set (${ocp_version} → ${ocp_upgrade_to}) but release images are excluded." \
-			"The upgrade will fail without release images."
-		if ask "Include release images"; then
-			replace-value-conf -n excl_platform -v "false" -f "$ABA_ROOT/aba.conf"
-			excl_platform=false
-			aba_info "Enabled release images in aba.conf (excl_platform=false)."
-			aba_info "Regenerating ImageSet configuration..."
-			scripts/reg-create-imageset-config.sh -f 1
-		else
-			aba_warn "Continuing WITHOUT release images. The upgrade may fail on the disconnected side."
-		fi
-	fi
+	# Note: upgrade + excl_platform=true guard is handled by the status-preflight
+	# Makefile dependency which runs before this script. See mirror-status.sh --preflight.
 fi
 
 # Still downloading?
@@ -151,7 +139,7 @@ fi
 
 aba_info "Using oc-mirror version $(oc_mirror_version)"
 
-_print_operation_summary "save"
+scripts/mirror-status.sh
 
 aba_info "Now saving (mirror2disk) images from external network to mirror/data/ directory."
 
