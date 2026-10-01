@@ -3860,22 +3860,15 @@ _oc_mirror_pin_catalogs_by_digest() {
 
 # --- ISC operator-parsing helpers (DRY -- shared by mirror-status.sh, etc.) ---
 #
-# Parse operator names from an ImageSet Configuration YAML.
-# Each package block has "- name: op-name" then "channels:" then "- name: chan".
-# The awk skips channel "- name:" entries by tracking "channels:" sections.
+# Parse operator names from an ImageSet Configuration YAML using yaml2json + jq.
 
 # Usage: _isc_operator_list <isc-path>
 # Prints: comma-separated sorted operator names (empty string if none)
 _isc_operator_list() {
 	local _isc="${1:?Usage: _isc_operator_list <isc-path>}"
 	[ -f "$_isc" ] || return 0
-	awk '
-		/packages:/ { in_pkg=1; skip=0; next }
-		/catalog:/ { in_pkg=0 }
-		in_pkg && /channels:/ { skip=1; next }
-		in_pkg && skip && /- name:/ { skip=0; next }
-		in_pkg && /- name:/ { sub(/.*- name: */, ""); sub(/ *#.*/, ""); print }
-	' "$_isc" | sort | paste -sd, -
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+		jq -r '[.mirror.operators[]?.packages[]?.name] | sort | join(",")' 2>/dev/null
 }
 
 # Usage: _isc_operator_count <isc-path>
@@ -3883,14 +3876,8 @@ _isc_operator_list() {
 _isc_operator_count() {
 	local _isc="${1:?Usage: _isc_operator_count <isc-path>}"
 	[ -f "$_isc" ] || { echo 0; return 0; }
-	awk '
-		/packages:/ { in_pkg=1; skip=0; next }
-		/catalog:/ { in_pkg=0 }
-		in_pkg && /channels:/ { skip=1; next }
-		in_pkg && skip && /- name:/ { skip=0; next }
-		in_pkg && /- name:/ { n++ }
-		END { print n+0 }
-	' "$_isc"
+	python3 -c 'import yaml, json, sys; print(json.dumps(yaml.safe_load(sys.stdin)))' < "$_isc" | \
+		jq -r '[.mirror.operators[]?.packages[]?.name] | length' 2>/dev/null || echo 0
 }
 
 # --- oc-mirror retry loop (shared by reg-save.sh, reg-sync.sh, reg-load.sh) ---
