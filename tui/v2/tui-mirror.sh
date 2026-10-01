@@ -1228,7 +1228,7 @@ mirror_payload_menu() {
 
 		# Build context summary
 		local _op_count=0
-		if declare -p OP_BASKET &>/dev/null && [[ ${#OP_BASKET[@]} -gt 0 ]]; then
+		if declare -p OP_BASKET &>/dev/null; then
 			_op_count=${#OP_BASKET[@]}
 		else
 			local _isc_file="$ABA_ROOT/mirror/data/imageset-config.yaml"
@@ -1262,13 +1262,13 @@ mirror_payload_menu() {
 		fi
 
 		# Prepare Upgrade label
-		local _upg_label="Prepare Upgrade (beta)"
+		local _upg_label="Prepare Upgrade"
 		local _upg_target=""
 		if [[ -f "$ABA_ROOT/mirror/mirror.conf" ]]; then
 			_upg_target=$(grep '^ocp_upgrade_to=' "$ABA_ROOT/mirror/mirror.conf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*//')
 		fi
 		if [[ -n "$_upg_target" && "$_upg_target" != "${ocp_version:-}" ]]; then
-			_upg_label="Prepare Upgrade (beta) [→ ${_upg_target}]"
+			_upg_label="Prepare Upgrade [→ ${_upg_target}]"
 		fi
 
 		local _payload_summary="OCP ${ocp_version:-?} ${ocp_channel:-}"
@@ -1579,6 +1579,10 @@ Selected operators will be included in the ImageSet config."
 						9 50
 					local _nb_rc=$?
 					[[ $_nb_rc -ne 0 ]] && continue
+					# Persist the empty selection if it changed
+					if [[ "$_OP_BASKET_DIRTY" == "true" ]]; then
+						_persist_operator_basket
+					fi
 				fi
 				tui_log "Operator selection done with $basket_count operators"
 				# Check for companion image sets for newly added operator sets
@@ -1981,14 +1985,15 @@ _tui_image_set_checklist() {
 	for _add_name in "${_to_add[@]}"; do
 		if _image_set_is_dynamic "$_add_name"; then
 			# Dynamic set (AI): auto-detect version, confirm
-			local _ver
+			local _ver _ocp_short
+			_ocp_short=$(_ver_minor "${ocp_version:-}")
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Detecting RHOAI version..." 3 40
 			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Could not detect RHOAI version.\n\nCheck internet connectivity and try again." 0 0
-				tui_log "Failed to detect RHOAI version for image set: $_add_name"
+					"Could not detect RHOAI version.\n\nThe rhods-operator was not found in the\nOCP ${_ocp_short} operator catalog." 0 0
+				tui_log "Failed to detect RHOAI version for image set: $_add_name (OCP $_ocp_short)"
 				_failed=true
 				continue
 			fi
@@ -2099,14 +2104,15 @@ _tui_offer_companion_images() {
 		[[ -z "$_set_name" ]] && continue
 
 		if _image_set_is_dynamic "$_set_name"; then
-			local _ver
+			local _ver _ocp_short
+			_ocp_short=$(_ver_minor "${ocp_version:-}")
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Detecting RHOAI version..." 3 40
 			_ver=$(detect_rhoai_version 2>/dev/null) || _ver=""
 			if [[ -z "$_ver" ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
-					"Could not detect RHOAI version.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
-				tui_log "Failed to detect RHOAI version"
+					"Could not detect RHOAI version.\n\nThe rhods-operator was not found in the\nOCP ${_ocp_short} operator catalog.\n\nYou can add AI images later via:\nMirror Payload (P) → Additional Images (G) → Recommended Images (S)" 0 0
+				tui_log "Failed to detect RHOAI version (OCP $_ocp_short)"
 				continue
 			fi
 			dlg --backtitle "$(ui_backtitle)" --infobox \

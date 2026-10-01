@@ -1973,7 +1973,8 @@ tui_advanced_menu() {
 				adv_items+=("X" "Switch to Partially Disconnected (mirror)")
 				;;
 			DISCO)
-				adv_items+=("X" "Switch to Connected Mode")
+				adv_items+=("X" "Switch to Partially Disconnected (mirror)")
+				adv_items+=("Y" "Switch to Fully Connected (direct)")
 				;;
 		esac
 		adv_items+=("" "──── Danger Zone ───────────────────")
@@ -2004,7 +2005,7 @@ U - Uninstall Mirror Registry: Removes the mirror registry container\n\
     and ALL mirrored data. You will need to re-sync images after reinstall.\n\n\
 F - Monitor Cluster Installation: Re-attach to a running install\n\
     and wait for completion. Rarely needed since ABA auto-detects.\n\n\
-X/Z - Switch Mode: Manually switch between Connected, Partially\n\
+X/Y/Z - Switch Mode: Manually switch between Connected, Partially\n\
     Disconnected, and Fully Disconnected workflows.\n\n\
 W - Refresh Cluster: Destroys existing VMs and triggers a fresh\n\
     installation from scratch. All current cluster data is lost.\n\n\
@@ -2095,10 +2096,16 @@ R - Reset ABA: Cleans configuration and state files so you can\n\
 						return 0
 						;;
 					DISCO)
-						disco_reset
+						disco_reset "CONNO"
 						return $?
 						;;
 				esac
+				;;
+			"Y")
+				if [[ "$_TUI_MODE" == "DISCO" ]]; then
+					disco_reset "DIRECT"
+					return $?
+				fi
 				;;
 			"Z")
 				if [[ "$_TUI_MODE" == "CONNO" ]]; then
@@ -2150,7 +2157,7 @@ cluster_day2_menu() {
 			"L" "Cluster Login Terminal" \
 			"H" "SSH into Rendezvous Server" \
 			"" "──── Lifecycle ────────────────────" \
-			"U" "Upgrade cluster (beta)" \
+			"U" "Upgrade cluster" \
 			"G" "Graceful cluster shutdown" \
 			"T" "Graceful cluster startup" \
 			"" "──── Cleanup ──────────────────────" \

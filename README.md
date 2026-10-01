@@ -1143,6 +1143,20 @@ Images are stored in `images.conf` (next to `aba.conf`). You can also create a p
 
 After adding images, run `aba -d mirror sync` (or `save`/`load`) to mirror them.
 
+### Excluding Image Categories (`excl_*`)
+
+Three boolean variables in `aba.conf` control which image categories are included in the ImageSetConfiguration:
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `excl_platform` | `false` | Exclude OCP platform/release images. Set to `true` to mirror only operators and additional images (e.g. operator-only updates to an air-gapped host that already has release images). |
+| `excl_operators` | `false` | Exclude operator images. |
+| `excl_additional` | `false` | Exclude additional images (`images.conf`). |
+
+These can also be set via CLI flags: `aba save --excl-platform`, `aba bundle --excl-platform`, etc.
+
+> **Caution:** With `excl_platform=true`, cluster installation is not possible — the TUI will show `[release image missing]` on the Install Cluster item. Leave all three at `false` (the default) unless you have a specific reason to exclude a category.
+
 [Back to top](#quick-start)
 
 ## Connect OperatorHub to Internal Mirror Registry

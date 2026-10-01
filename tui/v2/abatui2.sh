@@ -893,6 +893,7 @@ while :; do
 				_detect_mode
 				continue
 			fi
+			[[ "$_TUI_MODE" != "DISCO" ]] && continue
 			break
 			;;
 		CONNO)
