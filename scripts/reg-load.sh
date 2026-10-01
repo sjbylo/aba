@@ -46,6 +46,26 @@ aba_debug "Configuration validated"
 # aba-transfer.tar path (used in both early-exit and normal flow)
 _transfer_tar="data/aba-transfer.tar"
 
+# Back up config files before transfer tar overwrites them.
+# Allows users to retrace their steps and recover previous config.
+_backup_configs() {
+	local _ts _backup_dir _f _base
+	_ts=$(date +%Y%m%d-%H%M%S)
+	_backup_dir="data/.backup"
+	mkdir -p "$_backup_dir"
+
+	for _f in data/imageset-config.yaml \
+	          data/imageset-config-digest.yaml \
+	          data/aba-transfer-metadata.json \
+	          ../aba.conf \
+	          mirror.conf; do
+		[ -f "$_f" ] || continue
+		_base=$(basename "$_f")
+		cp -p "$_f" "${_backup_dir}/${_base}.${_ts}"
+		aba_debug "Backed up $_f → ${_backup_dir}/${_base}.${_ts}"
+	done
+}
+
 # --- Guard: archive files must be present ---
 # Config-only transfers (aba-transfer-configs.tar without mirror_*.tar) are valid.
 # Extract configs and exit gracefully if no images to load.
@@ -55,6 +75,7 @@ if ! ls data/mirror_*.tar >/dev/null 2>&1; then
 	[ -f "$_transfer_tar" ] && _has_configs=1
 
 	if [ "$_has_configs" ]; then
+		_backup_configs
 		# Extract transfer tars (configs only, no images)
 		if [ -f "data/aba-transfer-configs.tar" ]; then
 			aba_info "Found config-only transfer: data/aba-transfer-configs.tar"
@@ -99,6 +120,8 @@ fi
 
 if [ -f "$_transfer_tar" ]; then
 	aba_debug "Found transfer config: $_transfer_tar"
+
+	_backup_configs
 
 	# Drop leftovers from a prior load before unpack. Non-upgrade transfer tars
 	# omit metadata (and sometimes the digest ISC); tar xf will not remove

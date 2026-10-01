@@ -137,6 +137,9 @@ ensure_sigstore_mirror_config "$reg_host:$reg_port"
 
 echo
 aba_info "Using oc-mirror version $(oc_mirror_version)"
+
+_print_operation_summary "sync" "$reg_host:$reg_port$reg_path"
+
 aba_info "Now syncing (mirror2mirror) images from external network to registry $reg_host:$reg_port$reg_path. "
 
 # Check if *aba installed Quay* (if so, show warning) or it's an existing reg. (no need to show warning)

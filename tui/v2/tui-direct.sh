@@ -82,6 +82,11 @@ tui_change_version() {
 					local _ver_short
 					_ver_short=$(_ver_minor "$ocp_version")
 					tui_log "Starting catalog downloads for OpenShift $_ver_short"
+					# Reset cached catalog tasks so we get fresh data for the new version
+					local _cat
+					for _cat in redhat-operator certified-operator community-operator; do
+						run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
+					done
 					download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
 
 					tui_kick_isconf_regen >>"$_TUI_LOG_FILE" 2>&1
@@ -181,6 +186,11 @@ direct_wizard() {
 					_direct_save_config
 					if [[ "$_TUI_MODE" != "DIRECT" ]]; then
 						tui_log "Starting catalog downloads for OpenShift $_ver_short"
+						# Reset cached catalog tasks so we get fresh data
+						local _cat
+						for _cat in redhat-operator certified-operator community-operator; do
+							run_once -r -i "catalog:${_ver_short}:${_cat}" 2>/dev/null || true
+						done
 						download_all_catalogs "$_ver_short" >>"$_TUI_LOG_FILE" 2>&1
 						# Start registry download early (shared task ID with aba.sh)
 						run_once -i "$TASK_DL_QUAY_REG" -- "${CMD_DL_QUAY_REG[@]}" >>"$_TUI_LOG_FILE" 2>&1
