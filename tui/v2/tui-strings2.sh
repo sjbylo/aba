@@ -413,7 +413,7 @@ TUI2_MSG_BASKET_EMPTY="Selection is empty.\n\nUse 'Select Operator Sets' or 'Sea
 TUI2_MSG_BUNDLE_PATH_PROMPT="Create a portable bundle (tar) containing the ABA repo,\nCLI tools, registry installer, and container images.\n\nThis bundle can be transferred to a disconnected\nenvironment via USB or other media.\n\nEnter output path (version suffix added automatically):\n\nTip: For best results, use a USB drive or a separate\nfilesystem with plenty of free space."
 TUI2_MSG_BUNDLE_LIGHT_CONFIRM="Bundle output and mirror data are on the same\ndisk (same filesystem). A full bundle would\nduplicate the image archives, requiring roughly\ndouble the space.\n\n\\ZbLight\\ZB: excludes image archives from the bundle.\nYou must transfer them separately and copy\nthem into mirror/data/ on the internal bastion.\n\n\\ZbFull\\ZB: everything in one file (needs more space).\n\nChoose \\ZbLight\\ZB if disk space is limited."
 
-TUI2_MSG_UPGRADE_NEEDS_RELEASE="Upgrade requires release images.\n\nRelease image exclusion (excl_platform) has been\nswitched off automatically so the upgrade target\nimages will be included."
+TUI2_MSG_UPGRADE_NEEDS_RELEASE="Upgrade to %s requires release images, but they\nare currently EXCLUDED (excl_platform=true in\naba.conf).\n\nInclude release images so the upgrade target\nimages will be available?\n\nIf you select No, the upgrade may fail on the\ndisconnected side."
 TUI2_MSG_EXCL_PLATFORM_OFFER="Release images for v%s are already in the\nmirror registry.\n\nExclude them from this save to reduce\ntransfer size?\n\n(Only new/changed operators will be saved)"
 
 # =============================================================================
