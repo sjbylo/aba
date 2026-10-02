@@ -84,7 +84,7 @@ _print_colored() {
     local n_opt="$1"; shift
     local line="$*"
 
-    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
+    if [ -t "${ABA_TTY_FD:-1}" ] && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ] && [ -z "${PLAIN_OUTPUT:-}" ]; then
         tput setaf "$color"
         echo -e $n_opt "$line"
         tput sgr0
@@ -138,6 +138,9 @@ color_demo() {
 aba_info() {
 	[ ! "${INFO_ABA:-}" ] && return 0
 
+	# Append to trace file (terminal output is not tee'd)
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $*" >> "$ABA_TRACE_FILE" 2>/dev/null
+
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_white -n "[ABA] $@"
@@ -155,6 +158,9 @@ aba_info() {
 
 # Same as aba_info, but green
 aba_success() {
+	# Append to trace file
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $*" >> "$ABA_TRACE_FILE" 2>/dev/null
+
 	if [ "$1" = "-n" ]; then
 		shift
 		echo_green -n "[ABA] $@"
@@ -190,16 +196,16 @@ aba_debug() {
     timestamp="$(date +%H:%M:%S)"
 
     if [ "${DEBUG_ABA:-}" ]; then
-        # Debug mode: write to terminal (stderr). The exec tee in aba.sh
-        # will also capture this into the trace file -- no direct write needed.
+        # Debug mode: write to terminal (stderr) and trace file
         [ "$TERM" ] && { tput el1 && tput cr; } >&2
         if (( newline )); then
             echo_magenta    "[ABA_DEBUG] ${timestamp}: $*" >&2
         else
             echo_magenta -n "[ABA_DEBUG] ${timestamp}: $*" >&2
         fi
-    elif [ -n "${ABA_TRACE_FILE:-}" ] && [ -w "${ABA_TRACE_FILE:-}" ]; then
-        # Non-debug mode: write directly to trace file only (not visible on terminal)
+    fi
+    # Always append to trace file (stdout/stderr go direct to terminal, not tee'd)
+    if [ -n "${ABA_TRACE_FILE:-}" ] && [ -w "${ABA_TRACE_FILE:-}" ]; then
         if (( newline )); then
             echo "[ABA_DEBUG] ${timestamp}: $*" >> "$ABA_TRACE_FILE"
         else
@@ -239,6 +245,9 @@ aba_abort() {
 		echo_red "[ABA]        $line" >&2
 	done
 	echo >&2
+
+	# Append to trace file
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] Error: $main_msg ${_args[*]}" >> "$ABA_TRACE_FILE" 2>/dev/null
 
 	# Write error tag for structured detection by callers (TUI, scripts)
 	if [[ -n "$_tag" ]]; then
@@ -293,6 +302,8 @@ aba_warn() {
 
 	# Print main message
 	echo_$col $newline "[ABA] $prefix: $main_msg" >&2
+	# Append to trace file
+	[ -n "${ABA_TRACE_FILE:-}" ] && echo "[ABA] $prefix: $main_msg $*" >> "$ABA_TRACE_FILE" 2>/dev/null
 
 	#[ "$*" ] && newline=  # Note, '-n' only make sense for a single line
 
@@ -326,25 +337,6 @@ if ! [[ "$PATH" =~ "$HOME/bin:" ]]; then
 fi
 
 umask 077
-
-# Function to display an error message and the last executed command
-show_error() {
-	local exit_code=$?
-	local _safe_cmd="${BASH_COMMAND//-p \'*\'/-p \'***\'}"  # mask password args in error output
-	echo 
-	echo_red "Script error at $(date) in directory $PWD: " >&2
-	echo_red "Error occurred in command: '$_safe_cmd'" >&2
-	echo_red "Error code: $exit_code" >&2
-	echo >&2
-	echo "[ABA] Check the output above for clues. Fix the issue and re-run the same command -- it's safe to retry." >&2
-
-	exit $exit_code
-}
-
-# Set the trap to call the show_error function on ERR signal
-# "no-trap" argument suppresses the ERR trap (used by E2E framework)
-[ "${1:-}" != "no-trap" ] && trap 'show_error' ERR
-[ "${DEBUG_ABA:-}" ] && echo Error trap set >&2
 
 vm_name() {
 	# For SNO the hostname equals the cluster name; avoid doubling (e.g. sno1-sno1)
@@ -1467,9 +1459,9 @@ ask() {
 	[ ! "$ret_default" ] && [ "$1" == "-t" ] && timer="-t $2" && shift 2
 
 	#echo
- 	echo_yellow -n "[ABA] $@? $yn_opts: "
+ 	echo_yellow -n "[ABA] $@? $yn_opts: " >&2
 	if [ "$ret_default" ]; then
-		echo_white "[default: $ret_default]"
+		echo_white "[default: $ret_default]" >&2
 		# ASK_OVERRIDE (-y flag): always proceed (like dnf -y)
 		# unless --auto-no explicitly blocks this specific prompt
 		if [ "$ret_default" = "-y" ]; then
@@ -4898,7 +4890,7 @@ ensure_quay_registry() {
 	run_once -q -w -i "$TASK_DL_QUAY_REG"
 
 	run_once -i "$TASK_INST_QUAY_REG" -- "${CMD_INST_QUAY_REG[@]}"
-	run_once -w -m "Installing mirror-registry" -i "$TASK_INST_QUAY_REG"
+	run_once -w -m "Installing mirror-registry binary" -i "$TASK_INST_QUAY_REG"
 }
 
 # Get error output from a task (helper for error messages)

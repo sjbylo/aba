@@ -59,7 +59,6 @@ set +e
 output=$(ABA_REPO="$ABA_REPO_ROOT" timeout 30 bash -c 'cd "$ABA_REPO" && ./aba' 2>&1)
 test_rc=$?
 set -e
-trap 'show_error' ERR
 
 # Check that failure was detected (task ID shows as api.openshift.com even though URL is broken)
 if echo "$output" | grep -q "Cannot access required sites.*api.openshift.com"; then
@@ -105,7 +104,6 @@ set +e
 output=$(ABA_REPO="$ABA_REPO_ROOT" timeout 30 bash -c 'cd "$ABA_REPO" && ./aba' 2>&1)
 test_rc=$?
 set -e
-trap 'show_error' ERR
 
 # Check if two sites are reported (order may vary)
 if echo "$output" | grep -qE "Cannot access required sites:.*,.*"; then
