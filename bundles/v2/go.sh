@@ -232,7 +232,9 @@ do
 		fi
 
 		echo "=== Bundle $bundle_name completed at $(date) ==="
-		read -p "Press Enter to continue to the next bundle..."
+		if [ "${BUNDLE_DEV_MODE:-}" == "1" ]; then
+			read -p "Press Enter to continue to the next bundle..."
+		fi
 	done
 done
 
