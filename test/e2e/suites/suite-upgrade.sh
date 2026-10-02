@@ -90,34 +90,41 @@ e2e_run "Save older (previous) version" "
     echo \"Older version: \$ocp_version\"
 "
 
-e2e_run "Resolve latest version as upgrade target" "
-    cd ~/aba &&
-    aba --channel fast --version latest &&
-    . aba.conf &&
-    echo \$ocp_version > /tmp/e2e-ocp-version-desired &&
-    echo \"Desired version: \$ocp_version\"
-"
-
-e2e_run "Validate older version is in upgrade graph" "
+e2e_run "Resolve upgrade pair from release metadata" "
     cd ~/aba && source scripts/include_all.sh &&
+    . aba.conf &&
+    major=\$(echo \$ocp_version | cut -d. -f1) &&
+    cur_minor_num=\$(echo \$ocp_version | cut -d. -f2) &&
+    _resolve_pair() {
+        local src_minor=\"\$1\" tgt_minor=\"\$2\"
+        local all_tgt upgrades desired older
+        all_tgt=\$(fetch_all_versions fast \$tgt_minor 2>/dev/null | sort -rV)
+        [ -n \"\$all_tgt\" ] || return 1
+        local count=\$(echo \"\$all_tgt\" | wc -l)
+        [ \$count -ge 3 ] || { echo \"Only \$count versions in fast-\$tgt_minor — too few\"; return 1; }
+        desired=\$(echo \"\$all_tgt\" | sed -n '3p')
+        upgrades=\$(curl -sf \"https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/fast-\$tgt_minor/release.txt\" \
+            | sed -n 's/^  Upgrades: //p' | tr ', ' '\\n' | grep .)
+        older=\$(echo \"\$upgrades\" | grep \"^\$src_minor\\.\" | sort -rV | head -1)
+        [ -n \"\$older\" ] || { echo \"No \$src_minor.x in release metadata for fast-\$tgt_minor\"; return 1; }
+        echo \$older > /tmp/e2e-ocp-version-older
+        echo \$desired > /tmp/e2e-ocp-version-desired
+        echo \"Resolved: \$older -> \$desired\"
+    } &&
+    next_minor=\"\${major}.\$(( cur_minor_num + 1 ))\" &&
+    cur_minor=\"\${major}.\${cur_minor_num}\" &&
+    prev_minor=\"\${major}.\$(( cur_minor_num - 1 ))\" &&
+    if _resolve_pair \$cur_minor \$next_minor; then
+        echo \"Using next minor: \$cur_minor.x -> \$next_minor.x\"
+    elif _resolve_pair \$prev_minor \$cur_minor; then
+        echo \"Fell back to previous minor: \$prev_minor.x -> \$cur_minor.x\"
+    else
+        echo \"FATAL: could not find a viable cross-minor upgrade pair\"; exit 1
+    fi &&
     older=\$(< /tmp/e2e-ocp-version-older) &&
     desired=\$(< /tmp/e2e-ocp-version-desired) &&
-    tgt_minor=\$(echo \$desired | cut -d. -f1-2) &&
-    if verify_upgrade_path_exists \"\$older\" \"\$desired\" fast; then
-        echo \"Upgrade path OK: \$older -> \$desired\"
-    else
-        echo \"WARNING: \$older not in fast-\$tgt_minor graph, searching for valid source ...\"
-        src_minor=\$(echo \$older | cut -d. -f1-2)
-        graph_json=\$(_fetch_graph_cached fast \$tgt_minor)
-        valid=\$(echo \"\$graph_json\" | jq -r '.nodes[].version' \
-            | grep \"^\$src_minor\\.\" | sort -rV | head -1)
-        if [ -z \"\$valid\" ]; then
-            echo \"FATAL: no \$src_minor.x version in fast-\$tgt_minor graph\"; exit 1
-        fi
-        echo \"Using \$valid instead of \$older\"
-        aba -v \$valid
-        echo \$valid > /tmp/e2e-ocp-version-older
-    fi
+    aba --channel fast -v \$older &&
+    echo \"Final: \$older -> \$desired\"
 "
 
 e2e_run "Create mirror directory and mirror.conf" \
