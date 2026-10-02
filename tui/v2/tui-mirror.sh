@@ -2002,11 +2002,12 @@ _tui_image_set_checklist() {
 				_failed=true
 				continue
 			fi
-			# Fetch count for confirm
-			local _preview_count
+			# Fetch images for preview
+			local _preview_images _preview_count
 			dlg --backtitle "$(ui_backtitle)" --infobox \
 				"Fetching RHOAI $_ver image list from GitHub..." 3 55
-			_preview_count=$(fetch_rhoai_images "$_ver" 2>/dev/null | wc -l)
+			_preview_images=$(fetch_rhoai_images "$_ver" 2>/dev/null) || _preview_images=""
+			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
 			if [[ $_preview_count -eq 0 ]]; then
 				dlg --backtitle "$(ui_backtitle)" --msgbox \
 					"Could not fetch RHOAI $_ver images from GitHub.\n\nCheck internet connectivity and try again." 0 0
@@ -2014,16 +2015,45 @@ _tui_image_set_checklist() {
 				_failed=true
 				continue
 			fi
-			# Confirm
+			# Confirm with image list
+			local _preview_msg="RHOAI $_ver — $_preview_count images:"
+			local _img_line _shown=0
+			while IFS= read -r _img_line; do
+				[[ -n "$_img_line" ]] || continue
+				_shown=$(( _shown + 1 ))
+				[[ $_shown -le 20 ]] && _preview_msg+="\\n  ${_img_line}"
+			done <<< "$_preview_images"
+			[[ $_preview_count -gt 20 ]] && _preview_msg+="\\n  ... and $(( _preview_count - 20 )) more"
+			_preview_msg+="\\n\\nAdd these images?"
 			dlg --backtitle "$(ui_backtitle)" --title "Add RHOAI Images" \
 				--yes-label "Add" --no-label "Skip" \
-				--yesno "Adding $_preview_count RHOAI $_ver additional images.\n\nThese images are required for Red Hat OpenShift AI\nin disconnected environments.\n\nContinue?" 0 0
+				--yesno "$_preview_msg" 0 0
 			if [[ $? -ne 0 ]]; then
 				tui_log "User skipped RHOAI image set"
 				continue
 			fi
 			_add_count=$(image_set_add "$_add_name" "$_ver" 2>/dev/null) || _add_count=0
 		else
+			# Static set: preview images before adding
+			local _preview_images _preview_count _display
+			_preview_images=$(_image_set_static_images "$_add_name") || _preview_images=""
+			_preview_count=$(echo "$_preview_images" | grep -c . 2>/dev/null) || _preview_count=0
+			_display=$(_image_set_display_name "$_add_name")
+			if [[ $_preview_count -gt 0 ]]; then
+				local _preview_msg="${_display} — $_preview_count images:\\n"
+				local _img_line
+				while IFS= read -r _img_line; do
+					[[ -n "$_img_line" ]] && _preview_msg+="\\n  ${_img_line}"
+				done <<< "$_preview_images"
+				_preview_msg+="\\n\\nAdd these images?"
+				dlg --backtitle "$(ui_backtitle)" --title "Add Image Set" \
+					--yes-label "Add" --no-label "Skip" \
+					--yesno "$_preview_msg" 0 0
+				if [[ $? -ne 0 ]]; then
+					tui_log "User skipped image set: $_add_name"
+					continue
+				fi
+			fi
 			_add_count=$(image_set_add "$_add_name" 2>/dev/null) || _add_count=0
 		fi
 		if [[ $_add_count -gt 0 ]]; then
@@ -2161,19 +2191,29 @@ mirror_manage_images() {
 			_incl_label="Additional Images: \Z2included\Zn"
 		fi
 
+		# Build menu dynamically: hide list/remove/delete/toggle/edit when empty
+		local _menu_items=()
+		if [[ $_count -gt 0 ]]; then
+			_menu_items+=("L" "List images")
+		fi
+		_menu_items+=("A" "Add image")
+		if [[ $_count -gt 0 ]]; then
+			_menu_items+=("R" "Remove image")
+			_menu_items+=("D" "Delete all images")
+		fi
+		_menu_items+=("S" "Add Recommended Images")
+		if [[ $_count -gt 0 ]]; then
+			_menu_items+=("X" "$_incl_label")
+		fi
+		_menu_items+=("E" "Edit images.conf")
+
 		dlg --backtitle "$(ui_backtitle)" --title "Additional Images" \
 			--cancel-label "$TUI2_BTN_BACK" \
 			--ok-label "$TUI2_BTN_SELECT" \
 			--help-button \
 			--default-item "$default_item" \
 			--menu "Extra container images included in the mirror payload.\nCurrently: $_count image(s) in images.conf\n" 0 0 0 \
-			"L" "List images" \
-			"A" "Add image" \
-			"R" "Remove image" \
-			"D" "Delete all images" \
-			"S" "Add Recommended Images" \
-			"X" "$_incl_label" \
-			"E" "Edit images.conf" \
+			"${_menu_items[@]}" \
 			2>"$_TUI_TMP"
 		local rc=$?
 
