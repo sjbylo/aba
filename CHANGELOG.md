@@ -8,6 +8,8 @@
 - **Config backup on load** — `aba load` now backs up ISC, digest ISC, metadata JSON, `aba.conf`, and `mirror.conf` to `data/.backup/` before unpacking the transfer archive.
 - **TUI: upgrade guard dialog** — When an upgrade requires release images but `excl_platform` is set, the TUI now offers a Yes/No dialog (default Yes) to include them, with a clear warning about upgrade failure if declined.
 - **TUI: image preview before adding** — Recommended image sets (OCP, Virt, RHOAI) now show the full list of images for review before adding them.
+- **Conditional upgrade edge detection** — Upgrade path validation now detects Cincinnati graph conditional edges (known risks) and reports risk names. TUI shows a confirmation dialog; CLI prints warnings.
+- **Pre-flight: stale registry directory detection** — Registry install now checks for leftover data directories with wrong ownership (container UID) before installing. Prevents cryptic Ansible PermissionError failures with a clear fix command.
 
 ### Changed
 
@@ -16,9 +18,14 @@
 - **TUI disconnected mode menu** — DISCO mode switch is split into separate menu items for clearer navigation, with mode-specific confirmation dialogs.
 - **TUI: context-sensitive Additional Images menu** — Menu items that don't apply when `images.conf` is empty (List, Remove, Delete, Include/Exclude toggle) are hidden until images are added.
 - **Auto-DNS messages are more descriptive** — DNS add/remove messages now mention "ABA auto-DNS via dnsmasq" and the specific config file path under `/etc/dnsmasq.d/`, so users understand where the records come from.
+- **TUI: clearer menu labels** — "Delete all images" → "Clear all images", "Add Recommended Images" → "Recommended Images". Mirror Payload help text now explains the transfer workflow for air-gapped environments.
+- **Removed ERR trap and show_error()** — The generic "Script error in command..." footer added noise without value. Real errors are reported by the failing commands or `aba_abort()`. `set -e` still exits with the correct exit code.
 
 ### Fixed
 
+- **`aba load` hang on disconnected and bundle hosts** — The `exec > >(stdbuf -oL tee ...)` process substitution caused a deadlock: `echo -n` (no newline) through a line-buffered pipe never flushed, blocking `ask()` prompts forever with zero output. Removed all exec tee pipes; trace logging now uses direct `>>` append in logging functions.
+- **oc-mirror terminal animations missing** — Stdout going through a pipe made `isatty()` return false, so oc-mirror disabled spinners and progress bars. Now stdout goes straight to the terminal.
+- **RHOAI empty image list handling** — When a published RHOAI version has no additional images, the empty result is now cached correctly (zero-byte file) and the TUI shows an informational row instead of a misleading image count.
 - **ISC operator parsing reliability** — Replaced fragile awk-based ISC operator parsing with yaml-to-json + jq across all scripts (save, sync, load, bundle, TUI). Prevents misparsing when operator names resemble channel entries.
 - **TUI dialog paragraph breaks** — Multi-paragraph dialog messages now render correctly. Fixed a `printf -v` issue where literal `\n` sequences were converted to real newlines that dialog collapsed into single lines.
 - **TUI operator basket count** — Fixed stale operator count display when the basket is emptied, and empty selections now persist correctly.
