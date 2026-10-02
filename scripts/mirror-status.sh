@@ -93,6 +93,26 @@ if [ -f "$_isc" ] && [ -s "$_isc" ]; then
 	fi
 fi
 
+# Upgrade path validation (Cincinnati graph — skipped when offline or no target)
+_upgrade_path_exists=""
+_upgrade_path_conditional=""
+_upgrade_risks=""
+if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
+	_path_out=$(verify_upgrade_path_exists "$_ver" "$_upgrade_to" "$_chan" --shell 2>/dev/null) || true
+	if echo "$_path_out" | grep -q 'REACHABLE=1'; then
+		_upgrade_path_exists=true
+		if echo "$_path_out" | grep -q 'CONDITIONAL=1'; then
+			_upgrade_path_conditional=true
+			_upgrade_risks=$(echo "$_path_out" | grep -oP 'RISKS=\K\S+')
+		else
+			_upgrade_path_conditional=false
+		fi
+	elif echo "$_path_out" | grep -q 'REACHABLE=0'; then
+		_upgrade_path_exists=false
+		_upgrade_path_conditional=false
+	fi
+fi
+
 # Derived flags
 _upgrade_needs_platform=false
 if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ] && [ "$_excl_platform" = "true" ]; then
@@ -121,6 +141,9 @@ shell)
 	echo "isc_exists=$_isc_exists"
 	echo "isc_user_managed=$_isc_user_managed"
 	echo "upgrade_needs_platform=$_upgrade_needs_platform"
+	echo "upgrade_path_exists=$_upgrade_path_exists"
+	echo "upgrade_path_conditional=$_upgrade_path_conditional"
+	echo "upgrade_risks=$_upgrade_risks"
 	;;
 
 preflight)
@@ -247,6 +270,20 @@ op)
 	fi
 	aba_info "  ISC:          ${_isc_display}"
 	[ -n "$_excl_display" ] && aba_warn "  Excluded:     ${_excl_display}"
+	if [ -n "$_upgrade_to" ] && [ "$_upgrade_to" != "$_ver" ]; then
+		if [ "$_upgrade_path_exists" = "true" ]; then
+			if [ "$_upgrade_path_conditional" = "true" ]; then
+				aba_warn "  Upgrade path: available (conditional — known risks)"
+				for _r in $(echo "${_upgrade_risks:-}" | tr ',' '\n'); do
+					[ -n "$_r" ] && aba_warn "                  - $_r"
+				done
+			else
+				aba_info "  Upgrade path: available"
+			fi
+		elif [ "$_upgrade_path_exists" = "false" ]; then
+			aba_warn "  Upgrade path: NOT available ($_ver → $_upgrade_to)"
+		fi
+	fi
 	if [ "$_upgrade_needs_platform" = "true" ]; then
 		aba_warn "  Warning:      upgrade requires release images but they are excluded!"
 	fi
