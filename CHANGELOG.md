@@ -1,5 +1,26 @@
 ## [Unreleased](https://github.com/sjbylo/aba/compare/v1.3.6...HEAD)
 
+### Added
+
+- **`aba -d mirror status` command** — New unified mirror intelligence layer showing OCP version, registry, operators, ISC, and exclusion status in a compact summary. Supports human-readable, shell-parseable (`--shell`), and preflight-check (`--preflight`) modes.
+- **Pre-operation summaries for save/sync/load** — Each mirror operation now shows a one-liner summary of what it will do (OCP version, operator count, image breakdown) before starting.
+- **Save/sync preflight guard** — Interactive check before `aba save` and `aba sync` detects and warns about upgrade + `excl_platform` conflicts before work begins, not after.
+- **Config backup on load** — `aba load` now backs up ISC, digest ISC, metadata JSON, `aba.conf`, and `mirror.conf` to `data/.backup/` before unpacking the transfer archive.
+- **TUI: upgrade guard dialog** — When an upgrade requires release images but `excl_platform` is set, the TUI now offers a Yes/No dialog (default Yes) to include them, with a clear warning about upgrade failure if declined.
+
+### Changed
+
+- **Cleaner mirror output** — Save, sync, and load operations produce ~40% less output by combining duplicate lines, folding tool versions into attempt lines, and demoting redundant ISC generation details to debug level. All information is still available via `DEBUG_ABA=1`.
+- **TUI reset is lighter** — TUI "Reset" now uses `aba clean` (keeps CLI tools and saved images) instead of `aba reset --force` (factory wipe). Full factory reset is still available from the command line.
+- **TUI disconnected mode menu** — DISCO mode switch is split into separate menu items for clearer navigation, with mode-specific confirmation dialogs.
+- **Auto-DNS messages are more descriptive** — DNS add/remove messages now mention "ABA auto-DNS via dnsmasq" and the specific config file path under `/etc/dnsmasq.d/`, so users understand where the records come from.
+
+### Fixed
+
+- **ISC operator parsing reliability** — Replaced fragile awk-based ISC operator parsing with yaml-to-json + jq across all scripts (save, sync, load, bundle, TUI). Prevents misparsing when operator names resemble channel entries.
+- **TUI dialog paragraph breaks** — Multi-paragraph dialog messages now render correctly. Fixed a `printf -v` issue where literal `\n` sequences were converted to real newlines that dialog collapsed into single lines.
+- **TUI operator basket count** — Fixed stale operator count display when the basket is emptied, and empty selections now persist correctly.
+
 ---
 
 ## [1.3.6](https://github.com/sjbylo/aba/releases/tag/v1.3.6) - 2026-09-30
